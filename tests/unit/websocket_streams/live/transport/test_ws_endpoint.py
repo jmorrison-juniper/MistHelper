@@ -7,16 +7,20 @@ import logging  # Logging tests capture debug records.
 import ssl  # TLS option tests compare ssl constants.
 
 import pytest  # The policy tests assert refusal errors.
-
 import websocket  # ConnectFailure tests use real websocket-client exceptions.
-from src.websocket_streams.intake.fields.error import StreamRequestError  # Policy refusals use this contract error.
-from src.websocket_streams.live.transport.endpoint import (  # Build endpoint policies for these tests.
+
+from src.mist.realtime.websocket_streams.intake.fields.error import (
+    StreamRequestError,
+)  # Policy refusals use this contract error.
+from src.mist.realtime.websocket_streams.live.transport.endpoint import (  # Build endpoint policies for these tests.
     ConnectFailure,
     MistStreamEndpoint,
     ShellAddressPolicy,
     TransportProfile,
 )
-from src.websocket_streams.live.transport.stream_client import StreamClient  # Fake-cloud fault tests open a stream.
+from src.mist.realtime.websocket_streams.live.transport.stream_client import (
+    StreamClient,
+)  # Fake-cloud fault tests open a stream.
 from tests.unit.websocket_streams.live.transport.fake_mist_cloud.api import (
     FakeApiSession,
 )  # Fake sessions expose the SDK private attributes.
@@ -221,7 +225,9 @@ class TestEndpointStructuredLogging:
 
     def test_endpoint_records_are_json_and_exclude_secrets(self, caplog: pytest.LogCaptureFixture) -> None:
         """Emit bounded records without token, cookie, or certificate values."""
-        caplog.set_level(logging.DEBUG, logger="src.websocket_streams.live.transport.endpoint")  # Capture all events.
+        caplog.set_level(
+            logging.DEBUG, logger="src.mist.realtime.websocket_streams.live.transport.endpoint"
+        )  # Capture all events.
         session = FakeApiSession()  # Build a session with sensitive connection values.
         session._apitoken = ["token-secret-value"]  # Add a token that must not enter logs.
         session._session.cookies.set("session", "cookie-secret-value")  # Add a cookie that must not enter logs.

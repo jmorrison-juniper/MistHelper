@@ -9,7 +9,7 @@ their counters, and their response headers.
 
 **Reason**: No portal code builds a connector from the configuration. A
 search of `src/` and `wsgi_capture.py` finds each of the four keys in
-`src/upgrade_portal/api/run_controls/models.py` only. A reader for each trap
+`src/interfaces/portals/upgrade_portal/api/run_controls/models.py` only. A reader for each trap
 would add a production code path that exists only to serve a test.
 
 The real isolation of the connectors is already in place. The function

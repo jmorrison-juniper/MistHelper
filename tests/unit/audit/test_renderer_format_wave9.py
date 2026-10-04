@@ -1,4 +1,4 @@
-"""Wave 9 P2 coverage tests for src.audit._renderer_format.
+"""Wave 9 P2 coverage tests for src.mist.access.audit._renderer_format.
 
 Covers all four public paths of ``format_delta_html``: dict, list, leaf,
 and empty-container shortcuts, plus the ``_render_dict_item`` /
@@ -7,7 +7,7 @@ and empty-container shortcuts, plus the ``_render_dict_item`` /
 
 from __future__ import annotations  # WHY: postponed eval for forward-ref consistency
 
-from src.audit._renderer_format import format_delta_html
+from src.mist.access.audit._renderer_format import format_delta_html
 
 
 class TestFormatDeltaHtmlLeafBranch:

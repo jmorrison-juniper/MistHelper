@@ -357,7 +357,7 @@ The writer applies two safety controls to every cell.
    `@`, a tab, or a carriage return, unless the value reads as a number. A
    spreadsheet would otherwise run that cell as a formula.
 
-`src/upgrade_portal/compare/download.py` owns both rules. The capture writer
+`src/interfaces/portals/upgrade_portal/compare/download.py` owns both rules. The capture writer
 holds a copy of each one, because an import from `compare` into `capture` would
 make the two packages depend on each other. A unit test compares the two copies,
 so neither one drifts alone.

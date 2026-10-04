@@ -6,7 +6,7 @@
 | - | - |
 | Menu | `278` |
 | Category | `safe` |
-| Handler import | `src.reports.ap_scorecard.operation` |
+| Handler import | `src.mist.intelligence.reports.ap_scorecard.operation` |
 | Handler attribute | `ApScorecard.run` |
 | Data source | `mistapi.api.v1.orgs.stats.listOrgDevicesStats` |
 | Required query | `type=ap` |

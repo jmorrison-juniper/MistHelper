@@ -20,7 +20,7 @@ One pylint `W0613` message.
 | `line` | Integer | Required. Points at the function definition. |
 | `function` | Qualified name | Required. Holds the class name when the function is a method. |
 | `parameter` | Identifier | Required. Names the unused argument. |
-| `gate_sees_it` | Boolean | Derived. False when the file sits in `src/maps`, `src/ssh`, or `src/ui`. |
+| `gate_sees_it` | Boolean | Derived. False when the file sits in `src/interfaces/visualization/maps`, `src/operations/execution/ssh`, or `src/interfaces/visualization/ui`. |
 | `outcome` | Enum `A`, `B`, `C` | Required. FR-001 forbids an empty value. |
 | `justification` | One sentence | Required by FR-002. |
 

@@ -6,7 +6,7 @@
 
 ### The site checks
 
-- The function `find_site` in `src/upgrade_portal/app/routes/select.py` reads
+- The function `find_site` in `src/interfaces/portals/upgrade_portal/app/routes/select.py` reads
   `listOrgSites` and returns the record of one site. It returns None when no
   record matches. It does not read the partial reasons of the answer.
 - Four routes reach `find_site`. The inventory page calls it directly. The
@@ -16,7 +16,7 @@
   each exception and keeps the site identifier. The run creation therefore
   needs no change.
 - The function `selected_rows` in
-  `src/upgrade_portal/app/routes/org_upgrade.py` reads `build_site_rows`. It
+  `src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py` reads `build_site_rows`. It
   returns an empty list when the list does not hold a selected site. Four
   steps call it: the options page, the options save, the confirm page, and the
   retry.

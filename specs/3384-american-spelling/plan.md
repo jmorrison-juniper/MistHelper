@@ -26,8 +26,8 @@ that reads every template and the portal script for a British spelling.
 
 | File | Change |
 | - | - |
-| `src/upgrade_portal/app/assets/templates/upgrade/options.html` | Four lines use "neighbor" or "neighborhood". |
-| `src/upgrade_portal/app/assets/templates/upgrade/confirm.html` | One row name uses "neighbor". |
+| `src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/options.html` | Four lines use "neighbor" or "neighborhood". |
+| `src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/confirm.html` | One row name uses "neighbor". |
 | `tests/contract/upgrade_portal/test_template_spelling.py` | Add the guard and the two pattern tests. |
 | `changelog.d/issue-3384-american-spelling.md` | Add the release note. |
 

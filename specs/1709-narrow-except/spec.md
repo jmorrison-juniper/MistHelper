@@ -105,5 +105,5 @@ caught and an unexpected exception escapes.
 
 - The analyst table in `1709-except-plan.md` is the task source for block
   classification.
-- This change does not edit files under `src\refactors\` or `src\config\`.
+- This change does not edit files under `src\foundation\support\refactors\` or `src\foundation\runtime\config\`.
 - This change does not alter production hardware or production configuration.

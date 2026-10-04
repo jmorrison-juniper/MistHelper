@@ -164,7 +164,7 @@ the two meanings would collide.
 
 ### Packages
 
-The portal is `src/upgrade_portal/`, which holds 39 modules in five groups.
+The portal is `src/interfaces/portals/upgrade_portal/`, which holds 39 modules in five groups.
 
 | Group | Purpose |
 | --- | --- |
@@ -177,7 +177,7 @@ The portal is `src/upgrade_portal/`, which holds 39 modules in five groups.
 The package sits outside `web_portal/`. Ruff and mypy exclude `web_portal/`, so
 a module inside it would escape those gates.
 
-The upgrade seam is `src/firmware/upgrade_service.py`. The portal calls the
+The upgrade seam is `src/operations/execution/firmware/upgrade_service.py`. The portal calls the
 existing bulk firmware tools through that seam and never calls them directly.
 
 ### Behavior that is built and tested
@@ -534,7 +534,7 @@ Break one of these and a gate turns red, or worse, a secret leaks.
 - Never log a whole record, job, session, or settings object. A session object
   carries an API token inside it.
 - Never log an email address in plain text. Use `email_digest` from
-  `src/upgrade_portal/runtime/identity.py`.
+  `src/interfaces/portals/upgrade_portal/runtime/identity.py`.
 - A caught fault logs `type(fault).__name__` alone. A driver message can carry a
   connection string.
 - Never name the end customer in code, in documentation, or in a commit message.
@@ -594,7 +594,7 @@ Each of these cost real time. Read them before you debug.
 | `PATHEXT` holds `.CPL` alone | `git` and `python` report "not recognized" | Set `$env:PATHEXT = ".COM;.EXE;.BAT;.CMD;.VBS;.JS;.WS;.MSC;.PS1"` first |
 | `APPDATA` is empty | `gh` looks signed out. Podman loses its connection list | Set `$env:APPDATA = "C:\Users\jmorrison\AppData\Roaming"`. Never cycle the podman machine for this |
 | A stale copy of `src/` sits in `.venv/Lib/site-packages/src/` | A script reports a missing module for a file that exists | A `pip install .` of this project puts it there, because the wheel packs the repository root. Run `python -m pip uninstall -y misthelper`. `tests/conftest.py` now stops a session that would read the copy. Issue #2010 |
-| `src/dataclasses/` shadows the standard library | Strange import faults | Never put `src` on `sys.path`. Import as `src.<package>` |
+| `src/foundation/models/dataclasses/` shadows the standard library | Strange import faults | Never put `src` on `sys.path`. Import as `src.<package>` |
 | Bandit `exclude_dirs` uses forward slashes | 42 local findings that CI never reports | Judge a local run by the paths, not the exit code. All 42 sit in `tools/test_quality_analyzer/fixtures/` |
 | The lint tools live in the virtual environment | `python -m ruff` fails | Call `.\.venv\Scripts\python.exe` by path |
 | Playwright cannot re-enter a nested run | A pytest run inside a pytest run fails | Pass `-p no:playwright` |

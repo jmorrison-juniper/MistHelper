@@ -107,8 +107,8 @@ mypy MistHelper.py --strict
 grep -n "# type: ignore\[no-untyped-call" MistHelper.py
 
 # Protocol classes must exist:
-test -f src/utils/misthelper_facade.py
-python -c "from src.utils import misthelper_facade; print(dir(misthelper_facade))"
+test -f src/foundation/support/utils/misthelper_facade.py
+python -c "from src.foundation.support.utils import misthelper_facade; print(dir(misthelper_facade))"
 ```
 
 ## Story 5 (#897) — type-arg
@@ -144,8 +144,8 @@ bandit -r MistHelper.py
 grep -n "# nosec" MistHelper.py
 
 # If subprocess_runner was introduced, it must exist and its coverage must be ≥ 90%:
-test -f src/utils/subprocess_runner.py && \
-  pytest -v --tb=short --cov=src.utils.subprocess_runner --cov-fail-under=90 \
+test -f src/foundation/support/utils/subprocess_runner.py && \
+  pytest -v --tb=short --cov=src.foundation.support.utils.subprocess_runner --cov-fail-under=90 \
     tests/utils/test_subprocess_runner.py
 ```
 

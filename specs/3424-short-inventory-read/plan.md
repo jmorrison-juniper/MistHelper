@@ -27,13 +27,13 @@ row copy runs inside the guarded block (D9).
 
 | File | Change |
 | - | - |
-| `src/upgrade_portal/upgrade/options.py` | `InventoryRead.is_short`. `PartialInventoryError` and `ERROR_PARTIAL_INVENTORY`. The view reports `partial_reasons`. The record refuses a short read. `_read_paged` uses the page walk and copies the rows inside the guarded block. |
-| `src/upgrade_portal/capture/devices.py` | New `read_every_page` and `_page_records`. The walk names a lost later page with the reason `page_count_mismatch`. |
-| `src/upgrade_portal/upgrade/org_site_records.py` | `SHORT_MESSAGE`. `OrgSiteRecords` collects each short site and refuses in the order of D6. |
-| `src/upgrade_portal/app/routes/upgrade.py` | `options_view` and `options_page` pass `partial_reasons` to the page. |
-| `src/upgrade_portal/app/routes/org_upgrade.py` | `_site_view_gap` finds an empty view or a short view. `_site_option_record` turns a short read into the short marker. `options_page` names each short site. |
-| `src/upgrade_portal/app/assets/templates/upgrade/options.html` | The single-site banner. |
-| `src/upgrade_portal/app/assets/templates/upgrade/org_options.html` | The multi-site banner. |
+| `src/interfaces/portals/upgrade_portal/upgrade/options.py` | `InventoryRead.is_short`. `PartialInventoryError` and `ERROR_PARTIAL_INVENTORY`. The view reports `partial_reasons`. The record refuses a short read. `_read_paged` uses the page walk and copies the rows inside the guarded block. |
+| `src/interfaces/portals/upgrade_portal/capture/devices.py` | New `read_every_page` and `_page_records`. The walk names a lost later page with the reason `page_count_mismatch`. |
+| `src/interfaces/portals/upgrade_portal/upgrade/org_site_records.py` | `SHORT_MESSAGE`. `OrgSiteRecords` collects each short site and refuses in the order of D6. |
+| `src/interfaces/portals/upgrade_portal/app/routes/upgrade.py` | `options_view` and `options_page` pass `partial_reasons` to the page. |
+| `src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py` | `_site_view_gap` finds an empty view or a short view. `_site_option_record` turns a short read into the short marker. `options_page` names each short site. |
+| `src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/options.html` | The single-site banner. |
+| `src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_options.html` | The multi-site banner. |
 | `tests/unit/upgrade_portal/test_upgrade_options.py` | The short read of the view and of the record. A lost later page with a real SDK answer. |
 | `tests/unit/upgrade_portal/test_capture_devices.py` | The page walk with a real SDK answer. |
 | `tests/support/sdk_pages.py` | New. A real SDK answer with page headers, and a session that answers the planned later pages. |

@@ -27,7 +27,7 @@ and the wiki with the tree.
 **Acceptance scenarios**:
 
 1. **Given** the README and the wiki pages, **When** a reader compares a count
-   with `src/utils/operation_registry.py`, **Then** the count agrees.
+   with `src/foundation/support/utils/operation_registry.py`, **Then** the count agrees.
 2. **Given** a path, a port, or a command in a page, **When** the reader looks
    for it in the tree, `compose.yml`, or the argument parser, **Then** it
    exists.

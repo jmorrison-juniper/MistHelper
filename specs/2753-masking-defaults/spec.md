@@ -73,19 +73,19 @@ An operator starts a destructive upgrade only when the request names the device 
 
 | File | Default | Category | Result |
 | - | - | - | - |
-| `src\upgrade_portal\app\routes\upgrade.py` | `request.get_json() or {}` | Upgrade input | Missing JSON body returns `json_body is required for upgrade start`. |
-| `src\upgrade_portal\app\routes\upgrade.py` | `body.get("device_ids", [])` | Upgrade input | Missing target list returns `device_ids is required for upgrade start`. |
-| `src\upgrade_portal\app\routes\upgrade.py` | `body.get("firmware_version", "")` | Upgrade input | Missing firmware version returns `firmware_version is required for upgrade start`. |
-| `src\upgrade_portal\app\routes\upgrade.py` | `body.get("strategy", "serial")` | Upgrade input | Missing strategy returns `strategy is required for upgrade start`. |
+| `src\interfaces\portals\upgrade_portal\app\routes\upgrade.py` | `request.get_json() or {}` | Upgrade input | Missing JSON body returns `json_body is required for upgrade start`. |
+| `src\interfaces\portals\upgrade_portal\app\routes\upgrade.py` | `body.get("device_ids", [])` | Upgrade input | Missing target list returns `device_ids is required for upgrade start`. |
+| `src\interfaces\portals\upgrade_portal\app\routes\upgrade.py` | `body.get("firmware_version", "")` | Upgrade input | Missing firmware version returns `firmware_version is required for upgrade start`. |
+| `src\interfaces\portals\upgrade_portal\app\routes\upgrade.py` | `body.get("strategy", "serial")` | Upgrade input | Missing strategy returns `strategy is required for upgrade start`. |
 
 ### Deliberately kept defaults
 
 | File | Default | Reason |
 | - | - | - |
-| `src\upgrade_portal\app\routes\upgrade.py` | `body.get("rollback_enabled", False)` | The absent rollback choice must not enable rollback. |
+| `src\interfaces\portals\upgrade_portal\app\routes\upgrade.py` | `body.get("rollback_enabled", False)` | The absent rollback choice must not enable rollback. |
 | `web_portal\app.py` | `WEBHOOK_ENABLED` defaults to `true` | Existing code rejects every webhook with code 503 when the secret is absent. |
 | `web_portal\app.py` | `WEBHOOK_SECRET` defaults to an empty string | Existing code fails closed and logs the missing secret. |
-| `src\upgrade_portal\runtime\identity.py` | token presence reads default to empty strings | Existing code returns presence only and never reads or logs the token value. |
+| `src\interfaces\portals\upgrade_portal\runtime\identity.py` | token presence reads default to empty strings | Existing code returns presence only and never reads or logs the token value. |
 
 ### Deferred defaults
 

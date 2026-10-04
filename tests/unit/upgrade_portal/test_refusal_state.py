@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from src.upgrade_portal.app.routes import capture
+from src.interfaces.portals.upgrade_portal.app.routes import capture
 
 REPO_ROOT = Path(__file__).resolve().parents[3]  # The repository root for the browser asset.
-SCRIPT_PATH = REPO_ROOT / "src" / "upgrade_portal" / "app" / "assets" / "static" / "js" / "portal.js"
-TEMPLATE_PATH = REPO_ROOT / "src" / "upgrade_portal" / "app" / "assets" / "templates" / "capture" / "capture.html"
+PORTAL_ROOT = REPO_ROOT / "src" / "interfaces" / "portals" / "upgrade_portal"
+SCRIPT_PATH = PORTAL_ROOT / "app" / "assets" / "static" / "js" / "portal.js"
+TEMPLATE_PATH = PORTAL_ROOT / "app" / "assets" / "templates" / "capture" / "capture.html"
 
 
 def script_function(name: str) -> str:

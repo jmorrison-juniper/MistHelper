@@ -22,14 +22,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.export.org_sec_intel_profile_exporter import OrgSecIntelProfileExporter
-from src.export.org_sec_intel_profile_exporter import (
+from src.operations.exporting.export.org_sec_intel_profile_exporter import OrgSecIntelProfileExporter
+from src.operations.exporting.export.org_sec_intel_profile_exporter import (
     OrgSecIntelProfileExporter as FailureModeOrgSecIntelProfileExporter,
 )
 
 ORG_ID = "org-1148"
 PROFILE_ID = "11111111-2222-3333-4444-555555555555"
-MODULE = "src.export.org_sec_intel_profile_exporter"
+MODULE = "src.operations.exporting.export.org_sec_intel_profile_exporter"
 
 EXPECTED_TWO = 2
 

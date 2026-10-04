@@ -29,7 +29,7 @@ distinct trailing block that can be skipped without breaking US1/US2.
 
 Single-project CLI layout (per `plan.md`):
 
-- Source: `src/org/`, `src/utils/`
+- Source: `src/mist/resources/org/`, `src/foundation/support/utils/`
 - Tests: `tests/unit/org/`, `tests/unit/utils/`
 - Fixtures: `tests/unit/org/fixtures/`
 - Telemetry (US3 only, runtime-created): `data/vpn_ike_health.jsonl`
@@ -86,7 +86,7 @@ row in the emitted bundle for a VPN-classified host contains `:500`,
   `gateway.zscalerthree.net` -> `reachability`; and shape-wins-over-
   `role_type` (role_type=`application` + bare hostname target still
   returns `reachability`). Tests target
-  `src.org.org_synthetic_probes_manager._probe_type_for_target`. MUST NOT
+  `src.mist.resources.org.org_synthetic_probes_manager._probe_type_for_target`. MUST NOT
   touch the network.
 - [ ] T004 [P] [US1] Author
   `TestProbeTargetVpn::test_cenr_bag_vpn_emits_bare_hostname` in
@@ -134,7 +134,7 @@ row in the emitted bundle for a VPN-classified host contains `:500`,
 ### Implementation for User Story 1
 
 - [ ] T010 [US1] Tighten `_probe_type_for_target` at
-  `src/org/org_synthetic_probes_manager.py` line ~163 to shape-based
+  `src/mist/resources/org/org_synthetic_probes_manager.py` line ~163 to shape-based
   dispatch per `contracts/probe_type_dispatch.md` §Decision Rule:
   (1) if `target` starts with `http://` or `https://` return
   `"application"`; (2) if a `":"` appears after the last `"."` in
@@ -145,7 +145,7 @@ row in the emitted bundle for a VPN-classified host contains `:500`,
   shape-wins-over-role-type and INV-2. Verify T003 (dispatch tests) now
   passes.
 - [ ] T011 [US1] Modify the VPN pre-check branch in `_probe_target` at
-  `src/org/org_synthetic_probes_manager.py` line ~337 (the
+  `src/mist/resources/org/org_synthetic_probes_manager.py` line ~337 (the
   `if _is_vpn_host(fqdn, cenr_source):` block) per
   `contracts/vpn_probe_target_shape.md`: return the bare `fqdn` (drop
   the `:500` suffix that pre-1024 code produced). Emit
@@ -156,7 +156,7 @@ row in the emitted bundle for a VPN-classified host contains `:500`,
   truthful signal. Verify T004-T008 now pass.
 - [ ] T012 [US1] Audit the three row-emission callsites that call
   `_probe_type_for_target(target, role.get("type"))` at
-  `src/org/org_synthetic_probes_manager.py` lines ~793, ~879, ~1196
+  `src/mist/resources/org/org_synthetic_probes_manager.py` lines ~793, ~879, ~1196
   (`_build_probe_set`, `_build_region_probes`, `_merge_probes`). Confirm
   each callsite (a) builds `target` via `_probe_target(...)` first and
   (b) derives `type` via `_probe_type_for_target(target, ...)` with no
@@ -239,7 +239,7 @@ Feature can ship here; US3 is optional trailing.
 > Phase 5 entirely and ship US1+US2. Nothing in Phase 5 modifies files
 > touched by US1/US2. All Phase 5 file edits are additive.
 
-**Goal**: `run_full_validation()` in `src/utils/zscaler_probe.py`
+**Goal**: `run_full_validation()` in `src/foundation/support/utils/zscaler_probe.py`
 appends one JSONL line per VPN host per invocation to
 `data/vpn_ike_health.jsonl`, so a future report can distinguish
 reachable-but-IKE-dead edges from fully-healthy ones.
@@ -298,7 +298,7 @@ All six US3 tests pass. `run_full_validation` remains stable on
 ### Implementation for User Story 3
 
 - [ ] T026 [US3] Add private helper `_append_ike_health_record` to
-  `src/utils/zscaler_probe.py` per `contracts/vpn_ike_health_jsonl.md`
+  `src/foundation/support/utils/zscaler_probe.py` per `contracts/vpn_ike_health_jsonl.md`
   §Write-Side Contract. Signature:
   `_append_ike_health_record(hostname: str, icmp_ok: bool, ike_500_ok: bool, ike_4500_ok: bool, *, path: pathlib.Path = pathlib.Path("data") / "vpn_ike_health.jsonl") -> None`.
   Build record as ordered `dict` with keys `ts`, `hostname`, `icmp_ok`,
@@ -311,7 +311,7 @@ All six US3 tests pass. `run_full_validation` remains stable on
   citing FR-009, FR-010, and the append-only invariant. Verify T019-T024
   now pass.
 - [ ] T027 [US3] Wire the append call into
-  `src/utils/zscaler_probe.py::run_full_validation()` at line ~646.
+  `src/foundation/support/utils/zscaler_probe.py::run_full_validation()` at line ~646.
   After both `_udp_check(host, 500, ...)` and `_udp_check(host, 4500, ...)`
   return for a given VPN host, before moving to the next host, call
   `_append_ike_health_record(hostname=host, icmp_ok=..., ike_500_ok=bool(udp_500_result), ike_4500_ok=bool(udp_4500_result))`.
@@ -321,7 +321,7 @@ All six US3 tests pass. `run_full_validation` remains stable on
   limit; Decision 6). Verify T025 now passes.
 - [ ] T028 [US3] Add module-level `from datetime import UTC, datetime`,
   `import json`, `import pathlib` imports to
-  `src/utils/zscaler_probe.py` if not already present. `logging`,
+  `src/foundation/support/utils/zscaler_probe.py` if not already present. `logging`,
   `socket`, `struct` should already be imported. Keep stdlib-only per
   FR-011.
 
@@ -343,8 +343,8 @@ tests missed. Non-blocking for MVP (US1+US2), but MUST run before merge.
   `black src/ tests/` and commit the formatting fix in a separate
   commit so the code-change diff stays reviewable.
 - [ ] T031 [P] Run `mypy src/`. Address any type findings in the
-  modified functions in `src/org/org_synthetic_probes_manager.py` and
-  `src/utils/zscaler_probe.py`. No new `# type: ignore` unless
+  modified functions in `src/mist/resources/org/org_synthetic_probes_manager.py` and
+  `src/foundation/support/utils/zscaler_probe.py`. No new `# type: ignore` unless
   justified by a comment.
 - [ ] T032 [P] Run `interrogate -c pyproject.toml src/` and confirm
   docstring coverage remains >=90% (per Principle I). New functions
@@ -364,7 +364,7 @@ tests missed. Non-blocking for MVP (US1+US2), but MUST run before merge.
   `:4500`, `http://`, or `https://<vpn-host>`.
 - [ ] T036 Confirm no menu-entry change was introduced (this feature
   edits `_probe_target` / `_probe_type_for_target` internals only). No
-  update to `src/utils/operation_registry.py` is required. Record in
+  update to `src/foundation/support/utils/operation_registry.py` is required. Record in
   the PR description that OperationRegistry is unchanged.
 
 ---
@@ -382,7 +382,7 @@ tests missed. Non-blocking for MVP (US1+US2), but MUST run before merge.
   implementation.
 - **US3 (Phase 5)**: Independent of US2. Can be scheduled in parallel
   with US2, or deferred entirely without breaking US1/US2. Edits a
-  different module (`src/utils/zscaler_probe.py`) and a different test
+  different module (`src/foundation/support/utils/zscaler_probe.py`) and a different test
   file (`tests/unit/utils/test_zscaler_probe.py`).
 - **Polish (Phase 6)**: Depends on all included user stories being
   code-complete.

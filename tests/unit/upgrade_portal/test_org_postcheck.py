@@ -14,9 +14,9 @@ from typing import Any
 
 import pytest
 
-from src.upgrade_portal.upgrade.org_cascade.close import OrgPostCheckStage
-from src.upgrade_portal.upgrade.org_cascade.record import WATCH_KEY, OrgPhaseStore
-from src.upgrade_portal.upgrade.org_postcheck import (
+from src.interfaces.portals.upgrade_portal.upgrade.org_cascade.close import OrgPostCheckStage
+from src.interfaces.portals.upgrade_portal.upgrade.org_cascade.record import WATCH_KEY, OrgPhaseStore
+from src.interfaces.portals.upgrade_portal.upgrade.org_postcheck import (
     FAILED_MESSAGE,
     FAILURE_REASON,
     HELD_MESSAGE,

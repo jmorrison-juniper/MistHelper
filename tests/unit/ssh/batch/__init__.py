@@ -1,1 +1,1 @@
-"""Unit tests for src.ssh.batch package."""
+"""Unit tests for src.operations.execution.ssh.batch package."""

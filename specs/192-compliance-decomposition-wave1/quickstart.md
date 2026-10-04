@@ -65,7 +65,7 @@ python scripts/wave1/verify_wave1_scope_boundaries.py
 
 This script checks:
 
-1. No new packet-capture decomposition files added to `src/capture/`.
+1. No new packet-capture decomposition files added to `src/operations/execution/capture/`.
 2. `menu_actions` key count has not dropped below the Wave 1 baseline.
 3. All Wave-1-touched classes remain accessible in `MistHelper`.
 4. `bounded-decomposition-checklist.md` evidence document is present.

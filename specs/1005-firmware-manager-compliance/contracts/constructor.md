@@ -8,7 +8,7 @@
 ## Pre-Refactor Signature (current)
 
 ```python
-# src/firmware/firmware_manager.py (line 61-70)
+# src/operations/execution/firmware/firmware_manager.py (line 61-70)
 class FirmwareManager:
     def __init__(
         self,
@@ -36,7 +36,7 @@ class FirmwareManager:
 ## Post-Refactor Signature (target)
 
 ```python
-# src/firmware/firmware_manager.py (new)
+# src/operations/execution/firmware/firmware_manager.py (new)
 @dataclass(frozen=True, slots=True, kw_only=True)
 class FirmwareManagerConfig:
     apisession: Any
@@ -83,11 +83,11 @@ class FirmwareManager:
 
 ```python
 class FirmwareManager:
-    """Factory for the extracted firmware manager (src.firmware.firmware_manager)."""
+    """Factory for the extracted firmware manager (src.operations.execution.firmware.firmware_manager)."""
 
     @staticmethod
     def create(apisession: Any, org_id: str) -> Any:
-        from src.firmware.firmware_manager import FirmwareManager as _Impl  # noqa: PLC0415
+        from src.operations.execution.firmware.firmware_manager import FirmwareManager as _Impl  # noqa: PLC0415
         logging.debug("Building firmware manager impl for org %s", org_id)
         return _Impl(
             apisession=apisession,
@@ -105,11 +105,11 @@ class FirmwareManager:
 
 ```python
 class FirmwareManager:
-    """Factory for the extracted firmware manager (src.firmware.firmware_manager)."""
+    """Factory for the extracted firmware manager (src.operations.execution.firmware.firmware_manager)."""
 
     @staticmethod
     def create(apisession: Any, org_id: str) -> Any:
-        from src.firmware.firmware_manager import (                         # noqa: PLC0415
+        from src.operations.execution.firmware.firmware_manager import (                         # noqa: PLC0415
             FirmwareManager as _Impl,
             FirmwareManagerConfig,
         )
@@ -163,7 +163,7 @@ Expected pre- and post-refactor output (identical):
 **None**. Grep for cross-repo consumers:
 
 ```bash
-grep -rn "from src.firmware.firmware_manager import" --include="*.py" .
+grep -rn "from src.operations.execution.firmware.firmware_manager import" --include="*.py" .
 ```
 
 Expected: exactly one match — `MistHelper.py` line 18795 (inside the factory body, the sole import). No other Python file in the repo imports this module.
@@ -192,7 +192,7 @@ FirmwareManager, FirmwareManagerConfig
 SafeInputFn, SelectSiteFn, CheckCacheFn, GetCsvPathFn, GeneratorFn
 ```
 
-**Addition**: `FirmwareManagerConfig` becomes importable. No name is removed. Legacy import `from src.firmware.firmware_manager import FirmwareManager` continues to work.
+**Addition**: `FirmwareManagerConfig` becomes importable. No name is removed. Legacy import `from src.operations.execution.firmware.firmware_manager import FirmwareManager` continues to work.
 
 ---
 

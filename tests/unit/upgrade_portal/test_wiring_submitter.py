@@ -25,7 +25,7 @@ from typing import Any
 
 import pytest
 
-from src.upgrade_portal.app import wiring
+from src.interfaces.portals.upgrade_portal.app import wiring
 
 RUN_ID = "11111111-1111-1111-1111-111111111111"
 UPGRADE_ID = "22222222-2222-2222-2222-222222222222"

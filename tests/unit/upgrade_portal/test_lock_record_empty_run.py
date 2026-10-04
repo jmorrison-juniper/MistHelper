@@ -18,7 +18,7 @@ from __future__ import annotations  # Postponed annotations keep every hint a pl
 import json  # The store keeps a record as JSON text, so one test reads a stored null back.
 from typing import Any  # A decoded record maps a key to a free-form value.
 
-from src.upgrade_portal.runtime import identity, lock  # The identity pair and the record under test.
+from src.interfaces.portals.upgrade_portal.runtime import identity, lock  # The identity pair and the record under test.
 
 # --------------------------------------------------------------------------
 # The fixed values. Each one repeats a rule of the specification.

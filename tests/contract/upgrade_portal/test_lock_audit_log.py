@@ -21,7 +21,7 @@ from typing import Any
 
 import pytest
 
-from src.upgrade_portal.compare import lock_audit
+from src.interfaces.portals.upgrade_portal.compare import lock_audit
 
 logger = logging.getLogger(__name__)  # Keep temporary fixture records separate from portal records.
 

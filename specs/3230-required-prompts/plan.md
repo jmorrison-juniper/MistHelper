@@ -8,7 +8,7 @@ Menus 263 through 268 ask for an endpoint first. The later prompts depend on the
 
 ## Design
 
-Add one marked block before `return registry` in `_build_registry()`. The block builds chooser options from `src.export.count_exporter` and `src.export.simple_endpoint_exporter` tables. This keeps the portal choice list aligned with the CLI chooser.
+Add one marked block before `return registry` in `_build_registry()`. The block builds chooser options from `src.operations.exporting.export.count_exporter` and `src.operations.exporting.export.simple_endpoint_exporter` tables. This keeps the portal choice list aligned with the CLI chooser.
 
 Mark menus 263 through 268 as `cli_only`. The message states the per-choice prompt limit and gives the `python MistHelper.py --menu N` path.
 

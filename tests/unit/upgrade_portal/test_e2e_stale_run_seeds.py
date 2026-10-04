@@ -15,7 +15,7 @@ from typing import Any  # The records hold JSON values of mixed types.
 
 import pytest  # The parameters of the write tests and the log capture.
 
-from src.upgrade_portal.app.routes.upgrade import run_is_live  # The shipped rule of the site scan.
+from src.interfaces.portals.upgrade_portal.app.routes.upgrade import run_is_live  # The shipped rule of the site scan.
 from tests.e2e.upgrade_portal.stale_run_seeds import (  # Issue #3507: the module under test.
     STALE_PRE_CLOUD_RUN_ID,
     STALE_SITE_ID,

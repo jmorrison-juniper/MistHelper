@@ -1,10 +1,10 @@
-"""Unit tests for src.capture.org_pcap_wait_download_workflow."""
+"""Unit tests for src.operations.execution.capture.org_pcap_wait_download_workflow."""
 
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from src.capture.org_pcap_wait_download_workflow import OrgPcapWaitDownloadWorkflow
+from src.operations.execution.capture.org_pcap_wait_download_workflow import OrgPcapWaitDownloadWorkflow
 
 
 def test_execute_calls_org_list_callback_and_download_manager() -> None:
@@ -20,7 +20,9 @@ def test_execute_calls_org_list_callback_and_download_manager() -> None:
     response.data = []
     mistapi_module.api.v1.orgs.pcaps.listOrgPacketCaptures.return_value = response
 
-    with patch("src.capture.org_pcap_wait_download_workflow.PacketCaptureDownloadManager") as mock_manager_cls:
+    with patch(
+        "src.operations.execution.capture.org_pcap_wait_download_workflow.PacketCaptureDownloadManager"
+    ) as mock_manager_cls:
         mock_manager = MagicMock()
         mock_manager_cls.return_value = mock_manager
         workflow.execute("org-1", "capture-1", 60)

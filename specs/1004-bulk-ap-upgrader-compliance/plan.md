@@ -5,7 +5,7 @@
 
 ## Summary
 
-Refactor `src/firmware/bulk_ap_upgrader.py` (1,673 lines, grade F / 50.0 / 62 violations) to grade B (>=80.0) by:
+Refactor `src/operations/execution/firmware/bulk_ap_upgrader.py` (1,673 lines, grade F / 50.0 / 62 violations) to grade B (>=80.0) by:
 
 1. Collapsing the 10-parameter `__init__` into a `BulkAPUpgraderConfig` frozen dataclass so the constructor accepts at most 3 arguments (`self, org_id, apisession, config`) — or, per the recommendation in `research.md`, exactly one argument (`self, config`) with `org_id`/`apisession` folded into the config.
 2. Decomposing `__init__`, `execute`, and the ten enumerated MEDIUM-severity offenders (`_select_strategy`, `_estimate_api_calls`, `_offer_additional_model_versions`, `_fetch_ap_model_families`, `_configure_auto_upgrade_schedule`, `_step11_write_results`, `_apply_version_selection`, `_upgrade_version_group`, `_log_upgrade_results`, plus `execute`) into <=25-line, <=5-block helpers using a shared decomposition pattern (see `research.md` R-3).
@@ -74,12 +74,12 @@ tests/
 
 MistHelper.py                       # Updated: thin wrapper at line 19783 now builds BulkAPUpgraderConfig
 
-src/firmware/firmware_manager.py    # NOT MODIFIED — line 1463 calls the MistHelper.py thin wrapper,
+src/operations/execution/firmware/firmware_manager.py    # NOT MODIFIED — line 1463 calls the MistHelper.py thin wrapper,
                                     # not the impl class directly, so it is insulated from the
                                     # signature change by the wrapper.
 ```
 
-**Structure Decision**: Single-project layout. The refactor is scoped to one implementation file (`src/firmware/bulk_ap_upgrader.py`) plus its two direct callers (`MistHelper.py`, `tests/unit/test_bulk_ap_upgrader.py`). No new files are created inside `src/`. The `BulkAPUpgraderConfig` dataclass lives in the same module (FR-018) — there is no circular-import risk because the dataclass has no imports of its own beyond `dataclasses.dataclass` and the type aliases already at the top of the file.
+**Structure Decision**: Single-project layout. The refactor is scoped to one implementation file (`src/operations/execution/firmware/bulk_ap_upgrader.py`) plus its two direct callers (`MistHelper.py`, `tests/unit/test_bulk_ap_upgrader.py`). No new files are created inside `src/`. The `BulkAPUpgraderConfig` dataclass lives in the same module (FR-018) — there is no circular-import risk because the dataclass has no imports of its own beyond `dataclasses.dataclass` and the type aliases already at the top of the file.
 
 ## Phase 0 Deliverables
 

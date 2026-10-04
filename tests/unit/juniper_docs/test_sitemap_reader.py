@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from src.juniper_docs.discovery.sitemap_reader import SitemapReader
+from src.mist.intelligence.juniper_docs.discovery.sitemap_reader import SitemapReader
 from tests.unit.juniper_docs.conftest import FIXTURES, FakeCatalogClient
 
 

@@ -15,13 +15,13 @@ from typing import Any
 
 import pytest
 
-from src.firmware.aggregate_upgrade_service import (
+from src.operations.execution.firmware.aggregate_upgrade_service import (
     AggregateBuildInput,
     AggregateUpgradeService,
     ReconcileEvidence,
     RescheduleRequest,
 )
-from src.firmware.upgrade_service import DeviceTarget, UpgradeOptions
+from src.operations.execution.firmware.upgrade_service import DeviceTarget, UpgradeOptions
 
 ORG_ID = "11111111-1111-1111-1111-111111111111"
 SITE_ONE = "22222222-2222-2222-2222-222222222222"

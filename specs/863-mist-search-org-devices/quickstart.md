@@ -16,6 +16,6 @@ Run the quality gates:
 
 ```powershell
 python -m py_compile MistHelper.py
-python -m ruff check MistHelper.py src/export/org_search_exporter.py src/utils/operation_registry.py tests/unit/export/test_org_search_exporter.py
-python -m black --check MistHelper.py src/export/org_search_exporter.py src/utils/operation_registry.py tests/unit/export/test_org_search_exporter.py
+python -m ruff check MistHelper.py src/operations/exporting/export/org_search_exporter.py src/foundation/support/utils/operation_registry.py tests/unit/export/test_org_search_exporter.py
+python -m black --check MistHelper.py src/operations/exporting/export/org_search_exporter.py src/foundation/support/utils/operation_registry.py tests/unit/export/test_org_search_exporter.py
 ```

@@ -432,7 +432,7 @@ version change count, plus the elapsed time of the whole run.
 ## 9. Registry entries
 
 Two rows join `ENDPOINT_PRIMARY_KEY_STRATEGIES` in
-`src/refactors/endpoint_primary_key_strategies.py`.
+`src/foundation/support/refactors/endpoint_primary_key_strategies.py`.
 
 | Operation | Strategy | Key field |
 | --- | --- | --- |
@@ -442,7 +442,7 @@ Two rows join `ENDPOINT_PRIMARY_KEY_STRATEGIES` in
 `natural_pk` is the only correct choice.
 
 - `composite_pk` dual-writes to Redis, and the Redis JSON writer sets an expiry on
-  every key (`src/db/redis_writer.py:598`). FR-032a forbids an expiring path.
+  every key (`src/foundation/persistence/db/redis_writer.py:598`). FR-032a forbids an expiring path.
 - `auto_increment_with_unique` mints a fresh identifier on every write
-  (`src/db/arango_writer.py:4039`). A retry would duplicate the record instead of
+  (`src/foundation/persistence/db/arango_writer.py:4039`). A retry would duplicate the record instead of
   replacing it.

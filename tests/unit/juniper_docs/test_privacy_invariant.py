@@ -12,11 +12,11 @@ import dataclasses
 import sqlite3
 from pathlib import Path
 
-from src.juniper_docs.classify.content_sampler import ContentSampler
-from src.juniper_docs.classify.signal_scorer import SignalScorer
-from src.juniper_docs.harvest.manifest_writer import ManifestWriter
-from src.juniper_docs.harvest.state_store import HarvestStateStore
-from src.juniper_docs.models import ContentAnalysisResult, DocumentType, InventoryRecord
+from src.mist.intelligence.juniper_docs.classify.content_sampler import ContentSampler
+from src.mist.intelligence.juniper_docs.classify.signal_scorer import SignalScorer
+from src.mist.intelligence.juniper_docs.harvest.manifest_writer import ManifestWriter
+from src.mist.intelligence.juniper_docs.harvest.state_store import HarvestStateStore
+from src.mist.intelligence.juniper_docs.models import ContentAnalysisResult, DocumentType, InventoryRecord
 from tests.unit.juniper_docs.conftest import FIXTURES
 
 _MARKER = "UNIQUE-BODY-MARKER-DO-NOT-PERSIST-7F3A"  # A token from the fixture body text.
@@ -38,7 +38,7 @@ def test_content_scores_table_has_no_text_column(tmp_path: Path) -> None:
 
 def test_manifest_has_no_body_text_field() -> None:
     """The manifest field set carries no body-text field."""
-    from src.juniper_docs.harvest.manifest_writer import _CSV_FIELDS  # The manifest columns.
+    from src.mist.intelligence.juniper_docs.harvest.manifest_writer import _CSV_FIELDS  # The manifest columns.
 
     assert not any("body" in name or name == "text" for name in _CSV_FIELDS)  # No text field.
 

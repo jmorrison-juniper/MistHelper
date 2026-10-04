@@ -1,4 +1,4 @@
-"""Unit tests for src.audit.time_parser module.
+"""Unit tests for src.mist.access.audit.time_parser module.
 
 Covers TimeRangeParser.display_legend, parse, validate, and to_api_kwargs.
 """
@@ -7,7 +7,7 @@ import time
 
 import pytest
 
-from src.audit.time_parser import UNIT_SECONDS, ParsedTimeRange, TimeRangeParser
+from src.mist.access.audit.time_parser import UNIT_SECONDS, ParsedTimeRange, TimeRangeParser
 
 
 class TestDisplayLegend:

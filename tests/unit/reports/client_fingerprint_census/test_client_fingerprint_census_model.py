@@ -7,7 +7,7 @@ from pathlib import Path  # WHY: build repository-relative paths without separat
 
 import pytest  # WHY: assert validation failures clearly.
 
-from src.reports.client_fingerprint_census.model import (
+from src.mist.intelligence.reports.client_fingerprint_census.model import (
     DISPLAY_LIMIT,
     DISTINCT_FIELDS,
     UNKNOWN_VALUE,

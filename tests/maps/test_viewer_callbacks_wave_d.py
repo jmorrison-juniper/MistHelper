@@ -45,7 +45,7 @@ def _build_dash_stub() -> types.ModuleType:
 
 sys.modules["dash"] = _build_dash_stub()  # Install before launcher imports run
 
-from src.maps.launcher import MapViewerCallbacks, MapViewerState  # noqa: E402
+from src.interfaces.visualization.maps.launcher import MapViewerCallbacks, MapViewerState  # noqa: E402
 
 
 @pytest.fixture(autouse=True)

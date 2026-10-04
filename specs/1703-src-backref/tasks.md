@@ -4,20 +4,20 @@
 - [x] T002 Create a worktree from `origin/main` at `C:\Users\jmorrison\mh-1703`.
 - [x] T003 Confirm `git rev-list --count HEAD..origin/main` prints `0`.
 - [x] T004 Run `python scripts\bootstrap_worktree.py` in the worktree.
-- [x] T005 Add `src\config\runtime_settings.py`.
-- [x] T006 Add `src\api\api_usage_cache.py`.
-- [x] T007 Add the remaining fast-mode settings to `src\refactors\fast_mode_constants.py`.
-- [x] T008 Move API retry reads in `src\api\api_data_fetcher.py`.
-- [x] T009 Move page-limit reads in `src\api\api_core_fetch_utils.py`.
-- [x] T010 Move settings reads in `src\export\gateway_test_exporter.py`.
-- [x] T011 Move settings reads in `src\export\org_device_stats_exporter.py`.
-- [x] T012 Move fallback thread reads in `src\refactors\connection_pool_executor.py`.
-- [x] T013 Move page-limit reads in `src\upgrade_portal\capture\devices.py`.
-- [x] T014 Move page-limit reads in `src\upgrade_portal\capture\extras.py`.
-- [x] T015 Move fallback thread reads in `src\upgrade_portal\runtime\pools.py`.
+- [x] T005 Add `src\foundation\runtime\config\runtime_settings.py`.
+- [x] T006 Add `src\mist\access\api\api_usage_cache.py`.
+- [x] T007 Add the remaining fast-mode settings to `src\foundation\support\refactors\fast_mode_constants.py`.
+- [x] T008 Move API retry reads in `src\mist\access\api\api_data_fetcher.py`.
+- [x] T009 Move page-limit reads in `src\mist\access\api\api_core_fetch_utils.py`.
+- [x] T010 Move settings reads in `src\operations\exporting\export\gateway_test_exporter.py`.
+- [x] T011 Move settings reads in `src\operations\exporting\export\org_device_stats_exporter.py`.
+- [x] T012 Move fallback thread reads in `src\foundation\support\refactors\connection_pool_executor.py`.
+- [x] T013 Move page-limit reads in `src\interfaces\portals\upgrade_portal\capture\devices.py`.
+- [x] T014 Move page-limit reads in `src\interfaces\portals\upgrade_portal\capture\extras.py`.
+- [x] T015 Move fallback thread reads in `src\interfaces\portals\upgrade_portal\runtime\pools.py`.
 - [x] T016 Update focused unit tests for the new source settings modules.
 - [x] T017 Run focused unit tests for API, gateway, and upgrade portal helpers.
-- [x] T018 Run import checks for `src.api.api_data_fetcher`, `MistHelper`, and `wsgi`.
+- [x] T018 Run import checks for `src.mist.access.api.api_data_fetcher`, `MistHelper`, and `wsgi`.
 - [x] T019 Confirm the AST reference count changed from 366 to 356 for executable `importlib.import_module("MistHelper")`.
 - [x] T020 Confirm the AST import count changed from 21 to 18 for executable `import MistHelper`.
 - [x] T021 Confirm `MistHelper.py` does not appear in the branch diff.

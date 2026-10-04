@@ -200,7 +200,7 @@ tests/
 
 ### Tier 1 — Files with CC > 40 (Worst Offenders — Highest Risk)
 
-**Files affected (6)**: `src/websocket/manager.py`, `src/websocket/diag_commands.py`, `src/ui/tui.py`, `src/ssh/ssh_runner.py`, `src/auth/interactive_session.py`, `src/gateway/gateway_override_analyzer.py`
+**Files affected (6)**: `src/mist/realtime/websocket/manager.py`, `src/mist/realtime/websocket/diag_commands.py`, `src/interfaces/visualization/ui/tui.py`, `src/operations/execution/ssh/ssh_runner.py`, `src/mist/access/auth/interactive_session.py`, `src/mist/resources/gateway/gateway_override_analyzer.py`
 
 **Functions to refactor**:
 
@@ -231,8 +231,8 @@ tests/
 
 **Validation gate (after Tier 1 push)**:
 ```powershell
-python -m radon cc -n D src\websocket src\ui\tui.py src\ssh\ssh_runner.py src\auth\interactive_session.py src\gateway\gateway_override_analyzer.py   # expect: empty (no D/E/F)
-python -m radon cc -n C src\websocket src\ui\tui.py src\ssh\ssh_runner.py src\auth\interactive_session.py src\gateway\gateway_override_analyzer.py   # expect: empty
+python -m radon cc -n D src\mist\realtime\websocket src\interfaces\visualization\ui\tui.py src\operations\execution\ssh\ssh_runner.py src\mist\access\auth\interactive_session.py src\mist\resources\gateway\gateway_override_analyzer.py   # expect: empty (no D/E/F)
+python -m radon cc -n C src\mist\realtime\websocket src\interfaces\visualization\ui\tui.py src\operations\execution\ssh\ssh_runner.py src\mist\access\auth\interactive_session.py src\mist\resources\gateway\gateway_override_analyzer.py   # expect: empty
 python -m ruff check .
 python -m black --check .
 python -m mypy src/
@@ -243,7 +243,7 @@ python -m pytest tests/guardrails/ -q
 
 ### Tier 2 — Files with CC 25–40 (Medium Risk)
 
-**Files affected (6)**: `src/maps/maps_manager.py`, `src/export/wifi_clients_exporter.py`, `src/export/site_insights_exporter.py`, `src/auth/interactive_session.py` (remaining), `src/ssh/ssh_runner.py` (remaining), `src/websocket/commands.py`, `src/websocket/service_ping_discovery.py`
+**Files affected (6)**: `src/interfaces/visualization/maps/maps_manager.py`, `src/operations/exporting/export/wifi_clients_exporter.py`, `src/operations/exporting/export/site_insights_exporter.py`, `src/mist/access/auth/interactive_session.py` (remaining), `src/operations/execution/ssh/ssh_runner.py` (remaining), `src/mist/realtime/websocket/commands.py`, `src/mist/realtime/websocket/service_ping_discovery.py`
 
 **Functions to refactor**:
 
@@ -278,7 +278,7 @@ python -m pytest tests/guardrails/ tests/unit/ -q
 
 ### Tier 3 — Files with CC 11–24 (Lowest Risk, Largest Count)
 
-**Files affected (~15)**: `src/analytics/site_inventory_health_analyzer.py`, `src/bootstrap/uv_runtime.py`, `src/capture/multi_ap_scan_workflow.py`, `src/export/site_export_utils.py`, `src/export/site_insights_exporter.py` (remaining), `src/gateway/gateway_export_utils.py`, `src/gateway/gateway_stats_exporter.py`, `src/gateway/wan2_migration_manager.py`, `src/gateway/wan_probe_device_override_manager.py`, `src/inventory/org_device_inventory_msp.py`, `src/inventory/org_device_inventory_summary.py`, `src/maps/maps_manager.py` (remaining: `_validate_ppm`, `_add_vbeacons_to_figure`, `download_site_map_images`), `src/site/site_config_manager.py`, `src/ssh/ssh_runner_manager.py`, `src/ssh/ssh_runner.py` (remaining: `load_commands_from_csv`, `_connect`, `_parse_command_list`), `src/troubleshooting/interactive_test_runner.py`, `src/troubleshooting/marvis_troubleshoot_utils.py`, `src/ui/tui.py` (remaining smaller methods), `src/websocket/service_ping_discovery.py` (remaining)
+**Files affected (~15)**: `src/mist/intelligence/analytics/site_inventory_health_analyzer.py`, `src/foundation/runtime/bootstrap/uv_runtime.py`, `src/operations/execution/capture/multi_ap_scan_workflow.py`, `src/operations/exporting/export/site_export_utils.py`, `src/operations/exporting/export/site_insights_exporter.py` (remaining), `src/mist/resources/gateway/gateway_export_utils.py`, `src/mist/resources/gateway/gateway_stats_exporter.py`, `src/mist/resources/gateway/wan2_migration_manager.py`, `src/mist/resources/gateway/wan_probe_device_override_manager.py`, `src/mist/resources/inventory/org_device_inventory_msp.py`, `src/mist/resources/inventory/org_device_inventory_summary.py`, `src/interfaces/visualization/maps/maps_manager.py` (remaining: `_validate_ppm`, `_add_vbeacons_to_figure`, `download_site_map_images`), `src/mist/resources/site/site_config_manager.py`, `src/operations/execution/ssh/ssh_runner_manager.py`, `src/operations/execution/ssh/ssh_runner.py` (remaining: `load_commands_from_csv`, `_connect`, `_parse_command_list`), `src/mist/intelligence/troubleshooting/interactive_test_runner.py`, `src/mist/intelligence/troubleshooting/marvis_troubleshoot_utils.py`, `src/interfaces/visualization/ui/tui.py` (remaining smaller methods), `src/mist/realtime/websocket/service_ping_discovery.py` (remaining)
 
 **Strategy**: Predominantly **Extract Method** in-place (private `_verb_noun` helpers on the same class) + **Guard Clauses** to flatten nested conditionals. A handful of cohesive 2–3-method clusters (`maps/plotly_viewer/ppm_validator.py`, `maps/plotly_viewer/vbeacon_figure_builder.py`, `ui/formatting/hierarchical_value_formatter.py`, `ssh/runner_manager/*`, `ssh/config/csv_command_loader.py`, `ssh/shell_execution/connect_strategy.py`, `websocket/service_ping/service_category_renderer.py`) move into submodules already created in Tier 1 / Tier 2 — no *new* directories are introduced in Tier 3.
 

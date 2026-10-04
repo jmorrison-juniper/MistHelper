@@ -35,7 +35,7 @@ Drive every counted violation in the seven listed categories to **0** in `MistHe
 
 ### Non-Goals
 
-- **No changes outside `MistHelper.py`** except: (a) the `data-model.md` / `tasks.md` status advances inside `specs/195/`, `specs/196/`, `specs/168/`, `specs/1002/`; (b) at most a single import-statement rename if `ExtractedPacketCaptureManager` is renamed in `src/capture/packet_capture.py` (see Edge Cases).
+- **No changes outside `MistHelper.py`** except: (a) the `data-model.md` / `tasks.md` status advances inside `specs/195/`, `specs/196/`, `specs/168/`, `specs/1002/`; (b) at most a single import-statement rename if `ExtractedPacketCaptureManager` is renamed in `src/operations/execution/capture/packet_capture.py` (see Edge Cases).
 - **Do not** touch `src/`, `tools/`, `web_portal/`, `maps_manager.py`, `wsgi.py` (other than the one exception above).
 - **Do not** address CONV-COMMENTS (inline-comment coverage 41.3 %) as a primary objective. It improves implicitly as tranches touch lines per the project's NON-NEGOTIABLE inline-comment rule; no dedicated sweep here.
 - **Do not** introduce new wrappers, façades, or aliases to "ease" migration. The migration lifecycle terminates here.
@@ -69,7 +69,7 @@ As an operator running MistHelper in production, I need every inlined call site 
 **Acceptance Scenarios**:
 
 1. **Given** the pre-cleanup `MistHelper.py`, **When** the cleanup completes, **Then** all existing pytest suites pass unchanged with coverage ≥ 70 %.
-2. **Given** a public class previously re-exported via a façade (e.g. `PacketCaptureManager`), **When** imported from `MistHelper` after cleanup, **Then** `MistHelper.PacketCaptureManager is src.capture.packet_capture.PacketCaptureManager` returns `True`.
+2. **Given** a public class previously re-exported via a façade (e.g. `PacketCaptureManager`), **When** imported from `MistHelper` after cleanup, **Then** `MistHelper.PacketCaptureManager is src.operations.execution.capture.packet_capture.PacketCaptureManager` returns `True`.
 3. **Given** a wrapper-removed call site for `_safe_input` / `save_data_to_output` / `_mist_get_wrapper`, **When** the same code path runs post-cleanup, **Then** stdout, file output, and HTTP behavior match the pre-cleanup baseline.
 
 ---
@@ -100,8 +100,8 @@ As a reviewer of a 59-site architectural cleanup, I need the work split into rev
 
 - **Dunder methods that look like delegators**: `DateTimeHandler.__call__` and `__getattr__` are listed under the 8 hand-rolled passthroughs. They MUST be examined individually before deletion — `__getattr__` in particular may implement legitimate dynamic-attribute access rather than a true wrapper. Inlining is only valid where the dunder body is a pure passthrough.
 - **`_safe_input` (L21303) used pervasively by `BulkRadiusConfig`**: removal MUST either inline the body at every call site OR (preferred) replace every call site with a direct `InputUtils.safe_input(...)` call. Do not introduce a new wrapper. Count of call sites MUST be enumerated in `plan.md`.
-- **`save_data_to_output` (L8006) marked "backward compatibility"**: every call site MUST migrate to the canonical `DataExporter.write_with_format_selection(...)` (or whichever `src/exporters/` method is the documented successor). The cleanup task in `plan.md` MUST list the exact replacement.
-- **`PacketCaptureManager = ExtractedPacketCaptureManager` (L6277)**: two valid resolutions — (a) rewrite every reference inside `MistHelper.py` to `ExtractedPacketCaptureManager`, OR (b) rename the class to `PacketCaptureManager` inside `src/capture/packet_capture.py` (single-statement change there + update one import in `MistHelper.py`). Option (b) is preferred *only if* the rename is contained to a single import-statement change. `plan.md` MUST pick one and justify.
+- **`save_data_to_output` (L8006) marked "backward compatibility"**: every call site MUST migrate to the canonical `DataExporter.write_with_format_selection(...)` (or whichever `src/operations/exporting/exporters/` method is the documented successor). The cleanup task in `plan.md` MUST list the exact replacement.
+- **`PacketCaptureManager = ExtractedPacketCaptureManager` (L6277)**: two valid resolutions — (a) rewrite every reference inside `MistHelper.py` to `ExtractedPacketCaptureManager`, OR (b) rename the class to `PacketCaptureManager` inside `src/operations/execution/capture/packet_capture.py` (single-statement change there + update one import in `MistHelper.py`). Option (b) is preferred *only if* the rename is contained to a single import-statement change. `plan.md` MUST pick one and justify.
 - **30 migration-spec façades**: each removal opens a `tasks.md` checkbox in the originating spec (#195 / #196 / #168 / #1002). A follow-up table in `tasks.md` MUST track which spec / which task is checked by which removal.
 - **`stop_listening` no-op stub**: if no caller exists, delete it outright; if callers exist, replace each with the canonical stop method on the owning class.
 - **CONV-PATH L12268**: hardcoded `\\` drive separator must move to `pathlib.Path` / `os.path.join` so the line is portable across Windows / Linux / container runtimes.
@@ -161,7 +161,7 @@ As a reviewer of a 59-site architectural cleanup, I need the work split into rev
 
 ## Constraints / Performance *(mandatory)*
 
-- **Scope confinement**: edits are restricted to `MistHelper.py` plus the four migration-spec `data-model.md` / `tasks.md` pairs plus `CHANGELOG.md` plus `data/compliance_report.md` plus the at-most-one optional rename in `src/capture/packet_capture.py`. Touching any other file fails review.
+- **Scope confinement**: edits are restricted to `MistHelper.py` plus the four migration-spec `data-model.md` / `tasks.md` pairs plus `CHANGELOG.md` plus `data/compliance_report.md` plus the at-most-one optional rename in `src/operations/execution/capture/packet_capture.py`. Touching any other file fails review.
 - **Tranche atomicity**: every tranche commit MUST leave `MistHelper.py` syntactically valid, importable, and CI-green. No tranche may rely on a follow-up tranche to restore consistency.
 - **No new wrappers**: the cleanup must not introduce a new layer of indirection to ease the diff. Direct call sites only.
 - **Performance**: this is a behavior-preserving refactor; no measurable runtime regression is expected and none is acceptable. Removing wrappers should be a marginal positive (one fewer call frame).
@@ -220,7 +220,7 @@ As a reviewer of a 59-site architectural cleanup, I need the work split into rev
 - **Order matters within Tranche 4**: handle façades for spec #195 first (longest enum, most documented context), then #196, then #168, then #1002. Sub-tranche per owning spec.
 - **STRUCT-PARAMS pattern**: prefer `@dataclass(frozen=True, slots=True)` for the extracted parameter struct. The dataclass lives in `src/` if there is an obvious home, otherwise in `MistHelper.py` near its consumer (single consumer, internal to the file).
 - **`_safe_input` removal**: enumerate all call sites once, replace every site with `InputUtils.safe_input(...)`. Do not leave `_safe_input` defined.
-- **`save_data_to_output` removal**: locate the canonical successor in `src/exporters/` before starting; do not invent one.
+- **`save_data_to_output` removal**: locate the canonical successor in `src/operations/exporting/exporters/` before starting; do not invent one.
 - **`PacketCaptureManager` alias**: decide between in-file rename (option a) vs `src/` rename (option b) during `/speckit.plan`. Default to option (a) if option (b) would require touching any caller outside `MistHelper.py`.
 - **Per-tranche CHANGELOG note is optional**; one consolidated CHANGELOG entry in the final commit is required.
 - **Inline-comment rule reminder**: the NON-NEGOTIABLE inline-comment rule applies to every line touched. Each replacement site MUST gain an inline comment explaining the inlined logic if one is not already adjacent.
@@ -234,6 +234,6 @@ As a reviewer of a 59-site architectural cleanup, I need the work split into rev
 - The 2026-06-23 `data/compliance_report.md` snapshot is current as of plan execution. If the file changes during the cleanup window, the count of 59 may shift; the goal is "zero in these seven categories", not "remove exactly 59 things".
 - Every façade flagged by ARCH-DELEGATE has a canonical successor already living in `src/`. If a façade is found whose successor does not yet exist in `src/`, escalate to NEEDS DECISION rather than inventing one.
 - `InputUtils.safe_input` is the canonical prompt helper. (Verified during `/speckit.plan` against `src/`.)
-- `DataExporter.write_with_format_selection` (or the documented equivalent under `src/exporters/`) is the canonical successor for `save_data_to_output`. (Verified during `/speckit.plan`.)
+- `DataExporter.write_with_format_selection` (or the documented equivalent under `src/operations/exporting/exporters/`) is the canonical successor for `save_data_to_output`. (Verified during `/speckit.plan`.)
 - CI quality gates (ruff, black, mypy, pytest+cov, bandit, pip-audit, CodeQL, Playwright) are wired and currently green on `main`.
 - The user has explicitly chosen to override the documented 4-state migration lifecycle in specs #195 / #196 / #168 / #1002 in favor of the NON-NEGOTIABLE "no wrappers" rule.

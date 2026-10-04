@@ -65,8 +65,8 @@ That explicit sequence replaces the older automatic deployment instructions for 
 The exact reservation contains these files.
 
 ```text
-src/upgrade_portal/app/assets/templates/select/mode.html
-src/upgrade_portal/app/assets/templates/select/sites.html
+src/interfaces/portals/upgrade_portal/app/assets/templates/select/mode.html
+src/interfaces/portals/upgrade_portal/app/assets/templates/select/sites.html
 tests/contract/upgrade_portal/test_mode_descriptions.py
 tests/e2e/upgrade_portal/test_mode_descriptions_journey.py
 specs/3215-upgrade-mode-descriptions/spec.md

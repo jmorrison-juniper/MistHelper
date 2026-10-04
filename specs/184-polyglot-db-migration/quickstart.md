@@ -70,10 +70,10 @@ python -m black --check MistHelper.py
 
 | File | What to Change |
 | - | - |
-| `src/db/router.py` | DatabaseRouter class (new) |
-| `src/db/arango_writer.py` | ArangoDBWriter class (new) |
-| `src/db/redis_writer.py` | RedisTimeSeriesWriter class (new) |
-| `src/db/retention.py` | RetentionManager class (new) |
+| `src/foundation/persistence/db/router.py` | DatabaseRouter class (new) |
+| `src/foundation/persistence/db/arango_writer.py` | ArangoDBWriter class (new) |
+| `src/foundation/persistence/db/redis_writer.py` | RedisTimeSeriesWriter class (new) |
+| `src/foundation/persistence/db/retention.py` | RetentionManager class (new) |
 | `MistHelper.py` line ~9401 | DataExporter: add DatabaseRouter delegation |
 | `compose.yml` | Add arangodb + redis-stack services |
 | `requirements.txt` | Add python-arango, redis[hiredis], structlog |

@@ -4,7 +4,7 @@ The catalog is not a flat list. The landing page embeds a solution list, and
 each solution page embeds its own JVD list. This script walks both levels.
 
 The shared HTTP client, the PDF resolver, and the downloader now live in the
-``src/juniper_docs/acquire`` package. This script imports them directly and
+``src/mist/intelligence/juniper_docs/acquire`` package. This script imports them directly and
 keeps only the two validated-designs classes: the catalog walker and the run
 driver. There is no re-export stub and no compatibility wrapper.
 """
@@ -19,10 +19,10 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.juniper_docs.acquire.catalog_client import JvdCatalogClient  # noqa: E402
-from src.juniper_docs.acquire.downloader import JvdDownloader  # noqa: E402
-from src.juniper_docs.acquire.http_config import HttpConfig  # noqa: E402
-from src.juniper_docs.acquire.pdf_resolver import JvdPdfResolver  # noqa: E402
+from src.mist.intelligence.juniper_docs.acquire.catalog_client import JvdCatalogClient  # noqa: E402
+from src.mist.intelligence.juniper_docs.acquire.downloader import JvdDownloader  # noqa: E402
+from src.mist.intelligence.juniper_docs.acquire.http_config import HttpConfig  # noqa: E402
+from src.mist.intelligence.juniper_docs.acquire.pdf_resolver import JvdPdfResolver  # noqa: E402
 
 SITE = HttpConfig.SITE  # Base origin sourced from the shared HTTP config
 LANDING = f"{SITE}/documentation/validated-designs/"  # Solution list page

@@ -18,7 +18,7 @@ from typing import Any
 
 import pytest
 
-from src.upgrade_portal.compare import diff
+from src.interfaces.portals.upgrade_portal.compare import diff
 
 # WHY: Obviously fake addresses. A reader sees at once that no test reaches a
 #      real site.

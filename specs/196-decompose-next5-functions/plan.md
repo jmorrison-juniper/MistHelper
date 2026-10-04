@@ -100,7 +100,7 @@ tests/
 
 ### Boundary A: Multi-AP scan orchestration (`_start_site_scan_capture_all_aps`)
 
-- **New module**: `src/capture/multi_ap_scan_workflow.py`
+- **New module**: `src/operations/execution/capture/multi_ap_scan_workflow.py`
 - **Primary class**: `MultiApScanCaptureWorkflow`
 - **Responsibilities**:
   - AP inventory retrieval and normalization
@@ -111,7 +111,7 @@ tests/
 
 ### Boundary B: Site PCAP wait/download state machine (`_wait_and_download_pcap`)
 
-- **New module**: `src/capture/site_pcap_wait_download_workflow.py`
+- **New module**: `src/operations/execution/capture/site_pcap_wait_download_workflow.py`
 - **Primary class**: `SitePcapWaitDownloadWorkflow`
 - **Responsibilities**:
   - capture completion polling
@@ -122,7 +122,7 @@ tests/
 
 ### Boundary C: Org PCAP wait/download state machine (`_wait_and_download_pcap_org`)
 
-- **New module**: `src/capture/org_pcap_wait_download_workflow.py`
+- **New module**: `src/operations/execution/capture/org_pcap_wait_download_workflow.py`
 - **Primary class**: `OrgPcapWaitDownloadWorkflow`
 - **Responsibilities**:
   - org-level capture completion polling and readiness checks
@@ -132,7 +132,7 @@ tests/
 
 ### Boundary D: Wi-Fi client export orchestration (`wifi_clients`)
 
-- **New module**: `src/export/wifi_clients_exporter.py`
+- **New module**: `src/operations/exporting/export/wifi_clients_exporter.py`
 - **Primary class**: `WifiClientsExporter`
 - **Responsibilities**:
   - site/client retrieval orchestration
@@ -143,7 +143,7 @@ tests/
 
 ### Boundary E: Interactive diagnostics/test orchestration (`run_interactive_test`)
 
-- **New module**: `src/troubleshooting/interactive_test_runner.py`
+- **New module**: `src/mist/intelligence/troubleshooting/interactive_test_runner.py`
 - **Primary class**: `InteractiveTestRunner`
 - **Responsibilities**:
   - prompt flow and selection control
@@ -174,7 +174,7 @@ Rollback strategy:
 ### Phase 0 - Research and decision hardening
 
 - Confirm exact behavior invariants per target.
-- Confirm which existing `src/capture` helpers can be reused vs extracted new.
+- Confirm which existing `src/operations/execution/capture` helpers can be reused vs extracted new.
 - Resolve all planning unknowns and capture alternatives in `research.md`.
 
 ### Phase 1 - Design artifacts and contracts

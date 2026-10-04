@@ -114,10 +114,10 @@
 - [ ] T023 Add the test tree ignore rule to `pyproject.toml`. Add `S101` to the `tests/**` entry in `[tool.ruff.lint.per-file-ignores]`. The measurement shows 13,440 results without this rule. Add a comment that states the count and the reason.
 - [ ] T024 Add `S` to the `select` list in `[tool.ruff.lint]` of `pyproject.toml`. Add a comment that links to `specs/1780-ruff-s-family-decision/decision.md`.
 - [ ] T025 Add the second annotation to each of the 62 lines that already hold a `# nosec` comment. [research.md](research.md) section R3 holds the count. Write the ruff annotation first and the bandit comment second, so that both tools read their own form.
-- [ ] T026 Triage the 10 production results in [research.md](research.md) section R4. Two of them are default passwords in `src/db/__init__.py` lines 45 and 48. **Warning**: If a value is a real credential, move it to the environment and raise a rotation request. Do not add a suppression comment for a real secret.
+- [ ] T026 Triage the 10 production results in [research.md](research.md) section R4. Two of them are default passwords in `src/foundation/persistence/db/__init__.py` lines 45 and 48. **Warning**: If a value is a real credential, move it to the environment and raise a rotation request. Do not add a suppression comment for a real secret.
 - [ ] T027 Under Option 3 only, delete the bandit job from `.github/workflows/ci.yml`. Delete the `[tool.bandit]` table from `pyproject.toml`. Remove `bandit` from `requirements-dev.txt`. Remove the bandit entry from `.pre-commit-config.yaml`.
 - [ ] T028 Under Option 3 only, remove every one of the 117 `# nosec` comments across the 51 files that hold one. A comment for a tool that no longer runs is dead text.
-- [ ] T029 Under Option 3 only, record what the repository gives up. Name `src/maps`, `mist-ops-platform`, and `web_portal`, which hold 111 Python files that ruff excludes. Name the four bandit rules with no ruff equivalent. Success criterion SC-010 demands this record.
+- [ ] T029 Under Option 3 only, record what the repository gives up. Name `src/interfaces/visualization/maps`, `mist-ops-platform`, and `web_portal`, which hold 111 Python files that ruff excludes. Name the four bandit rules with no ruff equivalent. Success criterion SC-010 demands this record.
 
 **Checkpoint**: The configuration matches the decision. Phase 7 can start.
 
@@ -130,7 +130,7 @@
 - [ ] T030 Run the lint gate and the format gate. Run `.venv\Scripts\python.exe -m ruff check .` and `.venv\Scripts\python.exe -m black --check --diff .`. Confirm that each command exits with code 0.
 - [ ] T031 Run the security gate. Run `.venv\Scripts\python.exe -m bandit -c pyproject.toml -r . -q` under Option 1 and Option 2 and confirm the count from T004. Skip this task under Option 3, because the gate no longer exists.
 - [ ] T032 Run the test suite. Run `.venv\Scripts\python.exe -m pytest tests/unit --no-cov -q` and confirm that the pass count matches the count before the change. Success criterion SC-006 compares against it.
-- [ ] T033 Open a separate issue for the 10 production results in [research.md](research.md) section R4. Name the two default passwords in `src/db/__init__.py`. Add the labels `security` and `chore`. Non-goal NG-001 keeps that work outside this scope.
+- [ ] T033 Open a separate issue for the 10 production results in [research.md](research.md) section R4. Name the two default passwords in `src/foundation/persistence/db/__init__.py`. Add the labels `security` and `chore`. Non-goal NG-001 keeps that work outside this scope.
 - [ ] T034 Write the pull request body. State the chosen option and link to `specs/1780-ruff-s-family-decision/decision.md`. State the ordering against issue #1778. Reference issue [#1719](https://github.com/jmorrison-juniper/MistHelper/issues/1719), which raised the question. Requirement FR-014 demands both references.
 - [ ] T035 Run the writing gate. Run `.venv\Scripts\python.exe -m tools.ste_linter` against every changed Markdown file and confirm a score of 80 or more.
 - [ ] T036 Open the pull request. Write `Closes #1780` in the body. Add the labels `chore` and `docs`. Wait for CodeQL to report before adding the `auto-merge` label.

@@ -31,7 +31,7 @@ top-level entry point and already covered by the entry routing guardrails.
 ## Redaction Target
 
 `SSHRunnerManager._collect_missing_data()` handles passwords.
-`src/utils/logger_utils.py` provides `redact_secret()` to prevent credential leakage
+`src/foundation/support/utils/logger_utils.py` provides `redact_secret()` to prevent credential leakage
 in log output.
 
 ## Post-US3 Evidence

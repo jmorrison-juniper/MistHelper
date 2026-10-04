@@ -1,7 +1,7 @@
 """A stand-in for the site lock store of the upgrade portal.
 
 Why:
-    The lock rules live in `src/upgrade_portal/runtime/lock.py`, and a test must
+    The lock rules live in `src/interfaces/portals/upgrade_portal/runtime/lock.py`, and a test must
     drive those real rules. This module stands in for the store alone, so the
     compare-and-extend and the compare-and-delete both run exactly as they run
     against Redis, with no Redis server.

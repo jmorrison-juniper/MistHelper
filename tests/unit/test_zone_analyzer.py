@@ -1,4 +1,4 @@
-"""Tests for src.analytics.zone_analyzer module."""
+"""Tests for src.mist.intelligence.analytics.zone_analyzer module."""
 
 from __future__ import annotations
 
@@ -55,7 +55,7 @@ def _restore_stub_modules() -> None:
 # import. See issue #1739.
 _install_stub_modules()
 try:
-    from src.analytics.zone_analyzer import (
+    from src.mist.intelligence.analytics.zone_analyzer import (
         ZoneConfigurationAnalyzer,
         _build_one_summary_row,
         _build_summary_rows,
@@ -597,7 +597,7 @@ class TestDisplayHelpersBranches:
     """Cover display helper branches with data present."""
 
     def test_display_missing_zones_with_data(self, capsys: pytest.CaptureFixture[str]) -> None:
-        from src.analytics.zone_analyzer import _display_missing_zones
+        from src.mist.intelligence.analytics.zone_analyzer import _display_missing_zones
 
         zone_analysis = {
             "sites_missing_common_zones": {
@@ -610,7 +610,7 @@ class TestDisplayHelpersBranches:
         assert "Missing:" in out
 
     def test_display_zone_deviations_with_data(self, capsys: pytest.CaptureFixture[str]) -> None:
-        from src.analytics.zone_analyzer import _display_zone_deviations
+        from src.mist.intelligence.analytics.zone_analyzer import _display_zone_deviations
 
         zone_analysis = {
             "zone_count_deviations": {
@@ -628,7 +628,7 @@ class TestDisplayHelpersBranches:
         assert "20 zones" in out
 
     def test_display_custom_names_with_data(self, capsys: pytest.CaptureFixture[str]) -> None:
-        from src.analytics.zone_analyzer import _display_custom_names
+        from src.mist.intelligence.analytics.zone_analyzer import _display_custom_names
 
         engagement = {
             "sites_with_custom_names": {
@@ -643,7 +643,7 @@ class TestDisplayHelpersBranches:
         assert "Walk-by" in out
 
     def test_display_business_hours_few_sites(self, capsys: pytest.CaptureFixture[str]) -> None:
-        from src.analytics.zone_analyzer import _display_business_hours
+        from src.mist.intelligence.analytics.zone_analyzer import _display_business_hours
 
         engagement = {
             "sites_with_business_hours": {
@@ -657,7 +657,7 @@ class TestDisplayHelpersBranches:
         assert "S2" in out
 
     def test_display_business_hours_many_sites(self, capsys: pytest.CaptureFixture[str]) -> None:
-        from src.analytics.zone_analyzer import _display_business_hours
+        from src.mist.intelligence.analytics.zone_analyzer import _display_business_hours
 
         many = {f"s{i}": {"site_name": f"S{i}"} for i in range(10)}
         engagement = {"sites_with_business_hours": many}
@@ -666,7 +666,7 @@ class TestDisplayHelpersBranches:
         assert "10 sites have business hours" in out
 
     def test_display_occupancy_configs_with_data(self, capsys: pytest.CaptureFixture[str]) -> None:
-        from src.analytics.zone_analyzer import _display_occupancy_configs
+        from src.mist.intelligence.analytics.zone_analyzer import _display_occupancy_configs
 
         occupancy = {
             "most_common_config": (
@@ -682,7 +682,7 @@ class TestDisplayHelpersBranches:
         assert "Min Duration Distribution" in out
 
     def test_display_dwell_deviations_with_data(self, capsys: pytest.CaptureFixture[str]) -> None:
-        from src.analytics.zone_analyzer import _display_dwell_deviations
+        from src.mist.intelligence.analytics.zone_analyzer import _display_dwell_deviations
 
         engagement = {
             "sites_with_dwell_deviations": {
@@ -698,7 +698,7 @@ class TestDisplayHelpersBranches:
         assert "passerby=1-300" in out
 
     def test_display_occupancy_deviations_with_data(self, capsys: pytest.CaptureFixture[str]) -> None:
-        from src.analytics.zone_analyzer import _display_occupancy_deviations
+        from src.mist.intelligence.analytics.zone_analyzer import _display_occupancy_deviations
 
         occupancy = {
             "sites_with_occupancy_deviations": {
@@ -767,7 +767,7 @@ class TestExportHelpersBranches:
     """Test export helper functions with actual data."""
 
     def test_export_all_zones(self, capsys: pytest.CaptureFixture[str]) -> None:
-        from src.analytics.zone_analyzer import _export_all_zones
+        from src.mist.intelligence.analytics.zone_analyzer import _export_all_zones
 
         save_fn = MagicMock()
         site_zones = {
@@ -785,7 +785,7 @@ class TestExportHelpersBranches:
         assert rows[0]["vertex_count"] == 2
 
     def test_export_zone_frequency(self, capsys: pytest.CaptureFixture[str]) -> None:
-        from src.analytics.zone_analyzer import _export_zone_frequency
+        from src.mist.intelligence.analytics.zone_analyzer import _export_zone_frequency
 
         save_fn = MagicMock()
         zone_analysis = {
@@ -800,7 +800,7 @@ class TestExportHelpersBranches:
         assert rows[0]["is_common"] == "Yes"
 
     def test_export_dwell_configs(self) -> None:
-        from src.analytics.zone_analyzer import _export_dwell_configs
+        from src.mist.intelligence.analytics.zone_analyzer import _export_dwell_configs
 
         save_fn = MagicMock()
         engagement = {
@@ -818,7 +818,7 @@ class TestExportHelpersBranches:
         save_fn.assert_called_once()
 
     def test_export_occupancy_configs(self) -> None:
-        from src.analytics.zone_analyzer import _export_occupancy_configs
+        from src.mist.intelligence.analytics.zone_analyzer import _export_occupancy_configs
 
         save_fn = MagicMock()
         occupancy = {
@@ -1075,7 +1075,7 @@ class TestDisplayMoreThanTen:
 
     def test_display_missing_zones_more_than_ten(self, capsys: pytest.CaptureFixture[str]) -> None:
         """Line 760: 11+ sites with missing zones → overflow count message printed."""
-        from src.analytics.zone_analyzer import _display_missing_zones  # private fn under test
+        from src.mist.intelligence.analytics.zone_analyzer import _display_missing_zones  # private fn under test
 
         missing = {  # build 11-item dict so len > 10 branch fires
             f"site-{i}": {"site_name": f"Site {i}", "missing_zones": ["ZoneA"]} for i in range(11)
@@ -1085,7 +1085,7 @@ class TestDisplayMoreThanTen:
 
     def test_display_zone_deviations_more_than_ten(self, capsys: pytest.CaptureFixture[str]) -> None:
         """Line 774: 11+ deviating sites → overflow count message printed."""
-        from src.analytics.zone_analyzer import _display_zone_deviations  # private fn under test
+        from src.mist.intelligence.analytics.zone_analyzer import _display_zone_deviations  # private fn under test
 
         devs = {  # build 11-item dict so len > 10 branch fires
             f"site-{i}": {
@@ -1101,7 +1101,7 @@ class TestDisplayMoreThanTen:
 
     def test_display_dwell_deviations_more_than_ten(self, capsys: pytest.CaptureFixture[str]) -> None:
         """Line 809: 11+ dwell deviating sites → overflow count message printed."""
-        from src.analytics.zone_analyzer import _display_dwell_deviations  # private fn
+        from src.mist.intelligence.analytics.zone_analyzer import _display_dwell_deviations  # private fn
 
         devs = {  # build 11-item dict with required current_config fields
             f"site-{i}": {
@@ -1120,7 +1120,7 @@ class TestDisplayMoreThanTen:
 
     def test_display_custom_names_more_than_ten(self, capsys: pytest.CaptureFixture[str]) -> None:
         """Line 826: 11+ sites with custom names → overflow count message printed."""
-        from src.analytics.zone_analyzer import _display_custom_names  # private fn under test
+        from src.mist.intelligence.analytics.zone_analyzer import _display_custom_names  # private fn under test
 
         custom = {  # build 11-item dict so len > 10 branch fires
             f"site-{i}": {
@@ -1134,7 +1134,7 @@ class TestDisplayMoreThanTen:
 
     def test_display_occupancy_deviations_more_than_ten(self, capsys: pytest.CaptureFixture[str]) -> None:
         """Line 888: 11+ occupancy deviating sites → overflow count message printed."""
-        from src.analytics.zone_analyzer import _display_occupancy_deviations  # private fn
+        from src.mist.intelligence.analytics.zone_analyzer import _display_occupancy_deviations  # private fn
 
         devs = {  # build 11-item dict with required current_config fields
             f"site-{i}": {
@@ -1161,7 +1161,7 @@ class TestExportEarlyReturns:
 
     def test_export_summary_empty_rows(self) -> None:
         """Line 916: _export_summary returns early when _build_summary_rows produces no rows."""
-        from src.analytics.zone_analyzer import _export_summary  # private fn under test
+        from src.mist.intelligence.analytics.zone_analyzer import _export_summary  # private fn under test
 
         save_fn = MagicMock()  # spy on whether the save function is ever called
         _export_summary({}, {}, {}, {}, {}, "20250101", save_fn)  # all-empty inputs
@@ -1170,7 +1170,7 @@ class TestExportEarlyReturns:
 
     def test_export_all_zones_empty_input(self) -> None:
         """Line 1026: _export_all_zones returns early when site_zones is empty."""
-        from src.analytics.zone_analyzer import _export_all_zones  # private fn under test
+        from src.mist.intelligence.analytics.zone_analyzer import _export_all_zones  # private fn under test
 
         save_fn = MagicMock()  # spy on whether the save function is ever called
         _export_all_zones({}, "20250101", save_fn)  # empty site_zones dict
@@ -1178,7 +1178,7 @@ class TestExportEarlyReturns:
 
     def test_export_dwell_configs_empty_input(self) -> None:
         """Line 1086: _export_dwell_configs returns early when dwell_tag_configs absent."""
-        from src.analytics.zone_analyzer import _export_dwell_configs  # private fn under test
+        from src.mist.intelligence.analytics.zone_analyzer import _export_dwell_configs  # private fn under test
 
         save_fn = MagicMock()  # spy on whether the save function is ever called
         _export_dwell_configs({}, "20250101", save_fn)  # no dwell_tag_configs key in dict
@@ -1186,7 +1186,7 @@ class TestExportEarlyReturns:
 
     def test_export_occupancy_configs_empty_input(self) -> None:
         """Line 1116: _export_occupancy_configs returns early when occupancy_configs absent."""
-        from src.analytics.zone_analyzer import _export_occupancy_configs  # private fn
+        from src.mist.intelligence.analytics.zone_analyzer import _export_occupancy_configs  # private fn
 
         save_fn = MagicMock()  # spy on whether the save function is ever called
         _export_occupancy_configs({}, "20250101", save_fn)  # no occupancy_configs key in dict

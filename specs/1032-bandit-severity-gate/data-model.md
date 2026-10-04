@@ -118,12 +118,12 @@ The line numbers below come from commit `fb604b4`. Locate each finding by its an
 
 | # | Rule | Path | Line | Anchor | Default decision |
 | - | - | - | - | - | - |
-| 1 | B404 | `src/site/address_audit/ui_geocoder.py` | 48 | `import subprocess` | SUPPRESS. Name the seam and the runner, in the style of `MistHelper.py` line 47. |
-| 2 | B404 | `src/utils/zscaler_probe.py` | 29 | `import subprocess` | SUPPRESS. Same style. |
+| 1 | B404 | `src/mist/resources/site/address_audit/ui_geocoder.py` | 48 | `import subprocess` | SUPPRESS. Name the seam and the runner, in the style of `MistHelper.py` line 47. |
+| 2 | B404 | `src/foundation/support/utils/zscaler_probe.py` | 29 | `import subprocess` | SUPPRESS. Same style. |
 | 3 | B404 | `starlink_dashboard.py` | 18 | `import subprocess` | SUPPRESS. Same style. |
 | 4 | B404 | `tools/compliance_analyzer/engine.py` | 8 | `import subprocess` | SUPPRESS. Same style. |
-| 5 | B603 | `src/site/address_audit/ui_geocoder.py` | 625 | `proc = subprocess.Popen(` | SUPPRESS. State the source of each argument. |
-| 6 | B603 | `src/utils/zscaler_probe.py` | 184 | `completed = subprocess.run(` | SUPPRESS. The line already carries an inert `# noqa: S603`. See research decision R4. |
+| 5 | B603 | `src/mist/resources/site/address_audit/ui_geocoder.py` | 625 | `proc = subprocess.Popen(` | SUPPRESS. State the source of each argument. |
+| 6 | B603 | `src/foundation/support/utils/zscaler_probe.py` | 184 | `completed = subprocess.run(` | SUPPRESS. The line already carries an inert `# noqa: S603`. See research decision R4. |
 | 7 | B603, B607 | `starlink_dashboard.py` | 34 | `["uv", "--version"]` | FIX for B607 with `shutil.which`. SUPPRESS for B603. One combined comment. |
 | 8 | B603 | `starlink_dashboard.py` | 47 | `[sys.executable, "-m", "pip", "install", "uv"]` | SUPPRESS. Every argument is a literal or `sys.executable`. |
 | 9 | B603 | `starlink_dashboard.py` | 98 | `["uv", "pip", "install"] + packages` | SUPPRESS. State that `packages` comes from a module constant. |
@@ -140,15 +140,15 @@ Rows 7, 11, and 13 each hold two findings. The group therefore holds 17 findings
 | # | Rule | Path | Line | Anchor | Default decision |
 | - | - | - | - | - | - |
 | 15 | B105 | `mist-ops-platform/src/shared/mist/session.py` | 24 | `VAULT_SECRET_PREFIX` | SUPPRESS. The value is a Vault path prefix, not a secret. Limit 99 characters. |
-| 16 | B105 | `src/db/redis_writer.py` | 46 | `ALREADY_EXISTS_TOKEN` | SUPPRESS. The value is an error-message fragment used for matching. |
-| 17 | B105 | `src/gateway/wan_probe_device_override_manager.py` | 30 | `APPLY_CONFIRM_TOKEN` | SUPPRESS. The value is the typed confirmation word `APPLY`. |
-| 18 | B105 | `src/gateway/wan_probe_device_override_manager.py` | 31 | `CANCEL_TOKEN` | SUPPRESS. The value is the prompt cancel keyword `cancel`. |
-| 19 | B105 | `src/maps/_flask_viewer.py` | 42 | `_TOKEN_ATTR` | SUPPRESS. The value is an attribute name, not a token value. |
-| 20 | B105 | `src/maps/plotly_map_figure_builder.py` | 38 | `_FILL_ALPHA_TOKEN` | SUPPRESS. The value is the CSS alpha string `0.2`. |
-| 21 | B105 | `src/maps/plotly_map_figure_builder.py` | 39 | `_BORDER_ALPHA_TOKEN` | SUPPRESS. The value is the CSS alpha string `0.8`. |
-| 22 | B105 | `src/maps/plotly_map_figure_builder.py` | 40 | `_LABEL_BG_ALPHA_TOKEN` | SUPPRESS. The value is the CSS alpha string `0.9`. |
-| 23 | B105 | `src/wan_vpn_builder.py` | 38 | `CANCEL_TOKEN` | SUPPRESS. The value is the prompt sentinel `q`. |
-| 24 | B105 | `src/wan_vpn_builder.py` | 39 | `CONFIRM_TOKEN` | SUPPRESS. The value is the typed confirmation word `CREATE`. |
+| 16 | B105 | `src/foundation/persistence/db/redis_writer.py` | 46 | `ALREADY_EXISTS_TOKEN` | SUPPRESS. The value is an error-message fragment used for matching. |
+| 17 | B105 | `src/mist/resources/gateway/wan_probe_device_override_manager.py` | 30 | `APPLY_CONFIRM_TOKEN` | SUPPRESS. The value is the typed confirmation word `APPLY`. |
+| 18 | B105 | `src/mist/resources/gateway/wan_probe_device_override_manager.py` | 31 | `CANCEL_TOKEN` | SUPPRESS. The value is the prompt cancel keyword `cancel`. |
+| 19 | B105 | `src/interfaces/visualization/maps/_flask_viewer.py` | 42 | `_TOKEN_ATTR` | SUPPRESS. The value is an attribute name, not a token value. |
+| 20 | B105 | `src/interfaces/visualization/maps/plotly_map_figure_builder.py` | 38 | `_FILL_ALPHA_TOKEN` | SUPPRESS. The value is the CSS alpha string `0.2`. |
+| 21 | B105 | `src/interfaces/visualization/maps/plotly_map_figure_builder.py` | 39 | `_BORDER_ALPHA_TOKEN` | SUPPRESS. The value is the CSS alpha string `0.8`. |
+| 22 | B105 | `src/interfaces/visualization/maps/plotly_map_figure_builder.py` | 40 | `_LABEL_BG_ALPHA_TOKEN` | SUPPRESS. The value is the CSS alpha string `0.9`. |
+| 23 | B105 | `src/operations/wan/wan_vpn_builder.py` | 38 | `CANCEL_TOKEN` | SUPPRESS. The value is the prompt sentinel `q`. |
+| 24 | B105 | `src/operations/wan/wan_vpn_builder.py` | 39 | `CONFIRM_TOKEN` | SUPPRESS. The value is the typed confirmation word `CREATE`. |
 | 25 | B105 | `tools/ste_linter/parsing/wordcount.py` | 15 | `_PROTECTED_TOKEN` | SUPPRESS. The value is a null-byte delimiter that survives a whitespace split. |
 | 26 | B107 | `mist-ops-platform/src/shared/services/notification.py` | 22 | `password: str = ""` in `EmailAdapter.__init__` | SUPPRESS. The empty string is a "not provided" sentinel. Confirm that no caller passes a literal credential. Limit 99 characters. |
 
@@ -156,13 +156,13 @@ Rows 7, 11, and 13 each hold two findings. The group therefore holds 17 findings
 
 | # | Rule | Path | Line | Anchor | Default decision |
 | - | - | - | - | - | - |
-| 27 | B110 | `mist-ops-platform/src/api/routes/health.py` | 208 | `pass  # Redis unavailable` | FIX. Narrow the exception type and log at debug. Limit 99 characters. |
-| 28 | B110 | `mist-ops-platform/src/api/routes/health.py` | 217 | `pass  # Worker unavailable` | FIX. Narrow the exception type and log at debug. Limit 99 characters. |
-| 29 | B110 | `src/auth/interactive/login_orchestrator.py` | 233 | `configure_session_timeout(apisession)` | FIX. Narrow the exception type and log at debug. |
-| 30 | B110 | `src/export/site_insights/device_metric_operation.py` | 163 | `pass  # WHY: Degrade gracefully` | FIX. Narrow the exception type and log at debug. |
-| 31 | B110 | `src/firmware/firmware_manager.py` | 2326 | `_display_ssr_inventory_stats` | FIX. Narrow the exception type and log at debug. |
-| 32 | B110 | `src/utils/logger_utils.py` | 113 | `record.args = ()` | SUPPRESS. A log call inside the logging filter risks recursion. See Complexity Tracking in the plan. |
-| 33 | B110 | `src/utils/zscaler_probe.py` | 371 | `conn.close()` cleanup | SUPPRESS. The block is a best-effort cleanup that the specification names as a valid escalation. |
+| 27 | B110 | `mist-ops-platform/src/mist/access/api/routes/health.py` | 208 | `pass  # Redis unavailable` | FIX. Narrow the exception type and log at debug. Limit 99 characters. |
+| 28 | B110 | `mist-ops-platform/src/mist/access/api/routes/health.py` | 217 | `pass  # Worker unavailable` | FIX. Narrow the exception type and log at debug. Limit 99 characters. |
+| 29 | B110 | `src/mist/access/auth/interactive/login_orchestrator.py` | 233 | `configure_session_timeout(apisession)` | FIX. Narrow the exception type and log at debug. |
+| 30 | B110 | `src/operations/exporting/export/site_insights/device_metric_operation.py` | 163 | `pass  # WHY: Degrade gracefully` | FIX. Narrow the exception type and log at debug. |
+| 31 | B110 | `src/operations/execution/firmware/firmware_manager.py` | 2326 | `_display_ssr_inventory_stats` | FIX. Narrow the exception type and log at debug. |
+| 32 | B110 | `src/foundation/support/utils/logger_utils.py` | 113 | `record.args = ()` | SUPPRESS. A log call inside the logging filter risks recursion. See Complexity Tracking in the plan. |
+| 33 | B110 | `src/foundation/support/utils/zscaler_probe.py` | 371 | `conn.close()` cleanup | SUPPRESS. The block is a best-effort cleanup that the specification names as a valid escalation. |
 
 ### Group D1 - Assert statements that only narrow a type (11 findings)
 
@@ -170,17 +170,17 @@ Requirement FR-010 permits a suppression. Each comment must name the guard that 
 
 | # | Rule | Path | Line | Anchor | Default decision |
 | - | - | - | - | - | - |
-| 34 | B101 | `src/export/data_exporter.py` | 62 | `assert configure_db_logging is not None` | SUPPRESS. `_polyglot_db_layer_available` already guards it. |
-| 35 | B101 | `src/export/data_exporter.py` | 63 | `assert DatabaseConfig is not None` | SUPPRESS. Same guard. |
-| 36 | B101 | `src/export/data_exporter.py` | 64 | `assert DatabaseRouter is not None` | SUPPRESS. Same guard. |
-| 37 | B101 | `src/export/data_exporter.py` | 162 | `assert DataExporter._router is not None` | SUPPRESS. The caller checks `_should_skip_polyglot` first. |
-| 38 | B101 | `src/export/data_exporter.py` | 183 | `assert api_function_name is not None` | SUPPRESS. The caller already validated the value. |
-| 39 | B101 | `src/firmware/firmware_manager.py` | 2963 | `assert prepared is not None` | SUPPRESS. The early return above proves the value. |
-| 40 | B101 | `src/firmware/firmware_manager.py` | 2991 | `assert org_and_sites is not None` | SUPPRESS. Same pattern. |
-| 41 | B101 | `src/firmware/firmware_manager.py` | 2996 | `assert config_and_version is not None` | SUPPRESS. Same pattern. |
-| 42 | B101 | `src/firmware/firmware_manager.py` | 3011 | `assert selected_sites is not None` | SUPPRESS. Same pattern. |
-| 43 | B101 | `src/firmware/site_auto_upgrade.py` | 88 | `assert isinstance(resolved, SiteAutoUpgradeConfig)` | SUPPRESS. The `"config" in cfg` branch already proves the shape. |
-| 44 | B101 | `src/gateway/_wan2_variable_device.py` | 371 | `assert self._pool_fn is not None` | SUPPRESS. The line carries an inert `# noqa: S101`. See research decision R4. |
+| 34 | B101 | `src/operations/exporting/export/data_exporter.py` | 62 | `assert configure_db_logging is not None` | SUPPRESS. `_polyglot_db_layer_available` already guards it. |
+| 35 | B101 | `src/operations/exporting/export/data_exporter.py` | 63 | `assert DatabaseConfig is not None` | SUPPRESS. Same guard. |
+| 36 | B101 | `src/operations/exporting/export/data_exporter.py` | 64 | `assert DatabaseRouter is not None` | SUPPRESS. Same guard. |
+| 37 | B101 | `src/operations/exporting/export/data_exporter.py` | 162 | `assert DataExporter._router is not None` | SUPPRESS. The caller checks `_should_skip_polyglot` first. |
+| 38 | B101 | `src/operations/exporting/export/data_exporter.py` | 183 | `assert api_function_name is not None` | SUPPRESS. The caller already validated the value. |
+| 39 | B101 | `src/operations/execution/firmware/firmware_manager.py` | 2963 | `assert prepared is not None` | SUPPRESS. The early return above proves the value. |
+| 40 | B101 | `src/operations/execution/firmware/firmware_manager.py` | 2991 | `assert org_and_sites is not None` | SUPPRESS. Same pattern. |
+| 41 | B101 | `src/operations/execution/firmware/firmware_manager.py` | 2996 | `assert config_and_version is not None` | SUPPRESS. Same pattern. |
+| 42 | B101 | `src/operations/execution/firmware/firmware_manager.py` | 3011 | `assert selected_sites is not None` | SUPPRESS. Same pattern. |
+| 43 | B101 | `src/operations/execution/firmware/site_auto_upgrade.py` | 88 | `assert isinstance(resolved, SiteAutoUpgradeConfig)` | SUPPRESS. The `"config" in cfg` branch already proves the shape. |
+| 44 | B101 | `src/mist/resources/gateway/_wan2_variable_device.py` | 371 | `assert self._pool_fn is not None` | SUPPRESS. The line carries an inert `# noqa: S101`. See research decision R4. |
 
 ### Group D2 - Assert statements that guard runtime behavior (7 findings)
 
@@ -188,13 +188,13 @@ Requirement FR-009 demands an explicit check that raises. Python removes an `ass
 
 | # | Rule | Path | Line | Anchor | Default decision |
 | - | - | - | - | - | - |
-| 45 | B101 | `src/firmware/site_auto_upgrade.py` | 54 | `assert isinstance(self.org_id, str)` | FIX. Raise `TypeError` inside `SiteAutoUpgradeConfig.__post_init__`. |
-| 46 | B101 | `src/firmware/site_auto_upgrade.py` | 55 | `assert isinstance(self.dry_run, bool)` | FIX. Raise `TypeError`. |
-| 47 | B101 | `src/maps/plotly_map_templates.py` | 187 | `_rule_css_length` | FIX. Raise `ValueError`. |
-| 48 | B101 | `src/maps/plotly_map_templates.py` | 191 | `_rule_html_entry` | FIX. Raise `ValueError`. |
-| 49 | B101 | `src/maps/plotly_map_templates.py` | 196 | `_rule_html_style` | FIX. Raise `ValueError`. |
-| 50 | B101 | `src/maps/plotly_map_templates.py` | 200 | `_rule_meta_shape`, the `isinstance` check | FIX. Raise `TypeError`. |
-| 51 | B101 | `src/maps/plotly_map_templates.py` | 201 | `_rule_meta_shape`, the title-key check | FIX. Raise `ValueError`. |
+| 45 | B101 | `src/operations/execution/firmware/site_auto_upgrade.py` | 54 | `assert isinstance(self.org_id, str)` | FIX. Raise `TypeError` inside `SiteAutoUpgradeConfig.__post_init__`. |
+| 46 | B101 | `src/operations/execution/firmware/site_auto_upgrade.py` | 55 | `assert isinstance(self.dry_run, bool)` | FIX. Raise `TypeError`. |
+| 47 | B101 | `src/interfaces/visualization/maps/plotly_map_templates.py` | 187 | `_rule_css_length` | FIX. Raise `ValueError`. |
+| 48 | B101 | `src/interfaces/visualization/maps/plotly_map_templates.py` | 191 | `_rule_html_entry` | FIX. Raise `ValueError`. |
+| 49 | B101 | `src/interfaces/visualization/maps/plotly_map_templates.py` | 196 | `_rule_html_style` | FIX. Raise `ValueError`. |
+| 50 | B101 | `src/interfaces/visualization/maps/plotly_map_templates.py` | 200 | `_rule_meta_shape`, the `isinstance` check | FIX. Raise `TypeError`. |
+| 51 | B101 | `src/interfaces/visualization/maps/plotly_map_templates.py` | 201 | `_rule_meta_shape`, the title-key check | FIX. Raise `ValueError`. |
 
 **Linked edit**: The `validate_template` docstring declares `Raises: AssertionError`. Rows 47 to 51 change that behavior, so the docstring changes with them.
 

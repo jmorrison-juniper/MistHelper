@@ -58,7 +58,7 @@ produce a change smaller than the reported resolution.
 
 **Caution**: This is a Windows measurement. Issue #891 measured a 0.30 gap
 between Windows and Linux for the same commit. That gap appeared when the run
-included `src/maps`, `src/ssh`, and `src/ui`. This feature keeps the
+included `src/interfaces/visualization/maps`, `src/operations/execution/ssh`, and `src/interfaces/visualization/ui`. This feature keeps the
 `--ignore=maps,ssh,ui` flag, so the two runs cover the same package set that
 passes today. The gap is therefore expected to be smaller. The team still
 treats the Windows number as an estimate only. FR-023 requires a real run on
@@ -145,27 +145,27 @@ counts the production call sites and the test call sites that need an edit.
 
 | # | File | Line | Function | Parameter | Gate sees it | Outcome | Justification | Call sites |
 | - | - | - | - | - | - | - | - | - |
-| 1 | `src/capture/packet_capture.py` | 911 | `PacketCaptureManager._multi_ap_gather_params` | `ap_macs` | Yes | A | The body calls three prompt helpers. None of them needs the AP list. The sibling helpers `_multi_ap_print_summary` and `_multi_ap_build_payload` do use the list, so the parameter is a copy-paste leftover. | 1 production, 0 test |
-| 2 | `src/firmware/bulk_ap_upgrader.py` | 1487 | `BulkAPFirmwareUpgrader._upgrade_version_group` | `mistapi` | Yes | A | The deeper helper `_invoke_upgrade_api` performs a lazy `import mistapi` of its own. The threaded module is dead. Cascades one level to `_execute_multi_version_upgrade`. | 2 production, 2 test |
-| 3 | `src/firmware/org_ap_upgrader.py` | 675 | `OrgLevelAPFirmwareUpgrader._display_org_list` | `msp_name` | Yes | A | The body prints the org list and the selection help. It never names the MSP. The caller already prints the MSP name in the step banner. | 1 production, 0 test |
-| 4 | `src/inventory/inventory_summary/version_per_model_fetcher.py` | 188 | `VersionPerModelFetcher._rows_for_model` | `target_org_id` | Yes | A | The method dispatches on `device_type` and reads only the prefetched record lists. The org id is no longer needed after the prefetch refactor. Cascades one level to `_expand_model_rows`. | 2 production, 6 test |
-| 5 | `src/maps/_maps_clone.py` | 149 | `_MapsClone._confirm_clone` | `clone_payload` | No | A | Verified in the spec. The method prints a plan and prompts for confirmation. It never reads the payload. | 1 production, 0 test |
-| 6 | `src/maps/maps_manager.py` | 532 | `MapsManager._render_site_maps_table` | `site_name` | No | A | The table header prints the map count and the column titles only. The caller already prints the site name before the call, so the operator does not lose information. | 1 production, 0 test |
-| 7 | `src/org/org_synthetic_probes_manager.py` | 1619 | `_build_probe_set` | `vlan_ids` | Yes | B | Verified in the spec. The docstring documents a back-compat promise to the caller. VLAN scoping belongs on the `tests[]` row, not on the `custom_probes` definition. | 0 |
-| 8 | `src/site/address_audit/address_resolver.py` | 93 | `AddressResolver._combine` | `candidates` | Yes | A | Verified in the spec. The body delegates to `_pick_tier_winner` and `_resolve_validated`. Neither helper needs the candidate list. The parameter sits fourth of five, so the removal shifts `query`. | 1 production, 0 test |
-| 9 | `src/ssh/runtime/app_runner.py` | 265 | `AppRunner._prompt_for_commands` | `env_cmds` | No | A | The caller reaches this line only after both lists tested empty. The caller passes two empty lists. The body prompts the operator and ignores both. | 1 production, 0 test |
-| 10 | `src/ssh/runtime/app_runner.py` | 265 | `AppRunner._prompt_for_commands` | `csv_cmds` | No | A | Same evidence as row 9. Both parameters are always empty at the single call site. | 1 production, 0 test |
-| 11 | `src/ssid_consolidation/_ssid_template_cache.py` | 193 | `_SsidTemplateCacheCluster._offer_resume` | `results` | Yes | A | All three production call sites pass a literal empty list. The body loads the prior results from disk instead. The manager reaches this method through `__getattr__` proxy delegation, so no base class fixes the signature. | 3 production, 1 test |
-| 12 | `src/ssid_consolidation/_ssid_template_phase1.py` | 121 | `_resolve_template` | `sitegroup_lookup` | Yes | A | The scope check `_template_applies_to_site` reads `site["sitegroup_ids"]` directly. The lookup map is never needed. Cascades one level to `_resolve_site_wlan`. | 2 production, 3 test |
-| 13 | `src/ssid_consolidation/_ssid_template_phase45.py` | 267 | `_build_template_config` | `resolutions` | Yes | **C** | See section 6. The operator answers a deviation prompt for each cluster and parameter. The answers never reach the template. | Do not remove |
-| 14 | `src/utils/address_utils.py` | 494 | `AddressUtils.apply_business_context_rules` | `debug` | Yes | A | No caller in the repository passes `debug`. The parameter carries a default value, so the removal cannot raise a `TypeError` at any caller. | 0 production, 4 test |
-| 15 | `src/utils/address_utils.py` | 902 | `NominatimValidator._make_api_request` | `source` | Yes | A | The body builds the query parameters and retries the request. It never reads `source`. Part of the five-level `source` thread. | 1 production, 4 test |
-| 16 | `src/utils/address_utils.py` | 947 | `NominatimValidator._calculate_component_match` | `source` | Yes | A | The body scores address parts against the display name. It never reads `source`. Part of the five-level `source` thread. | 1 production, 3 test |
-| 17 | `src/utils/address_utils.py` | 977 | `NominatimValidator._calculate_quality_boost` | `source` | Yes | A | The body sums two boost helpers. It never reads `source`. Part of the five-level `source` thread. | 1 production, 3 test |
-| 18 | `src/websocket/manager.py` | 318 | `WebSocketManager._on_open` | `websocket_connection` | Yes | B | Verified in the spec. The `websocket-client` library calls the callback with the connection as the first argument. | 0 |
-| 19 | `src/websocket/manager.py` | 323 | `WebSocketManager._on_message` | `websocket_connection` | Yes | B | Same library protocol as row 18. | 0 |
-| 20 | `src/websocket/manager.py` | 336 | `WebSocketManager._on_error` | `websocket_connection` | Yes | B | Same library protocol as row 18. | 0 |
-| 21 | `src/websocket/manager.py` | 343 | `WebSocketManager._on_close` | `websocket_connection` | Yes | B | Same library protocol as row 18. | 0 |
+| 1 | `src/operations/execution/capture/packet_capture.py` | 911 | `PacketCaptureManager._multi_ap_gather_params` | `ap_macs` | Yes | A | The body calls three prompt helpers. None of them needs the AP list. The sibling helpers `_multi_ap_print_summary` and `_multi_ap_build_payload` do use the list, so the parameter is a copy-paste leftover. | 1 production, 0 test |
+| 2 | `src/operations/execution/firmware/bulk_ap_upgrader.py` | 1487 | `BulkAPFirmwareUpgrader._upgrade_version_group` | `mistapi` | Yes | A | The deeper helper `_invoke_upgrade_api` performs a lazy `import mistapi` of its own. The threaded module is dead. Cascades one level to `_execute_multi_version_upgrade`. | 2 production, 2 test |
+| 3 | `src/operations/execution/firmware/org_ap_upgrader.py` | 675 | `OrgLevelAPFirmwareUpgrader._display_org_list` | `msp_name` | Yes | A | The body prints the org list and the selection help. It never names the MSP. The caller already prints the MSP name in the step banner. | 1 production, 0 test |
+| 4 | `src/mist/resources/inventory/inventory_summary/version_per_model_fetcher.py` | 188 | `VersionPerModelFetcher._rows_for_model` | `target_org_id` | Yes | A | The method dispatches on `device_type` and reads only the prefetched record lists. The org id is no longer needed after the prefetch refactor. Cascades one level to `_expand_model_rows`. | 2 production, 6 test |
+| 5 | `src/interfaces/visualization/maps/_maps_clone.py` | 149 | `_MapsClone._confirm_clone` | `clone_payload` | No | A | Verified in the spec. The method prints a plan and prompts for confirmation. It never reads the payload. | 1 production, 0 test |
+| 6 | `src/interfaces/visualization/maps/maps_manager.py` | 532 | `MapsManager._render_site_maps_table` | `site_name` | No | A | The table header prints the map count and the column titles only. The caller already prints the site name before the call, so the operator does not lose information. | 1 production, 0 test |
+| 7 | `src/mist/resources/org/org_synthetic_probes_manager.py` | 1619 | `_build_probe_set` | `vlan_ids` | Yes | B | Verified in the spec. The docstring documents a back-compat promise to the caller. VLAN scoping belongs on the `tests[]` row, not on the `custom_probes` definition. | 0 |
+| 8 | `src/mist/resources/site/address_audit/address_resolver.py` | 93 | `AddressResolver._combine` | `candidates` | Yes | A | Verified in the spec. The body delegates to `_pick_tier_winner` and `_resolve_validated`. Neither helper needs the candidate list. The parameter sits fourth of five, so the removal shifts `query`. | 1 production, 0 test |
+| 9 | `src/operations/execution/ssh/runtime/app_runner.py` | 265 | `AppRunner._prompt_for_commands` | `env_cmds` | No | A | The caller reaches this line only after both lists tested empty. The caller passes two empty lists. The body prompts the operator and ignores both. | 1 production, 0 test |
+| 10 | `src/operations/execution/ssh/runtime/app_runner.py` | 265 | `AppRunner._prompt_for_commands` | `csv_cmds` | No | A | Same evidence as row 9. Both parameters are always empty at the single call site. | 1 production, 0 test |
+| 11 | `src/operations/execution/ssid_consolidation/_ssid_template_cache.py` | 193 | `_SsidTemplateCacheCluster._offer_resume` | `results` | Yes | A | All three production call sites pass a literal empty list. The body loads the prior results from disk instead. The manager reaches this method through `__getattr__` proxy delegation, so no base class fixes the signature. | 3 production, 1 test |
+| 12 | `src/operations/execution/ssid_consolidation/_ssid_template_phase1.py` | 121 | `_resolve_template` | `sitegroup_lookup` | Yes | A | The scope check `_template_applies_to_site` reads `site["sitegroup_ids"]` directly. The lookup map is never needed. Cascades one level to `_resolve_site_wlan`. | 2 production, 3 test |
+| 13 | `src/operations/execution/ssid_consolidation/_ssid_template_phase45.py` | 267 | `_build_template_config` | `resolutions` | Yes | **C** | See section 6. The operator answers a deviation prompt for each cluster and parameter. The answers never reach the template. | Do not remove |
+| 14 | `src/foundation/support/utils/address_utils.py` | 494 | `AddressUtils.apply_business_context_rules` | `debug` | Yes | A | No caller in the repository passes `debug`. The parameter carries a default value, so the removal cannot raise a `TypeError` at any caller. | 0 production, 4 test |
+| 15 | `src/foundation/support/utils/address_utils.py` | 902 | `NominatimValidator._make_api_request` | `source` | Yes | A | The body builds the query parameters and retries the request. It never reads `source`. Part of the five-level `source` thread. | 1 production, 4 test |
+| 16 | `src/foundation/support/utils/address_utils.py` | 947 | `NominatimValidator._calculate_component_match` | `source` | Yes | A | The body scores address parts against the display name. It never reads `source`. Part of the five-level `source` thread. | 1 production, 3 test |
+| 17 | `src/foundation/support/utils/address_utils.py` | 977 | `NominatimValidator._calculate_quality_boost` | `source` | Yes | A | The body sums two boost helpers. It never reads `source`. Part of the five-level `source` thread. | 1 production, 3 test |
+| 18 | `src/mist/realtime/websocket/manager.py` | 318 | `WebSocketManager._on_open` | `websocket_connection` | Yes | B | Verified in the spec. The `websocket-client` library calls the callback with the connection as the first argument. | 0 |
+| 19 | `src/mist/realtime/websocket/manager.py` | 323 | `WebSocketManager._on_message` | `websocket_connection` | Yes | B | Same library protocol as row 18. | 0 |
+| 20 | `src/mist/realtime/websocket/manager.py` | 336 | `WebSocketManager._on_error` | `websocket_connection` | Yes | B | Same library protocol as row 18. | 0 |
+| 21 | `src/mist/realtime/websocket/manager.py` | 343 | `WebSocketManager._on_close` | `websocket_connection` | Yes | B | Same library protocol as row 18. | 0 |
 
 ### Outcome totals
 
@@ -182,7 +182,7 @@ Zero findings stay unassigned. SC-001 is satisfied by this table.
 
 ## 6. Outcome C detail, row 13
 
-**Site**: `src/ssid_consolidation/_ssid_template_phase45.py:267`,
+**Site**: `src/operations/execution/ssid_consolidation/_ssid_template_phase45.py:267`,
 `_build_template_config`, parameter `resolutions`.
 
 **The chain**:
@@ -213,7 +213,7 @@ states that the parameter stays until the fix lands.
 
 **Companion issue (FR-017)**: File an issue with the title
 "Phase 4 discards the operator deviation resolutions". Use the labels `bug` and
-`MistHelper.py` scope equivalent for `src/ssid_consolidation`. The issue body
+`MistHelper.py` scope equivalent for `src/operations/execution/ssid_consolidation`. The issue body
 holds the five-step chain above.
 
 **Rationale for the minimal action**: The correct fix reads a resolved value

@@ -1,4 +1,4 @@
-"""Unit tests for src.export.data_exporter.DataExporter.
+"""Unit tests for src.operations.exporting.export.data_exporter.DataExporter.
 
 Tranche 15 of initiative #878: un-omit `data_exporter.py` and drive it to
 100% line coverage.
@@ -21,9 +21,9 @@ from unittest.mock import MagicMock, mock_open, patch
 
 import pytest
 
-from src.dataclasses.export_backend_options import ExportBackendOptions
-from src.export import data_exporter as de_module
-from src.export.data_exporter import DataExporter
+from src.foundation.models.dataclasses.export_backend_options import ExportBackendOptions
+from src.operations.exporting.export import data_exporter as de_module
+from src.operations.exporting.export.data_exporter import DataExporter
 
 
 @pytest.fixture(autouse=True)
@@ -246,7 +246,9 @@ class TestIsStandaloneMode:
         monkeypatch.delenv("MISTHELPER_STANDALONE", raising=False)
         with (
             patch.object(DataExporter, "_polyglot_db_layer_available", return_value=True),
-            patch("src.export.data_exporter.polyglot_hosts_unreachable", return_value=True) as probe,
+            patch(
+                "src.operations.exporting.export.data_exporter.polyglot_hosts_unreachable", return_value=True
+            ) as probe,
             caplog.at_level(logging.WARNING),
         ):
             assert DataExporter._is_standalone_mode() is True
@@ -260,9 +262,9 @@ class TestIsStandaloneMode:
         monkeypatch.delenv("MISTHELPER_STANDALONE", raising=False)
         with (
             patch.object(DataExporter, "_polyglot_db_layer_available", return_value=True),
-            patch("src.export.data_exporter.polyglot_hosts_unreachable", return_value=False),
+            patch("src.operations.exporting.export.data_exporter.polyglot_hosts_unreachable", return_value=False),
             patch(
-                "src.utils.environment_utils.EnvironmentUtils.is_running_in_container",
+                "src.foundation.support.utils.environment_utils.EnvironmentUtils.is_running_in_container",
                 return_value=False,
             ),
         ):
@@ -277,7 +279,9 @@ class TestIsStandaloneMode:
         monkeypatch.delenv("MISTHELPER_STANDALONE", raising=False)
         with (
             patch.object(DataExporter, "_polyglot_db_layer_available", return_value=True),
-            patch("src.export.data_exporter.polyglot_hosts_unreachable", return_value=False) as probe,
+            patch(
+                "src.operations.exporting.export.data_exporter.polyglot_hosts_unreachable", return_value=False
+            ) as probe,
         ):
             assert DataExporter._polyglot_hosts_silent() is False
             assert DataExporter._polyglot_hosts_silent() is False
@@ -388,25 +392,25 @@ class TestRouteToPolyglot:
 class TestCheckPeriodicSnapshot:
     def test_first_call_returns_true_and_records(self):
         # Default threshold is 3600s; use a small threshold so 1000-0=1000 exceeds it.
-        with patch("src.export.data_exporter.time.time", return_value=1000.0):
+        with patch("src.operations.exporting.export.data_exporter.time.time", return_value=1000.0):
             assert DataExporter._check_periodic_snapshot("listStuff", threshold_seconds=500.0) is True
         assert DataExporter._last_snapshot_times["listStuff"] == 1000.0
 
     def test_default_threshold_below_returns_false(self):
         # 1000 - 0 = 1000 < 3600 default -> False, timestamp not updated.
-        with patch("src.export.data_exporter.time.time", return_value=1000.0):
+        with patch("src.operations.exporting.export.data_exporter.time.time", return_value=1000.0):
             assert DataExporter._check_periodic_snapshot("listStuff") is False
         assert DataExporter._last_snapshot_times.get("listStuff", 0.0) == 0.0
 
     def test_below_threshold_returns_false(self):
         DataExporter._last_snapshot_times["listStuff"] = 900.0
-        with patch("src.export.data_exporter.time.time", return_value=1000.0):
+        with patch("src.operations.exporting.export.data_exporter.time.time", return_value=1000.0):
             assert DataExporter._check_periodic_snapshot("listStuff", threshold_seconds=200.0) is False
         assert DataExporter._last_snapshot_times["listStuff"] == 900.0
 
     def test_above_threshold_returns_true_and_updates(self):
         DataExporter._last_snapshot_times["listStuff"] = 100.0
-        with patch("src.export.data_exporter.time.time", return_value=5000.0):
+        with patch("src.operations.exporting.export.data_exporter.time.time", return_value=5000.0):
             assert DataExporter._check_periodic_snapshot("listStuff", threshold_seconds=1000.0) is True
         assert DataExporter._last_snapshot_times["listStuff"] == 5000.0
 
@@ -446,7 +450,9 @@ class TestWriteSqliteFormat:
     def test_strips_csv_extension_for_table_name(self):
         writer_instance = MagicMock()
         writer_instance.write.return_value = True
-        with patch("src.export.data_exporter.SQLiteDatabaseWriter", return_value=writer_instance) as writer_cls:
+        with patch(
+            "src.operations.exporting.export.data_exporter.SQLiteDatabaseWriter", return_value=writer_instance
+        ) as writer_cls:
             ok = DataExporter._write_sqlite_format([{"a": 1}], "target.csv", "listStuff")
         assert ok is True
         writer_cls.assert_called_once_with([{"a": 1}], "target", "listStuff")
@@ -454,7 +460,9 @@ class TestWriteSqliteFormat:
     def test_uses_bare_name_when_no_csv_extension(self):
         writer_instance = MagicMock()
         writer_instance.write.return_value = False
-        with patch("src.export.data_exporter.SQLiteDatabaseWriter", return_value=writer_instance) as writer_cls:
+        with patch(
+            "src.operations.exporting.export.data_exporter.SQLiteDatabaseWriter", return_value=writer_instance
+        ) as writer_cls:
             ok = DataExporter._write_sqlite_format([{"a": 1}], "target", None)
         assert ok is False
         writer_cls.assert_called_once_with([{"a": 1}], "target", None)
@@ -469,11 +477,11 @@ class TestWriteToCsv:
     def test_full_flow_writes(self, monkeypatch):
         escaped = [{"a": 1, "b": 2}]
         monkeypatch.setattr(
-            "src.export.data_exporter.DataProcessingUtils.escape_multiline",
+            "src.operations.exporting.export.data_exporter.DataProcessingUtils.escape_multiline",
             MagicMock(return_value=escaped),
         )
         monkeypatch.setattr(
-            "src.export.data_exporter.DataProcessingUtils.get_unique_keys",
+            "src.operations.exporting.export.data_exporter.DataProcessingUtils.get_unique_keys",
             MagicMock(return_value=["a", "b"]),
         )
         with (
@@ -503,7 +511,7 @@ class TestResolveCsvFields:
 
     def test_derives_fields_when_none(self, monkeypatch):
         monkeypatch.setattr(
-            "src.export.data_exporter.DataProcessingUtils.get_unique_keys",
+            "src.operations.exporting.export.data_exporter.DataProcessingUtils.get_unique_keys",
             MagicMock(return_value=["a", "b"]),
         )
         assert DataExporter._resolve_csv_fields([{"a": 1}], None) == ["a", "b"]
@@ -570,11 +578,11 @@ class TestExportWithProcessing:
         flat = [{"a": 1, "b": 2, "flat": True}]
         escaped = [{"a": 1, "b": 2, "flat": True, "e": True}]
         monkeypatch.setattr(
-            "src.export.data_exporter.DataProcessingUtils.flatten_nested_fields",
+            "src.operations.exporting.export.data_exporter.DataProcessingUtils.flatten_nested_fields",
             MagicMock(return_value=flat),
         )
         monkeypatch.setattr(
-            "src.export.data_exporter.DataProcessingUtils.escape_multiline",
+            "src.operations.exporting.export.data_exporter.DataProcessingUtils.escape_multiline",
             MagicMock(return_value=escaped),
         )
         with patch.object(DataExporter, "write_with_format_selection", return_value=True) as writer:
@@ -584,11 +592,11 @@ class TestExportWithProcessing:
 
     def test_write_failure_returns_zero(self, monkeypatch):
         monkeypatch.setattr(
-            "src.export.data_exporter.DataProcessingUtils.flatten_nested_fields",
+            "src.operations.exporting.export.data_exporter.DataProcessingUtils.flatten_nested_fields",
             MagicMock(return_value=[{"a": 1}]),
         )
         monkeypatch.setattr(
-            "src.export.data_exporter.DataProcessingUtils.escape_multiline",
+            "src.operations.exporting.export.data_exporter.DataProcessingUtils.escape_multiline",
             MagicMock(return_value=[{"a": 1}]),
         )
         with patch.object(DataExporter, "write_with_format_selection", return_value=False):
@@ -596,11 +604,11 @@ class TestExportWithProcessing:
 
     def test_non_dict_entries_filtered_out(self, monkeypatch):
         monkeypatch.setattr(
-            "src.export.data_exporter.DataProcessingUtils.flatten_nested_fields",
+            "src.operations.exporting.export.data_exporter.DataProcessingUtils.flatten_nested_fields",
             MagicMock(side_effect=lambda rows: rows),
         )
         monkeypatch.setattr(
-            "src.export.data_exporter.DataProcessingUtils.escape_multiline",
+            "src.operations.exporting.export.data_exporter.DataProcessingUtils.escape_multiline",
             MagicMock(side_effect=lambda rows: rows),
         )
         with patch.object(DataExporter, "write_with_format_selection", return_value=True) as writer:

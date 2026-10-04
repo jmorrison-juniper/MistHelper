@@ -1,1 +1,1 @@
-"""Tests for the Marvis package under src/marvis."""
+"""Tests for the Marvis package under src/mist/intelligence/marvis."""

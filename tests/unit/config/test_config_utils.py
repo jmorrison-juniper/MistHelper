@@ -6,16 +6,20 @@ from unittest.mock import MagicMock, patch  # WHY: patch optional import paths d
 
 import pytest  # WHY: assert propagation for non-import failures.
 
-from src.config import config_utils as config_utils_mod  # WHY: capture the product logger for status checks.
-from src.config.config_utils import ConfigUtils  # WHY: subject under test for issue #2834.
-from src.config.config_utils import ConfigUtils as FailureModeConfigUtils  # WHY: prove new status tests call src.
+from src.foundation.runtime.config import (
+    config_utils as config_utils_mod,
+)  # WHY: capture the product logger for status checks.
+from src.foundation.runtime.config.config_utils import ConfigUtils  # WHY: subject under test for issue #2834.
+from src.foundation.runtime.config.config_utils import (
+    ConfigUtils as FailureModeConfigUtils,
+)  # WHY: prove new status tests call src.
 
 
 def test_runtime_context_returns_none_when_entrypoint_import_fails(monkeypatch: pytest.MonkeyPatch) -> None:
     """Missing entry point import keeps the local cache path."""
     monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)  # WHY: force the optional import branch during pytest.
     with patch(  # WHY: simulate the optional entry point missing during partial startup.
-        "src.config.config_utils.importlib.import_module",
+        "src.foundation.runtime.config.config_utils.importlib.import_module",
         side_effect=ImportError("missing entry point"),
     ):
         assert ConfigUtils._runtime_context() is None  # WHY: import failures still use the fallback path.
@@ -26,7 +30,7 @@ def test_runtime_context_non_import_failure_propagates(monkeypatch: pytest.Monke
     monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)  # WHY: force the optional import branch during pytest.
     with (  # WHY: prove the narrowed handler no longer hides programming faults.
         patch(  # WHY: simulate an unexpected loader failure outside the narrowed contract.
-            "src.config.config_utils.importlib.import_module",
+            "src.foundation.runtime.config.config_utils.importlib.import_module",
             side_effect=RuntimeError("loader failed"),
         ),
         pytest.raises(RuntimeError),  # WHY: callers must see unexpected runtime failures.
@@ -49,7 +53,9 @@ def test_prompt_path_http_403_exits_and_logs_status(
     response.status_code = 403  # WHY: model a forbidden organization-selection response.
     caplog.set_level("ERROR", logger=config_utils_mod.logger.name)  # WHY: capture the product status log.
     try:
-        with patch("src.config.config_utils.mistapi.cli.select_org", return_value=response) as picker:
+        with patch(
+            "src.foundation.runtime.config.config_utils.mistapi.cli.select_org", return_value=response
+        ) as picker:
             with pytest.raises(SystemExit) as excinfo:  # WHY: the product fails closed on unusable org lists.
                 ConfigUtils.get_cached_or_prompted_org_id()  # WHY: drive the real prompt resolution path.
         assert excinfo.value.code == 1  # WHY: a 403 response must stop startup.
@@ -76,7 +82,9 @@ def test_prompt_path_http_503_exits_and_logs_status(
     response.status_code = 503  # WHY: model an unavailable organization-selection response.
     caplog.set_level("ERROR", logger=config_utils_mod.logger.name)  # WHY: capture the product status log.
     try:
-        with patch("src.config.config_utils.mistapi.cli.select_org", return_value=response) as picker:
+        with patch(
+            "src.foundation.runtime.config.config_utils.mistapi.cli.select_org", return_value=response
+        ) as picker:
             with pytest.raises(SystemExit) as excinfo:  # WHY: the product fails closed on unusable org lists.
                 FailureModeConfigUtils.get_cached_or_prompted_org_id()  # WHY: drive the real src resolution path.
         assert excinfo.value.code == 1  # WHY: a 503 response must stop startup.

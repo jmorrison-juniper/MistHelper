@@ -101,7 +101,7 @@ flowchart LR
 
 ## Module Decomposition (`src/`)
 
-Feature-domain packages now hold most runtime code. `MistHelper.py` remains the
+Four domain packages now hold the runtime code. `MistHelper.py` remains the
 entrypoint and menu dispatch surface.
 
 ```mermaid
@@ -115,59 +115,39 @@ entrypoint and menu dispatch surface.
   'fontFamily': 'ui-monospace, monospace'
 }}}%%
 flowchart TD
-    entrypoint["MistHelper.py<br/>Entrypoint + Menu Dispatch"]
+    entrypoint["MistHelper.py<br/>Entrypoint and Menu Dispatch"]
 
-    subgraph core["Core Packages"]
-        api["src/api/"]
-        db_pkg["src/db/"]
-        export_pkg["src/export/"]
-        utils["src/utils/"]
-        refactors["src/refactors/"]
+    subgraph source["src"]
+        foundation["foundation<br/>runtime, models, persistence, support"]
+        mist["mist<br/>access, resources, intelligence, realtime, networking"]
+        operations["operations<br/>execution, exporting, hardware, protection, WAN"]
+        interfaces["interfaces<br/>portals, visualization, monitoring"]
     end
 
-    subgraph features["Feature Packages"]
-        analytics["src/analytics/"]
-        capture["src/capture/"]
-        device["src/device/"]
-        firmware["src/firmware/"]
-        gateway["src/gateway/"]
-        inventory["src/inventory/"]
-        org_pkg["src/org/"]
-        site["src/site/"]
-        ssh_pkg["src/ssh/"]
-        troubleshooting["src/troubleshooting/"]
-        websocket["src/websocket/"]
-    end
-
-    subgraph portals["Portal Packages"]
-        ui["src/ui/"]
-        upgrade_portal["src/upgrade_portal/"]
-        metrics_gateway["src/metrics_gateway/"]
-    end
-
-    entrypoint --> core
-    entrypoint --> features
-    entrypoint --> portals
+    entrypoint --> foundation
+    entrypoint --> mist
+    entrypoint --> operations
+    entrypoint --> interfaces
 ```
 
 | Package | Primary Classes | Menu Ops |
 |---------|----------------|----------|
-| `src/analytics/` | `ZoneConfigurationAnalyzer`, `SiteInventoryHealthAnalyzer`, `SiteAnalyticsConfigurator` | 7, 77-79, 169 |
-| `src/capture/` | `PacketCaptureManager`, `PacketCaptureDownloadManager` | 134-135 |
-| `src/db/` | `DatabaseRouter`, `ArangoDBWriter`, `RedisTimeSeriesWriter`, `RedisJSONWriter` | Output backends |
-| `src/device/` | Device utility modules | 128-133, 148, 207-208 |
-| `src/export/` | `SiteExportUtils`, `SiteInsightsExporter` | 60-96 |
-| `src/firmware/` | `FirmwareManager` | 153-157, 239 |
-| `src/gateway/` | `GatewayExportUtils`, `GatewayStatsExporter`, `WAN2MigrationManager` | 31-50, 104-111, 149, 167 |
-| `src/inventory/` | `OrgDeviceInventorySummaryCore`, `OrgDeviceInventoryMSPOrchestrator` | 8-9, 13-14 |
-| `src/site/` | `SiteConfigManager` | 171-174 |
+| `src/mist/intelligence/analytics/` | `ZoneConfigurationAnalyzer`, `SiteInventoryHealthAnalyzer`, `SiteAnalyticsConfigurator` | 7, 77-79, 169 |
+| `src/operations/execution/capture/` | `PacketCaptureManager`, `PacketCaptureDownloadManager` | 134-135 |
+| `src/foundation/persistence/db/` | `DatabaseRouter`, `ArangoDBWriter`, `RedisTimeSeriesWriter`, `RedisJSONWriter` | Output backends |
+| `src/mist/resources/device/` | Device utility modules | 128-133, 148, 207-208 |
+| `src/operations/exporting/export/` | `SiteExportUtils`, `SiteInsightsExporter` | 60-96 |
+| `src/operations/execution/firmware/` | `FirmwareManager` | 153-157, 239 |
+| `src/mist/resources/gateway/` | `GatewayExportUtils`, `GatewayStatsExporter`, `WAN2MigrationManager` | 31-50, 104-111, 149, 167 |
+| `src/mist/resources/inventory/` | `OrgDeviceInventorySummaryCore`, `OrgDeviceInventoryMSPOrchestrator` | 8-9, 13-14 |
+| `src/mist/resources/site/` | `SiteConfigManager` | 171-174 |
 | `src/sle/` | `SLEExporter` | 51-55 |
-| `src/ssh/` | `EnhancedSSHRunner`, `SSHRunnerManager` | 175-176 |
-| `src/org/` | `OrgTicketManager` | 188-193 |
-| `src/troubleshooting/` | `MarvisTroubleshootUtils` | 124-127, 139 |
-| `src/websocket/` | `WebSocketManager`, `ServicePingManager` | 102-123 |
-| `src/metrics_gateway/` | `MistMetricsCollector`, `PrometheusRenderer`, `SnmpPassPersistResponder` | 241 |
-| `src/upgrade_portal/` | Upgrade portal modules | 239 |
+| `src/operations/execution/ssh/` | `EnhancedSSHRunner`, `SSHRunnerManager` | 175-176 |
+| `src/mist/resources/org/` | `OrgTicketManager` | 188-193 |
+| `src/mist/intelligence/troubleshooting/` | `MarvisTroubleshootUtils` | 124-127, 139 |
+| `src/mist/realtime/websocket/` | `WebSocketManager`, `ServicePingManager` | 102-123 |
+| `src/interfaces/monitoring/metrics_gateway/` | `MistMetricsCollector`, `PrometheusRenderer`, `SnmpPassPersistResponder` | 241 |
+| `src/interfaces/portals/upgrade_portal/` | Upgrade portal modules | 239 |
 
 ## Key Subsystems
 
@@ -181,8 +161,8 @@ flowchart TD
 | Packet Capture | `PacketCaptureManager`, `PacketCaptureDownloadManager` | Site/org packet captures with extracted poll/download handling |
 | Container | Non-root user, ForceCommand SSH | Isolated session management |
 | Web Portal | Gunicorn on port 8055 | Browser UI for operations |
-| Upgrade Portal | `src/upgrade_portal/` on port 8056 | Pre-check, upgrade, and post-check capture workflow |
-| Metrics Gateway | `src/metrics_gateway/` on port 8057 | Prometheus and SNMP monitoring output |
+| Upgrade Portal | `src/interfaces/portals/upgrade_portal/` on port 8056 | Pre-check, upgrade, and post-check capture workflow |
+| Metrics Gateway | `src/interfaces/monitoring/metrics_gateway/` on port 8057 | Prometheus and SNMP monitoring output |
 
 ---
 

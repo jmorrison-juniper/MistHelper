@@ -10,7 +10,7 @@
 
 ### Context
 
-The current constructor signature at `src/firmware/bulk_ap_upgrader.py:43`:
+The current constructor signature at `src/operations/execution/firmware/bulk_ap_upgrader.py:43`:
 
 ```python
 def __init__(
@@ -38,7 +38,7 @@ Two positional params (`org_id`, `apisession`), eight keyword-only params (every
 | 1 | `MistHelper.py:19796` — production menu 195 (inside the thin wrapper class `BulkAPFirmwareUpgrader.execute`) | `_Impl(org_id=..., apisession=..., sites_override=..., dry_run=..., safe_input_fn=..., check_stop_fn=..., fetch_sites_fn=..., get_csv_path_fn=..., check_firmware_status_fn=..., get_org_id_fn=...)` | All 10 args passed as kwargs. |
 | 2 | `tests/unit/test_bulk_ap_upgrader.py:83` — `_make_upgrader` factory | `BulkAPFirmwareUpgrader(**defaults)` where `defaults` is a dict of 9 kwargs (all except `apisession` which is present). | All args passed via `**kwargs`. |
 
-Note on `src/firmware/firmware_manager.py:1463`: this line reads `BulkAPFirmwareUpgrader(self.org_id, sites_to_upgrade_override, dry_run=dry_run)` — but the class name bound at line 1460 is the **thin wrapper in `MistHelper.py:19783`**, not the implementation class. The wrapper's signature is `(org_id, sites_override=None, dry_run=False)`. This call site therefore does NOT hit the implementation constructor directly; it is insulated by the wrapper.
+Note on `src/operations/execution/firmware/firmware_manager.py:1463`: this line reads `BulkAPFirmwareUpgrader(self.org_id, sites_to_upgrade_override, dry_run=dry_run)` — but the class name bound at line 1460 is the **thin wrapper in `MistHelper.py:19783`**, not the implementation class. The wrapper's signature is `(org_id, sites_override=None, dry_run=False)`. This call site therefore does NOT hit the implementation constructor directly; it is insulated by the wrapper.
 
 ### Options Considered
 
@@ -258,9 +258,9 @@ The test file exists at `tests/unit/test_bulk_ap_upgrader.py`. It is substantial
 1. **No new test file created.** The existing suite is the regression harness.
 2. **Update `_make_upgrader` factory only.** It becomes: build a `BulkAPUpgraderConfig` from `defaults`, then call `BulkAPFirmwareUpgrader(config)`. Every `TestInit.*` test then exercises the new config-based init automatically.
 3. **Acceptance gate is the four commands from FR-001, FR-002, FR-003, plus pytest:**
-   - `python -m tools.compliance_analyzer src/firmware/bulk_ap_upgrader.py` — score >=80, grade >=B.
-   - `python -m ruff check src/firmware/bulk_ap_upgrader.py` — zero errors, zero warnings.
-   - `python -m py_compile src/firmware/bulk_ap_upgrader.py` — exit 0.
+   - `python -m tools.compliance_analyzer src/operations/execution/firmware/bulk_ap_upgrader.py` — score >=80, grade >=B.
+   - `python -m ruff check src/operations/execution/firmware/bulk_ap_upgrader.py` — zero errors, zero warnings.
+   - `python -m py_compile src/operations/execution/firmware/bulk_ap_upgrader.py` — exit 0.
    - `python -m pytest tests/unit/test_bulk_ap_upgrader.py -v` — all existing tests pass without test-code modification beyond the `_make_upgrader` factory update.
 
 Adding new tests is a follow-on feature (per spec Assumptions section).

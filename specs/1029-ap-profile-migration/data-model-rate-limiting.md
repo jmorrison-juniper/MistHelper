@@ -127,6 +127,6 @@ avoids storing the full delay history and stays O(1) memory during a
 - Parent `data-model.md` section 1 (backup schema; unchanged),
   section 2.1 (summary), section 2.2 (JSONL audit line).
 - Addendum spec `spec-addendum-rate-limiting.md` FR-A09.
-- `src/analytics/telemetry_emitter.py` (`TelemetryEmitter`) --
+- `src/mist/intelligence/analytics/telemetry_emitter.py` (`TelemetryEmitter`) --
   existing writer; no code change required beyond adding the
   `pacing` sub-dict to the payload the loop already builds.

@@ -53,10 +53,10 @@
 
 ### Implementation for User Story 1
 
-- [x] T012 [P] [US1] Implement organization capture workflow class in `src/capture/org_capture_workflow.py`
-- [x] T013 [P] [US1] Implement site capture loop runner class in `src/capture/site_capture_loop.py`
-- [x] T014 [US1] Refactor `start_org_packet_capture` orchestration to delegate into workflow classes in `src/capture/packet_capture.py`
-- [x] T015 [US1] Refactor `_execute_site_capture_loop` orchestration to delegate loop stages in `src/capture/packet_capture.py`
+- [x] T012 [P] [US1] Implement organization capture workflow class in `src/operations/execution/capture/org_capture_workflow.py`
+- [x] T013 [P] [US1] Implement site capture loop runner class in `src/operations/execution/capture/site_capture_loop.py`
+- [x] T014 [US1] Refactor `start_org_packet_capture` orchestration to delegate into workflow classes in `src/operations/execution/capture/packet_capture.py`
+- [x] T015 [US1] Refactor `_execute_site_capture_loop` orchestration to delegate loop stages in `src/operations/execution/capture/packet_capture.py`
 - [x] T016 [US1] Update compatibility facade wiring for packet capture paths in `MistHelper.py`
 - [x] T017 [US1] Record US1 behavior parity evidence in `specs/195-decompose-top5-functions/evidence/us1_packet_capture_parity.md`
 
@@ -83,14 +83,14 @@
 
 ### Implementation for User Story 2
 
-- [x] T021 [P] [US2] Implement dependency check orchestrator in `src/bootstrap/dependency_check.py`
-- [x] T022 [P] [US2] Implement package install/upgrade strategy helpers in `src/bootstrap/package_installer.py`
-- [x] T023 [P] [US2] Implement uv runtime detection/validation helpers in `src/bootstrap/uv_runtime.py`
+- [x] T021 [P] [US2] Implement dependency check orchestrator in `src/foundation/runtime/bootstrap/dependency_check.py`
+- [x] T022 [P] [US2] Implement package install/upgrade strategy helpers in `src/foundation/runtime/bootstrap/package_installer.py`
+- [x] T023 [P] [US2] Implement uv runtime detection/validation helpers in `src/foundation/runtime/bootstrap/uv_runtime.py`
 - [x] T024 [US2] Refactor `_early_dependency_check` facade delegation in `MistHelper.py`
-- [x] T025 [P] [US2] Implement device events 52-week exporter in `src/export/device_events_52w_exporter.py`
+- [x] T025 [P] [US2] Implement device events 52-week exporter in `src/operations/exporting/export/device_events_52w_exporter.py`
 - [x] T026 [US2] Refactor `device_events_52w` facade delegation in `MistHelper.py`
-- [x] T027 [P] [US2] Implement gateway WAN override analyzer in `src/gateway/gateway_override_analysis.py`
-- [x] T028 [US2] Delegate `with_wan_overrides` through analyzer in `src/gateway/gateway_export_utils.py`
+- [x] T027 [P] [US2] Implement gateway WAN override analyzer in `src/mist/resources/gateway/gateway_override_analysis.py`
+- [x] T028 [US2] Delegate `with_wan_overrides` through analyzer in `src/mist/resources/gateway/gateway_export_utils.py`
 - [x] T029 [US2] Remove legacy duplicate heavy-body `with_wan_overrides` definition and retain single compatible entrypoint in `MistHelper.py`
 - [x] T030 [US2] Update old-vs-new responsibility mappings in `specs/195-decompose-top5-functions/target-boundary-map.md`
 - [x] T031 [US2] Record US2 maintainability evidence in `specs/195-decompose-top5-functions/evidence/us2_complexity_and_design.md`

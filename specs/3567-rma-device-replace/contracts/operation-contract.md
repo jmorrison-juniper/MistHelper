@@ -4,7 +4,7 @@
 
 - Menu number: `287`.
 - Category: `destructive`.
-- Handler: `src.inventory.device_replace.operation.DeviceReplaceOperation.run`.
+- Handler: `src.mist.resources.inventory.device_replace.operation.DeviceReplaceOperation.run`.
 - Confirmation word: `REPLACE`.
 - Dry-run flag: `--dry-run` in process arguments.
 

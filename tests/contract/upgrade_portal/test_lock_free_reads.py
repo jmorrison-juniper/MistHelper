@@ -34,7 +34,10 @@ from flask import Flask  # The application type of the portal.
 from flask.testing import FlaskClient  # The client type that drives every request.
 from werkzeug.test import TestResponse  # The answer type that every assertion reads.
 
-from src.upgrade_portal.runtime import identity, lock  # The real session guard and the real lock record.
+from src.interfaces.portals.upgrade_portal.runtime import (
+    identity,
+    lock,
+)  # The real session guard and the real lock record.
 
 LOCK_CLIENT_KEY = "LOCK_STORE_CLIENT"  # The lock store seam, named by `app/routes/select.py`.
 CAPTURE_LOADER_KEY = "CAPTURE_LOADER"  # The capture reader seam, named by `app/routes/review.py`.

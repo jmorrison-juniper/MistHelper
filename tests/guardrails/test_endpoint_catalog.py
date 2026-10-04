@@ -5,7 +5,7 @@ Why:
     raw operationId alone, so an operator read `getOrgWlan` and learned neither
     what the call reads nor whether it changes the Mist cloud.
 
-    `src/export/endpoint_catalog.py` now holds one description and one safety
+    `src/operations/exporting/export/endpoint_catalog.py` now holds one description and one safety
     flag for each operation. A later change can add a row to an operation table
     and forget the catalog. The sub-menu would then print a bare name again,
     and the fallback would mark a plain read as interactive.
@@ -29,7 +29,8 @@ from unittest.mock import MagicMock, Mock
 
 import pytest
 
-from src.export.endpoint_catalog import (
+from src.foundation.support.refactors.endpoint_primary_key_strategies import ENDPOINT_PRIMARY_KEY_STRATEGIES
+from src.operations.exporting.export.endpoint_catalog import (
     DESTRUCTIVE,
     ENDPOINT_CATALOG,
     INTERACTIVE_SAFE,
@@ -40,7 +41,7 @@ from src.export.endpoint_catalog import (
     describe,
     menu_text,
 )
-from src.export.endpoint_family_exporter import (
+from src.operations.exporting.export.endpoint_family_exporter import (
     _MSP_DETAIL_OPS,
     _ORG_DETAIL_OPS,
     _OTHER_DETAIL_OPS,
@@ -49,8 +50,13 @@ from src.export.endpoint_family_exporter import (
     _SITE_SLE_OPS,
     _EndpointFamilyOp,
 )
-from src.export.simple_endpoint_exporter import _MSP_OPS, _NONE_OPS, _ORG_OPS, _SITE_OPS, _SimpleEndpointOp
-from src.refactors.endpoint_primary_key_strategies import ENDPOINT_PRIMARY_KEY_STRATEGIES
+from src.operations.exporting.export.simple_endpoint_exporter import (
+    _MSP_OPS,
+    _NONE_OPS,
+    _ORG_OPS,
+    _SITE_OPS,
+    _SimpleEndpointOp,
+)
 
 # The one table that needs no operator identifier. Only these rows may read
 # `safe`, because `--test` runs that category without a prompt.

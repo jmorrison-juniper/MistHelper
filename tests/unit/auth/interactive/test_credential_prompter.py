@@ -1,4 +1,4 @@
-"""Unit tests for src.auth.interactive.credential_prompter.
+"""Unit tests for src.mist.access.auth.interactive.credential_prompter.
 
 Wave 13 P2 coverage lift — CredentialPrompter is a thin wrapper over
 safe_input/getpass that returns Optional[str]. Cover every branch
@@ -13,7 +13,7 @@ from unittest.mock import MagicMock  # WHY: MagicMock spec + patch for getpass
 
 import pytest  # WHY: LogCaptureFixture type for caplog assertions
 
-from src.auth.interactive.credential_prompter import CredentialPrompter  # WHY: subject under test
+from src.mist.access.auth.interactive.credential_prompter import CredentialPrompter  # WHY: subject under test
 
 
 class _SafeInputStub:
@@ -58,7 +58,7 @@ def test_prompt_email_returns_none_on_blank(caplog: pytest.LogCaptureFixture) ->
 def test_prompt_password_returns_value(monkeypatch) -> None:
     """Successful getpass returns the raw password (no trimming)."""
     monkeypatch.setattr(  # WHY: patch getpass in the target module namespace
-        "src.auth.interactive.credential_prompter.getpass.getpass",
+        "src.mist.access.auth.interactive.credential_prompter.getpass.getpass",
         MagicMock(return_value="hunter2"),
     )
     prompter = CredentialPrompter(safe_input=_SafeInputStub())
@@ -68,7 +68,7 @@ def test_prompt_password_returns_value(monkeypatch) -> None:
 def test_prompt_password_returns_none_on_eof(monkeypatch) -> None:
     """EOFError from getpass returns None (SSH disconnect path)."""
     monkeypatch.setattr(
-        "src.auth.interactive.credential_prompter.getpass.getpass",
+        "src.mist.access.auth.interactive.credential_prompter.getpass.getpass",
         MagicMock(side_effect=EOFError()),
     )
     prompter = CredentialPrompter(safe_input=_SafeInputStub())
@@ -78,7 +78,7 @@ def test_prompt_password_returns_none_on_eof(monkeypatch) -> None:
 def test_prompt_password_returns_none_on_terminal_error(monkeypatch, caplog: pytest.LogCaptureFixture) -> None:
     """Non-EOF exceptions from getpass are logged and returned as None."""
     monkeypatch.setattr(
-        "src.auth.interactive.credential_prompter.getpass.getpass",
+        "src.mist.access.auth.interactive.credential_prompter.getpass.getpass",
         MagicMock(side_effect=OSError("closed stdin")),
     )
     prompter = CredentialPrompter(safe_input=_SafeInputStub())
@@ -90,7 +90,7 @@ def test_prompt_password_returns_none_on_terminal_error(monkeypatch, caplog: pyt
 def test_prompt_password_non_terminal_error_propagates(monkeypatch) -> None:
     """Non-terminal faults from getpass must propagate."""
     monkeypatch.setattr(  # WHY: replace the masked prompt with a deterministic fault.
-        "src.auth.interactive.credential_prompter.getpass.getpass",
+        "src.mist.access.auth.interactive.credential_prompter.getpass.getpass",
         MagicMock(side_effect=AttributeError("bad prompt")),  # WHY: simulate a programming fault.
     )
     prompter = CredentialPrompter(safe_input=_SafeInputStub())  # WHY: build the subject with safe prompt input.
@@ -101,7 +101,7 @@ def test_prompt_password_non_terminal_error_propagates(monkeypatch) -> None:
 def test_prompt_password_returns_none_on_blank(monkeypatch, caplog: pytest.LogCaptureFixture) -> None:
     """Blank password prints validation banner and returns None."""
     monkeypatch.setattr(
-        "src.auth.interactive.credential_prompter.getpass.getpass",
+        "src.mist.access.auth.interactive.credential_prompter.getpass.getpass",
         MagicMock(return_value=""),
     )
     prompter = CredentialPrompter(safe_input=_SafeInputStub())

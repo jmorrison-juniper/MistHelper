@@ -1,6 +1,6 @@
 """Unit tests for the WebSocket diagnostic-command shared helpers.
 
-Covers src/websocket/diagnostics/common.py: detect_debug_mode, post_device_command,
+Covers src/mist/realtime/websocket/diagnostics/common.py: detect_debug_mode, post_device_command,
 extract_command_session, prepare_command_credentials, and the two extra-field
 printers. The helpers exist to keep the ping/ARP executors small and testable —
 these tests pin the branching (debug on/off, HTTP success/failure, missing
@@ -16,11 +16,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.websocket.diagnostics import common as common_mod
+from src.mist.realtime.websocket.diagnostics import common as common_mod
 
 # WHY: caplog needs the module-scoped logger name so records are captured
 # after the print()→logger.info/warning migration in slice #886/74.
-_LOGGER_NAME = "src.websocket.diagnostics.common"
+_LOGGER_NAME = "src.mist.realtime.websocket.diagnostics.common"
 
 
 def _fake_response(status: int, body: dict[str, Any] | None = None, text: str = "") -> MagicMock:

@@ -4,7 +4,7 @@
 
 Research was limited to local source, local tests, and the already-created issue mapping. No source, test, configuration, GitHub, Mist, branch, commit, or PR state was changed.
 
-The current runner invokes every `interactive_safe` handler in `src/troubleshooting/interactive_test_runner.py`. A normal return is emitted as `test_pass`; only an exception becomes `test_fail`. `TelemetryEmitter` derives the overall status from `TestSummary.failed`, so a handler that logs an error then returns is falsely represented as clean. The runner resolves an exact id/case-insensitive full-name selector, but falls back to the first site after a selector miss. It injects `site_id` only for signatures declaring that parameter. `InputUtils.safe_input` intentionally converts EOF and Ctrl+C to normal return values, which explains why a cancelled prompt can look like a successful no-op.
+The current runner invokes every `interactive_safe` handler in `src/mist/intelligence/troubleshooting/interactive_test_runner.py`. A normal return is emitted as `test_pass`; only an exception becomes `test_fail`. `TelemetryEmitter` derives the overall status from `TestSummary.failed`, so a handler that logs an error then returns is falsely represented as clean. The runner resolves an exact id/case-insensitive full-name selector, but falls back to the first site after a selector miss. It injects `site_id` only for signatures declaring that parameter. `InputUtils.safe_input` intentionally converts EOF and Ctrl+C to normal return values, which explains why a cancelled prompt can look like a successful no-op.
 
 ## Decisions
 

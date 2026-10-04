@@ -1,6 +1,6 @@
 """Focused unit tests for pure/near-pure static helpers on OrgInventoryExporter.
 
-Purpose: lift coverage for src/export/org_inventory_exporter.py above the 42%
+Purpose: lift coverage for src/operations/exporting/export/org_inventory_exporter.py above the 42%
 floor produced by the T-06 extraction. These tests target only helpers whose
 behavior is fully specified by their inputs/outputs (or filesystem/log side
 effects that fixtures like ``tmp_path``, ``capsys``, and ``caplog`` capture
@@ -21,7 +21,7 @@ from unittest.mock import MagicMock
 import pytest
 
 import MistHelper
-from src.export.org_inventory_exporter import OrgInventoryExporter
+from src.operations.exporting.export.org_inventory_exporter import OrgInventoryExporter
 
 # ---------------------------------------------------------------------------
 # _build_safe_org_name (pure)
@@ -173,7 +173,7 @@ def test_partition_combined_inventory_rows_composes_split_and_classify() -> None
 def test_emit_vc_shell_dashboard_diff_prints_three_lines(caplog: pytest.LogCaptureFixture) -> None:
     physical = [{"mac": "aabbccddee01"}]
     shells = [{"mac": "020003ffffff"}]
-    with caplog.at_level(logging.INFO, logger="src.export.org_inventory_exporter"):
+    with caplog.at_level(logging.INFO, logger="src.operations.exporting.export.org_inventory_exporter"):
         OrgInventoryExporter._emit_vc_shell_dashboard_diff(physical, shells)
     assert "1 provisioned VC shells" in caplog.text
     assert "Dashboard shows 2" in caplog.text
@@ -347,7 +347,7 @@ def test_print_combined_inventory_summary_names_three_outputs(caplog: pytest.Log
     weekly["2024_Week_01"] = [{}]
     weekly["2024_Week_02"] = [{}, {}]
     site_configs = [{}] * 3
-    with caplog.at_level(logging.INFO, logger="src.export.org_inventory_exporter"):
+    with caplog.at_level(logging.INFO, logger="src.operations.exporting.export.org_inventory_exporter"):
         OrgInventoryExporter._print_combined_inventory_summary(weekly, site_configs, "acme.csv", 3)
     out = caplog.text
     assert "2 weekly CSV files" in out
@@ -461,8 +461,12 @@ class _RecordingDataExporter:
 @pytest.fixture
 def _source_resolver_double(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
     """Provide source resolver state that each exporter helper test owns."""
-    from src.config.config_utils import ConfigUtils  # Import the source state owner used by the exporter.
-    from src.export import org_inventory_exporter as mod  # Import the module so the resolver seam can be patched.
+    from src.foundation.runtime.config.config_utils import (
+        ConfigUtils,
+    )  # Import the source state owner used by the exporter.
+    from src.operations.exporting.export import (
+        org_inventory_exporter as mod,
+    )  # Import the module so the resolver seam can be patched.
 
     session = object()  # Create a per-test Mist session double for ConfigUtils and the resolver.
     ConfigUtils.set_apisession(session)  # Give ConfigUtils the session that this test owns.
@@ -486,7 +490,7 @@ def test_flatten_sort_export_devices_sorts_by_site_and_writes_csv(
         {"name": "d2", "site_name": "Zeta"},
         {"name": "d1", "site_name": "Alpha"},
     ]
-    with caplog.at_level(logging.INFO, logger="src.export.org_inventory_exporter"):
+    with caplog.at_level(logging.INFO, logger="src.operations.exporting.export.org_inventory_exporter"):
         result = OrgInventoryExporter._flatten_sort_export_devices(devices)
     assert [d["site_name"] for d in result] == ["Alpha", "Zeta"]
     assert _RecordingDataExporter.calls[-1][1] == "AllDevicesWithSiteInfo.csv"
@@ -501,7 +505,7 @@ def test_flatten_sort_export_gateways_sorts_by_site_and_writes_csv(
         {"name": "g2", "site_name": "Zeta"},
         {"name": "g1", "site_name": "Alpha"},
     ]
-    with caplog.at_level(logging.INFO, logger="src.export.org_inventory_exporter"):
+    with caplog.at_level(logging.INFO, logger="src.operations.exporting.export.org_inventory_exporter"):
         result = OrgInventoryExporter._flatten_sort_export_gateways(gateways)
     assert [g["site_name"] for g in result] == ["Alpha", "Zeta"]
     assert _RecordingDataExporter.calls[-1][1] == "GatewaysWithSiteInfo.csv"
@@ -517,7 +521,7 @@ def test_load_combined_inventory_rows_reads_all_devices_with_site_info_csv(
     tmp_path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Redirect FilePathUtils to a tmp CSV and confirm rows are materialized."""
-    from src.utils import file_path_utils
+    from src.foundation.support.utils import file_path_utils
 
     csv_path = tmp_path / "AllDevicesWithSiteInfo.csv"
     csv_path.write_text("mac,site_name\naabb,Site1\nccdd,Site2\n", encoding="utf-8")
@@ -527,7 +531,7 @@ def test_load_combined_inventory_rows_reads_all_devices_with_site_info_csv(
 
     monkeypatch.setattr(file_path_utils.FilePathUtils, "get_csv_path", staticmethod(_fake_get_csv_path))
     # The exporter imports FilePathUtils at module load; patch that reference too.
-    from src.export import org_inventory_exporter
+    from src.operations.exporting.export import org_inventory_exporter
 
     monkeypatch.setattr(org_inventory_exporter.FilePathUtils, "get_csv_path", staticmethod(_fake_get_csv_path))
 
@@ -543,7 +547,7 @@ def test_load_combined_inventory_rows_reads_all_devices_with_site_info_csv(
 def test_load_site_lookup_from_cache_reads_site_list_csv(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     csv_path = tmp_path / "SiteList.csv"
     csv_path.write_text("id,name,address\nS1,Site1,Addr1\nS2,Site2,Addr2\n", encoding="utf-8")
-    from src.export import org_inventory_exporter
+    from src.operations.exporting.export import org_inventory_exporter
 
     monkeypatch.setattr(
         org_inventory_exporter.FilePathUtils, "get_csv_path", staticmethod(lambda fn: str(tmp_path / fn))
@@ -558,7 +562,7 @@ def test_load_site_lookup_from_cache_reads_site_list_csv(tmp_path, monkeypatch: 
 def test_load_inventory_from_cache_reads_org_inventory_csv(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     csv_path = tmp_path / "OrgInventory.csv"
     csv_path.write_text("mac,model\naabb,AP41\nccdd,SW\n", encoding="utf-8")
-    from src.export import org_inventory_exporter
+    from src.operations.exporting.export import org_inventory_exporter
 
     monkeypatch.setattr(
         org_inventory_exporter.FilePathUtils, "get_csv_path", staticmethod(lambda fn: str(tmp_path / fn))
@@ -591,7 +595,7 @@ def test_enrich_devices_with_site_info_logs_vc_inheritance_count(caplog: pytest.
 
 
 def test_prepare_combined_inventory_context_returns_expected_tuple(monkeypatch: pytest.MonkeyPatch) -> None:
-    from src.export import org_inventory_exporter
+    from src.operations.exporting.export import org_inventory_exporter
 
     monkeypatch.setenv("END_CUSTOMER_NAME", "Acme")
     monkeypatch.setenv("END_CUSTOMER_ACCOUNT_ID", "acct-1")
@@ -734,7 +738,7 @@ def test_devices_menu17_skips_emitter_when_absent(_source_resolver_double: Simpl
 
 
 def test_build_site_lookup_from_api(monkeypatch) -> None:
-    from src.export import org_inventory_exporter as mod
+    from src.operations.exporting.export import org_inventory_exporter as mod
 
     monkeypatch.setattr(
         mod.APICoreFetchUtils,
@@ -752,7 +756,7 @@ def test_build_site_lookup_from_api(monkeypatch) -> None:
 
 
 def test_load_site_lookup_from_cache_falls_back_on_read_error(monkeypatch) -> None:
-    from src.export import org_inventory_exporter as mod
+    from src.operations.exporting.export import org_inventory_exporter as mod
 
     monkeypatch.setattr(mod.FilePathUtils, "get_csv_path", lambda name: "/nonexistent/does_not_exist.csv")
     monkeypatch.setattr(
@@ -765,7 +769,7 @@ def test_load_site_lookup_from_cache_falls_back_on_read_error(monkeypatch) -> No
 
 
 def test_load_site_lookup_from_cache_reads_csv(monkeypatch, tmp_path) -> None:
-    from src.export import org_inventory_exporter as mod
+    from src.operations.exporting.export import org_inventory_exporter as mod
 
     csv_path = tmp_path / "SiteList.csv"
     with open(csv_path, "w", newline="", encoding="utf-8") as f:
@@ -778,7 +782,7 @@ def test_load_site_lookup_from_cache_reads_csv(monkeypatch, tmp_path) -> None:
 
 
 def test_load_inventory_from_cache_falls_back_on_read_error(monkeypatch) -> None:
-    from src.export import org_inventory_exporter as mod
+    from src.operations.exporting.export import org_inventory_exporter as mod
 
     monkeypatch.setattr(mod.FilePathUtils, "get_csv_path", lambda name: "/nonexistent/does_not_exist.csv")
     monkeypatch.setattr(
@@ -791,7 +795,7 @@ def test_load_inventory_from_cache_falls_back_on_read_error(monkeypatch) -> None
 
 
 def test_load_inventory_from_cache_reads_csv(monkeypatch, tmp_path) -> None:
-    from src.export import org_inventory_exporter as mod
+    from src.operations.exporting.export import org_inventory_exporter as mod
 
     csv_path = tmp_path / "OrgInventory.csv"
     with open(csv_path, "w", newline="", encoding="utf-8") as f:
@@ -804,7 +808,7 @@ def test_load_inventory_from_cache_reads_csv(monkeypatch, tmp_path) -> None:
 
 
 def test_devices_load_data_non_fast_calls_api(monkeypatch) -> None:
-    from src.export import org_inventory_exporter as mod
+    from src.operations.exporting.export import org_inventory_exporter as mod
 
     monkeypatch.setattr(
         mod.APICoreFetchUtils,
@@ -822,7 +826,7 @@ def test_devices_load_data_non_fast_calls_api(monkeypatch) -> None:
 
 
 def test_devices_load_data_fast_uses_cache(monkeypatch, tmp_path) -> None:
-    from src.export import org_inventory_exporter as mod
+    from src.operations.exporting.export import org_inventory_exporter as mod
 
     site_csv = tmp_path / "SiteList.csv"
     inv_csv = tmp_path / "OrgInventory.csv"
@@ -858,7 +862,7 @@ class _StubOrgResponse:
 
 
 def test_resolve_combined_inventory_org_name_uses_api_name(monkeypatch) -> None:
-    from src.export import org_inventory_exporter as mod
+    from src.operations.exporting.export import org_inventory_exporter as mod
 
     monkeypatch.setattr(MistHelper, "apisession", object(), raising=False)
     monkeypatch.setattr(
@@ -871,7 +875,7 @@ def test_resolve_combined_inventory_org_name_uses_api_name(monkeypatch) -> None:
 
 
 def test_resolve_combined_inventory_org_name_falls_back_to_env(monkeypatch) -> None:
-    from src.export import org_inventory_exporter as mod
+    from src.operations.exporting.export import org_inventory_exporter as mod
 
     monkeypatch.setattr(MistHelper, "apisession", object(), raising=False)
     monkeypatch.setattr(
@@ -884,7 +888,7 @@ def test_resolve_combined_inventory_org_name_falls_back_to_env(monkeypatch) -> N
 
 
 def test_resolve_combined_inventory_org_name_final_fallback(monkeypatch) -> None:
-    from src.export import org_inventory_exporter as mod
+    from src.operations.exporting.export import org_inventory_exporter as mod
 
     monkeypatch.setattr(MistHelper, "apisession", object(), raising=False)
     monkeypatch.setattr(
@@ -898,7 +902,7 @@ def test_resolve_combined_inventory_org_name_final_fallback(monkeypatch) -> None
 
 @pytest.mark.parametrize("status_code", [404, 503])
 def test_resolve_combined_inventory_org_name_http_failure_falls_back(monkeypatch, status_code: int) -> None:
-    from src.export import org_inventory_exporter as mod
+    from src.operations.exporting.export import org_inventory_exporter as mod
 
     monkeypatch.setattr(MistHelper, "apisession", object(), raising=False)
     monkeypatch.setattr(
@@ -911,7 +915,7 @@ def test_resolve_combined_inventory_org_name_http_failure_falls_back(monkeypatch
 
 
 def test_resolve_combined_inventory_org_name_unknown_org_sentinel(monkeypatch) -> None:
-    from src.export import org_inventory_exporter as mod
+    from src.operations.exporting.export import org_inventory_exporter as mod
 
     monkeypatch.setattr(MistHelper, "apisession", object(), raising=False)
     monkeypatch.setattr(
@@ -930,7 +934,7 @@ def test_resolve_combined_inventory_org_name_unknown_org_sentinel(monkeypatch) -
 
 def test_devices_with_site_info_orchestrator(monkeypatch, tmp_path) -> None:
     """Cover the devices_with_site_info orchestrator path (fast=False)."""
-    from src.export import org_inventory_exporter as mod
+    from src.operations.exporting.export import org_inventory_exporter as mod
 
     monkeypatch.setattr(mod.ConfigUtils, "get_cached_or_prompted_org_id", lambda: "org-1")
     all_sites = MagicMock(return_value=[{"id": "s1", "name": "HQ", "address": "1 Main"}])
@@ -964,7 +968,7 @@ def test_devices_with_site_info_orchestrator(monkeypatch, tmp_path) -> None:
 
 def test_gateways_with_site_info_orchestrator(monkeypatch) -> None:
     """Cover the gateways_with_site_info orchestrator path."""
-    from src.export import org_inventory_exporter as mod
+    from src.operations.exporting.export import org_inventory_exporter as mod
 
     monkeypatch.setattr(mod.ConfigUtils, "get_cached_or_prompted_org_id", lambda: "org-1")
     all_sites = MagicMock(return_value=[{"id": "s1", "name": "HQ", "address": "1 Main"}])
@@ -1006,7 +1010,7 @@ class _StubResponse:
 
 
 def test_fetch_and_persist_raw_inventory_variant(monkeypatch, tmp_path) -> None:
-    from src.export import org_inventory_exporter as mod
+    from src.operations.exporting.export import org_inventory_exporter as mod
 
     monkeypatch.setattr(MistHelper, "apisession", object(), raising=False)
     monkeypatch.setattr(
@@ -1027,7 +1031,7 @@ def test_fetch_and_persist_raw_inventory_variant(monkeypatch, tmp_path) -> None:
 
 
 def test_export_combined_inventory_raw_json(monkeypatch, tmp_path) -> None:
-    from src.export import org_inventory_exporter as mod
+    from src.operations.exporting.export import org_inventory_exporter as mod
 
     monkeypatch.setattr(MistHelper, "apisession", object(), raising=False)
     monkeypatch.setattr(MistHelper, "DEFAULT_API_PAGE_LIMIT", 1000, raising=False)
@@ -1050,7 +1054,7 @@ def test_export_combined_inventory_raw_json(monkeypatch, tmp_path) -> None:
 
 def test_export_combined_inventory_raw_json_swallows_errors(monkeypatch, tmp_path, caplog) -> None:
     """Diagnostic export must be non-fatal: exceptions are logged as warnings, not raised."""
-    from src.export import org_inventory_exporter as mod
+    from src.operations.exporting.export import org_inventory_exporter as mod
 
     monkeypatch.setattr(MistHelper, "apisession", object(), raising=False)
     monkeypatch.setattr(MistHelper, "DEFAULT_API_PAGE_LIMIT", 1000, raising=False)

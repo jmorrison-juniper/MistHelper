@@ -34,5 +34,5 @@
 - Baseline compliance report at `artifacts/baseline_compliance_report.md` enumerates all 82 violations across 7 rule categories.
 - Prior-art template from `specs/1004-bulk-ap-upgrader-compliance/` (frozen slots dataclass + phase-helper decomposition) is the model.
 - Target is A+/100.0 (zero violations); intermediate grades are not acceptable per campaign rules.
-- Only permitted diff outside `src/firmware/firmware_manager.py` is `MistHelper.py` lines 18788-18807 (factory wrapper update).
+- Only permitted diff outside `src/operations/execution/firmware/firmware_manager.py` is `MistHelper.py` lines 18788-18807 (factory wrapper update).
 - Refactor is real (no `# noqa` / `# type: ignore` / suppressions).

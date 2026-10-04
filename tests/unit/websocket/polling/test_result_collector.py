@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`src.websocket.polling.result_collector`.
+"""Unit tests for :mod:`src.mist.realtime.websocket.polling.result_collector`.
 
 Why:
     Issue #878 tranche 37k un-omits ``result_collector.py`` from the coverage
@@ -18,8 +18,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.websocket.polling import result_collector as rc_mod
-from src.websocket.polling.result_collector import (
+from src.mist.realtime.websocket.polling import result_collector as rc_mod
+from src.mist.realtime.websocket.polling.result_collector import (
     _CB_ERROR_TMPL,
     _DBG_PREFIX,
     _DEFAULT_ACTIVITY_TIMEOUT,

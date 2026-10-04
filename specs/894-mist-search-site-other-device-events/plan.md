@@ -52,10 +52,10 @@ verification, focused tests, and documentation updates.
 ## Project Structure
 
 ```text
-src/export/site_other_device_events_exporter.py
+src/operations/exporting/export/site_other_device_events_exporter.py
 tests/unit/export/test_site_other_device_events_exporter.py
 MistHelper.py
-src/refactors/endpoint_primary_key_strategies.py
+src/foundation/support/refactors/endpoint_primary_key_strategies.py
 README.md
 CHANGELOG.md
 documentation/menu_reference.md

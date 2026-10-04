@@ -49,7 +49,7 @@ def _mount_middleware(app: FastAPI, settings) -> None:  # noqa: ANN001
     app.add_middleware(StructuredLoggingMiddleware)
     # WHY: issue #2049. Per-org rate limiting moved to a dependency that runs
     # after auth, so an anonymous caller can no longer burn any org's budget.
-    # See get_scoped_org_id in src/api/deps.py.
+    # See get_scoped_org_id in src/mist/access/api/deps.py.
 
 
 def _mount_routers(app: FastAPI) -> None:

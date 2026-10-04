@@ -7,21 +7,21 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.export import data_exporter as data_exporter_module
-from src.export.data_exporter import (
+from src.foundation.support.refactors.device_data_fetcher import DeviceDataFetcher, DeviceFetchConfig
+from src.foundation.support.refactors.sqlite_database_writer import SQLiteDatabaseWriter
+from src.foundation.support.refactors.wlanradius_timer_manager import WLANRadiusTimerManager
+from src.mist.realtime.websocket.manager import WebSocketManager
+from src.mist.resources.gateway.wan2_variable import GatewayWan2VariableMigrator, Wan2VariableDeps
+from src.mist.resources.gateway.wan_probe_device_override_manager import WANProbeDeviceOverrideManager
+from src.operations.execution.firmware.firmware_manager import FirmwareManager
+from src.operations.execution.firmware.site_auto_upgrade import _resolve_configurator_kwargs
+from src.operations.execution.ssh.runtime.app_runner import AppRunner
+from src.operations.exporting.export import data_exporter as data_exporter_module
+from src.operations.exporting.export.data_exporter import (
     SKIP_NO_API_FUNCTION_NAME,
     SKIP_ROUTER_UNAVAILABLE,
     DataExporter,
 )
-from src.firmware.firmware_manager import FirmwareManager
-from src.firmware.site_auto_upgrade import _resolve_configurator_kwargs
-from src.gateway.wan2_variable import GatewayWan2VariableMigrator, Wan2VariableDeps
-from src.gateway.wan_probe_device_override_manager import WANProbeDeviceOverrideManager
-from src.refactors.device_data_fetcher import DeviceDataFetcher, DeviceFetchConfig
-from src.refactors.sqlite_database_writer import SQLiteDatabaseWriter
-from src.refactors.wlanradius_timer_manager import WLANRadiusTimerManager
-from src.ssh.runtime.app_runner import AppRunner
-from src.websocket.manager import WebSocketManager
 
 
 @pytest.mark.parametrize(
@@ -242,7 +242,9 @@ def test_app_runner_returns_none_when_user_vanishes_after_preflight(monkeypatch:
 
 def test_websocket_manager_requires_mist_host(monkeypatch: pytest.MonkeyPatch) -> None:
     """WebSocket manager raises a named error when no Mist host exists."""
-    monkeypatch.setattr("src.websocket.manager.os.getenv", lambda *_args: None)  # Remove the default fallback.
+    monkeypatch.setattr(
+        "src.mist.realtime.websocket.manager.os.getenv", lambda *_args: None
+    )  # Remove the default fallback.
     session = SimpleNamespace(host=None)  # Provide a session with no host.
 
     with pytest.raises(ValueError, match="mist_host must be set"):

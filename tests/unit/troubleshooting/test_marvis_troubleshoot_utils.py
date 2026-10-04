@@ -9,7 +9,10 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.troubleshooting.marvis_troubleshoot_utils import MarvisTroubleshootDeps, MarvisTroubleshootUtils
+from src.mist.intelligence.troubleshooting.marvis_troubleshoot_utils import (
+    MarvisTroubleshootDeps,
+    MarvisTroubleshootUtils,
+)
 
 
 @pytest.fixture(autouse=True)

@@ -4,7 +4,7 @@ Why:
     Section 3 of ``specs/1823-upgrade-capture-portal/contracts/upgrade-service.md``
     lists six prohibitions. A prohibition that no test checks returns the first
     time somebody adds a debug line. These tests read the syntax tree of
-    ``src/firmware/upgrade_service.py`` and fail on the exact node.
+    ``src/operations/execution/firmware/upgrade_service.py`` and fail on the exact node.
 
     The tests read the syntax tree, not the text. A text search finds the word
     ``print`` inside a docstring and reports a false failure, and it misses a
@@ -18,7 +18,7 @@ from pathlib import Path
 
 import pytest
 
-from src.firmware import upgrade_service
+from src.operations.execution.firmware import upgrade_service
 
 # The names that a web request can never use, because a web request has no
 # terminal and no keyboard.
@@ -60,7 +60,7 @@ def source_path() -> Path:
         leave the guard reading a stale path.
 
     Returns:
-        The path of ``src/firmware/upgrade_service.py``.
+        The path of ``src/operations/execution/firmware/upgrade_service.py``.
     """
     assert upgrade_service.__file__ is not None
     return Path(upgrade_service.__file__)

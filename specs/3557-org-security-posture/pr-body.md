@@ -10,7 +10,7 @@ This pull request adds the importable organization security posture checklist pa
 
 ## Files
 
-- `src/reports/org_security_posture/**`
+- `src/mist/intelligence/reports/org_security_posture/**`
 - `tests/unit/reports/org_security_posture/**`
 - `specs/3557-org-security-posture/**`
 - `changelog.d/issue-3557-org-security-posture.md`
@@ -33,12 +33,12 @@ It names the menu entry, handler import, primary key strategy, and deferred file
 - [x] New or changed guards state the measured count and prove one failing path
 - [x] No new Ruff lint violations (`ruff check`)
 - [x] Code formatted with Black (`black --check`)
-- [x] mypy passes (`mypy src/reports/org_security_posture --config-file pyproject.toml`)
+- [x] mypy passes (`mypy src/mist/intelligence/reports/org_security_posture --config-file pyproject.toml`)
 
 ## Security
 
 - [x] No hardcoded secrets, tokens, or passwords
-- [x] Bandit passes with no new findings (`bandit -c pyproject.toml -r src/reports/org_security_posture`)
+- [x] Bandit passes with no new findings (`bandit -c pyproject.toml -r src/mist/intelligence/reports/org_security_posture`)
 - [ ] pip-audit clean (`pip-audit -r requirements.txt`)
 - [x] Sensitive data handled via `.env` or environment variables only
 

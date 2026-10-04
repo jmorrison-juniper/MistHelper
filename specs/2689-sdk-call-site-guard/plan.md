@@ -52,7 +52,7 @@ specs/2689-sdk-call-site-guard/
 ### Source Code (repository root)
 
 ```text
-src/firmware/site_auto_upgrade.py
+src/operations/execution/firmware/site_auto_upgrade.py
 
 tests/integration/test_mistapi_sdk_compatibility.py
 
@@ -65,19 +65,19 @@ tests/guardrails/test_guard_proof_audit.py
 changelog.d/issue-2689-sdk-guard.md
 ```
 
-**Structure Decision**: Keep the guard in the existing integration test file because it is the named SDK compatibility test. The guard found one real SDK typo in `src/firmware/site_auto_upgrade.py`, so this plan includes that direct repair and its existing unit mock names.
+**Structure Decision**: Keep the guard in the existing integration test file because it is the named SDK compatibility test. The guard found one real SDK typo in `src/operations/execution/firmware/site_auto_upgrade.py`, so this plan includes that direct repair and its existing unit mock names.
 
 ## Complexity Tracking
 
 | Violation | Why Needed | Simpler Alternative Rejected Because |
 |-----------|------------|-------------------------------------|
 | Existing `tests/integration` directory has many children | This change repairs the named existing guard file | Moving the guard would leave the dead named file in place |
-| Existing `src/firmware` directory has many children | The guard found one broken SDK call there | Leaving the call broken would keep the guard red |
+| Existing `src/operations/execution/firmware` directory has many children | The guard found one broken SDK call there | Leaving the call broken would keep the guard red |
 
 ## Changed Files
 
 - `tests/integration/test_mistapi_sdk_compatibility.py`: Replace the skipped guard with an AST call-site guard and negative tests.
-- `src/firmware/site_auto_upgrade.py`: Change `getSiteSettings` to `getSiteSetting` after the guard found the missing SDK function.
+- `src/operations/execution/firmware/site_auto_upgrade.py`: Change `getSiteSettings` to `getSiteSetting` after the guard found the missing SDK function.
 - `tests/unit/test_site_auto_upgrade.py`: Update mocks to the installed SDK function name.
 - `tools/guard_proof_audit.py`: Remove the issue #2689 known-debt baseline after the guard repair.
 - `tests/guardrails/test_guard_proof_audit.py`: Assert that the SDK compatibility guard no longer appears as known debt.

@@ -1,4 +1,4 @@
-"""Unit tests for ``src.export.sites_by_ap_model_exporter.SitesByAPModelExporter``.
+"""Unit tests for ``src.operations.exporting.export.sites_by_ap_model_exporter.SitesByAPModelExporter``.
 
 Why: Un-omitting this module from ``[tool.coverage.run].omit`` requires 100%
 line + branch coverage across the 12 static methods that back menu 88 -- the
@@ -41,7 +41,7 @@ class TestGetApModels:
 
     def test_filters_non_ap_devices_and_sorts_distinct_models(self, fake_mh):
         """Non-AP devices are dropped, and remaining models are returned distinct + sorted."""
-        from src.export.sites_by_ap_model_exporter import SitesByAPModelExporter
+        from src.operations.exporting.export.sites_by_ap_model_exporter import SitesByAPModelExporter
 
         inventory = [
             {"type": "ap", "model": "AP45"},
@@ -64,7 +64,7 @@ class TestPrintModelOptions:
 
     def test_prints_numbered_list_with_counts(self, caplog):
         """Prints a numbered list with per-model AP counts."""
-        from src.export.sites_by_ap_model_exporter import SitesByAPModelExporter
+        from src.operations.exporting.export.sites_by_ap_model_exporter import SitesByAPModelExporter
 
         models = ["AP41", "AP45"]
         aps = [
@@ -86,14 +86,14 @@ class TestResolveModelChoice:
 
     def test_valid_selection_returns_model(self):
         """1-based valid index returns the matching model string."""
-        from src.export.sites_by_ap_model_exporter import SitesByAPModelExporter
+        from src.operations.exporting.export.sites_by_ap_model_exporter import SitesByAPModelExporter
 
         models = ["AP41", "AP45"]
         assert SitesByAPModelExporter._resolve_model_choice("2", models) == "AP45"
 
     def test_out_of_bounds_returns_none(self, caplog):
         """Out-of-range selection returns None (bounds check branch, no notice)."""
-        from src.export.sites_by_ap_model_exporter import SitesByAPModelExporter
+        from src.operations.exporting.export.sites_by_ap_model_exporter import SitesByAPModelExporter
 
         models = ["AP41"]
         with caplog.at_level(logging.INFO):
@@ -102,7 +102,7 @@ class TestResolveModelChoice:
 
     def test_zero_selection_returns_none(self, caplog):
         """Zero (1-based) becomes -1 index which is out of bounds -> None (no notice)."""
-        from src.export.sites_by_ap_model_exporter import SitesByAPModelExporter
+        from src.operations.exporting.export.sites_by_ap_model_exporter import SitesByAPModelExporter
 
         models = ["AP41"]
         with caplog.at_level(logging.INFO):
@@ -111,7 +111,7 @@ class TestResolveModelChoice:
 
     def test_non_numeric_returns_none(self, caplog):
         """Non-numeric input triggers ValueError branch -> None with error notice."""
-        from src.export.sites_by_ap_model_exporter import SitesByAPModelExporter
+        from src.operations.exporting.export.sites_by_ap_model_exporter import SitesByAPModelExporter
 
         with caplog.at_level(logging.INFO):
             assert SitesByAPModelExporter._resolve_model_choice("abc", ["AP41"]) is None
@@ -123,7 +123,7 @@ class TestPromptModelSelection:
 
     def test_empty_input_cancels(self, fake_mh):
         """Empty (or whitespace) operator input returns None without resolving."""
-        from src.export.sites_by_ap_model_exporter import SitesByAPModelExporter
+        from src.operations.exporting.export.sites_by_ap_model_exporter import SitesByAPModelExporter
 
         fake_mh.InputUtils.safe_input.return_value = "   "
         result = SitesByAPModelExporter._prompt_model_selection(["AP41"], [{"model": "AP41"}])
@@ -132,7 +132,7 @@ class TestPromptModelSelection:
 
     def test_valid_choice_returns_model(self, fake_mh):
         """Valid numeric choice returns the corresponding model."""
-        from src.export.sites_by_ap_model_exporter import SitesByAPModelExporter
+        from src.operations.exporting.export.sites_by_ap_model_exporter import SitesByAPModelExporter
 
         fake_mh.InputUtils.safe_input.return_value = "1"
         result = SitesByAPModelExporter._prompt_model_selection(["AP41", "AP45"], [{"model": "AP41"}])
@@ -145,21 +145,21 @@ class TestSplitAddress:
 
     def test_happy_path_full_address(self):
         """A well-formed address is split into street/city/state/zip/country."""
-        from src.export.sites_by_ap_model_exporter import SitesByAPModelExporter
+        from src.operations.exporting.export.sites_by_ap_model_exporter import SitesByAPModelExporter
 
         result = SitesByAPModelExporter._split_address("123 Main St, Sunnyvale, CA 94089, USA")
         assert result == ("123 Main St", "Sunnyvale", "CA", "94089", "USA")
 
     def test_short_address_falls_back(self):
         """Address that can't be split raises IndexError -> fallback to (addr, "", "", "", "")."""
-        from src.export.sites_by_ap_model_exporter import SitesByAPModelExporter
+        from src.operations.exporting.export.sites_by_ap_model_exporter import SitesByAPModelExporter
 
         result = SitesByAPModelExporter._split_address("just a street")
         assert result == ("just a street", "", "", "", "")
 
     def test_empty_address_falls_back(self):
         """Empty address hits the exception branch and returns the fallback tuple."""
-        from src.export.sites_by_ap_model_exporter import SitesByAPModelExporter
+        from src.operations.exporting.export.sites_by_ap_model_exporter import SitesByAPModelExporter
 
         result = SitesByAPModelExporter._split_address("")
         assert result == ("", "", "", "", "")
@@ -170,7 +170,7 @@ class TestGroupApsBySite:
 
     def test_groups_matching_model_by_site_id(self):
         """Only APs matching model AND having a site_id are grouped by site_id."""
-        from src.export.sites_by_ap_model_exporter import SitesByAPModelExporter
+        from src.operations.exporting.export.sites_by_ap_model_exporter import SitesByAPModelExporter
 
         aps = [
             {"model": "AP41", "site_id": "s1", "mac": "aa"},
@@ -191,7 +191,7 @@ class TestBuildSiteRow:
 
     def test_row_has_all_fields_including_macs_joined(self):
         """Row includes site name, model, count, address parts, and comma-joined MACs."""
-        from src.export.sites_by_ap_model_exporter import SitesByAPModelExporter
+        from src.operations.exporting.export.sites_by_ap_model_exporter import SitesByAPModelExporter
 
         devices = [{"mac": "aabbcc"}, {"mac": "ddeeff"}]
         site_map = {"s1": {"name": "HQ", "address": "1 Way, City, CA 90000, USA"}}
@@ -210,7 +210,7 @@ class TestBuildSiteRow:
 
     def test_missing_site_uses_empty_defaults(self):
         """Site missing from map -> empty name and empty address parts."""
-        from src.export.sites_by_ap_model_exporter import SitesByAPModelExporter
+        from src.operations.exporting.export.sites_by_ap_model_exporter import SitesByAPModelExporter
 
         row = SitesByAPModelExporter._build_site_row("s99", [{"mac": "aa"}], "AP41", {})
 
@@ -223,7 +223,7 @@ class TestBuildExportRows:
 
     def test_rows_sorted_by_site_name(self):
         """Rows are grouped by site and ordered alphabetically by site name."""
-        from src.export.sites_by_ap_model_exporter import SitesByAPModelExporter
+        from src.operations.exporting.export.sites_by_ap_model_exporter import SitesByAPModelExporter
 
         aps = [
             {"model": "AP41", "site_id": "sB", "mac": "bb"},
@@ -243,7 +243,7 @@ class TestBuildSiteMap:
 
     def test_indexes_sites_by_id_and_skips_missing_id(self):
         """Entries without an ``id`` are skipped; others are indexed by id."""
-        from src.export.sites_by_ap_model_exporter import SitesByAPModelExporter
+        from src.operations.exporting.export.sites_by_ap_model_exporter import SitesByAPModelExporter
 
         sites = [
             {"id": "s1", "name": "HQ"},
@@ -261,7 +261,7 @@ class TestFinalizeApModelExport:
 
     def test_slugifies_model_and_writes_csv(self, fake_mh, caplog):
         """Model name is slugified for filename, DataExporter is called, summary is logged."""
-        from src.export.sites_by_ap_model_exporter import SitesByAPModelExporter
+        from src.operations.exporting.export.sites_by_ap_model_exporter import SitesByAPModelExporter
 
         rows = [{"site_id": "s1"}]
         with caplog.at_level(logging.INFO):
@@ -282,7 +282,7 @@ class TestExportSitesByApModel:
 
     def test_no_models_returns_early(self, fake_mh, caplog, monkeypatch):
         """Empty AP inventory -> tells the user and returns before prompting."""
-        from src.export.sites_by_ap_model_exporter import SitesByAPModelExporter
+        from src.operations.exporting.export.sites_by_ap_model_exporter import SitesByAPModelExporter
 
         fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org1"
         monkeypatch.setattr(
@@ -301,7 +301,7 @@ class TestExportSitesByApModel:
 
     def test_operator_cancels_prompt(self, fake_mh, monkeypatch):
         """Prompt returns None -> abort before fetching sites."""
-        from src.export.sites_by_ap_model_exporter import SitesByAPModelExporter
+        from src.operations.exporting.export.sites_by_ap_model_exporter import SitesByAPModelExporter
 
         fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org1"
         monkeypatch.setattr(
@@ -320,7 +320,7 @@ class TestExportSitesByApModel:
 
     def test_no_matching_rows_returns_early(self, fake_mh, caplog, monkeypatch):
         """Prompt returns model but no sites match -> notice + no CSV write."""
-        from src.export.sites_by_ap_model_exporter import SitesByAPModelExporter
+        from src.operations.exporting.export.sites_by_ap_model_exporter import SitesByAPModelExporter
 
         fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org1"
         fake_mh.APICoreFetchUtils.all_sites_with_limit.return_value = [{"id": "s1", "name": "HQ"}]
@@ -351,7 +351,7 @@ class TestExportSitesByApModel:
 
     def test_success_path_writes_csv(self, fake_mh, monkeypatch):
         """Happy path: models found, model chosen, rows built -> finalize called."""
-        from src.export.sites_by_ap_model_exporter import SitesByAPModelExporter
+        from src.operations.exporting.export.sites_by_ap_model_exporter import SitesByAPModelExporter
 
         fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org1"
         fake_mh.APICoreFetchUtils.all_sites_with_limit.return_value = [{"id": "s1", "name": "HQ"}]

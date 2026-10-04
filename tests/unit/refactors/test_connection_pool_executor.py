@@ -1,4 +1,4 @@
-"""Wave 2 P2 coverage for src/refactors/connection_pool_executor.py (initiative #1018).
+"""Wave 2 P2 coverage for src/foundation/support/refactors/connection_pool_executor.py (initiative #1018).
 
 Covers `_resolve_fast_mode_env` late-binding, `ConnectionPoolExecutor`'s 15
 `@staticmethod` helpers, and the top-level `execute()` orchestrator's empty and
@@ -15,9 +15,13 @@ from unittest.mock import MagicMock  # WHY: FR-008 mandates MagicMock(spec=...) 
 
 import pytest  # WHY: monkeypatch, caplog, and raises fixtures.
 
-from src.dataclasses.batch_worker import BatchWorkerConfig  # WHY: real frozen dataclass built for pool config.
-from src.refactors import connection_pool_executor as cpe_mod  # WHY: import module for monkeypatch access.
-from src.refactors.connection_pool_executor import (  # WHY: SUT direct imports.
+from src.foundation.models.dataclasses.batch_worker import (
+    BatchWorkerConfig,
+)  # WHY: real frozen dataclass built for pool config.
+from src.foundation.support.refactors import (
+    connection_pool_executor as cpe_mod,
+)  # WHY: import module for monkeypatch access.
+from src.foundation.support.refactors.connection_pool_executor import (  # WHY: SUT direct imports.
     ConnectionPoolExecutor,
     _resolve_fast_mode_env,
 )
@@ -44,13 +48,17 @@ class TestResolveFastModeEnv:
     def test_returns_tuple_of_three_constants(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """The helper returns (use_conn_aware, max_conn, fallback_threads) sourced from live modules."""
         monkeypatch.setattr(  # WHY: publish fallback thread count in the source settings module.
-            "src.refactors.fast_mode_constants.FAST_MODE_FALLBACK_THREADS", 7, raising=False
+            "src.foundation.support.refactors.fast_mode_constants.FAST_MODE_FALLBACK_THREADS", 7, raising=False
         )
         monkeypatch.setattr(  # WHY: publish concurrent-connection cap in the landing module.
-            "src.refactors.fast_mode_constants.FAST_MODE_MAX_CONCURRENT_CONNECTIONS", 12, raising=False
+            "src.foundation.support.refactors.fast_mode_constants.FAST_MODE_MAX_CONCURRENT_CONNECTIONS",
+            12,
+            raising=False,
         )
         monkeypatch.setattr(  # WHY: publish threading-strategy toggle in the landing module.
-            "src.refactors.fast_mode_constants.FAST_MODE_USE_CONNECTION_AWARE_THREADING", True, raising=False
+            "src.foundation.support.refactors.fast_mode_constants.FAST_MODE_USE_CONNECTION_AWARE_THREADING",
+            True,
+            raising=False,
         )
         use_conn_aware, max_conn, fallback = _resolve_fast_mode_env()  # WHY: exercise the resolver.
         assert use_conn_aware is True  # WHY: verify the toggle was returned.
@@ -69,14 +77,18 @@ class TestPoolResolveThreadSizing:
 
     def test_cpu_aware_uses_cpu_count_when_available(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """With use_conn_aware=False, max_threads=os.cpu_count() and mode='CPU-aware'."""
-        monkeypatch.setattr("src.refactors.connection_pool_executor.os.cpu_count", lambda: 6)  # WHY: deterministic.
+        monkeypatch.setattr(
+            "src.foundation.support.refactors.connection_pool_executor.os.cpu_count", lambda: 6
+        )  # WHY: deterministic.
         max_threads, mode = ConnectionPoolExecutor._pool_resolve_thread_sizing(False, 8, 3)  # WHY: branch B.
         assert max_threads == 6  # WHY: CPU-aware uses cpu_count when available.
         assert mode == "CPU-aware"  # WHY: strategy label is emitted for identification.
 
     def test_cpu_aware_falls_back_when_cpu_count_none(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """If os.cpu_count() returns None, the fallback_threads argument is used."""
-        monkeypatch.setattr("src.refactors.connection_pool_executor.os.cpu_count", lambda: None)  # WHY: simulate.
+        monkeypatch.setattr(
+            "src.foundation.support.refactors.connection_pool_executor.os.cpu_count", lambda: None
+        )  # WHY: simulate.
         max_threads, mode = ConnectionPoolExecutor._pool_resolve_thread_sizing(
             False, 8, 5
         )  # WHY: exercise or-fallback.
@@ -91,7 +103,9 @@ class TestPoolConfigure:
         """Full config tuple is returned when _resolve_fast_mode_env is monkeypatched to a known state."""
         monkeypatch.setattr(cpe_mod, "_resolve_fast_mode_env", lambda: (True, 4, 2))  # WHY: force known env values.
         monkeypatch.setattr(  # WHY: deterministic batch multiplier for the assertion below.
-            "src.refactors.connection_pool_executor.FastModeDevicesPerThread.VALUE", 10, raising=False
+            "src.foundation.support.refactors.connection_pool_executor.FastModeDevicesPerThread.VALUE",
+            10,
+            raising=False,
         )
         max_threads, sem, batch_size, mode = ConnectionPoolExecutor._pool_configure(  # WHY: exercise helper.
             work_items=[object()] * 6, batch_description="devices"

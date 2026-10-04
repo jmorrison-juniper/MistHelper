@@ -54,8 +54,8 @@ class PlanSourceInventory:
     def _read_plan(self) -> tuple[Path, Path]:
         """Read the plan and return its feature source roots."""
         plan, markers = self.root / "specs/3671-interactive-terminal/plan.md", (  # Set the plan and markers.
-            "src/websocket_streams/live/",
-            "src/websocket_streams/web/",
+            "src/mist/realtime/websocket_streams/live/",
+            "src/mist/realtime/websocket_streams/web/",
         )
         try:  # Convert an input read problem into an explicit guard failure.
             text = plan.read_text(encoding="utf-8")  # Read the authoritative feature path list.
@@ -261,61 +261,106 @@ class TestWebSocketFeatureStructure:
     """Prove the guard fails for bad code and passes for current feature code."""
 
     ANALYSIS_SCOPE = (  # Map all 25 Python paths from the final structural analysis.
-        ("src/websocket_streams/catalog/registry.py", "src/websocket_streams/catalog/registry"),
-        ("src/websocket_streams/catalog/utilities.py", "src/websocket_streams/catalog/utilities"),
-        ("src/websocket_streams/intake/fields.py", "src/websocket_streams/intake/fields"),
-        ("src/websocket_streams/intake/identifiers.py", "src/websocket_streams/intake/identifiers"),
-        ("src/websocket_streams/intake/pickers.py", "src/websocket_streams/intake/pickers"),
-        ("src/websocket_streams/intake/start_request.py", "src/websocket_streams/intake/start_request"),
-        ("src/websocket_streams/live/runners/channel.py", "src/websocket_streams/live/runners/channel"),
-        ("src/websocket_streams/live/runners/shell.py", "src/websocket_streams/live/runners/shell"),
-        ("src/websocket_streams/live/runners/text.py", "src/websocket_streams/live/runners/text"),
         (
-            "src/websocket_streams/live/runners/utility/filters.py",
-            "src/websocket_streams/live/runners/utility/filters",
+            "src/mist/realtime/websocket_streams/catalog/registry.py",
+            "src/mist/realtime/websocket_streams/catalog/registry",
         ),
         (
-            "src/websocket_streams/live/runners/utility/runner.py",
-            "src/websocket_streams/live/runners/utility/runner",
+            "src/mist/realtime/websocket_streams/catalog/utilities.py",
+            "src/mist/realtime/websocket_streams/catalog/utilities",
+        ),
+        ("src/mist/realtime/websocket_streams/intake/fields.py", "src/mist/realtime/websocket_streams/intake/fields"),
+        (
+            "src/mist/realtime/websocket_streams/intake/identifiers.py",
+            "src/mist/realtime/websocket_streams/intake/identifiers",
+        ),
+        ("src/mist/realtime/websocket_streams/intake/pickers.py", "src/mist/realtime/websocket_streams/intake/pickers"),
+        (
+            "src/mist/realtime/websocket_streams/intake/start_request.py",
+            "src/mist/realtime/websocket_streams/intake/start_request",
         ),
         (
-            "src/websocket_streams/live/runners/utility/triggers.py",
-            "src/websocket_streams/live/runners/utility/triggers",
-        ),
-        ("src/websocket_streams/live/sessions/buffer.py", "src/websocket_streams/live/sessions/buffer"),
-        ("src/websocket_streams/live/sessions/manager.py", "src/websocket_streams/live/sessions/manager"),
-        ("src/websocket_streams/live/sessions/record.py", "src/websocket_streams/live/sessions/record"),
-        (
-            "src/websocket_streams/live/terminal/byte_history.py",
-            "src/websocket_streams/live/terminal/byte_history.py",
-        ),
-        ("src/websocket_streams/live/terminal/gateway.py", "src/websocket_streams/live/terminal/gateway.py"),
-        (
-            "src/websocket_streams/live/terminal/input_queue.py",
-            "src/websocket_streams/live/terminal/input_queue.py",
-        ),
-        ("src/websocket_streams/live/terminal/state.py", "src/websocket_streams/live/terminal/state"),
-        ("src/websocket_streams/live/transport/endpoint.py", "src/websocket_streams/live/transport/endpoint.py"),
-        ("src/websocket_streams/live/transport/frames.py", "src/websocket_streams/live/transport/runtime"),
-        (
-            "src/websocket_streams/live/transport/stream_client.py",
-            "src/websocket_streams/live/transport/stream_client.py",
+            "src/mist/realtime/websocket_streams/live/runners/channel.py",
+            "src/mist/realtime/websocket_streams/live/runners/channel",
         ),
         (
-            "src/websocket_streams/live/transport/shell_client.py",
-            "src/websocket_streams/live/transport/shell_client.py",
+            "src/mist/realtime/websocket_streams/live/runners/shell.py",
+            "src/mist/realtime/websocket_streams/live/runners/shell",
         ),
-        ("src/websocket_streams/web/blueprint.py", "src/websocket_streams/web/blueprint"),
-        ("src/websocket_streams/web/services.py", "src/websocket_streams/web/services"),
+        (
+            "src/mist/realtime/websocket_streams/live/runners/text.py",
+            "src/mist/realtime/websocket_streams/live/runners/text",
+        ),
+        (
+            "src/mist/realtime/websocket_streams/live/runners/utility/filters.py",
+            "src/mist/realtime/websocket_streams/live/runners/utility/filters",
+        ),
+        (
+            "src/mist/realtime/websocket_streams/live/runners/utility/runner.py",
+            "src/mist/realtime/websocket_streams/live/runners/utility/runner",
+        ),
+        (
+            "src/mist/realtime/websocket_streams/live/runners/utility/triggers.py",
+            "src/mist/realtime/websocket_streams/live/runners/utility/triggers",
+        ),
+        (
+            "src/mist/realtime/websocket_streams/live/sessions/buffer.py",
+            "src/mist/realtime/websocket_streams/live/sessions/buffer",
+        ),
+        (
+            "src/mist/realtime/websocket_streams/live/sessions/manager.py",
+            "src/mist/realtime/websocket_streams/live/sessions/manager",
+        ),
+        (
+            "src/mist/realtime/websocket_streams/live/sessions/record.py",
+            "src/mist/realtime/websocket_streams/live/sessions/record",
+        ),
+        (
+            "src/mist/realtime/websocket_streams/live/terminal/byte_history.py",
+            "src/mist/realtime/websocket_streams/live/terminal/byte_history.py",
+        ),
+        (
+            "src/mist/realtime/websocket_streams/live/terminal/gateway.py",
+            "src/mist/realtime/websocket_streams/live/terminal/gateway.py",
+        ),
+        (
+            "src/mist/realtime/websocket_streams/live/terminal/input_queue.py",
+            "src/mist/realtime/websocket_streams/live/terminal/input_queue.py",
+        ),
+        (
+            "src/mist/realtime/websocket_streams/live/terminal/state.py",
+            "src/mist/realtime/websocket_streams/live/terminal/state",
+        ),
+        (
+            "src/mist/realtime/websocket_streams/live/transport/endpoint.py",
+            "src/mist/realtime/websocket_streams/live/transport/endpoint.py",
+        ),
+        (
+            "src/mist/realtime/websocket_streams/live/transport/frames.py",
+            "src/mist/realtime/websocket_streams/live/transport/runtime",
+        ),
+        (
+            "src/mist/realtime/websocket_streams/live/transport/stream_client.py",
+            "src/mist/realtime/websocket_streams/live/transport/stream_client.py",
+        ),
+        (
+            "src/mist/realtime/websocket_streams/live/transport/shell_client.py",
+            "src/mist/realtime/websocket_streams/live/transport/shell_client.py",
+        ),
+        ("src/mist/realtime/websocket_streams/web/blueprint.py", "src/mist/realtime/websocket_streams/web/blueprint"),
+        ("src/mist/realtime/websocket_streams/web/services.py", "src/mist/realtime/websocket_streams/web/services"),
     )
     SUPPORT_SCOPE = (  # Keep the moved screen runner in the replacement proof.
         (
-            "src/websocket_streams/live/runners/utility/screen.py",
-            "src/websocket_streams/live/runners/shell/runners.py",
+            "src/mist/realtime/websocket_streams/live/runners/utility/screen.py",
+            "src/mist/realtime/websocket_streams/live/runners/shell/runners.py",
         ),
     )
     JAVASCRIPT_SCOPE = (  # Map the original terminal script to every split leaf script.
-        ("src/websocket_streams/web/static/websockets_terminal.js", "src/websocket_streams/web/static/terminal"),
+        (
+            "src/mist/realtime/websocket_streams/web/static/websockets_terminal.js",
+            "src/mist/realtime/websocket_streams/web/static/terminal",
+        ),
     )
     REPORTED_CLASSES = 28  # Preserve the final analysis class coverage floor.
     REPORTED_FUNCTIONS = 19  # Preserve the final analysis function coverage floor.
@@ -324,14 +369,15 @@ class TestWebSocketFeatureStructure:
         """Build one bounded source fixture with six module children."""
         root, live, web, plan = (  # Set all bounded fixture paths together.
             tmp_path / "bad-feature",
-            tmp_path / "bad-feature/src/websocket_streams/live",
-            tmp_path / "bad-feature/src/websocket_streams/web",
+            tmp_path / "bad-feature/src/mist/realtime/websocket_streams/live",
+            tmp_path / "bad-feature/src/mist/realtime/websocket_streams/web",
             tmp_path / "bad-feature/specs/3671-interactive-terminal/plan.md",
         )
         for directory in (live, web, plan.parent):  # Create the bounded source and plan folders.
             directory.mkdir(parents=True)  # Keep the fixture isolated from production files.
         plan.write_text(  # Write the two authoritative source roots.
-            "### Source Code\nsrc/websocket_streams/live/\nsrc/websocket_streams/web/\n", encoding="utf-8"
+            "### Source Code\nsrc/mist/realtime/websocket_streams/live/\nsrc/mist/realtime/websocket_streams/web/\n",
+            encoding="utf-8",
         )  # Name both roots.
         live.joinpath("bad.py").write_text(  # Write six bounded module children.
             "\n".join(f"def item_{index}():\n    return {index}" for index in range(6)), encoding="utf-8"
@@ -360,7 +406,9 @@ class TestWebSocketFeatureStructure:
     def test_bounded_bad_fixture_fails(self, tmp_path: Path) -> None:
         """Prove that six module children fail without production edits."""
         inventory = PlanSourceInventory(self._bad_root(tmp_path))  # Resolve only the temporary bad fixture.
-        scope = (("src/websocket_streams/live/bad.py", "src/websocket_streams/live/bad.py"),)  # Set one bad path.
+        scope = (
+            ("src/mist/realtime/websocket_streams/live/bad.py", "src/mist/realtime/websocket_streams/live/bad.py"),
+        )  # Set one bad path.
         with pytest.raises(AssertionError, match=r"module .* has 6 child items") as caught:  # Require the red path.
             PythonStructureGuard().inspect(  # Run the guard against the bounded bad module.
                 [path for path in inventory.files(scope) if path.suffix == ".py"]
@@ -370,7 +418,7 @@ class TestWebSocketFeatureStructure:
     def test_unreadable_input_fails(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """Prove that an unreadable mapped source fails the guard."""
         root = self._bad_root(tmp_path)  # Build one isolated source tree with a valid plan.
-        source = root / "src/websocket_streams/live/bad.py"  # Select the mapped source input.
+        source = root / "src/mist/realtime/websocket_streams/live/bad.py"  # Select the mapped source input.
         original = Path.read_bytes  # Preserve normal reads for every other path.
 
         def denied(path: Path) -> bytes:
@@ -381,7 +429,9 @@ class TestWebSocketFeatureStructure:
 
         monkeypatch.setattr(Path, "read_bytes", denied)  # Apply the bounded read failure.
         inventory = PlanSourceInventory(root)  # Read the plan before the source inventory.
-        scope = (("src/websocket_streams/live/bad.py", "src/websocket_streams/live/bad.py"),)  # Map one input.
+        scope = (
+            ("src/mist/realtime/websocket_streams/live/bad.py", "src/mist/realtime/websocket_streams/live/bad.py"),
+        )  # Map one input.
         with pytest.raises(AssertionError, match=r"cannot read input .*bad\.py") as caught:  # Require failure.
             inventory.files(scope)  # Read the mapped input through the guarded inventory.
         print(f"unreadable-input proof: {caught.value}")  # Print the exact read failure evidence.

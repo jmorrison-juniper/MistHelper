@@ -15,7 +15,7 @@ Add a safe organization report that builds the Mist switch scorecard across all 
 | Item | Decision |
 | - | - |
 | Language | Python 3.13 or newer |
-| Package | `src/reports/switch_scorecard/` |
+| Package | `src/mist/intelligence/reports/switch_scorecard/` |
 | Test path | `tests/unit/reports/switch_scorecard/` |
 | Entry class | `SwitchScorecard` |
 | Handler | `SwitchScorecard.run()` |
@@ -40,7 +40,7 @@ Add a safe organization report that builds the Mist switch scorecard across all 
 ## Project Structure
 
 ```text
-src/reports/switch_scorecard/
+src/mist/intelligence/reports/switch_scorecard/
   __init__.py
   client.py
   model.py
@@ -70,7 +70,7 @@ The integration pull request wires menu `277`. This feature branch does not edit
 
 | Existing debt | New design action | Follow-up |
 | - | - | - |
-| `src/reports/` can contain more than five report packages in the full repository. | Use the assigned nested package and do not add a sibling outside `switch_scorecard`. | A separate structure cleanup can group report packages by domain. |
+| `src/mist/intelligence/reports/` can contain more than five report packages in the full repository. | Use the assigned nested package and do not add a sibling outside `switch_scorecard`. | A separate structure cleanup can group report packages by domain. |
 | Menu registration files are shared fleet files. | Record all required entries in `wiring.md`. | The tier integration pull request applies the wiring. |
 
 ## Quality Gates
@@ -78,14 +78,14 @@ The integration pull request wires menu `277`. This feature branch does not edit
 Run these commands with the assigned Python path.
 
 ```powershell
-.\.venv\Scripts\python.exe -m py_compile src\reports\switch_scorecard\__init__.py src\reports\switch_scorecard\client.py src\reports\switch_scorecard\model.py src\reports\switch_scorecard\operation.py
-.\.venv\Scripts\python.exe -m ruff check src\reports\switch_scorecard tests\unit\reports\switch_scorecard
-.\.venv\Scripts\python.exe -m black --check src\reports\switch_scorecard tests\unit\reports\switch_scorecard
-.\.venv\Scripts\python.exe -m mypy src\reports\switch_scorecard --config-file pyproject.toml
-.\.venv\Scripts\python.exe -m pydocstyle src\reports\switch_scorecard
+.\.venv\Scripts\python.exe -m py_compile src\mist\intelligence\reports\switch_scorecard\__init__.py src\mist\intelligence\reports\switch_scorecard\client.py src\mist\intelligence\reports\switch_scorecard\model.py src\mist\intelligence\reports\switch_scorecard\operation.py
+.\.venv\Scripts\python.exe -m ruff check src\mist\intelligence\reports\switch_scorecard tests\unit\reports\switch_scorecard
+.\.venv\Scripts\python.exe -m black --check src\mist\intelligence\reports\switch_scorecard tests\unit\reports\switch_scorecard
+.\.venv\Scripts\python.exe -m mypy src\mist\intelligence\reports\switch_scorecard --config-file pyproject.toml
+.\.venv\Scripts\python.exe -m pydocstyle src\mist\intelligence\reports\switch_scorecard
 .\.venv\Scripts\python.exe -m pytest tests\unit\reports\switch_scorecard -q --timeout=120
-.\.venv\Scripts\python.exe -m vulture src\reports\switch_scorecard --min-confidence 70
-.\.venv\Scripts\python.exe -m interrogate -v src\reports\switch_scorecard
+.\.venv\Scripts\python.exe -m vulture src\mist\intelligence\reports\switch_scorecard --min-confidence 70
+.\.venv\Scripts\python.exe -m interrogate -v src\mist\intelligence\reports\switch_scorecard
 ```
 
 ## Phase Outputs

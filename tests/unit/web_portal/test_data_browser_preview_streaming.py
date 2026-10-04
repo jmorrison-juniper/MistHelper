@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from src.security import CredentialRedactor
+from src.operations.protection.security import CredentialRedactor
 from web_portal.services.data_browser import DataBrowserService
 
 

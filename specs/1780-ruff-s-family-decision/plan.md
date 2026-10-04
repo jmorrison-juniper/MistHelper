@@ -32,7 +32,7 @@ The plan recommends Option 2, which keeps the current select list. The recommend
 
 **Constraints**:
 
-- The root ruff `extend-exclude` list holds `mist-ops-platform`, `web_portal`, `scripts`, and `src/maps`.
+- The root ruff `extend-exclude` list holds `mist-ops-platform`, `web_portal`, `scripts`, and `src/interfaces/visualization/maps`.
 - The bandit `exclude_dirs` list holds `tests`, `.venv`, `node_modules`, `scripts`, `specs`, and `tools/test_quality_analyzer/fixtures`.
 - The two lists do not match, so the two tools read different trees.
 - The test tree holds 13,440 `assert` statements. Pytest needs them.
@@ -80,7 +80,7 @@ The control is simple. Choose Option 2, which never selects `S`. If the team ove
 
 The plan recommends Option 2. A reviewer can disagree. Two counter arguments deserve a written answer.
 
-1. **"Ruff finds 10 results that bandit misses."** True. Section R4 of [research.md](research.md) names all 10. Two of them are default passwords in `src/db/__init__.py`. The correct answer is a separate issue that corrects those 10 lines, not a second tool that reports 13,566 results to find them.
+1. **"Ruff finds 10 results that bandit misses."** True. Section R4 of [research.md](research.md) names all 10. Two of them are default passwords in `src/foundation/persistence/db/__init__.py`. The correct answer is a separate issue that corrects those 10 lines, not a second tool that reports 13,566 results to find them.
 2. **"Editors show ruff inline and never show bandit."** True. That is a real developer experience gain. It costs 62 double suppression comments and a permanent second comment form. A bandit editor extension solves the same problem with no repository change.
 
 The implementer must record the chosen answer even when the team overrides the recommendation.
@@ -178,7 +178,7 @@ The plan does not recommend this phase. It states the steps so that the team can
 - Add `S` to the select list.
 - Add a second annotation to each of the 62 lines that already hold a `# nosec` comment.
 - Under Option 3, delete the bandit job from `.github/workflows/ci.yml`, remove the `[tool.bandit]` table, remove `bandit` from `requirements-dev.txt`, and remove every one of the 117 `# nosec` comments.
-- Under Option 3, remove `mist-ops-platform`, `web_portal`, and `src/maps` from the ruff exclude list, or record that 111 Python files lose their security scan.
+- Under Option 3, remove `mist-ops-platform`, `web_portal`, and `src/interfaces/visualization/maps` from the ruff exclude list, or record that 111 Python files lose their security scan.
 
 **Exit measurement**: Every gate is green and no security result hides behind a latent annotation.
 

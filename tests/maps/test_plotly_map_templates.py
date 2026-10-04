@@ -7,7 +7,7 @@ management for the Plotly/Dash map viewer.
 
 import pytest
 
-from src.maps.plotly_map_templates import DashTemplateManager
+from src.interfaces.visualization.maps.plotly_map_templates import DashTemplateManager
 
 
 class TestDashTemplateManagerInit:
@@ -17,7 +17,7 @@ class TestDashTemplateManagerInit:
         """DashTemplateManager initializes without errors."""
         mgr = DashTemplateManager(org_id="test-org")
         assert mgr.org_id == "test-org"
-        assert mgr.base_template_dir == "src/maps/templates"
+        assert mgr.base_template_dir == "src/interfaces/visualization/maps/templates"
 
     def test_init_with_custom_template_dir(self):
         """DashTemplateManager accepts custom template directory."""

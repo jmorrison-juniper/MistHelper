@@ -27,17 +27,21 @@ _saved_mistapi = sys.modules.get("mistapi")
 _our_mock = MagicMock()
 sys.modules["mistapi"] = _our_mock
 try:
-    from src.device._utility_commands_action import _UtilityCommandsAction
-    from src.device._utility_commands_websocket import ExportResultSpec, StreamWsSpec
-    from src.device.utility_commands import DeviceUtilityCommands, UtilityCommandsDeps
+    from src.mist.resources.device._utility_commands_action import _UtilityCommandsAction
+    from src.mist.resources.device._utility_commands_websocket import ExportResultSpec, StreamWsSpec
+    from src.mist.resources.device.utility_commands import DeviceUtilityCommands, UtilityCommandsDeps
 finally:
     if _saved_mistapi is not None:
         sys.modules["mistapi"] = _saved_mistapi
     else:
         sys.modules.pop("mistapi", None)
 
-_WS_LOGGER = "src.device._utility_commands_websocket"  # WHY: caplog target for #886 print-to-logger tests
-_SEL_LOGGER = "src.device._utility_commands_selection"  # WHY: caplog target for #886 print-to-logger tests
+_WS_LOGGER = (
+    "src.mist.resources.device._utility_commands_websocket"  # WHY: caplog target for #886 print-to-logger tests
+)
+_SEL_LOGGER = (
+    "src.mist.resources.device._utility_commands_selection"  # WHY: caplog target for #886 print-to-logger tests
+)
 _ZTP_SECRET = "secret123"  # WHY: one literal keeps every ZTP assertion on the same value
 
 
@@ -98,10 +102,12 @@ def duc(mock_deps: dict[str, MagicMock]) -> DeviceUtilityCommands:
 def mock_api():
     """Patch mistapi across every cluster module used by DeviceUtilityCommands."""
     with (
-        patch("src.device._utility_commands_selection.mistapi") as mapi,  # WHY: primary mistapi mock
-        patch("src.device._utility_commands_show.mistapi", mapi),  # WHY: keep clusters sharing one mock
-        patch("src.device._utility_commands_action.mistapi", mapi),  # WHY: cover action-cluster SDK calls
-        patch("src.device._utility_commands_clear.mistapi", mapi),  # WHY: cover clear-cluster SDK calls
+        patch("src.mist.resources.device._utility_commands_selection.mistapi") as mapi,  # WHY: primary mistapi mock
+        patch("src.mist.resources.device._utility_commands_show.mistapi", mapi),  # WHY: keep clusters sharing one mock
+        patch(
+            "src.mist.resources.device._utility_commands_action.mistapi", mapi
+        ),  # WHY: cover action-cluster SDK calls
+        patch("src.mist.resources.device._utility_commands_clear.mistapi", mapi),  # WHY: cover clear-cluster SDK calls
     ):
         yield mapi
 
@@ -515,7 +521,7 @@ class TestRunWebsocketCommand:
         assert result is None
         ws_mgr.disconnect.assert_called_once()
 
-    @patch("src.device._utility_commands_websocket.time.sleep")
+    @patch("src.mist.resources.device._utility_commands_websocket.time.sleep")
     def test_success_path(
         self,
         mock_sleep: MagicMock,
@@ -583,7 +589,7 @@ class TestTraceroute:
         with patch.object(duc, "_select_site_and_device", return_value=("s1", "d1", "ap")):
             mock_deps["safe_input_fn"].return_value = ""
             # WHY: slice 90 migrated print()->logger.warning; assertion now reads caplog, not stdout.
-            with caplog.at_level("WARNING", logger="src.device._utility_commands_show"):
+            with caplog.at_level("WARNING", logger="src.mist.resources.device._utility_commands_show"):
                 duc.traceroute()
             assert "required" in caplog.text
 
@@ -1533,7 +1539,7 @@ class TestStreamWsOutput:
 class TestRunStreamingCommandExtended:
     """Extended tests for _run_streaming_command."""
 
-    @patch("src.device._utility_commands_websocket.time.sleep")
+    @patch("src.mist.resources.device._utility_commands_websocket.time.sleep")
     def test_subscribe_fail(
         self,
         mock_sleep: MagicMock,
@@ -1550,7 +1556,7 @@ class TestRunStreamingCommandExtended:
         assert "Failed to subscribe" in caplog.text
         ws_mgr.disconnect.assert_called_once()
 
-    @patch("src.device._utility_commands_websocket.time.sleep")
+    @patch("src.mist.resources.device._utility_commands_websocket.time.sleep")
     def test_success_path(
         self,
         mock_sleep: MagicMock,
@@ -1568,7 +1574,7 @@ class TestRunStreamingCommandExtended:
         ws_mgr.disconnect.assert_called_once()
         assert ws_mgr.disconnect.call_count == 1  # Prove the WebSocket manager disconnects once.
 
-    @patch("src.device._utility_commands_websocket.time.sleep")
+    @patch("src.mist.resources.device._utility_commands_websocket.time.sleep")
     def test_exception_in_stream(
         self,
         mock_sleep: MagicMock,
@@ -1586,7 +1592,7 @@ class TestRunStreamingCommandExtended:
             assert "oops" in caplog.text
         ws_mgr.disconnect.assert_called_once()
 
-    @patch("src.device._utility_commands_websocket.time.sleep")
+    @patch("src.mist.resources.device._utility_commands_websocket.time.sleep")
     def test_keyboard_interrupt(
         self,
         mock_sleep: MagicMock,
@@ -1613,7 +1619,7 @@ class TestRunStreamingCommandExtended:
 class TestRunWebsocketCommandExtended:
     """Extended tests for _run_websocket_command."""
 
-    @patch("src.device._utility_commands_websocket.time.sleep")
+    @patch("src.mist.resources.device._utility_commands_websocket.time.sleep")
     def test_exception_in_execute(
         self,
         mock_sleep: MagicMock,

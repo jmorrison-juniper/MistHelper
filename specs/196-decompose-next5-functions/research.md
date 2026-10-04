@@ -10,7 +10,7 @@
 
 ## Decision 2: Split multi-AP scan capture orchestration into dedicated capture workflow
 
-- **Decision**: Extract `_start_site_scan_capture_all_aps` into `src/capture/multi_ap_scan_workflow.py` (`MultiApScanCaptureWorkflow`).
+- **Decision**: Extract `_start_site_scan_capture_all_aps` into `src/operations/execution/capture/multi_ap_scan_workflow.py` (`MultiApScanCaptureWorkflow`).
 - **Rationale**: Current logic combines AP discovery, parameter gathering, payload assembly, API execution, and result routing in one body.
 - **Alternatives considered**:
   - Keep logic in `packet_capture.py` with helper methods only (rejected: keeps orchestration complexity concentrated).
@@ -22,16 +22,16 @@
 - **Alternatives considered**:
   - Single generic workflow with many mode flags (rejected: recreates complexity through branching).
 
-## Decision 4: Introduce Wi-Fi client exporter boundary under `src/export/`
+## Decision 4: Introduce Wi-Fi client exporter boundary under `src/operations/exporting/export/`
 
-- **Decision**: Move `wifi_clients` orchestration into `src/export/wifi_clients_exporter.py`.
+- **Decision**: Move `wifi_clients` orchestration into `src/operations/exporting/export/wifi_clients_exporter.py`.
 - **Rationale**: Function currently mixes selection, retrieval, shaping, and output concerns; exporter boundary improves testability and schema guardrails.
 - **Alternatives considered**:
   - Keep static function and extract only utility helpers (rejected: weak ownership and persistent monolith coupling).
 
-## Decision 5: Introduce interactive test runner boundary under `src/troubleshooting/`
+## Decision 5: Introduce interactive test runner boundary under `src/mist/intelligence/troubleshooting/`
 
-- **Decision**: Move `run_interactive_test` logic into `src/troubleshooting/interactive_test_runner.py`.
+- **Decision**: Move `run_interactive_test` logic into `src/mist/intelligence/troubleshooting/interactive_test_runner.py`.
 - **Rationale**: Prompt/dispatch/failure paths are easier to validate when isolated from global script context.
 - **Alternatives considered**:
   - Keep all branching in one global function (rejected: persistent high complexity and weak unit-test isolation).

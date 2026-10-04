@@ -6,7 +6,7 @@ Why:
     between 1000 and 10000 and is not the vendor default.
 
     Issue #2059 delivered that rule in `compose.yml`. The rule then leaked. One
-    fallback in `src/upgrade_portal/runtime/dependencies.py` still named the
+    fallback in `src/interfaces/portals/upgrade_portal/runtime/dependencies.py` still named the
     vendor port 8529, and two host fallbacks still named the unprefixed host
     `arangodb`.
 
@@ -41,7 +41,7 @@ VENDOR_DEFAULT_PORTS = (8529, 6379)
 
 # The unprefixed host names that a fallback used to carry. The pattern names the
 # fallback form on purpose. The bare word `arangodb` is also a backend marker in
-# `src/db/router.py`, and that marker names no host.
+# `src/foundation/persistence/db/router.py`, and that marker names no host.
 UNPREFIXED_HOSTS = ('or "arangodb"', "or 'arangodb'", 'or "redis-stack"', "or 'redis-stack'")
 
 PUBLISHED_PORT = re.compile(r"^(\d+):")  # The host side of a compose port mapping.

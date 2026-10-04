@@ -13,26 +13,26 @@
 
 ## Phase 2: Foundational Measurement
 
-- [x] T005 Verify the poll interval in `src\upgrade_portal\upgrade\gate.py`. (delivered: `spec.md`)
-- [x] T006 Verify calls for each round in `src\upgrade_portal\upgrade\phase_gate.py`. (delivered: `spec.md`)
-- [x] T007 Verify the schedule horizon in `src\upgrade_portal\upgrade\options.py`. (delivered: `spec.md`)
-- [x] T008 Verify the maximum lock life in `src\upgrade_portal\runtime\lock.py`. (delivered: `spec.md`)
+- [x] T005 Verify the poll interval in `src\interfaces\portals\upgrade_portal\upgrade\gate.py`. (delivered: `spec.md`)
+- [x] T006 Verify calls for each round in `src\interfaces\portals\upgrade_portal\upgrade\phase_gate.py`. (delivered: `spec.md`)
+- [x] T007 Verify the schedule horizon in `src\interfaces\portals\upgrade_portal\upgrade\options.py`. (delivered: `spec.md`)
+- [x] T008 Verify the maximum lock life in `src\interfaces\portals\upgrade_portal\runtime\lock.py`. (delivered: `spec.md`)
 
 ## Phase 3: User Story 1 - Refuse unsafe long schedules
 
 - [x] T009 [US1] Add tests for the safe schedule limit in `tests\unit\upgrade_portal\test_upgrade_ssr_options.py`. (delivered: `tests\unit\upgrade_portal\test_upgrade_ssr_options.py`)
-- [x] T010 [US1] Cap the schedule horizon in `src\upgrade_portal\upgrade\options.py`. (delivered: `src\upgrade_portal\upgrade\options.py`)
+- [x] T010 [US1] Cap the schedule horizon in `src\interfaces\portals\upgrade_portal\upgrade\options.py`. (delivered: `src\interfaces\portals\upgrade_portal\upgrade\options.py`)
 
 ## Phase 4: User Story 2 - Stop polling before the scheduled reboot
 
 - [x] T011 [US2] Add a phase gate test that proves no cloud poll before a future reboot in `tests\unit\upgrade_portal\test_phase_gate.py`. (delivered: `tests\unit\upgrade_portal\test_phase_gate.py`)
-- [x] T012 [US2] Add scheduled pre-wait logic to `src\upgrade_portal\upgrade\phase_gate.py`. (delivered: `src\upgrade_portal\upgrade\phase_gate.py`)
+- [x] T012 [US2] Add scheduled pre-wait logic to `src\interfaces\portals\upgrade_portal\upgrade\phase_gate.py`. (delivered: `src\interfaces\portals\upgrade_portal\upgrade\phase_gate.py`)
 
 ## Phase 5: User Story 3 - Fail closed on lock loss
 
 - [x] T013 [US3] Add driver tests that prove a lost lock stops later site actions in `tests\unit\upgrade_portal\test_upgrade_driver.py`. (delivered: `tests\unit\upgrade_portal\test_upgrade_driver.py`)
-- [x] T014 [US3] Make `src\upgrade_portal\upgrade\driver.py` fail when the heartbeat reports a lost lock. (delivered: `src\upgrade_portal\upgrade\driver.py`)
-- [x] T015 [US3] Make `src\upgrade_portal\upgrade\phase_gate.py` fail before cloud polling when the progress heartbeat reports a lost lock. (delivered: `src\upgrade_portal\upgrade\phase_gate.py`)
+- [x] T014 [US3] Make `src\interfaces\portals\upgrade_portal\upgrade\driver.py` fail when the heartbeat reports a lost lock. (delivered: `src\interfaces\portals\upgrade_portal\upgrade\driver.py`)
+- [x] T015 [US3] Make `src\interfaces\portals\upgrade_portal\upgrade\phase_gate.py` fail before cloud polling when the progress heartbeat reports a lost lock. (delivered: `src\interfaces\portals\upgrade_portal\upgrade\phase_gate.py`)
 
 ## Phase 6: Release Note and Validation
 

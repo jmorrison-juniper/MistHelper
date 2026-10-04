@@ -1,4 +1,4 @@
-"""Unit tests for src.export.const_definitions_exporter.ConstDefinitionsExporter.
+"""Unit tests for src.operations.exporting.export.const_definitions_exporter.ConstDefinitionsExporter.
 
 Tranche 14 of initiative #878: un-omit `const_definitions_exporter.py` and drive
 it to 100% line coverage.
@@ -22,9 +22,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 import requests
 
-from src.dataclasses.endpoint_config import EndpointConfig
-from src.export.const_definitions_exporter import ConstDefinitionsExporter
-from src.export.const_definitions_exporter import ConstDefinitionsExporter as FailureModeConstDefinitionsExporter
+from src.foundation.models.dataclasses.endpoint_config import EndpointConfig
+from src.operations.exporting.export.const_definitions_exporter import ConstDefinitionsExporter
+from src.operations.exporting.export.const_definitions_exporter import (
+    ConstDefinitionsExporter as FailureModeConstDefinitionsExporter,
+)
 
 
 @pytest.fixture
@@ -956,7 +958,7 @@ class TestExportData:
         cfg = _endpoint_config()
         fake_mh.DataProcessingUtils.escape_multiline = MagicMock(return_value=[{"a": 1}])
         # Patch the module-level DataProcessingUtils direct import
-        with patch("src.export.const_definitions_exporter.DataProcessingUtils") as dpu:
+        with patch("src.operations.exporting.export.const_definitions_exporter.DataProcessingUtils") as dpu:
             dpu.escape_multiline.return_value = [{"a": 1}]
             exporter._export_data(cfg, {"row": {"a": 1}})
         fake_mh.DataExporter.write_with_format_selection.assert_called_once()

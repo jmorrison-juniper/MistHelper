@@ -1,8 +1,8 @@
 """Unit tests for ComparisonTableRenderer (1003-site-address-audit)."""
 
-from src.site.address_audit import comparison_display as display_mod
-from src.site.address_audit.comparison_display import ComparisonTableRenderer
-from src.site.address_audit.models import AddressRow, AuditResult, MatchedSite
+from src.mist.resources.site.address_audit import comparison_display as display_mod
+from src.mist.resources.site.address_audit.comparison_display import ComparisonTableRenderer
+from src.mist.resources.site.address_audit.models import AddressRow, AuditResult, MatchedSite
 
 _ROW = AddressRow(
     serial="2012233588", model="SSR130", address="100 Main St Suite 5", city="Town", state="FL", zip_code="33000"

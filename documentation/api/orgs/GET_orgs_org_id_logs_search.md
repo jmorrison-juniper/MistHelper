@@ -229,4 +229,4 @@ Menu Operation **98** exports organization audit logs for 52 weeks.
 Menu Operation **25** uses this endpoint for the audit log analysis report.
 Menu Operation **153** includes this endpoint in bulk organization data collection.
 Verification source: `git grep -n "listOrgAuditLogs" -- src MistHelper.py`.
-`src/export/endpoint_catalog.py` was also checked for endpoint family menu coverage.
+`src/operations/exporting/export/endpoint_catalog.py` was also checked for endpoint family menu coverage.

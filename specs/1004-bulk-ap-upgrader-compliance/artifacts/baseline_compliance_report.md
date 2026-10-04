@@ -16,7 +16,7 @@ Plan at the end to drive fixes.
 
 | File | Score | Grade | Critical | High | Medium | Low | Total |
 | - | - | - | - | - | - | - | - |
-| src\firmware\bulk_ap_upgrader.py | 58.0 | F | 0 | 1 | 11 | 19 | 31 |
+| src\operations\execution\firmware\bulk_ap_upgrader.py | 58.0 | F | 0 | 1 | 11 | 19 | 31 |
 
 ## Machine-Readable Summary
 
@@ -48,7 +48,7 @@ Plan at the end to drive fixes.
 }
 ```
 
-## File: src\firmware\bulk_ap_upgrader.py
+## File: src\operations\execution\firmware\bulk_ap_upgrader.py
 
 - **Score**: 58.0 / 100
 - **Grade**: F
@@ -132,165 +132,165 @@ Plan at the end to drive fixes.
 
 ### Phase: High (1 task(s))
 
-- [ ] **CMP-001** `src\firmware\bulk_ap_upgrader.py:27` - CONV-COMMENTS (Conventions)
+- [ ] **CMP-001** `src\operations\execution\firmware\bulk_ap_upgrader.py:27` - CONV-COMMENTS (Conventions)
   - Symbol: `<file>`
   - Problem: Inline-comment coverage is 33.2%; uncommented lines: 27, 79, 94, 114, 128, 146, 157, 159, 161, 166, 180, 201.
   - Fix: Add a same-line comment explaining intent on each executable line of changed code.
-  - Done when: analyzer reports no CONV-COMMENTS for `<file>` in `src\firmware\bulk_ap_upgrader.py`.
+  - Done when: analyzer reports no CONV-COMMENTS for `<file>` in `src\operations\execution\firmware\bulk_ap_upgrader.py`.
 
 ### Phase: Medium (11 task(s))
 
-- [ ] **CMP-002** `src\firmware\bulk_ap_upgrader.py:387` - STRUCT-NESTING (Structure)
+- [ ] **CMP-002** `src\operations\execution\firmware\bulk_ap_upgrader.py:387` - STRUCT-NESTING (Structure)
   - Symbol: `_parse_index_input`
   - Problem: Maximum nesting depth is 5 (limit 4).
   - Fix: Flatten nesting with early returns, guard clauses, or extracted helper methods.
-  - Done when: analyzer reports no STRUCT-NESTING for `_parse_index_input` in `src\firmware\bulk_ap_upgrader.py`.
-- [ ] **CMP-003** `src\firmware\bulk_ap_upgrader.py:781` - STRUCT-LENGTH (Structure)
+  - Done when: analyzer reports no STRUCT-NESTING for `_parse_index_input` in `src\operations\execution\firmware\bulk_ap_upgrader.py`.
+- [ ] **CMP-003** `src\operations\execution\firmware\bulk_ap_upgrader.py:781` - STRUCT-LENGTH (Structure)
   - Symbol: `_apply_version_selection`
   - Problem: Function spans 34 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `_apply_version_selection` in `src\firmware\bulk_ap_upgrader.py`.
-- [ ] **CMP-004** `src\firmware\bulk_ap_upgrader.py:816` - STRUCT-LENGTH (Structure)
+  - Done when: analyzer reports no STRUCT-LENGTH for `_apply_version_selection` in `src\operations\execution\firmware\bulk_ap_upgrader.py`.
+- [ ] **CMP-004** `src\operations\execution\firmware\bulk_ap_upgrader.py:816` - STRUCT-LENGTH (Structure)
   - Symbol: `_partition_devices_by_version`
   - Problem: Function spans 27 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `_partition_devices_by_version` in `src\firmware\bulk_ap_upgrader.py`.
-- [ ] **CMP-005** `src\firmware\bulk_ap_upgrader.py:1112` - STRUCT-LENGTH (Structure)
+  - Done when: analyzer reports no STRUCT-LENGTH for `_partition_devices_by_version` in `src\operations\execution\firmware\bulk_ap_upgrader.py`.
+- [ ] **CMP-005** `src\operations\execution\firmware\bulk_ap_upgrader.py:1112` - STRUCT-LENGTH (Structure)
   - Symbol: `_compute_upgrade_call_breakdown`
   - Problem: Function spans 28 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `_compute_upgrade_call_breakdown` in `src\firmware\bulk_ap_upgrader.py`.
-- [ ] **CMP-006** `src\firmware\bulk_ap_upgrader.py:1358` - STRUCT-LENGTH (Structure)
+  - Done when: analyzer reports no STRUCT-LENGTH for `_compute_upgrade_call_breakdown` in `src\operations\execution\firmware\bulk_ap_upgrader.py`.
+- [ ] **CMP-006** `src\operations\execution\firmware\bulk_ap_upgrader.py:1358` - STRUCT-LENGTH (Structure)
   - Symbol: `_execute_single_version_upgrade`
   - Problem: Function spans 29 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `_execute_single_version_upgrade` in `src\firmware\bulk_ap_upgrader.py`.
-- [ ] **CMP-007** `src\firmware\bulk_ap_upgrader.py:1445` - STRUCT-LENGTH (Structure)
+  - Done when: analyzer reports no STRUCT-LENGTH for `_execute_single_version_upgrade` in `src\operations\execution\firmware\bulk_ap_upgrader.py`.
+- [ ] **CMP-007** `src\operations\execution\firmware\bulk_ap_upgrader.py:1445` - STRUCT-LENGTH (Structure)
   - Symbol: `_upgrade_version_group`
   - Problem: Function spans 33 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `_upgrade_version_group` in `src\firmware\bulk_ap_upgrader.py`.
-- [ ] **CMP-008** `src\firmware\bulk_ap_upgrader.py:1479` - STRUCT-LENGTH (Structure)
+  - Done when: analyzer reports no STRUCT-LENGTH for `_upgrade_version_group` in `src\operations\execution\firmware\bulk_ap_upgrader.py`.
+- [ ] **CMP-008** `src\operations\execution\firmware\bulk_ap_upgrader.py:1479` - STRUCT-LENGTH (Structure)
   - Symbol: `_log_dry_run_upgrade`
   - Problem: Function spans 27 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `_log_dry_run_upgrade` in `src\firmware\bulk_ap_upgrader.py`.
-- [ ] **CMP-009** `src\firmware\bulk_ap_upgrader.py:1596` - STRUCT-LENGTH (Structure)
+  - Done when: analyzer reports no STRUCT-LENGTH for `_log_dry_run_upgrade` in `src\operations\execution\firmware\bulk_ap_upgrader.py`.
+- [ ] **CMP-009** `src\operations\execution\firmware\bulk_ap_upgrader.py:1596` - STRUCT-LENGTH (Structure)
   - Symbol: `_log_upgrade_results`
   - Problem: Function spans 26 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `_log_upgrade_results` in `src\firmware\bulk_ap_upgrader.py`.
-- [ ] **CMP-010** `src\firmware\bulk_ap_upgrader.py:1623` - STRUCT-LENGTH (Structure)
+  - Done when: analyzer reports no STRUCT-LENGTH for `_log_upgrade_results` in `src\operations\execution\firmware\bulk_ap_upgrader.py`.
+- [ ] **CMP-010** `src\operations\execution\firmware\bulk_ap_upgrader.py:1623` - STRUCT-LENGTH (Structure)
   - Symbol: `_build_result_row`
   - Problem: Function spans 30 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `_build_result_row` in `src\firmware\bulk_ap_upgrader.py`.
-- [ ] **CMP-011** `src\firmware\bulk_ap_upgrader.py:1866` - STRUCT-LENGTH (Structure)
+  - Done when: analyzer reports no STRUCT-LENGTH for `_build_result_row` in `src\operations\execution\firmware\bulk_ap_upgrader.py`.
+- [ ] **CMP-011** `src\operations\execution\firmware\bulk_ap_upgrader.py:1866` - STRUCT-LENGTH (Structure)
   - Symbol: `_present_family_candidates`
   - Problem: Function spans 26 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `_present_family_candidates` in `src\firmware\bulk_ap_upgrader.py`.
-- [ ] **CMP-012** `src\firmware\bulk_ap_upgrader.py:1893` - STRUCT-LENGTH (Structure)
+  - Done when: analyzer reports no STRUCT-LENGTH for `_present_family_candidates` in `src\operations\execution\firmware\bulk_ap_upgrader.py`.
+- [ ] **CMP-012** `src\operations\execution\firmware\bulk_ap_upgrader.py:1893` - STRUCT-LENGTH (Structure)
   - Symbol: `_apply_family_version_choice`
   - Problem: Function spans 26 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `_apply_family_version_choice` in `src\firmware\bulk_ap_upgrader.py`.
+  - Done when: analyzer reports no STRUCT-LENGTH for `_apply_family_version_choice` in `src\operations\execution\firmware\bulk_ap_upgrader.py`.
 
 ### Phase: Low (19 task(s))
 
-- [ ] **CMP-013** `src\firmware\bulk_ap_upgrader.py:310` - STRUCT-COMPLEXITY (Complexity)
+- [ ] **CMP-013** `src\operations\execution\firmware\bulk_ap_upgrader.py:310` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_resolve_site_names`
   - Problem: Cyclomatic complexity is 6 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_resolve_site_names` in `src\firmware\bulk_ap_upgrader.py`.
-- [ ] **CMP-014** `src\firmware\bulk_ap_upgrader.py:365` - STRUCT-COMPLEXITY (Complexity)
+  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_resolve_site_names` in `src\operations\execution\firmware\bulk_ap_upgrader.py`.
+- [ ] **CMP-014** `src\operations\execution\firmware\bulk_ap_upgrader.py:365` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_select_multiple_sites`
   - Problem: Cyclomatic complexity is 6 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_select_multiple_sites` in `src\firmware\bulk_ap_upgrader.py`.
-- [ ] **CMP-015** `src\firmware\bulk_ap_upgrader.py:387` - STRUCT-COMPLEXITY (Complexity)
+  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_select_multiple_sites` in `src\operations\execution\firmware\bulk_ap_upgrader.py`.
+- [ ] **CMP-015** `src\operations\execution\firmware\bulk_ap_upgrader.py:387` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_parse_index_input`
   - Problem: Cyclomatic complexity is 10 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_parse_index_input` in `src\firmware\bulk_ap_upgrader.py`.
-- [ ] **CMP-016** `src\firmware\bulk_ap_upgrader.py:387` - STRUCT-BLOCKS (Structure)
+  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_parse_index_input` in `src\operations\execution\firmware\bulk_ap_upgrader.py`.
+- [ ] **CMP-016** `src\operations\execution\firmware\bulk_ap_upgrader.py:387` - STRUCT-BLOCKS (Structure)
   - Symbol: `_parse_index_input`
   - Problem: Function has 7 logical blocks (limit 5).
   - Fix: Split the function so each helper owns a single cohesive block of logic.
-  - Done when: analyzer reports no STRUCT-BLOCKS for `_parse_index_input` in `src\firmware\bulk_ap_upgrader.py`.
-- [ ] **CMP-017** `src\firmware\bulk_ap_upgrader.py:555` - STRUCT-COMPLEXITY (Complexity)
+  - Done when: analyzer reports no STRUCT-BLOCKS for `_parse_index_input` in `src\operations\execution\firmware\bulk_ap_upgrader.py`.
+- [ ] **CMP-017** `src\operations\execution\firmware\bulk_ap_upgrader.py:555` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_fetch_site_ap_stats`
   - Problem: Cyclomatic complexity is 7 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_fetch_site_ap_stats` in `src\firmware\bulk_ap_upgrader.py`.
-- [ ] **CMP-018** `src\firmware\bulk_ap_upgrader.py:627` - STRUCT-COMPLEXITY (Complexity)
+  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_fetch_site_ap_stats` in `src\operations\execution\firmware\bulk_ap_upgrader.py`.
+- [ ] **CMP-018** `src\operations\execution\firmware\bulk_ap_upgrader.py:627` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_build_model_version_ranges`
   - Problem: Cyclomatic complexity is 9 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_build_model_version_ranges` in `src\firmware\bulk_ap_upgrader.py`.
-- [ ] **CMP-019** `src\firmware\bulk_ap_upgrader.py:627` - STRUCT-BLOCKS (Structure)
+  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_build_model_version_ranges` in `src\operations\execution\firmware\bulk_ap_upgrader.py`.
+- [ ] **CMP-019** `src\operations\execution\firmware\bulk_ap_upgrader.py:627` - STRUCT-BLOCKS (Structure)
   - Symbol: `_build_model_version_ranges`
   - Problem: Function has 6 logical blocks (limit 5).
   - Fix: Split the function so each helper owns a single cohesive block of logic.
-  - Done when: analyzer reports no STRUCT-BLOCKS for `_build_model_version_ranges` in `src\firmware\bulk_ap_upgrader.py`.
-- [ ] **CMP-020** `src\firmware\bulk_ap_upgrader.py:694` - STRUCT-COMPLEXITY (Complexity)
+  - Done when: analyzer reports no STRUCT-BLOCKS for `_build_model_version_ranges` in `src\operations\execution\firmware\bulk_ap_upgrader.py`.
+- [ ] **CMP-020** `src\operations\execution\firmware\bulk_ap_upgrader.py:694` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_find_universal_versions`
   - Problem: Cyclomatic complexity is 6 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_find_universal_versions` in `src\firmware\bulk_ap_upgrader.py`.
-- [ ] **CMP-021** `src\firmware\bulk_ap_upgrader.py:714` - STRUCT-COMPLEXITY (Complexity)
+  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_find_universal_versions` in `src\operations\execution\firmware\bulk_ap_upgrader.py`.
+- [ ] **CMP-021** `src\operations\execution\firmware\bulk_ap_upgrader.py:714` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_get_versions_for_model`
   - Problem: Cyclomatic complexity is 8 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_get_versions_for_model` in `src\firmware\bulk_ap_upgrader.py`.
-- [ ] **CMP-022** `src\firmware\bulk_ap_upgrader.py:714` - STRUCT-BLOCKS (Structure)
+  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_get_versions_for_model` in `src\operations\execution\firmware\bulk_ap_upgrader.py`.
+- [ ] **CMP-022** `src\operations\execution\firmware\bulk_ap_upgrader.py:714` - STRUCT-BLOCKS (Structure)
   - Symbol: `_get_versions_for_model`
   - Problem: Function has 6 logical blocks (limit 5).
   - Fix: Split the function so each helper owns a single cohesive block of logic.
-  - Done when: analyzer reports no STRUCT-BLOCKS for `_get_versions_for_model` in `src\firmware\bulk_ap_upgrader.py`.
-- [ ] **CMP-023** `src\firmware\bulk_ap_upgrader.py:740` - STRUCT-COMPLEXITY (Complexity)
+  - Done when: analyzer reports no STRUCT-BLOCKS for `_get_versions_for_model` in `src\operations\execution\firmware\bulk_ap_upgrader.py`.
+- [ ] **CMP-023** `src\operations\execution\firmware\bulk_ap_upgrader.py:740` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_display_model_versions`
   - Problem: Cyclomatic complexity is 6 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_display_model_versions` in `src\firmware\bulk_ap_upgrader.py`.
-- [ ] **CMP-024** `src\firmware\bulk_ap_upgrader.py:756` - STRUCT-COMPLEXITY (Complexity)
+  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_display_model_versions` in `src\operations\execution\firmware\bulk_ap_upgrader.py`.
+- [ ] **CMP-024** `src\operations\execution\firmware\bulk_ap_upgrader.py:756` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_get_user_version_selection`
   - Problem: Cyclomatic complexity is 6 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_get_user_version_selection` in `src\firmware\bulk_ap_upgrader.py`.
-- [ ] **CMP-025** `src\firmware\bulk_ap_upgrader.py:868` - STRUCT-COMPLEXITY (Complexity)
+  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_get_user_version_selection` in `src\operations\execution\firmware\bulk_ap_upgrader.py`.
+- [ ] **CMP-025** `src\operations\execution\firmware\bulk_ap_upgrader.py:868` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_validate_upgrade_plan`
   - Problem: Cyclomatic complexity is 8 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_validate_upgrade_plan` in `src\firmware\bulk_ap_upgrader.py`.
-- [ ] **CMP-026** `src\firmware\bulk_ap_upgrader.py:1267` - STRUCT-COMPLEXITY (Complexity)
+  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_validate_upgrade_plan` in `src\operations\execution\firmware\bulk_ap_upgrader.py`.
+- [ ] **CMP-026** `src\operations\execution\firmware\bulk_ap_upgrader.py:1267` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_get_upgrade_confirmation`
   - Problem: Cyclomatic complexity is 6 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_get_upgrade_confirmation` in `src\firmware\bulk_ap_upgrader.py`.
-- [ ] **CMP-027** `src\firmware\bulk_ap_upgrader.py:1291` - STRUCT-COMPLEXITY (Complexity)
+  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_get_upgrade_confirmation` in `src\operations\execution\firmware\bulk_ap_upgrader.py`.
+- [ ] **CMP-027** `src\operations\execution\firmware\bulk_ap_upgrader.py:1291` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_step8_execute_upgrades`
   - Problem: Cyclomatic complexity is 6 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_step8_execute_upgrades` in `src\firmware\bulk_ap_upgrader.py`.
-- [ ] **CMP-028** `src\firmware\bulk_ap_upgrader.py:1706` - STRUCT-COMPLEXITY (Complexity)
+  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_step8_execute_upgrades` in `src\operations\execution\firmware\bulk_ap_upgrader.py`.
+- [ ] **CMP-028** `src\operations\execution\firmware\bulk_ap_upgrader.py:1706` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_group_models_by_ap_type`
   - Problem: Cyclomatic complexity is 7 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_group_models_by_ap_type` in `src\firmware\bulk_ap_upgrader.py`.
-- [ ] **CMP-029** `src\firmware\bulk_ap_upgrader.py:1809` - STRUCT-COMPLEXITY (Complexity)
+  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_group_models_by_ap_type` in `src\operations\execution\firmware\bulk_ap_upgrader.py`.
+- [ ] **CMP-029** `src\operations\execution\firmware\bulk_ap_upgrader.py:1809` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_parse_family_selection`
   - Problem: Cyclomatic complexity is 6 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_parse_family_selection` in `src\firmware\bulk_ap_upgrader.py`.
-- [ ] **CMP-030** `src\firmware\bulk_ap_upgrader.py:1950` - STRUCT-COMPLEXITY (Complexity)
+  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_parse_family_selection` in `src\operations\execution\firmware\bulk_ap_upgrader.py`.
+- [ ] **CMP-030** `src\operations\execution\firmware\bulk_ap_upgrader.py:1950` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_find_universal_versions_for_models`
   - Problem: Cyclomatic complexity is 8 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_find_universal_versions_for_models` in `src\firmware\bulk_ap_upgrader.py`.
-- [ ] **CMP-031** `src\firmware\bulk_ap_upgrader.py:2002` - STRUCT-COMPLEXITY (Complexity)
+  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_find_universal_versions_for_models` in `src\operations\execution\firmware\bulk_ap_upgrader.py`.
+- [ ] **CMP-031** `src\operations\execution\firmware\bulk_ap_upgrader.py:2002` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_prompt_schedule_day`
   - Problem: Cyclomatic complexity is 6 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_prompt_schedule_day` in `src\firmware\bulk_ap_upgrader.py`.
+  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_prompt_schedule_day` in `src\operations\execution\firmware\bulk_ap_upgrader.py`.
 

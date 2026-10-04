@@ -41,16 +41,16 @@ Move startup work from `MistHelper.py` import into `ApplicationBootstrap`. The C
 ```text
 MistHelper.py
 wsgi.py
-src/refactors/main_entrypoint.py
-src/refactors/mist_site_exclude_prefix.py
-src/utils/rate_limiting.py
-src/utils/tqdm_wrapper.py
+src/foundation/support/refactors/main_entrypoint.py
+src/foundation/support/refactors/mist_site_exclude_prefix.py
+src/foundation/support/utils/rate_limiting.py
+src/foundation/support/utils/tqdm_wrapper.py
 tests/unit/refactors/test_reject_unsupported_flag_variants.py
 changelog.d/issue-1701-bootstrap-entrypoint.md
 specs/1701-bootstrap-entrypoint/
 ```
 
-**Structure Decision**: Keep the bootstrap class in `src/refactors/main_entrypoint.py`, because that file already owns the entrypoint seam.
+**Structure Decision**: Keep the bootstrap class in `src/foundation/support/refactors/main_entrypoint.py`, because that file already owns the entrypoint seam.
 
 ## Technical Approach
 

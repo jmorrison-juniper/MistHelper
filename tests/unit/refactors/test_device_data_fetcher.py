@@ -1,4 +1,4 @@
-"""Wave 7 P2 coverage for src/refactors/device_data_fetcher.py (initiative #1018).
+"""Wave 7 P2 coverage for src/foundation/support/refactors/device_data_fetcher.py (initiative #1018).
 
 Covers every branch of ``DeviceDataFetcher.fetch()`` orchestration plus the
 private helpers and the ``_MistHelperProxy.__getattr__`` late-binding path.
@@ -20,8 +20,10 @@ from unittest.mock import MagicMock  # WHY: FR-008 mandates MagicMock for collab
 
 import pytest  # WHY: fixture + monkeypatch + caplog fixtures.
 
-from src.config.source_dependency_resolver import SourceDependencyResolver  # WHY: assert the source dependency seam.
-from src.refactors.device_data_fetcher import (  # WHY: direct SUT imports.
+from src.foundation.runtime.config.source_dependency_resolver import (
+    SourceDependencyResolver,
+)  # WHY: assert the source dependency seam.
+from src.foundation.support.refactors.device_data_fetcher import (  # WHY: direct SUT imports.
     _MH,
     DeviceDataFetcher,
     DeviceFetchConfig,

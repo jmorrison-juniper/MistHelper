@@ -111,7 +111,7 @@ Run this loop after each group from A to D. See the phased approach in [plan.md]
 | - | - | - | - |
 | A | B404, B603, B606, B607 | 0 for each | `starlink_dashboard.py` still starts. `tools/compliance_analyzer` still reads the git ignore list. |
 | B | B105, B107 | 0 for each | No value moved to the environment, unless you found a real credential. If you did, stop and raise a rotation request. |
-| C | B110 | 0 | `.venv\Scripts\python.exe -m pytest tests/unit -q` keeps its pass count. No new log line appears inside `src/utils/logger_utils.py`. |
+| C | B110 | 0 | `.venv\Scripts\python.exe -m pytest tests/unit -q` keeps its pass count. No new log line appears inside `src/foundation/support/utils/logger_utils.py`. |
 | D | B101 | 0 | `validate_template` raises `ValueError` on a bad template. Its docstring names `ValueError`, not `AssertionError`. |
 | E | none | 0 in total | The bandit step holds no `-ll`. |
 

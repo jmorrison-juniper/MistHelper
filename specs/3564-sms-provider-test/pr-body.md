@@ -10,14 +10,14 @@ This pull request adds the package for menu `284`, `Test the guest portal SMS pr
 
 ## Files
 
-- `src/troubleshooting/sms_provider_test/`
+- `src/mist/intelligence/troubleshooting/sms_provider_test/`
 - `tests/unit/troubleshooting/sms_provider_test/`
 - `specs/3564-sms-provider-test/`
 - `changelog.d/issue-3564-sms-provider-test.md`
 
 ## Deferred wiring
 
-Menu registration is deferred to the tier integration pull request. The exact instructions are in `specs/3564-sms-provider-test/wiring.md`. This branch does not edit `MistHelper.py`, `src/utils/operation_registry.py`, `src/refactors/endpoint_primary_key_strategies.py`, `README.md`, generated menu references, or `web_portal/`.
+Menu registration is deferred to the tier integration pull request. The exact instructions are in `specs/3564-sms-provider-test/wiring.md`. This branch does not edit `MistHelper.py`, `src/foundation/support/utils/operation_registry.py`, `src/foundation/support/refactors/endpoint_primary_key_strategies.py`, `README.md`, generated menu references, or `web_portal/`.
 
 ## Acceptance Criteria
 
@@ -31,7 +31,7 @@ Menu registration is deferred to the tier integration pull request. The exact in
 - [x] New or changed guards state the measured count and prove one failing path. The confirmation guard test proves zero API calls after refusal.
 - [x] No new Ruff lint violations. Targeted `ruff check` passed.
 - [x] Code formatted with Black. Targeted `black --check` passed.
-- [x] mypy passes. Targeted `mypy src\troubleshooting\sms_provider_test --config-file pyproject.toml` passed.
+- [x] mypy passes. Targeted `mypy src\mist\intelligence\troubleshooting\sms_provider_test --config-file pyproject.toml` passed.
 
 ## Security
 
@@ -63,15 +63,15 @@ Menu registration is deferred to the tier integration pull request. The exact in
 ## Validation
 
 - `py_compile` passed for 5 package files.
-- `ruff check src\troubleshooting\sms_provider_test tests\unit\troubleshooting\sms_provider_test` passed.
-- `black --check src\troubleshooting\sms_provider_test tests\unit\troubleshooting\sms_provider_test` passed.
-- `mypy src\troubleshooting\sms_provider_test --config-file pyproject.toml` passed.
-- `pydocstyle src\troubleshooting\sms_provider_test` passed.
+- `ruff check src\mist\intelligence\troubleshooting\sms_provider_test tests\unit\troubleshooting\sms_provider_test` passed.
+- `black --check src\mist\intelligence\troubleshooting\sms_provider_test tests\unit\troubleshooting\sms_provider_test` passed.
+- `mypy src\mist\intelligence\troubleshooting\sms_provider_test --config-file pyproject.toml` passed.
+- `pydocstyle src\mist\intelligence\troubleshooting\sms_provider_test` passed.
 - `pytest tests\unit\troubleshooting\sms_provider_test -q --timeout=120` passed with 9 tests.
-- `vulture src\troubleshooting\sms_provider_test --min-confidence 70` passed.
-- `interrogate -v src\troubleshooting\sms_provider_test` passed with 100.0% coverage.
-- `bandit -c pyproject.toml -r src\troubleshooting\sms_provider_test -q` passed.
-- `radon cc src\troubleshooting\sms_provider_test -j | complexity-gate --max 10` passed.
+- `vulture src\mist\intelligence\troubleshooting\sms_provider_test --min-confidence 70` passed.
+- `interrogate -v src\mist\intelligence\troubleshooting\sms_provider_test` passed with 100.0% coverage.
+- `bandit -c pyproject.toml -r src\mist\intelligence\troubleshooting\sms_provider_test -q` passed.
+- `radon cc src\mist\intelligence\troubleshooting\sms_provider_test -j | complexity-gate --max 10` passed.
 - `test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json --changed-from origin/main` passed.
 - `pytest tests\integration\test_mistapi_sdk_compatibility.py -q --timeout=120` passed.
 - `pytest tests\unit\web_portal\test_output_scan_runtime_files.py -q --timeout=120` passed.

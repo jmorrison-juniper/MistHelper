@@ -6,7 +6,7 @@ Why:
     disagreed with the cloud. The suite stayed green through four blocking
     defects.
 
-    `src/upgrade_portal/app/seam_shapes.py` records the call that each route
+    `src/interfaces/portals/upgrade_portal/app/seam_shapes.py` records the call that each route
     makes through each seam. That record only helps while it stays true, so the
     first test below compares every recorded call against the callable that the
     portal really falls back to. The rest prove that the guard refuses a stand-in
@@ -20,8 +20,8 @@ from typing import Any
 
 import pytest
 
-from src.upgrade_portal.app import seam_shapes
-from src.upgrade_portal.app.routes import auth, capture, review, select, upgrade
+from src.interfaces.portals.upgrade_portal.app import seam_shapes
+from src.interfaces.portals.upgrade_portal.app.routes import auth, capture, review, select, upgrade
 
 # The seams that hold an object with named methods rather than one callable. Each
 # route guards these with its own method-name check, so no call record fits them.

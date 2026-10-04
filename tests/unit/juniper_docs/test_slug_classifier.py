@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.juniper_docs.classify.slug_classifier import SlugClassifier
+from src.mist.intelligence.juniper_docs.classify.slug_classifier import SlugClassifier
 
 
 @pytest.mark.parametrize(

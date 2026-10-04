@@ -6,8 +6,8 @@ from types import SimpleNamespace  # Build small SDK response doubles.
 
 import pytest  # Assert exceptions and test outcomes.
 
-from src.reports.subscription_expiry import client as client_module  # Patch the module SDK seams.
-from src.reports.subscription_expiry.client import (
+from src.mist.intelligence.reports.subscription_expiry import client as client_module  # Patch the module SDK seams.
+from src.mist.intelligence.reports.subscription_expiry.client import (
     JsiAccountNotLinkedError,
     SubscriptionExpiryClient,
     SubscriptionExpiryClientError,

@@ -9,8 +9,12 @@ from types import SimpleNamespace  # Build lightweight resolver fakes.
 
 import pytest  # Provide monkeypatch and caplog fixtures.
 
-from src.reports.certificate_expiry import operation  # Import the operation module for monkeypatching.
-from src.reports.certificate_expiry.operation import CertificateExpiryReport  # Import the static handler under test.
+from src.mist.intelligence.reports.certificate_expiry import (
+    operation,
+)  # Import the operation module for monkeypatching.
+from src.mist.intelligence.reports.certificate_expiry.operation import (
+    CertificateExpiryReport,
+)  # Import the static handler under test.
 from tests.unit.reports.certificate_expiry.test_model import CertificateFixtureFactory  # Reuse no-network PEM fixtures.
 
 
@@ -221,8 +225,8 @@ def test_wiring_manifest_contains_deferred_sections() -> None:
         assert text in wiring  # Verify each required section exists.
     for path in (
         "MistHelper.py",
-        "src/utils/operation_registry.py",
-        "src/refactors/endpoint_primary_key_strategies.py",
+        "src/foundation/support/utils/operation_registry.py",
+        "src/foundation/support/refactors/endpoint_primary_key_strategies.py",
         "README.md",
         "generated menu references",
     ):  # Check deferred paths.

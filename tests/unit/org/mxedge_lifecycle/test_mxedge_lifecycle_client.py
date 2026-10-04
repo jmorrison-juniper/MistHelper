@@ -8,7 +8,7 @@ from typing import Any  # WHY: fake response stores dynamic JSON.
 import mistapi  # WHY: monkeypatch SDK methods used by the client.
 import pytest  # WHY: failure-mode tests assert raised client errors.
 
-from src.org.mxedge_lifecycle.client import (  # WHY: system under test and error contract.
+from src.mist.resources.org.mxedge_lifecycle.client import (  # WHY: system under test and error contract.
     MxEdgeLifecycleApiError,
     MxEdgeLifecycleClient,
 )

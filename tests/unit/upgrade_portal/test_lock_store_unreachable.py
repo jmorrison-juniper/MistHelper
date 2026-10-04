@@ -26,8 +26,8 @@ from flask import Flask  # The smallest application that can hold the blueprint.
 from flask.testing import FlaskClient  # Drives a route with no server and no browser.
 from werkzeug.test import TestResponse  # The answer that the test client returns.
 
-from src.upgrade_portal.app.routes import upgrade  # The module under test.
-from src.upgrade_portal.app.routes.select import (  # The sibling module owns the three state words.
+from src.interfaces.portals.upgrade_portal.app.routes import upgrade  # The module under test.
+from src.interfaces.portals.upgrade_portal.app.routes.select import (  # The sibling module owns the three state words.
     LOCK_READER_KEY,
     LOCK_STATE_FREE,
     LOCK_STATE_LOCKED,
@@ -35,8 +35,10 @@ from src.upgrade_portal.app.routes.select import (  # The sibling module owns th
     SELECTED_ORG_KEY,
     SELECTED_SITE_KEY,
 )
-from src.upgrade_portal.runtime import identity  # The registry, the cookie name, and the session field names.
-from src.upgrade_portal.runtime.runs import RunRecordBuilder, RunSpec, RunState  # The record model.
+from src.interfaces.portals.upgrade_portal.runtime import (
+    identity,
+)  # The registry, the cookie name, and the session field names.
+from src.interfaces.portals.upgrade_portal.runtime.runs import RunRecordBuilder, RunSpec, RunState  # The record model.
 
 # WHY: A reserved example domain, so no message can reach a real mailbox.
 PROBE_EMAIL = "probe.operator@example.invalid"

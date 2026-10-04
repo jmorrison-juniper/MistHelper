@@ -40,8 +40,8 @@ uses these methods for a proven child job only.
 
 | File | Change |
 | - | - |
-| `src/upgrade_portal/upgrade/org_devices.py` | The methods `is_proven` and `proven_counts` of `OrgChildDevices`. |
-| `src/upgrade_portal/app/routes/org_upgrade.py` | `_aggregate_child_counts` returns the proven counts for a proven child job. |
+| `src/interfaces/portals/upgrade_portal/upgrade/org_devices.py` | The methods `is_proven` and `proven_counts` of `OrgChildDevices`. |
+| `src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py` | `_aggregate_child_counts` returns the proven counts for a proven child job. |
 | `tests/unit/upgrade_portal/test_issue_3457_reconcile_upgraded_count.py` | New. The proof rule, the counts, and the summary. |
 | `tests/contract/upgrade_portal/test_org_child_controls_routes.py` | The counts of the page and the status answer after each check. |
 | `tests/e2e/upgrade_portal/test_org_recovery_controls.py` | The child rows and the operation block after the check. |

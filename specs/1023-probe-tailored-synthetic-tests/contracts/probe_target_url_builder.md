@@ -1,7 +1,7 @@
 # Contract: `_probe_target` URL Builder
 
 **Feature**: 1023-probe-tailored-synthetic-tests
-**Module**: `src/org/org_synthetic_probes_manager.py`
+**Module**: `src/mist/resources/org/org_synthetic_probes_manager.py`
 **Kind**: Internal Python API contract (private function)
 
 ## Scope

@@ -22,23 +22,23 @@ below. The three Tier 1 façades already produced under the old approach
 
 ### User Story 1 — Unblock PR #391 by Clearing Tier 1 Offenders (Priority: P1)
 
-A maintainer pushes PR #391 (clone device config to gateway template). The Radon quality gate fails on CI because the base branch `feat/196` carries 75+ pre-existing functions with cyclomatic complexity > 10. The worst offenders (CC > 40) sit in `src/websocket/`, `src/ui/tui.py`, `src/ssh/ssh_runner.py`, and `src/auth/interactive_session.py`. The maintainer needs these six files restructured first because they alone account for the majority of the Radon gate's failure surface and are the most-touched modules in active development.
+A maintainer pushes PR #391 (clone device config to gateway template). The Radon quality gate fails on CI because the base branch `feat/196` carries 75+ pre-existing functions with cyclomatic complexity > 10. The worst offenders (CC > 40) sit in `src/mist/realtime/websocket/`, `src/interfaces/visualization/ui/tui.py`, `src/operations/execution/ssh/ssh_runner.py`, and `src/mist/access/auth/interactive_session.py`. The maintainer needs these six files restructured first because they alone account for the majority of the Radon gate's failure surface and are the most-touched modules in active development.
 
 **Why this priority**: Without clearing the Tier 1 worst offenders the Radon gate will continue to fail, no matter how many smaller functions are fixed. These six files are also the highest-risk to refactor blindly, so they need first attention while the rest of the change set is still small.
 
-**Independent Test**: After Tier 1 work merges, running `python -m radon cc src/websocket src/ui/tui.py src/ssh/ssh_runner.py src/auth/interactive_session.py src/gateway/gateway_override_analyzer.py -n C` returns "No blocks found" (no C-or-worse), and the existing test suite for these modules passes unchanged.
+**Independent Test**: After Tier 1 work merges, running `python -m radon cc src/mist/realtime/websocket src/interfaces/visualization/ui/tui.py src/operations/execution/ssh/ssh_runner.py src/mist/access/auth/interactive_session.py src/mist/resources/gateway/gateway_override_analyzer.py -n C` returns "No blocks found" (no C-or-worse), and the existing test suite for these modules passes unchanged.
 
 **Acceptance Scenarios**:
 
-1. **Given** `src/websocket/manager.py` contains `wait_for_command_result` at CC=110, **When** Tier 1 refactor is applied, **Then** `wait_for_command_result` and every extracted helper has CC ≤ 10 and the websocket integration tests still pass.
-2. **Given** `src/ui/tui.py` contains `handle_input` (CC=65), `check_keyboard_input` (CC=59), `execute_current_item` (CC=54), and `create_layout` (CC=52), **When** Tier 1 refactor is applied, **Then** each method and its helpers have CC ≤ 10 and the TUI continues to render menus, accept keyboard input, and execute selected items identically.
-3. **Given** `src/ssh/ssh_runner.py` contains `_execute_with_shell` (CC=51) and related methods, **When** Tier 1 refactor is applied, **Then** SSH command execution, multi-host execution, and shell interactivity behave identically and CC ≤ 10 everywhere.
+1. **Given** `src/mist/realtime/websocket/manager.py` contains `wait_for_command_result` at CC=110, **When** Tier 1 refactor is applied, **Then** `wait_for_command_result` and every extracted helper has CC ≤ 10 and the websocket integration tests still pass.
+2. **Given** `src/interfaces/visualization/ui/tui.py` contains `handle_input` (CC=65), `check_keyboard_input` (CC=59), `execute_current_item` (CC=54), and `create_layout` (CC=52), **When** Tier 1 refactor is applied, **Then** each method and its helpers have CC ≤ 10 and the TUI continues to render menus, accept keyboard input, and execute selected items identically.
+3. **Given** `src/operations/execution/ssh/ssh_runner.py` contains `_execute_with_shell` (CC=51) and related methods, **When** Tier 1 refactor is applied, **Then** SSH command execution, multi-host execution, and shell interactivity behave identically and CC ≤ 10 everywhere.
 
 ---
 
 ### User Story 2 — Clear Tier 2 Files for a Green Radon Gate (Priority: P2)
 
-After Tier 1 lands, a smaller batch of high-complexity functions (CC 25–40) remains across `src/maps/`, `src/export/`, `src/auth/`, `src/ssh/`, and `src/websocket/`. The maintainer needs these cleared so `radon cc src/` reports zero offenders globally — the condition CI checks.
+After Tier 1 lands, a smaller batch of high-complexity functions (CC 25–40) remains across `src/interfaces/visualization/maps/`, `src/operations/exporting/export/`, `src/mist/access/auth/`, `src/operations/execution/ssh/`, and `src/mist/realtime/websocket/`. The maintainer needs these cleared so `radon cc src/` reports zero offenders globally — the condition CI checks.
 
 **Why this priority**: The Radon CI gate is binary: it only passes when every function in `src/` is ≤ 10. Tier 2 must complete before the gate can possibly turn green; however, these functions are individually less risky and less central than Tier 1.
 
@@ -46,15 +46,15 @@ After Tier 1 lands, a smaller batch of high-complexity functions (CC 25–40) re
 
 **Acceptance Scenarios**:
 
-1. **Given** `src/maps/maps_manager.py::_launch_plotly_viewer` is CC=36, **When** Tier 2 refactor is applied, **Then** the Plotly viewer launches identically and CC ≤ 10.
-2. **Given** `src/export/wifi_clients_exporter.py::execute` is CC=30, **When** Tier 2 refactor is applied, **Then** WiFi client CSV/SQLite/ArangoDB output is byte-identical and CC ≤ 10.
-3. **Given** `src/auth/interactive_session.py::select_msp_and_org` is CC=26, **When** Tier 2 refactor is applied, **Then** the interactive MSP/org selection flow shows the same prompts and CC ≤ 10.
+1. **Given** `src/interfaces/visualization/maps/maps_manager.py::_launch_plotly_viewer` is CC=36, **When** Tier 2 refactor is applied, **Then** the Plotly viewer launches identically and CC ≤ 10.
+2. **Given** `src/operations/exporting/export/wifi_clients_exporter.py::execute` is CC=30, **When** Tier 2 refactor is applied, **Then** WiFi client CSV/SQLite/ArangoDB output is byte-identical and CC ≤ 10.
+3. **Given** `src/mist/access/auth/interactive_session.py::select_msp_and_org` is CC=26, **When** Tier 2 refactor is applied, **Then** the interactive MSP/org selection flow shows the same prompts and CC ≤ 10.
 
 ---
 
 ### User Story 3 — Finish the Long Tail (Tier 3) and Auto-Merge PR #391 (Priority: P3)
 
-After Tiers 1 and 2 land, roughly 40 medium-complexity functions (CC 11–24) remain spread across `src/inventory/`, `src/troubleshooting/`, `src/gateway/`, `src/analytics/`, `src/site/`, `src/capture/`, and a few stragglers. With Tier 3 cleared, the Radon gate finally passes, `auto-merge` can be added to PR #391, and the clone-device-config-to-gateway-template feature reaches `main`.
+After Tiers 1 and 2 land, roughly 40 medium-complexity functions (CC 11–24) remain spread across `src/mist/resources/inventory/`, `src/mist/intelligence/troubleshooting/`, `src/mist/resources/gateway/`, `src/mist/intelligence/analytics/`, `src/mist/resources/site/`, `src/operations/execution/capture/`, and a few stragglers. With Tier 3 cleared, the Radon gate finally passes, `auto-merge` can be added to PR #391, and the clone-device-config-to-gateway-template feature reaches `main`.
 
 **Why this priority**: Lowest individual risk per function but largest in count. Must finish to clear the gate, but each function is a small, mechanical extract-method change.
 
@@ -82,7 +82,7 @@ After Tiers 1 and 2 land, roughly 40 medium-complexity functions (CC 11–24) re
 
 - **FR-001**: Every function and method in `src/` MUST have cyclomatic complexity ≤ 10 as reported by `radon cc src/ -j`.
 - **FR-002**: The refactor MUST NOT use any complexity suppression marker — no `# noqa: C901`, no `# pylint: disable=too-many-branches/statements/locals/nested-blocks`, no Radon allowlist additions, no `pyproject.toml` exemption entries.
-- **FR-003**: Every Tier 1 file (`src/websocket/manager.py`, `src/ui/tui.py`, `src/websocket/diag_commands.py`, `src/ssh/ssh_runner.py`, `src/auth/interactive_session.py`, `src/gateway/gateway_override_analyzer.py`) MUST be decomposed first, before Tier 2 or Tier 3 work begins.
+- **FR-003**: Every Tier 1 file (`src/mist/realtime/websocket/manager.py`, `src/interfaces/visualization/ui/tui.py`, `src/mist/realtime/websocket/diag_commands.py`, `src/operations/execution/ssh/ssh_runner.py`, `src/mist/access/auth/interactive_session.py`, `src/mist/resources/gateway/gateway_override_analyzer.py`) MUST be decomposed first, before Tier 2 or Tier 3 work begins.
 - **FR-004**: Decomposition MUST use one or more of: Extract Method (private helper), Extract Class (collaborator in same module), Extract Submodule (new directory under the parent package), Replace Conditional with Dispatch Table, Guard Clauses / Early Returns.
 - **FR-005**: All extracted helper methods MUST themselves have CC ≤ 10.
 - **FR-006**: All public class names, public method names, and public method signatures called from outside `src/` (`MistHelper.py`, `tests/`, `web_portal/`, or other top-level modules) MUST remain unchanged.
@@ -103,7 +103,7 @@ After Tiers 1 and 2 land, roughly 40 medium-complexity functions (CC 11–24) re
 - **Tier 3 Offenders (Files)**: ~10–15 files containing the long tail of CC 11–24 functions. Cleared last. Lowest risk per function but largest in count.
 - **Extracted Helper Method**: A new private method (`_verb_noun`) on the same class as the original. Receives state explicitly via parameters. Has CC ≤ 10. Carries inline comments and action logging.
 - **Extracted Collaborator Class**: A new class in the same module (or a new submodule) when 3+ logically distinct responsibility groups are pulled out of one method. Example: `WebSocketResultPoller` and `WebSocketCompletionDetector` extracted from `wait_for_command_result`.
-- **Extracted Submodule**: A new directory (e.g., `src/websocket/polling/`, `src/ui/input_handlers/`) holding one or more collaborator classes that form a coherent unit.
+- **Extracted Submodule**: A new directory (e.g., `src/mist/realtime/websocket/polling/`, `src/interfaces/visualization/ui/input_handlers/`) holding one or more collaborator classes that form a coherent unit.
 - **Dispatch Table**: A `{key: bound_method}` dictionary built once in `__init__` that replaces a long `if/elif` chain (TUI key handlers, diag command parsers). Each handler method has CC ≤ 10.
 
 ## Success Criteria *(mandatory)*

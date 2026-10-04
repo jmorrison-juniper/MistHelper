@@ -18,7 +18,7 @@ from unittest.mock import MagicMock  # WHY: leaf-callable stubbing for the endpo
 
 import pytest  # WHY: standard test runner + fixtures + raises.
 
-from src.export.wan_client_events_exporter import (
+from src.operations.exporting.export.wan_client_events_exporter import (
     WanClientEventsExporter,  # WHY: subject under test — the exporter dataclass.
     _SiteStamp,  # WHY: reused for stamp-parameter fixtures below.
 )

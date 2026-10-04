@@ -7,11 +7,11 @@
 
 ## 2) Implement in this order
 
-1. Extract multi-AP scan capture logic to `src/capture/multi_ap_scan_workflow.py`.
-2. Extract site wait/download logic to `src/capture/site_pcap_wait_download_workflow.py`.
-3. Extract org wait/download logic to `src/capture/org_pcap_wait_download_workflow.py`.
-4. Extract Wi-Fi client export logic to `src/export/wifi_clients_exporter.py`.
-5. Extract interactive test flow to `src/troubleshooting/interactive_test_runner.py`.
+1. Extract multi-AP scan capture logic to `src/operations/execution/capture/multi_ap_scan_workflow.py`.
+2. Extract site wait/download logic to `src/operations/execution/capture/site_pcap_wait_download_workflow.py`.
+3. Extract org wait/download logic to `src/operations/execution/capture/org_pcap_wait_download_workflow.py`.
+4. Extract Wi-Fi client export logic to `src/operations/exporting/export/wifi_clients_exporter.py`.
+5. Extract interactive test flow to `src/mist/intelligence/troubleshooting/interactive_test_runner.py`.
 6. Keep `MistHelper.py` entrypoints as compatibility facades and reduce each target function to `CC <= 10`.
 
 ## 3) Testing and parity validation

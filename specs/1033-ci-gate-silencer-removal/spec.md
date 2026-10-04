@@ -35,7 +35,7 @@ The reasons follow.
 
 | Issue | File | Line | Suppression | Effect |
 | - | - | - | - | - |
-| #891 | `.github/workflows/ci.yml` | 291 | `--ignore=maps,ssh,ui` | Hides `src/maps`, `src/ssh`, and `src/ui` from the pylint gate. |
+| #891 | `.github/workflows/ci.yml` | 291 | `--ignore=maps,ssh,ui` | Hides `src/interfaces/visualization/maps`, `src/operations/execution/ssh`, and `src/interfaces/visualization/ui` from the pylint gate. |
 | #892 | `.github/workflows/ci.yml` | 51 | `VULTURE_CONFIDENCE: 90` | Raises the vulture confidence floor to the maximum value. |
 | #893 | `.github/codeql/codeql-config.yml` | 10 to 14 | Two `query-filters` exclusions | Hides two CodeQL query results from the security gate. |
 
@@ -100,7 +100,7 @@ A bare suppression does not pass review.
 
 ### User Story 1 - See every pylint message from every source package (Priority: P1)
 
-A code reviewer wants the pylint gate to read every package under `src/`. The reviewer removes the `--ignore=maps,ssh,ui` flag from the pylint step. The gate then reports the messages for `src/maps`, `src/ssh`, and `src/ui` alongside the rest.
+A code reviewer wants the pylint gate to read every package under `src/`. The reviewer removes the `--ignore=maps,ssh,ui` flag from the pylint step. The gate then reports the messages for `src/interfaces/visualization/maps`, `src/operations/execution/ssh`, and `src/interfaces/visualization/ui` alongside the rest.
 
 **Why this priority**: This story carries the highest value and the lowest risk. The measurement proves that the gate still passes. The change is a one line deletion. The story also holds the line that issue #888 edits, so it must land first.
 
@@ -110,8 +110,8 @@ A code reviewer wants the pylint gate to read every package under `src/`. The re
 
 1. **Given** the updated workflow file, **When** a reviewer searches the pylint step for `--ignore`, **Then** the search returns no match.
 2. **Given** the updated workflow file, **When** CI runs the pylint job, **Then** the job exits with code 0 inside the existing 10 minute timeout.
-3. **Given** the CI log for the pylint job, **When** a reviewer searches the log for the path `src/maps`, **Then** the log holds at least one message for that path.
-4. **Given** the CI log for the pylint job, **When** a reviewer searches the log for the path `src/ssh` and for the path `src/ui`, **Then** the log holds at least one message for each path.
+3. **Given** the CI log for the pylint job, **When** a reviewer searches the log for the path `src/interfaces/visualization/maps`, **Then** the log holds at least one message for that path.
+4. **Given** the CI log for the pylint job, **When** a reviewer searches the log for the path `src/operations/execution/ssh` and for the path `src/interfaces/visualization/ui`, **Then** the log holds at least one message for each path.
 5. **Given** a follow-up issue that tracks the newly visible messages, **When** a reviewer opens the pull request, **Then** the pull request links that issue.
 
 ---
@@ -232,7 +232,7 @@ A security reviewer wants the rationale for `py/clear-text-logging-sensitive-dat
 
 ### Measurable Outcomes
 
-- **SC-001**: The pylint gate reads three source packages that it could not read before. A search of the pylint job log returns at least one message for `src/maps`, at least one for `src/ssh`, and at least one for `src/ui`.
+- **SC-001**: The pylint gate reads three source packages that it could not read before. A search of the pylint job log returns at least one message for `src/interfaces/visualization/maps`, at least one for `src/operations/execution/ssh`, and at least one for `src/interfaces/visualization/ui`.
 - **SC-002**: The pylint job passes after the change and adds no build failure. The exit code is 0 and the run finishes inside the existing 10 minute timeout.
 - **SC-003**: The number of hidden pylint messages falls from 502 to 0.
 - **SC-004**: The vulture gate runs at a confidence floor of 70 and reports 0 findings. The exit code is 0 and the run finishes inside the existing 5 minute timeout.
@@ -260,7 +260,7 @@ The following work stays outside this feature. Each item belongs to separate fol
 - **NG-006**: Removing the `SRC_PATH` scope cap from the mypy, pytest, pylint, and radon gates. Issue #888 owns that work.
 - **NG-007**: Changing the pylint `--fail-under` threshold, the coverage threshold, or any other gate threshold.
 - **NG-008**: Adding a new CodeQL query, a new query pack, or a new quality gate.
-- **NG-009**: Refactoring `src/maps`, `src/ssh`, or `src/ui`. The feature only makes the existing messages visible.
+- **NG-009**: Refactoring `src/interfaces/visualization/maps`, `src/operations/execution/ssh`, or `src/interfaces/visualization/ui`. The feature only makes the existing messages visible.
 - **NG-010**: Creating a git branch. The work reuses `ci/891-893-gate-silencers`.
 
 ---

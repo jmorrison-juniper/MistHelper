@@ -1,4 +1,4 @@
-"""Unit tests for src/utils/logger_utils.py.
+"""Unit tests for src/foundation/support/utils/logger_utils.py.
 
 Covers: redact_secret, redact_if_sensitive, and SensitiveFilter.filter.
 All tests are pure logic -- no external dependencies, no API calls.
@@ -11,7 +11,7 @@ from __future__ import annotations  # Enable PEP 604 union types on Python 3.10+
 
 import logging  # Standard library logging for creating test LogRecord objects
 
-from src.utils.logger_utils import (  # Module under test
+from src.foundation.support.utils.logger_utils import (  # Module under test
     REDACTED_PLACEHOLDER,  # The canonical replacement string
     SensitiveFilter,  # Logging filter class
     redact_if_sensitive,  # Conditional redaction helper

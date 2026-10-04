@@ -29,7 +29,7 @@
 
 - [x] T008 Remove the `sys.modules["MistHelper"]` assignment from `MistHelper.py`. (delivered: MistHelper.py)
 - [x] T009 Confirm the `sys` import remains necessary in `MistHelper.py`. (delivered: MistHelper.py)
-- [x] T010 Remove remaining source root lookups from firmware and serial capture modules. (delivered: src/firmware/firmware_manager.py and src/refactors/serial_cc/)
+- [x] T010 Remove remaining source root lookups from firmware and serial capture modules. (delivered: src/operations/execution/firmware/firmware_manager.py and src/foundation/support/refactors/serial_cc/)
 - [x] T011 Update the guard so it rejects constant-based root imports and `sys.modules` reads. (delivered: tests/guardrails/test_source_misthelper_backrefs.py)
 - [x] T012 Update firmware tests for the resolver seam. (delivered: tests/unit/firmware/)
 - [x] T013 Create `changelog.d/issue-2670-sysmodules-alias.md`. (delivered: changelog.d/issue-2670-sysmodules-alias.md)

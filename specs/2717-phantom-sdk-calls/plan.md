@@ -73,11 +73,11 @@ changelog.d\
 
 ## Changed Files
 
-- `src\device\virtual_chassis.py`: Replace `sites.getSite` with `sites.sites.getSiteInfo`.
-- `src\export\site_anomaly_exporter.py`: Replace `sites.listSites` with `sites.sites.getSiteInfo`.
-- `src\export\site_insights\device_metric_operation.py`: Replace `sites.listSites` with `sites.sites.getSiteInfo`.
-- `src\export\site_insights\site_metric_operation.py`: Replace `sites.listSites` with `sites.sites.getSiteInfo`.
-- `src\refactors\serial_cc\site_client_insights.py`: Replace `sites.listSites` with `sites.sites.getSiteInfo`.
+- `src\mist\resources\device\virtual_chassis.py`: Replace `sites.getSite` with `sites.sites.getSiteInfo`.
+- `src\operations\exporting\export\site_anomaly_exporter.py`: Replace `sites.listSites` with `sites.sites.getSiteInfo`.
+- `src\operations\exporting\export\site_insights\device_metric_operation.py`: Replace `sites.listSites` with `sites.sites.getSiteInfo`.
+- `src\operations\exporting\export\site_insights\site_metric_operation.py`: Replace `sites.listSites` with `sites.sites.getSiteInfo`.
+- `src\foundation\support\refactors\serial_cc\site_client_insights.py`: Replace `sites.listSites` with `sites.sites.getSiteInfo`.
 - `tests\unit\test_virtual_chassis.py`: Prove the virtual chassis path returns the known site name.
 - `tests\unit\export\test_site_anomaly_exporter.py`: Prove the anomaly path returns the known site name.
 - `tests\unit\export\site_insights\test_device_metric_operation_wave3.py`: Prove the device metric path returns the known site name.

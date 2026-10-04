@@ -11,8 +11,8 @@ from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
-from src.upgrade_portal.app.routes import review
-from src.upgrade_portal.runtime import identity
+from src.interfaces.portals.upgrade_portal.app.routes import review
+from src.interfaces.portals.upgrade_portal.runtime import identity
 from tests.contract.upgrade_portal.test_issue_3484_history_org_isolation import HistoryCase, SyntheticStore
 
 logger = logging.getLogger(__name__)

@@ -62,7 +62,7 @@ An operator starts the CLI, the help path, or the WSGI host. The entry points ke
 
 ### Functional Requirements
 
-- **FR-001**: The system MUST expose an `AppContext` class in `src/refactors/main_entrypoint.py`.
+- **FR-001**: The system MUST expose an `AppContext` class in `src/foundation/support/refactors/main_entrypoint.py`.
 - **FR-002**: `AppContext` MUST own the Mist API session, the SDK module, the selected organization, the MSP grants, the selected MSP, the output format, the progress emitter, and the parsed arguments.
 - **FR-003**: Two `AppContext` instances MUST NOT share the session or MSP grant list.
 - **FR-004**: `MistHelper.py` MUST NOT store live session state in module globals.
@@ -75,7 +75,7 @@ An operator starts the CLI, the help path, or the WSGI host. The entry points ke
 
 ## Interfaces and Behavior
 
-- `AppContext` is a dataclass in `src/refactors/main_entrypoint.py`.
+- `AppContext` is a dataclass in `src/foundation/support/refactors/main_entrypoint.py`.
 - `MainEntrypoint.context` holds the process context for CLI and WSGI startup.
 - `ApplicationBootstrap` stores the parsed arguments on the context.
 - `MistSessionInitializer.initialize()` writes the session to `MainEntrypoint.context`.

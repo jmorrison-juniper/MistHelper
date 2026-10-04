@@ -14,8 +14,8 @@ Date: 2026-05-26
 ## Parity Verification Approach
 
 - Preserved exported field composition and filenames by direct extraction of existing implementation logic into:
-  - `src/analytics/site_inventory_health_analyzer.py`
-  - `src/analytics/site_analytics_configurator.py`
+  - `src/mist/intelligence/analytics/site_inventory_health_analyzer.py`
+  - `src/mist/intelligence/analytics/site_analytics_configurator.py`
 - Kept exporter call surface (`save_data_fn` mapped to `DataExporter.save_data_to_output`) unchanged from menu flow.
 - Added unit tests covering core data-shaping branches for both modules to verify report content structure is retained.
 

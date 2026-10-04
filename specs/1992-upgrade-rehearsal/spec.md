@@ -180,13 +180,13 @@ hardware. Remove any item that the rehearsal already proves.
 #### The harness and the shipped code
 
 - **FR-001**: The harness MUST drive the shipped run driver in
-  `src/upgrade_portal/upgrade/driver.py`. The entry point is the `start` method,
+  `src/interfaces/portals/upgrade_portal/upgrade/driver.py`. The entry point is the `start` method,
   which spawns the thread of the run.
 - **FR-002**: The harness MUST reach the shipped settle gate in
-  `src/upgrade_portal/upgrade/gate.py` and in
-  `src/upgrade_portal/upgrade/phase_gate.py`.
+  `src/interfaces/portals/upgrade_portal/upgrade/gate.py` and in
+  `src/interfaces/portals/upgrade_portal/upgrade/phase_gate.py`.
 - **FR-003**: The harness MUST reach the shipped stop path in
-  `src/upgrade_portal/upgrade/stop.py`.
+  `src/interfaces/portals/upgrade_portal/upgrade/stop.py`.
 - **FR-004**: The harness MUST NOT hold a copy of any settle rule, any phase
   order, or any stop rule. Every such rule stays in the shipped code. This rule
   holds by review, and no automated check proves it.
@@ -198,7 +198,7 @@ hardware. Remove any item that the rehearsal already proves.
 - **FR-006**: The stand-in cloud MUST answer the device event search and the
   device statistics read itself. No call may reach the network.
 - **FR-007**: The stand-in cloud MUST answer the shape that the real cloud
-  answers. The shape rules of `src/upgrade_portal/app/seam_shapes.py` and of
+  answers. The shape rules of `src/interfaces/portals/upgrade_portal/app/seam_shapes.py` and of
   `specs/1823-upgrade-capture-portal/seam-shape-audit.md` apply.
 - **FR-008**: The stand-in cloud MUST sit at the boundary of the cloud client
   library. The shipped reader code must run above it.

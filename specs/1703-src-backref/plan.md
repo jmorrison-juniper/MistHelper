@@ -14,10 +14,10 @@ The branch does not edit `MistHelper.py`. The root alias remains because another
 
 ## Changes
 
-1. Add `src.config.runtime_settings` for the page limit, CSV freshness, API retry settings, and small runtime flags.
-2. Add `src.api.api_usage_cache` for the shared rate-limit cache.
-3. Extend `src.refactors.fast_mode_constants` with retry and fallback thread settings.
-4. Update startup publishing in `src.refactors.main_entrypoint`.
+1. Add `src.foundation.runtime.config.runtime_settings` for the page limit, CSV freshness, API retry settings, and small runtime flags.
+2. Add `src.mist.access.api.api_usage_cache` for the shared rate-limit cache.
+3. Extend `src.foundation.support.refactors.fast_mode_constants` with retry and fallback thread settings.
+4. Update startup publishing in `src.foundation.support.refactors.main_entrypoint`.
 5. Move direct settings reads in the API helpers, gateway helpers, and upgrade portal helpers.
 6. Update focused tests so they patch the new source modules.
 

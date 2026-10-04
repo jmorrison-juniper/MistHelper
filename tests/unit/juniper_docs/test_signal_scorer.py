@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from src.juniper_docs.classify.signal_scorer import SignalScorer
+from src.mist.intelligence.juniper_docs.classify.signal_scorer import SignalScorer
 
 
 def test_scores_three_groups_and_builds_the_label() -> None:

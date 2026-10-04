@@ -5,7 +5,7 @@ class, the arguments, the exit behavior, and the reuse boundary.
 
 ## Entry class
 
-`HarvestRunner` in `src/juniper_docs/harvest/runner.py` drives the whole harvest. A
+`HarvestRunner` in `src/mist/intelligence/juniper_docs/harvest/runner.py` drives the whole harvest. A
 thin entry block builds one runner and calls its `run` method. There is no wrapper
 function that only delegates to the class.
 
@@ -63,7 +63,7 @@ continues (FR-017).
 ## Reuse boundary
 
 `scripts/crawl_jvd.py` imports `JvdCatalogClient`, `JvdPdfResolver`, and
-`JvdDownloader` from `src/juniper_docs/acquire`. It keeps `JvdCatalogWalker` and
+`JvdDownloader` from `src/mist/intelligence/juniper_docs/acquire`. It keeps `JvdCatalogWalker` and
 `JvdCrawlRunner` for the validated-designs crawl. The JVD crawl entry still runs:
 
 ```python

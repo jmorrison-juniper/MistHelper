@@ -10,7 +10,7 @@
 
 ## Phase 2: Menu row model
 
-- [x] T004 Add the immutable `MenuEntry` dataclass. (delivered: `src/utils/menu_entry.py`)
+- [x] T004 Add the immutable `MenuEntry` dataclass. (delivered: `src/foundation/support/utils/menu_entry.py`)
 - [x] T005 Convert `menu_actions` values to named row objects. (delivered: `MistHelper.py`)
 - [x] T006 Update CLI and interactive menu dispatch to read named row fields. (delivered: `MistHelper.py`)
 - [x] T007 Update systematic test dispatch to read `supports_fast`. (delivered: `MistHelper.py`)
@@ -24,7 +24,7 @@
 
 ## Phase 4: Related surfaces
 
-- [x] T012 Update the interactive test runner to read named row fields. (delivered: `src/troubleshooting/interactive_test_runner.py`)
+- [x] T012 Update the interactive test runner to read named row fields. (delivered: `src/mist/intelligence/troubleshooting/interactive_test_runner.py`)
 - [x] T013 Update the web portal executor to read named row fields. (delivered: `web_portal/services/operation.py`)
 - [x] T014 Update the static portal registry to return named rows. (delivered: `web_portal/menu_registry.py`)
 - [x] T015 Update the menu reference generator for named row syntax. (delivered: `scripts/generate_menu_wiki.py`)

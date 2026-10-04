@@ -20,7 +20,7 @@ import pathlib
 import re
 import sys
 
-TEMPLATE_ROOT = pathlib.Path("src/upgrade_portal/app/assets/templates")
+TEMPLATE_ROOT = pathlib.Path("src/interfaces/portals/upgrade_portal/app/assets/templates")
 OUTPUT = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else "page-strings.md")
 
 # WHY: A Jinja comment, a Jinja statement, and a Jinja expression are all author

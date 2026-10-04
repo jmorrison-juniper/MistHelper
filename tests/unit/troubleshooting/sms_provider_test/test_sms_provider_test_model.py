@@ -2,7 +2,7 @@
 
 from __future__ import annotations  # WHY: keep annotations consistent with source modules.
 
-from src.troubleshooting.sms_provider_test.model import (  # WHY: tests target pure model behavior.
+from src.mist.intelligence.troubleshooting.sms_provider_test.model import (  # WHY: tests target pure model behavior.
     SMSGLOBAL_PROVIDER,
     TELSTRA_PROVIDER,
     TWILIO_PROVIDER,

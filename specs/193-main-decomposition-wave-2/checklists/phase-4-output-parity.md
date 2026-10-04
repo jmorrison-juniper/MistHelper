@@ -20,7 +20,7 @@ Date: 2026-05-26
 
 ## Parity Verification Approach
 
-- Canonical implementation moved to `src/site/site_config_manager.py`.
+- Canonical implementation moved to `src/mist/resources/site/site_config_manager.py`.
 - Preserved output boundaries through `DataExporter.save_data_to_output(...)`.
 - Preserved API call intent and menu wiring by keeping `MistHelper.py` as orchestration/delegation only.
 

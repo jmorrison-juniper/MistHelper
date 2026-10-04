@@ -1,4 +1,4 @@
-"""Unit tests for src.utils.file_path_utils.FilePathUtils.
+"""Unit tests for src.foundation.support.utils.file_path_utils.FilePathUtils.
 
 Covers both @staticmethod entry points end-to-end using tmp_path:
 - get_csv_path: bare name normalization, explicit-directory passthrough, data/ auto-create.
@@ -14,7 +14,7 @@ from unittest.mock import patch  # Force open() to raise for the failure-path te
 
 import pytest  # Fixtures + expected-exception assertions.
 
-from src.utils.file_path_utils import FilePathUtils  # System under test.
+from src.foundation.support.utils.file_path_utils import FilePathUtils  # System under test.
 
 
 @pytest.fixture(autouse=True)
@@ -95,7 +95,9 @@ def test_create_csv_template_sample_data_ignored(_isolate_cwd):
 
 def test_create_csv_template_reraises_on_io_error(_isolate_cwd):
     """When the underlying open() fails, the error must be re-raised."""
-    with patch("src.utils.file_path_utils.open", side_effect=PermissionError("nope")):  # Force IO failure.
+    with patch(
+        "src.foundation.support.utils.file_path_utils.open", side_effect=PermissionError("nope")
+    ):  # Force IO failure.
         with pytest.raises(PermissionError):  # Caller must observe the exception.
             FilePathUtils.create_csv_template("boom.csv", headers=["x"])  # Trigger the failure path.
 

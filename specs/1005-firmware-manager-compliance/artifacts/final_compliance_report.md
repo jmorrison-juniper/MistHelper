@@ -16,7 +16,7 @@ Plan at the end to drive fixes.
 
 | File | Score | Grade | Critical | High | Medium | Low | Total |
 | - | - | - | - | - | - | - | - |
-| src\firmware\firmware_manager.py | 100.0 | A+ | 0 | 0 | 0 | 0 | 0 |
+| src\operations\execution\firmware\firmware_manager.py | 100.0 | A+ | 0 | 0 | 0 | 0 | 0 |
 
 ## Machine-Readable Summary
 
@@ -42,7 +42,7 @@ Plan at the end to drive fixes.
 }
 ```
 
-## File: src\firmware\firmware_manager.py
+## File: src\operations\execution\firmware\firmware_manager.py
 
 - **Score**: 100.0 / 100
 - **Grade**: A+

@@ -10,7 +10,7 @@
 
 ```powershell
 Set-Location -LiteralPath 'C:\Users\jmorrison\mh-fleet\3569-client-fingerprint-census'
-C:\Users\jmorrison\mh-fleet\3569-client-fingerprint-census\.venv\Scripts\python.exe -m py_compile src\reports\client_fingerprint_census\__init__.py src\reports\client_fingerprint_census\client.py src\reports\client_fingerprint_census\model.py src\reports\client_fingerprint_census\operation.py
+C:\Users\jmorrison\mh-fleet\3569-client-fingerprint-census\.venv\Scripts\python.exe -m py_compile src\mist\intelligence\reports\client_fingerprint_census\__init__.py src\mist\intelligence\reports\client_fingerprint_census\client.py src\mist\intelligence\reports\client_fingerprint_census\model.py src\mist\intelligence\reports\client_fingerprint_census\operation.py
 C:\Users\jmorrison\mh-fleet\3569-client-fingerprint-census\.venv\Scripts\python.exe -m pytest tests\unit\reports\client_fingerprint_census -q --timeout=120
 ```
 

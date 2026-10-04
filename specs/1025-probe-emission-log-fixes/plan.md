@@ -30,7 +30,7 @@ Fix two log-noise / correctness defects in menu 206
    either log-noise pattern.
 
 **Technical approach**: All changes are confined to
-`src/org/org_synthetic_probes_manager.py` plus new/extended unit-test files
+`src/mist/resources/org/org_synthetic_probes_manager.py` plus new/extended unit-test files
 and one static ISO-3166 alpha-2 fixture. No new runtime dependency. No
 schema-breaking telemetry change. No new class introduced — the target
 module is entirely function-based today; per-run dedup state is threaded
@@ -61,7 +61,7 @@ coverage regression test.
 
 **Project Type**: Single-project Python CLI (menu-driven ops toolkit). No
 web/mobile split. The touched module is a menu-206-scoped submodule under
-`src/org/`.
+`src/mist/resources/org/`.
 
 **Performance Goals**: SC-007 caps the new regression tests at <5 seconds
 wall-clock on the reference dev machine (fixture-driven, no network I/O).
@@ -150,7 +150,7 @@ tests/
 
 **Structure Decision**: Single-project layout, already established.
 No new package or module is introduced — all runtime changes live in the
-existing `src/org/org_synthetic_probes_manager.py` module. Test coverage is
+existing `src/mist/resources/org/org_synthetic_probes_manager.py` module. Test coverage is
 split across the existing feature-scoped test file and one new
 coverage-invariant test file (kept separate so the ISO regression test can
 be found by name from CI failure output).

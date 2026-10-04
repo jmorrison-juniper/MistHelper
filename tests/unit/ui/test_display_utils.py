@@ -1,4 +1,4 @@
-"""Wave 7 P2 coverage for src/ui/display_utils.py (initiative #1018).
+"""Wave 7 P2 coverage for src/interfaces/visualization/ui/display_utils.py (initiative #1018).
 
 Covers every public + private branch of ``DisplayUtils``:
 
@@ -24,7 +24,9 @@ import logging  # WHY: caplog verification of the rendered-table debug log.
 import pytest  # WHY: parametrize + caplog fixtures.
 from prettytable import PrettyTable  # WHY: verify real PrettyTable objects flow through helpers.
 
-from src.ui.display_utils import DisplayUtils  # WHY: direct SUT import; class holds only static methods.
+from src.interfaces.visualization.ui.display_utils import (
+    DisplayUtils,
+)  # WHY: direct SUT import; class holds only static methods.
 
 
 class TestApplySortIfValid:

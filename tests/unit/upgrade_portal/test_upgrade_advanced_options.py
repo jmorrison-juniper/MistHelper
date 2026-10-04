@@ -24,17 +24,17 @@ from typing import Any  # A request body is free-form.
 
 import pytest  # The test framework of the project.
 
-from src.firmware.upgrade_service import (
+from src.interfaces.portals.upgrade_portal.upgrade.options import (
+    BadOptionError,
+    advanced_option_values,
+    build_options,
+)
+from src.operations.execution.firmware.upgrade_service import (
     DeviceTarget,
     GatewayFamily,
     UpgradeOptions,
     build_body,
     plan_upgrade,
-)
-from src.upgrade_portal.upgrade.options import (
-    BadOptionError,
-    advanced_option_values,
-    build_options,
 )
 
 SITE_ID = "11111111-1111-1111-1111-111111111111"

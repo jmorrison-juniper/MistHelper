@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This contract defines the planned interface for `src/troubleshooting/rf_diagnostics`. It also records the Mist API request and response shapes that tests must enforce.
+This contract defines the planned interface for `src/mist/intelligence/troubleshooting/rf_diagnostics`. It also records the Mist API request and response shapes that tests must enforce.
 
 ## Package entry contract
 

@@ -1,4 +1,4 @@
-"""Tests for src.firmware.bulk_ap_upgrader -- BulkAPFirmwareUpgrader.
+"""Tests for src.operations.execution.firmware.bulk_ap_upgrader -- BulkAPFirmwareUpgrader.
 
 Covers: initialization, site selection (override, file, interactive),
 AP discovery, firmware stats, version selection, upgrade configuration,
@@ -34,7 +34,7 @@ with patch.dict(
         "mistapi.api.v1.const.device_models": MagicMock(),
     },
 ):
-    from src.firmware.bulk_ap_upgrader import BulkAPFirmwareUpgrader, BulkAPUpgraderConfig
+    from src.operations.execution.firmware.bulk_ap_upgrader import BulkAPFirmwareUpgrader, BulkAPUpgraderConfig
 
 
 # ===================================================================

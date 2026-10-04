@@ -8,7 +8,7 @@
 
 ## Summary
 
-Add menu `274` as a safe PSK hygiene report that produces `data/PskHygiene.csv` without prompts. The feature is implemented as `PskHygieneReport.run()` in `src/reports/psk_hygiene/`, with separate client, model, and operation modules. The client reads organization PSKs, organization WLANs, and organization templates through `mistapi`. The model scores each PSK through `PskHygieneScorer` and dataclasses. The operation resolves the Mist session and organization ID, calls the client and model, logs only summary counts, and exports through `DataExporter.write_with_format_selection`.
+Add menu `274` as a safe PSK hygiene report that produces `data/PskHygiene.csv` without prompts. The feature is implemented as `PskHygieneReport.run()` in `src/mist/intelligence/reports/psk_hygiene/`, with separate client, model, and operation modules. The client reads organization PSKs, organization WLANs, and organization templates through `mistapi`. The model scores each PSK through `PskHygieneScorer` and dataclasses. The operation resolves the Mist session and organization ID, calls the client and model, logs only summary counts, and exports through `DataExporter.write_with_format_selection`.
 
 ## Technical Context
 
@@ -36,7 +36,7 @@ Add menu `274` as a safe PSK hygiene report that produces `data/PskHygiene.csv` 
 
 | Gate | Status | Evidence |
 | - | - | - |
-| Five-Item Rule | Pass | New code enters `src/reports/psk_hygiene/`, a nested feature package. The planned package has at most five modules: `__init__`, `client`, `model`, `operation`, and optional package metadata. |
+| Five-Item Rule | Pass | New code enters `src/mist/intelligence/reports/psk_hygiene/`, a nested feature package. The planned package has at most five modules: `__init__`, `client`, `model`, `operation`, and optional package metadata. |
 | Class-Based Architecture | Pass | The public entry point is the class `PskHygieneReport` with static `run()`. Helper behavior belongs to semantically named feature classes. No wrapper function is planned. |
 | Safety-First | Pass | `run()` has no prompt. The operation uses existing session and organization resolvers and exports only sanitized rows. |
 | Full Deployment Pipeline | Deferred | This plan step edits only `specs/3555-psk-hygiene-report/**`. Implementation must add the release note, run local gates, open the pull request, and pass CI. |
@@ -88,7 +88,7 @@ changelog.d/
 └── issue-3555-psk-hygiene-report.md
 ```
 
-**Structure Decision**: Use a nested package under `src/reports/psk_hygiene/` so the feature has a clear boundary and does not add new root-level children. Create `tests/unit/reports/psk_hygiene/` with fake client data and no network calls. Create the release note during implementation, not during this plan step, because this request allows edits only under `specs/3555-psk-hygiene-report/**`.
+**Structure Decision**: Use a nested package under `src/mist/intelligence/reports/psk_hygiene/` so the feature has a clear boundary and does not add new root-level children. Create `tests/unit/reports/psk_hygiene/` with fake client data and no network calls. Create the release note during implementation, not during this plan step, because this request allows edits only under `specs/3555-psk-hygiene-report/**`.
 
 ## Phase 0 Research
 

@@ -14,19 +14,19 @@ certificates, PSK portal IdP certificates, and CA certificates. It will normaliz
 one `CertificateExpiry.csv` file and one console band summary.
 
 This fleet branch delivers the package, tests, release note, and wiring manifest. The integration
-pull request must register menu 272 in `MistHelper.py`, `src/utils/operation_registry.py`,
-`src/refactors/endpoint_primary_key_strategies.py`, `README.md`, and generated references before
+pull request must register menu 272 in `MistHelper.py`, `src/foundation/support/utils/operation_registry.py`,
+`src/foundation/support/refactors/endpoint_primary_key_strategies.py`, `README.md`, and generated references before
 the feature reaches release.
 
 The package remains unregistered on this branch. `CertificateExpiryReport.run()` includes a runtime
 guard that blocks export until the integration pull request adds the primary key strategy. No
 production path can export rows without that strategy.
 
-The implementation will use a class-based package at `src/reports/certificate_expiry/`. The package
+The implementation will use a class-based package at `src/mist/intelligence/reports/certificate_expiry/`. The package
 will contain `client.py` for Mist API reads, `model.py` for dataclasses and pure normalization, and
 `operation.py` for the static menu handler and export call. The operation will resolve the shared
 session, organization, and exporter through `SourceDependencyResolver`, matching the pattern in
-`src/security/rogue_dhcp/operation.py` and `src/marvis/actions/operation.py`.
+`src/operations/protection/security/rogue_dhcp/operation.py` and `src/mist/intelligence/marvis/actions/operation.py`.
 
 ## Technical Context
 
@@ -42,7 +42,7 @@ The planned endpoint name is `certificate_expiry_report`.
 
 **Testing**: `pytest` unit tests under `tests/unit/reports/certificate_expiry/`. Planned validation
 also includes syntax, Ruff, Black, mypy, pydocstyle, Vulture, and interrogate checks for
-`src/reports/certificate_expiry/` and `tests/unit/reports/certificate_expiry/`.
+`src/mist/intelligence/reports/certificate_expiry/` and `tests/unit/reports/certificate_expiry/`.
 
 **Target Platform**: Windows local development and the existing Linux container runtime.
 
@@ -57,7 +57,7 @@ menu 272. It must not log or export certificate bodies, private keys, or complet
 must use `SourceDependencyResolver`, `DataExporter`, and platform-safe paths.
 
 **Scale/Scope**: One organization, six certificate scopes, one CSV export, and one console summary.
-The feature owns `src/reports/certificate_expiry/` and `tests/unit/reports/certificate_expiry/`
+The feature owns `src/mist/intelligence/reports/certificate_expiry/` and `tests/unit/reports/certificate_expiry/`
 during implementation.
 
 ## Constitution Check
@@ -111,7 +111,7 @@ tests/
             └── test_operation.py
 ```
 
-**Structure Decision**: Use one new package under `src/reports/` and one matching unit-test package.
+**Structure Decision**: Use one new package under `src/mist/intelligence/reports/` and one matching unit-test package.
 The package separates external reads, pure normalization, and the static operation handler. This
 keeps Mist API behavior mockable and keeps certificate parsing away from export code.
 
@@ -173,10 +173,10 @@ These entries are planned for the implementation step, because this step edits o
 | - | - | - |
 | Unit tests | `python -m pytest tests\unit\reports\certificate_expiry` | All certificate report unit tests pass. |
 | Syntax | `python -m py_compile MistHelper.py <each new .py file>` | No output. |
-| Lint | `python -m ruff check src\reports\certificate_expiry tests\unit\reports\certificate_expiry` | All checks pass. |
-| Format | `python -m black --check src\reports\certificate_expiry tests\unit\reports\certificate_expiry` | No file needs formatting. |
-| Types | `python -m mypy src\reports\certificate_expiry --config-file pyproject.toml` | No type errors. |
-| Docstrings | `python -m pydocstyle src\reports\certificate_expiry` | No docstring errors. |
-| Dead code | `python -m vulture src\reports\certificate_expiry --min-confidence 70` | No findings. |
-| Docstring coverage | `python -m interrogate -v src\reports\certificate_expiry` | At least 90 percent coverage. |
+| Lint | `python -m ruff check src\mist\intelligence\reports\certificate_expiry tests\unit\reports\certificate_expiry` | All checks pass. |
+| Format | `python -m black --check src\mist\intelligence\reports\certificate_expiry tests\unit\reports\certificate_expiry` | No file needs formatting. |
+| Types | `python -m mypy src\mist\intelligence\reports\certificate_expiry --config-file pyproject.toml` | No type errors. |
+| Docstrings | `python -m pydocstyle src\mist\intelligence\reports\certificate_expiry` | No docstring errors. |
+| Dead code | `python -m vulture src\mist\intelligence\reports\certificate_expiry --min-confidence 70` | No findings. |
+| Docstring coverage | `python -m interrogate -v src\mist\intelligence\reports\certificate_expiry` | At least 90 percent coverage. |
 | Dependency security | `python -m pip_audit -r requirements.txt` | No vulnerabilities that block the pull request. |

@@ -85,7 +85,7 @@ Run from the new worktree root with its interpreter:
 - `rtk proxy .venv\Scripts\python.exe -m pytest tests/unit/export/site_read/ -q --timeout=120`.
 - `rtk proxy .venv\Scripts\python.exe -m pytest tests/unit/test_arango_writer.py tests/unit/test_redis_writer.py tests/unit/security/test_credential_redaction.py tests/unit/refactors/test_sqlite_database_writer.py -q --timeout=120`.
 - `rtk proxy .venv\Scripts\python.exe -m pytest tests/guardrails/test_operation_registry_menu_coverage.py tests/unit/test_operation_registry_fail_closed.py tests/unit/test_no_new_legacy_facade_imports.py -q --timeout=120`.
-- `rtk proxy .venv\Scripts\python.exe -m pytest tests/unit/export/site_read/ --cov=src/export/site_read --cov-branch --cov-fail-under=90 --timeout=120`.
+- `rtk proxy .venv\Scripts\python.exe -m pytest tests/unit/export/site_read/ --cov=src/operations/exporting/export/site_read --cov-branch --cov-fail-under=90 --timeout=120`.
 
 An expected red test before implementation proves the missing behavior. Record it. An unexpected failure is not permission to weaken the assertion. Fix only the assigned cause, or file a separate issue and stop at the boundary.
 

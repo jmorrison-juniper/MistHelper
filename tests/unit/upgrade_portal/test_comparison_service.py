@@ -10,7 +10,7 @@ from unittest.mock import Mock, patch  # WHY: dependency mocking
 import pytest  # WHY: test framework
 
 # WHY: import service under test
-from src.upgrade_portal.compare.service import (
+from src.interfaces.portals.upgrade_portal.compare.service import (
     ComparisonResult,  # WHY: T-012 result
     ComparisonResultService,  # WHY: T-013 service
     ComparisonService,  # WHY: T-012 service

@@ -4,7 +4,7 @@ import logging
 
 import plotly.graph_objects as go
 
-from src.maps.plotly_map_figure_builder import PlotlyMapFigureBuilder
+from src.interfaces.visualization.maps.plotly_map_figure_builder import PlotlyMapFigureBuilder
 
 
 def _wall_map_data() -> dict:

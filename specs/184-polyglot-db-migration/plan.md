@@ -25,7 +25,7 @@ Replace SQLite with ArangoDB (graph/document store) and Redis TimeSeries (metric
 
 | Principle | Status | Notes |
 | - | - | - |
-| I. Five-Item Rule | PASS | New classes (`ArangoDBWriter`, `RedisTimeSeriesWriter`, `DatabaseRouter`, `RetentionManager`, `SnapshotManager`) each under 5 public methods. `src/db/` package has max 5 modules. |
+| I. Five-Item Rule | PASS | New classes (`ArangoDBWriter`, `RedisTimeSeriesWriter`, `DatabaseRouter`, `RetentionManager`, `SnapshotManager`) each under 5 public methods. `src/foundation/persistence/db/` package has max 5 modules. |
 | II. Class-Based Architecture | PASS | All DB backends are classes (no wrapper functions). `DatabaseRouter` replaces direct SQLite calls. |
 | III. Safety-First | PASS | No destructive operations added. DB credentials via `.env` only, never logged. Connection failures degrade gracefully to CSV. |
 | IV. Full Deployment Pipeline | PASS | compose.yml updated; container build triggers on push to main. |
@@ -75,7 +75,7 @@ tests/
     └── test_compose_deploy.py # Container deployment validation
 ```
 
-**Structure Decision**: New database code lives in `src/db/` package (4 modules + `__init__.py` = 5 files, satisfying Five-Item Rule). This isolates the polyglot logic from the monolithic `MistHelper.py` while the `DataExporter` class remains the entry point, delegating to `DatabaseRouter` when backends are available.
+**Structure Decision**: New database code lives in `src/foundation/persistence/db/` package (4 modules + `__init__.py` = 5 files, satisfying Five-Item Rule). This isolates the polyglot logic from the monolithic `MistHelper.py` while the `DataExporter` class remains the entry point, delegating to `DatabaseRouter` when backends are available.
 
 ## Complexity Tracking
 

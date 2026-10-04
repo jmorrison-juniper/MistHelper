@@ -8,10 +8,14 @@ from typing import Any  # The in-memory run store carries JSON-compatible record
 
 import pytest  # Parametrize every canonical terminal state.
 
-from src.upgrade_portal.api.run_controls.views import RunStalePolicy  # Test the shared stale decision.
-from src.upgrade_portal.app.routes import review, upgrade  # Test history and live-run decisions.
-from src.upgrade_portal.runtime import signals  # Test the stop decision and removed legacy set.
-from src.upgrade_portal.runtime.runs import RunStateMachine  # Read the only terminal-state authority.
+from src.interfaces.portals.upgrade_portal.api.run_controls.views import (
+    RunStalePolicy,
+)  # Test the shared stale decision.
+from src.interfaces.portals.upgrade_portal.app.routes import review, upgrade  # Test history and live-run decisions.
+from src.interfaces.portals.upgrade_portal.runtime import signals  # Test the stop decision and removed legacy set.
+from src.interfaces.portals.upgrade_portal.runtime.runs import (
+    RunStateMachine,
+)  # Read the only terminal-state authority.
 
 TERMINAL_NAMES = tuple(sorted(state.value for state in RunStateMachine.TERMINAL))  # Use the canonical values.
 CLOCK = datetime(2026, 9, 11, 8, 0, 0, tzinfo=UTC)  # Keep every boundary independent from wall time.

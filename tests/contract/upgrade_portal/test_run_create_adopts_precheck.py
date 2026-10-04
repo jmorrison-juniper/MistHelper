@@ -24,7 +24,9 @@ import pytest
 from flask import Flask
 from flask.testing import FlaskClient
 
-from src.upgrade_portal.runtime import identity  # The real session guard, so the tests sign in for real.
+from src.interfaces.portals.upgrade_portal.runtime import (
+    identity,
+)  # The real session guard, so the tests sign in for real.
 
 logger = logging.getLogger(__name__)
 

@@ -31,12 +31,12 @@
 
 **CRITICAL**: No user story work can begin until this phase is complete
 
-- [x] T004 Add `DualWriteResult` dataclass to `src/db/__init__.py` with `arango_result: WriteResult`, `redis_result: WriteResult`, and `combined` property
-- [x] T005 Update `WriteResult.backend` field documentation in `src/db/__init__.py` to include new values: `"redis_json"`, `"dual"`
-- [x] T006 [P] Add `RedisJSONWriter` class to `src/db/redis_writer.py` with `__init__(config: DatabaseConfig)`, `write(data, api_function_name, strategy) -> WriteResult`, and `_build_key(endpoint, record, pk_fields) -> str` methods
-- [x] T007 [P] Update routing constants in `src/db/router.py`: replace `ARANGO_PK_TYPES` and `REDIS_PK_TYPES` with `ARANGO_ONLY_TYPES`, `DUAL_WRITE_TYPES`, and `TIMESERIES_TYPES` sets
-- [x] T008 Export `RedisJSONWriter` and `DualWriteResult` in `src/db/__init__.py` `__all__` list
-- [x] T009 Run quality gates on all modified files: `py_compile`, `ruff check`, `black --check` for `src/db/__init__.py`, `src/db/redis_writer.py`, `src/db/router.py`
+- [x] T004 Add `DualWriteResult` dataclass to `src/foundation/persistence/db/__init__.py` with `arango_result: WriteResult`, `redis_result: WriteResult`, and `combined` property
+- [x] T005 Update `WriteResult.backend` field documentation in `src/foundation/persistence/db/__init__.py` to include new values: `"redis_json"`, `"dual"`
+- [x] T006 [P] Add `RedisJSONWriter` class to `src/foundation/persistence/db/redis_writer.py` with `__init__(config: DatabaseConfig)`, `write(data, api_function_name, strategy) -> WriteResult`, and `_build_key(endpoint, record, pk_fields) -> str` methods
+- [x] T007 [P] Update routing constants in `src/foundation/persistence/db/router.py`: replace `ARANGO_PK_TYPES` and `REDIS_PK_TYPES` with `ARANGO_ONLY_TYPES`, `DUAL_WRITE_TYPES`, and `TIMESERIES_TYPES` sets
+- [x] T008 Export `RedisJSONWriter` and `DualWriteResult` in `src/foundation/persistence/db/__init__.py` `__all__` list
+- [x] T009 Run quality gates on all modified files: `py_compile`, `ruff check`, `black --check` for `src/foundation/persistence/db/__init__.py`, `src/foundation/persistence/db/redis_writer.py`, `src/foundation/persistence/db/router.py`
 
 **Checkpoint**: Foundation ready -- new writer class exists, routing constants updated, data models in place
 
@@ -70,13 +70,13 @@
 
 ### Implementation for User Story 2
 
-- [x] T017 [US2] Implement `RedisJSONWriter._verify_json_module()` method in `src/db/redis_writer.py` to check for `ReJSON` module availability (mirrors existing `_verify_timeseries_module()` pattern)
-- [x] T018 [US2] Implement `RedisJSONWriter.write()` body in `src/db/redis_writer.py`: pipeline `JSON.SET` + `EXPIRE` for each record using key pattern `{endpoint}:{pk_values}` and TTL from `REDIS_JSON_TTL_DAYS` env var (default 7)
-- [x] T019 [US2] Initialize `RedisJSONWriter` in `DatabaseRouter.__init__()` in `src/db/router.py` alongside existing `RedisTimeSeriesWriter`
-- [x] T020 [US2] Add `_write_dual()` method to `DatabaseRouter` in `src/db/router.py` that calls both `_write_redis_json()` and `_write_arango()` independently, returning `DualWriteResult`
-- [x] T021 [US2] Update `DatabaseRouter.write()` dispatch in `src/db/router.py` to route `composite_pk` (from `DUAL_WRITE_TYPES`) through `_write_dual()`
-- [x] T022 [US2] Add `_write_redis_json()` helper method to `DatabaseRouter` in `src/db/router.py` that delegates to `RedisJSONWriter.write()`
-- [x] T023 [US2] Run quality gates: `py_compile`, `ruff check`, `black --check` for `src/db/router.py`, `src/db/redis_writer.py`
+- [x] T017 [US2] Implement `RedisJSONWriter._verify_json_module()` method in `src/foundation/persistence/db/redis_writer.py` to check for `ReJSON` module availability (mirrors existing `_verify_timeseries_module()` pattern)
+- [x] T018 [US2] Implement `RedisJSONWriter.write()` body in `src/foundation/persistence/db/redis_writer.py`: pipeline `JSON.SET` + `EXPIRE` for each record using key pattern `{endpoint}:{pk_values}` and TTL from `REDIS_JSON_TTL_DAYS` env var (default 7)
+- [x] T019 [US2] Initialize `RedisJSONWriter` in `DatabaseRouter.__init__()` in `src/foundation/persistence/db/router.py` alongside existing `RedisTimeSeriesWriter`
+- [x] T020 [US2] Add `_write_dual()` method to `DatabaseRouter` in `src/foundation/persistence/db/router.py` that calls both `_write_redis_json()` and `_write_arango()` independently, returning `DualWriteResult`
+- [x] T021 [US2] Update `DatabaseRouter.write()` dispatch in `src/foundation/persistence/db/router.py` to route `composite_pk` (from `DUAL_WRITE_TYPES`) through `_write_dual()`
+- [x] T022 [US2] Add `_write_redis_json()` helper method to `DatabaseRouter` in `src/foundation/persistence/db/router.py` that delegates to `RedisJSONWriter.write()`
+- [x] T023 [US2] Run quality gates: `py_compile`, `ruff check`, `black --check` for `src/foundation/persistence/db/router.py`, `src/foundation/persistence/db/redis_writer.py`
 - [x] T024 [US2] Verify: run a `composite_pk` endpoint (e.g., menu 13 Device Events), confirm Redis JSON documents exist with `redis-cli JSON.GET`, confirm ArangoDB archive has same documents
 
 **Checkpoint**: `composite_pk` endpoints dual-write to Redis JSON + ArangoDB. SC-002, SC-005 verified.
@@ -91,11 +91,11 @@
 
 ### Implementation for User Story 3
 
-- [x] T025 [US3] Add `timeseries_pk` to routing dispatch in `DatabaseRouter.write()` in `src/db/router.py` -- route to existing `_write_redis()` method
-- [x] T026 [US3] Update `RedisTimeSeriesWriter._extract_chunk()` in `src/db/redis_writer.py` to respect `ts_value_fields` (extract only listed fields) when present in the strategy dict
-- [x] T027 [US3] Update `RedisTimeSeriesWriter._extract_chunk()` in `src/db/redis_writer.py` to use `ts_label_fields` as TimeSeries labels when present in the strategy dict
-- [x] T028 [US3] Ensure fallback: if `ts_value_fields` is not in the strategy, `_extract_chunk()` falls back to current auto-detect behavior in `src/db/redis_writer.py`
-- [x] T029 [US3] Run quality gates: `py_compile`, `ruff check`, `black --check` for `src/db/router.py`, `src/db/redis_writer.py`
+- [x] T025 [US3] Add `timeseries_pk` to routing dispatch in `DatabaseRouter.write()` in `src/foundation/persistence/db/router.py` -- route to existing `_write_redis()` method
+- [x] T026 [US3] Update `RedisTimeSeriesWriter._extract_chunk()` in `src/foundation/persistence/db/redis_writer.py` to respect `ts_value_fields` (extract only listed fields) when present in the strategy dict
+- [x] T027 [US3] Update `RedisTimeSeriesWriter._extract_chunk()` in `src/foundation/persistence/db/redis_writer.py` to use `ts_label_fields` as TimeSeries labels when present in the strategy dict
+- [x] T028 [US3] Ensure fallback: if `ts_value_fields` is not in the strategy, `_extract_chunk()` falls back to current auto-detect behavior in `src/foundation/persistence/db/redis_writer.py`
+- [x] T029 [US3] Run quality gates: `py_compile`, `ruff check`, `black --check` for `src/foundation/persistence/db/router.py`, `src/foundation/persistence/db/redis_writer.py`
 - [x] T030 [US3] Verify: confirm `timeseries_pk` dispatching works by temporarily reclassifying one endpoint and running it
 
 **Checkpoint**: `timeseries_pk` strategy routes numeric data to Redis TimeSeries with labels. SC-004 verified.
@@ -131,8 +131,8 @@
 - [x] T040 [P] Verify graceful degradation: stop Redis, run menu 11, confirm CSV output succeeds and warning is logged (SC-005)
 - [x] T041 [P] Verify graceful degradation: stop ArangoDB, run a `composite_pk` endpoint, confirm CSV output succeeds and warning is logged (SC-005)
 - [x] T042 Verify dual-write performance: time a `composite_pk` endpoint write and confirm overhead is < 2x single-backend (SC-007)
-- [x] T043 Run full quality gates on all modified files: `py_compile`, `ruff check`, `black --check` for `MistHelper.py`, `src/db/__init__.py`, `src/db/router.py`, `src/db/redis_writer.py`
-- [x] T044 Update `src/db/__init__.py` module docstring to reflect new routing: "Routes API data to ArangoDB (documents), Redis JSON (events), or Redis TimeSeries (metrics)"
+- [x] T043 Run full quality gates on all modified files: `py_compile`, `ruff check`, `black --check` for `MistHelper.py`, `src/foundation/persistence/db/__init__.py`, `src/foundation/persistence/db/router.py`, `src/foundation/persistence/db/redis_writer.py`
+- [x] T044 Update `src/foundation/persistence/db/__init__.py` module docstring to reflect new routing: "Routes API data to ArangoDB (documents), Redis JSON (events), or Redis TimeSeries (metrics)"
 - [x] T045 Run quickstart.md verification commands end-to-end to confirm all acceptance criteria pass
 
 ---
@@ -182,8 +182,8 @@ Phase 7 (Polish)
 **Phase 3 (US1)**: T013 and T014 can run in parallel (different menu operations in same file, but independent callers)
 
 **Phase 5 (US3) and Phase 4 (US2)**: These two phases can run in parallel after US1 completes, since they modify different files:
-- US2 modifies `src/db/router.py` (dual-write dispatch) and `src/db/redis_writer.py` (JSON writer body)
-- US3 modifies `src/db/router.py` (TS dispatch) and `src/db/redis_writer.py` (extract_chunk)
+- US2 modifies `src/foundation/persistence/db/router.py` (dual-write dispatch) and `src/foundation/persistence/db/redis_writer.py` (JSON writer body)
+- US3 modifies `src/foundation/persistence/db/router.py` (TS dispatch) and `src/foundation/persistence/db/redis_writer.py` (extract_chunk)
 - **Caution**: Both touch the same two files, so true parallelism requires careful coordination. Sequential execution (US2 → US3) is safer for a single agent.
 
 **Phase 6 (US4)**: T032-T036 can all run in parallel (independent endpoint entries in the same dictionary)

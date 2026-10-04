@@ -68,10 +68,10 @@ Do not replace the caller's refresh path with a mock.
 
 | Operation | Actual refresh entry | Expected scope |
 | --- | --- | --- |
-| Menu 74 | `SiteMetricOperation._refresh_const_metrics` in [site_metric_operation.py](../../../src/export/site_insights/site_metric_operation.py) | `site` |
-| Menu 75 | `SiteClientInsightsService._print_intro_and_refresh` in [site_client_insights.py](../../../src/refactors/serial_cc/site_client_insights.py) | `client` |
-| Menu 76 | `DeviceMetricOperation._refresh_const_metrics` in [device_metric_operation.py](../../../src/export/site_insights/device_metric_operation.py) | `device` |
-| Organization insight export | `OrgExportUtils._insight_setup_or_empty` in [org_export_utils.py](../../../src/export/org_export_utils.py) | `org` |
+| Menu 74 | `SiteMetricOperation._refresh_const_metrics` in [site_metric_operation.py](../../../src/operations/exporting/export/site_insights/site_metric_operation.py) | `site` |
+| Menu 75 | `SiteClientInsightsService._print_intro_and_refresh` in [site_client_insights.py](../../../src/foundation/support/refactors/serial_cc/site_client_insights.py) | `client` |
+| Menu 76 | `DeviceMetricOperation._refresh_const_metrics` in [device_metric_operation.py](../../../src/operations/exporting/export/site_insights/device_metric_operation.py) | `device` |
+| Organization insight export | `OrgExportUtils._insight_setup_or_empty` in [org_export_utils.py](../../../src/operations/exporting/export/org_export_utils.py) | `org` |
 
 Use `tmp_path` for all test files and controlled cache directories.
 Never use a production data directory.
@@ -84,9 +84,9 @@ Separate definition writes from existing empty insight-output writes.
 
 Only these source files are reserved for later implementation:
 
-- [src/export/const_definitions_exporter.py](../../../src/export/const_definitions_exporter.py)
-- [src/analytics/insight_metrics_utils.py](../../../src/analytics/insight_metrics_utils.py)
-- [src/refactors/serial_cc/site_client_insights.py](../../../src/refactors/serial_cc/site_client_insights.py)
+- [src/operations/exporting/export/const_definitions_exporter.py](../../../src/operations/exporting/export/const_definitions_exporter.py)
+- [src/mist/intelligence/analytics/insight_metrics_utils.py](../../../src/mist/intelligence/analytics/insight_metrics_utils.py)
+- [src/foundation/support/refactors/serial_cc/site_client_insights.py](../../../src/foundation/support/refactors/serial_cc/site_client_insights.py)
 
 Only these test files are reserved:
 

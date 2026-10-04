@@ -26,7 +26,7 @@ from __future__ import annotations  # WHY: PEP 604 unions on Python 3.10+.
 
 import pytest  # WHY: parametrized cases keep each menu reported separately.
 
-from src.utils.operation_registry import OperationRegistry
+from src.foundation.support.utils.operation_registry import OperationRegistry
 
 # Each entry is a menu that prompts, with the prompt context recorded in the log.
 PROMPTING_MENUS = [

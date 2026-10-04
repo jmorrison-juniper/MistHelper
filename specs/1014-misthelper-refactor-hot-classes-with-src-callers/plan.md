@@ -32,7 +32,7 @@ Sum of the 24 candidates' LoC across both categories: ~3,395. SC-002 target: `Mi
 **Project Type**: Single-project CLI tool with a monolithic entrypoint (`MistHelper.py`) being decomposed into `src/*` sub-packages
 **Performance Goals**: No performance regression at any callsite after extraction; interactive CLI menu latency unchanged; extracted class bodies preserve their original method contracts byte-for-byte, with any in-flight decomposition (E-2) only splitting internal method bodies rather than altering call semantics
 **Constraints**: Zero wrapper shims may be left in `MistHelper.py` (FR-003 carry-forward, extended for Cat E dual-side rewrite); zero `importlib.import_module("MistHelper")` + `mh.<ClassName>` remainders for any Cat E-extracted class name (FR-005 / SC-009); every new/edited module lands at A+/100 compliance (FR-016); repo-wide baseline stays `>=99.6/A+` (FR-017); `MistHelper.py` pylint stays non-regressing against the pre-initiative baseline (FR-018); no `--admin` merge bypass as a routine unblock (per `feedback_no_admin_bypass.md` — check `mergeStateStatus: CLEAN` first); every extraction site carries the pinned NOTE breadcrumb (FR-007, SC-012); `refactor_candidates.md` is regenerated after every merged PR before the next dispatch (FR-014); pre-dispatch grep audit is mandatory for every PR (FR-013); no new SKIPPED CI conditionals introduced (FR-019); every Cat A PR carries a method-parity audit in its PR description (FR-025); every Cat E PR carries a callsite table in its PR description (FR-027) and verifies import-graph health (FR-028); global Refs-ASC / LOC-DESC ordering across BOTH categories combined per FR-026 (no Cat A warmup separation)
-**Scale/Scope**: 24 serial PRs (one class per PR: 6 Cat A + 18 Cat E); ~3,395 LoC total addressed; SC-002 requires `MistHelper.py` shrinks by `>=3,000` physical lines; landing distribution spans 15 packages (see Project Structure below); `src/refactors/` receives **zero** candidates; 24 mandatory NOTE breadcrumbs (one per merged PR); at most one open PR at a time (FR-023)
+**Scale/Scope**: 24 serial PRs (one class per PR: 6 Cat A + 18 Cat E); ~3,395 LoC total addressed; SC-002 requires `MistHelper.py` shrinks by `>=3,000` physical lines; landing distribution spans 15 packages (see Project Structure below); `src/foundation/support/refactors/` receives **zero** candidates; 24 mandatory NOTE breadcrumbs (one per merged PR); at most one open PR at a time (FR-023)
 
 ## Constitution Check
 
@@ -179,7 +179,7 @@ src/
     `-- (pre-existing 1010/1011/1012/1013 files) # Prior extractions preserved; not extended.
 ```
 
-**Structure Decision**: Single-project layout preserved from 1010/1011/1012/1013. Every row of the Dispatch Queue is pinned to a specific landing target in `spec.md`, all advisory per FR-029 (the PR may override at dispatch time if a closer semantic fit exists) — `src/refactors/` receives **zero** candidates in this initiative, continuing the 1013 practice of per-row semantic-fit destinations. The six Cat A rows target the pre-existing `src/network/routing_utils.py`, `src/gateway/gateway_stats_exporter.py`, `src/gateway/gateway_export_utils.py`, `src/ssh/ssh_runner_manager.py`, `src/export/site_export_utils.py`, and `src/device/virtual_chassis.py` — the PR only deletes the facade + rewires callsites (both `MistHelper.py` and, where applicable, `src/`), no file is created. The 18 Cat E rows spread across 15 existing/new packages: `src/export/` accepts 3 Cat E + 1 Cat A = 4 total (largest cluster), `src/ssh/` accepts 2 Cat E (batch subpackage) + 1 Cat A = 3 total, `src/api/` accepts 2 Cat E, `src/firmware/` accepts 2 Cat E fold-ins, `src/gateway/` accepts 2 Cat A, `src/ui/` accepts 2 Cat E, all others accept 1. No candidate is split across multiple PRs — even the six very-large Cat E candidates (E-10: `OrgInventoryExporter` 686 LoC, `PromptUtils` 441 LoC, `DataExporter` 345 LoC, `InsightMetricsUtils` 328 LoC, `CacheUtils` 264 LoC, `APIFetchUtils` 221 LoC) land as one PR each, with internal decomposition (E-2 / FR-006) folded into the same PR to satisfy the `<=25`-line-per-method rule and the aggregate score floor.
+**Structure Decision**: Single-project layout preserved from 1010/1011/1012/1013. Every row of the Dispatch Queue is pinned to a specific landing target in `spec.md`, all advisory per FR-029 (the PR may override at dispatch time if a closer semantic fit exists) — `src/foundation/support/refactors/` receives **zero** candidates in this initiative, continuing the 1013 practice of per-row semantic-fit destinations. The six Cat A rows target the pre-existing `src/mist/networking/network/routing_utils.py`, `src/mist/resources/gateway/gateway_stats_exporter.py`, `src/mist/resources/gateway/gateway_export_utils.py`, `src/operations/execution/ssh/ssh_runner_manager.py`, `src/operations/exporting/export/site_export_utils.py`, and `src/mist/resources/device/virtual_chassis.py` — the PR only deletes the facade + rewires callsites (both `MistHelper.py` and, where applicable, `src/`), no file is created. The 18 Cat E rows spread across 15 existing/new packages: `src/operations/exporting/export/` accepts 3 Cat E + 1 Cat A = 4 total (largest cluster), `src/operations/execution/ssh/` accepts 2 Cat E (batch subpackage) + 1 Cat A = 3 total, `src/mist/access/api/` accepts 2 Cat E, `src/operations/execution/firmware/` accepts 2 Cat E fold-ins, `src/mist/resources/gateway/` accepts 2 Cat A, `src/interfaces/visualization/ui/` accepts 2 Cat E, all others accept 1. No candidate is split across multiple PRs — even the six very-large Cat E candidates (E-10: `OrgInventoryExporter` 686 LoC, `PromptUtils` 441 LoC, `DataExporter` 345 LoC, `InsightMetricsUtils` 328 LoC, `CacheUtils` 264 LoC, `APIFetchUtils` 221 LoC) land as one PR each, with internal decomposition (E-2 / FR-006) folded into the same PR to satisfy the `<=25`-line-per-method rule and the aggregate score floor.
 
 ### Dispatch Queue (Authoritative)
 
@@ -187,30 +187,30 @@ Per FR-001, FR-023, and FR-026, the 24 candidates dispatch in **global Refs-ASC 
 
 | # | Refs | LOC | Class | Cat | Landing target |
 |---:|---:|---:|---|:-:|---|
-| 1 | 5 | 8 | SSHExecutionConfig | E | `src/ssh/batch/execution_config.py` |
-| 2 | 6 | 22 | SiteAutoUpgradeConfigurator | E | `src/firmware/site_auto_upgrade.py` (fold-in) |
-| 3 | 6 | 9 | SSHConnectionConfig | E | `src/ssh/batch/connection_config.py` |
-| 4 | 12 | 22 | RoutingUtils | A | `src/network/routing_utils.py` |
-| 5 | 15 | 90 | ValidationUtils | E | `src/validation/validation_utils.py` |
-| 6 | 27 | 29 | TimeUtils | E | `src/time/time_utils.py` |
-| 7 | 33 | 79 | OrgLevelAPFirmwareUpgrader | E | `src/firmware/org_ap_upgrader.py` (fold-in) |
-| 8 | 34 | 221 | APIFetchUtils | E | `src/api/api_fetch_utils.py` |
-| 9 | 43 | 112 | OrgSiteExporter | E | `src/export/org_site_exporter.py` |
-| 10 | 43 | 47 | APICoreFetchUtils | E | `src/api/api_core_fetch_utils.py` |
-| 11 | 51 | 328 | InsightMetricsUtils | E | `src/analytics/insight_metrics_utils.py` |
-| 12 | 52 | 28 | GatewayStatsExporter | A | `src/gateway/gateway_stats_exporter.py` |
-| 13 | 78 | 98 | GatewayExportUtils | A | `src/gateway/gateway_export_utils.py` |
-| 14 | 81 | 264 | CacheUtils | E | `src/cache/cache_utils.py` |
-| 15 | 82 | 26 | SSHRunnerManager | A | `src/ssh/ssh_runner_manager.py` |
-| 16 | 86 | 145 | SiteExportUtils | A | `src/export/site_export_utils.py` |
-| 17 | 86 | 46 | FilePathUtils | E | `src/utils/file_path_utils.py` |
-| 18 | 90 | 441 | PromptUtils | E | `src/ui/prompt_utils.py` |
-| 19 | 104 | 686 | OrgInventoryExporter | E | `src/export/org_inventory_exporter.py` |
-| 20 | 104 | 78 | VirtualChassisManager | A | `src/device/virtual_chassis.py` |
-| 21 | 125 | 158 | DataProcessingUtils | E | `src/data/data_processing_utils.py` |
-| 22 | 146 | 70 | ConfigUtils | E | `src/config/config_utils.py` |
-| 23 | 168 | 345 | DataExporter | E | `src/export/data_exporter.py` |
-| 24 | 229 | 74 | InputUtils | E | `src/ui/input_utils.py` |
+| 1 | 5 | 8 | SSHExecutionConfig | E | `src/operations/execution/ssh/batch/execution_config.py` |
+| 2 | 6 | 22 | SiteAutoUpgradeConfigurator | E | `src/operations/execution/firmware/site_auto_upgrade.py` (fold-in) |
+| 3 | 6 | 9 | SSHConnectionConfig | E | `src/operations/execution/ssh/batch/connection_config.py` |
+| 4 | 12 | 22 | RoutingUtils | A | `src/mist/networking/network/routing_utils.py` |
+| 5 | 15 | 90 | ValidationUtils | E | `src/foundation/runtime/validation/validation_utils.py` |
+| 6 | 27 | 29 | TimeUtils | E | `src/foundation/runtime/time/time_utils.py` |
+| 7 | 33 | 79 | OrgLevelAPFirmwareUpgrader | E | `src/operations/execution/firmware/org_ap_upgrader.py` (fold-in) |
+| 8 | 34 | 221 | APIFetchUtils | E | `src/mist/access/api/api_fetch_utils.py` |
+| 9 | 43 | 112 | OrgSiteExporter | E | `src/operations/exporting/export/org_site_exporter.py` |
+| 10 | 43 | 47 | APICoreFetchUtils | E | `src/mist/access/api/api_core_fetch_utils.py` |
+| 11 | 51 | 328 | InsightMetricsUtils | E | `src/mist/intelligence/analytics/insight_metrics_utils.py` |
+| 12 | 52 | 28 | GatewayStatsExporter | A | `src/mist/resources/gateway/gateway_stats_exporter.py` |
+| 13 | 78 | 98 | GatewayExportUtils | A | `src/mist/resources/gateway/gateway_export_utils.py` |
+| 14 | 81 | 264 | CacheUtils | E | `src/foundation/persistence/cache/cache_utils.py` |
+| 15 | 82 | 26 | SSHRunnerManager | A | `src/operations/execution/ssh/ssh_runner_manager.py` |
+| 16 | 86 | 145 | SiteExportUtils | A | `src/operations/exporting/export/site_export_utils.py` |
+| 17 | 86 | 46 | FilePathUtils | E | `src/foundation/support/utils/file_path_utils.py` |
+| 18 | 90 | 441 | PromptUtils | E | `src/interfaces/visualization/ui/prompt_utils.py` |
+| 19 | 104 | 686 | OrgInventoryExporter | E | `src/operations/exporting/export/org_inventory_exporter.py` |
+| 20 | 104 | 78 | VirtualChassisManager | A | `src/mist/resources/device/virtual_chassis.py` |
+| 21 | 125 | 158 | DataProcessingUtils | E | `src/foundation/models/data/data_processing_utils.py` |
+| 22 | 146 | 70 | ConfigUtils | E | `src/foundation/runtime/config/config_utils.py` |
+| 23 | 168 | 345 | DataExporter | E | `src/operations/exporting/export/data_exporter.py` |
+| 24 | 229 | 74 | InputUtils | E | `src/interfaces/visualization/ui/input_utils.py` |
 
 **Reordering rule (FR-014 / FR-026 / User Story 3)**: After every merged PR, regenerate `refactor_candidates.md` and re-sort the *remaining candidates* by fresh Refs-ASC / LOC-DESC before dispatching the next PR. Unlike 1013, this initiative does NOT partition into Cat A / Cat E blocks — the fresh sort is global across all remaining candidates. A candidate whose ref count shifts (e.g. because an earlier extraction indirectly removed some of its callers) is repositioned in the global order. A candidate whose classification drops below Hot bucket is deferred out of scope per FR-020. A Cat A candidate whose `src/` callers add a new `mh.<facade-class-name>` import reclassifies to Cat E per E-12; a Cat E candidate whose `src/` callers are refactored away by an unrelated commit reclassifies to MistHelper-only and is deferred to a follow-up initiative per FR-020.
 
@@ -222,8 +222,8 @@ Per FR-001, FR-023, and FR-026, the 24 candidates dispatch in **global Refs-ASC 
 
 Per-Cat variation:
 
-- **Cat A PRs** place the breadcrumb at the **facade-deletion site**. `<new-module-path>` points at the pre-existing `src/` file that already houses the real implementation (e.g. `src/network/routing_utils.py`, `src/gateway/gateway_stats_exporter.py`, `src/ssh/ssh_runner_manager.py`, `src/export/site_export_utils.py`, `src/device/virtual_chassis.py`, `src/gateway/gateway_export_utils.py`). No file is created by the Cat A PR.
-- **Cat E PRs** place the breadcrumb at the **class-body-deletion site**. `<new-module-path>` points at the newly created `src/` file inside the landing package (e.g. `src/ssh/batch/execution_config.py`, `src/ui/input_utils.py`).
+- **Cat A PRs** place the breadcrumb at the **facade-deletion site**. `<new-module-path>` points at the pre-existing `src/` file that already houses the real implementation (e.g. `src/mist/networking/network/routing_utils.py`, `src/mist/resources/gateway/gateway_stats_exporter.py`, `src/operations/execution/ssh/ssh_runner_manager.py`, `src/operations/exporting/export/site_export_utils.py`, `src/mist/resources/device/virtual_chassis.py`, `src/mist/resources/gateway/gateway_export_utils.py`). No file is created by the Cat A PR.
+- **Cat E PRs** place the breadcrumb at the **class-body-deletion site**. `<new-module-path>` points at the newly created `src/` file inside the landing package (e.g. `src/operations/execution/ssh/batch/execution_config.py`, `src/interfaces/visualization/ui/input_utils.py`).
 
 Post-merge grep audit: `grep -n "# NOTE: .* extracted to .*::.* See specs/1014-misthelper-refactor-hot-classes-with-src-callers/spec.md." MistHelper.py` should return exactly `N` hits after `N` merged PRs.
 
@@ -308,5 +308,5 @@ Re-evaluated after Phase 1 design artifacts landed (this `plan.md`):
 - Does not raise the compliance baseline. The initiative preserves `>=99.6/A+` aggregate; it does not attempt to reach 100/A+.
 - Does not enumerate the follow-up initiative that will address the 12 residual MistHelper-only Hot-bucket classes; that follow-up (`1015+`) is out of scope for this spec — FR-030.
 - Does not add a `contracts/` directory, `data-model.md`, `research.md`, or `quickstart.md`. The initiative's contracts are exhaustively captured in `spec.md` (FR-001-FR-030, SC-001-SC-020); adding duplicate documents would not add audit value.
-- Does not use `src/refactors/` as a landing target for any of the 24 rows. Every row is pinned to a domain-fitting existing or new package in `spec.md`, all advisory per FR-029.
+- Does not use `src/foundation/support/refactors/` as a landing target for any of the 24 rows. Every row is pinned to a domain-fitting existing or new package in `spec.md`, all advisory per FR-029.
 - Does not commit `refactor_candidates.md` to the repository. The catalog is a LOCAL-ONLY artifact regenerated after every merged PR; the branch state must NOT include it.

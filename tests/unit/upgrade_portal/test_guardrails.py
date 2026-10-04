@@ -39,14 +39,14 @@ from pathlib import Path
 
 import pytest
 
-from src.refactors.endpoint_primary_key_strategies import ENDPOINT_PRIMARY_KEY_STRATEGIES
-from src.upgrade_portal.capture.store import (  # WHY: issue #2061 pins the write name to the read name.
+from src.foundation.support.refactors.endpoint_primary_key_strategies import ENDPOINT_PRIMARY_KEY_STRATEGIES
+from src.foundation.support.utils.operation_registry import OperationRegistry
+from src.interfaces.portals.upgrade_portal.capture.store import (  # Import the moved dependency.
     CAPTURE_COLLECTION,
     CAPTURE_OPERATION,
     RUN_COLLECTION,
     RUN_OPERATION,
 )
-from src.utils.operation_registry import OperationRegistry
 from tests.support.git_environment import (
     git_subprocess_environment,  # WHY: issue #3022, repair a partial editor git config set.
 )
@@ -55,13 +55,13 @@ from tests.support.git_environment import (
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
 # WHY: Every scan below reads this package and nothing outside it.
-PORTAL_ROOT = REPO_ROOT / "src" / "upgrade_portal"
+PORTAL_ROOT = REPO_ROOT / "src" / "interfaces" / "portals" / "upgrade_portal"
 
 # WHY: The menu classification file that task T004 changed.
-REGISTRY_PATH = REPO_ROOT / "src" / "utils" / "operation_registry.py"
+REGISTRY_PATH = REPO_ROOT / "src" / "foundation" / "support" / "utils" / "operation_registry.py"
 
 # WHY: The key strategy file that tasks T005 and T006 changed.
-STRATEGY_PATH = REPO_ROOT / "src" / "refactors" / "endpoint_primary_key_strategies.py"
+STRATEGY_PATH = REPO_ROOT / "src" / "foundation" / "support" / "refactors" / "endpoint_primary_key_strategies.py"
 
 # WHY: The brand theme from task T018. The brand name stays inside the content.
 THEME_PATH = PORTAL_ROOT / "app" / "assets" / "static" / "css" / "themes" / "magenta.css"
@@ -71,7 +71,7 @@ DOCKERIGNORE_PATH = REPO_ROOT / ".dockerignore"
 
 # WHY: A theme name that holds a brand token. The control probe proves that the
 # ignore check still finds a bad name, so a pass carries meaning.
-BRAND_THEME_PROBE = "src/upgrade_portal/app/assets/static/css/themes/tmo.css"
+BRAND_THEME_PROBE = "src/interfaces/portals/upgrade_portal/app/assets/static/css/themes/tmo.css"
 
 # WHY: tasks.md:48. The module holds four globals and two save-and-restore
 # blocks that are not thread safe. The portal uses the seam instead.
@@ -484,7 +484,7 @@ class TestRepositoryGuardrails:
         """Each portal write endpoint uses the natural primary key strategy.
 
         Why:
-            ``src/db/redis_writer.py:598`` puts a 7-day time to live on every
+            ``src/foundation/persistence/db/redis_writer.py:598`` puts a 7-day time to live on every
             ``composite_pk`` document. The portal keeps a capture and a run
             forever, so a change to the strategy would delete the history.
 
@@ -593,12 +593,12 @@ class TestPortalCodeGuardrails:
         assert len(modules) >= MINIMUM_PORTAL_MODULES, f"The scan found {len(modules)} modules under {PORTAL_ROOT.name}"
 
     def test_the_portal_imports_no_firmware_manager_name(self) -> None:
-        """No portal module imports a name from ``src/firmware/firmware_manager.py``.
+        """No portal module imports a name from ``src/operations/execution/firmware/firmware_manager.py``.
 
         Why:
             tasks.md:48 bans the module. It holds four globals at ``:34-37``,
             and the save-and-restore blocks at ``:1736`` and ``:1797`` are not
-            thread safe. The portal uses the seam ``src/firmware/upgrade_service.py``.
+            thread safe. The portal uses the seam ``src/operations/execution/firmware/upgrade_service.py``.
         """
         offenders: list[str] = []  # WHY: Collects each import across the package.
         for path in portal_modules():  # WHY: Every module of the package needs the check.

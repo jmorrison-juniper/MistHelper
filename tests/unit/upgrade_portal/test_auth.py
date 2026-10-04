@@ -35,9 +35,13 @@ from flask import Flask  # The smallest application that can hold the blueprint.
 from flask.testing import FlaskClient  # Drives a route with no server and no browser.
 from werkzeug.test import TestResponse  # The answer that the test client returns.
 
-from src.upgrade_portal.app import factory  # The module that owns the negotiation rule and its header names.
-from src.upgrade_portal.app.routes import auth  # The module under test.
-from src.upgrade_portal.runtime import identity  # The registry, the mode names, and the variable names.
+from src.interfaces.portals.upgrade_portal.app import (
+    factory,
+)  # The module that owns the negotiation rule and its header names.
+from src.interfaces.portals.upgrade_portal.app.routes import auth  # The module under test.
+from src.interfaces.portals.upgrade_portal.runtime import (
+    identity,
+)  # The registry, the mode names, and the variable names.
 
 # WHY: A reserved example domain, so no message can reach a real mailbox.
 PROBE_EMAIL = "probe.operator@example.invalid"

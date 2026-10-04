@@ -16,15 +16,15 @@ from typing import Any
 
 import pytest
 
-import src.firmware.firmware_manager as fm_mod
-from src.firmware.firmware_manager import FirmwareManager, FirmwareManagerConfig
-from src.firmware.running_version import (
+import src.operations.execution.firmware.firmware_manager as fm_mod
+from src.operations.execution.firmware.firmware_manager import FirmwareManager, FirmwareManagerConfig
+from src.operations.execution.firmware.running_version import (
     DEVICE_LISTING_ENDPOINT,
     ORG_INVENTORY_ENDPOINT,
     SITE_STATS_ENDPOINT,
     RunningFirmwareVersionResolver,
 )
-from src.firmware.running_version import (
+from src.operations.execution.firmware.running_version import (
     RunningFirmwareVersionResolver as FailureModeRunningFirmwareVersionResolver,
 )
 
@@ -112,7 +112,9 @@ def test_fetch_site_running_versions_reports_runtime_failure(caplog: Any) -> Non
 def test_rows_from_response_reports_http_404(caplog: Any) -> None:
     """A 404 site stats response must return no rows and log the exact status."""
     response = _FakeResponse(status_code=404, data=[{"id": "ignored"}])  # Model a client-side refusal.
-    with caplog.at_level("ERROR", logger="src.firmware.running_version"):  # Capture the product status log.
+    with caplog.at_level(
+        "ERROR", logger="src.operations.execution.firmware.running_version"
+    ):  # Capture the product status log.
         rows = RunningFirmwareVersionResolver._rows_from_response(response, "site-404")  # Drive the parser.
     assert rows == []  # Failed status data must not feed a firmware decision.
     assert "returned 404" in caplog.text  # The log must keep the exact status.
@@ -122,7 +124,9 @@ def test_rows_from_response_reports_http_404(caplog: Any) -> None:
 def test_rows_from_response_reports_http_503(caplog: Any) -> None:
     """A 503 site stats response must return no rows and log the exact status."""
     response = _FakeResponse(status_code=503, data=[{"id": "ignored"}])  # Model a server-side refusal.
-    with caplog.at_level("ERROR", logger="src.firmware.running_version"):  # Capture the product status log.
+    with caplog.at_level(
+        "ERROR", logger="src.operations.execution.firmware.running_version"
+    ):  # Capture the product status log.
         rows = FailureModeRunningFirmwareVersionResolver._rows_from_response(response, "site-503")  # Drive parser.
     assert rows == []  # Failed status data must not feed a firmware decision.
     assert "returned 503" in caplog.text  # The log must keep the exact status.

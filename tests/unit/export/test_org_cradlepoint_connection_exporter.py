@@ -24,13 +24,13 @@ import pytest
 import requests
 from mistapi.__api_response import APIResponse
 
-from src.export.org_cradlepoint_connection_exporter import OrgCradlepointConnectionExporter
-from src.export.org_cradlepoint_connection_exporter import (
+from src.operations.exporting.export.org_cradlepoint_connection_exporter import OrgCradlepointConnectionExporter
+from src.operations.exporting.export.org_cradlepoint_connection_exporter import (
     OrgCradlepointConnectionExporter as FailureModeOrgCradlepointConnectionExporter,
 )
 
 ORG_ID = "org-1413"
-MODULE = "src.export.org_cradlepoint_connection_exporter"
+MODULE = "src.operations.exporting.export.org_cradlepoint_connection_exporter"
 STATUS_URL = "https://api.mist.com/api/v1/orgs/org-1413/setting/cradlepoint/setup"
 
 

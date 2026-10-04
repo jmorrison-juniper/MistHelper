@@ -15,7 +15,7 @@ import logging
 import os
 import sys
 
-# Put the repository root on sys.path, so the import of `src.upgrade_portal`
+# Put the repository root on sys.path, so the import of `src.interfaces.portals.upgrade_portal`
 # resolves. Gunicorn starts from /app in the container and from the repository
 # root on a workstation. Neither directory is on sys.path by default.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -34,7 +34,7 @@ try:
 except ImportError:  # The portal still starts, and the operator signs in with a pair.
     logging.getLogger(__name__).warning("wsgi_capture: python-dotenv is absent, so .env was not read")
 
-from src.upgrade_portal.app.factory import create_app
+from src.interfaces.portals.upgrade_portal.app.factory import create_app
 
 # Both portals share one record format, so one log file stays readable.
 logging.basicConfig(

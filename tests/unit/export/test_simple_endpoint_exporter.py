@@ -10,7 +10,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.export.simple_endpoint_exporter import (
+from src.foundation.support.refactors.endpoint_primary_key_strategies import ENDPOINT_PRIMARY_KEY_STRATEGIES
+from src.operations.exporting.export.simple_endpoint_exporter import (
     _MSP_OPS,
     _NONE_OPS,
     _ORG_OPS,
@@ -18,7 +19,6 @@ from src.export.simple_endpoint_exporter import (
     SimpleEndpointExporter,
     _SimpleEndpointOp,
 )
-from src.refactors.endpoint_primary_key_strategies import ENDPOINT_PRIMARY_KEY_STRATEGIES
 
 ALL_OPS = list(_NONE_OPS) + list(_ORG_OPS) + list(_SITE_OPS) + list(_MSP_OPS)
 
@@ -99,7 +99,7 @@ def test_choose_rejects_a_non_numeric_answer() -> None:
     """A non-number answer must return to the menu safely."""
     fake = _fake_mist_helper()
     fake.InputUtils.safe_input.return_value = "abc"
-    with patch("src.export.simple_endpoint_exporter.SourceDependencyResolver", fake):
+    with patch("src.operations.exporting.export.simple_endpoint_exporter.SourceDependencyResolver", fake):
         assert SimpleEndpointExporter._choose(_ORG_OPS, "org") is None
 
 
@@ -107,7 +107,7 @@ def test_choose_rejects_an_out_of_range_answer() -> None:
     """An out-of-range answer must not index the table."""
     fake = _fake_mist_helper()
     fake.InputUtils.safe_input.return_value = str(len(_ORG_OPS) + 1)
-    with patch("src.export.simple_endpoint_exporter.SourceDependencyResolver", fake):
+    with patch("src.operations.exporting.export.simple_endpoint_exporter.SourceDependencyResolver", fake):
         assert SimpleEndpointExporter._choose(_ORG_OPS, "org") is None
 
 
@@ -115,14 +115,14 @@ def test_choose_returns_the_selected_operation() -> None:
     """A valid selection must return the matching table row."""
     fake = _fake_mist_helper()
     fake.InputUtils.safe_input.return_value = "1"
-    with patch("src.export.simple_endpoint_exporter.SourceDependencyResolver", fake):
+    with patch("src.operations.exporting.export.simple_endpoint_exporter.SourceDependencyResolver", fake):
         assert SimpleEndpointExporter._choose(_ORG_OPS, "org") == _ORG_OPS[0]
 
 
 def test_persist_skips_empty_rows() -> None:
     """An empty endpoint response must not create an export file."""
     fake = _fake_mist_helper()
-    with patch("src.export.simple_endpoint_exporter.SourceDependencyResolver", fake):
+    with patch("src.operations.exporting.export.simple_endpoint_exporter.SourceDependencyResolver", fake):
         SimpleEndpointExporter._persist([], "empty.csv", "listAlarmDefinitions")
     fake.DataExporter.write_with_format_selection.assert_not_called()
     assert fake.DataExporter.write_with_format_selection.call_count == 0  # WHY: empty rows must skip export.
@@ -131,7 +131,7 @@ def test_persist_skips_empty_rows() -> None:
 def test_persist_wraps_single_object_response() -> None:
     """A single JSON object response must export as one row."""
     fake = _fake_mist_helper()
-    with patch("src.export.simple_endpoint_exporter.SourceDependencyResolver", fake):
+    with patch("src.operations.exporting.export.simple_endpoint_exporter.SourceDependencyResolver", fake):
         SimpleEndpointExporter._persist({"id": "one"}, "one.csv", "getSelf")
     args, kwargs = fake.DataExporter.write_with_format_selection.call_args
     assert args[0] == [{"id": "one"}]
@@ -149,9 +149,9 @@ def test_run_uses_session_only_for_global_operation() -> None:
     fake = _fake_mist_helper()
     callable_obj = MagicMock(return_value=MagicMock())
     with (
-        patch("src.export.simple_endpoint_exporter.SourceDependencyResolver", fake),
+        patch("src.operations.exporting.export.simple_endpoint_exporter.SourceDependencyResolver", fake),
         patch.object(SimpleEndpointExporter, "_resolve", return_value=callable_obj),
-        patch("src.export.simple_endpoint_exporter.mistapi.get_all", return_value=[]),
+        patch("src.operations.exporting.export.simple_endpoint_exporter.mistapi.get_all", return_value=[]),
     ):
         SimpleEndpointExporter._run(_NONE_OPS[0], None, "global")
     callable_obj.assert_called_once_with(fake.apisession)
@@ -162,9 +162,9 @@ def test_run_uses_identifier_for_scoped_operation() -> None:
     fake = _fake_mist_helper()
     callable_obj = MagicMock(return_value=MagicMock())
     with (
-        patch("src.export.simple_endpoint_exporter.SourceDependencyResolver", fake),
+        patch("src.operations.exporting.export.simple_endpoint_exporter.SourceDependencyResolver", fake),
         patch.object(SimpleEndpointExporter, "_resolve", return_value=callable_obj),
-        patch("src.export.simple_endpoint_exporter.mistapi.get_all", return_value=[]),
+        patch("src.operations.exporting.export.simple_endpoint_exporter.mistapi.get_all", return_value=[]),
     ):
         SimpleEndpointExporter._run(_ORG_OPS[0], "org-one", "org-one")
     callable_obj.assert_called_once_with(fake.apisession, "org-one")
@@ -177,7 +177,7 @@ def test_run_logs_http_errors_without_writing(status_code: int, caplog: pytest.L
     callable_obj = MagicMock(side_effect=RuntimeError(f"HTTP {status_code}"))
     with (
         caplog.at_level(logging.ERROR),
-        patch("src.export.simple_endpoint_exporter.SourceDependencyResolver", fake),
+        patch("src.operations.exporting.export.simple_endpoint_exporter.SourceDependencyResolver", fake),
         patch.object(SimpleEndpointExporter, "_resolve", return_value=callable_obj),
     ):
         SimpleEndpointExporter._run(_NONE_OPS[0], None, "global")

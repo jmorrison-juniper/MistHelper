@@ -4,8 +4,8 @@ import csv
 import os
 import re
 
-from src.site.address_audit.audit_reporter import AddressAuditReporter
-from src.site.address_audit.models import AddressRow, AuditResult, MatchedSite
+from src.mist.resources.site.address_audit.audit_reporter import AddressAuditReporter
+from src.mist.resources.site.address_audit.models import AddressRow, AuditResult, MatchedSite
 
 
 def _result(issue="MISSING_SUITE"):
@@ -73,7 +73,7 @@ class TestSaveCorrections:
 
     def test_writes_correction_report(self, tmp_path):
         """save_corrections() writes a timestamped before/after CSV with the 6-column header."""
-        from src.site.address_audit.models import CorrectionOutcome
+        from src.mist.resources.site.address_audit.models import CorrectionOutcome
 
         outcomes = [
             CorrectionOutcome("Store 181", "s1", "100 Main St", "100 Main St Suite 5", "pushed"),

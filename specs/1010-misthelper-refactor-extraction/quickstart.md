@@ -89,7 +89,7 @@ For **Single-Use**: create the target module file per the queue in `plan.md`. La
 - Inline comments every 5-10 lines (Principle VI, NON-NEGOTIABLE).
 - Action logging before every non-trivial action with the correct prefix (Principle VII, NON-NEGOTIABLE).
 - Module-level function candidates land as **class methods** on a new cohesive class (FR-005).
-- `AddressComparisonCounters` folds into `src/inventory/csv_comparator.py::CsvComparatorManager` (FR-015 — no new file).
+- `AddressComparisonCounters` folds into `src/mist/resources/inventory/csv_comparator.py::CsvComparatorManager` (FR-015 — no new file).
 - Every `guideline_flag` the analyzer reported on the extracted code is resolved in this file (FR-006, SC-012).
 
 ---
@@ -99,7 +99,7 @@ For **Single-Use**: create the target module file per the queue in `plan.md`. La
 In the **same commit**:
 
 1. Delete the original symbol definition from `MistHelper.py` (do not leave a wrapper, forwarding function, or backward-compat alias — FR-003, SC-008).
-2. For **Single-Use**: update the caller's `from MistHelper import SymbolName` (or bare-name reference) to `from src.refactors.new_module import SymbolName` (or the equivalent for the AddressComparisonCounters fold-in).
+2. For **Single-Use**: update the caller's `from MistHelper import SymbolName` (or bare-name reference) to `from src.foundation.support.refactors.new_module import SymbolName` (or the equivalent for the AddressComparisonCounters fold-in).
 3. For module-level function candidates rewritten as class methods, update the caller from `func(args)` to `NewClass().func(args)` or the domain-appropriate method name.
 
 Verify no intermediate commit on the branch leaves a dangling import or dangling definition.
@@ -185,7 +185,7 @@ Then immediately loop back to Step 1 for the next candidate. The catalog must be
 - Zero wrapper shims remain (SC-008).
 - Zero `SKIP_ALWAYS` symbols were modified (SC-009).
 - Zero Hot-bucket symbols were extracted in this pass (SC-010).
-- Every new `src/refactors/*.py` scored A+/100 (SC-007).
+- Every new `src/foundation/support/refactors/*.py` scored A+/100 (SC-007).
 - Repo-wide compliance ≥ 99.6/A+ (SC-004), zero A+ regressions (SC-005).
 
 Report the aggregate LoC reduction and file the initiative's closeout note. Second-pass Low-Use planning is a **separate initiative** — do not roll into this one (Assumption 6).

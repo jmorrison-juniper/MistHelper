@@ -75,8 +75,8 @@ the operation the hook wraps. The nanosecond cost of one span does not.
 ```
 python tools/bench_performance_overhead.py --calls 20000 --repeats 9
 python -m pytest tests/test_performance_monitoring.py -q
-python -m ruff check src/utils/performance tests/test_performance_monitoring.py
-python -m black --check src/utils/performance tests/test_performance_monitoring.py
+python -m ruff check src/foundation/support/utils/performance tests/test_performance_monitoring.py
+python -m black --check src/foundation/support/utils/performance tests/test_performance_monitoring.py
 ```
 
 ## 4. Baseline results
@@ -182,10 +182,10 @@ when allocator sharing changes.
 | --- | --- | --- |
 | New unit tests | `python -m pytest tests/test_performance_monitoring.py -q` | 71 passed |
 | Existing tests | `python -m pytest tests/ -k "utils or logger or console" -q` | 1,503 passed, 14,346 deselected |
-| Byte compile | `python -m compileall src/utils/performance -q` | Pass |
-| Lint | `python -m ruff check src/utils/performance tests/test_performance_monitoring.py` | All checks passed |
-| Format | `python -m black --check src/utils/performance tests/...` | 7 files unchanged |
-| Import check | `import src.utils, src.utils.performance` | Pass |
+| Byte compile | `python -m compileall src/foundation/support/utils/performance -q` | Pass |
+| Lint | `python -m ruff check src/foundation/support/utils/performance tests/test_performance_monitoring.py` | All checks passed |
+| Format | `python -m black --check src/foundation/support/utils/performance tests/...` | 7 files unchanged |
+| Import check | `import src.foundation.support.utils, src.foundation.support.utils.performance` | Pass |
 | E2E browser shard | `python -m pytest tests\e2e -q -p no:cacheprovider` | 235 passed, 4 skipped, 672.86 seconds |
 
 The tests cover the contract, the source attribution, the privacy rules, the

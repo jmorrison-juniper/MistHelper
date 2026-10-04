@@ -10,7 +10,7 @@ The Operations portal gets a new WebSockets tab. The tab lists every WebSocket s
 
 The design has two parts:
 
-- A new package `src/websocket_streams/` holds the catalog, the request checks, the live sessions, the SDK runners, and a small Flask blueprint. The lint, type, complexity, and coverage gates read this package.
+- A new package `src/mist/realtime/websocket_streams/` holds the catalog, the request checks, the live sessions, the SDK runners, and a small Flask blueprint. The lint, type, complexity, and coverage gates read this package.
 - The portal in `web_portal/` gets one navigation item in `base.html` and three lines in `app.py`. The lines register the blueprint and stop every session when the portal stops.
 
 The engine drives the SDK in three ways:
@@ -47,7 +47,7 @@ The page asks the server for new messages once each second. Each request answers
 
 | Principle | Result | Evidence |
 | - | - | - |
-| I. Five-Item Rule | Pass with one recorded exception | Each new package holds 5 children or fewer. The only new child of a noncompliant parent is `src/websocket_streams/`. See Complexity Tracking. |
+| I. Five-Item Rule | Pass with one recorded exception | Each new package holds 5 children or fewer. The only new child of a noncompliant parent is `src/mist/realtime/websocket_streams/`. See Complexity Tracking. |
 | II. Class-Based Architecture | Pass | Every behavior lives in a named class. The blueprint view functions call one class method each. |
 | III. Safety-First | Pass | The server checks each identifier and each parameter before a request goes to Mist. Two flags lock the state-changing utilities and the shell, and each run needs the typed device name. |
 | IV. Full Deployment Pipeline | Pass | The work follows the pipeline to the container update. The merge happens only after every check passes. |
@@ -79,7 +79,7 @@ specs/3551-websocket-tab/
 ### Source Code (repository root)
 
 ```text
-src/websocket_streams/                 # New, 5 children
+src/mist/realtime/websocket_streams/                 # New, 5 children
 ├── __init__.py                        # Package docstring
 ├── catalog/                           # New, 5 children: what streams exist
 │   ├── __init__.py
@@ -132,11 +132,11 @@ deploy/.env.example                    # Edit: the flags and the limits
 changelog.d/issue-3551-websocket-tab.md # New: the release note
 ```
 
-**Structure Decision**: The engine and the blueprint live in `src/websocket_streams/`, as `src/upgrade_portal/` did for the capture portal. The lint gates skip `web_portal/`, and the gates must read the new code. The blueprint carries its own `templates/` and `static/` folders. For this reason, the feature adds no child to `web_portal/routes/` (7 children) or to `web_portal/templates/` (5 children).
+**Structure Decision**: The engine and the blueprint live in `src/mist/realtime/websocket_streams/`, as `src/interfaces/portals/upgrade_portal/` did for the capture portal. The lint gates skip `web_portal/`, and the gates must read the new code. The blueprint carries its own `templates/` and `static/` folders. For this reason, the feature adds no child to `web_portal/routes/` (7 children) or to `web_portal/templates/` (5 children).
 
 ## Complexity Tracking
 
 | Violation | Type | Why Needed | Simpler Alternative Rejected Because | Remediation |
 | - | - | - | - | - |
-| One new child `websocket_streams/` under `src/`, which holds 43 children | Grandfathered parent, new child | The repository puts each feature in one top-level `src/` package. Examples are `upgrade_portal`, `ssid_consolidation`, and `juniper_docs`. | `src/websocket/` holds 7 children and imports the CLI manager at import time. A nested package there adds a child to a noncompliant parent and slows each portal import. | Issue #3574 groups the `src/` packages into domain packages. |
+| One new child `websocket_streams/` under `src/`, which holds 43 children | Grandfathered parent, new child | The repository puts each feature in one top-level `src/` package. Examples are `upgrade_portal`, `ssid_consolidation`, and `juniper_docs`. | `src/mist/realtime/websocket/` holds 7 children and imports the CLI manager at import time. A nested package there adds a child to a noncompliant parent and slows each portal import. | Issue #3574 groups the `src/` packages into domain packages. |
 | `tests/unit/` holds 148 children, `tests/contract/` holds 11 children, and `tests/e2e/` holds 15 children | Grandfathered parent, new child | Each test tree mirrors its source package. The browser tests live in `tests/e2e/`, where the `gunicorn_server` fixture lives. | A flat file for each test adds more children to the same parents. | Issue #3574 covers the test trees with the source tree. |

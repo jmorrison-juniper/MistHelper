@@ -1,4 +1,4 @@
-"""Wave 9 P2 coverage tests for src.ssh.config.env_loader.
+"""Wave 9 P2 coverage tests for src.operations.execution.ssh.config.env_loader.
 
 Targets the ``EnvSshConfigLoader`` branches that existing tests in
 ``tests/unit/test_ssh_runner.py::TestLoadSSHConfigFromEnv`` don't reach:
@@ -16,8 +16,8 @@ from typing import Any  # WHY: annotate config dicts consistently with SUT
 
 import pytest  # WHY: monkeypatch fixture for module-level flag flips
 
-from src.ssh.config import env_loader as env_loader_module  # WHY: patch _DOTENV_AVAILABLE
-from src.ssh.config.env_loader import EnvSshConfigLoader  # WHY: SUT under test
+from src.operations.execution.ssh.config import env_loader as env_loader_module  # WHY: patch _DOTENV_AVAILABLE
+from src.operations.execution.ssh.config.env_loader import EnvSshConfigLoader  # WHY: SUT under test
 
 logger = logging.getLogger(__name__)  # WHY: keep test log records on the module logger.
 
@@ -61,7 +61,7 @@ class TestLoadPathGuards:
 
     def test_size_getsize_raises_oserror(self, tmp_path, monkeypatch, caplog: pytest.LogCaptureFixture) -> None:
         # WHY: OSError from getsize is caught by _is_within_size_limit and returns False
-        caplog.set_level(logging.WARNING, logger="src.ssh.config.env_loader")
+        caplog.set_level(logging.WARNING, logger="src.operations.execution.ssh.config.env_loader")
         monkeypatch.chdir(tmp_path)  # WHY: isolate cwd
         env_path = tmp_path / "test.env"  # WHY: create file so exists() passes
         env_path.write_text("SSH_HOST=1.1.1.1\n", encoding="utf-8")  # WHY: real content is irrelevant here
@@ -81,7 +81,7 @@ class TestLoadPathGuards:
         self, tmp_path, monkeypatch, caplog: pytest.LogCaptureFixture
     ) -> None:
         # WHY: files above _MAX_ENV_BYTES trip the size cap branch
-        caplog.set_level(logging.WARNING, logger="src.ssh.config.env_loader")
+        caplog.set_level(logging.WARNING, logger="src.operations.execution.ssh.config.env_loader")
         monkeypatch.chdir(tmp_path)  # WHY: isolate cwd
         env_path = tmp_path / "big.env"  # WHY: create an oversized file
         env_path.write_bytes(b"X" * (env_loader_module._MAX_ENV_BYTES + 1))  # WHY: > cap by 1 byte
@@ -165,7 +165,7 @@ class TestManualParser:
         self, tmp_path, monkeypatch, caplog: pytest.LogCaptureFixture
     ) -> None:
         # WHY: invalid usernames hit the "warning log" branch of _set_username
-        caplog.set_level(logging.WARNING, logger="src.ssh.config.env_loader")
+        caplog.set_level(logging.WARNING, logger="src.operations.execution.ssh.config.env_loader")
         monkeypatch.chdir(tmp_path)  # WHY: isolate cwd
         env_path = tmp_path / "test.env"  # WHY: fixture file
         env_path.write_text("SSH_USER=; rm -rf /\n", encoding="utf-8")  # WHY: dangerous chars fail validation
@@ -175,7 +175,7 @@ class TestManualParser:
 
     def test_line_cap_stops_at_limit(self, tmp_path, monkeypatch, caplog: pytest.LogCaptureFixture) -> None:
         # WHY: > _MAX_MANUAL_LINES trips the runaway-file guard
-        caplog.set_level(logging.WARNING, logger="src.ssh.config.env_loader")
+        caplog.set_level(logging.WARNING, logger="src.operations.execution.ssh.config.env_loader")
         monkeypatch.chdir(tmp_path)  # WHY: isolate cwd
         monkeypatch.setattr(env_loader_module, "_MAX_MANUAL_LINES", 3)  # WHY: lower cap so test stays fast
         env_path = tmp_path / "test.env"  # WHY: fixture file
@@ -189,7 +189,7 @@ class TestManualParser:
 
     def test_read_raises_unicode_decode_error(self, tmp_path, monkeypatch, caplog: pytest.LogCaptureFixture) -> None:
         # WHY: UnicodeDecodeError path in _populate_via_manual_parse is exercised via monkeypatched open
-        caplog.set_level(logging.WARNING, logger="src.ssh.config.env_loader")
+        caplog.set_level(logging.WARNING, logger="src.operations.execution.ssh.config.env_loader")
         monkeypatch.chdir(tmp_path)  # WHY: isolate cwd
         env_path = tmp_path / "test.env"  # WHY: real file so size/exists checks pass
         env_path.write_text("SSH_USER=admin\n", encoding="utf-8")  # WHY: content irrelevant
@@ -205,7 +205,7 @@ class TestManualParser:
 
     def test_read_raises_oserror(self, tmp_path, monkeypatch, caplog: pytest.LogCaptureFixture) -> None:
         # WHY: OSError path (permission denied, disk gone) in _populate_via_manual_parse
-        caplog.set_level(logging.WARNING, logger="src.ssh.config.env_loader")
+        caplog.set_level(logging.WARNING, logger="src.operations.execution.ssh.config.env_loader")
         monkeypatch.chdir(tmp_path)  # WHY: isolate cwd
         env_path = tmp_path / "test.env"  # WHY: real file so guards pass
         env_path.write_text("SSH_USER=admin\n", encoding="utf-8")  # WHY: content irrelevant
@@ -221,7 +221,7 @@ class TestManualParser:
 
     def test_read_raises_generic_exception(self, tmp_path, monkeypatch, caplog: pytest.LogCaptureFixture) -> None:
         # WHY: broad except Exception guard in _populate_via_manual_parse
-        caplog.set_level(logging.WARNING, logger="src.ssh.config.env_loader")
+        caplog.set_level(logging.WARNING, logger="src.operations.execution.ssh.config.env_loader")
         monkeypatch.chdir(tmp_path)  # WHY: isolate cwd
         env_path = tmp_path / "test.env"  # WHY: real file so guards pass
         env_path.write_text("SSH_USER=admin\n", encoding="utf-8")  # WHY: content irrelevant
@@ -241,7 +241,7 @@ class TestDotenvPath:
 
     def test_dotenv_exception_prints_warning(self, tmp_path, monkeypatch, caplog: pytest.LogCaptureFixture) -> None:
         # WHY: force dotenv path AND make it raise to hit the except-Exception guard
-        caplog.set_level(logging.WARNING, logger="src.ssh.config.env_loader")
+        caplog.set_level(logging.WARNING, logger="src.operations.execution.ssh.config.env_loader")
         monkeypatch.chdir(tmp_path)  # WHY: isolate cwd
         env_path = tmp_path / "test.env"  # WHY: real file so exists / size checks pass
         env_path.write_text("SSH_USER=admin\n", encoding="utf-8")  # WHY: content irrelevant

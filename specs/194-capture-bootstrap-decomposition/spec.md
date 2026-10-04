@@ -3,16 +3,16 @@
 **Feature Branch**: `[194-capture-bootstrap-decomposition]`  
 **Created**: 2026-05-27  
 **Status**: Draft  
-**Input**: User description: "Create or update a feature specification for a new MistHelper decomposition wave focused on two groups from MistHelper.py only: (1) packet capture cleanup/final migration and (2) bootstrap/session/auth selection extraction. The user explicitly wants decomposition and refactor into src modules/submodules outside the main script, with no thin wrappers or generic 'helpers' modules. Use the existing repo conventions and the current wave-2 spec as a style reference, but do NOT copy its exact scope. The spec should capture: problem/goal, interfaces & behavior, constraints/performance, security & secrets, test plan, migration/compatibility, acceptance criteria, implementation notes, and UI behavior if applicable (likely none). Include explicit assumptions based on discovery: packet capture already exists in src/capture but MistHelper.py still contains legacy logic and wave-1 guardrails that will need to change; bootstrap/session logic currently lives in MistHelper.py and has no dedicated src/bootstrap package or dedicated unit tests. Mention that existing packet capture tests exist and will need adjustment, and bootstrap/session tests do not exist yet and will need creation. Emphasize that GlobalImportManager is not a target unless import rewiring is strictly required by moved classes. Keep the spec concise but actionable and aligned to a future plan/tasks workflow."
+**Input**: User description: "Create or update a feature specification for a new MistHelper decomposition wave focused on two groups from MistHelper.py only: (1) packet capture cleanup/final migration and (2) bootstrap/session/auth selection extraction. The user explicitly wants decomposition and refactor into src modules/submodules outside the main script, with no thin wrappers or generic 'helpers' modules. Use the existing repo conventions and the current wave-2 spec as a style reference, but do NOT copy its exact scope. The spec should capture: problem/goal, interfaces & behavior, constraints/performance, security & secrets, test plan, migration/compatibility, acceptance criteria, implementation notes, and UI behavior if applicable (likely none). Include explicit assumptions based on discovery: packet capture already exists in src/operations/execution/capture but MistHelper.py still contains legacy logic and wave-1 guardrails that will need to change; bootstrap/session logic currently lives in MistHelper.py and has no dedicated src/foundation/runtime/bootstrap package or dedicated unit tests. Mention that existing packet capture tests exist and will need adjustment, and bootstrap/session tests do not exist yet and will need creation. Emphasize that GlobalImportManager is not a target unless import rewiring is strictly required by moved classes. Keep the spec concise but actionable and aligned to a future plan/tasks workflow."
 
 ## Problem Statement
 
-`MistHelper.py` still owns two high-risk decomposition areas that should live in `src/` modules: the remaining packet capture workflow and the session/bootstrap/auth selection flow. Packet capture already has a home in `src/capture`, but legacy code and wave-1 guardrails remain in the main script. Bootstrap/session/auth selection still lives entirely in `MistHelper.py`, with no dedicated `src/bootstrap` package and no dedicated unit coverage. This leaves the main script oversized, increases regression risk, and makes it harder to maintain a clean module boundary.
+`MistHelper.py` still owns two high-risk decomposition areas that should live in `src/` modules: the remaining packet capture workflow and the session/bootstrap/auth selection flow. Packet capture already has a home in `src/operations/execution/capture`, but legacy code and wave-1 guardrails remain in the main script. Bootstrap/session/auth selection still lives entirely in `MistHelper.py`, with no dedicated `src/foundation/runtime/bootstrap` package and no dedicated unit coverage. This leaves the main script oversized, increases regression risk, and makes it harder to maintain a clean module boundary.
 
 ## Goals
 
 - Finish the packet capture migration so `MistHelper.py` keeps only orchestration and compatibility glue for capture-related paths.
-- Extract bootstrap/session/auth selection into semantically named `src/bootstrap` modules and submodules.
+- Extract bootstrap/session/auth selection into semantically named `src/foundation/runtime/bootstrap` modules and submodules.
 - Keep user-visible menu flows, prompts, and authentication choices stable during the refactor.
 - Replace legacy main-script logic with module-owned behavior, not thin wrappers or generic helper buckets.
 - Update and extend tests so the refactor is verified by existing packet capture coverage plus new bootstrap/session coverage.
@@ -30,7 +30,7 @@
 
 ### User Story 1 - Complete packet capture migration (Priority: P1)
 
-As a NOC engineer, I want packet capture behavior to come from `src/capture` instead of the main script so the codebase has one clear home for capture workflows and fewer regression-prone paths.
+As a NOC engineer, I want packet capture behavior to come from `src/operations/execution/capture` instead of the main script so the codebase has one clear home for capture workflows and fewer regression-prone paths.
 
 **Why this priority**: Packet capture is already partially extracted, so finishing it removes known legacy duplication and closes the highest-risk refactor gap.
 
@@ -44,7 +44,7 @@ As a NOC engineer, I want packet capture behavior to come from `src/capture` ins
 
 ### User Story 2 - Extract bootstrap/session/auth selection (Priority: P2)
 
-As a NOC engineer, I want session bootstrap and authentication selection to be owned by dedicated `src/bootstrap` modules so startup behavior is easier to test and maintain.
+As a NOC engineer, I want session bootstrap and authentication selection to be owned by dedicated `src/foundation/runtime/bootstrap` modules so startup behavior is easier to test and maintain.
 
 **Why this priority**: This flow currently has no dedicated package or unit tests, so extracting it creates a cleaner boundary and immediate testability gains.
 
@@ -61,7 +61,7 @@ As a NOC engineer, I want session bootstrap and authentication selection to be o
 - Packet capture still depends on a legacy guardrail in `MistHelper.py` that must be replaced rather than duplicated.
 - Packet capture tests reference old main-script entry points and need to be updated to the new module ownership.
 - Bootstrap/session/auth selection needs to handle EOF and cancellation without leaking secrets or leaving partially initialized state behind.
-- Import rewiring introduces a cycle unless the new `src/bootstrap` and `src/capture` boundaries stay one-way.
+- Import rewiring introduces a cycle unless the new `src/foundation/runtime/bootstrap` and `src/operations/execution/capture` boundaries stay one-way.
 - A moved class only needs `GlobalImportManager` changes if import rewiring cannot be done any other way.
 
 ## Interfaces & Behavior
@@ -71,7 +71,7 @@ As a NOC engineer, I want session bootstrap and authentication selection to be o
 - Packet capture entrypoints continue to present the same menu choices and capture outcomes.
 - Bootstrap/session/auth selection continues to honor the same inputs, prompts, and cancellation behavior.
 - `MistHelper.py` becomes a thin orchestrator for these flows, not the implementation owner.
-- New code lives in semantically named `src/capture` and `src/bootstrap` modules or submodules.
+- New code lives in semantically named `src/operations/execution/capture` and `src/foundation/runtime/bootstrap` modules or submodules.
 
 ### Out of Scope Behavior
 
@@ -98,13 +98,13 @@ As a NOC engineer, I want session bootstrap and authentication selection to be o
 
 ### Existing Coverage to Update
 
-- Packet capture tests already exist and must be adjusted to the new `src/capture` ownership and any changed import paths.
+- Packet capture tests already exist and must be adjusted to the new `src/operations/execution/capture` ownership and any changed import paths.
 - Existing menu or integration coverage that still touches packet capture must remain valid after the move.
 
 ### New Coverage to Create
 
 - Create dedicated unit tests for bootstrap/session/auth selection behavior, including happy-path startup and EOF/cancellation paths.
-- Add regression coverage for the new `src/bootstrap` boundary so the startup flow is exercised without `MistHelper.py` owning the implementation.
+- Add regression coverage for the new `src/foundation/runtime/bootstrap` boundary so the startup flow is exercised without `MistHelper.py` owning the implementation.
 
 ### Validation Layers
 
@@ -132,8 +132,8 @@ As a NOC engineer, I want session bootstrap and authentication selection to be o
 
 ### Functional Requirements
 
-- **FR-001**: Packet capture logic MUST be fully owned by `src/capture` modules, with `MistHelper.py` reduced to orchestration for packet capture entrypoints.
-- **FR-002**: Bootstrap/session/auth selection logic MUST be extracted into a dedicated `src/bootstrap` package or package family with clear ownership boundaries.
+- **FR-001**: Packet capture logic MUST be fully owned by `src/operations/execution/capture` modules, with `MistHelper.py` reduced to orchestration for packet capture entrypoints.
+- **FR-002**: Bootstrap/session/auth selection logic MUST be extracted into a dedicated `src/foundation/runtime/bootstrap` package or package family with clear ownership boundaries.
 - **FR-003**: The refactor MUST preserve current packet capture behavior, prompts, and output semantics.
 - **FR-004**: The refactor MUST preserve current bootstrap/session/auth selection behavior, including safe handling of EOF, cancellation, and invalid input.
 - **FR-005**: Existing packet capture tests MUST be updated to match the new module boundaries and continue covering the same behavior.
@@ -153,8 +153,8 @@ As a NOC engineer, I want session bootstrap and authentication selection to be o
 
 ### Measurable Outcomes
 
-- **SC-001**: All packet capture behavior in scope is owned by `src/capture`, with no remaining implementation-heavy packet capture logic in `MistHelper.py`.
-- **SC-002**: Bootstrap/session/auth selection behavior is owned by a dedicated `src/bootstrap` package family, and the main script no longer implements that logic directly.
+- **SC-001**: All packet capture behavior in scope is owned by `src/operations/execution/capture`, with no remaining implementation-heavy packet capture logic in `MistHelper.py`.
+- **SC-002**: Bootstrap/session/auth selection behavior is owned by a dedicated `src/foundation/runtime/bootstrap` package family, and the main script no longer implements that logic directly.
 - **SC-003**: Existing packet capture tests are updated and pass, and new bootstrap/session tests exist and pass.
 - **SC-004**: No accepted regressions are introduced in packet capture flows or startup/auth selection flows.
 - **SC-005**: No new circular imports are introduced by the refactor.
@@ -162,9 +162,9 @@ As a NOC engineer, I want session bootstrap and authentication selection to be o
 
 ## Assumptions
 
-- Packet capture already exists in `src/capture`, and the remaining work is to finish migration and remove legacy main-script logic.
+- Packet capture already exists in `src/operations/execution/capture`, and the remaining work is to finish migration and remove legacy main-script logic.
 - Wave-1 guardrails around packet capture will need to be updated as part of the final migration.
-- Bootstrap/session/auth selection currently lives in `MistHelper.py` and does not yet have a dedicated `src/bootstrap` package.
+- Bootstrap/session/auth selection currently lives in `MistHelper.py` and does not yet have a dedicated `src/foundation/runtime/bootstrap` package.
 - Existing packet capture tests will need adjustment to match the new ownership model.
 - Bootstrap/session/auth selection tests do not yet exist and must be created from scratch.
 - No UI-specific work is expected for this wave; the changes are limited to CLI/menu-internal behavior and module boundaries.

@@ -115,7 +115,7 @@ class PortalRecordStore:  # Own portal records for one isolated server process.
             limit, and the projected fields.
         """
         # The store imports the database driver, so the import waits for the first read.
-        from src.upgrade_portal.capture.store import OPERATION_FAMILIES_FIELD, OPERATION_LIST_FIELDS
+        from src.interfaces.portals.upgrade_portal.capture.store import OPERATION_FAMILIES_FIELD, OPERATION_LIST_FIELDS
 
         logger.info("List the E2E operation records of one organization")  # Record the process-owned scan.
         scoped = [row for row in self._runs.values() if self._operation_matches(row, org_id, site_id)]  # Filter.
@@ -283,7 +283,7 @@ class PortalRecordStore:  # Own portal records for one isolated server process.
             the capture-origin rule nor the tier fallback changes.
         """
         # Import the wiring only when the reader needs it.
-        from src.upgrade_portal.app.wiring import DEFAULT_TIER, precheck_tier_number
+        from src.interfaces.portals.upgrade_portal.app.wiring import DEFAULT_TIER, precheck_tier_number
 
         logger.info("Read the tier of the newest E2E standalone pre-check")
         capture_id = self.newest_precheck(site_id)  # The existing reader owns the origin and time rules.

@@ -2,9 +2,9 @@
 
 from unittest.mock import MagicMock
 
-from src.site.address_audit import address_resolver as resolver_mod
-from src.site.address_audit.address_resolver import AddressResolver
-from src.site.address_audit.models import ResolveCandidates, ResolverResult
+from src.mist.resources.site.address_audit import address_resolver as resolver_mod
+from src.mist.resources.site.address_audit.address_resolver import AddressResolver
+from src.mist.resources.site.address_audit.models import ResolveCandidates, ResolverResult
 
 _NO_SUITE = {"address": "100 Main St", "city": "Town", "state": "FL", "zip": "33000"}
 _WITH_SUITE = {"address": "100 Main St Suite 5", "city": "Town", "state": "FL", "zip": "33000"}

@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.troubleshooting.troubleshoot_utils import TroubleshootUtils
+from src.mist.intelligence.troubleshooting.troubleshoot_utils import TroubleshootUtils
 
 
 @pytest.fixture(autouse=True)
@@ -59,7 +59,7 @@ class TestBuildDeps:
         assert kwargs["data_exporter"] is mh_mocks["DataExporter"]
         assert kwargs["marvis_data_utils"] is mh_mocks["MarvisDataUtilsFactory"].instance.return_value
         # data_processing_utils is a direct import, not from mh
-        from src.data.data_processing_utils import DataProcessingUtils
+        from src.foundation.models.data.data_processing_utils import DataProcessingUtils
 
         assert kwargs["data_processing_utils"] is DataProcessingUtils
         assert result is mh_mocks["MarvisTroubleshootDeps"].return_value

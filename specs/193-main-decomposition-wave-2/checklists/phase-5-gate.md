@@ -5,10 +5,10 @@ Scope: T037/T038/T039/T040/T040A/T040B/T043/T044/T045
 
 ## Code Extraction and Delegation
 
-- Extracted `SiteExportUtils` implementation from `MistHelper.py` into `src/export/site_export_utils.py`.
-- Split high-complexity insights branch into `src/export/site_insights_exporter.py`.
+- Extracted `SiteExportUtils` implementation from `MistHelper.py` into `src/operations/exporting/export/site_export_utils.py`.
+- Split high-complexity insights branch into `src/operations/exporting/export/site_insights_exporter.py`.
 - Updated `MistHelper.py` `SiteExportUtils` to orchestration/delegation wrapper for relevant menu operations `70-86` (and supporting delegated methods).
-- Added `src/export/__init__.py` and unit tests:
+- Added `src/operations/exporting/export/__init__.py` and unit tests:
   - `tests/unit/export/test_site_export_utils.py`
   - `tests/unit/export/test_site_insights_exporter.py`
 - No changes were made to `GlobalImportManager`.

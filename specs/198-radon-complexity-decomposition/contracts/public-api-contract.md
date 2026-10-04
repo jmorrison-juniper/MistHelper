@@ -11,7 +11,7 @@ The list is grouped by the façade file that owns the symbol. The agent MUST run
 
 ---
 
-## src/websocket/manager.py — `WebSocketManager`
+## src/mist/realtime/websocket/manager.py — `WebSocketManager`
 
 Public methods that must keep their name and signature:
 
@@ -22,40 +22,40 @@ Public methods that must keep their name and signature:
 - `send_command(self, ...)`
 - `register_handler(self, ...)` (if present)
 
-Internal implementation moves to `src/websocket/polling/` and `src/websocket/message_handlers/`; the public surface above is the façade.
+Internal implementation moves to `src/mist/realtime/websocket/polling/` and `src/mist/realtime/websocket/message_handlers/`; the public surface above is the façade.
 
 ---
 
-## src/websocket/diag_commands.py — `WebSocketNetworkDiagCommands`
+## src/mist/realtime/websocket/diag_commands.py — `WebSocketNetworkDiagCommands`
 
 - `__init__(self, ...)`
 - `arp_device(self, device_mac: str, ...)`
 - `ping_device(self, device_mac: str, ...)`
 - Any other top-level command method without a leading underscore
 
-Internal implementation moves to `src/websocket/diag/`.
+Internal implementation moves to `src/mist/realtime/websocket/diag/`.
 
 ---
 
-## src/websocket/commands.py — `WebSocketCommands`
+## src/mist/realtime/websocket/commands.py — `WebSocketCommands`
 
 - `__init__(self, ...)`
 - `show_mac_table(self, ...)`
 - Other public `show_*` methods on this class
 
-Internal implementation moves to `src/websocket/commands/handlers/`.
+Internal implementation moves to `src/mist/realtime/websocket/commands/handlers/`.
 
 ---
 
-## src/websocket/service_ping_discovery.py — `ServicePingDiscoveryMixin`
+## src/mist/realtime/websocket/service_ping_discovery.py — `ServicePingDiscoveryMixin`
 
 - All public mixin methods used by classes that mix it in. (Grep verified pre-push.)
 
-Internal implementation moves to `src/websocket/service_ping/`.
+Internal implementation moves to `src/mist/realtime/websocket/service_ping/`.
 
 ---
 
-## src/ui/tui.py — `MistHelperTUI`
+## src/interfaces/visualization/ui/tui.py — `MistHelperTUI`
 
 - `__init__(self, ...)`
 - `run(self, ...)`
@@ -64,11 +64,11 @@ Internal implementation moves to `src/websocket/service_ping/`.
 - `execute_current_item(self, ...)`
 - `create_layout(self, ...)`
 
-Internal implementation moves to `src/ui/input_handlers/`, `src/ui/layout/`, `src/ui/execution/`, `src/ui/formatting/`.
+Internal implementation moves to `src/interfaces/visualization/ui/input_handlers/`, `src/interfaces/visualization/ui/layout/`, `src/interfaces/visualization/ui/execution/`, `src/interfaces/visualization/ui/formatting/`.
 
 ---
 
-## src/ssh/ssh_runner.py — `EnhancedSSHRunner`
+## src/operations/execution/ssh/ssh_runner.py — `EnhancedSSHRunner`
 
 - `__init__(self, ...)`
 - `connect(self, ...)`
@@ -78,63 +78,63 @@ Internal implementation moves to `src/ui/input_handlers/`, `src/ui/layout/`, `sr
 - `load_ssh_config_from_env(self, ...)` (or `EnvConfigLoader.load()` if hoisted; if hoisted, a thin backward-compatible classmethod stays on `EnhancedSSHRunner`)
 - `load_commands_from_csv(self, ...)`
 
-Internal implementation moves to `src/ssh/shell_execution/`, `src/ssh/multi_host/`, `src/ssh/application/`, `src/ssh/config/`.
+Internal implementation moves to `src/operations/execution/ssh/shell_execution/`, `src/operations/execution/ssh/multi_host/`, `src/operations/execution/ssh/application/`, `src/operations/execution/ssh/config/`.
 
 ---
 
-## src/ssh/ssh_runner_manager.py — `SSHRunnerManager`
+## src/operations/execution/ssh/ssh_runner_manager.py — `SSHRunnerManager`
 
 - `__init__(self, ...)`
 - `interactive(self, ...)`
 
-Internal implementation moves to `src/ssh/runner_manager/`.
+Internal implementation moves to `src/operations/execution/ssh/runner_manager/`.
 
 ---
 
-## src/auth/interactive_session.py — `InteractiveSessionManager`
+## src/mist/access/auth/interactive_session.py — `InteractiveSessionManager`
 
 - `__init__(self, ...)`
 - `initialize_mist_session_interactive(self, ...)`
 - `select_msp_and_org(self, ...)`
 
-Internal implementation moves to `src/auth/session_init/`.
+Internal implementation moves to `src/mist/access/auth/session_init/`.
 
 ---
 
-## src/gateway/gateway_override_analyzer.py — `GatewayOverrideAnalyzer`
+## src/mist/resources/gateway/gateway_override_analyzer.py — `GatewayOverrideAnalyzer`
 
 - `__init__(self, ...)`
 - `with_wan_overrides(self, ...)`
 
-Internal implementation moves to `src/gateway/overrides/`.
+Internal implementation moves to `src/mist/resources/gateway/overrides/`.
 
 ---
 
-## src/maps/maps_manager.py — `MapsManager`
+## src/interfaces/visualization/maps/maps_manager.py — `MapsManager`
 
 - `__init__(self, ...)`
 - All public methods on `MapsManager` (the dispatcher uses many — full enumeration via grep)
 
-Internal implementation moves to `src/maps/plotly_viewer/`.
+Internal implementation moves to `src/interfaces/visualization/maps/plotly_viewer/`.
 
 ---
 
-## src/export/wifi_clients_exporter.py — `WifiClientsExporter`
+## src/operations/exporting/export/wifi_clients_exporter.py — `WifiClientsExporter`
 
 - `__init__(self, ...)`
 - `execute(self, ...)`
 
-Internal implementation moves to `src/export/wifi_clients/`.
+Internal implementation moves to `src/operations/exporting/export/wifi_clients/`.
 
 ---
 
-## src/export/site_insights_exporter.py — `SiteInsightsExporter`
+## src/operations/exporting/export/site_insights_exporter.py — `SiteInsightsExporter`
 
 - `__init__(self, ...)`
 - `device_insights(self, ...)`
 - `insight_metrics(self, ...)`
 
-Internal implementation moves to `src/export/site_insights/`.
+Internal implementation moves to `src/operations/exporting/export/site_insights/`.
 
 ---
 
@@ -149,18 +149,18 @@ Internal implementation moves to `src/export/site_insights/`.
 ```powershell
 # 1. Capture the current public surface of every façade file
 $facades = @(
-  "src/websocket/manager.py",
-  "src/websocket/diag_commands.py",
-  "src/websocket/commands.py",
-  "src/websocket/service_ping_discovery.py",
-  "src/ui/tui.py",
-  "src/ssh/ssh_runner.py",
-  "src/ssh/ssh_runner_manager.py",
-  "src/auth/interactive_session.py",
-  "src/gateway/gateway_override_analyzer.py",
-  "src/maps/maps_manager.py",
-  "src/export/wifi_clients_exporter.py",
-  "src/export/site_insights_exporter.py"
+  "src/mist/realtime/websocket/manager.py",
+  "src/mist/realtime/websocket/diag_commands.py",
+  "src/mist/realtime/websocket/commands.py",
+  "src/mist/realtime/websocket/service_ping_discovery.py",
+  "src/interfaces/visualization/ui/tui.py",
+  "src/operations/execution/ssh/ssh_runner.py",
+  "src/operations/execution/ssh/ssh_runner_manager.py",
+  "src/mist/access/auth/interactive_session.py",
+  "src/mist/resources/gateway/gateway_override_analyzer.py",
+  "src/interfaces/visualization/maps/maps_manager.py",
+  "src/operations/exporting/export/wifi_clients_exporter.py",
+  "src/operations/exporting/export/site_insights_exporter.py"
 )
 foreach ($f in $facades) {
   Write-Host "=== $f ==="

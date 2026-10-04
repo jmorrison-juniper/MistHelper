@@ -59,7 +59,7 @@ This document consolidates the five clarification decisions (Q1-Q5) from `spec.m
 **Rationale**: The DI slot name should track the underlying callable's identity. When `is_debug_mode` becomes `IsDebugMode.check`, keeping the slot named `is_debug_mode_fn` creates a permanent semantic drift that will confuse every future reader ("which name is the current one?"). Doing the rename atomically:
 
 1. Eliminates a class of future bugs where a caller wires the wrong callable into a slot with a misleading name.
-2. Costs 12 mechanical edits distributed across `src/export/site_export_utils.py`, `src/gateway/overrides/_deps.py`, `src/gateway/overrides/device_data_fetcher.py`, and `MistHelper.py` — well within the atomic-PR budget.
+2. Costs 12 mechanical edits distributed across `src/operations/exporting/export/site_export_utils.py`, `src/mist/resources/gateway/overrides/_deps.py`, `src/mist/resources/gateway/overrides/device_data_fetcher.py`, and `MistHelper.py` — well within the atomic-PR budget.
 3. Is validated by the SC-014 breadcrumb-audit gate: each rename site carries the pinned template `# NOTE: renamed from <old-name>; wiring source <new-callable> at MistHelper.py:<line>.` for one-grep discoverability.
 
 **Alternatives considered**:
@@ -77,7 +77,7 @@ This document consolidates the five clarification decisions (Q1-Q5) from `spec.m
 - **Extraction/deletion breadcrumb**: `# NOTE: <symbol> extracted to <new-location>. See specs/1012-misthelper-refactor-hot-functions/spec.md.`
   - Sites: `MistHelper.py:635` (tqdm skip-pin, Action 1), `MistHelper.py` at the `is_debug_mode` delete site (Action 2), `MistHelper.py` at the `execute_with_connection_pool_management` delete site (Action 3).
 - **DI slot rename breadcrumb**: `# NOTE: renamed from <old-name>; wiring source <new-callable> at MistHelper.py:<line>.`
-  - Sites: `src/export/site_export_utils.py` at rename sites (Action 2), `src/gateway/overrides/_deps.py` at rename sites (Action 3), `src/gateway/overrides/device_data_fetcher.py:40` at rename site (Action 3).
+  - Sites: `src/operations/exporting/export/site_export_utils.py` at rename sites (Action 2), `src/mist/resources/gateway/overrides/_deps.py` at rename sites (Action 3), `src/mist/resources/gateway/overrides/device_data_fetcher.py:40` at rename site (Action 3).
 
 **Rationale**: Breadcrumbs are the mechanism by which future refactor sweeps discover why a symbol looks the way it does. The pinned template shape (specifically `See specs/1012-misthelper-refactor-hot-functions/spec.md.` in the extraction template) makes SC-014 verifiable with a single grep: `grep -R "specs/1012-misthelper-refactor-hot-functions/spec.md" src/ MistHelper.py` must return exactly the expected count. Without pinned templates, breadcrumb quality drifts across contributors and the audit degrades to eyeballing.
 
@@ -133,7 +133,7 @@ Bundling amortizes the CI cost across three actions and preserves atomicity for 
 
 **Alternatives considered**:
 
-- *Module-level free `_pool_*()` functions*. Rejected — leaks private helpers into the module namespace; any future `from src.refactors.connection_pool_executor import *` would expose them.
+- *Module-level free `_pool_*()` functions*. Rejected — leaks private helpers into the module namespace; any future `from src.foundation.support.refactors.connection_pool_executor import *` would expose them.
 - *Nested inside `execute()`*. Rejected — 3 helpers is enough size that nesting them makes `execute()` harder to read; and nesting prevents individual testing.
 
 ---

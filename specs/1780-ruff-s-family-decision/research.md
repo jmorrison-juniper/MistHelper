@@ -104,20 +104,20 @@ The repository holds 117 `# nosec` comments across 51 tracked Python files today
 
 ```text
 MistHelper.py:917                              S310  with urllib.request.urlopen(
-src/analytics/site_analytics_configurator.py:11 S105  _CONFIRM_TOKEN: str = "CONFIGURE"
-src/db/__init__.py:45                          S105  arango_password: str = "misthelper"
-src/db/__init__.py:48                          S105  redis_password: str = "misthelper"
-src/refactors/sqlite_database_writer.py:248    S101  assert (
-src/ssh/shell_execution/shell_executor.py:157  S101  assert (
-src/utils/logger_utils.py:113                  S110  except Exception:
-src/utils/zscaler_catalogue.py:679             S310  req = urllib.request.Request(url, ...)
-src/utils/zscaler_probe.py:184                 S603  completed = subprocess.run(
-src/utils/zscaler_probe.py:371                 S110  except Exception:
+src/mist/intelligence/analytics/site_analytics_configurator.py:11 S105  _CONFIRM_TOKEN: str = "CONFIGURE"
+src/foundation/persistence/db/__init__.py:45                          S105  arango_password: str = "misthelper"
+src/foundation/persistence/db/__init__.py:48                          S105  redis_password: str = "misthelper"
+src/foundation/support/refactors/sqlite_database_writer.py:248    S101  assert (
+src/operations/execution/ssh/shell_execution/shell_executor.py:157  S101  assert (
+src/foundation/support/utils/logger_utils.py:113                  S110  except Exception:
+src/foundation/support/utils/zscaler_catalogue.py:679             S310  req = urllib.request.Request(url, ...)
+src/foundation/support/utils/zscaler_probe.py:184                 S603  completed = subprocess.run(
+src/foundation/support/utils/zscaler_probe.py:371                 S110  except Exception:
 ```
 
 **Caution**: The search read the reported line only. Bandit accepts a `# nosec` comment on any line of a multi line statement. Some of these 10 results may already hold a suppression on an adjacent line. The implementer must read each statement before treating it as a new result.
 
-**Finding**: Two results look like real value. `src/db/__init__.py` lines 45 and 48 hold a default password of `misthelper` in an annotated assignment. Bandit does not report an annotated assignment under `B105`. Ruff does. That is one measured case where ruff finds a default credential that bandit misses.
+**Finding**: Two results look like real value. `src/foundation/persistence/db/__init__.py` lines 45 and 48 hold a default password of `misthelper` in an annotated assignment. Bandit does not report an annotated assignment under `B105`. Ruff does. That is one measured case where ruff finds a default credential that bandit misses.
 
 ---
 
@@ -149,7 +149,7 @@ A Windows scan does not apply the `exclude_dirs` entry for the analyzer fixtures
 **Ruff excludes** (root `pyproject.toml`, `[tool.ruff] extend-exclude`):
 
 ```text
-mist-ops-platform, web_portal, scripts, src/maps
+mist-ops-platform, web_portal, scripts, src/interfaces/visualization/maps
 ```
 
 **Bandit excludes** (root `pyproject.toml`, `[tool.bandit] exclude_dirs`):
@@ -160,8 +160,8 @@ tests, .venv, node_modules, scripts, specs, tools/test_quality_analyzer/fixtures
 
 | Tree | Ruff reads it | Bandit reads it |
 | - | - | - |
-| `src/` except `src/maps` | Yes | Yes |
-| `src/maps` | No | Yes |
+| `src/` except `src/interfaces/visualization/maps` | Yes | Yes |
+| `src/interfaces/visualization/maps` | No | Yes |
 | `mist-ops-platform` | No | Yes |
 | `web_portal` | No | Yes |
 | `tests` | Yes | No |
@@ -169,7 +169,7 @@ tests, .venv, node_modules, scripts, specs, tools/test_quality_analyzer/fixtures
 | `tools/test_quality_analyzer/fixtures` | Yes | No |
 | `scripts` | No | No |
 
-**Finding**: The two coverage sets differ in both directions. Option 3 in issue #1780 asks the team to drop bandit. That option would leave `src/maps`, `mist-ops-platform`, and `web_portal` with no security scan at all. The three trees hold 111 Python files.
+**Finding**: The two coverage sets differ in both directions. Option 3 in issue #1780 asks the team to drop bandit. That option would leave `src/interfaces/visualization/maps`, `mist-ops-platform`, and `web_portal` with no security scan at all. The three trees hold 111 Python files.
 
 The `mist-ops-platform` subtree holds its own `pyproject.toml` with a separate ruff configuration. That configuration selects `E`, `W`, `F`, `I`, `N`, `UP`, `B`, `A`, `C4`, `SIM`, `TCH`, `RUF`, and `PLR`. It does not select `S` either. The root `extend-exclude` entry means a repository wide ruff run never reads the subtree, so the subtree configuration has no effect in CI.
 
@@ -282,7 +282,7 @@ The counts below come from R1 through R9. Each count is a measurement, not an es
 | - | - |
 | New ruff results to clear | 13,566 |
 | Lines that lose their suppression and need a new one | 117 `# nosec` comments across 51 files |
-| Trees that lose every security scan | `src/maps`, `mist-ops-platform`, `web_portal` |
+| Trees that lose every security scan | `src/interfaces/visualization/maps`, `mist-ops-platform`, `web_portal` |
 | Python files in those trees | 111 |
 | Bandit rules lost | 4, including `B613` Trojan Source detection |
 | CI time saved | About 10 seconds, in a parallel job |
@@ -295,7 +295,7 @@ The counts below come from R1 through R9. Each count is a measurement, not an es
 The data supports **Option 2 with two named corrections**. The plan states the reasoning. The corrections are as follows.
 
 1. Adopt a rule that forbids a `# noqa: S...` annotation while `S` stays out of the select list. A `RUF100` check can enforce the rule. The annotation is latent, not harmless.
-2. Open a separate issue for the 10 production results in R4. Two of them are default passwords in `src/db/__init__.py`. Bandit misses them because of an annotated assignment. Correct them under the bandit gate that already exists, and do not add a second tool to find them.
+2. Open a separate issue for the 10 production results in R4. Two of them are default passwords in `src/foundation/persistence/db/__init__.py`. Bandit misses them because of an annotated assignment. Correct them under the bandit gate that already exists, and do not add a second tool to find them.
 
 Option 3 fails on the coverage data alone. It would leave 111 Python files with no security scan and would lose Trojan Source detection.
 

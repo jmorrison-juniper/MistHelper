@@ -16,7 +16,7 @@ Plan at the end to drive fixes.
 
 | File | Score | Grade | Critical | High | Medium | Low | Total |
 | - | - | - | - | - | - | - | - |
-| src\firmware\site_auto_upgrade.py | 100.0 | A+ | 0 | 0 | 0 | 0 | 0 |
+| src\operations\execution\firmware\site_auto_upgrade.py | 100.0 | A+ | 0 | 0 | 0 | 0 | 0 |
 
 ## Machine-Readable Summary
 
@@ -42,7 +42,7 @@ Plan at the end to drive fixes.
 }
 ```
 
-## File: src\firmware\site_auto_upgrade.py
+## File: src\operations\execution\firmware\site_auto_upgrade.py
 
 - **Score**: 100.0 / 100
 - **Grade**: A+

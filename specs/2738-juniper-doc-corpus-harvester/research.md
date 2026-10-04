@@ -5,12 +5,12 @@ reason, and the alternatives that the plan rejected. No open clarification remai
 
 ## 1. Package location and class promotion
 
-**Decision**: Create one new package, `src/juniper_docs/`. Move `JvdCatalogClient`,
+**Decision**: Create one new package, `src/mist/intelligence/juniper_docs/`. Move `JvdCatalogClient`,
 `JvdPdfResolver`, and `JvdDownloader` from `scripts/crawl_jvd.py` into
-`src/juniper_docs/acquire/`. Move `ReleaseNoteSelector` and `ReleaseNoteKey` from
-`scripts/jvd_doc_selector.py` into `src/juniper_docs/discovery/`. Move the module
+`src/mist/intelligence/juniper_docs/acquire/`. Move `ReleaseNoteSelector` and `ReleaseNoteKey` from
+`scripts/jvd_doc_selector.py` into `src/mist/intelligence/juniper_docs/discovery/`. Move the module
 constants (`SITE`, `HEADERS`, `TIMEOUT_SECONDS`, `DELAY_SECONDS`, the SSL context)
-into `src/juniper_docs/acquire/http_config.py`. The new feature classes extend the
+into `src/mist/intelligence/juniper_docs/acquire/http_config.py`. The new feature classes extend the
 base classes: `CompanionPdfResolver(JvdPdfResolver)`,
 `CorpusDownloader(JvdDownloader)`, and `CorpusReleaseNoteSelector(ReleaseNoteSelector)`.
 

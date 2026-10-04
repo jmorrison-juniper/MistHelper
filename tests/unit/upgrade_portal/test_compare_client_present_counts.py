@@ -19,8 +19,8 @@ from __future__ import annotations  # Postponed annotations keep every hint a pl
 
 from typing import Any  # A capture document maps a key to a free-form value.
 
-from src.upgrade_portal.compare import clients as client_compare  # The client half under test.
-from src.upgrade_portal.compare import statistics  # The roll-up that the operator reads.
+from src.interfaces.portals.upgrade_portal.compare import clients as client_compare  # The client half under test.
+from src.interfaces.portals.upgrade_portal.compare import statistics  # The roll-up that the operator reads.
 
 # --------------------------------------------------------------------------
 # The fixed values. Each one repeats a rule of the specification.

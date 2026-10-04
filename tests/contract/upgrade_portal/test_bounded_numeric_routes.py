@@ -12,8 +12,8 @@ from unittest.mock import Mock
 import pytest
 from flask import Flask, Response, jsonify
 
-from src.upgrade_portal.app.routes import capture
-from src.upgrade_portal.runtime import identity
+from src.interfaces.portals.upgrade_portal.app.routes import capture
+from src.interfaces.portals.upgrade_portal.runtime import identity
 from tests.contract.upgrade_portal.conftest import FakeMistApi
 
 INVALID_TEXT = [

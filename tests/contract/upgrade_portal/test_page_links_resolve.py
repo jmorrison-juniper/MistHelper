@@ -48,7 +48,16 @@ PATH_STAND_IN = "standin1"
 
 # The folder that holds every template of the portal. The sweep walks it, so a
 # new page joins the guard when somebody adds the file.
-TEMPLATE_FOLDER = Path(__file__).resolve().parents[3] / "src" / "upgrade_portal" / "app" / "assets" / "templates"
+TEMPLATE_FOLDER = (
+    Path(__file__).resolve().parents[3]
+    / "src"
+    / "interfaces"
+    / "portals"
+    / "upgrade_portal"
+    / "app"
+    / "assets"
+    / "templates"
+)
 
 # One run row, in the shape that `review.run_history_row` answers.
 RUN_ROW: dict[str, Any] = {

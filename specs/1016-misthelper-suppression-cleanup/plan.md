@@ -18,7 +18,7 @@ This plan removes the six remaining suppressions from `MistHelper.py`. Each repa
 
 **Target file**: `MistHelper.py`.
 
-**Support file**: `src/utils/subprocess_runner.py`, because the bootstrap installer uses the audited subprocess dispatcher.
+**Support file**: `src/foundation/support/utils/subprocess_runner.py`, because the bootstrap installer uses the audited subprocess dispatcher.
 
 ## Technical Approach
 

@@ -7,8 +7,7 @@ from typing import Final  # Mark the fixed test times and request key.
 
 import pytest  # Exercise stable failure and compare-and-swap behavior.
 
-import src.upgrade_portal.persistence.actions.repository as action_repository_module  # Inspect production imports.
-from src.upgrade_portal.persistence.actions import (  # Test the public action persistence surface.
+from src.interfaces.portals.upgrade_portal.persistence.actions import (  # Test the public action persistence surface.
     ACTION_COLLECTION,
     RUN_COLLECTION,
     ActionIdentity,
@@ -26,6 +25,9 @@ from src.upgrade_portal.persistence.actions import (  # Test the public action p
     RunActionOutcome,
     RunMutation,
     canonical_digest,
+)
+from src.interfaces.portals.upgrade_portal.persistence.actions import (
+    repository as action_repository_module,  # Inspect the production imports.
 )
 from tests.integration.upgrade_portal.run_controls import FakeDatabase  # Use no live ArangoDB store.
 

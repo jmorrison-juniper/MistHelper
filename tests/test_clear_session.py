@@ -12,7 +12,7 @@ These tests cover:
 import logging
 from unittest.mock import MagicMock, patch
 
-from src.device.utility_commands import DeviceUtilityCommands, UtilityCommandsDeps
+from src.mist.resources.device.utility_commands import DeviceUtilityCommands, UtilityCommandsDeps
 
 
 def _make_duc(safe_input_fn):
@@ -61,7 +61,7 @@ def test_clear_session_with_service_name(monkeypatch):
         captured["body"] = body
         return MagicMock()
 
-    with patch("src.device._utility_commands_clear.mistapi") as mock_api:
+    with patch("src.mist.resources.device._utility_commands_clear.mistapi") as mock_api:
         mock_api.api.v1.sites.devices.clearSiteDeviceSession = fake_clear
         duc.clear_session()
 
@@ -92,7 +92,7 @@ def test_clear_session_with_session_ids(monkeypatch):
         captured["body"] = body
         return MagicMock()
 
-    with patch("src.device._utility_commands_clear.mistapi") as mock_api:
+    with patch("src.mist.resources.device._utility_commands_clear.mistapi") as mock_api:
         mock_api.api.v1.sites.devices.clearSiteDeviceSession = fake_clear
         duc.clear_session()
 
@@ -115,9 +115,9 @@ def test_clear_session_cancel_clear_all(monkeypatch, caplog):
         called["api"] = True
         return MagicMock()
 
-    with patch("src.device._utility_commands_clear.mistapi") as mock_api:
+    with patch("src.mist.resources.device._utility_commands_clear.mistapi") as mock_api:
         mock_api.api.v1.sites.devices.clearSiteDeviceSession = fake_clear
-        with caplog.at_level("WARNING", logger="src.device._utility_commands_clear"):
+        with caplog.at_level("WARNING", logger="src.mist.resources.device._utility_commands_clear"):
             duc.clear_session()
 
     # WHY: slice 79 migrated print()->logger.warning; assertion now reads caplog, not stdout.
@@ -143,7 +143,7 @@ def test_clear_session_confirm_clear_all_proceeds(monkeypatch):
         captured["body"] = body
         return MagicMock()
 
-    with patch("src.device._utility_commands_clear.mistapi") as mock_api:
+    with patch("src.mist.resources.device._utility_commands_clear.mistapi") as mock_api:
         mock_api.api.v1.sites.devices.clearSiteDeviceSession = fake_clear
         duc.clear_session()
 
@@ -179,7 +179,7 @@ def test_clear_session_handles_400(monkeypatch, capsys, caplog):
     def fake_clear_raise(apisession, site_id, device_id, body):
         raise FakeErr()
 
-    with patch("src.device._utility_commands_clear.mistapi") as mock_api:
+    with patch("src.mist.resources.device._utility_commands_clear.mistapi") as mock_api:
         mock_api.api.v1.sites.devices.clearSiteDeviceSession = fake_clear_raise
         with caplog.at_level(logging.ERROR, logger="root"):
             duc.clear_session()

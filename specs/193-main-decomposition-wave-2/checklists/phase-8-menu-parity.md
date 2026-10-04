@@ -13,8 +13,8 @@ Date: 2026-05-26
 
 - The `MistHelper.ServicePingManager` wrapper now delegates to `_get_service_ping_manager_instance()`.
 - The extracted implementation lives in:
-  - `src/websocket/service_ping_manager.py`
-  - `src/websocket/service_ping_discovery.py`
+  - `src/mist/realtime/websocket/service_ping_manager.py`
+  - `src/mist/realtime/websocket/service_ping_discovery.py`
 - Unit-test evidence:
   - `test_misthelper_wrapper_delegates_execute`
   - `test_menu_action_120_description_is_preserved`

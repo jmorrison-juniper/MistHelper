@@ -14,14 +14,14 @@ from typing import Any, cast  # Build one deliberate invalid value for validatio
 
 import pytest  # Check fail-closed construction.
 
-from src.upgrade_portal.api.run_controls import (  # Import the explicit factory value groups.
+from src.interfaces.portals.upgrade_portal.api.run_controls import (  # Import the explicit factory value groups.
     E2EActionOverrides,
     E2EExternalOverrides,
     E2EFactoryOverrides,
     E2ERecordOverrides,
     E2ESecurityOverrides,
 )
-from src.upgrade_portal.app import factory, wiring  # Test the real construction order.
+from src.interfaces.portals.upgrade_portal.app import factory, wiring  # Test the real construction order.
 from tests.support.upgrade_portal_e2e import (  # Import the process stores and the owner check.
     ActionRecordStore,
     PortalRecordStore,

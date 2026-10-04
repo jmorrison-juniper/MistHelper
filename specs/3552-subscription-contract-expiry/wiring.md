@@ -4,7 +4,7 @@
 
 | menu | title | handler import | handler attribute | category | skip_reason | destructive | supports_fast |
 | - | - | - | - | - | - | - | - |
-| 271 | Export the subscription and contract expiry report | src.reports.subscription_expiry.operation | SubscriptionExpiryReport.run | safe |  | False | False |
+| 271 | Export the subscription and contract expiry report | src.mist.intelligence.reports.subscription_expiry.operation | SubscriptionExpiryReport.run | safe |  | False | False |
 
 ## OperationRegistry comment
 
@@ -35,13 +35,13 @@ The `safe` category row gains menu 271.
 
 ## Import line for MistHelper.py
 
-`from src.reports.subscription_expiry.operation import SubscriptionExpiryReport  # Menu 271 (issue #3552) -- subscription and contract expiry report.`
+`from src.mist.intelligence.reports.subscription_expiry.operation import SubscriptionExpiryReport  # Menu 271 (issue #3552) -- subscription and contract expiry report.`
 
 ## Deferred integration items
 
 1. Add menu 271 to `MistHelper.py`.
 2. Add menu 271 metadata to `OperationRegistry`.
-3. Add the primary key strategies above to `src/refactors/endpoint_primary_key_strategies.py`.
+3. Add the primary key strategies above to `src/foundation/support/refactors/endpoint_primary_key_strategies.py`.
 4. Update `README.md` operation counts and the menu table.
 5. Regenerate the menu wiki with `python scripts\generate_menu_wiki.py`.
 6. Regenerate the menu API map with `python -m scripts.menu_api_map`.
@@ -62,7 +62,7 @@ The run handler accepts no positional argument. It must resolve context through
 Implementation work belongs under:
 
 ```text
-src/reports/subscription_expiry/
+src/mist/intelligence/reports/subscription_expiry/
 ```
 
 Unit tests belong under:

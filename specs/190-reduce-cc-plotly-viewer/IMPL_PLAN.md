@@ -30,14 +30,14 @@ This plan decomposes `MapsManager._launch_plotly_viewer` (5,247 lines, CC=138) i
 #### Class 1: `DashTemplateManager` (Phase 1)
 
 **Purpose**: Centralize HTML/CSS template management and custom styling  
-**Location**: `src/maps/plotly_map_templates.py`  
+**Location**: `src/interfaces/visualization/maps/plotly_map_templates.py`  
 **CC Target**: ≤5 (utility class, mostly lookups)
 
 ```python
 class DashTemplateManager:
     """Manages custom Dash templates, CSS styling, and HTML layout."""
     
-    def __init__(self, org_id: str, base_template_dir: str = "src/maps/templates"):
+    def __init__(self, org_id: str, base_template_dir: str = "src/interfaces/visualization/maps/templates"):
         """
         Initialize template manager.
         
@@ -106,7 +106,7 @@ class DashTemplateManager:
 #### Class 2: `PlotlyMapDataSerializer` (Phase 2)
 
 **Purpose**: Handle JSON serialization/deserialization of callback data  
-**Location**: `src/maps/plotly_map_serializer.py`  
+**Location**: `src/interfaces/visualization/maps/plotly_map_serializer.py`  
 **CC Target**: ≤7 (handles multiple data types)
 
 ```python
@@ -215,7 +215,7 @@ class PlotlyMapDataSerializer:
 #### Class 3: `CoverageHeatmapRenderer` (Phase 3)
 
 **Purpose**: Encapsulate heatmap interpolation and rendering logic  
-**Location**: `src/maps/plotly_map_heatmap.py`  
+**Location**: `src/interfaces/visualization/maps/plotly_map_heatmap.py`  
 **CC Target**: ≤10 per method (complex algorithm)
 
 ```python
@@ -354,7 +354,7 @@ class CoverageHeatmapRenderer:
 #### Class 4: `PlotlyMapFigureBuilder` (Phase 4)
 
 **Purpose**: Build Plotly figures for all map layers (walls, devices, clients, heatmap)  
-**Location**: `src/maps/plotly_map_figures.py`  
+**Location**: `src/interfaces/visualization/maps/plotly_map_figures.py`  
 **CC Target**: ≤10 per method
 
 ```python
@@ -496,7 +496,7 @@ class PlotlyMapFigureBuilder:
 #### Class 5: `PlotlyMapCallbackManager` (Phase 5)
 
 **Purpose**: Register and organize ~25 callback functions  
-**Location**: `src/maps/plotly_map_callbacks.py`  
+**Location**: `src/interfaces/visualization/maps/plotly_map_callbacks.py`  
 **CC Target**: ≤10 per callback group (high complexity, so split into groups)
 
 ```python
@@ -640,7 +640,7 @@ class PlotlyMapCallbackManager:
 #### Class 6: `PlotlyMapViewer` (Phase 6)
 
 **Purpose**: Main orchestrator; initializes Dash app and coordinates all components  
-**Location**: `src/maps/plotly_map_viewer.py` (new file)  
+**Location**: `src/interfaces/visualization/maps/plotly_map_viewer.py` (new file)  
 **CC Target**: ≤10 (mostly delegation)
 
 ```python
@@ -778,7 +778,7 @@ class PlotlyMapViewer:
 ### New Files to Create
 
 ```
-src/maps/
+src/interfaces/visualization/maps/
   ├── plotly_map_templates.py        (NEW - Phase 1)
   │   └── class DashTemplateManager
   │
@@ -803,7 +803,7 @@ src/maps/
 ### Modified Files
 
 ```
-src/maps/maps_manager.py
+src/interfaces/visualization/maps/maps_manager.py
   - Lines 3010–8256: Replace with call to PlotlyMapViewer
   - Imports: Add new imports for extracted classes
   - CC reduction: 138 → ≤10
@@ -903,7 +903,7 @@ custom_css = """
 """
 layout = html.Div([...])  # ~130 lines
 
-# New file: src/maps/plotly_map_templates.py
+# New file: src/interfaces/visualization/maps/plotly_map_templates.py
 class DashTemplateManager:
     def get_custom_css(self):
         return "... CSS here ..."
@@ -924,7 +924,7 @@ def test_get_custom_css():
 **Step 1.3**: Update `MapsManager._launch_plotly_viewer` to use new class
 ```python
 # In MapsManager._launch_plotly_viewer:
-from src.maps.plotly_map_templates import DashTemplateManager
+from src.interfaces.visualization.maps.plotly_map_templates import DashTemplateManager
 template_mgr = DashTemplateManager(self.org_id)
 custom_css = template_mgr.get_custom_css()
 layout = template_mgr.get_layout_html()
@@ -945,12 +945,12 @@ pytest tests/maps/test_plotly_map_viewer_integration.py -v
 
 **Step 2.1**: Identify JSON serialization patterns (grep)
 ```bash
-grep -n "json.dumps\|json.loads" src/maps/maps_manager.py | head -20
+grep -n "json.dumps\|json.loads" src/interfaces/visualization/maps/maps_manager.py | head -20
 ```
 
 **Step 2.2**: Extract to `PlotlyMapDataSerializer`
 ```python
-# New class in src/maps/plotly_map_serializer.py
+# New class in src/interfaces/visualization/maps/plotly_map_serializer.py
 class PlotlyMapDataSerializer:
     def serialize_figure_state(self, fig_dict):
         return json.dumps(fig_dict, default=self._encode_defaults)
@@ -986,12 +986,12 @@ callback_data = self.serializer.serialize_figure_state(fig_dict)
 
 **Step 3.1**: Identify heatmap algorithm code (lines ~3700–4500)
 ```bash
-grep -n "def.*heatmap\|scipy.interpolate\|kriging\|idw" src/maps/maps_manager.py
+grep -n "def.*heatmap\|scipy.interpolate\|kriging\|idw" src/interfaces/visualization/maps/maps_manager.py
 ```
 
 **Step 3.2**: Copy heatmap algorithm into `CoverageHeatmapRenderer`
 ```python
-# New class in src/maps/plotly_map_heatmap.py
+# New class in src/interfaces/visualization/maps/plotly_map_heatmap.py
 class CoverageHeatmapRenderer:
     def interpolate_grid(self, data):
         # Copy kriging / IDW algorithm here
@@ -1004,7 +1004,7 @@ class CoverageHeatmapRenderer:
 ```bash
 # Run original code, capture output
 python -c "
-from src.maps.maps_manager import MapsManager
+from src.interfaces.visualization.maps.maps_manager import MapsManager
 mgr = MapsManager(...)
 result = mgr._launch_plotly_viewer()
 # Save heatmap output to JSON file
@@ -1045,7 +1045,7 @@ interpolated_grid = heatmap_renderer.interpolate_grid(data)
 
 **Step 4.1**: Extract figure building (lines ~3300–3700)
 ```python
-# New class in src/maps/plotly_map_figures.py
+# New class in src/interfaces/visualization/maps/plotly_map_figures.py
 class PlotlyMapFigureBuilder:
     def build_walls_figure(self):
         # Copy from _launch_plotly_viewer lines 3300-3350
@@ -1087,7 +1087,7 @@ device_trace = figure_builder.build_device_scatter()
 
 **Step 5.1**: Identify all callback definitions (lines ~4500–8000)
 ```bash
-grep -n "@app.callback" src/maps/maps_manager.py | wc -l
+grep -n "@app.callback" src/interfaces/visualization/maps/maps_manager.py | wc -l
 # Should be ~25
 ```
 
@@ -1101,7 +1101,7 @@ grep -n "@app.callback" src/maps/maps_manager.py | wc -l
 
 **Step 5.3**: Extract callback groups into `PlotlyMapCallbackManager`
 ```python
-# New class in src/maps/plotly_map_callbacks.py
+# New class in src/interfaces/visualization/maps/plotly_map_callbacks.py
 class PlotlyMapCallbackManager:
     def register_layer_callbacks(self):
         @self.app.callback(Output(...), Input(...))
@@ -1154,7 +1154,7 @@ callback_mgr.register_all_callbacks()
 
 **Step 6.1**: Create `PlotlyMapViewer` orchestrator
 ```python
-# New class in src/maps/plotly_map_viewer.py
+# New class in src/interfaces/visualization/maps/plotly_map_viewer.py
 class PlotlyMapViewer:
     def __init__(self, org_id, site_id, device_inv, client_data, ...):
         self.template_mgr = DashTemplateManager(org_id)
@@ -1588,14 +1588,14 @@ def test_error_handling_invalid_data():
 
 | Gate | Tool | Command | Pass Criteria |
 |---|---|---|---|
-| **Lint** | `ruff` | `ruff check src/maps/plotly_map*.py` | Zero violations |
-| **Format** | `black` | `black --check src/maps/plotly_map*.py` | All formatted |
-| **Type Check** | `mypy` | `mypy --strict src/maps/plotly_map*.py` | All types annotated, zero errors |
-| **Security** | `bandit` | `bandit -r src/maps/plotly_map*.py` | No high-severity findings |
+| **Lint** | `ruff` | `ruff check src/interfaces/visualization/maps/plotly_map*.py` | Zero violations |
+| **Format** | `black` | `black --check src/interfaces/visualization/maps/plotly_map*.py` | All formatted |
+| **Type Check** | `mypy` | `mypy --strict src/interfaces/visualization/maps/plotly_map*.py` | All types annotated, zero errors |
+| **Security** | `bandit` | `bandit -r src/interfaces/visualization/maps/plotly_map*.py` | No high-severity findings |
 | **Dependency CVE** | `pip-audit` | `pip-audit` | No new vulnerabilities |
 | **Unit Tests** | `pytest` | `pytest tests/maps/test_plotly_map*.py -v` | All pass |
-| **Coverage** | `pytest-cov` | `pytest --cov=src/maps/ --cov-report=html` | ≥70% coverage |
-| **Complexity** | `radon` | `radon cc src/maps/plotly_map*.py -a` | All methods ≤10 CC |
+| **Coverage** | `pytest-cov` | `pytest --cov=src/interfaces/visualization/maps/ --cov-report=html` | ≥70% coverage |
+| **Complexity** | `radon` | `radon cc src/interfaces/visualization/maps/plotly_map*.py -a` | All methods ≤10 CC |
 | **Code Quality** | `CodeQL` | GitHub Actions CI | Zero security findings |
 | **Regression** | Custom | `pytest tests/maps/test_*_regression.py -v` | All pass (figure/heatmap/callback equivalence) |
 
@@ -1784,8 +1784,8 @@ def test_return_type_unchanged():
 
 **Recovery**:
 ```bash
-git checkout HEAD~1 src/maps/plotly_map_serializer.py
-git checkout HEAD~1 src/maps/maps_manager.py
+git checkout HEAD~1 src/interfaces/visualization/maps/plotly_map_serializer.py
+git checkout HEAD~1 src/interfaces/visualization/maps/maps_manager.py
 pytest tests/maps/test_plotly_map_viewer_integration.py
 ```
 
@@ -1803,7 +1803,7 @@ pytest tests/maps/test_plotly_map_viewer_integration.py
 
 **Recovery**:
 ```bash
-git checkout HEAD~1 src/maps/plotly_map_heatmap.py
+git checkout HEAD~1 src/interfaces/visualization/maps/plotly_map_heatmap.py
 # Restore heatmap code to _launch_plotly_viewer
 pytest tests/maps/test_plotly_map_heatmap.py
 ```
@@ -1824,7 +1824,7 @@ pytest tests/maps/test_plotly_map_heatmap.py
 ```bash
 # Debug: print callback map
 python -c "
-from src.maps.plotly_map_viewer import PlotlyMapViewer
+from src.interfaces.visualization.maps.plotly_map_viewer import PlotlyMapViewer
 viewer = PlotlyMapViewer(...)
 app = viewer.create_app()
 print(f'Callbacks registered: {len(app.callback_map)}')
@@ -1842,12 +1842,12 @@ print(list(app.callback_map.keys()))
 git reset --hard HEAD~6  # Assumes 6 commits (1 per phase)
 
 # OR selectively revert specific files
-git checkout HEAD~1 src/maps/plotly_map_templates.py
-git checkout HEAD~2 src/maps/plotly_map_serializer.py
-git checkout HEAD~3 src/maps/plotly_map_heatmap.py
-git checkout HEAD~4 src/maps/plotly_map_figures.py
-git checkout HEAD~5 src/maps/plotly_map_callbacks.py
-git checkout HEAD~6 src/maps/plotly_map_viewer.py
+git checkout HEAD~1 src/interfaces/visualization/maps/plotly_map_templates.py
+git checkout HEAD~2 src/interfaces/visualization/maps/plotly_map_serializer.py
+git checkout HEAD~3 src/interfaces/visualization/maps/plotly_map_heatmap.py
+git checkout HEAD~4 src/interfaces/visualization/maps/plotly_map_figures.py
+git checkout HEAD~5 src/interfaces/visualization/maps/plotly_map_callbacks.py
+git checkout HEAD~6 src/interfaces/visualization/maps/plotly_map_viewer.py
 
 # Re-run original implementation
 pytest tests/maps/ -v

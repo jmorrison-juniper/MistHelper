@@ -6,9 +6,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.capture.packet_capture import PacketCaptureManager
-from src.capture.packet_capture_download import PacketCaptureDownloadManager
-from src.capture.packet_capture_download import (
+from src.operations.execution.capture.packet_capture import PacketCaptureManager
+from src.operations.execution.capture.packet_capture_download import PacketCaptureDownloadManager
+from src.operations.execution.capture.packet_capture_download import (
     PacketCaptureDownloadManager as FailureModePacketCaptureDownloadManager,
 )  # WHY: prove new HTTP status tests call src.
 
@@ -16,7 +16,7 @@ from src.capture.packet_capture_download import (
 @pytest.fixture()
 def manager() -> PacketCaptureManager:
     """Create a PacketCaptureManager with deterministic org-id dependency."""
-    with patch("src.capture.packet_capture._get_config_utils") as config_utils:
+    with patch("src.operations.execution.capture.packet_capture._get_config_utils") as config_utils:
         config_utils.return_value.get_cached_or_prompted_org_id.return_value = "org-1"
         return PacketCaptureManager(MagicMock(), org_id=None)
 
@@ -44,7 +44,9 @@ def test_poll_and_download_uses_download_manager_poll_and_save(manager: PacketCa
     """poll_and_download polls via the download manager and saves via its static saver."""
     manager._download_manager = MagicMock()  # Replace the download manager collaborator
     manager._download_manager.poll_for_pcap_url.return_value = "https://example/cap-9.pcap"  # URL ready
-    with patch("src.capture.packet_capture.PacketCaptureDownloadManager.save_pcap_file") as mock_save:
+    with patch(
+        "src.operations.execution.capture.packet_capture.PacketCaptureDownloadManager.save_pcap_file"
+    ) as mock_save:
         manager._poll_and_download_pcap(lambda: MagicMock(), "cap-9", 60, "org_")  # Drive the flow
     manager._download_manager.poll_for_pcap_url.assert_called_once()  # Polled once via the manager
     mock_save.assert_called_once_with("https://example/cap-9.pcap", "cap-9", "org_")  # Saved with org prefix
@@ -63,7 +65,9 @@ def test_fetch_completed_pcaps_reports_http_404(capsys, caplog: pytest.LogCaptur
     """A 404 listing response must report the status and return no captures."""
     response = MagicMock(status_code=404, data={"detail": "not found"})  # Model a client-side API refusal.
     downloader = PacketCaptureDownloadManager()  # Drive the product helper that reads response status.
-    caplog.set_level("WARNING", logger="src.capture.packet_capture_download")  # Capture the audit status record.
+    caplog.set_level(
+        "WARNING", logger="src.operations.execution.capture.packet_capture_download"
+    )  # Capture the audit status record.
 
     result = downloader.fetch_completed_pcaps(lambda: response, 1)  # Drive the real list status path.
 
@@ -76,7 +80,9 @@ def test_fetch_completed_pcaps_reports_http_503(capsys, caplog: pytest.LogCaptur
     """A 503 listing response must report the status and return no captures."""
     response = MagicMock(status_code=503, data={"detail": "unavailable"})  # Model a server-side API failure.
     downloader = FailureModePacketCaptureDownloadManager()  # Drive the real src helper that reads response status.
-    caplog.set_level("WARNING", logger="src.capture.packet_capture_download")  # Capture the audit status record.
+    caplog.set_level(
+        "WARNING", logger="src.operations.execution.capture.packet_capture_download"
+    )  # Capture the audit status record.
 
     result = downloader.fetch_completed_pcaps(lambda: response, 1)  # Drive the real list status path.
 

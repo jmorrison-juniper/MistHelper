@@ -48,9 +48,9 @@ import it. A shared plural helper for all modules is out of scope.
 
 | Place | Role |
 | - | - |
-| `src/upgrade_portal/upgrade/org_reconcile.py`, `_summary` | Writes the text. |
-| `src/upgrade_portal/upgrade/org_reconcile.py`, `OrgUncertainChild.view` | Reads the stored text for the page. |
-| `src/upgrade_portal/app/assets/templates/upgrade/org_progress.html`, line 251 | Shows the text after "Last check". |
+| `src/interfaces/portals/upgrade_portal/upgrade/org_reconcile.py`, `_summary` | Writes the text. |
+| `src/interfaces/portals/upgrade_portal/upgrade/org_reconcile.py`, `OrgUncertainChild.view` | Reads the stored text for the page. |
+| `src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_progress.html`, line 251 | Shows the text after "Last check". |
 | The JSON answer of the check route | Returns the verdict of each child job. |
 
 ## Finding: The tests that read the old text

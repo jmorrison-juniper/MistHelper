@@ -13,8 +13,11 @@ from typing import Any  # Type the small fixture maps without adding a model.
 
 import pytest  # Use pytest for monkeypatch and exception checks.
 
-from src.upgrade_portal.compare import clients  # Import the real comparison path.
-from src.utils.performance import Recorder, RecorderSettings  # Build isolated recorders for each test.
+from src.foundation.support.utils.performance import (
+    Recorder,
+    RecorderSettings,
+)  # Build isolated recorders for each test.
+from src.interfaces.portals.upgrade_portal.compare import clients  # Import the real comparison path.
 
 PRIVATE_MAC = "aa:bb:cc:dd:ee:ff"  # A private client address that must not enter the event.
 PRIVATE_IP = "10.20.30.40"  # A private client IP that must not enter the event.

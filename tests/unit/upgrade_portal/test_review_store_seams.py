@@ -27,7 +27,7 @@ from typing import Any
 import pytest
 from flask import Flask, session  # Supply explicit signed selection to the real source adapters.
 
-from src.upgrade_portal.app.routes import review
+from src.interfaces.portals.upgrade_portal.app.routes import review
 
 SITE_ID = "cf36153a-97bb-4974-8f8f-e9cc25d64d83"
 ORG_ID = "org-review-store-seams"  # Use one explicit selected organization in this isolated unit file.

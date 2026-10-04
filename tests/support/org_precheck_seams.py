@@ -15,7 +15,7 @@ import logging
 from collections.abc import Iterable, MutableMapping
 from typing import Any
 
-from src.upgrade_portal.app.routes.upgrade import PRECHECK_ADOPTER_KEY
+from src.interfaces.portals.upgrade_portal.app.routes.upgrade import PRECHECK_ADOPTER_KEY
 
 logger = logging.getLogger(__name__)  # The seam logs under this module.
 

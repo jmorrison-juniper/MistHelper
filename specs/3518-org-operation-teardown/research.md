@@ -81,7 +81,7 @@ The value `true` means that the operation is live.
 
 **Rationale**:
 
-- The route builds the field from `FINAL_OPERATION_STATES` of `src/firmware/aggregate_upgrade_service.py`.
+- The route builds the field from `FINAL_OPERATION_STATES` of `src/operations/execution/firmware/aggregate_upgrade_service.py`.
   The progress page uses the same field to show the cancel form (issue #3225).
   So the teardown holds no copy of the list of final states.
 - A status answer with no boolean field fails the teardown.

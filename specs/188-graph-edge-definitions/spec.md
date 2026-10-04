@@ -115,6 +115,6 @@ A NOC engineer performs a multi-hop traversal: starting from an organization, tr
 
 - The OpenAPI spec at `documentation/mist-api-openapi31json.json` contains accurate response schemas for all org-level endpoints.
 - Foreign-key relationships are expressed as fields ending in `_id` (e.g., `site_id`, `device_id`, `wlan_id`, `template_id`) or as array fields containing IDs (e.g., `applies.site_ids`, `device_ids`).
-- The `mistapi` Python library function names in `src/org_data_collector.py` map 1:1 to OpenAPI endpoint paths.
+- The `mistapi` Python library function names in `src/operations/wan/org_data_collector.py` map 1:1 to OpenAPI endpoint paths.
 - Edge creation during import can be done inline (same write pass) without requiring a separate post-processing step.
 - Placeholder vertices (if used for missing targets) will be updated with real data when that entity's endpoint is eventually imported.

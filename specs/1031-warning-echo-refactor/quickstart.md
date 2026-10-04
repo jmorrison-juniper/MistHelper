@@ -26,7 +26,7 @@ Expected baseline: `warning_count` in the low thousands (roughly 7,900 per the s
 
 ## Run 1: Helper unit tests
 
-Once `src/utils/console.py` and `tests/unit/utils/test_console.py` are in place, run:
+Once `src/foundation/support/utils/console.py` and `tests/unit/utils/test_console.py` are in place, run:
 
 ```bash
 cd src && pytest ../tests/unit/utils/test_console.py -v
@@ -115,14 +115,14 @@ grep -Rn "logging.warning" src MistHelper.py | grep -F "Legacy console echo"
 ```bash
 for f in \
   MistHelper.py \
-  src/reports/e911_bssid.py \
-  src/reports/offline_device_reporter.py \
-  src/reports/global_wired_client_report_generator.py \
-  src/reports/wired_client_manufacturer_report_generator.py \
-  src/reports/sfp_transceiver_data_processor.py \
-  src/auth/interactive/clouds.py; do
+  src/mist/intelligence/reports/e911_bssid.py \
+  src/mist/intelligence/reports/offline_device_reporter.py \
+  src/mist/intelligence/reports/global_wired_client_report_generator.py \
+  src/mist/intelligence/reports/wired_client_manufacturer_report_generator.py \
+  src/mist/intelligence/reports/sfp_transceiver_data_processor.py \
+  src/mist/access/auth/interactive/clouds.py; do
     echo -n "$f: "
-    grep -c "from src.utils.console import echo" "$f"
+    grep -c "from src.foundation.support.utils.console import echo" "$f"
 done
 ```
 
@@ -135,12 +135,12 @@ Cross-check the count of remaining `logging.warning(` calls in the seven affecte
 ```bash
 grep -Rn "logging.warning(" \
   MistHelper.py \
-  src/reports/e911_bssid.py \
-  src/reports/offline_device_reporter.py \
-  src/reports/global_wired_client_report_generator.py \
-  src/reports/wired_client_manufacturer_report_generator.py \
-  src/reports/sfp_transceiver_data_processor.py \
-  src/auth/interactive/clouds.py \
+  src/mist/intelligence/reports/e911_bssid.py \
+  src/mist/intelligence/reports/offline_device_reporter.py \
+  src/mist/intelligence/reports/global_wired_client_report_generator.py \
+  src/mist/intelligence/reports/wired_client_manufacturer_report_generator.py \
+  src/mist/intelligence/reports/sfp_transceiver_data_processor.py \
+  src/mist/access/auth/interactive/clouds.py \
   | wc -l
 ```
 
@@ -160,7 +160,7 @@ grep -Rn "logging.warning(" \
 | No menu text at WARNING | `grep WARNING - after.log \| grep -E "Menu\|Report\|Select"` | empty |
 | Marker gone | `grep -R "# Legacy console echo routed via logger\." src MistHelper.py` | empty |
 | Legacy pattern gone | `grep logging.warning ... \| grep Legacy console echo` | empty |
-| Import present | `grep -c "from src.utils.console import echo" <file>` | 1 in every migrated file |
+| Import present | `grep -c "from src.foundation.support.utils.console import echo" <file>` | 1 in every migrated file |
 | Legitimate warnings preserved | `grep -c logging.warning( ...` | approximately 32 |
 
 If every gate passes, the refactor met all seven success criteria (SC-001 through SC-007) and is ready to merge.

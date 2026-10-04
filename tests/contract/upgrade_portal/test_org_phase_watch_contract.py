@@ -24,13 +24,12 @@ import pytest
 from flask import Flask
 from flask.testing import FlaskClient
 
-from src.firmware.aggregate_upgrade_service import AggregateUpgradeService
-from src.upgrade_portal.app.routes import org_upgrade, select
-from src.upgrade_portal.app.routes.org_postcheck import OrgPostCheckBridge
-from src.upgrade_portal.runtime import identity
-from src.upgrade_portal.runtime.runs import PHASE_ORDER
-from src.upgrade_portal.upgrade import options as option_rules
-from src.upgrade_portal.upgrade.org_cascade.record import (
+from src.interfaces.portals.upgrade_portal.app.routes import org_upgrade, select
+from src.interfaces.portals.upgrade_portal.app.routes.org_postcheck import OrgPostCheckBridge
+from src.interfaces.portals.upgrade_portal.runtime import identity
+from src.interfaces.portals.upgrade_portal.runtime.runs import PHASE_ORDER
+from src.interfaces.portals.upgrade_portal.upgrade import options as option_rules
+from src.interfaces.portals.upgrade_portal.upgrade.org_cascade.record import (
     ANCHORS_KEY,
     NO_CHILD_NOTE,
     NOT_STARTED_NOTE,
@@ -40,8 +39,9 @@ from src.upgrade_portal.upgrade.org_cascade.record import (
     OrgPhaseWatch,
     WatchState,
 )
-from src.upgrade_portal.upgrade.org_postcheck import OrgPostCheckRows, PostCheckResult
-from src.upgrade_portal.upgrade.org_postcheck_view import WAITING_MESSAGE
+from src.interfaces.portals.upgrade_portal.upgrade.org_postcheck import OrgPostCheckRows, PostCheckResult
+from src.interfaces.portals.upgrade_portal.upgrade.org_postcheck_view import WAITING_MESSAGE
+from src.operations.execution.firmware.aggregate_upgrade_service import AggregateUpgradeService
 from tests.support.lock_store_double import FakeLockStore
 from tests.support.org_cascade_seams import CascadeSeamStandIn
 from tests.support.org_precheck_seams import PrecheckAdopterStandIn

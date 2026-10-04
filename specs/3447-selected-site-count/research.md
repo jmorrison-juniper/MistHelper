@@ -4,7 +4,7 @@
 
 ## R1: The source of the count
 
-The route `options_page` in `src/upgrade_portal/app/routes/org_upgrade.py`
+The route `options_page` in `src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py`
 passes one row for each selected site as `sites`. The template
 `org_options.html` sets `rows = sites | default([], true)` on line 2. The note
 on line 27 prints `rows | length`, and then the fixed word "sites".

@@ -20,8 +20,8 @@ from typing import Any
 import pytest
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
-from src.upgrade_portal.app.routes import review, select
-from src.upgrade_portal.compare import render
+from src.interfaces.portals.upgrade_portal.app.routes import review, select
+from src.interfaces.portals.upgrade_portal.compare import render
 
 _TEMPLATE_ROOT = Path(select.__file__).resolve().parents[1] / "assets" / "templates"  # The real template folder.
 _PICKER_TEMPLATE = "select/orgs.html"  # The organization picker.

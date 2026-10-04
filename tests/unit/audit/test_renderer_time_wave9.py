@@ -1,4 +1,4 @@
-"""Wave 9 P2 coverage tests for src.audit._renderer_time.
+"""Wave 9 P2 coverage tests for src.mist.access.audit._renderer_time.
 
 Both epoch-formatter helpers have simple guard-then-strftime bodies, so
 these tests hit both branches (sentinel 0 vs valid epoch) directly.
@@ -8,7 +8,7 @@ from __future__ import annotations  # WHY: postponed eval for consistency with p
 
 import pytest  # WHY: parametrized branch coverage of the two formatter functions
 
-from src.audit._renderer_time import epoch_to_readable, epoch_to_short
+from src.mist.access.audit._renderer_time import epoch_to_readable, epoch_to_short
 
 
 class TestEpochToReadable:

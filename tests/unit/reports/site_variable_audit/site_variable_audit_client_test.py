@@ -6,7 +6,7 @@ from typing import Any  # Type simple fixture doubles.
 
 import pytest  # Assert client error behavior without network access.
 
-from src.reports.site_variable_audit.client import (  # Test client read behavior.
+from src.mist.intelligence.reports.site_variable_audit.client import (  # Test client read behavior.
     SiteVariableAuditClient,
     SiteVariableAuditReadError,
 )

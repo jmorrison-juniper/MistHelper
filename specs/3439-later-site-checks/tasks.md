@@ -50,11 +50,11 @@ These tasks block User Stories 1, 2, and 3.
   - Result on the new code: 20 of 20 passed. The unit suite of the upgrade
     portal passed with 3894 tests.
 - [x] T007 Add the three constants, `SiteListIncompleteError`, and
-  `SiteList.missing_sites` to `src/upgrade_portal/app/routes/select.py`.
-- [x] T008 Change `find_site` in `src/upgrade_portal/app/routes/select.py`, so
+  `SiteList.missing_sites` to `src/interfaces/portals/upgrade_portal/app/routes/select.py`.
+- [x] T008 Change `find_site` in `src/interfaces/portals/upgrade_portal/app/routes/select.py`, so
   that it raises the error for a missing site of a partial list.
 - [x] T009 Add the application error handler of `SiteListIncompleteError` to
-  `src/upgrade_portal/app/routes/select.py`. A browser page receives the
+  `src/interfaces/portals/upgrade_portal/app/routes/select.py`. A browser page receives the
   shared error page. A script receives the error envelope. A refused form post
   from a browser also receives the link back to the form.
 - [x] T010 Add the later-check organization, its operator, its three sites,
@@ -113,7 +113,7 @@ Press the forward control while the site read loses page two.
     organization holds no such site. The kept-site test and the whole-list
     test passed, as the plan expects.
 - [x] T017 [US2] Add `site_set_refusal` to
-  `src/upgrade_portal/app/routes/select.py`. Change `site_choice_refusal` to
+  `src/interfaces/portals/upgrade_portal/app/routes/select.py`. Change `site_choice_refusal` to
   return its answer.
 - [x] T018 [US2] Add the site choice journey to
   `tests/e2e/upgrade_portal/test_later_site_checks.py`. Save a screenshot, and
@@ -148,7 +148,7 @@ each later step while the site read loses page two.
   - Result: 20 of 36 contract tests failed at `3d8cce8c`. All 36 pass after
     the change.
 - [x] T021 [US3] Change `selected_rows` in
-  `src/upgrade_portal/app/routes/org_upgrade.py`, so that it raises the error
+  `src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py`, so that it raises the error
   for a missing site of a partial list.
 - [x] T022 [US3] Add the plan step journeys and the retry journey to
   `tests/e2e/upgrade_portal/test_later_site_checks.py`. Save a screenshot of
@@ -169,7 +169,7 @@ each later step while the site read loses page two.
 - [x] T023 [P] Name the 503 answer in
   `specs/1823-upgrade-capture-portal/contracts/http-api.md` and
   `specs/1823-upgrade-capture-portal/contracts/README.md`. Name the status 503
-  in the comment of `src/upgrade_portal/app/assets/templates/error.html`.
+  in the comment of `src/interfaces/portals/upgrade_portal/app/assets/templates/error.html`.
 - [x] T024 [P] Add `changelog.d/issue-3439-later-site-checks.md`.
 - [x] T025 Count the cloud reads of each step in
   `tests/contract/upgrade_portal/test_issue_3439_later_site_checks.py` (SC-005).

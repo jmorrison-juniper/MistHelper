@@ -1,4 +1,4 @@
-"""Tests for src.websocket.polling.message_router.
+"""Tests for src.mist.realtime.websocket.polling.message_router.
 
 Covers every branch of MessageRouter and its module-level helpers:
 route() success/error/unknown-event dispatch; _parse for str/dict/other;
@@ -14,8 +14,8 @@ import logging
 import threading
 from typing import Any
 
-import src.websocket.polling.message_router as mr
-from src.websocket.polling.message_router import MessageRouter
+import src.mist.realtime.websocket.polling.message_router as mr
+from src.mist.realtime.websocket.polling.message_router import MessageRouter
 
 
 def _make_router(debug: bool = False) -> tuple[MessageRouter, dict[str, Any], set[str], threading.Lock]:

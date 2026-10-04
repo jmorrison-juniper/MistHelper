@@ -4,12 +4,12 @@
 **Spec Directory**: `specs/1006-org-ap-upgrader-compliance/`
 **Created**: 2026-07-02
 **Status**: Draft
-**Target Module**: `src/firmware/org_ap_upgrader.py`
-**Reference Pattern**: PR #3 (`src/firmware/firmware_manager.py`) — same successful shape
+**Target Module**: `src/operations/execution/firmware/org_ap_upgrader.py`
+**Reference Pattern**: PR #3 (`src/operations/execution/firmware/firmware_manager.py`) — same successful shape
 
 ## Problem Statement
 
-The org-level AP firmware upgrader module (`src/firmware/org_ap_upgrader.py`, 2393 LOC, 157 functions, one class `OrgLevelAPFirmwareUpgrader`) currently scores **60.0 / D-** on the project compliance analyzer. The baseline report at `specs/1006-org-ap-upgrader-compliance/artifacts/baseline_compliance_report.md` enumerates **27 violations**:
+The org-level AP firmware upgrader module (`src/operations/execution/firmware/org_ap_upgrader.py`, 2393 LOC, 157 functions, one class `OrgLevelAPFirmwareUpgrader`) currently scores **60.0 / D-** on the project compliance analyzer. The baseline report at `specs/1006-org-ap-upgrader-compliance/artifacts/baseline_compliance_report.md` enumerates **27 violations**:
 
 - **2 high**: 1 CONV-COMMENTS at file scope (inline comment coverage is only 16.0% — 12 concrete uncommented lines cited at 11, 13, 14, 15, 16, 17, 18, 71, 72, 73, 75, 76), and 1 STRUCT-PARAMS on `__init__` at line 41 (11 parameters, limit 5).
 - **11 medium** STRUCT-LENGTH violations on functions exceeding 25 lines: `__init__` (45 lines @ L41), `_execute_msp_mode` (28 @ L178), `_confirm_msp_orgs` (31 @ L232), `_execute_org_upgrades` (42 @ L264), `_select_orgs_from_msp` (31 @ L448), `_step1_select_site_scope` (32 @ L761), `_fetch_org_aps` (27 @ L883), `_apply_version_selection` (28 @ L1340), `_configure_canary_phases` (26 @ L1928), `_execute_upgrades` (28 @ L2242), `_process_upgrade_response` (26 @ L2347).
@@ -17,7 +17,7 @@ The org-level AP firmware upgrader module (`src/firmware/org_ap_upgrader.py`, 23
 
 The 16.0% inline comment coverage is the root cause of the CONV-COMMENTS high violation and drops the overall grade to D-. The 11-parameter `__init__` and eleven oversized functions prevent maintainer review under the project's 25-line function budget, while the fourteen CC>5 functions push branching decisions beyond the analyzer's target. Together they place this module at a **40-point deficit** from the project's A+ / 100.0 requirement.
 
-MistHelper.py already depends on this module through **four lazy-import shims** (line 20237 docstring `"""Thin wrapper that delegates to src.firmware.org_ap_upgrader."""` and lines 20247, 20269, 20289, 20305 all doing `from src.firmware.org_ap_upgrader import OrgLevelAPFirmwareUpgrader as _Impl`). Any refactor must preserve those callsites verbatim and keep the public API surface byte-identical so NOC operators experience zero behavioral drift.
+MistHelper.py already depends on this module through **four lazy-import shims** (line 20237 docstring `"""Thin wrapper that delegates to src.operations.execution.firmware.org_ap_upgrader."""` and lines 20247, 20269, 20289, 20305 all doing `from src.operations.execution.firmware.org_ap_upgrader import OrgLevelAPFirmwareUpgrader as _Impl`). Any refactor must preserve those callsites verbatim and keep the public API surface byte-identical so NOC operators experience zero behavioral drift.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -38,11 +38,11 @@ A network operations engineer opens MistHelper, navigates to the org-level AP fi
 
 ### User Story 2 - Maintainer Reviews the Module (Priority: P2)
 
-A maintainer opens `src/firmware/org_ap_upgrader.py` for code review or extension. Every function is at most 25 lines, has cyclomatic complexity at most 5, takes at most 5 parameters, and every executable line carries a `# WHY:` inline comment explaining intent. The 11-parameter `__init__` has been replaced by a frozen, `slots=True`, `kw_only=True` `OrgAPUpgraderConfig` dataclass with `__post_init__` validation. Long orchestration functions have been decomposed using the Prepare / Compute / Persist / Present (PCPP) pattern and phase-helper extraction, mirroring the shape of `FirmwareManagerConfig` in PR #3.
+A maintainer opens `src/operations/execution/firmware/org_ap_upgrader.py` for code review or extension. Every function is at most 25 lines, has cyclomatic complexity at most 5, takes at most 5 parameters, and every executable line carries a `# WHY:` inline comment explaining intent. The 11-parameter `__init__` has been replaced by a frozen, `slots=True`, `kw_only=True` `OrgAPUpgraderConfig` dataclass with `__post_init__` validation. Long orchestration functions have been decomposed using the Prepare / Compute / Persist / Present (PCPP) pattern and phase-helper extraction, mirroring the shape of `FirmwareManagerConfig` in PR #3.
 
 **Why this priority**: Once the module ships to A+, every future edit inherits the compliance floor. Reducing per-function surface area and lifting comment coverage from 16% to the analyzer target directly cuts the time a reviewer spends locating the intent of any given line and prevents complexity regressions from slipping in.
 
-**Independent Test**: Run the compliance analyzer (`python -m tools.compliance_analyzer src/firmware/org_ap_upgrader.py`) and verify a score of 100.0 / A+ with zero violations across all four rules (CONV-COMMENTS, STRUCT-PARAMS, STRUCT-LENGTH, STRUCT-COMPLEXITY). Independently, `git grep -nE "# noqa|# type: ignore|# pragma: no cover" src/firmware/org_ap_upgrader.py` must return zero matches.
+**Independent Test**: Run the compliance analyzer (`python -m tools.compliance_analyzer src/operations/execution/firmware/org_ap_upgrader.py`) and verify a score of 100.0 / A+ with zero violations across all four rules (CONV-COMMENTS, STRUCT-PARAMS, STRUCT-LENGTH, STRUCT-COMPLEXITY). Independently, `git grep -nE "# noqa|# type: ignore|# pragma: no cover" src/operations/execution/firmware/org_ap_upgrader.py` must return zero matches.
 
 **Acceptance Scenarios**:
 
@@ -56,7 +56,7 @@ The CI gate operator (or automated CI job) runs the standard project quality gat
 
 **Why this priority**: Merging cleanly through the existing CI matrix, with no analyzer config changes, is the only way to guarantee the improvement is real rather than accounting. The audit trail (baseline vs. final analyzer report side-by-side in the spec directory) is what allows a future reviewer to trust that the score jump is legitimate.
 
-**Independent Test**: On the feature branch, run in sequence: `python -m tools.compliance_analyzer src/firmware/org_ap_upgrader.py` (expect 100.0 / A+, 0 violations), `ruff check src/firmware/org_ap_upgrader.py` (expect exit 0), `black --check src/firmware/org_ap_upgrader.py` (expect exit 0), `mypy --strict src/firmware/org_ap_upgrader.py` (expect exit 0), and the module's associated pytest suite (expect same pass count as `main`). Confirm `git diff main -- pyproject.toml setup.cfg tools/compliance_analyzer/` shows no analyzer-threshold changes.
+**Independent Test**: On the feature branch, run in sequence: `python -m tools.compliance_analyzer src/operations/execution/firmware/org_ap_upgrader.py` (expect 100.0 / A+, 0 violations), `ruff check src/operations/execution/firmware/org_ap_upgrader.py` (expect exit 0), `black --check src/operations/execution/firmware/org_ap_upgrader.py` (expect exit 0), `mypy --strict src/operations/execution/firmware/org_ap_upgrader.py` (expect exit 0), and the module's associated pytest suite (expect same pass count as `main`). Confirm `git diff main -- pyproject.toml setup.cfg tools/compliance_analyzer/` shows no analyzer-threshold changes.
 
 **Acceptance Scenarios**:
 
@@ -70,7 +70,7 @@ The CI gate operator (or automated CI job) runs the standard project quality gat
 - **Long orchestration functions where every line matters** (e.g., `_execute_org_upgrades` at 42 lines, `__init__` at 45 lines): decomposition must preserve execution order and log sequence — helper extraction is a mechanical refactor, not a semantic rewrite.
 - **Functions with CC 7 driven by input validation** (`_organize_by_version`, `_parse_time_input`, `_parse_canary_phase_values`): guard-clause extraction and small validator helpers must not change which inputs raise vs. return None vs. accept a default.
 - **The 11-parameter `__init__` includes runtime handles** (session, logger, config paths, mode flags): the `OrgAPUpgraderConfig` dataclass must hold only stateless configuration; live handles remain direct constructor parameters within the 5-parameter budget.
-- **MistHelper.py lazy imports use `as _Impl` aliasing**: the class name `OrgLevelAPFirmwareUpgrader` and module path `src.firmware.org_ap_upgrader` must not change.
+- **MistHelper.py lazy imports use `as _Impl` aliasing**: the class name `OrgLevelAPFirmwareUpgrader` and module path `src.operations.execution.firmware.org_ap_upgrader` must not change.
 - **ASCII-only log constraint**: any new log strings introduced during decomposition must remain ASCII (no unicode arrows, checkmarks, or emoji).
 - **`input()` usage during interactive prompts**: any prompt call must go through `safe_input(context=...)` with an explicit context string; direct `input(...)` calls are forbidden.
 
@@ -80,14 +80,14 @@ The CI gate operator (or automated CI job) runs the standard project quality gat
 
 **Public API preservation**
 
-- **FR-001**: The class `OrgLevelAPFirmwareUpgrader` MUST retain its current fully-qualified path `src.firmware.org_ap_upgrader.OrgLevelAPFirmwareUpgrader` so the four lazy imports in MistHelper.py (lines 20247, 20269, 20289, 20305) continue to resolve unchanged.
+- **FR-001**: The class `OrgLevelAPFirmwareUpgrader` MUST retain its current fully-qualified path `src.operations.execution.firmware.org_ap_upgrader.OrgLevelAPFirmwareUpgrader` so the four lazy imports in MistHelper.py (lines 20247, 20269, 20289, 20305) continue to resolve unchanged.
 - **FR-002**: The constructor call signature `OrgLevelAPFirmwareUpgrader(...)` as invoked by MistHelper.py MUST remain compatible; if the underlying `__init__` is decomposed to accept a config dataclass, a compatibility path MUST still accept the current argument list (either through positional/keyword acceptance or by having MistHelper.py pass a config object that the refactor builds — no shim wrapper class or delegator module allowed).
 - **FR-003**: The instance method `.run()` MUST retain its current signature, return contract, and side-effect sequence byte-identical to `main` HEAD as observed by stdout, log lines, and Mist API payloads.
-- **FR-004**: The docstring on line 20237 of MistHelper.py (`"""Thin wrapper that delegates to src.firmware.org_ap_upgrader."""`) MUST remain accurate — the refactor MUST NOT introduce a delegator or wrapper class inside `src/firmware/org_ap_upgrader.py` itself.
+- **FR-004**: The docstring on line 20237 of MistHelper.py (`"""Thin wrapper that delegates to src.operations.execution.firmware.org_ap_upgrader."""`) MUST remain accurate — the refactor MUST NOT introduce a delegator or wrapper class inside `src/operations/execution/firmware/org_ap_upgrader.py` itself.
 
 **Compliance remediation**
 
-- **FR-005**: Every executable line of code in `src/firmware/org_ap_upgrader.py` MUST carry a same-line `# WHY:` inline comment describing intent, sufficient to bring inline comment coverage from 16.0% to the analyzer threshold that resolves CONV-COMMENTS.
+- **FR-005**: Every executable line of code in `src/operations/execution/firmware/org_ap_upgrader.py` MUST carry a same-line `# WHY:` inline comment describing intent, sufficient to bring inline comment coverage from 16.0% to the analyzer threshold that resolves CONV-COMMENTS.
 - **FR-006**: Every function in the refactored module MUST have at most 5 parameters (STRUCT-PARAMS resolution for `__init__`).
 - **FR-007**: Every function in the refactored module MUST span at most 25 lines (STRUCT-LENGTH resolution for the 11 listed functions).
 - **FR-008**: Every function in the refactored module MUST have cyclomatic complexity at most 5 (STRUCT-COMPLEXITY resolution for the 14 listed functions).
@@ -103,8 +103,8 @@ The CI gate operator (or automated CI job) runs the standard project quality gat
 
 **Non-negotiables (what MUST NOT happen)**
 
-- **FR-015**: No `# noqa`, `# type: ignore`, or `# pragma: no cover` comments MAY be introduced anywhere in `src/firmware/org_ap_upgrader.py`. `git grep -nE "# noqa|# type: ignore|# pragma: no cover" src/firmware/org_ap_upgrader.py` MUST return zero matches on the final tree.
-- **FR-016**: No wrapper, delegator, alias, or shim module or class MAY be introduced inside `src/firmware/org_ap_upgrader.py`. The refactor MUST land as an in-place rewrite of the existing module.
+- **FR-015**: No `# noqa`, `# type: ignore`, or `# pragma: no cover` comments MAY be introduced anywhere in `src/operations/execution/firmware/org_ap_upgrader.py`. `git grep -nE "# noqa|# type: ignore|# pragma: no cover" src/operations/execution/firmware/org_ap_upgrader.py` MUST return zero matches on the final tree.
+- **FR-016**: No wrapper, delegator, alias, or shim module or class MAY be introduced inside `src/operations/execution/firmware/org_ap_upgrader.py`. The refactor MUST land as an in-place rewrite of the existing module.
 - **FR-017**: No analyzer threshold, budget, rule toggle, or exclusion in `pyproject.toml`, `setup.cfg`, `tools/compliance_analyzer/`, or any other configuration file MAY be relaxed to reach A+ / 100.0. The score gain MUST come entirely from source-level improvements.
 - **FR-018**: The four MistHelper.py lazy-import shims at lines 20237, 20247, 20269, 20289, and 20305 MUST remain unchanged. No new imports, no reordering, no comment edits, no whitespace churn on those lines.
 
@@ -119,12 +119,12 @@ The CI gate operator (or automated CI job) runs the standard project quality gat
 
 ### Measurable Outcomes
 
-- **SC-001**: The compliance analyzer, run against `src/firmware/org_ap_upgrader.py` on the feature branch tip, reports **100.0 / A+** with **zero** violations across CONV-COMMENTS, STRUCT-PARAMS, STRUCT-LENGTH, and STRUCT-COMPLEXITY. Delta from baseline: +40.0 points, D- to A+, 27 violations to 0.
+- **SC-001**: The compliance analyzer, run against `src/operations/execution/firmware/org_ap_upgrader.py` on the feature branch tip, reports **100.0 / A+** with **zero** violations across CONV-COMMENTS, STRUCT-PARAMS, STRUCT-LENGTH, and STRUCT-COMPLEXITY. Delta from baseline: +40.0 points, D- to A+, 27 violations to 0.
 - **SC-002**: Inline comment coverage on the module reaches the CONV-COMMENTS threshold that makes the analyzer stop reporting the rule — every executable line carries a `# WHY:` comment.
 - **SC-003**: All 11 listed STRUCT-LENGTH functions span ≤ 25 lines after refactor; all 14 listed STRUCT-COMPLEXITY functions have cyclomatic complexity ≤ 5; `__init__` takes ≤ 5 parameters.
 - **SC-004**: `ruff check`, `black --check`, and `mypy --strict` all exit cleanly against the refactored module. No warnings, no errors, no config relaxation.
 - **SC-005**: The existing pytest suite for this module passes with the same pass count as `main` HEAD. No skipped tests, no new `# pragma: no cover`, no test-file edits that mask behavior change.
-- **SC-006**: `git grep -nE "# noqa|# type: ignore|# pragma: no cover" src/firmware/org_ap_upgrader.py` returns zero lines on the feature branch tip.
+- **SC-006**: `git grep -nE "# noqa|# type: ignore|# pragma: no cover" src/operations/execution/firmware/org_ap_upgrader.py` returns zero lines on the feature branch tip.
 - **SC-007**: `git diff main..HEAD -- MistHelper.py` shows zero changes to the four lazy-import shims at lines 20237, 20247, 20269, 20289, and 20305.
 - **SC-008**: A NOC engineer running the upgrader through every entry point exercised by the four MistHelper.py lazy imports observes byte-identical stdout, log lines, and Mist API payloads compared to a `main` HEAD baseline capture.
 - **SC-009**: `git diff main..HEAD -- pyproject.toml setup.cfg tools/compliance_analyzer/` shows no analyzer threshold, budget, or rule-enablement changes.
@@ -134,9 +134,9 @@ The CI gate operator (or automated CI job) runs the standard project quality gat
 - **NG-001**: No behavioral changes. The refactor is byte-identical externally; every prompt, log line, API payload, exception, and return value stays exactly as it is on `main` HEAD.
 - **NG-002**: No new features. No new menus, no new upgrade modes, no new logging levels, no new configuration options.
 - **NG-003**: No changes to menu wiring inside MistHelper.py beyond preserving the four existing lazy-import shims verbatim. Menu numbers, menu ordering, menu prompts, and menu-to-module wiring all remain untouched.
-- **NG-004**: No introduction of wrapper modules, delegator classes, or alias re-exports. The refactor lands in-place inside `src/firmware/org_ap_upgrader.py`.
+- **NG-004**: No introduction of wrapper modules, delegator classes, or alias re-exports. The refactor lands in-place inside `src/operations/execution/firmware/org_ap_upgrader.py`.
 - **NG-005**: No changes to analyzer thresholds, ruff/black/mypy configuration, or CI job definitions.
-- **NG-006**: No relocation of `OrgLevelAPFirmwareUpgrader` to a different module path. The class stays at `src.firmware.org_ap_upgrader.OrgLevelAPFirmwareUpgrader`.
+- **NG-006**: No relocation of `OrgLevelAPFirmwareUpgrader` to a different module path. The class stays at `src.operations.execution.firmware.org_ap_upgrader.OrgLevelAPFirmwareUpgrader`.
 - **NG-007**: No introduction of unicode characters into log output, print output, or any user-facing string.
 
 ## Assumptions
@@ -147,11 +147,11 @@ The CI gate operator (or automated CI job) runs the standard project quality gat
 - **A-004**: The existing pytest suite adequately covers the module's behavior for regression detection. Any gap in behavioral coverage must be surfaced in the plan phase, not silently accepted.
 - **A-005**: Baseline artifacts already staged in `specs/1006-org-ap-upgrader-compliance/artifacts/` (`baseline_compliance_report.md`, `baseline_lint.txt`) capture the pre-refactor state and remain unchanged for the audit trail.
 - **A-006**: The `safe_input(context=...)` helper is already available in the codebase and is the standard replacement for direct `input()` calls in this module.
-- **A-007**: `logging.info` before / `logging.debug` after is the project's operational logging convention and matches usage elsewhere in `src/firmware/`.
+- **A-007**: `logging.info` before / `logging.debug` after is the project's operational logging convention and matches usage elsewhere in `src/operations/execution/firmware/`.
 
 ## Reference: PR #3 Pattern (firmware_manager)
 
-The successful precedent for this refactor is PR #3, which took `src/firmware/firmware_manager.py` to A+ / 100.0 using the following shape — reproduce it here:
+The successful precedent for this refactor is PR #3, which took `src/operations/execution/firmware/firmware_manager.py` to A+ / 100.0 using the following shape — reproduce it here:
 
 1. **Introduce `OrgAPUpgraderConfig`**: a frozen `slots=True` `kw_only=True` `@dataclass` grouping the stateless configuration fields previously spread across `__init__`'s 11 parameters. Implement `__post_init__` field validation for each field so misconfiguration fails fast at construction.
 2. **Shrink `__init__` to ≤ 5 parameters, ≤ 25 lines**: accept the config dataclass plus the live runtime handles (session, logger, etc.) that cannot live in a frozen dataclass.

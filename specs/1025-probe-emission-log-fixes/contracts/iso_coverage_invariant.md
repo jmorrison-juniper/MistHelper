@@ -2,7 +2,7 @@
 
 **Feature**: `1025-probe-emission-log-fixes`
 **Scope**: `_COUNTRY_CODE_TO_REGION` and `_COUNTRY_CODE_INTENTIONAL_GAPS`
-in `src/org/org_synthetic_probes_manager.py`
+in `src/mist/resources/org/org_synthetic_probes_manager.py`
 **Related FRs**: FR-005, FR-006, FR-007, FR-008, SC-005
 
 This is the CI-enforced completeness invariant on country-code
@@ -55,7 +55,7 @@ import json
 import re
 from pathlib import Path
 
-from src.org.org_synthetic_probes_manager import (
+from src.mist.resources.org.org_synthetic_probes_manager import (
     _COUNTRY_CODE_TO_REGION,
     _COUNTRY_CODE_INTENTIONAL_GAPS,
 )

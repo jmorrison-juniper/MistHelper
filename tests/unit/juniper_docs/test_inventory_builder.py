@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from src.juniper_docs.discovery.inventory_builder import InventoryBuilder
-from src.juniper_docs.models import DocumentType
+from src.mist.intelligence.juniper_docs.discovery.inventory_builder import InventoryBuilder
+from src.mist.intelligence.juniper_docs.models import DocumentType
 
 _BASE = "https://www.juniper.net/documentation/us/en/software"
 

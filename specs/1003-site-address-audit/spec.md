@@ -17,7 +17,7 @@ NOC operators managing large Juniper SSR/gateway deployments receive customer-pr
 2. **SNMP location drift** — Sites often have a richer address in `vars["snmp_location"]` or `snmp_config.location` than in the main Mist site record; there is no tooling to surface that discrepancy.
 3. **Manual comparison burden** — Operators currently export site lists and CSV files, then hand-compare rows in a spreadsheet — a slow, error-prone process for organizations with hundreds of sites.
 
-MistHelper already has an `InventoryCSVComparator` class (`src/inventory/csv_comparator.py`) that performs a broader device inventory comparison using Nominatim. The new feature is **complementary, not redundant**: it is narrowly scoped to serial-number-keyed address audit with Mist's own geocoding API as the primary source, SNMP location enrichment, and a pre-classified output table — none of which exist in the current comparator.
+MistHelper already has an `InventoryCSVComparator` class (`src/mist/resources/inventory/csv_comparator.py`) that performs a broader device inventory comparison using Nominatim. The new feature is **complementary, not redundant**: it is narrowly scoped to serial-number-keyed address audit with Mist's own geocoding API as the primary source, SNMP location enrichment, and a pre-classified output table — none of which exist in the current comparator.
 
 ### Goal
 
@@ -127,10 +127,10 @@ As a NOC operator running the audit a second time on the same or updated CSV, I 
 
 ## Module Architecture
 
-New subpackage lives entirely within `src/site/address_audit/`. Each module holds **one class** following MistHelper's "one class per module" convention.
+New subpackage lives entirely within `src/mist/resources/site/address_audit/`. Each module holds **one class** following MistHelper's "one class per module" convention.
 
 ```
-src/site/address_audit/
+src/mist/resources/site/address_audit/
   __init__.py                # Package init; exports AddressAuditEngine for menu registration
   models.py                  # Dataclasses: AddressRow, MatchedSite, ResolverResult, AuditResult
   csv_ingester.py            # CSVAddressIngester  — parse & sanitize tab-delimited input
@@ -145,7 +145,7 @@ src/site/address_audit/
 ```
 
 Two lines added to `MistHelper.py` only:
-1. Import of `AddressAuditEngine` (with existing import block for `src.site.*`)
+1. Import of `AddressAuditEngine` (with existing import block for `src.mist.resources.site.*`)
 2. Menu entry in the safe export dict (range 1–59, number TBD by developer at implementation time)
 
 No changes to any other existing file except where required by the import.
@@ -238,7 +238,7 @@ Two registrations in `MistHelper.py`:
 The customer CSV and the SNMP location field already carry suite/unit data on the majority of rows (the sample CSV has `Unit 200`, `Suite 1019A`, `Suite 101`, etc.). Internal signals are therefore the primary suite source; external geocoding is a validator, not the suite origin.
 
 1. **Tier 1 — Internal candidate comparison (no network)**: Compare the Mist site address against the CSV address and the SNMP location. Detect the common case where Mist is missing a suite/unit that the CSV or SNMP value supplies. This catches most discrepancies with zero external calls.
-2. **Tier 2 — Nominatim validation (free, no key)**: `https://nominatim.openstreetmap.org/search?q=<query>&format=json&limit=3`, rate-limited to <= 1 request/second per ToS. Reuses the existing `NominatimValidator` in `src/utils/address_utils.py`. Confirms the base street address resolves and is consistent; drives the `WRONG_STREET` classification. Nominatim/OSM does not reliably carry US retail suite numbers, so it validates the street, not the unit.
+2. **Tier 2 — Nominatim validation (free, no key)**: `https://nominatim.openstreetmap.org/search?q=<query>&format=json&limit=3`, rate-limited to <= 1 request/second per ToS. Reuses the existing `NominatimValidator` in `src/foundation/support/utils/address_utils.py`. Confirms the base street address resolves and is consistent; drives the `WRONG_STREET` classification. Nominatim/OSM does not reliably carry US retail suite numbers, so it validates the street, not the unit.
 3. **Tier 3 — Mist dashboard UI automation (optional, flagged)**: The operator-authorized "hijack" path. Using Playwright (already a repo dependency with e2e infrastructure), drive the live Mist site-edit **address autocomplete field**, type `"{business_name} {address}"`, and capture the top Google-Places suggestion — the same suite-corrected result an operator sees today when editing a site by hand. This is the only free path to Google-quality retail suite data. Gated behind a `--ui-geocode` flag because it requires an authenticated dashboard session and is slower/more fragile than the API tiers. Invoked selectively (e.g. for `AMBIGUOUS` mall cases), not for every row.
 4. **Cache** — SQLite table `geocoding_cache` in `mist_data.db`, checked before any Tier 2/3 network/UI call.
 
@@ -393,8 +393,8 @@ $env:PYTEST_DISABLE_PLUGIN_AUTOLOAD="1"; & ".venv\Scripts\python.exe" -m pytest 
 
 ```
 python -m py_compile MistHelper.py          # Must pass
-ruff check src/site/address_audit/          # Must pass clean
-black --check src/site/address_audit/       # Must pass clean
+ruff check src/mist/resources/site/address_audit/          # Must pass clean
+black --check src/mist/resources/site/address_audit/       # Must pass clean
 ```
 
 ---
@@ -402,7 +402,7 @@ black --check src/site/address_audit/       # Must pass clean
 ## Migration / Compatibility
 
 - **No database schema changes to existing tables**: The new `geocoding_cache` table is additive; `mist_data.db` is created if absent; `CREATE TABLE IF NOT EXISTS` used.
-- **No changes to existing `InventoryCSVComparator`**: The new feature does not touch `src/inventory/csv_comparator.py` or `AddressComparisonCounters`.
+- **No changes to existing `InventoryCSVComparator`**: The new feature does not touch `src/mist/resources/inventory/csv_comparator.py` or `AddressComparisonCounters`.
 - **No menu number conflicts**: The developer assigns an unoccupied number in range 1–59 at implementation time; the menu framework enforces uniqueness via a dict key collision that would cause an immediate startup error if a conflict existed.
 - **`MistHelper.py` changes are additive only**: One import line; one menu entry; no modifications to existing code paths.
 - **Backward compatibility**: Operators who never use the new menu option are unaffected.
@@ -432,9 +432,9 @@ black --check src/site/address_audit/       # Must pass clean
 
 > These notes are for the AI/developer implementing the feature. They do not define requirements — they describe the expected implementation path.
 
-1. **Start with dataclasses first** (`AddressRow`, `MatchedSite`, `ResolverResult`, `AuditResult` in a new `src/site/address_audit/models.py`). Every class that produces or consumes these types can then be written with clear type hints.
+1. **Start with dataclasses first** (`AddressRow`, `MatchedSite`, `ResolverResult`, `AuditResult` in a new `src/mist/resources/site/address_audit/models.py`). Every class that produces or consumes these types can then be written with clear type hints.
 
-2. **Reuse `InputUtils.safe_input()`** from `src/utils/input_utils.py`; do not create new input wrappers.
+2. **Reuse `InputUtils.safe_input()`** from `src/foundation/support/utils/input_utils.py`; do not create new input wrappers.
 
 3. **`AddressResolver` cache table DDL** (place in `_ensure_cache_table(conn)`):
    ```sql
@@ -451,7 +451,7 @@ black --check src/site/address_audit/       # Must pass clean
 
 4. **There is NO Mist geocoding REST endpoint.** Do not attempt `apisession.get("/api/v1/utils/geocoding", ...)` — it returns 404. Verified absent from the `mistapi` SDK (`api/v1/utils/` has only SMS test endpoints) and from both OpenAPI specs. Resolution tiers:
    - **Tier 1 (internal)**: compare normalized Mist address vs CSV vs SNMP location; if CSV/SNMP carry a suite the Mist address lacks, that is the suggested correction — no network call.
-   - **Tier 2 (Nominatim)**: reuse `NominatimValidator` in `src/utils/address_utils.py` (`validate()` / `_geocode_address()`); validates the base street, drives `WRONG_STREET`. Honor the 1 req/sec ToS and the existing `User-Agent` convention.
+   - **Tier 2 (Nominatim)**: reuse `NominatimValidator` in `src/foundation/support/utils/address_utils.py` (`validate()` / `_geocode_address()`); validates the base street, drives `WRONG_STREET`. Honor the 1 req/sec ToS and the existing `User-Agent` convention.
    - **Tier 3 (optional, `--ui-geocode`)**: `MistUIGeocoder` uses Playwright to drive the live Mist dashboard site-edit address field, type `"{business_name} {address}"`, and read back the top autocomplete suggestion. Requires an authenticated dashboard session (see open question on credentials). Bound by per-lookup timeout and a max-lookups-per-run cap.
 
 5. **Fuzzy match pattern**: Load all site names + concatenated addresses into a list; use `rapidfuzz.process.extractOne(query, choices, score_cutoff=85)`. The match threshold of 85 % is a constant in `SiteMatchingEngine`, overridable via `.env` key `FUZZY_MATCH_THRESHOLD`.
@@ -473,7 +473,7 @@ black --check src/site/address_audit/       # Must pass clean
    - `AddressAuditEngine.run()` will naturally want > 25 lines — split into `_load_csv()`, `_match_sites()`, `_enrich_and_resolve()`, `_classify_and_render()` private methods, each called from `run()`.
    - `AddressResolver.resolve()` — split into `_compare_internal()`, `_validate_nominatim()`, `_build_query_key()`, `_from_cache()` / `_to_cache()`.
 
-10. **Existing `AddressComparisonCounters`** at `src/inventory/csv_comparator.py` should NOT be reused for this feature; create fresh counters inline in `AddressAuditEngine` or a lightweight dataclass to avoid coupling the two workflows.
+10. **Existing `AddressComparisonCounters`** at `src/mist/resources/inventory/csv_comparator.py` should NOT be reused for this feature; create fresh counters inline in `AddressAuditEngine` or a lightweight dataclass to avoid coupling the two workflows.
 
 ---
 

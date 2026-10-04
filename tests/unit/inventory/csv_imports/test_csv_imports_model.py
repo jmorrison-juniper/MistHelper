@@ -5,7 +5,7 @@ from __future__ import annotations  # WHY: keep annotations lazy for the test ru
 import csv  # WHY: write realistic CSV files for parser tests.
 from pathlib import Path  # WHY: build test paths with Windows-safe separators.
 
-from src.inventory.csv_imports.model import (  # WHY: test pure validation and masking logic.
+from src.mist.resources.inventory.csv_imports.model import (  # WHY: test pure validation and masking logic.
     MASK,
     CsvImportCatalog,
     CsvImportConfirmation,

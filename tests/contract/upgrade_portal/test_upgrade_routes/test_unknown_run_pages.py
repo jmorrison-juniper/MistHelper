@@ -23,8 +23,13 @@ import pytest  # The test framework of the project.
 from flask import Flask  # The application type of the portal.
 from flask.testing import FlaskClient  # The client type that drives every request.
 
-from src.upgrade_portal.runtime import identity  # The real session guard, so the client signs in for real.
-from src.upgrade_portal.runtime.runs import RunRecordBuilder, RunSpec  # The record layer owns every field.
+from src.interfaces.portals.upgrade_portal.runtime import (
+    identity,
+)  # The real session guard, so the client signs in for real.
+from src.interfaces.portals.upgrade_portal.runtime.runs import (
+    RunRecordBuilder,
+    RunSpec,
+)  # The record layer owns every field.
 
 ORG_ID = "org-unknown-run-contract"  # One organization scope for the seeded run.
 SITE_ID = "site-unknown-run-contract"  # One site scope for the seeded run and the lock read.
@@ -39,7 +44,7 @@ NOT_FOUND_STATUS = 404  # No run holds the ID.
 OK_STATUS = 200  # The page of a stored run.
 RUN_NOT_FOUND_CODE = "run_not_found"  # `contracts/http-api.md` fixes this code for every run path.
 SITE_LIST_LINK = 'href="/select/site"'  # The recovery link of `error.html`.
-ROUTE_LOGGER = "src.upgrade_portal.app.routes.upgrade"  # The logger of the three page routes.
+ROUTE_LOGGER = "src.interfaces.portals.upgrade_portal.app.routes.upgrade"  # The logger of the three page routes.
 
 # A control that writes to a run must never appear on the error page (FR-003).
 WRITE_CONTROLS = (

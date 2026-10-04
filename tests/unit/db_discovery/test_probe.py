@@ -13,12 +13,12 @@ import pytest
 import structlog
 from arango.exceptions import ArangoError
 
-from src import db
-from src.db import DatabaseConfig, arango_writer
-from src.db.arango_writer import ArangoDBWriter
-from src.db.host_resolver import ResolverLimits
-from src.db.redis_writer import RedisTimeSeriesWriter
-from src.refactors.endpoint_primary_key_strategies import ENDPOINT_PRIMARY_KEY_STRATEGIES
+from src.foundation.persistence import db  # Import the moved database package from its canonical persistence group.
+from src.foundation.persistence.db import DatabaseConfig, arango_writer
+from src.foundation.persistence.db.arango_writer import ArangoDBWriter
+from src.foundation.persistence.db.host_resolver import ResolverLimits
+from src.foundation.persistence.db.redis_writer import RedisTimeSeriesWriter
+from src.foundation.support.refactors.endpoint_primary_key_strategies import ENDPOINT_PRIMARY_KEY_STRATEGIES
 from tests.unit.arango_indexes.fakes import ArangoIndexWriterHarness
 from tests.unit.db_discovery.fakes import ControlledPreflightCall, ControlledSockets, ResolverHarness
 
@@ -31,7 +31,8 @@ class TestNumericAddresses:
         sockets = ControlledSockets()
         monkeypatch.setattr(db.socket, "socket", sockets)
         with patch(
-            "src.db.socket.create_connection", side_effect=AssertionError("Raw hostname connection is forbidden.")
+            "src.foundation.persistence.db.socket.create_connection",
+            side_effect=AssertionError("Raw hostname connection is forbidden."),
         ):
             assert db._can_connect("db.invalid", 8529) is True
         assert sockets.calls == [(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP)]
@@ -136,7 +137,7 @@ class TestTcpBudgets:
         self, discovery: ResolverHarness, error: Exception
     ) -> None:
         discovery.lookup.answers["db.invalid"] = discovery.lookup.addresses()
-        with patch("src.db.socket.socket", side_effect=error):
+        with patch("src.foundation.persistence.db.socket.socket", side_effect=error):
             assert db._can_connect("db.invalid", 8529) is False
         assert len(discovery.lookup.calls) == 1
 
@@ -383,7 +384,7 @@ class TestRedisConstructorPreflight:
         error = socket.gaierror("Name or service not known")
         discovery.lookup.answers["localhost"] = error
         config = DatabaseConfig(redis_host="localhost", redis_port=6379)
-        with patch("src.db.redis_writer.redis.Redis") as client:
+        with patch("src.foundation.persistence.db.redis_writer.redis.Redis") as client:
             with pytest.raises(ConnectionError, match="not resolvable") as failure:
                 RedisTimeSeriesWriter(config)
         assert failure.value.__cause__ is error

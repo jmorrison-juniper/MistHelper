@@ -1,4 +1,4 @@
-"""Wave 4 P2 coverage for src/validation/validation_utils.py (initiative #1018).
+"""Wave 4 P2 coverage for src/foundation/runtime/validation/validation_utils.py (initiative #1018).
 
 Covers every branch of ``ValidationUtils`` including:
 - ``validate_site_id`` None / empty / whitespace / valid paths (with default and custom ``function_name``).
@@ -16,7 +16,7 @@ import logging  # WHY: verify logging.error is emitted before ValueError is rais
 
 import pytest  # WHY: pytest.raises for ValueError assertions and caplog fixture for log capture.
 
-from src.validation.validation_utils import ValidationUtils  # WHY: system under test.
+from src.foundation.runtime.validation.validation_utils import ValidationUtils  # WHY: system under test.
 
 
 class TestValidateSiteId:

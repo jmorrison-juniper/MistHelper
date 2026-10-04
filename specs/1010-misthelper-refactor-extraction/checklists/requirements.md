@@ -33,5 +33,5 @@
 
 - Items marked incomplete require spec updates before `/speckit.clarify` or `/speckit.plan`
 - This is a workflow/refactor specification where the "product" is a codebase state, not a user-facing feature. Some conventions are adapted: the "user" is the refactor engineer and CI system; "user value" is compliance-preserving LOC reduction; "business need" is entrypoint monolith decomposition.
-- The spec deliberately references file paths and tooling (`MistHelper.py`, `src/refactors/`, `tools/refactor_analyzer/`, `refactor_candidates.md`) because these are the domain vocabulary of the initiative, not implementation choices. They are the "what" being manipulated, not the "how" of manipulation.
+- The spec deliberately references file paths and tooling (`MistHelper.py`, `src/foundation/support/refactors/`, `tools/refactor_analyzer/`, `refactor_candidates.md`) because these are the domain vocabulary of the initiative, not implementation choices. They are the "what" being manipulated, not the "how" of manipulation.
 - Bucket names (Unused / Single-Use / Low-Use / Hot / Skipped) are analyzer terminology and appear in the spec as domain vocabulary.

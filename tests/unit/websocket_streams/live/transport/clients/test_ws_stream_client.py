@@ -9,12 +9,21 @@ import time  # Tests measure bounded close behavior.
 from collections.abc import Callable  # The recorder helper returns a callback.
 
 import pytest  # Tests assert expected transport errors.
-
 import websocket  # Socket fakes raise websocket-client timeout errors.
-from src.websocket_streams.live.transport.endpoint import MistStreamEndpoint, TransportProfile  # Need endpoints.
-from src.websocket_streams.live.transport.runtime.frame_decoder import SubscribeError  # Test subscription errors.
-from src.websocket_streams.live.transport.runtime.reader.contracts import ConnectionClosed  # Test close errors.
-from src.websocket_streams.live.transport.stream_client import StreamClient  # Test the stream transport client.
+
+from src.mist.realtime.websocket_streams.live.transport.endpoint import (
+    MistStreamEndpoint,
+    TransportProfile,
+)  # Need endpoints.
+from src.mist.realtime.websocket_streams.live.transport.runtime.frame_decoder import (
+    SubscribeError,
+)  # Test subscription errors.
+from src.mist.realtime.websocket_streams.live.transport.runtime.reader.contracts import (
+    ConnectionClosed,
+)  # Test close errors.
+from src.mist.realtime.websocket_streams.live.transport.stream_client import (
+    StreamClient,
+)  # Test the stream transport client.
 from tests.unit.websocket_streams.live.transport.fake_mist_cloud.api import (
     FakeApiSession,
 )  # Fake sessions provide endpoint fields.
@@ -389,7 +398,9 @@ class TestStreamStructuredLogging:
 
     def test_stream_records_are_json_and_exclude_channel_paths(self, caplog: pytest.LogCaptureFixture) -> None:
         """Emit structured records without subscription channel values."""
-        caplog.set_level(logging.DEBUG, logger="src.websocket_streams.live.transport.stream_client")  # Capture events.
+        caplog.set_level(
+            logging.DEBUG, logger="src.mist.realtime.websocket_streams.live.transport.stream_client"
+        )  # Capture events.
         with FakeMistCloud() as cloud:  # Start a loopback fake cloud.
             device = StreamDevice()  # Build a normal stream device.
             cloud.register("/api-ws/v1/stream", device)  # Route the stream path.

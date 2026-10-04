@@ -36,11 +36,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from src.upgrade_portal.upgrade import driver
+from src.interfaces.portals.upgrade_portal.upgrade import driver
 
 # WHY: This file sits at tests/unit/upgrade_portal, so the root is three levels up.
 REPO_ROOT = Path(__file__).resolve().parents[3]
-SCRIPT_PATH = REPO_ROOT / "src" / "upgrade_portal" / "app" / "assets" / "static" / "js" / "portal.js"
+SCRIPT_PATH = (
+    REPO_ROOT / "src" / "interfaces" / "portals" / "upgrade_portal" / "app" / "assets" / "static" / "js" / "portal.js"
+)
 
 # WHY: The two sentences the driver writes onto the run record. One covers a lock
 # that changed hands, and one covers a lock store that stopped answering.

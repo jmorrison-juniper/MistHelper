@@ -978,9 +978,9 @@ portal behaves as it does.
 
 ### The write path reports success after zero rows
 
-`_is_standalone_mode()` at `src/export/data_exporter.py:141` returns `True` when
+`_is_standalone_mode()` at `src/operations/exporting/export/data_exporter.py:141` returns `True` when
 the process does not run inside a container. The export path then skips the
-polyglot database. `_csv_fallback` at `src/db/router.py:372-382` returns
+polyglot database. `_csv_fallback` at `src/foundation/persistence/db/router.py:372-382` returns
 `success=True` with `records_written=0`. A caller therefore reads a success
 after a write of zero rows. Issue #1824 tracks this defect.
 
@@ -990,8 +990,8 @@ compares the schema version and the digest. A capture reaches the state
 
 ### The retention purge never runs
 
-`src/db/retention.py:100` reads the attribute `_database` from the ArangoDB
-writer. `src/db/arango_writer.py:3903` names that handle `self._db`. The read
+`src/foundation/persistence/db/retention.py:100` reads the attribute `_database` from the ArangoDB
+writer. `src/foundation/persistence/db/arango_writer.py:3903` names that handle `self._db`. The read
 therefore answers `None`, the usage measure answers `0.0`, and the purge never
 starts.
 

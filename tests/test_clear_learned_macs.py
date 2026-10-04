@@ -9,7 +9,7 @@ from unittest.mock import MagicMock
 import mistapi
 import pytest
 
-from src.device.utility_commands import DeviceUtilityCommands
+from src.mist.resources.device.utility_commands import DeviceUtilityCommands
 
 
 @pytest.mark.xfail(reason="Port normalization / API mapping not implemented")

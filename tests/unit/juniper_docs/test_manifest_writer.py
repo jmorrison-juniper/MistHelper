@@ -6,9 +6,9 @@ import csv
 import json
 from pathlib import Path
 
-from src.juniper_docs.harvest.manifest_writer import ManifestWriter
-from src.juniper_docs.harvest.state_store import HarvestStateStore
-from src.juniper_docs.models import DocumentType, InventoryRecord, PdfCandidate
+from src.mist.intelligence.juniper_docs.harvest.manifest_writer import ManifestWriter
+from src.mist.intelligence.juniper_docs.harvest.state_store import HarvestStateStore
+from src.mist.intelligence.juniper_docs.models import DocumentType, InventoryRecord, PdfCandidate
 
 
 def _seed(tmp_path: Path) -> HarvestStateStore:

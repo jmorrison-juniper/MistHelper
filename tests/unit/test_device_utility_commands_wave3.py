@@ -1,7 +1,7 @@
 """Wave 3 top-up tests for DeviceUtilityCommands (initiative 1018).
 
 Targets the last two uncovered branches in
-``src/device/utility_commands.py``:
+``src/mist/resources/device/utility_commands.py``:
 
 * Line 70: ``_extract_error_detail`` returns ``""`` when ``response.data``
   is not a dict (e.g. ``None``, string, list). Existing tests only cover
@@ -22,7 +22,7 @@ from unittest.mock import MagicMock  # WHY: build synthetic response/deps with s
 
 import pytest  # WHY: expect AttributeError with pytest.raises.
 
-from src.device.utility_commands import (  # WHY: SUTs under test.
+from src.mist.resources.device.utility_commands import (  # WHY: SUTs under test.
     DeviceUtilityCommands,
     UtilityCommandsDeps,
     _extract_error_detail,

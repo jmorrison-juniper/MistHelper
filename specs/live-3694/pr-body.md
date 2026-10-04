@@ -81,15 +81,15 @@ Site variable audit found 140 site(s) with missing variables. Wrote SiteVariable
 ## Local validation
 
 ```text
-python -m py_compile src\reports\site_variable_audit\__init__.py src\reports\site_variable_audit\client.py src\reports\site_variable_audit\model.py src\reports\site_variable_audit\operation.py tests\unit\reports\site_variable_audit\__init__.py tests\unit\reports\site_variable_audit\site_variable_audit_client_test.py tests\unit\reports\site_variable_audit\site_variable_audit_contract_test.py tests\unit\reports\site_variable_audit\site_variable_audit_fixtures_test.py tests\unit\reports\site_variable_audit\site_variable_audit_model_test.py tests\unit\reports\site_variable_audit\site_variable_audit_operation_test.py tests\unit\reports\site_variable_audit\site_variable_audit_summary_test.py
-python -m ruff check src\reports\site_variable_audit tests\unit\reports\site_variable_audit
-python -m black --check src\reports\site_variable_audit tests\unit\reports\site_variable_audit
-python -m mypy src\reports\site_variable_audit --config-file pyproject.toml
-python -m pydocstyle src\reports\site_variable_audit
+python -m py_compile src\mist\intelligence\reports\site_variable_audit\__init__.py src\mist\intelligence\reports\site_variable_audit\client.py src\mist\intelligence\reports\site_variable_audit\model.py src\mist\intelligence\reports\site_variable_audit\operation.py tests\unit\reports\site_variable_audit\__init__.py tests\unit\reports\site_variable_audit\site_variable_audit_client_test.py tests\unit\reports\site_variable_audit\site_variable_audit_contract_test.py tests\unit\reports\site_variable_audit\site_variable_audit_fixtures_test.py tests\unit\reports\site_variable_audit\site_variable_audit_model_test.py tests\unit\reports\site_variable_audit\site_variable_audit_operation_test.py tests\unit\reports\site_variable_audit\site_variable_audit_summary_test.py
+python -m ruff check src\mist\intelligence\reports\site_variable_audit tests\unit\reports\site_variable_audit
+python -m black --check src\mist\intelligence\reports\site_variable_audit tests\unit\reports\site_variable_audit
+python -m mypy src\mist\intelligence\reports\site_variable_audit --config-file pyproject.toml
+python -m pydocstyle src\mist\intelligence\reports\site_variable_audit
 python -m pytest tests\unit\reports\site_variable_audit -q --timeout=120
-python -m radon cc src\reports\site_variable_audit -j | complexity-gate --max 10
+python -m radon cc src\mist\intelligence\reports\site_variable_audit -j | complexity-gate --max 10
 test-quality-analyzer --gate --config .github\test-quality-config.toml --baseline .github\test-quality-baseline.json --changed-from origin/main
-python -m bandit -c pyproject.toml -r src\reports\site_variable_audit -q
+python -m bandit -c pyproject.toml -r src\mist\intelligence\reports\site_variable_audit -q
 python -m pytest tests\integration\test_mistapi_sdk_compatibility.py tests\unit\web_portal\test_output_scan_runtime_files.py -q --timeout=120
 .\.venv\Scripts\python.exe MistHelper.py --skip-deps -M 275 -O 8a1ea872-241a-4c8e-a5ca-2d85674c7229 *> data\live-275.log
 ```

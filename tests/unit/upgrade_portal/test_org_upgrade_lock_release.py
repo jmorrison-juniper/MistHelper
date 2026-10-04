@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from src.upgrade_portal.app.routes import org_upgrade
+from src.interfaces.portals.upgrade_portal.app.routes import org_upgrade
 
 
 def operation(*states: str, state: str = "running", cancelled: bool = False) -> dict[str, Any]:

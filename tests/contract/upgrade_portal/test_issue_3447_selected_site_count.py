@@ -21,8 +21,8 @@ import pytest
 from flask import Flask
 from flask.testing import FlaskClient
 
-from src.upgrade_portal.app.routes import org_upgrade, select
-from src.upgrade_portal.runtime import identity
+from src.interfaces.portals.upgrade_portal.app.routes import org_upgrade, select
+from src.interfaces.portals.upgrade_portal.runtime import identity
 from tests.contract.upgrade_portal.test_org_child_controls_routes import (
     AP_ONE,
     AP_TWO,

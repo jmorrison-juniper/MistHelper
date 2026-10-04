@@ -193,9 +193,9 @@ Do not expand to the full unrelated test suite without a targeted reason.
 Repeat this focused scope with these coverage options instead of `--no-cov`:
 
 ```text
---cov=src.export.const_definitions_exporter
---cov=src.analytics.insight_metrics_utils
---cov=src.refactors.serial_cc.site_client_insights
+--cov=src.operations.exporting.export.const_definitions_exporter
+--cov=src.mist.intelligence.analytics.insight_metrics_utils
+--cov=src.foundation.support.refactors.serial_cc.site_client_insights
 --cov-branch
 --cov-report=term-missing
 --cov-report=json:<absolute-validation-root>/coverage.json

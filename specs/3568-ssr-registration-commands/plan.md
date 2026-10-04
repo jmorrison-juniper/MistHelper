@@ -13,7 +13,7 @@ Add menu 288 as a deferred wiring entry for an operation class named `SsrRegistr
 - Language: Python 3.13.
 - Mist API operation: `getOrg128TRegistrationCommands`.
 - SDK status: The installed `mistapi` package has no helper for this operation, so the client will use `apisession.mist_get`.
-- Package: `src/gateway/ssr_registration/`.
+- Package: `src/mist/resources/gateway/ssr_registration/`.
 - Tests: `tests/unit/gateway/ssr_registration/`.
 - Output file: `data/SsrRegistrationCommands.txt`.
 
@@ -34,7 +34,7 @@ Create a small package with three modules.
 
 ## Deferred Wiring
 
-The integration pull request must update `MistHelper.py`, `src/utils/operation_registry.py`, generated menu documentation, and any top-level operation count. This feature branch records the exact changes in `specs/3568-ssr-registration-commands/wiring.md` only.
+The integration pull request must update `MistHelper.py`, `src/foundation/support/utils/operation_registry.py`, generated menu documentation, and any top-level operation count. This feature branch records the exact changes in `specs/3568-ssr-registration-commands/wiring.md` only.
 
 ## Validation
 

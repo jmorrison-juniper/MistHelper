@@ -1,6 +1,9 @@
 """Smoke tests for package imports."""
 
-from src.reports.org_security_posture import OrganizationSecuritySourceData, OrgSecurityPostureChecklist
+from src.mist.intelligence.reports.org_security_posture import (
+    OrganizationSecuritySourceData,
+    OrgSecurityPostureChecklist,
+)
 
 
 def test_package_exports_runner_and_model() -> None:

@@ -1,6 +1,6 @@
 """Unit tests for the WebSocket MacTableCommand orchestrator.
 
-Covers src/websocket/commands.py: the MacTableCommand class dispatches the Mist
+Covers src/mist/realtime/websocket/commands.py: the MacTableCommand class dispatches the Mist
 `show_mac_table` RPC over a WebSocket. These tests pin the branching (debug
 on/off, operator abort at each interactive prompt, WS connect failure, RPC
 failure, timeout vs successful result) so future refactors of the workflow
@@ -16,8 +16,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.websocket import commands as commands_mod
-from src.websocket.commands import MacTableCommand
+from src.mist.realtime.websocket import commands as commands_mod
+from src.mist.realtime.websocket.commands import MacTableCommand
 
 
 def _fake_response(status: int, body: dict[str, Any] | None = None, text: str = "") -> MagicMock:

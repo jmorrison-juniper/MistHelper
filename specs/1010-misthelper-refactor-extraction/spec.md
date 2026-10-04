@@ -3,17 +3,17 @@
 **Feature Branch**: `1010-misthelper-refactor-extraction`
 **Created**: 2026-07-05
 **Status**: Draft
-**Input**: User description: "Systematically decompose MistHelper.py (24K+ line entrypoint monolith) into cohesive class modules under `src/refactors/` by extracting analyzer-identified candidates. Multi-PR extraction workflow driven by `tools/refactor_analyzer/`, which produces `refactor_candidates.md` — a ranked catalog of extraction candidates classified by reference count."
+**Input**: User description: "Systematically decompose MistHelper.py (24K+ line entrypoint monolith) into cohesive class modules under `src/foundation/support/refactors/` by extracting analyzer-identified candidates. Multi-PR extraction workflow driven by `tools/refactor_analyzer/`, which produces `refactor_candidates.md` — a ranked catalog of extraction candidates classified by reference count."
 
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Extract Single-Use candidates from the monolith (Priority: P1)
 
-The core value-delivery workflow. For each Single-Use candidate (exactly one caller in the codebase), a refactor engineer opens a PR that (a) moves the class/function into a new cohesive module under `src/refactors/` (or, when the caller lives in an existing dedicated module, alongside that caller), (b) rewrites the single callsite in the same commit, and (c) deletes the original symbol from `MistHelper.py`. No wrapper shims are left behind. Guideline violations detected on the moved code (oversize, missing action logging, hardcoded separators) are corrected in the extraction PR — never carried forward. Module-level functions are refactored into class-body methods on landing, not left as bare module functions.
+The core value-delivery workflow. For each Single-Use candidate (exactly one caller in the codebase), a refactor engineer opens a PR that (a) moves the class/function into a new cohesive module under `src/foundation/support/refactors/` (or, when the caller lives in an existing dedicated module, alongside that caller), (b) rewrites the single callsite in the same commit, and (c) deletes the original symbol from `MistHelper.py`. No wrapper shims are left behind. Guideline violations detected on the moved code (oversize, missing action logging, hardcoded separators) are corrected in the extraction PR — never carried forward. Module-level functions are refactored into class-body methods on landing, not left as bare module functions.
 
 **Why this priority**: Delivers the bulk of the LOC drop (11 PRs, ~761 LoC of the 811 LoC first-pass budget). Rewriting the callsite atomically with the move is the non-negotiable that distinguishes this initiative from prior stalled attempts, so P1 is where the discipline is enforced.
 
-**Independent Test**: Any single Single-Use extraction (e.g. `SQLiteDatabaseWriter` at MistHelper.py:6949-7265 → `src/refactors/sqlite_database_writer.py` with callsite MistHelper.py:7468 rewritten) can be merged in isolation with the full CI matrix green. The initiative delivers value one candidate at a time.
+**Independent Test**: Any single Single-Use extraction (e.g. `SQLiteDatabaseWriter` at MistHelper.py:6949-7265 → `src/foundation/support/refactors/sqlite_database_writer.py` with callsite MistHelper.py:7468 rewritten) can be merged in isolation with the full CI matrix green. The initiative delivers value one candidate at a time.
 
 **Acceptance Scenarios**:
 
@@ -82,10 +82,10 @@ Reference counts shift as extractions land — a symbol that was Single-Use pre-
 - **FR-009**: The initiative MUST NEVER touch symbols in the Hot bucket (4+ callers) during the first pass. Second-pass Low-Use evaluation is a distinct effort scoped after first pass completes.
 - **FR-010**: After every merged extraction PR, the workflow MUST regenerate `refactor_candidates.md` by running the analyzer against the current `main` head before the next PR is dispatched.
 - **FR-011**: An extraction PR MUST NOT merge until all 15 functional CI jobs report green. When `mergeStateStatus` reports BLOCKED, DIRTY, or BEHIND, the PR MUST be updated and re-run rather than force-merged. `--admin` merge bypass MUST NOT be used as a routine unblock.
-- **FR-012**: Every new module under `src/refactors/` (and any existing module receiving an extracted symbol) MUST land at A+/100 compliance score, and no file that was previously A+ may regress below A+ as a result of the extraction.
+- **FR-012**: Every new module under `src/foundation/support/refactors/` (and any existing module receiving an extracted symbol) MUST land at A+/100 compliance score, and no file that was previously A+ may regress below A+ as a result of the extraction.
 - **FR-013**: The repository-wide compliance baseline MUST remain at or above 99.6/A+ after each merged extraction PR. Any PR that would regress the baseline MUST be reworked before merge.
 - **FR-014**: The first-pass extraction budget covers exactly 13 candidates: 2 Unused (`PerformanceMonitor`, `MapViewerConfig`) plus 11 Single-Use (LOC-DESC: `SQLiteDatabaseWriter`, `TUILauncher`, `DataDirectoryChecker`, `MapsManagerLauncher`, `AddressComparisonCounters`, `ServicePingManager`, `WAN2MigrationManager`, `run_systematic_test`, `switch_to_interactive_login`, `run_interactive_test`, `listen_keyboard`). Additions to first-pass scope require explicit re-scoping.
-- **FR-015**: `AddressComparisonCounters` MUST be relocated into the existing `src/inventory/csv_comparator.py::CsvComparatorManager` class rather than into a new `src/refactors/` module, because its sole caller already lives there. All other Single-Use candidates map to fresh files under `src/refactors/`.
+- **FR-015**: `AddressComparisonCounters` MUST be relocated into the existing `src/mist/resources/inventory/csv_comparator.py::CsvComparatorManager` class rather than into a new `src/foundation/support/refactors/` module, because its sole caller already lives there. All other Single-Use candidates map to fresh files under `src/foundation/support/refactors/`.
 - **FR-016**: When the freshly regenerated `refactor_candidates.md` shows that a candidate has been reclassified out of the first-pass buckets (e.g. Single-Use → Low-Use or Hot after a prior merge), the workflow MUST reroute or defer that candidate rather than force-extract it under the original classification.
 - **FR-017**: The initiative MUST NOT introduce new features, new commands, or scope beyond the extraction itself (e.g. issue #421 Menu 195 packet capture and other feature backlogs remain out of scope).
 - **FR-018**: The initiative MUST NOT modify `tools/refactor_analyzer/` itself; the analyzer is consumed as-is. Analyzer improvements are a separate initiative.
@@ -95,7 +95,7 @@ Reference counts shift as extractions land — a symbol that was Single-Use pre-
 - **Extraction Candidate**: A class or function in `MistHelper.py` catalogued by `tools/refactor_analyzer/` with attributes name, kind (class/function), line range, LOC count, reference count, classification bucket (Unused / Single-Use / Low-Use / Hot / Skipped), callsite locations, and `guideline_flags`.
 - **Refactor Candidates Catalog** (`refactor_candidates.md`): The analyzer's ranked output; the single source of truth for the dispatch queue. Sections: Summary, Unused, Single-Use, Low-Use, Hot, Skipped, Limitations. Regenerated after every merged extraction PR.
 - **Extraction PR**: A single pull request delivering one candidate's move-or-delete plus its callsite rewrite plus any in-place `guideline_flags` remediation. Gated by 15 functional CI jobs and A+/100 compliance on affected files.
-- **Target Module**: The new file under `src/refactors/` (or existing sibling module in the case of `AddressComparisonCounters`) that receives an extracted symbol. Must land at A+/100 compliance.
+- **Target Module**: The new file under `src/foundation/support/refactors/` (or existing sibling module in the case of `AddressComparisonCounters`) that receives an extracted symbol. Must land at A+/100 compliance.
 - **Callsite**: The exact location where a Single-Use candidate is invoked. Rewritten atomically with the extraction so that no intermediate revision references a deleted symbol.
 - **Compliance Baseline**: The repo-wide compliance score maintained at ≥99.6/A+ with zero sub-A files; each extraction PR must preserve or improve this baseline.
 
@@ -109,7 +109,7 @@ Reference counts shift as extractions land — a symbol that was Single-Use pre-
 - **SC-004**: Repository-wide compliance score is ≥99.6/A+ at every intermediate main-branch state throughout the initiative and at final completion.
 - **SC-005**: Zero files that were A+/100 pre-initiative regress below A+ by the end of the initiative.
 - **SC-006**: All 13 first-pass PRs merge with 15/15 functional CI jobs green. Zero PRs merged via `--admin` bypass except where `mergeStateStatus` was genuinely BLOCKED/DIRTY/BEHIND with root cause documented in the PR.
-- **SC-007**: Every new file created under `src/refactors/` during the initiative scores A+/100 on compliance.
+- **SC-007**: Every new file created under `src/foundation/support/refactors/` during the initiative scores A+/100 on compliance.
 - **SC-008**: Zero wrapper shims, forwarding functions, or backward-compatibility aliases remain in `MistHelper.py` after the initiative — every extracted symbol is either fully removed or (for Unused) simply deleted.
 - **SC-009**: Zero symbols from the analyzer's `SKIP_ALWAYS` bucket are modified by any PR in this initiative.
 - **SC-010**: Zero symbols from the Hot bucket (4+ callers) are extracted during the first pass.
@@ -126,4 +126,4 @@ Reference counts shift as extractions land — a symbol that was Single-Use pre-
 - Second-pass (Low-Use, 20 candidates) is a distinct initiative scoped after first pass completes; success of second pass is not a success criterion of this specification.
 - The parent conversation (not this spec or its downstream `/speckit.plan`/`/speckit.tasks`) controls PR dispatch cadence and branch creation. This spec exists to document the contract, not to trigger execution.
 - Analyzer regeneration cost (per run) is negligible relative to CI cycle time; the "regenerate after every merge" discipline does not create a bottleneck.
-- The mapping specifies `AddressComparisonCounters` lands in `src/inventory/csv_comparator.py::CsvComparatorManager`; this is a deliberate exception to the "new module under `src/refactors/`" pattern because the sole caller already lives in `csv_comparator.py`. Other candidates whose sole caller lives outside `MistHelper.py` may follow the same "land next to caller" rule if discovered during extraction.
+- The mapping specifies `AddressComparisonCounters` lands in `src/mist/resources/inventory/csv_comparator.py::CsvComparatorManager`; this is a deliberate exception to the "new module under `src/foundation/support/refactors/`" pattern because the sole caller already lives in `csv_comparator.py`. Other candidates whose sole caller lives outside `MistHelper.py` may follow the same "land next to caller" rule if discovered during extraction.

@@ -5,7 +5,9 @@ from __future__ import annotations  # WHY: keep annotations consistent with the 
 from unittest.mock import MagicMock  # WHY: observe telemetry calls without opening real files.
 
 import MistHelper  # WHY: exercise the public script helpers used by the CLI path.
-from src.utils.menu_entry import MenuEntry  # WHY: patched menu rows must match the production row model.
+from src.foundation.support.utils.menu_entry import (
+    MenuEntry,
+)  # WHY: patched menu rows must match the production row model.
 
 
 def test_no_token_safe_plan_runs_only_offline_safe_options(monkeypatch) -> None:

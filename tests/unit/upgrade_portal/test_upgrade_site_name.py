@@ -30,13 +30,13 @@ from typing import Any
 import pytest
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
-from src.upgrade_portal.app.routes import upgrade
+from src.interfaces.portals.upgrade_portal.app.routes import upgrade
 
 # WHY: This file sits at tests/unit/upgrade_portal, so the repository root is three levels up.
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 
 # WHY: The real template folder. A stub loader would prove nothing about the shipped pages.
-_TEMPLATE_ROOT = _REPO_ROOT / "src" / "upgrade_portal" / "app" / "assets" / "templates"
+_TEMPLATE_ROOT = _REPO_ROOT / "src" / "interfaces" / "portals" / "upgrade_portal" / "app" / "assets" / "templates"
 
 # WHY: The contract that fixes every test identifier of the portal.
 _CONTRACT_PATH = _REPO_ROOT / "specs" / "1823-upgrade-capture-portal" / "contracts" / "ui-testids.md"

@@ -2,10 +2,10 @@
 
 **Issue**: #3220 | **Plan**: [plan.md](plan.md)
 
-- [x] T001 Add the cloud word sets and `_child_state` in `src/firmware/aggregate_upgrade_service.py`.
+- [x] T001 Add the cloud word sets and `_child_state` in `src/operations/execution/firmware/aggregate_upgrade_service.py`.
 - [x] T002 Apply `_child_state` and keep `cloud_status` in `_read_org_child` and `_read_device_child`.
 - [x] T003 Use `CLOUD_RUNNING_WORDS` in `_combined_site_status`.
-- [x] T004 Add `FINAL_WRITE_STATES` and read each child in `_operation_is_settled` (`src/upgrade_portal/app/routes/org_upgrade.py`).
+- [x] T004 Add `FINAL_WRITE_STATES` and read each child in `_operation_is_settled` (`src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py`).
 - [x] T005 Add `cloud_status` to `_aggregate_child_summary`.
 - [x] T006 Show the cloud word in `org_progress.html` and in `paintOrgUpgradeSites` of `portal.js`.
 - [x] T007 Keep the poll for `attention_required` in `portal.js`.

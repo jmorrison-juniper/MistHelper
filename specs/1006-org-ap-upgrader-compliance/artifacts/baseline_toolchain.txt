@@ -7,6 +7,6 @@ All done! \u2728 \U0001f370 \u2728
 1 file would be left unchanged.
 black EXIT=0
 --- mypy ---
-pyproject.toml: note: unused section(s): module = ['MistHelper', 'MistHelper.*', 'dash', 'dash.*', 'maps_manager', 'maps_manager.*', 'mist-ops-platform.*', 'ops-portal.*', 'scripts.*', 'specs.*', 'src.analytics.*', 'src.db', 'src.db.*', 'src.export.*', 'src.gateway.*', 'src.inventory.*', 'src.maps', 'src.maps.*', 'src.site.*', 'src.ssh.ssh_runner', 'src.ssh.ssh_runner_manager', 'src.troubleshooting.*', 'src.websocket.*', 'tests', 'tests.*', 'tests.e2e.*', 'tests.unit.*', 'web_portal.*']
+pyproject.toml: note: unused section(s): module = ['MistHelper', 'MistHelper.*', 'dash', 'dash.*', 'maps_manager', 'maps_manager.*', 'mist-ops-platform.*', 'ops-portal.*', 'scripts.*', 'specs.*', 'src.mist.intelligence.analytics.*', 'src.foundation.persistence.db', 'src.foundation.persistence.db.*', 'src.operations.exporting.export.*', 'src.mist.resources.gateway.*', 'src.mist.resources.inventory.*', 'src.interfaces.visualization.maps', 'src.interfaces.visualization.maps.*', 'src.mist.resources.site.*', 'src.operations.execution.ssh.ssh_runner', 'src.operations.execution.ssh.ssh_runner_manager', 'src.mist.intelligence.troubleshooting.*', 'src.mist.realtime.websocket.*', 'tests', 'tests.*', 'tests.e2e.*', 'tests.unit.*', 'web_portal.*']
 Success: no issues found in 1 source file
 mypy EXIT=0

@@ -30,7 +30,7 @@ import pyperf  # The project's chosen benchmark runner (see optimizing-python sk
 REPO_ROOT = Path(__file__).resolve().parents[2]  # scripts/benchmarks/ -> repo root.
 sys.path.insert(0, str(REPO_ROOT))  # Make `src` importable without installing the package.
 
-from src.data.data_processing_utils import DataProcessingUtils  # Module under measurement.
+from src.foundation.models.data.data_processing_utils import DataProcessingUtils  # Module under measurement.
 
 RECORD_COUNT = 500  # Typical export size: a mid-size org's device or site list.
 

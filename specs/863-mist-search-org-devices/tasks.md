@@ -10,7 +10,7 @@
 
 ## Phase 2: User Story 1 - Read-only device search (P1)
 
-- [X] T004 [US1] Add `OrgSearchExporter.devices` in `src/export/org_search_exporter.py`.
+- [X] T004 [US1] Add `OrgSearchExporter.devices` in `src/operations/exporting/export/org_search_exporter.py`.
 - [X] T005 [US1] Add menu 249 in `MistHelper.py`.
 - [X] T006 [US1] Add endpoint binding, pagination, persistence, empty-result, and error tests.
 - [X] T007 [US1] Update the README, changelog, and generated menu reference.

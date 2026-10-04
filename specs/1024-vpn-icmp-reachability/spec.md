@@ -45,7 +45,7 @@ An operator diffing today's emitted bundle against tomorrow's bundle (after this
 
 ### User Story 3 - VPN IKE Telemetry Distinguishes Reachable-But-Dead Edges (Priority: P3)
 
-An operator wants to distinguish a VPN edge that is IP-reachable but IKE-dead (ICMP responds, but IKEv2 `IKE_SA_INIT` gets no reply on UDP/500 or UDP/4500) from a VPN edge that is fully healthy. The truthful IKE check already runs during the 8h CENR refresh in `src/utils/zscaler_probe.py::run_full_validation()` — its results are currently log-only. This story promotes those results to append-only JSONL telemetry under `data/` (e.g. `data/vpn_ike_health.jsonl`) so a future report can surface the "reachable but IKE-dead" class.
+An operator wants to distinguish a VPN edge that is IP-reachable but IKE-dead (ICMP responds, but IKEv2 `IKE_SA_INIT` gets no reply on UDP/500 or UDP/4500) from a VPN edge that is fully healthy. The truthful IKE check already runs during the 8h CENR refresh in `src/foundation/support/utils/zscaler_probe.py::run_full_validation()` — its results are currently log-only. This story promotes those results to append-only JSONL telemetry under `data/` (e.g. `data/vpn_ike_health.jsonl`) so a future report can surface the "reachable but IKE-dead" class.
 
 **Why this priority**: Optional in-scope follow-up per feature description. Adds diagnostic depth. Not required for the primary fix (US1) to deliver value. Reasonable to defer to a follow-up feature if scope pressure arises, but cheap enough to include here.
 
@@ -81,9 +81,9 @@ An operator wants to distinguish a VPN edge that is IP-reachable but IKE-dead (I
 - **FR-006**: No emitted row may target a VPN host with a URL of the form `https://<host>-vpn.<domain>`, `http://<host>`, or `<host>:500`. These synthetic-probe shapes are prohibited outputs.
 - **FR-007**: The row-shape and probe-type choice for every non-VPN target MUST be byte-identical to the current implementation for the same input snapshot (INV-1 preservation).
 - **FR-008**: All existing pytests under `tests/unit/org/test_org_synthetic_probes_manager.py` MUST continue to pass. New pytests MUST cover: (a) VPN row emits `type: reachability` for each of the three VPN classification paths (CENR bag, UDP observation, `-vpn.` pattern), (b) VPN row target is bare hostname, (c) non-VPN TCP/443 row is unchanged, (d) non-VPN non-443 TCP row is unchanged, (e) probe-type dispatch from target shape.
-- **FR-009** *(optional, US3 only)*: If US3 is included in this feature, `src/utils/zscaler_probe.py::run_full_validation()` MUST append one JSONL record per VPN host per run to `data/vpn_ike_health.jsonl`. Each record MUST contain at minimum: hostname, ISO-8601 timestamp, ICMP reachability result (bool), UDP/500 `IKE_SA_INIT` result (bool), UDP/4500 `IKE_SA_INIT` result (bool).
+- **FR-009** *(optional, US3 only)*: If US3 is included in this feature, `src/foundation/support/utils/zscaler_probe.py::run_full_validation()` MUST append one JSONL record per VPN host per run to `data/vpn_ike_health.jsonl`. Each record MUST contain at minimum: hostname, ISO-8601 timestamp, ICMP reachability result (bool), UDP/500 `IKE_SA_INIT` result (bool), UDP/4500 `IKE_SA_INIT` result (bool).
 - **FR-010** *(optional, US3 only)*: The JSONL append MUST NOT abort or destabilize `run_full_validation()` on failure (permission denied, disk full, path missing). The failure MUST be logged at WARNING level and the function MUST continue.
-- **FR-011**: The feature MUST NOT introduce any new third-party dependency. Standard library only, matching the existing pattern in `src/utils/zscaler_probe.py` (`socket`, `struct`).
+- **FR-011**: The feature MUST NOT introduce any new third-party dependency. Standard library only, matching the existing pattern in `src/foundation/support/utils/zscaler_probe.py` (`socket`, `struct`).
 
 ### Key Entities *(include if feature involves data)*
 
@@ -104,11 +104,11 @@ An operator wants to distinguish a VPN edge that is IP-reachable but IKE-dead (I
 
 ## Assumptions
 
-- Menu 206 (`src/org/org_synthetic_probes_manager.py`) is the only emission path that produces synthetic-test rows for VPN endpoints. No other module emits parallel rows for the same hosts.
+- Menu 206 (`src/mist/resources/org/org_synthetic_probes_manager.py`) is the only emission path that produces synthetic-test rows for VPN endpoints. No other module emits parallel rows for the same hosts.
 - Mist accepts `type: reachability` rows with a bare hostname (no port, no scheme) and interprets them as ICMP-ping targets. This is the documented Marvis Minis probe surface (two probe types: `application`, `reachability`).
 - The CENR `vpn_hostnames` bag is authoritative for VPN identity: if a host is in the bag, it is a VPN endpoint even if it also happens to serve TCP/443 for admin traffic.
 - The `_is_vpn_host` catalogue-default branch (`-vpn.` hostname pattern) is a stable fallback and its match criteria will not change under this feature.
-- The existing `_udp_check()` in `src/utils/zscaler_probe.py` correctly sends IKEv2 `IKE_SA_INIT` per RFC 3948 §2.2 (bare on UDP/500, with non-ESP marker on UDP/4500). No changes to the IKE-probe wire format are required by this feature.
+- The existing `_udp_check()` in `src/foundation/support/utils/zscaler_probe.py` correctly sends IKEv2 `IKE_SA_INIT` per RFC 3948 §2.2 (bare on UDP/500, with non-ESP marker on UDP/4500). No changes to the IKE-probe wire format are required by this feature.
 - The `data/` directory is writable by the process running `run_full_validation()`. If it is not, US3's JSONL append fails gracefully per FR-010.
 - INV-1 (run-to-run byte stability for non-VPN rows) is measured against a fixed input snapshot, not against varying live CENR data — the invariant is about code determinism, not upstream data drift.
 - No IPv6-only behavior differences are anticipated; Mist resolves DNS server-side for reachability targets, and bare-hostname emission is address-family-agnostic.

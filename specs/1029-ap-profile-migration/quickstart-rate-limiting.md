@@ -43,7 +43,7 @@ Expected:
 - Mocked `RateLimitingUtils.get_rate_limited_delay` is called 10,000
   times.
 - Mocked `time.sleep` (patched at
-  `src.device.ap_profile_migration_manager.time.sleep`) is called
+  `src.mist.resources.device.ap_profile_migration_manager.time.sleep`) is called
   10,000 times.
 - The migration reports 10,000 successes, 0 failures.
 - Summary output includes the four FR-A09 pacing lines.
@@ -122,7 +122,7 @@ Expected:
 cd src
 pytest -q
 ruff check .
-interrogate -c ../pyproject.toml src/device/ap_profile_migration_manager.py
+interrogate -c ../pyproject.toml src/mist/resources/device/ap_profile_migration_manager.py
 ```
 
 Expected:
@@ -150,14 +150,14 @@ Manual check (no test):
 
 ```bash
 git diff main -- pyproject.toml
-git diff main -- src/utils/
+git diff main -- src/foundation/support/utils/
 ```
 
 Expected:
 
 - `pyproject.toml` diff is empty (or contains only unrelated
   parent-feature changes; no rate-limit entries).
-- No new file under `src/utils/`. `src/utils/rate_limiting.py` is
+- No new file under `src/foundation/support/utils/`. `src/foundation/support/utils/rate_limiting.py` is
   the only limiter consulted.
 
 ## Cleanup
@@ -168,7 +168,7 @@ feature's `data/` writes are also mocked in the pacing tests.
 ## Notes
 
 - Every pacing test that exercises the loop must patch
-  `src.device.ap_profile_migration_manager.time.sleep` per Q4 of
+  `src.mist.resources.device.ap_profile_migration_manager.time.sleep` per Q4 of
   `research-rate-limiting.md`. Failure to patch will cause SC-A01
   (10,000-AP hermetic run) to time out at pytest's default limit.
 - The one integration-style test (recommended) leaves

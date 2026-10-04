@@ -1,4 +1,4 @@
-"""Wave 4 P2 coverage for src/refactors/initialize_mist_session.py (initiative #1018).
+"""Wave 4 P2 coverage for src/foundation/support/refactors/initialize_mist_session.py (initiative #1018).
 
 Covers `_MistHelperProxy.__getattr__`, `_mh_module`, and every branch of
 `MistSessionInitializer.initialize`:
@@ -20,8 +20,10 @@ from unittest.mock import MagicMock  # WHY: FR-008 mandates MagicMock doubles.
 
 import pytest  # WHY: monkeypatch fixture.
 
-from src.config.source_dependency_resolver import SourceDependencyResolver  # WHY: assert the source dependency seam.
-from src.refactors.initialize_mist_session import (  # WHY: SUT direct imports.
+from src.foundation.runtime.config.source_dependency_resolver import (
+    SourceDependencyResolver,
+)  # WHY: assert the source dependency seam.
+from src.foundation.support.refactors.initialize_mist_session import (  # WHY: SUT direct imports.
     _MH,
     MistSessionConfigurator,
     MistSessionInitializer,

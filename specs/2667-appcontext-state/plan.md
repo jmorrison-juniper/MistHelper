@@ -52,7 +52,7 @@ specs/2667-appcontext-state/
 ### Source Code (repository root)
 
 ```text
-src/refactors/main_entrypoint.py
+src/foundation/support/refactors/main_entrypoint.py
 tests/unit/refactors/test_app_context_session_state.py
 tests/unit/refactors/test_main_entrypoint.py
 changelog.d/issue-2667-appcontext-state.md

@@ -12,10 +12,10 @@ row targets: [('ap', '0.15.1'), ('gateway', '0.15.1'), ('switch', '0.15.1')]
 shipped selector: {'ap': ['0.15.1', '0.14.29216'], 'switch': ['0.15.1', '0.14.29216'], 'gateway': ['0.15.1', '0.14.29216']}
 ```
 
-- The shipped `build_options_view` in `src/upgrade_portal/upgrade/options.py`
+- The shipped `build_options_view` in `src/interfaces/portals/upgrade_portal/upgrade/options.py`
   calls `TypedVersionSelector().select(...)`. It passes the selections to
   `build_version_options` and answers `type_selections`.
-- `options_view` in `src/upgrade_portal/app/routes/upgrade.py` reads
+- `options_view` in `src/interfaces/portals/upgrade_portal/app/routes/upgrade.py` reads
   `type_selections` from the seam answer. A missing field reads as `{}`.
 - `options.html` draws each type control from the `candidates` of its
   selection. An empty map gives each control the empty prompt only.
@@ -113,15 +113,15 @@ seconds.
   `data-needs-lock`, and the click waited 30 seconds.
 
 - The pre-check capture takes the site lock. `take_site_lock` in
-  `src/upgrade_portal/app/routes/capture.py` stores the lock record in the
+  `src/interfaces/portals/upgrade_portal/app/routes/capture.py` stores the lock record in the
   signed session of the browser that sent the call.
 
 - A lock names one operator and one browser. `LockRecord.held_by` in
-  `src/upgrade_portal/runtime/lock.py` compares both halves. Each test of the
+  `src/interfaces/portals/upgrade_portal/runtime/lock.py` compares both halves. Each test of the
   module opens a new browser context, so a later test is a second browser of
   the same operator.
 
-- `lock_banner_context` in `src/upgrade_portal/app/routes/select.py` reads
+- `lock_banner_context` in `src/interfaces/portals/upgrade_portal/app/routes/select.py` reads
   `held` only when the session of this browser stores the token. Every other
   holder reads as `locked`, and issue #2200 turns the save control off.
 

@@ -24,11 +24,11 @@
 
 **Independent Test**: Run the five unit test files named in the plan.
 
-- [x] T007 [US1] Repair `src\device\virtual_chassis.py`. (delivered: src\device\virtual_chassis.py)
-- [x] T008 [US1] Repair `src\export\site_anomaly_exporter.py`. (delivered: src\export\site_anomaly_exporter.py)
-- [x] T009 [US1] Repair `src\export\site_insights\device_metric_operation.py`. (delivered: src\export\site_insights\device_metric_operation.py)
-- [x] T010 [US1] Repair `src\export\site_insights\site_metric_operation.py`. (delivered: src\export\site_insights\site_metric_operation.py)
-- [x] T011 [US1] Repair `src\refactors\serial_cc\site_client_insights.py`. (delivered: src\refactors\serial_cc\site_client_insights.py)
+- [x] T007 [US1] Repair `src\mist\resources\device\virtual_chassis.py`. (delivered: src\mist\resources\device\virtual_chassis.py)
+- [x] T008 [US1] Repair `src\operations\exporting\export\site_anomaly_exporter.py`. (delivered: src\operations\exporting\export\site_anomaly_exporter.py)
+- [x] T009 [US1] Repair `src\operations\exporting\export\site_insights\device_metric_operation.py`. (delivered: src\operations\exporting\export\site_insights\device_metric_operation.py)
+- [x] T010 [US1] Repair `src\operations\exporting\export\site_insights\site_metric_operation.py`. (delivered: src\operations\exporting\export\site_insights\site_metric_operation.py)
+- [x] T011 [US1] Repair `src\foundation\support\refactors\serial_cc\site_client_insights.py`. (delivered: src\foundation\support\refactors\serial_cc\site_client_insights.py)
 - [x] T012 [US1] Add five mocked known-site tests. (delivered: tests\unit\*)
 
 ## Phase 4: User Story 2 - Report lookup faults

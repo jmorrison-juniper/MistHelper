@@ -3,9 +3,9 @@
 Why:
     The exporter reports success for a write that reached no database. The
     exporter skips the database outside a container
-    (``src/export/data_exporter.py:134``), and the router returns a success
+    (``src/operations/exporting/export/data_exporter.py:134``), and the router returns a success
     envelope that carries zero written rows after a file fallback
-    (``src/db/router.py:373``). That defect is issue 1824, and it stays open on
+    (``src/foundation/persistence/db/router.py:373``). That defect is issue 1824, and it stays open on
     purpose. The store works around the defect, because it reads every key back
     after a write. These tests prove that the read-back catches the false
     success, and that a driver field never raises a false alarm.
@@ -28,7 +28,7 @@ from typing import Any
 import pytest
 from arango.exceptions import ArangoError  # WHY: tests exercise narrowed python-arango handlers.
 
-from src.upgrade_portal.capture import store
+from src.interfaces.portals.upgrade_portal.capture import store
 
 _KEY = "cap-0001"  # WHY: One capture key serves every test in this module.
 _RUN_KEY = "run-0001"  # WHY: The run that both captures of a pair belong to.
@@ -214,8 +214,8 @@ def _drop_cached_handle() -> Iterator[None]:
 @pytest.fixture(autouse=True)
 def _isolate_store_dns(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     """Keep store client tests independent of operating system DNS."""
-    from src.db import host_resolver
-    from src.db.host_resolver import BoundedHostResolver
+    from src.foundation.persistence.db import host_resolver
+    from src.foundation.persistence.db.host_resolver import BoundedHostResolver
     from tests.unit.db_discovery.fakes import ControlledResolver
 
     lookup = ControlledResolver()
@@ -1018,7 +1018,7 @@ def test_is_schema_version_refuses_a_boolean() -> None:
     Why:
         Python treats ``True`` as the integer 1, so a plain ``!= 1`` test
         accepts ``True``. ``RunRecordBuilder.validate`` in
-        ``src/upgrade_portal/runtime/runs.py`` holds that defect, and this
+        ``src/interfaces/portals/upgrade_portal/runtime/runs.py`` holds that defect, and this
         store must not repeat it.
     """
     assert store.is_schema_version(store.SCHEMA_VERSION) is True

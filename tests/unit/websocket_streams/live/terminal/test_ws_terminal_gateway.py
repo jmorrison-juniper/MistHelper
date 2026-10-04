@@ -9,19 +9,21 @@ from types import SimpleNamespace  # Test sessions need small mutable records.
 from unittest.mock import Mock  # Test sessions expose one observed method.
 
 import pytest  # The tests assert contract refusals.
-
 import websocket  # The production shell client uses the installed WebSocket transport.
-from src.websocket_streams.intake.fields.error import StreamRequestError  # Tests verify refusal codes.
-from src.websocket_streams.live.terminal.byte_history import ByteHistory  # Tests build terminal state.
-from src.websocket_streams.live.terminal.gateway import TerminalGateway  # Tests cover this class.
-from src.websocket_streams.live.terminal.input_queue import TerminalInput  # Tests build writable state.
-from src.websocket_streams.live.terminal.state.terminal_state import TerminalState  # Tests build terminal state.
-from src.websocket_streams.live.transport.endpoint import (  # Tests build a safe loopback endpoint.
+
+from src.mist.realtime.websocket_streams.intake.fields.error import StreamRequestError  # Tests verify refusal codes.
+from src.mist.realtime.websocket_streams.live.terminal.byte_history import ByteHistory  # Tests build terminal state.
+from src.mist.realtime.websocket_streams.live.terminal.gateway import TerminalGateway  # Tests cover this class.
+from src.mist.realtime.websocket_streams.live.terminal.input_queue import TerminalInput  # Tests build writable state.
+from src.mist.realtime.websocket_streams.live.terminal.state.terminal_state import (
+    TerminalState,
+)  # Tests build terminal state.
+from src.mist.realtime.websocket_streams.live.transport.endpoint import (  # Tests build a safe loopback endpoint.
     MistStreamEndpoint,
     ShellAddressPolicy,
     TransportProfile,
 )
-from src.websocket_streams.live.transport.shell_client import (
+from src.mist.realtime.websocket_streams.live.transport.shell_client import (
     ShellClient,
 )  # Send paste bytes through production transport.
 from tests.unit.websocket_streams.live.transport.fake_mist_cloud.api import FakeApiSession  # Supply endpoint auth.

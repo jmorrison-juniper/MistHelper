@@ -16,8 +16,8 @@ from pathlib import Path
 
 import pytest
 
-from src.upgrade_portal.runtime.runs import PHASE_ORDER, PhaseState, RunState
-from src.upgrade_portal.upgrade import gate
+from src.interfaces.portals.upgrade_portal.runtime.runs import PHASE_ORDER, PhaseState, RunState
+from src.interfaces.portals.upgrade_portal.upgrade import gate
 from tests.support.rehearsal import (
     TYPE_ACCESS_POINT,
     TYPE_GATEWAY,

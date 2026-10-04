@@ -128,7 +128,7 @@ entries (via `structlog` or equivalent) are required for any new service or modu
 The portal is a new service and a new package. `plan.md:95` marks Principle V PASS. The
 stated reason is that every record is ASCII, every record uses `%s` placeholders, and every
 record carries a run identifier and a site identifier. `plan.md:37` confines `structlog` to
-`src/db`. `tasks.md:44` repeats that rule as a global constraint.
+`src/foundation/persistence/db`. `tasks.md:44` repeats that rule as a global constraint.
 
 A `%s` format string produces a prose sentence. A prose sentence is not machine-parseable.
 T212 at `tasks.md:457` audits the placeholders, the ASCII characters, the two identifiers,
@@ -140,7 +140,7 @@ does not name.
 
 **Recommendation**: Add one paragraph to the Constitution Check that tests the design
 against the phrase "or equivalent". If the prose format cannot meet the test, adopt a
-key-value log format inside `src/upgrade_portal/` and extend T212.
+key-value log format inside `src/interfaces/portals/upgrade_portal/` and extend T212.
 
 ### G1 (HIGH). Four required comparison statistics have no home
 
@@ -536,10 +536,10 @@ All three known items are still accurate. None is reported above as a new findin
 
 **2. Two out-of-scope prohibitions.** `tasks.md:53-66` and `plan.md:322-335` record both.
 
-- Do not repair issue #1824. `_is_standalone_mode()` at `src/export/data_exporter.py:141`
-  and `_csv_fallback` at `src/db/router.py:372-382` stay as they are. FR-031 makes the
+- Do not repair issue #1824. `_is_standalone_mode()` at `src/operations/exporting/export/data_exporter.py:141`
+  and `_csv_fallback` at `src/foundation/persistence/db/router.py:372-382` stay as they are. FR-031 makes the
   portal verify its own write instead.
-- Do not repair `src/db/retention.py:100`. The attribute name mismatch stops the purge.
+- Do not repair `src/foundation/persistence/db/retention.py:100`. The attribute name mismatch stops the purge.
   FR-032 wants unlimited retention, so the defect is harmless here and a repair would
   delete captures.
 

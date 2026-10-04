@@ -6,7 +6,7 @@ Closes #3565
 
 ## Summary
 
-- Added the owned package for menu 285 at `src/troubleshooting/nac_idp_credential_test`.
+- Added the owned package for menu 285 at `src/mist/intelligence/troubleshooting/nac_idp_credential_test`.
 - Added model, client, prompt, and operation tests under `tests/unit/troubleshooting/nac_idp_credential_test`.
 - Deferred integration wiring to `specs/3565-nac-idp-credential-test/wiring.md`.
 
@@ -22,12 +22,12 @@ Closes #3565
 - [x] New or changed guards state the measured count and prove one failing path
 - [x] No new Ruff lint violations (`ruff check` on owned package and tests)
 - [x] Code formatted with Black (`black --check` on owned package and tests)
-- [x] mypy passes (`mypy src\troubleshooting\nac_idp_credential_test --config-file pyproject.toml`)
+- [x] mypy passes (`mypy src\mist\intelligence\troubleshooting\nac_idp_credential_test --config-file pyproject.toml`)
 
 ## Security
 
 - [x] No hardcoded secrets, tokens, or passwords
-- [x] Bandit passes with no new findings (`bandit -c pyproject.toml -r src\troubleshooting\nac_idp_credential_test -q`)
+- [x] Bandit passes with no new findings (`bandit -c pyproject.toml -r src\mist\intelligence\troubleshooting\nac_idp_credential_test -q`)
 - [ ] pip-audit clean (`pip-audit -r requirements.txt`)
 - [x] Sensitive data handled through hidden input only
 
@@ -54,14 +54,14 @@ Closes #3565
 ## Validation
 
 - `py_compile`: passed for all owned Python files.
-- `ruff check`: passed for `src\troubleshooting\nac_idp_credential_test` and `tests\unit\troubleshooting\nac_idp_credential_test`.
-- `black --check`: passed for `src\troubleshooting\nac_idp_credential_test` and `tests\unit\troubleshooting\nac_idp_credential_test`.
-- `mypy`: passed for `src\troubleshooting\nac_idp_credential_test`.
-- `pydocstyle`: passed for `src\troubleshooting\nac_idp_credential_test`.
+- `ruff check`: passed for `src\mist\intelligence\troubleshooting\nac_idp_credential_test` and `tests\unit\troubleshooting\nac_idp_credential_test`.
+- `black --check`: passed for `src\mist\intelligence\troubleshooting\nac_idp_credential_test` and `tests\unit\troubleshooting\nac_idp_credential_test`.
+- `mypy`: passed for `src\mist\intelligence\troubleshooting\nac_idp_credential_test`.
+- `pydocstyle`: passed for `src\mist\intelligence\troubleshooting\nac_idp_credential_test`.
 - `pytest`: 13 passed for `tests\unit\troubleshooting\nac_idp_credential_test`.
-- `vulture`: passed for `src\troubleshooting\nac_idp_credential_test`.
-- `interrogate`: passed with 100.0 percent for `src\troubleshooting\nac_idp_credential_test`.
-- `bandit`: passed for `src\troubleshooting\nac_idp_credential_test`.
+- `vulture`: passed for `src\mist\intelligence\troubleshooting\nac_idp_credential_test`.
+- `interrogate`: passed with 100.0 percent for `src\mist\intelligence\troubleshooting\nac_idp_credential_test`.
+- `bandit`: passed for `src\mist\intelligence\troubleshooting\nac_idp_credential_test`.
 - `complexity-gate`: passed with maximum complexity 10.
 - `test-quality-analyzer`: passed with 3 files checked and 0 new findings.
 - `test_mistapi_sdk_compatibility`: passed with 486 call signatures checked.
@@ -69,7 +69,7 @@ Closes #3565
 
 ## Files
 
-- `src/troubleshooting/nac_idp_credential_test/**`
+- `src/mist/intelligence/troubleshooting/nac_idp_credential_test/**`
 - `tests/unit/troubleshooting/nac_idp_credential_test/**`
 - `specs/3565-nac-idp-credential-test/**`
 - `changelog.d/issue-3565-nac-idp-credential-test.md`

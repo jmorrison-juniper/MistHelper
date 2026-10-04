@@ -7,7 +7,7 @@ This guide shows how to validate the planned RF diagnostics feature after implem
 - Python 3.13 or newer.
 - Project dependencies installed in the active environment.
 - No live Mist tenant is needed for unit tests.
-- Source package planned at `src/troubleshooting/rf_diagnostics`.
+- Source package planned at `src/mist/intelligence/troubleshooting/rf_diagnostics`.
 - Unit tests planned at `tests/unit/troubleshooting/rf_diagnostics`.
 
 ## Scenario 1: Spectrum analysis success

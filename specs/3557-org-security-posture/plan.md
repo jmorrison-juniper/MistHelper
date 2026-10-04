@@ -92,7 +92,7 @@ tests/
             +-- test_setting_switch_checks.py
 ```
 
-**Structure Decision**: Put new implementation code in `src/reports/org_security_posture/`. This keeps the feature with other reports and preserves the fleet ownership boundary.
+**Structure Decision**: Put new implementation code in `src/mist/intelligence/reports/org_security_posture/`. This keeps the feature with other reports and preserves the fleet ownership boundary.
 
 ## Design Overview
 

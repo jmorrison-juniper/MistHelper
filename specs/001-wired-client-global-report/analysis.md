@@ -3,7 +3,7 @@
 ## 2026-09-14 closeout
 
 The issue matched the existing spec directory `specs/001-wired-client-global-report`.
-The implementation already existed in `src/reports/global_wired_client_report_generator.py`.
+The implementation already existed in `src/mist/intelligence/reports/global_wired_client_report_generator.py`.
 The menu registry maps Menu 90 to `GlobalWiredClientReportGenerator.execute`.
 The operation registry marks Menu 90 as `interactive_safe`.
 

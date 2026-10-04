@@ -26,8 +26,10 @@ from urllib.parse import parse_qs, urlsplit  # Read the run key from the address
 
 import pytest  # Report a workstation with no lock store as a skip.
 
-from src.upgrade_portal.runtime.lock import LockState  # The grant states that the lock route answers.
-from src.upgrade_portal.runtime.runs import RunStateMachine  # The final states of the run model.
+from src.interfaces.portals.upgrade_portal.runtime.lock import (
+    LockState,
+)  # The grant states that the lock route answers.
+from src.interfaces.portals.upgrade_portal.runtime.runs import RunStateMachine  # The final states of the run model.
 
 logger = logging.getLogger(__name__)  # Keep each record of the site lock rules tied to this module.
 

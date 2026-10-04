@@ -166,7 +166,7 @@ line-length = 120
 target-version = "py313"
 # Ruff exclusion counts live in quality_gate_exclusions.json.
 # Run the exclusion-drift command to measure them without blocking CI.
-extend-exclude = ["mist-ops-platform", "web_portal", "scripts", "src/maps"]
+extend-exclude = ["mist-ops-platform", "web_portal", "scripts", "src/interfaces/visualization/maps"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "G", "PLW1514", "RUF100"]
@@ -260,7 +260,7 @@ explicit_package_bases = true
 #                            both were scanned (duplicate-module error). Hard requirement.
 #   web_portal            -- Flask app; Phase-2 typing target (needs types-flask + per-view
 #                            annotations). Also covered by follow_imports=silent (#883).
-#   src/maps              -- matplotlib/plotly viewer subtree; Phase-2 typing target. Also
+#   src/interfaces/visualization/maps              -- matplotlib/plotly viewer subtree; Phase-2 typing target. Also
 #                            covered by follow_imports=silent (#883) and coverage omit (#878).
 #   tests                 -- test suite; strict mode not appropriate for pytest fixtures.
 #                            The [[overrides]] block for tests below is now dead config —
@@ -282,7 +282,7 @@ explicit_package_bases = true
 exclude = [
     "mist-ops-platform",
     "web_portal",
-    "src/maps",
+    "src/interfaces/visualization/maps",
     "tests",
     "scripts",
 ]
@@ -295,18 +295,18 @@ module = ["dash", "dash.*"]
 follow_imports = "skip"
 
 [[tool.mypy.overrides]]
-# Non-CI-target modules: MistHelper.py (monolith being refactored), src.maps.*
+# Non-CI-target modules: MistHelper.py (monolith being refactored), src.interfaces.visualization.maps.*
 # (matplotlib/plotly viewer subtree — its own Phase-2 target), and web_portal.*
 # (Flask app — needs types-flask + per-view annotations). Using `follow_imports = "silent"`
 # means mypy still follows imports to resolve real types at call sites but suppresses
 # error reporting from these files themselves. This is deliberately narrower than
 # `follow_imports = "skip"` (the old blanket setting, forbidden by issue #883 AC), which
 # treated every symbol imported from these modules as `Any` and hid cross-module bugs
-# like the one caught in src/capture/packet_capture.py (a `PromptNetworkDeviceUtils`
+# like the one caught in src/operations/execution/capture/packet_capture.py (a `PromptNetworkDeviceUtils`
 # reference that no longer existed after issue #33xx extracted it out of MistHelper).
 #
 # Graduated in this PR (issue #883):
-#   maps_manager, maps_manager.*      -- root module never existed; only src.maps.maps_manager
+#   maps_manager, maps_manager.*      -- root module never existed; only src.interfaces.visualization.maps.maps_manager
 #   mist-ops-platform.*, ops-portal.* -- hyphenated names are not valid Python modules;
 #                                         patterns never matched anything
 #   scripts.*, specs.*                -- dev tooling and planning artifacts; not imported
@@ -314,14 +314,14 @@ follow_imports = "skip"
 #   MistHelper.*                      -- MistHelper.py is a single module, no submodules
 #
 # Follow-ups: as MistHelper monolith classes graduate, the `MistHelper` entry shrinks;
-# src.maps.* and web_portal.* need their own dedicated typing sweeps (out of scope here).
-module = ["MistHelper", "src.maps.*", "web_portal.*"]
+# src.interfaces.visualization.maps.* and web_portal.* need their own dedicated typing sweeps (out of scope here).
+module = ["MistHelper", "src.interfaces.visualization.maps.*", "web_portal.*"]
 follow_imports = "silent"
 
 [[tool.mypy.overrides]]
-# src.db: polyglot database modules use python-arango and redis SDKs which have
+# src.foundation.persistence.db: polyglot database modules use python-arango and redis SDKs which have
 # untyped methods and return union types. Relax strict checks here; tighten in Phase 2.
-module = ["src.db", "src.db.*"]
+module = ["src.foundation.persistence.db", "src.foundation.persistence.db.*"]
 disallow_untyped_calls = false
 disallow_any_generics = false
 warn_return_any = false
@@ -330,7 +330,7 @@ warn_return_any = false
 # Upgrade portal modules use Flask and injected service dependencies that expose
 # dynamic attributes and untyped SDK return values. Keep strict checking active
 # for all other source modules while this package graduates to full annotations.
-module = ["src.upgrade_portal", "src.upgrade_portal.*"]
+module = ["src.interfaces.portals.upgrade_portal", "src.interfaces.portals.upgrade_portal.*"]
 disallow_untyped_defs = false
 disallow_incomplete_defs = false
 disallow_untyped_calls = false
@@ -392,34 +392,34 @@ disable_error_code = [
 # once type annotations are added and mypy passes at strict mode.
 #
 # Graduated (removed from list) — pass strict mypy as of issue #882:
-#   src.cache.*                    (0 errs pre-graduation)
-#   src.ssh.ssh_runner             (0 errs pre-graduation)
-#   src.ssh.cli_shell_manager      (1 err  fixed pre-graduation: no-any-return cast)
-#   src.ssh.ssh_runner_manager     (2 errs fixed pre-graduation: no-any-return cast + ignore code)
+#   src.foundation.persistence.cache.*                    (0 errs pre-graduation)
+#   src.operations.execution.ssh.ssh_runner             (0 errs pre-graduation)
+#   src.operations.execution.ssh.cli_shell_manager      (1 err  fixed pre-graduation: no-any-return cast)
+#   src.operations.execution.ssh.ssh_runner_manager     (2 errs fixed pre-graduation: no-any-return cast + ignore code)
 #
 # Remaining (still overridden) — error counts at strict mypy captured 2026-07-19,
 # tracked for follow-up under issue #882 comments (module list to graduate next):
-#   src.analytics.*     ( 15 errs)  src.api.*           ( 23 errs)
-#   src.device.*        ( 36 errs)  src.export.*        (189 errs)
-#   src.gateway.*       ( 92 errs)  src.input.*         ( 14 errs)
-#   src.inventory.*     ( 94 errs)  src.org.*           ( 55 errs)
-#   src.reports.*       (  7 errs)  src.site.*          ( 17 errs)
-#   src.troubleshooting.* ( 7 errs) src.ui.*            ( 12 errs)
-#   src.websocket.*     ( 79 errs)
+#   src.mist.intelligence.analytics.*     ( 15 errs)  src.mist.access.api.*           ( 23 errs)
+#   src.mist.resources.device.*        ( 36 errs)  src.operations.exporting.export.*        (189 errs)
+#   src.mist.resources.gateway.*       ( 92 errs)  src.foundation.runtime.input.*         ( 14 errs)
+#   src.mist.resources.inventory.*     ( 94 errs)  src.mist.resources.org.*           ( 55 errs)
+#   src.mist.intelligence.reports.*       (  7 errs)  src.mist.resources.site.*          ( 17 errs)
+#   src.mist.intelligence.troubleshooting.* ( 7 errs) src.interfaces.visualization.ui.*            ( 12 errs)
+#   src.mist.realtime.websocket.*     ( 79 errs)
 module = [
-    "src.analytics.*",
-    "src.api.*",
-    "src.export.*",
-    "src.gateway.*",
-    "src.input.*",
-    "src.inventory.*",
-    "src.org.*",
-    "src.device.*",
-    "src.reports.*",
-    "src.site.*",
-    "src.troubleshooting.*",
-    "src.ui.*",
-    "src.websocket.*",
+    "src.mist.intelligence.analytics.*",
+    "src.mist.access.api.*",
+    "src.operations.exporting.export.*",
+    "src.mist.resources.gateway.*",
+    "src.foundation.runtime.input.*",
+    "src.mist.resources.inventory.*",
+    "src.mist.resources.org.*",
+    "src.mist.resources.device.*",
+    "src.mist.intelligence.reports.*",
+    "src.mist.resources.site.*",
+    "src.mist.intelligence.troubleshooting.*",
+    "src.interfaces.visualization.ui.*",
+    "src.mist.realtime.websocket.*",
 ]
 # WHY (per-flag opt-outs): each flag below is relaxed for a specific documented
 # reason -- collectively they replace the blanket `ignore_errors = true`, so mypy
@@ -489,16 +489,16 @@ markers = [
 ]
 
 [tool.coverage.run]
-# src/upgrade_portal is named on its own, so a run that measures only the new
+# src/interfaces/portals/upgrade_portal is named on its own, so a run that measures only the new
 # package still reports it. The "." entry already covers the repository.
-source = [".", "src/upgrade_portal"]
+source = [".", "src/interfaces/portals/upgrade_portal"]
 omit = [
     "tests/*",
     "venv/*",
     ".venv/*",
     "setup.py",
     "*/site-packages/*",
-    "src/maps/*",
+    "src/interfaces/visualization/maps/*",
 ]
 
 [tool.coverage.report]
@@ -549,7 +549,7 @@ max-line-length = 120
 # W0613 (unused-argument) and W0718 (broad-exception-caught) remain disabled
 # repo-wide; narrowing them is tracked as separate #887 follow-up slices --
 # W0613 has 20 sites (mostly WebSocket protocol-mandated callback signatures
-# in `src/websocket/manager.py` plus a scattering across capture/firmware/ssh
+# in `src/mist/realtime/websocket/manager.py` plus a scattering across capture/firmware/ssh
 # handlers), and W0718 has 493 sites where broad `except Exception:` blocks
 # are intentional in cleanup/error handlers. Each needs a per-site audit.
 disable = ["C0114", "C0115", "C0116", "W0613", "W0718"]

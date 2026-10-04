@@ -7,8 +7,8 @@ from unittest.mock import Mock
 
 from flask import Flask
 
-from src.upgrade_portal.app import factory, wiring
-from src.upgrade_portal.app.routes import capture, upgrade
+from src.interfaces.portals.upgrade_portal.app import factory, wiring
+from src.interfaces.portals.upgrade_portal.app.routes import capture, upgrade
 
 
 def unwrapped(route):

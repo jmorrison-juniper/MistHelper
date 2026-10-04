@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import pytest
 import requests
 
-from src.maps import _maps_backup, _maps_clone, _maps_coverage, _maps_wizard
+from src.interfaces.visualization.maps import _maps_backup, _maps_clone, _maps_coverage, _maps_wizard
 
 
 class _DummyManager:

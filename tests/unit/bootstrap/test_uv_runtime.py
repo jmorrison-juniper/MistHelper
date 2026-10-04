@@ -1,4 +1,4 @@
-"""Wave 7 P2 coverage for src/bootstrap/uv_runtime.py (initiative #1018).
+"""Wave 7 P2 coverage for src/foundation/runtime/bootstrap/uv_runtime.py (initiative #1018).
 
 Covers every branch of ``UVRuntimeHelper`` static methods plus
 ``build_runtime_helpers`` factory:
@@ -28,7 +28,7 @@ from typing import Any  # WHY: annotate the runtime-helpers dict return type.
 import pytest  # WHY: parametrize + caplog fixtures.
 from packaging.version import Version  # WHY: assert PEP 440 parser results.
 
-from src.bootstrap.uv_runtime import (  # WHY: direct SUT imports (module + factory).
+from src.foundation.runtime.bootstrap.uv_runtime import (  # WHY: direct SUT imports (module + factory).
     UVRuntimeHelper,
     build_runtime_helpers,
 )

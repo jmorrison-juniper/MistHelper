@@ -10,7 +10,10 @@ from unittest.mock import MagicMock  # WHY: Stand in for a response that holds n
 
 import pytest  # WHY: Use the caplog fixture and the parametrize marker.
 
-from src.export.site_insights.metric_refusals import MetricRefusal, MetricRefusalLog  # WHY: The code under test.
+from src.operations.exporting.export.site_insights.metric_refusals import (
+    MetricRefusal,
+    MetricRefusalLog,
+)  # WHY: The code under test.
 
 
 def answer(status_code: Any, data: Any = None) -> SimpleNamespace:

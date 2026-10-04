@@ -33,7 +33,7 @@ The plan treats the existing project judgment as a starting point, not as a conc
 **Constraints**:
 
 - The root ruff line length is 120 characters.
-- `ruff check .` reads the whole repository. Its `extend-exclude` list drops `mist-ops-platform`, `web_portal`, `scripts`, and `src/maps`.
+- `ruff check .` reads the whole repository. Its `extend-exclude` list drops `mist-ops-platform`, `web_portal`, `scripts`, and `src/interfaces/visualization/maps`.
 - `pylint` reads `MistHelper.py` and `src` only. The two roots differ, and that difference produces part of the count gap.
 - `radon` fails on any block above complexity 10. A narrowed type adds no branch, so the score stays flat. An added `if` inside a handler does add a branch.
 - The action logging rule in `.github/copilot-instructions.md` demands a log call on each meaningful action. Requirement FR-011 extends that rule to every handler that the code continues past.
@@ -60,7 +60,7 @@ A maintainer probed the counts on 2026-08-06 at commit `08a75d2`. Four results s
 
 1. The default count reads 412 and the `--ignore-noqa` count reads 500. The gap is 88.
 2. The default run touches 122 files. The `--ignore-noqa` run touches 161 files. 39 files hold hidden sites only.
-3. `src/ssh` shows the largest hidden share. It reports 14 sites by default and 32 with `--ignore-noqa`.
+3. `src/operations/execution/ssh` shows the largest hidden share. It reports 14 sites by default and 32 with `--ignore-noqa`.
 4. `starlink_dashboard.py` holds 8 sites. Pylint never reads that file, so those 8 sites sit inside the count gap between the two tools.
 
 ### Discovered risk: the two tools disagree by 7 sites
@@ -186,19 +186,19 @@ disable = ["C0114", "C0115", "C0116", "W0613"]
 | Slice | Scope | Sites |
 | - | - | - |
 | 1 | Reconciliation only, no edit | 0 |
-| 2 | src/analytics, src/ui, starlink_dashboard.py | 30 |
-| 3 | src/api, src/utils, src/websocket | 44, split if needed |
-| 4 | src/site, src/db | 35 |
-| 5 | src/gateway | 24 |
-| 6 | src/ssh | 32 |
-| 7 | src/device | 34 |
-| 8 | src/refactors | 43, split into two |
-| 9 | src/firmware/firmware_manager.py | 28 |
-| 10 | src/firmware, the rest | 34 |
+| 2 | src/mist/intelligence/analytics, src/interfaces/visualization/ui, starlink_dashboard.py | 30 |
+| 3 | src/mist/access/api, src/foundation/support/utils, src/mist/realtime/websocket | 44, split if needed |
+| 4 | src/mist/resources/site, src/foundation/persistence/db | 35 |
+| 5 | src/mist/resources/gateway | 24 |
+| 6 | src/operations/execution/ssh | 32 |
+| 7 | src/mist/resources/device | 34 |
+| 8 | src/foundation/support/refactors | 43, split into two |
+| 9 | src/operations/execution/firmware/firmware_manager.py | 28 |
+| 10 | src/operations/execution/firmware, the rest | 34 |
 | 11 | MistHelper.py | 33 |
-| 12 | src/export, part one | about 33 |
-| 13 | src/export, part two | about 33 |
-| 14 | src/export, part three, and every remaining area | the remainder |
+| 12 | src/operations/exporting/export, part one | about 33 |
+| 13 | src/operations/exporting/export, part two | about 33 |
+| 14 | src/operations/exporting/export, part three, and every remaining area | the remainder |
 | 15 | pyproject.toml | 0 |
 
 **Caution**: Slice 14 holds every area that the table above does not name. The implementer must split that slice further once the earlier slices land. No pull request may audit more than 40 sites.

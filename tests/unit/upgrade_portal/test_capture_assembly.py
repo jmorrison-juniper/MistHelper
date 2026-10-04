@@ -21,8 +21,8 @@ from typing import Any
 
 import pytest
 
-from src.upgrade_portal.capture import assembly, collector, extras
-from src.upgrade_portal.capture.clients import ClientAttachment, ClientIdentity, ClientRecord
+from src.interfaces.portals.upgrade_portal.capture import assembly, collector, extras
+from src.interfaces.portals.upgrade_portal.capture.clients import ClientAttachment, ClientIdentity, ClientRecord
 
 RUN_ID = "run-0123456789abcdef0123456789abcdef"
 RUN_HEX = "0123456789abcdef0123456789abcdef"

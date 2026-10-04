@@ -42,11 +42,11 @@ Excluded from scope (and explicitly not touched by this initiative):
 
 ### User Story 1 — Extract a low-reference Hot class into a cohesive class-body module (Priority: P1)
 
-The core value-delivery workflow. For each Hot-bucket class in the Dispatch Queue whose 4-plus references are all inside `MistHelper.py`, a refactor engineer opens a PR that (a) moves the class body into a new cohesive module under `src/refactors/` (or, when the class semantically belongs to an existing package such as `src/export/`, `src/gateway/`, `src/site/`, folds into that package), (b) rewrites every `MistHelper.py` callsite in the same commit, (c) deletes the original class definition from `MistHelper.py`, (d) resolves any analyzer `guideline_flags` in-flight (decomposing during the move rather than deferring), and (e) lands with all 15 functional CI jobs green, analyzer score ≥ 99.6/A+, `black --check` clean, `ruff check` clean, and `python MistHelper.py --test` passing (0 failed, exit 0). No wrapper shims. No re-export modules. No compatibility aliases.
+The core value-delivery workflow. For each Hot-bucket class in the Dispatch Queue whose 4-plus references are all inside `MistHelper.py`, a refactor engineer opens a PR that (a) moves the class body into a new cohesive module under `src/foundation/support/refactors/` (or, when the class semantically belongs to an existing package such as `src/operations/exporting/export/`, `src/mist/resources/gateway/`, `src/mist/resources/site/`, folds into that package), (b) rewrites every `MistHelper.py` callsite in the same commit, (c) deletes the original class definition from `MistHelper.py`, (d) resolves any analyzer `guideline_flags` in-flight (decomposing during the move rather than deferring), and (e) lands with all 15 functional CI jobs green, analyzer score ≥ 99.6/A+, `black --check` clean, `ruff check` clean, and `python MistHelper.py --test` passing (0 failed, exit 0). No wrapper shims. No re-export modules. No compatibility aliases.
 
 **Why this priority**: Delivers the initiative's entire LoC drop and constitutes its unit of progress. Serial per-PR dispatch (one class per PR) preserves the mergeability contract that 1010/1011 proved out and keeps every intermediate `main` state analyzer-green. Refs-ascending, LOC-descending dispatch ordering front-loads the smallest-blast-radius extractions so the workflow validates against low-refs classes before the 128-refs `OrgExportUtils` monolith at the tail.
 
-**Independent Test**: Any single Dispatch Queue candidate (e.g. `OrgConfigMigrationManager` at 4 refs / 675 LoC, the queue's first entry) can be merged in isolation. The PR (a) creates `src/refactors/org_config_migration_manager.py` (or folds into an existing fitting package), (b) deletes the class body from `MistHelper.py`, (c) rewrites all 4 callsites, (d) leaves a NOTE breadcrumb at the extraction site, (e) lands with the analyzer reporting the class removed from Hot and the aggregate score still ≥ 99.6/A+, and (f) passes `black --check`, `ruff check`, and `python MistHelper.py --test` (0 failed, exit 0).
+**Independent Test**: Any single Dispatch Queue candidate (e.g. `OrgConfigMigrationManager` at 4 refs / 675 LoC, the queue's first entry) can be merged in isolation. The PR (a) creates `src/foundation/support/refactors/org_config_migration_manager.py` (or folds into an existing fitting package), (b) deletes the class body from `MistHelper.py`, (c) rewrites all 4 callsites, (d) leaves a NOTE breadcrumb at the extraction site, (e) lands with the analyzer reporting the class removed from Hot and the aggregate score still ≥ 99.6/A+, and (f) passes `black --check`, `ruff check`, and `python MistHelper.py --test` (0 failed, exit 0).
 
 **Acceptance Scenarios**:
 
@@ -69,7 +69,7 @@ The initiative's scoping discipline. The 47 Dispatch Queue candidates are precis
 **Acceptance Scenarios**:
 
 1. **Given** a Dispatch Queue candidate at the top of the queue, **When** the pre-dispatch grep audit runs, **Then** it confirms zero references to the class from `src/`, `tests/`, or any first-party path other than `MistHelper.py`, and the PR proceeds.
-2. **Given** the pre-dispatch grep audit surfaces an external caller (e.g. a new `src/export/*` file imported the class between catalog regenerations), **When** the dispatcher plans the PR, **Then** the candidate is skipped, the skip is recorded in this spec's "Deferred Candidates" section, and the workflow advances to the next queue head.
+2. **Given** the pre-dispatch grep audit surfaces an external caller (e.g. a new `src/operations/exporting/export/*` file imported the class between catalog regenerations), **When** the dispatcher plans the PR, **Then** the candidate is skipped, the skip is recorded in this spec's "Deferred Candidates" section, and the workflow advances to the next queue head.
 3. **Given** the extraction PR is under review, **When** the reviewer runs the same grep against the merged `main`, **Then** the audit continues to return zero external matches — no ninja imports have crept in during the review window.
 
 ---
@@ -92,7 +92,7 @@ Carry-forward of 1010/1011 User Story 3. Reference counts shift as extractions l
 
 ### Edge Cases
 
-- **E-1** — Destination package selection. Some candidates fit an existing package cleanly (`SiteConfigExporter` → `src/site/`, `OrgAlarmEventExporter` → `src/export/`, `GatewayTemplateConfigManager` → `src/gateway/`); others have no obvious existing home and land in `src/refactors/`. The PR description MUST record the destination-selection rationale in one sentence. When both are viable, prefer the existing semantic package over `src/refactors/`.
+- **E-1** — Destination package selection. Some candidates fit an existing package cleanly (`SiteConfigExporter` → `src/mist/resources/site/`, `OrgAlarmEventExporter` → `src/operations/exporting/export/`, `GatewayTemplateConfigManager` → `src/mist/resources/gateway/`); others have no obvious existing home and land in `src/foundation/support/refactors/`. The PR description MUST record the destination-selection rationale in one sentence. When both are viable, prefer the existing semantic package over `src/foundation/support/refactors/`.
 - **E-2** — Guideline-flag decomposition mid-move. If a candidate carries `oversize_25_lines` (e.g. `ConstDefinitionsExporter` at 759 LoC or `OrgConfigMigrationManager` at 675 LoC), the move includes method-level decomposition: split methods > 25 lines into helpers each ≤ 25 lines with ≤ 5 params, add inline comments on every executable line, wrap every method body with `logging.info`/`logging.debug` envelopes, convert non-ASCII log literals to ASCII, replace `os.path` with `pathlib.Path`, replace raw `input()` with `InputUtils.safe_input()`. Deferral of any flag to a follow-up PR is prohibited (FR-006 carry-forward).
 - **E-3** — Callsite drift between catalog regeneration and PR opening. If the analyzer's recorded line numbers drift (line-number churn from unrelated commits landing on `main` after the catalog was regenerated), the PR uses fresh grep against the current `main` head at branch time. Line-number drift alone does not block the extraction; only a *count* change (ref count changed or an external `src/` caller appeared) triggers deferral.
 - **E-4** — NOTE breadcrumb at the extraction site. Every extraction PR MUST leave a single-line NOTE breadcrumb at the deletion site in `MistHelper.py` pointing to the new location and this spec (per FR-007 below): `# NOTE: <ClassName> extracted to <new-module-path>::<ClassName>. See specs/1013-misthelper-refactor-hot-classes/spec.md.` Silent (breadcrumbless) deletion is rejected.
@@ -125,13 +125,13 @@ Carry-forward of 1010/1011 User Story 3. Reference counts shift as extractions l
 - **FR-013**: Before opening each extraction PR, the workflow MUST run `grep -rn "<ClassName>" src/ tests/` (and any additional first-party paths surfaced by the module graph) and confirm zero matches. If any match is found, the candidate is deferred and recorded in the "Deferred Candidates" section of this spec.
 - **FR-014**: After every merged extraction PR, the workflow MUST regenerate `refactor_candidates.md` by running the analyzer against the current `main` head before the next PR is dispatched. The next candidate is selected from that fresh catalog using Refs-ASC / LOC-DESC ordering (carry-forward from 1010/1011 FR-010).
 - **FR-015**: An extraction PR MUST NOT merge until all 15 functional CI jobs report green AND `mergeStateStatus` is CLEAN AND `black --check` is clean AND `ruff check` is clean AND `python MistHelper.py --test` reports 0 failed with exit code 0. `--admin` merge bypass MUST NOT be used as a routine unblock. Reference `feedback_no_admin_bypass.md` and `feedback_prepush_black_ruff.md` (carry-forward from 1010/1011/1012 FR-011).
-- **FR-016**: Every new module under `src/refactors/` (or extended module in an existing destination package) MUST land at A+/100 compliance score. No file that was previously A+ may regress below A+ as a result of any extraction (carry-forward from 1010/1011/1012 FR-012).
+- **FR-016**: Every new module under `src/foundation/support/refactors/` (or extended module in an existing destination package) MUST land at A+/100 compliance score. No file that was previously A+ may regress below A+ as a result of any extraction (carry-forward from 1010/1011/1012 FR-012).
 - **FR-017**: The repository-wide aggregate compliance MUST remain ≥ 99.6/A+ after each merged extraction PR (carry-forward from 1010/1011/1012 FR-013).
 - **FR-018**: `MistHelper.py`'s pylint score MUST be non-regressing against the pre-initiative baseline established on the first branch commit. Regression blocks merge for the PR that caused it.
 - **FR-019**: No new SKIPPED conditionals in CI may be introduced by any extraction PR (per the user-specified "no new SKIPPED conditionals" gate). SKIPPED conditionals that pre-date the initiative continue to be non-blocking per Edge Case E-9.
 - **FR-020**: If a candidate's `refactor_candidates.md` classification shifts mid-initiative (e.g. Hot → Low-Use because a prior extraction removed several of its references indirectly), the candidate MUST be deferred out of this initiative and recorded in "Deferred Candidates". Force-extracting under a stale classification is prohibited (carry-forward from 1010/1011/1012 FR-016).
 - **FR-021**: The initiative MUST NOT introduce new features, new commands, new CLI flags, or user-facing behavior changes. Extraction is source-level only; user-facing behavior is preserved exactly (carry-forward from 1010/1011/1012 FR-017).
-- **FR-022**: When a candidate class is folded into an existing destination package's class body (rather than a new `src/refactors/*.py` module), the existing destination file's compliance grade MUST remain at A+/100 after the fold. If the fold would regress the destination below A+, the destination is changed or the extracted class receives further decomposition within the same PR.
+- **FR-022**: When a candidate class is folded into an existing destination package's class body (rather than a new `src/foundation/support/refactors/*.py` module), the existing destination file's compliance grade MUST remain at A+/100 after the fold. If the fold would regress the destination below A+, the destination is changed or the extracted class receives further decomposition within the same PR.
 - **FR-023**: The Dispatch Queue's ordering (Refs-ASC / LOC-DESC) is a **dispatch rule**, not a merge order guarantee. If a PR later in the queue is ready to merge before an earlier PR because the earlier PR is under revision, the later PR MAY merge first — but only if the earlier PR is deferred or withdrawn. Concurrent open PRs are not permitted (one PR open at a time per FR-002's serial workflow).
 - **FR-024**: The initiative is considered complete when the freshest `refactor_candidates.md` shows that all 47 Dispatch Queue candidates have been either (a) extracted and no longer appear in the Hot bucket, or (b) recorded as deferred in the "Deferred Candidates" section with documented rationale.
 - **FR-025**: Every Cat A (facade-removal) PR MUST verify **method-parity** between the `MistHelper.py` facade and its `src/` counterpart before deletion. Verification consists of: (a) enumerating every public method, static method, classmethod, and instance attribute exposed by the facade; (b) confirming each is exposed with a semantically-equivalent signature by the real `src/` implementation; (c) recording the audit output in the PR description in a fenced code block. If the facade exposes a method absent from the `src/` implementation, the PR MUST either (i) port the missing method to the `src/` class in the same commit and rewire callers, or (ii) be deferred and the gap recorded in "Deferred Candidates". Silent facade deletion without a parity audit is prohibited. This applies with particular rigour to `DeviceUtilityCommands` at dispatch position 4, whose facade fans out to 35 operation-subclasses.
@@ -142,7 +142,7 @@ Carry-forward of 1010/1011 User Story 3. Reference counts shift as extractions l
 - **Extraction Candidate**: A class in `MistHelper.py` catalogued by `tools/refactor_analyzer/` — for this initiative, restricted to Hot-bucket entries (4+ references) whose callsites are all inside `MistHelper.py`. Enumerated in the Dispatch Queue table.
 - **Refactor Candidates Catalog** (`refactor_candidates.md`): Regenerated after every merged extraction PR (FR-014). The freshest catalog is the authoritative source for dispatch order.
 - **Extraction PR**: A single pull request delivering one class's move plus its callsite rewrites plus any in-place `guideline_flags` remediation plus the NOTE breadcrumb.
-- **Target Module**: The new or extended file receiving the extracted class. Typically `src/refactors/<snake_name>.py` for classes without an obvious semantic home, or an existing package file (e.g. `src/export/site_config_exporter.py`, `src/gateway/gateway_template_config_manager.py`, `src/site/site_client_exporter.py`) when the semantic fit is clear.
+- **Target Module**: The new or extended file receiving the extracted class. Typically `src/foundation/support/refactors/<snake_name>.py` for classes without an obvious semantic home, or an existing package file (e.g. `src/operations/exporting/export/site_config_exporter.py`, `src/mist/resources/gateway/gateway_template_config_manager.py`, `src/mist/resources/site/site_client_exporter.py`) when the semantic fit is clear.
 - **Callsite**: The exact location where a candidate class is instantiated, referenced, or imported. For Hot-bucket classes, may be 4-128 distinct locations, all inside `MistHelper.py`, all rewritten atomically in one commit.
 - **Dispatch Queue**: The Refs-ASC / LOC-DESC-ordered list of 47 candidates below. Ordering is re-derived from the freshest catalog after every merge.
 - **Deferred Candidate**: A queue entry that has been removed from active dispatch mid-initiative because (a) a fresh catalog regeneration surfaced a new `src/` caller, or (b) its classification shifted out of the Hot bucket, or (c) the pre-dispatch grep audit surfaced an unexpected external reference. Deferrals are recorded in the "Deferred Candidates" section (initially empty).
@@ -160,59 +160,59 @@ Collision audit performed 2026-07-07 against all 47 candidates confirmed exactly
 
 | # | Refs | LOC | Class | Cat | Landing target |
 |---:|---:|---:|---|:-:|---|
-| 1 | 6 | 56 | GatewayTemplateConfigManager | A | `src/gateway/template_config.py` |
-| 2 | 8 | 22 | FirmwareManager | A | `src/firmware/firmware_manager.py` |
-| 3 | 16 | 43 | SiteConfigManager | A | `src/site/site_config_manager.py` |
-| 4 | 70 | 188 | DeviceUtilityCommands | A | `src/device/utility_commands.py` |
-| 5 | 4 | 675 | OrgConfigMigrationManager | B | `src/org/` |
-| 6 | 4 | 97 | DeviceUtils | B | `src/device/` |
-| 7 | 4 | 40 | SelfExportUtils | B | `src/export/` |
-| 8 | 5 | 386 | MSPInventoryExporter | B | `src/export/` |
-| 9 | 5 | 214 | TelemetryEmitter | B | `src/analytics/` |
-| 10 | 8 | 72 | InteractiveDisplayUtils | B | `src/ui/` |
-| 11 | 8 | 70 | DisplayUtils | B | `src/ui/` |
-| 12 | 8 | 66 | AuditAnalysisOps | B | `src/audit/` |
-| 13 | 9 | 461 | OperationRegistry | B | `src/utils/` |
-| 14 | 10 | 85 | SiteClientExporter | B | `src/export/` |
-| 15 | 13 | 587 | BulkRadiusWLANConfigManager | B | `src/site/` |
-| 16 | 13 | 10 | EndpointConfig | B | `src/dataclasses/` |
-| 17 | 14 | 759 | ConstDefinitionsExporter | B | `src/export/` |
-| 18 | 14 | 129 | OrgAlarmEventExporter | B | `src/export/` |
-| 19 | 14 | 100 | SiteConfigExporter | B | `src/export/` |
-| 20 | 14 | 94 | OrgAdminExporter | B | `src/export/` |
-| 21 | 16 | 328 | APIDataFetcher | B | `src/api/` |
-| 22 | 18 | 144 | OrgTemplateExporter | B | `src/export/` |
-| 23 | 18 | 139 | GatewayHaExporter | B | `src/export/` |
-| 24 | 20 | 168 | LicenseExportUtils | B | `src/export/` |
-| 25 | 20 | 156 | DataCollectionManager | B | `src/analytics/` |
-| 26 | 20 | 129 | WiredClientManufacturerReportGenerator | B | `src/reports/` |
-| 27 | 22 | 180 | SFPTransceiverDataProcessor | B | `src/reports/` |
-| 28 | 22 | 146 | SitesByAPModelExporter | B | `src/export/` |
-| 29 | 22 | 69 | OrgDeviceInventorySummary | B | `src/inventory/` |
-| 30 | 23 | 161 | CLIShellManager | B | `src/ssh/` |
-| 31 | 24 | 168 | OrgConfigExporter | B | `src/export/` |
-| 32 | 26 | 162 | OrgClientSecurityExporter | B | `src/export/` |
-| 33 | 28 | 114 | EnvironmentUtils | B | `src/utils/` |
-| 34 | 30 | 203 | SiteDeviceExporter | B | `src/export/` |
-| 35 | 31 | 210 | PromptClientUtils | B | `src/input/` |
-| 36 | 32 | 251 | GlobalWiredClientReportGenerator | B | `src/reports/` |
-| 37 | 34 | 245 | GatewayTestExporter | B | `src/export/` |
-| 38 | 34 | 179 | DatabaseSchemaUtils | B | `src/db/` |
-| 39 | 36 | 127 | TroubleshootUtils | B | `src/troubleshooting/` |
-| 40 | 37 | 110 | FilterOperatorEngine | B | `src/utils/` |
-| 41 | 46 | 396 | DeviceRebootManager | B | `src/device/` |
-| 42 | 46 | 289 | ARPCommandManager | B | `src/device/` |
-| 43 | 54 | 341 | SiteAnomalyExporter | B | `src/export/` |
-| 44 | 54 | 273 | OfflineDeviceReporter | B | `src/reports/` |
-| 45 | 58 | 414 | OrgDeviceStatsExporter | B | `src/export/` |
-| 46 | 66 | 475 | OrgTicketManager | B | `src/org/` |
-| 47 | 128 | 653 | OrgExportUtils | B | `src/export/` |
+| 1 | 6 | 56 | GatewayTemplateConfigManager | A | `src/mist/resources/gateway/template_config.py` |
+| 2 | 8 | 22 | FirmwareManager | A | `src/operations/execution/firmware/firmware_manager.py` |
+| 3 | 16 | 43 | SiteConfigManager | A | `src/mist/resources/site/site_config_manager.py` |
+| 4 | 70 | 188 | DeviceUtilityCommands | A | `src/mist/resources/device/utility_commands.py` |
+| 5 | 4 | 675 | OrgConfigMigrationManager | B | `src/mist/resources/org/` |
+| 6 | 4 | 97 | DeviceUtils | B | `src/mist/resources/device/` |
+| 7 | 4 | 40 | SelfExportUtils | B | `src/operations/exporting/export/` |
+| 8 | 5 | 386 | MSPInventoryExporter | B | `src/operations/exporting/export/` |
+| 9 | 5 | 214 | TelemetryEmitter | B | `src/mist/intelligence/analytics/` |
+| 10 | 8 | 72 | InteractiveDisplayUtils | B | `src/interfaces/visualization/ui/` |
+| 11 | 8 | 70 | DisplayUtils | B | `src/interfaces/visualization/ui/` |
+| 12 | 8 | 66 | AuditAnalysisOps | B | `src/mist/access/audit/` |
+| 13 | 9 | 461 | OperationRegistry | B | `src/foundation/support/utils/` |
+| 14 | 10 | 85 | SiteClientExporter | B | `src/operations/exporting/export/` |
+| 15 | 13 | 587 | BulkRadiusWLANConfigManager | B | `src/mist/resources/site/` |
+| 16 | 13 | 10 | EndpointConfig | B | `src/foundation/models/dataclasses/` |
+| 17 | 14 | 759 | ConstDefinitionsExporter | B | `src/operations/exporting/export/` |
+| 18 | 14 | 129 | OrgAlarmEventExporter | B | `src/operations/exporting/export/` |
+| 19 | 14 | 100 | SiteConfigExporter | B | `src/operations/exporting/export/` |
+| 20 | 14 | 94 | OrgAdminExporter | B | `src/operations/exporting/export/` |
+| 21 | 16 | 328 | APIDataFetcher | B | `src/mist/access/api/` |
+| 22 | 18 | 144 | OrgTemplateExporter | B | `src/operations/exporting/export/` |
+| 23 | 18 | 139 | GatewayHaExporter | B | `src/operations/exporting/export/` |
+| 24 | 20 | 168 | LicenseExportUtils | B | `src/operations/exporting/export/` |
+| 25 | 20 | 156 | DataCollectionManager | B | `src/mist/intelligence/analytics/` |
+| 26 | 20 | 129 | WiredClientManufacturerReportGenerator | B | `src/mist/intelligence/reports/` |
+| 27 | 22 | 180 | SFPTransceiverDataProcessor | B | `src/mist/intelligence/reports/` |
+| 28 | 22 | 146 | SitesByAPModelExporter | B | `src/operations/exporting/export/` |
+| 29 | 22 | 69 | OrgDeviceInventorySummary | B | `src/mist/resources/inventory/` |
+| 30 | 23 | 161 | CLIShellManager | B | `src/operations/execution/ssh/` |
+| 31 | 24 | 168 | OrgConfigExporter | B | `src/operations/exporting/export/` |
+| 32 | 26 | 162 | OrgClientSecurityExporter | B | `src/operations/exporting/export/` |
+| 33 | 28 | 114 | EnvironmentUtils | B | `src/foundation/support/utils/` |
+| 34 | 30 | 203 | SiteDeviceExporter | B | `src/operations/exporting/export/` |
+| 35 | 31 | 210 | PromptClientUtils | B | `src/foundation/runtime/input/` |
+| 36 | 32 | 251 | GlobalWiredClientReportGenerator | B | `src/mist/intelligence/reports/` |
+| 37 | 34 | 245 | GatewayTestExporter | B | `src/operations/exporting/export/` |
+| 38 | 34 | 179 | DatabaseSchemaUtils | B | `src/foundation/persistence/db/` |
+| 39 | 36 | 127 | TroubleshootUtils | B | `src/mist/intelligence/troubleshooting/` |
+| 40 | 37 | 110 | FilterOperatorEngine | B | `src/foundation/support/utils/` |
+| 41 | 46 | 396 | DeviceRebootManager | B | `src/mist/resources/device/` |
+| 42 | 46 | 289 | ARPCommandManager | B | `src/mist/resources/device/` |
+| 43 | 54 | 341 | SiteAnomalyExporter | B | `src/operations/exporting/export/` |
+| 44 | 54 | 273 | OfflineDeviceReporter | B | `src/mist/intelligence/reports/` |
+| 45 | 58 | 414 | OrgDeviceStatsExporter | B | `src/operations/exporting/export/` |
+| 46 | 66 | 475 | OrgTicketManager | B | `src/mist/resources/org/` |
+| 47 | 128 | 653 | OrgExportUtils | B | `src/operations/exporting/export/` |
 
-**Landing distribution**: `src/export/` = 20 (largest cluster — accepted as flat layout for this initiative; sub-partitioning deferred pending noise emergence), `src/device/` = 4 (+1 Cat A), `src/utils/` = 4, `src/reports/` = 4, `src/analytics/` = 2, `src/ui/` = 2, `src/org/` = 2, `src/site/` = 2, `src/gateway/` = 1 Cat A, `src/firmware/` = 1 Cat A, all others = 1. Note: `src/refactors/` receives **zero** candidates — every row lands in a domain-fitting existing package.
+**Landing distribution**: `src/operations/exporting/export/` = 20 (largest cluster — accepted as flat layout for this initiative; sub-partitioning deferred pending noise emergence), `src/mist/resources/device/` = 4 (+1 Cat A), `src/foundation/support/utils/` = 4, `src/mist/intelligence/reports/` = 4, `src/mist/intelligence/analytics/` = 2, `src/interfaces/visualization/ui/` = 2, `src/mist/resources/org/` = 2, `src/mist/resources/site/` = 2, `src/mist/resources/gateway/` = 1 Cat A, `src/operations/execution/firmware/` = 1 Cat A, all others = 1. Note: `src/foundation/support/refactors/` receives **zero** candidates — every row lands in a domain-fitting existing package.
 
-**Resolution of the `FirmwareManager` row-10 ambiguity** (previously flagged): confirmed as Cat A. The `MistHelper.py` `FirmwareManager` class at `MistHelper.py:17376` is a factory facade (`create()` builds `FirmwareManagerConfig` + returns `_Impl(config)` sourced from `src/firmware/firmware_manager.py::FirmwareManager` at 270 defs). The dispatch PR deletes the facade and rewires the 8 callsites to construct the real `src/firmware/firmware_manager.py::FirmwareManager` directly. No new file is created.
+**Resolution of the `FirmwareManager` row-10 ambiguity** (previously flagged): confirmed as Cat A. The `MistHelper.py` `FirmwareManager` class at `MistHelper.py:17376` is a factory facade (`create()` builds `FirmwareManagerConfig` + returns `_Impl(config)` sourced from `src/operations/execution/firmware/firmware_manager.py::FirmwareManager` at 270 defs). The dispatch PR deletes the facade and rewires the 8 callsites to construct the real `src/operations/execution/firmware/firmware_manager.py::FirmwareManager` directly. No new file is created.
 
-**Cat A method-parity risk flag**: The `DeviceUtilityCommands` facade at `MistHelper.py:13527` fans out to 35 operation-subclasses in `src/device/utility_commands.py`. Its extraction PR (dispatch position 4) MUST run an exhaustive method-parity audit — enumerate every method exposed by the facade, confirm the identical method is exposed by the real `src/` class (including all 35 sub-op wrappers), record the audit output in the PR description — before deleting the facade. This is a Cat A-specific gate per FR-025.
+**Cat A method-parity risk flag**: The `DeviceUtilityCommands` facade at `MistHelper.py:13527` fans out to 35 operation-subclasses in `src/mist/resources/device/utility_commands.py`. Its extraction PR (dispatch position 4) MUST run an exhaustive method-parity audit — enumerate every method exposed by the facade, confirm the identical method is exposed by the real `src/` class (including all 35 sub-op wrappers), record the audit output in the PR description — before deleting the facade. This is a Cat A-specific gate per FR-025.
 
 ## Deferred Candidates
 
@@ -230,7 +230,7 @@ Collision audit performed 2026-07-07 against all 47 candidates confirmed exactly
 - **SC-003**: Repository-wide aggregate compliance score is ≥ 99.6/A+ at every intermediate `main`-branch state throughout the initiative and at final completion.
 - **SC-004**: Zero files that were A+/100 pre-initiative regress below A+ by the end of the initiative.
 - **SC-005**: All extraction PRs merge with 15/15 functional CI jobs green, `mergeStateStatus: CLEAN`, `black --check` clean, `ruff check` clean, and `python MistHelper.py --test` reporting 0 failed / exit 0. Zero PRs merged via `--admin` bypass except where `mergeStateStatus` was genuinely BLOCKED/DIRTY/BEHIND with root cause documented in the PR.
-- **SC-006**: Every new file created under `src/refactors/` (or extended file in an existing destination package) during the initiative scores A+/100 on compliance.
+- **SC-006**: Every new file created under `src/foundation/support/refactors/` (or extended file in an existing destination package) during the initiative scores A+/100 on compliance.
 - **SC-007**: Zero wrapper shims, forwarding functions, re-export modules, or backward-compatibility aliases remain in `MistHelper.py` after the initiative.
 - **SC-008**: Zero symbols from the analyzer's `SKIP_ALWAYS` bucket (`GlobalImportManager`, `tqdm`) are modified by any PR in this initiative.
 - **SC-009**: Zero Hot-bucket classes outside the 47 Dispatch Queue entries are extracted by this initiative — the 29 excluded classes (those with any `src/` reference) remain deferred to a future initiative that will address multi-file rewrite discipline.
@@ -252,9 +252,9 @@ Collision audit performed 2026-07-07 against all 47 candidates confirmed exactly
 - Serial per-PR workflow: at most one extraction PR is open at any time (contrast with 1012's single-PR bundle).
 - Analyzer regeneration cost per run is negligible relative to CI cycle time; the "regenerate after every merge" discipline does not create a bottleneck.
 - Refs-ASC / LOC-DESC ordering front-loads the smallest-blast-radius extractions and back-loads the largest-LoC candidates. This ordering is a dispatch rule; the merge order MAY deviate slightly if an earlier PR is under revision (per FR-023), but concurrent PRs are not permitted.
-- The `src/refactors/` layout established by 1010, extended by 1011, and continued by 1012 remains the correct destination for classes without an obvious semantic home. Classes with a clear semantic fit (e.g. `SiteConfigExporter` → `src/site/`, `OrgAlarmEventExporter` → `src/export/`, `GatewayTemplateConfigManager` → `src/gateway/`) land in the existing package (per E-1).
+- The `src/foundation/support/refactors/` layout established by 1010, extended by 1011, and continued by 1012 remains the correct destination for classes without an obvious semantic home. Classes with a clear semantic fit (e.g. `SiteConfigExporter` → `src/mist/resources/site/`, `OrgAlarmEventExporter` → `src/operations/exporting/export/`, `GatewayTemplateConfigManager` → `src/mist/resources/gateway/`) land in the existing package (per E-1).
 - Black + Ruff pre-push discipline (`feedback_prepush_black_ruff.md`) is followed by the contributor. This spec documents the requirement in SC-013 but does not add a new CI job to enforce it — the enforcement remains local.
 - `python MistHelper.py --test` is the initiative's smoke-test contract. It runs as a merge gate per FR-015. Its passing state is a strict requirement (0 failed, exit 0) on every merged extraction PR.
 - The 29 excluded Hot-bucket classes (those with any `src/` reference) are outside scope. A future initiative (post-1013) will address them with multi-file rewrite discipline analogous to 1011's User Story 2. This spec does not attempt to enumerate that future initiative's scope.
 - The user-supplied ref counts in the Dispatch Queue reflect direct name occurrences at analyzer-scan time. Line-number drift alone does not invalidate an entry; only a change in classification (ref count band or external-caller presence) triggers deferral.
-- `FirmwareManager` at row 10 may be a duplicate reference to the existing `src/firmware/firmware_manager.py::FirmwareManager` established in 1011 (see note under the Dispatch Queue table). The extraction PR resolves the ambiguity at dispatch time.
+- `FirmwareManager` at row 10 may be a duplicate reference to the existing `src/operations/execution/firmware/firmware_manager.py::FirmwareManager` established in 1011 (see note under the Dispatch Queue table). The extraction PR resolves the ambiguity at dispatch time.

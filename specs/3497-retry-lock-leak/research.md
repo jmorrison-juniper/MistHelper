@@ -58,7 +58,7 @@ No test reported the leak, because the lock was less than 300 seconds old.
 
 The lock module compares two values to find the owner of a lock.
 The two values are the address of the operator and the browser identifier.
-The method `held_by` in `src/upgrade_portal/runtime/lock.py` compares both values.
+The method `held_by` in `src/interfaces/portals/upgrade_portal/runtime/lock.py` compares both values.
 
 The fixture `page` in `tests/e2e/upgrade_portal/conftest.py` adds the same two cookies to each browser context.
 So each test that uses `page` has the same owner.
@@ -90,7 +90,7 @@ The cancel route answers 409 `run_already_started` for each state after the pre-
 A cancelled run also answers 409.
 The teardown therefore reads the state first, and it cancels only a run that is not final.
 
-The final states come from `RunStateMachine.TERMINAL` in `src/upgrade_portal/runtime/runs.py`.
+The final states come from `RunStateMachine.TERMINAL` in `src/interfaces/portals/upgrade_portal/runtime/runs.py`.
 The test code copies no state name, so a new final state reaches the teardown with no edit.
 
 A run in a live state after the pre-check cannot receive a cancel.

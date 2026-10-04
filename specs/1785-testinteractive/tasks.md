@@ -12,9 +12,9 @@
 
 ## Phase 2: Foundational
 
-- [x] T004 Add `UnattendedInteractiveInputProvider` in `src/troubleshooting/interactive_test_runner.py`. (delivered: `src/troubleshooting/interactive_test_runner.py`)
+- [x] T004 Add `UnattendedInteractiveInputProvider` in `src/mist/intelligence/troubleshooting/interactive_test_runner.py`. (delivered: `src/mist/intelligence/troubleshooting/interactive_test_runner.py`)
 - [x] T005 Inject `InputUtils` through `_build_interactive_test_runner` in `MistHelper.py`. (delivered: `MistHelper.py`)
-- [x] T006 Add candidate validation to refuse non-`interactive_safe` operations. (delivered: `src/troubleshooting/interactive_test_runner.py`)
+- [x] T006 Add candidate validation to refuse non-`interactive_safe` operations. (delivered: `src/mist/intelligence/troubleshooting/interactive_test_runner.py`)
 
 ## Phase 3: User Story 1 - Run unattended
 
@@ -28,8 +28,8 @@
 
 ## Phase 5: User Story 3 - Report measurement
 
-- [x] T011 Add prompt harness failure reporting in the summary. (delivered: `src/troubleshooting/interactive_test_runner.py`)
-- [x] T012 Add a non-empty skip reason fallback. (delivered: `src/troubleshooting/interactive_test_runner.py`)
+- [x] T011 Add prompt harness failure reporting in the summary. (delivered: `src/mist/intelligence/troubleshooting/interactive_test_runner.py`)
+- [x] T012 Add a non-empty skip reason fallback. (delivered: `src/mist/intelligence/troubleshooting/interactive_test_runner.py`)
 
 ## Phase 6: Validation and Delivery
 

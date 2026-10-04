@@ -12,7 +12,7 @@ from typing import Any
 
 import pytest
 
-from src.upgrade_portal.upgrade.org_cascade.record import (
+from src.interfaces.portals.upgrade_portal.upgrade.org_cascade.record import (
     NO_CHILD_NOTE,
     NOT_STARTED_NOTE,
     WATCH_KEY,
@@ -20,7 +20,7 @@ from src.upgrade_portal.upgrade.org_cascade.record import (
     OrgPhaseWatch,
     WatchState,
 )
-from src.upgrade_portal.upgrade.org_cascade.view import OrgPhaseView
+from src.interfaces.portals.upgrade_portal.upgrade.org_cascade.view import OrgPhaseView
 from tests.support.org_cascade import AP_CHILD_KEY, OrgRecordBuilder
 from tests.support.rehearsal import cascade_fleet
 

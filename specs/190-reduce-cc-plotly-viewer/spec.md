@@ -4,7 +4,7 @@
 **Created**: 2026-05-13  
 **Status**: Draft  
 **Target Issue**: #293  
-**File**: `src/maps/maps_manager.py`  
+**File**: `src/interfaces/visualization/maps/maps_manager.py`  
 **Current Method**: `MapsManager._launch_plotly_viewer` (lines 3010-8256, 5,247 lines)  
 **Current CC**: 138 (Target: ≤10 per method)
 
@@ -12,7 +12,7 @@
 
 ## Problem Statement
 
-The method `_launch_plotly_viewer` in `src/maps/maps_manager.py` has a cyclomatic complexity (CC) of 138, exceeding the target of ≤10 by 13.8×. This monolithic method combines multiple concerns:
+The method `_launch_plotly_viewer` in `src/interfaces/visualization/maps/maps_manager.py` has a cyclomatic complexity (CC) of 138, exceeding the target of ≤10 by 13.8×. This monolithic method combines multiple concerns:
 
 - **Dash application initialization** (imports, config)
 - **HTML/CSS template setup** (custom styling)
@@ -198,7 +198,7 @@ MapsManager._launch_plotly_viewer()
 - **SC-001**: Cyclomatic complexity of `MapsManager._launch_plotly_viewer` MUST reduce from 138 to ≤10.
 - **SC-002**: Average cyclomatic complexity across all `MapsManager` methods MUST be ≤10.
 - **SC-003**: All extracted classes MUST have cyclomatic complexity ≤10 per method (verified via radon/flake8-cognitive-complexity).
-- **SC-004**: Test coverage for `src/maps/` MUST remain ≥70% (no decrease from current baseline).
+- **SC-004**: Test coverage for `src/interfaces/visualization/maps/` MUST remain ≥70% (no decrease from current baseline).
 - **SC-005**: All 100+ existing tests MUST pass without modification (zero test breakage).
 - **SC-006**: All quality gates MUST pass: ruff lint, black format check, mypy strict, CodeQL scanning, pytest+cov.
 - **SC-007**: Web UI integration tests MUST confirm identical functionality (walls render, callbacks execute, heatmap displays).
@@ -513,16 +513,16 @@ def test_public_api_stable():
 **Severity**: High  
 **Mitigation**:
 - Mandatory unit tests for all extracted classes (Phase 2–5)
-- Coverage report: run `pytest --cov=src/maps/ --cov-report=html`
+- Coverage report: run `pytest --cov=src/interfaces/visualization/maps/ --cov-report=html`
 - Acceptance criterion: coverage ≥70% or current baseline (whichever is higher)
 - Focus on critical paths: callbacks, heatmap algorithm, figure building
 
 **Validation Test**:
 ```python
 def test_coverage_maintained():
-    """Verify test coverage is >= 70% for src/maps/"""
+    """Verify test coverage is >= 70% for src/interfaces/visualization/maps/"""
     result = subprocess.run(
-        ["pytest", "--cov=src/maps/", "--cov-report=term-missing"],
+        ["pytest", "--cov=src/interfaces/visualization/maps/", "--cov-report=term-missing"],
         capture_output=True, text=True
     )
     coverage_line = [l for l in result.stdout.split('\n') if 'TOTAL' in l][0]
@@ -605,7 +605,7 @@ def test_heatmap_output_identical():
 - [ ] **QUALITY-002**: `black --check` passes (formatting compliant)
 - [ ] **QUALITY-003**: `mypy --strict` passes (type annotations complete)
 - [ ] **QUALITY-004**: CodeQL scanning passes (no security issues)
-- [ ] **QUALITY-005**: `pytest --cov` reports ≥70% coverage for `src/maps/`
+- [ ] **QUALITY-005**: `pytest --cov` reports ≥70% coverage for `src/interfaces/visualization/maps/`
 - [ ] **FUNC-001**: Dash app initializes identically (same templates, CSS, config)
 - [ ] **FUNC-002**: All callbacks execute identically (inputs/outputs unchanged)
 - [ ] **FUNC-003**: Plotly figures render identically (walls, devices, clients, heatmap)
@@ -680,18 +680,18 @@ class PlotlyMapCallbackManager:
 
 ### Key File Locations
 
-- **Source**: `src/maps/maps_manager.py` (lines 3010–8256)
-- **New Classes**: Create in `src/maps/plotly_map_viewer.py` (new file)
+- **Source**: `src/interfaces/visualization/maps/maps_manager.py` (lines 3010–8256)
+- **New Classes**: Create in `src/interfaces/visualization/maps/plotly_map_viewer.py` (new file)
 - **Tests**: Add to `tests/maps/test_plotly_map_viewer*.py` (new files)
 - **Docs**: Add architecture to `documentation/ARCHITECTURE.md`
 
 ### CI Integration
 
-- **Linting**: `ruff check src/maps/` (zero violations)
-- **Formatting**: `black --check src/maps/`
-- **Type Safety**: `mypy --strict src/maps/`
+- **Linting**: `ruff check src/interfaces/visualization/maps/` (zero violations)
+- **Formatting**: `black --check src/interfaces/visualization/maps/`
+- **Type Safety**: `mypy --strict src/interfaces/visualization/maps/`
 - **Security**: CodeQL scanning in CI
-- **Coverage**: `pytest --cov=src/maps/ --cov-report=html --cov-fail-under=70`
+- **Coverage**: `pytest --cov=src/interfaces/visualization/maps/ --cov-report=html --cov-fail-under=70`
 
 ---
 
@@ -730,7 +730,7 @@ class PlotlyMapCallbackManager:
 - **Cyclomatic Complexity**: https://en.wikipedia.org/wiki/Cyclomatic_complexity
 - **Radon CC Tool**: https://radon.readthedocs.io/
 - **Project Standards**: `.github/copilot-instructions.md`, `agents.md`
-- **Current Implementation**: `src/maps/maps_manager.py` (lines 3010–8256)
+- **Current Implementation**: `src/interfaces/visualization/maps/maps_manager.py` (lines 3010–8256)
 
 ---
 

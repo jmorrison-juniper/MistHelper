@@ -12,8 +12,8 @@ Date: 2026-05-26
 ## Parity Verification Approach
 
 - Moved logic to:
-  - `src/gateway/wan2_migration_manager.py`
-  - `src/gateway/wan_probe_device_override_manager.py`
+  - `src/mist/resources/gateway/wan2_migration_manager.py`
+  - `src/mist/resources/gateway/wan_probe_device_override_manager.py`
 - Preserved write boundaries through `DataExporter.save_data_to_output(...)`.
 - Preserved API call intent and menu wiring by keeping `MistHelper.py` as orchestrator/delegator only.
 

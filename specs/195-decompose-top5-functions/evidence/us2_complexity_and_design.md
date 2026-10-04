@@ -1,7 +1,7 @@
 # US2 Complexity and Design Evidence
 
-- Extracted bootstrap dependency orchestration into `src/bootstrap/`.
-- Extracted 52-week device events exporter into `src/export/device_events_52w_exporter.py`.
+- Extracted bootstrap dependency orchestration into `src/foundation/runtime/bootstrap/`.
+- Extracted 52-week device events exporter into `src/operations/exporting/export/device_events_52w_exporter.py`.
 - Replaced legacy heavy `with_wan_overrides` body in `MistHelper.py` with a delegation facade.
 - Added unit tests:
   - `tests/unit/test_dependency_check.py`

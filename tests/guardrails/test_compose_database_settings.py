@@ -1,6 +1,6 @@
 """Guard the database settings the compose file must supply.
 
-Issue #3113: `src/db` requires `ARANGO_USERNAME` whenever MistHelper is not
+Issue #3113: `src/foundation/persistence/db` requires `ARANGO_USERNAME` whenever MistHelper is not
 standalone, and `compose.yml` never set it. The router therefore refused to
 build inside the container, the exporter caught the error, and every operation
 kept the CSV file as its only copy. Both stores were healthy the whole time,
@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-import src.db as db_package
+import src.foundation.persistence.db as db_package
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 COMPOSE_PATH = REPOSITORY_ROOT / "compose.yml"

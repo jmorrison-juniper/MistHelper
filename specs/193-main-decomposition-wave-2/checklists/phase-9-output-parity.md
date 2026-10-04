@@ -5,8 +5,8 @@ Date: 2026-05-26
 ## Scope
 
 - Packet capture extraction finalization:
-  - `src/capture/packet_capture.py`
-  - `src/capture/packet_capture_download.py`
+  - `src/operations/execution/capture/packet_capture.py`
+  - `src/operations/execution/capture/packet_capture_download.py`
 - Menu operations: `134`, `135`
 
 ## Parity Verification Approach

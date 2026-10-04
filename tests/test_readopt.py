@@ -9,7 +9,7 @@ from unittest.mock import MagicMock
 import mistapi
 import pytest
 
-from src.device.utility_commands import DeviceUtilityCommands
+from src.mist.resources.device.utility_commands import DeviceUtilityCommands
 
 
 def make_mock_response(data=None, status_code=200):

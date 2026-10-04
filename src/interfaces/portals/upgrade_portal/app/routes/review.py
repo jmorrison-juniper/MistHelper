@@ -1,0 +1,2168 @@
+"""The comparison routes and the history routes of the upgrade capture portal.
+
+Why:
+    Section 6 of ``contracts/http-api.md`` gives the operator three ways to
+    read one comparison. A machine reads ``GET /api/comparisons``. A person
+    reads ``GET /compare``. A record keeper downloads
+    ``GET /api/comparisons/export``. All three must report the same numbers.
+    Each route builds the comparison with the same three calls into the
+    compare package and counts nothing on its own. The same section holds the
+    history, because a comparison and a history read the same stored captures.
+
+Route names:
+    ``review.compare_captures`` answers ``GET /api/comparisons``.
+    ``review.download_comparison`` answers ``GET /api/comparisons/export``.
+    ``review.compare_page`` answers ``GET /compare``.
+
+    ``review.capture_history`` answers ``GET /api/sites/<site_id>/history``.
+    ``review.run_history`` answers ``GET /api/sites/<site_id>/runs/history``.
+    ``review.history_page`` answers ``GET /history``.
+
+A free read:
+    FR-032, FR-081, and FR-082 let any person read the history. No history
+    route asks for a typed word, and no history route reads the site lock. A
+    read that waited for a lock would hide the record from the operator who
+    most needs it. That is the operator watching somebody else's upgrade.
+
+One filter bar, two tables:
+    Rule 6 of ``contracts/ui-testids.md`` allows one value of a test
+    identifier for each page. The word ``added`` belongs to the device
+    outcomes and to the client outcomes. Two filter bars would print
+    ``compare-filter-added`` twice, so the page carries one bar that holds the
+    union of the two outcome sets. The route hands the chosen outcome to the
+    table that owns it and hands ``all`` to the other table. The rows match
+    ``build_view``, and the log stays quiet for an outcome that only one table
+    knows.
+
+Seams:
+    The capture read and the capture list arrive through the application
+    config, so a contract test needs no database. The module falls back to
+    ``capture.store`` when the config holds nothing. That fallback loads late,
+    because ``capture.store`` imports the database driver at module level and
+    the portal must start without it.
+"""
+
+from __future__ import annotations
+
+import logging
+from collections.abc import Callable, Iterable, Mapping, Sequence
+from dataclasses import asdict, dataclass, is_dataclass
+from datetime import UTC, datetime
+from importlib import import_module
+from inspect import signature
+from types import ModuleType
+from typing import Any
+from urllib.parse import urlencode
+
+from flask import Blueprint, Response, abort, current_app, jsonify, render_template, request  # Carry existing refusals.
+from jinja2 import TemplateNotFound
+
+from src.interfaces.portals.upgrade_portal.api.run_controls.views import (
+    RunStalePolicy,
+)  # Use one stale decision for both portal pages.
+from src.interfaces.portals.upgrade_portal.app.factory import json_error
+from src.interfaces.portals.upgrade_portal.app.history_descriptions import HistoryCardScope
+from src.interfaces.portals.upgrade_portal.app.routes import (
+    select,
+)  # Reuse the signed organization resolver and existing refusal authority.
+from src.interfaces.portals.upgrade_portal.app.seam_shapes import (
+    check_stand_in,
+)  # Issue #1991: compare each stand-in against the real callee.
+from src.interfaces.portals.upgrade_portal.compare import clients as client_compare
+from src.interfaces.portals.upgrade_portal.compare import diff as device_compare
+from src.interfaces.portals.upgrade_portal.compare import download as compare_download
+from src.interfaces.portals.upgrade_portal.compare import render as compare_render
+from src.interfaces.portals.upgrade_portal.compare import statistics as compare_statistics
+from src.interfaces.portals.upgrade_portal.runtime import identity
+from src.interfaces.portals.upgrade_portal.runtime.runs import (
+    RunStateMachine,
+    RunTransitionError,
+)  # Use the canonical final-state authority.
+from src.interfaces.portals.upgrade_portal.upgrade.org_history import (
+    OperationHistorySection,
+    OrgOperationHistory,
+)  # Issue #3248: the section rules.
+
+logger = logging.getLogger(__name__)
+
+review_bp = Blueprint("review", __name__)  # No URL prefix, because the paths span `/compare` and `/api`.
+
+
+# ---------------------------------------------------------------------------
+# The contract values
+# ---------------------------------------------------------------------------
+
+COMPARISONS_API_PATH = "/api/comparisons"
+COMPARISONS_EXPORT_API_PATH = "/api/comparisons/export"
+COMPARE_PAGE_PATH = "/compare"
+
+# Section 6 of `contracts/http-api.md` names the capture history endpoint and the
+# history page. The contract names no run history path at all, so
+# `tasks.md` T205 supplies the need and this module supplies the spelling. The
+# path sits below the site and below `runs`, because `POST
+# /api/sites/<site_id>/runs` already means "create a run" in section 5, and one
+# path with two meanings would read as a trap.
+HISTORY_API_PATH = "/api/sites/<site_id>/history"
+RUN_HISTORY_API_PATH = "/api/sites/<site_id>/runs/history"
+HISTORY_PAGE_PATH = "/history"
+
+BEFORE_FIELD = "before"
+AFTER_FIELD = "after"
+FORMAT_FIELD = "format"
+SCOPE_FIELD = "scope"
+OUTCOME_FIELD = "outcome"
+SITE_ID_FIELD = "site_id"
+SITE_NAME_FIELD = "site_name"
+CAPTURE_ID_FIELD = "capture_id"
+STARTED_AT_FIELD = "started_at"
+CAPTURES_FIELD = "captures"
+RUNS_FIELD = "runs"
+TOTAL_FIELD = "total"
+LIMIT_FIELD = "limit"
+OFFSET_FIELD = "offset"
+SCHEMA_VERSION_FIELD = "schema_version"
+UNKNOWN_VERSION = "unknown"
+
+# The count names of `data-model.md` line 179, as `capture/assembly.py` writes
+# them into the `counts` map of every capture document.
+COUNTS_FIELD = "counts"
+DEVICE_COUNT_FIELD = "device_count"
+CLIENT_COUNT_FIELD = "client_count"
+DEVICE_TOTAL_KEY = "devices_total"
+CLIENT_COUNT_KEYS = ("clients_wired", "clients_wireless", "clients_guest")
+
+# WHY: Issue #2625. The run list query projects the length of the target list
+# under this name, because the projection carries no `targets`. The value must
+# match `store.RUN_DEVICE_COUNT_FIELD`. A contract test compares the two names,
+# so no runtime import of the store package is needed here. That import pulls
+# the database layer and the exporter into every page import.
+RUN_DEVICE_COUNT_FIELD = "device_count"
+
+# FR-084a asks the history view to name the device types that each capture set
+# holds. One capture reads every device type at one time, so a capture set holds
+# a mixed set and names no single type. The upgrade run names no single type
+# either, because `data-model.md` section 4.2 puts `device_type` on one entry of
+# `targets`. The stored `counts` map is therefore the one honest source, and it
+# already travels with every history row.
+#
+# Each entry pairs one stored count name with the word for one device and the
+# word for more than one device. The order is the cascade order of
+# `data-model.md` section 4.1, so the page reads the way an upgrade runs.
+DEVICE_TYPE_WORDS: tuple[tuple[str, str, str], ...] = (
+    ("gateways", "gateway", "gateways"),
+    ("switches", "switch", "switches"),
+    ("access_points", "access point", "access points"),
+)
+DEVICE_TYPE_FIELD = "device_type_text"
+DEVICE_TYPE_TEST_ID_FIELD = "device_type_test_id"
+DEVICE_TYPE_TEST_ID_PREFIX = "history-device-type-"
+NO_DEVICE_TYPE_TEXT = "No device type"
+DEVICE_TYPE_SEPARATOR = ", "
+CAPTURE_ID_FIELD = "capture_id"
+
+# Issue #3486. The history with no site lists the captures of every site in one
+# table, so each row names its site. The site cell carries its own test
+# identifier, as the device type cell does, so a browser test reads the cell of
+# one capture without a column position. The page of one site names its site in
+# the note, so its table keeps the nine columns of today.
+SITE_TEXT_FIELD = "site_text"  # The row field that holds the printed site text.
+SITE_TEST_ID_FIELD = "site_test_id"  # The row field that holds the test identifier of the site cell.
+SITE_TEST_ID_PREFIX = "history-site-"  # The test identifier of one site cell is this prefix and the capture.
+EVERY_SITE_COLUMN_COUNT = 10  # The Captures table with the Site column.
+ONE_SITE_COLUMN_COUNT = 9  # The Captures table of one site, which does not change.
+EVERY_SITE_ROW_VALUES_TEXT = (  # The second sentence of the hidden caption of the table with the Site column.
+    "Each row holds the site, the moment, the role, the state, the device count, the device types, "
+    "the client count, and the stored size."
+)
+ONE_SITE_ROW_VALUES_TEXT = (  # The second sentence of the hidden caption of the table of one site.
+    "Each row holds the moment, the role, the state, the device count, the device types, the client count, "
+    "and the stored size."
+)
+
+# Section 6 of `contracts/http-api.md` sets the two page defaults. The two bounds
+# are the portal's own, because the contract sets none and an unbounded limit
+# lets one request read the whole unlimited retention of FR-032 in one answer.
+DEFAULT_HISTORY_LIMIT = 25
+SMALLEST_HISTORY_LIMIT = 1
+LARGEST_HISTORY_LIMIT = 200
+DEFAULT_HISTORY_OFFSET = 0
+LARGEST_HISTORY_OFFSET = 1_000_000
+
+# Section 6 of `contracts/http-api.md` names the six fields of one history
+# row. A row that drops one of them still answers with the name, because a
+# reader that meets a missing name reports a fault instead of an empty cell.
+# The size is there for FR-032b, which watches the growth of an unlimited store.
+#
+# The two counts are not in that list. A history of an upgrade that cannot say
+# how many devices and how many clients the site held is of little use, so the
+# row carries both. Each one comes off the stored `counts` map, and neither one
+# costs a second read.
+HISTORY_ROW_DEFAULTS: dict[str, Any] = {
+    "capture_id": "",
+    "role": "",
+    "started_at": "",
+    "capture_status": "",
+    "actor_email": "",
+    "stored_size_bytes": 0,
+    DEVICE_COUNT_FIELD: 0,
+    CLIENT_COUNT_FIELD: 0,
+}
+
+COMPARE_TEMPLATE = "review/compare.html"
+COMPARE_SELECT_TEMPLATE = "review/compare_select.html"
+HISTORY_TEMPLATE = "review/history.html"
+FALLBACK_TEMPLATE = "layout.html"
+
+# The short moment of one history row. The store writes
+# `datetime.now(tz=UTC).isoformat()`, which holds 32 characters and wraps across
+# four lines in the narrow moment column of issue #2106. The short form holds 20
+# characters and fits one line. The page keeps the stored value in a `title`
+# attribute, so the operator still reads the second and the microsecond.
+MOMENT_TEXTS_FIELD = "moment_texts"
+MOMENT_TEXT_FORMAT = "%Y-%m-%d %H:%M UTC"
+
+COMPARE_PAGE_TITLE = "Capture comparison"
+PICKER_PAGE_TITLE = "Choose two captures"
+HISTORY_PAGE_TITLE = "Capture history"
+
+OK_STATUS = 200
+BAD_REQUEST_STATUS = 400
+NOT_FOUND_STATUS = 404
+CONFLICT_STATUS = 409
+SERVER_ERROR_STATUS = 500
+
+# The refusal codes of section 6 of `contracts/http-api.md`.
+# Each message sits beside its code, because `factory.ERROR_MESSAGES` holds the
+# site lock sentence for 409 and that sentence names the wrong fault here.
+CAPTURE_NOT_FOUND = "capture_not_found"
+CAPTURE_NOT_FOUND_MESSAGE = "The portal holds no capture with that identifier."
+CAPTURE_NOT_VERIFIED = "capture_not_verified"
+CAPTURE_NOT_VERIFIED_MESSAGE = "A comparison reads a verified capture only."
+SCHEMA_TOO_NEW = "schema_version_too_new"
+SCHEMA_TOO_NEW_MESSAGE = (
+    "This record comes from a later version of the portal. This portal is too old to show it. Upgrade the portal."
+)
+CAPTURE_SITE_MISMATCH = "capture_site_mismatch"
+CAPTURE_SITE_MISMATCH_MESSAGE = "The two captures name different sites."
+COMPARISON_UNAVAILABLE = "comparison_unavailable"
+COMPARISON_UNAVAILABLE_MESSAGE = "The portal cannot read a capture right now."
+BAD_FORMAT_MESSAGE = "Ask for the csv format or the json format."
+BAD_SCOPE_MESSAGE = "Ask for the differences scope or the full scope."
+# WHY: The download module names the fault. One map turns that name into the
+# words that the operator reads, so the route holds no branch of its own.
+_EXPORT_MESSAGES: dict[str, str] = {
+    compare_download.ERROR_BAD_FORMAT: BAD_FORMAT_MESSAGE,
+    compare_download.ERROR_BAD_SCOPE: BAD_SCOPE_MESSAGE,
+}
+_REFUSALS: dict[str, tuple[int, str, str]] = {
+    CAPTURE_NOT_FOUND: (NOT_FOUND_STATUS, CAPTURE_NOT_FOUND, CAPTURE_NOT_FOUND_MESSAGE),
+    CAPTURE_NOT_VERIFIED: (CONFLICT_STATUS, CAPTURE_NOT_VERIFIED, CAPTURE_NOT_VERIFIED_MESSAGE),
+    # Section 6 of `contracts/http-api.md` fixes the status and the code. The store
+    # gate at `capture/store.py` runs before the state gate, so this reason can
+    # reach the route in place of `capture_not_verified`. Without this row the
+    # reason falls to the 500 default, and a record that one portal upgrade
+    # would open reads as a server fault. The code is explicit here, because
+    # `factory.ERROR_CODES[409]` gives the bare word `conflict` and that word
+    # cannot tell a locked site from a record of a later release.
+    SCHEMA_TOO_NEW: (CONFLICT_STATUS, SCHEMA_TOO_NEW, SCHEMA_TOO_NEW_MESSAGE),
+}
+
+# WHY: The store also reports `database_unreachable`, and section 6 names no
+# status for it. A read that the portal cannot perform is a portal fault, so it
+# answers 500 rather than blaming the request.
+_DEFAULT_REFUSAL = (SERVER_ERROR_STATUS, COMPARISON_UNAVAILABLE, COMPARISON_UNAVAILABLE_MESSAGE)
+
+
+# ---------------------------------------------------------------------------
+# The seams
+# ---------------------------------------------------------------------------
+
+CAPTURE_LOADER_KEY = "CAPTURE_LOADER"
+CAPTURE_LISTER_KEY = "CAPTURE_LISTER"
+RUN_LISTER_KEY = "RUN_LISTER"
+# Issue #3248: the multi-site operation list of the history page. The key lives
+# in this module, because the seam guard test reads the keys of this module.
+OPERATION_LISTER_KEY = "OPERATION_LISTER"
+
+PACKAGE_ROOT = __name__.rsplit(".", maxsplit=3)[0]
+STORE_MODULE = "capture.store"
+LOADER_ATTRIBUTES = ("load_capture_for_comparison",)
+LISTER_ATTRIBUTES = ("list_captures",)
+QUERY_ATTRIBUTES = ("CaptureQuery",)
+
+# The run list of the capture store. `list_runs` answers a `RunListPage`, which
+# carries `runs` and `total` under the same two names as `CaptureListPage`, so
+# one page reader serves both histories.
+RUN_LISTER_ATTRIBUTES = ("list_runs",)
+
+# Issue #2221: the reader of the site lock trail, which the audit log paints.
+AUDIT_MODULE = "compare.lock_audit"
+AUDIT_READER_ATTRIBUTES = ("read_audit_rows",)
+RUN_QUERY_ATTRIBUTES = ("RunQuery",)
+
+# Issue #3248: the operation list of the capture store. `list_operations`
+# answers an `OperationListPage`, which carries `operations` and the
+# availability flag.
+OPERATION_LISTER_ATTRIBUTES = ("list_operations",)
+OPERATION_QUERY_ATTRIBUTES = ("OperationQuery",)
+
+# The history view of the compare package. The name is read at call time rather
+# than imported at module level. A portal whose render module has not grown the
+# builder yet therefore answers the history page instead of failing to start.
+HISTORY_VIEW_ATTRIBUTE = "build_history_view"
+ROWS_KEY = "rows"
+WINDOW_KEY = "window"
+
+
+def load_optional_module(suffix: str) -> ModuleType | None:
+    """Import one module of this package, or report that it is absent.
+
+    Why:
+        The capture store imports the database driver at module level. A
+        top-level import here would stop the whole portal on a host that holds
+        no driver. The import waits until a request needs the store.
+
+    Args:
+        suffix: The module path below the package root.
+
+    Returns:
+        The module, or None when the import fails.
+    """
+    try:  # The module is absent on a host with no database driver.
+        return import_module(f"{PACKAGE_ROOT}.{suffix}")
+    except ImportError:  # Expected on a lean host, so this is not a fault.
+        logger.info("review: the module %s is not available", suffix)
+        return None
+
+
+def find_attribute(module: ModuleType | None, names: tuple[str, ...]) -> Callable[..., Any] | None:
+    """Return the first callable of one module that carries one of these names.
+
+    Why:
+        A seam names more than one candidate, so a rename in the store does not
+        break the route on the same day.
+
+    Args:
+        module: The module to read, or None.
+        names: The candidate names, in order of preference.
+
+    Returns:
+        The first callable found, or None.
+    """
+    if module is None:
+        return None
+    for name in names:  # The first match wins.
+        candidate: Any = getattr(module, name, None)
+        if callable(candidate):
+            found: Callable[..., Any] = candidate
+            return found
+    return None
+
+
+def injected_seam(config_key: str) -> Callable[..., Any] | None:
+    """Return the callable that the application config holds under one key.
+
+    Why:
+        A contract test injects a stand-in through the config, so the test
+        needs no database, no network, and no lock server.
+
+    Args:
+        config_key: The config key of the seam.
+
+    Returns:
+        The injected callable, or None when the config holds no callable.
+    """
+    candidate: Any = current_app.config.get(config_key)
+    if not callable(candidate):  # A value that is not callable counts as unset.
+        return None  # The caller then falls back to the real callee.
+    check_stand_in(config_key, candidate)  # Issue #1991: a wrong shape must fail here, not at a customer site.
+    stand_in: Callable[..., Any] = candidate  # The named type satisfies the strict return check.
+    return stand_in  # The stand-in answers the same call the real callee answers.
+
+
+def store_capture_rows(  # Preserve the existing site-only picker and site-and-window history interface.
+    site_id: str, limit: int = DEFAULT_HISTORY_LIMIT, offset: int = DEFAULT_HISTORY_OFFSET
+) -> Any:
+    """Read a scoped capture page through the existing site-and-window interface."""
+    logger.info("review: authorize the capture history source")  # Authorize before even resolving a store module.
+    chosen = (select.resolve_org(None) or "").strip()  # Only the signed selection can authorize stored history.
+    refusal = select.org_refusal(chosen)  # Preserve missing-selection and current privilege refusals.
+    logger.debug("review: the capture source scope is permitted: %s", refusal is None)  # Report a safe decision.
+    if refusal is not None:  # A direct adapter and the site-only picker need the same source boundary.
+        abort(current_app.make_response(refusal))  # Carry the authoritative refusal instead of an empty success.
+    logger.info("review: resolve the scoped capture history reader")  # Record optional source resolution.
+    module = load_optional_module(STORE_MODULE)  # Load only after the signed organization passes authorization.
+    lister = find_attribute(module, LISTER_ATTRIBUTES)  # Preserve the existing late-loaded source interface.
+    query_class = find_attribute(module, QUERY_ATTRIBUTES)  # Use the store's existing organization query field.
+    logger.debug("review: the reader is ready: %s", lister is not None and query_class is not None)  # Safe status.
+    if lister is None or query_class is None:  # An authorized host without a source retains its existing empty shape.
+        return ()  # Never retry an unscoped read when the reader is unavailable.
+    logger.info("review: read the scoped capture history page")  # Record query construction and the source read.
+    page = lister(query_class(org_id=chosen, site_id=site_id, limit=limit, offset=offset))  # Scope COUNT and LIMIT.
+    logger.debug(  # Report safe scoped counts after the capture read.
+        "review: the capture source returned %s rows of %s",
+        len(getattr(page, CAPTURES_FIELD, ())),
+        getattr(page, TOTAL_FIELD, 0),
+    )  # Report only safe counts.
+    return page  # Preserve the store page and the comparison picker's site-only call shape.
+
+
+def store_run_rows(  # Preserve the existing trusted run lister interface.
+    site_id: str, limit: int = DEFAULT_HISTORY_LIMIT, offset: int = DEFAULT_HISTORY_OFFSET
+) -> Any:
+    """Read a scoped run page through the existing site-and-window interface."""
+    logger.info("review: authorize the run history source")  # Authorize before even resolving a store module.
+    chosen = (select.resolve_org(None) or "").strip()  # A caller-supplied organization cannot replace signed scope.
+    refusal = select.org_refusal(chosen)  # Reuse the current authorization policy without a duplicate rule.
+    logger.debug("review: the run source scope is permitted: %s", refusal is None)  # Report a safe decision.
+    if refusal is not None:  # The adapter must independently protect direct callers.
+        abort(current_app.make_response(refusal))  # Preserve the authoritative refusal status and envelope.
+    logger.info("review: resolve the scoped run history reader")  # Record optional source resolution.
+    module = load_optional_module(STORE_MODULE)  # Load only after signed scope passes authorization.
+    lister = find_attribute(module, RUN_LISTER_ATTRIBUTES)  # Preserve the existing late-loaded run interface.
+    query_class = find_attribute(module, RUN_QUERY_ATTRIBUTES)  # Use the existing RunQuery organization field.
+    logger.debug("review: the reader is ready: %s", lister is not None and query_class is not None)  # Safe status.
+    if lister is None or query_class is None:  # An authorized missing source retains its existing empty shape.
+        return ()  # Do not retry with a site-only or unrestricted real-store query.
+    logger.info("review: read the scoped run history page")  # Record query construction and the source read.
+    page = lister(query_class(org_id=chosen, site_id=site_id, limit=limit, offset=offset))  # Scope COUNT and LIMIT.
+    logger.debug(  # Report safe scoped counts after the run read.
+        "review: the run source returned %s rows of %s",
+        len(getattr(page, RUNS_FIELD, ())),
+        getattr(page, TOTAL_FIELD, 0),
+    )  # Report only safe counts.
+    return page  # Preserve source sorting, projection, page totals, and existing seam signatures.
+
+
+def store_operation_rows(org_id: str, site_id: str = "", limit: int = DEFAULT_HISTORY_LIMIT) -> Any:
+    """Read the multi-site operation rows of one organization from the capture store.
+
+    Why:
+        Issue #3248. The fallback follows ``store_run_rows``. The store owns the
+        query, the sort order, and the projection, and this route owns none of
+        them.
+
+    Args:
+        org_id: The selected organization.
+        site_id: The site to narrow to. An empty value reads every site.
+        limit: The largest number of rows to read.
+
+    Returns:
+        The store page, or an empty tuple when the operation list is absent.
+    """
+    module = load_optional_module(STORE_MODULE)  # The store imports the database driver, so load it late.
+    lister = find_attribute(module, OPERATION_LISTER_ATTRIBUTES)  # The reader of the operation rows.
+    query_class = find_attribute(module, OPERATION_QUERY_ATTRIBUTES)  # The request record of that reader.
+    if lister is None or query_class is None:  # The store offers no operation list.
+        logger.info("review: the capture store offers no operation list, so the section is empty")
+        return ()  # The section then states that it holds no operation.
+    return lister(query_class(org_id=org_id, site_id=site_id, limit=limit))  # One read for the section.
+
+
+def capture_loader() -> Callable[..., Any] | None:
+    """Return the reader that loads one capture for a comparison.
+
+    Why:
+        The injected seam wins over the store, so a test never reaches a
+        database and a running portal still reads real records.
+
+    Returns:
+        The reader, or None when no reader is available.
+    """
+    injected = injected_seam(CAPTURE_LOADER_KEY)
+    if injected is not None:
+        return injected
+    return find_attribute(load_optional_module(STORE_MODULE), LOADER_ATTRIBUTES)
+
+
+def capture_lister() -> Callable[..., Any]:
+    """Return the reader that fills the two capture pickers and the history.
+
+    Why:
+        The picker always renders, even with no rows, so this seam falls back
+        to the store rather than to None. The page then needs no extra branch.
+
+    Returns:
+        The reader.
+    """
+    injected = injected_seam(CAPTURE_LISTER_KEY)
+    return injected if injected is not None else store_capture_rows
+
+
+def run_lister() -> Callable[..., Any]:
+    """Return the reader that fills the run history.
+
+    Why:
+        The run history renders with no rows in the same way as the capture
+        history. This seam falls back to the store rather than to None.
+
+    Returns:
+        The reader.
+    """
+    injected = injected_seam(RUN_LISTER_KEY)
+    return injected if injected is not None else store_run_rows
+
+
+def operation_lister() -> Callable[..., Any]:
+    """Return the reader that fills the multi-site section of the history.
+
+    Why:
+        Issue #3248. The injected seam wins over the store, so a test never
+        reaches a database. The seam falls back to the store and never to
+        None, so the page needs no extra branch.
+
+    Returns:
+        The reader.
+    """
+    injected = injected_seam(OPERATION_LISTER_KEY)  # A test injects a stand-in through the config.
+    return injected if injected is not None else store_operation_rows  # A running portal reads the store.
+
+
+# ---------------------------------------------------------------------------
+# The capture pair
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class CapturePair:
+    """Two captures that may join a comparison, or the refusal that stopped them.
+
+    Why:
+        All three routes read the same two captures and refuse for the same
+        three reasons. One record carries the success and the refusal together,
+        so each route holds one branch and the refusal rules live in one place.
+
+    Attributes:
+        before: The pre-check capture, or None on a refusal.
+        after: The post-check capture, or None on a refusal.
+        status: The HTTP status of the refusal.
+        code: The error code of the refusal.
+        message: The sentence that names the refusal.
+    """
+
+    before: Mapping[str, Any] | None = None
+    after: Mapping[str, Any] | None = None
+    status: int = OK_STATUS
+    code: str = ""
+    message: str = ""
+
+    def both(self) -> tuple[Mapping[str, Any], Mapping[str, Any]] | None:
+        """Return the two captures together, or None when the read failed.
+
+        Why:
+            A caller that reads the two fields one at a time repeats the same
+            test twice. One call answers once and keeps the type plain.
+
+        Returns:
+            The pre-check capture and the post-check capture, or None.
+        """
+        if self.before is None or self.after is None:
+            return None
+        return self.before, self.after
+
+
+def text_field(record: Mapping[str, Any], name: str) -> str:
+    """Return one text field of one stored record.
+
+    Why:
+        A partial capture drops a field, and the routes must still answer. A
+        reader that returns an empty string keeps the type tests out of the
+        route bodies.
+
+    Args:
+        record: One stored record.
+        name: The field name.
+
+    Returns:
+        The field value as text, or an empty string.
+    """
+    value = record.get(name)
+    return value if isinstance(value, str) else ""
+
+
+def read_capture(loader: Callable[..., Any], capture_id: str) -> tuple[Mapping[str, Any] | None, str]:
+    """Read one capture that may join a comparison.
+
+    Why:
+        The store answers with a record that carries the document and the
+        verdict. A test stand-in answers with the document alone. Reading both
+        shapes here keeps a stand-in small and keeps the route unchanged.
+
+    Args:
+        loader: The capture reader.
+        capture_id: The business key of the capture.
+
+    Returns:
+        The capture and an empty reason, or the refused record and the reason.
+        A record travels beside a refusal whenever the store held one, so a
+        caller can report the schema version that it met.
+    """
+    answer: Any = loader(capture_id)
+    if isinstance(answer, Mapping):  # A stand-in hands back the document itself.
+        return answer, ""
+    document: Any = getattr(answer, "capture", None)
+    record = document if isinstance(document, Mapping) else None
+    if record is not None and bool(getattr(answer, "comparable", True)):
+        return record, ""
+    reason: Any = getattr(answer, "reason", "")
+    return record, reason if isinstance(reason, str) and reason else CAPTURE_NOT_FOUND
+
+
+def refuse(reason: str, capture_id: str, record: Mapping[str, Any] | None = None) -> CapturePair:
+    """Return the refusal that one store reason asks for.
+
+    Why:
+        The store names the fault and the route names the status. Mapping the
+        two in one table stops a route from inventing a status of its own.
+
+        The store hands back the refused record for a record of a later
+        release, so the log names the schema version that this release met.
+        Without that number an operator cannot tell which release wrote the
+        record and cannot judge how far behind this portal sits.
+
+    Args:
+        reason: The store reason.
+        capture_id: The capture that the portal refused.
+        record: The refused record, when the store held one.
+
+    Returns:
+        The refusal record.
+    """
+    status, code, message = _REFUSALS.get(reason, _DEFAULT_REFUSAL)
+    found = record.get(SCHEMA_VERSION_FIELD, UNKNOWN_VERSION) if record else UNKNOWN_VERSION
+    logger.info("review: the portal refused capture %s with %s at schema version %s", capture_id, code, found)
+    return CapturePair(status=status, code=code, message=message)
+
+
+def same_site(before: Mapping[str, Any], after: Mapping[str, Any]) -> bool:
+    """Return whether the two captures name the same site.
+
+    Why:
+        A comparison across two sites reports every device as added and every
+        device as removed, which reads as a total outage. An absent name proves
+        no disagreement, so a partial capture never triggers the refusal.
+
+    Args:
+        before: The pre-check capture.
+        after: The post-check capture.
+
+    Returns:
+        True when the two names agree, or when either name is absent.
+    """
+    left = text_field(before, SITE_ID_FIELD)
+    right = text_field(after, SITE_ID_FIELD)
+    if not left or not right:
+        return True
+    return left == right
+
+
+def read_pair(before_id: str, after_id: str) -> CapturePair:
+    """Read the two captures of one comparison.
+
+    Why:
+        The verification test runs before the site test, because the store
+        hands out no document at all for an unverified capture. The route
+        therefore cannot read that capture's site.
+
+    Args:
+        before_id: The business key of the pre-check capture.
+        after_id: The business key of the post-check capture.
+
+    Returns:
+        The two captures, or the refusal.
+    """
+    loader = capture_loader()
+    if loader is None:
+        logger.warning("review: the portal found no capture reader")
+        return CapturePair(
+            status=SERVER_ERROR_STATUS, code=COMPARISON_UNAVAILABLE, message=COMPARISON_UNAVAILABLE_MESSAGE
+        )
+    before, before_reason = read_capture(loader, before_id)
+    if before_reason or before is None:
+        return refuse(before_reason or CAPTURE_NOT_FOUND, before_id, before)
+    after, after_reason = read_capture(loader, after_id)
+    if after_reason or after is None:
+        return refuse(after_reason or CAPTURE_NOT_FOUND, after_id, after)
+    if not same_site(before, after):
+        logger.warning("review: the two captures name different sites")
+        return CapturePair(status=BAD_REQUEST_STATUS, code=CAPTURE_SITE_MISMATCH, message=CAPTURE_SITE_MISMATCH_MESSAGE)
+    return CapturePair(before=before, after=after)
+
+
+# ---------------------------------------------------------------------------
+# The comparison itself
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class ComparisonParts:
+    """The two captures and the three results that every route needs.
+
+    Why:
+        The endpoint, the page, and the download show the same comparison. One
+        record carries the whole result, so no route repeats a count and the
+        three answers can never disagree.
+
+    Attributes:
+        before: The pre-check capture.
+        after: The post-check capture.
+        devices: The device half of the comparison.
+        clients: The client half of the comparison.
+        statistics: The statistics roll-up.
+    """
+
+    before: Mapping[str, Any]
+    after: Mapping[str, Any]
+    devices: device_compare.DeviceComparison
+    clients: client_compare.ClientComparison
+    statistics: compare_statistics.ComparisonStatistics
+
+    @property
+    def skipped_sections(self) -> tuple[str, ...]:
+        """Return every section that a digest match skipped.
+
+        Why:
+            The header names each skip once, and the two halves each hold their
+            own list. Joining them here keeps the join out of the page code.
+
+        Returns:
+            The device skips followed by the client skips.
+        """
+        return (*self.devices.skipped_sections, *self.clients.skipped_sections)
+
+
+def build_parts(before: Mapping[str, Any], after: Mapping[str, Any]) -> ComparisonParts:
+    """Compare two captures and roll up the statistics.
+
+    Why:
+        This is the one place that calls the compare package. A second caller
+        would let two routes report two different numbers for one comparison.
+
+    Args:
+        before: The pre-check capture.
+        after: The post-check capture.
+
+    Returns:
+        The whole comparison result.
+    """
+    devices = device_compare.compare_devices(before, after)
+    clients = client_compare.compare_clients(before, after)
+    elapsed = compare_statistics.elapsed_seconds_between(before, after)
+    statistics = compare_statistics.build_statistics(devices, clients, elapsed)
+    return ComparisonParts(before, after, devices, clients, statistics)
+
+
+# ---------------------------------------------------------------------------
+# The single filter bar
+# ---------------------------------------------------------------------------
+
+# WHY: The bar holds the union of the two outcome sets. `added` belongs to both
+# sets, and rule 6 of the identifier contract allows one `compare-filter-added`
+# for each page, so the union keeps it once.
+FILTER_CHOICES: tuple[str, ...] = (
+    compare_render.FILTER_ALL,
+    *device_compare.DEVICE_OUTCOMES,
+    *(name for name in client_compare.CLIENT_OUTCOMES if name not in device_compare.DEVICE_OUTCOMES),
+)
+
+_FILTER_LABELS = {
+    compare_render.FILTER_ALL: "All rows",
+    device_compare.OUTCOME_UNCHANGED: "Unchanged",
+    device_compare.OUTCOME_CHANGED: "Changed",
+    device_compare.OUTCOME_ADDED: "Added",
+    device_compare.OUTCOME_REMOVED: "Removed",
+    client_compare.OUTCOME_PRESENT: "Present",
+    client_compare.OUTCOME_MOVED: "Moved",
+    client_compare.OUTCOME_MISSING: "Missing",
+}
+
+
+@dataclass(frozen=True, slots=True)
+class FilterChoice:
+    """One control of the single filter bar.
+
+    Why:
+        A template must build no name and no address, because a template that
+        builds a name drifts from the browser test. The record carries the
+        words, the test identifier, and the link, ready to print.
+
+    Attributes:
+        outcome: The outcome name, or ``all``.
+        label: The words that the page shows.
+        test_id: The test identifier of this control.
+        href: The address that applies this filter.
+        active: True when this filter is in force.
+    """
+
+    outcome: str
+    label: str
+    test_id: str
+    href: str
+    active: bool
+
+
+def build_link(path: str, values: Mapping[str, str]) -> str:
+    """Return one portal address with its query values.
+
+    Why:
+        A capture identifier and a filter name travel in the address bar, so
+        the builder escapes them rather than joining raw text.
+
+    Args:
+        path: The portal path.
+        values: The query values.
+
+    Returns:
+        The address.
+    """
+    return path + "?" + urlencode(dict(values))
+
+
+def table_filter(chosen: str, allowed: tuple[str, ...]) -> str:
+    """Return the filter value that one table can use.
+
+    Why:
+        ``missing`` is a client outcome and never a device outcome. Handing it
+        to the device table would make the table fall back to ``all``. The
+        table would then log a warning about a value that the page offered on
+        purpose.
+
+    Args:
+        chosen: The filter in force.
+        allowed: The filter values of this table.
+
+    Returns:
+        The chosen value, or ``all`` when this table does not know it.
+    """
+    return chosen if chosen in allowed else compare_render.FILTER_ALL
+
+
+def build_filter_choices(chosen: str, ids: Mapping[str, str]) -> tuple[FilterChoice, ...]:
+    """Return one control for each outcome of the filter bar.
+
+    Why:
+        The bar prints in a fixed order, so the same control sits in the same
+        place on every comparison page.
+
+    Args:
+        chosen: The filter in force.
+        ids: The two capture identifiers, under their query names.
+
+    Returns:
+        One record for each filter control.
+    """
+    return tuple(
+        FilterChoice(
+            outcome=name,
+            label=_FILTER_LABELS.get(name, name),
+            test_id=compare_render.filter_test_id(name),
+            href=build_link(COMPARE_PAGE_PATH, {**ids, OUTCOME_FIELD: name}),
+            active=name == chosen,
+        )
+        for name in FILTER_CHOICES
+    )
+
+
+# ---------------------------------------------------------------------------
+# The pages
+# ---------------------------------------------------------------------------
+
+
+def render_page(name: str, **context: Any) -> str:
+    """Render one template, and fall back to the shell page when it is absent.
+
+    Why:
+        The portal grows one template at a time. A missing template shows the
+        shell page and a log line rather than a server error.
+
+    Args:
+        name: The template name.
+        context: The values that the template shows.
+
+    Returns:
+        The rendered page.
+    """
+    try:
+        return render_template(name, **context)
+    except TemplateNotFound:
+        logger.warning("review: the template %s is absent, so the portal showed the shell page", name)
+        return render_template(FALLBACK_TEMPLATE, **context)
+
+
+def plain_rows(value: Any) -> list[dict[str, Any]]:
+    """Return one plain dictionary for each usable row of one store answer.
+
+    Why:
+        A store page, a plain list, and an empty tuple all reach this reader,
+        and a page must render for all three. Turning every shape into one
+        list here keeps the type tests out of the page code.
+
+    Args:
+        value: The rows that a store page or a stand-in gave back.
+
+    Returns:
+        One plain dictionary for each usable row.
+    """
+    if not isinstance(value, Iterable) or isinstance(value, str | Mapping):
+        return []
+    return [dict(row) for row in value if isinstance(row, Mapping)]
+
+
+def read_capture_rows(site_id: str) -> list[dict[str, Any]]:
+    """Return the capture rows that the two pickers offer.
+
+    Why:
+        The picker must render even when the store answers with nothing, so
+        this reader turns every shape into a plain list and never raises.
+
+    Args:
+        site_id: The site to narrow to. An empty value reads every site.
+
+    Returns:
+        One plain dictionary for each usable row.
+    """
+    page: Any = capture_lister()(site_id)
+    rows = plain_rows(getattr(page, CAPTURES_FIELD, page))
+    # Issue #2227: the picker showed the stored text, which holds 32 characters
+    # and the offset of the machine that wrote it. The operator picks two
+    # captures here, and the moment is the one value that tells the two apart.
+    # The history page already reads the short UTC form, so the picker reads it
+    # too and no page of the portal shows a raw stamp of the store.
+    return [dict(row, moment_text=short_moment(row.get(STARTED_AT_FIELD))) for row in rows]
+
+
+def render_picker(before_id: str, after_id: str, notice: str = "") -> str:
+    """Render the page that asks for the two captures.
+
+    Why:
+        An operator reaches ``/compare`` from the navigation with no query
+        values. The picker asks for the two captures rather than showing an
+        error for a request that named nothing.
+
+    Args:
+        before_id: The pre-check identifier that the request carried.
+        after_id: The post-check identifier that the request carried.
+        notice: The sentence that names a refusal, or an empty string.
+
+    Returns:
+        The rendered page.
+    """
+    return render_page(
+        COMPARE_SELECT_TEMPLATE,
+        page_title=PICKER_PAGE_TITLE,
+        signed_in=True,
+        captures=read_capture_rows(request.args.get(SITE_ID_FIELD, "")),
+        before_id=before_id,
+        after_id=after_id,
+        notice=notice,
+        action_path=COMPARE_PAGE_PATH,
+    )
+
+
+def build_download_links(ids: Mapping[str, str]) -> dict[str, str]:
+    """Return the four download addresses of one comparison.
+
+    Why:
+        The page offers the differences file and the full file, each in two
+        formats. The two older addresses name no scope, so a link that an
+        operator saved before the full scope arrived still works.
+
+    Args:
+        ids: The two capture identifiers, under ``before`` and ``after``.
+
+    Returns:
+        The four addresses, under the names that the template prints.
+    """
+    path = COMPARISONS_EXPORT_API_PATH
+    full = {SCOPE_FIELD: compare_download.SCOPE_FULL}
+    return {
+        "csv_href": build_link(path, {**ids, FORMAT_FIELD: compare_download.FORMAT_CSV}),
+        "json_href": build_link(path, {**ids, FORMAT_FIELD: compare_download.FORMAT_JSON}),
+        "full_csv_href": build_link(path, {**ids, FORMAT_FIELD: compare_download.FORMAT_CSV, **full}),
+        "full_json_href": build_link(path, {**ids, FORMAT_FIELD: compare_download.FORMAT_JSON, **full}),
+    }
+
+
+def build_export_context(parts: ComparisonParts) -> compare_download.ExportContext:
+    """Return the reading that the full download needs.
+
+    Why:
+        The full file names the site, the organization, the two moments, and
+        every statistic. The route already holds all of that, so it hands the
+        whole reading over and the download counts nothing again.
+
+    Args:
+        parts: The whole comparison result.
+
+    Returns:
+        The two captures and the flat statistics.
+    """
+    return compare_download.ExportContext(
+        before=parts.before,
+        after=parts.after,
+        statistics=parts.statistics.to_dict(),
+    )
+
+
+def build_page_context(parts: ComparisonParts, chosen: str) -> dict[str, Any]:
+    """Return every value that the comparison page shows.
+
+    Why:
+        The page holds no rule of its own, so the route builds each section
+        here and the template prints what this function decided.
+
+    Args:
+        parts: The whole comparison result.
+        chosen: The filter in force.
+
+    Returns:
+        The template context.
+    """
+    ids = {
+        BEFORE_FIELD: text_field(parts.before, CAPTURE_ID_FIELD),
+        AFTER_FIELD: text_field(parts.after, CAPTURE_ID_FIELD),
+    }
+    device_outcome = table_filter(chosen, compare_render.DEVICE_FILTERS)
+    client_outcome = table_filter(chosen, compare_render.CLIENT_FILTERS)
+    return {
+        "page_title": COMPARE_PAGE_TITLE,
+        "signed_in": True,
+        "header": compare_render.build_header(parts.before, parts.after, parts.skipped_sections),
+        "devices": compare_render.build_device_section(parts.devices, device_outcome),
+        "clients": compare_render.build_client_section(parts.clients, client_outcome),
+        "statistics": compare_render.build_statistics_section(parts.statistics),
+        "filters": build_filter_choices(chosen, ids),
+        **build_download_links(ids),
+    }
+
+
+def render_comparison(parts: ComparisonParts) -> str:
+    """Render the comparison of two captures.
+
+    Why:
+        The filter arrives in the address bar, so the route normalizes it once.
+        The route hands the same value to the bar and to both tables.
+
+    Args:
+        parts: The whole comparison result.
+
+    Returns:
+        The rendered page.
+    """
+    chosen = compare_render.normalize_filter(request.args.get(OUTCOME_FIELD, ""), FILTER_CHOICES)
+    return render_page(COMPARE_TEMPLATE, **build_page_context(parts, chosen))
+
+
+def build_attachment(result: compare_download.ExportResult) -> tuple[Response, int]:
+    """Return one download as a file attachment.
+
+    Why:
+        The browser must save the file rather than show it. The answer
+        carries the disposition header and the file name that the export chose.
+
+    Args:
+        result: The export result.
+
+    Returns:
+        The file answer and its status.
+    """
+    response = Response(result.body, mimetype=result.media_type)
+    response.headers["Content-Disposition"] = 'attachment; filename="' + result.filename + '"'
+    logger.info("review: the portal sent a comparison download named %s", result.filename)
+    return response, OK_STATUS
+
+
+# ---------------------------------------------------------------------------
+# The history page window
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class PageWindow:
+    """The page of history rows that one request asked for, and its neighbors.
+
+    Why:
+        Retention is unlimited under FR-032, so one site can hold thousands of
+        capture rows. The window carries the two neighbor addresses ready to
+        print. A template that builds an address of its own drifts away from
+        the browser test that clicks it.
+
+    Attributes:
+        limit: The largest number of rows on this page.
+        offset: The number of rows before this page.
+        total: The number of rows that the whole history holds.
+        previous_href: The earlier page, or an empty string when none exists.
+        next_href: The later page, or an empty string when none exists.
+    """
+
+    limit: int = DEFAULT_HISTORY_LIMIT
+    offset: int = DEFAULT_HISTORY_OFFSET
+    total: int = 0
+    previous_href: str = ""
+    next_href: str = ""
+
+
+def bounded_int(raw: str, fallback: int, smallest: int, largest: int) -> int:
+    """Return one query value as a whole number inside its two bounds.
+
+    Why:
+        A query value arrives as text that any person can edit in the address
+        bar. Text that is not a number, or a number outside the bounds, must
+        give the documented default rather than a server error.
+
+    Args:
+        raw: The text that the request carried.
+        fallback: The value to use when the text is not a whole number.
+        smallest: The smallest value the portal accepts.
+        largest: The largest value the portal accepts.
+
+    Returns:
+        The value, held inside the two bounds.
+    """
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):  # Any person can type a word into the address bar.
+        return fallback
+    return min(max(value, smallest), largest)
+
+
+def read_window_values() -> tuple[int, int]:
+    """Return the page size and the page start that the request asked for.
+
+    Why:
+        Section 6 of ``contracts/http-api.md`` sets the two defaults, and all
+        three history routes must read them the same way. One reader keeps the
+        two endpoints and the page on one page size.
+
+    Returns:
+        The page size and the page start.
+    """
+    limit = bounded_int(
+        request.args.get(LIMIT_FIELD, ""), DEFAULT_HISTORY_LIMIT, SMALLEST_HISTORY_LIMIT, LARGEST_HISTORY_LIMIT
+    )
+    offset = bounded_int(
+        request.args.get(OFFSET_FIELD, ""), DEFAULT_HISTORY_OFFSET, DEFAULT_HISTORY_OFFSET, LARGEST_HISTORY_OFFSET
+    )
+    return limit, offset
+
+
+def page_href(site_id: str, limit: int, offset: int) -> str:
+    """Return the address of one history page.
+
+    Why:
+        The site travels in the address bar beside the two window values. The
+        next page and the earlier page stay on the same site. The builder
+        escapes each value rather than joining raw text.
+
+    Args:
+        site_id: The site to narrow to. An empty value reads every site.
+        limit: The page size to carry onward.
+        offset: The page start of the wanted page.
+
+    Returns:
+        The address of that page.
+    """
+    values = {LIMIT_FIELD: str(limit), OFFSET_FIELD: str(offset)}
+    if site_id:  # An organization wide history carries no site.
+        values[SITE_ID_FIELD] = site_id
+    return build_link(HISTORY_PAGE_PATH, values)
+
+
+def build_window(site_id: str, limit: int, offset: int, total: int) -> PageWindow:
+    """Return the page window with its two neighbor addresses.
+
+    Why:
+        Task T206 asks for the next page and the earlier page. An empty
+        address states plainly that the page does not exist, so the template
+        hides that one control and never offers a dead link.
+
+    Args:
+        site_id: The site to narrow to. An empty value reads every site.
+        limit: The page size in force.
+        offset: The page start in force.
+        total: The number of rows that the whole history holds.
+
+    Returns:
+        The window record.
+    """
+    earlier = page_href(site_id, limit, max(offset - limit, DEFAULT_HISTORY_OFFSET)) if offset > 0 else ""
+    later = page_href(site_id, limit, offset + limit) if offset + limit < total else ""
+    return PageWindow(limit=limit, offset=offset, total=total, previous_href=earlier, next_href=later)
+
+
+# ---------------------------------------------------------------------------
+# The history rows
+# ---------------------------------------------------------------------------
+
+
+def call_lister(lister: Callable[..., Any], site_id: str, limit: int, offset: int) -> Any:
+    """Call one list seam with the page window when the seam accepts it.
+
+    Why:
+        The store fallback pages inside the database, and it declares both
+        window names. A contract stand-in often takes the site alone, and two
+        extra keywords would raise ``TypeError`` there. The probe reads the
+        seam once and passes only what the seam declares.
+
+    Args:
+        lister: The list seam.
+        site_id: The site to narrow to. An empty value reads every site.
+        limit: The page size in force.
+        offset: The page start in force.
+
+    Returns:
+        The store page, or whatever shape the stand-in gave back.
+    """
+    try:
+        parameters = signature(lister).parameters
+    except (TypeError, ValueError):  # A builtin or a stand-in that declares nothing.
+        return lister(site_id)
+    if LIMIT_FIELD in parameters and OFFSET_FIELD in parameters:
+        return lister(site_id, limit=limit, offset=offset)
+    return lister(site_id)
+
+
+def read_store_page(
+    lister: Callable[..., Any], rows_name: str, site_id: str, limit: int, offset: int
+) -> tuple[list[dict[str, Any]], int]:
+    """Return one page of stored rows and the count of the whole history.
+
+    Why:
+        ``CaptureListPage`` and ``RunListPage`` carry their rows under
+        different names and their count under the same name. One reader serves
+        both histories, and neither route counts anything itself.
+
+    Args:
+        lister: The list seam.
+        rows_name: The attribute that holds the rows on the store page.
+        site_id: The site to narrow to. An empty value reads every site.
+        limit: The page size in force.
+        offset: The page start in force.
+
+    Returns:
+        The rows of this page, and the count of the whole history.
+    """
+    page: Any = call_lister(lister, site_id, limit, offset)
+    rows = plain_rows(getattr(page, rows_name, page))
+    total: Any = getattr(page, TOTAL_FIELD, None)
+    return rows, total if isinstance(total, int) else len(rows)
+
+
+def whole_number(value: Any) -> int:
+    """Return one count as a whole number, or zero for anything else.
+
+    Why:
+        A stored count arrives from a database driver, so it can be a string,
+        a float, or absent. A page that added a string to an integer would
+        stop the whole history over one bad row.
+
+    Args:
+        value: The stored count.
+
+    Returns:
+        The count, or zero.
+    """
+    if isinstance(value, bool):  # A boolean is an integer in Python, and no count is a boolean.
+        return 0
+    if isinstance(value, int):
+        return value
+    return 0
+
+
+def row_counts(row: Mapping[str, Any]) -> dict[str, int]:
+    """Return the device count and the client count of one history row.
+
+    Why:
+        The history exists to show what a site held before an upgrade and
+        after it, so the two counts belong on every row. A direct name wins,
+        because a later projection may compute the counts in the database.
+        The stored ``counts`` map of ``capture/assembly.py`` supplies the rest,
+        so no row costs a second read of the whole capture.
+
+    Args:
+        row: One stored row.
+
+    Returns:
+        The two counts, under the two row names.
+    """
+    counts = row.get(COUNTS_FIELD)
+    stored: Mapping[str, Any] = counts if isinstance(counts, Mapping) else {}
+    devices = row.get(DEVICE_COUNT_FIELD, stored.get(DEVICE_TOTAL_KEY))
+    clients = row.get(CLIENT_COUNT_FIELD)
+    if clients is None:  # No direct name, so add the three client groups of the capture.
+        clients = sum(whole_number(stored.get(name)) for name in CLIENT_COUNT_KEYS)
+    return {DEVICE_COUNT_FIELD: whole_number(devices), CLIENT_COUNT_FIELD: whole_number(clients)}
+
+
+def device_type_phrase(count: int, one_word: str, many_words: str) -> str:
+    """Return the words for one device count.
+
+    Why:
+        A cell that read `1 gateways` would look like a fault to an operator.
+        The count and the word travel together, so the caller joins whole
+        phrases and never repairs a word later.
+
+    Args:
+        count: The count of this device type.
+        one_word: The word for one device of this type.
+        many_words: The word for more than one device of this type.
+
+    Returns:
+        The count and the word, with one space between them.
+    """
+    return f"{count} {one_word if count == 1 else many_words}"
+
+
+def device_type_text(row: Mapping[str, Any]) -> str:
+    """Return the device types that one stored capture set holds.
+
+    Why:
+        FR-084a asks the history view to name the device types of each capture
+        set. A capture reads every type at one time, so the cell names each
+        type that the set holds and the count of it. The order is the cascade
+        order of `data-model.md` section 4.1.
+
+    Args:
+        row: One stored history row.
+
+    Returns:
+        The device types, or the plain fallback text.
+    """
+    counts = row.get(COUNTS_FIELD)  # The store projects this map on every row.
+    stored: Mapping[str, Any] = counts if isinstance(counts, Mapping) else {}  # A missing map reads as empty.
+    parts = []  # The phrases of the types that this set holds.
+    for name, one_word, many_words in DEVICE_TYPE_WORDS:  # The cascade order fixes the reading order.
+        total = whole_number(stored.get(name))  # A bad stored value reads as zero, so no row stops the page.
+        if total:  # A type of no device names nothing, because it tells the operator nothing.
+            parts.append(device_type_phrase(total, one_word, many_words))
+    return DEVICE_TYPE_SEPARATOR.join(parts) if parts else NO_DEVICE_TYPE_TEXT
+
+
+def history_row(row: Mapping[str, Any]) -> dict[str, Any]:
+    """Return one history row that carries every field the contract names.
+
+    Why:
+        Section 6 of ``contracts/http-api.md`` promises six names on every
+        row. A partial capture drops one of them, and a reader that meets a
+        missing name reports a fault instead of showing an empty cell. The
+        row keeps any further store field, because the contract reads as a
+        smallest set and a later release can add a name.
+
+        The two counts come last, because the store carries them inside the
+        ``counts`` map and a default of zero would otherwise hide a real
+        number.
+
+    Args:
+        row: One stored row.
+
+    Returns:
+        The row, with a default under every absent contract name.
+    """
+    shaped = dict(HISTORY_ROW_DEFAULTS)
+    shaped.update(row)
+    shaped.update(row_counts(row))  # The two counts run last, because a `counts` map fills them.
+    return shaped
+
+
+def short_moment(value: Any) -> str:
+    """Return one stored moment in a short form that fits one line.
+
+    Why:
+        ``capture/assembly.py`` writes ``datetime.now(tz=UTC).isoformat()``,
+        which holds 32 characters. Issue #2106 measured that text across four
+        lines in the moment column, and one row then stood 113 pixels tall. The
+        short form holds the day and the minute, which is enough to tell two
+        captures apart. The page keeps the stored text in a ``title``
+        attribute, so the second and the microsecond stay reachable.
+
+        A value this reader cannot parse comes back unchanged. A later release
+        of the store may write another shape, and a page that dropped the value
+        would leave the operator with an empty cell.
+
+    Args:
+        value: The moment as the store holds it.
+
+    Returns:
+        The short moment, the value unchanged, or an empty text.
+    """
+    if not isinstance(value, str):  # A partial record can hold None under this name.
+        return ""
+    try:
+        moment = datetime.fromisoformat(value)  # Reads the offset form and the trailing Z form.
+    except ValueError:  # A shape this reader does not know stays as it stands.
+        return value
+    if moment.tzinfo is None:  # The store writes UTC, so a moment with no zone is already UTC.
+        moment = moment.replace(tzinfo=UTC)
+    return moment.astimezone(UTC).strftime(MOMENT_TEXT_FORMAT)  # One zone for every row.
+
+
+# The state that the page shows for a run whose record names none. Issue #2199
+# asks the page to name an unknown state and never to hide the row, because a
+# run stored before the state field existed still happened.
+UNKNOWN_RUN_STATE = "unknown"
+
+
+def record_site_label(record: Mapping[str, Any]) -> str:
+    """Return the site name of one stored record, or its identifier.
+
+    Why:
+        An old record holds the identifier alone. A row with an empty site tells
+        the operator nothing, and the identifier at least reaches the site page.
+        The Runs table and the Captures table read the site with this one rule,
+        so the two tables of the history name a site the same way (issue #3486).
+
+    Args:
+        record: The stored run record or the stored capture record.
+
+    Returns:
+        The site name, the site identifier, or an empty text.
+    """
+    return str(record.get("site_name") or record.get("site_id") or "")  # An empty name reads as no name.
+
+
+def run_end_moment(record: Mapping[str, Any], state: str) -> str:  # Select an end time from the canonical state.
+    """Return the stored end moment of one run, or an empty text.
+
+    Why:
+        A run that still runs has not ended. A page that showed the last update
+        as an end moment would tell the operator that a live run finished.
+
+    Args:
+        record: The stored run record.
+        state: The state that the row shows.
+
+    Returns:
+        The stored moment when the run ended, or an empty text.
+    """
+    logger.info("review: the portal checks whether one run has ended")  # Record the history decision.
+    try:  # An old or damaged state must not appear as a completed run.
+        run_state = RunStateMachine.coerce(state)  # Use the canonical state model for the history decision.
+    except RunTransitionError:  # A state outside the model has no proven end moment.
+        logger.debug("review: the run state is unknown, so the history shows no end moment")  # Safe result.
+        return ""  # Do not tell the operator that an unknown run ended.
+    ended = run_state in RunStateMachine.TERMINAL  # The canonical terminal set controls the end moment.
+    result = str(record.get("updated_at") or "") if ended else ""  # Final runs use their last stored update.
+    logger.debug("review: the run history end moment is present: %s", bool(result))  # Report no record value.
+    return result  # A live run keeps the end column empty.
+
+
+def run_device_count(record: Mapping[str, Any]) -> int:
+    """Return how many devices one run acts on.
+
+    Why:
+        Issue #2625. The history page reads a projected run row, and that
+        projection carries no target list. The store now returns the length of
+        the list under `device_count`, so this reader prefers that number. The
+        run detail page reads the whole document, so the target count stays as
+        the fallback for a record that holds no projected number.
+
+    Args:
+        record: The stored run record, or one projected row of the run list.
+
+    Returns:
+        The count of targets. A run that reached no options holds none.
+    """
+    counted: Any = record.get(RUN_DEVICE_COUNT_FIELD)  # The store projects this for a list row.
+    if isinstance(counted, int) and not isinstance(counted, bool):  # A true would read as the number 1.
+        return counted if counted >= 0 else 0  # A negative count has no meaning, so the page shows none.
+    targets: Any = record.get("targets") or []  # A run that reached no options holds no target.
+    return len(targets) if isinstance(targets, (list, tuple)) else 0
+
+
+def run_operator_fields(record: Mapping[str, Any]) -> dict[str, str]:
+    """Return the operator labels that one run history row shows.
+
+    Args:
+        record: The stored run record.
+
+    Returns:
+        The typed operator address and the Mist account label.
+    """
+    return {  # Keep identity shaping out of the larger history row builder.
+        "actor_email": str(record.get("actor_email") or ""),  # Show the typed address that created the run.
+        "cloud_account": str(record.get("cloud_account") or ""),  # Show the account read before firmware moved.
+    }
+
+
+def run_history_identity_fields(record: Mapping[str, Any], state: str) -> dict[str, Any]:
+    """Return identity fields for one run history row.
+
+    Args:
+        record: The stored run record.
+        state: The safe run state text.
+
+    Returns:
+        The stable identity fields of one history row.
+    """
+    return {  # Keep simple fallback fields out of the row composer.
+        "run_id": str(record.get("run_id") or ""),  # Keep the stored identifier for links and test hooks.
+        "site_name": record_site_label(record),  # Show a name and fall back to the site identifier.
+        "site_id": str(record.get("site_id") or ""),  # Keep the site scope available for later controls.
+        **run_operator_fields(record),  # Show both operator labels without adding branch count here.
+        "state": state,  # Show the stored state or the safe unknown value.
+        "device_count": run_device_count(record),  # Count only a list or tuple of run targets.
+    }
+
+
+def run_history_capture_fields(record: Mapping[str, Any], state: str) -> dict[str, str]:
+    """Return capture and moment fields for one run history row.
+
+    Args:
+        record: The stored run record.
+        state: The safe run state text.
+
+    Returns:
+        The capture and moment fields of one history row.
+    """
+    return {  # Keep date formatting out of the row composer.
+        "started_text": short_moment(record.get("created_at")),  # The human UTC moment.
+        "started_raw": str(record.get("created_at") or ""),  # The stored text, for the title attribute.
+        "ended_text": short_moment(run_end_moment(record, state)),  # Empty while the run still runs.
+        "pre_capture_id": str(record.get("pre_capture_id") or ""),  # Link the capture before the run.
+        "post_capture_id": str(record.get("post_capture_id") or ""),  # Link the capture after the run.
+    }
+
+
+def run_history_stale_fields(stale: Any) -> dict[str, Any]:
+    """Return stale status fields for one run history row.
+
+    Args:
+        stale: The shared stale assessment for the run.
+
+    Returns:
+        The stale status fields of one run history row.
+    """
+    return {  # Keep stale display fields out of the row composer.
+        "updated_at": stale.updated_at,  # Give browser display updates the normalized safe time only.
+        "age_seconds": stale.age_seconds,  # Keep the exact server age beside the display text.
+        "age_text": stale.age_text,  # Show the shared short age or `unknown`.
+        "is_stale": stale.is_stale,  # Let the template show a badge without making a decision.
+        "stale_reason": stale.reason,  # Keep the stable reason available for later controls.
+    }
+
+
+def run_history_state(record: Mapping[str, Any]) -> str:
+    """Return the safe state text for one run history row.
+
+    Args:
+        record: The stored run record.
+
+    Returns:
+        The safe state text.
+    """
+    raw = str(record.get("state") or "").strip()  # Empty and blank states both mean unknown.
+    return raw if raw else UNKNOWN_RUN_STATE  # The history page must never show an empty state.
+
+
+def run_history_policy(stale_policy: RunStalePolicy | None) -> RunStalePolicy:
+    """Return the stale policy for one run history row.
+
+    Args:
+        stale_policy: The shared policy, or None.
+
+    Returns:
+        The policy to use for this row.
+    """
+    if stale_policy is not None:  # The page batch uses one clock for all rows.
+        return stale_policy  # Keep all rows comparable.
+    return RunStalePolicy(datetime.now(tz=UTC))  # A single-row caller still needs an aware UTC clock.
+
+
+def run_history_row(  # Shape one run with an optional shared policy for a page batch.
+    record: Mapping[str, Any], stale_policy: RunStalePolicy | None = None
+) -> dict[str, Any]:
+    """Shape one stored run record into the row that the history page paints.
+
+    Why:
+        Issue #2199 asks the history page to list every run beside the captures.
+        An operator who wants to find a run, or to reach the comparison of a run
+        that ended, had no page to read.
+
+        Every moment reads as a human date in UTC. The store writes the offset
+        of the machine that started the run, so a page that showed the stored
+        text would name a different hour for two runs of one afternoon.
+
+    Args:
+        record: The stored run record.
+
+    Returns:
+        The row, with the state, the counts, both moments, and both capture
+        keys.
+    """
+    logger.info("review: the portal shapes one run history row")  # Record the transformation before it starts.
+    state = run_history_state(record)  # An old record names no state.
+    policy = run_history_policy(stale_policy)  # Use one clock when the caller supplies none.
+    stale = policy.assess(record)  # Apply the shared policy before the template receives the row.
+    shaped = {  # Give the template data only, so it contains no stale rule.
+        **run_history_identity_fields(record, state),  # Keep the row composer below the complexity gate.
+        **run_history_capture_fields(record, state),  # Keep the row composer below the complexity gate.
+        **run_history_stale_fields(stale),  # Keep the row composer below the complexity gate.
+    }
+    logger.debug("review: the run history row has stale state %s", stale.is_stale)  # Report no record value.
+    return shaped  # Return the complete display row.
+
+
+def run_history_rows(site_id: str, limit: int, offset: int) -> list[dict[str, Any]]:
+    """Return one page of run rows for the history page.
+
+    Why:
+        The page reads the same store page as the run history endpoint, so the
+        two views never disagree. A store that offers no run list answers an
+        empty page, and the section then states that it holds no run.
+
+    Args:
+        site_id: The site to narrow to. An empty value reads every site.
+        limit: The largest number of rows to read.
+        offset: The number of rows to step over first.
+
+    Returns:
+        One shaped row for each run of the page.
+    """
+    logger.info("review: the portal reads the run rows of the history page")  # Record the read before it starts.
+    rows, total = read_store_page(run_lister(), RUNS_FIELD, site_id, limit, offset)  # Read one visible page.
+    logger.debug("review: the run store returned %s row(s) of %s", len(rows), total)  # Confirm the safe count.
+    logger.info("review: the portal assesses the age of the run rows")  # Record the shared time decision.
+    policy = RunStalePolicy(datetime.now(tz=UTC))  # Supply one UTC clock value to the complete page.
+    shaped = [run_history_row(row, policy) for row in rows]  # Apply that same clock to every visible run.
+    logger.debug("review: the history page holds %s assessed run row(s)", len(shaped))  # Confirm the result count.
+    return shaped  # Give the template the complete run rows.
+
+
+def moment_texts(rows: Iterable[Mapping[str, Any]]) -> dict[str, str]:
+    """Return the short moment of each history row, under the row key.
+
+    Why:
+        ``compare/render.py`` owns the columns of the table, and its row record
+        is frozen. The page therefore reads the short moment from a map beside
+        the view model, keyed by the capture identifier that each row already
+        carries. A row with no identifier reaches no entry. One empty key would
+        serve two rows, and the page would then show the moment of the wrong
+        capture.
+
+    Args:
+        rows: The history rows of this page.
+
+    Returns:
+        The capture identifier and the short moment of each row.
+    """
+    logger.info("review: the portal shapes the moment text of the history rows")  # Before the work.
+    texts = {
+        capture_id: short_moment(row.get(STARTED_AT_FIELD))  # The row key reaches the short text.
+        for row in rows
+        if (capture_id := text_field(row, CAPTURE_ID_FIELD))  # A row with no key reaches no entry.
+    }
+    logger.debug("review: the portal shaped %s moment texts", len(texts))  # After the work.
+    return texts
+
+
+def read_site_name(rows: Sequence[Mapping[str, Any]]) -> str:
+    """Return the site name that the history rows carry.
+
+    Why:
+        The note of the Captures card names the site, and the store already
+        carries the name on each row. A read here saves a second cloud call.
+
+        Issue #3482. The rows of the page with no site belong to many sites,
+        so the first name names one of them only. ``HistoryScope.for_page``
+        therefore calls this reader for the page of one site only.
+
+    Args:
+        rows: The rows of this page.
+
+    Returns:
+        The first site name found, or an empty string.
+    """
+    for row in rows:  # The rows of one site all carry the same name.
+        name = text_field(row, SITE_NAME_FIELD)  # A row with no name gives an empty text.
+        if name:  # The first stored name is the name of the site.
+            return name
+    return ""  # No row of this page carries a name.
+
+
+@dataclass(frozen=True, slots=True)
+class HistoryScope:
+    """The scope of one history page: every site, or one site.
+
+    Why:
+        Issue #3482. The page with no site read the site name of its first
+        row. For the captures of two sites, the note then said "The list shows
+        the stored captures of E2E Stand-In Site. The site holds 5 captures."
+        The scope holds the request values, and each text is a property. The
+        template prints the texts and holds no rule.
+
+        The page with no site reads every capture in the store, so the texts
+        say "every site" and "The portal holds". Issue #3484 holds the change
+        that narrows the list to the selected organization.
+
+    Attributes:
+        site_id: The site of the request, or an empty text for every site.
+        site_name: The site name that the rows carry, or an empty text.
+    """
+
+    site_id: str = ""  # An absent site means every site, as section 6 of the HTTP contract states.
+    site_name: str = ""  # The name that the rows of one site carry.
+
+    @classmethod
+    def for_page(cls, site_id: str, rows: Sequence[Mapping[str, Any]]) -> HistoryScope:
+        """Return the scope of one history page.
+
+        Why:
+            The page with no site shows the rows of many sites. The name of the
+            first row names one of them only, so the scope reads a name for the
+            page of one site only.
+
+        Args:
+            site_id: The site of the request, or an empty text for every site.
+            rows: The shaped rows of this page.
+
+        Returns:
+            The scope of the page.
+        """
+        logger.info("review: the portal reads the scope of the history page")  # Before the read.
+        site_name = read_site_name(rows) if site_id else ""  # The page with no site names no site.
+        logger.debug("review: the history scope names one site: %s", bool(site_id))  # After the read.
+        return cls(site_id=site_id, site_name=site_name)  # The request values of the page.
+
+    @property
+    def capture_lead_text(self) -> str:
+        """Return the first sentence of the note of the Captures card."""
+        if not self.site_id:  # The page lists the captures of every site.
+            return "The list shows the stored captures of every site."  # FR-001 names no single site.
+        if self.site_name:  # The rows of the site carry its name.
+            return f"The list shows the stored captures of {self.site_name}."  # FR-003 keeps the name.
+        return "The list shows the stored captures."  # A site with no capture has no name on a row.
+
+    @property
+    def capture_holder_text(self) -> str:
+        """Return the words before the count of the note, such as "The site holds"."""
+        return "The site holds" if self.site_id else "The portal holds"  # The holder of the counted captures.
+
+    @property
+    def capture_caption_text(self) -> str:
+        """Return the first sentence of the hidden caption of the capture table."""
+        if self.site_id:  # The page of one site keeps its old caption.
+            return "The stored captures of the site."  # FR-004 names the same scope as the note.
+        return "The stored captures of every site."  # A screen reader hears the scope of every site.
+
+
+@dataclass(frozen=True, slots=True)
+class HistoryCaptureColumns:
+    """The columns of the Captures table of one history page.
+
+    Why:
+        Issue #3486. The page with no site lists the captures of every site in
+        one table, and no column named the site of a row. The page of one site
+        names its site in the note, so a Site column there repeats one name in
+        each row. The class holds the request value, and each column value is a
+        property. The template prints the values and holds no rule.
+
+        The class stands apart from ``HistoryScope``. The scope settles the
+        texts of the note, and this class settles the shape of the table.
+
+    Attributes:
+        site_id: The site of the request, or an empty text for every site.
+    """
+
+    site_id: str = ""  # An absent site means every site, as section 6 of the HTTP contract states.
+
+    @property
+    def shows_site_column(self) -> bool:
+        """Return True when the table names the site of each row."""
+        return not self.site_id  # Only the page with no site mixes the captures of many sites.
+
+    @property
+    def column_count(self) -> int:
+        """Return the number of table columns, which the empty row spans."""
+        return EVERY_SITE_COLUMN_COUNT if self.shows_site_column else ONE_SITE_COLUMN_COUNT  # FR-009.
+
+    @property
+    def row_values_text(self) -> str:
+        """Return the second sentence of the hidden caption, which names the values of each row."""
+        return EVERY_SITE_ROW_VALUES_TEXT if self.shows_site_column else ONE_SITE_ROW_VALUES_TEXT  # FR-005.
+
+
+def call_builder(builder: Callable[..., Any], rows: list[dict[str, Any]], window: PageWindow) -> Any:
+    """Call the history view builder with the window when it accepts one.
+
+    Why:
+        The route owns the page window and the compare package owns the view.
+        The probe lets the two land in either order, because a call with a
+        keyword that the builder does not declare would raise ``TypeError``.
+
+    Args:
+        builder: The view builder of the compare package.
+        rows: The rows of this page.
+        window: The page window in force.
+
+    Returns:
+        The history view.
+    """
+    try:
+        parameters = signature(builder).parameters
+    except (TypeError, ValueError):  # A builtin or a stand-in that declares nothing.
+        return builder(rows)
+    if WINDOW_KEY in parameters:
+        return builder(rows, window=window)
+    return builder(rows)
+
+
+def build_history(rows: list[dict[str, Any]], window: PageWindow) -> Any:
+    """Return the view that the history template prints.
+
+    Why:
+        ``compare.render.build_history_view`` owns the columns and the stored
+        size of FR-032b. The name is read at call time. A portal whose render
+        module has not grown the builder yet still answers the page with the
+        plain rows instead of a server error.
+
+    Args:
+        rows: The rows of this page.
+        window: The page window in force.
+
+    Returns:
+        The history view, or a plain record of the rows and the window.
+    """
+    builder: Any = getattr(compare_render, HISTORY_VIEW_ATTRIBUTE, None)
+    if not callable(builder):
+        logger.warning("review: the compare render module holds no %s", HISTORY_VIEW_ATTRIBUTE)
+        return {ROWS_KEY: rows, WINDOW_KEY: window}
+    return call_builder(builder, rows, window)
+
+
+@dataclass(frozen=True, slots=True)
+class HistoryPageView(compare_render.HistoryNoteText):
+    """The history view that the page prints.
+
+    Why:
+        The compare package owns ``HistoryRow`` and ``HistoryView``, and both
+        are frozen. The route cannot add a column there, so it builds this view
+        beside the compare one and adds the device types of FR-084a. The
+        attribute names match the compare view, so the template reads one shape.
+
+        Issue #3449. The view inherits the ``HistoryNoteText`` mixin of the
+        compare package, so the note prints the same count texts as the
+        compare view. A text is a property and not a field.
+
+    Attributes:
+        rows: The rows of this page, each one with its device types.
+        total: The count of the whole history.
+        page_size: The page size in force.
+        offset: The page start in force.
+        has_next: The state of the next control.
+        has_previous: The state of the previous control.
+        next_url: The address of the next page.
+        previous_url: The address of the previous page.
+    """
+
+    rows: tuple[Mapping[str, Any], ...] = ()
+    total: int = 0
+    page_size: int = 0
+    offset: int = 0
+    has_next: bool = False
+    has_previous: bool = False
+    next_url: str = ""
+    previous_url: str = ""
+
+
+def view_field(view: Any, name: str, fallback: Any) -> Any:
+    """Return one field of the compare view, whatever shape it holds.
+
+    Why:
+        ``build_history`` answers a dataclass, and it answers a plain map when
+        the compare package holds no builder. The page must print the same
+        paging under both shapes.
+
+    Args:
+        view: The compare view.
+        name: The field to read.
+        fallback: The value for an absent field.
+
+    Returns:
+        The field, or the fallback.
+    """
+    if isinstance(view, Mapping):  # The fallback shape of `build_history` is a plain map.
+        return view.get(name, fallback)
+    return getattr(view, name, fallback)
+
+
+def view_row_mapping(row: Any) -> dict[str, Any]:
+    """Return one compare row as a map the route can add to.
+
+    Why:
+        A compare row is frozen, so the route copies it. A map row travels
+        unchanged, because the fallback shape already carries plain rows.
+
+    Args:
+        row: One row of the compare view.
+
+    Returns:
+        The row as a map.
+    """
+    if is_dataclass(row) and not isinstance(row, type):  # A frozen row cannot grow a field, so copy it.
+        return asdict(row)
+    if isinstance(row, Mapping):  # The fallback shape hands the plain store rows straight through.
+        return dict(row)
+    logger.warning("review: one history row holds no readable shape")
+    return {}
+
+
+def page_rows(view: Any, shaped: Sequence[Mapping[str, Any]]) -> tuple[Mapping[str, Any], ...]:
+    """Return the rows of the page, each one naming its device types and its site.
+
+    Why:
+        The compare view holds the printed columns and the stored rows hold the
+        ``counts`` map and the site fields. The two join on the capture
+        identifier, so a compare view that reordered its rows still meets the
+        right stored row. Issue #3486 adds the site text, because the page with
+        no site lists the captures of every site in one table.
+
+    Args:
+        view: The compare view.
+        shaped: The stored rows of this page.
+
+    Returns:
+        The rows, ready for the page.
+    """
+    logger.info("review: the portal adds the device types and the site of each history row")  # Before the join.
+    stored_by_id = {row.get(CAPTURE_ID_FIELD, ""): row for row in shaped}  # One read of the store rows.
+    built = []  # The rows that the page prints.
+    for row in view_field(view, ROWS_KEY, ()):  # The compare view fixes the printed order.
+        copied = view_row_mapping(row)  # A frozen compare row cannot grow a field, so the route copies it.
+        capture_id = str(copied.get(CAPTURE_ID_FIELD, ""))  # The join key, and the identifier of the cell.
+        stored = stored_by_id.get(capture_id, copied)  # The stored row, or the copy when no stored row matches.
+        copied[DEVICE_TYPE_FIELD] = device_type_text(stored)  # FR-084a names the device types of the capture.
+        copied[DEVICE_TYPE_TEST_ID_FIELD] = f"{DEVICE_TYPE_TEST_ID_PREFIX}{capture_id}" if capture_id else ""
+        copied[SITE_TEXT_FIELD] = record_site_label(stored)  # The Runs table names a site with the same rule.
+        copied[SITE_TEST_ID_FIELD] = f"{SITE_TEST_ID_PREFIX}{capture_id}" if capture_id else ""  # No hook if no ID.
+        built.append(copied)  # Keep the printed order of the compare view.
+    logger.debug("review: the portal shaped %s history rows with a site text", len(built))  # After the join.
+    return tuple(built)  # A tuple, so the page view stays frozen.
+
+
+def build_page_view(view: Any, shaped: Sequence[Mapping[str, Any]]) -> HistoryPageView:
+    """Return the compare view with the device types of FR-084a added.
+
+    Args:
+        view: The compare view.
+        shaped: The stored rows of this page.
+
+    Returns:
+        The view that the page prints.
+    """
+    return HistoryPageView(
+        rows=page_rows(view, shaped),  # The one field that the route adds to.
+        total=whole_number(view_field(view, TOTAL_FIELD, len(shaped))),  # A bad total reads as zero.
+        page_size=whole_number(view_field(view, "page_size", len(shaped))),
+        offset=whole_number(view_field(view, OFFSET_FIELD, DEFAULT_HISTORY_OFFSET)),
+        has_next=bool(view_field(view, "has_next", False)),  # An absent control stays closed.
+        has_previous=bool(view_field(view, "has_previous", False)),
+        next_url=str(view_field(view, "next_url", "") or ""),  # A `None` address prints as no address.
+        previous_url=str(view_field(view, "previous_url", "") or ""),
+    )
+
+
+# ---------------------------------------------------------------------------
+# The routes
+# ---------------------------------------------------------------------------
+
+
+@review_bp.get(COMPARISONS_API_PATH)
+@identity.require_session
+def compare_captures() -> tuple[Response, int]:
+    """Answer the comparison of two captures as JSON.
+
+    Why:
+        Section 6 documents no filter value for this endpoint, and
+        ``ComparisonView.to_dict`` emits the filtered rows. The endpoint
+        therefore builds the view with the default ``all``, so the body always
+        holds every difference.
+
+    Returns:
+        The comparison body, or the refusal.
+    """
+    pair = read_pair(request.args.get(BEFORE_FIELD, ""), request.args.get(AFTER_FIELD, ""))
+    both = pair.both()
+    if both is None:
+        return json_error(pair.status, pair.code, pair.message)
+    parts = build_parts(*both)
+    view = compare_render.build_view(both, parts.devices, parts.clients, parts.statistics)
+    return jsonify(view.to_dict()), OK_STATUS
+
+
+@review_bp.get(COMPARISONS_EXPORT_API_PATH)
+@identity.require_session
+def download_comparison() -> tuple[Response, int]:
+    """Answer the comparison of two captures as a file attachment.
+
+    Why:
+        The download module owns the format rule and the column list. The
+        route reads the two captures, asks for the file, and passes the refusal
+        straight on.
+
+    Returns:
+        The file answer, or the refusal.
+    """
+    pair = read_pair(request.args.get(BEFORE_FIELD, ""), request.args.get(AFTER_FIELD, ""))
+    both = pair.both()
+    if both is None:
+        return json_error(pair.status, pair.code, pair.message)
+    parts = build_parts(*both)
+    wanted = request.args.get(FORMAT_FIELD, "")
+    scope = request.args.get(SCOPE_FIELD, compare_download.SCOPE_DIFFERENCES)
+    context = build_export_context(parts)
+    result = compare_download.export_comparison(parts.devices, parts.clients, wanted, scope, context)
+    if not result.ok:
+        return json_error(BAD_REQUEST_STATUS, result.error, _EXPORT_MESSAGES.get(result.error, BAD_FORMAT_MESSAGE))
+    return build_attachment(result)
+
+
+@review_bp.get(COMPARE_PAGE_PATH)
+@identity.require_session
+def compare_page() -> str:
+    """Render the human view of one comparison.
+
+    Why:
+        The page takes the same two query values as the endpoint. A request
+        that names neither capture reaches the picker instead of a refusal,
+        because the operator has not asked for anything yet.
+
+    Returns:
+        The rendered page.
+    """
+    before_id = request.args.get(BEFORE_FIELD, "").strip()
+    after_id = request.args.get(AFTER_FIELD, "").strip()
+    if not before_id or not after_id:
+        return render_picker(before_id, after_id)
+    pair = read_pair(before_id, after_id)
+    both = pair.both()
+    if both is None:
+        return render_picker(before_id, after_id, pair.message)
+    return render_comparison(build_parts(*both))
+
+
+@review_bp.get(HISTORY_API_PATH)
+@identity.require_session
+def capture_history(site_id: str) -> tuple[Response, int]:  # Keep the existing lock-free capture history endpoint.
+    """Return capture rows and a scoped total for the selected organization and requested site."""
+    logger.info("review: authorize the capture history request")  # Refuse before resolving any source.
+    chosen = (select.resolve_org(None) or "").strip()  # Read only the signed selection, never query scope.
+    refusal = select.org_refusal(chosen)  # Preserve the existing missing-selection and privilege decisions.
+    logger.debug("review: the capture request scope is permitted: %s", refusal is None)  # Safe decision.
+    if refusal is not None:  # An empty or unavailable store cannot authorize a request.
+        return refusal  # Keep the authoritative status, code, message, and envelope.
+    logger.info("review: read the selected organization capture history")  # Record the authorized source action.
+    limit, offset = read_window_values()  # Preserve the existing page defaults and clamps.
+    rows, total = read_store_page(capture_lister(), CAPTURES_FIELD, site_id, limit, offset)  # Keep seam call shapes.
+    logger.debug("review: the capture history returned %s rows of %s", len(rows), total)  # Safe scoped counts.
+    logger.info("review: shape the scoped capture history response")  # Record the response transformation.
+    response = jsonify({CAPTURES_FIELD: [history_row(row) for row in rows], TOTAL_FIELD: total})  # Existing wire shape.
+    logger.debug("review: the capture response contains %s rows", len(rows))  # Report no stored row content.
+    return response, OK_STATUS  # Empty authorized intersections retain the existing successful response.
+
+
+@review_bp.get(RUN_HISTORY_API_PATH)
+@identity.require_session
+def run_history(site_id: str) -> tuple[Response, int]:  # Keep the existing lock-free single-site run endpoint.
+    """Return run rows and a scoped total for the selected organization and requested site."""
+    logger.info("review: authorize the run history request")  # Refuse before resolving any source.
+    chosen = (select.resolve_org(None) or "").strip()  # Read the signed selection rather than caller-supplied scope.
+    refusal = select.org_refusal(chosen)  # Preserve the unchanged identity policy and refusal authority.
+    logger.debug("review: the run request scope is permitted: %s", refusal is None)  # Report a safe decision.
+    if refusal is not None:  # Known empty privileges and invalid selections must cause no source read.
+        return refusal  # Preserve the authoritative refusal envelope.
+    logger.info("review: read the selected organization run history")  # Record the authorized source action.
+    limit, offset = read_window_values()  # Preserve existing defaults, clamps, and nonnumeric behavior.
+    rows, total = read_store_page(run_lister(), RUNS_FIELD, site_id, limit, offset)  # Keep existing seam signatures.
+    logger.debug("review: the run history returned %s rows of %s", len(rows), total)  # Report only scoped counts.
+    logger.info("review: shape the scoped run history response")  # Record the response transformation.
+    response = jsonify({RUNS_FIELD: rows, TOTAL_FIELD: total})  # Preserve the existing run projection and envelope.
+    logger.debug("review: the run response contains %s rows", len(rows))  # Report no stored address or record.
+    return response, OK_STATUS  # Foreign and unknown sites retain successful empty intersections.
+
+
+def audit_history_rows(org_id: str, site_id: str = "") -> list[dict[str, Any]]:  # Receive validated route scope.
+    """Read scoped audit rows and preserve their existing UTC moment display."""
+    logger.info("review: resolve the scoped lock audit reader")  # Record optional source resolution.
+    module = load_optional_module(AUDIT_MODULE)  # The reader may not be built yet.
+    reader = find_attribute(module, AUDIT_READER_ATTRIBUTES)  # Preserve the existing late-loaded audit interface.
+    logger.debug("review: the lock audit reader is available: %s", reader is not None)  # Report no source data.
+    if reader is None:  # A missing reader draws an empty section, never a fault page.
+        return []  # No unavailable-source fallback may widen organization scope.
+    logger.info("review: read the selected organization lock audit")  # Record the scoped source action.
+    rows: Any = reader(org_id=org_id, site_id=site_id)  # Keep the audit default limit independent from capture pages.
+    logger.debug("review: the scoped audit reader returned %s rows", len(rows))  # Report only a safe count.
+    logger.info("review: shape the scoped audit moments")  # Record the display transformation.
+    shaped = [dict(row, moment_text=short_moment(row.get("occurred_at"))) for row in rows]  # Keep existing row fields.
+    logger.debug("review: the audit log holds %s rows", len(shaped))  # Never log stored audit addresses or digests.
+    return shaped  # Actual and inferred rows keep the existing digest-only public representation.
+
+
+def operation_history_section(org_id: str, site_id: str, limit: int) -> OperationHistorySection:  # One validated scope.
+    """Read the scoped operation section while keeping owner keys on the server."""
+    logger.info("review: resolve the operation history owner")  # Record the server-side ownership decision.
+    record = identity.current_session()  # The server-side session holds the owner key.
+    owner_key = record.owner.key if record is not None else ""  # An empty key owns no operation.
+    logger.debug("review: the operation history has an active owner: %s", record is not None)  # Report no owner key.
+    logger.info("review: build the selected organization operation history")  # Record source read and shaping.
+    history = OrgOperationHistory(owner_key, short_moment)  # One short moment rule for every section.
+    section = history.section(operation_lister(), org_id, site_id, limit)  # Use the route's validated scope directly.
+    logger.debug("review: the scoped operation section holds %s rows", len(section.rows))  # Report a safe count.
+    return section  # Preserve visibility and owner-only progress links for matching operations.
+
+
+@review_bp.get(HISTORY_PAGE_PATH)
+@identity.require_session
+def history_page() -> str | tuple[Response, int]:  # An invalid selection returns the authoritative refusal.
+    """Render the human view of the capture history.
+
+    Why:
+        Section 6 of ``contracts/http-api.md`` asks for the same list as the
+        endpoint, for one site or for the whole organization. The site travels
+        as a query value rather than in the path, because one page serves both
+        views and an absent site means every site.
+
+    Returns:
+        The rendered page.
+    """
+    logger.info("review: authorize the history page request")  # Guard all four sources before any reader resolves.
+    chosen = (select.resolve_org(None) or "").strip()  # Never guess scope or accept a query organization override.
+    refusal = select.org_refusal(chosen)  # Reuse the current signed-selection and privilege authorities.
+    logger.debug("review: the history page scope is permitted: %s", refusal is None)  # Report a safe decision.
+    if refusal is not None:  # Invalid selections must not read even empty or unavailable history sources.
+        return refusal  # Preserve the existing status, code, message, and JSON envelope.
+    logger.info("review: read the selected organization capture page")  # Record the authorized source action.
+    site_id = request.args.get(SITE_ID_FIELD, "").strip()  # A site narrows the selected organization only.
+    limit, offset = read_window_values()  # Preserve the existing capture and run window rules.
+    rows, total = read_store_page(capture_lister(), CAPTURES_FIELD, site_id, limit, offset)  # Keep seam call shapes.
+    logger.debug("review: the scoped capture page returned %s rows of %s", len(rows), total)  # Safe source counts.
+    logger.info("review: shape the selected organization history page")  # Record the display transformation.
+    shaped = [history_row(row) for row in rows]  # Preserve device types, counts, and compatibility fields.
+    page_view = build_page_view(  # Preserve already scoped counts and page links.
+        build_history(shaped, build_window(site_id, limit, offset, total)), shaped
+    )  # Scoped pages.
+    scope = HistoryScope.for_page(site_id, shaped)
+    logger.debug("review: the history page holds %s rows of %s", len(page_view.rows), page_view.total)  # Safe counts.
+    logger.info("review: render the selected organization history cards")  # Record scoped reads and rendering.
+    page = render_page(  # Render all four cards within the same validated organization.
+        HISTORY_TEMPLATE,  # Preserve the existing four-card presentation.
+        page_title=HISTORY_PAGE_TITLE,  # Keep unrelated history text unchanged.
+        signed_in=True,  # The existing identity guard remains the first request boundary.
+        # Issue #3482. The scope names every site when the request names no site.
+        history_scope=scope,  # Preserve legitimate requested-site context.
+        history_cards=HistoryCardScope(site_id=scope.site_id, site_name=scope.site_name),
+        # Issue #3486. The Captures table of every site names the site of each row.
+        history_columns=HistoryCaptureColumns(site_id=site_id),  # Keep site columns and device-type cells unchanged.
+        history_view=page_view,  # Totals and page links come from already scoped source queries.
+        moment_texts=moment_texts(shaped),  # Preserve the existing UTC moment shaper.
+        # Issue #2199 adds the runs section beside the captures section.
+        run_rows=run_history_rows(site_id, limit, offset),  # The real run adapter independently enforces signed scope.
+        run_control_org_id=chosen,  # Bulk controls must use the same normalized validated organization.
+        run_control_history_scope=f"site:{site_id}" if site_id else "all-sites",  # Keep existing control scope.
+        # Issue #3248 adds the multi-site operations of the selected organization.
+        operation_section=operation_history_section(chosen, site_id, limit),  # Pass one validated operation scope.
+        # Issue #2221 adds the audit log of every site lock action.
+        # Issue #2596 narrows that log to the site that this page names.
+        audit_rows=audit_history_rows(chosen, site_id),  # Match organization and optional site before audit inference.
+    )
+    logger.debug("review: rendered one scoped history page with %s capture rows", len(shaped))  # Safe result summary.
+    return page  # History remains read-only and independent from locks and typed confirmations.

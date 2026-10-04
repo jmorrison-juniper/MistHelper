@@ -1,4 +1,4 @@
-"""Unit tests for the upgrade seam at ``src/firmware/upgrade_service.py``.
+"""Unit tests for the upgrade seam at ``src/operations/execution/firmware/upgrade_service.py``.
 
 Why:
     The seam decides which cloud call runs, and a wrong decision starts the
@@ -16,7 +16,7 @@ from typing import Any
 
 import pytest
 
-from src.firmware import upgrade_service
+from src.operations.execution.firmware import upgrade_service
 
 MAC_SWITCH = "5c5b350e0001"
 MAC_GATEWAY = "5c5b350e0002"

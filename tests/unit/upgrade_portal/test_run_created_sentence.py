@@ -26,7 +26,7 @@ from typing import Any  # A stored run record is a free-form mapping.
 
 import pytest  # The test framework of the project.
 
-from src.upgrade_portal.runtime.runs import RunState, RunStatusView  # The unit under test.
+from src.interfaces.portals.upgrade_portal.runtime.runs import RunState, RunStatusView  # The unit under test.
 
 # WHY: The capture of the issue report. Any non-empty text proves the same rule.
 PRE_CAPTURE_ID = "cap-0eb57df4b3e445e6b179efc6953a271d-01"

@@ -4,7 +4,7 @@
 
 The handler class is `ClientSessionControl`.
 The entry point is static `run()`.
-The implementation package is `src/device/client_session_control/`.
+The implementation package is `src/mist/resources/device/client_session_control/`.
 
 Recommended callable shape:
 

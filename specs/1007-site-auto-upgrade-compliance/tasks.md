@@ -86,11 +86,11 @@ Task ordering follows the phase plan. Each task is atomic and gate-testable.
 
 ## Phase 7 — Local gates
 
-- [ ] T7.1 — `python -m py_compile src/firmware/site_auto_upgrade.py`.
-- [ ] T7.2 — `ruff check src/firmware/site_auto_upgrade.py`.
-- [ ] T7.3 — `black --check src/firmware/site_auto_upgrade.py`.
-- [ ] T7.4 — `mypy --strict src/firmware/site_auto_upgrade.py`.
-- [ ] T7.5 — `python -m tools.compliance_analyzer --paths src/firmware/site_auto_upgrade.py`
+- [ ] T7.1 — `python -m py_compile src/operations/execution/firmware/site_auto_upgrade.py`.
+- [ ] T7.2 — `ruff check src/operations/execution/firmware/site_auto_upgrade.py`.
+- [ ] T7.3 — `black --check src/operations/execution/firmware/site_auto_upgrade.py`.
+- [ ] T7.4 — `mypy --strict src/operations/execution/firmware/site_auto_upgrade.py`.
+- [ ] T7.5 — `python -m tools.compliance_analyzer --paths src/operations/execution/firmware/site_auto_upgrade.py`
   → must report **100.0 / A+** with **zero violations**.
 - [ ] T7.6 — `pytest tests/unit/test_site_auto_upgrade.py -x`.
 

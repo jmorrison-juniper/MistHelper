@@ -29,14 +29,14 @@
   ],
   "dynamic_calls": [
     {
-      "function": "src.export.const_definitions_exporter:ConstDefinitionsExporter._discover_endpoints",
+      "function": "src.operations.exporting.export.const_definitions_exporter:ConstDefinitionsExporter._discover_endpoints",
       "reason": "The exporter walks the mistapi const package with pkgutil and calls each function that it finds.",
       "sdk_prefix": "api.v1.const."
     },
     {
-      "function": "src.upgrade_portal.app.factory:register_one_blueprint",
+      "function": "src.interfaces.portals.upgrade_portal.app.factory:register_one_blueprint",
       "reason": "The factory imports each route module by name, so static analysis cannot follow the import.",
-      "route_handlers_under": "src.upgrade_portal."
+      "route_handlers_under": "src.interfaces.portals.upgrade_portal."
     }
   ],
   "no_endpoint_reasons": {

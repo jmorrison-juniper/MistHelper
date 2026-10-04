@@ -9,7 +9,7 @@ Repository wiring is deferred to the integration pull request.
 ## Owned Paths
 
 - `specs/3566-client-coa-disconnect/**`
-- `src/device/client_session_control/**`
+- `src/mist/resources/device/client_session_control/**`
 - `tests/unit/device/client_session_control/**`
 - `changelog.d/issue-3566-client-coa-disconnect.md`
 
@@ -23,8 +23,8 @@ The primary-key strategy item is expected to be recorded as not applicable unles
 Deferred files named by the contract:
 
 - `MistHelper.py`
-- `src/utils/operation_registry.py`
-- `src/refactors/endpoint_primary_key_strategies.py`
+- `src/foundation/support/utils/operation_registry.py`
+- `src/foundation/support/refactors/endpoint_primary_key_strategies.py`
 - `README.md`
 - `.github/copilot-instructions.md`
 - `agents.md`
@@ -52,9 +52,9 @@ Integration pull request responsibilities:
 - Category: `destructive`
 - Destructive flag: `true`
 - Supports fast: `false`
-- Handler import: `from src.device.client_session_control.handler import ClientSessionControl`
+- Handler import: `from src.mist.resources.device.client_session_control.handler import ClientSessionControl`
 - Handler attribute: `ClientSessionControl.run`
-- Handler package: `src/device/client_session_control/`
+- Handler package: `src/mist/resources/device/client_session_control/`
 - Handler class: `ClientSessionControl`
 - Entry point: static `run()`
 - Skip reason: Destructive client session control requires typed target confirmation and must not run in automated safe or fast tests.
@@ -63,7 +63,7 @@ Integration pull request responsibilities:
 
 | menu | title | handler import | handler attribute | category | skip_reason | destructive | supports_fast |
 | - | - | - | - | - | - | - | - |
-| 286 | Client CoA, reauthentication, and disconnect | `src.device.client_session_control.handler` | `ClientSessionControl.run` | destructive | Destructive client session control requires typed target confirmation and must not run in automated safe or fast tests. | True | False |
+| 286 | Client CoA, reauthentication, and disconnect | `src.mist.resources.device.client_session_control.handler` | `ClientSessionControl.run` | destructive | Destructive client session control requires typed target confirmation and must not run in automated safe or fast tests. | True | False |
 
 ## OperationRegistry comment
 
@@ -94,7 +94,7 @@ The menu list adds `286` to the existing destructive set.
 ## Import line for MistHelper.py
 
 ```python
-from src.device.client_session_control.handler import ClientSessionControl  # Menu 286 (issue #3566) -- destructive client session control handler.
+from src.mist.resources.device.client_session_control.handler import ClientSessionControl  # Menu 286 (issue #3566) -- destructive client session control handler.
 ```
 
 ## Dry Run Wiring Contract
@@ -165,10 +165,10 @@ The implementation verified these organization operation IDs before code used cl
 
 ## Existing Helper Review Contract
 
-Implementation read `src/device/prompt_utils.py` before coding.
+Implementation read `src/mist/resources/device/prompt_utils.py` before coding.
 That file contains `_normalize_mac()` and device lookup patterns that compare normalized MAC values.
 The feature normalizer adds dotted input support because the existing helper does not remove dots.
-Implementation searched `src/device/` for any newer client lookup helper before coding.
+Implementation searched `src/mist/resources/device/` for any newer client lookup helper before coding.
 
 ## Logging Contract
 

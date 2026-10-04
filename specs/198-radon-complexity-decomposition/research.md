@@ -30,7 +30,7 @@ All NEEDS CLARIFICATION items from Technical Context were resolved during spec a
 
 ## Decision 3 — `EnhancedSSHRunner._execute_with_shell` (CC=51) and `run_application` (CC=64): Extract Class per cohesive responsibility
 
-- **Decision**: Extract `ShellSession` (owns the interactive shell channel lifecycle), `ApplicationRunner` (orchestrates application-style menu execution), `InteractiveOrchestrator` / `BatchOrchestrator` (multi-host execution modes). Each new class lives in a new submodule directory under `src/ssh/`.
+- **Decision**: Extract `ShellSession` (owns the interactive shell channel lifecycle), `ApplicationRunner` (orchestrates application-style menu execution), `InteractiveOrchestrator` / `BatchOrchestrator` (multi-host execution modes). Each new class lives in a new submodule directory under `src/operations/execution/ssh/`.
 - **Rationale**: `EnhancedSSHRunner` is the largest single class in the codebase (CC=12 at the class level, 13+ methods over CC=10). Method-extraction alone leaves the class itself over the 5-Item Rule. Submodule extraction grouped by responsibility (shell session vs. multi-host orchestration vs. config loading) keeps each new file ≤ 5 children and matches how operators reason about SSH operations.
 - **Alternatives considered**:
   - *Inheritance hierarchy (`InteractiveSSHRunner(EnhancedSSHRunner)`, etc.)*: rejected — changes public surface (`isinstance` checks in callers), violates FR-006.
@@ -50,11 +50,11 @@ All NEEDS CLARIFICATION items from Technical Context were resolved during spec a
 
 ## Decision 5 — Façade preservation: keep original class file as a thin delegator
 
-- **Decision**: After extracting submodules, the original file (e.g., `src/ui/tui.py`) keeps `class MistHelperTUI` with all its public methods. Each public method body shrinks to: (a) one-line construction or lookup of the collaborator, (b) one-line delegation call, (c) one-line return. Inline comments and a `logging.info` / `logging.debug` bookend pair go on each delegation.
+- **Decision**: After extracting submodules, the original file (e.g., `src/interfaces/visualization/ui/tui.py`) keeps `class MistHelperTUI` with all its public methods. Each public method body shrinks to: (a) one-line construction or lookup of the collaborator, (b) one-line delegation call, (c) one-line return. Inline comments and a `logging.info` / `logging.debug` bookend pair go on each delegation.
 - **Rationale**: FR-006 requires public surface preservation. The façade pattern achieves this with zero risk of breaking external callers (`MistHelper.py`, `tests/`, `web_portal/`, `wsgi.py`) while keeping the per-method CC at 1–2.
 - **Alternatives considered**:
   - *Import-time aliasing (e.g., `MistHelperTUI = NewTuiFacade`)*: rejected — opaque, breaks IDE navigation.
-  - *Move the original class entirely and re-export*: rejected — changes the qualified name (`src.ui.tui.MistHelperTUI` -> `src.ui.tui.tui_facade.MistHelperTUI`), which `isinstance` checks and pickle would notice.
+  - *Move the original class entirely and re-export*: rejected — changes the qualified name (`src.interfaces.visualization.ui.tui.MistHelperTUI` -> `src.interfaces.visualization.ui.tui.tui_facade.MistHelperTUI`), which `isinstance` checks and pickle would notice.
 
 ---
 

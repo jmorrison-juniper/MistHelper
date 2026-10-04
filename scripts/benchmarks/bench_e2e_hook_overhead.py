@@ -26,8 +26,8 @@ logger = logging.getLogger(__name__)  # Use a module logger so tests can identif
 
 REPO_ROOT = Path(__file__).resolve().parents[2]  # Locate the repository root from scripts/benchmarks.
 sys.path.insert(0, str(REPO_ROOT))  # Make src importable when the script runs by file path.
-clients = importlib.import_module("src.upgrade_portal.compare.clients")  # Import the measured path.
-performance = importlib.import_module("src.utils.performance")  # Import the recorder package.
+clients = importlib.import_module("src.interfaces.portals.upgrade_portal.compare.clients")  # Import the measured path.
+performance = importlib.import_module("src.foundation.support.utils.performance")  # Import the recorder package.
 Recorder = performance.Recorder  # Store the recorder class for level changes.
 RecorderSettings = performance.RecorderSettings  # Store the settings class for level changes.
 

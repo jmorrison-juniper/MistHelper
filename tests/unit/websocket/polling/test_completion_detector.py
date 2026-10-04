@@ -1,6 +1,6 @@
 """Unit tests for the WebSocket CompletionDetector.
 
-Covers src/websocket/polling/completion_detector.py: the six-strategy priority
+Covers src/mist/realtime/websocket/polling/completion_detector.py: the six-strategy priority
 chain (generic → ping-stats → service-ping → count-based → MAC-table →
 ARP-structure), plus every trace/log helper gated by ``debug_mode`` and the
 periodic ``check_count`` modulos. The detector is the sole authority that
@@ -19,8 +19,8 @@ from unittest.mock import patch
 
 import pytest
 
-from src.websocket.polling import completion_detector as cd_mod
-from src.websocket.polling.completion_detector import CompletionDetector
+from src.mist.realtime.websocket.polling import completion_detector as cd_mod
+from src.mist.realtime.websocket.polling.completion_detector import CompletionDetector
 
 _LOGGER_NAME = "test.completion_detector"  # WHY: Pin caplog to the injected detector logger name.
 

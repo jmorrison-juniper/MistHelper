@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from src.upgrade_portal.upgrade import events
+from src.interfaces.portals.upgrade_portal.upgrade import events
 from tests.support.rehearsal import (
     TYPE_ACCESS_POINT,
     TYPE_GATEWAY,

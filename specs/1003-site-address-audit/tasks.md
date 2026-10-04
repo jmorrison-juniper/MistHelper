@@ -9,7 +9,7 @@ description: "Task list for Site Address Audit from CSV"
 **Branch**: `1003-site-address-audit`
 
 > **STATUS — IMPLEMENTED.** All P1-P4 tasks (T004-T033) are implemented and verified:
-> 11 modules under `src/site/address_audit/`, 8 unit-test files (58 tests passing),
+> 11 modules under `src/mist/resources/site/address_audit/`, 8 unit-test files (58 tests passing),
 > `MistHelper.py` menu registered at key **195** (keys 0-194 were fully saturated)
 > plus the `--ui-geocode` flag. Gates clean: `py_compile` + `ruff` + `black`.
 > End-to-end pipeline verified against mocked mistapi/Nominatim. The setup tasks
@@ -43,7 +43,7 @@ description: "Task list for Site Address Audit from CSV"
 
 **Purpose**: Subpackage skeleton and test scaffolding.
 
-- [X] T001 Create subpackage `src/site/address_audit/__init__.py` exporting `MistUIGeocoder`, `ResolverResult`, `UIGeocoderConfig` — DONE (commit 3ef899f; will be extended in Phase 2 to also export `AddressAuditEngine` for menu registration).
+- [X] T001 Create subpackage `src/mist/resources/site/address_audit/__init__.py` exporting `MistUIGeocoder`, `ResolverResult`, `UIGeocoderConfig` — DONE (commit 3ef899f; will be extended in Phase 2 to also export `AddressAuditEngine` for menu registration).
 - [X] T002 [P] Create test packages `tests/unit/site/__init__.py` and `tests/unit/site/address_audit/__init__.py` — DONE (commit 3ef899f).
 
 **Checkpoint**: Package and test directories exist; gates green.
@@ -56,9 +56,9 @@ description: "Task list for Site Address Audit from CSV"
 
 **⚠️ CRITICAL**: Blocks all user stories.
 
-- [X] T003 [P] Add `ResolverResult` and `UIGeocoderConfig` dataclasses in `src/site/address_audit/models.py` per data-model.md — DONE (commit 3ef899f).
-- [ ] T004 Add remaining dataclasses to `src/site/address_audit/models.py`: `AddressRow`, `MatchedSite`, `AuditResult`, `AuditCounters`, and the `ResolveCandidates` config dataclass (fields/types exactly per data-model.md and class-contracts.md `models.py` section). No behavior beyond trivial defaults; type hints required. (Extends the file alongside the two existing dataclasses from T003.)
-- [ ] T005 [P] Add `ambiguous: bool` field to existing `ResolverResult` in `src/site/address_audit/models.py` if not already present, per data-model.md (drives `AMBIGUOUS` classification). Verify against the committed dataclass first; skip if already implemented.
+- [X] T003 [P] Add `ResolverResult` and `UIGeocoderConfig` dataclasses in `src/mist/resources/site/address_audit/models.py` per data-model.md — DONE (commit 3ef899f).
+- [ ] T004 Add remaining dataclasses to `src/mist/resources/site/address_audit/models.py`: `AddressRow`, `MatchedSite`, `AuditResult`, `AuditCounters`, and the `ResolveCandidates` config dataclass (fields/types exactly per data-model.md and class-contracts.md `models.py` section). No behavior beyond trivial defaults; type hints required. (Extends the file alongside the two existing dataclasses from T003.)
+- [ ] T005 [P] Add `ambiguous: bool` field to existing `ResolverResult` in `src/mist/resources/site/address_audit/models.py` if not already present, per data-model.md (drives `AMBIGUOUS` classification). Verify against the committed dataclass first; skip if already implemented.
 
 **Checkpoint**: All entities defined; `py_compile`/`ruff`/`black` clean on `models.py`. User stories can now proceed.
 
@@ -80,15 +80,15 @@ description: "Task list for Site Address Audit from CSV"
 
 ### Implementation for User Story 1
 
-- [ ] T011 [P] [US1] Implement `CSVAddressIngester` in `src/site/address_audit/csv_ingester.py`: `load(path)` opens tab-delimited UTF-8 (no header), yields one `AddressRow` per valid row, returns `(rows, parse_failure_count)`; skip+count empty/non-numeric col-0 serials; file-not-found -> controlled logged exception. `sanitize_address(raw)`: strip, replace `\n`/`\r\n`/`\r` with single space, collapse repeats. Multi-file picker in `data/` via `safe_input` (indexed prompt; single file auto-selected). Per class-contracts.md.
-- [ ] T012 [P] [US1] Implement `SNMPLocationEnricher` in `src/site/address_audit/snmp_enricher.py`: `enrich(site_id)` reads `site["vars"]["snmp_location"]` and `snmp_config.location`; prefer `snmp_config.location`; one present -> return it; neither -> `None`; never raises on absence; `info` before / `debug` after (which source won). Per class-contracts.md.
-- [ ] T013 [US1] Implement `SiteMatchingEngine.match_serial` in `src/site/address_audit/site_matcher.py`: serial -> Mist device inventory (via `mistapi`) -> `device.site_id` -> site; hit -> `MatchedSite(match_strategy="serial", confidence=1.0)`; device found but `site_id` null -> `unmatched` (reason "device unassigned"); 429/rate-limit back-off, retry up to 3, WARNING per retry. (Fuzzy fallback deferred to US3 T024.)
-- [ ] T014 [US1] Implement `AddressResolver` Tier 1 + Tier 2 in `src/site/address_audit/address_resolver.py`: `resolve(candidates: ResolveCandidates)` order = `_compare_internal` (Tier 1, zero network) -> `_validate_nominatim` (Tier 2) reusing `NominatimValidator.validate` from `src/utils/address_utils.py` (enforce <=1 req/sec via guarded `time.sleep`, reuse its User-Agent); `_build_query_key` (lowercase + collapse ws). Any exception -> log + `ResolverResult(canonical_address=None)` (FR-013, never abort). Selective Tier 3 delegation guarded so `MistUIGeocoder` is invoked ONLY when `candidates.ui_geocode is True`. (Cache methods deferred to US4 T031; SQLite read/write is a no-op pass-through in this story.)
-- [ ] T015 [US1] Implement `ComparisonTableRenderer` in `src/site/address_audit/comparison_display.py`: `render(results)` builds 7-column prettytable (Site Name, Current Mist Address, CSV Address, SNMP Location, Suggested Address, Source, Issue Type) with `max_width=40` on SNMP Location + Suggested Address; returns string (also printed). `prompt_post_table(results)` prints one-line summary then loops `safe_input` offering `[1]`/`[q]` (Save-CSV wiring lands in US2 T020). Per class-contracts.md.
-- [ ] T016 [US1] Implement `AddressAuditEngine` orchestrator in `src/site/address_audit/audit_engine.py`: `run(apisession, org_id)` menu entry point; split into `_load_csv` / `_match_sites` / `_enrich_and_resolve` / `_classify_and_render` (each <=25 lines, 5-Item Rule); `tqdm` progress around resolve loop (suppressed when stdout non-interactive); zero Mist writes. `apply_corrections(*args, **kwargs)` present but raises `NotImplementedError`, NOT menu-registered.
-- [ ] T017 [US1] Implement 8-state classifier in `src/site/address_audit/audit_engine.py`: `_classify(mist_addr, csv_addr, snmp_loc, resolver_result)` returns exactly one of `ADDRESS_MATCH`, `MISSING_SUITE`, `WRONG_STREET`, `CSV_BETTER`, `MIST_BETTER`, `AMBIGUOUS`, `NO_RESULT`, `UNMATCHED`; delegate to `_addresses_agree(a, b)` and `_has_suite_discrepancy(base, candidate)` helpers to honor the 25-line limit. 100% row accountability (SC-002).
-- [ ] T018 [US1] Extend `src/site/address_audit/__init__.py` to also export `AddressAuditEngine` (additive to the T001 exports) for menu registration.
-- [ ] T019 [US1] Register the feature in `MistHelper.py` with EXACTLY TWO additive lines: (1) `import AddressAuditEngine` near other `src.site.*` imports; (2) one menu dict entry in the safe-export range 1-59 bound to `AddressAuditEngine.run`. Implementer MUST first scan the safe-export menu dict for a genuinely free integer key (keys 0-194 densely used) and rely on the startup collision check (PLAN-001). Label: "Audit site addresses from CSV -- compare Mist vs. customer data vs. web". No existing logic modified.
+- [ ] T011 [P] [US1] Implement `CSVAddressIngester` in `src/mist/resources/site/address_audit/csv_ingester.py`: `load(path)` opens tab-delimited UTF-8 (no header), yields one `AddressRow` per valid row, returns `(rows, parse_failure_count)`; skip+count empty/non-numeric col-0 serials; file-not-found -> controlled logged exception. `sanitize_address(raw)`: strip, replace `\n`/`\r\n`/`\r` with single space, collapse repeats. Multi-file picker in `data/` via `safe_input` (indexed prompt; single file auto-selected). Per class-contracts.md.
+- [ ] T012 [P] [US1] Implement `SNMPLocationEnricher` in `src/mist/resources/site/address_audit/snmp_enricher.py`: `enrich(site_id)` reads `site["vars"]["snmp_location"]` and `snmp_config.location`; prefer `snmp_config.location`; one present -> return it; neither -> `None`; never raises on absence; `info` before / `debug` after (which source won). Per class-contracts.md.
+- [ ] T013 [US1] Implement `SiteMatchingEngine.match_serial` in `src/mist/resources/site/address_audit/site_matcher.py`: serial -> Mist device inventory (via `mistapi`) -> `device.site_id` -> site; hit -> `MatchedSite(match_strategy="serial", confidence=1.0)`; device found but `site_id` null -> `unmatched` (reason "device unassigned"); 429/rate-limit back-off, retry up to 3, WARNING per retry. (Fuzzy fallback deferred to US3 T024.)
+- [ ] T014 [US1] Implement `AddressResolver` Tier 1 + Tier 2 in `src/mist/resources/site/address_audit/address_resolver.py`: `resolve(candidates: ResolveCandidates)` order = `_compare_internal` (Tier 1, zero network) -> `_validate_nominatim` (Tier 2) reusing `NominatimValidator.validate` from `src/foundation/support/utils/address_utils.py` (enforce <=1 req/sec via guarded `time.sleep`, reuse its User-Agent); `_build_query_key` (lowercase + collapse ws). Any exception -> log + `ResolverResult(canonical_address=None)` (FR-013, never abort). Selective Tier 3 delegation guarded so `MistUIGeocoder` is invoked ONLY when `candidates.ui_geocode is True`. (Cache methods deferred to US4 T031; SQLite read/write is a no-op pass-through in this story.)
+- [ ] T015 [US1] Implement `ComparisonTableRenderer` in `src/mist/resources/site/address_audit/comparison_display.py`: `render(results)` builds 7-column prettytable (Site Name, Current Mist Address, CSV Address, SNMP Location, Suggested Address, Source, Issue Type) with `max_width=40` on SNMP Location + Suggested Address; returns string (also printed). `prompt_post_table(results)` prints one-line summary then loops `safe_input` offering `[1]`/`[q]` (Save-CSV wiring lands in US2 T020). Per class-contracts.md.
+- [ ] T016 [US1] Implement `AddressAuditEngine` orchestrator in `src/mist/resources/site/address_audit/audit_engine.py`: `run(apisession, org_id)` menu entry point; split into `_load_csv` / `_match_sites` / `_enrich_and_resolve` / `_classify_and_render` (each <=25 lines, 5-Item Rule); `tqdm` progress around resolve loop (suppressed when stdout non-interactive); zero Mist writes. `apply_corrections(*args, **kwargs)` present but raises `NotImplementedError`, NOT menu-registered.
+- [ ] T017 [US1] Implement 8-state classifier in `src/mist/resources/site/address_audit/audit_engine.py`: `_classify(mist_addr, csv_addr, snmp_loc, resolver_result)` returns exactly one of `ADDRESS_MATCH`, `MISSING_SUITE`, `WRONG_STREET`, `CSV_BETTER`, `MIST_BETTER`, `AMBIGUOUS`, `NO_RESULT`, `UNMATCHED`; delegate to `_addresses_agree(a, b)` and `_has_suite_discrepancy(base, candidate)` helpers to honor the 25-line limit. 100% row accountability (SC-002).
+- [ ] T018 [US1] Extend `src/mist/resources/site/address_audit/__init__.py` to also export `AddressAuditEngine` (additive to the T001 exports) for menu registration.
+- [ ] T019 [US1] Register the feature in `MistHelper.py` with EXACTLY TWO additive lines: (1) `import AddressAuditEngine` near other `src.mist.resources.site.*` imports; (2) one menu dict entry in the safe-export range 1-59 bound to `AddressAuditEngine.run`. Implementer MUST first scan the safe-export menu dict for a genuinely free integer key (keys 0-194 densely used) and rely on the startup collision check (PLAN-001). Label: "Audit site addresses from CSV -- compare Mist vs. customer data vs. web". No existing logic modified.
 
 **Checkpoint**: MVP — CSV in `data/` renders a fully classified comparison table end-to-end; gates green; US1 tests pass.
 
@@ -106,8 +106,8 @@ description: "Task list for Site Address Audit from CSV"
 
 ### Implementation for User Story 2
 
-- [ ] T021 [US2] Implement `AddressAuditReporter` in `src/site/address_audit/audit_reporter.py`: `save(results, output_dir="data")` -> `os.makedirs(exist_ok=True)`, timestamped `address_audit_YYYYMMDD_HHMMSS.csv`, header matching the 7 table columns, FULL (untruncated) values; path via `os.path.join`; returns written path. Per class-contracts.md.
-- [ ] T022 [US2] Wire the `[1] Save CSV` branch in `ComparisonTableRenderer.prompt_post_table` (`src/site/address_audit/comparison_display.py`) and/or `AddressAuditEngine._classify_and_render` to call `AddressAuditReporter.save`; `[q]` -> "No file saved. Exiting address audit."; invalid -> one-line error + re-prompt. (Depends on T015, T021.)
+- [ ] T021 [US2] Implement `AddressAuditReporter` in `src/mist/resources/site/address_audit/audit_reporter.py`: `save(results, output_dir="data")` -> `os.makedirs(exist_ok=True)`, timestamped `address_audit_YYYYMMDD_HHMMSS.csv`, header matching the 7 table columns, FULL (untruncated) values; path via `os.path.join`; returns written path. Per class-contracts.md.
+- [ ] T022 [US2] Wire the `[1] Save CSV` branch in `ComparisonTableRenderer.prompt_post_table` (`src/mist/resources/site/address_audit/comparison_display.py`) and/or `AddressAuditEngine._classify_and_render` to call `AddressAuditReporter.save`; `[q]` -> "No file saved. Exiting address audit."; invalid -> one-line error + re-prompt. (Depends on T015, T021.)
 
 **Checkpoint**: US1 + US2 both work independently; report persists to `data/`; gates green.
 
@@ -125,8 +125,8 @@ description: "Task list for Site Address Audit from CSV"
 
 ### Implementation for User Story 3
 
-- [ ] T024 [US3] Implement `SiteMatchingEngine.match_fuzzy(address, sites)` in `src/site/address_audit/site_matcher.py`: `rapidfuzz.process.extractOne` with `score_cutoff=THRESHOLD` (default 85, `.env FUZZY_MATCH_THRESHOLD`); >=cutoff -> `match_strategy="fuzzy"`, `confidence=score/100`; below -> `unmatched`. Optional-import `rapidfuzz` via `GlobalImportManager` pattern; absent -> graceful `unmatched` + one-time startup WARNING (no per-call spam). Wire `match_serial` miss to delegate here.
-- [ ] T025 [US3] Confirm `UNMATCHED` handling in `AddressAuditEngine`/`csv_ingester` (`src/site/address_audit/`): empty-address rows -> `UNMATCHED` (reason "empty address"), no geocoding attempted; unassigned-device rows -> `UNMATCHED`; address-field newlines/whitespace sanitized before comparison. Ensure `resolver_result is None` for `UNMATCHED` rows (no resolution attempted). (Mostly validation/glue over T011/T013/T017.)
+- [ ] T024 [US3] Implement `SiteMatchingEngine.match_fuzzy(address, sites)` in `src/mist/resources/site/address_audit/site_matcher.py`: `rapidfuzz.process.extractOne` with `score_cutoff=THRESHOLD` (default 85, `.env FUZZY_MATCH_THRESHOLD`); >=cutoff -> `match_strategy="fuzzy"`, `confidence=score/100`; below -> `unmatched`. Optional-import `rapidfuzz` via `GlobalImportManager` pattern; absent -> graceful `unmatched` + one-time startup WARNING (no per-call spam). Wire `match_serial` miss to delegate here.
+- [ ] T025 [US3] Confirm `UNMATCHED` handling in `AddressAuditEngine`/`csv_ingester` (`src/mist/resources/site/address_audit/`): empty-address rows -> `UNMATCHED` (reason "empty address"), no geocoding attempted; unassigned-device rows -> `UNMATCHED`; address-field newlines/whitespace sanitized before comparison. Ensure `resolver_result is None` for `UNMATCHED` rows (no resolution attempted). (Mostly validation/glue over T011/T013/T017.)
 
 **Checkpoint**: 100% row accountability proven; fuzzy fallback and `UNMATCHED` paths covered; gates green.
 
@@ -144,7 +144,7 @@ description: "Task list for Site Address Audit from CSV"
 
 ### Implementation for User Story 4
 
-- [ ] T027 [US4] Implement cache I/O in `src/site/address_audit/address_resolver.py` per geocoding-cache-contract.md: `_ensure_cache_table(conn)` (`CREATE TABLE IF NOT EXISTS geocoding_cache(query_key PRIMARY KEY, canonical_addr, source, confidence, raw_json, cached_at)`); `_from_cache(key)` SELECT (hit -> `source="cache"`, return, zero external calls); `_to_cache(key, result)` `INSERT OR REPLACE` after successful resolve. DB path resolves to `data/mist_data.db` via `os.path.join`. Insert read-before / upsert-after into `resolve()` (replacing the T014 no-op pass-through). Update `AuditCounters.cache_hits` / `external_calls`.
+- [ ] T027 [US4] Implement cache I/O in `src/mist/resources/site/address_audit/address_resolver.py` per geocoding-cache-contract.md: `_ensure_cache_table(conn)` (`CREATE TABLE IF NOT EXISTS geocoding_cache(query_key PRIMARY KEY, canonical_addr, source, confidence, raw_json, cached_at)`); `_from_cache(key)` SELECT (hit -> `source="cache"`, return, zero external calls); `_to_cache(key, result)` `INSERT OR REPLACE` after successful resolve. DB path resolves to `data/mist_data.db` via `os.path.join`. Insert read-before / upsert-after into `resolve()` (replacing the T014 no-op pass-through). Update `AuditCounters.cache_hits` / `external_calls`.
 
 **Checkpoint**: All four user stories independently functional; cache verified; gates green.
 
@@ -154,11 +154,11 @@ description: "Task list for Site Address Audit from CSV"
 
 **Purpose**: Optional Tier 3 flag plumbing, inert write-back stub, env/docs, coverage, gates.
 
-- [ ] T028 [P] Implement `AddressCorrector` STUB in `src/site/address_audit/address_corrector.py`: `apply_correction(site_id, address)` raises `NotImplementedError("Address write-back is not enabled in this release.")`; NOT imported into the menu; documents deferred write-back surface (OQ-003).
-- [ ] T029 Add the `--ui-geocode` CLI flag (default OFF) plumbing through `AddressAuditEngine.run` -> `ResolveCandidates.ui_geocode`, plus `.env` bounds `UI_GEOCODE_TIMEOUT_SECONDS` and `UI_GEOCODE_MAX_LOOKUPS` and `BUSINESS_NAME` wiring (business-name prompt shown once/run when `.env BUSINESS_NAME` blank, runtime-only, not logged at INFO). Touches `src/site/address_audit/audit_engine.py` (and resolver guard from T014).
+- [ ] T028 [P] Implement `AddressCorrector` STUB in `src/mist/resources/site/address_audit/address_corrector.py`: `apply_correction(site_id, address)` raises `NotImplementedError("Address write-back is not enabled in this release.")`; NOT imported into the menu; documents deferred write-back surface (OQ-003).
+- [ ] T029 Add the `--ui-geocode` CLI flag (default OFF) plumbing through `AddressAuditEngine.run` -> `ResolveCandidates.ui_geocode`, plus `.env` bounds `UI_GEOCODE_TIMEOUT_SECONDS` and `UI_GEOCODE_MAX_LOOKUPS` and `BUSINESS_NAME` wiring (business-name prompt shown once/run when `.env BUSINESS_NAME` blank, runtime-only, not logged at INFO). Touches `src/mist/resources/site/address_audit/audit_engine.py` (and resolver guard from T014).
 - [ ] T030 [P] Update `deploy/.env.example` with `BUSINESS_NAME`, `UI_GEOCODE_TIMEOUT_SECONDS`, `UI_GEOCODE_MAX_LOOKUPS`, and `FUZZY_MATCH_THRESHOLD` (documented defaults; Tier 3 OFF by default).
-- [ ] T031 [X] `MistUIGeocoder` Tier 3 (`src/site/address_audit/ui_geocoder.py`) + `tests/unit/site/address_audit/test_ui_geocoder.py` (14 mocked tests) — DONE (commit 3ef899f; attach/launch modes proven end-to-end; fail-soft; max-lookups cap; per ui-geocoder-contract.md).
-- [ ] T032 Run quality gates clean across the subpackage: `python -m py_compile MistHelper.py`, `ruff check src/site/address_audit/`, `black --check src/site/address_audit/`; verify unit-test coverage >=70% under `tests/unit/site/address_audit/`.
+- [ ] T031 [X] `MistUIGeocoder` Tier 3 (`src/mist/resources/site/address_audit/ui_geocoder.py`) + `tests/unit/site/address_audit/test_ui_geocoder.py` (14 mocked tests) — DONE (commit 3ef899f; attach/launch modes proven end-to-end; fail-soft; max-lookups cap; per ui-geocoder-contract.md).
+- [ ] T032 Run quality gates clean across the subpackage: `python -m py_compile MistHelper.py`, `ruff check src/mist/resources/site/address_audit/`, `black --check src/mist/resources/site/address_audit/`; verify unit-test coverage >=70% under `tests/unit/site/address_audit/`.
 - [ ] T033 [P] Execute `specs/1003-site-address-audit/quickstart.md` operator + dev verification walkthrough; confirm acceptance criteria and Success Criteria (SC-001..SC-004) hold.
 
 ---

@@ -10,8 +10,8 @@ The suite proves the acceptance criteria of GitHub issue #2011:
 
 from unittest.mock import MagicMock, patch
 
-from src.api.api_fetch_utils import APIFetchUtils
-from src.security import CredentialRedactor
+from src.mist.access.api.api_fetch_utils import APIFetchUtils
+from src.operations.protection.security import CredentialRedactor
 
 # One record shaped like the ``getSiteSetting`` answer that prompted the issue.
 # The values are invented. No real credential appears in this repository.
@@ -134,7 +134,7 @@ class TestSiteSettingReadBoundary:
             "name": "kept",
         }
         with patch(
-            "src.api.api_fetch_utils.mistapi.api.v1.sites.setting.getSiteSetting",
+            "src.mist.access.api.api_fetch_utils.mistapi.api.v1.sites.setting.getSiteSetting",
             return_value=response,
         ):
             config = APIFetchUtils._fetch_single_site_setting(
@@ -153,7 +153,7 @@ class TestSiteSettingReadBoundary:
         response = MagicMock()
         response.data = payload
         with patch(
-            "src.api.api_fetch_utils.mistapi.api.v1.sites.setting.getSiteSetting",
+            "src.mist.access.api.api_fetch_utils.mistapi.api.v1.sites.setting.getSiteSetting",
             return_value=response,
         ):
             APIFetchUtils._fetch_single_site_setting(MagicMock(), {"id": "s", "name": "n"})

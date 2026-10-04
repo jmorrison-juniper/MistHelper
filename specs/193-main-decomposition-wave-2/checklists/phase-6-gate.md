@@ -5,8 +5,8 @@ Scope: T046/T047/T048/T049/T049A/T049B/T052/T053/T054
 
 ## Code Extraction and Delegation
 
-- Extracted summary core from `MistHelper.py` into `src/inventory/org_device_inventory_summary.py`.
-- Extracted MSP-specific orchestration from `MistHelper.py` into `src/inventory/org_device_inventory_msp.py`.
+- Extracted summary core from `MistHelper.py` into `src/mist/resources/inventory/org_device_inventory_summary.py`.
+- Extracted MSP-specific orchestration from `MistHelper.py` into `src/mist/resources/inventory/org_device_inventory_msp.py`.
 - Reduced `MistHelper.py` `OrgDeviceInventorySummary` to orchestration/delegation for menu operation `13` and related dispatch paths.
 - Added unit tests:
   - `tests/unit/inventory/test_org_device_inventory_summary.py`
@@ -33,7 +33,7 @@ Scope: T046/T047/T048/T049/T049A/T049B/T052/T053/T054
 
 ## Constitution Compliance (T049A)
 
-- `MistHelper.py` now delegates inventory summary ownership to `src/inventory/*` modules.
+- `MistHelper.py` now delegates inventory summary ownership to `src/mist/resources/inventory/*` modules.
 - Existing menu-action and dispatch contracts for operation `13` are preserved.
 - Scope guard respected: no `GlobalImportManager` changes.
 

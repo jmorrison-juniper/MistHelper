@@ -98,36 +98,36 @@ for helper modules extracted from files >500 LOC. The twenty target paths are ex
 
 ```text
 # P1 (ranks 1-5, 445 violations combined) - worst-first, merged first
-src/maps/maps_manager.py                        # rank 1: F/54.0/149  (7243 LOC)
-src/maps/launcher/viewer_callbacks.py           # rank 2: F/57.0/96   (3221 LOC)
-src/capture/packet_capture.py                   # rank 3: F/54.0/68   (2389 LOC)
-src/network/routing_utils.py                    # rank 4: F/54.0/67   (1888 LOC)
-src/device/utility_commands.py                  # rank 5: F/54.0/65   (1803 LOC)
+src/interfaces/visualization/maps/maps_manager.py                        # rank 1: F/54.0/149  (7243 LOC)
+src/interfaces/visualization/maps/launcher/viewer_callbacks.py           # rank 2: F/57.0/96   (3221 LOC)
+src/operations/execution/capture/packet_capture.py                   # rank 3: F/54.0/68   (2389 LOC)
+src/mist/networking/network/routing_utils.py                    # rank 4: F/54.0/67   (1888 LOC)
+src/mist/resources/device/utility_commands.py                  # rank 5: F/54.0/65   (1803 LOC)
 
 # P2 (ranks 6-13, ~299 violations combined)
-src/ssid_consolidation/ssid_template_consolidation.py   # rank 6:  F/55.0/53
+src/operations/execution/ssid_consolidation/ssid_template_consolidation.py   # rank 6:  F/55.0/53
 scripts/mist_ideas_analyzer.py                          # rank 7:  F/54.0/46
 tests/unit/test_arango_writer.py                        # rank 8:  D-/62.0/39
 scripts/mist_ideas_distiller_v2.py                      # rank 9:  F/54.0/34
-src/gateway/wan2_variable.py                            # rank 10: D-/62.0/32
-src/audit/renderer.py                                   # rank 11: D-/62.0/29
-src/site/site_config_manager.py                         # rank 12: D/66.0/29
+src/mist/resources/gateway/wan2_variable.py                            # rank 10: D-/62.0/32
+src/mist/access/audit/renderer.py                                   # rank 11: D-/62.0/29
+src/mist/resources/site/site_config_manager.py                         # rank 12: D/66.0/29
 starlink_dashboard.py                                   # rank 13: D/64.0/28
 
 # P3 (ranks 14-20)
-src/analytics/zone_analyzer.py                          # rank 14: D/65.0/26
-src/inventory/csv_comparator.py                         # rank 15: D/64.0/26
-src/device/prompt_utils.py                              # rank 16: D/66.0/25
-src/gateway/template_config.py                          # rank 17: D/65.0/25
+src/mist/intelligence/analytics/zone_analyzer.py                          # rank 14: D/65.0/26
+src/mist/resources/inventory/csv_comparator.py                         # rank 15: D/64.0/26
+src/mist/resources/device/prompt_utils.py                              # rank 16: D/66.0/25
+src/mist/resources/gateway/template_config.py                          # rank 17: D/65.0/25
 tools/codemod_logging_lazy.py                           # rank 18: D-/60.0/23
-src/reports/e911_bssid.py                               # rank 19: D/65.0/23
+src/mist/intelligence/reports/e911_bssid.py                               # rank 19: D/65.0/23
 scripts/menu_regroup.py                                 # rank 20: C/73.0/22
 ```
 
 New helper modules (only when a target file exceeds ~500 LOC after decomposition) land in
-the same package as the parent file. Example: `src/maps/maps_manager.py` (7243 LOC) is
-expected to spawn siblings such as `src/maps/floorplan_operations.py`,
-`src/maps/heatmap_orchestration.py`, etc., named for the real responsibility being
+the same package as the parent file. Example: `src/interfaces/visualization/maps/maps_manager.py` (7243 LOC) is
+expected to spawn siblings such as `src/interfaces/visualization/maps/floorplan_operations.py`,
+`src/interfaces/visualization/maps/heatmap_orchestration.py`, etc., named for the real responsibility being
 extracted - never `maps_manager_helpers.py` or similar generic dumping grounds.
 
 **Structure Decision**: Keep the existing single-project layout. This is a

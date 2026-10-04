@@ -5,7 +5,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from src.gateway.wan2_migration_manager import (
+from src.mist.resources.gateway.wan2_migration_manager import (
     WAN2MigrationDependencies,
     WAN2MigrationManager,
     configure_wan2_migration_dependencies,
@@ -55,7 +55,7 @@ def test_confirm_site_variable_operation_returns_false_on_negative_input() -> No
     manager = WAN2MigrationManager()
     manager_input = manager.__class__.__dict__["_confirm_site_variable_operation"]
 
-    from src.gateway import wan2_migration_manager as module
+    from src.mist.resources.gateway import wan2_migration_manager as module
 
     module.InputUtils.safe_input = MagicMock(return_value="no")
 

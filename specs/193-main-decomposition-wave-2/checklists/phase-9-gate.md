@@ -5,9 +5,9 @@ Scope: T073/T074/T075/T076/T076A/T076B/T079/T080/T081
 
 ## Code Extraction and Delegation
 
-- Completed canonical packet capture implementation ownership in `src/capture/packet_capture.py`.
-- Added `src/capture/packet_capture_download.py` to extract/normalize poll/download responsibilities.
-- In `src/capture/packet_capture.py`, moved poll/download heavy logic to helper delegation for:
+- Completed canonical packet capture implementation ownership in `src/operations/execution/capture/packet_capture.py`.
+- Added `src/operations/execution/capture/packet_capture_download.py` to extract/normalize poll/download responsibilities.
+- In `src/operations/execution/capture/packet_capture.py`, moved poll/download heavy logic to helper delegation for:
   - `_fetch_completed_pcaps`
   - `_download_pending_pcaps`
   - `_download_single_pcap`
@@ -25,12 +25,12 @@ Scope: T073/T074/T075/T076/T076A/T076B/T079/T080/T081
 T074 **triggered** and extraction was performed.
 
 Trigger evidence:
-- Download/poll responsibilities still existed in `src/capture/packet_capture.py` with long methods and dense loop logic:
+- Download/poll responsibilities still existed in `src/operations/execution/capture/packet_capture.py` with long methods and dense loop logic:
   - `_poll_for_pcap_url`
   - `_poll_and_download_pcap`
   - `_download_pending_pcaps`
   - `_download_single_pcap`
-- Objective trigger satisfied by complexity/length and responsibility concentration, so extraction to `src/capture/packet_capture_download.py` was executed.
+- Objective trigger satisfied by complexity/length and responsibility concentration, so extraction to `src/operations/execution/capture/packet_capture_download.py` was executed.
 
 ## Mandatory Validation Commands (T076)
 
@@ -60,7 +60,7 @@ Trigger evidence:
 ## Constitution Compliance Review (T076A)
 
 - `GlobalImportManager` remained unchanged.
-- Runtime ownership of packet capture logic moved to `src/capture/*` with `MistHelper.py` acting as orchestration compatibility surface.
+- Runtime ownership of packet capture logic moved to `src/operations/execution/capture/*` with `MistHelper.py` acting as orchestration compatibility surface.
 - Added targeted extraction helper with explicit action logging around list/poll/download operations.
 - Existing user-facing packet capture output strings and flow were preserved.
 

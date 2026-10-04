@@ -14,8 +14,8 @@ from typing import Any
 
 import pytest
 
-from src.upgrade_portal.upgrade.options import ORG_OPTION_HELP
-from src.upgrade_portal.upgrade.org_advanced_options import (
+from src.interfaces.portals.upgrade_portal.upgrade.options import ORG_OPTION_HELP
+from src.interfaces.portals.upgrade_portal.upgrade.org_advanced_options import (
     ADVANCED_FIELDS,
     OrgAdvancedOptions,
     OrgAdvancedRules,

@@ -23,8 +23,8 @@ Date: 2026-05-26
 
 ## Delegation Integrity
 
-- `SiteExportUtils` implementation ownership moved from `MistHelper.py` to `src/export/site_export_utils.py`.
-- High-complexity insights branch moved to `src/export/site_insights_exporter.py`.
+- `SiteExportUtils` implementation ownership moved from `MistHelper.py` to `src/operations/exporting/export/site_export_utils.py`.
+- High-complexity insights branch moved to `src/operations/exporting/export/site_insights_exporter.py`.
 - `MistHelper.py` remains orchestration-only for affected paths.
 
 ## Conclusion

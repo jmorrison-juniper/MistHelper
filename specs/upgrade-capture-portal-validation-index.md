@@ -127,7 +127,7 @@ The device upgraded successfully, but the portal wrote the run as `failed`.
 | 08:11:57 | Device | `GW_UPGRADED` from `23.4R2-S5.5` to `24.2R2-S3.3`. |
 | 08:26:22 | Device | `GW_CONNECTED` on the new version. |
 
-`src/upgrade_portal/upgrade/phase_gate.py:64` holds `PHASE_DEADLINE_SECONDS`
+`src/interfaces/portals/upgrade_portal/upgrade/phase_gate.py:64` holds `PHASE_DEADLINE_SECONDS`
 with the value 1800. That budget gives 30 minutes. This gateway needed about 44
 minutes. The portal gave up 14 minutes before the device reported the new
 version.

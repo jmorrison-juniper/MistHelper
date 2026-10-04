@@ -27,8 +27,13 @@ from flask import Flask  # The application type of the portal.
 from flask.testing import FlaskClient  # The client type that drives every request.
 from werkzeug.test import TestResponse  # The answer type that every assertion reads.
 
-from src.upgrade_portal.runtime import identity  # The real session guard, so the tests sign in for real.
-from src.upgrade_portal.runtime.runs import RunRecordBuilder, RunSpec  # The record layer owns every field.
+from src.interfaces.portals.upgrade_portal.runtime import (
+    identity,
+)  # The real session guard, so the tests sign in for real.
+from src.interfaces.portals.upgrade_portal.runtime.runs import (
+    RunRecordBuilder,
+    RunSpec,
+)  # The record layer owns every field.
 
 # --------------------------------------------------------------------------
 # The contract values. Each one repeats a line of the specification.

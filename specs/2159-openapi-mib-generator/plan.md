@@ -7,12 +7,12 @@
 ## Summary
 
 A person writes `documentation/mibs/MISTHELPER-MIB.mib` by hand today. The hand work already made one
-defect. This feature adds the package `src/mib_generator/`. The package reads three inputs and it
+defect. This feature adds the package `src/operations/hardware/mib_generator/`. The package reads three inputs and it
 writes the MIB:
 
 - `documentation/mist-api-openapi31json.json` gives the type, the description, and the proof that a
   Mist field still exists.
-- `src/metrics_gateway/catalog.py` gives the truth about the readings the agent answers.
+- `src/interfaces/monitoring/metrics_gateway/catalog.py` gives the truth about the readings the agent answers.
 - `data/mib_generator/oid_assignments.json` gives the number of each field, so an OID never moves.
 
 The package does not change the catalog and it does not change the agent. It reads both, and it
@@ -55,7 +55,7 @@ allow list selects 3 of them. The output MIB holds 35 live objects and 4 identit
 
 | Principle | How this plan meets it |
 |---|---|
-| I. Five-Item Rule | `src/mib_generator/` holds 5 modules and one `__init__.py`. No module holds more than 3 classes. No class holds more than 5 public methods. No function takes more than 5 parameters, holds more than 5 blocks, or runs past 25 lines. |
+| I. Five-Item Rule | `src/operations/hardware/mib_generator/` holds 5 modules and one `__init__.py`. No module holds more than 3 classes. No class holds more than 5 public methods. No function takes more than 5 parameters, holds more than 5 blocks, or runs past 25 lines. |
 | II. Class-Based Architecture | Six classes own the work. The command line calls `MibGeneratorRunner` directly. No wrapper function exists. |
 | III. Safety-First | The tool reads local files and it makes no network call. `generate` refuses to overwrite when the caller passes `--dry-run`. `check` writes nothing at all. Every stop condition raises before the writer opens a file. |
 | IV. Full Deployment Pipeline | The `check` action joins CI. The generate action joins the release step that refreshes the MIB. |
@@ -89,7 +89,7 @@ specs/2159-openapi-mib-generator/
 ### Source Code (repository root)
 
 ```text
-src/mib_generator/
+src/operations/hardware/mib_generator/
 ├── __init__.py          # The package docstring and the public names.
 ├── document.py          # Load the OpenAPI file and answer a question about one operation.
 ├── schema.py            # Turn one response schema into a flat list of fields.
@@ -116,7 +116,7 @@ tests/contract/
 └── test_mib_matches_catalog.py            # Moved from tests/unit/metrics_gateway/.
 ```
 
-**Structure Decision**: A new package `src/mib_generator/` beside `src/metrics_gateway/`. The
+**Structure Decision**: A new package `src/operations/hardware/mib_generator/` beside `src/interfaces/monitoring/metrics_gateway/`. The
 generator is a build-time tool and the gateway is a run-time service. They must not share a package,
 because the SNMP responder must import nothing that reads a 16.6 MB file. The generator imports the
 catalog. The catalog imports nothing from the generator.
@@ -150,7 +150,7 @@ classes as collaborators and it calls their methods directly.
 
 ### The decisions the plan owes the spec
 
-1. **Module layout**: the table above. `src/mib_generator/` holds 5 modules plus `__init__.py`, so
+1. **Module layout**: the table above. `src/operations/hardware/mib_generator/` holds 5 modules plus `__init__.py`, so
    the 5-Item Rule holds at the package level.
 2. **Class set**: the table above. No wrapper.
 3. **Data files**: `data/mib_generator/allowlist.json` and `data/mib_generator/oid_assignments.json`.
@@ -173,7 +173,7 @@ classes as collaborators and it calls their methods directly.
 2. A `_run_<mode>` handler near line 5937.
 3. A row in the `mode_table` tuple of `_dispatch_main_mode` near line 5969.
 4. A menu entry in the menu dict near line 3750, through a lambda that defers the name lookup.
-5. A row in `OperationRegistry._REGISTRY` in `src/utils/operation_registry.py`.
+5. A row in `OperationRegistry._REGISTRY` in `src/foundation/support/utils/operation_registry.py`.
 
 This feature adds the same five parts:
 

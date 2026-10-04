@@ -350,9 +350,9 @@
     "verdict": "normal"
   },
   "context": [
-    "area: src/upgrade_portal/upgrade/options.py compatibility and target validation",
-    "area: src/upgrade_portal/app/routes/upgrade.py options view and save",
-    "area: src/upgrade_portal/app/assets/templates/upgrade/options.html target controls",
+    "area: src/interfaces/portals/upgrade_portal/upgrade/options.py compatibility and target validation",
+    "area: src/interfaces/portals/upgrade_portal/app/routes/upgrade.py options view and save",
+    "area: src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/options.html target controls",
     "constraint: never select an unavailable version or submit during validation"
   ],
   "intent": "Provide safe per-device-type upgrade target defaults while preserving explicit operator confirmation.",
@@ -411,7 +411,7 @@
       "status": "DONE",
       "did": "Implemented typed compatibility selection, numeric ranking, safe defaults, and no-common warnings.",
       "files": [
-        "src/upgrade_portal/upgrade/options.py"
+        "src/interfaces/portals/upgrade_portal/upgrade/options.py"
       ]
     },
     "T003": {
@@ -432,21 +432,21 @@
       "status": "DONE",
       "did": "Replaced global version picker with AP, switch, and gateway controls and warnings.",
       "files": [
-        "src/upgrade_portal/app/assets/templates/upgrade/options.html"
+        "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/options.html"
       ]
     },
     "T006": {
       "status": "DONE",
       "did": "Passed typed candidates, selections, and warnings through the options render boundary.",
       "files": [
-        "src/upgrade_portal/app/routes/upgrade.py"
+        "src/interfaces/portals/upgrade_portal/app/routes/upgrade.py"
       ]
     },
     "T007": {
       "status": "DONE",
       "did": "Bound typed controls to matching device rows and exact offered versions only.",
       "files": [
-        "src/upgrade_portal/app/assets/static/js/portal.js"
+        "src/interfaces/portals/upgrade_portal/app/assets/static/js/portal.js"
       ]
     },
     "T008": {
@@ -467,14 +467,14 @@
       "status": "DONE",
       "did": "Re-read availability during save and atomically rejected unavailable targets or unreadable validation.",
       "files": [
-        "src/upgrade_portal/upgrade/options.py"
+        "src/interfaces/portals/upgrade_portal/upgrade/options.py"
       ]
     },
     "T011": {
       "status": "DONE",
       "did": "Kept the existing bad_option route contract and confirmation-only start boundary.",
       "files": [
-        "src/upgrade_portal/app/routes/upgrade.py"
+        "src/interfaces/portals/upgrade_portal/app/routes/upgrade.py"
       ]
     },
     "T012": {
@@ -488,7 +488,7 @@
       "status": "DONE",
       "did": "Validated type-specific environment overrides against normalized compatible candidates.",
       "files": [
-        "src/upgrade_portal/upgrade/options.py"
+        "src/interfaces/portals/upgrade_portal/upgrade/options.py"
       ]
     },
     "T014": {
@@ -510,10 +510,10 @@
       "did": "Ran Ruff lint and format checks for changed portal Python and tests.",
       "files": [
         "pyproject.toml",
-        "src/upgrade_portal/upgrade/options.py",
-        "src/upgrade_portal/app/routes/upgrade.py",
-        "src/upgrade_portal/app/assets/templates/upgrade/options.html",
-        "src/upgrade_portal/app/assets/static/js/portal.js"
+        "src/interfaces/portals/upgrade_portal/upgrade/options.py",
+        "src/interfaces/portals/upgrade_portal/app/routes/upgrade.py",
+        "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/options.html",
+        "src/interfaces/portals/upgrade_portal/app/assets/static/js/portal.js"
       ]
     },
     "T018": {

@@ -6,9 +6,9 @@ import sys
 
 sys.path.insert(0, ".")
 
-from src.audit.analyzer import AuditLogAnalyzer
-from src.audit.filter import AuditLogFilter
-from src.audit.renderer import AuditReportRenderer
+from src.mist.access.audit.analyzer import AuditLogAnalyzer
+from src.mist.access.audit.filter import AuditLogFilter
+from src.mist.access.audit.renderer import AuditReportRenderer
 
 with open("data/orgaudit-filtered.json", encoding="utf-8") as f:
     data = json.load(f)

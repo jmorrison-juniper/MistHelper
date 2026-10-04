@@ -1,4 +1,4 @@
-"""Unit tests for src/ui/execution/item_executor.py."""
+"""Unit tests for src/interfaces/visualization/ui/execution/item_executor.py."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.ui.execution.item_executor import ItemExecutor, _ResultPreview
+from src.interfaces.visualization.ui.execution.item_executor import ItemExecutor, _ResultPreview
 
 
 def _patch_input(monkeypatch: pytest.MonkeyPatch, answers: list[str]) -> None:

@@ -4,7 +4,7 @@ from __future__ import annotations  # WHY: keep annotations consistent with the 
 
 from typing import Any  # WHY: fake exporter call storage is dynamic.
 
-from src.reports.switch_scorecard import operation  # WHY: monkeypatch operation-level dependencies.
+from src.mist.intelligence.reports.switch_scorecard import operation  # WHY: monkeypatch operation-level dependencies.
 
 
 class _Client:

@@ -6,7 +6,9 @@ import importlib
 def test_initialize_all_imports_delegates_to_service(monkeypatch):
     import MistHelper as misthelper_module  # WHY: integration test verifies the root delegator.
 
-    serial_cc_module = importlib.import_module("src.refactors.serial_cc.import_initialization_service")
+    serial_cc_module = importlib.import_module(
+        "src.foundation.support.refactors.serial_cc.import_initialization_service"
+    )
     manager = misthelper_module.GlobalImportManager()
     called = {"count": 0, "manager": None, "skip_deps": None}
 

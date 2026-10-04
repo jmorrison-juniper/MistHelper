@@ -18,7 +18,7 @@ from unittest.mock import MagicMock, patch  # Mock modules and Flask config.
 import pytest  # The test framework of the project.
 from flask import Flask  # The Flask application for config injection.
 
-from src.upgrade_portal.app import factory, wiring  # The units under test.
+from src.interfaces.portals.upgrade_portal.app import factory, wiring  # The units under test.
 
 logger = logging.getLogger(__name__)
 
@@ -87,7 +87,7 @@ class TestServiceWiring:
             same key that wiring uses to install it. A mismatch breaks injection.
         """
         # WHY: Import the capture routes module to check its constant
-        from src.upgrade_portal.app.routes import capture  # Import routes module
+        from src.interfaces.portals.upgrade_portal.app.routes import capture  # Import routes module
 
         # WHY: Verify the seam key constants match between wiring and routes
         assert wiring.CAPTURE_SERVICE_KEY == capture.CAPTURE_SERVICE_KEY  # Keys must match for injection
@@ -101,7 +101,7 @@ class TestServiceWiring:
             same key that wiring uses to install it. A mismatch breaks injection.
         """
         # WHY: Import the upgrade routes module to check its constant
-        from src.upgrade_portal.app.routes import upgrade  # Import routes module
+        from src.interfaces.portals.upgrade_portal.app.routes import upgrade  # Import routes module
 
         # WHY: Verify the seam key constants match between wiring and routes
         assert wiring.UPGRADE_SERVICE_KEY == upgrade.UPGRADE_SERVICE_KEY  # Keys must match for injection

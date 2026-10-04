@@ -15,17 +15,17 @@
 
 ## Changes
 
-1. `src/firmware/aggregate_upgrade_service.py`
+1. `src/operations/execution/firmware/aggregate_upgrade_service.py`
    - Add `ENDED_CHILD_STATUS = "already_ended"` and `ENDED_CHILD_TEXT`.
    - In `_cancellation_result`, keep the identifier check first. Then, if the
      stored child state is in `FINAL_CHILD_STATES`, return the ended result
      with no cloud call.
-2. `src/upgrade_portal/upgrade/org_cancel_outcomes.py`
+2. `src/interfaces/portals/upgrade_portal/upgrade/org_cancel_outcomes.py`
    - Add `ENDED_NOTE`.
    - `OrgCancelLists.lists` returns three empty lists and `ENDED_NOTE` for a
      result with the status `already_ended`.
    - `OrgCancelOutcomes._row` adds the boolean `ended`.
-3. `src/upgrade_portal/app/assets/templates/upgrade/org_progress.html`
+3. `src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_progress.html`
    - Show the three lists only when `outcome.ended` is false.
 4. Tests
    - `tests/unit/firmware/test_aggregate_upgrade_service.py`: the mixed test

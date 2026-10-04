@@ -16,7 +16,7 @@ confirmation page will remain the only path that can start an upgrade.
 ## Project Structure
 
 ```text
-src/upgrade_portal/
+src/interfaces/portals/upgrade_portal/
 ├── upgrade/options.py
 ├── app/routes/upgrade.py
 └── app/assets/
@@ -61,22 +61,22 @@ contracts.
 
 ## Implementation Steps
 
-1. Add a typed compatibility selector in `src/upgrade_portal/upgrade/options.py`.
+1. Add a typed compatibility selector in `src/interfaces/portals/upgrade_portal/upgrade/options.py`.
    Group eligible inventory by `ap`, `switch`, and `gateway`. Normalize returned
    version values, intersect the values for every eligible device, and rank
    numeric components. Read `CAPTURE_DEFAULT_AP_VERSION`,
    `CAPTURE_DEFAULT_SWITCH_VERSION`, and `CAPTURE_DEFAULT_GATEWAY_VERSION`.
    Use an override only when it is an exact compatible candidate.
 2. Extend the options view and route rendering in
-   `src/upgrade_portal/upgrade/options.py` and
-   `src/upgrade_portal/app/routes/upgrade.py`. Supply per-type candidates,
+   `src/interfaces/portals/upgrade_portal/upgrade/options.py` and
+   `src/interfaces/portals/upgrade_portal/app/routes/upgrade.py`. Supply per-type candidates,
    defaults, and empty-candidate warnings while retaining saved choices.
-3. Change `src/upgrade_portal/app/assets/templates/upgrade/options.html` and
-   `src/upgrade_portal/app/assets/static/js/portal.js`. Replace the global
+3. Change `src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/options.html` and
+   `src/interfaces/portals/upgrade_portal/app/assets/static/js/portal.js`. Replace the global
    control with the three fixed type controls. Apply each selection only to
    devices of that type that offer that exact version. Preserve individual
    device controls and the existing save action.
-4. Change save validation in `src/upgrade_portal/upgrade/options.py`. Read
+4. Change save validation in `src/interfaces/portals/upgrade_portal/upgrade/options.py`. Read
    current inventory and model availability during each save. Reject a target
    that is unknown, from another type, unavailable, or not common to the type.
    Do not modify the run record when validation fails.

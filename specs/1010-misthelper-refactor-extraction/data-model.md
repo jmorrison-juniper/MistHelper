@@ -19,7 +19,7 @@ The unit of work. One candidate → one PR (FR-002).
 | `bucket` | enum: `Unused` \| `Single-Use` \| `Low-Use` \| `Hot` \| `Skipped` | Derived from `reference_count` and `SKIP_ALWAYS` list | analyzer |
 | `callsite_locations` | list[(file, line)] | Length equals `reference_count`; empty for Unused | analyzer + manual grep verification |
 | `guideline_flags` | list[flag_name] | Zero or more of: `oversize_25_lines`, `missing_inline_comments`, `missing_action_logging`, `non_ascii_logs`, `hardcoded_separator`, `raw_input_call`, `too_many_params` | analyzer |
-| `target_path` | string (path) | For Unused: N/A; for Single-Use: `src/refactors/{snake_name}.py` OR `src/inventory/csv_comparator.py` (AddressComparisonCounters only, per FR-015) | dispatcher decision |
+| `target_path` | string (path) | For Unused: N/A; for Single-Use: `src/foundation/support/refactors/{snake_name}.py` OR `src/mist/resources/inventory/csv_comparator.py` (AddressComparisonCounters only, per FR-015) | dispatcher decision |
 | `target_class` | string \| null | For module-level function candidates: class name to wrap the function into (per FR-005); null for class candidates that keep their own name; `CsvComparatorManager` for AddressComparisonCounters | dispatcher decision |
 
 **Validation rules**:
@@ -44,7 +44,7 @@ The destination file for a Single-Use extraction.
 
 | Field | Type | Constraints |
 |-------|------|-------------|
-| `path` | string | Absolute-from-repo-root path; typically `src/refactors/{name}.py` |
+| `path` | string | Absolute-from-repo-root path; typically `src/foundation/support/refactors/{name}.py` |
 | `contains_class` | string | The class name housing the extracted symbol (may be pre-existing for the AddressComparisonCounters exception) |
 | `is_new_file` | boolean | True for 10 of 11 Single-Use PRs; False only for AddressComparisonCounters (folds into existing `csv_comparator.py`) |
 | `compliance_grade_required` | literal | `A+/100` — non-negotiable (FR-012, SC-007) |

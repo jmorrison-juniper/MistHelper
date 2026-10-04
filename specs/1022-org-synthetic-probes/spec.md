@@ -71,7 +71,7 @@ An operator wants to replace a legacy probe set with a freshly curated set (e.g.
 ### Functional Requirements
 
 - **FR-001**: MistHelper MUST expose a new interactive menu entry that launches the org-level synthetic-probe manager.
-- **FR-002**: The menu entry MUST be registered in `src/utils/operation_registry.py` with category `destructive` (it PUTs to org settings via `updateOrgSettings`).
+- **FR-002**: The menu entry MUST be registered in `src/foundation/support/utils/operation_registry.py` with category `destructive` (it PUTs to org settings via `updateOrgSettings`).
 - **FR-003**: The manager MUST prompt for a comma-separated VLAN list and MUST validate each entry as a non-negative integer in the range `[0, 4094]`.
 - **FR-004**: The manager MUST call `mistapi.api.v1.orgs.setting.getOrgSettings(session, org_id)` to read the current org setting.
 - **FR-005**: The manager MUST inspect the response's `synthetic_test.custom_probes` field. If present and non-empty, it MUST prompt the operator for **merge** vs. **swap** using an unambiguous two-choice prompt.

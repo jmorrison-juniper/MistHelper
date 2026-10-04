@@ -99,12 +99,12 @@ logger.info("Fetching device list for site %s", site_id)    # After
 
 **Warning**: Do not change a message text and do not change a level. A reviewer who finds one changed message must reject the slice.
 
-- [ ] T016 [US1] Convert slice 2. The scope is `src/auth`, `src/inventory`, and `src/ui`, which hold 393 calls. Repeat the T008 to T015 steps. Split the slice by area if the changed line count passes 500.
-- [ ] T017 [US1] Convert slice 3. The scope is `src/device`, `src/site`, and `src/troubleshooting`, which hold 488 calls. Read `src/troubleshooting/marvis_troubleshoot_utils.py` with care, because it holds 76 calls. Repeat the T008 to T015 steps.
-- [ ] T018 [P] [US1] Convert slice 4. The scope is `src/org`, which holds 191 calls. Read `src/org/org_ticket_manager.py` with care, because it holds 86 calls. Repeat the T008 to T015 steps.
-- [ ] T019 [P] [US1] Convert slice 5. The scope is `src/capture`, which holds 220 calls. Repeat the T008 to T015 steps.
-- [ ] T020 [P] [US1] Convert slice 6. The scope is `src/gateway`, which holds 261 calls. Repeat the T008 to T015 steps.
-- [ ] T021 [US1] Convert slice 7. The scope is `src/refactors`, which holds 423 calls. Split the slice by file if the changed line count passes 500. Repeat the T008 to T015 steps.
+- [ ] T016 [US1] Convert slice 2. The scope is `src/mist/access/auth`, `src/mist/resources/inventory`, and `src/interfaces/visualization/ui`, which hold 393 calls. Repeat the T008 to T015 steps. Split the slice by area if the changed line count passes 500.
+- [ ] T017 [US1] Convert slice 3. The scope is `src/mist/resources/device`, `src/mist/resources/site`, and `src/mist/intelligence/troubleshooting`, which hold 488 calls. Read `src/mist/intelligence/troubleshooting/marvis_troubleshoot_utils.py` with care, because it holds 76 calls. Repeat the T008 to T015 steps.
+- [ ] T018 [P] [US1] Convert slice 4. The scope is `src/mist/resources/org`, which holds 191 calls. Read `src/mist/resources/org/org_ticket_manager.py` with care, because it holds 86 calls. Repeat the T008 to T015 steps.
+- [ ] T019 [P] [US1] Convert slice 5. The scope is `src/operations/execution/capture`, which holds 220 calls. Repeat the T008 to T015 steps.
+- [ ] T020 [P] [US1] Convert slice 6. The scope is `src/mist/resources/gateway`, which holds 261 calls. Repeat the T008 to T015 steps.
+- [ ] T021 [US1] Convert slice 7. The scope is `src/foundation/support/refactors`, which holds 423 calls. Split the slice by file if the changed line count passes 500. Repeat the T008 to T015 steps.
 
 **Checkpoint**: The count reads about 2368. Slice 8 can start.
 
@@ -118,9 +118,9 @@ logger.info("Fetching device list for site %s", site_id)    # After
 
 **Caution**: A single file cannot split across two pull requests. The module logger line must land with the first converted call in that file. A split leaves the module holding both call forms.
 
-- [ ] T022 [US1] Convert slice 8. The file is `src/firmware/org_ap_upgrader.py`, which holds 143 calls. Repeat the T008 to T015 steps for that file alone.
-- [ ] T023 [US1] Convert slice 9. The file is `src/firmware/firmware_manager.py`, which holds 228 calls. Repeat the T008 to T015 steps for that file alone.
-- [ ] T024 [US1] Convert slice 10. The scope is the rest of `src/firmware`, which holds 130 calls. `src/firmware/bulk_ap_upgrader.py` holds 105 of them. Repeat the T008 to T015 steps.
+- [ ] T022 [US1] Convert slice 8. The file is `src/operations/execution/firmware/org_ap_upgrader.py`, which holds 143 calls. Repeat the T008 to T015 steps for that file alone.
+- [ ] T023 [US1] Convert slice 9. The file is `src/operations/execution/firmware/firmware_manager.py`, which holds 228 calls. Repeat the T008 to T015 steps for that file alone.
+- [ ] T024 [US1] Convert slice 10. The scope is the rest of `src/operations/execution/firmware`, which holds 130 calls. `src/operations/execution/firmware/bulk_ap_upgrader.py` holds 105 of them. Repeat the T008 to T015 steps.
 - [ ] T025 [US1] Convert slice 11. The file is `MistHelper.py`, which holds 303 calls. Run `.venv\Scripts\python.exe -m mypy src/ MistHelper.py --config-file pyproject.toml` after the edit. Issue #888 widened the mypy scope to cover this file, so a wrong edit fails the type gate.
 
 **Checkpoint**: The count reads about 1589. Slice 12 can start.
@@ -129,13 +129,13 @@ logger.info("Fetching device list for site %s", site_id)    # After
 
 ## Phase 6: User Story 1 and 2, Slices 12 and 13 - The export area and the remainder (Priority: P1)
 
-**Goal**: Convert the last 1589 calls. `src/export` holds 678 of them, so that area splits into two or more slices.
+**Goal**: Convert the last 1589 calls. `src/operations/exporting/export` holds 678 of them, so that area splits into two or more slices.
 
 **Independent Test**: The `LOG015` count reaches zero.
 
-- [ ] T026 [US1] Split `src/export` into groups of at most 500 changed lines. List the files with `.venv\Scripts\python.exe -m ruff check src/export --select LOG015 --output-format concise` and record the group boundary in [plan.md](plan.md).
-- [ ] T027 [US1] Convert slice 12. The scope is the first `src/export` group. Repeat the T008 to T015 steps.
-- [ ] T028 [US1] Convert slice 13. The scope is the second `src/export` group. Repeat the T008 to T015 steps.
+- [ ] T026 [US1] Split `src/operations/exporting/export` into groups of at most 500 changed lines. List the files with `.venv\Scripts\python.exe -m ruff check src/operations/exporting/export --select LOG015 --output-format concise` and record the group boundary in [plan.md](plan.md).
+- [ ] T027 [US1] Convert slice 12. The scope is the first `src/operations/exporting/export` group. Repeat the T008 to T015 steps.
+- [ ] T028 [US1] Convert slice 13. The scope is the second `src/operations/exporting/export` group. Repeat the T008 to T015 steps.
 - [ ] T029 [US1] List every area that the earlier slices did not cover. Run `.venv\Scripts\python.exe -m ruff check . --select LOG015 --output-format concise` and group the remaining files by area. Record the group boundary in [plan.md](plan.md).
 - [ ] T030 [US1] Convert each remaining group as its own slice. Repeat the T008 to T015 steps for each one. Keep every pull request at or below 500 changed lines.
 - [ ] T031 [US1] Verify the whole conversion. Run `.venv\Scripts\python.exe -m ruff check . --select LOG015 --statistics` and confirm zero results. SC-001 depends on this run.
@@ -154,7 +154,7 @@ logger.info("Fetching device list for site %s", site_id)    # After
 
 - [ ] T032 [US3] Change line 164 of `pyproject.toml` from `select = ["E", "F", "W", "I", "UP", "B", "G"]` to `select = ["E", "F", "W", "I", "UP", "B", "G", "LOG015"]`. Add no other rule, per FR-017.
 - [ ] T033 [US3] Add a comment above the `select` list in `pyproject.toml`. State that a root logger record carries no module name and that an operator cannot filter it. Keep the comment inside 120 characters. Depends on T032, because both tasks edit the same file.
-- [ ] T034 [US3] Read `src/utils/logger_utils.py` in full. Confirm that the module logger does not sit inside a filter or a handler. A record from inside the logging path can re-enter that path and can recurse without end.
+- [ ] T034 [US3] Read `src/foundation/support/utils/logger_utils.py` in full. Confirm that the module logger does not sit inside a filter or a handler. A record from inside the logging path can re-enter that path and can recurse without end.
 - [ ] T035 [US3] Prove the negative case for SC-008. Add one temporary `logging.info("temp")` call to a tracked file under `src/`. Run `.venv\Scripts\python.exe -m ruff check .` and confirm that it reports `LOG015` and exits with code 1. Remove the line. Run `git status` and confirm that the tree holds no leftover change.
 
 **Checkpoint**: The gate reports a root logger call. SC-007 and SC-008 now hold.

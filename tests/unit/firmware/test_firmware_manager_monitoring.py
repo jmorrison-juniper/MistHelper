@@ -19,8 +19,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-import src.firmware.firmware_manager as fm_mod
-from src.firmware.firmware_manager import FirmwareManager, FirmwareManagerConfig
+import src.operations.execution.firmware.firmware_manager as fm_mod
+from src.operations.execution.firmware.firmware_manager import FirmwareManager, FirmwareManagerConfig
 
 
 def _make_manager(**overrides: Any) -> FirmwareManager:

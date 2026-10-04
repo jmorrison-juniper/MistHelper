@@ -14,9 +14,15 @@ from typing import Any
 
 import pytest
 
-from src.firmware.upgrade_service import CancelOutcome, DeviceTarget, GatewayFamily, PlanRoute, UpgradePlan
-from src.upgrade_portal.runtime.signals import ConfirmationRequiredError, StopOutcome
-from src.upgrade_portal.upgrade import stop
+from src.interfaces.portals.upgrade_portal.runtime.signals import ConfirmationRequiredError, StopOutcome
+from src.interfaces.portals.upgrade_portal.upgrade import stop
+from src.operations.execution.firmware.upgrade_service import (
+    CancelOutcome,
+    DeviceTarget,
+    GatewayFamily,
+    PlanRoute,
+    UpgradePlan,
+)
 
 RUN_ID = "run-" + "b" * 32
 MAC_ONE = "5c5b350e0001"

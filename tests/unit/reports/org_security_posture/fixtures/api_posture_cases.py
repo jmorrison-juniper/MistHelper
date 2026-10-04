@@ -1,6 +1,6 @@
 """API posture fixture cases."""
 
-from src.reports.org_security_posture.models import OrganizationSecuritySourceData
+from src.mist.intelligence.reports.org_security_posture.models import OrganizationSecuritySourceData
 
 
 class ApiPostureCases:

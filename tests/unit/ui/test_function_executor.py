@@ -1,11 +1,11 @@
-"""Unit tests for src/ui/execution/function_executor.py."""
+"""Unit tests for src/interfaces/visualization/ui/execution/function_executor.py."""
 
 from __future__ import annotations
 
 from typing import Any
 from unittest.mock import MagicMock
 
-from src.ui.execution.function_executor import FunctionExecutor, _redact
+from src.interfaces.visualization.ui.execution.function_executor import FunctionExecutor, _redact
 
 
 def _api_call(org_id: str, limit: int = 100):  # test stub

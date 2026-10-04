@@ -35,7 +35,7 @@ documentation and the code disagree.
 
 ### D1. Place the new application outside `web_portal/`
 
-**Decision**: Create the package `src/upgrade_portal/`.
+**Decision**: Create the package `src/interfaces/portals/upgrade_portal/`.
 
 **Rationale**: `pyproject.toml:161` excludes `web_portal` from ruff.
 `pyproject.toml:273-281` excludes `web_portal` from mypy. Code inside
@@ -78,12 +78,12 @@ more workers.
 `natural_pk`.
 
 **Rationale**: `composite_pk` dual-writes to Redis, and the Redis JSON writer
-applies an expiry to every key (`src/db/redis_writer.py:598`). FR-032a forbids a
+applies an expiry to every key (`src/foundation/persistence/db/redis_writer.py:598`). FR-032a forbids a
 storage path that expires a record. `auto_increment_with_unique` mints a fresh
-identifier on every write (`src/db/arango_writer.py:4039`), so a retry would
+identifier on every write (`src/foundation/persistence/db/arango_writer.py:4039`), so a retry would
 duplicate the record instead of replacing it.
 
-### D5. Add a new upgrade seam at `src/firmware/upgrade_service.py`
+### D5. Add a new upgrade seam at `src/operations/execution/firmware/upgrade_service.py`
 
 **Decision**: Add a module with `build_body`, `plan_upgrade`, `invoke_upgrade`,
 and `classify_gateway`, plus frozen dataclasses. Call that module from the
@@ -108,7 +108,7 @@ sequential. Never fan out per device.
 **Rationale**: `mistapi.get_all` follows a cursor, so pages inside one group must
 run in order. A per-device fan-out costs about 125 times the requests for no gain.
 The rate limit is 5000 calls each hour for each token
-(`src/utils/rate_limiting.py:56`).
+(`src/foundation/support/utils/rate_limiting.py:56`).
 
 ### D7. Use threads, not asyncio
 
@@ -132,8 +132,8 @@ a forward migration and a range query. A text value does not.
 **Decision**: After the portal writes a capture, the portal reads the document key
 back and compares it. The portal reports the true outcome to the operator.
 
-**Rationale**: `WriteResult.success` is not proof. `src/export/data_exporter.py:141`
-gates every polyglot write on a container check, and `src/db/router.py:372-382`
+**Rationale**: `WriteResult.success` is not proof. `src/operations/exporting/export/data_exporter.py:141`
+gates every polyglot write on a container check, and `src/foundation/persistence/db/router.py:372-382`
 returns `success=True` after it writes zero rows. Issue #1824 tracks the repair. A
 read-back does not wait for that repair.
 
@@ -204,14 +204,14 @@ Three lines of evidence support the cloud side.
    `documentation/api/sites/GET_sites_site_id_stats_devices.md:7565`.
 
 The repository side is clear and negative. `research/upgrade-reuse.md` section 4.4
-reports zero matches for the Junos gateway model family across `src/firmware/`.
+reports zero matches for the Junos gateway model family across `src/operations/execution/firmware/`.
 The switch upgrader filters on `d.get("type") == "switch"`
-(`src/firmware/bulk_switch_upgrader.py:898`), so a gateway never enters that path.
+(`src/operations/execution/firmware/bulk_switch_upgrader.py:898`), so a gateway never enters that path.
 
 **Result**: the Junos gateway path is new work, but it is the same cloud call that
 the switch path already makes. The only new logic is the family split.
 `classify_gateway` performs that split. The one existing discriminator is
-`_is_ssr_inventory_row` at `src/firmware/firmware_manager.py:2291`, which matches
+`_is_ssr_inventory_row` at `src/operations/execution/firmware/firmware_manager.py:2291`, which matches
 a type value of `ssr` or a model string that holds `SSR` or `128T`.
 
 ---
@@ -240,23 +240,23 @@ The plan routes around each item. No item blocks the feature.
 7. `mistapi/api/v1/orgs/ssr.py:167` builds the cancel path inside
    `getOrgSsrUpgrade`. The status call therefore reads the cancel path. This is an
    SDK defect. The portal must not call `getOrgSsrUpgrade`.
-8. `src/device/_utility_commands_show.py:384-385` claims menu 137 for the top
+8. `src/mist/resources/device/_utility_commands_show.py:384-385` claims menu 137 for the top
    command. The real menu number is 125.
-9. `src/firmware/firmware_manager.py:3713` writes `ActiveUpgrades.json` to the
+9. `src/operations/execution/firmware/firmware_manager.py:3713` writes `ActiveUpgrades.json` to the
    process working directory. Every output belongs under `data/`.
-10. `src/db/retention.py:100` reads an attribute named `_database`, but
-    `ArangoDBWriter` names the handle `self._db` (`src/db/arango_writer.py:3903`).
+10. `src/foundation/persistence/db/retention.py:100` reads an attribute named `_database`, but
+    `ArangoDBWriter` names the handle `self._db` (`src/foundation/persistence/db/arango_writer.py:3903`).
     Storage usage always reports 0.0 and the purge never runs. Record this. Do not
     repair it in this feature, because FR-032 wants unlimited retention.
-11. `src/refactors/endpoint_primary_key_strategies.py:22` lists the strategy names
+11. `src/foundation/support/refactors/endpoint_primary_key_strategies.py:22` lists the strategy names
     `auto_pk` and `time_series` in its module docstring. Neither name appears in
     any entry. The docstring is stale.
-12. `src/auth/interactive/msp_org_selector.py:155-156` hard-codes `current_page = 0`
+12. `src/mist/access/auth/interactive/msp_org_selector.py:155-156` hard-codes `current_page = 0`
     and `total_pages = 1`. The navigation branches at `:208` and `:210` can never
     run. The portal builds its own organization picker.
-13. `src/firmware/bulk_ap_upgrader.py:1025` sets `p2p_parallelism`, but no body
+13. `src/operations/execution/firmware/bulk_ap_upgrader.py:1025` sets `p2p_parallelism`, but no body
     builder reads it. The access point site path drops the value.
-14. `src/firmware/bulk_switch_upgrader.py` sends a canary strategy with no canary
+14. `src/operations/execution/firmware/bulk_switch_upgrader.py` sends a canary strategy with no canary
     phase list.
 15. The coverage floor differs between `pyproject.toml:419-420`, which sets 90, and
     `.github/workflows/ci.yml:71`, which sets 80. Target 90.

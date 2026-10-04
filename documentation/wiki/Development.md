@@ -2,7 +2,7 @@
 
 Recommended maintenance targets:
 
-- Keep API access in `src/api/`, export code in `src/export/`, and SSH code in `src/ssh/`
+- Keep API access in `src/mist/access/api/`, export code in `src/operations/exporting/export/`, and SSH code in `src/operations/execution/ssh/`
 - Add unit tests for validators (hostname, port, command sanitation)
 - Introduce optional structured JSON logging mode (feature flag)
 

@@ -16,7 +16,7 @@ Why:
 # module import cleanly before pytest has resolved the runtime types.
 from __future__ import annotations
 
-from src.utils.operation_registry import OperationRegistry
+from src.foundation.support.utils.operation_registry import OperationRegistry
 
 
 def test_menu_207_registered_as_destructive() -> None:

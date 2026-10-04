@@ -53,8 +53,8 @@ crashes the audit if the UI changes.
 ### Quality gates (must pass)
 ```powershell
 python -m py_compile MistHelper.py
-ruff check src/site/address_audit/
-black --check src/site/address_audit/
+ruff check src/mist/resources/site/address_audit/
+black --check src/mist/resources/site/address_audit/
 ```
 
 ### Unit tests
@@ -82,6 +82,6 @@ resolver + cache, 8-state classification, table rendering/truncation, CSV save.
 - No Mist geocoding REST call (the endpoint does not exist).
 - No writes to Mist site records (`AddressCorrector` is an inert stub).
 - No new required dependencies; `rapidfuzz`/`scourgify` are optional with fallbacks.
-- New code only under `src/site/address_audit/`; only 2 additive lines in `MistHelper.py`.
+- New code only under `src/mist/resources/site/address_audit/`; only 2 additive lines in `MistHelper.py`.
 - ASCII-only logs; `safe_input()` everywhere; every executable line commented;
   info-before/debug-after every action.

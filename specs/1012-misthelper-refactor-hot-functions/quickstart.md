@@ -50,7 +50,7 @@ grep -n "tqdm extracted to SKIP_ALWAYS" MistHelper.py    # Expect: 1 hit
 
 ### 2a. Create the new module
 
-Create `src/refactors/is_debug_mode.py`:
+Create `src/foundation/support/refactors/is_debug_mode.py`:
 
 ```python
 """is_debug_mode extracted from MistHelper (SC-002).
@@ -95,7 +95,7 @@ Remove `EnvironmentUtils.is_debug_mode` at `MistHelper.py:5891-5900` entirely (0
 At the appropriate import block near the top of `MistHelper.py`:
 
 ```python
-from src.refactors.is_debug_mode import IsDebugMode
+from src.foundation.support.refactors.is_debug_mode import IsDebugMode
 ```
 
 ### 2d. Rewrite the 12 callsites
@@ -110,7 +110,7 @@ For each hit, rewrite `is_debug_mode()` -> `IsDebugMode.check()`.
 
 ### 2e. Rename `is_debug_mode_fn` -> `check_fn` (6 occurrences; canonical NOTE at slot only)
 
-- `src/export/site_export_utils.py` at L32, L52, L64, L76, L337 — rename identifier in place at all 5 sites. Add the canonical rename NOTE **ONLY at L32** (module-level slot declaration):
+- `src/operations/exporting/export/site_export_utils.py` at L32, L52, L64, L76, L337 — rename identifier in place at all 5 sites. Add the canonical rename NOTE **ONLY at L32** (module-level slot declaration):
   ```python
   # NOTE: renamed from is_debug_mode; wiring source IsDebugMode.check at MistHelper.py:13372.
   ```
@@ -130,7 +130,7 @@ grep -Rn "renamed from is_debug_mode" src/ MistHelper.py           # Expect: 1 h
 
 ### 3a. Create the new module
 
-Create `src/refactors/connection_pool_executor.py` (skeleton):
+Create `src/foundation/support/refactors/connection_pool_executor.py` (skeleton):
 
 ```python
 """execute_with_connection_pool_management extracted from MistHelper (SC-003).
@@ -185,25 +185,25 @@ Remove all four functions at `MistHelper.py:7503-7576`. Replace with the mandato
 At the appropriate import block in `MistHelper.py` and in each of the 3 caller files:
 
 ```python
-from src.refactors.connection_pool_executor import ConnectionPoolExecutor
+from src.foundation.support.refactors.connection_pool_executor import ConnectionPoolExecutor
 ```
 
 ### 3d. Rewrite the 7 callsites
 
 - `MistHelper.py:6309, 10076, 15399, 15564` — 4 rewrites
-- `src/gateway/gateway_export_utils.py:48, 550` — 2 rewrites
-- `src/gateway/gateway_stats_exporter.py:32` — 1 rewrite
+- `src/mist/resources/gateway/gateway_export_utils.py:48, 550` — 2 rewrites
+- `src/mist/resources/gateway/gateway_stats_exporter.py:32` — 1 rewrite
 
 For each hit, rewrite `execute_with_connection_pool_management(...)` -> `ConnectionPoolExecutor.execute(...)` (arguments preserved verbatim).
 
 ### 3e. Rename `connection_pool_fn` -> `execute_fn` (6 occurrences; canonical NOTE at slot only)
 
-- `src/gateway/overrides/_deps.py` at L18, L33, L41, L49 — rename identifier in place at all 4 sites. Add the canonical rename NOTE **ONLY at L18** (module-level slot declaration):
+- `src/mist/resources/gateway/overrides/_deps.py` at L18, L33, L41, L49 — rename identifier in place at all 4 sites. Add the canonical rename NOTE **ONLY at L18** (module-level slot declaration):
   ```python
   # NOTE: renamed from execute_with_connection_pool_management; wiring source ConnectionPoolExecutor.execute at MistHelper.py:15564.
   ```
   The other 3 sites (L33/L41/L49) get identifier rename WITHOUT breadcrumbs.
-- `src/gateway/overrides/device_data_fetcher.py:40` — rename identifier in place. **No breadcrumb** at this site.
+- `src/mist/resources/gateway/overrides/device_data_fetcher.py:40` — rename identifier in place. **No breadcrumb** at this site.
 - `MistHelper.py:15564` — rewrite the kwarg key `connection_pool_fn=<callable>` -> `execute_fn=ConnectionPoolExecutor.execute`. **No breadcrumb** at this site; the cluster's canonical NOTE lives on `_deps.py:L18`.
 
 ### 3f. Verify
@@ -241,8 +241,8 @@ All three must report zero diff / zero issues.
 ## Step 6 — Compliance Verification
 
 ```bash
-python -m tools.compliance_analyzer src/refactors/is_debug_mode.py            # Expect: A+/100
-python -m tools.compliance_analyzer src/refactors/connection_pool_executor.py # Expect: A+/100
+python -m tools.compliance_analyzer src/foundation/support/refactors/is_debug_mode.py            # Expect: A+/100
+python -m tools.compliance_analyzer src/foundation/support/refactors/connection_pool_executor.py # Expect: A+/100
 python -m tools.compliance_analyzer --repo-wide                                # Expect: >=99.6/A+
 pylint src/ MistHelper.py                                                       # Expect: >=8.74/10
 ```
@@ -271,7 +271,7 @@ Single bounded PR landing the three hot-bucket actions from `specs/1012-misthelp
 - **Action 3 (SC-003/005)**: Extract `execute_with_connection_pool_management` + 3 private helpers -> `ConnectionPoolExecutor.execute` + 3 private static methods (7 callsites), rename `connection_pool_fn` -> `execute_fn` (6 occurrences).
 
 ## Edit Surface
-- 2 new files under `src/refactors/`
+- 2 new files under `src/foundation/support/refactors/`
 - 19 callsite rewrites
 - 12 DI-slot rename occurrences
 - 5 mandatory NOTE breadcrumb sites (grep-audited per SC-014) — 3 extraction + 2 DI-rename canonical NOTEs

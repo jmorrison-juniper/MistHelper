@@ -19,7 +19,7 @@
 | Input | `InputUtils.safe_input()` for all prompts, `"CONFIRM"` gate for writes |
 | Org ID | `ConfigUtils.get_cached_or_prompted_org_id()` |
 | Caching | JSON files in `data/` directory |
-| Delete | `src/ssid_consolidation/` directory (old broken implementation) |
+| Delete | `src/operations/execution/ssid_consolidation/` directory (old broken implementation) |
 
 ---
 
@@ -122,13 +122,13 @@ SSIDTemplateConsolidationManager
 ### Task 0: Cleanup — Delete Old Implementation
 
 **Effort**: Small
-**Files**: `src/ssid_consolidation/` (delete), `MistHelper.py` (remove old launcher)
+**Files**: `src/operations/execution/ssid_consolidation/` (delete), `MistHelper.py` (remove old launcher)
 **FR**: FR-003
 
-1. Delete `src/ssid_consolidation/` directory entirely.
+1. Delete `src/operations/execution/ssid_consolidation/` directory entirely.
 2. Remove `SSIDTemplateConsolidationLauncher` class (lines ~12862–12943).
 3. Update menu 159 registration to point to `SSIDTemplateConsolidationManager.execute`.
-4. Remove the `from src.ssid_consolidation...` import block in the old launcher.
+4. Remove the `from src.operations.execution.ssid_consolidation...` import block in the old launcher.
 
 **Verification**: `python -m py_compile MistHelper.py` passes. Menu 159 shows new description.
 
@@ -477,7 +477,7 @@ Task 2 (skeleton) ──→ Task 10 (menu update)
 | - | - | - |
 | FR-001 | Task 2 | Class inside MistHelper.py |
 | FR-002 | Task 10 | Menu 159 registration |
-| FR-003 | Task 0 | Delete src/ssid_consolidation/ |
+| FR-003 | Task 0 | Delete src/operations/execution/ssid_consolidation/ |
 | FR-004 | Task 2 | MIST_TARGET_SSID env var |
 | FR-005 | Task 2 | Runtime override prompt |
 | FR-006 | Task 2 | Single SSID scope per run |

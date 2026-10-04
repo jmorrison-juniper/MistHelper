@@ -28,8 +28,8 @@ from __future__ import annotations
 
 import pytest
 
-from src.utils.menu_entry import MenuEntry  # WHY: fixtures must match the production menu row.
-from src.utils.operation_registry import OperationRegistry
+from src.foundation.support.utils.menu_entry import MenuEntry  # WHY: fixtures must match the production menu row.
+from src.foundation.support.utils.operation_registry import OperationRegistry
 from web_portal.services.operation import (
     CATEGORY_RANGES,
     PORTAL_RUNNABLE_CATEGORIES,

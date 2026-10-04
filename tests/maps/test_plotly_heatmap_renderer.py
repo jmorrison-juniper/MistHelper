@@ -4,7 +4,7 @@ import logging
 
 import plotly.graph_objects as go
 
-from src.maps.plotly_heatmap_renderer import PlotlyCoverageHeatmapRenderer
+from src.interfaces.visualization.maps.plotly_heatmap_renderer import PlotlyCoverageHeatmapRenderer
 
 
 def _sample_coverage() -> dict:

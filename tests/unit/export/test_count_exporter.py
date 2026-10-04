@@ -12,8 +12,8 @@ from unittest.mock import MagicMock, patch
 import mistapi
 import pytest
 
-from src.export.count_exporter import _MSP_OPS, _ORG_OPS, _SITE_OPS, CountExporter, _CountOp
-from src.refactors.endpoint_primary_key_strategies import ENDPOINT_PRIMARY_KEY_STRATEGIES
+from src.foundation.support.refactors.endpoint_primary_key_strategies import ENDPOINT_PRIMARY_KEY_STRATEGIES
+from src.operations.exporting.export.count_exporter import _MSP_OPS, _ORG_OPS, _SITE_OPS, CountExporter, _CountOp
 
 ALL_OPS = list(_ORG_OPS) + list(_SITE_OPS) + list(_MSP_OPS)
 

@@ -6,8 +6,11 @@ from dataclasses import dataclass  # WHY: fake client responses mimic SDK respon
 from datetime import UTC, datetime  # WHY: make audit timestamps deterministic.
 from typing import Any  # WHY: fake responses carry dynamic payloads.
 
-from src.troubleshooting.rf_diagnostics.models import STATUS_SUCCESS, STATUS_TIMEOUT  # WHY: assert outcomes.
-from src.troubleshooting.rf_diagnostics.spectrum import SpectrumAnalysisRunner  # WHY: test target.
+from src.mist.intelligence.troubleshooting.rf_diagnostics.models import (
+    STATUS_SUCCESS,
+    STATUS_TIMEOUT,
+)  # WHY: assert outcomes.
+from src.mist.intelligence.troubleshooting.rf_diagnostics.spectrum import SpectrumAnalysisRunner  # WHY: test target.
 
 
 @dataclass

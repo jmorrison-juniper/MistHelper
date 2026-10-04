@@ -41,7 +41,7 @@ Keep all declared-index and data behavior unchanged.
 - Keep new methods within five parameters, five logical blocks, and 25 lines where possible.
 - Add no pass-through compatibility helper.
 - Remove `_can_resolve` instead of retaining a wrapper.
-- Existing `src/db/` has six direct Python files. The user explicitly reserves one new resolver module at this existing boundary.
+- Existing `src/foundation/persistence/db/` has six direct Python files. The user explicitly reserves one new resolver module at this existing boundary.
 - Existing package hierarchy debt remains outside this one-issue repair. A separate maintenance change can regroup the database package.
 - Existing `DatabaseConfig.from_env` exceeds the method length limit. Preserve its configuration and credential semantics without an unrelated class migration.
 - Existing `capture/store.py` uses long module functions. Add only the released DNS preflight and preserve its real connection logic.
@@ -69,12 +69,12 @@ specs/3318-bounded-database-discovery/
 ### Source Code (repository root)
 
 ```text
-src/db/
+src/foundation/persistence/db/
   __init__.py
   host_resolver.py
   arango_writer.py
   redis_writer.py
-src/upgrade_portal/capture/store.py
+src/interfaces/portals/upgrade_portal/capture/store.py
 tests/unit/db_discovery/
   conftest.py
   fakes.py
@@ -103,7 +103,7 @@ Do not run automatic commit hooks or change `.specify/` files.
 
 | Existing boundary | Reason for the surgical change | Separate maintenance action |
 | - | - | - |
-| Six files in `src/db/` | The user reserves `src/db/host_resolver.py` for this issue. | Regroup the existing writers in a separate issue. |
+| Six files in `src/foundation/persistence/db/` | The user reserves `src/foundation/persistence/db/host_resolver.py` for this issue. | Regroup the existing writers in a separate issue. |
 | Long `DatabaseConfig.from_env` method | Credential and standalone behavior must remain unchanged. | Refactor configuration assembly in a separate issue. |
 
 ## Design
@@ -138,7 +138,7 @@ The verified bundle retains its complete original one-commit range over `ff3cc1b
 The rebase uses `rebase.updateRefs=false` and changes no peer branch.
 The rebased preparation commit is `67e53ecad8b94bafa50b35796c7d2e68ef05224d`.
 
-Only the inherited `_preflight_dns` method and necessary imports change in `src/db/arango_writer.py`.
+Only the inherited `_preflight_dns` method and necessary imports change in `src/foundation/persistence/db/arango_writer.py`.
 All other writer methods and the declared-index manager remain unchanged.
 Controlled native tests prove the caller deadline, cache expiry, refusal, recovery, finite work, and cleanup.
 The separate publication decision remains open.

@@ -26,9 +26,13 @@ from flask import Flask, abort  # The application type, and the abort call of a 
 from flask.testing import FlaskClient  # The client type that drives every request.
 from werkzeug.test import TestResponse  # The answer type of the test client.
 
-from src.upgrade_portal.app import factory  # The module that owns the fault handler and the rule.
-from src.upgrade_portal.app.config import ALLOWED_ADDRESSES_VARIABLE  # The variable that arms the allow list.
-from src.upgrade_portal.runtime import identity  # The real session registry, so one client signs in for real.
+from src.interfaces.portals.upgrade_portal.app import factory  # The module that owns the fault handler and the rule.
+from src.interfaces.portals.upgrade_portal.app.config import (
+    ALLOWED_ADDRESSES_VARIABLE,
+)  # The variable that arms the allow list.
+from src.interfaces.portals.upgrade_portal.runtime import (
+    identity,
+)  # The real session registry, so one client signs in for real.
 
 UNKNOWN_PATH = "/unknown-upgrade-portal-route"  # The path of the issue. No route serves it.
 POST_ONLY_PATH = "/auth/signout"  # A real route that answers `POST` only.

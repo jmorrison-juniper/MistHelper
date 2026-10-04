@@ -39,13 +39,13 @@ These tasks block User Stories 1, 2, and 3.
   must answer its reasons. 4 failures found no `DeviceRead` name. 1 failure
   found no warning for a lost page.
 - [x] T009 Change `collect_pages` and `default_cloud_read` in
-  `src/upgrade_portal/app/routes/select.py`. Walk each page, and name a fault
+  `src/interfaces/portals/upgrade_portal/app/routes/select.py`. Walk each page, and name a fault
   of the first page. Return a `DeviceRead`, and keep a whole read only.
-- [x] T010 Add `SiteList` to `src/upgrade_portal/app/routes/select.py`. Change
+- [x] T010 Add `SiteList` to `src/interfaces/portals/upgrade_portal/app/routes/select.py`. Change
   `build_site_rows` to return it. Move `site_choice_refusal` to
   `SiteList.rows`.
 - [x] T011 Move `selected_rows` and `_site_labels` to `SiteList.rows` in
-  `src/upgrade_portal/app/routes/org_upgrade.py`.
+  `src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py`.
 - [x] T012 Add the lost-page organization and its operator in
   `tests/e2e/upgrade_portal/lost_page_seeds.py`.
 - [x] T013 Add the lost-page cloud session and the real read for that
@@ -68,9 +68,9 @@ single-site mode. Read the two notes above the table.
   5 failures found no note. 1 failure found no flag in the values of the
   template. 6 failures found no completeness field in the site list answer.
 - [x] T015 [US1] Pass `site_list_partial` and `site_count_partial` from
-  `sites_page` in `src/upgrade_portal/app/routes/select.py`.
+  `sites_page` in `src/interfaces/portals/upgrade_portal/app/routes/select.py`.
 - [x] T016 [US1] Add the two Caution notes to
-  `src/upgrade_portal/app/assets/templates/select/sites.html`.
+  `src/interfaces/portals/upgrade_portal/app/assets/templates/select/sites.html`.
 - [x] T017 [US1] Add the single-site journey to
   `tests/e2e/upgrade_portal/test_lost_site_page.py`. Save a screenshot, and
   read it.
@@ -102,7 +102,7 @@ first page, and push the forward control.
   `site_list_complete` and `device_counts_complete` on both paths. Also cover
   the rows, which must not change.
 - [x] T021 [US3] Add the two fields in `list_sites` in
-  `src/upgrade_portal/app/routes/select.py`.
+  `src/interfaces/portals/upgrade_portal/app/routes/select.py`.
 - [x] T022 [P] [US3] Name the two fields in
   `specs/1823-upgrade-capture-portal/contracts/http-api.md`.
 - [x] T023 [US3] Read the site list answer in the browser in
@@ -131,7 +131,7 @@ statistics read loses its second page.
   T025 tests passed, because a whole single page reads the same on both code
   versions.
 - [x] T027 [US4] Change `SiteStatsFirmwareEvidenceReader.read` in
-  `src/upgrade_portal/api/run_controls/routes.py`. Add `_read_pages`,
+  `src/interfaces/portals/upgrade_portal/api/run_controls/routes.py`. Add `_read_pages`,
   `_unread_evidence`, and `_target_id`.
 
 ## Phase 7: Polish

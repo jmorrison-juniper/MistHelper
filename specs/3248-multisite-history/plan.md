@@ -6,8 +6,8 @@
 ## Technical context
 
 - Python 3.13, Flask 3, and `python-arango` through the capture store.
-- The history page is `GET /history` in `src/upgrade_portal/app/routes/review.py`.
-- The template is `src/upgrade_portal/app/assets/templates/review/history.html`.
+- The history page is `GET /history` in `src/interfaces/portals/upgrade_portal/app/routes/review.py`.
+- The template is `src/interfaces/portals/upgrade_portal/app/assets/templates/review/history.html`.
 - The aggregate service writes each operation record into `upgrade_runs` through `write_run`.
 - The job page `/upgrade/org/jobs/<operation_id>` shows an operation only to the owner session of the selected organization.
 
@@ -17,7 +17,7 @@ No new dependency is necessary. The change adds no collection and no index.
 
 ### 1. The store
 
-File: `src/upgrade_portal/capture/store.py`.
+File: `src/interfaces/portals/upgrade_portal/capture/store.py`.
 
 - `_RUN_LIST_HEAD` adds `FILTER doc.operation_id == null`. The count query and the page query of `list_runs` both start with this head, so the total and the rows agree. A single-site run holds no `operation_id` field, and AQL reads a missing field as `null`.
 - `OPERATION_LIST_FIELDS` names the projected fields of one operation row.
@@ -29,7 +29,7 @@ The operation query returns no `children`, no `owner` history, and no device lis
 
 ### 2. The shaper
 
-File: `src/upgrade_portal/upgrade/org_history.py`. The module has no Flask import and no identity import, so a unit test calls it directly.
+File: `src/interfaces/portals/upgrade_portal/upgrade/org_history.py`. The module has no Flask import and no identity import, so a unit test calls it directly.
 
 - `OperationHistorySection` is the frozen value that the template reads: `rows`, `org_selected`, and `database_available`.
 - `OrgOperationHistory(owner_key, moment_text)` builds the section.
@@ -38,14 +38,14 @@ File: `src/upgrade_portal/upgrade/org_history.py`. The module has no Flask impor
 
 ### 3. The route
 
-File: `src/upgrade_portal/app/routes/review.py`.
+File: `src/interfaces/portals/upgrade_portal/app/routes/review.py`.
 
 - `OPERATION_LISTER_KEY = "OPERATION_LISTER"` is the new seam. A test injects a stand-in through the application config.
 - `store_operation_rows(org_id, site_id="", limit=...)` is the fallback. It follows `store_run_rows` and loads the store module at call time.
 - `operation_history_section(site_id, limit)` reads the owner key and the selected organization, and then builds the section.
 - `history_page` passes `operation_section` to the template.
 
-File: `src/upgrade_portal/app/seam_shapes.py` records the call `lister(org_id, site_id=..., limit=...)` for the new seam.
+File: `src/interfaces/portals/upgrade_portal/app/seam_shapes.py` records the call `lister(org_id, site_id=..., limit=...)` for the new seam.
 
 ### 4. The template
 
@@ -53,7 +53,7 @@ The section follows the bulk-action dialog and comes before the Audit log. Every
 
 ### 5. The aggregate record
 
-File: `src/firmware/aggregate_upgrade_service.py`. `_build_record` writes `created_at` and `updated_at` from one clock read.
+File: `src/operations/execution/firmware/aggregate_upgrade_service.py`. `_build_record` writes `created_at` and `updated_at` from one clock read.
 
 ### 6. The browser test stand-ins
 

@@ -13,7 +13,7 @@
 
 | Test file | Current legacy/facade dependency | Planned migration |
 | - | - | - |
-| `tests/unit/test_exports.py` | direct facade use: `MistHelper.SiteExportUtils`, `MistHelper.InsightMetricsUtils` | migrate assertions to canonical `src.export.site_export_utils.SiteExportUtils` / local helper functions where possible |
+| `tests/unit/test_exports.py` | direct facade use: `MistHelper.SiteExportUtils`, `MistHelper.InsightMetricsUtils` | migrate assertions to canonical `src.operations.exporting.export.site_export_utils.SiteExportUtils` / local helper functions where possible |
 | `tests/unit/test_menu_13_device_stats.py` | direct facade use: `MistHelper.TimeUtils` | migrate to direct canonical helper import once stable module path is locked |
 | `tests/guardrails/test_wave1_*` | direct facade use: `MistHelper.OperationRegistry` | migrate to canonical menu registry module when extraction complete |
 

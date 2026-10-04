@@ -13,7 +13,7 @@
       "const": 1
     },
     "base_oid": {
-      "description": "The MIB root. It must equal DEFAULT_BASE_OID in src/metrics_gateway/snmp.py. The run stops when the two differ.",
+      "description": "The MIB root. It must equal DEFAULT_BASE_OID in src/interfaces/monitoring/metrics_gateway/snmp.py. The run stops when the two differ.",
       "type": "string",
       "pattern": "^\\.1\\.3\\.6\\.1\\.4\\.1(\\.[0-9]+)+$"
     },

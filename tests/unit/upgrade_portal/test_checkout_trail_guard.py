@@ -20,7 +20,7 @@ from pathlib import Path
 
 import pytest
 
-from src.upgrade_portal.runtime import lock
+from src.interfaces.portals.upgrade_portal.runtime import lock
 from tests.support.site_lock_trail import CheckoutTrailGuard
 
 logger = logging.getLogger(__name__)  # WHY: keep test log records on the module logger.

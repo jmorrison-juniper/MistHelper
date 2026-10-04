@@ -2,7 +2,9 @@
 
 import pytest  # WHY: parametrized tests cover supported operator input formats.
 
-from src.device.client_session_control.models import normalize_target  # WHY: pure normalizer owns target safety.
+from src.mist.resources.device.client_session_control.models import (
+    normalize_target,
+)  # WHY: pure normalizer owns target safety.
 
 
 @pytest.mark.parametrize(  # WHY: one table proves every accepted MAC input form.

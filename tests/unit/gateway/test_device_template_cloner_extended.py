@@ -14,13 +14,13 @@ from unittest.mock import MagicMock, patch  # MagicMock for injection, patch for
 
 import pytest  # Parametrize and monkeypatch fixtures
 
-from src.gateway.device_template_cloner import (  # SUT imports for direct manipulation
+from src.mist.resources.gateway.device_template_cloner import (  # SUT imports for direct manipulation
     COMMON_GATEWAY_MODELS,  # Constant list used to validate hardware picker output
     DeviceConfigTemplateClonerManager,  # Class under test
     DeviceTemplateClonerDeps,  # Frozen deps bundle required by the constructor
 )
 
-_SUT_LOGGER = "src.gateway.device_template_cloner"  # Module logger name for caplog level scoping
+_SUT_LOGGER = "src.mist.resources.gateway.device_template_cloner"  # Module logger name for caplog level scoping
 
 
 def _build_deps(**overrides: Any) -> DeviceTemplateClonerDeps:
@@ -51,7 +51,7 @@ def test_list_sites_extracts_data_from_response() -> None:
     manager = _build_manager()  # Build cloner with default mocks
     fake_response = SimpleNamespace(data=[{"id": "site-1", "name": "Site A"}])  # API response stub
     with patch(  # Patch listOrgSites at module import path used by SUT
-        "src.gateway.device_template_cloner.mistapi.api.v1.orgs.sites.listOrgSites",
+        "src.mist.resources.gateway.device_template_cloner.mistapi.api.v1.orgs.sites.listOrgSites",
         return_value=fake_response,
     ) as mocked_call:
         sites = manager._list_sites()  # Invoke helper under test
@@ -64,7 +64,7 @@ def test_list_sites_returns_empty_when_response_missing_data_attr() -> None:
     manager = _build_manager()  # Build cloner with default mocks
     fake_response = object()  # Bare object with no .data attribute triggers empty branch
     with patch(  # Patch listOrgSites to return the attr-less response
-        "src.gateway.device_template_cloner.mistapi.api.v1.orgs.sites.listOrgSites",
+        "src.mist.resources.gateway.device_template_cloner.mistapi.api.v1.orgs.sites.listOrgSites",
         return_value=fake_response,
     ):
         sites = manager._list_sites()  # Invoke helper under test
@@ -107,7 +107,7 @@ def test_list_gateways_filters_only_gateway_type() -> None:
     ]
     fake_response = SimpleNamespace(data=mixed_devices)  # API response stub
     with patch(  # Patch listSiteDevices at module import path
-        "src.gateway.device_template_cloner.mistapi.api.v1.sites.devices.listSiteDevices",
+        "src.mist.resources.gateway.device_template_cloner.mistapi.api.v1.sites.devices.listSiteDevices",
         return_value=fake_response,
     ) as mocked_call:
         gateways = manager._list_gateways("site-1")  # Invoke helper under test
@@ -119,7 +119,7 @@ def test_list_gateways_returns_empty_when_response_missing_data_attr() -> None:
     """_list_gateways must return [] when the response object lacks a .data attribute."""
     manager = _build_manager()  # Build cloner with default mocks
     with patch(  # Patch listSiteDevices to return attr-less response
-        "src.gateway.device_template_cloner.mistapi.api.v1.sites.devices.listSiteDevices",
+        "src.mist.resources.gateway.device_template_cloner.mistapi.api.v1.sites.devices.listSiteDevices",
         return_value=object(),
     ):
         gateways = manager._list_gateways("site-1")  # Invoke helper under test
@@ -199,7 +199,7 @@ def test_fetch_device_config_returns_dict_on_success() -> None:
     manager = _build_manager()  # Build cloner with default mocks
     fake_response = SimpleNamespace(data={"id": "dev-1", "name": "gw", "ntp_servers": ["1.1.1.1"]})
     with patch(  # Patch getSiteDevice at module import path
-        "src.gateway.device_template_cloner.mistapi.api.v1.sites.devices.getSiteDevice",
+        "src.mist.resources.gateway.device_template_cloner.mistapi.api.v1.sites.devices.getSiteDevice",
         return_value=fake_response,
     ) as mocked_call:
         result = manager._fetch_device_config("site-1", "dev-1")  # Invoke helper under test
@@ -211,7 +211,7 @@ def test_fetch_device_config_returns_none_on_empty_response() -> None:
     """_fetch_device_config must return None when the API response is empty."""
     manager = _build_manager()  # Build cloner with default mocks
     with patch(  # Patch getSiteDevice to return an empty-data response
-        "src.gateway.device_template_cloner.mistapi.api.v1.sites.devices.getSiteDevice",
+        "src.mist.resources.gateway.device_template_cloner.mistapi.api.v1.sites.devices.getSiteDevice",
         return_value=SimpleNamespace(data={}),
     ):
         result = manager._fetch_device_config("site-1", "dev-1")  # Invoke helper under test
@@ -222,7 +222,7 @@ def test_fetch_device_config_returns_none_when_response_missing_data_attr() -> N
     """_fetch_device_config must return None when response has no .data attribute."""
     manager = _build_manager()  # Build cloner with default mocks
     with patch(  # Patch getSiteDevice to return attr-less response
-        "src.gateway.device_template_cloner.mistapi.api.v1.sites.devices.getSiteDevice",
+        "src.mist.resources.gateway.device_template_cloner.mistapi.api.v1.sites.devices.getSiteDevice",
         return_value=object(),
     ):
         result = manager._fetch_device_config("site-1", "dev-1")  # Invoke helper under test
@@ -244,7 +244,7 @@ def test_fetch_existing_template_names_returns_name_set() -> None:
         {"id": "t-4"},  # Missing name must be filtered out via .get() default
     ]
     with patch(  # Patch listOrgGatewayTemplates at module import path
-        "src.gateway.device_template_cloner.mistapi.api.v1.orgs.gatewaytemplates.listOrgGatewayTemplates",
+        "src.mist.resources.gateway.device_template_cloner.mistapi.api.v1.orgs.gatewaytemplates.listOrgGatewayTemplates",
         return_value=SimpleNamespace(data=templates),
     ):
         names = manager._fetch_existing_template_names()  # Invoke helper under test
@@ -255,7 +255,7 @@ def test_fetch_existing_template_names_returns_empty_when_response_missing_data_
     """_fetch_existing_template_names must return empty set when response has no .data."""
     manager = _build_manager()  # Build cloner with default mocks
     with patch(  # Patch listOrgGatewayTemplates to return attr-less response
-        "src.gateway.device_template_cloner.mistapi.api.v1.orgs.gatewaytemplates.listOrgGatewayTemplates",
+        "src.mist.resources.gateway.device_template_cloner.mistapi.api.v1.orgs.gatewaytemplates.listOrgGatewayTemplates",
         return_value=object(),
     ):
         names = manager._fetch_existing_template_names()  # Invoke helper under test
@@ -389,7 +389,7 @@ def test_create_template_returns_new_template_dict() -> None:
     fake_response = SimpleNamespace(data={"id": "tmpl-1", "name": "new-tmpl", "type": "standalone"})
     payload = {"name": "new-tmpl", "type": "standalone", "gateway_matching": {"enable": True}}
     with patch(  # Patch createOrgGatewayTemplate at module import path
-        "src.gateway.device_template_cloner.mistapi.api.v1.orgs.gatewaytemplates.createOrgGatewayTemplate",
+        "src.mist.resources.gateway.device_template_cloner.mistapi.api.v1.orgs.gatewaytemplates.createOrgGatewayTemplate",
         return_value=fake_response,
     ) as mocked_call:
         result = manager._create_template(payload)  # Invoke helper under test
@@ -401,7 +401,7 @@ def test_create_template_returns_none_on_empty_response() -> None:
     """_create_template must return None when the API response .data is empty."""
     manager = _build_manager()  # Build cloner with default mocks
     with patch(  # Patch createOrgGatewayTemplate to return empty .data
-        "src.gateway.device_template_cloner.mistapi.api.v1.orgs.gatewaytemplates.createOrgGatewayTemplate",
+        "src.mist.resources.gateway.device_template_cloner.mistapi.api.v1.orgs.gatewaytemplates.createOrgGatewayTemplate",
         return_value=SimpleNamespace(data={}),
     ):
         result = manager._create_template({"name": "n", "type": "standalone"})  # Invoke helper
@@ -412,7 +412,7 @@ def test_create_template_returns_none_when_response_missing_data_attr() -> None:
     """_create_template must return None when response object lacks a .data attribute."""
     manager = _build_manager()  # Build cloner with default mocks
     with patch(  # Patch createOrgGatewayTemplate to return attr-less object
-        "src.gateway.device_template_cloner.mistapi.api.v1.orgs.gatewaytemplates.createOrgGatewayTemplate",
+        "src.mist.resources.gateway.device_template_cloner.mistapi.api.v1.orgs.gatewaytemplates.createOrgGatewayTemplate",
         return_value=object(),
     ):
         result = manager._create_template({"name": "n"})  # Invoke helper under test

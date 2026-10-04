@@ -1,1 +1,1 @@
-"""Unit tests for src.db package."""
+"""Unit tests for src.foundation.persistence.db package."""

@@ -10,7 +10,7 @@ This pull request adds menu `291` implementation files for RRM optimize or reset
 
 ## Files
 
-- `src/site/rrm_reset/`
+- `src/mist/resources/site/rrm_reset/`
 - `tests/unit/site/rrm_reset/`
 - `specs/3571-rrm-reset-plan/`
 - `changelog.d/issue-3571-rrm-reset-plan.md`
@@ -35,7 +35,7 @@ Manual SpecKit analysis found no blocking inconsistency across `spec.md`, `plan.
 - [ ] New or changed guards state the measured count and prove one failing path
 - [ ] No new Ruff lint violations (`ruff check .`)
 - [ ] Code formatted with Black (`black --check --diff .`)
-- [x] mypy passes for `src/site/rrm_reset` (`mypy src/site/rrm_reset --config-file pyproject.toml`)
+- [x] mypy passes for `src/mist/resources/site/rrm_reset` (`mypy src/mist/resources/site/rrm_reset --config-file pyproject.toml`)
 
 ## Security
 
@@ -66,13 +66,13 @@ Manual SpecKit analysis found no blocking inconsistency across `spec.md`, `plan.
 
 ## Validation
 
-- `py_compile`: passed for `src/site/rrm_reset`.
-- `ruff check`: passed for `src/site/rrm_reset` and `tests/unit/site/rrm_reset`.
-- `black --check`: passed for `src/site/rrm_reset` and `tests/unit/site/rrm_reset`.
-- `mypy`: passed for `src/site/rrm_reset`.
-- `pydocstyle`: passed for `src/site/rrm_reset`.
+- `py_compile`: passed for `src/mist/resources/site/rrm_reset`.
+- `ruff check`: passed for `src/mist/resources/site/rrm_reset` and `tests/unit/site/rrm_reset`.
+- `black --check`: passed for `src/mist/resources/site/rrm_reset` and `tests/unit/site/rrm_reset`.
+- `mypy`: passed for `src/mist/resources/site/rrm_reset`.
+- `pydocstyle`: passed for `src/mist/resources/site/rrm_reset`.
 - `pytest`: `11 passed` for `tests/unit/site/rrm_reset`.
-- `complexity-gate`: passed for `src/site/rrm_reset` with max complexity `10`.
+- `complexity-gate`: passed for `src/mist/resources/site/rrm_reset` with max complexity `10`.
 - `test-quality-analyzer`: passed for changes since `origin/main`.
-- `vulture`: passed for `src/site/rrm_reset`.
-- `interrogate`: `100.0%` for `src/site/rrm_reset`.
+- `vulture`: passed for `src/mist/resources/site/rrm_reset`.
+- `interrogate`: `100.0%` for `src/mist/resources/site/rrm_reset`.

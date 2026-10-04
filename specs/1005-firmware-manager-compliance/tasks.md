@@ -17,16 +17,16 @@ description: "Task list for the Firmware Manager Compliance Refactor (specs/1005
 Every task in this file is not complete until ALL THREE commands report clean:
 
 ```bash
-python -m tools.compliance_analyzer src/firmware/firmware_manager.py   # score trends toward 100.0 / A+
-python -m ruff check src/firmware/firmware_manager.py                  # zero errors, zero warnings
-python -m py_compile src/firmware/firmware_manager.py                  # exit 0
+python -m tools.compliance_analyzer src/operations/execution/firmware/firmware_manager.py   # score trends toward 100.0 / A+
+python -m ruff check src/operations/execution/firmware/firmware_manager.py                  # zero errors, zero warnings
+python -m py_compile src/operations/execution/firmware/firmware_manager.py                  # exit 0
 ```
 
 Any task that regresses ruff / py_compile is reverted before moving on. Compliance score is expected to climb monotonically; a within-task dip is only acceptable if the very next task recovers it. The final target is exactly 100.0 / A+ with zero HIGH / zero MEDIUM / zero LOW findings across all seven analyzer rules — no intermediate grade is a pass.
 
 ## Format: `[ID] [P?] [Story] Description`
 
-- **[P]**: Task edits a file that no concurrent task is also editing. Because ~99% of this refactor lives in `src/firmware/firmware_manager.py`, [P] appears sparingly (only the MistHelper.py factory-body diff and the final read-only verification tasks).
+- **[P]**: Task edits a file that no concurrent task is also editing. Because ~99% of this refactor lives in `src/operations/execution/firmware/firmware_manager.py`, [P] appears sparingly (only the MistHelper.py factory-body diff and the final read-only verification tasks).
 - **[Story]**: Which user story from `spec.md` (US1..US6). Setup / Foundational / Polish tasks have no story label.
 - Every task lists the exact file path being edited.
 - Every task has a "Done when:" line stating the acceptance criterion for that task in isolation.
@@ -34,7 +34,7 @@ Any task that regresses ruff / py_compile is reverted before moving on. Complian
 ## Path Conventions
 
 - Repository root is the current working directory.
-- Primary edit target: `src/firmware/firmware_manager.py` (single file, 2450 lines pre-refactor, ~4000 lines post-refactor).
+- Primary edit target: `src/operations/execution/firmware/firmware_manager.py` (single file, 2450 lines pre-refactor, ~4000 lines post-refactor).
 - Sole permitted off-file diff: `MistHelper.py` lines 18791-18807 (the `FirmwareManager.create` factory body).
 - Optional plan reference update: `.github/copilot-instructions.md`.
 - Artifact drop directory: `specs/1005-firmware-manager-compliance/artifacts/`.
@@ -57,9 +57,9 @@ If a task's diff would introduce a violation of items 1-7, the task is not compl
 
 **Purpose**: Freeze the pre-refactor baseline so every subsequent task can be measured against a known starting point. No source code is changed in this phase.
 
-- [X] T-001 Capture baseline compliance analyzer output by running `python -m tools.compliance_analyzer src/firmware/firmware_manager.py` and saving stdout+stderr to `specs/1005-firmware-manager-compliance/artifacts/baseline_compliance.txt`. Confirm the recorded score is 51.0 and grade is F (matches spec claim of 82 violations: 6 HIGH, 34 MEDIUM, 42 LOW).
+- [X] T-001 Capture baseline compliance analyzer output by running `python -m tools.compliance_analyzer src/operations/execution/firmware/firmware_manager.py` and saving stdout+stderr to `specs/1005-firmware-manager-compliance/artifacts/baseline_compliance.txt`. Confirm the recorded score is 51.0 and grade is F (matches spec claim of 82 violations: 6 HIGH, 34 MEDIUM, 42 LOW).
   - **Done when:** file exists and its first line-block reports `Score: 51.0` and `Grade: F`, and the per-rule totals in the JSON block enumerate the exact 82 violations claimed by `spec.md`.
-- [X] T-002 [P] Capture baseline ruff + py_compile output by running both commands on `src/firmware/firmware_manager.py` and saving to `specs/1005-firmware-manager-compliance/artifacts/baseline_lint.txt`. Confirm both currently exit clean.
+- [X] T-002 [P] Capture baseline ruff + py_compile output by running both commands on `src/operations/execution/firmware/firmware_manager.py` and saving to `specs/1005-firmware-manager-compliance/artifacts/baseline_lint.txt`. Confirm both currently exit clean.
   - **Done when:** file records exit code 0 for both commands and no ruff violations are present pre-refactor (only the analyzer is failing).
 - [X] T-003 [P] Enumerate every callsite of `FirmwareManager.create(...)` and every direct impl-class import by running `grep -rn "FirmwareManager\.create\|from src\.firmware\.firmware_manager" MistHelper.py src/ tests/` and saving output to `specs/1005-firmware-manager-compliance/artifacts/callsites.txt`. Confirm exactly one impl-import (MistHelper.py line 18795 inside the factory body), one `def create` (line 18797), and five downstream `FirmwareManager.create(apisession, org_id)` calls (lines 19809, 22097, 22154, 22237, 22246). Any additional impl-class import discovered here is added as a follow-up task and blocks Phase 7.
   - **Done when:** callsites.txt matches the seven expected lines exactly. If anything else appears, halt and re-plan.
@@ -76,14 +76,14 @@ If a task's diff would introduce a violation of items 1-7, the task is not compl
 
 **CRITICAL**: No user story work can begin until this phase is complete.
 
-- [X] T-005 [T-DATACLASS] Add the `FirmwareManagerConfig` frozen dataclass to `src/firmware/firmware_manager.py` per `data-model.md`. Placement: below the module imports and above the `FirmwareManager` class. Requirements:
+- [X] T-005 [T-DATACLASS] Add the `FirmwareManagerConfig` frozen dataclass to `src/operations/execution/firmware/firmware_manager.py` per `data-model.md`. Placement: below the module imports and above the `FirmwareManager` class. Requirements:
   - Decorator: `@dataclass(frozen=True, slots=True, kw_only=True)`.
   - Eight fields matching the pre-refactor 8-parameter `__init__` 1:1 (see `data-model.md` field mapping table): `apisession: Any`, `org_id: str`, `safe_input_fn: Optional[SafeInputFn] = None`, `select_site_fn: Optional[SelectSiteFn] = None`, `check_cache_fn: Optional[CheckCacheFn] = None`, `get_csv_path_fn: Optional[GetCsvPathFn] = None`, `gateway_templates_fn: Optional[GeneratorFn] = None`, `sites_fn: Optional[GeneratorFn] = None`.
   - Type aliases (`SafeInputFn`, `SelectSiteFn`, `CheckCacheFn`, `GetCsvPathFn`, `GeneratorFn`) already exist in the module; reuse them, do not redefine.
   - Add `__post_init__` with the validation rules from `data-model.md`: `apisession` must not be `None`; `org_id` must be a non-empty `str`; each `*_fn` must be `None` or callable. Diagnostics per the table in `data-model.md`.
   - Every field declaration and every executable line inside `__post_init__` carries a `# WHY: <intent>` inline comment (fields count as executable lines for the analyzer).
   - Imports: add `from dataclasses import dataclass` and `from typing import Optional` at the top of the file if not already present. `Any` and `Callable` / `Iterable` are already imported.
-  - Verification: `python -m py_compile src/firmware/firmware_manager.py` exits 0; `python -m ruff check src/firmware/firmware_manager.py` clean; `python -c "from src.firmware.firmware_manager import FirmwareManagerConfig; print(list(FirmwareManagerConfig.__dataclass_fields__))"` prints all eight field names.
+  - Verification: `python -m py_compile src/operations/execution/firmware/firmware_manager.py` exits 0; `python -m ruff check src/operations/execution/firmware/firmware_manager.py` clean; `python -c "from src.operations.execution.firmware.firmware_manager import FirmwareManagerConfig; print(list(FirmwareManagerConfig.__dataclass_fields__))"` prints all eight field names.
   - **Done when:** `FirmwareManagerConfig` is importable, `__post_init__` rejects the three invalid cases from `data-model.md` (verified interactively), and no analyzer regression is introduced by the addition (existing 8-parameter `__init__` is still present and still flagged — that is expected and cleared in Phase 3).
 
 **Checkpoint**: `FirmwareManagerConfig` exists and is importable. `__init__` still has its pre-refactor 8-parameter shape (unchanged). US3 constructor work AND US2 MistHelper.py migration can now proceed independently.
@@ -94,13 +94,13 @@ If a task's diff would introduce a violation of items 1-7, the task is not compl
 
 **Goal**: Bring `FirmwareManager.__init__` from 8 parameters / 44 lines / STRUCT-PARAMS violation to 1 parameter (`config: FirmwareManagerConfig`) and <=15 lines / <=5 blocks / CC<=3. Preserve every module-global side effect via the `_bind_module_globals(config)` helper described in `research.md` R-2.
 
-**Independent Test**: `python -m tools.compliance_analyzer src/firmware/firmware_manager.py` shows `__init__` no longer flagged for STRUCT-PARAMS or STRUCT-LENGTH. Direct instantiation with the pre-refactor 8-kwarg pattern raises `TypeError` (contract C-3). Instantiation via `FirmwareManagerConfig` succeeds (contract C-1).
+**Independent Test**: `python -m tools.compliance_analyzer src/operations/execution/firmware/firmware_manager.py` shows `__init__` no longer flagged for STRUCT-PARAMS or STRUCT-LENGTH. Direct instantiation with the pre-refactor 8-kwarg pattern raises `TypeError` (contract C-3). Instantiation via `FirmwareManagerConfig` succeeds (contract C-1).
 
 ### Constructor Decomposition (depends on T-005)
 
-- [X] T-006 [US3] Add module-level private helper `_bind_module_globals(config: FirmwareManagerConfig) -> None` to `src/firmware/firmware_manager.py` per `research.md` R-2. Body (via `sys.modules[__name__]` attribute setting): rebinds `module.apisession`, `module.org_id`, `module.PROGRESS_EMITTER` (via `_make_progress_emitter()` if that helper exists, otherwise leave the existing initializer in place), and resets `module.msp_privileges = []`. Every executable line carries a `# WHY:` inline comment. Bracket the helper with `logging.info("Binding module globals for org %s", config.org_id)` at entry and `logging.debug("Module globals bound: apisession=%s org_id=%s", type(config.apisession).__name__, config.org_id)` at exit. Ceiling: <=25 lines, <=5 params, <=5 blocks, <=4 nesting, CC <=5.
+- [X] T-006 [US3] Add module-level private helper `_bind_module_globals(config: FirmwareManagerConfig) -> None` to `src/operations/execution/firmware/firmware_manager.py` per `research.md` R-2. Body (via `sys.modules[__name__]` attribute setting): rebinds `module.apisession`, `module.org_id`, `module.PROGRESS_EMITTER` (via `_make_progress_emitter()` if that helper exists, otherwise leave the existing initializer in place), and resets `module.msp_privileges = []`. Every executable line carries a `# WHY:` inline comment. Bracket the helper with `logging.info("Binding module globals for org %s", config.org_id)` at entry and `logging.debug("Module globals bound: apisession=%s org_id=%s", type(config.apisession).__name__, config.org_id)` at exit. Ceiling: <=25 lines, <=5 params, <=5 blocks, <=4 nesting, CC <=5.
   - **Done when:** helper exists, calling it from a REPL rebinds all four module-scope names, ruff+py_compile clean, no new analyzer violations introduced.
-- [X] T-007 [US3] Rewrite `FirmwareManager.__init__` in `src/firmware/firmware_manager.py` to the shape shown in `data-model.md` "Usage — Consumer Side": signature is `def __init__(self, config: FirmwareManagerConfig) -> None`; body is exactly 4 executable lines — `logging.info(...)`, `self._config = config`, `_bind_module_globals(config)`, `logging.debug(...)`. Each line carries a `# WHY:` inline comment. Also add the two read-only properties `org_id` and `apisession` from `data-model.md` "Usage — Consumer Side" so downstream helpers that already read `self.org_id` / `self.apisession` continue to work byte-identically (FR-023). Every helper method in the file that reads `self.safe_input_fn` / `self.select_site_fn` / etc. via attribute access must be updated in the same task to read `self._config.safe_input_fn` (or equivalent). This task DEPENDS ON T-005 + T-006. After it lands, direct `FirmwareManager(...)` calls with the pre-refactor 8-kwarg pattern will raise `TypeError` — this is the intended fail-fast per contract C-2/C-3 and is cleared for production paths by the Phase 7 MistHelper.py migration.
+- [X] T-007 [US3] Rewrite `FirmwareManager.__init__` in `src/operations/execution/firmware/firmware_manager.py` to the shape shown in `data-model.md` "Usage — Consumer Side": signature is `def __init__(self, config: FirmwareManagerConfig) -> None`; body is exactly 4 executable lines — `logging.info(...)`, `self._config = config`, `_bind_module_globals(config)`, `logging.debug(...)`. Each line carries a `# WHY:` inline comment. Also add the two read-only properties `org_id` and `apisession` from `data-model.md` "Usage — Consumer Side" so downstream helpers that already read `self.org_id` / `self.apisession` continue to work byte-identically (FR-023). Every helper method in the file that reads `self.safe_input_fn` / `self.select_site_fn` / etc. via attribute access must be updated in the same task to read `self._config.safe_input_fn` (or equivalent). This task DEPENDS ON T-005 + T-006. After it lands, direct `FirmwareManager(...)` calls with the pre-refactor 8-kwarg pattern will raise `TypeError` — this is the intended fail-fast per contract C-2/C-3 and is cleared for production paths by the Phase 7 MistHelper.py migration.
   - **Done when:** `__init__` body is <=15 executable lines, analyzer no longer reports STRUCT-PARAMS or STRUCT-LENGTH on `__init__`, ruff clean, py_compile 0, all downstream `self.<callable>_fn` references in the file resolve through `self._config`.
 
 **Checkpoint**: `__init__` is 4 lines with 1 param. STRUCT-PARAMS clears. STRUCT-LENGTH clears on `__init__`. Score climbs materially. Downstream method bodies now read collaborators via `self._config.*_fn`. MistHelper.py factory is NOT yet updated, so any production menu invocation will fail at construction until Phase 7 T-033 lands. Serialize Phase 3 -> Phase 4 -> ... -> Phase 7 so the whole file is compliant before the callsite migration goes in the same commit.
@@ -111,11 +111,11 @@ If a task's diff would introduce a violation of items 1-7, the task is not compl
 
 **Goal**: Bring each of the four HIGH-severity STRUCT-LENGTH offenders to <=25 lines and <=5 blocks / <=5 complexity / <=4 nesting by applying the PCPP pattern (Prepare / Compute / Present / Persist) from `research.md` R-3. Each orchestrator ends as a 4-8 line sequence of helper calls; each helper is <=25 lines with `# WHY:` comments on every executable line and info-before / debug-after brackets.
 
-**Independent Test**: For each of the four HIGH offenders, `python -m tools.compliance_analyzer src/firmware/firmware_manager.py` shows the method removed from the flagged-offenders list at every severity. Menu 195 / menu 196 dry-run smokes reach identical prompt sequences vs. the pre-refactor branch (FR-023).
+**Independent Test**: For each of the four HIGH offenders, `python -m tools.compliance_analyzer src/operations/execution/firmware/firmware_manager.py` shows the method removed from the flagged-offenders list at every severity. Menu 195 / menu 196 dry-run smokes reach identical prompt sequences vs. the pre-refactor branch (FR-023).
 
 **Rule for every task in this phase**: apply PCPP; helpers named `_prepare_<action>_context`, `_compute_<action>_plan`, `_present_<action>_preview`, `_persist_<action>_results` (omit any slice that would be <=3 executable lines — inline it, per FR-007). Every helper carries `# WHY:` on every executable line + info-before / debug-after brackets. Every helper <=25 lines / <=5 blocks / CC<=5 / nesting<=4. The public method is rewritten as a thin orchestrator whose executable lines also carry `# WHY:` comments. Any single-letter loop variable encountered inside the method is renamed opportunistically (US6 task-list target).
 
-Tasks (all edit `src/firmware/firmware_manager.py` sequentially — no [P] because same file):
+Tasks (all edit `src/operations/execution/firmware/firmware_manager.py` sequentially — no [P] because same file):
 
 - [X] T-008 [US4] Decompose `check_firmware_upgrade_status` (currently 61 executable lines at line 182, HIGH-severity STRUCT-LENGTH + CC 9) per PCPP: `_prepare_status_check_context`, `_compute_status_check_plan`, `_present_status_check_preview`, `_persist_status_check_results`. Rewrite `check_firmware_upgrade_status` as the 4-8 line orchestrator per the sample in `research.md` R-3. Preserve every existing prompt string, CSV output path, and API call byte-for-byte (FR-023, FR-025).
   - **Done when:** analyzer shows `check_firmware_upgrade_status` at <=25 lines with no flags; every helper is <=25 lines / <=5 blocks / CC<=5.
@@ -134,11 +134,11 @@ Tasks (all edit `src/firmware/firmware_manager.py` sequentially — no [P] becau
 
 **Goal**: Decompose the 32 MEDIUM-severity STRUCT-LENGTH offenders enumerated in FR-013 (`__init__` was already handled in Phase 3). Every method in the file must end at <=25 lines, <=5 blocks, CC <=5, nesting <=4. This phase also clears the remaining 28 STRUCT-COMPLEXITY, 11 STRUCT-BLOCKS, and 1 remaining STRUCT-NESTING findings — most overlap with the STRUCT-LENGTH decomposition and clear as a side effect.
 
-**Independent Test**: `python -m tools.compliance_analyzer src/firmware/firmware_manager.py` shows zero STRUCT-LENGTH, zero STRUCT-COMPLEXITY, zero STRUCT-BLOCKS, and zero STRUCT-NESTING findings. Score >=95.
+**Independent Test**: `python -m tools.compliance_analyzer src/operations/execution/firmware/firmware_manager.py` shows zero STRUCT-LENGTH, zero STRUCT-COMPLEXITY, zero STRUCT-BLOCKS, and zero STRUCT-NESTING findings. Score >=95.
 
 **Rule for every task in this phase**: same PCPP rule as Phase 4. Helpers <=25 lines / <=5 blocks / CC<=5 / nesting<=4. Every executable line in every touched helper (new or rewritten orchestrator) carries a `# WHY:` inline comment. Info-before / debug-after logging at every operation site. Any single-letter loop variable encountered is renamed opportunistically. Filesystem paths use `os.path.join(...)` or `pathlib.Path(...)`. `input(...)` calls route through `safe_input(..., context="firmware-manager.<kebab-tag>")`.
 
-Tasks are batched by cohesive functional area so each task keeps a manageable diff size. All edit `src/firmware/firmware_manager.py` sequentially (no [P]):
+Tasks are batched by cohesive functional area so each task keeps a manageable diff size. All edit `src/operations/execution/firmware/firmware_manager.py` sequentially (no [P]):
 
 ### Batch A: Firmware Version + Template Selection (5 offenders)
 
@@ -195,24 +195,24 @@ Tasks are batched by cohesive functional area so each task keeps a manageable di
 
 **Goal**: Push inline-comment coverage from 6.3% to >=90% (spec target — analyzer threshold is 80%, we leave a buffer). Clear the three CONV-NAME violations. Guarantee every `logging.*` call is ASCII-only lazy-form. Guarantee every `input(...)` is `safe_input(..., context=...)`. Guarantee every filesystem path is `os.path.join` / `pathlib.Path`. This is the largest single-diff phase in the plan.
 
-**Independent Test**: `python -m tools.compliance_analyzer src/firmware/firmware_manager.py` reports zero CONV-COMMENTS and zero CONV-NAME findings, and inline-comment coverage >=90%. The Python one-liner from `quickstart.md` Step 5 finds zero non-ASCII log strings and zero f-strings inside `logging.*` calls. `grep -n "^\\s*input(" src/firmware/firmware_manager.py` returns nothing. `grep -n "for r in " src/firmware/firmware_manager.py` returns nothing.
+**Independent Test**: `python -m tools.compliance_analyzer src/operations/execution/firmware/firmware_manager.py` reports zero CONV-COMMENTS and zero CONV-NAME findings, and inline-comment coverage >=90%. The Python one-liner from `quickstart.md` Step 5 finds zero non-ASCII log strings and zero f-strings inside `logging.*` calls. `grep -n "^\\s*input(" src/operations/execution/firmware/firmware_manager.py` returns nothing. `grep -n "for r in " src/operations/execution/firmware/firmware_manager.py` returns nothing.
 
-- [X] T-025 [US5] Sweep the constructor cohort in `src/firmware/firmware_manager.py` — `__init__`, `_bind_module_globals`, `FirmwareManagerConfig` (fields + `__post_init__`), and the `org_id` / `apisession` properties — and confirm every executable line carries a `# WHY: <intent>` inline comment. Add missing comments. Every comment explains WHY the line exists (Constitution VI), not WHAT it does. Since these were introduced fresh in Phase 2-3, coverage should already be at 100% here — this task is the audit.
+- [X] T-025 [US5] Sweep the constructor cohort in `src/operations/execution/firmware/firmware_manager.py` — `__init__`, `_bind_module_globals`, `FirmwareManagerConfig` (fields + `__post_init__`), and the `org_id` / `apisession` properties — and confirm every executable line carries a `# WHY: <intent>` inline comment. Add missing comments. Every comment explains WHY the line exists (Constitution VI), not WHAT it does. Since these were introduced fresh in Phase 2-3, coverage should already be at 100% here — this task is the audit.
   - **Done when:** grep of the constructor cohort shows every executable line ends in `# WHY:` (or a functionally equivalent trailing `# <intent>` for the rare case where `# WHY:` reads awkwardly).
-- [X] T-026 [US5] Sweep every helper introduced in Phase 4 (the ~16-20 helpers from T-008..T-011) in `src/firmware/firmware_manager.py` and confirm every executable line carries a `# WHY:` inline comment. Add missing comments. Also confirm each helper has `logging.info(...)` on its first executable line and `logging.debug(...)` on its last executable line before return (FR-019).
+- [X] T-026 [US5] Sweep every helper introduced in Phase 4 (the ~16-20 helpers from T-008..T-011) in `src/operations/execution/firmware/firmware_manager.py` and confirm every executable line carries a `# WHY:` inline comment. Add missing comments. Also confirm each helper has `logging.info(...)` on its first executable line and `logging.debug(...)` on its last executable line before return (FR-019).
   - **Done when:** grep on each Phase-4 helper's body shows every executable line ends in `# WHY:` and each helper is bracketed by info-before / debug-after logging.
-- [X] T-027 [US5] Sweep every helper introduced in Phase 5 (the ~40+ helpers from T-012..T-024) in `src/firmware/firmware_manager.py` and confirm every executable line carries a `# WHY:` inline comment. Add missing comments. Also confirm each helper has `logging.info(...)` on its first executable line and `logging.debug(...)` on its last executable line before return. This is the largest sub-task in the phase and may be split into three review-friendly sub-tasks (T-027a / T-027b / T-027c) if the diff becomes unwieldy — sub-splits use `Ta` / `Tb` letter suffixes without renumbering.
+- [X] T-027 [US5] Sweep every helper introduced in Phase 5 (the ~40+ helpers from T-012..T-024) in `src/operations/execution/firmware/firmware_manager.py` and confirm every executable line carries a `# WHY:` inline comment. Add missing comments. Also confirm each helper has `logging.info(...)` on its first executable line and `logging.debug(...)` on its last executable line before return. This is the largest sub-task in the phase and may be split into three review-friendly sub-tasks (T-027a / T-027b / T-027c) if the diff becomes unwieldy — sub-splits use `Ta` / `Tb` letter suffixes without renumbering.
   - **Done when:** analyzer's inline-comment coverage metric on the file is >=90%; grep confirms info-before / debug-after brackets at every helper.
-- [X] T-028 [US5] Sweep every remaining executable line in `src/firmware/firmware_manager.py` that was NOT touched by Phases 3-5 (i.e. methods the analyzer never flagged, but which still need to reach the file-wide >=80% coverage threshold). Add `# WHY:` comments to those lines. The measurement is file-wide, so untouched code that was already commented stays; untouched code that had no comment picks one up now.
-  - **Done when:** `python -m tools.compliance_analyzer src/firmware/firmware_manager.py` reports CONV-COMMENTS count 0 and inline-comment coverage >=90%.
-- [X] T-029 [US6] Rename the three single-letter loop variables at pre-refactor lines 1364 / 1373 / 1381 inside `_split_results_by_status` (or its post-Phase-5 successor helpers) in `src/firmware/firmware_manager.py` per R-8: `for r in results:` -> `for result in results:`; `for r in records:` -> `for record in records:`; `for r in report_rows:` -> `for report_row in report_rows:`. Every renamed line + every line inside the renamed loop body that references the loop variable is updated together. Each edited line carries a `# WHY:` inline comment (or reuses the existing one).
-  - **Done when:** `grep -n "for r in " src/firmware/firmware_manager.py` returns zero matches; analyzer CONV-NAME count is 0.
-- [X] T-030 [US5,US6] Audit every `input(...)` call in `src/firmware/firmware_manager.py` per FR-021. Every remaining raw `input(...)` (Phases 4-5 wrapped the touched ones opportunistically; this sweeps the rest) is wrapped in `safe_input(..., context="firmware-manager.<kebab-tag>")`. Grep-verify: `grep -nE "^\\s*[^#]*[^_a-zA-Z]input\\(" src/firmware/firmware_manager.py` returns nothing (excluding `safe_input` matches). Every edited call carries a `# WHY:` inline comment naming the prompt purpose.
+- [X] T-028 [US5] Sweep every remaining executable line in `src/operations/execution/firmware/firmware_manager.py` that was NOT touched by Phases 3-5 (i.e. methods the analyzer never flagged, but which still need to reach the file-wide >=80% coverage threshold). Add `# WHY:` comments to those lines. The measurement is file-wide, so untouched code that was already commented stays; untouched code that had no comment picks one up now.
+  - **Done when:** `python -m tools.compliance_analyzer src/operations/execution/firmware/firmware_manager.py` reports CONV-COMMENTS count 0 and inline-comment coverage >=90%.
+- [X] T-029 [US6] Rename the three single-letter loop variables at pre-refactor lines 1364 / 1373 / 1381 inside `_split_results_by_status` (or its post-Phase-5 successor helpers) in `src/operations/execution/firmware/firmware_manager.py` per R-8: `for r in results:` -> `for result in results:`; `for r in records:` -> `for record in records:`; `for r in report_rows:` -> `for report_row in report_rows:`. Every renamed line + every line inside the renamed loop body that references the loop variable is updated together. Each edited line carries a `# WHY:` inline comment (or reuses the existing one).
+  - **Done when:** `grep -n "for r in " src/operations/execution/firmware/firmware_manager.py` returns zero matches; analyzer CONV-NAME count is 0.
+- [X] T-030 [US5,US6] Audit every `input(...)` call in `src/operations/execution/firmware/firmware_manager.py` per FR-021. Every remaining raw `input(...)` (Phases 4-5 wrapped the touched ones opportunistically; this sweeps the rest) is wrapped in `safe_input(..., context="firmware-manager.<kebab-tag>")`. Grep-verify: `grep -nE "^\\s*[^#]*[^_a-zA-Z]input\\(" src/operations/execution/firmware/firmware_manager.py` returns nothing (excluding `safe_input` matches). Every edited call carries a `# WHY:` inline comment naming the prompt purpose.
   - **Done when:** no raw `input(...)` remains in the file; every prompt is `safe_input(..., context=...)`.
-- [X] T-031 [US5,US6] Audit every `logging.*(...)` and every `print(...)` call in `src/firmware/firmware_manager.py` for non-ASCII characters per FR-020 and for f-string usage per FR-019 / spec Edge Case. Run the two Python one-liners from `quickstart.md` Step 5 (ASCII scan + f-string scan). Replace emoji with ASCII markers (`[OK]`, `[FAIL]`, `[SKIP]`), replace curly quotes with straight, replace en/em-dash with `-`, replace non-ASCII arrows with `->`. Convert any `logging.info(f"... {x}")` to `logging.info("... %s", x)` (lazy form). Every edited string carries an updated `# WHY:` inline comment.
+- [X] T-031 [US5,US6] Audit every `logging.*(...)` and every `print(...)` call in `src/operations/execution/firmware/firmware_manager.py` for non-ASCII characters per FR-020 and for f-string usage per FR-019 / spec Edge Case. Run the two Python one-liners from `quickstart.md` Step 5 (ASCII scan + f-string scan). Replace emoji with ASCII markers (`[OK]`, `[FAIL]`, `[SKIP]`), replace curly quotes with straight, replace en/em-dash with `-`, replace non-ASCII arrows with `->`. Convert any `logging.info(f"... {x}")` to `logging.info("... %s", x)` (lazy form). Every edited string carries an updated `# WHY:` inline comment.
   - **Done when:** the two one-liners from Step 5 emit zero lines; grep confirms no f-strings inside `logging.*` calls.
-- [X] T-032 [US5,US6] Audit every filesystem path construction in `src/firmware/firmware_manager.py` per FR-022. Replace any raw `/` or `\\` string concatenation with `os.path.join(...)` or `pathlib.Path(...)`. Particularly around CSV output paths in `_persist_*` helpers. Add `import os` if not already imported (it should be). Every edited line carries a `# WHY:` inline comment.
-  - **Done when:** grep `grep -nE '"[^"]*/[^"]*"' src/firmware/firmware_manager.py` shows no user-facing filesystem path built by concatenation (URL patterns like `/api/v1/orgs/{org_id}` are unaffected — those are mistapi paths, not filesystem paths).
+- [X] T-032 [US5,US6] Audit every filesystem path construction in `src/operations/execution/firmware/firmware_manager.py` per FR-022. Replace any raw `/` or `\\` string concatenation with `os.path.join(...)` or `pathlib.Path(...)`. Particularly around CSV output paths in `_persist_*` helpers. Add `import os` if not already imported (it should be). Every edited line carries a `# WHY:` inline comment.
+  - **Done when:** grep `grep -nE '"[^"]*/[^"]*"' src/operations/execution/firmware/firmware_manager.py` shows no user-facing filesystem path built by concatenation (URL patterns like `/api/v1/orgs/{org_id}` are unaffected — those are mistapi paths, not filesystem paths).
 
 **Checkpoint**: Analyzer reports zero findings across all seven rule buckets. Inline-comment coverage >=90%. Every `input(...)` is `safe_input(..., context=...)`. Every log string is ASCII-only lazy-form. Every filesystem path is `os.path.join` / `pathlib.Path`. Compliance score is 100.0 / A+. **The refactor's compliance work is complete.** The next phase migrates the sole permitted off-file callsite.
 
@@ -228,11 +228,11 @@ Tasks are batched by cohesive functional area so each task keeps a manageable di
 
     ```python
     class FirmwareManager:
-        """Factory for the extracted firmware manager (src.firmware.firmware_manager)."""
+        """Factory for the extracted firmware manager (src.operations.execution.firmware.firmware_manager)."""
 
         @staticmethod
         def create(apisession: Any, org_id: str) -> Any:
-            from src.firmware.firmware_manager import (                         # noqa: PLC0415
+            from src.operations.execution.firmware.firmware_manager import (                         # noqa: PLC0415
                 FirmwareManager as _Impl,
                 FirmwareManagerConfig,
             )
@@ -261,11 +261,11 @@ Tasks are batched by cohesive functional area so each task keeps a manageable di
 
 **Purpose**: Final verification, artifact capture, and reviewer-friendly documentation updates. Executes the eight `quickstart.md` steps in order and drops all outputs to `specs/1005-firmware-manager-compliance/artifacts/`.
 
-- [X] T-034 Run the final compliance analyzer gate: `python -m tools.compliance_analyzer src/firmware/firmware_manager.py`. Save output to `specs/1005-firmware-manager-compliance/artifacts/final_compliance.txt`. Confirm score is **exactly 100.0**, grade is **A+**, and every rule bucket (`CONV-COMMENTS`, `CONV-NAME`, `STRUCT-BLOCKS`, `STRUCT-COMPLEXITY`, `STRUCT-LENGTH`, `STRUCT-NESTING`, `STRUCT-PARAMS`) reports 0 findings (FR-001, FR-002, FR-003, SC-001, SC-002, SC-003). Any single LOW-severity finding is a failure — no partial credit per `quickstart.md` Step 2.
+- [X] T-034 Run the final compliance analyzer gate: `python -m tools.compliance_analyzer src/operations/execution/firmware/firmware_manager.py`. Save output to `specs/1005-firmware-manager-compliance/artifacts/final_compliance.txt`. Confirm score is **exactly 100.0**, grade is **A+**, and every rule bucket (`CONV-COMMENTS`, `CONV-NAME`, `STRUCT-BLOCKS`, `STRUCT-COMPLEXITY`, `STRUCT-LENGTH`, `STRUCT-NESTING`, `STRUCT-PARAMS`) reports 0 findings (FR-001, FR-002, FR-003, SC-001, SC-002, SC-003). Any single LOW-severity finding is a failure — no partial credit per `quickstart.md` Step 2.
   - **Done when:** artifact file reports `Score: 100.0`, `Grade: A+`, and zero findings across all seven rule buckets.
-- [X] T-035 [P] Run the final ruff gate: `python -m ruff check src/firmware/firmware_manager.py`. Save output to `specs/1005-firmware-manager-compliance/artifacts/final_ruff.txt`. Confirm zero errors, zero warnings (FR-005, SC-007).
+- [X] T-035 [P] Run the final ruff gate: `python -m ruff check src/operations/execution/firmware/firmware_manager.py`. Save output to `specs/1005-firmware-manager-compliance/artifacts/final_ruff.txt`. Confirm zero errors, zero warnings (FR-005, SC-007).
   - **Done when:** artifact file records exit code 0 and empty output.
-- [X] T-036 [P] Run the final py_compile gate: `python -m py_compile src/firmware/firmware_manager.py`. Save exit code + any stderr to `specs/1005-firmware-manager-compliance/artifacts/final_pycompile.txt`. Confirm exit 0 (FR-004, SC-006).
+- [X] T-036 [P] Run the final py_compile gate: `python -m py_compile src/operations/execution/firmware/firmware_manager.py`. Save exit code + any stderr to `specs/1005-firmware-manager-compliance/artifacts/final_pycompile.txt`. Confirm exit 0 (FR-004, SC-006).
   - **Done when:** artifact file records exit code 0.
 - [X] T-037 [P] Run the six-callsite factory-wrapper insulation smoke per `quickstart.md` Step 3. Execute `grep -n "FirmwareManager\.create\|from src\.firmware\.firmware_manager" MistHelper.py` and confirm the output matches the seven lines expected by Step 3 exactly. Then execute `grep -rn "from src\.firmware\.firmware_manager" --include="*.py" .` and confirm exactly one match (the MistHelper.py factory-body import). Save both outputs to `specs/1005-firmware-manager-compliance/artifacts/callsite_smoke.txt` (FR-011, FR-012, contract C-6, SC-008).
   - **Done when:** artifact file shows the seven expected MistHelper.py lines and the single repo-wide import match.
@@ -275,7 +275,7 @@ Tasks are batched by cohesive functional area so each task keeps a manageable di
   - **Done when:** artifact file records: info-before / debug-after present at every named site; empty output from both one-liners.
 - [X] T-040 Perform the constructor-contract REPL smoke from `quickstart.md` Step 6: exercise all five cases (C-1 positive construction via `FirmwareManagerConfig`; C-2 legacy positional call raises `TypeError`; C-3 legacy kwargs call raises `TypeError`; C-4 frozen dataclass rejects mutation with `FrozenInstanceError`; C-5 empty `org_id` raises `ValueError`). All five cases must behave exactly as the Step-6 sample shows (FR-008, FR-009, FR-010, contracts C-1..C-5). Save the REPL transcript to `specs/1005-firmware-manager-compliance/artifacts/constructor_smoke.txt`.
   - **Done when:** transcript shows all five cases with the exact expected outcome; each case verified visually.
-- [X] T-041 [P] Perform the loop-variable rename spot check from `quickstart.md` Step 7: `grep -n "for r in " src/firmware/firmware_manager.py` must return empty; `grep -n "for result in \|for record in \|for report_row in " src/firmware/firmware_manager.py` must return the three expected matches inside the `_split_results_by_status` region (SC-011, FR-017). Save output to `specs/1005-firmware-manager-compliance/artifacts/rename_smoke.txt`.
+- [X] T-041 [P] Perform the loop-variable rename spot check from `quickstart.md` Step 7: `grep -n "for r in " src/operations/execution/firmware/firmware_manager.py` must return empty; `grep -n "for result in \|for record in \|for report_row in " src/operations/execution/firmware/firmware_manager.py` must return the three expected matches inside the `_split_results_by_status` region (SC-011, FR-017). Save output to `specs/1005-firmware-manager-compliance/artifacts/rename_smoke.txt`.
   - **Done when:** first grep is empty; second grep shows the three intended matches.
 - [X] T-042 Optional: perform the menu 196 production-path manual smoke from `quickstart.md` Step 8 against a dry-run session. Launch `python MistHelper.py --dry-run`, select menu 196, walk through each sub-menu (status check, AP upgrade, SSR upgrade, MSP bulk), cancel at each confirmation prompt, and confirm the prompt sequence + log lines + CSV output paths are byte-identical vs. the pre-refactor branch (FR-023, FR-025, SC-014). Save the observed prompt sequence to `specs/1005-firmware-manager-compliance/artifacts/menu_196_smoke.txt`. Only required if a reviewer has doubts after T-034 through T-041 all pass.
   - **Done when:** transcript shows identical prompts / log lines / CSV paths vs. the pre-refactor branch; any divergence is treated as an FR-023 violation and returned to Phase 5-6 for fix.
@@ -333,7 +333,7 @@ Tasks are batched by cohesive functional area so each task keeps a manageable di
 - T-002 and T-003 (baseline capture) can run in parallel — different artifact files.
 - T-035 / T-036 / T-037 / T-041 / T-043 (final verification gates + doc update) can run in parallel — read-only against the primary file (or edit an unrelated file).
 - T-033 (MistHelper.py factory-body diff) is technically parallelizable with any read-only Phase-8 task after Phase 6 completes, but by convention it lands first as part of the "compliance work complete" commit.
-- Everything else touches `src/firmware/firmware_manager.py` and must serialize.
+- Everything else touches `src/operations/execution/firmware/firmware_manager.py` and must serialize.
 
 ---
 
@@ -343,19 +343,19 @@ Tasks are batched by cohesive functional area so each task keeps a manageable di
 # After T-033 (MistHelper.py migration) lands and analyzer at 100.0 / A+:
 
 # Terminal 1 (analyzer artifact):
-Task: T-034 python -m tools.compliance_analyzer src/firmware/firmware_manager.py > artifacts/final_compliance.txt
+Task: T-034 python -m tools.compliance_analyzer src/operations/execution/firmware/firmware_manager.py > artifacts/final_compliance.txt
 
 # Terminal 2 (ruff artifact):
-Task: T-035 python -m ruff check src/firmware/firmware_manager.py > artifacts/final_ruff.txt
+Task: T-035 python -m ruff check src/operations/execution/firmware/firmware_manager.py > artifacts/final_ruff.txt
 
 # Terminal 3 (py_compile artifact):
-Task: T-036 python -m py_compile src/firmware/firmware_manager.py; echo $? > artifacts/final_pycompile.txt
+Task: T-036 python -m py_compile src/operations/execution/firmware/firmware_manager.py; echo $? > artifacts/final_pycompile.txt
 
 # Terminal 4 (callsite grep artifact):
 Task: T-037 grep -n "FirmwareManager.create" MistHelper.py > artifacts/callsite_smoke.txt
 
 # Terminal 5 (loop-variable grep artifact):
-Task: T-041 grep -n "for r in " src/firmware/firmware_manager.py > artifacts/rename_smoke.txt
+Task: T-041 grep -n "for r in " src/operations/execution/firmware/firmware_manager.py > artifacts/rename_smoke.txt
 
 # Terminal 6 (doc update):
 Task: T-043 edit .github/copilot-instructions.md between SPECKIT markers
@@ -397,13 +397,13 @@ If a task's diff becomes unwieldy for review (rule of thumb: >500 changed lines 
 
 ## Notes
 
-- Every task edits `src/firmware/firmware_manager.py` unless otherwise noted. Two exceptions: T-033 edits `MistHelper.py` lines 18791-18807 only; T-043 edits `.github/copilot-instructions.md` between the SPECKIT markers only. Baseline/verification tasks (T-001, T-002, T-003, T-004, T-034..T-042) write to `specs/1005-firmware-manager-compliance/artifacts/`.
+- Every task edits `src/operations/execution/firmware/firmware_manager.py` unless otherwise noted. Two exceptions: T-033 edits `MistHelper.py` lines 18791-18807 only; T-043 edits `.github/copilot-instructions.md` between the SPECKIT markers only. Baseline/verification tasks (T-001, T-002, T-003, T-004, T-034..T-042) write to `specs/1005-firmware-manager-compliance/artifacts/`.
 - Every task's success is measured against the standing three-command gate at the top of this file — plus the task's own "Done when:" line.
 - No wrapper / delegator / shim helpers may be introduced (FR-007). If a PCPP slice would be a 1-line forward, inline it.
 - Every executable line new or edited must carry `# WHY:` inline commentary (Constitution VI, AGENTS.md non-negotiable, FR-018).
 - Every new operation must be bracketed by `logging.info` before / `logging.debug` after (Constitution VII, AGENTS.md non-negotiable, FR-019).
 - All log strings must be ASCII-only lazy `%s` / `%d` form (FR-020). All `input(...)` calls must use `safe_input(..., context=...)` (FR-021). All filesystem paths must use `os.path.join(...)` or `pathlib.Path(...)` (FR-022).
 - No `# noqa`, `# type: ignore`, or `# pragma: no cover` markers may be added by this refactor on lines the analyzer would otherwise flag (FR-006). The single pre-existing `# noqa: PLC0415` on the MistHelper.py deferred import predates this feature and is preserved (T-033).
-- The `FirmwareManagerConfig` dataclass lives in `src/firmware/firmware_manager.py` (FR-010). No new module is created (NG-004).
+- The `FirmwareManagerConfig` dataclass lives in `src/operations/execution/firmware/firmware_manager.py` (FR-010). No new module is created (NG-004).
 - The MistHelper.py factory-body diff is the sole permitted off-file change (FR-011, NG-002). Any additional MistHelper.py edit discovered mid-implementation is a scope violation — halt and re-plan.
 - Task IDs are gap-friendly. If a task needs to be split during implementation, assign `T-XXXa`, `T-XXXb` rather than renumbering.

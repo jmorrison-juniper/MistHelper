@@ -1,12 +1,12 @@
-"""Unit tests for ``src.ui.prompt_utils.PromptUtils``.
+"""Unit tests for ``src.interfaces.visualization.ui.prompt_utils.PromptUtils``.
 
 Why:
-    Un-omit ``src/ui/prompt_utils.py`` (issue #878 tranche 34) and drive 100%
+    Un-omit ``src/interfaces/visualization/ui/prompt_utils.py`` (issue #878 tranche 34) and drive 100%
     line + branch coverage over the 25 static prompt/selection helpers. The
     module leans on a lazy ``SourceDependencyResolver`` for live
     globals (``apisession``, ``DataExporter``, ``LAST_SELECTED_SITE_ID``);
     tests replace that lookup with a ``SimpleNamespace`` fake through
-    ``patch("src.ui.prompt_utils.SourceDependencyResolver", ...)`` -- the
+    ``patch("src.interfaces.visualization.ui.prompt_utils.SourceDependencyResolver", ...)`` -- the
     canonical pattern established by the tranche 33 exemplar.
 """
 
@@ -20,7 +20,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from prettytable import PrettyTable
 
-from src.ui.prompt_utils import PromptUtils
+from src.interfaces.visualization.ui.prompt_utils import PromptUtils
 
 
 def _make_mh(**extra):
@@ -84,10 +84,10 @@ def test_fetch_and_filter_devices_empty_rawdata(caplog: pytest.LogCaptureFixture
     fake_response = SimpleNamespace(data=[])
     with (
         patch(
-            "src.ui.prompt_utils.mistapi.api.v1.sites.devices.listSiteDevices",
+            "src.interfaces.visualization.ui.prompt_utils.mistapi.api.v1.sites.devices.listSiteDevices",
             return_value=fake_response,
         ),
-        patch("src.ui.prompt_utils.SourceDependencyResolver", fake_mh),
+        patch("src.interfaces.visualization.ui.prompt_utils.SourceDependencyResolver", fake_mh),
         caplog.at_level(logging.WARNING),
     ):
         result = PromptUtils._fetch_and_filter_devices("site-1", "all")
@@ -101,10 +101,10 @@ def test_fetch_and_filter_devices_empty_after_filter(caplog: pytest.LogCaptureFi
     fake_response = SimpleNamespace(data=[{"type": "ap"}])
     with (
         patch(
-            "src.ui.prompt_utils.mistapi.api.v1.sites.devices.listSiteDevices",
+            "src.interfaces.visualization.ui.prompt_utils.mistapi.api.v1.sites.devices.listSiteDevices",
             return_value=fake_response,
         ),
-        patch("src.ui.prompt_utils.SourceDependencyResolver", fake_mh),
+        patch("src.interfaces.visualization.ui.prompt_utils.SourceDependencyResolver", fake_mh),
         caplog.at_level(logging.WARNING),
     ):
         result = PromptUtils._fetch_and_filter_devices("site-1", "gateway")
@@ -118,10 +118,10 @@ def test_fetch_and_filter_devices_happy_path() -> None:
     fake_response = SimpleNamespace(data=[{"type": "ap"}, {"type": "switch"}])
     with (
         patch(
-            "src.ui.prompt_utils.mistapi.api.v1.sites.devices.listSiteDevices",
+            "src.interfaces.visualization.ui.prompt_utils.mistapi.api.v1.sites.devices.listSiteDevices",
             return_value=fake_response,
         ),
-        patch("src.ui.prompt_utils.SourceDependencyResolver", fake_mh),
+        patch("src.interfaces.visualization.ui.prompt_utils.SourceDependencyResolver", fake_mh),
     ):
         result = PromptUtils._fetch_and_filter_devices("site-1", "ap")
     assert result == [{"type": "ap"}]
@@ -139,14 +139,14 @@ def test_export_and_index_inventory_builds_maps_and_calls_exporter() -> None:
     ]
     with (
         patch(
-            "src.ui.prompt_utils.DataProcessingUtils.flatten_nested_fields",
+            "src.interfaces.visualization.ui.prompt_utils.DataProcessingUtils.flatten_nested_fields",
             side_effect=lambda x: x,
         ),
         patch(
-            "src.ui.prompt_utils.DataProcessingUtils.escape_multiline",
+            "src.interfaces.visualization.ui.prompt_utils.DataProcessingUtils.escape_multiline",
             side_effect=lambda x: x,
         ),
-        patch("src.ui.prompt_utils.SourceDependencyResolver", fake_mh),
+        patch("src.interfaces.visualization.ui.prompt_utils.SourceDependencyResolver", fake_mh),
     ):
         table, index_map, name_map = PromptUtils._export_and_index_inventory(rawdata, "out.csv")
     assert isinstance(table, PrettyTable)
@@ -201,7 +201,7 @@ def test_select_device_id_from_inventory_happy_path(caplog: pytest.LogCaptureFix
             "_export_and_index_inventory",
             return_value=(fake_table, {0: {"id": "d1"}}, {"alpha": {"id": "d1"}}),
         ),
-        patch("src.ui.prompt_utils.InputUtils.safe_input", return_value="0  "),
+        patch("src.interfaces.visualization.ui.prompt_utils.InputUtils.safe_input", return_value="0  "),
         patch.object(PromptUtils, "_resolve_device_selection", return_value="d1"),
         caplog.at_level(logging.WARNING),
     ):
@@ -217,7 +217,7 @@ def test_load_site_csv_maps_reads_csv(tmp_path) -> None:
     """Returns index-to-row and name-to-row maps derived from CSV."""
     csv_path = tmp_path / "sites.csv"
     csv_path.write_text("id,name\nid-1,Alpha\nid-2,Beta\n", encoding="utf-8")
-    with patch("src.ui.prompt_utils.FilePathUtils.get_csv_path", return_value=str(csv_path)):
+    with patch("src.interfaces.visualization.ui.prompt_utils.FilePathUtils.get_csv_path", return_value=str(csv_path)):
         idx_map, name_map = PromptUtils._load_site_csv_maps("sites.csv")
     assert idx_map[0]["name"] == "Alpha"
     assert idx_map[1]["name"] == "Beta"
@@ -229,7 +229,7 @@ def test_load_site_csv_maps_skips_rows_without_name(tmp_path) -> None:
     """Rows missing the ``name`` column do not appear in the name map."""
     csv_path = tmp_path / "sites.csv"
     csv_path.write_text("id,other\nid-1,x\n", encoding="utf-8")
-    with patch("src.ui.prompt_utils.FilePathUtils.get_csv_path", return_value=str(csv_path)):
+    with patch("src.interfaces.visualization.ui.prompt_utils.FilePathUtils.get_csv_path", return_value=str(csv_path)):
         _, name_map = PromptUtils._load_site_csv_maps("sites.csv")
     assert name_map == {}
 
@@ -267,14 +267,14 @@ def test_select_site_id_from_csv_by_index(caplog: pytest.LogCaptureFixture) -> N
     """Digit input picks site by index and caches to ``mh.LAST_SELECTED_SITE_ID``."""
     fake_mh = _make_mh()
     with (
-        patch("src.ui.prompt_utils.CacheUtils.check_and_generate_csv"),
+        patch("src.interfaces.visualization.ui.prompt_utils.CacheUtils.check_and_generate_csv"),
         patch.object(
             PromptUtils,
             "_load_site_csv_maps",
             return_value=({0: {"id": "s0", "name": "A"}}, {"A": {"id": "s0"}}),
         ),
-        patch("src.ui.prompt_utils.InputUtils.safe_input", return_value="0"),
-        patch("src.ui.prompt_utils.SourceDependencyResolver", fake_mh),
+        patch("src.interfaces.visualization.ui.prompt_utils.InputUtils.safe_input", return_value="0"),
+        patch("src.interfaces.visualization.ui.prompt_utils.SourceDependencyResolver", fake_mh),
         caplog.at_level(logging.WARNING),
     ):
         result = PromptUtils.select_site_id_from_csv()
@@ -287,14 +287,14 @@ def test_select_site_id_from_csv_index_invalid_keeps_last_selected_unset() -> No
     """Invalid index returns None and leaves ``LAST_SELECTED_SITE_ID`` untouched."""
     fake_mh = _make_mh()
     with (
-        patch("src.ui.prompt_utils.CacheUtils.check_and_generate_csv"),
+        patch("src.interfaces.visualization.ui.prompt_utils.CacheUtils.check_and_generate_csv"),
         patch.object(
             PromptUtils,
             "_load_site_csv_maps",
             return_value=({0: {"id": "s0", "name": "A"}}, {"A": {"id": "s0"}}),
         ),
-        patch("src.ui.prompt_utils.InputUtils.safe_input", return_value="99"),
-        patch("src.ui.prompt_utils.SourceDependencyResolver", fake_mh),
+        patch("src.interfaces.visualization.ui.prompt_utils.InputUtils.safe_input", return_value="99"),
+        patch("src.interfaces.visualization.ui.prompt_utils.SourceDependencyResolver", fake_mh),
     ):
         result = PromptUtils.select_site_id_from_csv()
     assert result is None
@@ -305,14 +305,14 @@ def test_select_site_id_from_csv_by_name() -> None:
     """Name input picks site by name and caches selection."""
     fake_mh = _make_mh()
     with (
-        patch("src.ui.prompt_utils.CacheUtils.check_and_generate_csv"),
+        patch("src.interfaces.visualization.ui.prompt_utils.CacheUtils.check_and_generate_csv"),
         patch.object(
             PromptUtils,
             "_load_site_csv_maps",
             return_value=({0: {"id": "s0", "name": "A"}}, {"A": {"id": "s0"}}),
         ),
-        patch("src.ui.prompt_utils.InputUtils.safe_input", return_value="A"),
-        patch("src.ui.prompt_utils.SourceDependencyResolver", fake_mh),
+        patch("src.interfaces.visualization.ui.prompt_utils.InputUtils.safe_input", return_value="A"),
+        patch("src.interfaces.visualization.ui.prompt_utils.SourceDependencyResolver", fake_mh),
     ):
         result = PromptUtils.select_site_id_from_csv()
     assert result == "s0"
@@ -323,14 +323,14 @@ def test_select_site_id_from_csv_not_found(caplog: pytest.LogCaptureFixture) -> 
     """Unmatched input logs ``Site not found`` and returns None."""
     fake_mh = _make_mh()
     with (
-        patch("src.ui.prompt_utils.CacheUtils.check_and_generate_csv"),
+        patch("src.interfaces.visualization.ui.prompt_utils.CacheUtils.check_and_generate_csv"),
         patch.object(
             PromptUtils,
             "_load_site_csv_maps",
             return_value=({0: {"id": "s0", "name": "A"}}, {"A": {"id": "s0"}}),
         ),
-        patch("src.ui.prompt_utils.InputUtils.safe_input", return_value="Zed"),
-        patch("src.ui.prompt_utils.SourceDependencyResolver", fake_mh),
+        patch("src.interfaces.visualization.ui.prompt_utils.InputUtils.safe_input", return_value="Zed"),
+        patch("src.interfaces.visualization.ui.prompt_utils.SourceDependencyResolver", fake_mh),
         caplog.at_level(logging.WARNING),
     ):
         result = PromptUtils.select_site_id_from_csv()
@@ -375,7 +375,7 @@ def test_determine_search_scope_provided_site_short_circuits() -> None:
 def test_determine_search_scope_site_selected() -> None:
     """``'s'`` scope + successful site pick returns the selected site."""
     with (
-        patch("src.ui.prompt_utils.InputUtils.safe_input", return_value="s"),
+        patch("src.interfaces.visualization.ui.prompt_utils.InputUtils.safe_input", return_value="s"),
         patch.object(PromptUtils, "select_site", return_value="site-pick"),
     ):
         assert PromptUtils._determine_search_scope(None) == "site-pick"
@@ -384,7 +384,7 @@ def test_determine_search_scope_site_selected() -> None:
 def test_determine_search_scope_site_cancelled(caplog: pytest.LogCaptureFixture) -> None:
     """``'s'`` scope with cancelled site pick returns False."""
     with (
-        patch("src.ui.prompt_utils.InputUtils.safe_input", return_value="s"),
+        patch("src.interfaces.visualization.ui.prompt_utils.InputUtils.safe_input", return_value="s"),
         patch.object(PromptUtils, "select_site", return_value=None),
         caplog.at_level(logging.WARNING),
     ):
@@ -394,7 +394,7 @@ def test_determine_search_scope_site_cancelled(caplog: pytest.LogCaptureFixture)
 
 def test_determine_search_scope_org_wide() -> None:
     """Anything other than ``'s'`` returns None (org-wide)."""
-    with patch("src.ui.prompt_utils.InputUtils.safe_input", return_value="o"):
+    with patch("src.interfaces.visualization.ui.prompt_utils.InputUtils.safe_input", return_value="o"):
         assert PromptUtils._determine_search_scope(None) is None
 
 
@@ -407,11 +407,11 @@ def test_fetch_site_wireless_clients_success() -> None:
     clients = [{"mac": "11"}, {"mac": "22"}]
     with (
         patch(
-            "src.ui.prompt_utils.mistapi.api.v1.sites.clients.searchSiteWirelessClients",
+            "src.interfaces.visualization.ui.prompt_utils.mistapi.api.v1.sites.clients.searchSiteWirelessClients",
             return_value="resp",
         ),
-        patch("src.ui.prompt_utils.mistapi.get_all", return_value=clients),
-        patch("src.ui.prompt_utils.SourceDependencyResolver", fake_mh),
+        patch("src.interfaces.visualization.ui.prompt_utils.mistapi.get_all", return_value=clients),
+        patch("src.interfaces.visualization.ui.prompt_utils.SourceDependencyResolver", fake_mh),
     ):
         result = PromptUtils._fetch_site_wireless_clients("site-1")
     assert all(c["client_type"] == "wireless" for c in result)
@@ -423,11 +423,11 @@ def test_fetch_site_wireless_clients_get_all_none_returns_empty() -> None:
     fake_mh = _make_mh()
     with (
         patch(
-            "src.ui.prompt_utils.mistapi.api.v1.sites.clients.searchSiteWirelessClients",
+            "src.interfaces.visualization.ui.prompt_utils.mistapi.api.v1.sites.clients.searchSiteWirelessClients",
             return_value="resp",
         ),
-        patch("src.ui.prompt_utils.mistapi.get_all", return_value=None),
-        patch("src.ui.prompt_utils.SourceDependencyResolver", fake_mh),
+        patch("src.interfaces.visualization.ui.prompt_utils.mistapi.get_all", return_value=None),
+        patch("src.interfaces.visualization.ui.prompt_utils.SourceDependencyResolver", fake_mh),
     ):
         assert PromptUtils._fetch_site_wireless_clients("site-1") == []
 
@@ -437,10 +437,10 @@ def test_fetch_site_wireless_clients_exception_returns_empty() -> None:
     fake_mh = _make_mh()
     with (
         patch(
-            "src.ui.prompt_utils.mistapi.api.v1.sites.clients.searchSiteWirelessClients",
+            "src.interfaces.visualization.ui.prompt_utils.mistapi.api.v1.sites.clients.searchSiteWirelessClients",
             side_effect=RuntimeError("boom"),
         ),
-        patch("src.ui.prompt_utils.SourceDependencyResolver", fake_mh),
+        patch("src.interfaces.visualization.ui.prompt_utils.SourceDependencyResolver", fake_mh),
     ):
         assert PromptUtils._fetch_site_wireless_clients("site-1") == []
 
@@ -454,11 +454,11 @@ def test_fetch_site_wired_clients_success() -> None:
     clients = [{"mac": "aa"}]
     with (
         patch(
-            "src.ui.prompt_utils.mistapi.api.v1.sites.wired_clients.searchSiteWiredClients",
+            "src.interfaces.visualization.ui.prompt_utils.mistapi.api.v1.sites.wired_clients.searchSiteWiredClients",
             return_value="resp",
         ),
-        patch("src.ui.prompt_utils.mistapi.get_all", return_value=clients),
-        patch("src.ui.prompt_utils.SourceDependencyResolver", fake_mh),
+        patch("src.interfaces.visualization.ui.prompt_utils.mistapi.get_all", return_value=clients),
+        patch("src.interfaces.visualization.ui.prompt_utils.SourceDependencyResolver", fake_mh),
     ):
         result = PromptUtils._fetch_site_wired_clients("site-1")
     assert result[0]["client_type"] == "wired"
@@ -470,10 +470,10 @@ def test_fetch_site_wired_clients_exception_returns_empty() -> None:
     fake_mh = _make_mh()
     with (
         patch(
-            "src.ui.prompt_utils.mistapi.api.v1.sites.wired_clients.searchSiteWiredClients",
+            "src.interfaces.visualization.ui.prompt_utils.mistapi.api.v1.sites.wired_clients.searchSiteWiredClients",
             side_effect=RuntimeError("boom"),
         ),
-        patch("src.ui.prompt_utils.SourceDependencyResolver", fake_mh),
+        patch("src.interfaces.visualization.ui.prompt_utils.SourceDependencyResolver", fake_mh),
     ):
         assert PromptUtils._fetch_site_wired_clients("site-1") == []
 
@@ -487,11 +487,11 @@ def test_fetch_org_wireless_clients_success() -> None:
     clients = [{"mac": "bb"}]
     with (
         patch(
-            "src.ui.prompt_utils.mistapi.api.v1.orgs.clients.searchOrgWirelessClients",
+            "src.interfaces.visualization.ui.prompt_utils.mistapi.api.v1.orgs.clients.searchOrgWirelessClients",
             return_value="resp",
         ),
-        patch("src.ui.prompt_utils.mistapi.get_all", return_value=clients),
-        patch("src.ui.prompt_utils.SourceDependencyResolver", fake_mh),
+        patch("src.interfaces.visualization.ui.prompt_utils.mistapi.get_all", return_value=clients),
+        patch("src.interfaces.visualization.ui.prompt_utils.SourceDependencyResolver", fake_mh),
     ):
         result = PromptUtils._fetch_org_wireless_clients("org-1")
     assert result[0]["client_type"] == "wireless"
@@ -503,10 +503,10 @@ def test_fetch_org_wireless_clients_exception_returns_empty() -> None:
     fake_mh = _make_mh()
     with (
         patch(
-            "src.ui.prompt_utils.mistapi.api.v1.orgs.clients.searchOrgWirelessClients",
+            "src.interfaces.visualization.ui.prompt_utils.mistapi.api.v1.orgs.clients.searchOrgWirelessClients",
             side_effect=RuntimeError("boom"),
         ),
-        patch("src.ui.prompt_utils.SourceDependencyResolver", fake_mh),
+        patch("src.interfaces.visualization.ui.prompt_utils.SourceDependencyResolver", fake_mh),
     ):
         assert PromptUtils._fetch_org_wireless_clients("org-1") == []
 
@@ -520,11 +520,11 @@ def test_fetch_org_wired_clients_success() -> None:
     clients = [{"mac": "cc"}]
     with (
         patch(
-            "src.ui.prompt_utils.mistapi.api.v1.orgs.wired_clients.searchOrgWiredClients",
+            "src.interfaces.visualization.ui.prompt_utils.mistapi.api.v1.orgs.wired_clients.searchOrgWiredClients",
             return_value="resp",
         ),
-        patch("src.ui.prompt_utils.mistapi.get_all", return_value=clients),
-        patch("src.ui.prompt_utils.SourceDependencyResolver", fake_mh),
+        patch("src.interfaces.visualization.ui.prompt_utils.mistapi.get_all", return_value=clients),
+        patch("src.interfaces.visualization.ui.prompt_utils.SourceDependencyResolver", fake_mh),
     ):
         result = PromptUtils._fetch_org_wired_clients("org-1")
     assert result[0]["client_type"] == "wired"
@@ -535,10 +535,10 @@ def test_fetch_org_wired_clients_exception_returns_empty() -> None:
     fake_mh = _make_mh()
     with (
         patch(
-            "src.ui.prompt_utils.mistapi.api.v1.orgs.wired_clients.searchOrgWiredClients",
+            "src.interfaces.visualization.ui.prompt_utils.mistapi.api.v1.orgs.wired_clients.searchOrgWiredClients",
             side_effect=RuntimeError("boom"),
         ),
-        patch("src.ui.prompt_utils.SourceDependencyResolver", fake_mh),
+        patch("src.interfaces.visualization.ui.prompt_utils.SourceDependencyResolver", fake_mh),
     ):
         assert PromptUtils._fetch_org_wired_clients("org-1") == []
 
@@ -586,7 +586,7 @@ def test_load_sites_cache_success(caplog: pytest.LogCaptureFixture) -> None:
     # WHY (#886 Phase 2): PromptUtils now emits via logging.warning instead of print, so tests capture via caplog.
     with (
         patch(
-            "src.ui.prompt_utils.APICoreFetchUtils.all_sites_with_limit",
+            "src.interfaces.visualization.ui.prompt_utils.APICoreFetchUtils.all_sites_with_limit",
             return_value=[{"id": "a", "name": "Alpha"}, {"id": "b", "name": "Beta"}],
         ),
         caplog.at_level(logging.WARNING),
@@ -599,7 +599,7 @@ def test_load_sites_cache_success(caplog: pytest.LogCaptureFixture) -> None:
 def test_load_sites_cache_exception_returns_empty() -> None:
     """Fetch failure yields an empty cache."""
     with patch(
-        "src.ui.prompt_utils.APICoreFetchUtils.all_sites_with_limit",
+        "src.interfaces.visualization.ui.prompt_utils.APICoreFetchUtils.all_sites_with_limit",
         side_effect=RuntimeError("boom"),
     ):
         assert PromptUtils._load_sites_cache("org-1") == {}
@@ -717,13 +717,13 @@ def test_get_client_status_offline() -> None:
 
 def test_get_client_status_recently_seen_overrides() -> None:
     """``last_seen`` older than 300s overrides to ``[~]``."""
-    with patch("src.ui.prompt_utils.time.time", return_value=1000):
+    with patch("src.interfaces.visualization.ui.prompt_utils.time.time", return_value=1000):
         assert PromptUtils._get_client_status({"connected": True, "last_seen": 500}) == "[~]"
 
 
 def test_get_client_status_recent_last_seen_keeps_online() -> None:
     """Fresh ``last_seen`` (<=300s) leaves status untouched."""
-    with patch("src.ui.prompt_utils.time.time", return_value=1000):
+    with patch("src.interfaces.visualization.ui.prompt_utils.time.time", return_value=1000):
         assert PromptUtils._get_client_status({"connected": True, "last_seen": 900}) == "[+]"
 
 
@@ -804,9 +804,9 @@ def test_truncate_string_under_max() -> None:
 def test_handle_client_selection_quit_returns_triple_none() -> None:
     """``PromptClientUtils._parse_client_choice`` returning None aborts."""
     with (
-        patch("src.ui.prompt_utils.InputUtils.safe_input", return_value="q"),
+        patch("src.interfaces.visualization.ui.prompt_utils.InputUtils.safe_input", return_value="q"),
         patch(
-            "src.ui.prompt_utils.PromptClientUtils._parse_client_choice",
+            "src.interfaces.visualization.ui.prompt_utils.PromptClientUtils._parse_client_choice",
             return_value=None,
         ),
     ):
@@ -821,8 +821,8 @@ def test_handle_client_selection_valid_index() -> None:
     """Valid parsed index delegates to ``_extract_selected_client``."""
     clients = [{"mac": "aa", "client_type": "wireless", "site_id": "s-1"}]
     with (
-        patch("src.ui.prompt_utils.InputUtils.safe_input", return_value="0"),
-        patch("src.ui.prompt_utils.PromptClientUtils._parse_client_choice", return_value=0),
+        patch("src.interfaces.visualization.ui.prompt_utils.InputUtils.safe_input", return_value="0"),
+        patch("src.interfaces.visualization.ui.prompt_utils.PromptClientUtils._parse_client_choice", return_value=0),
         patch.object(
             PromptUtils,
             "_extract_selected_client",

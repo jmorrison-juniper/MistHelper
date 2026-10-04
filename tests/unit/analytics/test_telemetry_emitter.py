@@ -1,4 +1,4 @@
-"""Wave 5 P2 coverage for src/analytics/telemetry_emitter.py (initiative #1018).
+"""Wave 5 P2 coverage for src/mist/intelligence/analytics/telemetry_emitter.py (initiative #1018).
 
 Covers every branch of ``TelemetryEmitter``:
 - ``__init__``: happy-path handle open + OSError swallowed with warning + missing parent dir creation.
@@ -23,8 +23,8 @@ from unittest.mock import MagicMock, patch  # WHY: mandatory spec= mocks + patch
 
 import pytest  # WHY: monkeypatch, tmp_path, caplog fixtures.
 
-from src.analytics.telemetry_emitter import TelemetryEmitter  # WHY: SUT direct import.
-from src.dataclasses.progress_event import ProgressContext, TestSummary  # WHY: real value objects.
+from src.foundation.models.dataclasses.progress_event import ProgressContext, TestSummary  # WHY: real value objects.
+from src.mist.intelligence.analytics.telemetry_emitter import TelemetryEmitter  # WHY: SUT direct import.
 
 
 class TestInit:
@@ -44,7 +44,7 @@ class TestInit:
         """File in cwd (no parent path) does not call os.makedirs."""
         monkeypatch.chdir(tmp_path)  # WHY: run in an isolated cwd.
         fake_makedirs = MagicMock()  # WHY: assert makedirs is NOT called when dirname is empty.
-        monkeypatch.setattr("src.analytics.telemetry_emitter.os.makedirs", fake_makedirs)
+        monkeypatch.setattr("src.mist.intelligence.analytics.telemetry_emitter.os.makedirs", fake_makedirs)
         emitter = TelemetryEmitter("events.jsonl")  # WHY: bare filename → dirname("") is falsy.
         try:
             fake_makedirs.assert_not_called()  # WHY: empty parent → skip branch executed.
@@ -61,7 +61,7 @@ class TestInit:
             """Force builtins.open to raise OSError."""
             raise OSError("perm denied")  # WHY: simulate un-writable directory.
 
-        monkeypatch.setattr("src.analytics.telemetry_emitter.open", _boom, raising=False)
+        monkeypatch.setattr("src.mist.intelligence.analytics.telemetry_emitter.open", _boom, raising=False)
         with caplog.at_level(logging.WARNING):
             emitter = TelemetryEmitter("/does/not/exist/x.jsonl")  # WHY: exercise error branch.
 
@@ -80,7 +80,7 @@ class TestEmit:
             """Force builtins.open to raise OSError."""
             raise OSError("nope")
 
-        monkeypatch.setattr("src.analytics.telemetry_emitter.open", _boom, raising=False)
+        monkeypatch.setattr("src.mist.intelligence.analytics.telemetry_emitter.open", _boom, raising=False)
         emitter = TelemetryEmitter("/does/not/exist/x.jsonl")  # WHY: handle now None.
         emitter.emit({"event_type": "noop"})  # WHY: no exception is proof of contract.
         assert emitter._handle is None  # WHY: unchanged after emit no-op.
@@ -329,7 +329,7 @@ class TestEnforceRetention:
         emitter = TelemetryEmitter(str(tmp_path / "current.jsonl"))
         try:
             monkeypatch.setattr(
-                "src.analytics.telemetry_emitter.os.remove",
+                "src.mist.intelligence.analytics.telemetry_emitter.os.remove",
                 MagicMock(side_effect=OSError("kaboom")),
             )
             with caplog.at_level(logging.WARNING):
@@ -360,7 +360,7 @@ class TestTimestampedPath:
     def test_uses_utc_timestamp(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Timestamp is generated via datetime.now(UTC)."""
         # Patch datetime.now to return a fixed value; verify formatted stamp.
-        with patch("src.analytics.telemetry_emitter.datetime") as fake_dt:
+        with patch("src.mist.intelligence.analytics.telemetry_emitter.datetime") as fake_dt:
             fake_dt.now.return_value = MagicMock(strftime=MagicMock(return_value="20260714_120000"))
             result = TelemetryEmitter.timestamped_path()
         assert result.endswith("test_events_20260714_120000.jsonl")  # WHY: strftime output propagated.

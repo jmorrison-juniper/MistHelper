@@ -4,7 +4,7 @@ from __future__ import annotations  # WHY: keep annotations lightweight during t
 
 from typing import Any  # WHY: fakes store dynamic request bodies.
 
-from src.site.rrm_reset.operation import RrmResetDependencies, RrmResetOperation
+from src.mist.resources.site.rrm_reset.operation import RrmResetDependencies, RrmResetOperation
 
 
 class FakeClient:

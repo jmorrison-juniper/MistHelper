@@ -31,8 +31,8 @@
 **Goal**: Extract easiest analytics cluster with zero behavior drift.
 **Independent Test**: Menu `7` and `169` execute with parity and all phase gates are green.
 
-- [x] T001 [US1] Extract `SiteInventoryHealthAnalyzer` from `MistHelper.py` into `src/analytics/site_inventory_health_analyzer.py`
-- [x] T002 [US1] Extract `SiteAnalyticsConfigurator` from `MistHelper.py` into `src/analytics/site_analytics_configurator.py` and keep only orchestration/delegation in `MistHelper.py`
+- [x] T001 [US1] Extract `SiteInventoryHealthAnalyzer` from `MistHelper.py` into `src/mist/intelligence/analytics/site_inventory_health_analyzer.py`
+- [x] T002 [US1] Extract `SiteAnalyticsConfigurator` from `MistHelper.py` into `src/mist/intelligence/analytics/site_analytics_configurator.py` and keep only orchestration/delegation in `MistHelper.py`
 - [x] T003 [US1] Add or update analytics unit tests in `tests/unit/analytics/test_site_inventory_health_analyzer.py` and `tests/unit/analytics/test_site_analytics_configurator.py`
 - [x] T004 [US1] Run mandatory automated validation for Phase 1 (`python -m py_compile MistHelper.py`, `python -m ruff check MistHelper.py`, `python -m black --check MistHelper.py`, `python MistHelper.py --test`) and record output in `specs/193-main-decomposition-wave-2/checklists/phase-1-gate.md`
 - [x] T004A [US1] Verify constitution compliance for Phase 1 changed code (inline comments on all changed executable lines + action logging before/after meaningful actions) and record evidence in `specs/193-main-decomposition-wave-2/checklists/phase-1-gate.md`
@@ -50,8 +50,8 @@
 **Goal**: Extract troubleshooting/SSH runners while preserving interactive semantics.
 **Independent Test**: Menu `139`, `175`, and `176` behave identically with parity and hard-gate pass.
 
-- [x] T010 [US1] Extract troubleshoot logic from `MistHelper.py` into `src/troubleshooting/marvis_troubleshoot_utils.py`
-- [x] T011 [US1] Extract SSH runner logic from `MistHelper.py` into `src/ssh/ssh_runner_manager.py` with delegator-only orchestration left in `MistHelper.py`
+- [x] T010 [US1] Extract troubleshoot logic from `MistHelper.py` into `src/mist/intelligence/troubleshooting/marvis_troubleshoot_utils.py`
+- [x] T011 [US1] Extract SSH runner logic from `MistHelper.py` into `src/operations/execution/ssh/ssh_runner_manager.py` with delegator-only orchestration left in `MistHelper.py`
 - [x] T012 [US1] Add or update tests in `tests/unit/troubleshooting/test_marvis_troubleshoot_utils.py` and `tests/unit/ssh/test_ssh_runner_manager.py`
 - [x] T013 [US1] Run mandatory automated validation for Phase 2 and record output in `specs/193-main-decomposition-wave-2/checklists/phase-2-gate.md`
 - [x] T013A [US1] Verify constitution compliance for Phase 2 changed code (inline comments + before/after action logging) and record evidence in `specs/193-main-decomposition-wave-2/checklists/phase-2-gate.md`
@@ -69,8 +69,8 @@
 **Goal**: Extract WAN migration/override managers with destructive safeguards unchanged.
 **Independent Test**: Menu `149` and `167` parity remains intact and hard-gate pass is recorded.
 
-- [x] T019 [US1] Extract WAN2 migration logic from `MistHelper.py` into `src/gateway/wan2_migration_manager.py`
-- [x] T020 [US1] Extract WAN probe device override logic from `MistHelper.py` into `src/gateway/wan_probe_device_override_manager.py` and preserve orchestration in `MistHelper.py`
+- [x] T019 [US1] Extract WAN2 migration logic from `MistHelper.py` into `src/mist/resources/gateway/wan2_migration_manager.py`
+- [x] T020 [US1] Extract WAN probe device override logic from `MistHelper.py` into `src/mist/resources/gateway/wan_probe_device_override_manager.py` and preserve orchestration in `MistHelper.py`
 - [x] T021 [US1] Add or update tests in `tests/unit/gateway/test_wan2_migration_manager.py` and `tests/unit/gateway/test_wan_probe_device_override_manager.py`
 - [x] T022 [US1] Run mandatory automated validation for Phase 3 and record output in `specs/193-main-decomposition-wave-2/checklists/phase-3-gate.md`
 - [x] T022A [US1] Verify constitution compliance for Phase 3 changed code (inline comments + before/after action logging) and record evidence in `specs/193-main-decomposition-wave-2/checklists/phase-3-gate.md`
@@ -88,7 +88,7 @@
 **Goal**: Extract site configuration manager with grouped destructive operations unchanged.
 **Independent Test**: Menu `171-174` parity and hard-gate criteria pass.
 
-- [x] T028 [US1] Extract `SiteConfigManager` from `MistHelper.py` into `src/site/site_config_manager.py`
+- [x] T028 [US1] Extract `SiteConfigManager` from `MistHelper.py` into `src/mist/resources/site/site_config_manager.py`
 - [x] T029 [US1] Reduce `MistHelper.py` to orchestration/delegation for `SiteConfigManager` entrypoints and remove duplicated implementation blocks
 - [x] T030 [US1] Add or update tests in `tests/unit/site/test_site_config_manager.py`
 - [x] T031 [US1] Run mandatory automated validation for Phase 4 and record output in `specs/193-main-decomposition-wave-2/checklists/phase-4-gate.md`
@@ -107,8 +107,8 @@
 **Goal**: Extract site export stack while preserving export shape and backend behavior.
 **Independent Test**: Menu `70-86` parity and backend parity checks pass.
 
-- [x] T037 [US1] Extract `SiteExportUtils` from `MistHelper.py` into `src/export/site_export_utils.py`
-- [x] T038 [US1] Split high-complexity insights branch into `src/export/site_insights_exporter.py` and keep `MistHelper.py` orchestration only
+- [x] T037 [US1] Extract `SiteExportUtils` from `MistHelper.py` into `src/operations/exporting/export/site_export_utils.py`
+- [x] T038 [US1] Split high-complexity insights branch into `src/operations/exporting/export/site_insights_exporter.py` and keep `MistHelper.py` orchestration only
 - [x] T039 [US1] Add or update tests in `tests/unit/export/test_site_export_utils.py` and `tests/unit/export/test_site_insights_exporter.py`
 - [x] T040 [US1] Run mandatory automated validation for Phase 5 and record output in `specs/193-main-decomposition-wave-2/checklists/phase-5-gate.md`
 - [x] T040A [US1] Verify constitution compliance for Phase 5 changed code (inline comments + before/after action logging) and record evidence in `specs/193-main-decomposition-wave-2/checklists/phase-5-gate.md`
@@ -126,8 +126,8 @@
 **Goal**: Extract org device inventory summary and MSP modes with invariant output shape.
 **Independent Test**: Menu `13` parity and export parity remain unchanged.
 
-- [x] T046 [US1] Extract `OrgDeviceInventorySummary` from `MistHelper.py` into `src/inventory/org_device_inventory_summary.py`
-- [x] T047 [US1] Extract MSP-specific orchestration into `src/inventory/org_device_inventory_msp.py` and leave `MistHelper.py` as delegator only
+- [x] T046 [US1] Extract `OrgDeviceInventorySummary` from `MistHelper.py` into `src/mist/resources/inventory/org_device_inventory_summary.py`
+- [x] T047 [US1] Extract MSP-specific orchestration into `src/mist/resources/inventory/org_device_inventory_msp.py` and leave `MistHelper.py` as delegator only
 - [x] T048 [US1] Add or update tests in `tests/unit/inventory/test_org_device_inventory_summary.py` and `tests/unit/inventory/test_org_device_inventory_msp.py`
 - [x] T049 [US1] Run mandatory automated validation for Phase 6 and record output in `specs/193-main-decomposition-wave-2/checklists/phase-6-gate.md`
 - [x] T049A [US1] Verify constitution compliance for Phase 6 changed code (inline comments + before/after action logging) and record evidence in `specs/193-main-decomposition-wave-2/checklists/phase-6-gate.md`
@@ -145,8 +145,8 @@
 **Goal**: Extract hardest gateway export surfaces without changing gateway semantics.
 **Independent Test**: Menu `31-36`, `99`, `163` parity plus backend consistency passes.
 
-- [x] T055 [US1] Extract `GatewayExportUtils` from `MistHelper.py` into `src/gateway/gateway_export_utils.py`
-- [x] T056 [US1] Extract gateway stats/override branches into `src/gateway/gateway_stats_exporter.py` and `src/gateway/gateway_override_analyzer.py` with `MistHelper.py` delegator-only wiring
+- [x] T055 [US1] Extract `GatewayExportUtils` from `MistHelper.py` into `src/mist/resources/gateway/gateway_export_utils.py`
+- [x] T056 [US1] Extract gateway stats/override branches into `src/mist/resources/gateway/gateway_stats_exporter.py` and `src/mist/resources/gateway/gateway_override_analyzer.py` with `MistHelper.py` delegator-only wiring
 - [x] T057 [US1] Add or update tests in `tests/unit/gateway/test_gateway_export_utils.py`, `tests/unit/gateway/test_gateway_stats_exporter.py`, and `tests/unit/gateway/test_gateway_override_analyzer.py`
 - [x] T058 [US1] Run mandatory automated validation for Phase 7 and record output in `specs/193-main-decomposition-wave-2/checklists/phase-7-gate.md`
 - [x] T058A [US1] Verify constitution compliance for Phase 7 changed code (inline comments + before/after action logging) and record evidence in `specs/193-main-decomposition-wave-2/checklists/phase-7-gate.md`
@@ -164,8 +164,8 @@
 **Goal**: Extract websocket service ping orchestration with transport contract parity.
 **Independent Test**: Menu `120` behavior, timeout handling, and outputs remain parity-aligned.
 
-- [x] T064 [US1] Extract `ServicePingManager` from `MistHelper.py` into `src/websocket/service_ping_manager.py`
-- [x] T065 [US1] Extract discovery and payload composition logic into `src/websocket/service_ping_discovery.py` and keep `MistHelper.py` orchestration only
+- [x] T064 [US1] Extract `ServicePingManager` from `MistHelper.py` into `src/mist/realtime/websocket/service_ping_manager.py`
+- [x] T065 [US1] Extract discovery and payload composition logic into `src/mist/realtime/websocket/service_ping_discovery.py` and keep `MistHelper.py` orchestration only
 - [x] T066 [US1] Add or update tests in `tests/unit/websocket/test_service_ping_manager.py` and `tests/unit/websocket/test_service_ping_discovery.py`
 - [x] T067 [US1] Run mandatory automated validation for Phase 8 and record output in `specs/193-main-decomposition-wave-2/checklists/phase-8-gate.md`
 - [x] T067A [US1] Verify constitution compliance for Phase 8 changed code (inline comments + before/after action logging) and record evidence in `specs/193-main-decomposition-wave-2/checklists/phase-8-gate.md`
@@ -183,8 +183,8 @@
 **Goal**: Complete canonical packet capture extraction with single-source ownership.
 **Independent Test**: Menu `134` and `135` parity and all hard-gate checks pass.
 
-- [x] T073 [US1] Complete `PacketCaptureManager` migration by finalizing canonical implementation in `src/capture/packet_capture.py` and removing duplicate logic from `MistHelper.py`
-- [x] T074 [US1] Extract/normalize download and poll loop responsibilities into `src/capture/packet_capture_download.py` when either function length exceeds 25 lines, complexity exceeds 10, or duplicate download/poll logic remains in `MistHelper.py`; retain only orchestration in `MistHelper.py`
+- [x] T073 [US1] Complete `PacketCaptureManager` migration by finalizing canonical implementation in `src/operations/execution/capture/packet_capture.py` and removing duplicate logic from `MistHelper.py`
+- [x] T074 [US1] Extract/normalize download and poll loop responsibilities into `src/operations/execution/capture/packet_capture_download.py` when either function length exceeds 25 lines, complexity exceeds 10, or duplicate download/poll logic remains in `MistHelper.py`; retain only orchestration in `MistHelper.py`
 - [x] T075 [US1] Add or update tests in `tests/unit/capture/test_packet_capture_manager.py` and `tests/unit/capture/test_packet_capture_download.py`
 - [x] T076 [US1] Run mandatory automated validation for Phase 9 and record output in `specs/193-main-decomposition-wave-2/checklists/phase-9-gate.md`
 - [x] T076A [US1] Verify constitution compliance for Phase 9 changed code (inline comments + before/after action logging) and record evidence in `specs/193-main-decomposition-wave-2/checklists/phase-9-gate.md`

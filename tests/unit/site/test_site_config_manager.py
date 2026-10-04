@@ -5,8 +5,8 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from src.site import site_config_manager as module
-from src.site.site_config_manager import (
+from src.mist.resources.site import site_config_manager as module
+from src.mist.resources.site.site_config_manager import (
     SiteConfigDependencies,
     SiteConfigManager,
     configure_site_config_manager_dependencies,

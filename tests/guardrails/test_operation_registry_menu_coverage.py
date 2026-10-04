@@ -11,7 +11,7 @@ for the four guarantees enforced here.
 from __future__ import annotations
 
 import MistHelper  # WHY: menu_actions remains the authoritative runtime mapping of reachable menu options.
-from src.utils.operation_registry import (
+from src.foundation.support.utils.operation_registry import (
     OperationRegistry,
 )  # WHY: exercise the canonical registry module, not its legacy facade.
 

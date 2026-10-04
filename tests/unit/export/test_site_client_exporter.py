@@ -1,4 +1,4 @@
-"""Wave 7 P2 coverage for src/export/site_client_exporter.py (initiative #1018).
+"""Wave 7 P2 coverage for src/operations/exporting/export/site_client_exporter.py (initiative #1018).
 
 Covers every branch of ``SiteClientExporter`` static methods:
 
@@ -36,7 +36,7 @@ from unittest.mock import MagicMock, call  # WHY: FR-008 collaborator doubles + 
 import pytest  # WHY: monkeypatch + caplog fixtures.
 
 import MistHelper as _mh_module  # WHY: module-object monkeypatch avoids legacy-facade substring guard.
-from src.export.site_client_exporter import SiteClientExporter  # WHY: direct SUT import.
+from src.operations.exporting.export.site_client_exporter import SiteClientExporter  # WHY: direct SUT import.
 
 
 @pytest.fixture
@@ -52,24 +52,28 @@ def wired_deps(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     data_processing.flatten_nested_fields.side_effect = lambda rows: rows  # WHY: identity for round-trip check.
     data_processing.escape_multiline.side_effect = lambda rows: rows  # WHY: identity so we can verify final payload.
     monkeypatch.setattr(  # WHY: intercept the module-scope import.
-        "src.export.site_client_exporter.DataProcessingUtils", data_processing, raising=True
+        "src.operations.exporting.export.site_client_exporter.DataProcessingUtils", data_processing, raising=True
     )
 
     mistapi_mod = MagicMock(name="mistapi")  # WHY: listSiteWirelessClientsStats + get_all + listSiteBeacons.
-    monkeypatch.setattr("src.export.site_client_exporter.mistapi", mistapi_mod, raising=True)  # WHY: patch import ref.
+    monkeypatch.setattr(
+        "src.operations.exporting.export.site_client_exporter.mistapi", mistapi_mod, raising=True
+    )  # WHY: patch import ref.
 
     wifi_cls = MagicMock(name="WifiClientsExporter")  # WHY: constructor + execute observed only.
     monkeypatch.setattr(
-        "src.export.site_client_exporter.WifiClientsExporter", wifi_cls, raising=True
+        "src.operations.exporting.export.site_client_exporter.WifiClientsExporter", wifi_cls, raising=True
     )  # WHY: intercept.
 
     site_export_cls = MagicMock(name="SiteExportUtils")  # WHY: constructor + _export_data observed only.
     monkeypatch.setattr(
-        "src.export.site_client_exporter.SiteExportUtils", site_export_cls, raising=True
+        "src.operations.exporting.export.site_client_exporter.SiteExportUtils", site_export_cls, raising=True
     )  # WHY: intercept.
 
     tqdm_ref = MagicMock(name="tqdm")  # WHY: forwarded into SiteExportUtils constructor.
-    monkeypatch.setattr("src.export.site_client_exporter.tqdm", tqdm_ref, raising=True)  # WHY: intercept module-scope.
+    monkeypatch.setattr(
+        "src.operations.exporting.export.site_client_exporter.tqdm", tqdm_ref, raising=True
+    )  # WHY: intercept module-scope.
 
     # WHY: monkeypatch every MistHelper attribute reached via importlib.import_module.
     data_exporter = MagicMock(name="DataExporter")  # WHY: write_with_format_selection observed.
@@ -270,7 +274,7 @@ class TestClientInsights:
         """`client_insights` performs a local import and calls SiteClientInsightsService.execute()."""
         service_cls = MagicMock(name="SiteClientInsightsService")  # WHY: witness for delegation.
         monkeypatch.setattr(
-            "src.refactors.serial_cc.site_client_insights.SiteClientInsightsService",
+            "src.foundation.support.refactors.serial_cc.site_client_insights.SiteClientInsightsService",
             service_cls,
             raising=True,
         )  # WHY: intercept the local import path.
@@ -498,7 +502,7 @@ class TestGetSiteBeacon:
         )  # WHY: deterministic delay tuple.
         sleep_spy = MagicMock(name="sleep_spy")  # WHY: observe delay application without real waiting.
         monkeypatch.setattr(
-            "src.export.site_client_exporter.time.sleep",
+            "src.operations.exporting.export.site_client_exporter.time.sleep",
             sleep_spy,
             raising=True,
         )  # WHY: intercept sleep.
@@ -554,7 +558,9 @@ class TestGetSiteBeacon:
             RuntimeError("connection closed"),
         ]  # WHY: distinct errors prove the first one survives.
         wired_deps["RateLimitingUtils"].get_rate_limited_delay.return_value = (0.1, 0.1)  # WHY: satisfy retry delay.
-        monkeypatch.setattr("src.export.site_client_exporter.time.sleep", MagicMock(), raising=True)  # WHY: no wait.
+        monkeypatch.setattr(
+            "src.operations.exporting.export.site_client_exporter.time.sleep", MagicMock(), raising=True
+        )  # WHY: no wait.
 
         with pytest.raises(RuntimeError, match="auth failed"):  # WHY: assert the first failure reaches the caller.
             SiteClientExporter._fetch_site_beacon_with_retry(  # WHY: drive retry exhaustion directly.

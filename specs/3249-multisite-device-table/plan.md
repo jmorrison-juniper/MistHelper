@@ -10,9 +10,9 @@ The portal layer builds one row for each device and decides which sites need a r
 ## Technical context
 
 - Python 3.13, Flask, Jinja, and the existing `portal.js`. The change adds no dependency.
-- The running version reader is `RunningFirmwareVersionResolver.fetch_site_running_versions` in `src/firmware/running_version.py`.
-- The version rule is `version_outcome` in `src/upgrade_portal/upgrade/gate.py`.
-- The age rule is `RunStalePolicy` in `src/upgrade_portal/api/run_controls/views.py`.
+- The running version reader is `RunningFirmwareVersionResolver.fetch_site_running_versions` in `src/operations/execution/firmware/running_version.py`.
+- The version rule is `version_outcome` in `src/interfaces/portals/upgrade_portal/upgrade/gate.py`.
+- The age rule is `RunStalePolicy` in `src/interfaces/portals/upgrade_portal/api/run_controls/views.py`.
 
 ## Design decisions
 
@@ -43,12 +43,12 @@ The route reads the reader from the configuration key `ORG_DEVICE_VERSION_READER
 
 | File | Change |
 | - | - |
-| `src/upgrade_portal/upgrade/org_devices.py` | New. `CloudTargetLists`, `StoredReadings`, `OrgChildDevices`, and `OrgDeviceRows`. These classes build one row for each device and make no cloud call. |
-| `src/upgrade_portal/upgrade/org_versions.py` | New. `VersionReadResult`, `ReadPlan`, and `OrgVersionRefresh`. These classes decide which sites need a running version read, and they read each site one time. |
-| `src/firmware/aggregate_upgrade_service.py` | The access point child stores `targets`. The record stores `site_names` and `updated_at`. `_cas` writes `updated_at` on a change. A new public method `record_device_versions`. |
-| `src/upgrade_portal/app/routes/org_upgrade.py` | The summary carries the rows, the account, the address, and the time. The refresh reads the versions. The submit stores the operator. |
-| `src/upgrade_portal/app/assets/templates/upgrade/org_progress.html` | The device table, the account, the address, and the age. |
-| `src/upgrade_portal/app/assets/static/js/portal.js` | `paintOrgUpgradeDevices` and the age repaint. |
+| `src/interfaces/portals/upgrade_portal/upgrade/org_devices.py` | New. `CloudTargetLists`, `StoredReadings`, `OrgChildDevices`, and `OrgDeviceRows`. These classes build one row for each device and make no cloud call. |
+| `src/interfaces/portals/upgrade_portal/upgrade/org_versions.py` | New. `VersionReadResult`, `ReadPlan`, and `OrgVersionRefresh`. These classes decide which sites need a running version read, and they read each site one time. |
+| `src/operations/execution/firmware/aggregate_upgrade_service.py` | The access point child stores `targets`. The record stores `site_names` and `updated_at`. `_cas` writes `updated_at` on a change. A new public method `record_device_versions`. |
+| `src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py` | The summary carries the rows, the account, the address, and the time. The refresh reads the versions. The submit stores the operator. |
+| `src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_progress.html` | The device table, the account, the address, and the age. |
+| `src/interfaces/portals/upgrade_portal/app/assets/static/js/portal.js` | `paintOrgUpgradeDevices` and the age repaint. |
 | `tests/e2e/upgrade_portal/conftest.py` | The stand-in lists real MAC addresses, the second site holds its own addresses, and a stand-in version reader answers each site. |
 
 ## Test plan

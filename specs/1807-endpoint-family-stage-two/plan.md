@@ -44,9 +44,9 @@ secrets and no cloud state.
 ## Project Structure
 
 ```text
-src/export/endpoint_family_exporter.py
-src/refactors/endpoint_primary_key_strategies.py
-src/utils/operation_registry.py
+src/operations/exporting/export/endpoint_family_exporter.py
+src/foundation/support/refactors/endpoint_primary_key_strategies.py
+src/foundation/support/utils/operation_registry.py
 MistHelper.py
 tests/unit/export/test_endpoint_family_exporter.py
 tests/unit/test_pk_strategies.py

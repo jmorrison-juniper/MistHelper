@@ -1,4 +1,4 @@
-"""Unit tests for src/api/tenant_fetch.py -- APITenantFetchUtils (issue #331)."""
+"""Unit tests for src/mist/access/api/tenant_fetch.py -- APITenantFetchUtils (issue #331)."""
 
 from __future__ import annotations  # Enable postponed evaluation of annotations for Python 3.10 compat
 
@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch  # Use mocks to simulate the Mist API
 import pytest  # WHY: assert unexpected exceptions now propagate.
 import requests  # WHY: model expected Mist transport failures.
 
-from src.api.tenant_fetch import APITenantFetchUtils  # Class under test
+from src.mist.access.api.tenant_fetch import APITenantFetchUtils  # Class under test
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -324,7 +324,9 @@ class TestServicePolicyTenants:
         from unittest.mock import patch  # Import patch for contextual mocking
 
         org_response = _make_response([{"name": "org-pol", "tenants": ["org-t"]}])  # Canned response with one policy
-        with patch("src.api.tenant_fetch.mistapi") as mock_mistapi:  # Patch the mistapi binding in tenant_fetch
+        with patch(
+            "src.mist.access.api.tenant_fetch.mistapi"
+        ) as mock_mistapi:  # Patch the mistapi binding in tenant_fetch
             list_org_sp = mock_mistapi.api.v1.orgs.servicepolicies.listOrgServicePolicies  # Alias for readability
             list_org_sp.return_value = org_response  # Org returns canned policy data
             list_site_sp = mock_mistapi.api.v1.sites.servicepolicies.listSiteServicePoliciesDerived  # Alias
@@ -368,7 +370,9 @@ class TestGatewayTemplateTenants:
         site_response = _make_response(  # Canned site-level gateway template
             [{"name": "site-tmpl", "networks": [{"tenants": {"site-nt": {}}}]}]
         )
-        with patch("src.api.tenant_fetch.mistapi") as mock_mistapi:  # Patch the mistapi binding in tenant_fetch
+        with patch(
+            "src.mist.access.api.tenant_fetch.mistapi"
+        ) as mock_mistapi:  # Patch the mistapi binding in tenant_fetch
             list_org_gt = mock_mistapi.api.v1.orgs.gatewaytemplates.listOrgGatewayTemplates  # Alias for readability
             list_org_gt.return_value = org_response  # Org returns gateway template
             list_site_gt = mock_mistapi.api.v1.sites.gatewaytemplates.listSiteGatewayTemplatesDerived  # Alias
@@ -381,7 +385,7 @@ class TestGatewayTemplateTenants:
 class TestCoverageGaps:
     """Additional tests to reach the 90% coverage threshold (issue #331).
 
-    All tests use ``patch("src.api.tenant_fetch.mistapi")`` to ensure the
+    All tests use ``patch("src.mist.access.api.tenant_fetch.mistapi")`` to ensure the
     mistapi name binding in tenant_fetch.py is properly intercepted.
     """
 
@@ -391,7 +395,7 @@ class TestCoverageGaps:
 
         session = MagicMock()  # Fake API session object
         org_fn = lambda: "org-test"  # Simple callable returning a fixed org ID  # noqa: E731
-        with patch("src.api.tenant_fetch.mistapi"):  # Suppress real mistapi import side-effects
+        with patch("src.mist.access.api.tenant_fetch.mistapi"):  # Suppress real mistapi import side-effects
             utils = APITenantFetchUtils(session, org_fn)  # Call __init__ directly (not via __new__)
         assert utils._session is session  # Session stored by reference
         assert utils._get_org_id is org_fn  # Org ID callable stored by reference
@@ -405,7 +409,7 @@ class TestCoverageGaps:
         utils._get_org_id = lambda: "org-1"  # Fixed org ID callable
         empty_resp = MagicMock()  # Simulate API response with no usable data
         empty_resp.data = None  # None triggers the no-data guard
-        with patch("src.api.tenant_fetch.mistapi") as m:  # Intercept mistapi in tenant_fetch
+        with patch("src.mist.access.api.tenant_fetch.mistapi") as m:  # Intercept mistapi in tenant_fetch
             m.api.v1.orgs.networks.listOrgNetworks.return_value = empty_resp  # Return empty response
             result = utils.organization_tenants()  # Call method under test
         assert result == []  # No data must produce empty list
@@ -417,7 +421,7 @@ class TestCoverageGaps:
         utils = APITenantFetchUtils.__new__(APITenantFetchUtils)  # Bypass __init__ for injection
         utils._session = MagicMock()  # Inject mock session
         utils._get_org_id = lambda: "org-1"  # Fixed org ID callable
-        with patch("src.api.tenant_fetch.mistapi") as m:  # Intercept mistapi in tenant_fetch
+        with patch("src.mist.access.api.tenant_fetch.mistapi") as m:  # Intercept mistapi in tenant_fetch
             m.api.v1.orgs.networks.listOrgNetworks.side_effect = requests.RequestException("api down")  # Simulate error
             result = utils.organization_tenants()  # Call method under test
         assert result == []  # Exception must be caught and empty list returned
@@ -431,7 +435,7 @@ class TestCoverageGaps:
         utils._get_org_id = lambda: "org-1"  # Fixed org ID callable
         empty_resp = MagicMock()  # Simulate API response with no usable data
         empty_resp.data = []  # Empty list is also falsy -- triggers the guard
-        with patch("src.api.tenant_fetch.mistapi") as m:  # Intercept mistapi in tenant_fetch
+        with patch("src.mist.access.api.tenant_fetch.mistapi") as m:  # Intercept mistapi in tenant_fetch
             m.api.v1.sites.networks.listSiteNetworksDerived.return_value = empty_resp  # Return empty response
             result = utils.site_tenants("site-1")  # Call method under test with a site ID
         assert result == []  # Empty data must produce empty list
@@ -443,7 +447,7 @@ class TestCoverageGaps:
         utils = APITenantFetchUtils.__new__(APITenantFetchUtils)  # Bypass __init__ for injection
         utils._session = MagicMock()  # Inject mock session
         utils._get_org_id = lambda: "org-1"  # Fixed org ID callable
-        with patch("src.api.tenant_fetch.mistapi") as m:  # Intercept mistapi in tenant_fetch
+        with patch("src.mist.access.api.tenant_fetch.mistapi") as m:  # Intercept mistapi in tenant_fetch
             m.api.v1.sites.networks.listSiteNetworksDerived.side_effect = requests.RequestException(
                 "timeout"
             )  # Simulate error
@@ -459,7 +463,7 @@ class TestCoverageGaps:
         utils._get_org_id = lambda: "org-1"  # Fixed org ID callable
         org_resp = _make_response([{"tenants": {"org-t": {}}}])  # Org policy with tenant
         site_resp = _make_response([{"tenants": {"site-t": {}}}])  # Site policy with tenant
-        with patch("src.api.tenant_fetch.mistapi") as m:  # Intercept mistapi in tenant_fetch
+        with patch("src.mist.access.api.tenant_fetch.mistapi") as m:  # Intercept mistapi in tenant_fetch
             m.api.v1.orgs.servicepolicies.listOrgServicePolicies.return_value = org_resp  # Org endpoint
             m.api.v1.sites.servicepolicies.listSiteServicePoliciesDerived.return_value = site_resp  # Site endpoint
             result = utils.service_policy_tenants(site_id="site-1")  # With site_id fetches both levels
@@ -508,7 +512,7 @@ class TestCoverageGaps:
         utils._get_org_id = lambda: "org-1"  # Fixed org ID callable
         empty_resp = MagicMock()  # Simulate empty API response
         empty_resp.data = None  # None triggers no-data guard in _fetch_org_policy_tenants
-        with patch("src.api.tenant_fetch.mistapi") as m:  # Intercept mistapi in tenant_fetch
+        with patch("src.mist.access.api.tenant_fetch.mistapi") as m:  # Intercept mistapi in tenant_fetch
             m.api.v1.orgs.servicepolicies.listOrgServicePolicies.return_value = empty_resp  # Empty org response
             result = utils.service_policy_tenants()  # Calls _fetch_org_policy_tenants internally
         assert result == []  # Empty data must produce empty result
@@ -520,7 +524,7 @@ class TestCoverageGaps:
         utils = APITenantFetchUtils.__new__(APITenantFetchUtils)  # Bypass __init__ for injection
         utils._session = MagicMock()  # Inject mock session
         utils._get_org_id = lambda: "org-1"  # Fixed org ID callable
-        with patch("src.api.tenant_fetch.mistapi") as m:  # Intercept mistapi in tenant_fetch
+        with patch("src.mist.access.api.tenant_fetch.mistapi") as m:  # Intercept mistapi in tenant_fetch
             m.api.v1.orgs.servicepolicies.listOrgServicePolicies.side_effect = requests.RequestException(
                 "sp fail"
             )  # API error
@@ -537,7 +541,7 @@ class TestCoverageGaps:
         org_resp = _make_response([{"tenants": {"org-t": {}}}])  # Org policies with a tenant
         empty_site_resp = MagicMock()  # Simulate empty site API response
         empty_site_resp.data = None  # None triggers no-data guard in _fetch_site_policy_tenants
-        with patch("src.api.tenant_fetch.mistapi") as m:  # Intercept mistapi in tenant_fetch
+        with patch("src.mist.access.api.tenant_fetch.mistapi") as m:  # Intercept mistapi in tenant_fetch
             m.api.v1.orgs.servicepolicies.listOrgServicePolicies.return_value = org_resp  # Org returns data
             m.api.v1.sites.servicepolicies.listSiteServicePoliciesDerived.return_value = empty_site_resp  # Site empty
             result = utils.service_policy_tenants(site_id="site-1")  # With site_id to trigger site fetch
@@ -551,7 +555,7 @@ class TestCoverageGaps:
         utils._session = MagicMock()  # Inject mock session
         utils._get_org_id = lambda: "org-1"  # Fixed org ID callable
         org_resp = _make_response([])  # Org returns empty list (no policies)
-        with patch("src.api.tenant_fetch.mistapi") as m:  # Intercept mistapi in tenant_fetch
+        with patch("src.mist.access.api.tenant_fetch.mistapi") as m:  # Intercept mistapi in tenant_fetch
             m.api.v1.orgs.servicepolicies.listOrgServicePolicies.return_value = org_resp  # Empty org response
             sp_derived = m.api.v1.sites.servicepolicies.listSiteServicePoliciesDerived  # Alias
             sp_derived.side_effect = requests.RequestException("site-sp")  # Site endpoint raises
@@ -567,7 +571,7 @@ class TestCoverageGaps:
         utils._get_org_id = lambda: "org-1"  # Fixed org ID callable
         empty_resp = MagicMock()  # Simulate empty API response
         empty_resp.data = None  # None triggers no-data guard in _fetch_org_template_tenants
-        with patch("src.api.tenant_fetch.mistapi") as m:  # Intercept mistapi in tenant_fetch
+        with patch("src.mist.access.api.tenant_fetch.mistapi") as m:  # Intercept mistapi in tenant_fetch
             m.api.v1.orgs.gatewaytemplates.listOrgGatewayTemplates.return_value = empty_resp  # Empty org response
             result = utils.gateway_template_tenants()  # Calls _fetch_org_template_tenants internally
         assert result == []  # Empty data must produce empty result
@@ -579,7 +583,7 @@ class TestCoverageGaps:
         utils = APITenantFetchUtils.__new__(APITenantFetchUtils)  # Bypass __init__ for injection
         utils._session = MagicMock()  # Inject mock session
         utils._get_org_id = lambda: "org-1"  # Fixed org ID callable
-        with patch("src.api.tenant_fetch.mistapi") as m:  # Intercept mistapi in tenant_fetch
+        with patch("src.mist.access.api.tenant_fetch.mistapi") as m:  # Intercept mistapi in tenant_fetch
             m.api.v1.orgs.gatewaytemplates.listOrgGatewayTemplates.side_effect = requests.RequestException(
                 "gt fail"
             )  # API error
@@ -597,7 +601,7 @@ class TestCoverageGaps:
         org_resp.data = []  # Empty org data so org method returns quickly
         empty_site_resp = MagicMock()  # Simulate empty site API response
         empty_site_resp.data = None  # None triggers no-data guard in _fetch_site_template_tenants
-        with patch("src.api.tenant_fetch.mistapi") as m:  # Intercept mistapi in tenant_fetch
+        with patch("src.mist.access.api.tenant_fetch.mistapi") as m:  # Intercept mistapi in tenant_fetch
             m.api.v1.orgs.gatewaytemplates.listOrgGatewayTemplates.return_value = org_resp  # Org returns empty
             site_gt = m.api.v1.sites.gatewaytemplates.listSiteGatewayTemplatesDerived  # Alias for readability
             site_gt.return_value = empty_site_resp  # Site returns empty response
@@ -613,7 +617,7 @@ class TestCoverageGaps:
         utils._get_org_id = lambda: "org-1"  # Fixed org ID callable
         org_resp = MagicMock()  # Simulate empty org response
         org_resp.data = []  # Empty org data so org method returns quickly
-        with patch("src.api.tenant_fetch.mistapi") as m:  # Intercept mistapi in tenant_fetch
+        with patch("src.mist.access.api.tenant_fetch.mistapi") as m:  # Intercept mistapi in tenant_fetch
             m.api.v1.orgs.gatewaytemplates.listOrgGatewayTemplates.return_value = org_resp  # Org empty
             site_gt = m.api.v1.sites.gatewaytemplates.listSiteGatewayTemplatesDerived  # Alias for readability
             site_gt.side_effect = requests.RequestException("site-gt fail")  # Site gateway template fetch raises
@@ -667,7 +671,7 @@ class TestNarrowedTenantExceptions:
         """A coding fault inside each private tenant fetch helper must propagate."""
         utils = APITenantFetchUtils.__new__(APITenantFetchUtils)  # Build the class with direct injection.
         utils._session = MagicMock()  # Supply the required session dependency.
-        import src.api.tenant_fetch as tenant_module  # Patch the module-level mistapi binding.
+        import src.mist.access.api.tenant_fetch as tenant_module  # Patch the module-level mistapi binding.
 
         endpoint = MagicMock(side_effect=TypeError(f"bad {endpoint_attr}"))  # Model an unexpected coding fault.
         mistapi_mock = MagicMock()  # Build a nested mistapi stand-in.

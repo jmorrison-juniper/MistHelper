@@ -1,4 +1,4 @@
-"""Unit tests for src.refactors.run_interactive_test.
+"""Unit tests for src.foundation.support.refactors.run_interactive_test.
 
 Wave 13 P2 coverage lift — RunInteractiveTestManager is a thin
 orchestrator that late-binds MistHelper and passes org_id closures
@@ -11,7 +11,7 @@ from __future__ import annotations  # WHY: enable PEP 604 unions on older type c
 import sys  # WHY: patch.dict(sys.modules) to inject a fake MistHelper module
 from unittest.mock import MagicMock, patch  # WHY: MagicMock stubs + patch for sys.modules swap
 
-from src.refactors.run_interactive_test import (
+from src.foundation.support.refactors.run_interactive_test import (
     RunInteractiveTestManager,  # WHY: subject under test
     _resolve_runtime_dependencies,  # WHY: cover the module-level helper directly
 )

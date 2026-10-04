@@ -2,7 +2,7 @@
 
 **Feature**: `refactor/bulk-ap-upgrader-compliance`
 **Date**: 2026-07-01
-**Location**: Same module as the target class — `src/firmware/bulk_ap_upgrader.py` (per FR-018)
+**Location**: Same module as the target class — `src/operations/execution/firmware/bulk_ap_upgrader.py` (per FR-018)
 
 ---
 

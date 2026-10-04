@@ -64,9 +64,9 @@ class AstNames:
 class ModuleInfo:
     """One parsed source module and its top-level import map."""
 
-    name: str  # The dotted module name, such as src.export.site_exporter.
+    name: str  # The dotted module name, such as src.operations.exporting.export.site_exporter.
     path: Path  # The absolute file path.
-    relative: str  # The repository path with forward slashes, such as src/export/site_exporter.py.
+    relative: str  # The repository path with forward slashes, such as src/operations/exporting/export/site_exporter.py.
     tree: ast.Module  # The parsed module.
     package: str  # The package that a relative import starts from.
     imports: dict[str, str] = field(default_factory=dict)  # The top-level local name to its dotted target.
@@ -89,7 +89,7 @@ class ScopeView:
 class FunctionEntry:
     """One function or method in the index."""
 
-    key: str  # The key, such as src.export.site_exporter:SiteExporter.export.
+    key: str  # The key, such as src.operations.exporting.export.site_exporter:SiteExporter.export.
     module: ModuleInfo  # The module that holds the function.
     node: ast.FunctionDef | ast.AsyncFunctionDef  # The function definition.
     class_key: str | None  # The key of the owner class, or None for a module function.
@@ -99,7 +99,7 @@ class FunctionEntry:
 class ClassEntry:
     """One class in the index."""
 
-    key: str  # The key, such as src.export.site_exporter:SiteExporter.
+    key: str  # The key, such as src.operations.exporting.export.site_exporter:SiteExporter.
     module: ModuleInfo  # The module that holds the class.
     node: ast.ClassDef  # The class definition.
 
@@ -108,7 +108,7 @@ class ClassEntry:
 class ConstantEntry:
     """One module constant or class constant in the index."""
 
-    key: str  # The key, such as src.upgrade_portal.app.routes:bp.
+    key: str  # The key, such as src.interfaces.portals.upgrade_portal.app.routes:bp.
     module: ModuleInfo  # The module that holds the constant.
     value: ast.expr  # The assigned expression.
 

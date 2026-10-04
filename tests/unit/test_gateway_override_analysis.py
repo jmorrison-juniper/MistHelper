@@ -2,7 +2,7 @@
 
 from unittest.mock import MagicMock
 
-from src.gateway.overrides import (
+from src.mist.resources.gateway.overrides import (
     GatewayOverrideDependencies,
     WanOverrideWalker,
     configure_gateway_override_dependencies,

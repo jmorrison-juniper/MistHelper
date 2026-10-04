@@ -35,13 +35,15 @@ pytest.importorskip("playwright.sync_api", reason="The Playwright package is not
 
 from playwright.sync_api import Error as PlaywrightError  # WHY: The skip above runs first.
 
-from src.upgrade_portal.app import factory  # WHY: The skip above runs first.
+from src.interfaces.portals.upgrade_portal.app import factory  # WHY: The skip above runs first.
 
 # WHY: This file sits at tests/e2e/upgrade_portal, so the root is three levels up.
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
 # WHY: The real script that the real page loads. The browser reads this text.
-SCRIPT_PATH = REPO_ROOT / "src" / "upgrade_portal" / "app" / "assets" / "static" / "js" / "portal.js"
+SCRIPT_PATH = (
+    REPO_ROOT / "src" / "interfaces" / "portals" / "upgrade_portal" / "app" / "assets" / "static" / "js" / "portal.js"
+)
 
 # WHY: contracts/ui-testids.md fixes each name below. A locator reads no other attribute.
 IDENTIFIER_TESTID = "capture-identifier"

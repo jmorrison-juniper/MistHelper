@@ -21,7 +21,7 @@
 
 ## Phase 2: The change
 
-- [x] T004 Add `src/upgrade_portal/upgrade/org_advanced_options.py`.
+- [x] T004 Add `src/interfaces/portals/upgrade_portal/upgrade/org_advanced_options.py`.
 
 - [x] T005 Change the routes, the labels, and the two firmware modules.
 
@@ -53,7 +53,7 @@
   passes. The test quality gate first reported two findings in the contract
   file: no malformed body and no empty body. Three new tests cover both cases.
   Pylint reported three copies of the peer and radio field names. The names
-  now come from one list in `src/firmware/org_upgrade_body.py`.
+  now come from one list in `src/operations/execution/firmware/org_upgrade_body.py`.
 
 - [x] T012 Run the portal suites and the browser suite of the upgrade portal.
   The portal suites gave 5864 passed and 2 failed. The two failures pinned

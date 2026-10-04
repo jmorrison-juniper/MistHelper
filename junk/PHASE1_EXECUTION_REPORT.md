@@ -1,7 +1,7 @@
 # Issue #293 Autonomous Execution Report: Phase 1 Status
 
 > **Status note, 2026-09-25**: This report is historical. The current tree has
-> `src/maps/plotly_map_templates.py` and `tests/maps/test_plotly_map_templates.py`.
+> `src/interfaces/visualization/maps/plotly_map_templates.py` and `tests/maps/test_plotly_map_templates.py`.
 > Read current refactor work from the issue or pull request that owns that work.
 
 **Report Date**: 2026-05-13  
@@ -27,14 +27,14 @@ The autonomous execution of Issue #293 has begun using a structured phase-based 
 
 ### 1.1 DashTemplateManager Class Creation
 
-**File**: `src/maps/plotly_map_templates.py` (175 lines, CC=5)
+**File**: `src/interfaces/visualization/maps/plotly_map_templates.py` (175 lines, CC=5)
 
 **Design**: Encapsulates all template/CSS/HTML management for the Plotly/Dash viewer
 
 **Methods**:
 ```python
 class DashTemplateManager:
-    def __init__(self, org_id: str, base_template_dir: str = "src/maps/templates")
+    def __init__(self, org_id: str, base_template_dir: str = "src/interfaces/visualization/maps/templates")
     def get_custom_css(self) -> str  # Dark theme CSS (~130 lines)
     def get_html_template(self) -> str  # Dash HTML template
     def get_app_meta(self) -> Dict[str, str]  # App metadata
@@ -80,7 +80,7 @@ Commit: bf4369b
 Branch: chore/293-phase-1
 Message: chore(293-phase1-t001): Extract DashTemplateManager class
 
-- Create new module: src/maps/plotly_map_templates.py
+- Create new module: src/interfaces/visualization/maps/plotly_map_templates.py
 - Implement DashTemplateManager with 4 methods
 - Add comprehensive validation with validate_template()
 - Create 25 unit tests covering all functionality

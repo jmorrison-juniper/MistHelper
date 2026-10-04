@@ -1,6 +1,6 @@
 """Tests for BulkSwitchFirmwareUpgrader extraction.
 
-Validates the extracted module at src/firmware/bulk_switch_upgrader.py
+Validates the extracted module at src/operations/execution/firmware/bulk_switch_upgrader.py
 with comprehensive coverage of all upgrade workflow steps.
 """
 
@@ -29,7 +29,7 @@ _saved_mistapi = sys.modules.get("mistapi")
 _our_mock = MagicMock()
 sys.modules["mistapi"] = _our_mock
 try:
-    from src.firmware.bulk_switch_upgrader import BulkSwitchFirmwareUpgrader
+    from src.operations.execution.firmware.bulk_switch_upgrader import BulkSwitchFirmwareUpgrader
 finally:
     if _saved_mistapi is not None:
         sys.modules["mistapi"] = _saved_mistapi

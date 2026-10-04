@@ -5,7 +5,7 @@ Why:
     filters in the portal itself". Both halves of that sentence are rules, and
     a rule that lives in a template cannot be tested without a browser. These
     tests prove that the rules live in
-    ``src.upgrade_portal.app.routes.select`` instead, and that the page only
+    ``src.interfaces.portals.upgrade_portal.app.routes.select`` instead, and that the page only
     prints what ``build_org_view`` decided.
 
     The order of the two rules carries the whole point. The portal filters the
@@ -31,7 +31,7 @@ import pytest
 from flask import Flask
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
-from src.upgrade_portal.app.routes import select
+from src.interfaces.portals.upgrade_portal.app.routes import select
 
 # The repository root. This file sits at tests/unit/upgrade_portal/.
 _REPO_ROOT = Path(__file__).resolve().parents[3]

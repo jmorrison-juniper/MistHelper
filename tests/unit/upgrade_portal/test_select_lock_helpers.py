@@ -21,9 +21,9 @@ from typing import Any
 
 import pytest
 
-from src.upgrade_portal.app.routes import select
-from src.upgrade_portal.runtime.identity import SessionOwner
-from src.upgrade_portal.runtime.lock import LockRecord
+from src.interfaces.portals.upgrade_portal.app.routes import select
+from src.interfaces.portals.upgrade_portal.runtime.identity import SessionOwner
+from src.interfaces.portals.upgrade_portal.runtime.lock import LockRecord
 
 ORG_ID = "8a1ea872-241a-4c8e-a5ca-2d85674c7229"
 SITE_ID = "cf36153a-97bb-4974-8f8f-e9cc25d64d83"

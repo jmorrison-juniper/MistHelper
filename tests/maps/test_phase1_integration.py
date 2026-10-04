@@ -2,7 +2,7 @@
 
 from unittest.mock import Mock, patch
 
-from src.maps.plotly_map_templates import DashTemplateManager
+from src.interfaces.visualization.maps.plotly_map_templates import DashTemplateManager
 
 
 class TestDashTemplateManagerIntegration:
@@ -11,7 +11,7 @@ class TestDashTemplateManagerIntegration:
     def test_dash_template_manager_importable(self):
         """DashTemplateManager can be imported from maps_manager."""
         # This verifies the import statement exists in maps_manager.py
-        from src.maps.maps_manager import DashTemplateManager
+        from src.interfaces.visualization.maps.maps_manager import DashTemplateManager
 
         assert DashTemplateManager.__name__ == "DashTemplateManager"
 
@@ -91,7 +91,7 @@ class TestDashTemplateManagerIntegration:
         # Verify callback exception suppression is enabled for multiple outputs
         assert meta["suppress_callback_exceptions"] is True
 
-    @patch("src.maps.plotly_map_templates.DashTemplateManager.validate_template")
+    @patch("src.interfaces.visualization.maps.plotly_map_templates.DashTemplateManager.validate_template")
     def test_template_validation_called(self, mock_validate):
         """Template manager can validate template structure."""
         mgr = DashTemplateManager(org_id="test-org")
@@ -184,12 +184,12 @@ class TestTemplateIntegrationWithMapsManager:
     def test_maps_manager_imports_template_manager(self):
         """MapsManager properly imports DashTemplateManager."""
         # This import should succeed without errors
-        from src.maps.maps_manager import DashTemplateManager
+        from src.interfaces.visualization.maps.maps_manager import DashTemplateManager
 
         assert DashTemplateManager.__name__ == "DashTemplateManager"
 
-    @patch("src.maps.maps_manager.Dash")
-    @patch("src.maps.plotly_map_templates.DashTemplateManager")
+    @patch("src.interfaces.visualization.maps.maps_manager.Dash")
+    @patch("src.interfaces.visualization.maps.plotly_map_templates.DashTemplateManager")
     def test_launch_plotly_viewer_uses_template_manager(self, mock_template_mgr_class, mock_dash):
         """_launch_plotly_viewer uses DashTemplateManager for templates."""
         # Setup mock template manager
@@ -220,7 +220,7 @@ class TestPhase1Completion:
 
     def test_dash_template_manager_class_exists(self):
         """DashTemplateManager class exists and is importable."""
-        from src.maps.plotly_map_templates import DashTemplateManager
+        from src.interfaces.visualization.maps.plotly_map_templates import DashTemplateManager
 
         mgr = DashTemplateManager(org_id="test-org")
         assert mgr.org_id == "test-org"
@@ -228,8 +228,8 @@ class TestPhase1Completion:
     def test_phase1_integration_complete(self):
         """Phase 1 integration is complete with all components."""
         # Import both
-        from src.maps.maps_manager import DashTemplateManager as MapsImportedDTM
-        from src.maps.plotly_map_templates import DashTemplateManager
+        from src.interfaces.visualization.maps.maps_manager import DashTemplateManager as MapsImportedDTM
+        from src.interfaces.visualization.maps.plotly_map_templates import DashTemplateManager
 
         # They should be the same class
         assert DashTemplateManager is MapsImportedDTM

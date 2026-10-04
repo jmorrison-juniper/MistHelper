@@ -7,10 +7,12 @@ from unittest.mock import MagicMock, call, patch
 
 import pytest
 
-from src.capture._packet_capture_prompts import PacketCapturePrompts
-from src.capture.multi_ap_scan_workflow import MultiApScanCaptureWorkflow
-from src.refactors.serial_cc.start_site_client_capture_wireless import SiteWirelessClientCaptureService
-from src.utils.input_utils import InputUtils
+from src.foundation.support.refactors.serial_cc.start_site_client_capture_wireless import (
+    SiteWirelessClientCaptureService,
+)
+from src.foundation.support.utils.input_utils import InputUtils
+from src.operations.execution.capture._packet_capture_prompts import PacketCapturePrompts
+from src.operations.execution.capture.multi_ap_scan_workflow import MultiApScanCaptureWorkflow
 
 
 def _build_workflow() -> tuple[MultiApScanCaptureWorkflow, MagicMock, MagicMock, MagicMock]:

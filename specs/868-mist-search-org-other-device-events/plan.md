@@ -16,9 +16,9 @@ ships on `main` as menu 252 through pull request #2418.
 ## Files
 
 - `MistHelper.py` registers menu 252.
-- `src/export/org_export_utils.py` implements the operation.
-- `src/utils/operation_registry.py` marks the menu as safe.
-- `src/refactors/endpoint_primary_key_strategies.py` defines the key strategy.
+- `src/operations/exporting/export/org_export_utils.py` implements the operation.
+- `src/foundation/support/utils/operation_registry.py` marks the menu as safe.
+- `src/foundation/support/refactors/endpoint_primary_key_strategies.py` defines the key strategy.
 - `tests/unit/export/test_org_export_utils.py` verifies the operation.
 
 ## Validation

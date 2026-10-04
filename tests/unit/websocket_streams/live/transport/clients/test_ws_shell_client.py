@@ -8,19 +8,23 @@ import threading  # Send from another thread is part of the contract.
 from collections.abc import Callable  # The client helper accepts fake factories.
 
 import pytest  # Tests assert expected transport errors.
+import websocket  # Socket fakes raise websocket-client write errors.
 from websocket._url import get_proxy_info  # FR-005: the pinned library reads the proxy of the host.
 
-import websocket  # Socket fakes raise websocket-client write errors.
-from src.websocket_streams.intake.fields.error import StreamRequestError  # Sends use the request error contract.
-from src.websocket_streams.live.transport.endpoint import (  # Build client endpoints.
+from src.mist.realtime.websocket_streams.intake.fields.error import (
+    StreamRequestError,
+)  # Sends use the request error contract.
+from src.mist.realtime.websocket_streams.live.transport.endpoint import (  # Build client endpoints.
     MistStreamEndpoint,
     ShellAddressPolicy,
     TransportProfile,
 )
-from src.websocket_streams.live.transport.runtime.reader.contracts import (
+from src.mist.realtime.websocket_streams.live.transport.runtime.reader.contracts import (
     ConnectionClosed,
 )  # Read errors use this structured close.
-from src.websocket_streams.live.transport.shell_client import ShellClient  # Test the shell transport client.
+from src.mist.realtime.websocket_streams.live.transport.shell_client import (
+    ShellClient,
+)  # Test the shell transport client.
 from tests.unit.websocket_streams.live.transport.fake_mist_cloud.api import (
     FakeApiSession,
 )  # Fake sessions provide endpoint fields.
@@ -437,7 +441,9 @@ class TestShellStructuredLogging:
 
     def test_shell_records_are_json_and_exclude_input(self, caplog: pytest.LogCaptureFixture) -> None:
         """Emit structured records without shell addresses or terminal input."""
-        caplog.set_level(logging.DEBUG, logger="src.websocket_streams.live.transport.shell_client")  # Capture events.
+        caplog.set_level(
+            logging.DEBUG, logger="src.mist.realtime.websocket_streams.live.transport.shell_client"
+        )  # Capture events.
         with FakeMistCloud() as cloud:  # Start a loopback fake cloud.
             device = ShellDevice()  # Build a normal shell device.
             cloud.register("/shell/private-token", device)  # Use a path that must not enter logs.

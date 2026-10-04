@@ -6,8 +6,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.utils import environment_utils as env_mod
-from src.utils.environment_utils import EnvironmentUtils
+from src.foundation.support.utils import environment_utils as env_mod
+from src.foundation.support.utils.environment_utils import EnvironmentUtils
 
 
 @pytest.fixture(autouse=True)

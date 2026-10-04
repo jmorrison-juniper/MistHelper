@@ -4,7 +4,7 @@
 
 | menu | title | handler import | handler attribute | category | skip_reason | destructive | supports_fast |
 | - | - | - | - | - | - | - | - |
-| 275 | Audit site variable coverage | `src.reports.site_variable_audit.operation` | `SiteVariableAudit.run` | `safe` |  | `False` | `False` |
+| 275 | Audit site variable coverage | `src.mist.intelligence.reports.site_variable_audit.operation` | `SiteVariableAudit.run` | `safe` |  | `False` | `False` |
 
 ## OperationRegistry comment
 
@@ -32,14 +32,14 @@ Add Menu 275 to the `safe` row. Increase the `safe` count by one. Do not add Men
 ## Import line for MistHelper.py
 
 ```python
-from src.reports.site_variable_audit.operation import SiteVariableAudit  # Menu 275 (issue #3556) -- audit missing and unused site variables.
+from src.mist.intelligence.reports.site_variable_audit.operation import SiteVariableAudit  # Menu 275 (issue #3556) -- audit missing and unused site variables.
 ```
 
 ## Deferred integration status
 
 - `MistHelper.py` is deferred to the integration pull request.
-- `src/utils/operation_registry.py` is deferred to the integration pull request.
-- `src/refactors/endpoint_primary_key_strategies.py` is deferred to the integration pull request.
+- `src/foundation/support/utils/operation_registry.py` is deferred to the integration pull request.
+- `src/foundation/support/refactors/endpoint_primary_key_strategies.py` is deferred to the integration pull request.
 - `README.md` is deferred to the integration pull request.
 - `documentation/menu_reference.md` is deferred to the integration pull request.
 - `documentation/wiki/` generated files are deferred to the integration pull request.
@@ -47,10 +47,10 @@ from src.reports.site_variable_audit.operation import SiteVariableAudit  # Menu 
 
 ## Source package files
 
-- `src/reports/site_variable_audit/__init__.py`
-- `src/reports/site_variable_audit/client.py`
-- `src/reports/site_variable_audit/model.py`
-- `src/reports/site_variable_audit/operation.py`
+- `src/mist/intelligence/reports/site_variable_audit/__init__.py`
+- `src/mist/intelligence/reports/site_variable_audit/client.py`
+- `src/mist/intelligence/reports/site_variable_audit/model.py`
+- `src/mist/intelligence/reports/site_variable_audit/operation.py`
 
 ## Test files
 
@@ -72,14 +72,14 @@ python -m scripts.menu_api_map
 ## Validation commands
 
 ```powershell
-C:\Users\jmorrison\mh-fleet\3556-site-variable-audit\.venv\Scripts\python.exe -m py_compile src\reports\site_variable_audit\client.py src\reports\site_variable_audit\model.py src\reports\site_variable_audit\operation.py
-C:\Users\jmorrison\mh-fleet\3556-site-variable-audit\.venv\Scripts\python.exe -m ruff check src\reports\site_variable_audit tests\unit\reports\site_variable_audit
-C:\Users\jmorrison\mh-fleet\3556-site-variable-audit\.venv\Scripts\python.exe -m black --check src\reports\site_variable_audit tests\unit\reports\site_variable_audit
-C:\Users\jmorrison\mh-fleet\3556-site-variable-audit\.venv\Scripts\python.exe -m mypy src\reports\site_variable_audit --config-file pyproject.toml
-C:\Users\jmorrison\mh-fleet\3556-site-variable-audit\.venv\Scripts\python.exe -m pydocstyle src\reports\site_variable_audit
+C:\Users\jmorrison\mh-fleet\3556-site-variable-audit\.venv\Scripts\python.exe -m py_compile src\mist\intelligence\reports\site_variable_audit\client.py src\mist\intelligence\reports\site_variable_audit\model.py src\mist\intelligence\reports\site_variable_audit\operation.py
+C:\Users\jmorrison\mh-fleet\3556-site-variable-audit\.venv\Scripts\python.exe -m ruff check src\mist\intelligence\reports\site_variable_audit tests\unit\reports\site_variable_audit
+C:\Users\jmorrison\mh-fleet\3556-site-variable-audit\.venv\Scripts\python.exe -m black --check src\mist\intelligence\reports\site_variable_audit tests\unit\reports\site_variable_audit
+C:\Users\jmorrison\mh-fleet\3556-site-variable-audit\.venv\Scripts\python.exe -m mypy src\mist\intelligence\reports\site_variable_audit --config-file pyproject.toml
+C:\Users\jmorrison\mh-fleet\3556-site-variable-audit\.venv\Scripts\python.exe -m pydocstyle src\mist\intelligence\reports\site_variable_audit
 C:\Users\jmorrison\mh-fleet\3556-site-variable-audit\.venv\Scripts\python.exe -m pytest tests\unit\reports\site_variable_audit -q --timeout=120
-C:\Users\jmorrison\mh-fleet\3556-site-variable-audit\.venv\Scripts\python.exe -m vulture src\reports\site_variable_audit --min-confidence 70
-C:\Users\jmorrison\mh-fleet\3556-site-variable-audit\.venv\Scripts\python.exe -m interrogate -v src\reports\site_variable_audit
-C:\Users\jmorrison\mh-fleet\3556-site-variable-audit\.venv\Scripts\python.exe -m radon cc src\reports\site_variable_audit -j | & C:\Users\jmorrison\mh-fleet\3556-site-variable-audit\.venv\Scripts\complexity-gate.exe --max 10
+C:\Users\jmorrison\mh-fleet\3556-site-variable-audit\.venv\Scripts\python.exe -m vulture src\mist\intelligence\reports\site_variable_audit --min-confidence 70
+C:\Users\jmorrison\mh-fleet\3556-site-variable-audit\.venv\Scripts\python.exe -m interrogate -v src\mist\intelligence\reports\site_variable_audit
+C:\Users\jmorrison\mh-fleet\3556-site-variable-audit\.venv\Scripts\python.exe -m radon cc src\mist\intelligence\reports\site_variable_audit -j | & C:\Users\jmorrison\mh-fleet\3556-site-variable-audit\.venv\Scripts\complexity-gate.exe --max 10
 & C:\Users\jmorrison\mh-fleet\3556-site-variable-audit\.venv\Scripts\test-quality-analyzer.exe --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json --changed-from origin/main
 ```

@@ -6,7 +6,7 @@
 
 ## Summary
 
-Add the package for menu 282 as a safe operation that writes a rogue wireless PCI evidence pack. This branch is a package-only precursor. The implementation uses a new package under `src/reports/rogue_pci_evidence/` with a Mist API client, pure model builders, and one operation entry point. Menu wiring, README updates, and database key registration stay deferred to [wiring.md](./wiring.md). The operation is not integration-complete until the integration pull request applies those deferred tasks.
+Add the package for menu 282 as a safe operation that writes a rogue wireless PCI evidence pack. This branch is a package-only precursor. The implementation uses a new package under `src/mist/intelligence/reports/rogue_pci_evidence/` with a Mist API client, pure model builders, and one operation entry point. Menu wiring, README updates, and database key registration stay deferred to [wiring.md](./wiring.md). The operation is not integration-complete until the integration pull request applies those deferred tasks.
 
 ## Technical Context
 
@@ -32,7 +32,7 @@ Add the package for menu 282 as a safe operation that writes a rogue wireless PC
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-- Five-Item Rule: Pass for the new package. Existing parent directories `src/reports` and `tests/unit/reports` exceed five children before this branch. Incremental remediation is tracked for a later package taxonomy change, because this fleet contract owns only `src/reports/rogue_pci_evidence` and `tests/unit/reports/rogue_pci_evidence`.
+- Five-Item Rule: Pass for the new package. Existing parent directories `src/mist/intelligence/reports` and `tests/unit/reports` exceed five children before this branch. Incremental remediation is tracked for a later package taxonomy change, because this fleet contract owns only `src/mist/intelligence/reports/rogue_pci_evidence` and `tests/unit/reports/rogue_pci_evidence`.
 - Class-Based Architecture: Pass. `RoguePciEvidencePack`, `RoguePciEvidenceClient`, and model dataclasses own behavior.
 - Safety-First: Pass. The operation is read-only and uses the existing organization resolver.
 - Full Deployment Pipeline: Pass by fleet contract. Local gates run before each implementation commit.
@@ -59,7 +59,7 @@ specs/3562-rogue-pci-evidence/
 ### Source Code (repository root)
 
 ```text
-src/reports/rogue_pci_evidence/
+src/mist/intelligence/reports/rogue_pci_evidence/
 ├── __init__.py
 ├── client.py
 ├── model.py

@@ -37,9 +37,9 @@ the count of the short sites, as the fixes of #3447 and #3452 do.
 
 | File | Change |
 | - | - |
-| `src/upgrade_portal/upgrade/org_site_records.py` | The place words, the method `place_text`, and the three save refusals. |
-| `src/upgrade_portal/app/routes/org_upgrade.py` | The second sentence of the start refusal, and the import of `OrgSiteRefusal`. |
-| `src/upgrade_portal/app/assets/templates/upgrade/org_options.html` | The Boolean value and the two nouns of the banner. |
+| `src/interfaces/portals/upgrade_portal/upgrade/org_site_records.py` | The place words, the method `place_text`, and the three save refusals. |
+| `src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py` | The second sentence of the start refusal, and the import of `OrgSiteRefusal`. |
+| `src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_options.html` | The Boolean value and the two nouns of the banner. |
 | `tests/unit/upgrade_portal/test_issue_3462_site_list_noun.py` | New. The place words and the whole texts for one, two, and twelve sites. |
 | `tests/unit/upgrade_portal/test_org_site_records.py` | The texts of one site. |
 | `tests/contract/upgrade_portal/test_org_site_records_routes.py` | The texts of one site, and new tests of the banner and the save. |

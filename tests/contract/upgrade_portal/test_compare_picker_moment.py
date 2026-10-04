@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import re
 
-from src.upgrade_portal.app.routes import review
+from src.interfaces.portals.upgrade_portal.app.routes import review
 
 # The stored shape of a real record of the database. The offset is seven hours
 # behind UTC, so the readable form must name a different hour.

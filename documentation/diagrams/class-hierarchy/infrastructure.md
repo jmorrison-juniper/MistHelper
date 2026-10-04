@@ -90,14 +90,14 @@ classDiagram
 
 | Class | Module path |
 |-------|-------------|
-| `DataDirectoryChecker` | `src/refactors/data_directory_checker.py` |
-| `EndpointConfig` | `src/dataclasses/endpoint_config.py` |
-| `SSHConnectionConfig` | `src/ssh/ssh_runner.py` |
-| `SSHExecutionConfig` | `src/ssh/ssh_runner.py` |
-| `APICoreFetchUtils` | `src/api/api_core_fetch_utils.py` |
-| `APITenantFetchUtils` | `src/api/tenant_fetch.py` |
-| `APIFetchUtils` | `src/api/api_fetch_utils.py` |
-| `DeviceDataFetcher` | `src/refactors/device_data_fetcher.py` and `src/gateway/overrides/device_data_fetcher.py` |
+| `DataDirectoryChecker` | `src/foundation/support/refactors/data_directory_checker.py` |
+| `EndpointConfig` | `src/foundation/models/dataclasses/endpoint_config.py` |
+| `SSHConnectionConfig` | `src/operations/execution/ssh/ssh_runner.py` |
+| `SSHExecutionConfig` | `src/operations/execution/ssh/ssh_runner.py` |
+| `APICoreFetchUtils` | `src/mist/access/api/api_core_fetch_utils.py` |
+| `APITenantFetchUtils` | `src/mist/access/api/tenant_fetch.py` |
+| `APIFetchUtils` | `src/mist/access/api/api_fetch_utils.py` |
+| `DeviceDataFetcher` | `src/foundation/support/refactors/device_data_fetcher.py` and `src/mist/resources/gateway/overrides/device_data_fetcher.py` |
 
 ## Siblings
 

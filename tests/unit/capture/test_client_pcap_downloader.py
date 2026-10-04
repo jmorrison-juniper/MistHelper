@@ -7,14 +7,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.capture import client_pcap_downloader as mod
-from src.capture.client_pcap_downloader import (
+from src.operations.execution.capture import client_pcap_downloader as mod
+from src.operations.execution.capture.client_pcap_downloader import (
     ClientPacketCaptureDownloader,
     _CaptureRow,
     capture_dir,
     normalise_mac,
 )
-from src.capture.client_pcap_downloader import (
+from src.operations.execution.capture.client_pcap_downloader import (
     ClientPacketCaptureDownloader as FailureModeClientPacketCaptureDownloader,
 )  # WHY: prove new status tests call src.
 
@@ -72,7 +72,7 @@ def test_capture_dir_accepts_negative_vlan() -> None:
 @pytest.fixture()
 def downloader() -> ClientPacketCaptureDownloader:
     """Build a downloader with mocked ConfigUtils to skip the org-id prompt."""
-    with patch("src.capture.client_pcap_downloader._get_config_utils") as config_utils:
+    with patch("src.operations.execution.capture.client_pcap_downloader._get_config_utils") as config_utils:
         config_utils.return_value.get_cached_or_prompted_org_id.return_value = "org-1"
         return ClientPacketCaptureDownloader(MagicMock(), org_id=None)
 
@@ -174,7 +174,9 @@ def test_fetch_wireless_clients_http_503_logs_and_returns_empty(
     response.status_code = 503  # WHY: model an unavailable wireless-client list.
     response.data = [{"mac": "aa:bb:cc:dd:ee:ff"}]  # WHY: prove failed response data is not trusted.
     caplog.set_level("ERROR", logger=mod.logger.name)  # WHY: capture the operator-visible status log.
-    with patch("src.capture.client_pcap_downloader.mistapi") as fake_mistapi:  # WHY: isolate the SDK.
+    with patch(
+        "src.operations.execution.capture.client_pcap_downloader.mistapi"
+    ) as fake_mistapi:  # WHY: isolate the SDK.
         fake_mistapi.api.v1.sites.clients.searchSiteWirelessClients.return_value = response  # WHY: return 503.
         result = FailureModeClientPacketCaptureDownloader._fetch_wireless_clients(
             downloader, "site-503"

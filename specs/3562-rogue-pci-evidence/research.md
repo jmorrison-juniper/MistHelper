@@ -2,7 +2,7 @@
 
 ## Decision: Use `listOrgWlans` for approved org SSIDs
 
-**Rationale**: Existing menu 46 uses `mistapi.api.v1.orgs.wlans.listOrgWlans` in `src/export/org_config_exporter.py`. The OpenAPI operation is `GET /api/v1/orgs/{org_id}/wlans` with `org_id`, optional `limit`, and optional `page`. The installed SDK exposes `mistapi.api.v1.orgs.wlans.listOrgWlans`.
+**Rationale**: Existing menu 46 uses `mistapi.api.v1.orgs.wlans.listOrgWlans` in `src/operations/exporting/export/org_config_exporter.py`. The OpenAPI operation is `GET /api/v1/orgs/{org_id}/wlans` with `org_id`, optional `limit`, and optional `page`. The installed SDK exposes `mistapi.api.v1.orgs.wlans.listOrgWlans`.
 
 **Alternatives considered**: Site WLAN reads were rejected because the acceptance rule names organization WLAN SSIDs.
 
@@ -20,7 +20,7 @@
 
 ## Decision: Use `listSiteRogueAPs` as the primary detection source
 
-**Rationale**: Existing menu 30 uses `mistapi.api.v1.sites.insights.listSiteRogueAPs` in `src/export/org_client_security_exporter.py`. The OpenAPI operation is `GET /api/v1/sites/{site_id}/insights/rogues` with `site_id`, optional `type`, `limit`, `start`, `end`, `duration`, and `interval`. The response schema contains `ssid`, `bssid`, `channel`, `avg_rssi`, `ap_mac`, `num_aps`, `seen_on_lan`, and `times_heard`. The installed SDK exposes `mistapi.api.v1.sites.insights.listSiteRogueAPs`.
+**Rationale**: Existing menu 30 uses `mistapi.api.v1.sites.insights.listSiteRogueAPs` in `src/operations/exporting/export/org_client_security_exporter.py`. The OpenAPI operation is `GET /api/v1/sites/{site_id}/insights/rogues` with `site_id`, optional `type`, `limit`, `start`, `end`, `duration`, and `interval`. The response schema contains `ssid`, `bssid`, `channel`, `avg_rssi`, `ap_mac`, `num_aps`, `seen_on_lan`, and `times_heard`. The installed SDK exposes `mistapi.api.v1.sites.insights.listSiteRogueAPs`.
 
 **Alternatives considered**: Only reading site rogue events was rejected because menu 30 already proves that the insight endpoint is the raw rogue AP export path.
 

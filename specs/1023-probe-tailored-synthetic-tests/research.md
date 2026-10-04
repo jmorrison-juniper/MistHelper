@@ -216,11 +216,11 @@ one code path.
 
 **Decision**: All new tests mock at these boundaries:
 - `socket.socket` (both TCP and UDP paths) via
-  `unittest.mock.patch("src.utils.zscaler_probe.socket.socket")`.
+  `unittest.mock.patch("src.foundation.support.utils.zscaler_probe.socket.socket")`.
 - `subprocess.run` (for `_icmp_ping`) via
-  `unittest.mock.patch("src.utils.zscaler_probe.subprocess.run")`.
+  `unittest.mock.patch("src.foundation.support.utils.zscaler_probe.subprocess.run")`.
 - `socket.getaddrinfo` via
-  `unittest.mock.patch("src.utils.zscaler_probe.socket.gethostbyname")` (the
+  `unittest.mock.patch("src.foundation.support.utils.zscaler_probe.socket.gethostbyname")` (the
   existing resolve path).
 - No `pytest-network-mock` or similar new dependencies.
 

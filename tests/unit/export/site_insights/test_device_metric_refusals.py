@@ -15,7 +15,7 @@ from unittest.mock import MagicMock  # WHY: Stand in for the collaborators that 
 
 import pytest  # WHY: Use the caplog fixture and the parametrize marker.
 
-from src.export.site_insights.device_metric_operation import (  # WHY: Test the real menu 76 operation.
+from src.operations.exporting.export.site_insights.device_metric_operation import (  # Import the moved dependency.
     DeviceMetricOperation,
     DeviceRunContext,
 )

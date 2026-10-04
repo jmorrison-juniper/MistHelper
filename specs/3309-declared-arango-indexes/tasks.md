@@ -20,8 +20,8 @@
 **Independent Test**: Compare exact ordered requests before import and zero repeated requests after a complete check.
 
 - [x] T006 [US1] Test real strategies and declaration changes. (delivered: `tests/unit/arango_indexes/test_declared_indexes.py`)
-- [x] T007 [US1] Add semantic normalization and index state classes. (delivered: `src/db/database_schema_utils.py`)
-- [x] T008 [US1] Consume the strategy indexes through the existing collection path. (delivered: `src/db/arango_writer.py`)
+- [x] T007 [US1] Add semantic normalization and index state classes. (delivered: `src/foundation/persistence/db/database_schema_utils.py`)
+- [x] T008 [US1] Consume the strategy indexes through the existing collection path. (delivered: `src/foundation/persistence/db/arango_writer.py`)
 - [x] T009 [US1] Test exact SDK requests and equal-index responses. (delivered: `tests/contract/test_arango_declared_indexes.py`)
 
 ## Phase 4: User Story 2 - Report a failure and retry
@@ -29,7 +29,7 @@
 **Independent Test**: Fail an index, compare zero imports, then verify all unconfirmed retry requests.
 
 - [x] T010 [US2] Test driver errors, transport errors, and retry. (delivered: `tests/unit/arango_indexes/test_retry_concurrency.py`)
-- [x] T011 [US2] Add explicit diagnostics and complete-check confirmation. (delivered: `src/db/database_schema_utils.py`)
+- [x] T011 [US2] Add explicit diagnostics and complete-check confirmation. (delivered: `src/foundation/persistence/db/database_schema_utils.py`)
 - [x] T012 [US2] Verify the existing single and dual router failure results. (delivered: `tests/contract/test_arango_declared_indexes.py`)
 - [x] T013 [US2] Prove unchanged keys, values, counts, imports, and batching. (delivered: `tests/unit/arango_indexes/test_preservation.py`)
 
@@ -38,7 +38,7 @@
 **Independent Test**: Block an initial request and verify one complete index request set across concurrent same-scope writers.
 
 - [x] T014 [US3] Test concurrent writes, retry, and independent scopes. (delivered: `tests/unit/arango_indexes/test_retry_concurrency.py`)
-- [x] T015 [US3] Share the guard and invalidate recreated collections. (delivered: `src/db/database_schema_utils.py`, `src/db/arango_writer.py`)
+- [x] T015 [US3] Share the guard and invalidate recreated collections. (delivered: `src/foundation/persistence/db/database_schema_utils.py`, `src/foundation/persistence/db/arango_writer.py`)
 
 ## Phase 6: Validation and delivery
 

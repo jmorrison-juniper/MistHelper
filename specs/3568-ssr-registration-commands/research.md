@@ -33,4 +33,4 @@ The installed `mistapi` package has no `getOrg128TRegistrationCommands` helper u
 
 ## Decision
 
-The operation keeps the registration code on the console and out of logs. It writes a file only after explicit consent. This matches the ZTP password pattern in `src/device/_utility_commands_action.py`, where the code logs render state but excludes the credential value.
+The operation keeps the registration code on the console and out of logs. It writes a file only after explicit consent. This matches the ZTP password pattern in `src/mist/resources/device/_utility_commands_action.py`, where the code logs render state but excludes the credential value.

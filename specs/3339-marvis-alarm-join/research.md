@@ -13,8 +13,8 @@ source, so a reviewer can repeat the check.
 | - | - |
 | `documentation/api/orgs/GET_orgs_org_id_alarms_search.md` | The query values and the alarm fields of the organization alarm search. |
 | `mistapi` 0.64.0, installed in the local virtual environment and in `misthelper-app` | The signatures of `searchOrgAlarms` and `get_next`. |
-| `src/marvis/actions/client.py` at `origin/main` 0e84cb7c | The page checks and the guard of the Marvis Actions list read. |
-| `src/marvis/actions/operation.py` at 0e84cb7c | The export step and the output of each mode. |
+| `src/mist/intelligence/marvis/actions/client.py` at `origin/main` 0e84cb7c | The page checks and the guard of the Marvis Actions list read. |
+| `src/mist/intelligence/marvis/actions/operation.py` at 0e84cb7c | The export step and the output of each mode. |
 | `web_portal/services/operation.py` at 0e84cb7c | The words that make the portal mark a run as failed. |
 | A live read-only test on 2026-09-24 at about 20:00Z | The alarm rows and the action rows of the lab organization. |
 

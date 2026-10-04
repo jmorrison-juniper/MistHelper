@@ -102,7 +102,7 @@ At the end of the 13-PR first pass, the operator runs the compliance analyzer on
 
 - Repo-wide score ≥ 99.6/A+ (SC-004).
 - Zero A+ files regressed below A+ across the entire initiative (SC-005).
-- Every new `src/refactors/*.py` file is A+/100 (SC-007).
+- Every new `src/foundation/support/refactors/*.py` file is A+/100 (SC-007).
 - Zero sub-A files exist (baseline invariant).
 
 These are cumulative outcomes; each is verifiable by diffing the initial and final `data/full_repo_compliance_current.md`. Any deviation is a spec-compliance failure and must be remediated before the initiative closes out.

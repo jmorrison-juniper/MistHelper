@@ -7,7 +7,7 @@ from unittest.mock import MagicMock  # WHY: inject collaborator failures without
 import pytest  # WHY: assert that unexpected exceptions now propagate.
 import requests  # WHY: model expected connection, timeout, and HTTP failures.
 
-from src.inventory.csv_comparator import (  # WHY: build the comparator with real dataclasses.
+from src.mist.resources.inventory.csv_comparator import (  # WHY: build the comparator with real dataclasses.
     ComparatorDependencies,
     ComparatorFlags,
     InventoryCSVComparator,

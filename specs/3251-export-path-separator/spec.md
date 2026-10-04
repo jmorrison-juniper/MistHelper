@@ -11,8 +11,8 @@ separator:
 
 | Module | Menu | Notice |
 | - | - | - |
-| `src/export/site_config_exporter.py` | 69, the WLAN export of a site | `! 0 records exported to data\%s` and `! %s records exported to data\%s` |
-| `src/export/site_export_utils.py` | 73, the SLE metric insight export of a site | `! %s records exported to data\%s` and `! 0 records exported to data\%s (no metrics available)` |
+| `src/operations/exporting/export/site_config_exporter.py` | 69, the WLAN export of a site | `! 0 records exported to data\%s` and `! %s records exported to data\%s` |
+| `src/operations/exporting/export/site_export_utils.py` | 73, the SLE metric insight export of a site | `! %s records exported to data\%s` and `! 0 records exported to data\%s (no metrics available)` |
 
 The container runs Linux. The Execution Log of menu 69 therefore reads
 `! 0 records exported to data\SiteWlans_AlamoSanAntonio.csv`. No file with a

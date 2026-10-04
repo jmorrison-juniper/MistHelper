@@ -4,7 +4,7 @@ from __future__ import annotations  # Enable modern annotations without runtime 
 
 from time import perf_counter  # Measure pure grouping speed for the performance acceptance criterion.
 
-from src.reports.alert_digest.model import AlertDigestModel  # Test pure model helpers.
+from src.mist.intelligence.reports.alert_digest.model import AlertDigestModel  # Test pure model helpers.
 
 from .conftest import alarm, definition  # Reuse synthetic alarm factories.
 

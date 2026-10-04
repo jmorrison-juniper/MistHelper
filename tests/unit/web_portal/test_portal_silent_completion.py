@@ -2,7 +2,9 @@
 
 from __future__ import annotations  # WHY: keep annotations cheap and consistent with project style.
 
-from src.utils.menu_entry import MenuEntry  # WHY: OperationExecutor expects menu entries, not raw callables.
+from src.foundation.support.utils.menu_entry import (
+    MenuEntry,
+)  # WHY: OperationExecutor expects menu entries, not raw callables.
 from web_portal.services.operation import PARAMETER_REGISTRY, OperationExecutor  # WHY: test the portal run contract.
 
 ISSUE_3144_MENUS = ("66", "75", "76", "209", "210", "213", "224", "233")  # WHY: exact issue scope.

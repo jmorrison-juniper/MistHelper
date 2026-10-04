@@ -264,20 +264,20 @@ pytest tests/unit/upgrade_portal tests/contract/upgrade_portal -v
 pytest tests/e2e/upgrade_portal -v
 
 # Lint and types. Both now cover the new package, because it lives under src/.
-ruff check src/upgrade_portal src/firmware/upgrade_service.py
-mypy src/upgrade_portal src/firmware/upgrade_service.py
+ruff check src/interfaces/portals/upgrade_portal src/operations/execution/firmware/upgrade_service.py
+mypy src/interfaces/portals/upgrade_portal src/operations/execution/firmware/upgrade_service.py
 
 # Formatting
-black --check src/upgrade_portal src/firmware/upgrade_service.py
+black --check src/interfaces/portals/upgrade_portal src/operations/execution/firmware/upgrade_service.py
 
 # Docstring coverage. The floor is 90.
-interrogate -v src/upgrade_portal src/firmware/upgrade_service.py
+interrogate -v src/interfaces/portals/upgrade_portal src/operations/execution/firmware/upgrade_service.py
 
 # Docstring style. This project installs pydocstyle, and it installs no pydoclint.
-pydocstyle --convention=google src/upgrade_portal
+pydocstyle --convention=google src/interfaces/portals/upgrade_portal
 
 # Security
-bandit -r src/upgrade_portal src/firmware/upgrade_service.py
+bandit -r src/interfaces/portals/upgrade_portal src/operations/execution/firmware/upgrade_service.py
 ```
 
 **Expected result**: every command exits zero. Coverage for the new package is 90
@@ -293,7 +293,7 @@ These checks fail the build when the change misses a required step.
 | --- | --- | --- |
 | Menu registration | The operation registry guardrail test | Menu 238 has a category entry |
 | Primary key strategy | The strategy guardrail test | `upgradeCaptureWrite` and `upgradeRunWrite` are present and use `natural_pk` |
-| Theme file tracked | `git status --porcelain src/upgrade_portal/app/assets/static/css/themes/` | The file is tracked, not ignored |
+| Theme file tracked | `git status --porcelain src/interfaces/portals/upgrade_portal/app/assets/static/css/themes/` | The file is tracked, not ignored |
 | Container assets | `podman build` then list the image contents | The theme file is inside the image |
 
 **Why the theme check matters.** `.gitignore` and `.dockerignore` exclude any path
@@ -324,7 +324,7 @@ which holds none of those strings.
 
 `GET /readyz` performs a real write and a real read-back. A plain connection check
 would report ready while every write failed silently.
-`src/export/data_exporter.py:141` gates polyglot writes on a container check, and
-`src/db/router.py:372-382` returns success after writing zero rows. Issue #1824
+`src/operations/exporting/export/data_exporter.py:141` gates polyglot writes on a container check, and
+`src/foundation/persistence/db/router.py:372-382` returns success after writing zero rows. Issue #1824
 tracks that repair. The portal does not wait for it, because the portal verifies
 its own write.

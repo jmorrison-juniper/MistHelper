@@ -6,7 +6,7 @@
 
 ## Summary
 
-Menu `283` starts a Mist synthetic test on demand for a site, one device, or a switch RADIUS check. The implementation adds a new package under `src/troubleshooting/synthetic_test_trigger/`, unit tests under `tests/unit/troubleshooting/synthetic_test_trigger/`, and a wiring manifest for the integration pull request.
+Menu `283` starts a Mist synthetic test on demand for a site, one device, or a switch RADIUS check. The implementation adds a new package under `src/mist/intelligence/troubleshooting/synthetic_test_trigger/`, unit tests under `tests/unit/troubleshooting/synthetic_test_trigger/`, and a wiring manifest for the integration pull request.
 
 ## Technical Context
 
@@ -56,7 +56,7 @@ specs/3563-synthetic-test-trigger/
 ### Source Code (repository root)
 
 ```text
-src/troubleshooting/synthetic_test_trigger/
+src/mist/intelligence/troubleshooting/synthetic_test_trigger/
 ├── __init__.py
 ├── client.py
 ├── models.py
@@ -67,7 +67,7 @@ tests/unit/troubleshooting/synthetic_test_trigger/
 └── test_synthetic_test_trigger.py
 ```
 
-**Structure Decision**: The feature uses one nested troubleshooting package, because the root `src/troubleshooting` directory already exists and the feature owns only its new child package.
+**Structure Decision**: The feature uses one nested troubleshooting package, because the root `src/mist/intelligence/troubleshooting` directory already exists and the feature owns only its new child package.
 
 ## Complexity Tracking
 

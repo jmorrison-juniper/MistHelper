@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.inventory.org_device_inventory_msp import (
+from src.mist.resources.inventory.org_device_inventory_msp import (
     OrgDeviceInventoryMSPOrchestrator,
     _flatten_model_rows,
     _flatten_version_rows,

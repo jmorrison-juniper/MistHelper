@@ -83,11 +83,11 @@ and SC-002.
 
 ## Step 4. Validate the ignored packages
 
-The gate hides `src/maps` and `src/ssh`. Four findings sit there. Prove them by
+The gate hides `src/interfaces/visualization/maps` and `src/operations/execution/ssh`. Four findings sit there. Prove them by
 hand.
 
 ```powershell
-.venv\Scripts\python.exe -m pylint src/maps src/ssh --disable=all --enable=W0613 --score=n
+.venv\Scripts\python.exe -m pylint src/interfaces/visualization/maps src/operations/execution/ssh --disable=all --enable=W0613 --score=n
 ```
 
 **Expected result**: No output. Zero findings.

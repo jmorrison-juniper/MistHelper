@@ -1,4 +1,4 @@
-"""Contract tests for the HTTP surface of the ``src.upgrade_portal`` package.
+"""Contract tests for the HTTP surface of the ``src.interfaces.portals.upgrade_portal`` package.
 
 Why:
     These tests drive the Flask test client and check the status code, the

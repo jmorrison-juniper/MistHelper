@@ -1,4 +1,4 @@
-"""Unit tests for PromptNetworkDeviceUtils (src/device/prompt_utils.py).
+"""Unit tests for PromptNetworkDeviceUtils (src/mist/resources/device/prompt_utils.py).
 
 Tests cover private helpers (pure logic) and API-calling public methods
 (using unittest.mock.patch to isolate from real network calls):
@@ -16,7 +16,10 @@ from unittest.mock import MagicMock, patch  # Mock API session, injected callabl
 import pytest  # WHY: parameterized failure-mode tests use pytest.
 import requests  # WHY: model expected Mist transport failures.
 
-from src.device.prompt_utils import PromptNetworkDeviceUtils, _PortPromptRequest  # Class under test + request DTO
+from src.mist.resources.device.prompt_utils import (
+    PromptNetworkDeviceUtils,
+    _PortPromptRequest,
+)  # Class under test + request DTO
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -497,7 +500,7 @@ class TestSelectApMac:
     def test_empty_ap_list_returns_none(self, capsys):  # No APs at site
         """Returns None and prints a warning when no APs are returned."""
         utils = _make_utils()  # Create instance with mocked session
-        with patch("src.device.prompt_utils.mistapi") as mock_mistapi:  # Isolate from real API
+        with patch("src.mist.resources.device.prompt_utils.mistapi") as mock_mistapi:  # Isolate from real API
             mock_mistapi.api.v1.sites.devices.listSiteDevices.return_value = _mock_list_response([])  # Empty
             result = utils.select_ap_mac("site-1")  # Invoke with a fake site ID
         assert result is None  # No APs available -- return None
@@ -508,7 +511,7 @@ class TestSelectApMac:
         """Returns 'ALL_APS' sentinel when user enters 'all'."""
         utils = _make_utils()  # Create instance with mocked session
         utils._safe_input = MagicMock(return_value="all")  # Simulate user typing 'all'
-        with patch("src.device.prompt_utils.mistapi") as mock_mistapi:  # Isolate from real API
+        with patch("src.mist.resources.device.prompt_utils.mistapi") as mock_mistapi:  # Isolate from real API
             mock_mistapi.api.v1.sites.devices.listSiteDevices.return_value = _mock_list_response(
                 [_make_ap(0)]  # One AP in the list
             )
@@ -519,7 +522,7 @@ class TestSelectApMac:
         """Returns the AP MAC when user enters a valid numeric index."""
         utils = _make_utils()  # Create instance with mocked session
         utils._safe_input = MagicMock(return_value="0")  # User selects first AP
-        with patch("src.device.prompt_utils.mistapi") as mock_mistapi:  # Isolate from real API
+        with patch("src.mist.resources.device.prompt_utils.mistapi") as mock_mistapi:  # Isolate from real API
             mock_mistapi.api.v1.sites.devices.listSiteDevices.return_value = _mock_list_response(
                 [_make_ap(0)]  # One AP: mac = 'aa:bb:cc:dd:ee:00'
             )
@@ -530,7 +533,7 @@ class TestSelectApMac:
         """Returns None when user enters a numeric index that is out of range."""
         utils = _make_utils()  # Create instance with mocked session
         utils._safe_input = MagicMock(return_value="99")  # Index 99 -- beyond list length
-        with patch("src.device.prompt_utils.mistapi") as mock_mistapi:  # Isolate from real API
+        with patch("src.mist.resources.device.prompt_utils.mistapi") as mock_mistapi:  # Isolate from real API
             mock_mistapi.api.v1.sites.devices.listSiteDevices.return_value = _mock_list_response(
                 [_make_ap(0)]  # Only one AP (index 0 is valid)
             )
@@ -543,7 +546,7 @@ class TestSelectApMac:
         """Returns None when user enters a non-numeric string that is not 'all'."""
         utils = _make_utils()  # Create instance with mocked session
         utils._safe_input = MagicMock(return_value="abc")  # Non-numeric, non-'all' input
-        with patch("src.device.prompt_utils.mistapi") as mock_mistapi:  # Isolate from real API
+        with patch("src.mist.resources.device.prompt_utils.mistapi") as mock_mistapi:  # Isolate from real API
             mock_mistapi.api.v1.sites.devices.listSiteDevices.return_value = _mock_list_response(
                 [_make_ap(0)]  # One AP available
             )
@@ -555,7 +558,7 @@ class TestSelectApMac:
     def test_api_exception_returns_none(self, capsys):  # API call raises
         """Returns None and prints an error when the Mist API raises an exception."""
         utils = _make_utils()  # Create instance with mocked session
-        with patch("src.device.prompt_utils.mistapi") as mock_mistapi:  # Isolate from real API
+        with patch("src.mist.resources.device.prompt_utils.mistapi") as mock_mistapi:  # Isolate from real API
             mock_mistapi.api.v1.sites.devices.listSiteDevices.side_effect = RuntimeError("timeout")  # API fails
             result = utils.select_ap_mac("site-1")  # Invoke
         assert result is None  # Exception handled gracefully -- return None
@@ -574,7 +577,7 @@ class TestSelectGatewayMac:
     def test_empty_list_returns_none(self, capsys):  # No gateways at site
         """Returns None when no gateways are returned from the API."""
         utils = _make_utils()  # Create instance with mocked session
-        with patch("src.device.prompt_utils.mistapi") as mock_mistapi:  # Isolate from real API
+        with patch("src.mist.resources.device.prompt_utils.mistapi") as mock_mistapi:  # Isolate from real API
             mock_mistapi.api.v1.sites.devices.listSiteDevices.return_value = _mock_list_response([])  # Empty
             result = utils.select_gateway_mac("site-1")  # Invoke
         assert result is None  # No gateways -- return None
@@ -586,7 +589,7 @@ class TestSelectGatewayMac:
         utils = _make_utils()  # Create instance with mocked session
         utils._safe_input = MagicMock(return_value="0")  # User selects index 0
         gw = {"name": "GW-1", "mac": "de:ad:be:ef:00:01", "model": "SRX300", "status": "connected"}  # One gateway
-        with patch("src.device.prompt_utils.mistapi") as mock_mistapi:  # Isolate from real API
+        with patch("src.mist.resources.device.prompt_utils.mistapi") as mock_mistapi:  # Isolate from real API
             mock_mistapi.api.v1.sites.devices.listSiteDevices.return_value = _mock_list_response([gw])  # One GW
             result = utils.select_gateway_mac("site-1")  # Invoke
         assert result == "de:ad:be:ef:00:01"  # Should return gateway MAC
@@ -596,7 +599,7 @@ class TestSelectGatewayMac:
         utils = _make_utils()  # Create instance with mocked session
         utils._safe_input = MagicMock(return_value="5")  # No index 5 in a 1-item list
         gw = {"name": "GW-1", "mac": "de:ad:be:ef:00:01", "model": "SRX300", "status": "connected"}  # One GW
-        with patch("src.device.prompt_utils.mistapi") as mock_mistapi:  # Isolate from real API
+        with patch("src.mist.resources.device.prompt_utils.mistapi") as mock_mistapi:  # Isolate from real API
             mock_mistapi.api.v1.sites.devices.listSiteDevices.return_value = _mock_list_response([gw])  # One GW
             result = utils.select_gateway_mac("site-1")  # Invoke
         assert result is None  # Bad index -- return None
@@ -604,7 +607,7 @@ class TestSelectGatewayMac:
     def test_api_exception_returns_none(self, capsys):  # API raises
         """Returns None when the Mist API raises an exception."""
         utils = _make_utils()  # Create instance with mocked session
-        with patch("src.device.prompt_utils.mistapi") as mock_mistapi:  # Isolate from real API
+        with patch("src.mist.resources.device.prompt_utils.mistapi") as mock_mistapi:  # Isolate from real API
             mock_mistapi.api.v1.sites.devices.listSiteDevices.side_effect = RuntimeError("down")  # API fails
             result = utils.select_gateway_mac("site-1")  # Invoke
         assert result is None  # Exception handled -- return None
@@ -614,7 +617,7 @@ class TestSelectGatewayMac:
         utils = _make_utils()  # Create instance with mocked session
         utils._safe_input = MagicMock(return_value="xyz")  # Non-numeric input
         gw = {"name": "GW-1", "mac": "de:ad:be:ef:00:01", "model": "SRX300", "status": "connected"}  # One GW
-        with patch("src.device.prompt_utils.mistapi") as mock_mistapi:  # Isolate from real API
+        with patch("src.mist.resources.device.prompt_utils.mistapi") as mock_mistapi:  # Isolate from real API
             mock_mistapi.api.v1.sites.devices.listSiteDevices.return_value = _mock_list_response([gw])  # One GW
             result = utils.select_gateway_mac("site-1")  # Invoke
         assert result is None  # Non-digit input not accepted
@@ -631,7 +634,7 @@ class TestSelectSwitchMac:
     def test_empty_list_returns_none(self, capsys):  # No switches at site
         """Returns None when no switches are returned from the API."""
         utils = _make_utils()  # Create instance with mocked session
-        with patch("src.device.prompt_utils.mistapi") as mock_mistapi:  # Isolate from real API
+        with patch("src.mist.resources.device.prompt_utils.mistapi") as mock_mistapi:  # Isolate from real API
             mock_mistapi.api.v1.sites.devices.listSiteDevices.return_value = _mock_list_response([])  # Empty
             result = utils.select_switch_mac("site-1")  # Invoke
         assert result is None  # No switches -- return None
@@ -642,7 +645,7 @@ class TestSelectSwitchMac:
         """Returns the switch MAC when user enters a valid index."""
         utils = _make_utils()  # Create instance with mocked session
         utils._safe_input = MagicMock(return_value="0")  # User selects index 0
-        with patch("src.device.prompt_utils.mistapi") as mock_mistapi:  # Isolate from real API
+        with patch("src.mist.resources.device.prompt_utils.mistapi") as mock_mistapi:  # Isolate from real API
             mock_mistapi.api.v1.sites.devices.listSiteDevices.return_value = _mock_list_response(
                 [_make_switch(0)]  # One switch
             )
@@ -653,7 +656,7 @@ class TestSelectSwitchMac:
         """Returns None when user enters an out-of-range index."""
         utils = _make_utils()  # Create instance with mocked session
         utils._safe_input = MagicMock(return_value="10")  # Index 10 -- out of range
-        with patch("src.device.prompt_utils.mistapi") as mock_mistapi:  # Isolate from real API
+        with patch("src.mist.resources.device.prompt_utils.mistapi") as mock_mistapi:  # Isolate from real API
             mock_mistapi.api.v1.sites.devices.listSiteDevices.return_value = _mock_list_response(
                 [_make_switch(0)]  # Only one switch (index 0 valid)
             )
@@ -663,7 +666,7 @@ class TestSelectSwitchMac:
     def test_api_exception_returns_none(self, capsys):  # API raises
         """Returns None when the Mist API raises an exception."""
         utils = _make_utils()  # Create instance with mocked session
-        with patch("src.device.prompt_utils.mistapi") as mock_mistapi:  # Isolate from real API
+        with patch("src.mist.resources.device.prompt_utils.mistapi") as mock_mistapi:  # Isolate from real API
             mock_mistapi.api.v1.sites.devices.listSiteDevices.side_effect = RuntimeError("timeout")  # API fails
             result = utils.select_switch_mac("site-1")  # Invoke
         assert result is None  # Exception handled -- return None
@@ -672,7 +675,7 @@ class TestSelectSwitchMac:
         """Returns None when user enters a non-numeric string."""
         utils = _make_utils()  # Create instance with mocked session
         utils._safe_input = MagicMock(return_value="??")  # Non-numeric input
-        with patch("src.device.prompt_utils.mistapi") as mock_mistapi:  # Isolate from real API
+        with patch("src.mist.resources.device.prompt_utils.mistapi") as mock_mistapi:  # Isolate from real API
             mock_mistapi.api.v1.sites.devices.listSiteDevices.return_value = _mock_list_response(
                 [_make_switch(0)]  # One switch available
             )
@@ -691,7 +694,7 @@ class TestFetchPortStats:
     def test_switch_happy_path_builds_dict(self):  # Switch/gateway path via searchSiteSwOrGwPorts
         """Switch path returns a dict keyed by port_id from searchSiteSwOrGwPorts."""
         utils = _make_utils()  # Create instance with mocked session
-        with patch("src.device.prompt_utils.mistapi") as mock_mistapi:  # Isolate from real API
+        with patch("src.mist.resources.device.prompt_utils.mistapi") as mock_mistapi:  # Isolate from real API
             search_response = MagicMock()  # Fake search response
             search_response.data = {  # Simulate API returning two port entries
                 "results": [
@@ -707,7 +710,7 @@ class TestFetchPortStats:
     def test_switch_api_exception_returns_empty(self):  # API raises during switch path
         """Returns empty dict when searchSiteSwOrGwPorts raises an exception."""
         utils = _make_utils()  # Create instance with mocked session
-        with patch("src.device.prompt_utils.mistapi") as mock_mistapi:  # Isolate from real API
+        with patch("src.mist.resources.device.prompt_utils.mistapi") as mock_mistapi:  # Isolate from real API
             mock_mistapi.api.v1.sites.stats.searchSiteSwOrGwPorts.side_effect = RuntimeError("err")  # API fails
             result = utils._fetch_port_stats("site-1", "dev-1", "aa:bb:cc:dd:ee:ff", "switch")  # Invoke
         assert result == {}  # Exception swallowed -- return empty dict
@@ -715,7 +718,7 @@ class TestFetchPortStats:
     def test_ap_happy_path_uses_port_stat(self):  # AP path via getSiteDeviceStats
         """AP path returns port_stat dict embedded in device stats response."""
         utils = _make_utils()  # Create instance with mocked session
-        with patch("src.device.prompt_utils.mistapi") as mock_mistapi:  # Isolate from real API
+        with patch("src.mist.resources.device.prompt_utils.mistapi") as mock_mistapi:  # Isolate from real API
             stats_response = MagicMock()  # Fake device stats response
             stats_response.data = {  # AP stats embed port info under 'port_stat'
                 "port_stat": {"eth0": {"up": True, "speed": 1000}}  # One Ethernet port
@@ -727,7 +730,7 @@ class TestFetchPortStats:
     def test_ap_no_port_stat_returns_empty(self):  # AP stats with no port_stat key
         """Returns empty dict when AP stats response has no 'port_stat' key."""
         utils = _make_utils()  # Create instance with mocked session
-        with patch("src.device.prompt_utils.mistapi") as mock_mistapi:  # Isolate from real API
+        with patch("src.mist.resources.device.prompt_utils.mistapi") as mock_mistapi:  # Isolate from real API
             stats_response = MagicMock()  # Fake device stats response
             stats_response.data = {}  # No 'port_stat' key in the response
             mock_mistapi.api.v1.sites.stats.getSiteDeviceStats.return_value = stats_response  # Wire up mock
@@ -737,7 +740,7 @@ class TestFetchPortStats:
     def test_gateway_path_uses_same_endpoint_as_switch(self):  # Gateway uses switch endpoint
         """Gateway device_type uses the same searchSiteSwOrGwPorts endpoint as switch."""
         utils = _make_utils()  # Create instance with mocked session
-        with patch("src.device.prompt_utils.mistapi") as mock_mistapi:  # Isolate from real API
+        with patch("src.mist.resources.device.prompt_utils.mistapi") as mock_mistapi:  # Isolate from real API
             search_response = MagicMock()  # Fake search response
             search_response.data = {"results": [{"port_id": "ge-0/0/0", "up": True}]}  # One port
             mock_mistapi.api.v1.sites.stats.searchSiteSwOrGwPorts.return_value = search_response  # Wire up mock
@@ -748,7 +751,7 @@ class TestFetchPortStats:
     def test_switch_results_missing_port_id_returns_empty(self, capsys):  # line 439 path
         """Returns empty dict and logs a warning when results lack a 'port_id' key."""
         utils = _make_utils()  # Create instance with mocked session
-        with patch("src.device.prompt_utils.mistapi") as mock_mistapi:  # Isolate from real API
+        with patch("src.mist.resources.device.prompt_utils.mistapi") as mock_mistapi:  # Isolate from real API
             search_response = MagicMock()  # Fake search response
             search_response.data = {"results": [{"name": "port1"}]}  # Result with no port_id key
             mock_mistapi.api.v1.sites.stats.searchSiteSwOrGwPorts.return_value = search_response  # Wire up
@@ -767,7 +770,7 @@ class TestFetchPortConfig:
     def test_happy_path_returns_port_config(self):  # Normal case
         """Returns the port_config section from the device config response."""
         utils = _make_utils()  # Create instance with mocked session
-        with patch("src.device.prompt_utils.mistapi") as mock_mistapi:  # Isolate from real API
+        with patch("src.mist.resources.device.prompt_utils.mistapi") as mock_mistapi:  # Isolate from real API
             device_response = MagicMock()  # Fake device config response
             device_response.data = {  # Minimal device config with port_config section
                 "port_config": {"ge-0/0/0-5": {"usage": "default"}}  # Port range config
@@ -779,7 +782,7 @@ class TestFetchPortConfig:
     def test_exception_returns_empty_dict(self):  # API raises
         """Returns empty dict when the device config API raises an exception."""
         utils = _make_utils()  # Create instance with mocked session
-        with patch("src.device.prompt_utils.mistapi") as mock_mistapi:  # Isolate from real API
+        with patch("src.mist.resources.device.prompt_utils.mistapi") as mock_mistapi:  # Isolate from real API
             mock_mistapi.api.v1.sites.devices.getSiteDevice.side_effect = RuntimeError("timeout")  # API fails
             result = utils._fetch_port_config("site-1", "dev-1")  # Invoke
         assert result == {}  # Exception swallowed -- return empty dict
@@ -787,7 +790,7 @@ class TestFetchPortConfig:
     def test_missing_port_config_key_returns_empty(self):  # Device config without port_config
         """Returns empty dict when the device config response has no 'port_config' key."""
         utils = _make_utils()  # Create instance with mocked session
-        with patch("src.device.prompt_utils.mistapi") as mock_mistapi:  # Isolate from real API
+        with patch("src.mist.resources.device.prompt_utils.mistapi") as mock_mistapi:  # Isolate from real API
             device_response = MagicMock()  # Fake response without port_config
             device_response.data = {"name": "SW-1"}  # No port_config key present
             mock_mistapi.api.v1.sites.devices.getSiteDevice.return_value = device_response  # Wire up mock
@@ -960,7 +963,7 @@ class TestSelectPortsFromDevice:
     def test_device_not_found_returns_none(self, capsys):  # listSiteDevices returns no matching device
         """Returns None when no device in the site matches the provided MAC."""
         utils = _make_utils()  # Create instance with mocked session
-        with patch("src.device.prompt_utils.mistapi") as mock_mistapi:  # Isolate from real API
+        with patch("src.mist.resources.device.prompt_utils.mistapi") as mock_mistapi:  # Isolate from real API
             mock_mistapi.api.v1.sites.devices.listSiteDevices.return_value = _mock_list_response([])  # No devices
             result = utils.select_ports_from_device("site-1", "aa:bb:cc:dd:ee:ff", "switch")  # Invoke
         assert result is None  # Device not found -- return None
@@ -970,7 +973,7 @@ class TestSelectPortsFromDevice:
     def test_api_exception_returns_none(self, capsys):  # listSiteDevices raises
         """Returns None when the initial listSiteDevices API call raises an exception."""
         utils = _make_utils()  # Create instance with mocked session
-        with patch("src.device.prompt_utils.mistapi") as mock_mistapi:  # Isolate from real API
+        with patch("src.mist.resources.device.prompt_utils.mistapi") as mock_mistapi:  # Isolate from real API
             mock_mistapi.api.v1.sites.devices.listSiteDevices.side_effect = RuntimeError("timeout")  # API fails
             result = utils.select_ports_from_device("site-1", "aa:bb:cc:dd:ee:ff", "switch")  # Invoke
         assert result is None  # Exception handled -- return None
@@ -980,7 +983,7 @@ class TestSelectPortsFromDevice:
     def test_no_ports_after_filtering_returns_none(self, capsys):  # All ports filtered out
         """Returns None when _filter_and_sort_ports returns an empty list."""
         utils = _make_utils()  # Create instance with mocked session
-        with patch("src.device.prompt_utils.mistapi") as mock_mistapi:  # Isolate API
+        with patch("src.mist.resources.device.prompt_utils.mistapi") as mock_mistapi:  # Isolate API
             mock_mistapi.api.v1.sites.devices.listSiteDevices.return_value = _mock_list_response(
                 [self._device_dict()]  # Device found
             )
@@ -995,7 +998,7 @@ class TestSelectPortsFromDevice:
         """Returns the prompt result when all helpers succeed."""
         utils = _make_utils()  # Create instance with mocked session
         utils._safe_input = MagicMock(return_value="0")  # User selects first port
-        with patch("src.device.prompt_utils.mistapi") as mock_mistapi:  # Isolate API
+        with patch("src.mist.resources.device.prompt_utils.mistapi") as mock_mistapi:  # Isolate API
             mock_mistapi.api.v1.sites.devices.listSiteDevices.return_value = _mock_list_response(
                 [self._device_dict()]  # Device found in inventory
             )
@@ -1011,7 +1014,7 @@ class TestSelectPortsFromDevice:
     def test_empty_port_stats_with_none_fallback_returns_none(self):  # lines 362 path
         """Returns None when stats are empty AND _build_port_stat_from_config returns None."""
         utils = _make_utils()  # Create instance with mocked session
-        with patch("src.device.prompt_utils.mistapi") as mock_mistapi:  # Isolate API
+        with patch("src.mist.resources.device.prompt_utils.mistapi") as mock_mistapi:  # Isolate API
             mock_mistapi.api.v1.sites.devices.listSiteDevices.return_value = _mock_list_response(
                 [self._device_dict()]  # Device found
             )
@@ -1026,7 +1029,7 @@ class TestSelectPortsFromDevice:
         """Uses fallback port_stat when live stats are empty but config fallback succeeds."""
         utils = _make_utils()  # Create instance with mocked session
         fallback_stat = {"ge-0/0/0": {"up": True, "speed": 1000, "_fallback": True}}  # Config-derived stats
-        with patch("src.device.prompt_utils.mistapi") as mock_mistapi:  # Isolate API
+        with patch("src.mist.resources.device.prompt_utils.mistapi") as mock_mistapi:  # Isolate API
             mock_mistapi.api.v1.sites.devices.listSiteDevices.return_value = _mock_list_response(
                 [self._device_dict()]  # Device found
             )
@@ -1056,7 +1059,7 @@ class TestPromptDeviceFailureModes:
     def test_fetch_and_sort_request_failure_returns_none(self, exception: requests.RequestException) -> None:
         """Connection errors and timeouts must return None for the selector flow."""
         utils = PromptNetworkDeviceUtils(MagicMock(), MagicMock(), MagicMock())
-        with patch("src.device.prompt_utils.mistapi") as mistapi_mock:
+        with patch("src.mist.resources.device.prompt_utils.mistapi") as mistapi_mock:
             mistapi_mock.api.v1.sites.devices.listSiteDevices.side_effect = exception
             result = utils._fetch_and_sort_devices("site-1", "ap", "APs")
         assert result is None

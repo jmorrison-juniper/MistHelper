@@ -13,8 +13,8 @@ from unittest.mock import MagicMock
 import pytest
 from redis.exceptions import RedisError  # WHY: tests must raise the narrowed Redis driver type
 
-from src.db import retention
-from src.db.retention import RetentionManager
+from src.foundation.persistence.db import retention
+from src.foundation.persistence.db.retention import RetentionManager
 
 
 class FakeRedisClient:

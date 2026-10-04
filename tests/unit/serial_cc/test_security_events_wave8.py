@@ -9,8 +9,10 @@ from unittest.mock import MagicMock, patch  # WHY: MagicMock(spec=...) + resolve
 
 import pytest  # WHY: caplog + monkeypatch fixtures used in this suite
 
-from src.refactors.serial_cc import security_events as sut  # WHY: SUT module (helpers + service class)
-from src.refactors.serial_cc.security_events import (  # WHY: named imports for direct helper coverage
+from src.foundation.support.refactors.serial_cc import (
+    security_events as sut,
+)  # WHY: SUT module (helpers + service class)
+from src.foundation.support.refactors.serial_cc.security_events import (  # Import the moved dependency.
     _ROGUE_KINDS,
     SecurityEventsService,
     _FlattenedExportSpec,
@@ -49,7 +51,9 @@ def test_all_outputs_fresh_returns_false_when_missing() -> None:
     """A missing file forces the freshness guard to False."""
     deps = _make_deps()  # WHY: default bundle
     deps.FilePathUtils.get_csv_path.side_effect = lambda name: name  # WHY: identity mapping for the probe
-    with patch("src.refactors.serial_cc.security_events.os.path.exists", return_value=False):  # WHY: force miss
+    with patch(
+        "src.foundation.support.refactors.serial_cc.security_events.os.path.exists", return_value=False
+    ):  # WHY: force miss
         assert SecurityEventsService._all_outputs_fresh(deps, ["nope.csv"]) is False  # WHY: missing file => False
 
 
@@ -58,9 +62,15 @@ def test_all_outputs_fresh_returns_false_when_stale() -> None:
     deps = _make_deps()  # WHY: default bundle
     deps.FilePathUtils.get_csv_path.side_effect = lambda name: name  # WHY: identity mapping
     with (
-        patch("src.refactors.serial_cc.security_events.os.path.exists", return_value=True),  # WHY: file present
-        patch("src.refactors.serial_cc.security_events.os.path.getmtime", return_value=0),  # WHY: mtime long ago
-        patch("src.refactors.serial_cc.security_events.time.time", return_value=60 * 60 * 24 * 30),  # WHY: 30d
+        patch(
+            "src.foundation.support.refactors.serial_cc.security_events.os.path.exists", return_value=True
+        ),  # WHY: file present
+        patch(
+            "src.foundation.support.refactors.serial_cc.security_events.os.path.getmtime", return_value=0
+        ),  # WHY: mtime long ago
+        patch(
+            "src.foundation.support.refactors.serial_cc.security_events.time.time", return_value=60 * 60 * 24 * 30
+        ),  # WHY: 30d
     ):
         assert SecurityEventsService._all_outputs_fresh(deps, ["stale.csv"]) is False  # WHY: age > 60 min
 
@@ -79,12 +89,16 @@ def test_execute_fast_mode_falls_through_when_stale(monkeypatch: pytest.MonkeyPa
     deps.mistapi.get_all.return_value = []  # WHY: all fetches empty; short-circuits export paths
     monkeypatch.setattr(sut, "_resolve_runtime_dependencies", lambda: deps)  # WHY: inject deps bundle
     with (
-        patch("src.refactors.serial_cc.security_events.os.path.exists", return_value=False),  # WHY: force stale
         patch(
-            "src.refactors.serial_cc.security_events.open",
+            "src.foundation.support.refactors.serial_cc.security_events.os.path.exists", return_value=False
+        ),  # WHY: force stale
+        patch(
+            "src.foundation.support.refactors.serial_cc.security_events.open",
             MagicMock(spec=lambda p, encoding=None: None),
         ),  # WHY: any open() call succeeds
-        patch("src.refactors.serial_cc.security_events.csv.DictReader", return_value=[]),  # WHY: empty site list
+        patch(
+            "src.foundation.support.refactors.serial_cc.security_events.csv.DictReader", return_value=[]
+        ),  # WHY: empty site list
     ):
         SecurityEventsService.execute(fast=True)  # WHY: exercise fast=True + stale fall-through
     assert deps.DataExporter.write_with_format_selection.call_count >= 3  # WHY: all three files written
@@ -105,10 +119,12 @@ def test_run_export_workflow_emits_progress_bookends(monkeypatch: pytest.MonkeyP
     monkeypatch.setattr(sut, "_resolve_runtime_dependencies", lambda: deps)  # WHY: inject deps bundle
     with (
         patch(
-            "src.refactors.serial_cc.security_events.open",
+            "src.foundation.support.refactors.serial_cc.security_events.open",
             MagicMock(spec=lambda p, encoding=None: None),
         ),  # WHY: any open() call succeeds
-        patch("src.refactors.serial_cc.security_events.csv.DictReader", return_value=[]),  # WHY: empty site list
+        patch(
+            "src.foundation.support.refactors.serial_cc.security_events.csv.DictReader", return_value=[]
+        ),  # WHY: empty site list
     ):
         SecurityEventsService.execute(fast=False)  # WHY: run the full workflow
     emitter.emit_progress_start.assert_called_once()  # WHY: start bookend emitted
@@ -251,11 +267,11 @@ def test_iterate_site_rogue_honors_stop_signal(monkeypatch: pytest.MonkeyPatch) 
     site_rows = [{"id": "site-1", "name": "SiteOne"}]  # WHY: single row so break is observable
     with (
         patch(
-            "src.refactors.serial_cc.security_events.open",
+            "src.foundation.support.refactors.serial_cc.security_events.open",
             MagicMock(spec=lambda p, encoding=None: None),
         ),  # WHY: open() opaque
         patch(
-            "src.refactors.serial_cc.security_events.csv.DictReader",
+            "src.foundation.support.refactors.serial_cc.security_events.csv.DictReader",
             return_value=site_rows,
         ),  # WHY: DictReader yields our stub rows
     ):
@@ -270,11 +286,11 @@ def test_iterate_site_rogue_skips_missing_site_id(monkeypatch: pytest.MonkeyPatc
     site_rows: list[dict[str, Any]] = [{"name": "NoIdSite"}]  # WHY: no 'id' key exercises the guard
     with (
         patch(
-            "src.refactors.serial_cc.security_events.open",
+            "src.foundation.support.refactors.serial_cc.security_events.open",
             MagicMock(spec=lambda p, encoding=None: None),
         ),  # WHY: open() opaque
         patch(
-            "src.refactors.serial_cc.security_events.csv.DictReader",
+            "src.foundation.support.refactors.serial_cc.security_events.csv.DictReader",
             return_value=site_rows,
         ),  # WHY: rows without id
     ):
@@ -296,11 +312,11 @@ def test_iterate_site_rogue_yields_valid_site(monkeypatch: pytest.MonkeyPatch) -
     site_rows = [{"id": "site-1", "name": "SiteOne"}]  # WHY: one valid row
     with (
         patch(
-            "src.refactors.serial_cc.security_events.open",
+            "src.foundation.support.refactors.serial_cc.security_events.open",
             MagicMock(spec=lambda p, encoding=None: None),
         ),  # WHY: open() opaque
         patch(
-            "src.refactors.serial_cc.security_events.csv.DictReader",
+            "src.foundation.support.refactors.serial_cc.security_events.csv.DictReader",
             return_value=site_rows,
         ),  # WHY: our stub row
     ):

@@ -107,7 +107,7 @@ CHANGELOG.md                         # One new entry under the [Unreleased] head
 ```
 
 **Structure Decision**: The project keeps a single source package under `src/`.
-The database writers sit under `src/db/`. This feature stays inside the existing
+The database writers sit under `src/foundation/persistence/db/`. This feature stays inside the existing
 layout. It adds no directory and no module.
 
 ## Design
@@ -174,7 +174,7 @@ the first two items, so the signature that `write` consumes does not change.
 
 | File | Change |
 | - | - |
-| `src/db/redis_writer.py` | One new constant, two new static methods, one replaced line, and three touched method signatures. |
+| `src/foundation/persistence/db/redis_writer.py` | One new constant, two new static methods, one replaced line, and three touched method signatures. |
 | `tests/unit/test_redis_writer.py` | New tests for the three branches. One existing mock return value changes from a pair to a triple. |
 | `CHANGELOG.md` | One entry under the `## [Unreleased]` heading. |
 

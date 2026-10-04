@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from src.juniper_docs.acquire.downloader import CorpusDownloader, JvdDownloader
-from src.juniper_docs.acquire.pdf_paths import PdfPathAllocator
+from src.mist.intelligence.juniper_docs.acquire.downloader import CorpusDownloader, JvdDownloader
+from src.mist.intelligence.juniper_docs.acquire.pdf_paths import PdfPathAllocator
 from tests.unit.juniper_docs.conftest import FakeCatalogClient
 
 

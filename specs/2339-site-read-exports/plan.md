@@ -31,12 +31,12 @@ The source set is twenty exact GET operations. Store catalog data as four groups
 
 | File | New symbols and ownership |
 | --- | --- |
-| `src/export/site_read/__init__.py` | Keep package initialization inert. A docstring is sufficient. |
-| `src/export/site_read/models.py` | Own `EndpointSpec`, `SiteReadRuntime`, `SiteReadRequest`, `SiteReadOutcome`, and `SiteReadError`. |
-| `src/export/site_read/catalog.py` | Own `SiteReadCatalog`. It returns explicit entries, resolves one entry, imports its callable, and builds supported initial keyword arguments. |
-| `src/export/site_read/fetch.py` | Own `SiteReadFetcher` and `SiteReadPageGuard`. Separate request execution from status, continuation, and bound validation. |
-| `src/export/site_read/service.py` | Own `SiteReadExporter`, `SiteReadRecords`, and `SiteReadPersistence`. Separate selection, validation/redaction, and writing. |
-| `src/db/storage_keys.py` | Own `StorageKeyEncoder`. Keep it independent of Mist, database connections, and the feature package. |
+| `src/operations/exporting/export/site_read/__init__.py` | Keep package initialization inert. A docstring is sufficient. |
+| `src/operations/exporting/export/site_read/models.py` | Own `EndpointSpec`, `SiteReadRuntime`, `SiteReadRequest`, `SiteReadOutcome`, and `SiteReadError`. |
+| `src/operations/exporting/export/site_read/catalog.py` | Own `SiteReadCatalog`. It returns explicit entries, resolves one entry, imports its callable, and builds supported initial keyword arguments. |
+| `src/operations/exporting/export/site_read/fetch.py` | Own `SiteReadFetcher` and `SiteReadPageGuard`. Separate request execution from status, continuation, and bound validation. |
+| `src/operations/exporting/export/site_read/service.py` | Own `SiteReadExporter`, `SiteReadRecords`, and `SiteReadPersistence`. Separate selection, validation/redaction, and writing. |
+| `src/foundation/persistence/db/storage_keys.py` | Own `StorageKeyEncoder`. Keep it independent of Mist, database connections, and the feature package. |
 
 Use at most five methods per new class. Extract within these modules when necessary. Do not put tests inside `src/`.
 
@@ -63,11 +63,11 @@ These boundaries describe implementation ownership. Do not create empty forwardi
 | File | Exact change |
 | --- | --- |
 | `MistHelper.py` | Add private imports and one lazy menu composition using the live `apisession`, `PromptUtils.select_site`, `ConfigUtils.get_cached_or_prompted_org_id`, `AdaptivePacer(apisession, _api_usage_cache).pace`, and `DEFAULT_API_PAGE_LIMIT`. Do not change `__all__` or existing entries. |
-| `src/utils/operation_registry.py` | Register the new number as `interactive_safe` with a clear prompt-related reason. Use the actual existing registry value type. |
-| `src/refactors/endpoint_primary_key_strategies.py` | Add `storage_key_fields` to the twenty existing entries only. Do not append duplicate dictionary keys. |
-| `src/db/arango_writer.py` | Opt into scoped encoding in `_prepare_document`. Preserve the old path for strategies without the new field. |
-| `src/db/redis_writer.py` | Carry the opt-in key mode through `RedisJSONWriter` batch operations. Preserve ordinary endpoint keys and Redis TimeSeries code. |
-| `src/security/credential_redaction.py` | Extend the exact-key set for the three documented credential names. Keep deep-copy behavior and existing field rules. |
+| `src/foundation/support/utils/operation_registry.py` | Register the new number as `interactive_safe` with a clear prompt-related reason. Use the actual existing registry value type. |
+| `src/foundation/support/refactors/endpoint_primary_key_strategies.py` | Add `storage_key_fields` to the twenty existing entries only. Do not append duplicate dictionary keys. |
+| `src/foundation/persistence/db/arango_writer.py` | Opt into scoped encoding in `_prepare_document`. Preserve the old path for strategies without the new field. |
+| `src/foundation/persistence/db/redis_writer.py` | Carry the opt-in key mode through `RedisJSONWriter` batch operations. Preserve ordinary endpoint keys and Redis TimeSeries code. |
+| `src/operations/protection/security/credential_redaction.py` | Extend the exact-key set for the three documented credential names. Keep deep-copy behavior and existing field rules. |
 | `README.md` | Document one family menu and link its endpoint table. Do not add twenty menu numbers. |
 | `CHANGELOG.md` | Add one feature entry after tests pass. Keep the repository's timestamp version format. |
 | `documentation/menu_reference.md` and `documentation/wiki/Menu-Reference.md` | Regenerate both with the existing generator. Never edit only one copy. |
@@ -77,17 +77,17 @@ If an existing writer defect blocks a new regression test, stop and record a sep
 
 ## Existing code to read and reuse
 
-- `src/export/count_exporter.py:CountExporter._choose` shows the numbered family-choice UX. Its other behavior is not a safe implementation template.
-- `src/utils/input_utils.py:InputUtils.safe_input` returns an empty default on EOF and Ctrl+C. It does not raise in those normal cancellation paths.
-- `src/utils/rate_limiting.py:AdaptivePacer.pace` carries the adaptive state and applies the delay.
-- `src/data/data_processing_utils.py:DataProcessingUtils.flatten_nested_fields` normalizes nested records.
-- `src/export/data_exporter.py:DataExporter.write_with_format_selection` returns the primary writer result and emits mirror warnings.
-- `src/dataclasses/export_backend_options.py:ExportBackendOptions` transports safe raw data to the database router.
-- `src/security/credential_redaction.py:CredentialRedactor.redact_records` protects nested credential fields without mutating the input.
-- `src/db/router.py:DatabaseRouter.write` routes natural keys to ArangoDB and composite keys to the existing dual-write path.
-- `src/db/arango_writer.py:ArangoDBWriter._prepare_document` is the physical-key integration point.
-- `src/db/redis_writer.py:RedisJSONWriter.write` and `_build_key` are the Redis JSON identity integration points.
-- `src/refactors/sqlite_database_writer.py:SQLiteDatabaseWriter.write` and `src/db/database_schema_utils.py:DatabaseSchemaUtils` own SQLite persistence and DDL.
+- `src/operations/exporting/export/count_exporter.py:CountExporter._choose` shows the numbered family-choice UX. Its other behavior is not a safe implementation template.
+- `src/foundation/support/utils/input_utils.py:InputUtils.safe_input` returns an empty default on EOF and Ctrl+C. It does not raise in those normal cancellation paths.
+- `src/foundation/support/utils/rate_limiting.py:AdaptivePacer.pace` carries the adaptive state and applies the delay.
+- `src/foundation/models/data/data_processing_utils.py:DataProcessingUtils.flatten_nested_fields` normalizes nested records.
+- `src/operations/exporting/export/data_exporter.py:DataExporter.write_with_format_selection` returns the primary writer result and emits mirror warnings.
+- `src/foundation/models/dataclasses/export_backend_options.py:ExportBackendOptions` transports safe raw data to the database router.
+- `src/operations/protection/security/credential_redaction.py:CredentialRedactor.redact_records` protects nested credential fields without mutating the input.
+- `src/foundation/persistence/db/router.py:DatabaseRouter.write` routes natural keys to ArangoDB and composite keys to the existing dual-write path.
+- `src/foundation/persistence/db/arango_writer.py:ArangoDBWriter._prepare_document` is the physical-key integration point.
+- `src/foundation/persistence/db/redis_writer.py:RedisJSONWriter.write` and `_build_key` are the Redis JSON identity integration points.
+- `src/foundation/support/refactors/sqlite_database_writer.py:SQLiteDatabaseWriter.write` and `src/foundation/persistence/db/database_schema_utils.py:DatabaseSchemaUtils` own SQLite persistence and DDL.
 - `scripts/generate_menu_wiki.py` regenerates both menu-reference files.
 
 ## Test layout

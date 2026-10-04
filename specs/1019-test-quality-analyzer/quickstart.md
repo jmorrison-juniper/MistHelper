@@ -47,7 +47,7 @@ from pathlib import Path
 report = json.loads(Path('tools/test_quality_analyzer/output/report.json').read_text())
 skipped = {s['file_path'] for s in report['skipped_files']}
 findings = {(f['file_path'], f['line_number'], f['category']) for f in report['findings']}
-assert 'src/api/api_data_fetcher.py' in skipped, 'FR-002: api_data_fetcher.py must be skipped'
+assert 'src/mist/access/api/api_data_fetcher.py' in skipped, 'FR-002: api_data_fetcher.py must be skipped'
 assert ('tests/unit/ssh/test_shell_executor.py', 110, 'weak_assertion') in findings
 assert ('tests/maps/test_viewer_callbacks_wave_b_c.py', 526, 'weak_assertion') in findings
 print('golden findings present')

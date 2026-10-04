@@ -40,8 +40,8 @@ from werkzeug.test import TestResponse
 
 # WHY: The module, never a constant of it. One test drives the route helper
 # beside the identity primitive and proves that the route still delegates.
-from src.upgrade_portal.app.routes import select
-from src.upgrade_portal.runtime import identity
+from src.interfaces.portals.upgrade_portal.app.routes import select
+from src.interfaces.portals.upgrade_portal.runtime import identity
 
 # ---------------------------------------------------------------------------
 # The contract values

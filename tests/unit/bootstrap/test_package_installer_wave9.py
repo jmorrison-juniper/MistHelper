@@ -1,4 +1,4 @@
-"""Wave 9 P2 coverage tests for src.bootstrap.package_installer.
+"""Wave 9 P2 coverage tests for src.foundation.runtime.bootstrap.package_installer.
 
 Covers the ``PackageInstaller`` dataclass end-to-end using injected
 ``os``/``subprocess``/``sys``/``logging`` stubs. Exercises every
@@ -14,7 +14,7 @@ from unittest.mock import MagicMock  # WHY: MagicMock(spec=…) for injected std
 
 import pytest  # WHY: parametrized branch coverage of platform + upgrade combinations
 
-from src.bootstrap.package_installer import PackageInstaller  # WHY: SUT under test
+from src.foundation.runtime.bootstrap.package_installer import PackageInstaller  # WHY: SUT under test
 
 logger = logging.getLogger(__name__)  # WHY: keep test log records on the module logger.
 

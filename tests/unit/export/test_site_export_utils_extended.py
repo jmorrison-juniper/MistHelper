@@ -9,7 +9,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.export.site_export_utils import (
+from src.operations.exporting.export.site_export_utils import (
     SiteExportUtils,
     _api_supports_limit,
     _build_export_filename,
@@ -498,7 +498,7 @@ def test_insights_handles_api_error_without_an_empty_export(caplog: pytest.LogCa
     mocks["exporter_mock"].assert_not_called()
     assert mocks["exporter_mock"].call_count == 0
     errors = [(record.name, record.levelno) for record in caplog.records if record.levelno >= logging.ERROR]
-    assert errors == [("src.export.site_export_utils", logging.ERROR)]
+    assert errors == [("src.operations.exporting.export.site_export_utils", logging.ERROR)]
     assert "Failed to export site SLE metric insights for site site-1 from listSiteSlesMetrics" in caplog.text
     assert "The export does not retry with empty rows." in caplog.text
 
@@ -664,7 +664,7 @@ def test_current_channel_planning_handles_exception(caplog: pytest.LogCaptureFix
 def test_zone_config_analysis_delegates_to_zone_analyzer(monkeypatch: pytest.MonkeyPatch) -> None:
     """zone_config_analysis routes to ZoneConfigurationAnalyzer.analyze with wired deps."""
     exporter, _ = _build_exporter()
-    from src.analytics import zone_analyzer as za_module  # WHY: patch analyzer under test.
+    from src.mist.intelligence.analytics import zone_analyzer as za_module  # WHY: patch analyzer under test.
 
     analyze_mock = MagicMock()
     monkeypatch.setattr(za_module.ZoneConfigurationAnalyzer, "analyze", analyze_mock)

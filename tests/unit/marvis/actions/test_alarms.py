@@ -15,17 +15,17 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.marvis.actions import alarms as alarms_module
-from src.marvis.actions.alarms import (
+from src.mist.intelligence.marvis.actions import alarms as alarms_module
+from src.mist.intelligence.marvis.actions.alarms import (
     ALARM_COLUMNS,
     ALARM_MAX_WINDOW_SECONDS,
     ALARM_WINDOW_MARGIN_SECONDS,
     MarvisAlarmIndex,
     MarvisAlarmJoin,
 )
-from src.marvis.actions.client import MarvisActionsClient, MarvisListResult
-from src.marvis.actions.model import MarvisActionRecord, MarvisActionRecordBuilder, MarvisCatalog
-from src.marvis.actions.selection import DISPLAY_LEVEL
+from src.mist.intelligence.marvis.actions.client import MarvisActionsClient, MarvisListResult
+from src.mist.intelligence.marvis.actions.model import MarvisActionRecord, MarvisActionRecordBuilder, MarvisCatalog
+from src.mist.intelligence.marvis.actions.selection import DISPLAY_LEVEL
 from tests.unit.marvis.actions.conftest import make_alarm, make_raw
 from web_portal.services.operation import HANDLED_ERROR_MARKERS
 

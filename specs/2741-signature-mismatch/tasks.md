@@ -27,8 +27,8 @@
 
 - [x] T008 [US1] Update the shell session success test to require `body={}`. (delivered: `tests/unit/ssh/test_cli_shell_manager.py`)
 - [x] T009 [US1] Add a test that proves `TypeError` is not hidden. (delivered: `tests/unit/ssh/test_cli_shell_manager.py`)
-- [x] T010 [US1] Pass `body={}` to `createSiteDeviceShellSession`. (delivered: `src/ssh/cli_shell_manager.py`)
-- [x] T011 [US1] Narrow the shell handler so runtime failures return `None` and `TypeError` raises. (delivered: `src/ssh/cli_shell_manager.py`)
+- [x] T010 [US1] Pass `body={}` to `createSiteDeviceShellSession`. (delivered: `src/operations/execution/ssh/cli_shell_manager.py`)
+- [x] T011 [US1] Narrow the shell handler so runtime failures return `None` and `TypeError` raises. (delivered: `src/operations/execution/ssh/cli_shell_manager.py`)
 
 ## Phase 4: User Story 2 - Reconciliation evidence read
 
@@ -37,8 +37,8 @@
 **Independent Test**: Run `python -m pytest tests\unit\upgrade_portal\test_site_stats_evidence_reader.py -v`.
 
 - [x] T012 [US2] Add a strict SDK-signature test for reconciliation. (delivered: `tests/unit/upgrade_portal/test_site_stats_evidence_reader.py`)
-- [x] T013 [US2] Remove `fields` from `listSiteDevicesStats`. (delivered: `src/upgrade_portal/api/run_controls/routes.py`)
-- [x] T014 [US2] Apply `gate.STATISTICS_FIELDS` as a local projection. (delivered: `src/upgrade_portal/api/run_controls/routes.py`)
+- [x] T013 [US2] Remove `fields` from `listSiteDevicesStats`. (delivered: `src/interfaces/portals/upgrade_portal/api/run_controls/routes.py`)
+- [x] T014 [US2] Apply `gate.STATISTICS_FIELDS` as a local projection. (delivered: `src/interfaces/portals/upgrade_portal/api/run_controls/routes.py`)
 - [x] T015 [US2] Keep `running_version` and `fwupdate_status` in the evidence row. (delivered: `tests/unit/upgrade_portal/test_site_stats_evidence_reader.py`)
 
 ## Phase 5: Validation and Delivery

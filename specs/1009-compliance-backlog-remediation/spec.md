@@ -14,20 +14,20 @@ The current source tree replaces the stale backlog in issue #1000. The command `
 
 | Rank | Violations | Score | Grade | File |
 | - | -: | -: | - | - |
-| 1 | 90 | 34.0 | F | `src\org\org_synthetic_probes_manager.py` |
-| 2 | 52 | 61.0 | D- | `src\device\ap_profile_migration_manager.py` |
-| 3 | 46 | 60.0 | D- | `src\utils\zscaler_catalogue.py` |
-| 4 | 39 | 60.0 | D- | `src\upgrade_portal\app\routes\upgrade.py` |
-| 5 | 34 | 62.0 | D- | `src\upgrade_portal\upgrade\options.py` |
-| 6 | 31 | 64.0 | D | `src\firmware\upgrade_service.py` |
-| 7 | 28 | 63.0 | D | `src\utils\zscaler_probe.py` |
-| 8 | 26 | 70.0 | C- | `src\upgrade_portal\app\wiring.py` |
-| 9 | 26 | 75.0 | C | `src\upgrade_portal\compare\service.py` |
-| 10 | 25 | 53.0 | F | `src\upgrade_portal\upgrade\driver.py` |
+| 1 | 90 | 34.0 | F | `src\mist\resources\org\org_synthetic_probes_manager.py` |
+| 2 | 52 | 61.0 | D- | `src\mist\resources\device\ap_profile_migration_manager.py` |
+| 3 | 46 | 60.0 | D- | `src\foundation\support\utils\zscaler_catalogue.py` |
+| 4 | 39 | 60.0 | D- | `src\interfaces\portals\upgrade_portal\app\routes\upgrade.py` |
+| 5 | 34 | 62.0 | D- | `src\interfaces\portals\upgrade_portal\upgrade\options.py` |
+| 6 | 31 | 64.0 | D | `src\operations\execution\firmware\upgrade_service.py` |
+| 7 | 28 | 63.0 | D | `src\foundation\support\utils\zscaler_probe.py` |
+| 8 | 26 | 70.0 | C- | `src\interfaces\portals\upgrade_portal\app\wiring.py` |
+| 9 | 26 | 75.0 | C | `src\interfaces\portals\upgrade_portal\compare\service.py` |
+| 10 | 25 | 53.0 | F | `src\interfaces\portals\upgrade_portal\upgrade\driver.py` |
 
 ## Scope for this branch
 
-This branch reconciles the stale compliance records and applies one safe mechanical repair. The source change is limited to `src\utils\zscaler_catalogue.py`. The change adds same-line comments only, so it preserves behavior.
+This branch reconciles the stale compliance records and applies one safe mechanical repair. The source change is limited to `src\foundation\support\utils\zscaler_catalogue.py`. The change adds same-line comments only, so it preserves behavior.
 
 ## Requirements
 
@@ -39,8 +39,8 @@ This branch reconciles the stale compliance records and applies one safe mechani
 
 ## Acceptance criteria
 
-- `src\utils\zscaler_catalogue.py` improves from 60.0 D- to 66.0 D by comment coverage only.
-- `tools.symbol_diff` reports `no module-level name changed` for `src\utils\zscaler_catalogue.py`.
+- `src\foundation\support\utils\zscaler_catalogue.py` improves from 60.0 D- to 66.0 D by comment coverage only.
+- `tools.symbol_diff` reports `no module-level name changed` for `src\foundation\support\utils\zscaler_catalogue.py`.
 - The targeted test selection reports 323 passing tests before and after the source change.
 - `analysis.md` records the before and after score table.
 - The pull request links one follow-up issue #2645 for the structural refactor of the four low-scoring files.

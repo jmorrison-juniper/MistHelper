@@ -38,15 +38,15 @@ Add `AppContext` beside `ApplicationBootstrap`. Store the live session state on 
 
 ```text
 MistHelper.py
-src/refactors/main_entrypoint.py
-src/refactors/initialize_mist_session.py
-src/refactors/initialize_mist_session_interactive.py
+src/foundation/support/refactors/main_entrypoint.py
+src/foundation/support/refactors/initialize_mist_session.py
+src/foundation/support/refactors/initialize_mist_session_interactive.py
 tests/unit/refactors/test_app_context_session_state.py
 changelog.d/issue-1702-app-context.md
 specs/1702-app-context/
 ```
 
-**Structure Decision**: Keep `AppContext` in `src/refactors/main_entrypoint.py`, because `ApplicationBootstrap` owns startup.
+**Structure Decision**: Keep `AppContext` in `src/foundation/support/refactors/main_entrypoint.py`, because `ApplicationBootstrap` owns startup.
 
 ## Technical Approach
 

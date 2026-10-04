@@ -124,14 +124,14 @@ test suite to confirm no regression.
 
 ### User Story 5 -- Replace magic HTTP status code with named constant (Priority: P2)
 
-A developer replaces `status_code != 200` in `src/network/routing_utils.py:1062`
+A developer replaces `status_code != 200` in `src/mist/networking/network/routing_utils.py:1062`
 with `status_code != requests.codes.ok` (or `http.HTTPStatus.OK`) to eliminate the
 magic number.
 
 **Why this priority**: Named constants are self-documenting and prevent future bugs
 from mistyping the expected status code. Low-effort, zero-risk change.
 
-**Independent Test**: Can be tested by running `ruff check src/network/routing_utils.py`
+**Independent Test**: Can be tested by running `ruff check src/mist/networking/network/routing_utils.py`
 after the change and confirming no magic-number violation remains on that line, plus
 running routing-related tests.
 
@@ -212,7 +212,7 @@ before moving to the next.
   ~3166, 5677, 5730 (and any other B101-suppressed asserts outside `tests/`) MUST
   be replaced with `if not condition: raise ValueError("message")` or
   `raise RuntimeError("message")` with a descriptive message.
-- **FR-007**: `status_code != 200` in `src/network/routing_utils.py:1062` MUST be
+- **FR-007**: `status_code != 200` in `src/mist/networking/network/routing_utils.py:1062` MUST be
   replaced with `requests.codes.ok` or `http.HTTPStatus.OK`.
 - **FR-008**: Functions identified as PLR0913 targets MUST be refactored to accept
   a stdlib `@dataclass` config object, with all call sites updated in the same commit.
@@ -246,7 +246,7 @@ before moving to the next.
   source files (all production-critical asserts replaced with explicit raises).
 - **SC-003**: `ruff check starlink_dashboard.py` reports no F841 or F401 violations
   on the lines identified in FR-002 and FR-003.
-- **SC-004**: `ruff check src/network/routing_utils.py` reports no magic-number
+- **SC-004**: `ruff check src/mist/networking/network/routing_utils.py` reports no magic-number
   violation on line 1062.
 - **SC-005**: The total count of suppression annotations (`# type: ignore`, `# noqa`,
   `# nosec`) across the codebase is strictly lower after this feature than before.
@@ -255,8 +255,8 @@ before moving to the next.
   `warn_unused_ignores` is active.
 - **SC-007**: The full test suite (`python MistHelper.py --test`, skipping 14, 18,
   63-65, 90-100) passes with zero regressions after all phases are complete.
-- **SC-008**: `ruff check src/inventory/csv_comparator.py` and
-  `ruff check src/network/routing_utils.py` report no PLR0913 for the refactored
+- **SC-008**: `ruff check src/mist/resources/inventory/csv_comparator.py` and
+  `ruff check src/mist/networking/network/routing_utils.py` report no PLR0913 for the refactored
   functions.
 - **SC-009**: `python -m py_compile MistHelper.py` passes without error.
 
@@ -334,5 +334,5 @@ before moving to the next.
 | `pyproject.toml` | Add `warn_unused_ignores = true` under `[tool.mypy]` |
 | `starlink_dashboard.py` | Remove dead var at :1007; resolve import suppressions at :261, :273 |
 | `MistHelper.py` | Replace 3x `os.system` with `subprocess.run`; replace B101 production asserts |
-| `src/network/routing_utils.py` | Replace magic `200` with named constant; PLR0913 refactor |
-| `src/inventory/csv_comparator.py` | PLR0913 refactor (`_build_mismatch_item`, `_build_diff_item`) |
+| `src/mist/networking/network/routing_utils.py` | Replace magic `200` with named constant; PLR0913 refactor |
+| `src/mist/resources/inventory/csv_comparator.py` | PLR0913 refactor (`_build_mismatch_item`, `_build_diff_item`) |

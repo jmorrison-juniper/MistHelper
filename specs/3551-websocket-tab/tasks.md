@@ -33,7 +33,7 @@ description: "Task list for the WebSockets tab in the Operations portal"
 
 **Purpose**: Create the package tree and the configuration entries.
 
-- [X] T001 Create the package tree in `src/websocket_streams/`. Put a docstring in each `__init__.py`. The folders are `catalog/`, `intake/`, `live/`, `live/sessions/`, `live/runners/`, and `web/`.
+- [X] T001 Create the package tree in `src/mist/realtime/websocket_streams/`. Put a docstring in each `__init__.py`. The folders are `catalog/`, `intake/`, `live/`, `live/sessions/`, `live/runners/`, and `web/`.
 - [X] T002 [P] Create the test tree in `tests/unit/websocket_streams/`. Put an `__init__.py` in each folder. The folders are `catalog/`, `intake/`, `live/`, `live/sessions/`, `live/runners/`, and `web/`. Also create `tests/contract/websocket_streams/__init__.py`.
 - [X] T003 [P] Add the 7 `PORTAL_WS_*` variables to `deploy/.env.example`. Give each variable its default, its range, and one plain comment.
 
@@ -45,12 +45,12 @@ description: "Task list for the WebSockets tab in the Operations portal"
 
 **Checkpoint**: The foundational unit tests pass. Story work starts only after this point.
 
-- [X] T004 Define the `FieldKind` and `Safety` enums in `src/websocket_streams/catalog/model.py`. Also define the `FieldSpec`, `ChannelDefinition`, and `UtilityDefinition` dataclasses. Follow data-model.md.
-- [X] T005 [P] Implement `StreamSettings` in `src/websocket_streams/live/sessions/settings.py`. Read the 7 variables. A bad value gives the default and one warning with the variable name.
-- [X] T006 [P] Implement `MessageBuffer` in `src/websocket_streams/live/sessions/buffer.py`. Enforce the message cap and the byte cap. Drop the oldest messages first and count them. Shorten a message above 256 KB and mark it.
-- [X] T007 Implement `SessionState`, `SessionCounters`, and `StreamSession` in `src/websocket_streams/live/sessions/record.py`. Enforce the state machine of data-model.md. Give a page payload that holds no path and no token.
-- [X] T008 [P] Implement `IdentifierRules` in `src/websocket_streams/intake/identifiers.py`. Check a UUID, a MAC address, a host, an IP address, and a prefix. Also check a Junos port name, a plain name, and a capture filter.
-- [X] T009 Implement `FieldValueChecker` in `src/websocket_streams/intake/fields.py`. Check one value against one `FieldSpec`, and convert the value to the SDK type.
+- [X] T004 Define the `FieldKind` and `Safety` enums in `src/mist/realtime/websocket_streams/catalog/model.py`. Also define the `FieldSpec`, `ChannelDefinition`, and `UtilityDefinition` dataclasses. Follow data-model.md.
+- [X] T005 [P] Implement `StreamSettings` in `src/mist/realtime/websocket_streams/live/sessions/settings.py`. Read the 7 variables. A bad value gives the default and one warning with the variable name.
+- [X] T006 [P] Implement `MessageBuffer` in `src/mist/realtime/websocket_streams/live/sessions/buffer.py`. Enforce the message cap and the byte cap. Drop the oldest messages first and count them. Shorten a message above 256 KB and mark it.
+- [X] T007 Implement `SessionState`, `SessionCounters`, and `StreamSession` in `src/mist/realtime/websocket_streams/live/sessions/record.py`. Enforce the state machine of data-model.md. Give a page payload that holds no path and no token.
+- [X] T008 [P] Implement `IdentifierRules` in `src/mist/realtime/websocket_streams/intake/identifiers.py`. Check a UUID, a MAC address, a host, an IP address, and a prefix. Also check a Junos port name, a plain name, and a capture filter.
+- [X] T009 Implement `FieldValueChecker` in `src/mist/realtime/websocket_streams/intake/fields.py`. Check one value against one `FieldSpec`, and convert the value to the SDK type.
 - [X] T010 [P] Write the unit tests for T004 in `tests/unit/websocket_streams/catalog/test_ws_catalog_model.py`.
 - [X] T011 [P] Write the unit tests for T005 in `tests/unit/websocket_streams/live/sessions/test_ws_stream_settings.py`.
 - [X] T012 [P] Write the unit tests for T006 in `tests/unit/websocket_streams/live/sessions/test_ws_message_buffer.py`.
@@ -80,17 +80,17 @@ description: "Task list for the WebSockets tab in the Operations portal"
 
 ### Implementation for User Story 1
 
-- [X] T025 [US1] Implement `ChannelCatalog` with the 18 channels in `src/websocket_streams/catalog/channels.py`. Build a path only from a key and checked identifiers.
-- [X] T026 [US1] Implement `StreamCatalog` in `src/websocket_streams/catalog/registry.py`. Give a lookup by kind and key, the flag state, and the page payload.
-- [X] T027 [US1] Implement `StartRequest` and `StartRequestChecker` for a channel request in `src/websocket_streams/intake/start_request.py`.
-- [X] T028 [P] [US1] Implement `MessageShaper` and `ShellAddressFilter` in `src/websocket_streams/live/runners/text.py`.
-- [X] T029 [US1] Implement `ChannelStreamRunner` in `src/websocket_streams/live/runners/channel.py`. Use `_MistWebsocket` with the settings of research.md R-02.
-- [X] T030 [US1] Implement `StreamSessionManager` in `src/websocket_streams/live/sessions/manager.py`. Give start, list, get, read after a sequence number, stop, delete, and download.
-- [X] T031 [US1] Implement the site and map pickers of `StreamPickerService` in `src/websocket_streams/intake/pickers.py`.
-- [X] T032 [US1] Implement `WebSocketsServices` in `src/websocket_streams/web/services.py`. Build the catalog, the checker, the pickers, and the manager one time for each app.
-- [X] T033 [US1] Implement the blueprint routes of the contract in `src/websocket_streams/web/blueprint.py`. Each view calls one class method.
-- [X] T034 [P] [US1] Write the page in `src/websocket_streams/web/templates/websockets_page.html`. Extend `base.html`, and give each control a `data-testid`.
-- [X] T035 [P] [US1] Write `src/websocket_streams/web/static/websockets.js` and `websockets.css`. Render the catalog, fill the pickers, and start a stream. Poll each second. Give pause, resume, clear, filter, download, and stop.
+- [X] T025 [US1] Implement `ChannelCatalog` with the 18 channels in `src/mist/realtime/websocket_streams/catalog/channels.py`. Build a path only from a key and checked identifiers.
+- [X] T026 [US1] Implement `StreamCatalog` in `src/mist/realtime/websocket_streams/catalog/registry.py`. Give a lookup by kind and key, the flag state, and the page payload.
+- [X] T027 [US1] Implement `StartRequest` and `StartRequestChecker` for a channel request in `src/mist/realtime/websocket_streams/intake/start_request.py`.
+- [X] T028 [P] [US1] Implement `MessageShaper` and `ShellAddressFilter` in `src/mist/realtime/websocket_streams/live/runners/text.py`.
+- [X] T029 [US1] Implement `ChannelStreamRunner` in `src/mist/realtime/websocket_streams/live/runners/channel.py`. Use `_MistWebsocket` with the settings of research.md R-02.
+- [X] T030 [US1] Implement `StreamSessionManager` in `src/mist/realtime/websocket_streams/live/sessions/manager.py`. Give start, list, get, read after a sequence number, stop, delete, and download.
+- [X] T031 [US1] Implement the site and map pickers of `StreamPickerService` in `src/mist/realtime/websocket_streams/intake/pickers.py`.
+- [X] T032 [US1] Implement `WebSocketsServices` in `src/mist/realtime/websocket_streams/web/services.py`. Build the catalog, the checker, the pickers, and the manager one time for each app.
+- [X] T033 [US1] Implement the blueprint routes of the contract in `src/mist/realtime/websocket_streams/web/blueprint.py`. Each view calls one class method.
+- [X] T034 [P] [US1] Write the page in `src/mist/realtime/websocket_streams/web/templates/websockets_page.html`. Extend `base.html`, and give each control a `data-testid`.
+- [X] T035 [P] [US1] Write `src/mist/realtime/websocket_streams/web/static/websockets.js` and `websockets.css`. Render the catalog, fill the pickers, and start a stream. Poll each second. Give pause, resume, clear, filter, download, and stop.
 - [X] T036 [US1] Register the blueprint in `web_portal/app.py`. Add the `nav-websockets` item after Maps in `web_portal/templates/base.html`.
 
 **Checkpoint**: User Story 1 works alone. This is the MVP.
@@ -113,11 +113,11 @@ description: "Task list for the WebSockets tab in the Operations portal"
 
 ### Implementation for User Story 2
 
-- [X] T042 [US2] Implement `UtilityCatalog` in `src/websocket_streams/catalog/utilities.py`. Build the fields from each SDK signature and the field table of research.md.
-- [X] T043 [US2] Add the utility request checks to `src/websocket_streams/intake/start_request.py`. Compare the device family with the utility family.
-- [X] T044 [US2] Implement `UtilityRunner` in `src/websocket_streams/live/runners/utility.py`. Map the SDK result to the end states of research.md R-03.
-- [X] T045 [US2] Add the device picker and the family rules to `src/websocket_streams/intake/pickers.py`.
-- [X] T046 [US2] Add the device picker, the utility list, the parameter form, and the line and screen views to `src/websocket_streams/web/static/websockets.js`.
+- [X] T042 [US2] Implement `UtilityCatalog` in `src/mist/realtime/websocket_streams/catalog/utilities.py`. Build the fields from each SDK signature and the field table of research.md.
+- [X] T043 [US2] Add the utility request checks to `src/mist/realtime/websocket_streams/intake/start_request.py`. Compare the device family with the utility family.
+- [X] T044 [US2] Implement `UtilityRunner` in `src/mist/realtime/websocket_streams/live/runners/utility.py`. Map the SDK result to the end states of research.md R-03.
+- [X] T045 [US2] Add the device picker and the family rules to `src/mist/realtime/websocket_streams/intake/pickers.py`.
+- [X] T046 [US2] Add the device picker, the utility list, the parameter form, and the line and screen views to `src/mist/realtime/websocket_streams/web/static/websockets.js`.
 
 **Checkpoint**: User Stories 1 and 2 work alone.
 
@@ -137,11 +137,11 @@ description: "Task list for the WebSockets tab in the Operations portal"
 
 ### Implementation for User Story 3
 
-- [X] T050 [US3] Add the capture fields to `src/websocket_streams/catalog/utilities.py`. Add the `device_interfaces` build to `src/websocket_streams/live/runners/utility.py`.
-- [X] T051 [US3] Implement `CaptureStopper` in `src/websocket_streams/live/runners/utility.py`. Stop the capture only when the capture identifier matches.
-- [X] T052 [P] [US3] Implement `PacketSummary` in `src/websocket_streams/live/runners/text.py`.
-- [X] T053 [US3] Add the Mist Edge picker to `src/websocket_streams/intake/pickers.py`.
-- [X] T054 [US3] Add the packet view to `src/websocket_streams/web/static/websockets.js`.
+- [X] T050 [US3] Add the capture fields to `src/mist/realtime/websocket_streams/catalog/utilities.py`. Add the `device_interfaces` build to `src/mist/realtime/websocket_streams/live/runners/utility.py`.
+- [X] T051 [US3] Implement `CaptureStopper` in `src/mist/realtime/websocket_streams/live/runners/utility.py`. Stop the capture only when the capture identifier matches.
+- [X] T052 [P] [US3] Implement `PacketSummary` in `src/mist/realtime/websocket_streams/live/runners/text.py`.
+- [X] T053 [US3] Add the Mist Edge picker to `src/mist/realtime/websocket_streams/intake/pickers.py`.
+- [X] T054 [US3] Add the packet view to `src/mist/realtime/websocket_streams/web/static/websockets.js`.
 
 **Checkpoint**: User Stories 1 to 3 work alone.
 
@@ -160,9 +160,9 @@ description: "Task list for the WebSockets tab in the Operations portal"
 
 ### Implementation for User Story 4
 
-- [X] T057 [US4] Add the session limit, the reaper, and the ended-session retention to `src/websocket_streams/live/sessions/manager.py`.
-- [X] T058 [US4] Add the stop of every session to `src/websocket_streams/web/services.py`. Call it from `shutdown_app` in `web_portal/app.py`.
-- [X] T059 [US4] Add the session list after a reload and the limit message to `src/websocket_streams/web/static/websockets.js`.
+- [X] T057 [US4] Add the session limit, the reaper, and the ended-session retention to `src/mist/realtime/websocket_streams/live/sessions/manager.py`.
+- [X] T058 [US4] Add the stop of every session to `src/mist/realtime/websocket_streams/web/services.py`. Call it from `shutdown_app` in `web_portal/app.py`.
+- [X] T059 [US4] Add the session list after a reload and the limit message to `src/mist/realtime/websocket_streams/web/static/websockets.js`.
 
 **Checkpoint**: User Stories 1 to 4 work alone.
 
@@ -181,9 +181,9 @@ description: "Task list for the WebSockets tab in the Operations portal"
 
 ### Implementation for User Story 5
 
-- [X] T062 [US5] Add the flag check and the device name check to `src/websocket_streams/intake/start_request.py`. Read the device name with `StreamPickerService`.
-- [X] T063 [US5] Add the audit log line for each `change` run to `src/websocket_streams/live/sessions/manager.py`.
-- [X] T064 [US5] Add the lock mark and the confirmation field to `src/websocket_streams/web/static/websockets.js`.
+- [X] T062 [US5] Add the flag check and the device name check to `src/mist/realtime/websocket_streams/intake/start_request.py`. Read the device name with `StreamPickerService`.
+- [X] T063 [US5] Add the audit log line for each `change` run to `src/mist/realtime/websocket_streams/live/sessions/manager.py`.
+- [X] T064 [US5] Add the lock mark and the confirmation field to `src/mist/realtime/websocket_streams/web/static/websockets.js`.
 
 **Checkpoint**: User Stories 1 to 5 work alone.
 
@@ -202,9 +202,9 @@ description: "Task list for the WebSockets tab in the Operations portal"
 
 ### Implementation for User Story 6
 
-- [X] T067 [US6] Implement `ShellRunner` in `src/websocket_streams/live/runners/shell.py`.
-- [X] T068 [US6] Add the input route to `src/websocket_streams/web/blueprint.py`. Add the input method to `src/websocket_streams/live/sessions/manager.py`.
-- [X] T069 [US6] Add the terminal view, the line field, and the key buttons to `src/websocket_streams/web/static/websockets.js`.
+- [X] T067 [US6] Implement `ShellRunner` in `src/mist/realtime/websocket_streams/live/runners/shell.py`.
+- [X] T068 [US6] Add the input route to `src/mist/realtime/websocket_streams/web/blueprint.py`. Add the input method to `src/mist/realtime/websocket_streams/live/sessions/manager.py`.
+- [X] T069 [US6] Add the terminal view, the line field, and the key buttons to `src/mist/realtime/websocket_streams/web/static/websockets.js`.
 
 **Checkpoint**: All six user stories work alone.
 
@@ -257,7 +257,7 @@ Task: "T016 channel parity contract test in tests/contract/websocket_streams/tes
 Task: "T017 SDK client contract test in tests/contract/websocket_streams/test_ws_sdk_contract.py"
 Task: "T018 channel catalog tests in tests/unit/websocket_streams/catalog/test_ws_channel_catalog.py"
 Task: "T021 message shaper tests in tests/unit/websocket_streams/live/runners/test_ws_message_text.py"
-Task: "T034 page template in src/websocket_streams/web/templates/websockets_page.html"
+Task: "T034 page template in src/mist/realtime/websocket_streams/web/templates/websockets_page.html"
 ```
 
 ## Implementation strategy

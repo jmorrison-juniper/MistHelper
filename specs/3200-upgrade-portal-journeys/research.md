@@ -109,7 +109,7 @@ pytest entry in `tests/integration/upgrade_portal/journeys/`.
 
 **Decision**: `JourneyLauncher` is the value of the `RUN_LAUNCHER` seam. It
 builds the same objects as `wiring.start_upgrade_run`
-(`src/upgrade_portal/app/wiring.py:1009-1027`). It puts one `JourneyClock`
+(`src/interfaces/portals/upgrade_portal/app/wiring.py:1009-1027`). It puts one `JourneyClock`
 into the four seats that `tests/support/rehearsal/harness.py:349-364` fills.
 
 | Seat | Shipped object | Value |
@@ -332,7 +332,7 @@ and #3220 to #3225. A journey that meets one of these defects is a strict
 `ORG_UPGRADE_WRITES_ENABLED` to `True` in its own process only (FR-010). That
 setting does not repair #3203.
 
-The orchestrator note reports a wiring import of `src.upgrade_portal.mistapi`,
-which does not exist. A search of `src/upgrade_portal/` finds no such import
+The orchestrator note reports a wiring import of `src.interfaces.portals.upgrade_portal.mistapi`,
+which does not exist. A search of `src/interfaces/portals/upgrade_portal/` finds no such import
 text. If a journey meets that failure, the journey records the call and the
 issue.

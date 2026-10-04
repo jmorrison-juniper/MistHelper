@@ -18,7 +18,7 @@ from typing import Any  # A recorded call holds values of mixed types.
 
 import pytest  # Check each refusal and each skip.
 
-from src.upgrade_portal.runtime.runs import RunStateMachine  # The final states of the run model.
+from src.interfaces.portals.upgrade_portal.runtime.runs import RunStateMachine  # The final states of the run model.
 from tests.support.upgrade_portal_e2e.site_lock import (  # The classes under test.
     AnswerBody,
     LockTakeAnswer,

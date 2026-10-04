@@ -16,7 +16,7 @@ from concurrent.futures import wait as wait_for_futures
 from pathlib import Path  # Resolve output names against the data directory safely.
 from typing import Any
 
-from src.utils.operation_registry import OperationRegistry
+from src.foundation.support.utils.operation_registry import OperationRegistry
 from web_portal.services.output_scan import OutputFileScanner
 
 logger = logging.getLogger(__name__)  # Use a module logger so records include this module name.
@@ -71,7 +71,7 @@ CATEGORY_OVERRIDES = {
 }
 
 # The safety categories that the portal may run. `OperationRegistry` in
-# src/utils/operation_registry.py is the single source of truth for the safety
+# src/foundation/support/utils/operation_registry.py is the single source of truth for the safety
 # category of every operation, and this set is the only gate the portal applies.
 #
 # Issue #3082: a second bound, DESTRUCTIVE_THRESHOLD, once compared the menu
@@ -281,7 +281,9 @@ def _endpoint_family_dynamic_parameters(required: tuple[str, ...]) -> list[dict]
 
 def _endpoint_family_choice_options(operations: tuple) -> tuple[list[dict], dict[str, list[dict]]]:
     """Build chooser options and per-choice prompt controls for one endpoint family."""
-    from src.export.endpoint_catalog import menu_text  # Use the same readable text the CLI chooser prints.
+    from src.operations.exporting.export.endpoint_catalog import (
+        menu_text,
+    )  # Use the same readable text the CLI chooser prints.
 
     options = []  # Store the choices that the browser renders.
     dynamic_parameters = {}  # Store the later controls by one-based chooser value.
@@ -308,8 +310,8 @@ def _site_scoped_chooser_options() -> tuple:
     """
     # These modules already load when the menu table builds, so the import is
     # resolved by this point and costs nothing extra.
-    from src.export.count_exporter import _SITE_OPS as site_count_ops
-    from src.export.simple_endpoint_exporter import _SITE_OPS as site_endpoint_ops
+    from src.operations.exporting.export.count_exporter import _SITE_OPS as site_count_ops
+    from src.operations.exporting.export.simple_endpoint_exporter import _SITE_OPS as site_endpoint_ops
 
     count_options = _indexed_options([entry.operation for entry in site_count_ops])  # Menu 236 offers these.
     endpoint_options = _indexed_options([entry.operation for entry in site_endpoint_ops])  # Menu 261 offers these.
@@ -539,9 +541,15 @@ def _build_registry() -> dict:
     # all six. Issue #3342 adds mode 4, the report of the closed actions.
     # The subcategory values use the category/subcategory pair, because the
     # categories ap and gateway both hold the subcategory key non_compliant.
-    from src.marvis.actions.model import CATEGORY_NAMES  # Read the category names that the CLI table shows.
-    from src.marvis.actions.model import RESOLUTION_CODES  # Read the four codes in the order of the Mist UI.
-    from src.marvis.actions.model import TOPIC_NAMES  # Read the subcategory names that the CLI table shows.
+    from src.mist.intelligence.marvis.actions.model import (
+        CATEGORY_NAMES,
+    )  # Read the category names that the CLI table shows.
+    from src.mist.intelligence.marvis.actions.model import (
+        RESOLUTION_CODES,
+    )  # Read the four codes in the order of the Mist UI.
+    from src.mist.intelligence.marvis.actions.model import (
+        TOPIC_NAMES,
+    )  # Read the subcategory names that the CLI table shows.
 
     registry["270"] = {  # Menu 270 exports or resolves the Marvis Actions of one topic set.
         "category": "interactive",  # The portal must render the six controls before Run.
@@ -621,7 +629,9 @@ def _build_registry() -> dict:
         ],
     }
 
-    from src.reports.client_fingerprint_census.model import DISTINCT_FIELDS  # Read the OpenAPI field list.
+    from src.mist.intelligence.reports.client_fingerprint_census.model import (
+        DISTINCT_FIELDS,
+    )  # Read the OpenAPI field list.
 
     registry["289"] = {  # Menu 289 asks for one site and one distinct field.
         "category": "interactive",  # The portal must collect both answers before Run.
@@ -669,17 +679,39 @@ def _build_registry() -> dict:
     }
 
     # --- Issue #3230 required plain prompts and endpoint family explorers ---
-    from src.export.count_exporter import _MSP_OPS as msp_count_ops  # Read the MSP chooser source of truth.
-    from src.export.count_exporter import _ORG_OPS as org_count_ops  # Read the org chooser source of truth.
-    from src.export.endpoint_family_exporter import _MSP_DETAIL_OPS as msp_detail_ops  # Read menu 267 table.
-    from src.export.endpoint_family_exporter import _ORG_DETAIL_OPS as org_detail_ops  # Read menu 266 table.
-    from src.export.endpoint_family_exporter import _OTHER_DETAIL_OPS as other_detail_ops  # Read menu 268 table.
-    from src.export.endpoint_family_exporter import _SITE_DETAIL_OPS as site_detail_ops  # Read menu 265 table.
-    from src.export.endpoint_family_exporter import _SITE_MAP_OPS as site_map_ops  # Read menu 264 table.
-    from src.export.endpoint_family_exporter import _SITE_SLE_OPS as site_sle_ops  # Read menu 263 table.
-    from src.export.simple_endpoint_exporter import _MSP_OPS as msp_endpoint_ops  # Read the MSP endpoint table.
-    from src.export.simple_endpoint_exporter import _NONE_OPS as global_endpoint_ops  # Read the global endpoint table.
-    from src.export.simple_endpoint_exporter import _ORG_OPS as org_endpoint_ops  # Read the org endpoint table.
+    from src.operations.exporting.export.count_exporter import (
+        _MSP_OPS as msp_count_ops,
+    )  # Read the MSP chooser source of truth.
+    from src.operations.exporting.export.count_exporter import (
+        _ORG_OPS as org_count_ops,
+    )  # Read the org chooser source of truth.
+    from src.operations.exporting.export.endpoint_family_exporter import (
+        _MSP_DETAIL_OPS as msp_detail_ops,
+    )  # Read menu 267 table.
+    from src.operations.exporting.export.endpoint_family_exporter import (
+        _ORG_DETAIL_OPS as org_detail_ops,
+    )  # Read menu 266 table.
+    from src.operations.exporting.export.endpoint_family_exporter import (
+        _OTHER_DETAIL_OPS as other_detail_ops,
+    )  # Read menu 268 table.
+    from src.operations.exporting.export.endpoint_family_exporter import (
+        _SITE_DETAIL_OPS as site_detail_ops,
+    )  # Read menu 265 table.
+    from src.operations.exporting.export.endpoint_family_exporter import (
+        _SITE_MAP_OPS as site_map_ops,
+    )  # Read menu 264 table.
+    from src.operations.exporting.export.endpoint_family_exporter import (
+        _SITE_SLE_OPS as site_sle_ops,
+    )  # Read menu 263 table.
+    from src.operations.exporting.export.simple_endpoint_exporter import (
+        _MSP_OPS as msp_endpoint_ops,
+    )  # Read the MSP endpoint table.
+    from src.operations.exporting.export.simple_endpoint_exporter import (
+        _NONE_OPS as global_endpoint_ops,
+    )  # Read the global endpoint table.
+    from src.operations.exporting.export.simple_endpoint_exporter import (
+        _ORG_OPS as org_endpoint_ops,
+    )  # Read the org endpoint table.
 
     org_count_options = _indexed_options([entry.operation for entry in org_count_ops])  # Match menu 235 chooser order.
     msp_count_options = _indexed_options([entry.operation for entry in msp_count_ops])  # Match menu 237 chooser order.
@@ -1391,17 +1423,17 @@ class _RunLogHandler(logging.Handler):
             "flask",
             "mistapi",
             # Issue #3232: the polyglot writers bind these bare names, outside
-            # src.db, so the prefix rule below cannot reach them.
+            # src.foundation.persistence.db, so the prefix rule below cannot reach them.
             "redis_writer",
             "redis_json_writer",
         )
     )
 
     # Issue #3232: the site prompt refreshes SiteList.csv, and that refresh
-    # writes the polyglot store. src.db logs one JSON line for each collection,
+    # writes the polyglot store. src.foundation.persistence.db logs one JSON line for each collection,
     # so every site-scoped run showed database internals. The prefix applies at
     # INFO only, because the WARNING check runs first and keeps a failure visible.
-    _DEBUG_LOGGER_PREFIXES = ("src.db.",)
+    _DEBUG_LOGGER_PREFIXES = ("src.foundation.persistence.db.",)
 
     # Message prefixes that indicate internal plumbing (even at INFO)
     _INTERNAL_PREFIXES = (
@@ -1520,7 +1552,7 @@ class _RunLogHandler(logging.Handler):
     # (#886). The portal sends each WARNING to the Execution Log, so every
     # site-scoped run showed 144 menu lines that the pick list already answered.
     # The routing stays narrow: one logger, and the two line shapes of that menu.
-    _SITE_MENU_LOGGER = "src.ui.prompt_utils"
+    _SITE_MENU_LOGGER = "src.interfaces.visualization.ui.prompt_utils"
     _SITE_MENU_HEADING = "Available Sites:"
     _SITE_MENU_ROW = re.compile(r"^\[\d+\] \S")
 

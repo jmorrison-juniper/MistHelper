@@ -135,6 +135,6 @@ The owned record that defers repository registration.
 | Category | `destructive` |
 | Handler class | `ClientSessionControl` |
 | Entry point | static `run()` |
-| Package | `src/device/client_session_control/` |
+| Package | `src/mist/resources/device/client_session_control/` |
 | Test package | `tests/unit/device/client_session_control/` |
 | Registration state | Deferred to `wiring.md` |

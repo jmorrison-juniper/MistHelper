@@ -29,13 +29,13 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from src.upgrade_portal.upgrade import gate
+from src.interfaces.portals.upgrade_portal.upgrade import gate
 
 # WHY: This file sits at tests/unit/upgrade_portal, so the root is three levels up.
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
 # WHY: The two files that hold the badge. The page writes it and the script repaints it.
-ASSET_ROOT = REPO_ROOT / "src" / "upgrade_portal" / "app" / "assets"
+ASSET_ROOT = REPO_ROOT / "src" / "interfaces" / "portals" / "upgrade_portal" / "app" / "assets"
 SCRIPT_PATH = ASSET_ROOT / "static" / "js" / "portal.js"
 PAGE_PATH = ASSET_ROOT / "templates" / "upgrade" / "progress.html"
 

@@ -88,7 +88,7 @@
 - [x] Testing strategy is comprehensive
   - ✅ Unit tests (per component), Integration tests (full workflow), Regression tests (behavior comparison)
 - [x] Test coverage targets are specified
-  - ✅ Acceptance criterion: ≥70% coverage for `src/maps/`
+  - ✅ Acceptance criterion: ≥70% coverage for `src/interfaces/visualization/maps/`
 - [x] All quality gates are listed
   - ✅ Ruff, black, mypy, CodeQL, pytest+cov all specified with expectations
 - [x] Validation tests are specific

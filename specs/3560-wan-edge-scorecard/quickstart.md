@@ -4,7 +4,7 @@
 
 1. Use Python `3.13` or newer.
 2. Bootstrap the worktree before tests if `.venv` is absent.
-3. Keep implementation edits in the later package `src/reports/wan_edge_scorecard/`.
+3. Keep implementation edits in the later package `src/mist/intelligence/reports/wan_edge_scorecard/`.
 4. Keep implementation tests in `tests/unit/reports/wan_edge_scorecard/`.
 
 ## Validation scenario 1: unit fixture export
@@ -50,8 +50,8 @@ Run the smallest gates that cover changed files.
 
 ```powershell
 python -m py_compile MistHelper.py
-python -m ruff check MistHelper.py src\reports\wan_edge_scorecard tests\unit\reports\wan_edge_scorecard
-python -m black --check MistHelper.py src\reports\wan_edge_scorecard tests\unit\reports\wan_edge_scorecard
+python -m ruff check MistHelper.py src\mist\intelligence\reports\wan_edge_scorecard tests\unit\reports\wan_edge_scorecard
+python -m black --check MistHelper.py src\mist\intelligence\reports\wan_edge_scorecard tests\unit\reports\wan_edge_scorecard
 ```
 
 Expected outcome:

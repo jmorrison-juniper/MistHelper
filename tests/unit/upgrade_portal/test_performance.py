@@ -42,11 +42,20 @@ from dataclasses import dataclass, field  # The fakes of this module.
 from types import SimpleNamespace  # The two-field shape of a cloud answer.
 from typing import Any  # A session, a store result, and a document are all free-form.
 
-from src.upgrade_portal.capture import assembly, collector, devices, extras  # The capture lane under test.
-from src.upgrade_portal.capture import clients as capture_clients  # The client records that a site read answers with.
-from src.upgrade_portal.compare import clients as compare_clients  # The client half of a comparison.
-from src.upgrade_portal.compare import diff, render  # The device half and the page builder.
-from src.upgrade_portal.compare import statistics as compare_statistics  # The roll-up that the page shows.
+from src.interfaces.portals.upgrade_portal.capture import (
+    assembly,
+    collector,
+    devices,
+    extras,
+)  # The capture lane under test.
+from src.interfaces.portals.upgrade_portal.capture import (
+    clients as capture_clients,
+)  # The client records that a site read answers with.
+from src.interfaces.portals.upgrade_portal.compare import clients as compare_clients  # The client half of a comparison.
+from src.interfaces.portals.upgrade_portal.compare import diff, render  # The device half and the page builder.
+from src.interfaces.portals.upgrade_portal.compare import (
+    statistics as compare_statistics,
+)  # The roll-up that the page shows.
 
 LARGE_SITE_DEVICES = 250  # The site size that plan.md line 64 names for the 90 second capture target.
 SMALL_SITE_DEVICES = 50  # The site size that spec.md SC-001 names for the first capture of a site.

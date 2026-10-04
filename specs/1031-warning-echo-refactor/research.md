@@ -37,35 +37,35 @@ This document consolidates the research that resolved every open decision in the
 
 ## R-3: Logger identity (root vs named)
 
-**Decision**: `echo()` uses a module-level named logger: `_LOGGER = logging.getLogger(__name__)` where `__name__` resolves to `src.utils.console` (or `utils.console` depending on invocation, matching how other `src/utils/` modules bind their loggers).
+**Decision**: `echo()` uses a module-level named logger: `_LOGGER = logging.getLogger(__name__)` where `__name__` resolves to `src.foundation.support.utils.console` (or `utils.console` depending on invocation, matching how other `src/foundation/support/utils/` modules bind their loggers).
 
 **Rationale**:
 
 - Greppability: an operator investigating `data/script.log` can filter for the `console:` origin if they want to see only user-facing echoes.
-- Consistency: `src/utils/logger_utils.py`, `src/utils/input_utils.py`, and `src/utils/subprocess_runner.py` all bind to their module logger. `echo()` follows the same convention.
+- Consistency: `src/foundation/support/utils/logger_utils.py`, `src/foundation/support/utils/input_utils.py`, and `src/foundation/support/utils/subprocess_runner.py` all bind to their module logger. `echo()` follows the same convention.
 - Propagation: named loggers propagate to the root logger's handlers by default. File handler capture in `data/script.log` continues to work with no configuration change (FR-014).
 
 **Alternatives considered**:
 
-- **Root logger (`logging.getLogger()`)**: rejected. Loses greppability. Also inconsistent with the rest of `src/utils/`.
+- **Root logger (`logging.getLogger()`)**: rejected. Loses greppability. Also inconsistent with the rest of `src/foundation/support/utils/`.
 - **Custom logger named `"echo"`**: rejected. Wins nothing over `__name__` and hides the module of origin.
 
-## R-4: Helper location (`src/utils/console.py`)
+## R-4: Helper location (`src/foundation/support/utils/console.py`)
 
-**Decision**: New module at `src/utils/console.py`. Import path is `from src.utils.console import echo` in every migrated file.
+**Decision**: New module at `src/foundation/support/utils/console.py`. Import path is `from src.foundation.support.utils.console import echo` in every migrated file.
 
 **Rationale**:
 
-- The repo's `src/utils/` directory holds cross-cutting primitives (`logger_utils`, `input_utils`, `subprocess_runner`, `tqdm_wrapper`, `environment_utils`, `file_path_utils`). `console.py` fits the naming and role of that layer.
-- Existing symbols were surveyed: no `console.py`, no `echo` symbol, no import path collision. `src.utils.console` is a green field.
+- The repo's `src/foundation/support/utils/` directory holds cross-cutting primitives (`logger_utils`, `input_utils`, `subprocess_runner`, `tqdm_wrapper`, `environment_utils`, `file_path_utils`). `console.py` fits the naming and role of that layer.
+- Existing symbols were surveyed: no `console.py`, no `echo` symbol, no import path collision. `src.foundation.support.utils.console` is a green field.
 - Placing the helper in a new module keeps the diff auditable. Adding it to an existing utility module would mix a public helper with pre-existing internals and complicate CODEOWNERS review.
 - Every migrated file imports from the same path, satisfying FR-011.
 
 **Alternatives considered**:
 
-- **Add to `src/utils/logger_utils.py`**: rejected. That module is about logger configuration; `echo()` is about user-facing output. Mixing concerns is a smell and would bury the helper.
+- **Add to `src/foundation/support/utils/logger_utils.py`**: rejected. That module is about logger configuration; `echo()` is about user-facing output. Mixing concerns is a smell and would bury the helper.
 - **New top-level `src/console.py`**: rejected. Would fragment `src/` and set a precedent for top-level primitives that the current layout does not follow.
-- **`MistHelper.py` itself**: rejected. Import cycles: many `src/reports/*.py` cannot import from `MistHelper.py` cleanly.
+- **`MistHelper.py` itself**: rejected. Import cycles: many `src/mist/intelligence/reports/*.py` cannot import from `MistHelper.py` cleanly.
 
 ## R-5: Marker discriminator and multi-line variant
 

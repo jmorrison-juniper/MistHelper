@@ -8,9 +8,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.analytics.site_inventory_health_analyzer import SiteInventoryHealthAnalyzer, SiteInventoryHealthAnalyzerDeps
+from src.mist.intelligence.analytics.site_inventory_health_analyzer import (
+    SiteInventoryHealthAnalyzer,
+    SiteInventoryHealthAnalyzerDeps,
+)
 
-_MODULE_LOGGER = "src.analytics.site_inventory_health_analyzer"  # WHY: pin caplog to SUT logger post-#886 migration.
+_MODULE_LOGGER = "src.mist.intelligence.analytics.site_inventory_health_analyzer"  # Use the canonical source path.
 
 
 def _build_mistapi_stub() -> SimpleNamespace:

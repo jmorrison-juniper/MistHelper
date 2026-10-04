@@ -82,10 +82,10 @@ A running firmware workflow loses the site lock. The run stops before it reads o
 
 | Value | Source | Measurement |
 | - | - | - |
-| Poll interval | `src\upgrade_portal\upgrade\gate.py` `POLL_INTERVAL_SECONDS` | 20 seconds |
-| Calls for each round | `src\upgrade_portal\upgrade\phase_gate.py` `CALLS_PER_ROUND` | 2 |
-| Longest accepted schedule before this change | `src\upgrade_portal\upgrade\options.py` `START_TIME_HORIZON_SECONDS` | 31536000 seconds |
-| Longest site lock life | `src\upgrade_portal\runtime\lock.py` `MAX_LOCK_LIFE_SECONDS` | 43200 seconds |
+| Poll interval | `src\interfaces\portals\upgrade_portal\upgrade\gate.py` `POLL_INTERVAL_SECONDS` | 20 seconds |
+| Calls for each round | `src\interfaces\portals\upgrade_portal\upgrade\phase_gate.py` `CALLS_PER_ROUND` | 2 |
+| Longest accepted schedule before this change | `src\interfaces\portals\upgrade_portal\upgrade\options.py` `START_TIME_HORIZON_SECONDS` | 31536000 seconds |
+| Longest site lock life | `src\interfaces\portals\upgrade_portal\runtime\lock.py` `MAX_LOCK_LIFE_SECONDS` | 43200 seconds |
 
 The old maximum schedule produced 1576800 poll rounds and 3153600 cloud calls for one run.
 

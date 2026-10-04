@@ -85,7 +85,7 @@ path_globs = []
 # Both keys default to the values shown; override only if the repo layout
 # changes.
 banned_imports = ["mistapi"]              # Module-scope imports that mark a test as Mist-API.
-excluded_src_prefixes = ["src/api/"]      # Any src/* module under these prefixes marks its callers as Mist-API.
+excluded_src_prefixes = ["src/mist/access/api/"]      # Any src/* module under these prefixes marks its callers as Mist-API.
 ```
 
 Purpose: FR-002 configurable Mist-API predicate + FR-021 general exclusions.

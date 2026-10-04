@@ -19,9 +19,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from src.upgrade_portal.compare import clients as client_compare
-from src.upgrade_portal.compare import diff as device_compare
-from src.upgrade_portal.compare import render, statistics
+from src.interfaces.portals.upgrade_portal.compare import clients as client_compare
+from src.interfaces.portals.upgrade_portal.compare import diff as device_compare
+from src.interfaces.portals.upgrade_portal.compare import render, statistics
 
 # WHY: Obviously fake addresses. A reader sees at once that no test reaches a
 #      real site.

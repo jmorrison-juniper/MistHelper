@@ -6,7 +6,7 @@
 ## Technical context
 
 - Python 3.13, Flask 3, Jinja templates, and one browser script, `portal.js`.
-- The view layer is `src/upgrade_portal/upgrade/`. It makes no cloud call and no write.
+- The view layer is `src/interfaces/portals/upgrade_portal/upgrade/`. It makes no cloud call and no write.
 - The change adds no dependency, no environment variable, and no schema change. The operation record gains the list `pre_captures`. An older record without the list stays valid.
 - The session is the signed cookie of Flask. The portal has no session on the server.
 
@@ -27,7 +27,7 @@
 
 ### Part 1. The gate in the view layer
 
-The new module `src/upgrade_portal/upgrade/org_precheck.py` holds three classes.
+The new module `src/interfaces/portals/upgrade_portal/upgrade/org_precheck.py` holds three classes.
 
 | Class and member | Purpose |
 | - | - |
@@ -54,7 +54,7 @@ The new module `src/upgrade_portal/upgrade/org_precheck.py` holds three classes.
 
 ### Part 3. The endpoint
 
-The new route module `src/upgrade_portal/app/routes/org_precheck.py` holds the blueprint `org_precheck_bp`. The factory registers it after `org_controls`.
+The new route module `src/interfaces/portals/upgrade_portal/app/routes/org_precheck.py` holds the blueprint `org_precheck_bp`. The factory registers it after `org_controls`.
 
 | Function | Purpose |
 | - | - |

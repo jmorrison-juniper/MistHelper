@@ -2,7 +2,7 @@
 
 from unittest.mock import MagicMock, patch
 
-from src.refactors.serial_cc.switch_vc_stats import SwitchVcStatsService
+from src.foundation.support.refactors.serial_cc.switch_vc_stats import SwitchVcStatsService
 
 
 class DummyDeps:
@@ -35,7 +35,7 @@ class _TqdmContext:
         return None
 
 
-@patch("src.refactors.serial_cc.switch_vc_stats._resolve_runtime_dependencies")
+@patch("src.foundation.support.refactors.serial_cc.switch_vc_stats._resolve_runtime_dependencies")
 def test_switch_vc_stats_returns_when_no_switches(mock_resolve_runtime_dependencies):
     """Service exits early when OrgInventory.csv has no VC-capable switches."""
     deps = DummyDeps()  # Create synthetic dependency bundle
@@ -43,15 +43,17 @@ def test_switch_vc_stats_returns_when_no_switches(mock_resolve_runtime_dependenc
     deps.FilePathUtils.get_csv_path.return_value = "C:/tmp/OrgInventory.csv"  # Inventory CSV path used by loader
     deps.ConfigUtils.check_stop_signal.return_value = False  # No stop signal in this scenario
     with (
-        patch("src.refactors.serial_cc.switch_vc_stats.open", MagicMock()),  # Avoid real file access
-        patch("src.refactors.serial_cc.switch_vc_stats.csv.DictReader", return_value=[]),  # No inventory rows
+        patch("src.foundation.support.refactors.serial_cc.switch_vc_stats.open", MagicMock()),  # Avoid real file access
+        patch(
+            "src.foundation.support.refactors.serial_cc.switch_vc_stats.csv.DictReader", return_value=[]
+        ),  # No inventory rows
     ):
         SwitchVcStatsService.execute()  # Execute service
 
     deps.DataExporter.write_with_format_selection.assert_not_called()  # No output should be written on empty inventory
 
 
-@patch("src.refactors.serial_cc.switch_vc_stats._resolve_runtime_dependencies")
+@patch("src.foundation.support.refactors.serial_cc.switch_vc_stats._resolve_runtime_dependencies")
 def test_switch_vc_stats_sequential_exports_records(mock_resolve_runtime_dependencies):
     """Sequential mode merges VC API payload and exports flattened CSV rows."""
     deps = DummyDeps()  # Create synthetic dependency bundle
@@ -74,8 +76,10 @@ def test_switch_vc_stats_sequential_exports_records(mock_resolve_runtime_depende
         }
     ]
     with (
-        patch("src.refactors.serial_cc.switch_vc_stats.open", MagicMock()),  # Avoid real file access
-        patch("src.refactors.serial_cc.switch_vc_stats.csv.DictReader", return_value=inventory_rows),  # One row
+        patch("src.foundation.support.refactors.serial_cc.switch_vc_stats.open", MagicMock()),  # Avoid real file access
+        patch(
+            "src.foundation.support.refactors.serial_cc.switch_vc_stats.csv.DictReader", return_value=inventory_rows
+        ),  # One row
     ):
         SwitchVcStatsService.execute()  # Execute service
 
@@ -85,7 +89,7 @@ def test_switch_vc_stats_sequential_exports_records(mock_resolve_runtime_depende
     assert args[0][0]["status"] == "up"  # VC API field should be present in merged export row
 
 
-@patch("src.refactors.serial_cc.switch_vc_stats._resolve_runtime_dependencies")
+@patch("src.foundation.support.refactors.serial_cc.switch_vc_stats._resolve_runtime_dependencies")
 def test_switch_vc_stats_fast_mode_uses_parallel_collection(mock_resolve_runtime_dependencies):
     """Fast mode executes concurrent worker path and still exports results."""
     deps = DummyDeps()  # Create synthetic dependency bundle
@@ -122,10 +126,18 @@ def test_switch_vc_stats_fast_mode_uses_parallel_collection(mock_resolve_runtime
             return future
 
     with (
-        patch("src.refactors.serial_cc.switch_vc_stats.open", MagicMock()),  # Avoid real file access
-        patch("src.refactors.serial_cc.switch_vc_stats.csv.DictReader", return_value=inventory_rows),  # One row
-        patch("src.refactors.serial_cc.switch_vc_stats.ThreadPoolExecutor", return_value=_DummyExecutor()),
-        patch("src.refactors.serial_cc.switch_vc_stats.as_completed", side_effect=lambda futures: list(futures)),
+        patch("src.foundation.support.refactors.serial_cc.switch_vc_stats.open", MagicMock()),  # Avoid real file access
+        patch(
+            "src.foundation.support.refactors.serial_cc.switch_vc_stats.csv.DictReader", return_value=inventory_rows
+        ),  # One row
+        patch(
+            "src.foundation.support.refactors.serial_cc.switch_vc_stats.ThreadPoolExecutor",
+            return_value=_DummyExecutor(),
+        ),
+        patch(
+            "src.foundation.support.refactors.serial_cc.switch_vc_stats.as_completed",
+            side_effect=lambda futures: list(futures),
+        ),
     ):
         SwitchVcStatsService.execute()  # Execute service
 

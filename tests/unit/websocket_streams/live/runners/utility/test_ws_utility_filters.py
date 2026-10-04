@@ -4,8 +4,10 @@ from __future__ import annotations  # Keep annotations lazy for Python 3.13.
 
 import pytest  # The tests check contract refusals.
 
-from src.websocket_streams.intake.fields.error import StreamRequestError  # Bad answers raise this error.
-from src.websocket_streams.live.runners.utility.filters.message_filter import UtilityMessageFilter  # Filter class.
+from src.mist.realtime.websocket_streams.intake.fields.error import StreamRequestError  # Bad answers raise this error.
+from src.mist.realtime.websocket_streams.live.runners.utility.filters.message_filter import (
+    UtilityMessageFilter,
+)  # Filter class.
 
 
 class TestUtilityMessageFilter:

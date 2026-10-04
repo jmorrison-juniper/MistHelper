@@ -8,16 +8,32 @@ from unittest.mock import MagicMock, patch  # WHY: replace cloud and writer boun
 
 import pytest  # WHY: pytest fixtures drive the real product functions.
 
-from src.export import site_guest_authorization_exporter as guest_module  # WHY: patch the real guest exporter.
-from src.export import site_mist_edge_events_exporter as mist_edge_module  # WHY: patch the real Mist Edge exporter.
-from src.export import site_nac_client_events_exporter as nac_module  # WHY: patch the real NAC exporter.
-from src.export import site_wan_usage_exporter as wan_module  # WHY: patch the real WAN exporter.
-from src.export import site_webhook_deliveries_exporter as webhook_module  # WHY: patch the real webhook exporter.
-from src.export.site_guest_authorization_exporter import SiteGuestAuthorizationExporter  # WHY: real product class.
-from src.export.site_mist_edge_events_exporter import SiteMistEdgeEventsExporter  # WHY: real product class.
-from src.export.site_nac_client_events_exporter import SiteNacClientEventsExporter  # WHY: real product class.
-from src.export.site_wan_usage_exporter import SiteWanUsageExporter  # WHY: real product class.
-from src.export.site_webhook_deliveries_exporter import SiteWebhookDeliveriesExporter  # WHY: real product class.
+from src.operations.exporting.export import (
+    site_guest_authorization_exporter as guest_module,
+)  # WHY: patch the real guest exporter.
+from src.operations.exporting.export import (
+    site_mist_edge_events_exporter as mist_edge_module,
+)  # WHY: patch the real Mist Edge exporter.
+from src.operations.exporting.export import (
+    site_nac_client_events_exporter as nac_module,
+)  # WHY: patch the real NAC exporter.
+from src.operations.exporting.export import site_wan_usage_exporter as wan_module  # WHY: patch the real WAN exporter.
+from src.operations.exporting.export import (
+    site_webhook_deliveries_exporter as webhook_module,
+)  # WHY: patch the real webhook exporter.
+from src.operations.exporting.export.site_guest_authorization_exporter import (
+    SiteGuestAuthorizationExporter,
+)  # WHY: real product class.
+from src.operations.exporting.export.site_mist_edge_events_exporter import (
+    SiteMistEdgeEventsExporter,
+)  # WHY: real product class.
+from src.operations.exporting.export.site_nac_client_events_exporter import (
+    SiteNacClientEventsExporter,
+)  # WHY: real product class.
+from src.operations.exporting.export.site_wan_usage_exporter import SiteWanUsageExporter  # WHY: real product class.
+from src.operations.exporting.export.site_webhook_deliveries_exporter import (
+    SiteWebhookDeliveriesExporter,
+)  # WHY: real product class.
 
 
 class _FailedResponse:

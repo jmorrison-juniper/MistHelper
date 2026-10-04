@@ -24,8 +24,8 @@ import mistapi
 import pytest
 from mistapi.__api_response import APIResponse
 
-from src.config import runtime_settings
-from src.upgrade_portal.capture import devices
+from src.foundation.runtime.config import runtime_settings
+from src.interfaces.portals.upgrade_portal.capture import devices
 from tests.support.sdk_pages import HTML_TYPE, JSON_TYPE, PagedSession, build_sdk_answer
 
 # WHY: Obviously fake identifiers. A reader sees at once that no test reaches a

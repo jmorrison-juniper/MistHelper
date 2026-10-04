@@ -281,7 +281,7 @@ Retain original gate settings, baselines, exclusions, and thresholds.
 | Full Ruff | `rtk proxy .venv/bin/python -m ruff check .` |
 | Full Black | `rtk proxy .venv/bin/python -m black --check --diff .` |
 | Exact CI types | `rtk proxy .venv/bin/python -m mypy src/ MistHelper.py wsgi.py scripts/mist_ideas_analyzer_pkg/__init__.py scripts/mist_ideas_distiller_v2_pkg/__init__.py --config-file pyproject.toml` |
-| Bandit exclusion guard | `rtk proxy .venv/bin/bandit-exclude-check --include-sample ./src/utils/zen_city_metadata.py --include-sample '.\src\utils\zen_city_metadata.py'` |
+| Bandit exclusion guard | `rtk proxy .venv/bin/bandit-exclude-check --include-sample ./src/foundation/support/utils/zen_city_metadata.py --include-sample '.\src\foundation\support\utils\zen_city_metadata.py'` |
 | Full Bandit | `rtk proxy .venv/bin/python -m bandit -c pyproject.toml -r .` |
 | Full quality ratchet | `rtk proxy .venv/bin/test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json --report data/issue-3366/gates/quality.json --summary data/issue-3366/gates/quality.md` |
 | Runtime audit | `rtk proxy .venv/bin/python -m pip_audit -r requirements.txt` |

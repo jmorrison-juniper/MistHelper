@@ -50,7 +50,7 @@ specs\2753-masking-defaults\
 ### Source Code
 
 ```text
-src\upgrade_portal\app\routes\upgrade.py
+src\interfaces\portals\upgrade_portal\app\routes\upgrade.py
 tests\unit\upgrade_portal\test_upgrade_start_input_validator.py
 changelog.d\issue-2753-masking-defaults.md
 ```

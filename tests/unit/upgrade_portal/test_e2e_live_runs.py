@@ -26,8 +26,8 @@ from urllib.error import HTTPError, URLError  # The two failures of a real opene
 
 import pytest  # Check each refusal.
 
-from src.upgrade_portal.app.routes.upgrade import run_is_live  # The live rule of the create refusal.
-from src.upgrade_portal.runtime.runs import RunState, RunStateMachine  # The states of the run model.
+from src.interfaces.portals.upgrade_portal.app.routes.upgrade import run_is_live  # The live rule of the create refusal.
+from src.interfaces.portals.upgrade_portal.runtime.runs import RunState, RunStateMachine  # The states of the run model.
 from tests.support.upgrade_portal_e2e.live_runs import (  # The classes under test.
     LiveRun,
     LiveRunCheck,

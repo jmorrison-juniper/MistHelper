@@ -17,8 +17,8 @@
 - [x] T005 Write the class `RunOwnerHeaderCheck` in
   `tests/support/upgrade_portal_e2e/owner.py`. (US2)
 - [x] T006 Remove the seven fields, the eight keys, and `trap_call_counts` from
-  `src/upgrade_portal/api/run_controls/models.py`. (US1)
-- [x] T007 Make the test branch of `src/upgrade_portal/app/factory.py` write
+  `src/interfaces/portals/upgrade_portal/api/run_controls/models.py`. (US1)
+- [x] T007 Make the test branch of `src/interfaces/portals/upgrade_portal/app/factory.py` write
   the run owner header only. (US1)
 - [x] T008 Update `tests/support/upgrade_portal_e2e/__init__.py`. Delete the
   `traps` package. Remove `AuditRecordStore` and its export. (US1)

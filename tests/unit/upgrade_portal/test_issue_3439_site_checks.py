@@ -17,8 +17,8 @@ from typing import Any
 import pytest
 from flask import Flask
 
-from src.upgrade_portal.app.routes import org_upgrade, select
-from src.upgrade_portal.capture.devices import DeviceRead
+from src.interfaces.portals.upgrade_portal.app.routes import org_upgrade, select
+from src.interfaces.portals.upgrade_portal.capture.devices import DeviceRead
 
 ORG_ID = "org-3439"  # One organization for every read of this file.
 NORTH = "site-3439-north"  # A site of the kept page.

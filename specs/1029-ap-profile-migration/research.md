@@ -132,7 +132,7 @@ uppercase-single-word convention.
 ## Decision 6: New module location and naming
 
 **Decision**: New module at
-`src/device/ap_profile_migration_manager.py` containing
+`src/mist/resources/device/ap_profile_migration_manager.py` containing
 `class APProfileMigrationManager` with two public static-method entry
 points:
 
@@ -140,7 +140,7 @@ points:
 - `APProfileMigrationManager.revert_ap_profile_migration()` — menu 208
 
 **Rationale**: The operation acts on AP device objects, so
-`src/device/` is the correct package. The static-method decomposition
+`src/mist/resources/device/` is the correct package. The static-method decomposition
 pattern is the same one used by `SiteConfigManager` (menu 174) — small
 private helpers, two public entry points. Naming follows the existing
 `<Domain>Manager` convention (`SiteConfigManager`,
@@ -151,9 +151,9 @@ private helpers, two public entry points. Naming follows the existing
 - Two modules (one per menu) — rejected: the two operations share the
   backup-file schema, the AP-discovery helper, and the profile-lookup
   helper. Splitting duplicates code without a clear boundary.
-- Under `src/org/` (because device profiles are org-level objects) —
+- Under `src/mist/resources/org/` (because device profiles are org-level objects) —
   rejected: the mutation target is a device (AP) object, and the AP
-  discovery walks sites, so `src/device/` is more accurate.
+  discovery walks sites, so `src/mist/resources/device/` is more accurate.
 
 ---
 

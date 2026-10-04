@@ -32,7 +32,10 @@ from flask import Flask  # The application type of the portal.
 from flask.testing import FlaskClient  # The client type that drives every request.
 from werkzeug.test import TestResponse  # The answer type that every assertion reads.
 
-from src.upgrade_portal.runtime import identity, lock  # The real session guard and the real lock rules.
+from src.interfaces.portals.upgrade_portal.runtime import (
+    identity,
+    lock,
+)  # The real session guard and the real lock rules.
 
 LOCK_CLIENT_KEY = "LOCK_STORE_CLIENT"  # The seam that holds the lock store, named by `select.py`.
 

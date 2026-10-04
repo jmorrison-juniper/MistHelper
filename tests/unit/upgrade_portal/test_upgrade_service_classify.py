@@ -1,10 +1,10 @@
-"""Unit tests for ``classify_gateway`` in ``src/firmware/upgrade_service.py``.
+"""Unit tests for ``classify_gateway`` in ``src/operations/execution/firmware/upgrade_service.py``.
 
 Why:
     A Junos gateway and a session smart router need different cloud calls, so a
     wrong family sends the wrong firmware to real hardware. The one existing
     discriminator is ``_is_ssr_inventory_row`` at
-    ``src/firmware/firmware_manager.py:2291``. That predicate is a method of a
+    ``src/operations/execution/firmware/firmware_manager.py:2291``. That predicate is a method of a
     class, and its module binds four mutable globals at lines 34 to 37. These
     tests call the legacy predicate directly and prove that ``classify_gateway``
     returns the same family for every row, and that it reads none of that
@@ -23,8 +23,8 @@ from typing import Any
 
 import pytest
 
-from src.firmware import firmware_manager, upgrade_service
-from src.firmware.firmware_manager import FirmwareManager
+from src.operations.execution.firmware import firmware_manager, upgrade_service
+from src.operations.execution.firmware.firmware_manager import FirmwareManager
 
 # Every row that the legacy predicate can read without an error, with the family
 # that the legacy predicate reports. The new function must agree on each row.

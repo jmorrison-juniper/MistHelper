@@ -3,7 +3,9 @@
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from src.refactors.serial_cc.start_site_client_capture_wireless import SiteWirelessClientCaptureService
+from src.foundation.support.refactors.serial_cc.start_site_client_capture_wireless import (
+    SiteWirelessClientCaptureService,
+)
 
 
 def _build_manager():
@@ -18,7 +20,7 @@ def _build_manager():
     return manager
 
 
-@patch("src.refactors.serial_cc.start_site_client_capture_wireless._resolve_prompt_helpers")
+@patch("src.foundation.support.refactors.serial_cc.start_site_client_capture_wireless._resolve_prompt_helpers")
 def test_site_selection_cancelled_returns_early(mock_resolve_prompt_helpers):
     manager = _build_manager()
     input_utils = MagicMock()
@@ -39,7 +41,7 @@ def test_site_selection_cancelled_returns_early(mock_resolve_prompt_helpers):
     manager._execute_site_capture.assert_not_called()
 
 
-@patch("src.refactors.serial_cc.start_site_client_capture_wireless._resolve_prompt_helpers")
+@patch("src.foundation.support.refactors.serial_cc.start_site_client_capture_wireless._resolve_prompt_helpers")
 def test_invalid_client_mac_returns_before_capture(mock_resolve_prompt_helpers):
     manager = _build_manager()
     manager.validate_mac_address.return_value = False
@@ -63,7 +65,7 @@ def test_invalid_client_mac_returns_before_capture(mock_resolve_prompt_helpers):
     manager._execute_site_capture_loop.assert_not_called()
 
 
-@patch("src.refactors.serial_cc.start_site_client_capture_wireless._resolve_prompt_helpers")
+@patch("src.foundation.support.refactors.serial_cc.start_site_client_capture_wireless._resolve_prompt_helpers")
 def test_full_flow_single_capture(mock_resolve_prompt_helpers):
     manager = _build_manager()
     input_utils = MagicMock()

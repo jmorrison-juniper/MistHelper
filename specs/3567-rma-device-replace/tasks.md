@@ -10,17 +10,17 @@
 
 ## Phase 1: Setup
 
-- [x] T001 Create `src/inventory/device_replace/__init__.py` and `tests/unit/inventory/device_replace/__init__.py`. (delivered: `src/inventory/device_replace/__init__.py`, `tests/unit/inventory/device_replace/__init__.py`)
+- [x] T001 Create `src/mist/resources/inventory/device_replace/__init__.py` and `tests/unit/inventory/device_replace/__init__.py`. (delivered: `src/mist/resources/inventory/device_replace/__init__.py`, `tests/unit/inventory/device_replace/__init__.py`)
 - [x] T002 [P] Create `changelog.d/issue-3567-rma-device-replace.md` with one `Added` entry for issue `#3567`. (delivered: `changelog.d/issue-3567-rma-device-replace.md`)
 - [x] T003 [P] Create `specs/3567-rma-device-replace/wiring.md` with every section required by the fleet contract. (delivered: `specs/3567-rma-device-replace/wiring.md`)
 
 ## Phase 2: Foundational
 
-- [x] T004 [P] Implement pure inventory and request models in `src/inventory/device_replace/models.py`. (delivered: `src/inventory/device_replace/models.py`)
+- [x] T004 [P] Implement pure inventory and request models in `src/mist/resources/inventory/device_replace/models.py`. (delivered: `src/mist/resources/inventory/device_replace/models.py`)
 - [x] T005 [P] Add model tests for selector lookup, unassigned filtering, type mismatch refusal, and request body shape in `tests/unit/inventory/device_replace/test_rma_device_replace_model.py`. (delivered: `tests/unit/inventory/device_replace/test_rma_device_replace_model.py`)
-- [x] T006 [P] Implement Mist SDK calls in `src/inventory/device_replace/client.py`. (delivered: `src/inventory/device_replace/client.py`)
+- [x] T006 [P] Implement Mist SDK calls in `src/mist/resources/inventory/device_replace/client.py`. (delivered: `src/mist/resources/inventory/device_replace/client.py`)
 - [x] T007 [P] Add client tests with fake SDK responses in `tests/unit/inventory/device_replace/test_rma_device_replace_client.py`. (delivered: `tests/unit/inventory/device_replace/test_rma_device_replace_client.py`)
-- [x] T008 [P] Implement backup and CSV persistence in `src/inventory/device_replace/persistence.py`. (delivered: `src/inventory/device_replace/persistence.py`)
+- [x] T008 [P] Implement backup and CSV persistence in `src/mist/resources/inventory/device_replace/persistence.py`. (delivered: `src/mist/resources/inventory/device_replace/persistence.py`)
 
 ## Phase 3: User Story 1 - Replace an RMA device safely (Priority: P1)
 
@@ -28,23 +28,23 @@
 
 **Independent Test**: Mock prompts, client, and persistence. Verify backup order and request gating.
 
-- [x] T009 [US1] Implement the destructive operation flow in `src/inventory/device_replace/operation.py`. (delivered: `src/inventory/device_replace/operation.py`)
+- [x] T009 [US1] Implement the destructive operation flow in `src/mist/resources/inventory/device_replace/operation.py`. (delivered: `src/mist/resources/inventory/device_replace/operation.py`)
 - [x] T010 [US1] Add operation tests for backup-before-request, confirmation gating, dry-run behavior, and result logging in `tests/unit/inventory/device_replace/test_rma_device_replace_operation.py`. (delivered: `tests/unit/inventory/device_replace/test_rma_device_replace_operation.py`)
 
 ## Phase 4: User Story 2 - Select devices from inventory (Priority: P2)
 
-- [x] T011 [US2] Add operation prompt helpers for old selector and replacement choice in `src/inventory/device_replace/operation.py`. (delivered: `src/inventory/device_replace/operation.py`)
+- [x] T011 [US2] Add operation prompt helpers for old selector and replacement choice in `src/mist/resources/inventory/device_replace/operation.py`. (delivered: `src/mist/resources/inventory/device_replace/operation.py`)
 - [x] T012 [US2] Extend model and operation tests for ambiguous names, assigned replacement refusal, and same-type filtering. (delivered: `tests/unit/inventory/device_replace/test_rma_device_replace_model.py`)
 
 ## Phase 5: User Story 3 - Record operator evidence (Priority: P3)
 
 - [x] T013 [US3] Add persistence tests for backup JSON and `DeviceReplaceLog.csv` rows in `tests/unit/inventory/device_replace/test_rma_device_replace_operation.py`. (delivered: `tests/unit/inventory/device_replace/test_rma_device_replace_operation.py`)
-- [x] T014 [US3] Ensure the operation records `sent`, `dry_run`, `cancelled`, and `error` outcomes. (delivered: `src/inventory/device_replace/operation.py`)
+- [x] T014 [US3] Ensure the operation records `sent`, `dry_run`, `cancelled`, and `error` outcomes. (delivered: `src/mist/resources/inventory/device_replace/operation.py`)
 
 ## Phase 6: Deferred integration wiring
 
 - [x] T015 Document the menu `287` registration, destructive category table update, primary key strategy, and import line in `specs/3567-rma-device-replace/wiring.md`. (delivered: `specs/3567-rma-device-replace/wiring.md`)
-- [ ] T016 Defer the `MistHelper.py`, `src/utils/operation_registry.py`, `src/refactors/endpoint_primary_key_strategies.py`, README, and generated reference edits to the integration pull request. This remains unchecked because another pull request owns those files.
+- [ ] T016 Defer the `MistHelper.py`, `src/foundation/support/utils/operation_registry.py`, `src/foundation/support/refactors/endpoint_primary_key_strategies.py`, README, and generated reference edits to the integration pull request. This remains unchecked because another pull request owns those files.
 
 ## Phase 7: Validation
 

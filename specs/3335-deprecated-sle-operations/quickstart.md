@@ -224,7 +224,7 @@ rtk proxy .venv/bin/ruff check .
 rtk proxy .venv/bin/black --check --diff .
 rtk proxy .venv/bin/python -m py_compile MistHelper.py
 rtk proxy .venv/bin/mypy src/ MistHelper.py wsgi.py scripts/mist_ideas_analyzer_pkg/__init__.py scripts/mist_ideas_distiller_v2_pkg/__init__.py --config-file pyproject.toml
-rtk proxy .venv/bin/bandit-exclude-check --include-sample ./src/utils/zen_city_metadata.py --include-sample '.\src\utils\zen_city_metadata.py'
+rtk proxy .venv/bin/bandit-exclude-check --include-sample ./src/foundation/support/utils/zen_city_metadata.py --include-sample '.\src\foundation\support\utils\zen_city_metadata.py'
 rtk proxy .venv/bin/bandit -c pyproject.toml -r .
 ```
 

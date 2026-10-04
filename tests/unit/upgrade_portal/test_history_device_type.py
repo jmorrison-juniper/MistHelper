@@ -25,8 +25,8 @@ from typing import Any
 import pytest
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
-from src.upgrade_portal.app.routes import review
-from src.upgrade_portal.compare import render
+from src.interfaces.portals.upgrade_portal.app.routes import review
+from src.interfaces.portals.upgrade_portal.compare import render
 
 # The repository root. This file sits at tests/unit/upgrade_portal/.
 _REPO_ROOT = Path(__file__).resolve().parents[3]

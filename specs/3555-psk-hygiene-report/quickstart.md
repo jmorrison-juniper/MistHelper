@@ -70,14 +70,14 @@ Run the smallest gates that cover the implementation.
 
 ```powershell
 python -m py_compile MistHelper.py
-python -m ruff check MistHelper.py src\reports\psk_hygiene tests\unit\reports\psk_hygiene
-python -m black --check MistHelper.py src\reports\psk_hygiene tests\unit\reports\psk_hygiene
-python -m mypy src\reports\psk_hygiene --config-file pyproject.toml
-python -m pydocstyle src\reports\psk_hygiene
+python -m ruff check MistHelper.py src\mist\intelligence\reports\psk_hygiene tests\unit\reports\psk_hygiene
+python -m black --check MistHelper.py src\mist\intelligence\reports\psk_hygiene tests\unit\reports\psk_hygiene
+python -m mypy src\mist\intelligence\reports\psk_hygiene --config-file pyproject.toml
+python -m pydocstyle src\mist\intelligence\reports\psk_hygiene
 python -m pytest tests\unit\reports\psk_hygiene -q --timeout=120
-python -m vulture src\reports\psk_hygiene --min-confidence 70
-python -m interrogate -v src\reports\psk_hygiene
-python -m bandit -c pyproject.toml -r src\reports\psk_hygiene -q
+python -m vulture src\mist\intelligence\reports\psk_hygiene --min-confidence 70
+python -m interrogate -v src\mist\intelligence\reports\psk_hygiene
+python -m bandit -c pyproject.toml -r src\mist\intelligence\reports\psk_hygiene -q
 ```
 
 Expected result:

@@ -25,9 +25,11 @@ from flask import Flask  # The application type of the portal.
 from flask.testing import FlaskClient  # The client type that drives every request.
 from werkzeug.test import TestResponse  # The answer type of the test client.
 
-from src.upgrade_portal.app import factory  # The module that owns the one negotiation rule.
-from src.upgrade_portal.app.routes import auth, select  # The two route modules that read the rule.
-from src.upgrade_portal.runtime import identity  # The real session registry, so one client signs in for real.
+from src.interfaces.portals.upgrade_portal.app import factory  # The module that owns the one negotiation rule.
+from src.interfaces.portals.upgrade_portal.app.routes import auth, select  # The two route modules that read the rule.
+from src.interfaces.portals.upgrade_portal.runtime import (
+    identity,
+)  # The real session registry, so one client signs in for real.
 
 FORM_PATH = "/select/mode"  # A plain form post that `portal.js` never intercepts.
 FORM_BODY = {"mode": "single_site"}  # The field that the mode form sends.
@@ -42,7 +44,7 @@ BACK_LINK = "error-back-link"  # The handle of the link back to the form page.
 SITE_LIST_LINK = "error-site-list-link"  # The handle of the link that every error page shows.
 SIGNOUT_BUTTON = "signout-button"  # The header control that only a live session can use.
 REFUSED_TOKEN = "stale-token-value-for-issue-3275"  # A token value that the page and the log must not show.
-SECURITY_LOGGER = "src.upgrade_portal.app.security"  # The logger of the token check.
+SECURITY_LOGGER = "src.interfaces.portals.upgrade_portal.app.security"  # The logger of the token check.
 PROBE_EMAIL = "csrf.page.contract@example.invalid"  # A reserved address that reaches no mail service.
 
 # Each referrer below must give no link back, and the site list link must stay (FR-004).

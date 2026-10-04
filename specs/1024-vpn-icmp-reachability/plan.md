@@ -23,7 +23,7 @@ per-VPN target *shape* changes, from `host:500` to `host`. Non-VPN rows
 the same input snapshot (INV-1).
 
 Optional in-scope P3 follow-up (US3): promote the truthful IKEv2
-`IKE_SA_INIT` probe results from `src/utils/zscaler_probe.py::
+`IKE_SA_INIT` probe results from `src/foundation/support/utils/zscaler_probe.py::
 run_full_validation()` from log-only to append-only JSONL telemetry under
 `data/vpn_ike_health.jsonl`.
 

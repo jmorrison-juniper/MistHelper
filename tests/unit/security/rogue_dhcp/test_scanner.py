@@ -14,7 +14,7 @@ from typing import Any
 
 import pytest
 
-from src.security.rogue_dhcp.scanner import DEFAULT_WINDOW_DAYS, SECONDS_PER_DAY, RogueDhcpScanner
+from src.operations.protection.security.rogue_dhcp.scanner import DEFAULT_WINDOW_DAYS, SECONDS_PER_DAY, RogueDhcpScanner
 
 ROGUE_ALARM = {
     "type": "sw_rogue_dhcp_server_detected",

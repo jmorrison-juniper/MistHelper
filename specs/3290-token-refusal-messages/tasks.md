@@ -29,7 +29,7 @@
   Use a native form submission for the server empty-field response.
   Keep the existing isolated harness and token-free server evidence.
 
-- [x] T006 Record genuine red message assertions before changing `src/upgrade_portal/app/routes/auth.py`.
+- [x] T006 Record genuine red message assertions before changing `src/interfaces/portals/upgrade_portal/app/routes/auth.py`.
   Require working fixtures and actual route responses.
   Red evidence: 46 message failures and 14 passing unit/route cases.
   Real Chromium evidence: two message failures and one unchanged client-validation pass.

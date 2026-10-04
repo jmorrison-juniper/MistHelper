@@ -10,13 +10,17 @@ from unittest.mock import MagicMock  # Provide fake input helpers.
 
 import pytest  # Assert validation failures without network calls.
 
-from src.reports.alert_digest.client import AlertDigestListResult  # Return client search results.
-from src.reports.alert_digest.model import AlertDigestModel  # Build realistic digest groups for writer tests.
-from src.reports.alert_digest.operation import (  # Test the operation class and prompt resolver.
+from src.mist.intelligence.reports.alert_digest.client import AlertDigestListResult  # Return client search results.
+from src.mist.intelligence.reports.alert_digest.model import (
+    AlertDigestModel,
+)  # Build realistic digest groups for writer tests.
+from src.mist.intelligence.reports.alert_digest.operation import (  # Test the operation class and prompt resolver.
     AlertDigestOperation,
     AlertDigestPromptResolver,
 )
-from src.reports.alert_digest.writer import AlertDigestWriter  # Test output writing through the operation seam.
+from src.mist.intelligence.reports.alert_digest.writer import (
+    AlertDigestWriter,
+)  # Test output writing through the operation seam.
 
 from .conftest import alarm, definition  # Reuse synthetic row factories.
 

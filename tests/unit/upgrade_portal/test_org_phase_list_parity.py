@@ -20,15 +20,15 @@ from typing import Any
 import pytest
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
-from src.upgrade_portal.app.routes import upgrade
-from src.upgrade_portal.runtime.runs import RunRecordBuilder
+from src.interfaces.portals.upgrade_portal.app.routes import upgrade
+from src.interfaces.portals.upgrade_portal.runtime.runs import RunRecordBuilder
 
 # WHY: This file sits at tests/unit/upgrade_portal, so the repository root is three levels up.
 _REPO_ROOT = Path(__file__).resolve().parents[3]  # The path locates the repository root.
 
 # WHY: The real template folder. A stub loader would prove nothing about the shipped pages.
 _TEMPLATE_ROOT = (
-    _REPO_ROOT / "src" / "upgrade_portal" / "app" / "assets" / "templates"
+    _REPO_ROOT / "src" / "interfaces" / "portals" / "upgrade_portal" / "app" / "assets" / "templates"
 )  # The loader reads shipped templates.
 
 # WHY: The values that the single-site page reads beside the status. A missing value raises under StrictUndefined.

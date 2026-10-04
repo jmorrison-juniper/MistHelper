@@ -1,10 +1,10 @@
-"""Wave 4 P2 coverage for src/refactors/wan2_migration_launcher.py (initiative #1018).
+"""Wave 4 P2 coverage for src/foundation/support/refactors/wan2_migration_launcher.py (initiative #1018).
 
 Covers `WAN2MigrationLauncher` construction plus every helper method and every
 branch of `launch()` (happy path, exception path via _handle_fatal_error).
 MistHelper module attributes are monkeypatched with MagicMock doubles, and
 `configure_wan2_migration_dependencies` / `WAN2MigrationManager` /
-`WAN2MigrationDependencies` inside `src.gateway.wan2_migration_manager` are
+`WAN2MigrationDependencies` inside `src.mist.resources.gateway.wan2_migration_manager` are
 monkeypatched so no real gateway module executes. No source edits, no live I/O.
 """
 
@@ -16,7 +16,7 @@ from unittest.mock import MagicMock  # WHY: FR-008 mandates MagicMock(spec=...) 
 
 import pytest  # WHY: monkeypatch/caplog fixtures.
 
-from src.refactors.wan2_migration_launcher import (  # WHY: SUT + helper direct imports.
+from src.foundation.support.refactors.wan2_migration_launcher import (  # WHY: SUT + helper direct imports.
     WAN2MigrationLauncher,
     _resolve_runtime_dependencies,
 )
@@ -52,14 +52,14 @@ def wired_deps(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
 
     configure_mock = MagicMock(name="configure_wan2_migration_dependencies")  # WHY: intercept wire call.
     monkeypatch.setattr(
-        "src.gateway.wan2_migration_manager.configure_wan2_migration_dependencies",
+        "src.mist.resources.gateway.wan2_migration_manager.configure_wan2_migration_dependencies",
         configure_mock,
     )  # WHY: patch actual module attribute so lazy `from ... import` sees the mock.
 
     # WHY: WAN2MigrationDependencies is a frozen dataclass; wrap with a MagicMock that echoes kwargs.
     deps_class_mock = MagicMock(name="WAN2MigrationDependencies_class")  # WHY: constructor class handle.
     monkeypatch.setattr(
-        "src.gateway.wan2_migration_manager.WAN2MigrationDependencies", deps_class_mock
+        "src.mist.resources.gateway.wan2_migration_manager.WAN2MigrationDependencies", deps_class_mock
     )  # WHY: swap dataclass with MagicMock so we can inspect kwargs it was called with.
 
     manager_instance = MagicMock(name="WAN2MigrationManager_instance")  # WHY: instance returned by class call.
@@ -67,7 +67,7 @@ def wired_deps(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
         name="WAN2MigrationManager_class", return_value=manager_instance
     )  # WHY: class handle.
     monkeypatch.setattr(
-        "src.gateway.wan2_migration_manager.WAN2MigrationManager", manager_class_mock
+        "src.mist.resources.gateway.wan2_migration_manager.WAN2MigrationManager", manager_class_mock
     )  # WHY: swap class in target module so _build_manager instantiates our mock.
 
     return {  # WHY: expose everything needed for post-condition assertions.

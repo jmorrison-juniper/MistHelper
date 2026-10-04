@@ -9,7 +9,7 @@ from unittest.mock import MagicMock  # WHY: explicit call tracking for interacti
 
 import pytest  # WHY: autouse fixture registration for caplog level.
 
-from src.troubleshooting.marvis_troubleshoot_utils import (  # WHY: import target class + dep container.
+from src.mist.intelligence.troubleshooting.marvis_troubleshoot_utils import (  # Import the moved dependency.
     MarvisTroubleshootDeps,
     MarvisTroubleshootUtils,
 )

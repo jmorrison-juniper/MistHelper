@@ -121,9 +121,9 @@ These are observations, not new suppression settings.
 | Repository root | 48 tracked direct children. `MistHelper.py` has 214 top-level definitions. | Change only the existing menu 263 title later. | Move one cohesive legacy menu group into a compliant nested package under a separate reservation. |
 | `specs/` | 747 current direct children. | Reuse the already reserved feature directory. | Define a versioned archive layout for completed specifications in separate maintenance work. |
 | Feature document root | The required completed layout has seven direct children, including `spec.md` and `checklists/`. | Keep the five exact user-requested paths. Do not create more artifacts. | Reconcile the shared Spec Kit document template with the five-child rule in separate governance work. |
-| `src/export/` | 48 tracked children. The family module has 11 top-level definitions. The catalog module has nine. | Delete registrations within existing files. | Split one cohesive exporter family into a compliant nested package in a separate feature. |
+| `src/operations/exporting/export/` | 48 tracked children. The family module has 11 top-level definitions. The catalog module has nine. | Delete registrations within existing files. | Split one cohesive exporter family into a compliant nested package in a separate feature. |
 | `EndpointFamilyExporter` | 15 methods. `_SITE_SLE_OPS` has 17 entries. The catalog has 286 entries. | Add no method. Remove only the two retired rows and catalog entries. | Separately partition metadata ownership by existing semantic family without changing runtime behavior. |
-| `src/refactors/` and PK metadata | 33 tracked children. The merged PK dictionary has 571 entries. | Delete two supplemental entries. Preserve the existing `setdefault` behavior. | Separately move one strategy family into a compliant nested metadata package with equivalence tests. |
+| `src/foundation/support/refactors/` and PK metadata | 33 tracked children. The merged PK dictionary has 571 entries. | Delete two supplemental entries. Preserve the existing `setdefault` behavior. | Separately move one strategy family into a compliant nested metadata package with equivalence tests. |
 | Test placement | `tests/guardrails/` has 38 tracked children. `tests/unit/export/` has 45. The modules have eight and 20 top-level definitions. | Reuse both modules and existing test entry points where practical. No standalone helper wrappers or new infrastructure. | Separately organize one test family into a compliant package, without resetting the quality baseline. |
 | `web_portal/` | Seven tracked children. `MENU_DESCRIPTIONS` has 179 entries. | Change only the existing label for 263. | Separately partition menu descriptions by existing categories without changing menu identity. |
 | Documentation parents | `documentation/` has 58 tracked children, `wiki/` has 25, and `menu-api/` has eight. | Later update only existing reserved pages. | Separately archive obsolete documentation through the existing link and generator gates. |
@@ -159,9 +159,9 @@ The other five files are the only outputs of this planning run.
 
 | Purpose | Reserved later paths |
 | --- | --- |
-| Selectable rows | `src/export/endpoint_family_exporter.py` |
-| Catalog entries | `src/export/endpoint_catalog.py` |
-| PK registrations | `src/refactors/endpoint_primary_key_strategies.py` |
+| Selectable rows | `src/operations/exporting/export/endpoint_family_exporter.py` |
+| Catalog entries | `src/operations/exporting/export/endpoint_catalog.py` |
+| PK registrations | `src/foundation/support/refactors/endpoint_primary_key_strategies.py` |
 | Fixed labels | `MistHelper.py`, `web_portal/menu_registry.py`, `documentation/menu-highlights.md` |
 | Changed tests | `tests/guardrails/test_endpoint_catalog.py`, `tests/unit/export/test_endpoint_family_exporter.py` |
 | Generated wiki references | `documentation/menu_reference.md`, `documentation/wiki/Menu-Reference.md` |

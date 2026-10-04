@@ -11,7 +11,7 @@ aggregate contains child jobs for APs, switches, Junos gateways, and SSR
 gateways.
 
 The AP child uses the organization device endpoint. Switch and Junos gateway
-children use site routes from `src/firmware/upgrade_service.py`. SSR children
+children use site routes from `src/operations/execution/firmware/upgrade_service.py`. SSR children
 use the existing organization SSR route. The planner rejects Mist Edge.
 
 ## Source Decision
@@ -32,10 +32,10 @@ organization device endpoint.
 
 | Concern | Location |
 | - | - |
-| Portal routes | `src/upgrade_portal/app/routes/` |
-| Aggregate records | `src/upgrade_portal/runtime/runs.py` |
-| Existing family planning | `src/firmware/upgrade_service.py` |
-| AP organization service | `src/firmware/org_upgrade_service.py` |
+| Portal routes | `src/interfaces/portals/upgrade_portal/app/routes/` |
+| Aggregate records | `src/interfaces/portals/upgrade_portal/runtime/runs.py` |
+| Existing family planning | `src/operations/execution/firmware/upgrade_service.py` |
+| AP organization service | `src/operations/execution/firmware/org_upgrade_service.py` |
 | Browser flow | Jinja templates and `portal.js` |
 | Offline tests | `tests/unit`, `tests/contract`, `tests/integration`, `tests/e2e` |
 

@@ -1,4 +1,4 @@
-"""Unit tests for ``src/org/org_synthetic_probes_manager.py`` (menu 206).
+"""Unit tests for ``src/mist/resources/org/org_synthetic_probes_manager.py`` (menu 206).
 
 Why:
     The synthetic-probe manager mutates a shared org setting on every run,
@@ -18,7 +18,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.org import org_synthetic_probes_manager as ospm
+from src.mist.resources.org import org_synthetic_probes_manager as ospm
 
 logger = logging.getLogger(__name__)  # WHY: keep test log records on the module logger.
 
@@ -1045,7 +1045,7 @@ def test_load_probe_sources_threads_ensure_fresh_result(
         The auto-refresh contract lives at a single choke point: every menu
         206 code path reads the CENR catalogue via ``_load_probe_sources``, so
         that function -- and only that function -- calls
-        ``src.utils.zscaler_catalogue.ensure_fresh`` with the on-disk cenr
+        ``src.foundation.support.utils.zscaler_catalogue.ensure_fresh`` with the on-disk cenr
         path and dict. If a maintainer removes the call, downstream callers
         would silently serve stale (or single-cloud) hostnames until the
         cache was manually rotated. Assert the call signature *and* that the
@@ -2878,7 +2878,9 @@ class TestUs1CenrDedupWarning:
         # override flow that drives the storm in production. Capture WARNING
         # records at module scope so any load-time hook post-1025 also lands
         # in the same buffer.
-        caplog.set_level(logging.WARNING, logger="src.org.org_synthetic_probes_manager")  # scope the capture
+        caplog.set_level(
+            logging.WARNING, logger="src.mist.resources.org.org_synthetic_probes_manager"
+        )  # scope the capture
         for site in sites:  # emulate per-site override loop
             ospm._build_region_probes((probes, cenr), site.get("country_code"))  # triggers WARNING per host pre-1025
 
@@ -2919,7 +2921,9 @@ class TestUs1CenrDedupWarning:
         cenr = self._cenr_with_all_hosts()  # every host has a v3 observation entry
 
         # Act: iterate per-site as in T007.
-        caplog.set_level(logging.WARNING, logger="src.org.org_synthetic_probes_manager")  # capture at module scope
+        caplog.set_level(
+            logging.WARNING, logger="src.mist.resources.org.org_synthetic_probes_manager"
+        )  # capture at module scope
         for site in sites:  # exhaustive iteration to catch any per-site leak
             ospm._build_region_probes((probes, cenr), site.get("country_code"))
 
@@ -2962,7 +2966,9 @@ class TestUs1CenrDedupWarning:
         )
 
         # Act (run 1): fresh dedup set, invoke the load-time hook once.
-        caplog.set_level(logging.WARNING, logger="src.org.org_synthetic_probes_manager")  # capture WARNING+
+        caplog.set_level(
+            logging.WARNING, logger="src.mist.resources.org.org_synthetic_probes_manager"
+        )  # capture WARNING+
         run1_start = len(caplog.records)  # anchor so we can slice run-1 records out later
         warned_cenr_hosts_run1: set[str] = set()  # NEW per-run dedup set per FR-012
         ospm._emit_load_time_cenr_warning(missing_hosts, warned_cenr_hosts_run1)  # single-shot per run
@@ -3056,7 +3062,7 @@ class TestUs1CenrDedupWarning:
         }
 
         # Act (run 1): compute the missing set from run-1 cache, emit once.
-        caplog.set_level(logging.WARNING, logger="src.org.org_synthetic_probes_manager")  # WARNING+
+        caplog.set_level(logging.WARNING, logger="src.mist.resources.org.org_synthetic_probes_manager")  # WARNING+
         run1_start = len(caplog.records)  # anchor to isolate run-1 records
         missing_run1 = ospm._compute_missing_cenr_hosts(  # {host_a} in run 1
             ospm._collect_catalogue_hosts(probes),
@@ -3268,7 +3274,7 @@ class TestUs2CountryCodeDedupWarning:
             gap_set,
         )
         warned_unmapped_codes: set[str] = set()  # fresh per-run dedup state (FR-012)
-        caplog.set_level(logging.WARNING, logger="src.org.org_synthetic_probes_manager")
+        caplog.set_level(logging.WARNING, logger="src.mist.resources.org.org_synthetic_probes_manager")
         start = len(caplog.records)  # snapshot so we ignore prior records
         logger.info(  # BEFORE the load-time emission per Constitution VII
             "test_latam_caribbean_no_warnings: invoking load-time hook (unmapped=%d)",
@@ -3320,7 +3326,7 @@ class TestUs2CountryCodeDedupWarning:
         )
         k_unique = len(unmapped)  # cap for the WARNING count assertion
         warned_unmapped_codes: set[str] = set()  # fresh dedup state (FR-012)
-        caplog.set_level(logging.WARNING, logger="src.org.org_synthetic_probes_manager")
+        caplog.set_level(logging.WARNING, logger="src.mist.resources.org.org_synthetic_probes_manager")
         start = len(caplog.records)  # snapshot to isolate this test's records
         logger.info(  # BEFORE the load-time emission per Constitution VII
             "test_unmapped_country_warning_dedup: invoking hook (unmapped=%d)",
@@ -3376,7 +3382,7 @@ class TestUs2CountryCodeDedupWarning:
         )
 
         # Act (run 1): fresh dedup set, invoke the load-time hook once.
-        caplog.set_level(logging.WARNING, logger="src.org.org_synthetic_probes_manager")  # WARNING+
+        caplog.set_level(logging.WARNING, logger="src.mist.resources.org.org_synthetic_probes_manager")  # WARNING+
         run1_start = len(caplog.records)  # anchor to slice run-1 records later
         warned_unmapped_codes_run1: set[str] = set()  # NEW per-run dedup set per FR-012
         ospm._emit_load_time_country_code_warning(unmapped, warned_unmapped_codes_run1)  # single call

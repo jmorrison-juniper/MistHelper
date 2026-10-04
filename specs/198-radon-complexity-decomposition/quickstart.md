@@ -77,11 +77,11 @@ After all files in a tier are refactored locally, run the full tier-level gate *
 
 ```powershell
 # Worst-offender files must have NO D/E/F-grade blocks
-python -m radon cc -n D src\websocket src\ui\tui.py src\ssh\ssh_runner.py src\auth\interactive_session.py src\gateway\gateway_override_analyzer.py
+python -m radon cc -n D src\mist\realtime\websocket src\interfaces\visualization\ui\tui.py src\operations\execution\ssh\ssh_runner.py src\mist\access\auth\interactive_session.py src\mist\resources\gateway\gateway_override_analyzer.py
 # expect: NO OUTPUT
 
 # Same files must have NO C-grade blocks either
-python -m radon cc -n C src\websocket src\ui\tui.py src\ssh\ssh_runner.py src\auth\interactive_session.py src\gateway\gateway_override_analyzer.py
+python -m radon cc -n C src\mist\realtime\websocket src\interfaces\visualization\ui\tui.py src\operations\execution\ssh\ssh_runner.py src\mist\access\auth\interactive_session.py src\mist\resources\gateway\gateway_override_analyzer.py
 # expect: NO OUTPUT
 
 # Full local quality gates

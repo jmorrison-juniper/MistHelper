@@ -13,7 +13,7 @@ with or without the repair, and it would prove nothing.
 
 import pytest
 
-from src.utils.menu_entry import MenuEntry
+from src.foundation.support.utils.menu_entry import MenuEntry
 from web_portal.menu_registry import build_static_menu_actions
 from web_portal.services.operation import OperationExecutor
 

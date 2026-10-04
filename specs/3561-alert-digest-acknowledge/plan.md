@@ -6,7 +6,7 @@
 
 ## Summary
 
-Add menu 280 as a safe alert digest and menu 281 as a destructive alarm acknowledgement path. The implementation uses a new `src/reports/alert_digest/` package with a Mist API client, pure model logic, and an operation class. The integration pull request wires the two menu entries from `specs/3561-alert-digest-acknowledge/wiring.md`.
+Add menu 280 as a safe alert digest and menu 281 as a destructive alarm acknowledgement path. The implementation uses a new `src/mist/intelligence/reports/alert_digest/` package with a Mist API client, pure model logic, and an operation class. The integration pull request wires the two menu entries from `specs/3561-alert-digest-acknowledge/wiring.md`.
 
 ## Technical Context
 
@@ -61,7 +61,7 @@ specs/3561-alert-digest-acknowledge/
 ### Source Code (repository root)
 
 ```text
-src/reports/alert_digest/
+src/mist/intelligence/reports/alert_digest/
 ├── __init__.py
 ├── client.py
 ├── model.py
@@ -76,7 +76,7 @@ tests/unit/reports/alert_digest/
 └── test_alert_digest_operation.py
 ```
 
-**Structure Decision**: Use one new nested package under `src/reports/alert_digest/` and one new matching test package. The fleet contract forbids this branch from editing integration-owned files. Menu registration, registry category changes, primary key strategies, generated menu reference changes, and README changes are deferred to the integration pull request and recorded in `wiring.md`.
+**Structure Decision**: Use one new nested package under `src/mist/intelligence/reports/alert_digest/` and one new matching test package. The fleet contract forbids this branch from editing integration-owned files. Menu registration, registry category changes, primary key strategies, generated menu reference changes, and README changes are deferred to the integration pull request and recorded in `wiring.md`.
 
 ## Phase 0 Research Summary
 

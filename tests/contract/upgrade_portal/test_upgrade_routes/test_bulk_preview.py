@@ -9,7 +9,7 @@ import pytest
 from flask import Flask
 from flask.testing import FlaskClient
 
-from src.upgrade_portal.runtime import identity
+from src.interfaces.portals.upgrade_portal.runtime import identity
 
 ORG_ID = "00000000-0000-0000-0000-0000000000aa"
 SITE_A = "00000000-0000-0000-0000-0000000000bb"

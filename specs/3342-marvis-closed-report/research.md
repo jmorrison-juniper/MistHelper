@@ -11,11 +11,11 @@ source, so a reviewer can repeat the check.
 
 | Source | What it gives |
 | - | - |
-| `src/marvis/actions/model.py` at `origin/main` 3cd54e47 | The status catalog and the `is_open` rule. |
-| `src/marvis/actions/selection.py` at 3cd54e47 | The mode constants, the tables, and the answer grammar. |
-| `src/marvis/actions/operation.py` at 3cd54e47 | The run flow, the stop lines, and the export step. |
+| `src/mist/intelligence/marvis/actions/model.py` at `origin/main` 3cd54e47 | The status catalog and the `is_open` rule. |
+| `src/mist/intelligence/marvis/actions/selection.py` at 3cd54e47 | The mode constants, the tables, and the answer grammar. |
+| `src/mist/intelligence/marvis/actions/operation.py` at 3cd54e47 | The run flow, the stop lines, and the export step. |
 | `web_portal/services/operation.py` at 3cd54e47 | The six portal controls of menu 270 and the run status rules. |
-| `src/refactors/sqlite_database_writer.py` at 3cd54e47 | The SQLite write mode for a `natural_pk` table. |
+| `src/foundation/support/refactors/sqlite_database_writer.py` at 3cd54e47 | The SQLite write mode for a `natural_pk` table. |
 | `data/OrgMarvisActions.csv` of 2026-09-24T08:23:31Z | The live export of the lab organization. |
 
 ## R1. The current modes and the open rule

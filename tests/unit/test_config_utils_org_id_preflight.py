@@ -15,7 +15,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.config import config_utils  # WHY: patch the module-global SDK reference without relying on sys.modules.
+from src.foundation.runtime.config import (
+    config_utils,
+)  # WHY: patch the module-global SDK reference without relying on sys.modules.
 
 ConfigUtils = config_utils.ConfigUtils  # WHY: retain the direct class alias used throughout these focused tests.
 

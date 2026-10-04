@@ -59,7 +59,7 @@ The existing pip configuration read remains necessary when uv performs installat
 Interpreter-adjacent searches and module searches change the required discovery rule.
 Automatic uv installation changes dependencies.
 
-**Evidence**: `scripts/bootstrap_worktree.py` and the interpreter option in `src/bootstrap/package_installer.py`.
+**Evidence**: `scripts/bootstrap_worktree.py` and the interpreter option in `src/foundation/runtime/bootstrap/package_installer.py`.
 Installed `uv 0.11.8` help confirms the `--python` and `--requirements` options.
 
 ## 3. Child-only uv settings

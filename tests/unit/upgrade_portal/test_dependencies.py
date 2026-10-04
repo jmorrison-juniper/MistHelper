@@ -14,10 +14,10 @@ from unittest.mock import patch
 
 import pytest
 
-from src.upgrade_portal.app.config import ArangoSettings, RedisSettings
-from src.upgrade_portal.runtime import dependencies
-from src.upgrade_portal.runtime.containers import ContainerState
-from src.upgrade_portal.runtime.dependencies import (
+from src.interfaces.portals.upgrade_portal.app.config import ArangoSettings, RedisSettings
+from src.interfaces.portals.upgrade_portal.runtime import dependencies
+from src.interfaces.portals.upgrade_portal.runtime.containers import ContainerState
+from src.interfaces.portals.upgrade_portal.runtime.dependencies import (
     AUTOSTART_VARIABLE,
     DOCUMENT_STORE_KEY,
     LOCK_STORE_KEY,
@@ -259,14 +259,17 @@ class TestSigninPanel:
 
     def test_dependency_rows_returns_an_empty_list_on_any_fault(self) -> None:
         """An operator who cannot sign in cannot repair anything, so the form always renders."""
-        from src.upgrade_portal.app.routes.auth import dependency_rows
+        from src.interfaces.portals.upgrade_portal.app.routes.auth import dependency_rows
 
-        with patch("src.upgrade_portal.app.routes.auth.load_settings", side_effect=RuntimeError("no settings")):
+        with patch(
+            "src.interfaces.portals.upgrade_portal.app.routes.auth.load_settings",
+            side_effect=RuntimeError("no settings"),
+        ):
             assert dependency_rows() == []
 
     def test_signin_context_marks_an_unhealthy_report(self) -> None:
         """The banner tone comes from this flag, so a down service must set it false."""
-        from src.upgrade_portal.app.routes import auth
+        from src.interfaces.portals.upgrade_portal.app.routes import auth
 
         rows: list[dict[str, Any]] = [{"key": "k", "label": "L", "address": "a:1", "state": "down", "detail": "d"}]
         with (

@@ -5,7 +5,7 @@
 ## Design
 
 1. Add one trailing space to each of the four `content` values in section 12
-   of `src/upgrade_portal/app/assets/static/css/portal.css`.
+   of `src/interfaces/portals/upgrade_portal/app/assets/static/css/portal.css`.
 2. Extend the comment above `.flash-item::before`. The comment states why the
    space exists and why the flex items keep their look.
 

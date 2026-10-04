@@ -5,7 +5,7 @@ import datetime
 from concurrent import futures
 from types import SimpleNamespace
 
-from src.refactors.serial_cc.global_assignments_builder import GlobalAssignmentsBuilderService
+from src.foundation.support.refactors.serial_cc.global_assignments_builder import GlobalAssignmentsBuilderService
 
 
 def test_builder_populates_common_aliases_and_symbols():

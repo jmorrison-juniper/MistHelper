@@ -7,7 +7,7 @@ from unittest.mock import ANY, MagicMock  # Assert control flow without touching
 import pytest  # Provide the monkeypatch fixture used by the flow test.
 
 import MistHelper  # Use the public menu surface that option 92 exposes.
-from src.device.virtual_chassis import VCIODeps  # Build the dependency bundle used by the manager.
+from src.mist.resources.device.virtual_chassis import VCIODeps  # Build the dependency bundle used by the manager.
 
 
 def test_convert_virtual_chassis_requires_preflight_and_dry_run(monkeypatch: pytest.MonkeyPatch) -> None:

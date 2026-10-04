@@ -17,9 +17,11 @@ from unittest.mock import MagicMock, patch  # WHY: MagicMock builds the doubles,
 
 import pytest  # WHY: the fixtures and the raises helper come from pytest.
 
-from src.config.source_dependency_resolver import SourceDependencyResolver as _MH  # WHY: test the source resolver.
-from src.refactors import wlanradius_timer_manager as wrtm  # WHY: patch the module globals.
-from src.refactors.wlanradius_timer_manager import (  # WHY: the module under test.
+from src.foundation.runtime.config.source_dependency_resolver import (
+    SourceDependencyResolver as _MH,
+)  # WHY: test the source resolver.
+from src.foundation.support.refactors import wlanradius_timer_manager as wrtm  # WHY: patch the module globals.
+from src.foundation.support.refactors.wlanradius_timer_manager import (  # WHY: the module under test.
     WLANRadiusTimerManager,
 )
 

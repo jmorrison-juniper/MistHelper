@@ -1,4 +1,4 @@
-"""Unit tests for src/ui/layout/layout_builder.py."""
+"""Unit tests for src/interfaces/visualization/ui/layout/layout_builder.py."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 from rich.console import Console
 
-from src.ui.layout.layout_builder import (
+from src.interfaces.visualization.ui.layout.layout_builder import (
     _HELP_TEXT_TABLE,
     FIXED_PANEL_HEIGHT,
     OUTPUT_PANEL_HEIGHT,

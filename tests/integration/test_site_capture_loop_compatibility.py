@@ -2,7 +2,7 @@
 
 from unittest.mock import MagicMock
 
-from src.capture.site_capture_loop import SiteCaptureLoopRunner
+from src.operations.execution.capture.site_capture_loop import SiteCaptureLoopRunner
 
 
 def test_site_capture_loop_runner_stops_on_keyboard_interrupt() -> None:

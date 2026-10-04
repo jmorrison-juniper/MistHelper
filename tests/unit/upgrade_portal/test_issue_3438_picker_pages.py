@@ -22,8 +22,8 @@ from typing import Any
 import pytest
 from mistapi.__api_response import APIResponse
 
-from src.upgrade_portal.app.routes import select
-from src.upgrade_portal.runtime.cloud_cache import CloudReadCache
+from src.interfaces.portals.upgrade_portal.app.routes import select
+from src.interfaces.portals.upgrade_portal.runtime.cloud_cache import CloudReadCache
 from tests.support.sdk_pages import HTML_TYPE, JSON_TYPE, PagedSession, build_sdk_answer
 
 ORG_ID = "org-3438"  # One organization for every read of this file.

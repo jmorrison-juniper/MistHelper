@@ -4,20 +4,20 @@
 
 This file records each design decision, the reason for it, and the options that the design rejected. The SDK facts come from `mistapi` 0.64.0 in the worktree virtual environment.
 
-## R-01: Put the engine and the blueprint in `src/websocket_streams/`
+## R-01: Put the engine and the blueprint in `src/mist/realtime/websocket_streams/`
 
-**Decision**: Put the catalog, the checks, the sessions, the runners, and the blueprint in one new package `src/websocket_streams/`. The blueprint carries its own `templates/` and `static/` folders.
+**Decision**: Put the catalog, the checks, the sessions, the runners, and the blueprint in one new package `src/mist/realtime/websocket_streams/`. The blueprint carries its own `templates/` and `static/` folders.
 
 **Rationale**:
 
 - The lint gates do not read the `web_portal/` folder. The new code opens network connections and runs device commands, so the gates must read it.
-- The `src/upgrade_portal/` package already ships a Flask app with templates and static files. Hatch packs every file in `src/`, so the wheel holds the page files.
+- The `src/interfaces/portals/upgrade_portal/` package already ships a Flask app with templates and static files. Hatch packs every file in `src/`, so the wheel holds the page files.
 - The portal folders `web_portal/routes/` and `web_portal/templates/` hold 7 and 5 children. A blueprint with its own folders adds no child to them.
 
 **Alternatives rejected**:
 
 - `web_portal/routes/websockets.py` with a template in `web_portal/templates/`. The gates skip this code, and the folders pass the Five-Item limit.
-- A nested package in `src/websocket/`. That package holds 7 children, and its `__init__.py` imports the CLI manager.
+- A nested package in `src/mist/realtime/websocket/`. That package holds 7 children, and its `__init__.py` imports the CLI manager.
 
 ## R-02: Use the SDK WebSocket client for all 18 channels
 

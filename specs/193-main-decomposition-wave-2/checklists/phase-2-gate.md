@@ -5,8 +5,8 @@ Scope: T010/T011/T012/T013/T013A/T013B/T014/T015/T016/T017/T018
 
 ## Code Extraction and Delegation
 
-- Extracted Marvis troubleshooting logic from `MistHelper.py` into `src/troubleshooting/marvis_troubleshoot_utils.py`.
-- Extracted SSH runner manager logic from `MistHelper.py` into `src/ssh/ssh_runner_manager.py`.
+- Extracted Marvis troubleshooting logic from `MistHelper.py` into `src/mist/intelligence/troubleshooting/marvis_troubleshoot_utils.py`.
+- Extracted SSH runner manager logic from `MistHelper.py` into `src/operations/execution/ssh/ssh_runner_manager.py`.
 - Updated `MistHelper.py` to keep orchestration/delegation for menu operations `139`, `175`, and `176`.
 - Preserved existing menu mapping IDs and user-facing descriptions.
 

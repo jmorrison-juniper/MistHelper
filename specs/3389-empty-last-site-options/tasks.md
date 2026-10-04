@@ -14,7 +14,7 @@
 
 ## Phase 2: The change
 
-- [x] T004 Add `src/upgrade_portal/upgrade/org_site_records.py`.
+- [x] T004 Add `src/interfaces/portals/upgrade_portal/upgrade/org_site_records.py`.
 - [x] T005 Change `_aggregate_option_record`, and add `_site_labels`.
 - [x] T006 Run the unit tests and the contract tests green. The two contract
   files gave 44 passed. One test of issue #3383 emptied the first site of its

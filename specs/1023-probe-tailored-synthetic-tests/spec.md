@@ -6,7 +6,7 @@
 
 **Status**: Draft
 
-**Input**: User description: "Menu 206 (org Zscaler synthetic-probes manager) currently emits `https://<host>` targets for every Zscaler CENR hostname in the catalogue, including VPN initiators (`*-vpn.zscaler.net`). VPN initiators do not answer HTTPS — they answer IKE/IPsec on UDP 500/4500. A real Marvis-mini pcap capture confirms the failure: `chi1-2-vpn.zscaler.net` receives 8× TCP SYN retries on port 443 with zero SYN+ACK response, while `chi1-2.sme.zscaler.net` (the proxy pair) completes TLS cleanly in the same trace. Root cause: (1) `src/utils/zscaler_probe.py` only probes TCP:{80,443,8080} with no UDP path; (2) `src/org/org_synthetic_probes_manager.py::_probe_target` builds the Mist `target` URL strictly from the catalogue's declared `probe.protocol` — never from any live observation."
+**Input**: User description: "Menu 206 (org Zscaler synthetic-probes manager) currently emits `https://<host>` targets for every Zscaler CENR hostname in the catalogue, including VPN initiators (`*-vpn.zscaler.net`). VPN initiators do not answer HTTPS — they answer IKE/IPsec on UDP 500/4500. A real Marvis-mini pcap capture confirms the failure: `chi1-2-vpn.zscaler.net` receives 8× TCP SYN retries on port 443 with zero SYN+ACK response, while `chi1-2.sme.zscaler.net` (the proxy pair) completes TLS cleanly in the same trace. Root cause: (1) `src/foundation/support/utils/zscaler_probe.py` only probes TCP:{80,443,8080} with no UDP path; (2) `src/mist/resources/org/org_synthetic_probes_manager.py::_probe_target` builds the Mist `target` URL strictly from the catalogue's declared `probe.protocol` — never from any live observation."
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -28,7 +28,7 @@ A NOC engineer runs Menu 206 for an org whose Zscaler CENR catalogue includes VP
 
 ### User Story 2 - UDP reachability testing in the probe layer (Priority: P1)
 
-A NOC engineer or a scheduled cache-refresh job invokes the Zscaler catalogue refresh (TTL-triggered). Today `src/utils/zscaler_probe.py` only exercises TCP:{80,443,8080}; VPN initiators appear "dead" and get flagged for removal or continue to get HTTPS-shaped targets. The engineer needs the probe layer to attempt IKE/IPsec on UDP/500 and UDP/4500 for endpoints where UDP is expected (VPN role hint or hostname pattern) OR where every TCP port came back dead, so the resulting observation record accurately describes which protocol the host actually answers on.
+A NOC engineer or a scheduled cache-refresh job invokes the Zscaler catalogue refresh (TTL-triggered). Today `src/foundation/support/utils/zscaler_probe.py` only exercises TCP:{80,443,8080}; VPN initiators appear "dead" and get flagged for removal or continue to get HTTPS-shaped targets. The engineer needs the probe layer to attempt IKE/IPsec on UDP/500 and UDP/4500 for endpoints where UDP is expected (VPN role hint or hostname pattern) OR where every TCP port came back dead, so the resulting observation record accurately describes which protocol the host actually answers on.
 
 **Why this priority**: Without a UDP capability in the probe layer there is no factual source for the target-tailoring logic in User Story 1. This story delivers the observation; Story 1 consumes it.
 
@@ -116,7 +116,7 @@ An operator refreshes the Zscaler catalogue cache (via TTL expiration or explici
 - The Mist API's `custom_probes[i].target` field accepts a bare `host:port` string (no `scheme://` prefix) for non-HTTP checks. This has been confirmed by the operator based on prior manual testing; this spec is written on that assumption.
 - A single UDP datagram received on the probe socket is sufficient evidence of "open" for our purposes. Validating IKE cookie echo semantics (i.e. distinguishing a real IKE responder from an intermediate ICMP-unreachable reply) is out of scope; the pcap ground truth is that VPN initiators do reply.
 - IKE_SA_INIT cookie payload construction can be done from stdlib `struct` alone — no cryptographic material is exchanged, only header framing sufficient for the responder to recognise "this looks like IKE" and reply.
-- The TTL-based cache refresh in `src/utils/zscaler_catalogue.py` is the correct integration point for probing and persisting observations. No new refresh trigger is required.
+- The TTL-based cache refresh in `src/foundation/support/utils/zscaler_catalogue.py` is the correct integration point for probing and persisting observations. No new refresh trigger is required.
 - The two JSON cache files (`data/zscaler_cenr_hostnames.json` and `data/zscaler_client_connector_probes.json`) are the sole persistence surface for observations. No database schema change is required.
 - The existing WARN-level logger (`logging.warning(...)`) reaches the same operator-visible sink as other Menu 206 warnings. No new log routing is introduced.
 - "Backward compatibility" for the cache file schema means: a cache file WITHOUT observation fields loads cleanly on the new build. Forward compatibility (older MistHelper reading a newer file) is NOT required — mixed-version fleets are not supported in this codebase.

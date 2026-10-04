@@ -58,9 +58,9 @@ Menu 276 now passes `api_function_name="orgSecurityPostureChecklist"`, so the re
 
 - `python -m py_compile` passed for each edited Python file.
 - `python -m ruff check .` passed.
-- `python -m black --check MistHelper.py src/utils/operation_registry.py src/refactors/endpoint_primary_key_strategies.py web_portal/services/operation.py web_portal/menu_registry.py` passed.
+- `python -m black --check MistHelper.py src/foundation/support/utils/operation_registry.py src/foundation/support/refactors/endpoint_primary_key_strategies.py web_portal/services/operation.py web_portal/menu_registry.py` passed.
 - `python -m mypy src/ MistHelper.py wsgi.py --config-file pyproject.toml` passed.
 - `python -m pytest tests/unit/test_menu_entry_metadata.py tests/guardrails tests/unit/utils tests/unit/web_portal -q --timeout=120` passed.
 - `python MistHelper.py --help` passed.
 - `symbol-diff --base origin/main MistHelper.py` reported no lost names. It reported the six added public handler imports.
-- `python -m radon cc MistHelper.py src/utils/operation_registry.py web_portal/services/operation.py -j | complexity-gate --max 10` passed.
+- `python -m radon cc MistHelper.py src/foundation/support/utils/operation_registry.py web_portal/services/operation.py -j | complexity-gate --max 10` passed.

@@ -1,10 +1,10 @@
-"""Wave 4 P2 coverage for src/refactors/service_ping_launcher.py (initiative #1018).
+"""Wave 4 P2 coverage for src/foundation/support/refactors/service_ping_launcher.py (initiative #1018).
 
 Covers `ServicePingLauncher` construction plus every helper method and every
 branch of `launch()` (happy path, exception path via _handle_fatal_error).
 MistHelper module attributes are monkeypatched with MagicMock doubles, and
 `configure_service_ping_manager_dependencies` / `ServicePingManager` inside
-`src.websocket.service_ping_manager` are monkeypatched so no real WebSocket
+`src.mist.realtime.websocket.service_ping_manager` are monkeypatched so no real WebSocket
 transport or MistHelper import chain executes. No source edits, no live I/O.
 """
 
@@ -16,7 +16,7 @@ from unittest.mock import MagicMock  # WHY: FR-008 mandates MagicMock(spec=...) 
 
 import pytest  # WHY: monkeypatch/caplog fixtures.
 
-from src.refactors.service_ping_launcher import (  # WHY: SUT + helper direct imports.
+from src.foundation.support.refactors.service_ping_launcher import (  # WHY: SUT + helper direct imports.
     ServicePingLauncher,
     _resolve_runtime_dependencies,
 )
@@ -50,14 +50,14 @@ def wired_deps(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
 
     configure_mock = MagicMock(name="configure_service_ping_manager_dependencies")  # WHY: intercept wire call.
     monkeypatch.setattr(
-        "src.websocket.service_ping_manager.configure_service_ping_manager_dependencies",
+        "src.mist.realtime.websocket.service_ping_manager.configure_service_ping_manager_dependencies",
         configure_mock,
     )  # WHY: patch the actual module attribute so lazy `from ... import` sees the mock.
 
     manager_instance = MagicMock(name="ServicePingManager_instance")  # WHY: instance returned by class call.
     manager_class_mock = MagicMock(name="ServicePingManager_class", return_value=manager_instance)  # WHY: class handle.
     monkeypatch.setattr(
-        "src.websocket.service_ping_manager.ServicePingManager", manager_class_mock
+        "src.mist.realtime.websocket.service_ping_manager.ServicePingManager", manager_class_mock
     )  # WHY: swap class in target module so build_manager instantiates our mock.
 
     return {  # WHY: expose everything needed for post-condition assertions.

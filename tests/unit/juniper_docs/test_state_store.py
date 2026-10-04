@@ -13,8 +13,8 @@ from typing import Any
 
 import pytest
 
-from src.juniper_docs.harvest.state_store import HarvestStateStore, StateStoreError
-from src.juniper_docs.models import DocumentType, InventoryRecord
+from src.mist.intelligence.juniper_docs.harvest.state_store import HarvestStateStore, StateStoreError
+from src.mist.intelligence.juniper_docs.models import DocumentType, InventoryRecord
 
 
 def _store(tmp_path: Path) -> HarvestStateStore:

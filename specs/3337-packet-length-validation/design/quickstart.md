@@ -68,7 +68,7 @@ Keep its branch data under `data/issue-3337/`.
 ```bash
 rtk proxy env -u MIST_APITOKEN -u MIST_API_TOKEN COVERAGE_FILE=data/issue-3337/.coverage \
   .venv/bin/python -m coverage run --branch \
-  --source=src.capture._packet_capture_prompts,src.refactors.serial_cc.start_site_client_capture_wireless \
+  --source=src.operations.execution.capture._packet_capture_prompts,src.foundation.support.refactors.serial_cc.start_site_client_capture_wireless \
   -m pytest \
   tests/unit/capture/test_multi_ap_scan_workflow.py::test_packet_length_prompt_limits \
   tests/unit/capture/test_multi_ap_scan_workflow.py::test_packet_length_prompt_defaults \
@@ -128,7 +128,7 @@ logging.info("Parsing measured coverage report")  # State the transformation bef
 report = json.loads(report_text)  # Require valid JSON from the focused run.
 logging.debug("Parsed measured files %s", len(report["files"]))  # Confirm the measured scope.
 logging.info("Selecting actual validation regions")  # State the bounded measurement scope.
-regions = (("src/capture/_packet_capture_prompts.py", "prompt_max_packet_length"), ("src/refactors/serial_cc/start_site_client_capture_wireless.py", "_prompt_bounded_int"), ("src/refactors/serial_cc/start_site_client_capture_wireless.py", "_collect_bounded_ints"))  # Select the existing validation regions.
+regions = (("src/operations/execution/capture/_packet_capture_prompts.py", "prompt_max_packet_length"), ("src/foundation/support/refactors/serial_cc/start_site_client_capture_wireless.py", "_prompt_bounded_int"), ("src/foundation/support/refactors/serial_cc/start_site_client_capture_wireless.py", "_collect_bounded_ints"))  # Select the existing validation regions.
 logging.debug("Selected validation regions %s", len(regions))  # Confirm that all three regions remain required.
 for filename, method in regions:  # Report each region separately.
     logging.info("Reading current source %s", filename)  # Identify the region owner before reading it.
@@ -191,8 +191,8 @@ The supplied final adjacent run passed 4373 cases with zero failures or skips.
 
 ```bash
 rtk proxy .venv/bin/python -m py_compile MistHelper.py \
-  src/capture/_packet_capture_prompts.py \
-  src/refactors/serial_cc/start_site_client_capture_wireless.py \
+  src/operations/execution/capture/_packet_capture_prompts.py \
+  src/foundation/support/refactors/serial_cc/start_site_client_capture_wireless.py \
   tests/unit/capture/test_multi_ap_scan_workflow.py
 rtk proxy .venv/bin/python -m ruff check .
 rtk proxy .venv/bin/python -m black --check --diff .

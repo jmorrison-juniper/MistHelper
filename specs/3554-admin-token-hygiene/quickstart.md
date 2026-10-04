@@ -34,11 +34,11 @@ Run the smallest checks that cover the changed implementation files:
 
 ```powershell
 Set-Location "C:\Users\jmorrison\mh-fleet\3554-admin-token-hygiene"
-rtk .venv\Scripts\python.exe -m py_compile src\reports\admin_token_hygiene\client.py
-rtk .venv\Scripts\python.exe -m py_compile src\reports\admin_token_hygiene\model.py
-rtk .venv\Scripts\python.exe -m py_compile src\reports\admin_token_hygiene\operation.py
-rtk .venv\Scripts\python.exe -m ruff check src\reports\admin_token_hygiene tests\unit\reports\admin_token_hygiene
-rtk .venv\Scripts\python.exe -m black --check src\reports\admin_token_hygiene tests\unit\reports\admin_token_hygiene
+rtk .venv\Scripts\python.exe -m py_compile src\mist\intelligence\reports\admin_token_hygiene\client.py
+rtk .venv\Scripts\python.exe -m py_compile src\mist\intelligence\reports\admin_token_hygiene\model.py
+rtk .venv\Scripts\python.exe -m py_compile src\mist\intelligence\reports\admin_token_hygiene\operation.py
+rtk .venv\Scripts\python.exe -m ruff check src\mist\intelligence\reports\admin_token_hygiene tests\unit\reports\admin_token_hygiene
+rtk .venv\Scripts\python.exe -m black --check src\mist\intelligence\reports\admin_token_hygiene tests\unit\reports\admin_token_hygiene
 ```
 
 Expected result:

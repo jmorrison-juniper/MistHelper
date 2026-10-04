@@ -19,8 +19,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-import src.firmware.firmware_manager as fm_mod
-from src.firmware.firmware_manager import FirmwareUpgradeStatusChecker
+import src.operations.execution.firmware.firmware_manager as fm_mod
+from src.operations.execution.firmware.firmware_manager import FirmwareUpgradeStatusChecker
 
 
 class _FakeResponse:

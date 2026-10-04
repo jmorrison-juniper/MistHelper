@@ -25,7 +25,7 @@ No virtual environment was present in this worktree.
 **Measured**: The worktree was `C:\Users\jmorrison\misthelper-opt2-flatten`.
 The branch was `perf/2485-flatten-nested-fields`.
 The baseline source was the unmodified branch before source edits.
-The candidate source contains the change in `src\data\data_processing_utils.py`.
+The candidate source contains the change in `src\foundation\models\data\data_processing_utils.py`.
 Raw artifacts use the `opt2_flatten_` prefix in the session artifact folder.
 
 ## 3. Benchmark methodology
@@ -65,9 +65,9 @@ It passed 22 tests in 3.09 seconds.
 
 | Rank and status | File, symbol, and lines | Measured cost and frequency | Expected gain | Risk and maintenance cost | Confidence |
 | --- | --- | --- | --- | --- | --- |
-| 1, Measured | `src\data\data_processing_utils.py`, `_parse_stringified_value()` | 0.162 s cumulative in one profiled pass, 13,000 calls | Medium | Low risk if parse order stays JSON first | High |
-| 2, Measured | `src\data\data_processing_utils.py`, `_flatten_value_into()` | 0.136 s cumulative in one profiled pass, 13,000 calls | Medium | Medium risk from key order and empty container behavior | High |
-| 3, Measured | `src\data\data_processing_utils.py`, `flatten_dict()` | 0.085 s cumulative in one profiled pass, 8,000 calls | Medium | Medium risk from duplicate flattened keys | Medium |
+| 1, Measured | `src\foundation\models\data\data_processing_utils.py`, `_parse_stringified_value()` | 0.162 s cumulative in one profiled pass, 13,000 calls | Medium | Low risk if parse order stays JSON first | High |
+| 2, Measured | `src\foundation\models\data\data_processing_utils.py`, `_flatten_value_into()` | 0.136 s cumulative in one profiled pass, 13,000 calls | Medium | Medium risk from key order and empty container behavior | High |
+| 3, Measured | `src\foundation\models\data\data_processing_utils.py`, `flatten_dict()` | 0.085 s cumulative in one profiled pass, 8,000 calls | Medium | Medium risk from duplicate flattened keys | Medium |
 | 4, Measured | Standard library `ast.literal_eval()` | 0.071 s cumulative in one profiled pass, 2,000 calls | Low | High behavior risk if removed | High |
 
 ## 6. Recommended optimizations
@@ -91,7 +91,7 @@ The guard returns the string unchanged as before.
 
 | Field | Required content |
 | --- | --- |
-| Change ID and location | FLAT-2485 in `src\data\data_processing_utils.py`, `flatten_dict()`, `_flatten_dict_into()`, `_flatten_list_into()`, `_flatten_entry()`, `_parse_stringified_value()`, and `_flatten_value_into()`. |
+| Change ID and location | FLAT-2485 in `src\foundation\models\data\data_processing_utils.py`, `flatten_dict()`, `_flatten_dict_into()`, `_flatten_list_into()`, `_flatten_entry()`, `_parse_stringified_value()`, and `_flatten_value_into()`. |
 | Evidence | Baseline and candidate JSON files under the session artifact folder. Profiles are `opt2_flatten_baseline_profile.pstats` and `opt2_flatten_candidate_profile.pstats`. |
 | Root cause | Recursive flattening allocated temporary pair lists and dictionaries before merge. Parse guards ran for every field. |
 | Change | Write recursive output directly into the target dictionary. Cache hot static method lookups. Replace tuple `startswith()` with an empty check plus first-character test. |
@@ -130,11 +130,11 @@ No speed-versus-memory trade-off was accepted.
 | --- | --- | --- | --- |
 | Baseline unit tests | `rtk python -m pytest tests\unit\dataproc\test_data_processing_utils.py -q` | 22 passed | Baseline run before source edits |
 | Candidate unit tests | `rtk python -m pytest tests\unit\dataproc\test_data_processing_utils.py -q` | 25 passed | Covers target module |
-| Compile | `rtk python -m py_compile src\data\data_processing_utils.py tests\unit\dataproc\test_data_processing_utils.py` | Passed | Python 3.13.3 only |
-| Ruff | `rtk python -m ruff check src\data\data_processing_utils.py tests\unit\dataproc\test_data_processing_utils.py` | Passed | Target files only |
-| Black | `rtk python -m black --check src\data\data_processing_utils.py tests\unit\dataproc\test_data_processing_utils.py` | Passed | Target files only |
-| Pydocstyle | `rtk python -m pydocstyle src\data\data_processing_utils.py tests\unit\dataproc\test_data_processing_utils.py` | Passed | Target files only |
-| Bandit | `rtk python -m bandit -q src\data\data_processing_utils.py` | Passed with existing nosec notices | Target non-test file only |
+| Compile | `rtk python -m py_compile src\foundation\models\data\data_processing_utils.py tests\unit\dataproc\test_data_processing_utils.py` | Passed | Python 3.13.3 only |
+| Ruff | `rtk python -m ruff check src\foundation\models\data\data_processing_utils.py tests\unit\dataproc\test_data_processing_utils.py` | Passed | Target files only |
+| Black | `rtk python -m black --check src\foundation\models\data\data_processing_utils.py tests\unit\dataproc\test_data_processing_utils.py` | Passed | Target files only |
+| Pydocstyle | `rtk python -m pydocstyle src\foundation\models\data\data_processing_utils.py tests\unit\dataproc\test_data_processing_utils.py` | Passed | Target files only |
+| Bandit | `rtk python -m bandit -q src\foundation\models\data\data_processing_utils.py` | Passed with existing nosec notices | Target non-test file only |
 
 ## 11. Rejected ideas and why they were rejected
 

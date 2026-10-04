@@ -4,8 +4,10 @@ from __future__ import annotations  # Keep annotations lazy for Python 3.13.
 
 import pytest  # The tests assert contract refusals.
 
-from src.websocket_streams.intake.fields.error import StreamRequestError  # Tests verify exact refusal codes.
-from src.websocket_streams.live.terminal.input_queue import TerminalInput  # The tests cover this class.
+from src.mist.realtime.websocket_streams.intake.fields.error import (
+    StreamRequestError,
+)  # Tests verify exact refusal codes.
+from src.mist.realtime.websocket_streams.live.terminal.input_queue import TerminalInput  # The tests cover this class.
 
 
 class FakeClock:

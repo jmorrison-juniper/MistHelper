@@ -13,7 +13,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.wan_vpn_builder import WanVpnBuilder
+from src.operations.wan.wan_vpn_builder import WanVpnBuilder
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -285,15 +285,15 @@ class TestBuildVpnBody:
 class TestFetchProfiles:
     """Test _fetch_profiles API call and sorting."""
 
-    @patch("src.wan_vpn_builder.mistapi.get_all")
-    @patch("src.wan_vpn_builder.mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles")
+    @patch("src.operations.wan.wan_vpn_builder.mistapi.get_all")
+    @patch("src.operations.wan.wan_vpn_builder.mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles")
     def test_profiles_sorted_alphabetically(self, mock_list, mock_get_all, builder, sample_profiles):
         mock_get_all.return_value = list(sample_profiles)
         result = builder._fetch_profiles()
         names = [profile["name"] for profile in result]
         assert names == ["SPOKE01", "SPOKE02", "VREPOL69"]
 
-    @patch("src.wan_vpn_builder.mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles")
+    @patch("src.operations.wan.wan_vpn_builder.mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles")
     def test_api_error_returns_empty(self, mock_list, builder):
         mock_list.side_effect = Exception("API error")
         result = builder._fetch_profiles()
@@ -303,14 +303,14 @@ class TestFetchProfiles:
 class TestFetchExistingVpns:
     """Test _fetch_existing_vpns API call."""
 
-    @patch("src.wan_vpn_builder.mistapi.get_all")
-    @patch("src.wan_vpn_builder.mistapi.api.v1.orgs.vpns.listOrgVpns")
+    @patch("src.operations.wan.wan_vpn_builder.mistapi.get_all")
+    @patch("src.operations.wan.wan_vpn_builder.mistapi.api.v1.orgs.vpns.listOrgVpns")
     def test_returns_all_vpns(self, mock_list, mock_get_all, builder, sample_vpns):
         mock_get_all.return_value = list(sample_vpns)
         result = builder._fetch_existing_vpns()
         assert len(result) == 2
 
-    @patch("src.wan_vpn_builder.mistapi.api.v1.orgs.vpns.listOrgVpns")
+    @patch("src.operations.wan.wan_vpn_builder.mistapi.api.v1.orgs.vpns.listOrgVpns")
     def test_api_error_returns_empty(self, mock_list, builder):
         mock_list.side_effect = Exception("API error")
         result = builder._fetch_existing_vpns()
@@ -320,7 +320,7 @@ class TestFetchExistingVpns:
 class TestCreateVpn:
     """Test _create_vpn API call."""
 
-    @patch("src.wan_vpn_builder.mistapi.api.v1.orgs.vpns.createOrgVpn")
+    @patch("src.operations.wan.wan_vpn_builder.mistapi.api.v1.orgs.vpns.createOrgVpn")
     def test_success_returns_dict(self, mock_create, builder):
         mock_response = MagicMock()
         mock_response.data = {"id": "new-vpn-id", "name": "TestVPN"}
@@ -328,7 +328,7 @@ class TestCreateVpn:
         result = builder._create_vpn({"name": "TestVPN"})
         assert result["id"] == "new-vpn-id"
 
-    @patch("src.wan_vpn_builder.mistapi.api.v1.orgs.vpns.createOrgVpn")
+    @patch("src.operations.wan.wan_vpn_builder.mistapi.api.v1.orgs.vpns.createOrgVpn")
     def test_api_error_returns_none(self, mock_create, builder):
         mock_create.side_effect = Exception("API error")
         result = builder._create_vpn({"name": "TestVPN"})
@@ -413,16 +413,16 @@ class TestDisplayPreview:
 class TestRunWorkflow:
     """Test run() main workflow orchestration."""
 
-    @patch("src.wan_vpn_builder.mistapi.get_all")
-    @patch("src.wan_vpn_builder.mistapi.api.v1.orgs.vpns.createOrgVpn")
-    @patch("src.wan_vpn_builder.mistapi.api.v1.orgs.vpns.listOrgVpns")
-    @patch("src.wan_vpn_builder.mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles")
+    @patch("src.operations.wan.wan_vpn_builder.mistapi.get_all")
+    @patch("src.operations.wan.wan_vpn_builder.mistapi.api.v1.orgs.vpns.createOrgVpn")
+    @patch("src.operations.wan.wan_vpn_builder.mistapi.api.v1.orgs.vpns.listOrgVpns")
+    @patch("src.operations.wan.wan_vpn_builder.mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles")
     def test_no_profiles_exits(self, mock_list_profiles, mock_list_vpns, mock_create, mock_get_all, builder):
         mock_get_all.return_value = []
         builder.run()
         mock_create.assert_not_called()
 
-    @patch("src.wan_vpn_builder.mistapi.api.v1.orgs.vpns.createOrgVpn")
+    @patch("src.operations.wan.wan_vpn_builder.mistapi.api.v1.orgs.vpns.createOrgVpn")
     def test_api_failure_skips_profile_update(self, mock_create, builder, sample_profiles):
         mock_create.side_effect = Exception("API error")
         builder._fetch_profiles = MagicMock(return_value=sample_profiles)
@@ -484,8 +484,8 @@ class TestBuildPortVpnPaths:
 class TestUpdateSingleProfile:
     """Test _update_single_profile API interaction."""
 
-    @patch("src.wan_vpn_builder.mistapi.api.v1.orgs.deviceprofiles.updateOrgDeviceProfile")
-    @patch("src.wan_vpn_builder.mistapi.api.v1.orgs.deviceprofiles.getOrgDeviceProfile")
+    @patch("src.operations.wan.wan_vpn_builder.mistapi.api.v1.orgs.deviceprofiles.updateOrgDeviceProfile")
+    @patch("src.operations.wan.wan_vpn_builder.mistapi.api.v1.orgs.deviceprofiles.getOrgDeviceProfile")
     def test_success(self, mock_get, mock_update, builder):
         mock_response = MagicMock()
         mock_response.data = {
@@ -502,7 +502,7 @@ class TestUpdateSingleProfile:
         assert result is True
         mock_update.assert_called_once()
 
-    @patch("src.wan_vpn_builder.mistapi.api.v1.orgs.deviceprofiles.getOrgDeviceProfile")
+    @patch("src.operations.wan.wan_vpn_builder.mistapi.api.v1.orgs.deviceprofiles.getOrgDeviceProfile")
     def test_api_failure(self, mock_get, builder):
         mock_get.side_effect = Exception("API error")
         assignment = {"role": "hub", "pod": 69}

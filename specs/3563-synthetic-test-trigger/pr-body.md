@@ -51,10 +51,10 @@ This pull request adds the feature-owned package for menu `283`, which triggers 
 
 ## Files
 
-- `src/troubleshooting/synthetic_test_trigger/__init__.py`
-- `src/troubleshooting/synthetic_test_trigger/client.py`
-- `src/troubleshooting/synthetic_test_trigger/models.py`
-- `src/troubleshooting/synthetic_test_trigger/operation.py`
+- `src/mist/intelligence/troubleshooting/synthetic_test_trigger/__init__.py`
+- `src/mist/intelligence/troubleshooting/synthetic_test_trigger/client.py`
+- `src/mist/intelligence/troubleshooting/synthetic_test_trigger/models.py`
+- `src/mist/intelligence/troubleshooting/synthetic_test_trigger/operation.py`
 - `tests/unit/troubleshooting/synthetic_test_trigger/__init__.py`
 - `tests/unit/troubleshooting/synthetic_test_trigger/test_synthetic_test_trigger.py`
 - `specs/3563-synthetic-test-trigger/*`

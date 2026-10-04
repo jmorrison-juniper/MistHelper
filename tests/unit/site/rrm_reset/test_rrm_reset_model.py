@@ -2,7 +2,12 @@
 
 from __future__ import annotations  # WHY: keep annotations lightweight during tests.
 
-from src.site.rrm_reset.model import DEFAULT_SETTLE_SECONDS, RrmPlanDiffBuilder, RrmRunSettings, RrmSettleTime
+from src.mist.resources.site.rrm_reset.model import (
+    DEFAULT_SETTLE_SECONDS,
+    RrmPlanDiffBuilder,
+    RrmRunSettings,
+    RrmSettleTime,
+)
 
 
 def test_rrm_reset_diff_lists_changed_radios_only() -> None:

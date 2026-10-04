@@ -15,7 +15,7 @@ import mistapi
 import mistapi.api.v1.orgs.vpns
 import pytest
 
-from src.wan_vpn_builder import WanVpnBuilder
+from src.operations.wan.wan_vpn_builder import WanVpnBuilder
 
 pytestmark = pytest.mark.integration
 

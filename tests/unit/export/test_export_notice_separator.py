@@ -28,11 +28,11 @@ from unittest.mock import MagicMock  # Record each write call.
 
 import pytest  # Parametrize the platform cases and read the log records.
 
-from src.export.site_config_exporter import SiteConfigExporter  # The menu 69 exporter under test.
-from src.export.site_export_utils import SiteExportUtils  # The menu 73 exporter under test.
+from src.operations.exporting.export.site_config_exporter import SiteConfigExporter  # The menu 69 exporter under test.
+from src.operations.exporting.export.site_export_utils import SiteExportUtils  # The menu 73 exporter under test.
 
-_WLAN_MODULE = "src.export.site_config_exporter"  # The module path and the logger name of menu 69.
-_INSIGHT_MODULE = "src.export.site_export_utils"  # The module path and the logger name of menu 73.
+_WLAN_MODULE = "src.operations.exporting.export.site_config_exporter"  # The module path and the logger name of menu 69.
+_INSIGHT_MODULE = "src.operations.exporting.export.site_export_utils"  # The module path and the logger name of menu 73.
 _WLAN_FILE = "SiteWlans_HQ.csv"  # The bare file name that menu 69 builds for the site "HQ".
 _INSIGHT_FILE = "SiteSleMetricsInsights_HQ.csv"  # The bare file name that menu 73 builds for the site "HQ".
 _WLAN_ROWS = [{"ssid": "B"}, {"ssid": "A"}]  # Two WLAN rows, so the notice shows a count of 2.

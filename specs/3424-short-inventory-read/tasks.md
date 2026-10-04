@@ -28,10 +28,10 @@
 
 ## Phase 3: Implementation
 
-- [x] T008 [US1] [US2] Change `src/upgrade_portal/upgrade/options.py`.
-- [x] T009 [US3] Change `src/upgrade_portal/upgrade/org_site_records.py`.
-- [x] T010 [US1] Change `src/upgrade_portal/app/routes/upgrade.py`.
-- [x] T011 [US3] Change `src/upgrade_portal/app/routes/org_upgrade.py`.
+- [x] T008 [US1] [US2] Change `src/interfaces/portals/upgrade_portal/upgrade/options.py`.
+- [x] T009 [US3] Change `src/interfaces/portals/upgrade_portal/upgrade/org_site_records.py`.
+- [x] T010 [US1] Change `src/interfaces/portals/upgrade_portal/app/routes/upgrade.py`.
+- [x] T011 [US3] Change `src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py`.
 - [x] T012 [US1] [US3] Add the banners to `upgrade/options.html` and
   `upgrade/org_options.html`.
 - [x] T013 Run T003 through T006 green.

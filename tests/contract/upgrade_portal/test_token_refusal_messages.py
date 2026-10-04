@@ -14,7 +14,7 @@ from flask import Flask
 from flask.testing import FlaskClient
 from werkzeug.test import TestResponse
 
-from src.upgrade_portal.runtime import identity
+from src.interfaces.portals.upgrade_portal.runtime import identity
 
 TOKEN_SENTINEL = "fake-3290-token-that-must-not-reach-a-response"
 PASSWORD_SENTINEL = "fake-3290-password-that-must-not-reach-a-response"
@@ -106,7 +106,7 @@ def token_context(
         CLOUD_TOKEN_IDENTITY=cloud.token_identity,
         CLOUD_LOGIN=lambda actor_email, password, host: cloud,
     )
-    caplog.set_level(logging.DEBUG, logger="src.upgrade_portal")
+    caplog.set_level(logging.DEBUG, logger="src.interfaces.portals.upgrade_portal")
     initial_keys = set(identity.SESSION_REGISTRY._sessions)
     try:
         with portal_app.test_client() as client:

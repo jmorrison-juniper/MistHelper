@@ -1,4 +1,4 @@
-"""Unit tests for src.utils.subprocess_runner.SubprocessRunner.
+"""Unit tests for src.foundation.support.utils.subprocess_runner.SubprocessRunner.
 
 Covers the audited dispatch path and every validator branch so that the
 central B404/B603 justification remains trustworthy:
@@ -26,7 +26,7 @@ from unittest.mock import patch  # Stub subprocess.run to avoid real spawn.
 
 import pytest  # Fixtures + expected-exception assertions.
 
-from src.utils.subprocess_runner import (  # System under test + re-exports.
+from src.foundation.support.utils.subprocess_runner import (  # System under test + re-exports.
     CalledProcessError,
     SubprocessError,
     SubprocessRunner,

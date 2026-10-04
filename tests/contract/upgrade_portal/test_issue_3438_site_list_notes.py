@@ -24,8 +24,8 @@ import pytest
 from flask import Flask, template_rendered
 from flask.testing import FlaskClient
 
-from src.upgrade_portal.capture.devices import DeviceRead
-from src.upgrade_portal.runtime import identity
+from src.interfaces.portals.upgrade_portal.capture.devices import DeviceRead
+from src.interfaces.portals.upgrade_portal.runtime import identity
 
 SITE_PAGE_PATH = "/select/site"  # The site picker page, and the multi-site forward post.
 SITES_API_PATH = "/api/sites"  # The site list with the organization in the session.

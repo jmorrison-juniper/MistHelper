@@ -7,7 +7,7 @@
  * name. A file with the brand name in its path would stay untracked.
  *
  * The palette comes from the upgrade capture portal theme at
- * src/upgrade_portal/app/assets/static/css/themes/magenta.css. The two portals
+ * src/interfaces/portals/upgrade_portal/app/assets/static/css/themes/magenta.css. The two portals
  * therefore carry one brand identity. The variable names differ, because each
  * portal names its own tokens, so this file maps the shared palette onto the
  * names that portal.css and dark.css already read here.

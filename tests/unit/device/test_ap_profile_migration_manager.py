@@ -30,14 +30,14 @@ import pytest
 
 # WHY: the module-under-test lives here; the alias `apm_mod` gives short access
 # to module-scope names (helpers, logger) when tests need to patch them.
-from src.device import ap_profile_migration_manager as apm_mod
-from src.device.ap_profile_migration_manager import APProfileMigrationManager
+from src.mist.resources.device import ap_profile_migration_manager as apm_mod
+from src.mist.resources.device.ap_profile_migration_manager import APProfileMigrationManager
 
 logger = logging.getLogger(__name__)  # WHY: keep test log records on the module logger.
 
 # WHY: caplog / patch(...) targets must use the dotted module path so the
 # logger the code writes to matches the logger the test captures on.
-_LOGGER_NAME = "src.device.ap_profile_migration_manager"
+_LOGGER_NAME = "src.mist.resources.device.ap_profile_migration_manager"
 
 
 # ---------------------------------------------------------------------------
@@ -49,7 +49,7 @@ def _sleep_recorder() -> tuple[list[float], Callable[[float], None]]:
     """Build a pacing log and a recorder that accepts the calling thread only.
 
     Why:
-        ``patch("src.device.ap_profile_migration_manager.time.sleep", ...)``
+        ``patch("src.mist.resources.device.ap_profile_migration_manager.time.sleep", ...)``
         replaces the ``sleep`` attribute on the shared ``time`` module,
         because the module under test does a plain ``import time``. The patch
         is therefore process wide. A background thread that another test
@@ -193,10 +193,10 @@ def _sleep_recorder() -> tuple[list[float], Callable[[float], None]]:
     """Return a recording list and a sleep spy scoped to the calling thread.
 
     Why:
-        ``src/device/ap_profile_migration_manager.py`` binds the standard
+        ``src/mist/resources/device/ap_profile_migration_manager.py`` binds the standard
         module with ``import time``, so ``apm_mod.time`` *is* the one shared
         ``time`` module. Both ``patch("time.sleep", ...)`` and
-        ``patch("src.device.ap_profile_migration_manager.time.sleep", ...)``
+        ``patch("src.mist.resources.device.ap_profile_migration_manager.time.sleep", ...)``
         therefore set the attribute process-wide, and every thread that sleeps
         inside the ``with`` block reaches the spy. A daemon thread that an
         earlier test left running (the web portal heartbeat at
@@ -919,7 +919,7 @@ def test_revert_refuses_when_source_profile_deleted_from_org(
             "mistapi.api.v1.sites.devices.updateSiteDevice",
             side_effect=lambda *a, **kw: put_calls.append((a, kw)),
         ),
-        patch("src.analytics.telemetry_emitter.TelemetryEmitter.emit") as mock_emit,
+        patch("src.mist.intelligence.analytics.telemetry_emitter.TelemetryEmitter.emit") as mock_emit,
     ):
         APProfileMigrationManager.revert_ap_profile_migration(session=MagicMock())
 
@@ -980,7 +980,7 @@ def test_revert_skips_missing_ap_and_reports_partial(
         patch.object(APProfileMigrationManager, "_verify_source_profile_exists", return_value=True, create=True),
         patch.object(APProfileMigrationManager, "_confirm_revert", return_value="live", create=True),
         patch.object(APProfileMigrationManager, "_revert_one_ap", side_effect=_revert_side, create=True),
-        patch("src.analytics.telemetry_emitter.TelemetryEmitter.emit") as mock_emit,
+        patch("src.mist.intelligence.analytics.telemetry_emitter.TelemetryEmitter.emit") as mock_emit,
     ):
         APProfileMigrationManager.revert_ap_profile_migration(session=MagicMock())
 
@@ -1044,7 +1044,7 @@ def test_revert_never_touches_aps_not_in_backup(
         patch.object(APProfileMigrationManager, "_confirm_revert", return_value="live", create=True),
         patch("mistapi.api.v1.sites.devices.updateSiteDevice", side_effect=_ok_put),
         patch("time.sleep"),
-        patch("src.analytics.telemetry_emitter.TelemetryEmitter.emit"),
+        patch("src.mist.intelligence.analytics.telemetry_emitter.TelemetryEmitter.emit"),
     ):
         APProfileMigrationManager.revert_ap_profile_migration(session=MagicMock())
 
@@ -1086,7 +1086,7 @@ def test_revert_appends_jsonl_audit_line_via_telemetry_emitter(
         patch.object(APProfileMigrationManager, "_confirm_revert", return_value="live", create=True),
         patch("mistapi.api.v1.sites.devices.updateSiteDevice", side_effect=_ok_put),
         patch("time.sleep"),
-        patch("src.analytics.telemetry_emitter.TelemetryEmitter.emit") as mock_emit,
+        patch("src.mist.intelligence.analytics.telemetry_emitter.TelemetryEmitter.emit") as mock_emit,
     ):
         APProfileMigrationManager.revert_ap_profile_migration(session=MagicMock())
 
@@ -1163,7 +1163,7 @@ def test_us2_end_to_end_with_mocked_mistapi_session(
         patch.object(APProfileMigrationManager, "_verify_source_profile_exists", return_value=True, create=True),
         patch("mistapi.api.v1.sites.devices.updateSiteDevice", side_effect=_ok_put),
         patch("time.sleep"),
-        patch("src.analytics.telemetry_emitter.TelemetryEmitter.emit") as mock_emit,
+        patch("src.mist.intelligence.analytics.telemetry_emitter.TelemetryEmitter.emit") as mock_emit,
     ):
         APProfileMigrationManager.revert_ap_profile_migration(session=MagicMock())
 
@@ -1530,7 +1530,7 @@ def test_migrate_calls_get_rate_limited_delay_once_per_ap(
         patch.object(APProfileMigrationManager, "_pick_ap_device_profile", side_effect=[src, tgt]),
         patch.object(APProfileMigrationManager, "_discover_aps_on_source_profile", return_value=aps),
         patch.object(APProfileMigrationManager, "_reassign_one_ap", side_effect=_track_reassign),
-        patch("src.device.ap_profile_migration_manager.time.sleep"),
+        patch("src.mist.resources.device.ap_profile_migration_manager.time.sleep"),
     ):
         APProfileMigrationManager.migrate_aps_between_device_profiles(session=MagicMock())
 
@@ -1585,7 +1585,7 @@ def test_migrate_429_invalidates_api_usage_cache(
         patch.object(APProfileMigrationManager, "_pick_ap_device_profile", side_effect=[src, tgt]),
         patch.object(APProfileMigrationManager, "_discover_aps_on_source_profile", return_value=aps),
         patch.object(APProfileMigrationManager, "_reassign_one_ap", side_effect=_reassign_maybe_429),
-        patch("src.device.ap_profile_migration_manager.time.sleep"),
+        patch("src.mist.resources.device.ap_profile_migration_manager.time.sleep"),
     ):
         APProfileMigrationManager.migrate_aps_between_device_profiles(session=MagicMock())
 
@@ -1629,7 +1629,7 @@ def test_migrate_hermetic_no_wall_clock_sleep(
         patch.object(APProfileMigrationManager, "_pick_ap_device_profile", side_effect=[src, tgt]),
         patch.object(APProfileMigrationManager, "_discover_aps_on_source_profile", return_value=aps),
         patch.object(APProfileMigrationManager, "_reassign_one_ap", return_value=None),
-        patch("src.device.ap_profile_migration_manager.time.sleep", side_effect=_record_sleep),
+        patch("src.mist.resources.device.ap_profile_migration_manager.time.sleep", side_effect=_record_sleep),
     ):
         APProfileMigrationManager.migrate_aps_between_device_profiles(session=MagicMock())
 
@@ -1680,7 +1680,7 @@ def test_migrate_non_429_still_halts_stop_on_failure(
         patch.object(APProfileMigrationManager, "_pick_ap_device_profile", side_effect=[src, tgt]),
         patch.object(APProfileMigrationManager, "_discover_aps_on_source_profile", return_value=aps),
         patch.object(APProfileMigrationManager, "_reassign_one_ap", side_effect=_reassign_500_on_42),
-        patch("src.device.ap_profile_migration_manager.time.sleep"),
+        patch("src.mist.resources.device.ap_profile_migration_manager.time.sleep"),
     ):
         APProfileMigrationManager.migrate_aps_between_device_profiles(session=MagicMock())
 
@@ -1745,7 +1745,7 @@ def test_migrate_limiter_exception_falls_back_and_continues(
         patch.object(APProfileMigrationManager, "_pick_ap_device_profile", side_effect=[src, tgt]),
         patch.object(APProfileMigrationManager, "_discover_aps_on_source_profile", return_value=aps),
         patch.object(APProfileMigrationManager, "_reassign_one_ap", return_value=None),
-        patch("src.device.ap_profile_migration_manager.time.sleep", side_effect=_record_sleep),
+        patch("src.mist.resources.device.ap_profile_migration_manager.time.sleep", side_effect=_record_sleep),
     ):
         APProfileMigrationManager.migrate_aps_between_device_profiles(session=MagicMock())
 
@@ -1825,8 +1825,8 @@ def test_revert_calls_get_rate_limited_delay_once_per_ap(
         patch.object(APProfileMigrationManager, "_verify_source_profile_exists", return_value=True, create=True),
         patch.object(APProfileMigrationManager, "_confirm_revert", return_value="live", create=True),
         patch.object(APProfileMigrationManager, "_revert_one_ap", return_value=None),
-        patch("src.device.ap_profile_migration_manager.time.sleep"),
-        patch("src.analytics.telemetry_emitter.TelemetryEmitter.emit"),
+        patch("src.mist.resources.device.ap_profile_migration_manager.time.sleep"),
+        patch("src.mist.intelligence.analytics.telemetry_emitter.TelemetryEmitter.emit"),
     ):
         APProfileMigrationManager.revert_ap_profile_migration(session=MagicMock())
 
@@ -1872,8 +1872,8 @@ def test_revert_429_invalidates_api_usage_cache(
         patch.object(APProfileMigrationManager, "_verify_source_profile_exists", return_value=True, create=True),
         patch.object(APProfileMigrationManager, "_confirm_revert", return_value="live", create=True),
         patch.object(APProfileMigrationManager, "_revert_one_ap", side_effect=_revert_maybe_429),
-        patch("src.device.ap_profile_migration_manager.time.sleep"),
-        patch("src.analytics.telemetry_emitter.TelemetryEmitter.emit") as mock_emit,
+        patch("src.mist.resources.device.ap_profile_migration_manager.time.sleep"),
+        patch("src.mist.intelligence.analytics.telemetry_emitter.TelemetryEmitter.emit") as mock_emit,
     ):
         APProfileMigrationManager.revert_ap_profile_migration(session=MagicMock())
 
@@ -1920,8 +1920,8 @@ def test_revert_hermetic_no_wall_clock_sleep(
         patch.object(APProfileMigrationManager, "_verify_source_profile_exists", return_value=True, create=True),
         patch.object(APProfileMigrationManager, "_confirm_revert", return_value="live", create=True),
         patch.object(APProfileMigrationManager, "_revert_one_ap", return_value=None),
-        patch("src.device.ap_profile_migration_manager.time.sleep", side_effect=_record_sleep),
-        patch("src.analytics.telemetry_emitter.TelemetryEmitter.emit"),
+        patch("src.mist.resources.device.ap_profile_migration_manager.time.sleep", side_effect=_record_sleep),
+        patch("src.mist.intelligence.analytics.telemetry_emitter.TelemetryEmitter.emit"),
     ):
         APProfileMigrationManager.revert_ap_profile_migration(session=MagicMock())
     elapsed = time.perf_counter() - start
@@ -1968,8 +1968,8 @@ def test_revert_non_429_error_does_not_toggle_cache(
         patch.object(APProfileMigrationManager, "_verify_source_profile_exists", return_value=True, create=True),
         patch.object(APProfileMigrationManager, "_confirm_revert", return_value="live", create=True),
         patch.object(APProfileMigrationManager, "_revert_one_ap", side_effect=_revert_500_on_5),
-        patch("src.device.ap_profile_migration_manager.time.sleep"),
-        patch("src.analytics.telemetry_emitter.TelemetryEmitter.emit"),
+        patch("src.mist.resources.device.ap_profile_migration_manager.time.sleep"),
+        patch("src.mist.intelligence.analytics.telemetry_emitter.TelemetryEmitter.emit"),
     ):
         APProfileMigrationManager.revert_ap_profile_migration(session=MagicMock())
 
@@ -2007,7 +2007,7 @@ def test_dry_run_does_not_consult_rate_limiter(
     with (
         patch.object(APProfileMigrationManager, "_pick_ap_device_profile", side_effect=[src, tgt]),
         patch.object(APProfileMigrationManager, "_discover_aps_on_source_profile", return_value=aps),
-        patch("src.device.ap_profile_migration_manager.time.sleep"),
+        patch("src.mist.resources.device.ap_profile_migration_manager.time.sleep"),
     ):
         APProfileMigrationManager.migrate_aps_between_device_profiles(session=MagicMock())
 
@@ -2054,7 +2054,7 @@ def test_summary_contains_pacing_lines(
         patch.object(APProfileMigrationManager, "_pick_ap_device_profile", side_effect=[src, tgt]),
         patch.object(APProfileMigrationManager, "_discover_aps_on_source_profile", return_value=aps),
         patch.object(APProfileMigrationManager, "_reassign_one_ap", side_effect=_reassign_2_of_5_are_429),
-        patch("src.device.ap_profile_migration_manager.time.sleep"),
+        patch("src.mist.resources.device.ap_profile_migration_manager.time.sleep"),
     ):
         APProfileMigrationManager.migrate_aps_between_device_profiles(session=MagicMock())
 
@@ -2117,8 +2117,8 @@ def test_jsonl_audit_line_carries_pacing_subdict(
         patch.object(APProfileMigrationManager, "_verify_source_profile_exists", return_value=True, create=True),
         patch.object(APProfileMigrationManager, "_confirm_revert", return_value="live", create=True),
         patch.object(APProfileMigrationManager, "_revert_one_ap", side_effect=_revert_2_of_5_are_429),
-        patch("src.device.ap_profile_migration_manager.time.sleep"),
-        patch("src.analytics.telemetry_emitter.TelemetryEmitter.emit") as mock_emit,
+        patch("src.mist.resources.device.ap_profile_migration_manager.time.sleep"),
+        patch("src.mist.intelligence.analytics.telemetry_emitter.TelemetryEmitter.emit") as mock_emit,
     ):
         APProfileMigrationManager.revert_ap_profile_migration(session=MagicMock())
 
@@ -2160,7 +2160,7 @@ def test_migrate_integration_real_limiter_seeded_cache(
         cache so the addendum does not silently break the PID limiter's
         contract.
     """
-    from src.utils.rate_limiting import RateLimitingUtils as _RealLimiter
+    from src.foundation.support.utils.rate_limiting import RateLimitingUtils as _RealLimiter
 
     # WHY: install the real limiter class (not a MagicMock) so the manager
     # exercises the PID math per research Q4.
@@ -2190,7 +2190,7 @@ def test_migrate_integration_real_limiter_seeded_cache(
         patch.object(APProfileMigrationManager, "_pick_ap_device_profile", side_effect=[src, tgt]),
         patch.object(APProfileMigrationManager, "_discover_aps_on_source_profile", return_value=aps),
         patch.object(APProfileMigrationManager, "_reassign_one_ap", return_value=None),
-        patch("src.device.ap_profile_migration_manager.time.sleep", side_effect=_record_sleep),
+        patch("src.mist.resources.device.ap_profile_migration_manager.time.sleep", side_effect=_record_sleep),
     ):
         APProfileMigrationManager.migrate_aps_between_device_profiles(session=MagicMock())
 
@@ -2230,7 +2230,7 @@ def test_reassign_raises_on_error_status() -> None:
 
     with (
         patch("mistapi.api.v1.sites.devices.updateSiteDevice", return_value=_StubResponse(400)),
-        patch("src.device.ap_profile_migration_manager.time.sleep", return_value=None),
+        patch("src.mist.resources.device.ap_profile_migration_manager.time.sleep", return_value=None),
         pytest.raises(apm_mod.APProfileReassignmentError) as excinfo,
     ):
         APProfileMigrationManager._reassign_one_ap(MagicMock(), ap_record, "tgt-profile-id")
@@ -2374,7 +2374,7 @@ def test_migrate_pacing_ignores_a_foreign_thread_sleep(
     """A live foreign thread MUST NOT shift the pacing indices (issue #1822).
 
     Why:
-        ``patch("src.device.ap_profile_migration_manager.time.sleep", ...)``
+        ``patch("src.mist.resources.device.ap_profile_migration_manager.time.sleep", ...)``
         sets the attribute on the shared ``time`` module, so a daemon thread
         left running by an earlier test reaches the spy too. CI recorded a
         foreign ``30`` at index 4 and failed with
@@ -2423,7 +2423,7 @@ def test_migrate_pacing_ignores_a_foreign_thread_sleep(
         patch.object(APProfileMigrationManager, "_pick_ap_device_profile", side_effect=[src, tgt]),
         patch.object(APProfileMigrationManager, "_discover_aps_on_source_profile", return_value=aps),
         patch.object(APProfileMigrationManager, "_reassign_one_ap", return_value=None),
-        patch("src.device.ap_profile_migration_manager.time.sleep", side_effect=_record_sleep),
+        patch("src.mist.resources.device.ap_profile_migration_manager.time.sleep", side_effect=_record_sleep),
     ):
         APProfileMigrationManager.migrate_aps_between_device_profiles(session=MagicMock())
 

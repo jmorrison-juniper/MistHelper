@@ -5,7 +5,7 @@ from unittest.mock import call
 
 import pytest
 
-from src.refactors.endpoint_primary_key_strategies import ENDPOINT_PRIMARY_KEY_STRATEGIES
+from src.foundation.support.refactors.endpoint_primary_key_strategies import ENDPOINT_PRIMARY_KEY_STRATEGIES
 from tests.unit.arango_indexes.fakes import ArangoIndexWriterHarness
 
 INDEX_APIS = (

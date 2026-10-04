@@ -16,8 +16,8 @@ Date: 2026-05-26
 ## Parity Verification Approach
 
 - Extracted logic copied from existing `MistHelper.py` paths into:
-  - `src/troubleshooting/marvis_troubleshoot_utils.py`
-  - `src/ssh/ssh_runner_manager.py`
+  - `src/mist/intelligence/troubleshooting/marvis_troubleshoot_utils.py`
+  - `src/operations/execution/ssh/ssh_runner_manager.py`
 - Export/write boundaries preserved:
   - `DataExporter.save_data_to_output(...)` for Marvis CSV artifacts
   - `EnhancedSSHRunner` APIs for SSH command execution and host log output

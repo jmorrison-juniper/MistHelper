@@ -30,7 +30,7 @@ and the operator requests a retry.
 | `html_root` | An HTML document root that owns one companion PDF. |
 | `direct_pdf` | A sitemap entry that already names a `.pdf` file. |
 
-## 2. Dataclasses (in `src/juniper_docs/models.py`)
+## 2. Dataclasses (in `src/mist/intelligence/juniper_docs/models.py`)
 
 ### ReleaseNoteKey (promoted, reused unchanged)
 
@@ -101,7 +101,7 @@ The joined view of one document for the manifest render.
 | `rejected_candidates` | `list[str]` | Resolution |
 | `drop_reason` | `str \| None` | Release-note filter |
 
-## 3. SQLite schema (in `src/juniper_docs/harvest/state_store.py`)
+## 3. SQLite schema (in `src/mist/intelligence/juniper_docs/harvest/state_store.py`)
 
 The store is the single source of truth. The manifest renders from these tables.
 

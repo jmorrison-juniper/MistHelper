@@ -33,7 +33,7 @@ traceback logging where the code continues after a caught exception.
 
 - Keep `_check_and_upgrade_package` fail-open. A transient package tool failure
   must not stop MistHelper startup.
-- Do not edit `src\refactors\` or `src\config\`.
+- Do not edit `src\foundation\support\refactors\` or `src\foundation\runtime\config\`.
 - Do not add suppression comments to `MistHelper.py`.
 - Do not edit `CHANGELOG.md` on the feature branch.
 

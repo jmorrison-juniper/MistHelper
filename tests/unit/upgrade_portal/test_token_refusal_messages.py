@@ -7,8 +7,8 @@ from unittest.mock import create_autospec
 import pytest
 from flask import Flask, Response
 
-from src.upgrade_portal.app.routes import auth
-from src.upgrade_portal.runtime import identity
+from src.interfaces.portals.upgrade_portal.app.routes import auth
+from src.interfaces.portals.upgrade_portal.runtime import identity
 
 TOKEN_SENTINEL = "fake-3290-token-that-must-not-reach-a-response"
 PAIR_MESSAGE = "The portal could not sign you in. Check the address and the password, then try again."

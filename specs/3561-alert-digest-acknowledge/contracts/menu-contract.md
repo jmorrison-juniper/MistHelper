@@ -6,7 +6,7 @@
 | - | - |
 | Menu number | `280` |
 | Category | `safe` |
-| Handler | `src.reports.alert_digest.operation.AlertDigestOperation.run_digest` |
+| Handler | `src.mist.intelligence.reports.alert_digest.operation.AlertDigestOperation.run_digest` |
 | Prompts | None in `--test` mode. |
 | Output | `data/AlertDigest.csv` and `data/AlertDigest.md`. |
 | Mist calls | `listAlarmDefinitions`, then paged `searchOrgAlarms`. |
@@ -28,7 +28,7 @@
 | - | - |
 | Menu number | `281` |
 | Category | `destructive` |
-| Handler | `src.reports.alert_digest.operation.AlertDigestOperation.run_acknowledge` |
+| Handler | `src.mist.intelligence.reports.alert_digest.operation.AlertDigestOperation.run_acknowledge` |
 | Confirmation | `ACK <count>` |
 | Dry run | Supported. It sends no request. |
 | Output | `data/AlertAcknowledgeLog.csv`. |

@@ -107,4 +107,4 @@ Common use cases:
 
 MistHelper does not currently call `disableOrgE911Report`.
 Verification source: `git grep -n "disableOrgE911Report" -- src MistHelper.py`.
-`src/export/endpoint_catalog.py` does not list this operation as an endpoint family row.
+`src/operations/exporting/export/endpoint_catalog.py` does not list this operation as an endpoint family row.

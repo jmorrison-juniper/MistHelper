@@ -1,6 +1,6 @@
 """Tests for the WebSocket channel catalog."""
 
-from src.websocket_streams.catalog.channels import ChannelCatalog  # Import the catalog under test.
+from src.mist.realtime.websocket_streams.catalog.channels import ChannelCatalog  # Import the catalog under test.
 
 
 def test_channel_catalog_has_18_entries_in_page_order() -> None:

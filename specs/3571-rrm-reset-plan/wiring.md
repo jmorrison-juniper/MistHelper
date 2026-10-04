@@ -4,7 +4,7 @@
 
 | menu | title | handler import | handler attribute | category | skip_reason | destructive | supports_fast |
 | - | - | - | - | - | - | - | - |
-| 291 | Optimize or reset site RRM with before and after plan capture | src.site.rrm_reset.operation | RrmResetOperation.run | destructive |  | True | False |
+| 291 | Optimize or reset site RRM with before and after plan capture | src.mist.resources.site.rrm_reset.operation | RrmResetOperation.run | destructive |  | True | False |
 
 ## OperationRegistry comment
 
@@ -27,11 +27,11 @@ Add menu `291` to the `destructive` row.
 
 ## Import line for MistHelper.py
 
-`from src.site.rrm_reset.operation import RrmResetOperation  # Menu 291 (issue #3571) -- capture RRM before and after optimize or reset.`
+`from src.mist.resources.site.rrm_reset.operation import RrmResetOperation  # Menu 291 (issue #3571) -- capture RRM before and after optimize or reset.`
 
 ## Deferred registration
 
-The integration pull request registers menu `291` in `MistHelper.py` and `src/utils/operation_registry.py`. This feature branch does not edit those files.
+The integration pull request registers menu `291` in `MistHelper.py` and `src/foundation/support/utils/operation_registry.py`. This feature branch does not edit those files.
 
 ## Environment documentation
 

@@ -73,7 +73,7 @@ The normal requirements audit failed before scanning, and its documented local a
 
 - Issue: [MistHelper #3337](https://github.com/jmorrison-juniper/MistHelper/issues/3337).
 - The user confirmed that the issue is open and assigned to `jmorrison-juniper`.
-  Its labels are `bug`, `tests`, `in-progress`, and `src/api`.
+  Its labels are `bug`, `tests`, `in-progress`, and `src/mist/access/api`.
 - App session: `25e19be4-7155-4623-ad9c-50ca52cc6585`.
 - CLI session: `8709155b-5b4b-4372-b7f6-603845459534`.
 - Existing branch: `jmorrison-juniper-packet-length-validation`.
@@ -91,9 +91,9 @@ The normal requirements audit failed before scanning, and its documented local a
 
 The implementation owns these files only:
 
-1. `src/capture/_packet_capture_prompts.py`.
+1. `src/operations/execution/capture/_packet_capture_prompts.py`.
    The affected method is `PacketCapturePrompts.prompt_max_packet_length`.
-2. `src/refactors/serial_cc/start_site_client_capture_wireless.py`.
+2. `src/foundation/support/refactors/serial_cc/start_site_client_capture_wireless.py`.
    The affected value is `_MAX_PKT_LEN_SPEC`.
    Existing methods `_prompt_bounded_int` and `_collect_bounded_ints` perform its validation.
 3. `tests/unit/capture/test_multi_ap_scan_workflow.py`.
@@ -124,7 +124,7 @@ The user prohibits baseline changes, suppressions, and unrelated test repairs.
 The final manifest preserves that file exactly and requires new validation.
 
 The affected source directories already have structural debt.
-`src/capture/` has 13 children, and `src/refactors/serial_cc/` has nine children.
+`src/operations/execution/capture/` has 13 children, and `src/foundation/support/refactors/serial_cc/` has nine children.
 The existing plan records grandfathered violations and separate incremental remediation actions.
 This issue does not authorize unrelated restructuring.
 
@@ -146,11 +146,11 @@ Do not modify these files or areas:
 
 | Reviewed sender | Local source evidence | Scope decision |
 | --- | --- | --- |
-| `src/capture/multi_ap_scan_workflow.py` | `_DEFAULT_MAX_PKT_LEN` supplies fixed 1300. | Preserve the sender. |
-| `src/refactors/serial_cc/start_site_scan_capture.py` | `_MAX_PKT_LEN` supplies fixed 1300. | Preserve the sender. |
-| `src/capture/packet_capture.py` | Fixed lengths are 1300 or 1500. Interactive paths delegate to the shared prompt. | Preserve the sender. |
-| `src/capture/org_capture_workflow.py` | `_collect_capture_config` calls `manager._gather_org_capture_params`. | Preserve the sender. |
-| `src/capture/_packet_capture_org.py` | `gather_org_capture_params` reaches the shared prompt through `_prompt_max_packet_length`. | Preserve the sender. |
+| `src/operations/execution/capture/multi_ap_scan_workflow.py` | `_DEFAULT_MAX_PKT_LEN` supplies fixed 1300. | Preserve the sender. |
+| `src/foundation/support/refactors/serial_cc/start_site_scan_capture.py` | `_MAX_PKT_LEN` supplies fixed 1300. | Preserve the sender. |
+| `src/operations/execution/capture/packet_capture.py` | Fixed lengths are 1300 or 1500. Interactive paths delegate to the shared prompt. | Preserve the sender. |
+| `src/operations/execution/capture/org_capture_workflow.py` | `_collect_capture_config` calls `manager._gather_org_capture_params`. | Preserve the sender. |
+| `src/operations/execution/capture/_packet_capture_org.py` | `gather_org_capture_params` reaches the shared prompt through `_prompt_max_packet_length`. | Preserve the sender. |
 
 All reviewed fixed lengths satisfy the 1536-byte maximum.
 The organization path uses the shared prompt, not a third independent length validator.
@@ -163,7 +163,7 @@ The two final functions must execute these existing production validation paths:
 - `SiteWirelessClientCaptureService._prompt_bounded_int` with the real `_MAX_PKT_LEN_SPEC`.
 - `SiteWirelessClientCaptureService._collect_bounded_ints` with the real prompt specifications.
 
-Drive controlled terminal input through the real `InputUtils.safe_input` from `src/utils/input_utils.py`.
+Drive controlled terminal input through the real `InputUtils.safe_input` from `src/foundation/support/utils/input_utils.py`.
 Do not replace `safe_input` with a stub.
 Do not mock validator returns or replace the collection sequence.
 Substitute only `builtins.input`.

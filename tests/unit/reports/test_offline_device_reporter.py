@@ -1,7 +1,7 @@
 """Unit tests for OfflineDeviceReporter (issue #878 tranche 33 -- un-omit).
 
 Covers every static method on
-``src.reports.offline_device_reporter.OfflineDeviceReporter``:
+``src.mist.intelligence.reports.offline_device_reporter.OfflineDeviceReporter``:
 ``_parse_threshold_attempt`` (int/range/ValueError), ``_prompt_threshold``
 (test-mode shortcut + retry-until-valid + max-retries fallback),
 ``_fetch_data`` (site lookup + device stats happy path with missing site_id),
@@ -29,7 +29,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.reports.offline_device_reporter import OfflineDeviceReporter as R
+from src.mist.intelligence.reports.offline_device_reporter import OfflineDeviceReporter as R
 
 
 def _make_mh(**extra):
@@ -82,7 +82,7 @@ def test_parse_threshold_attempt_returns_none_on_value_error(caplog: pytest.LogC
 def test_prompt_threshold_returns_default_in_test_mode() -> None:
     """IS_TEST_MODE short-circuits interactive prompting."""
     fake_mh = _make_mh(IS_TEST_MODE=True)
-    with patch("src.reports.offline_device_reporter.SourceDependencyResolver", fake_mh):
+    with patch("src.mist.intelligence.reports.offline_device_reporter.SourceDependencyResolver", fake_mh):
         assert R._prompt_threshold() == R.DEFAULT_THRESHOLD_HOURS
 
 
@@ -90,26 +90,30 @@ def test_prompt_threshold_returns_first_valid_attempt() -> None:
     """First safe_input value parses cleanly -> returned immediately."""
     fake_mh = _make_mh()
     fake_mh.InputUtils.safe_input.return_value = "24"
-    with patch("src.reports.offline_device_reporter.SourceDependencyResolver", fake_mh):
+    with patch("src.mist.intelligence.reports.offline_device_reporter.SourceDependencyResolver", fake_mh):
         assert R._prompt_threshold() == 24
 
 
 def test_prompt_threshold_retries_then_succeeds(caplog: pytest.LogCaptureFixture) -> None:
     """Bad input on first attempt: retry counter decrements and second attempt wins."""
-    caplog.set_level(logging.INFO, logger="src.utils.console")  # 1031: echo() logs INFO on src.utils.console.
+    caplog.set_level(
+        logging.INFO, logger="src.foundation.support.utils.console"
+    )  # 1031: echo() logs INFO on src.foundation.support.utils.console.
     fake_mh = _make_mh()
     fake_mh.InputUtils.safe_input.side_effect = ["bad", "72"]
-    with patch("src.reports.offline_device_reporter.SourceDependencyResolver", fake_mh):
+    with patch("src.mist.intelligence.reports.offline_device_reporter.SourceDependencyResolver", fake_mh):
         assert R._prompt_threshold() == 72
     assert "attempt(s) remaining" in caplog.text
 
 
 def test_prompt_threshold_falls_back_when_max_retries_exceeded(caplog: pytest.LogCaptureFixture) -> None:
     """All MAX_INPUT_RETRIES attempts fail -> DEFAULT_THRESHOLD_HOURS."""
-    caplog.set_level(logging.INFO, logger="src.utils.console")  # 1031: echo() logs INFO on src.utils.console.
+    caplog.set_level(
+        logging.INFO, logger="src.foundation.support.utils.console"
+    )  # 1031: echo() logs INFO on src.foundation.support.utils.console.
     fake_mh = _make_mh()
     fake_mh.InputUtils.safe_input.side_effect = ["bad"] * R.MAX_INPUT_RETRIES
-    with patch("src.reports.offline_device_reporter.SourceDependencyResolver", fake_mh):
+    with patch("src.mist.intelligence.reports.offline_device_reporter.SourceDependencyResolver", fake_mh):
         assert R._prompt_threshold() == R.DEFAULT_THRESHOLD_HOURS
     assert "Using default threshold" in caplog.text
 
@@ -128,7 +132,7 @@ def test_fetch_data_builds_site_lookup_and_returns_devices() -> None:
     stats_resp = MagicMock(name="statsResp")
     fake_mh.mistapi.api.v1.orgs.stats.listOrgDevicesStats.return_value = stats_resp
     fake_mh.mistapi.get_all.return_value = [{"mac": "aa"}, {"mac": "bb"}]
-    with patch("src.reports.offline_device_reporter.SourceDependencyResolver", fake_mh):
+    with patch("src.mist.intelligence.reports.offline_device_reporter.SourceDependencyResolver", fake_mh):
         site_lookup, devices = R._fetch_data("org-uuid")
     assert site_lookup == {"site-a": "Alpha", "site-b": "Unknown Site"}
     assert devices == [{"mac": "aa"}, {"mac": "bb"}]
@@ -257,7 +261,7 @@ def test_process_devices_sorts_offline_records_by_duration_desc() -> None:
         {"status": "disconnected", "last_seen": now - 100_000, "name": "long"},
         {"status": "connected", "last_seen": now, "name": "skip"},
     ]
-    with patch("src.reports.offline_device_reporter.time.time", return_value=now):
+    with patch("src.mist.intelligence.reports.offline_device_reporter.time.time", return_value=now):
         results = R._process_devices(devices, {}, 1)
     assert [r["Device Name"] for r in results] == ["long", "short"]
 
@@ -269,7 +273,9 @@ def test_render_offline_breakdowns_hides_zero_type_and_lists_top_sites(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Zero counts are suppressed; sites render sorted descending, capped at 5."""
-    caplog.set_level(logging.INFO, logger="src.utils.console")  # 1031: echo() logs INFO on src.utils.console.
+    caplog.set_level(
+        logging.INFO, logger="src.foundation.support.utils.console"
+    )  # 1031: echo() logs INFO on src.foundation.support.utils.console.
     type_counts = {"AP": 3, "Switch": 0, "Gateway": 1}
     site_counts = {f"site-{i}": i for i in range(1, 8)}
     R._render_offline_breakdowns(type_counts, site_counts)
@@ -285,7 +291,9 @@ def test_render_offline_breakdowns_skips_top_sites_when_empty(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Empty site_counts hides the Top 5 leaderboard entirely."""
-    caplog.set_level(logging.INFO, logger="src.utils.console")  # 1031: echo() logs INFO on src.utils.console.
+    caplog.set_level(
+        logging.INFO, logger="src.foundation.support.utils.console"
+    )  # 1031: echo() logs INFO on src.foundation.support.utils.console.
     R._render_offline_breakdowns({"AP": 1}, {})
     output = caplog.text
     assert "Top 5 Sites" not in output
@@ -296,7 +304,9 @@ def test_render_offline_breakdowns_skips_top_sites_when_empty(
 
 def test_display_summary_prints_counts_and_calls_breakdown(caplog: pytest.LogCaptureFixture) -> None:
     """Header + totals print; per-type/per-site counts render via helper."""
-    caplog.set_level(logging.INFO, logger="src.utils.console")  # 1031: echo() logs INFO on src.utils.console.
+    caplog.set_level(
+        logging.INFO, logger="src.foundation.support.utils.console"
+    )  # 1031: echo() logs INFO on src.foundation.support.utils.console.
     offline_records = [
         {"Device Type": "AP", "Site Name": "HQ"},
         {"Device Type": "AP", "Site Name": "HQ"},
@@ -315,7 +325,9 @@ def test_display_summary_prints_counts_and_calls_breakdown(caplog: pytest.LogCap
 
 def test_save_offline_csv_strips_helper_keys_and_writes(caplog: pytest.LogCaptureFixture) -> None:
     """Helper keys (_sort_key) are stripped; DataExporter is called with expected filename."""
-    caplog.set_level(logging.INFO, logger="src.utils.console")  # 1031: echo() logs INFO on src.utils.console.
+    caplog.set_level(
+        logging.INFO, logger="src.foundation.support.utils.console"
+    )  # 1031: echo() logs INFO on src.foundation.support.utils.console.
     fake_mh = _make_mh()
     records = [
         {
@@ -331,7 +343,7 @@ def test_save_offline_csv_strips_helper_keys_and_writes(caplog: pytest.LogCaptur
             "_sort_key": "3600.0",
         }
     ]
-    with patch("src.reports.offline_device_reporter.SourceDependencyResolver", fake_mh):
+    with patch("src.mist.intelligence.reports.offline_device_reporter.SourceDependencyResolver", fake_mh):
         R._save_offline_csv(records, 1)
     written = fake_mh.DataExporter.write_with_format_selection.call_args
     csv_records = written.kwargs["data"]
@@ -346,7 +358,9 @@ def test_save_offline_csv_strips_helper_keys_and_writes(caplog: pytest.LogCaptur
 
 def test_present_results_caps_display_rows_and_calls_save(caplog: pytest.LogCaptureFixture) -> None:
     """Table display honors MAX_DISPLAY_ROWS; _save_offline_csv gets the full list."""
-    caplog.set_level(logging.INFO, logger="src.utils.console")  # 1031: echo() logs INFO on src.utils.console.
+    caplog.set_level(
+        logging.INFO, logger="src.foundation.support.utils.console"
+    )  # 1031: echo() logs INFO on src.foundation.support.utils.console.
     records = [
         {
             "Device Name": f"d{i}",
@@ -373,22 +387,26 @@ def test_present_results_caps_display_rows_and_calls_save(caplog: pytest.LogCapt
 
 def test_gather_offline_inputs_aborts_when_no_org(caplog: pytest.LogCaptureFixture) -> None:
     """Missing org -> (None, 0)."""
-    caplog.set_level(logging.INFO, logger="src.utils.console")  # 1031: echo() logs INFO on src.utils.console.
+    caplog.set_level(
+        logging.INFO, logger="src.foundation.support.utils.console"
+    )  # 1031: echo() logs INFO on src.foundation.support.utils.console.
     fake_mh = _make_mh()
     fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = ""
-    with patch("src.reports.offline_device_reporter.SourceDependencyResolver", fake_mh):
+    with patch("src.mist.intelligence.reports.offline_device_reporter.SourceDependencyResolver", fake_mh):
         assert R._gather_offline_inputs() == (None, 0)
     assert "No organization selected" in caplog.text
 
 
 def test_gather_offline_inputs_returns_org_and_threshold(caplog: pytest.LogCaptureFixture) -> None:
     """Happy path resolves org + prompts threshold + echoes."""
-    caplog.set_level(logging.INFO, logger="src.utils.console")  # 1031: echo() logs INFO on src.utils.console.
+    caplog.set_level(
+        logging.INFO, logger="src.foundation.support.utils.console"
+    )  # 1031: echo() logs INFO on src.foundation.support.utils.console.
     fake_mh = _make_mh()
     fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org-x"
     with (
         patch.object(R, "_prompt_threshold", return_value=24),
-        patch("src.reports.offline_device_reporter.SourceDependencyResolver", fake_mh),
+        patch("src.mist.intelligence.reports.offline_device_reporter.SourceDependencyResolver", fake_mh),
     ):
         assert R._gather_offline_inputs() == ("org-x", 24)
     assert "Threshold: 24 hours" in caplog.text
@@ -401,11 +419,13 @@ def test_finalize_offline_report_runs_summary_present_and_elapsed(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Finalize walks summary -> present -> elapsed."""
-    caplog.set_level(logging.INFO, logger="src.utils.console")  # 1031: echo() logs INFO on src.utils.console.
+    caplog.set_level(
+        logging.INFO, logger="src.foundation.support.utils.console"
+    )  # 1031: echo() logs INFO on src.foundation.support.utils.console.
     with (
         patch.object(R, "_display_summary") as summary,
         patch.object(R, "_present_results") as present,
-        patch("src.reports.offline_device_reporter.time.time", return_value=1000.0),
+        patch("src.mist.intelligence.reports.offline_device_reporter.time.time", return_value=1000.0),
     ):
         R._finalize_offline_report(10, [{"x": 1}], 48, 990.0)
     summary.assert_called_once_with(10, [{"x": 1}], 48)
@@ -428,7 +448,9 @@ def test_execute_returns_early_when_no_org() -> None:
 
 def test_execute_handles_fetch_exception(caplog: pytest.LogCaptureFixture) -> None:
     """_fetch_data exception -> user-facing error + no processing."""
-    caplog.set_level(logging.INFO, logger="src.utils.console")  # 1031: echo() logs INFO on src.utils.console.
+    caplog.set_level(
+        logging.INFO, logger="src.foundation.support.utils.console"
+    )  # 1031: echo() logs INFO on src.foundation.support.utils.console.
     with (
         patch.object(R, "_gather_offline_inputs", return_value=("org", 48)),
         patch.object(R, "_fetch_data", side_effect=RuntimeError("boom")),
@@ -441,7 +463,9 @@ def test_execute_handles_fetch_exception(caplog: pytest.LogCaptureFixture) -> No
 
 def test_execute_prints_notice_when_no_devices(caplog: pytest.LogCaptureFixture) -> None:
     """Empty device list -> "No devices found" notice + early return."""
-    caplog.set_level(logging.INFO, logger="src.utils.console")  # 1031: echo() logs INFO on src.utils.console.
+    caplog.set_level(
+        logging.INFO, logger="src.foundation.support.utils.console"
+    )  # 1031: echo() logs INFO on src.foundation.support.utils.console.
     with (
         patch.object(R, "_gather_offline_inputs", return_value=("org", 48)),
         patch.object(R, "_fetch_data", return_value=({}, [])),
@@ -454,7 +478,9 @@ def test_execute_prints_notice_when_no_devices(caplog: pytest.LogCaptureFixture)
 
 def test_execute_prints_all_clear_when_none_offline(caplog: pytest.LogCaptureFixture) -> None:
     """Devices exist but none offline beyond threshold -> all-clear message."""
-    caplog.set_level(logging.INFO, logger="src.utils.console")  # 1031: echo() logs INFO on src.utils.console.
+    caplog.set_level(
+        logging.INFO, logger="src.foundation.support.utils.console"
+    )  # 1031: echo() logs INFO on src.foundation.support.utils.console.
     with (
         patch.object(R, "_gather_offline_inputs", return_value=("org", 48)),
         patch.object(R, "_fetch_data", return_value=({}, [{"mac": "aa"}])),

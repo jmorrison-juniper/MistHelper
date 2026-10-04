@@ -7,12 +7,12 @@ import logging  # caplog captures records from the standard logging system.
 
 import pytest  # Parametrized redaction cases cover each required secret class.
 
-from src.websocket_streams.live.transport.runtime.logging.bounds import (
+from src.mist.realtime.websocket_streams.live.transport.runtime.logging.bounds import (
     MAX_EVENT_LENGTH,
     MAX_FIELD_LENGTH,
     REDACTED_VALUE,
 )
-from src.websocket_streams.live.transport.runtime.logging.structured_logger import (
+from src.mist.realtime.websocket_streams.live.transport.runtime.logging.structured_logger import (
     StructuredTransportLogger,
 )
 

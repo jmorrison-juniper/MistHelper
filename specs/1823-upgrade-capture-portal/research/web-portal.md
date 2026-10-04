@@ -254,8 +254,8 @@ directory. In the container the working directory is `/app`
 
 ### 4.2 Who consumes it
 
-`src/config/config_utils.py:158-178` holds the consumer. The relevant lines are
-`src/config/config_utils.py:169-176`:
+`src/foundation/runtime/config/config_utils.py:158-178` holds the consumer. The relevant lines are
+`src/foundation/runtime/config/config_utils.py:169-176`:
 
 ```python
 if os.path.exists("stop_loop.txt"):
@@ -713,7 +713,7 @@ with more than one worker. The current fixture hard-codes `--workers 1`
 `pyproject.toml:161`:
 
 ```toml
-extend-exclude = ["mist-ops-platform", "web_portal", "scripts", "src/maps"]
+extend-exclude = ["mist-ops-platform", "web_portal", "scripts", "src/interfaces/visualization/maps"]
 ```
 
 ruff never checks `web_portal`.
@@ -726,7 +726,7 @@ ruff never checks `web_portal`.
 exclude = [
     "mist-ops-platform",
     "web_portal",
-    "src/maps",
+    "src/interfaces/visualization/maps",
     "tests",
     "scripts",
     "tools",
@@ -738,7 +738,7 @@ A second mypy block softens imports for the same package
 (`pyproject.toml:311-312`):
 
 ```toml
-module = ["MistHelper", "src.maps.*", "web_portal.*"]
+module = ["MistHelper", "src.interfaces.visualization.maps.*", "web_portal.*"]
 follow_imports = "silent"
 ```
 

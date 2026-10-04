@@ -189,7 +189,7 @@ For pure structural lines (blank lines, dataclass field definitions inside an `@
 
 ### Rationale
 
-- Uniform `# WHY:` prefix is grep-friendly (`grep -c "# WHY:" src/firmware/firmware_manager.py` gives a fast coverage estimate).
+- Uniform `# WHY:` prefix is grep-friendly (`grep -c "# WHY:" src/operations/execution/firmware/firmware_manager.py` gives a fast coverage estimate).
 - Constitution VI is explicit that comments explain *why*, not *what*.
 - 90% target leaves a small buffer above the 80% analyzer threshold to absorb future line insertions during maintenance.
 
@@ -207,9 +207,9 @@ Spec NG-001 forbids new test files under `tests/unit/test_firmware_manager*.py`.
 
 The compliance analyzer + `ruff` + `py_compile` form the primary gates. Optional REPL constructor smoke (per `quickstart.md` Step 6) exercises the frozen-config contract manually.
 
-- **Gate 1** — `python -m py_compile src/firmware/firmware_manager.py` must succeed.
-- **Gate 2** — `python -m ruff check src/firmware/firmware_manager.py` must exit 0.
-- **Gate 3** — `python -m tools.compliance_analyzer src/firmware/firmware_manager.py` must report `Score: 100.0`, `Grade: A+`, zero HIGH/MEDIUM/LOW findings.
+- **Gate 1** — `python -m py_compile src/operations/execution/firmware/firmware_manager.py` must succeed.
+- **Gate 2** — `python -m ruff check src/operations/execution/firmware/firmware_manager.py` must exit 0.
+- **Gate 3** — `python -m tools.compliance_analyzer src/operations/execution/firmware/firmware_manager.py` must report `Score: 100.0`, `Grade: A+`, zero HIGH/MEDIUM/LOW findings.
 - **Gate 4** — six-callsite grep smoke: `grep -n "FirmwareManager.create\|FirmwareManager(" MistHelper.py` returns exactly the pre-refactor set (one class-def at line 18789, one impl-import at 18795, one static-method def at 18791, plus five call-sites at 19809/22097/22154/22237/22246).
 - **Gate 5** (optional) — REPL smoke: construct via `FirmwareManagerConfig`, verify frozen mutation raises `FrozenInstanceError`, verify legacy positional call raises `TypeError`.
 
@@ -291,7 +291,7 @@ Verified via `grep -n "FirmwareManager\." MistHelper.py`:
 |------|------|----------|
 | 18789 | `class FirmwareManager:` (factory-wrapper class definition) | Definition, no change. |
 | 18791 | `@staticmethod` decorator on `create` | No change. |
-| 18795 | `from src.firmware.firmware_manager import FirmwareManager as _Impl` inside `create` | No change (import line only). |
+| 18795 | `from src.operations.execution.firmware.firmware_manager import FirmwareManager as _Impl` inside `create` | No change (import line only). |
 | 18797-18807 | Factory body (kwargs construction of `_Impl(...)`) | **THIS IS THE PERMITTED DIFF**. Replace kwargs with `FirmwareManagerConfig(...)` and single positional call. |
 | 19809 | `FirmwareManager.create(apisession, org_id)` inside menu 196 handler | No change. |
 | 22097 | `FirmwareManager.create(apisession, org_id)` inside SSR upgrade path | No change. |

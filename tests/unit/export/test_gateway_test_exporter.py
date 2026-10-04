@@ -1,7 +1,7 @@
 """Unit tests for GatewayTestExporter — covers every static-method branch.
 
 Why:
-    The tranche-16 push of issue #878 removes ``src/export/gateway_test_exporter.py``
+    The tranche-16 push of issue #878 removes ``src/operations/exporting/export/gateway_test_exporter.py``
     from the coverage ``omit`` list.  A pre-existing wiring-only test covered ~36 %
     of statements; this suite drives the retry, tagging, concurrency-fan-out and
     export paths so the module lands at 100 % line coverage without leaning on
@@ -19,10 +19,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.export import gateway_test_exporter as gte
-from src.export.gateway_test_exporter import GatewayTestExporter
-from src.export.gateway_test_exporter import GatewayTestExporter as FailureModeGatewayTestExporter
-from src.refactors import fast_mode_constants
+from src.foundation.support.refactors import fast_mode_constants
+from src.operations.exporting.export import gateway_test_exporter as gte
+from src.operations.exporting.export.gateway_test_exporter import GatewayTestExporter
+from src.operations.exporting.export.gateway_test_exporter import GatewayTestExporter as FailureModeGatewayTestExporter
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -54,7 +54,7 @@ def fake_mh(monkeypatch: pytest.MonkeyPatch) -> ModuleType:
     mh.DataExporter = MagicMock()  # type: ignore[attr-defined]
 
     monkeypatch.setitem(sys.modules, "MistHelper", mh)
-    monkeypatch.setattr("src.export.gateway_test_exporter.SourceDependencyResolver", mh)
+    monkeypatch.setattr("src.operations.exporting.export.gateway_test_exporter.SourceDependencyResolver", mh)
     return mh
 
 
@@ -201,7 +201,7 @@ class TestFetchSyntheticTestStatsWithRetry:
 class TestTrySyntheticFetchAttempt:
     def test_success_returns_tagged_stats(self, fake_mh: ModuleType) -> None:
         with (
-            patch("src.export.gateway_test_exporter.ValidationUtils"),
+            patch("src.operations.exporting.export.gateway_test_exporter.ValidationUtils"),
             patch.object(GatewayTestExporter, "_call_synthetic_endpoint", return_value={"x": 1}),
         ):
             result = GatewayTestExporter._try_synthetic_fetch_attempt(("s", "d", "dn", "sn"), 0, None)
@@ -211,7 +211,7 @@ class TestTrySyntheticFetchAttempt:
 
     def test_exception_returns_none(self, fake_mh: ModuleType) -> None:
         with patch(
-            "src.export.gateway_test_exporter.ValidationUtils.validate_site_id",
+            "src.operations.exporting.export.gateway_test_exporter.ValidationUtils.validate_site_id",
             side_effect=RuntimeError("boom"),
         ):
             result = GatewayTestExporter._try_synthetic_fetch_attempt(("s", "d", "dn", "sn"), 0, None)
@@ -242,7 +242,7 @@ class TestTagSyntheticStats:
 
 class TestCallSyntheticEndpoint:
     def test_without_semaphore(self, fake_mh: ModuleType) -> None:
-        with patch("src.export.gateway_test_exporter.mistapi") as mistapi_mock:
+        with patch("src.operations.exporting.export.gateway_test_exporter.mistapi") as mistapi_mock:
             mistapi_mock.api.v1.sites.devices.getSiteDeviceSyntheticTest.return_value.data = {"r": 1}
             result = GatewayTestExporter._call_synthetic_endpoint("s", "d", None)
         assert result == {"r": 1}
@@ -251,7 +251,7 @@ class TestCallSyntheticEndpoint:
         sema = MagicMock()
         sema.__enter__ = MagicMock(return_value=None)
         sema.__exit__ = MagicMock(return_value=None)
-        with patch("src.export.gateway_test_exporter.mistapi") as mistapi_mock:
+        with patch("src.operations.exporting.export.gateway_test_exporter.mistapi") as mistapi_mock:
             mistapi_mock.api.v1.sites.devices.getSiteDeviceSyntheticTest.return_value.data = {"r": 2}
             result = GatewayTestExporter._call_synthetic_endpoint("s", "d", sema)
         assert result == {"r": 2}
@@ -313,8 +313,8 @@ class TestRetryFailedSyntheticDevices:
         with (
             patch.object(GatewayTestExporter, "_submit_synthetic_retries", return_value=futures_map),
             patch.object(GatewayTestExporter, "_record_retry_outcome"),
-            patch("src.export.gateway_test_exporter.tqdm", side_effect=lambda x, **_k: list(x)),
-            patch("src.export.gateway_test_exporter.as_completed", side_effect=lambda x: list(x)),
+            patch("src.operations.exporting.export.gateway_test_exporter.tqdm", side_effect=lambda x, **_k: list(x)),
+            patch("src.operations.exporting.export.gateway_test_exporter.as_completed", side_effect=lambda x: list(x)),
         ):
             results, still = GatewayTestExporter._retry_failed_synthetic_devices(failed, None)
         assert results == [] and still == []
@@ -386,7 +386,7 @@ class TestRunSyntheticSequentialPath:
         with (
             patch.object(GatewayTestExporter, "fetch_synthetic_test_stats_with_retry", side_effect=outcomes),
             patch.object(gte.time, "sleep"),
-            patch("src.export.gateway_test_exporter.tqdm", side_effect=lambda x, **_k: list(x)),
+            patch("src.operations.exporting.export.gateway_test_exporter.tqdm", side_effect=lambda x, **_k: list(x)),
         ):
             all_stats: list[Any] = []
             GatewayTestExporter._run_synthetic_sequential_path(devices, all_stats)
@@ -406,7 +406,7 @@ class TestExportSyntheticResults:
 
     def test_writes_csv_via_dataexporter(self, fake_mh: ModuleType, caplog: pytest.LogCaptureFixture) -> None:
         rows = [{"a": 1}]
-        with patch("src.export.gateway_test_exporter.DataProcessingUtils") as dp:
+        with patch("src.operations.exporting.export.gateway_test_exporter.DataProcessingUtils") as dp:
             dp.flatten_nested_fields.return_value = rows
             dp.escape_multiline.return_value = rows
             with caplog.at_level(logging.INFO):
@@ -424,6 +424,6 @@ class TestExportSyntheticResults:
 
 class TestTestResultsBySiteDelegator:
     def test_delegates_to_service(self, fake_mh: ModuleType) -> None:
-        with patch("src.refactors.serial_cc.test_results_by_site.GatewayTestResultsService") as svc:
+        with patch("src.foundation.support.refactors.serial_cc.test_results_by_site.GatewayTestResultsService") as svc:
             GatewayTestExporter.test_results_by_site(fast=True)
         svc.execute.assert_called_once_with(fast=True)

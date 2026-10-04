@@ -13,8 +13,8 @@ from typing import Any  # WHY: the fake session and cache are duck-typed stand-i
 
 import pytest  # WHY: fixtures and monkeypatch drive the isolation of the sleep call.
 
-from src.utils import rate_limiting  # WHY: patch the module attributes the pacer reads.
-from src.utils.rate_limiting import AdaptivePacer  # WHY: the class under test.
+from src.foundation.support.utils import rate_limiting  # WHY: patch the module attributes the pacer reads.
+from src.foundation.support.utils.rate_limiting import AdaptivePacer  # WHY: the class under test.
 
 
 class _DelayRecorder:  # WHY: capture every rate-limiter call so a test can assert the sequence.

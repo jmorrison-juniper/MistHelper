@@ -20,11 +20,11 @@ Each backend route group maps to a query factory that produces TanStack Query ke
 
 | Factory | Backend Route Group | File |
 |---------|-------------------|------|
-| `configQueries` | `/api/v1/config/*` | `src/api/config.ts` |
-| `auditQueries` | `/api/v1/audit/*` | `src/api/audit.ts` |
-| `deployQueries` | `/api/v1/deploy/*` | `src/api/deploy.ts` |
-| `syncQueries` | `/api/v1/sync/*` | `src/api/sync.ts` |
-| `systemQueries` | `/api/v1/system/*` | `src/api/system.ts` |
+| `configQueries` | `/api/v1/config/*` | `src/mist/access/api/config.ts` |
+| `auditQueries` | `/api/v1/audit/*` | `src/mist/access/api/audit.ts` |
+| `deployQueries` | `/api/v1/deploy/*` | `src/mist/access/api/deploy.ts` |
+| `syncQueries` | `/api/v1/sync/*` | `src/mist/access/api/sync.ts` |
+| `systemQueries` | `/api/v1/system/*` | `src/mist/access/api/system.ts` |
 
 ### Example: Config Query Factory
 

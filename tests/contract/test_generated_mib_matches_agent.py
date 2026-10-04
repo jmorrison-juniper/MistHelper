@@ -14,8 +14,13 @@ from pathlib import Path
 
 import pytest
 
-from src.metrics_gateway.catalog import ROW_IDENTITY_COLUMN, SUBTREE_BY_SCOPE, MetricCatalog, MetricScope
-from src.metrics_gateway.snmp import DEFAULT_BASE_OID
+from src.interfaces.monitoring.metrics_gateway.catalog import (
+    ROW_IDENTITY_COLUMN,
+    SUBTREE_BY_SCOPE,
+    MetricCatalog,
+    MetricScope,
+)
+from src.interfaces.monitoring.metrics_gateway.snmp import DEFAULT_BASE_OID
 
 REPO_ROOT = Path(__file__).resolve().parents[2]  # A pytest fixture moves the working folder, so every path is absolute.
 MIB_PATH = REPO_ROOT / "documentation" / "mibs" / "MISTHELPER-MIB.mib"  # The file a monitoring system loads.

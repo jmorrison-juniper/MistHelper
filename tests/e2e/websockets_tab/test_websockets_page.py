@@ -21,8 +21,8 @@ from typing import Any  # Type Playwright objects without importing private type
 
 import pytest  # Use fixtures and Playwright integration.
 
-from src.websocket_streams.live.sessions.buffer.message import StreamMessage
-from src.websocket_streams.live.sessions.buffer.page import MessagePage  # The fake keeps real records.
+from src.mist.realtime.websocket_streams.live.sessions.buffer.message import StreamMessage
+from src.mist.realtime.websocket_streams.live.sessions.buffer.page import MessagePage  # The fake keeps real records.
 
 logger = logging.getLogger(__name__)  # Keep this test module visible in logs.
 
@@ -109,7 +109,9 @@ class FakeWebSocketServices:
         with self._lock:  # Session limit and identifier allocation must be atomic.
             live = [session.title for session in self._sessions.values() if session.live]  # Current live titles.
             if len(live) >= 2:  # The fake limit is two sessions.
-                from src.websocket_streams.intake.fields.error import StreamRequestError  # Import only on refusal.
+                from src.mist.realtime.websocket_streams.intake.fields.error import (
+                    StreamRequestError,
+                )  # Import only on refusal.
 
                 raise StreamRequestError(
                     "limit_reached", "The live session limit is reached.", {"live": live}
@@ -411,7 +413,9 @@ def websocket_portal(fake_services: FakeWebSocketServices) -> Iterator[str]:
     import mistapi  # Patch the site picker SDK seam.
     from werkzeug.serving import make_server  # Start an in-process server.
 
-    from src.websocket_streams.web.services.registry import WebSocketServiceRegistry  # Inject the fake services.
+    from src.mist.realtime.websocket_streams.web.services.registry import (
+        WebSocketServiceRegistry,
+    )  # Inject the fake services.
     from web_portal.app import WebPortalApp  # Build the same app as the portal.
     from web_portal.menu_registry import build_static_menu_actions  # Supply normal menu actions.
 

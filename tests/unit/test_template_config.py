@@ -19,7 +19,7 @@ _saved_mistapi = sys.modules.get("mistapi")
 _our_mock = MagicMock()
 sys.modules["mistapi"] = _our_mock
 try:
-    from src.gateway.template_config import (
+    from src.mist.resources.gateway.template_config import (
         GatewayTemplateConfigManager,
         _filter_sites_with_location,
         _find_existing_picocell_index,
@@ -327,7 +327,7 @@ class TestFetchTemplates:
             {"name": "Alpha", "id": "a1"},
         ]
 
-        with patch("src.gateway.template_config.mistapi") as mock_api:
+        with patch("src.mist.resources.gateway.template_config.mistapi") as mock_api:
             mock_api.api.v1.orgs.gatewaytemplates.listOrgGatewayTemplates.return_value = mock_resp
             mock_api.get_all.return_value = mock_templates
             result = mgr._fetch_templates()
@@ -339,7 +339,7 @@ class TestFetchTemplates:
         mgr = _make_manager()
         mock_resp = MagicMock()
 
-        with patch("src.gateway.template_config.mistapi") as mock_api:
+        with patch("src.mist.resources.gateway.template_config.mistapi") as mock_api:
             mock_api.api.v1.orgs.gatewaytemplates.listOrgGatewayTemplates.return_value = mock_resp
             mock_api.get_all.return_value = []
             result = mgr._fetch_templates()
@@ -349,7 +349,7 @@ class TestFetchTemplates:
     def test_returns_none_on_exception(self) -> None:
         mgr = _make_manager()
 
-        with patch("src.gateway.template_config.mistapi") as mock_api:
+        with patch("src.mist.resources.gateway.template_config.mistapi") as mock_api:
             mock_api.api.v1.orgs.gatewaytemplates.listOrgGatewayTemplates.side_effect = RuntimeError("fail")
             result = mgr._fetch_templates()
 
@@ -393,7 +393,7 @@ class TestFetchTemplateConfig:
         mock_resp = MagicMock()
         mock_resp.data = {"name": "Test", "port_config": {}}
 
-        with patch("src.gateway.template_config.mistapi") as mock_api:
+        with patch("src.mist.resources.gateway.template_config.mistapi") as mock_api:
             mock_api.api.v1.orgs.gatewaytemplates.getOrgGatewayTemplate.return_value = mock_resp
             result = mgr._fetch_template_config({"id": "t1", "name": "T1"})
 
@@ -404,7 +404,7 @@ class TestFetchTemplateConfig:
         mock_resp = MagicMock()
         mock_resp.data = "invalid"
 
-        with patch("src.gateway.template_config.mistapi") as mock_api:
+        with patch("src.mist.resources.gateway.template_config.mistapi") as mock_api:
             mock_api.api.v1.orgs.gatewaytemplates.getOrgGatewayTemplate.return_value = mock_resp
             result = mgr._fetch_template_config({"id": "t1", "name": "T1"})
 
@@ -413,7 +413,7 @@ class TestFetchTemplateConfig:
     def test_returns_none_on_exception(self) -> None:
         mgr = _make_manager()
 
-        with patch("src.gateway.template_config.mistapi") as mock_api:
+        with patch("src.mist.resources.gateway.template_config.mistapi") as mock_api:
             mock_api.api.v1.orgs.gatewaytemplates.getOrgGatewayTemplate.side_effect = RuntimeError("fail")
             result = mgr._fetch_template_config({"id": "t1", "name": "T1"})
 
@@ -566,7 +566,7 @@ class TestApplyToTemplates:
         mock_update_resp = MagicMock()
         mock_update_resp.status_code = 200
 
-        with patch("src.gateway.template_config.mistapi") as mock_api:
+        with patch("src.mist.resources.gateway.template_config.mistapi") as mock_api:
             mock_api.api.v1.orgs.gatewaytemplates.getOrgGatewayTemplate.return_value = mock_get_resp
             mock_api.api.v1.orgs.gatewaytemplates.updateOrgGatewayTemplate.return_value = mock_update_resp
 
@@ -585,7 +585,7 @@ class TestApplyToTemplates:
         mock_update_resp = MagicMock()
         mock_update_resp.status_code = 400
 
-        with patch("src.gateway.template_config.mistapi") as mock_api:
+        with patch("src.mist.resources.gateway.template_config.mistapi") as mock_api:
             mock_api.api.v1.orgs.gatewaytemplates.getOrgGatewayTemplate.return_value = mock_get_resp
             mock_api.api.v1.orgs.gatewaytemplates.updateOrgGatewayTemplate.return_value = mock_update_resp
 
@@ -686,7 +686,7 @@ class TestGetExistingTemplateNames:
         mgr = _make_manager()
         mock_resp = MagicMock()
 
-        with patch("src.gateway.template_config.mistapi") as mock_api:
+        with patch("src.mist.resources.gateway.template_config.mistapi") as mock_api:
             mock_api.api.v1.orgs.gatewaytemplates.listOrgGatewayTemplates.return_value = mock_resp
             mock_api.get_all.return_value = [
                 {"name": "T1", "id": "id1"},
@@ -699,7 +699,7 @@ class TestGetExistingTemplateNames:
     def test_returns_empty_on_error(self) -> None:
         mgr = _make_manager()
 
-        with patch("src.gateway.template_config.mistapi") as mock_api:
+        with patch("src.mist.resources.gateway.template_config.mistapi") as mock_api:
             mock_api.api.v1.orgs.gatewaytemplates.listOrgGatewayTemplates.side_effect = RuntimeError("fail")
             result = mgr._get_existing_template_names()
 
@@ -714,7 +714,7 @@ class TestCreateTemplates:
         existing = {"Base_TX": "existing-id"}
         to_create = [{"name": "Base_TX"}]
 
-        with patch("src.gateway.template_config.mistapi"):
+        with patch("src.mist.resources.gateway.template_config.mistapi"):
             result = mgr._create_templates({"name": "Base"}, to_create, existing)
 
         assert result["Base_TX"] == "existing-id"
@@ -727,7 +727,7 @@ class TestCreateTemplates:
 
         to_create = [{"name": "Base_TX"}]
 
-        with patch("src.gateway.template_config.mistapi") as mock_api:
+        with patch("src.mist.resources.gateway.template_config.mistapi") as mock_api:
             mock_api.api.v1.orgs.gatewaytemplates.createOrgGatewayTemplate.return_value = mock_resp
             result = mgr._create_templates({"name": "Base", "id": "src-id"}, to_create, {})
 
@@ -752,7 +752,7 @@ class TestAssignSites:
         ]
         template_map = {"Base_TX": "new-id"}
 
-        with patch("src.gateway.template_config.mistapi") as mock_api:
+        with patch("src.mist.resources.gateway.template_config.mistapi") as mock_api:
             mock_api.api.v1.sites.sites.updateSiteInfo.return_value = mock_resp
             results = mgr._assign_sites(assignments, template_map)
 
@@ -769,7 +769,7 @@ class TestAssignSites:
             }
         ]
 
-        with patch("src.gateway.template_config.mistapi"):
+        with patch("src.mist.resources.gateway.template_config.mistapi"):
             results = mgr._assign_sites(assignments, {})
 
         assert results[0]["status"] == "SKIPPED"
@@ -786,7 +786,7 @@ class TestAssignSites:
         ]
         template_map = {"Base_TX": "same-id"}
 
-        with patch("src.gateway.template_config.mistapi"):
+        with patch("src.mist.resources.gateway.template_config.mistapi"):
             results = mgr._assign_sites(assignments, template_map)
 
         assert results[0]["status"] == "SKIPPED"
@@ -1071,7 +1071,7 @@ class TestSaveExtractionSuccessPath:
         mgr = _make_manager()  # Create manager with mocked dependencies
         extraction = {"configurations": {"service_policies": []}}  # Extraction data to save
         selected = {"name": "TestTemplate", "id": "id1"}  # Template that was extracted from
-        with patch("src.gateway.template_config.open", MagicMock()) as mock_open:  # Mock file open
+        with patch("src.mist.resources.gateway.template_config.open", MagicMock()) as mock_open:  # Mock file open
             mock_open.return_value.__enter__ = MagicMock(return_value=MagicMock())  # Context entry
             mock_open.return_value.__exit__ = MagicMock(return_value=False)  # Context exit
             mgr._save_extraction(extraction, selected)  # Should not raise; prints success
@@ -1085,7 +1085,7 @@ class TestLoadExtractionFileErrors:
     def test_os_error_returns_none(self) -> None:
         """Lines 324-326: OSError reading data directory → returns None."""
         mgr = _make_manager()  # Create manager with mocked dependencies
-        with patch("src.gateway.template_config.os.listdir", side_effect=OSError("no dir")):
+        with patch("src.mist.resources.gateway.template_config.os.listdir", side_effect=OSError("no dir")):
             result = mgr._load_extraction_file()  # Should catch OSError and return None
         assert result is None  # Verify error path returns None gracefully
 
@@ -1108,7 +1108,7 @@ class TestPromptFileSelectionEdgeCases:
     def test_file_load_exception_returns_none(self) -> None:
         """Lines 363-365: valid selection index but file open raises → returns None."""
         mgr = _make_manager(input_fn=MagicMock(return_value="0"))  # Valid index selection
-        with patch("src.gateway.template_config.open", side_effect=OSError("no file")):
+        with patch("src.mist.resources.gateway.template_config.open", side_effect=OSError("no file")):
             result = mgr._prompt_file_selection(["file1.json"])  # File open fails
         assert result is None  # Verify file error returns None
 
@@ -1198,7 +1198,7 @@ class TestLoadSitesWithLocation:
     def test_file_error_returns_none(self) -> None:
         """Lines 503-505: IOError opening sites CSV → returns None."""
         mgr = _make_manager()  # Create manager with mocked dependencies
-        with patch("src.gateway.template_config.open", side_effect=OSError("no file")):
+        with patch("src.mist.resources.gateway.template_config.open", side_effect=OSError("no file")):
             result = mgr._load_sites_with_location()  # File open fails
         assert result is None  # Verify file error returns None gracefully
 
@@ -1206,7 +1206,7 @@ class TestLoadSitesWithLocation:
         """Lines 553-555: CSV with no data rows (only header) → returns None."""
         mgr = _make_manager()  # Create manager with mocked dependencies
         csv_header_only = "site_name,address,country_code,state\n"  # Header row, no data
-        with patch("src.gateway.template_config.open", MagicMock()) as mock_open:
+        with patch("src.mist.resources.gateway.template_config.open", MagicMock()) as mock_open:
             mock_open.return_value.__enter__ = MagicMock(  # Context manager entry
                 return_value=csv_header_only.splitlines(keepends=True)  # Simulate file lines
             )
@@ -1218,9 +1218,9 @@ class TestLoadSitesWithLocation:
         """Lines 559-561: all sites have empty state/country → _filter returns empty → None."""
         mgr = _make_manager()  # Create manager with mocked dependencies
         with (  # Patch open to return data and filter to return empty
-            patch("src.gateway.template_config.open", MagicMock()),  # Mock file open
+            patch("src.mist.resources.gateway.template_config.open", MagicMock()),  # Mock file open
             patch(
-                "src.gateway.template_config._filter_sites_with_location",  # Mock filter
+                "src.mist.resources.gateway.template_config._filter_sites_with_location",  # Mock filter
                 return_value=[],  # No sites have location data
             ),
         ):
@@ -1235,9 +1235,9 @@ class TestLoadSitesWithLocation:
         filtered = [{"name": "S1", "state": "TX", "country": "US"}]  # Sites with location data
         csv_data = "name,address\nS1,123 Main\n"  # Minimal CSV with one data row
         with (  # Patch open to return valid CSV and filter to return known sites
-            patch("src.gateway.template_config.open", mk_open(read_data=csv_data)),  # Valid CSV
+            patch("src.mist.resources.gateway.template_config.open", mk_open(read_data=csv_data)),  # Valid CSV
             patch(
-                "src.gateway.template_config._filter_sites_with_location",  # Mock filter
+                "src.mist.resources.gateway.template_config._filter_sites_with_location",  # Mock filter
                 return_value=filtered,  # Return non-empty filtered list
             ),
         ):
@@ -1272,7 +1272,9 @@ class TestCreateTemplatesEdgeCases:
         mistapi_mock.api.v1.orgs.gatewaytemplates.createOrgGatewayTemplate.return_value = mock_resp
         source_config = {"service_policies": []}  # Source config to clone from
         to_create = [{"name": "T-TX", "key": "TX", "type": "state"}]  # Templates to create
-        with patch("src.gateway.template_config.mistapi", mistapi_mock):  # Bind the product module to this mock.
+        with patch(
+            "src.mist.resources.gateway.template_config.mistapi", mistapi_mock
+        ):  # Bind the product module to this mock.
             result = mgr._create_templates(source_config, to_create, {})  # Call with empty existing.
         assert result == {"T-TX": "new-template-id"}  # Prove the create path maps the new template identifier.
         assert mistapi_mock.api.v1.orgs.gatewaytemplates.createOrgGatewayTemplate.call_count == 1  # Prove one API call.
@@ -1288,7 +1290,9 @@ class TestCreateTemplatesEdgeCases:
         mistapi_mock.api.v1.orgs.gatewaytemplates.createOrgGatewayTemplate.return_value = mock_resp
         source_config = {"service_policies": []}  # Source config to clone from
         to_create = [{"name": "T-TX", "key": "TX", "type": "state"}]  # Templates to create
-        with patch("src.gateway.template_config.mistapi", mistapi_mock):  # Bind the product module to this mock.
+        with patch(
+            "src.mist.resources.gateway.template_config.mistapi", mistapi_mock
+        ):  # Bind the product module to this mock.
             result = mgr._create_templates(source_config, to_create, {})  # Should handle failure.
         assert result == {}  # Prove the failure path returns no successful template mapping.
         assert mistapi_mock.api.v1.orgs.gatewaytemplates.createOrgGatewayTemplate.call_count == 1  # Prove one API call.
@@ -1386,7 +1390,9 @@ class TestCoverageGapsExtra:
     def test_save_extraction_open_raises_covers_305_307(self, capsys: object) -> None:
         """Lines 305-307: open() raises IOError → except block prints error + logs."""
         mgr = _make_manager()  # create manager with default mocked dependencies
-        with patch("src.gateway.template_config.open", side_effect=OSError("disk full"), create=True):  # patch open
+        with patch(
+            "src.mist.resources.gateway.template_config.open", side_effect=OSError("disk full"), create=True
+        ):  # patch open
             mgr._save_extraction({"key": "val"}, {"name": "TestTemplate", "id": "t1"})  # call; open raises
         assert "Error saving extraction file" in capsys.readouterr().out  # Prove the error branch reported the failure.
 
@@ -1441,7 +1447,7 @@ class TestCoverageGapsExtra:
         csv_file.write_text("id,name,country_code,state\ns1,SiteA,US,TX\n")  # write data
         mgr = _make_manager(get_csv_path_fn=lambda _: str(csv_file))  # route CSV path to file
         with patch(  # patch _filter_sites_with_location to return empty list
-            "src.gateway.template_config._filter_sites_with_location",
+            "src.mist.resources.gateway.template_config._filter_sites_with_location",
             return_value=[],  # empty → triggers lines 564-565
         ):
             result = mgr._load_sites_with_location()  # call the method

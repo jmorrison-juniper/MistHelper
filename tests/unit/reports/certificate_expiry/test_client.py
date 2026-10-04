@@ -7,7 +7,9 @@ from unittest.mock import Mock  # Replace SDK functions without network access.
 
 import mistapi  # Patch the installed SDK functions used by the client.
 
-from src.reports.certificate_expiry.client import CertificateExpiryClient  # Import the client under test.
+from src.mist.intelligence.reports.certificate_expiry.client import (
+    CertificateExpiryClient,
+)  # Import the client under test.
 
 
 def test_client_reads_requested_sources_without_network(monkeypatch) -> None:

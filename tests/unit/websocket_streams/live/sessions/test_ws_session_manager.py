@@ -7,31 +7,54 @@ import logging  # caplog checks the audit line.
 import time  # Real runner failure tests use bounded waits.
 
 import pytest  # The tests check contract errors.
-
 import websocket  # Failure tests build the same exception type as websocket-client.
-from src.websocket_streams.catalog.model import (
+
+from src.mist.realtime.websocket_streams.catalog.model import (
     ChannelDefinition,
     FieldKind,
     FieldSpec,
     Safety,
     UtilityDefinition,
 )  # Tests build local definitions.
-from src.websocket_streams.intake.fields.error import StreamRequestError  # The manager raises these errors.
-from src.websocket_streams.intake.start_request.models import StartRequest  # Tests build checked requests by hand.
-from src.websocket_streams.live.runners.channel.runner import (
+from src.mist.realtime.websocket_streams.intake.fields.error import (
+    StreamRequestError,
+)  # The manager raises these errors.
+from src.mist.realtime.websocket_streams.intake.start_request.models import (
+    StartRequest,
+)  # Tests build checked requests by hand.
+from src.mist.realtime.websocket_streams.live.runners.channel.runner import (
     ChannelStreamRunner,
 )  # Factory tests assert runner classes.
-from src.websocket_streams.live.runners.shell.runners import ScreenRunner, ShellRunner  # Factory runner classes.
-from src.websocket_streams.live.runners.text.redaction import ShellAddressFilter  # Count redaction filters.
-from src.websocket_streams.live.runners.utility.runner.utility_runner import UtilityRunner  # Utility runner class.
-from src.websocket_streams.live.sessions.manager.factory import RunnerFactory  # Test concrete runner selection.
-from src.websocket_streams.live.sessions.manager.lifecycle import StreamSessionManager  # Test manager behavior.
-from src.websocket_streams.live.sessions.record.state import SessionState  # Tests finish sessions directly.
-from src.websocket_streams.live.sessions.settings import StreamSettings  # The manager needs limits.
-from src.websocket_streams.live.terminal.input_queue import TerminalInput  # Tests assert the shell queue type.
-from src.websocket_streams.live.terminal.state.size import TerminalSize  # Tests assert terminal size values.
-from src.websocket_streams.live.terminal.state.terminal_state import TerminalState  # Tests assert state values.
-from src.websocket_streams.live.transport.endpoint import (
+from src.mist.realtime.websocket_streams.live.runners.shell.runners import (
+    ScreenRunner,
+    ShellRunner,
+)  # Factory runner classes.
+from src.mist.realtime.websocket_streams.live.runners.text.redaction import (
+    ShellAddressFilter,
+)  # Count redaction filters.
+from src.mist.realtime.websocket_streams.live.runners.utility.runner.utility_runner import (
+    UtilityRunner,
+)  # Utility runner class.
+from src.mist.realtime.websocket_streams.live.sessions.manager.factory import (
+    RunnerFactory,
+)  # Test concrete runner selection.
+from src.mist.realtime.websocket_streams.live.sessions.manager.lifecycle import (
+    StreamSessionManager,
+)  # Test manager behavior.
+from src.mist.realtime.websocket_streams.live.sessions.record.state import (
+    SessionState,
+)  # Tests finish sessions directly.
+from src.mist.realtime.websocket_streams.live.sessions.settings import StreamSettings  # The manager needs limits.
+from src.mist.realtime.websocket_streams.live.terminal.input_queue import (
+    TerminalInput,
+)  # Tests assert the shell queue type.
+from src.mist.realtime.websocket_streams.live.terminal.state.size import (
+    TerminalSize,
+)  # Tests assert terminal size values.
+from src.mist.realtime.websocket_streams.live.terminal.state.terminal_state import (
+    TerminalState,
+)  # Tests assert state values.
+from src.mist.realtime.websocket_streams.live.transport.endpoint import (
     ConnectFailure,
     TransportProfile,
 )  # Factory tests avoid real Mist sockets.

@@ -155,7 +155,7 @@
   3. Config: View revisions → Diff two revisions → Install from revision (with confirmation)
   4. Deploy: Create job → Dry run → Submit → Approve
   5. Audit: Filter records → Export CSV
-- **Coverage targets**: 80% statement coverage for `src/api/` and `src/hooks/` (business logic). Component tests for all confirmation dialogs (safety-critical).
+- **Coverage targets**: 80% statement coverage for `src/mist/access/api/` and `src/hooks/` (business logic). Component tests for all confirmation dialogs (safety-critical).
 
 ### Alternatives Considered
 - **Jest**: Vitest is faster (Vite-native) and has identical API. No benefit to Jest.

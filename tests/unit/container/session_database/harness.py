@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
-from src.db import DatabaseConfig, WriteResult
+from src.foundation.persistence.db import DatabaseConfig, WriteResult
 from tests.unit.container.bash_support import BASH_PATH, BASH_SKIP_REASON
 
 
@@ -177,7 +177,7 @@ class SessionDatabaseProbe:
     def configuration(cls) -> int:
         """Replace discovery only and use the actual configuration builder."""
         expected = cls.expected()
-        with patch("src.db._hosts_unreachable", return_value=False):
+        with patch("src.foundation.persistence.db._hosts_unreachable", return_value=False):
             configuration = DatabaseConfig.from_env()
         cls.verify_config(configuration, expected)
         print("Checked 7 database settings.")
@@ -249,15 +249,15 @@ class FixtureDatabaseExport:
     @classmethod
     def export(cls, backend: FixtureArangoDatabase) -> None:
         """Replace backend connections only, not exporter or router behavior."""
-        from src.dataclasses.export_backend_options import ExportBackendOptions
-        from src.export.data_exporter import DataExporter
+        from src.foundation.models.dataclasses.export_backend_options import ExportBackendOptions
+        from src.operations.exporting.export.data_exporter import DataExporter
 
         with (
-            patch("src.db._hosts_unreachable", return_value=False),
-            patch("src.export.data_exporter.polyglot_hosts_unreachable", return_value=False),
-            patch("src.db.router.ArangoDBWriter", autospec=True, side_effect=backend.connect),
-            patch("src.db.router.RedisTimeSeriesWriter", autospec=True),
-            patch("src.db.router.RedisJSONWriter", autospec=True),
+            patch("src.foundation.persistence.db._hosts_unreachable", return_value=False),
+            patch("src.operations.exporting.export.data_exporter.polyglot_hosts_unreachable", return_value=False),
+            patch("src.foundation.persistence.db.router.ArangoDBWriter", autospec=True, side_effect=backend.connect),
+            patch("src.foundation.persistence.db.router.RedisTimeSeriesWriter", autospec=True),
+            patch("src.foundation.persistence.db.router.RedisJSONWriter", autospec=True),
         ):
             result = DataExporter.write_with_format_selection(
                 cls.RECORDS,

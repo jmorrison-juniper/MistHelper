@@ -109,14 +109,14 @@ Full test suite passes with no behavioral regression.
 
 ## Phase 7: User Story 5 — Replace Magic HTTP Status Code with Named Constant (Priority: P2)
 
-**Goal**: Replace `status_code != 200` at line 1062 in `src/network/routing_utils.py` with
+**Goal**: Replace `status_code != 200` at line 1062 in `src/mist/networking/network/routing_utils.py` with
 `status_code != requests.codes.ok`, eliminating the magic number.
 
-**Independent Test**: `ruff check src/network/routing_utils.py` reports no PLR2004 on line 1062.
+**Independent Test**: `ruff check src/mist/networking/network/routing_utils.py` reports no PLR2004 on line 1062.
 Routing behavior is functionally identical.
 
-- [X] T023 [P] [US5] Replace `status_code != 200` with `status_code != requests.codes.ok` at line 1062 in `src/network/routing_utils.py`; confirm `import requests` is already present (research.md confirms it is); remove `# noqa: PLR2004` annotation from that line
-- [X] T024 [US5] Run `python -m ruff check src/network/routing_utils.py` to verify no PLR2004 on line 1062 (SC-004); run `Select-String -Path src/network/routing_utils.py -Pattern '!= 200|requests.codes.ok' | Select-Object LineNumber, Line` to confirm the replacement
+- [X] T023 [P] [US5] Replace `status_code != 200` with `status_code != requests.codes.ok` at line 1062 in `src/mist/networking/network/routing_utils.py`; confirm `import requests` is already present (research.md confirms it is); remove `# noqa: PLR2004` annotation from that line
+- [X] T024 [US5] Run `python -m ruff check src/mist/networking/network/routing_utils.py` to verify no PLR2004 on line 1062 (SC-004); run `Select-String -Path src/mist/networking/network/routing_utils.py -Pattern '!= 200|requests.codes.ok' | Select-Object LineNumber, Line` to confirm the replacement
 
 **Checkpoint**: US5 complete — magic number eliminated; named constant in place.
 
@@ -126,7 +126,7 @@ Routing behavior is functionally identical.
 
 **Purpose**: Verify all P2 stories meet their success criteria before starting P3 refactoring.
 
-- [X] T025 Run full P2 gate battery and confirm all pass: `python -m py_compile MistHelper.py` (SC-009), `python -m ruff check MistHelper.py`, `python -m ruff check src/network/routing_utils.py` (SC-004), `bandit -r MistHelper.py` (SC-001, SC-002), `python MistHelper.py --test` (skip 14, 18, 63-65, 90-100) (SC-007)
+- [X] T025 Run full P2 gate battery and confirm all pass: `python -m py_compile MistHelper.py` (SC-009), `python -m ruff check MistHelper.py`, `python -m ruff check src/mist/networking/network/routing_utils.py` (SC-004), `bandit -r MistHelper.py` (SC-001, SC-002), `python MistHelper.py --test` (skip 14, 18, 63-65, 90-100) (SC-007)
 
 **Checkpoint**: P2 gate green. Begin P3 PLR0913 refactoring.
 
@@ -146,22 +146,22 @@ each file reports no PLR0913 for the refactored functions. Full test suite passe
 
 ### Phase 9a: csv_comparator.py Refactor (Independent — Different File)
 
-- [X] T026 [P] [US6] Define `ComparisonItemConfig` dataclass in `src/inventory/csv_comparator.py` co-located with its class (per data-model.md: 8 fields — `device`, `device_serial`, `mist_address`, `comparison_address`, `comparison_result`, `week_key`, `mismatch_type`, `validation_result`); add `from dataclasses import dataclass` and `from typing import Any` imports
-- [X] T027 [US6] Refactor `_build_mismatch_item` at line 1085 in `src/inventory/csv_comparator.py` to accept a single `ComparisonItemConfig` parameter; update all call sites in the same file to construct and pass the dataclass; remove `# noqa: PLR0913`
-- [X] T028 [US6] Refactor `_build_diff_item` at line 1128 in `src/inventory/csv_comparator.py` to accept `ComparisonItemConfig` (shared with `_build_mismatch_item`); update all call sites; remove `# noqa: PLR0913`
-- [X] T029 [US6] Run `python -m ruff check src/inventory/csv_comparator.py` (no PLR0913 for refactored functions, SC-008) and `python MistHelper.py --test` (skip 14, 18, 63-65, 90-100) to verify no regression
+- [X] T026 [P] [US6] Define `ComparisonItemConfig` dataclass in `src/mist/resources/inventory/csv_comparator.py` co-located with its class (per data-model.md: 8 fields — `device`, `device_serial`, `mist_address`, `comparison_address`, `comparison_result`, `week_key`, `mismatch_type`, `validation_result`); add `from dataclasses import dataclass` and `from typing import Any` imports
+- [X] T027 [US6] Refactor `_build_mismatch_item` at line 1085 in `src/mist/resources/inventory/csv_comparator.py` to accept a single `ComparisonItemConfig` parameter; update all call sites in the same file to construct and pass the dataclass; remove `# noqa: PLR0913`
+- [X] T028 [US6] Refactor `_build_diff_item` at line 1128 in `src/mist/resources/inventory/csv_comparator.py` to accept `ComparisonItemConfig` (shared with `_build_mismatch_item`); update all call sites; remove `# noqa: PLR0913`
+- [X] T029 [US6] Run `python -m ruff check src/mist/resources/inventory/csv_comparator.py` (no PLR0913 for refactored functions, SC-008) and `python MistHelper.py --test` (skip 14, 18, 63-65, 90-100) to verify no regression
 
 ---
 
 ### Phase 9b: routing_utils.py Refactors (Independent — Different File, Parallelizable with 9a)
 
-- [X] T030 [P] [US6] Define `RoutingTableContext` dataclass in `src/network/routing_utils.py` co-located with its class (per data-model.md: 6 fields — `websocket_manager`, `session_id`, `device_id`, `device_info`, `payload`, `debug_mode`); add `from dataclasses import dataclass` and `from typing import Any` imports if not present
-- [X] T031 [US6] Refactor `_process_routing_table_results` at line 1451 in `src/network/routing_utils.py` to accept `RoutingTableContext`; update all call sites; remove `# noqa: PLR0913`
-- [X] T032 [US6] Refactor `_display_routing_table_output` at line 1480 in `src/network/routing_utils.py` to accept `RoutingTableContext` plus a separate `result` argument (keep `result` explicit, not in the dataclass, to preserve single-responsibility between process and display); update all call sites; remove `# noqa: PLR0913`
-- [X] T033 [P] [US6] Define `SsrRouteQuery` dataclass in `src/network/routing_utils.py` (per data-model.md: 8 string filter fields — `protocol_input`, `prefix_input`, `vrf_input`, `neighbor_input`, `route_direction`, `node_input`, `interval_input`, `duration_input`)
-- [X] T034 [US6] Refactor `_build_ssr_payload` at line 1656 in `src/network/routing_utils.py` to accept `SsrRouteQuery`; update all call sites; remove `# noqa: PLR0913`
-- [X] T035 [US6] Inspect signatures of `_process_ssr_route_results` at line 1779 and `_display_ssr_route_output` at line 1811 in `src/network/routing_utils.py`; if shared parameter subset >= 5 fields, define `SsrRouteContext` dataclass per data-model.md placeholder; if signatures diverge significantly, create two separate dataclasses (`SsrProcessContext`, `SsrDisplayContext`); refactor both functions; update all call sites; remove `# noqa: PLR0913`
-- [X] T036 [US6] Run `python -m ruff check src/network/routing_utils.py` (no PLR0913 for refactored functions, SC-008) and `python MistHelper.py --test` (skip 14, 18, 63-65, 90-100) to verify no regression
+- [X] T030 [P] [US6] Define `RoutingTableContext` dataclass in `src/mist/networking/network/routing_utils.py` co-located with its class (per data-model.md: 6 fields — `websocket_manager`, `session_id`, `device_id`, `device_info`, `payload`, `debug_mode`); add `from dataclasses import dataclass` and `from typing import Any` imports if not present
+- [X] T031 [US6] Refactor `_process_routing_table_results` at line 1451 in `src/mist/networking/network/routing_utils.py` to accept `RoutingTableContext`; update all call sites; remove `# noqa: PLR0913`
+- [X] T032 [US6] Refactor `_display_routing_table_output` at line 1480 in `src/mist/networking/network/routing_utils.py` to accept `RoutingTableContext` plus a separate `result` argument (keep `result` explicit, not in the dataclass, to preserve single-responsibility between process and display); update all call sites; remove `# noqa: PLR0913`
+- [X] T033 [P] [US6] Define `SsrRouteQuery` dataclass in `src/mist/networking/network/routing_utils.py` (per data-model.md: 8 string filter fields — `protocol_input`, `prefix_input`, `vrf_input`, `neighbor_input`, `route_direction`, `node_input`, `interval_input`, `duration_input`)
+- [X] T034 [US6] Refactor `_build_ssr_payload` at line 1656 in `src/mist/networking/network/routing_utils.py` to accept `SsrRouteQuery`; update all call sites; remove `# noqa: PLR0913`
+- [X] T035 [US6] Inspect signatures of `_process_ssr_route_results` at line 1779 and `_display_ssr_route_output` at line 1811 in `src/mist/networking/network/routing_utils.py`; if shared parameter subset >= 5 fields, define `SsrRouteContext` dataclass per data-model.md placeholder; if signatures diverge significantly, create two separate dataclasses (`SsrProcessContext`, `SsrDisplayContext`); refactor both functions; update all call sites; remove `# noqa: PLR0913`
+- [X] T036 [US6] Run `python -m ruff check src/mist/networking/network/routing_utils.py` (no PLR0913 for refactored functions, SC-008) and `python MistHelper.py --test` (skip 14, 18, 63-65, 90-100) to verify no regression
 
 ---
 
@@ -184,7 +184,7 @@ each file reports no PLR0913 for the refactored functions. Full test suite passe
 
 **Purpose**: Verify the complete US6 work meets SC-007 and SC-008 before stale cleanup.
 
-- [X] T045 Run full Phase 2 gate per plan.md task 2.8: `python -m ruff check src/inventory/csv_comparator.py` (no PLR0913, SC-008), `python -m ruff check src/network/routing_utils.py` (no PLR0913, SC-008), `python -m ruff check MistHelper.py`, `bandit -r MistHelper.py` (SC-001, SC-002), `python MistHelper.py --test` (skip 14, 18, 63-65, 90-100) (SC-007)
+- [X] T045 Run full Phase 2 gate per plan.md task 2.8: `python -m ruff check src/mist/resources/inventory/csv_comparator.py` (no PLR0913, SC-008), `python -m ruff check src/mist/networking/network/routing_utils.py` (no PLR0913, SC-008), `python -m ruff check MistHelper.py`, `bandit -r MistHelper.py` (SC-001, SC-002), `python MistHelper.py --test` (skip 14, 18, 63-65, 90-100) (SC-007)
 
 **Checkpoint**: P3 gate green. Proceed to stale annotation cleanup (requires US1 merged/active).
 
@@ -214,7 +214,7 @@ criteria are met, and prepare the branch for PR.
 
 - [X] T049 Verify final suppression count across `MistHelper.py`, `starlink_dashboard.py`, and `src/**/*.py` is strictly lower than the baseline captured in T002 (SC-005 final verification)
 - [X] T050 Update `CHANGELOG.md` with a version entry (format `YY.MM.DD.HH.MM` UTC) for `chore/189-quality-gate-remediation` documenting: `warn_unused_ignores` enabled, dead code/imports removed from `starlink_dashboard.py`, `os.system` replaced with `subprocess.run`, 20 production asserts replaced with explicit raises, magic HTTP constant replaced, PLR0913 functions refactored to dataclass config objects
-- [X] T051 Run the complete final gate battery and confirm all pass: `python -m py_compile MistHelper.py` (SC-009), `python -m ruff check MistHelper.py`, `python -m ruff check starlink_dashboard.py` (SC-003), `python -m ruff check src/inventory/csv_comparator.py` (SC-008), `python -m ruff check src/network/routing_utils.py` (SC-004, SC-008), `bandit -r MistHelper.py` (SC-001, SC-002), `mypy --config-file pyproject.toml MistHelper.py` (SC-006), `python MistHelper.py --test` skip 14 18 63-65 90-100 (SC-007)
+- [X] T051 Run the complete final gate battery and confirm all pass: `python -m py_compile MistHelper.py` (SC-009), `python -m ruff check MistHelper.py`, `python -m ruff check starlink_dashboard.py` (SC-003), `python -m ruff check src/mist/resources/inventory/csv_comparator.py` (SC-008), `python -m ruff check src/mist/networking/network/routing_utils.py` (SC-004, SC-008), `bandit -r MistHelper.py` (SC-001, SC-002), `mypy --config-file pyproject.toml MistHelper.py` (SC-006), `python MistHelper.py --test` skip 14 18 63-65 90-100 (SC-007)
 
 **Checkpoint**: All 9 success criteria met. Branch is ready for PR.
 

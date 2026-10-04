@@ -10,7 +10,9 @@ from typing import Any
 
 import pytest
 
-from src.utils.process_safe_log_handler import ProcessSafeRotatingFileHandler
+from src.foundation.support.utils.process_safe_log_handler import (
+    ProcessSafeRotatingFileHandler,
+)  # Import the handler from its canonical moved module.
 
 
 def _write_concurrent_records(log_path: str, barrier: Any, worker_id: int) -> None:

@@ -2,7 +2,9 @@
 
 from __future__ import annotations  # Keep test annotations import-safe.
 
-from src.reports.site_variable_audit.model import SiteVariableAuditModel  # Test pure summary behavior.
+from src.mist.intelligence.reports.site_variable_audit.model import (
+    SiteVariableAuditModel,
+)  # Test pure summary behavior.
 from tests.unit.reports.site_variable_audit.site_variable_audit_fixtures_test import (  # Reuse offline records.
     SiteVariableAuditFixtures,
 )

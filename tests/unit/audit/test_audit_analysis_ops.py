@@ -1,4 +1,4 @@
-"""Wave 5 P2 coverage for src/audit/audit_analysis_ops.py (initiative #1018).
+"""Wave 5 P2 coverage for src/mist/access/audit/audit_analysis_ops.py (initiative #1018).
 
 Covers all static methods of ``AuditAnalysisOps``:
 - ``_prompt_audit_time_range_input`` in test-mode + interactive-mode branches.
@@ -21,8 +21,8 @@ from unittest.mock import MagicMock, patch  # WHY: mandatory spec= mocks + patch
 
 import pytest  # WHY: monkeypatch + caplog + capsys fixtures.
 
-from src.audit.audit_analysis_ops import AuditAnalysisOps  # WHY: SUT direct import.
-from src.audit.time_parser import ParsedTimeRange  # WHY: build real time-range value objects.
+from src.mist.access.audit.audit_analysis_ops import AuditAnalysisOps  # WHY: SUT direct import.
+from src.mist.access.audit.time_parser import ParsedTimeRange  # WHY: build real time-range value objects.
 
 
 def _install_fake_mist_helper(monkeypatch: pytest.MonkeyPatch, mh_module: Any) -> None:
@@ -61,7 +61,9 @@ class TestPromptAuditTimeRangeInput:
         mh.InputUtils.safe_input = MagicMock(return_value="  4w  ")  # WHY: stripped result asserted.
         _install_fake_mist_helper(monkeypatch, mh)
 
-        with caplog.at_level(logging.INFO, logger="src.audit.audit_analysis_ops"):  # WHY: capture guidance at INFO.
+        with caplog.at_level(
+            logging.INFO, logger="src.mist.access.audit.audit_analysis_ops"
+        ):  # WHY: capture guidance at INFO.
             result = AuditAnalysisOps._prompt_audit_time_range_input()  # WHY: exercise interactive branch.
 
         assert result == "4w"  # WHY: whitespace trimmed per SUT.
@@ -95,7 +97,7 @@ class TestFetchFilteredAuditEntries:
         fake_entries: list[dict[str, Any]] = [{"id": "1"}, {"id": "2"}]  # WHY: representative payload.
 
         with patch(  # WHY: patch mistapi call chain used inside the SUT.
-            "src.audit.audit_analysis_ops.mistapi"
+            "src.mist.access.audit.audit_analysis_ops.mistapi"
         ) as fake_mistapi:
             fake_mistapi.api.v1.orgs.logs.listOrgAuditLogs.return_value = fake_response
             fake_mistapi.get_all.return_value = fake_entries  # WHY: pagination collates all pages.
@@ -114,7 +116,7 @@ class TestFetchFilteredAuditEntries:
         _install_fake_mist_helper(monkeypatch, mh)
         time_range = ParsedTimeRange(duration="1d", description="tiny")
 
-        with patch("src.audit.audit_analysis_ops.mistapi") as fake_mistapi:
+        with patch("src.mist.access.audit.audit_analysis_ops.mistapi") as fake_mistapi:
             fake_mistapi.api.v1.orgs.logs.listOrgAuditLogs.return_value = MagicMock(spec=object)
             fake_mistapi.get_all.return_value = None  # WHY: covers `... or []` fallback.
             result = AuditAnalysisOps._fetch_filtered_audit_entries("org-1", time_range)
@@ -129,7 +131,7 @@ class TestFetchFilteredAuditEntries:
         _install_fake_mist_helper(monkeypatch, mh)
         time_range = ParsedTimeRange(duration="4w", description="4 weeks")
 
-        with patch("src.audit.audit_analysis_ops.mistapi") as fake_mistapi:
+        with patch("src.mist.access.audit.audit_analysis_ops.mistapi") as fake_mistapi:
             fake_mistapi.api.v1.orgs.logs.listOrgAuditLogs.side_effect = RuntimeError("boom")
             with caplog.at_level(logging.ERROR):
                 result = AuditAnalysisOps._fetch_filtered_audit_entries("org-1", time_range)
@@ -146,7 +148,7 @@ class TestFetchFilteredAuditEntries:
         _install_fake_mist_helper(monkeypatch, mh)  # WHY: SUT's lazy import lands on our stub.
         time_range = ParsedTimeRange(duration="4w", description="4 weeks")  # WHY: valid range for the source call.
 
-        with patch("src.audit.audit_analysis_ops.mistapi") as fake_mistapi:
+        with patch("src.mist.access.audit.audit_analysis_ops.mistapi") as fake_mistapi:
             fake_mistapi.api.v1.orgs.logs.listOrgAuditLogs.side_effect = RuntimeError(
                 f"HTTP {status_code}"
             )  # WHY: force a status-bearing API failure.
@@ -165,13 +167,15 @@ class TestRenderAuditAnalysisReports:
     def test_delegates_to_renderer_and_prints_both_paths(self, caplog: pytest.LogCaptureFixture) -> None:
         """Both render methods are invoked with the analysis + report paths, and paths are logged."""
         analysis = MagicMock(spec=object)  # WHY: opaque analysis object passed through unmodified.
-        with patch("src.audit.audit_analysis_ops.AuditReportRenderer") as fake_renderer_cls:
+        with patch("src.mist.access.audit.audit_analysis_ops.AuditReportRenderer") as fake_renderer_cls:
             fake_renderer = MagicMock(spec=object)
             fake_renderer.render_mermaid = MagicMock()
             fake_renderer.render_html = MagicMock()
             fake_renderer_cls.return_value = fake_renderer
 
-            with caplog.at_level(logging.INFO, logger="src.audit.audit_analysis_ops"):  # WHY: prove INFO is visible.
+            with caplog.at_level(
+                logging.INFO, logger="src.mist.access.audit.audit_analysis_ops"
+            ):  # WHY: prove INFO is visible.
                 AuditAnalysisOps._render_audit_analysis_reports(analysis)  # WHY: exercise both report path records.
 
         expected_md = os.path.join("data", "OrgAuditAnalysis.md")  # WHY: mirror SUT's os.path.join contract.
@@ -232,7 +236,7 @@ class TestAuditLogAnalysisOrchestration:
         self._prime_helpers(monkeypatch, cache_hit=False, org_id="org-x")
         with (
             patch.object(AuditAnalysisOps, "_prompt_audit_time_range_input", return_value="bogus"),
-            patch("src.audit.audit_analysis_ops.TimeRangeParser") as fake_parser_cls,
+            patch("src.mist.access.audit.audit_analysis_ops.TimeRangeParser") as fake_parser_cls,
             patch.object(AuditAnalysisOps, "_fetch_filtered_audit_entries") as fake_fetch,
         ):
             fake_parser_cls.return_value.parse.side_effect = ValueError("bad range")
@@ -251,12 +255,14 @@ class TestAuditLogAnalysisOrchestration:
 
         with (
             patch.object(AuditAnalysisOps, "_prompt_audit_time_range_input", return_value="7d"),
-            patch("src.audit.audit_analysis_ops.TimeRangeParser") as fake_parser_cls,
+            patch("src.mist.access.audit.audit_analysis_ops.TimeRangeParser") as fake_parser_cls,
             patch.object(AuditAnalysisOps, "_fetch_filtered_audit_entries", return_value=None),
-            patch("src.audit.audit_analysis_ops.AuditLogFilter") as fake_filter_cls,
+            patch("src.mist.access.audit.audit_analysis_ops.AuditLogFilter") as fake_filter_cls,
         ):
             fake_parser_cls.return_value.parse.return_value = time_range
-            with caplog.at_level(logging.INFO, logger="src.audit.audit_analysis_ops"):  # WHY: capture progress records.
+            with caplog.at_level(
+                logging.INFO, logger="src.mist.access.audit.audit_analysis_ops"
+            ):  # WHY: capture progress records.
                 AuditAnalysisOps.audit_log_analysis()  # WHY: exercise the API-failure branch.
 
         fake_filter_cls.assert_not_called()  # WHY: API-failure aborts before filter+analyze.
@@ -281,10 +287,10 @@ class TestAuditLogAnalysisOrchestration:
 
         with (
             patch.object(AuditAnalysisOps, "_prompt_audit_time_range_input", return_value="7d"),
-            patch("src.audit.audit_analysis_ops.TimeRangeParser") as fake_parser_cls,
+            patch("src.mist.access.audit.audit_analysis_ops.TimeRangeParser") as fake_parser_cls,
             patch.object(AuditAnalysisOps, "_fetch_filtered_audit_entries", return_value=fake_entries),
-            patch("src.audit.audit_analysis_ops.AuditLogFilter") as fake_filter_cls,
-            patch("src.audit.audit_analysis_ops.AuditLogAnalyzer") as fake_analyzer_cls,
+            patch("src.mist.access.audit.audit_analysis_ops.AuditLogFilter") as fake_filter_cls,
+            patch("src.mist.access.audit.audit_analysis_ops.AuditLogAnalyzer") as fake_analyzer_cls,
             patch.object(AuditAnalysisOps, "_render_audit_analysis_reports") as fake_render,
         ):
             fake_parser_cls.return_value.parse.return_value = time_range
@@ -296,7 +302,9 @@ class TestAuditLogAnalysisOrchestration:
             fake_analyzer.analyze = MagicMock(return_value=fake_analysis)
             fake_analyzer_cls.return_value = fake_analyzer
 
-            with caplog.at_level(logging.INFO, logger="src.audit.audit_analysis_ops"):  # WHY: capture progress records.
+            with caplog.at_level(
+                logging.INFO, logger="src.mist.access.audit.audit_analysis_ops"
+            ):  # WHY: capture progress records.
                 AuditAnalysisOps.audit_log_analysis()  # WHY: exercise the full happy path.
 
         fake_analyzer.analyze.assert_called_once_with(

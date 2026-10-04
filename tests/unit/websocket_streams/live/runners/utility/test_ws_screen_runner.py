@@ -7,21 +7,39 @@ import threading  # The recording screen exposes bounded wait helpers.
 import time  # Tests use monotonic waits.
 
 import pytest  # Parametrized failure-path tests need pytest.
-
 import websocket  # Failure tests build the same exception type as websocket-client.
-from src.websocket_streams.catalog.model import FieldKind, FieldSpec, Safety, UtilityDefinition  # Build requests.
-from src.websocket_streams.intake.start_request.models import StartRequest  # Runners accept checked requests.
-from src.websocket_streams.live.runners.shell.runners import ScreenRunner  # The screen runner under test.
-from src.websocket_streams.live.runners.utility.triggers.table import UtilityTriggerTable  # Trigger table.
-from src.websocket_streams.live.sessions.buffer.message_buffer import (
+
+from src.mist.realtime.websocket_streams.catalog.model import (
+    FieldKind,
+    FieldSpec,
+    Safety,
+    UtilityDefinition,
+)  # Build requests.
+from src.mist.realtime.websocket_streams.intake.start_request.models import (
+    StartRequest,
+)  # Runners accept checked requests.
+from src.mist.realtime.websocket_streams.live.runners.shell.runners import ScreenRunner  # The screen runner under test.
+from src.mist.realtime.websocket_streams.live.runners.utility.triggers.table import (
+    UtilityTriggerTable,
+)  # Trigger table.
+from src.mist.realtime.websocket_streams.live.sessions.buffer.message_buffer import (
     MessageBuffer,
 )  # A stream session needs an event buffer.
-from src.websocket_streams.live.sessions.record.session import StreamSession
-from src.websocket_streams.live.sessions.record.state import SessionResources, SessionState  # The runner writes here.
-from src.websocket_streams.live.terminal.byte_history import ByteHistory  # Screen output is raw byte history.
-from src.websocket_streams.live.terminal.gateway import TerminalRunner  # Writable terminal runners satisfy this.
-from src.websocket_streams.live.terminal.state.terminal_state import TerminalState  # Build read-only screen state.
-from src.websocket_streams.live.transport.endpoint import (
+from src.mist.realtime.websocket_streams.live.sessions.record.session import StreamSession
+from src.mist.realtime.websocket_streams.live.sessions.record.state import (
+    SessionResources,
+    SessionState,
+)  # The runner writes here.
+from src.mist.realtime.websocket_streams.live.terminal.byte_history import (
+    ByteHistory,
+)  # Screen output is raw byte history.
+from src.mist.realtime.websocket_streams.live.terminal.gateway import (
+    TerminalRunner,
+)  # Writable terminal runners satisfy this.
+from src.mist.realtime.websocket_streams.live.terminal.state.terminal_state import (
+    TerminalState,
+)  # Build read-only screen state.
+from src.mist.realtime.websocket_streams.live.transport.endpoint import (
     ConnectFailure,
     MistStreamEndpoint,
     TransportProfile,

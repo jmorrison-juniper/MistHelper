@@ -5,10 +5,10 @@ Scope: T064/T065/T066/T067/T067A/T067B/T070/T071/T072
 
 ## Code Extraction and Delegation
 
-- Extracted `ServicePingManager` from `MistHelper.py` into `src/websocket/service_ping_manager.py`.
-- Extracted tenant/service discovery and payload composition logic into `src/websocket/service_ping_discovery.py`.
+- Extracted `ServicePingManager` from `MistHelper.py` into `src/mist/realtime/websocket/service_ping_manager.py`.
+- Extracted tenant/service discovery and payload composition logic into `src/mist/realtime/websocket/service_ping_discovery.py`.
 - Kept `MistHelper.py` as orchestration/delegation only for menu operation `120` via `_get_service_ping_manager_instance()` and wrapper delegation.
-- Updated websocket package exports in `src/websocket/__init__.py`.
+- Updated websocket package exports in `src/mist/realtime/websocket/__init__.py`.
 - Added unit tests:
   - `tests/unit/websocket/test_service_ping_manager.py`
   - `tests/unit/websocket/test_service_ping_discovery.py`

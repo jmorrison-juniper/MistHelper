@@ -8,8 +8,8 @@ from unittest.mock import MagicMock  # WHY: MagicMock(spec=Callable) is mandator
 
 import pytest  # WHY: caplog + monkeypatch fixtures assert log output + patch time.time
 
-from src import org_data_collector as odc  # WHY: SUT under test — grab module for private helpers
-from src.org_data_collector import (  # WHY: Public entry point + Operation dataclass
+from src.operations.wan import org_data_collector as odc  # Import the moved module from its canonical WAN package.
+from src.operations.wan.org_data_collector import (  # WHY: Public entry point + Operation dataclass
     ALL_OPERATIONS,
     Operation,
     OrgDataCollector,

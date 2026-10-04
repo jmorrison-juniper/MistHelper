@@ -18,7 +18,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.export.wan_client_events_exporter import (
+from src.operations.exporting.export.wan_client_events_exporter import (
     _OUTPUT_CSV,
     _PLACEHOLDER_HEADER,
     _PLACEHOLDER_MESSAGE,

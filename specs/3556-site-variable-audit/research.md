@@ -86,8 +86,8 @@ through `SourceDependencyResolver`. It must write reports through
 `DataExporter.write_with_format_selection`.
 
 **Rationale**: Existing new menu operations use this pattern. The closest
-examples are `src/security/rogue_dhcp/operation.py` and
-`src/marvis/actions/operation.py`.
+examples are `src/operations/protection/security/rogue_dhcp/operation.py` and
+`src/mist/intelligence/marvis/actions/operation.py`.
 
 **Alternatives considered**: Direct file writes were rejected because report
 exports must use existing output backend behavior.

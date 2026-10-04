@@ -13,8 +13,8 @@ Run these checks after implementation.
 
 ```powershell
 python -m pytest tests\unit\reports\subscription_expiry
-python -m ruff check src\reports\subscription_expiry tests\unit\reports\subscription_expiry
-python -m black --check src\reports\subscription_expiry tests\unit\reports\subscription_expiry
+python -m ruff check src\mist\intelligence\reports\subscription_expiry tests\unit\reports\subscription_expiry
+python -m black --check src\mist\intelligence\reports\subscription_expiry tests\unit\reports\subscription_expiry
 ```
 
 Expected result:

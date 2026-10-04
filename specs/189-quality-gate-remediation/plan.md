@@ -239,8 +239,8 @@ python -m py_compile MistHelper.py
 # Lint
 python -m ruff check MistHelper.py
 python -m ruff check starlink_dashboard.py
-python -m ruff check src/inventory/csv_comparator.py
-python -m ruff check src/network/routing_utils.py
+python -m ruff check src/mist/resources/inventory/csv_comparator.py
+python -m ruff check src/mist/networking/network/routing_utils.py
 
 # Security (target: zero B605, zero B101 in production files after Phase 1)
 bandit -r MistHelper.py

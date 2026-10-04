@@ -4,12 +4,16 @@ from collections.abc import Mapping  # Type the fake directory store.
 
 import pytest  # Pytest checks refusal paths.
 
-from src.websocket_streams.catalog.channels import ChannelCatalog  # Build the channel catalog.
-from src.websocket_streams.catalog.registry.stream_catalog import StreamCatalog  # Build the joined catalog.
-from src.websocket_streams.catalog.utilities.utility_catalog import UtilityCatalog  # Build the utility catalog.
-from src.websocket_streams.intake.fields.error import StreamRequestError  # Check refusal codes.
-from src.websocket_streams.intake.start_request.checker import StartRequestChecker  # Import the checker.
-from src.websocket_streams.intake.start_request.models import DeviceFacts  # Import checked device facts.
+from src.mist.realtime.websocket_streams.catalog.channels import ChannelCatalog  # Build the channel catalog.
+from src.mist.realtime.websocket_streams.catalog.registry.stream_catalog import (
+    StreamCatalog,
+)  # Build the joined catalog.
+from src.mist.realtime.websocket_streams.catalog.utilities.utility_catalog import (
+    UtilityCatalog,
+)  # Build the utility catalog.
+from src.mist.realtime.websocket_streams.intake.fields.error import StreamRequestError  # Check refusal codes.
+from src.mist.realtime.websocket_streams.intake.start_request.checker import StartRequestChecker  # Import the checker.
+from src.mist.realtime.websocket_streams.intake.start_request.models import DeviceFacts  # Import checked device facts.
 
 ORG_ID = "11111111-1111-4111-8111-111111111111"  # Use one valid organization identifier.
 SITE_ID = "22222222-2222-4222-8222-222222222222"  # Use one valid site identifier.

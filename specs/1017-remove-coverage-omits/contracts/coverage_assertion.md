@@ -19,7 +19,7 @@ pytest --cov=<dotted.module.path> \
 
 **Example — PR-1 utility check**:
 ```bash
-pytest --cov=src.utils.filter_operator_engine \
+pytest --cov=src.foundation.support.utils.filter_operator_engine \
        --cov-report=term-missing \
        --cov-fail-under=90 \
        tests/unit/utils/test_filter_operator_engine.py
@@ -46,7 +46,7 @@ python -c "
 import tomllib, pathlib
 data = tomllib.loads(pathlib.Path('pyproject.toml').read_text())
 omit = data['tool']['coverage']['run']['omit']
-expected = ['tests/*', 'venv/*', '.venv/*', 'setup.py', '*/site-packages/*', 'src/maps/*']
+expected = ['tests/*', 'venv/*', '.venv/*', 'setup.py', '*/site-packages/*', 'src/interfaces/visualization/maps/*']
 assert sorted(omit) == sorted(expected), f'SC-001 violated: {sorted(omit)} != {sorted(expected)}'
 print('SC-001 OK: retained omit list matches frozen inventory')
 "
@@ -63,7 +63,7 @@ python -c "
 import tomllib, pathlib
 data = tomllib.loads(pathlib.Path('pyproject.toml').read_text())
 omit = data['tool']['coverage']['run']['omit']
-retained = {'tests/*', 'venv/*', '.venv/*', 'setup.py', '*/site-packages/*', 'src/maps/*'}
+retained = {'tests/*', 'venv/*', '.venv/*', 'setup.py', '*/site-packages/*', 'src/interfaces/visualization/maps/*'}
 escape_hatches = [e for e in omit if e not in retained]
 assert len(escape_hatches) <= 2, f'FR-015 violated: {len(escape_hatches)} escape hatches > 2'
 print(f'FR-015 OK: {len(escape_hatches)} escape hatches')

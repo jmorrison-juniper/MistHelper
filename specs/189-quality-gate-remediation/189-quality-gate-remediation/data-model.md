@@ -47,7 +47,7 @@ fetcher = SiteDataFetcher(config)
 
 ### 2. `ComparisonItemConfig`
 
-**File**: `src/inventory/csv_comparator.py` (co-located with the class)
+**File**: `src/mist/resources/inventory/csv_comparator.py` (co-located with the class)
 **Replaces**: 8-parameter signatures of `_build_mismatch_item` (line 1085)
 and `_build_diff_item` (line 1128) -- these functions share identical parameters.
 
@@ -89,7 +89,7 @@ item = self._build_mismatch_item(config)
 
 ### 3. `RoutingTableContext`
 
-**File**: `src/network/routing_utils.py` (co-located with the class)
+**File**: `src/mist/networking/network/routing_utils.py` (co-located with the class)
 **Replaces**: 6-parameter signatures of `_process_routing_table_results` (line 1451)
 and `_display_routing_table_output` (line 1480).
 
@@ -134,7 +134,7 @@ self._display_routing_table_output(context, result)
 
 ### 4. `SsrRouteQuery`
 
-**File**: `src/network/routing_utils.py` (co-located with the class)
+**File**: `src/mist/networking/network/routing_utils.py` (co-located with the class)
 **Replaces**: 8-parameter signature of `_build_ssr_payload` (line 1656).
 
 ```python
@@ -174,7 +174,7 @@ payload = self._build_ssr_payload(query)
 
 ### 5. `SsrRouteContext`
 
-**File**: `src/network/routing_utils.py`
+**File**: `src/mist/networking/network/routing_utils.py`
 **Replaces**: Shared parameters of `_process_ssr_route_results` (line 1779)
 and `_display_ssr_route_output` (line 1811).
 

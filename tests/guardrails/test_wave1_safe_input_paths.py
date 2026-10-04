@@ -3,8 +3,10 @@
 from unittest.mock import MagicMock
 
 import MistHelper
-from src.refactors.is_debug_mode import IsDebugMode  # WHY: replaces removed MistHelper.is_debug_mode per 1012 SC-002
-from src.refactors.mist_site_exclude_prefix import (  # WHY: read the site filter at the canonical owner.
+from src.foundation.support.refactors.is_debug_mode import (
+    IsDebugMode,
+)  # WHY: replaces removed MistHelper.is_debug_mode per 1012 SC-002
+from src.foundation.support.refactors.mist_site_exclude_prefix import (  # Import the moved dependency.
     MIST_SITE_EXCLUDE_PREFIX,  # WHY: avoid the removed MistHelper pass-through for the extracted constant.
 )
 
@@ -21,7 +23,7 @@ def test_ssh_runner_confirm_execution_returns_false_on_eof(monkeypatch):
 
 def test_wan2_confirm_operation_handles_eof_as_cancel(monkeypatch):
     # Wire canonical WAN2MigrationManager with MistHelper runtime globals (delegator shim removed)
-    from src.gateway import wan2_migration_manager as wan2_module  # Import canonical module
+    from src.mist.resources.gateway import wan2_migration_manager as wan2_module  # Import canonical module
 
     wan2_module.configure_wan2_migration_dependencies(  # Publish MistHelper-owned deps into canonical module
         wan2_module.WAN2MigrationDependencies(  # Frozen bundle mirrors production wiring
@@ -88,7 +90,7 @@ def test_handle_client_selection_returns_none_tuple_on_eof(monkeypatch):
 
 def test_service_ping_parameter_prompts_fall_back_to_defaults_on_eof(monkeypatch):
     # Wire canonical ServicePingManager with MistHelper runtime globals (delegator shim removed)
-    from src.websocket.service_ping_manager import (
+    from src.mist.realtime.websocket.service_ping_manager import (
         ServicePingManager,
         configure_service_ping_manager_dependencies,
     )

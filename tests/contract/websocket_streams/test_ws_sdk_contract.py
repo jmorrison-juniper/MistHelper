@@ -17,7 +17,9 @@ from mistapi.device_utils.__tools.__ws_wrapper import (
 )  # The tests execute the SDK trigger ordering contract.
 from mistapi.websockets.__ws_client import _MistWebsocket  # The tests pin the private client seam.
 
-from src.websocket_streams.live.runners.utility.runner.execution import UtilityExecution  # Owned ordering code.
+from src.mist.realtime.websocket_streams.live.runners.utility.runner.execution import (
+    UtilityExecution,
+)  # Owned ordering code.
 
 
 class TestWebSocketSdkContract:

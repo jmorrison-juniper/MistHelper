@@ -1,8 +1,8 @@
-"""Tests for src.audit.filter module."""
+"""Tests for src.mist.access.audit.filter module."""
 
 import pytest
 
-from src.audit.filter import AuditLogFilter
+from src.mist.access.audit.filter import AuditLogFilter
 
 
 @pytest.fixture

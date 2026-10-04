@@ -1,4 +1,4 @@
-"""Wave 2 P2 coverage for src/time/time_utils.py (initiative #1018).
+"""Wave 2 P2 coverage for src/foundation/runtime/time/time_utils.py (initiative #1018).
 
 Covers both branches of `TimeUtils.get_dynamic_lookback_hours` (test-mode + production
 mode, plus the exception fallback), and both branches of `TimeUtils.log_dynamic_lookback`
@@ -13,8 +13,10 @@ import logging  # WHY: caplog-level configuration and logger-name assertions.
 
 import pytest  # WHY: caplog + monkeypatch fixtures.
 
-from src.time import time_utils as tu  # WHY: import as module so IS_TEST_MODE can be monkeypatched by attr name.
-from src.time.time_utils import TimeUtils  # WHY: SUT static-method callsite convenience.
+from src.foundation.runtime.time import (
+    time_utils as tu,
+)  # WHY: import as module so IS_TEST_MODE can be monkeypatched by attr name.
+from src.foundation.runtime.time.time_utils import TimeUtils  # WHY: SUT static-method callsite convenience.
 
 
 class TestGetDynamicLookbackHours:

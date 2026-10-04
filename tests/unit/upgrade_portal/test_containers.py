@@ -15,8 +15,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.upgrade_portal.runtime import containers
-from src.upgrade_portal.runtime.containers import (
+from src.interfaces.portals.upgrade_portal.runtime import containers
+from src.interfaces.portals.upgrade_portal.runtime.containers import (
     ContainerState,
     find_runtime,
     read_container_state,

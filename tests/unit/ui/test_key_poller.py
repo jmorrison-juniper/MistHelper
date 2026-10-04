@@ -1,4 +1,4 @@
-"""Unit tests for src/ui/input_handlers/key_poller.py."""
+"""Unit tests for src/interfaces/visualization/ui/input_handlers/key_poller.py."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.ui.input_handlers.key_poller import KeyPoller, _UnixKeyPoller, _WindowsKeyPoller
+from src.interfaces.visualization.ui.input_handlers.key_poller import KeyPoller, _UnixKeyPoller, _WindowsKeyPoller
 
 # --- Windows path --------------------------------------------------------------
 

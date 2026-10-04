@@ -28,9 +28,9 @@ Do not scan those records as active callers or edit them.
 
 The three source owners remain:
 
-- `src/export/endpoint_family_exporter.py`
-- `src/export/endpoint_catalog.py`
-- `src/refactors/endpoint_primary_key_strategies.py`
+- `src/operations/exporting/export/endpoint_family_exporter.py`
+- `src/operations/exporting/export/endpoint_catalog.py`
+- `src/foundation/support/refactors/endpoint_primary_key_strategies.py`
 
 No alias from a retired selection to a trend operation is permitted.
 The existing resolver's missing-operation behavior remains unchanged.

@@ -5,15 +5,15 @@
 
 ## Phase 1: Setup
 
-- [x] T001 Create `src/reports/client_fingerprint_census/__init__.py` with package exports.
+- [x] T001 Create `src/mist/intelligence/reports/client_fingerprint_census/__init__.py` with package exports.
 - [x] T002 Create `tests/unit/reports/client_fingerprint_census/__init__.py` for the new test package.
 - [x] T003 Create `changelog.d/issue-3569-client-fingerprint-census.md` with one `### Added` entry for issue `#3569`.
 
 ## Phase 2: Foundation
 
-- [x] T004 [P] Create pure dataclasses and constants in `src/reports/client_fingerprint_census/model.py`.
-- [x] T005 [P] Create the SDK client seam in `src/reports/client_fingerprint_census/client.py`.
-- [x] T006 Create the operation handler in `src/reports/client_fingerprint_census/operation.py`.
+- [x] T004 [P] Create pure dataclasses and constants in `src/mist/intelligence/reports/client_fingerprint_census/model.py`.
+- [x] T005 [P] Create the SDK client seam in `src/mist/intelligence/reports/client_fingerprint_census/client.py`.
+- [x] T006 Create the operation handler in `src/mist/intelligence/reports/client_fingerprint_census/operation.py`.
 
 ## Phase 3: User Story 1 - Export a site fingerprint census
 
@@ -28,7 +28,7 @@
 **Independent Test**: Mock an empty API response. Verify that the exporter receives field names and no rows, and that the empty message is printed.
 
 - [x] T010 [US2] Add the empty-response operation test in `tests/unit/reports/client_fingerprint_census/test_client_fingerprint_census_operation.py`.
-- [x] T011 [US2] Implement header-only export behavior in `src/reports/client_fingerprint_census/operation.py`.
+- [x] T011 [US2] Implement header-only export behavior in `src/mist/intelligence/reports/client_fingerprint_census/operation.py`.
 
 ## Phase 5: User Story 3 - Keep integration wiring deferred
 
@@ -46,7 +46,7 @@
 - [x] T016 Run SpecKit analyze manually and repair any inconsistency in `specs/3569-client-fingerprint-census/`.
 - [x] T017 Verify and update `specs/3569-client-fingerprint-census/pr-body.md` for the draft pull request.
 - [x] T018 Record the fleet artifact count remediation path in `specs/3569-client-fingerprint-census/plan.md`.
-- [x] T019 Verify inline-comment, action-logging, and secret-safe logging compliance in `src/reports/client_fingerprint_census/`.
+- [x] T019 Verify inline-comment, action-logging, and secret-safe logging compliance in `src/mist/intelligence/reports/client_fingerprint_census/`.
 
 ## Dependencies
 

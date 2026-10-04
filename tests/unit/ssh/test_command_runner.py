@@ -1,4 +1,4 @@
-"""Unit tests for src.ssh.command.command_runner.SingleCommandRunner (T013b)."""
+"""Unit tests for src.operations.execution.ssh.command.command_runner.SingleCommandRunner (T013b)."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.ssh.command.command_runner import (  # T013b: extracted orchestrator
+from src.operations.execution.ssh.command.command_runner import (  # T013b: extracted orchestrator
     SingleCommandRequest,
     SingleCommandRunner,
 )
@@ -21,7 +21,7 @@ class TestSingleCommandRequest:
             SingleCommandRequest(hostname="", username="u", password="p", command="show")
 
     def test_from_config_copies_connection_fields(self) -> None:
-        from src.ssh.ssh_runner import SSHConnectionConfig
+        from src.operations.execution.ssh.ssh_runner import SSHConnectionConfig
 
         cfg = SSHConnectionConfig(
             hostname="h-from-cfg",
@@ -54,10 +54,10 @@ class TestRunOrchestration:
             command=command,
         )
 
-    @patch("src.ssh.command.command_runner.SshConnector")
-    @patch("src.ssh.ssh_runner.EnhancedSSHRunner._create_secure_log_file")
-    @patch("src.ssh.ssh_runner.EnhancedSSHRunner._execute_command")
-    @patch("src.ssh.ssh_runner.EnhancedSSHRunner._disconnect")
+    @patch("src.operations.execution.ssh.command.command_runner.SshConnector")
+    @patch("src.operations.execution.ssh.ssh_runner.EnhancedSSHRunner._create_secure_log_file")
+    @patch("src.operations.execution.ssh.ssh_runner.EnhancedSSHRunner._execute_command")
+    @patch("src.operations.execution.ssh.ssh_runner.EnhancedSSHRunner._disconnect")
     def test_successful_run_returns_true(self, mock_disconnect, mock_execute, mock_log, mock_connector_class) -> None:
         mock_client = MagicMock()
         mock_connector_class.return_value.connect.return_value = (mock_client, "data/ssh_known_hosts")
@@ -70,10 +70,10 @@ class TestRunOrchestration:
         mock_execute.assert_called_once()
         mock_disconnect.assert_called_once()
 
-    @patch("src.ssh.command.command_runner.SshConnector")
-    @patch("src.ssh.ssh_runner.EnhancedSSHRunner._create_secure_log_file")
-    @patch("src.ssh.ssh_runner.EnhancedSSHRunner._execute_command")
-    @patch("src.ssh.ssh_runner.EnhancedSSHRunner._disconnect")
+    @patch("src.operations.execution.ssh.command.command_runner.SshConnector")
+    @patch("src.operations.execution.ssh.ssh_runner.EnhancedSSHRunner._create_secure_log_file")
+    @patch("src.operations.execution.ssh.ssh_runner.EnhancedSSHRunner._execute_command")
+    @patch("src.operations.execution.ssh.ssh_runner.EnhancedSSHRunner._disconnect")
     def test_connection_failure_returns_false(
         self, mock_disconnect, mock_execute, mock_log, mock_connector_class
     ) -> None:
@@ -86,10 +86,10 @@ class TestRunOrchestration:
         mock_execute.assert_not_called()  # Skipped because connect failed
         mock_disconnect.assert_called_once()  # Cleanup still runs in finally
 
-    @patch("src.ssh.command.command_runner.SshConnector")
-    @patch("src.ssh.ssh_runner.EnhancedSSHRunner._create_secure_log_file")
-    @patch("src.ssh.ssh_runner.EnhancedSSHRunner._execute_command")
-    @patch("src.ssh.ssh_runner.EnhancedSSHRunner._disconnect")
+    @patch("src.operations.execution.ssh.command.command_runner.SshConnector")
+    @patch("src.operations.execution.ssh.ssh_runner.EnhancedSSHRunner._create_secure_log_file")
+    @patch("src.operations.execution.ssh.ssh_runner.EnhancedSSHRunner._execute_command")
+    @patch("src.operations.execution.ssh.ssh_runner.EnhancedSSHRunner._disconnect")
     def test_connection_failure_logs_end_not_completed(
         self, mock_disconnect, mock_execute, mock_log, mock_connector_class, caplog
     ) -> None:
@@ -105,10 +105,10 @@ class TestRunOrchestration:
         mock_execute.assert_not_called()  # WHY: a failed connection must not run the command.
         mock_disconnect.assert_called_once()  # WHY: cleanup must still run after the failed connection.
 
-    @patch("src.ssh.command.command_runner.SshConnector")
-    @patch("src.ssh.ssh_runner.EnhancedSSHRunner._create_secure_log_file")
-    @patch("src.ssh.ssh_runner.EnhancedSSHRunner._execute_command")
-    @patch("src.ssh.ssh_runner.EnhancedSSHRunner._disconnect")
+    @patch("src.operations.execution.ssh.command.command_runner.SshConnector")
+    @patch("src.operations.execution.ssh.ssh_runner.EnhancedSSHRunner._create_secure_log_file")
+    @patch("src.operations.execution.ssh.ssh_runner.EnhancedSSHRunner._execute_command")
+    @patch("src.operations.execution.ssh.ssh_runner.EnhancedSSHRunner._disconnect")
     def test_command_failure_returns_false(self, mock_disconnect, mock_execute, mock_log, mock_connector_class) -> None:
         mock_client = MagicMock()
         mock_connector_class.return_value.connect.return_value = (mock_client, "data/ssh_known_hosts")

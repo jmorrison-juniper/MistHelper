@@ -19,9 +19,9 @@ from typing import Any  # The stand-ins hold free-form records.
 import pytest  # The test framework of the project.
 from flask import Flask, has_app_context  # The fallback test checks the stored-status context.
 
-from src.upgrade_portal.app import factory, wiring  # The units under test.
-from src.upgrade_portal.app.routes import capture as capture_routes  # The progress seam under test.
-from src.upgrade_portal.upgrade import driver, phase_gate  # The two seats of the shared heartbeat.
+from src.interfaces.portals.upgrade_portal.app import factory, wiring  # The units under test.
+from src.interfaces.portals.upgrade_portal.app.routes import capture as capture_routes  # The progress seam under test.
+from src.interfaces.portals.upgrade_portal.upgrade import driver, phase_gate  # The two seats of the shared heartbeat.
 
 SITE_ID = "site-a"  # One site name for every test of this module.
 ORG_ID = "org-a"  # One organization name for every test of this module.
@@ -187,8 +187,12 @@ def test_import_opens_no_socket() -> None:
         The factory imports this module at load. A socket at import time would
         make every test and every start of the portal wait on a server.
     """
-    module = wiring.load_module("src.upgrade_portal.app.wiring")  # The autouse fixture blocks every socket.
-    assert module.__name__ == "src.upgrade_portal.app.wiring"  # A socket call would have raised instead.
+    module = wiring.load_module(
+        "src.interfaces.portals.upgrade_portal.app.wiring"
+    )  # The autouse fixture blocks every socket.
+    assert (
+        module.__name__ == "src.interfaces.portals.upgrade_portal.app.wiring"
+    )  # A socket call would have raised instead.
 
 
 def test_load_module_answers_none_for_an_absent_module() -> None:
@@ -198,7 +202,7 @@ def test_load_module_answers_none_for_an_absent_module() -> None:
         The portal is built in stages, so a module can arrive later. A missing
         module must leave every other seam working.
     """
-    assert wiring.load_module("src.upgrade_portal.no_such_module") is None  # One warning, no fault.
+    assert wiring.load_module("src.interfaces.portals.upgrade_portal.no_such_module") is None  # One warning, no fault.
 
 
 def test_install_seams_fills_the_launcher_and_the_store() -> None:
@@ -302,7 +306,10 @@ def sample_lock() -> Any:
     Returns:
         The lock record.
     """
-    from src.upgrade_portal.runtime import identity, lock  # Late, to match the import rule of the wiring module.
+    from src.interfaces.portals.upgrade_portal.runtime import (
+        identity,
+        lock,
+    )  # Late, to match the import rule of the wiring module.
 
     owner = identity.SessionOwner(actor_email="operator@example.com", browser_id=BROWSER_ID)  # Checked here.
     stamp = "2026-08-19T11:00:00+00:00"  # One fixed moment, so no test reads a real clock.
@@ -443,7 +450,9 @@ def test_the_document_store_answers_none_when_no_database_opens(monkeypatch: pyt
         The poll route calls the read many times for each run. A fault there
         would turn a slow store into a 500 answer on the operator screen.
     """
-    from src.upgrade_portal.capture import store  # Late, to match the import rule of the wiring module.
+    from src.interfaces.portals.upgrade_portal.capture import (
+        store,
+    )  # Late, to match the import rule of the wiring module.
 
     monkeypatch.setattr(store, "connect_database", lambda *args, **kwargs: None)  # Standalone mode.
     assert wiring.DocumentRunStore().read_run(RUN_ID) is None  # The caller reads an unknown run.
@@ -456,7 +465,9 @@ def test_the_document_store_reports_a_failed_write(monkeypatch: pytest.MonkeyPat
         A write that answered True while nothing landed would leave the poll
         route reading a stale state forever.
     """
-    from src.upgrade_portal.capture import store  # Late, to match the import rule of the wiring module.
+    from src.interfaces.portals.upgrade_portal.capture import (
+        store,
+    )  # Late, to match the import rule of the wiring module.
 
     monkeypatch.setattr(store, "write_run", lambda *args, **kwargs: _boom())  # The store refuses the write.
     assert wiring.DocumentRunStore().write_run({"run_id": RUN_ID}) is False  # One warning, no fault.
@@ -646,7 +657,9 @@ def test_an_adoption_holds_a_store_fault(monkeypatch: pytest.MonkeyPatch) -> Non
     Args:
         monkeypatch: The patcher of this test.
     """
-    from src.upgrade_portal.capture import store  # Late, to match the import rule of the wiring module.
+    from src.interfaces.portals.upgrade_portal.capture import (
+        store,
+    )  # Late, to match the import rule of the wiring module.
 
     monkeypatch.setattr(store, "latest_standalone_precheck", lambda *args, **kwargs: _boom())
     assert wiring.StandalonePrecheckAdopter().newest_precheck(SITE_ID) == ""
@@ -663,7 +676,9 @@ def test_the_precheck_pair_names_the_tier_of_the_capture(monkeypatch: pytest.Mon
     Args:
         monkeypatch: The patcher of this test.
     """
-    from src.upgrade_portal.capture import store  # Late, to match the import rule of the wiring module.
+    from src.interfaces.portals.upgrade_portal.capture import (
+        store,
+    )  # Late, to match the import rule of the wiring module.
 
     row = {"capture_id": "cap-abc-01", "tier": 3}  # One stored standalone pre-check at tier 3.
     monkeypatch.setattr(store, "latest_standalone_precheck", lambda *args, **kwargs: row)
@@ -720,7 +735,9 @@ def test_an_edge_write_holds_a_store_fault(monkeypatch: pytest.MonkeyPatch) -> N
     Args:
         monkeypatch: The patcher of this test.
     """
-    from src.upgrade_portal.capture import store  # Late, to match the import rule of the wiring module.
+    from src.interfaces.portals.upgrade_portal.capture import (
+        store,
+    )  # Late, to match the import rule of the wiring module.
 
     monkeypatch.setattr(store, "write_edge", lambda *args, **kwargs: _boom())
     assert wiring.StandalonePrecheckAdopter().write_capture_edge(RUN_ID, "cap-1", "pre") is None
@@ -737,7 +754,9 @@ def test_a_read_that_raises_answers_the_mirror(monkeypatch: pytest.MonkeyPatch) 
     Args:
         monkeypatch: The patcher of this test.
     """
-    from src.upgrade_portal.capture import store  # Late, to match the import rule of the wiring module.
+    from src.interfaces.portals.upgrade_portal.capture import (
+        store,
+    )  # Late, to match the import rule of the wiring module.
 
     monkeypatch.setattr(store, "connect_database", lambda *args, **kwargs: _boom())  # The store is unreachable.
     wiring.mirror_run({"run_id": RUN_ID, "state": "upgrading"})  # This process still holds the run.
@@ -751,7 +770,9 @@ def test_the_site_scan_answers_an_empty_list_when_the_store_is_silent(monkeypatc
         The scan supports FR-037. A guess from an unreachable store would stop
         honest work, and the site lock already guards a second operator.
     """
-    from src.upgrade_portal.capture import store  # Late, to match the import rule of the wiring module.
+    from src.interfaces.portals.upgrade_portal.capture import (
+        store,
+    )  # Late, to match the import rule of the wiring module.
 
     monkeypatch.setattr(store, "list_runs", lambda *args, **kwargs: _boom())  # The query does not answer.
     assert wiring.DocumentRunStore().runs_for_site(SITE_ID) == []  # The create route then continues.
@@ -771,7 +792,9 @@ def _standalone_store(monkeypatch: pytest.MonkeyPatch, answer: StoreAnswer) -> A
     Returns:
         The run store adapter under test.
     """
-    from src.upgrade_portal.capture import store  # Late, to match the import rule of the wiring module.
+    from src.interfaces.portals.upgrade_portal.capture import (
+        store,
+    )  # Late, to match the import rule of the wiring module.
 
     monkeypatch.setattr(store, "connect_database", lambda *args, **kwargs: None)  # Standalone mode.
     monkeypatch.setattr(store, "write_run", lambda *args, **kwargs: answer)  # One fixed write result.
@@ -814,7 +837,9 @@ def test_the_stored_row_wins_over_the_mirrored_copy(monkeypatch: pytest.MonkeyPa
         would pin the page at the state this process last wrote, so the operator
         would watch a run that never moves.
     """
-    from src.upgrade_portal.capture import store  # Late, to match the import rule of the wiring module.
+    from src.interfaces.portals.upgrade_portal.capture import (
+        store,
+    )  # Late, to match the import rule of the wiring module.
 
     adapter = _standalone_store(monkeypatch, StoreAnswer(backup_written=True))  # Fill the mirror first.
     adapter.write_run({"run_id": RUN_ID, "site_id": SITE_ID, "state": "created"})
@@ -850,7 +875,9 @@ def test_the_site_scan_returns_the_stored_runs(monkeypatch: pytest.MonkeyPatch) 
     Args:
         monkeypatch: The patcher of this test.
     """
-    from src.upgrade_portal.capture import store  # Late, to match the import rule of the wiring module.
+    from src.interfaces.portals.upgrade_portal.capture import (
+        store,
+    )  # Late, to match the import rule of the wiring module.
 
     stored = {"run_id": "stored-run", "site_id": SITE_ID, "state": "upgrade_running"}  # Another worker wrote it.
     mirrored = {"run_id": "mirrored-run", "site_id": SITE_ID, "state": "created"}  # This worker wrote this copy.
@@ -871,7 +898,9 @@ def test_an_empty_stored_site_scan_does_not_return_a_stale_mirror(monkeypatch: p
     Args:
         monkeypatch: The patcher of this test.
     """
-    from src.upgrade_portal.capture import store  # Late, to match the import rule of the wiring module.
+    from src.interfaces.portals.upgrade_portal.capture import (
+        store,
+    )  # Late, to match the import rule of the wiring module.
 
     page = store.RunListPage((), 0, wiring.SITE_SCAN_LIMIT, 0, True)  # The database answered with no matching run.
     monkeypatch.setattr(store, "list_runs", lambda query: page)  # Return the available page without a database call.
@@ -1100,7 +1129,9 @@ def test_the_launcher_gives_the_site_lock_back(monkeypatch: pytest.MonkeyPatch) 
         run that never reached that thread passes through none of it, and the
         lease then holds the site for a full hour while nothing upgrades it.
     """
-    from src.upgrade_portal.runtime import lock  # Late, to match the import rule of the wiring module.
+    from src.interfaces.portals.upgrade_portal.runtime import (
+        lock,
+    )  # Late, to match the import rule of the wiring module.
 
     recorder = _ReleaseRecorder()  # Records the release that this path must ask for.
     held = sample_lock()  # The record that the signed session would hold.
@@ -1119,7 +1150,9 @@ def test_the_launcher_frees_nothing_when_the_session_holds_no_lock(monkeypatch: 
         could only force the lock open, which would take a site from the
         operator who holds it.
     """
-    from src.upgrade_portal.runtime import lock  # Late, to match the import rule of the wiring module.
+    from src.interfaces.portals.upgrade_portal.runtime import (
+        lock,
+    )  # Late, to match the import rule of the wiring module.
 
     recorder = _ReleaseRecorder()  # Records a release that must never happen.
     monkeypatch.setattr(wiring, "read_lock_record", lambda site_id: None)  # The session holds no lock text.
@@ -1138,7 +1171,9 @@ def test_the_launcher_survives_a_lock_store_that_refuses_the_release(
         again when the store does not answer. Neither fault leaves a run holding
         the site, so neither may reach the operator as a page fault.
     """
-    from src.upgrade_portal.runtime import lock  # Late, to match the import rule of the wiring module.
+    from src.interfaces.portals.upgrade_portal.runtime import (
+        lock,
+    )  # Late, to match the import rule of the wiring module.
 
     monkeypatch.setattr(wiring, "read_lock_record", lambda site_id: sample_lock())  # No signed session here.
     monkeypatch.setattr(lock, "release_site_lock", lambda *args: _boom())  # The store does not answer.

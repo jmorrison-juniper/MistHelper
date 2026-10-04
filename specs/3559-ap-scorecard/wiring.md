@@ -4,7 +4,7 @@
 
 | menu | title | handler import | handler attribute | category | skip_reason | destructive | supports_fast |
 | - | - | - | - | - | - | - | - |
-| 278 | Export the organization access point scorecard | `src.reports.ap_scorecard.operation` | `ApScorecard.run` | `safe` |  | `False` | `False` |
+| 278 | Export the organization access point scorecard | `src.mist.intelligence.reports.ap_scorecard.operation` | `ApScorecard.run` | `safe` |  | `False` | `False` |
 
 ## OperationRegistry comment
 
@@ -33,7 +33,7 @@ Add menu `278` to the `safe` category row. Increase the `safe` count by `1`. Do 
 
 ## Import line for MistHelper.py
 
-`from src.reports.ap_scorecard.operation import ApScorecard  # Menu 278 (issue #3559) -- export AP scorecard tiles across all sites.`
+`from src.mist.intelligence.reports.ap_scorecard.operation import ApScorecard  # Menu 278 (issue #3559) -- export AP scorecard tiles across all sites.`
 
 ## Menu registration note
 

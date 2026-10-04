@@ -22,8 +22,8 @@ from typing import Any
 
 import pytest
 
-from src.firmware import upgrade_service
-from src.firmware.upgrade_service import DeviceTarget, PlanRoute, UpgradeOptions, UpgradePlan
+from src.operations.execution.firmware import upgrade_service
+from src.operations.execution.firmware.upgrade_service import DeviceTarget, PlanRoute, UpgradeOptions, UpgradePlan
 
 MAC_SWITCH = "5c5b350e0001"
 MAC_SECOND_SWITCH = "5c5b350e0004"

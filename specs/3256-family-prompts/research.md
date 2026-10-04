@@ -2,7 +2,7 @@
 
 ## Decision: Use exporter tables as the source of truth
 
-`src/export/endpoint_family_exporter.py` defines the six endpoint family tables. Each row carries `operation` and `required`. The portal must read these tables to prevent drift.
+`src/operations/exporting/export/endpoint_family_exporter.py` defines the six endpoint family tables. Each row carries `operation` and `required`. The portal must read these tables to prevent drift.
 
 ## Decision: Store full required tuples on each chooser option
 

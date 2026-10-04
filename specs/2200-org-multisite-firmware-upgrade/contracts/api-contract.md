@@ -28,7 +28,7 @@ The portal follows the AP-only description for this organization endpoint.
 | Junos gateway single | `upgradeDevice` | Site | The documented site device path |
 | SSR gateway | `upgradeOrgSsrs` | Organization | The documented organization SSR upgrade path |
 
-`src/firmware/upgrade_service.py` selects each site route. It also selects the
+`src/operations/execution/firmware/upgrade_service.py` selects each site route. It also selects the
 organization SSR route after gateway classification.
 
 The contract defines no Mist Edge child route.
@@ -69,7 +69,7 @@ The AP child uses one request for the selected AP sites.
 
 The portal does not create new switch, Junos gateway, or SSR body rules.
 
-It calls the existing planner in `src/firmware/upgrade_service.py`. The portal
+It calls the existing planner in `src/operations/execution/firmware/upgrade_service.py`. The portal
 stores the returned route and body without a family change.
 
 The child record must keep the planned target identifiers. The service must

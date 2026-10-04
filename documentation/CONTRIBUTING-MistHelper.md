@@ -65,12 +65,12 @@ Update this map when a symbol name changes.
 
 ## Where the real work lives
 
-The `src\` tree holds the packages that do product work.
-Use the package name as the first clue.
-A firmware change starts in `src\firmware\`.
-A site change starts in `src\site\`.
-An export change starts in `src\export\`.
-An upgrade portal change starts in `src\upgrade_portal\`.
+The `src\` tree holds four domain packages for product work.
+Use the domain and group names as the first clues.
+A firmware change starts in `src\operations\execution\firmware\`.
+A site change starts in `src\mist\resources\site\`.
+An export change starts in `src\operations\exporting\export\`.
+An upgrade portal change starts in `src\interfaces\portals\upgrade_portal\`.
 A web portal change starts in `web_portal\`.
 
 `MistHelper.py` imports from `src\`.
@@ -162,23 +162,27 @@ If another pull request changes `MistHelper.py`, choose a different file.
 
 | If you need this subject | Start here |
 | - | - |
-| A firmware question | `src\firmware\` |
-| A gateway question | `src\gateway\` |
-| A site question | `src\site\` |
-| An organization question | `src\org\` |
-| A device question | `src\device\` |
-| A packet capture question | `src\capture\` |
-| An SSH command question | `src\ssh\` |
-| A WebSocket question | `src\websocket\` |
+| Shared runtime or utility code | `src\foundation\` |
+| Mist API resources or intelligence | `src\mist\` |
+| Executable network operations | `src\operations\` |
+| Portals, maps, or monitoring interfaces | `src\interfaces\` |
+| A firmware question | `src\operations\execution\firmware\` |
+| A gateway question | `src\mist\resources\gateway\` |
+| A site question | `src\mist\resources\site\` |
+| An organization question | `src\mist\resources\org\` |
+| A device question | `src\mist\resources\device\` |
+| A packet capture question | `src\operations\execution\capture\` |
+| An SSH command question | `src\operations\execution\ssh\` |
+| A WebSocket question | `src\mist\realtime\websocket\` |
 | A web portal question | `web_portal\` |
-| An upgrade portal question | `src\upgrade_portal\` |
-| An export question | `src\export\` |
-| A database question | `src\db\` |
-| A menu category question | `src\utils\operation_registry.py` |
-| An input prompt question | `src\input\` |
-| A map question | `src\maps\` |
-| A report question | `src\reports\` |
-| A metric question | `src\metrics_gateway\` |
-| An authentication question | `src\auth\` |
-| A validation question | `src\validation\` |
-| A constant value | `src\constants.py` |
+| An upgrade portal question | `src\interfaces\portals\upgrade_portal\` |
+| An export question | `src\operations\exporting\export\` |
+| A database question | `src\foundation\persistence\db\` |
+| A menu category question | `src\foundation\support\utils\operation_registry.py` |
+| An input prompt question | `src\foundation\runtime\input\` |
+| A map question | `src\interfaces\visualization\maps\` |
+| A report question | `src\mist\intelligence\reports\` |
+| A metric question | `src\interfaces\monitoring\metrics_gateway\` |
+| An authentication question | `src\mist\access\auth\` |
+| A validation question | `src\foundation\runtime\validation\` |
+| A constant value | `src\foundation\constants.py` |

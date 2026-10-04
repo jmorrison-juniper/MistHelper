@@ -146,7 +146,7 @@ specs/3671-interactive-terminal/
 ### Source Code (repository root)
 
 ```text
-src/websocket_streams/live/
+src/mist/realtime/websocket_streams/live/
 |-- __init__.py
 |-- runners/
 |   |-- __init__.py
@@ -176,7 +176,7 @@ src/websocket_streams/live/
     |-- stream_client.py    (StreamClient)
     `-- shell_client.py     (ShellClient)
 
-src/websocket_streams/web/
+src/mist/realtime/websocket_streams/web/
 |-- blueprint/              (route and response leaf modules)
 |-- services/               (assembly, operations, picker, and registry leaf modules)
 |-- static/
@@ -206,7 +206,7 @@ tests/
     `-- test_websockets_terminal_performance.py   (new: SC-001, SC-005, and SC-007)
 ```
 
-**Structure Decision**: The new code stays inside `src/websocket_streams/`. The final
+**Structure Decision**: The new code stays inside `src/mist/realtime/websocket_streams/`. The final
 convergence replaces each noncompliant module with a package of named leaf classes. Each
 replacement `__init__.py` contains a docstring only. The structural guard checks the 25
 analyzed Python paths, one support mapping, and one JavaScript mapping.
@@ -231,31 +231,31 @@ branch rebased onto that commit.
 
 | Original path | Remediation |
 | - | - |
-| `src/websocket_streams/catalog/registry.py` | T085 replaced it with a compliant package. |
-| `src/websocket_streams/catalog/utilities.py` | T085 replaced it with a compliant package. |
-| `src/websocket_streams/intake/fields.py` | T086 replaced it with a compliant package. |
-| `src/websocket_streams/intake/identifiers.py` | T086 replaced it with a compliant package. |
-| `src/websocket_streams/intake/pickers.py` | T086 replaced it with a compliant package. |
-| `src/websocket_streams/intake/start_request.py` | T086 replaced it with a compliant package. |
-| `src/websocket_streams/live/runners/channel.py` | T087 replaced it with a compliant package. |
-| `src/websocket_streams/live/runners/shell.py` | T076 replaced it with a compliant package. |
-| `src/websocket_streams/live/runners/text.py` | T087 replaced it with a compliant package. |
-| `src/websocket_streams/live/runners/utility/filters.py` | T075 replaced it with a compliant package. |
-| `src/websocket_streams/live/runners/utility/runner.py` | T075 replaced it with a compliant package. |
-| `src/websocket_streams/live/runners/utility/triggers.py` | T075 replaced it with a compliant package. |
-| `src/websocket_streams/live/sessions/buffer.py` | T088 replaced it with a compliant package. |
-| `src/websocket_streams/live/sessions/manager.py` | T088 replaced it with a compliant package. |
-| `src/websocket_streams/live/sessions/record.py` | T088 replaced it with a compliant package. |
-| `src/websocket_streams/live/terminal/byte_history.py` | T074 decomposed the classes and functions in place. |
-| `src/websocket_streams/live/terminal/gateway.py` | T074 decomposed the classes and functions in place. |
-| `src/websocket_streams/live/terminal/input_queue.py` | T074 decomposed the classes and functions in place. |
-| `src/websocket_streams/live/terminal/state.py` | T089 replaced it with a compliant package. |
-| `src/websocket_streams/live/transport/endpoint.py` | T073 decomposed the classes and functions in place. |
-| `src/websocket_streams/live/transport/frames.py` | T072 replaced it with the compliant `runtime/` package. |
-| `src/websocket_streams/live/transport/stream_client.py` | T073 decomposed the classes and functions in place. |
-| `src/websocket_streams/live/transport/shell_client.py` | T073 decomposed the classes and functions in place. |
-| `src/websocket_streams/web/blueprint.py` | T090 replaced it with a compliant package. |
-| `src/websocket_streams/web/services.py` | T090 replaced it with a compliant package. |
+| `src/mist/realtime/websocket_streams/catalog/registry.py` | T085 replaced it with a compliant package. |
+| `src/mist/realtime/websocket_streams/catalog/utilities.py` | T085 replaced it with a compliant package. |
+| `src/mist/realtime/websocket_streams/intake/fields.py` | T086 replaced it with a compliant package. |
+| `src/mist/realtime/websocket_streams/intake/identifiers.py` | T086 replaced it with a compliant package. |
+| `src/mist/realtime/websocket_streams/intake/pickers.py` | T086 replaced it with a compliant package. |
+| `src/mist/realtime/websocket_streams/intake/start_request.py` | T086 replaced it with a compliant package. |
+| `src/mist/realtime/websocket_streams/live/runners/channel.py` | T087 replaced it with a compliant package. |
+| `src/mist/realtime/websocket_streams/live/runners/shell.py` | T076 replaced it with a compliant package. |
+| `src/mist/realtime/websocket_streams/live/runners/text.py` | T087 replaced it with a compliant package. |
+| `src/mist/realtime/websocket_streams/live/runners/utility/filters.py` | T075 replaced it with a compliant package. |
+| `src/mist/realtime/websocket_streams/live/runners/utility/runner.py` | T075 replaced it with a compliant package. |
+| `src/mist/realtime/websocket_streams/live/runners/utility/triggers.py` | T075 replaced it with a compliant package. |
+| `src/mist/realtime/websocket_streams/live/sessions/buffer.py` | T088 replaced it with a compliant package. |
+| `src/mist/realtime/websocket_streams/live/sessions/manager.py` | T088 replaced it with a compliant package. |
+| `src/mist/realtime/websocket_streams/live/sessions/record.py` | T088 replaced it with a compliant package. |
+| `src/mist/realtime/websocket_streams/live/terminal/byte_history.py` | T074 decomposed the classes and functions in place. |
+| `src/mist/realtime/websocket_streams/live/terminal/gateway.py` | T074 decomposed the classes and functions in place. |
+| `src/mist/realtime/websocket_streams/live/terminal/input_queue.py` | T074 decomposed the classes and functions in place. |
+| `src/mist/realtime/websocket_streams/live/terminal/state.py` | T089 replaced it with a compliant package. |
+| `src/mist/realtime/websocket_streams/live/transport/endpoint.py` | T073 decomposed the classes and functions in place. |
+| `src/mist/realtime/websocket_streams/live/transport/frames.py` | T072 replaced it with the compliant `runtime/` package. |
+| `src/mist/realtime/websocket_streams/live/transport/stream_client.py` | T073 decomposed the classes and functions in place. |
+| `src/mist/realtime/websocket_streams/live/transport/shell_client.py` | T073 decomposed the classes and functions in place. |
+| `src/mist/realtime/websocket_streams/web/blueprint.py` | T090 replaced it with a compliant package. |
+| `src/mist/realtime/websocket_streams/web/services.py` | T090 replaced it with a compliant package. |
 
 T091 directly targets all 25 paths, 28 classes, and 19 functions. Its recursive scan
 checked 145 modules, 204 classes, and 619 functions after each replacement.

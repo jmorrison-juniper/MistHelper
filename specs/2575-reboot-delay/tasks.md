@@ -12,15 +12,15 @@
 
 ## Phase 2: Route and Template Implementation
 
-- [x] T005 Add the multi-site `reboot_at` control to `src/upgrade_portal/app/assets/templates/upgrade/org_options.html`.
-- [x] T006 Add the confirmation display to `src/upgrade_portal/app/assets/templates/upgrade/org_confirm.html`.
-- [x] T007 Add `OrgUpgradeScheduleReader` to `src/upgrade_portal/app/routes/org_upgrade.py`.
-- [x] T008 Read, validate, and store `reboot_at` in `src/upgrade_portal/app/routes/org_upgrade.py`.
-- [x] T009 Pass `reboot_at` into the existing single-site option mapper from `src/upgrade_portal/app/routes/org_upgrade.py`.
+- [x] T005 Add the multi-site `reboot_at` control to `src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_options.html`.
+- [x] T006 Add the confirmation display to `src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_confirm.html`.
+- [x] T007 Add `OrgUpgradeScheduleReader` to `src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py`.
+- [x] T008 Read, validate, and store `reboot_at` in `src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py`.
+- [x] T009 Pass `reboot_at` into the existing single-site option mapper from `src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py`.
 
 ## Phase 3: Service Implementation
 
-- [x] T010 Store converted `reboot_at` epoch seconds on each aggregate site child in `src/firmware/aggregate_upgrade_service.py`.
+- [x] T010 Store converted `reboot_at` epoch seconds on each aggregate site child in `src/operations/execution/firmware/aggregate_upgrade_service.py`.
 - [x] T011 Keep the AP organization child free of `reboot_at`.
 
 ## Phase 4: Safety Tests

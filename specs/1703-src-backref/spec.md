@@ -20,9 +20,9 @@ A maintainer can open a source package and see where shared tuning settings live
 
 **Acceptance Scenarios**:
 
-1. **Given** a source module needs a page size, **When** it reads the setting, **Then** it imports `src.config.runtime_settings`.
-2. **Given** a source module needs a retry setting, **When** it reads the setting, **Then** it imports `src.refactors.fast_mode_constants`.
-3. **Given** a source module needs API usage state, **When** it rate-limits a call, **Then** it reads `src.api.api_usage_cache`.
+1. **Given** a source module needs a page size, **When** it reads the setting, **Then** it imports `src.foundation.runtime.config.runtime_settings`.
+2. **Given** a source module needs a retry setting, **When** it reads the setting, **Then** it imports `src.foundation.support.refactors.fast_mode_constants`.
+3. **Given** a source module needs API usage state, **When** it rate-limits a call, **Then** it reads `src.mist.access.api.api_usage_cache`.
 
 ### User Story 2 - Startup keeps source settings synchronized (Priority: P1)
 
@@ -49,9 +49,9 @@ A runtime configuration change during startup must reach source readers.
 
 - **FR-001**: The source packages MUST provide a source-owned module for shared runtime settings.
 - **FR-002**: The source packages MUST provide a source-owned module for the API usage cache.
-- **FR-003**: The API fetcher MUST read retry settings from `src.config.runtime_settings`.
-- **FR-004**: The low-level API fetch helpers MUST read the page limit from `src.config.runtime_settings`.
-- **FR-005**: The gateway and pool helpers MUST read fast-mode settings from `src.refactors.fast_mode_constants`.
+- **FR-003**: The API fetcher MUST read retry settings from `src.foundation.runtime.config.runtime_settings`.
+- **FR-004**: The low-level API fetch helpers MUST read the page limit from `src.foundation.runtime.config.runtime_settings`.
+- **FR-005**: The gateway and pool helpers MUST read fast-mode settings from `src.foundation.support.refactors.fast_mode_constants`.
 - **FR-006**: The change MUST NOT modify `MistHelper.py`.
 - **FR-007**: The change MUST leave the `sys.modules["MistHelper"]` alias in place.
 
@@ -68,7 +68,7 @@ A runtime configuration change during startup must reach source readers.
 - **SC-001**: Executable `importlib.import_module("MistHelper")` calls under `src` drop from 366 to 356.
 - **SC-002**: Executable `import MistHelper` imports under `src` drop from 21 to 18.
 - **SC-003**: Focused unit tests for the changed areas pass.
-- **SC-004**: `import src.api.api_data_fetcher`, `import MistHelper`, and `import wsgi` succeed.
+- **SC-004**: `import src.mist.access.api.api_data_fetcher`, `import MistHelper`, and `import wsgi` succeed.
 - **SC-005**: `git diff --name-only origin/main...HEAD` does not list `MistHelper.py`.
 
 ## Assumptions

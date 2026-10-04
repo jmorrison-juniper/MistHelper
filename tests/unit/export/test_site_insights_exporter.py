@@ -5,7 +5,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from src.export.site_insights_exporter import SiteInsightsExporter
+from src.operations.exporting.export.site_insights_exporter import SiteInsightsExporter
 
 
 def _build_exporter(validator_return: bool = True) -> SiteInsightsExporter:

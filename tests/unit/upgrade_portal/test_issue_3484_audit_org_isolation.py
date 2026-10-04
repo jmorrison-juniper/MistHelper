@@ -12,7 +12,9 @@ from unittest.mock import Mock  # Prove invalid scope opens and reads no trail.
 
 import pytest  # Exercise bounded, legacy, damaged-input, and inference contracts.
 
-from src.upgrade_portal.compare import lock_audit  # Test the real audit reader and unchanged direct inference API.
+from src.interfaces.portals.upgrade_portal.compare import (
+    lock_audit,
+)  # Test the real audit reader and unchanged direct inference API.
 
 logger = logging.getLogger(__name__)  # Keep audit test records separate from application records.
 

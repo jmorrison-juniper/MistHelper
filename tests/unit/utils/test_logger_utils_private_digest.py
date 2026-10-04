@@ -1,11 +1,14 @@
-"""Unit tests for ``private_digest`` in ``src/utils/logger_utils.py`` (issue 1733).
+"""Unit tests for ``private_digest`` in ``src/foundation/support/utils/logger_utils.py`` (issue 1733).
 
 ``private_digest`` protects personal data that is not a credential, such as a
 street address. These tests prove the token is stable, is not the input, and
 cannot be traced back to the input by a reader of the log.
 """
 
-from src.utils.logger_utils import PRIVATE_DIGEST_EMPTY, private_digest  # Helper and its empty-value token.
+from src.foundation.support.utils.logger_utils import (
+    PRIVATE_DIGEST_EMPTY,
+    private_digest,
+)  # Helper and its empty-value token.
 
 _STREET = "742 Evergreen Terrace Suite 12"  # A private street used across the tests.
 

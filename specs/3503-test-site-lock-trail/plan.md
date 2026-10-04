@@ -16,7 +16,7 @@ research.md holds the decisions R1 through R11.
 ## Technical Context
 
 **Language/Version**: Python 3.13.
-**Primary Dependencies**: pytest, and the lock module `src/upgrade_portal/runtime/lock.py`.
+**Primary Dependencies**: pytest, and the lock module `src/interfaces/portals/upgrade_portal/runtime/lock.py`.
 **Storage**: The trail is one JSON Lines file. The change adds no store.
 **Testing**: pytest. The browser tests use Playwright with Edge.
 **Target Platform**: Windows 11 on this computer, and Ubuntu on the CI runners.

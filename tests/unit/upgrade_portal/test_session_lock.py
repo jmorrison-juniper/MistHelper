@@ -13,7 +13,7 @@ from unittest.mock import Mock  # WHY: mock Redis client
 import pytest  # WHY: assert propagation for errors outside the Redis contract
 import redis  # WHY: build Redis driver failures for narrowed handlers
 
-from src.upgrade_portal.locking.session_lock import (
+from src.interfaces.portals.upgrade_portal.locking.session_lock import (
     LockResult,
     SessionLockManager,
 )  # WHY: import classes under test

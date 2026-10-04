@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.juniper_docs.classify.asset_classifier import MARKETING_FALLBACK, MarketingAssetClassifier
+from src.mist.intelligence.juniper_docs.classify.asset_classifier import MARKETING_FALLBACK, MarketingAssetClassifier
 
 
 @pytest.mark.parametrize(

@@ -106,8 +106,8 @@ helper passes `type="ap"` on purpose:
 rawdata = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="ap").data
 ```
 
-That line is `src/device/device_utils.py:35`. The helper is
-`get_all_ap_macs_from_site` at `src/device/device_utils.py:22`. That helper
+That line is `src/mist/resources/device/device_utils.py:35`. The helper is
+`get_all_ap_macs_from_site` at `src/mist/resources/device/device_utils.py:22`. That helper
 wants access points only, so the argument is correct there. Do not copy the
 pattern into the capture.
 
@@ -117,9 +117,9 @@ The repository also contains the correct capture pattern:
 response = mistapi.api.v1.sites.stats.listSiteDevicesStats(mh.apisession, site_id, type="all", limit=1000)
 ```
 
-That line is `src/export/site_device_exporter.py:144`. The firmware manager uses
-the same argument at `src/firmware/firmware_manager.py:508` and
-`src/firmware/firmware_manager.py:3231`.
+That line is `src/operations/exporting/export/site_device_exporter.py:144`. The firmware manager uses
+the same argument at `src/operations/execution/firmware/firmware_manager.py:508` and
+`src/operations/execution/firmware/firmware_manager.py:3231`.
 
 ### 2.3 Calls that carry the same trap
 
@@ -154,7 +154,7 @@ default of `ap`. No error and no warning appears.
 | `listOrgDevices` | `mistapi/api/v1/orgs/devices.py:17` | Takes `(mist_session, org_id)` only. No type filter and no pagination. Not useful for a capture. |
 | `listOrgDevicesStats` | `mistapi/api/v1/orgs/stats.py:397` | Accepts `site_id`, `type`, `status`, `fields`, `limit`, `page`. `site_id` and `mac` accept comma-separated values. |
 | `searchOrgDevices` | `mistapi/api/v1/orgs/devices.py:538` | 44 parameters. Includes `stats: bool` at `:573` and the `band_*_channel` and `band_*_power` filters. |
-| `getOrgInventory` | Used at `src/api/api_core_fetch_utils.py:61` | Inventory, not live state. Section 4.2 covers it. |
+| `getOrgInventory` | Used at `src/mist/access/api/api_core_fetch_utils.py:61` | Inventory, not live state. Section 4.2 covers it. |
 
 **Recommendation.** The capture targets one site. Use the site call. Pass
 `type="all"` and `limit=DEFAULT_API_PAGE_LIMIT`. Do not use the org call, because
@@ -345,12 +345,12 @@ The capture targets one site, so the site calls are the correct choice.
 |------|-------|
 | Function | `_fetch_all_clients` |
 | Signature | `_fetch_all_clients(org_id: str, site_id: str \| None) -> list[dict]` |
-| File | `src/ui/prompt_utils.py` |
+| File | `src/interfaces/visualization/ui/prompt_utils.py` |
 | Line | 242 |
 
-The helper branches on `site_id` at `src/ui/prompt_utils.py:250`. A present
+The helper branches on `site_id` at `src/interfaces/visualization/ui/prompt_utils.py:250`. A present
 `site_id` selects the site calls. An absent `site_id` selects the org calls. The
-helper returns a sorted list at `src/ui/prompt_utils.py:266`. The sort key is
+helper returns a sorted list at `src/interfaces/visualization/ui/prompt_utils.py:266`. The sort key is
 `(hostname, mac)`.
 
 Four private fetchers sit under it:
@@ -388,8 +388,8 @@ capture. Three changes are needed:
 
 | Item | Value |
 |------|-------|
-| Module | `src/inventory/org_device_inventory_summary.py` |
-| Facade | `src/inventory/org_device_inventory_summary_facade.py:29`-`:34` |
+| Module | `src/mist/resources/inventory/org_device_inventory_summary.py` |
+| Facade | `src/mist/resources/inventory/org_device_inventory_summary_facade.py:29`-`:34` |
 | Dependency setter | `configure_org_device_inventory_summary_dependencies` |
 
 The module counts physical devices by category. It handles virtual chassis in
@@ -397,11 +397,11 @@ two different ways, one per device family.
 
 **Switches use member summation.** The fetcher is
 `_fetch_switch_physical_inventory(target_org_id) -> list[dict]` at
-`src/inventory/org_device_inventory_summary.py:66`. It runs a manual cursor loop.
+`src/mist/resources/inventory/org_device_inventory_summary.py:66`. It runs a manual cursor loop.
 It reads `results` at `:77` and `next` at `:81`.
 
 The aggregator is `_aggregate_switch_counts(switch_records, distinct) -> list[dict]`
-at `src/inventory/org_device_inventory_summary.py:90`. The virtual chassis answer
+at `src/mist/resources/inventory/org_device_inventory_summary.py:90`. The virtual chassis answer
 is two lines:
 
 ```python
@@ -409,19 +409,19 @@ num_members = int(record.get("num_members") or 1)  # WHY: VC stacks count as mem
 counts[value] = counts.get(value, 0) + num_members
 ```
 
-Those lines are `src/inventory/org_device_inventory_summary.py:98` and `:99`. One
+Those lines are `src/mist/resources/inventory/org_device_inventory_summary.py:98` and `:99`. One
 switch record can represent four physical units. The `num_members` field is the
 only member signal.
 
 **Gateways use one record per node.** The fetcher is
 `_fetch_gateway_physical_inventory` at
-`src/inventory/org_device_inventory_summary.py:108`. It calls `getOrgInventory`
+`src/mist/resources/inventory/org_device_inventory_summary.py:108`. It calls `getOrgInventory`
 with `type="gateway"` and `vc=True` at `:112`-`:113`. The `vc=True` argument
 expands the virtual chassis server-side, so each physical node returns its own
 record. The aggregator at `:125` therefore adds one per record at `:133`.
 
 **Access points use a plain count.** The fetcher is `_fetch_ap_inventory` at
-`src/inventory/org_device_inventory_summary.py:142`. It calls `getOrgInventory`
+`src/mist/resources/inventory/org_device_inventory_summary.py:142`. It calls `getOrgInventory`
 with `type="ap"` at `:146`-`:147`.
 
 The same `vc=True` pattern appears in the shared fetch helper:
@@ -432,7 +432,7 @@ response = mistapi.api.v1.orgs.inventory.getOrgInventory(
 )  # vc=True includes all physical VC member devices
 ```
 
-Those lines are `src/api/api_core_fetch_utils.py:60`-`:62`.
+Those lines are `src/mist/access/api/api_core_fetch_utils.py:60`-`:62`.
 
 **Reuse assessment.** The capture needs live state, not inventory. Do not reuse
 these fetchers directly. Do reuse the `num_members` rule. A capture that counts
@@ -443,32 +443,32 @@ switches without `num_members` will under-report a stacked site.
 | Item | Value |
 |------|-------|
 | Adapter class | `InventoryCSVComparator` |
-| Adapter file | `src/refactors/inventory_csvcomparator.py:35` |
+| Adapter file | `src/foundation/support/refactors/inventory_csvcomparator.py:35` |
 | Adapter signature | `__init__(self, fast: bool = False, address_check: bool = False, debug: bool = False, skip_ssl_verify: bool = True) -> None` at `:84` |
 | Adapter entry point | `execute(self) -> None` at `:102` |
-| Implementation class | `src/inventory/csv_comparator.py:155` |
+| Implementation class | `src/mist/resources/inventory/csv_comparator.py:155` |
 | Implementation signature | `__init__(self, flags: ComparatorFlags, deps: ComparatorDependencies) -> None` at `:215` |
 | Menu registration | `MistHelper.py:3842` and `:3846` |
 
 The adapter builds two dataclasses and forwards them.
 `_build_flags(fast, address_check, debug, skip_ssl_verify)` sits at
-`src/refactors/inventory_csvcomparator.py:39`. `_build_deps()` sits at `:62`.
+`src/foundation/support/refactors/inventory_csvcomparator.py:39`. `_build_deps()` sits at `:62`.
 
-`ComparatorFlags` is defined at `src/inventory/csv_comparator.py:101`. Its four
+`ComparatorFlags` is defined at `src/mist/resources/inventory/csv_comparator.py:101`. Its four
 fields are `fast`, `address_check`, `debug`, and `skip_ssl_verify`.
 
-`ComparatorDependencies` is defined at `src/inventory/csv_comparator.py:111`. It
+`ComparatorDependencies` is defined at `src/mist/resources/inventory/csv_comparator.py:111`. It
 carries ten injected fields, listed at
-`src/refactors/inventory_csvcomparator.py:70`-`:79`:
+`src/foundation/support/refactors/inventory_csvcomparator.py:70`-`:79`:
 `apisession`, `get_csv_path_fn`, `check_and_generate_csv_fn`,
 `create_parse_failures_csv_fn`, `devices_with_site_info_fn`, `get_org_id_fn`,
 `get_device_identifier_fn`, `address_utils_cls`, `nominatim_validator_cls`, and
 `address_validation_config_cls`.
 
 **Warning. This helper is not a generic row comparison helper.** The class
-docstring at `src/refactors/inventory_csvcomparator.py:36` states its purpose as
+docstring at `src/foundation/support/refactors/inventory_csvcomparator.py:36` states its purpose as
 comparing Mist inventory with a CSV file. Its comparison methods are
-`_compare_and_record` at `src/inventory/csv_comparator.py:783` and
+`_compare_and_record` at `src/mist/resources/inventory/csv_comparator.py:783` and
 `_compare_addresses` at `:823`. Six of its ten dependencies exist only to serve
 street-address matching. The menu text at `MistHelper.py:3846` describes a
 "configurable address similarity threshold".
@@ -529,21 +529,21 @@ Source file for every line below is
 simply never reads the PoE fields. A search across `src/` finds no read of
 `poe_disabled`, `poe_mode`, `poe_on`, `poe_priority`, or `power_draw`. The only
 `POE` string in the source is a hardware model name, `"SRX320-POE"`, at
-`src/export/const_definitions_exporter.py:40`. Adding PoE to tier 3 costs zero
+`src/operations/exporting/export/const_definitions_exporter.py:40`. Adding PoE to tier 3 costs zero
 extra requests.
 
 Existing call sites:
 
 | File and line | Note |
 |---------------|------|
-| `src/device/prompt_utils.py:399` | Passes `mac=device_mac`, so it fetches one device only |
-| `src/export/site_device_exporter.py:178` | Site-wide, through the shared export runner |
-| `src/export/org_device_stats_exporter.py:181` | Site-wide |
-| `src/export/org_device_stats_exporter.py:416` | Org variant `searchOrgSwOrGwPorts` |
-| `src/export/count_exporter.py:69` and `:105` | Count variants |
-| `src/org_data_collector.py:340` | Collector path |
+| `src/mist/resources/device/prompt_utils.py:399` | Passes `mac=device_mac`, so it fetches one device only |
+| `src/operations/exporting/export/site_device_exporter.py:178` | Site-wide, through the shared export runner |
+| `src/operations/exporting/export/org_device_stats_exporter.py:181` | Site-wide |
+| `src/operations/exporting/export/org_device_stats_exporter.py:416` | Org variant `searchOrgSwOrGwPorts` |
+| `src/operations/exporting/export/count_exporter.py:69` and `:105` | Count variants |
+| `src/operations/wan/org_data_collector.py:340` | Collector path |
 
-The unwrap pattern is at `src/device/prompt_utils.py:405`:
+The unwrap pattern is at `src/mist/resources/device/prompt_utils.py:405`:
 
 ```python
 results = response.data.get("results", [])
@@ -551,7 +551,7 @@ results = response.data.get("results", [])
 
 The same file keys the results by `port_id` at `:416`-`:418`.
 
-**Warning.** Do not copy `src/device/prompt_utils.py:399` into the capture. That
+**Warning.** Do not copy `src/mist/resources/device/prompt_utils.py:399` into the capture. That
 call filters by one device MAC. A capture that loops over 50 switches makes 50
 requests. One unfiltered site-wide call makes about 3 requests. Section 9 shows
 the arithmetic.
@@ -566,7 +566,7 @@ Access point ports are **only available through a device statistics blob**.
 
 Access point port data lives under `port_stat` in the `stats_ap` shape, at
 `documentation/api/sites/GET_sites_site_id_stats_devices.md:1899`. The repository
-reads it at `src/device/prompt_utils.py:432`, through `getSiteDeviceStats`. That
+reads it at `src/mist/resources/device/prompt_utils.py:432`, through `getSiteDeviceStats`. That
 read shows a shape difference:
 
 - The dedicated endpoint returns a **list** of port records.
@@ -576,7 +576,7 @@ A compare view must normalize the two shapes before diffing them.
 
 The switch shape and the gateway shape carry `if_stat` instead, at
 `documentation/api/sites/GET_sites_site_id_stats_devices.md:3510` and `:5538`.
-`src/device/_utility_commands_selection.py:134` reads `stats.get("ports", [])`
+`src/mist/resources/device/_utility_commands_selection.py:134` reads `stats.get("ports", [])`
 for gateways and `:138` reads `stats.get("if_stat", {})`.
 
 **Recommendation.** Skip access point ports in tier 3. The value is low and the
@@ -620,8 +620,8 @@ finds no such read. This is a confirmed gap, not an existing helper.
 | Item | Value |
 |------|-------|
 | Function | `mistapi.api.v1.sites.rrm.getSiteCurrentChannelPlanning` |
-| Repository call site | `src/export/site_export_utils.py:477` |
-| Registry primary key | `["ap", "band"]` at `src/refactors/endpoint_primary_key_strategies.py:2594`-`:2600` |
+| Repository call site | `src/operations/exporting/export/site_export_utils.py:477` |
+| Registry primary key | `["ap", "band"]` at `src/foundation/support/refactors/endpoint_primary_key_strategies.py:2594`-`:2600` |
 
 The repository call is:
 
@@ -629,7 +629,7 @@ The repository call is:
 response = self.mistapi.api.v1.sites.rrm.getSiteCurrentChannelPlanning(self.apisession, site_id)
 ```
 
-The flattener at `src/export/site_export_utils.py:55`-`:69` shows the response
+The flattener at `src/operations/exporting/export/site_export_utils.py:55`-`:69` shows the response
 shape. It is a nested dict of the form `{ap_mac: {band: {assignment_fields}}}`.
 The flattener spreads the innermost dict wholesale with `row.update(payload)`, so
 it never names `channel`, `power`, or `bandwidth`. Those keys pass through
@@ -639,7 +639,7 @@ without being read by name.
 state. Use Route A.
 
 Two related endpoints appear in the registry but are never called:
-`listSiteDeviceRadioChannels` at `src/refactors/endpoint_primary_key_strategies.py:601`
+`listSiteDeviceRadioChannels` at `src/foundation/support/refactors/endpoint_primary_key_strategies.py:601`
 and `listSiteCurrentRrmNeighbors` at `:256`.
 
 ### 5.4 Gateway tunnel state
@@ -654,8 +654,8 @@ Tunnel data is org-scoped only. Filter it by `site_id`.
 
 | Function | SDK definition | Repository call site | Output |
 |----------|---------------|---------------------|--------|
-| `searchOrgTunnelsStats` | `mistapi/api/v1/orgs/stats.py:1395` | `src/export/org_export_utils.py:576` | `OrgTunnelStats.csv` |
-| `searchOrgPeerPathStats` | `mistapi/api/v1/orgs/stats.py:1592` | `src/export/org_device_stats_exporter.py:464` | `OrgVPNPeerStats.csv` |
+| `searchOrgTunnelsStats` | `mistapi/api/v1/orgs/stats.py:1395` | `src/operations/exporting/export/org_export_utils.py:576` | `OrgTunnelStats.csv` |
+| `searchOrgPeerPathStats` | `mistapi/api/v1/orgs/stats.py:1592` | `src/operations/exporting/export/org_device_stats_exporter.py:464` | `OrgVPNPeerStats.csv` |
 
 `searchOrgTunnelsStats` takes 24 parameters. They include `site_id`, `ap`, `mac`,
 `node`, `peer_ip`, `peer_host`, `ip`, `tunnel_name`, `protocol`, `auth_algo`,
@@ -668,14 +668,14 @@ Registry entries confirm the record shape:
 
 | Endpoint | Primary key | Registry line |
 |----------|------------|---------------|
-| `searchOrgTunnelsStats` | `["id", "device_id", "timestamp"]` | `src/refactors/endpoint_primary_key_strategies.py:2353`-`:2359` |
-| `searchOrgPeerPathStats` | `["from_device", "to_device", "timestamp"]` | `src/refactors/endpoint_primary_key_strategies.py:204`-`:212` |
+| `searchOrgTunnelsStats` | `["id", "device_id", "timestamp"]` | `src/foundation/support/refactors/endpoint_primary_key_strategies.py:2353`-`:2359` |
+| `searchOrgPeerPathStats` | `["from_device", "to_device", "timestamp"]` | `src/foundation/support/refactors/endpoint_primary_key_strategies.py:204`-`:212` |
 
 The peer path entry lists `latency`, `jitter`, and `loss` as its time-series
 fields.
 
-The method wrapper is `_tunnel_stats()` at `src/export/org_export_utils.py:573`.
-The collector calls both at `src/org_data_collector.py:339` and `:341`.
+The method wrapper is `_tunnel_stats()` at `src/operations/exporting/export/org_export_utils.py:573`.
+The collector calls both at `src/operations/wan/org_data_collector.py:339` and `:341`.
 
 **False positive warning.** A text search for `tunnel` in `src/` returns many
 `mxtunnel` and `wxtunnel` hits. Those are wireless Mist Edge tunnel
@@ -687,35 +687,35 @@ Three scopes exist. All three are dedicated calls.
 
 | Scope | Function | SDK definition | Repository call site |
 |-------|----------|---------------|---------------------|
-| Site | `searchSiteBgpStats` | `mistapi/api/v1/sites/stats.py:532` | `src/export/site_search_exporter.py:157` |
-| Org | `searchOrgBgpStats` | Registry at `endpoint_primary_key_strategies.py:2132` | `src/export/org_export_utils.py:569` |
-| Device | `showSiteDeviceBgpSummary` | Registry at `endpoint_primary_key_strategies.py:870` | `src/device/_utility_commands_show.py:115`-`:119` |
+| Site | `searchSiteBgpStats` | `mistapi/api/v1/sites/stats.py:532` | `src/operations/exporting/export/site_search_exporter.py:157` |
+| Org | `searchOrgBgpStats` | Registry at `endpoint_primary_key_strategies.py:2132` | `src/operations/exporting/export/org_export_utils.py:569` |
+| Device | `showSiteDeviceBgpSummary` | Registry at `endpoint_primary_key_strategies.py:870` | `src/mist/resources/device/_utility_commands_show.py:115`-`:119` |
 
 `searchSiteBgpStats` takes `mac`, `neighbor_mac`, `vrf_name`, `limit`, `start`,
 `end`, `duration`, `sort`, and `search_after`. A count variant sits at
 `.venv/Lib/site-packages/mistapi/api/v1/sites/stats.py:486`.
 
 The site call runs through the shared export runner. That runner is visible at
-`src/export/site_search_exporter.py:126`-`:128`:
+`src/operations/exporting/export/site_search_exporter.py:126`-`:128`:
 
 ```python
 response = api_call(mh.apisession, site_id, *extra_args)
 ```
 
-The site menu entry is 217, at `src/export/site_search_exporter.py:154`.
+The site menu entry is 217, at `src/operations/exporting/export/site_search_exporter.py:154`.
 
 Peer state fields come from the registry entry at
-`src/refactors/endpoint_primary_key_strategies.py:214`-`:220`. The primary key is
+`src/foundation/support/refactors/endpoint_primary_key_strategies.py:214`-`:220`. The primary key is
 `["mac", "neighbor", "timestamp"]`. The indexes are `["site_id", "org_id",
 "state", "neighbor_as"]`. **The peer state field is `state`.**
 
 The org variant keys on `["device_id", "neighbor", "timestamp"]` at
-`src/refactors/endpoint_primary_key_strategies.py:2132`-`:2138`. The org export
-sorts on `peer_ip` at `src/export/org_export_utils.py:569`, so the org shape
+`src/foundation/support/refactors/endpoint_primary_key_strategies.py:2132`-`:2138`. The org export
+sorts on `peer_ip` at `src/operations/exporting/export/org_export_utils.py:569`, so the org shape
 surfaces the peer under `peer_ip`.
 
 **Warning. Do not call `clearSiteSsrBgpRoutes`.** It appears at
-`src/device/_utility_commands_clear.py:161`. It is a write operation. A capture
+`src/mist/resources/device/_utility_commands_clear.py:161`. It is a write operation. A capture
 must never write.
 
 **Recommendation.** Use the site call. It matches the capture scope and needs one
@@ -725,8 +725,8 @@ request.
 
 | Scope | Function | SDK definition | Repository call site |
 |-------|----------|---------------|---------------------|
-| Site | `searchSiteAlarms` | `mistapi/api/v1/sites/alarms.py:160` | `src/export/site_search_exporter.py:137` |
-| Org | `searchOrgAlarms` | `mistapi/api/v1/orgs/alarms.py:135` | `src/export/org_alarm_event_exporter.py:70`-`:77` |
+| Site | `searchSiteAlarms` | `mistapi/api/v1/sites/alarms.py:160` | `src/operations/exporting/export/site_search_exporter.py:137` |
+| Org | `searchOrgAlarms` | `mistapi/api/v1/orgs/alarms.py:135` | `src/operations/exporting/export/org_alarm_event_exporter.py:70`-`:77` |
 
 `searchSiteAlarms` takes `group`, `severity`, `type`, `ack_admin_name`, `acked`,
 `limit`, `start`, `end`, `duration`, `sort`, and `search_after`.
@@ -736,17 +736,17 @@ is `certificate_expiry`, `infrastructure`, `marvis`, and `security`. The
 `severity` enum at `:191` is `critical`, `info`, and `warn`.
 
 **The parameter that restricts results to active alarms is `acked=False`.** The
-org exporter uses it at `src/export/org_alarm_event_exporter.py:70`-`:77`,
+org exporter uses it at `src/operations/exporting/export/org_alarm_event_exporter.py:70`-`:77`,
 together with `limit=1000` and `duration=f"{hours}h"`. The method is `alarms()`
 at `:62`.
 
-**Warning.** The site path at `src/export/site_search_exporter.py:137` passes no
+**Warning.** The site path at `src/operations/exporting/export/site_search_exporter.py:137` passes no
 filter arguments. It therefore returns acknowledged alarms as well. A capture
 must pass `acked=False` explicitly.
 
 The alarm record carries `id`, `org_id`, `site_id`, `timestamp`, `severity`, and
 `type`. It carries a device `mac` when the alarm is device-scoped. Those fields
-are visible at `src/db/arango_writer.py:2463`-`:2483`.
+are visible at `src/foundation/persistence/db/arango_writer.py:2463`-`:2483`.
 
 Registry entries:
 
@@ -779,7 +779,7 @@ it.
 The convention is two lines. Call the API with an explicit `limit`. Then hand
 the response to `mistapi.get_all`.
 
-The canonical example is `src/api/api_core_fetch_utils.py:44`-`:45`:
+The canonical example is `src/mist/access/api/api_core_fetch_utils.py:44`-`:45`:
 
 ```python
 response = mistapi.api.v1.orgs.sites.listOrgSites(mh.apisession, org_id, limit=mh.DEFAULT_API_PAGE_LIMIT)
@@ -787,12 +787,12 @@ return mistapi.get_all(response=response, mist_session=mh.apisession)
 ```
 
 The module is `APICoreFetchUtils`. `all_sites_with_limit(org_id) -> list[dict]`
-sits at `src/api/api_core_fetch_utils.py:32`.
+sits at `src/mist/access/api/api_core_fetch_utils.py:32`.
 `all_inventory_with_limit(org_id) -> list[dict]` sits at `:48`.
 `get_api_response_data(response) -> Any` sits at `:66` and returns
 `getattr(response, "data", response)` at `:69`.
 
-The lazy import at `src/api/api_core_fetch_utils.py:43` avoids a circular
+The lazy import at `src/mist/access/api/api_core_fetch_utils.py:43` avoids a circular
 dependency between `src/` and `MistHelper.py`.
 
 ### 6.2 The pagination helper
@@ -856,12 +856,12 @@ Several modules hardcode 1000 rather than reading the constant:
 
 | File and line | Value |
 |---------------|-------|
-| `src/ui/prompt_utils.py:273` | `limit=1000` |
-| `src/export/wifi_clients_exporter.py:12` | `_API_PAGE_LIMIT = 1000` |
-| `src/export/site_device_exporter.py:144` | `limit=1000` |
-| `src/export/site_client_exporter.py:70` | `limit=1000` |
-| `src/firmware/firmware_manager.py:508` and `:3231` | `limit=1000` |
-| `src/maps/launcher/_viewer_url_switch.py:30` | `_DEVICES_PAGE_LIMIT = 1000` |
+| `src/interfaces/visualization/ui/prompt_utils.py:273` | `limit=1000` |
+| `src/operations/exporting/export/wifi_clients_exporter.py:12` | `_API_PAGE_LIMIT = 1000` |
+| `src/operations/exporting/export/site_device_exporter.py:144` | `limit=1000` |
+| `src/operations/exporting/export/site_client_exporter.py:70` | `limit=1000` |
+| `src/operations/execution/firmware/firmware_manager.py:508` and `:3231` | `limit=1000` |
+| `src/interfaces/visualization/maps/launcher/_viewer_url_switch.py:30` | `_DEVICES_PAGE_LIMIT = 1000` |
 
 **Recommendation.** The capture should read `DEFAULT_API_PAGE_LIMIT`. That gives
 one place to lower the page size if a large site hits a payload limit.
@@ -876,8 +876,8 @@ two.
 | Environment variable name | `API_REQUEST_LIMIT` |
 | Where the name appears | `documentation/sample.env:30` |
 | Runtime fallback constant | `_DEFAULT_REQUEST_LIMIT` |
-| Fallback definition | `src/utils/rate_limiting.py:56` |
-| Cache assignment | `src/utils/rate_limiting.py:290` |
+| Fallback definition | `src/foundation/support/utils/rate_limiting.py:56` |
+| Cache assignment | `src/foundation/support/utils/rate_limiting.py:290` |
 
 The fallback line is:
 
@@ -920,15 +920,15 @@ and a device reboot.
 
 Use `DeviceUtils.get_device_identifier` for display text only. Its signature is
 `get_device_identifier(device: dict[str, Any], warn_on_missing: bool = False) -> str`
-at `src/device/device_utils.py:100`. Its resolution order at
-`src/device/device_utils.py:102` is `name`, then `serial`, then `id`, then the
+at `src/mist/resources/device/device_utils.py:100`. Its resolution order at
+`src/mist/resources/device/device_utils.py:102` is `name`, then `serial`, then `id`, then the
 string `"UNKNOWN"`. That order starts with the unstable field, so it is a display
 helper, not an identity helper.
 
 **Virtual chassis caution.** A switch stack reports one `mac` for the whole
 stack. A member-level change is invisible at that key. The only member signal in
 this repository is `num_members`, read at
-`src/inventory/org_device_inventory_summary.py:98`. If a stack loses a member
+`src/mist/resources/inventory/org_device_inventory_summary.py:98`. If a stack loses a member
 during an upgrade, the device count will not change. Record `num_members` as a
 captured attribute and compare it directly.
 
@@ -1032,10 +1032,10 @@ The repository registry uses composite keys that include `timestamp`:
 
 | Endpoint | Primary key | Line |
 |----------|------------|------|
-| `searchSiteWirelessClients` | `["mac", "timestamp"]` | `src/refactors/endpoint_primary_key_strategies.py:511` |
-| `searchSiteWiredClients` | `["mac", "timestamp"]` | `src/refactors/endpoint_primary_key_strategies.py:518` |
-| `listSiteDevicesStats` | `["device_id", "timestamp"]` | `src/refactors/endpoint_primary_key_strategies.py:168`-`:176` |
-| `searchSiteSwOrGwPorts` | `["device_id", "port_id", "timestamp"]` | `src/refactors/endpoint_primary_key_strategies.py:186`-`:203` |
+| `searchSiteWirelessClients` | `["mac", "timestamp"]` | `src/foundation/support/refactors/endpoint_primary_key_strategies.py:511` |
+| `searchSiteWiredClients` | `["mac", "timestamp"]` | `src/foundation/support/refactors/endpoint_primary_key_strategies.py:518` |
+| `listSiteDevicesStats` | `["device_id", "timestamp"]` | `src/foundation/support/refactors/endpoint_primary_key_strategies.py:168`-`:176` |
+| `searchSiteSwOrGwPorts` | `["device_id", "port_id", "timestamp"]` | `src/foundation/support/refactors/endpoint_primary_key_strategies.py:186`-`:203` |
 
 Those keys exist for time-series storage. Every capture writes a new timestamp.
 
@@ -1080,7 +1080,7 @@ access points, switches, and gateways report separately.
 the primary success measure. The expected result is a full move from the old
 version to the new version. Any device left on the old version is a failed
 upgrade. Sum switch rows with `num_members` from
-`src/inventory/org_device_inventory_summary.py:98` if the capture also records
+`src/mist/resources/inventory/org_device_inventory_summary.py:98` if the capture also records
 inventory, so a stack does not count as one unit.
 
 **3. Client count by band.** The `band` enum is `24`, `5`, and `6`, documented at
@@ -1118,7 +1118,7 @@ API call.** Section 5.1 explains why.
 **10. Alarms raised.** Take the alarm `id` set from each capture. The raised set
 is `after - before`. Group the raised set by `severity` and by `type`. Both keys
 are registry indexes at
-`src/refactors/endpoint_primary_key_strategies.py:372`. Pass `acked=False` so
+`src/foundation/support/refactors/endpoint_primary_key_strategies.py:372`. Pass `acked=False` so
 the set holds active alarms only. Report `critical` alarms at the top of the
 compare view.
 
@@ -1232,7 +1232,7 @@ else is a fixed small number.
 | Option C, stacks and a busy day window | 11 | 15 | **26** | **52** |
 
 Compare against the hourly quota. The in-source fallback quota is 5000 requests
-per hour, at `src/utils/rate_limiting.py:56`. The vendored specification states
+per hour, at `src/foundation/support/utils/rate_limiting.py:56`. The vendored specification states
 the same figure at
 `documentation/api/sites/GET_sites_site_id_clients_search.md:463`.
 
@@ -1276,7 +1276,7 @@ A design that makes all three mistakes costs 502 requests instead of 4. That is 
 125-fold increase, and it turns a 5-second capture into a multi-minute capture.
 
 The repository already contains one of the anti-patterns. The call at
-`src/device/prompt_utils.py:399` passes `mac=device_mac`. That is correct for its
+`src/mist/resources/device/prompt_utils.py:399` passes `mac=device_mac`. That is correct for its
 own single-device use. It is wrong for a capture. Do not copy it.
 
 ---
@@ -1291,7 +1291,7 @@ This section lists every place where this document reasoned rather than read.
 | 2 | The 52-interface-per-switch figure in section 9.3 | Assumption based on a 48-port switch plus uplinks. |
 | 3 | The 1-second round-trip figure in section 9.6 | Estimate. This document ran no timing test. |
 | 4 | Whether `id` is present on all three device stats shapes | Not verified. `mac` and `serial` were verified. Section 7.1 keys on `mac` for that reason. |
-| 5 | Whether `listSiteWirelessClientsStats` supports `search_after` or `page` paging | Inferred. `mistapi.get_all` follows `response.next` and is shape-agnostic, so both work. The repository already pages it at `src/export/site_client_exporter.py:71`. |
+| 5 | Whether `listSiteWirelessClientsStats` supports `search_after` or `page` paging | Inferred. `mistapi.get_all` follows `response.next` and is shape-agnostic, so both work. The repository already pages it at `src/operations/exporting/export/site_client_exporter.py:71`. |
 | 6 | Whether `type="all"` is legal on `searchOrgDevices` | Believed illegal. The docstring at `mistapi/api/v1/orgs/devices.py:672` lists only `ap`, `gateway`, and `switch`. Section 2.3 says to avoid the call. |
 | 7 | The description text on `last_ssid` | Confirmed wrong in the vendored specification at `GET_sites_site_id_clients_search.md:232`. The key name is right. |
 

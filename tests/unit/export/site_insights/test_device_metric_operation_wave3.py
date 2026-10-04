@@ -1,7 +1,7 @@
 """Wave 3 top-up tests for DeviceMetricOperation (initiative 1018).
 
 Targets the 121 uncovered statements in
-``src/export/site_insights/device_metric_operation.py``. Existing test
+``src/operations/exporting/export/site_insights/device_metric_operation.py``. Existing test
 suite covers ``SiteInsightsExporter`` but never instantiates or
 exercises ``DeviceMetricOperation``. This file drives every branch of
 ``execute()`` and its helpers via injected dependencies.
@@ -22,7 +22,7 @@ from unittest.mock import MagicMock  # WHY: build interchangeable stubs for inje
 
 import pytest
 
-from src.export.site_insights.device_metric_operation import (  # WHY: SUTs under test.
+from src.operations.exporting.export.site_insights.device_metric_operation import (  # WHY: SUTs under test.
     DeviceMetricOperation,
     DeviceRunContext,
 )

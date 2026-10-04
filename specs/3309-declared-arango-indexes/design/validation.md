@@ -46,7 +46,7 @@ The suite checks new and existing collections with five unchanged strategy fixtu
 The native SDK tests exercise the actual index formatter, connection parser, and query explanation return shape.
 
 ```bash
-rtk proxy .venv/bin/python -m pytest tests/unit/arango_indexes tests/contract/test_arango_declared_indexes.py tests/unit/test_arango_writer.py tests/unit/test_router.py tests/unit/db tests/unit/refactors/test_sqlite_database_writer.py -q --tb=short --cov=src.db.arango_writer --cov=src.db.database_schema_utils --cov-branch --cov-report=term-missing --cov-report=json:/Users/jmorrison/.copilot/session-state/87bdb7f6-0891-4536-a492-c22ffb198106/files/index-coverage.json --cov-fail-under=90
+rtk proxy .venv/bin/python -m pytest tests/unit/arango_indexes tests/contract/test_arango_declared_indexes.py tests/unit/test_arango_writer.py tests/unit/test_router.py tests/unit/db tests/unit/refactors/test_sqlite_database_writer.py -q --tb=short --cov=src.foundation.persistence.db.arango_writer --cov=src.foundation.persistence.db.database_schema_utils --cov-branch --cov-report=term-missing --cov-report=json:/Users/jmorrison/.copilot/session-state/87bdb7f6-0891-4536-a492-c22ffb198106/files/index-coverage.json --cov-fail-under=90
 ```
 
 The two changed database modules reach 96.48 percent combined statement and branch coverage.
@@ -130,7 +130,7 @@ All compile checks pass.
 The new function review finds no function above 25 lines.
 
 ```bash
-rtk proxy .venv/bin/python -m py_compile MistHelper.py src/db/arango_writer.py src/db/database_schema_utils.py tests/unit/arango_indexes/conftest.py tests/unit/arango_indexes/fakes.py tests/unit/arango_indexes/test_declared_indexes.py tests/unit/arango_indexes/test_retry_concurrency.py tests/unit/arango_indexes/test_preservation.py tests/contract/test_arango_declared_indexes.py tests/integration/test_arango_declared_indexes_live.py
+rtk proxy .venv/bin/python -m py_compile MistHelper.py src/foundation/persistence/db/arango_writer.py src/foundation/persistence/db/database_schema_utils.py tests/unit/arango_indexes/conftest.py tests/unit/arango_indexes/fakes.py tests/unit/arango_indexes/test_declared_indexes.py tests/unit/arango_indexes/test_retry_concurrency.py tests/unit/arango_indexes/test_preservation.py tests/contract/test_arango_declared_indexes.py tests/integration/test_arango_declared_indexes_live.py
 ```
 
 The unchanged test-quality ratchet initially rejected missing native empty-body and malformed-JSON evidence.
@@ -243,7 +243,7 @@ All seven new or changed methods have zero missing statements and zero missing b
 The existing SQLite tests again report three unclosed-connection warnings.
 
 ```bash
-rtk proxy .venv/bin/python -m pytest tests/unit/arango_indexes tests/contract/test_arango_declared_indexes.py tests/unit/test_arango_writer.py tests/unit/test_router.py tests/unit/db tests/unit/refactors/test_sqlite_database_writer.py -q --tb=short --cov=src.db.arango_writer --cov=src.db.database_schema_utils --cov-branch --cov-report=term-missing --cov-report=json:/Users/jmorrison/.copilot/session-state/87bdb7f6-0891-4536-a492-c22ffb198106/files/refresh-index-coverage.json --cov-fail-under=90
+rtk proxy .venv/bin/python -m pytest tests/unit/arango_indexes tests/contract/test_arango_declared_indexes.py tests/unit/test_arango_writer.py tests/unit/test_router.py tests/unit/db tests/unit/refactors/test_sqlite_database_writer.py -q --tb=short --cov=src.foundation.persistence.db.arango_writer --cov=src.foundation.persistence.db.database_schema_utils --cov-branch --cov-report=term-missing --cov-report=json:/Users/jmorrison/.copilot/session-state/87bdb7f6-0891-4536-a492-c22ffb198106/files/refresh-index-coverage.json --cov-fail-under=90
 rtk proxy .venv/bin/python -m pytest tests/guardrails/test_wave1_safe_input_paths.py tests/guardrails/local_test_quality_loop/test_guidance.py -q --no-cov --tb=short
 rtk proxy .venv/bin/python -m pytest tests/guardrails/local_test_quality_loop/test_guidance.py::TestLiveGuides::test_required_local_procedures -q -s --no-cov --tb=short
 ```

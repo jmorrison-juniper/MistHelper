@@ -213,4 +213,4 @@ Common use cases:
 
 Menu Operation **261** offers this site-scoped simple read endpoint.
 Verification source: `git grep -n "searchSiteClientFingerprints" -- src MistHelper.py`.
-`src/export/endpoint_catalog.py` was also checked for endpoint family menu coverage.
+`src/operations/exporting/export/endpoint_catalog.py` was also checked for endpoint family menu coverage.

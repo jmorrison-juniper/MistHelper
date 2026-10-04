@@ -2,7 +2,7 @@
 
 from __future__ import annotations  # Keep test annotations import-safe.
 
-from src.reports.site_variable_audit.model import (  # Test pure model behavior and scan inputs.
+from src.mist.intelligence.reports.site_variable_audit.model import (  # Test pure model behavior and scan inputs.
     SiteVariableAuditModel,
     TemplateReference,
 )

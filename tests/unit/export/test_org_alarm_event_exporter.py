@@ -1,7 +1,7 @@
 """Unit tests for OrgAlarmEventExporter — covers every static-method branch.
 
 Why:
-    The tranche-17 push of issue #878 removes ``src/export/org_alarm_event_exporter.py``
+    The tranche-17 push of issue #878 removes ``src/operations/exporting/export/org_alarm_event_exporter.py``
     from the coverage ``omit`` list.  This suite drives every entry point (alarms,
     alarm_templates, events, device_events, device_events_52w) plus the private
     ``_export_data`` helper and the ``device_events`` sample-log branch so the
@@ -17,9 +17,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.export import org_alarm_event_exporter as oaee
-from src.export.org_alarm_event_exporter import OrgAlarmEventExporter
-from src.export.org_alarm_event_exporter import OrgAlarmEventExporter as FailureModeOrgAlarmEventExporter
+from src.operations.exporting.export import org_alarm_event_exporter as oaee
+from src.operations.exporting.export.org_alarm_event_exporter import OrgAlarmEventExporter
+from src.operations.exporting.export.org_alarm_event_exporter import (
+    OrgAlarmEventExporter as FailureModeOrgAlarmEventExporter,
+)
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -149,7 +151,7 @@ class TestDeviceEvents:
         with (
             patch.object(oaee.TimeUtils, "get_dynamic_lookback_hours", return_value=24),
             patch.object(oaee.TimeUtils, "log_dynamic_lookback"),
-            patch("src.export.org_alarm_event_exporter.mistapi") as mistapi_mock,
+            patch("src.operations.exporting.export.org_alarm_event_exporter.mistapi") as mistapi_mock,
         ):
             mistapi_mock.api.v1.orgs.devices.searchOrgDeviceEvents.return_value = MagicMock()
             mistapi_mock.get_all.return_value = events
@@ -163,7 +165,7 @@ class TestDeviceEvents:
         with (
             patch.object(oaee.TimeUtils, "get_dynamic_lookback_hours", return_value=24),
             patch.object(oaee.TimeUtils, "log_dynamic_lookback"),
-            patch("src.export.org_alarm_event_exporter.mistapi") as mistapi_mock,
+            patch("src.operations.exporting.export.org_alarm_event_exporter.mistapi") as mistapi_mock,
             patch.object(oaee.json, "dumps") as dumps_mock,
         ):
             mistapi_mock.api.v1.orgs.devices.searchOrgDeviceEvents.return_value = MagicMock()
@@ -183,7 +185,7 @@ class TestDeviceEvents:
         with (
             patch.object(oaee.TimeUtils, "get_dynamic_lookback_hours", return_value=24),
             patch.object(oaee.TimeUtils, "log_dynamic_lookback"),
-            patch("src.export.org_alarm_event_exporter.mistapi") as mistapi_mock,
+            patch("src.operations.exporting.export.org_alarm_event_exporter.mistapi") as mistapi_mock,
         ):
             mistapi_mock.api.v1.orgs.devices.searchOrgDeviceEvents.return_value = response  # WHY: return 401.
             FailureModeOrgAlarmEventExporter.device_events()  # WHY: drive the real src status path.
@@ -201,7 +203,7 @@ class TestDeviceEvents:
         with (
             patch.object(oaee.TimeUtils, "get_dynamic_lookback_hours", return_value=24),
             patch.object(oaee.TimeUtils, "log_dynamic_lookback"),
-            patch("src.export.org_alarm_event_exporter.mistapi") as mistapi_mock,
+            patch("src.operations.exporting.export.org_alarm_event_exporter.mistapi") as mistapi_mock,
         ):
             mistapi_mock.api.v1.orgs.devices.searchOrgDeviceEvents.return_value = response  # WHY: return 503.
             OrgAlarmEventExporter.device_events()  # WHY: drive the product status path.
@@ -218,7 +220,7 @@ class TestDeviceEvents:
 
 class TestDeviceEvents52w:
     def test_builds_exporter_with_runtime_globals(self, fake_mh: ModuleType) -> None:
-        with patch("src.export.org_alarm_event_exporter.DeviceEvents52wExporter") as exporter_cls:
+        with patch("src.operations.exporting.export.org_alarm_event_exporter.DeviceEvents52wExporter") as exporter_cls:
             instance = exporter_cls.return_value
             OrgAlarmEventExporter.device_events_52w()
         exporter_cls.assert_called_once()

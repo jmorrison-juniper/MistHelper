@@ -3,7 +3,7 @@
 ## Menu entries
 | menu | title | handler import | handler attribute | category | skip_reason | destructive | supports_fast |
 | - | - | - | - | - | - | - | - |
-| 290 | Run spectrum analysis and RF diagnostic recording | src.troubleshooting.rf_diagnostics.operation | RfDiagnosticsOperation.run | interactive |  | False | False |
+| 290 | Run spectrum analysis and RF diagnostic recording | src.mist.intelligence.troubleshooting.rf_diagnostics.operation | RfDiagnosticsOperation.run | interactive |  | False | False |
 
 ## OperationRegistry comment
 One `# WHY:` paragraph for the registry entry, in the style of the menu 269 and menu 270 entries:
@@ -24,7 +24,7 @@ One `# WHY:` paragraph for the registry entry, in the style of the menu 269 and 
 Add menu `290` to the `interactive` category row. Do not mark menu `290` as destructive.
 
 ## Import line for MistHelper.py
-`from src.troubleshooting.rf_diagnostics.operation import RfDiagnosticsOperation  # Menu 290 (issue #3570) -- RF diagnostics spectrum and recording workflow.`
+`from src.mist.intelligence.troubleshooting.rf_diagnostics.operation import RfDiagnosticsOperation  # Menu 290 (issue #3570) -- RF diagnostics spectrum and recording workflow.`
 
 ## Changelog ownership
 The fleet contract allows this package pull request to add `changelog.d/issue-3570-spectrum-rfdiag.md`. The integration pull request must not duplicate that fragment.
@@ -33,8 +33,8 @@ The fleet contract allows this package pull request to add `changelog.d/issue-35
 The integration pull request owns these files and generated references:
 
 - `MistHelper.py` menu registration.
-- `src/utils/operation_registry.py` registry metadata.
-- `src/refactors/endpoint_primary_key_strategies.py` primary-key strategy.
+- `src/foundation/support/utils/operation_registry.py` registry metadata.
+- `src/foundation/support/refactors/endpoint_primary_key_strategies.py` primary-key strategy.
 - `README.md` operation count and menu table.
 - `documentation/menu_reference.md` and `documentation/wiki/**` generated menu reference output.
 - `.github/copilot-instructions.md` category table.

@@ -2,7 +2,7 @@
 
 **Feature**: 1823-upgrade-capture-portal
 **Store**: Redis
-**Module**: `src/upgrade_portal/runtime/lock.py`
+**Module**: `src/interfaces/portals/upgrade_portal/runtime/lock.py`
 
 ## Why the lock exists
 

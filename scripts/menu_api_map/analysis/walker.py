@@ -24,7 +24,9 @@ LOGGER = logging.getLogger(__name__)  # Keeps the log records tied to this modul
 MAX_VISITED = 4000  # The walk of one menu stops after this many functions.
 MENU_MODULE = "MistHelper"  # The module that holds the menu table.
 MENU_TABLE = "menu_actions"  # The name of the menu table.
-REGISTRY_KEY = "src.utils.operation_registry:OperationRegistry._REGISTRY"  # The category table constant.
+REGISTRY_KEY = (
+    "src.foundation.support.utils.operation_registry:OperationRegistry._REGISTRY"  # The category table constant.
+)
 ROOT_HOLDER = ""  # The holder key of a fact that the handler expression itself holds.
 PATH_RANK = len(EVIDENCE_RANK)  # A raw path or a channel ranks below every SDK evidence kind.
 

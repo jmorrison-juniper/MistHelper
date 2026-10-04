@@ -1,13 +1,13 @@
 # Menu Reference
 
 This page is generated. Run `python scripts/generate_menu_wiki.py` after any
-change to `menu_actions` in `MistHelper.py` or to `src/utils/operation_registry.py`.
+change to `menu_actions` in `MistHelper.py` or to `src/foundation/support/utils/operation_registry.py`.
 
 MistHelper defines **292 actionable menu entries**, numbered
 1 to 293 with gaps at 152.
 Menu 0 is Exit, so the registry holds 293 entries in total.
 
-The Safety column reads from `src/utils/operation_registry.py`, which is the
+The Safety column reads from `src/foundation/support/utils/operation_registry.py`, which is the
 single source of truth. The classifier fails closed, so an unregistered option
 never runs in an automated test pass.
 
@@ -337,7 +337,7 @@ operationId, a plain description, and a safety word:
   [1] getSiteWlan - Get site WLAN [safe interactive]
 ```
 
-`src/export/endpoint_catalog.py` holds the description and the safety word for
+`src/operations/exporting/export/endpoint_catalog.py` holds the description and the safety word for
 all 284 operations. The description comes from the Mist API documentation
 name that the installed `mistapi` docstring carries. The safety word uses the
 vocabulary of `OperationRegistry`.

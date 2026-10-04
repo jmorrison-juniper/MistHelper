@@ -1,4 +1,4 @@
-"""Unit tests for src.export.wifi_clients_exporter.
+"""Unit tests for src.operations.exporting.export.wifi_clients_exporter.
 
 Wave 13 P2 coverage lift — extends coverage to include exception guards
 (execute + resolve_site_name), placeholder + empty-merge branches, the
@@ -16,7 +16,7 @@ from pathlib import Path  # WHY: build platform-neutral tmp_path strings for CSV
 from typing import Any  # WHY: annotate mixed-value dict literals so mypy --strict accepts str/int co-occurrence.
 from unittest.mock import MagicMock  # WHY: MagicMock stubs give per-test isolation without ceremony.
 
-from src.export.wifi_clients_exporter import (
+from src.operations.exporting.export.wifi_clients_exporter import (
     WifiClientsExporter,  # WHY: subject under test — orchestrator dataclass.
     _SiteStamp,  # WHY: dataclass used by helpers below to construct stamp arguments.
 )

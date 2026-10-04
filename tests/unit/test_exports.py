@@ -9,7 +9,7 @@ import sqlite3
 from unittest.mock import MagicMock
 
 import MistHelper
-from src.export.site_insights_exporter import SiteInsightsExporter
+from src.operations.exporting.export.site_insights_exporter import SiteInsightsExporter
 
 
 def test_device_events_52w_streams_and_writes_csv(monkeypatch, tmp_path):

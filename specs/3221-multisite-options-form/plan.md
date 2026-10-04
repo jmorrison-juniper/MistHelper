@@ -8,11 +8,11 @@ Each page reads its own label table. `OPTION_HELP` holds the labels of `options.
 
 ## Files
 
-- src/upgrade_portal/app/routes/org_upgrade.py
-- src/upgrade_portal/app/assets/templates/upgrade/org_options.html
-- src/upgrade_portal/app/assets/static/js/portal.js
-- src/upgrade_portal/app/assets/static/css/portal.css
-- src/upgrade_portal/upgrade/options.py
+- src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py
+- src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_options.html
+- src/interfaces/portals/upgrade_portal/app/assets/static/js/portal.js
+- src/interfaces/portals/upgrade_portal/app/assets/static/css/portal.css
+- src/interfaces/portals/upgrade_portal/upgrade/options.py
 - tests/unit/upgrade_portal/test_option_refusal_message.py
 - tests/contract/upgrade_portal/test_org_upgrade_routes.py
 - tests/e2e/upgrade_portal/test_org_options_form.py

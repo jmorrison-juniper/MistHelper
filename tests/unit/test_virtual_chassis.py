@@ -1,4 +1,4 @@
-"""Tests for src.device.virtual_chassis -- VirtualChassisManager.
+"""Tests for src.mist.resources.device.virtual_chassis -- VirtualChassisManager.
 
 Covers all static methods: public entry-points (convert_single,
 convert_by_site_list, check_status) and private helpers.
@@ -19,7 +19,7 @@ import pytest
 # ---------------------------------------------------------------------------
 _mock_mistapi = MagicMock()  # WHY: stub mistapi to avoid real SDK during import
 with patch.dict(sys.modules, {"mistapi": _mock_mistapi}):  # WHY: ensure lazy imports resolve
-    from src.device.virtual_chassis import (  # WHY: import public API + dataclass groupings
+    from src.mist.resources.device.virtual_chassis import (  # WHY: import public API + dataclass groupings
         VCExportDeps,
         VCIODeps,
         VirtualChassisManager,

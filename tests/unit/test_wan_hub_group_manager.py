@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.wan_hub_group_manager import WanHubGroupNumberManager
+from src.operations.wan.wan_hub_group_manager import WanHubGroupNumberManager
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -88,22 +88,22 @@ def manager(mock_session):
 class TestFetchProfiles:
     """Test _fetch_profiles API call and sorting."""
 
-    @patch("src.wan_hub_group_manager.mistapi.get_all")
-    @patch("src.wan_hub_group_manager.mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles")
+    @patch("src.operations.wan.wan_hub_group_manager.mistapi.get_all")
+    @patch("src.operations.wan.wan_hub_group_manager.mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles")
     def test_profiles_sorted_alphabetically(self, mock_list, mock_get_all, manager, sample_profiles):
         mock_get_all.return_value = list(sample_profiles)
         result = manager._fetch_profiles()
         names = [profile["name"] for profile in result]
         assert names == ["ALPHA", "BRAVO", "CHARLIE"]
 
-    @patch("src.wan_hub_group_manager.mistapi.get_all")
-    @patch("src.wan_hub_group_manager.mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles")
+    @patch("src.operations.wan.wan_hub_group_manager.mistapi.get_all")
+    @patch("src.operations.wan.wan_hub_group_manager.mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles")
     def test_empty_profiles(self, mock_list, mock_get_all, manager):
         mock_get_all.return_value = []
         result = manager._fetch_profiles()
         assert result == []
 
-    @patch("src.wan_hub_group_manager.mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles")
+    @patch("src.operations.wan.wan_hub_group_manager.mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles")
     def test_api_error_returns_empty(self, mock_list, manager):
         mock_list.side_effect = Exception("API error")
         result = manager._fetch_profiles()
@@ -113,8 +113,8 @@ class TestFetchProfiles:
 class TestFetchHubSpokeVpns:
     """Test _fetch_hub_spoke_vpns API call and filtering."""
 
-    @patch("src.wan_hub_group_manager.mistapi.get_all")
-    @patch("src.wan_hub_group_manager.mistapi.api.v1.orgs.vpns.listOrgVpns")
+    @patch("src.operations.wan.wan_hub_group_manager.mistapi.get_all")
+    @patch("src.operations.wan.wan_hub_group_manager.mistapi.api.v1.orgs.vpns.listOrgVpns")
     def test_filters_to_hub_spoke(self, mock_list, mock_get_all, manager):
         mock_get_all.return_value = [
             {"id": "1", "name": "HubSpoke", "type": "hub_spoke", "paths": {}},
@@ -125,8 +125,8 @@ class TestFetchHubSpokeVpns:
         assert hub_spoke[0]["name"] == "HubSpoke"
         assert len(all_vpns) == 2
 
-    @patch("src.wan_hub_group_manager.mistapi.get_all")
-    @patch("src.wan_hub_group_manager.mistapi.api.v1.orgs.vpns.listOrgVpns")
+    @patch("src.operations.wan.wan_hub_group_manager.mistapi.get_all")
+    @patch("src.operations.wan.wan_hub_group_manager.mistapi.api.v1.orgs.vpns.listOrgVpns")
     def test_no_hub_spoke_vpns(self, mock_list, mock_get_all, manager):
         mock_get_all.return_value = [
             {"id": "1", "name": "Mesh", "type": "mesh", "paths": {}},
@@ -252,8 +252,8 @@ class TestPromptProfileSelection:
 class TestSetPod:
     """Test set_pod batch update logic."""
 
-    @patch("src.wan_hub_group_manager.mistapi.api.v1.orgs.vpns.updateOrgVpn")
-    @patch("src.wan_hub_group_manager.mistapi.api.v1.orgs.vpns.getOrgVpn")
+    @patch("src.operations.wan.wan_hub_group_manager.mistapi.api.v1.orgs.vpns.updateOrgVpn")
+    @patch("src.operations.wan.wan_hub_group_manager.mistapi.api.v1.orgs.vpns.getOrgVpn")
     def test_batch_update_all_paths(self, mock_get, mock_update, manager, sample_vpns):
         mock_response = MagicMock()
         mock_response.data = sample_vpns[0]
@@ -276,8 +276,8 @@ class TestSetPod:
         manager.set_pod(profile, vpn_data, 42)
         # Should print message but not crash
 
-    @patch("src.wan_hub_group_manager.mistapi.api.v1.orgs.vpns.updateOrgVpn")
-    @patch("src.wan_hub_group_manager.mistapi.api.v1.orgs.vpns.getOrgVpn")
+    @patch("src.operations.wan.wan_hub_group_manager.mistapi.api.v1.orgs.vpns.updateOrgVpn")
+    @patch("src.operations.wan.wan_hub_group_manager.mistapi.api.v1.orgs.vpns.getOrgVpn")
     def test_pod_value_range_validation(self, mock_get, mock_update, manager, sample_vpns):
         """set_pod itself does not validate range (caller does), but verify it sets correctly."""
         mock_response = MagicMock()
@@ -368,7 +368,7 @@ class TestModuleArchitecture:
     """Test clean import and instantiation."""
 
     def test_module_imports(self):
-        from src.wan_hub_group_manager import WanHubGroupNumberManager
+        from src.operations.wan.wan_hub_group_manager import WanHubGroupNumberManager
 
         assert WanHubGroupNumberManager is not None
 
@@ -489,7 +489,7 @@ class TestRunWorkflow:
 class TestFetchHubSpokeVpnsError:
     """Test _fetch_hub_spoke_vpns error handling."""
 
-    @patch("src.wan_hub_group_manager.mistapi.api.v1.orgs.vpns.listOrgVpns")
+    @patch("src.operations.wan.wan_hub_group_manager.mistapi.api.v1.orgs.vpns.listOrgVpns")
     def test_api_error_returns_empty(self, mock_list, manager, caplog: pytest.LogCaptureFixture):
         caplog.set_level(logging.ERROR)
         mock_list.side_effect = Exception("Connection failed")
@@ -605,7 +605,7 @@ class TestApplyVpnUpdatesError:
         ]  # WHY: isolate the repaired success summary.
         assert [record.levelno for record in summary_records] == [logging.INFO]  # WHY: success is not a warning.
 
-    @patch("src.wan_hub_group_manager.mistapi.api.v1.orgs.vpns.getOrgVpn")
+    @patch("src.operations.wan.wan_hub_group_manager.mistapi.api.v1.orgs.vpns.getOrgVpn")
     def test_api_error_prints_message(self, mock_get, manager, caplog: pytest.LogCaptureFixture):
         caplog.set_level(logging.ERROR)
         mock_get.side_effect = Exception("Network error")

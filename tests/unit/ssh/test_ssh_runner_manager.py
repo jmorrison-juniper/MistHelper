@@ -5,7 +5,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from src.ssh.ssh_runner_manager import SSHRunnerManager, SSHRunnerManagerDeps
+from src.operations.execution.ssh.ssh_runner_manager import SSHRunnerManager, SSHRunnerManagerDeps
 
 
 class _Args:
@@ -73,7 +73,7 @@ def test_execute_ssh_uses_multi_host_for_multiple_hosts() -> None:
     deps = _make_deps()
 
     with patch(
-        "src.ssh.ssh_runner_manager.MultiHostRunner.run",
+        "src.operations.execution.ssh.ssh_runner_manager.MultiHostRunner.run",
         return_value={"host-1": {"success": True}},
     ) as mock_run:
         ok = SSHRunnerManager._execute_ssh(deps, ["host-1", "host-2"], "admin", "pw", ["show version"])
@@ -86,7 +86,7 @@ def test_execute_ssh_uses_run_application_for_single_host_single_command() -> No
     """Single-host/single-command execution path uses AppRunner.run (T013d: no façade)."""
     deps = _make_deps()
 
-    with patch("src.ssh.ssh_runner_manager.AppRunner.run", return_value=True) as mock_app_run:
+    with patch("src.operations.execution.ssh.ssh_runner_manager.AppRunner.run", return_value=True) as mock_app_run:
         ok = SSHRunnerManager._execute_ssh(deps, ["host-1"], "admin", "pw", ["show version"])
 
     assert ok is True

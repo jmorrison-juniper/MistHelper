@@ -1,7 +1,7 @@
 """Tests for the Zscaler probe transport helpers and the parallel probe runner.
 
 Why:
-    ``src/utils/zscaler_probe.py`` opens sockets, runs a subprocess, wraps a
+    ``src/foundation/support/utils/zscaler_probe.py`` opens sockets, runs a subprocess, wraps a
     TLS session, and fans probes out across a thread pool. Every one of those
     paths owns a resource that must close on both the success path and the
     failure path. A leak here strands a socket or a worker thread for the whole
@@ -21,8 +21,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.utils import zscaler_probe as zp
-from src.utils.zscaler_probe import ProbeResult
+from src.foundation.support.utils import zscaler_probe as zp
+from src.foundation.support.utils.zscaler_probe import ProbeResult
 
 
 def _make_result(**overrides: Any) -> ProbeResult:

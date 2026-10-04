@@ -1,6 +1,6 @@
 """Tests for API posture checks."""
 
-from src.reports.org_security_posture.checks.api import (
+from src.mist.intelligence.reports.org_security_posture.checks.api import (
     ApiAccessRestrictionCheck,
     ApiTokenExpirationCheck,
     ApiWebhookHttpsCheck,

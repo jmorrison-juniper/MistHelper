@@ -23,8 +23,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # Import src without installing.
 
-from src.utils.performance.event import EventSource
-from src.utils.performance.recorder import Recorder, RecorderSettings
+from src.foundation.support.utils.performance.event import EventSource
+from src.foundation.support.utils.performance.recorder import Recorder, RecorderSettings
 
 PROBE = EventSource(file="scripts/benchmarks/bench_performance_overhead.py", symbol="run_spans")
 

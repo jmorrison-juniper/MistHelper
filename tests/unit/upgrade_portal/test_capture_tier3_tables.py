@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from src.upgrade_portal.capture import extras, tables
+from src.interfaces.portals.upgrade_portal.capture import extras, tables
 
 
 def _tier2_document() -> dict[str, Any]:

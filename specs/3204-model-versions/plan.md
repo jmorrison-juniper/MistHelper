@@ -15,10 +15,10 @@ That planner groups devices by type, gateway family, and target version.
 
 ## Files
 
-- `src/upgrade_portal/app/assets/templates/upgrade/org_options.html`
-- `src/upgrade_portal/app/assets/static/js/portal.js`
-- `src/upgrade_portal/app/routes/org_upgrade.py`
-- `src/firmware/aggregate_upgrade_service.py`
+- `src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_options.html`
+- `src/interfaces/portals/upgrade_portal/app/assets/static/js/portal.js`
+- `src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py`
+- `src/operations/execution/firmware/aggregate_upgrade_service.py`
 - Focused contract, browser, and aggregate service tests
 
 ## Risks

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from src.juniper_docs.acquire.pdf_paths import PdfPathAllocator
+from src.mist.intelligence.juniper_docs.acquire.pdf_paths import PdfPathAllocator
 
 
 def _store(owners: dict[str, str], path: Path, url: str, payload: bytes) -> None:

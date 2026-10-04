@@ -9,7 +9,7 @@ from typing import Any
 
 import pytest
 
-from src.reports.psk_hygiene.operation import PskHygieneReport
+from src.mist.intelligence.reports.psk_hygiene.operation import PskHygieneReport
 
 
 class _FakeConfigUtils:

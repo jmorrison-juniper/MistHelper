@@ -21,7 +21,7 @@ import logging
 import pytest
 from flask import Flask
 
-from src.utils.environment_utils import EnvironmentUtils
+from src.foundation.support.utils.environment_utils import EnvironmentUtils
 from web_portal.services.config import PortalConfigLoader, SecurityMiddleware
 
 logger = logging.getLogger(__name__)  # WHY: keep test log records on the module logger.

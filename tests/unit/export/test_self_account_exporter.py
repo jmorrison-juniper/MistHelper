@@ -23,11 +23,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.export.self_account_exporter import SelfAccountExporter
+from src.operations.exporting.export.self_account_exporter import SelfAccountExporter
 
 ORG_ID = "org-1415"
 TOKEN = "single-use-email-change-token"
-MODULE = "src.export.self_account_exporter"
+MODULE = "src.operations.exporting.export.self_account_exporter"
 
 
 @pytest.fixture

@@ -17,7 +17,7 @@ Menu 292 is destructive. It creates or updates Mist cloud records. A human must 
 
 ## Files changed
 
-- `src/inventory/csv_imports/**`
+- `src/mist/resources/inventory/csv_imports/**`
 - `tests/unit/inventory/csv_imports/**`
 - `specs/3572-csv-imports/**`
 - `changelog.d/issue-3572-csv-imports.md`
@@ -28,19 +28,19 @@ Menu wiring is deferred to the tier integration pull request. The integration pu
 
 ## Validation
 
-- `py_compile`: passed for `src/inventory/csv_imports`.
-- `ruff`: passed for `src/inventory/csv_imports` and `tests/unit/inventory/csv_imports`.
-- `black --check`: passed for `src/inventory/csv_imports` and `tests/unit/inventory/csv_imports`.
-- `mypy`: passed for `src/inventory/csv_imports`.
-- `pydocstyle`: passed for `src/inventory/csv_imports`.
+- `py_compile`: passed for `src/mist/resources/inventory/csv_imports`.
+- `ruff`: passed for `src/mist/resources/inventory/csv_imports` and `tests/unit/inventory/csv_imports`.
+- `black --check`: passed for `src/mist/resources/inventory/csv_imports` and `tests/unit/inventory/csv_imports`.
+- `mypy`: passed for `src/mist/resources/inventory/csv_imports`.
+- `pydocstyle`: passed for `src/mist/resources/inventory/csv_imports`.
 - `pytest`: passed, 17 tests.
-- `vulture`: passed for `src/inventory/csv_imports`.
+- `vulture`: passed for `src/mist/resources/inventory/csv_imports`.
 - `interrogate`: passed with 100 percent docstring coverage.
 - `radon` plus `complexity-gate`: passed with limit 10.
 - `test-quality-analyzer`: passed with zero new findings.
 - `SDK compatibility`: passed with no new `*args` or `**kwargs` Mist SDK calls.
 - `output scan`: passed with no new test data directory literal.
-- `bandit`: passed for `src/inventory/csv_imports`.
+- `bandit`: passed for `src/mist/resources/inventory/csv_imports`.
 
 ## Checklist
 

@@ -15,9 +15,9 @@ from pathlib import Path
 
 import pytest
 
-from src.firmware import upgrade_service
-from src.upgrade_portal.runtime.runs import PhaseState, RunState
-from src.upgrade_portal.upgrade import gate, stop
+from src.interfaces.portals.upgrade_portal.runtime.runs import PhaseState, RunState
+from src.interfaces.portals.upgrade_portal.upgrade import gate, stop
+from src.operations.execution.firmware import upgrade_service
 from tests.support.rehearsal import (
     DEFECT_NAMES,
     DefectDrill,

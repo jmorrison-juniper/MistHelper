@@ -8,18 +8,30 @@ from unittest.mock import MagicMock, patch  # WHY: replace cloud and writer boun
 
 import pytest  # WHY: pytest fixtures drive the real product functions.
 
-from src.api import api_data_fetcher as fetcher_module  # WHY: patch the shared fetcher resolver.
-from src.api.api_data_fetcher import APIDataFetcher  # WHY: keep APIDataFetcher real in dispatch tests.
-from src.device import prompt_utils as prompt_module  # WHY: patch module globals in the real prompt helper.
-from src.device.prompt_utils import PromptNetworkDeviceUtils  # WHY: drive the real product class.
-from src.export import org_site_exporter as site_module  # WHY: patch module globals in the real site exporter.
-from src.export import site_device_exporter as site_device_module  # WHY: patch the real VC exporter.
-from src.export import site_export_utils as site_utils_module  # WHY: patch the real site stats helper.
-from src.export.org_site_exporter import OrgSiteExporter  # WHY: drive the real product class.
-from src.export.site_device_exporter import SiteDeviceExporter  # WHY: drive the real product class.
-from src.export.site_export_utils import SiteExportUtils  # WHY: drive the real product class.
-from src.org import org_ticket_manager as ticket_module  # WHY: patch module globals in the real ticket manager.
-from src.org.org_ticket_manager import OrgTicketManager  # WHY: drive the real product class.
+from src.mist.access.api import api_data_fetcher as fetcher_module  # WHY: patch the shared fetcher resolver.
+from src.mist.access.api.api_data_fetcher import APIDataFetcher  # WHY: keep APIDataFetcher real in dispatch tests.
+from src.mist.resources.device import (
+    prompt_utils as prompt_module,
+)  # WHY: patch module globals in the real prompt helper.
+from src.mist.resources.device.prompt_utils import PromptNetworkDeviceUtils  # WHY: drive the real product class.
+from src.mist.resources.org import (
+    org_ticket_manager as ticket_module,
+)  # WHY: patch module globals in the real ticket manager.
+from src.mist.resources.org.org_ticket_manager import OrgTicketManager  # WHY: drive the real product class.
+from src.operations.exporting.export import (
+    org_site_exporter as site_module,
+)  # WHY: patch module globals in the real site exporter.
+from src.operations.exporting.export import (
+    site_device_exporter as site_device_module,
+)  # WHY: patch the real VC exporter.
+from src.operations.exporting.export import (
+    site_export_utils as site_utils_module,
+)  # WHY: patch the real site stats helper.
+from src.operations.exporting.export.org_site_exporter import OrgSiteExporter  # WHY: drive the real product class.
+from src.operations.exporting.export.site_device_exporter import (
+    SiteDeviceExporter,
+)  # WHY: drive the real product class.
+from src.operations.exporting.export.site_export_utils import SiteExportUtils  # WHY: drive the real product class.
 
 
 class _FailedResponse:
@@ -68,7 +80,10 @@ def test_sites_503_returns_none_suppresses_success_and_writes_no_file(caplog: py
     resolver = _writer_resolver(writer)  # WHY: control dependencies for the exporter and fetcher.
     with patch.object(site_module, "SourceDependencyResolver", resolver):  # WHY: route exporter through doubles.
         with _patch_fetcher_resolver(resolver):  # WHY: route APIDataFetcher through doubles.
-            with patch("src.export.org_site_exporter.mistapi.api.v1.orgs.sites.listOrgSites", _failed_api_call):
+            with patch(
+                "src.operations.exporting.export.org_site_exporter.mistapi.api.v1.orgs.sites.listOrgSites",
+                _failed_api_call,
+            ):
                 with caplog.at_level(logging.INFO):  # WHY: capture success and failure logs from both modules.
                     result = OrgSiteExporter.sites()  # WHY: drive the real product function.
     assert result is None  # WHY: the existing failure contract for this exporter is None.

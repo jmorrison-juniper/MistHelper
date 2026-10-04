@@ -10,9 +10,9 @@
 - Branch: `jmorrison-juniper-fuzzy-system`
 - Worktree: `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\copilot-worktrees\MistHelper\jmorrison-juniper-fuzzy-system`
 - Affected paths:
-  - `src/export/site_search_exporter.py` (new `service_path_events` entry)
+  - `src/operations/exporting/export/site_search_exporter.py` (new `service_path_events` entry)
   - `MistHelper.py` (menu 244 binding)
-  - `src/utils/operation_registry.py` (menu 244 row, `interactive_safe`)
+  - `src/foundation/support/utils/operation_registry.py` (menu 244 row, `interactive_safe`)
   - `tests/unit/export/test_site_search_exporter.py` (one MENU_BINDINGS row)
   - `README.md`, `CHANGELOG.md`, `documentation/menu-highlights.md`
   - `documentation/menu_reference.md`, `documentation/wiki/Menu-Reference.md` (regenerated)
@@ -52,8 +52,8 @@
 - Worktree: `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\copilot-worktrees\MistHelper\jmorrison-juniper-reimagined-meme`
 - Affected paths:
   - `MistHelper.py` (ISC004, 4 sites; C408, 2 sites)
-  - `src/upgrade_portal/upgrade/options.py` (ISC004, 2 sites)
-  - `src/websocket/diagnostics/arp_executor.py` (ISC004, 1 site)
+  - `src/interfaces/portals/upgrade_portal/upgrade/options.py` (ISC004, 2 sites)
+  - `src/mist/realtime/websocket/diagnostics/arp_executor.py` (ISC004, 1 site)
   - `tests/unit/troubleshooting/test_marvis_troubleshoot_utils_extended.py` (C408, 1 site)
   - `tools/refactor_analyzer/reporting.py` (ISC004, 7 sites)
   - `.github/copilot-handoff.md` (this record)

@@ -43,7 +43,7 @@ git rebase origin/main
 **ID**: T001  
 **Priority**: P1 (blocks all downstream)  
 **Acceptance Criteria**:
-- [ ] New file `src/maps/plotly_map_templates.py` created with `DashTemplateManager` class
+- [ ] New file `src/interfaces/visualization/maps/plotly_map_templates.py` created with `DashTemplateManager` class
 - [ ] Class has 4 methods: `__init__`, `get_custom_css`, `get_layout_html`, `get_app_meta`
 - [ ] All CSS/styling extracted byte-for-byte from original
 - [ ] All HTML layout components extracted exactly
@@ -64,10 +64,10 @@ git rebase origin/main
    # Lines 3070–3250 (HTML/CSS defs)
    
    # Into new file:
-   # src/maps/plotly_map_templates.py
+   # src/interfaces/visualization/maps/plotly_map_templates.py
    
    class DashTemplateManager:
-       def __init__(self, org_id: str, base_template_dir: str = "src/maps/templates"):
+       def __init__(self, org_id: str, base_template_dir: str = "src/interfaces/visualization/maps/templates"):
            self.org_id = org_id
            self.base_template_dir = base_template_dir
            self._template_cache: Dict[str, str] = {}
@@ -109,9 +109,9 @@ git rebase origin/main
 3. **Validation (pre-commit)**:
    ```powershell
    cd "MistHelper-phase-1"
-   python -m py_compile src/maps/plotly_map_templates.py
-   python -m ruff check src/maps/plotly_map_templates.py --fix
-   python -m black src/maps/plotly_map_templates.py
+   python -m py_compile src/interfaces/visualization/maps/plotly_map_templates.py
+   python -m ruff check src/interfaces/visualization/maps/plotly_map_templates.py --fix
+   python -m black src/interfaces/visualization/maps/plotly_map_templates.py
    ```
 
 **Test Cases**:
@@ -120,7 +120,7 @@ git rebase origin/main
 # tests/maps/test_plotly_map_templates.py
 
 import pytest
-from src.maps.plotly_map_templates import DashTemplateManager
+from src.interfaces.visualization.maps.plotly_map_templates import DashTemplateManager
 
 class TestDashTemplateManager:
     
@@ -128,7 +128,7 @@ class TestDashTemplateManager:
         """DashTemplateManager initializes without errors."""
         mgr = DashTemplateManager(org_id="test-org")
         assert mgr.org_id == "test-org"
-        assert mgr.base_template_dir == "src/maps/templates"
+        assert mgr.base_template_dir == "src/interfaces/visualization/maps/templates"
     
     def test_get_custom_css_returns_string(self):
         """get_custom_css() returns non-empty CSS string."""
@@ -167,15 +167,15 @@ class TestDashTemplateManager:
 # Run in ../MistHelper-phase-1
 
 # 1. Syntax check
-python -m py_compile src/maps/plotly_map_templates.py
+python -m py_compile src/interfaces/visualization/maps/plotly_map_templates.py
 # Expected output: (none, exit code 0)
 
 # 2. Lint check
-python -m ruff check src/maps/plotly_map_templates.py
+python -m ruff check src/interfaces/visualization/maps/plotly_map_templates.py
 # Expected output: 0 errors
 
 # 3. Format check
-python -m black --check src/maps/plotly_map_templates.py
+python -m black --check src/interfaces/visualization/maps/plotly_map_templates.py
 # Expected output: All done! (exit code 0)
 
 # 4. Unit tests
@@ -183,7 +183,7 @@ pytest tests/maps/test_plotly_map_templates.py -v
 # Expected output: 5 passed
 
 # 5. Type check (optional)
-python -m mypy src/maps/plotly_map_templates.py --ignore-missing-imports
+python -m mypy src/interfaces/visualization/maps/plotly_map_templates.py --ignore-missing-imports
 # Expected output: Success (or just informational, not blocking)
 ```
 
@@ -198,7 +198,7 @@ python -m mypy src/maps/plotly_map_templates.py --ignore-missing-imports
 **Git Commit**:
 
 ```powershell
-git add src/maps/plotly_map_templates.py tests/maps/test_plotly_map_templates.py
+git add src/interfaces/visualization/maps/plotly_map_templates.py tests/maps/test_plotly_map_templates.py
 git commit -m "chore(293): Extract DashTemplateManager from _launch_plotly_viewer
 
 - Extract HTML/CSS templates to DashTemplateManager class
@@ -223,13 +223,13 @@ Closes #293"
 - [ ] Syntax still valid
 
 **File Paths**:
-- `src/maps/maps_manager.py`: Lines 3010–3260 (method start to end of styling)
+- `src/interfaces/visualization/maps/maps_manager.py`: Lines 3010–3260 (method start to end of styling)
 
 **Implementation Steps**:
 
 1. **Add import** at top of `maps_manager.py`:
    ```python
-   from src.maps.plotly_map_templates import DashTemplateManager
+   from src.interfaces.visualization.maps.plotly_map_templates import DashTemplateManager
    ```
 
 2. **Replace inline styling** in `_launch_plotly_viewer` (lines 3070–3250):
@@ -249,7 +249,7 @@ Closes #293"
 
 3. **Validation**:
    ```powershell
-   python -m py_compile src/maps/maps_manager.py
+   python -m py_compile src/interfaces/visualization/maps/maps_manager.py
    ```
 
 4. **Regression test** (visual UI check):
@@ -267,7 +267,7 @@ def test_launch_plotly_viewer_uses_template_manager():
     mgr = MapsManager(org_id="test-org")
     # Mock the rest of the method to just check template creation
     # (full integration test in Phase 6)
-    with patch('src.maps.maps_manager.DashTemplateManager') as mock_tmpl:
+    with patch('src.interfaces.visualization.maps.maps_manager.DashTemplateManager') as mock_tmpl:
         # Verify template manager is instantiated
         # (Can only test after full integration)
 ```
@@ -275,15 +275,15 @@ def test_launch_plotly_viewer_uses_template_manager():
 **Quality Gate Validation**:
 
 ```powershell
-python -m py_compile src/maps/maps_manager.py
-python -m ruff check src/maps/maps_manager.py
+python -m py_compile src/interfaces/visualization/maps/maps_manager.py
+python -m ruff check src/interfaces/visualization/maps/maps_manager.py
 # Expected: all quality gates still pass
 ```
 
 **Git Commit**:
 
 ```powershell
-git add src/maps/maps_manager.py
+git add src/interfaces/visualization/maps/maps_manager.py
 git commit -m "chore(293): Integrate DashTemplateManager into _launch_plotly_viewer
 
 - Replace inline CSS/HTML/layout code with DashTemplateManager calls
@@ -314,25 +314,25 @@ Closes #293"
 $py = ".venv\Scripts\python.exe"
 
 # 1. Syntax validation
-& $py -m py_compile src/maps/plotly_map_templates.py
-& $py -m py_compile src/maps/maps_manager.py
+& $py -m py_compile src/interfaces/visualization/maps/plotly_map_templates.py
+& $py -m py_compile src/interfaces/visualization/maps/maps_manager.py
 Write-Host "✓ Syntax validation passed"
 
 # 2. Lint & format
-& $py -m ruff check src/maps/plotly_map_templates.py src/maps/maps_manager.py --fix
-& $py -m black src/maps/plotly_map_templates.py src/maps/maps_manager.py
+& $py -m ruff check src/interfaces/visualization/maps/plotly_map_templates.py src/interfaces/visualization/maps/maps_manager.py --fix
+& $py -m black src/interfaces/visualization/maps/plotly_map_templates.py src/interfaces/visualization/maps/maps_manager.py
 Write-Host "✓ Lint/format passed"
 
 # 3. Type check
-& $py -m mypy src/maps/plotly_map_templates.py --ignore-missing-imports --strict
+& $py -m mypy src/interfaces/visualization/maps/plotly_map_templates.py --ignore-missing-imports --strict
 Write-Host "✓ Type check passed"
 
 # 4. Security scan
-& $py -m bandit -r src/maps/plotly_map_templates.py
+& $py -m bandit -r src/interfaces/visualization/maps/plotly_map_templates.py
 Write-Host "✓ Security scan passed"
 
 # 5. Unit tests
-& $py -m pytest tests/maps/test_plotly_map_templates.py -v --cov=src/maps/plotly_map_templates --cov-report=term-missing
+& $py -m pytest tests/maps/test_plotly_map_templates.py -v --cov=src/interfaces/visualization/maps/plotly_map_templates --cov-report=term-missing
 # Expected: ≥70% coverage, all tests pass
 Write-Host "✓ Unit tests passed"
 
@@ -353,8 +353,8 @@ gh pr create \
   --body "Phase 1 of 6: Extract HTML/CSS template management
 
 ## Changes
-- New file: src/maps/plotly_map_templates.py (DashTemplateManager class)
-- Updated: src/maps/maps_manager.py (use DashTemplateManager)
+- New file: src/interfaces/visualization/maps/plotly_map_templates.py (DashTemplateManager class)
+- Updated: src/interfaces/visualization/maps/maps_manager.py (use DashTemplateManager)
 
 ## Acceptance Criteria
 - [x] DashTemplateManager class created with 4 methods
@@ -411,7 +411,7 @@ git worktree remove ../MistHelper-phase-1
 **ID**: T004  
 **Priority**: P1  
 **Acceptance Criteria**:
-- [ ] New file `src/maps/plotly_map_serializer.py` created
+- [ ] New file `src/interfaces/visualization/maps/plotly_map_serializer.py` created
 - [ ] Class has 6 methods: `__init__`, `serialize_figure_state`, `deserialize_figure_state`, `serialize_callback_inputs`, `deserialize_callback_inputs`, `validate_numeric_precision`
 - [ ] Handles `numpy` arrays, datetime objects, edge cases
 - [ ] Round-trip serialization produces exact match
@@ -424,7 +424,7 @@ git worktree remove ../MistHelper-phase-1
 
 **Implementation Steps**:
 
-1. **Create new file** `src/maps/plotly_map_serializer.py`:
+1. **Create new file** `src/interfaces/visualization/maps/plotly_map_serializer.py`:
    ```python
    import json
    import numpy as np
@@ -513,7 +513,7 @@ git worktree remove ../MistHelper-phase-1
 
 3. **Validation**:
    ```powershell
-   python -m py_compile src/maps/plotly_map_serializer.py
+   python -m py_compile src/interfaces/visualization/maps/plotly_map_serializer.py
    ```
 
 **Test Cases**:
@@ -525,7 +525,7 @@ import pytest
 import json
 import numpy as np
 from datetime import datetime
-from src.maps.plotly_map_serializer import PlotlyMapDataSerializer
+from src.interfaces.visualization.maps.plotly_map_serializer import PlotlyMapDataSerializer
 
 class TestPlotlyMapDataSerializer:
     
@@ -585,16 +585,16 @@ class TestPlotlyMapDataSerializer:
 **Quality Gate Validation**:
 
 ```powershell
-python -m py_compile src/maps/plotly_map_serializer.py
-python -m ruff check src/maps/plotly_map_serializer.py --fix
-python -m black src/maps/plotly_map_serializer.py
-pytest tests/maps/test_plotly_map_serializer.py -v --cov=src/maps/plotly_map_serializer
+python -m py_compile src/interfaces/visualization/maps/plotly_map_serializer.py
+python -m ruff check src/interfaces/visualization/maps/plotly_map_serializer.py --fix
+python -m black src/interfaces/visualization/maps/plotly_map_serializer.py
+pytest tests/maps/test_plotly_map_serializer.py -v --cov=src/interfaces/visualization/maps/plotly_map_serializer
 ```
 
 **Git Commit**:
 
 ```powershell
-git add src/maps/plotly_map_serializer.py tests/maps/test_plotly_map_serializer.py
+git add src/interfaces/visualization/maps/plotly_map_serializer.py tests/maps/test_plotly_map_serializer.py
 git commit -m "chore(293): Extract PlotlyMapDataSerializer from _launch_plotly_viewer
 
 - Extract JSON serialization logic to PlotlyMapDataSerializer
@@ -623,7 +623,7 @@ Closes #293"
 
 1. **Add import**:
    ```python
-   from src.maps.plotly_map_serializer import PlotlyMapDataSerializer
+   from src.interfaces.visualization.maps.plotly_map_serializer import PlotlyMapDataSerializer
    ```
 
 2. **In `_launch_plotly_viewer`, instantiate serializer**:
@@ -662,7 +662,7 @@ def test_callback_serialization_matches_original():
 **Git Commit**:
 
 ```powershell
-git add src/maps/maps_manager.py
+git add src/interfaces/visualization/maps/maps_manager.py
 git commit -m "chore(293): Integrate PlotlyMapDataSerializer into _launch_plotly_viewer
 
 - Replace all json.dumps/loads with serializer methods
@@ -682,10 +682,10 @@ Closes #293"
 **Quality Gate Commands**:
 
 ```powershell
-& $py -m py_compile src/maps/plotly_map_serializer.py
-& $py -m ruff check src/maps/
-& $py -m black src/maps/
-& $py -m pytest tests/maps/test_plotly_map_serializer.py -v --cov=src/maps/plotly_map_serializer
+& $py -m py_compile src/interfaces/visualization/maps/plotly_map_serializer.py
+& $py -m ruff check src/interfaces/visualization/maps/
+& $py -m black src/interfaces/visualization/maps/
+& $py -m pytest tests/maps/test_plotly_map_serializer.py -v --cov=src/interfaces/visualization/maps/plotly_map_serializer
 ```
 
 **PR Creation & Merge**:
@@ -698,8 +698,8 @@ gh pr create \
   --body "Phase 2 of 6: Extract JSON serialization
 
 ## Changes
-- New file: src/maps/plotly_map_serializer.py
-- Updated: src/maps/maps_manager.py
+- New file: src/interfaces/visualization/maps/plotly_map_serializer.py
+- Updated: src/interfaces/visualization/maps/maps_manager.py
 
 ## Acceptance Criteria
 - [x] PlotlyMapDataSerializer class created
@@ -735,7 +735,7 @@ gh pr checks --watch
 **ID**: T007  
 **Priority**: P1  
 **Acceptance Criteria**:
-- [ ] New file `src/maps/plotly_map_heatmap.py` created with `CoverageHeatmapRenderer` class
+- [ ] New file `src/interfaces/visualization/maps/plotly_map_heatmap.py` created with `CoverageHeatmapRenderer` class
 - [ ] All interpolation algorithms extracted (Kriging, IDW, RBF)
 - [ ] Methods: `__init__`, `interpolate_grid`, `apply_colorscale`, `smooth_heatmap`, `build_heatmap_figure`, `validate_algorithm`, `get_algorithm_config`
 - [ ] Heatmap output numerically identical to original (within 1e-10 relative tolerance)
@@ -753,7 +753,7 @@ gh pr checks --watch
    ```powershell
    # Run original code to capture heatmap output
    python -c "
-   from src.maps.maps_manager import MapsManager
+   from src.interfaces.visualization.maps.maps_manager import MapsManager
    import json
    
    mgr = MapsManager(org_id='test', ...)
@@ -769,7 +769,7 @@ gh pr checks --watch
    " 2>&1 | tee .heatmap-baseline.log
    ```
 
-2. **Implement CoverageHeatmapRenderer** in `src/maps/plotly_map_heatmap.py`:
+2. **Implement CoverageHeatmapRenderer** in `src/interfaces/visualization/maps/plotly_map_heatmap.py`:
    ```python
    import numpy as np
    from scipy.interpolate import Rbf, kriging_estimator
@@ -918,7 +918,7 @@ gh pr checks --watch
 
 4. **Validation**:
    ```powershell
-   python -m py_compile src/maps/plotly_map_heatmap.py
+   python -m py_compile src/interfaces/visualization/maps/plotly_map_heatmap.py
    ```
 
 **Test Cases**:
@@ -929,7 +929,7 @@ gh pr checks --watch
 import pytest
 import numpy as np
 import json
-from src.maps.plotly_map_heatmap import CoverageHeatmapRenderer
+from src.interfaces.visualization.maps.plotly_map_heatmap import CoverageHeatmapRenderer
 
 class TestCoverageHeatmapRenderer:
     
@@ -1019,10 +1019,10 @@ class TestCoverageHeatmapRenderer:
 **Quality Gate Validation**:
 
 ```powershell
-python -m py_compile src/maps/plotly_map_heatmap.py
-python -m ruff check src/maps/plotly_map_heatmap.py --fix
-python -m black src/maps/plotly_map_heatmap.py
-pytest tests/maps/test_plotly_map_heatmap.py -v --cov=src/maps/plotly_map_heatmap
+python -m py_compile src/interfaces/visualization/maps/plotly_map_heatmap.py
+python -m ruff check src/interfaces/visualization/maps/plotly_map_heatmap.py --fix
+python -m black src/interfaces/visualization/maps/plotly_map_heatmap.py
+pytest tests/maps/test_plotly_map_heatmap.py -v --cov=src/interfaces/visualization/maps/plotly_map_heatmap
 
 # Critical: Numeric equivalence
 pytest tests/maps/test_plotly_map_heatmap.py::TestCoverageHeatmapRenderer::test_heatmap_output_matches_original -v
@@ -1039,7 +1039,7 @@ pytest tests/maps/test_plotly_map_heatmap.py::TestCoverageHeatmapRenderer::test_
 **Git Commit**:
 
 ```powershell
-git add src/maps/plotly_map_heatmap.py tests/maps/test_plotly_map_heatmap.py
+git add src/interfaces/visualization/maps/plotly_map_heatmap.py tests/maps/test_plotly_map_heatmap.py
 git commit -m "chore(293): Extract CoverageHeatmapRenderer from _launch_plotly_viewer
 
 - Extract interpolation algorithms (Kriging, IDW, RBF) to new class
@@ -1075,7 +1075,7 @@ Closes #293"
 **ID**: T009  
 **Priority**: P1  
 **Acceptance Criteria**:
-- [ ] New file `src/maps/plotly_map_figures.py` created
+- [ ] New file `src/interfaces/visualization/maps/plotly_map_figures.py` created
 - [ ] Methods: `__init__`, `build_walls_figure`, `build_device_scatter`, `build_client_scatter`, `build_heatmap_figure`, `build_combined_figure`, `validate_figure_structure`, `get_figure_json`
 - [ ] Figure output JSON byte-for-byte identical to original (with svg data)
 - [ ] All traces (walls, devices, clients) properly formatted
@@ -1156,7 +1156,7 @@ class TestPlotlyMapFigureBuilder:
 **Git Commit**:
 
 ```powershell
-git add src/maps/plotly_map_figures.py tests/maps/test_plotly_map_figures.py
+git add src/interfaces/visualization/maps/plotly_map_figures.py tests/maps/test_plotly_map_figures.py
 git commit -m "chore(293): Extract PlotlyMapFigureBuilder from _launch_plotly_viewer
 
 - Extract figure building logic for walls, devices, clients, heatmap
@@ -1231,7 +1231,7 @@ Closes #293"
 
 **Implementation Steps**:
 
-1. **Create `src/maps/plotly_map_callbacks.py`**:
+1. **Create `src/interfaces/visualization/maps/plotly_map_callbacks.py`**:
    ```python
    import dash
    from dash import Output, Input, State, no_update
@@ -1468,9 +1468,9 @@ class TestPlotlyMapCallbackManager:
 **Quality Gate Validation**:
 
 ```powershell
-python -m py_compile src/maps/plotly_map_callbacks.py
-python -m ruff check src/maps/plotly_map_callbacks.py --fix
-python -m black src/maps/plotly_map_callbacks.py
+python -m py_compile src/interfaces/visualization/maps/plotly_map_callbacks.py
+python -m ruff check src/interfaces/visualization/maps/plotly_map_callbacks.py --fix
+python -m black src/interfaces/visualization/maps/plotly_map_callbacks.py
 pytest tests/maps/test_plotly_map_callbacks.py::TestPlotlyMapCallbackManager::test_layer_callbacks_registered -v
 ```
 
@@ -1506,7 +1506,7 @@ pytest tests/maps/test_plotly_map_callbacks.py::TestPlotlyMapCallbackManager::te
 
 1. **In `_launch_plotly_viewer`** (lines ~4500–8000), replace all callbacks with:
    ```python
-   from src.maps.plotly_map_callbacks import PlotlyMapCallbackManager
+   from src.interfaces.visualization.maps.plotly_map_callbacks import PlotlyMapCallbackManager
    
    # Instead of ~3500 lines of callback definitions:
    callback_mgr = PlotlyMapCallbackManager(app, self, serializer)
@@ -1519,13 +1519,13 @@ pytest tests/maps/test_plotly_map_callbacks.py::TestPlotlyMapCallbackManager::te
 
 3. **Validation**:
    ```powershell
-   python -m py_compile src/maps/maps_manager.py
+   python -m py_compile src/interfaces/visualization/maps/maps_manager.py
    ```
 
 **Git Commit**:
 
 ```powershell
-git add src/maps/plotly_map_callbacks.py src/maps/maps_manager.py
+git add src/interfaces/visualization/maps/plotly_map_callbacks.py src/interfaces/visualization/maps/maps_manager.py
 git commit -m "chore(293): Extract PlotlyMapCallbackManager (~25 callbacks)
 
 - Extract all ~25 callbacks into PlotlyMapCallbackManager class
@@ -1578,10 +1578,10 @@ def test_all_callback_count():
 **Quality Gate Commands**:
 
 ```powershell
-& $py -m py_compile src/maps/plotly_map_callbacks.py
-& $py -m ruff check src/maps/plotly_map_callbacks.py
-& $py -m black src/maps/plotly_map_callbacks.py
-& $py -m pytest tests/maps/test_plotly_map_callbacks*.py -v --cov=src/maps/plotly_map_callbacks
+& $py -m py_compile src/interfaces/visualization/maps/plotly_map_callbacks.py
+& $py -m ruff check src/interfaces/visualization/maps/plotly_map_callbacks.py
+& $py -m black src/interfaces/visualization/maps/plotly_map_callbacks.py
+& $py -m pytest tests/maps/test_plotly_map_callbacks*.py -v --cov=src/interfaces/visualization/maps/plotly_map_callbacks
 ```
 
 ---
@@ -1601,28 +1601,28 @@ def test_all_callback_count():
 **ID**: T017  
 **Priority**: P1  
 **Acceptance Criteria**:
-- [ ] New file `src/maps/plotly_map_viewer.py` created with `PlotlyMapViewer` class
+- [ ] New file `src/interfaces/visualization/maps/plotly_map_viewer.py` created with `PlotlyMapViewer` class
 - [ ] Methods: `__init__`, `create_app`, `_create_layout`, `_register_callbacks`, `run_server`, `validate_app`
 - [ ] All extracted classes instantiated and coordinated
 - [ ] Dash app fully functional (layout + callbacks)
 
 **File Paths & Line Numbers**:
-- `src/maps/plotly_map_viewer.py`: New file (500–700 lines)
+- `src/interfaces/visualization/maps/plotly_map_viewer.py`: New file (500–700 lines)
 
 **Implementation Steps**:
 
-1. **Create `src/maps/plotly_map_viewer.py`**:
+1. **Create `src/interfaces/visualization/maps/plotly_map_viewer.py`**:
    ```python
    import dash
    from dash import dcc, html
    import logging
    from typing import Dict, Any, Optional
    
-   from src.maps.plotly_map_templates import DashTemplateManager
-   from src.maps.plotly_map_serializer import PlotlyMapDataSerializer
-   from src.maps.plotly_map_heatmap import CoverageHeatmapRenderer
-   from src.maps.plotly_map_figures import PlotlyMapFigureBuilder
-   from src.maps.plotly_map_callbacks import PlotlyMapCallbackManager
+   from src.interfaces.visualization.maps.plotly_map_templates import DashTemplateManager
+   from src.interfaces.visualization.maps.plotly_map_serializer import PlotlyMapDataSerializer
+   from src.interfaces.visualization.maps.plotly_map_heatmap import CoverageHeatmapRenderer
+   from src.interfaces.visualization.maps.plotly_map_figures import PlotlyMapFigureBuilder
+   from src.interfaces.visualization.maps.plotly_map_callbacks import PlotlyMapCallbackManager
    
    class PlotlyMapViewer:
        """Main orchestrator for Plotly map viewer."""
@@ -1750,7 +1750,7 @@ def test_all_callback_count():
 
 3. **Validation**:
    ```powershell
-   python -m py_compile src/maps/plotly_map_viewer.py
+   python -m py_compile src/interfaces/visualization/maps/plotly_map_viewer.py
    ```
 
 **Test Cases**:
@@ -1815,10 +1815,10 @@ class TestPlotlyMapViewer:
 **Quality Gate Validation**:
 
 ```powershell
-python -m py_compile src/maps/plotly_map_viewer.py
-python -m ruff check src/maps/plotly_map_viewer.py --fix
-python -m black src/maps/plotly_map_viewer.py
-pytest tests/maps/test_plotly_map_viewer.py -v --cov=src/maps/plotly_map_viewer
+python -m py_compile src/interfaces/visualization/maps/plotly_map_viewer.py
+python -m ruff check src/interfaces/visualization/maps/plotly_map_viewer.py --fix
+python -m black src/interfaces/visualization/maps/plotly_map_viewer.py
+pytest tests/maps/test_plotly_map_viewer.py -v --cov=src/interfaces/visualization/maps/plotly_map_viewer
 ```
 
 ---
@@ -1839,7 +1839,7 @@ pytest tests/maps/test_plotly_map_viewer.py -v --cov=src/maps/plotly_map_viewer
    ```python
    def _launch_plotly_viewer(self, org_id, site_id, device_inventory, client_data, ...):
        """Launch Plotly map viewer."""
-       from src.maps.plotly_map_viewer import PlotlyMapViewer
+       from src.interfaces.visualization.maps.plotly_map_viewer import PlotlyMapViewer
        
        viewer = PlotlyMapViewer(
            org_id=org_id,
@@ -1858,22 +1858,22 @@ pytest tests/maps/test_plotly_map_viewer.py -v --cov=src/maps/plotly_map_viewer
 
 3. **Add import**:
    ```python
-   from src.maps.plotly_map_viewer import PlotlyMapViewer
+   from src.interfaces.visualization.maps.plotly_map_viewer import PlotlyMapViewer
    ```
 
 4. **Validation**:
    ```powershell
-   python -m py_compile src/maps/maps_manager.py
+   python -m py_compile src/interfaces/visualization/maps/maps_manager.py
    ```
 
 **Git Commit**:
 
 ```powershell
-git add src/maps/plotly_map_viewer.py src/maps/maps_manager.py
+git add src/interfaces/visualization/maps/plotly_map_viewer.py src/interfaces/visualization/maps/maps_manager.py
 git commit -m "chore(293): Create PlotlyMapViewer orchestrator and integrate
 
-- New file: src/maps/plotly_map_viewer.py (PlotlyMapViewer class)
-- Updated: src/maps/maps_manager.py (delegate to PlotlyMapViewer)
+- New file: src/interfaces/visualization/maps/plotly_map_viewer.py (PlotlyMapViewer class)
+- Updated: src/interfaces/visualization/maps/maps_manager.py (delegate to PlotlyMapViewer)
 - Consolidates all extracted components (templates, serializer, heatmap, figures, callbacks)
 - MapsManager._launch_plotly_viewer reduced to 3-line delegator
 - CC reduction: 138 → ≤10 (average per method)
@@ -1953,46 +1953,46 @@ def test_ui_CSS_rendering_identical():
 **CC Verification Commands**:
 
 ```powershell
-python -m radon cc src/maps/maps_manager.py -s | grep "_launch_plotly_viewer"
+python -m radon cc src/interfaces/visualization/maps/maps_manager.py -s | grep "_launch_plotly_viewer"
 # Expected: A (≤5) or B (6-10), NOT C/D/E/F
 
-python -m radon cc src/maps/plotly_map*.py -a -s
+python -m radon cc src/interfaces/visualization/maps/plotly_map*.py -a -s
 # Expected: All methods A or B (no C/D/E/F)
 
-python -m radon cc src/maps/ --exclude tests -a -s
+python -m radon cc src/interfaces/visualization/maps/ --exclude tests -a -s
 # Full report, should show all methods ≤10
 ```
 
 **Expected Report**:
 
 ```
-src/maps/maps_manager.py:
+src/interfaces/visualization/maps/maps_manager.py:
     MapsManager._launch_plotly_viewer (lines 3010-3014): A (3)
                                                           ^ was 138 (F)
 
-src/maps/plotly_map_templates.py:
+src/interfaces/visualization/maps/plotly_map_templates.py:
     DashTemplateManager.get_custom_css (lines ...): A (2)
     DashTemplateManager.get_layout_html (lines ...): B (7)
     DashTemplateManager.validate_template (lines ...): A (3)
 
-src/maps/plotly_map_serializer.py:
+src/interfaces/visualization/maps/plotly_map_serializer.py:
     PlotlyMapDataSerializer.serialize_figure_state: A (2)
     PlotlyMapDataSerializer.deserialize_figure_state: A (2)
     PlotlyMapDataSerializer.validate_numeric_precision: B (8)
     PlotlyMapDataSerializer._compare_objects_with_tolerance: B (9)
 
-src/maps/plotly_map_heatmap.py:
+src/interfaces/visualization/maps/plotly_map_heatmap.py:
     CoverageHeatmapRenderer.interpolate_grid: B (9)
     CoverageHeatmapRenderer.apply_colorscale: B (7)
     CoverageHeatmapRenderer.smooth_heatmap: A (2)
     CoverageHeatmapRenderer.build_heatmap_figure: A (3)
 
-src/maps/plotly_map_figures.py:
+src/interfaces/visualization/maps/plotly_map_figures.py:
     PlotlyMapFigureBuilder.build_walls_figure: B (8)
     PlotlyMapFigureBuilder.build_device_scatter: B (7)
     PlotlyMapFigureBuilder.build_combined_figure: B (9)
 
-src/maps/plotly_map_callbacks.py:
+src/interfaces/visualization/maps/plotly_map_callbacks.py:
     PlotlyMapCallbackManager.register_all_callbacks: A (5)
     PlotlyMapCallbackManager.register_layer_callbacks: B (10)
     PlotlyMapCallbackManager.register_heatmap_callbacks: B (8)
@@ -2000,7 +2000,7 @@ src/maps/plotly_map_callbacks.py:
     PlotlyMapCallbackManager.register_drawing_callbacks: B (9)
     PlotlyMapCallbackManager.register_admin_callbacks: B (8)
 
-src/maps/plotly_map_viewer.py:
+src/interfaces/visualization/maps/plotly_map_viewer.py:
     PlotlyMapViewer.create_app: B (8)
     PlotlyMapViewer._create_layout: A (2)
     PlotlyMapViewer._register_callbacks: A (3)
@@ -2035,31 +2035,31 @@ $failures = 0
 
 # 1. Syntax validation
 Write-Host ">>> Syntax validation..." -ForegroundColor Cyan
-& $py -m py_compile src/maps/plotly_map*.py src/maps/maps_manager.py
+& $py -m py_compile src/interfaces/visualization/maps/plotly_map*.py src/interfaces/visualization/maps/maps_manager.py
 if ($LASTEXITCODE -ne 0) { Write-Host "FAILED: Syntax"; $failures++ } else { Write-Host "✓ Passed" -ForegroundColor Green }
 
 # 2. Lint & format
 Write-Host "`n>>> Lint check..." -ForegroundColor Cyan
-& $py -m ruff check src/maps/plotly_map*.py src/maps/maps_manager.py
+& $py -m ruff check src/interfaces/visualization/maps/plotly_map*.py src/interfaces/visualization/maps/maps_manager.py
 if ($LASTEXITCODE -ne 0) { Write-Host "FAILED: Lint"; $failures++ } else { Write-Host "✓ Passed" -ForegroundColor Green }
 
 Write-Host "`n>>> Format check..." -ForegroundColor Cyan
-& $py -m black --check src/maps/plotly_map*.py src/maps/maps_manager.py
+& $py -m black --check src/interfaces/visualization/maps/plotly_map*.py src/interfaces/visualization/maps/maps_manager.py
 if ($LASTEXITCODE -ne 0) { Write-Host "FAILED: Format"; $failures++ } else { Write-Host "✓ Passed" -ForegroundColor Green }
 
 # 3. Type check
 Write-Host "`n>>> Type check..." -ForegroundColor Cyan
-& $py -m mypy src/maps/plotly_map*.py src/maps/maps_manager.py --ignore-missing-imports
+& $py -m mypy src/interfaces/visualization/maps/plotly_map*.py src/interfaces/visualization/maps/maps_manager.py --ignore-missing-imports
 if ($LASTEXITCODE -ne 0) { Write-Host "FAILED: Type check"; $failures++ } else { Write-Host "✓ Passed" -ForegroundColor Green }
 
 # 4. Security
 Write-Host "`n>>> Security scan..." -ForegroundColor Cyan
-& $py -m bandit -r src/maps/plotly_map*.py src/maps/maps_manager.py
+& $py -m bandit -r src/interfaces/visualization/maps/plotly_map*.py src/interfaces/visualization/maps/maps_manager.py
 if ($LASTEXITCODE -ne 0) { Write-Host "FAILED: Security"; $failures++ } else { Write-Host "✓ Passed" -ForegroundColor Green }
 
 # 5. Unit tests + coverage
 Write-Host "`n>>> Unit tests + coverage..." -ForegroundColor Cyan
-& $py -m pytest tests/maps/test_plotly_map*.py -v --cov=src/maps --cov-report=term-missing --cov-fail-under=70
+& $py -m pytest tests/maps/test_plotly_map*.py -v --cov=src/interfaces/visualization/maps --cov-report=term-missing --cov-fail-under=70
 if ($LASTEXITCODE -ne 0) { Write-Host "FAILED: Tests"; $failures++ } else { Write-Host "✓ Passed" -ForegroundColor Green }
 
 # 6. Regression tests
@@ -2074,7 +2074,7 @@ if ($LASTEXITCODE -ne 0) { Write-Host "FAILED: Integration"; $failures++ } else 
 
 # 8. Cyclomatic complexity
 Write-Host "`n>>> Cyclomatic complexity check..." -ForegroundColor Cyan
-& $py -m radon cc src/maps/plotly_map*.py src/maps/maps_manager.py -a -s | Where-Object { $_ -match "C \(|D \(|E \(|F \(" }
+& $py -m radon cc src/interfaces/visualization/maps/plotly_map*.py src/interfaces/visualization/maps/maps_manager.py -a -s | Where-Object { $_ -match "C \(|D \(|E \(|F \(" }
 if ($?) { 
     Write-Host "✓ All methods ≤ B (CC ≤ 10)" -ForegroundColor Green 
 } else { 
@@ -2154,15 +2154,15 @@ Successfully refactored \`MapsManager._launch_plotly_viewer\` from a 5,247-line 
 ## Changes
 
 ### New Files Created
-1. **src/maps/plotly_map_templates.py** - DashTemplateManager (CC ≤5)
-2. **src/maps/plotly_map_serializer.py** - PlotlyMapDataSerializer (CC ≤7)
-3. **src/maps/plotly_map_heatmap.py** - CoverageHeatmapRenderer (CC ≤10)
-4. **src/maps/plotly_map_figures.py** - PlotlyMapFigureBuilder (CC ≤10)
-5. **src/maps/plotly_map_callbacks.py** - PlotlyMapCallbackManager (CC ≤10)
-6. **src/maps/plotly_map_viewer.py** - PlotlyMapViewer orchestrator (CC ≤10)
+1. **src/interfaces/visualization/maps/plotly_map_templates.py** - DashTemplateManager (CC ≤5)
+2. **src/interfaces/visualization/maps/plotly_map_serializer.py** - PlotlyMapDataSerializer (CC ≤7)
+3. **src/interfaces/visualization/maps/plotly_map_heatmap.py** - CoverageHeatmapRenderer (CC ≤10)
+4. **src/interfaces/visualization/maps/plotly_map_figures.py** - PlotlyMapFigureBuilder (CC ≤10)
+5. **src/interfaces/visualization/maps/plotly_map_callbacks.py** - PlotlyMapCallbackManager (CC ≤10)
+6. **src/interfaces/visualization/maps/plotly_map_viewer.py** - PlotlyMapViewer orchestrator (CC ≤10)
 
 ### Modified Files
-- **src/maps/maps_manager.py** - \_launch_plotly_viewer now 3-line delegator
+- **src/interfaces/visualization/maps/maps_manager.py** - \_launch_plotly_viewer now 3-line delegator
 
 ### Test Files Created
 - **tests/maps/test_plotly_map_templates.py** (5 tests)
@@ -2246,13 +2246,13 @@ This refactoring is internal; no user-facing changes. The method signature and b
 
 ## Files Modified
 
-- [ ] src/maps/maps_manager.py (modified)
-- [ ] src/maps/plotly_map_templates.py (new)
-- [ ] src/maps/plotly_map_serializer.py (new)
-- [ ] src/maps/plotly_map_heatmap.py (new)
-- [ ] src/maps/plotly_map_figures.py (new)
-- [ ] src/maps/plotly_map_callbacks.py (new)
-- [ ] src/maps/plotly_map_viewer.py (new)
+- [ ] src/interfaces/visualization/maps/maps_manager.py (modified)
+- [ ] src/interfaces/visualization/maps/plotly_map_templates.py (new)
+- [ ] src/interfaces/visualization/maps/plotly_map_serializer.py (new)
+- [ ] src/interfaces/visualization/maps/plotly_map_heatmap.py (new)
+- [ ] src/interfaces/visualization/maps/plotly_map_figures.py (new)
+- [ ] src/interfaces/visualization/maps/plotly_map_callbacks.py (new)
+- [ ] src/interfaces/visualization/maps/plotly_map_viewer.py (new)
 - [ ] tests/maps/test_plotly_map_*.py (multiple new)
 
 ## CI/CD Status

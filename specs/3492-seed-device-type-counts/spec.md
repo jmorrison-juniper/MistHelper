@@ -13,7 +13,7 @@ holds three keys only: `devices_total`, `clients_wired`, and
 `clients_wireless`.
 
 A real capture holds nine count keys. The shipped function `build_counts` in
-`src/upgrade_portal/capture/assembly.py` writes them. Three of the nine keys
+`src/interfaces/portals/upgrade_portal/capture/assembly.py` writes them. Three of the nine keys
 count the devices of each type.
 
 The Device types cell of the history page reads the three type counts. The

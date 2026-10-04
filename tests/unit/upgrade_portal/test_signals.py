@@ -19,8 +19,8 @@ from typing import Any
 
 import pytest
 
-from src.upgrade_portal.runtime.runs import RunStateMachine
-from src.upgrade_portal.runtime.signals import (
+from src.interfaces.portals.upgrade_portal.runtime.runs import RunStateMachine
+from src.interfaces.portals.upgrade_portal.runtime.signals import (
     STOP_CONFIRMATION_TEXT,
     STOP_SCOPE_RUN,
     ConfirmationRequiredError,

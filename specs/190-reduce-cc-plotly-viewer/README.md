@@ -13,7 +13,7 @@
 |------|---------|
 | **Issue** | #293: Reduce CC in `_launch_plotly_viewer` |
 | **Current CC** | 138 (target: ≤10) |
-| **File** | `src/maps/maps_manager.py` (lines 3010–8256, 5,247 lines) |
+| **File** | `src/interfaces/visualization/maps/maps_manager.py` (lines 3010–8256, 5,247 lines) |
 | **Proposed Classes** | 6 new classes: PlotlyMapViewer, FigureBuilder, HeatmapRenderer, CallbackManager, TemplateManager, Serializer |
 | **Extraction Phases** | 6 phases, sequenced by risk (Phase 1: templates, Phase 6: integration) |
 | **Test Strategy** | Unit tests, integration tests, regression tests (targeting ≥70% coverage) |
@@ -32,7 +32,7 @@
 1. **CC reduction**: `_launch_plotly_viewer` from 138 → ≤10
 2. **Class-level CC**: Average MapsManager method CC ≤10
 3. **Per-method CC**: All extracted classes ≤10 per method
-4. **Test coverage**: ≥70% for `src/maps/`
+4. **Test coverage**: ≥70% for `src/interfaces/visualization/maps/`
 5. **Test compatibility**: All 100+ existing tests pass unchanged
 6. **Quality gates**: ruff, black, mypy, CodeQL all green
 7. **Functional equivalence**: Web UI integration tests confirm identical behavior
@@ -115,13 +115,13 @@ PlotlyMapViewer (orchestrator)
 ### Quality Gates (CI/CD)
 ```bash
 # Pre-commit validation
-python -m py_compile src/maps/
-python -m ruff check src/maps/
-python -m black --check src/maps/
-python -m mypy --strict src/maps/
+python -m py_compile src/interfaces/visualization/maps/
+python -m ruff check src/interfaces/visualization/maps/
+python -m black --check src/interfaces/visualization/maps/
+python -m mypy --strict src/interfaces/visualization/maps/
 
 # Full pipeline
-pytest --cov=src/maps/ --cov-fail-under=70
+pytest --cov=src/interfaces/visualization/maps/ --cov-fail-under=70
 # CodeQL scanning in CI
 ```
 
@@ -155,5 +155,5 @@ pytest --cov=src/maps/ --cov-fail-under=70
 - **Checklist**: [checklists/requirements.md](checklists/requirements.md)
 - **Issue**: #293 on GitHub
 - **Project Standards**: `.github/copilot-instructions.md`, `agents.md`
-- **Source Code**: `src/maps/maps_manager.py` (lines 3010–8256)
+- **Source Code**: `src/interfaces/visualization/maps/maps_manager.py` (lines 3010–8256)
 

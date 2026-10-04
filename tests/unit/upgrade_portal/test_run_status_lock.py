@@ -25,8 +25,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from src.upgrade_portal.runtime.runs import RunStatusView
-from src.upgrade_portal.upgrade import driver
+from src.interfaces.portals.upgrade_portal.runtime.runs import RunStatusView
+from src.interfaces.portals.upgrade_portal.upgrade import driver
 
 # WHY: `contracts/http-api.md` section 5 fixes these keys. The lock report is an
 # optional extra key and must never displace one of them.

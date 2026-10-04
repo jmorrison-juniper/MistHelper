@@ -1,11 +1,11 @@
-"""Unit tests for ``src.inventory.org_device_inventory_summary_facade.OrgDeviceInventorySummary``.
+"""Unit tests for ``src.mist.resources.inventory.org_device_inventory_summary_facade.OrgDeviceInventorySummary``.
 
 Why: Un-omitting this delegation facade from ``[tool.coverage.run].omit`` requires 100%
 line + branch coverage across the 7 static methods that back menu operation 13. The
 facade uses lazy ``SourceDependencyResolver`` reads plus function-local
 imports of the two extracted implementation modules
-(``src.inventory.org_device_inventory_summary`` and
-``src.inventory.org_device_inventory_msp``). Tests inject fake modules via
+(``src.mist.resources.inventory.org_device_inventory_summary`` and
+``src.mist.resources.inventory.org_device_inventory_msp``). Tests inject fake modules via
 ``sys.modules`` so the two ``configure_*`` wiring functions and the returned impl
 classes can be observed and controlled without importing the real code paths.
 """
@@ -41,39 +41,39 @@ def fake_mh(monkeypatch):
 
 @pytest.fixture
 def fake_summary_module(monkeypatch):
-    """Install a fake ``src.inventory.org_device_inventory_summary`` module.
+    """Install a fake ``src.mist.resources.inventory.org_device_inventory_summary`` module.
 
     Why: The facade's ``_get_summary_impl`` calls
-    ``from src.inventory.org_device_inventory_summary import OrgDeviceInventorySummaryCore,
+    ``from src.mist.resources.inventory.org_device_inventory_summary import OrgDeviceInventorySummaryCore,
     configure_org_device_inventory_summary_dependencies`` inside the function body.
     Injecting a fake module lets tests assert configure was called and control the
     returned core class.
     """
-    mod = ModuleType("src.inventory.org_device_inventory_summary")
+    mod = ModuleType("src.mist.resources.inventory.org_device_inventory_summary")
     mod.OrgDeviceInventorySummaryCore = MagicMock(name="OrgDeviceInventorySummaryCore")
     mod.configure_org_device_inventory_summary_dependencies = MagicMock(
         name="configure_org_device_inventory_summary_dependencies"
     )
-    monkeypatch.setitem(sys.modules, "src.inventory.org_device_inventory_summary", mod)
+    monkeypatch.setitem(sys.modules, "src.mist.resources.inventory.org_device_inventory_summary", mod)
     return mod
 
 
 @pytest.fixture
 def fake_msp_module(monkeypatch):
-    """Install a fake ``src.inventory.org_device_inventory_msp`` module.
+    """Install a fake ``src.mist.resources.inventory.org_device_inventory_msp`` module.
 
     Why: The facade's ``_get_msp_impl`` calls
-    ``from src.inventory.org_device_inventory_msp import OrgDeviceInventoryMSPOrchestrator,
+    ``from src.mist.resources.inventory.org_device_inventory_msp import OrgDeviceInventoryMSPOrchestrator,
     configure_org_device_inventory_msp_dependencies`` inside the function body.
     Injecting a fake module lets tests assert configure was called and control the
     returned orchestrator class.
     """
-    mod = ModuleType("src.inventory.org_device_inventory_msp")
+    mod = ModuleType("src.mist.resources.inventory.org_device_inventory_msp")
     mod.OrgDeviceInventoryMSPOrchestrator = MagicMock(name="OrgDeviceInventoryMSPOrchestrator")
     mod.configure_org_device_inventory_msp_dependencies = MagicMock(
         name="configure_org_device_inventory_msp_dependencies"
     )
-    monkeypatch.setitem(sys.modules, "src.inventory.org_device_inventory_msp", mod)
+    monkeypatch.setitem(sys.modules, "src.mist.resources.inventory.org_device_inventory_msp", mod)
     return mod
 
 
@@ -82,7 +82,7 @@ class TestClassAttributes:
 
     def test_device_types_tuple(self):
         """The ``_DEVICE_TYPES`` class attribute enumerates the three tracked device types."""
-        from src.inventory.org_device_inventory_summary_facade import OrgDeviceInventorySummary
+        from src.mist.resources.inventory.org_device_inventory_summary_facade import OrgDeviceInventorySummary
 
         assert OrgDeviceInventorySummary._DEVICE_TYPES == ("ap", "switch", "gateway")
 
@@ -92,7 +92,7 @@ class TestGetSummaryImpl:
 
     def test_configures_and_returns_core_class(self, fake_mh, fake_summary_module):
         """Wires apisession/mistapi/DataExporter/org_id from MistHelper and returns the core class."""
-        from src.inventory.org_device_inventory_summary_facade import OrgDeviceInventorySummary
+        from src.mist.resources.inventory.org_device_inventory_summary_facade import OrgDeviceInventorySummary
 
         result = OrgDeviceInventorySummary._get_summary_impl()
 
@@ -110,7 +110,7 @@ class TestGetMspImpl:
 
     def test_configures_and_returns_orchestrator_class(self, fake_mh, fake_msp_module):
         """Wires apisession/InputUtils/DataExporter/msp_privileges and returns the orchestrator class."""
-        from src.inventory.org_device_inventory_summary_facade import OrgDeviceInventorySummary
+        from src.mist.resources.inventory.org_device_inventory_summary_facade import OrgDeviceInventorySummary
 
         result = OrgDeviceInventorySummary._get_msp_impl()
 
@@ -128,7 +128,7 @@ class TestExecute:
 
     def test_delegates_to_core_execute(self, fake_mh, fake_summary_module):
         """``execute`` reaches the core class's ``execute`` classmethod."""
-        from src.inventory.org_device_inventory_summary_facade import OrgDeviceInventorySummary
+        from src.mist.resources.inventory.org_device_inventory_summary_facade import OrgDeviceInventorySummary
 
         OrgDeviceInventorySummary.execute()
 
@@ -140,7 +140,7 @@ class TestResolveActiveMsp:
 
     def test_delegates_and_returns_orchestrator_result(self, fake_mh, fake_msp_module):
         """Returns whatever the orchestrator's ``_resolve_active_msp`` returns."""
-        from src.inventory.org_device_inventory_summary_facade import OrgDeviceInventorySummary
+        from src.mist.resources.inventory.org_device_inventory_summary_facade import OrgDeviceInventorySummary
 
         expected = {"msp_id": "m1", "name": "Msp One"}
         fake_msp_module.OrgDeviceInventoryMSPOrchestrator._resolve_active_msp.return_value = expected
@@ -152,7 +152,7 @@ class TestResolveActiveMsp:
 
     def test_delegates_and_returns_none_when_orchestrator_returns_none(self, fake_mh, fake_msp_module):
         """None passes through cleanly (operator cancel path)."""
-        from src.inventory.org_device_inventory_summary_facade import OrgDeviceInventorySummary
+        from src.mist.resources.inventory.org_device_inventory_summary_facade import OrgDeviceInventorySummary
 
         fake_msp_module.OrgDeviceInventoryMSPOrchestrator._resolve_active_msp.return_value = None
 
@@ -164,7 +164,7 @@ class TestRunSingleMspOrg:
 
     def test_delegates_and_binds_core_run_for_org(self, fake_mh, fake_summary_module, fake_msp_module):
         """Invokes orchestrator.run_single_msp_org, passing core.run_for_org as the callback."""
-        from src.inventory.org_device_inventory_summary_facade import OrgDeviceInventorySummary
+        from src.mist.resources.inventory.org_device_inventory_summary_facade import OrgDeviceInventorySummary
 
         OrgDeviceInventorySummary._run_single_msp_org()
 
@@ -178,7 +178,7 @@ class TestExecuteMsp:
 
     def test_delegates_and_binds_core_run_for_org(self, fake_mh, fake_summary_module, fake_msp_module):
         """Invokes orchestrator.execute_msp with core.run_for_org bound as the batch callback."""
-        from src.inventory.org_device_inventory_summary_facade import OrgDeviceInventorySummary
+        from src.mist.resources.inventory.org_device_inventory_summary_facade import OrgDeviceInventorySummary
 
         OrgDeviceInventorySummary.execute_msp()
 
@@ -192,7 +192,7 @@ class TestDispatch:
 
     def test_delegates_with_all_three_callbacks(self, fake_mh, fake_msp_module):
         """dispatch forwards the three entry-point callbacks (single/select/batch) to the orchestrator."""
-        from src.inventory.org_device_inventory_summary_facade import OrgDeviceInventorySummary
+        from src.mist.resources.inventory.org_device_inventory_summary_facade import OrgDeviceInventorySummary
 
         OrgDeviceInventorySummary.dispatch()
 

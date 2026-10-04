@@ -16,8 +16,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.capture.packet_capture import PacketCaptureManager
-from src.capture.packet_capture_download import PacketCaptureDownloadManager
+from src.operations.execution.capture.packet_capture import PacketCaptureManager
+from src.operations.execution.capture.packet_capture_download import PacketCaptureDownloadManager
 
 AP_MAC = "001122334455"  # WHY: device identifier that the payload log must never hold
 SCAN_PARAMS: dict[str, Any] = {  # WHY: stand in for the radio prompts so the test needs no user input
@@ -32,7 +32,9 @@ SCAN_PARAMS: dict[str, Any] = {  # WHY: stand in for the radio prompts so the te
 @pytest.fixture()
 def manager() -> PacketCaptureManager:
     """Create a PacketCaptureManager with a deterministic org id."""
-    with patch("src.capture.packet_capture._get_config_utils") as config_utils:  # WHY: block the org id prompt
+    with patch(
+        "src.operations.execution.capture.packet_capture._get_config_utils"
+    ) as config_utils:  # WHY: block the org id prompt
         config_utils.return_value.get_cached_or_prompted_org_id.return_value = "org-1"  # WHY: fixed org id
         return PacketCaptureManager(MagicMock(), org_id=None)  # WHY: a mock session makes no network call
 
@@ -106,7 +108,9 @@ def test_pcap_list_http_errors_report_status_and_no_payload(
     capsys,
 ) -> None:
     """Failed PCAP list responses must return no rows and report the status."""
-    caplog.set_level(logging.WARNING, logger="src.capture.packet_capture_download")  # WHY: capture status warning.
+    caplog.set_level(
+        logging.WARNING, logger="src.operations.execution.capture.packet_capture_download"
+    )  # WHY: capture status warning.
     result = PacketCaptureDownloadManager._log_list_failure(status_code)  # WHY: drive the real status helper.
     assert result == []  # WHY: failed replies must not produce downloadable capture rows.
     assert f"HTTP {status_code}" in capsys.readouterr().out  # WHY: the operator must see the service status.

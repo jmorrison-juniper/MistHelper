@@ -54,7 +54,7 @@ comment holds the same spelling.
 
 ## Out of scope
 
-- The word "catalogue" in `src/upgrade_portal/upgrade/events.py`. It names the
+- The word "catalogue" in `src/interfaces/portals/upgrade_portal/upgrade/events.py`. It names the
   class `EventCatalogue`, and STE never changes an identifier.
 
 - The past result in `specs/1823-upgrade-capture-portal/quickstart-results.md`.

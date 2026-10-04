@@ -56,8 +56,8 @@ Do not claim that the companion command executed.
 
 | Owner | Permitted change |
 | --- | --- |
-| `src/capture/_packet_capture_prompts.py` | Change three existing `2048` literals to `1536` in `PacketCapturePrompts.prompt_max_packet_length`. |
-| `src/refactors/serial_cc/start_site_client_capture_wireless.py` | Change three existing `2048` literals to `1536` in `_MAX_PKT_LEN_SPEC`. |
+| `src/operations/execution/capture/_packet_capture_prompts.py` | Change three existing `2048` literals to `1536` in `PacketCapturePrompts.prompt_max_packet_length`. |
+| `src/foundation/support/refactors/serial_cc/start_site_client_capture_wireless.py` | Change three existing `2048` literals to `1536` in `_MAX_PKT_LEN_SPEC`. |
 | `tests/unit/capture/test_multi_ap_scan_workflow.py` | Append `test_packet_length_prompt_limits` and `test_packet_length_prompt_defaults`. Permit necessary imports and the module docstring only. |
 | `specs/3337-packet-length-validation/` | Commit the existing issue-owned documents and maintain accurate task and completion evidence. |
 | `changelog.d/issue-3337-packet-length-validation.md` | Add one `Fixed` bullet with a link to issue #3337. |
@@ -186,7 +186,7 @@ Both results violate the required maximum.
 
 ### Implementation for User Story 1
 
-- [X] T010 [P] [US1] Replace exactly three `2048` literals in `src/capture/_packet_capture_prompts.py::PacketCapturePrompts.prompt_max_packet_length`. Change the prompt, inclusive upper guard, and range-error maximum to `1536`. (delivered: src/capture/_packet_capture_prompts.py)
+- [X] T010 [P] [US1] Replace exactly three `2048` literals in `src/operations/execution/capture/_packet_capture_prompts.py::PacketCapturePrompts.prompt_max_packet_length`. Change the prompt, inclusive upper guard, and range-error maximum to `1536`. (delivered: src/operations/execution/capture/_packet_capture_prompts.py)
 - [X] T011 [US1] Record the `shared` cases from both final functions in `tests/unit/capture/test_multi_ap_scan_workflow.py`. Use the final green report and require correct values and messages. (delivered: data/issue-3337/green-pytest.xml)
 
 Preserve minimum 64, default 128, valid caller default 1300, integer conversion, EOF handling, and cancellation.
@@ -215,7 +215,7 @@ It does not substitute a later run against modified source for the original evid
 
 ### Implementation for User Story 2
 
-- [X] T013 [P] [US2] Replace exactly three `2048` literals in `_MAX_PKT_LEN_SPEC` in `src/refactors/serial_cc/start_site_client_capture_wireless.py`. Change `prompt`, `high`, and `range_lines` to use `1536`. (delivered: src/refactors/serial_cc/start_site_client_capture_wireless.py)
+- [X] T013 [P] [US2] Replace exactly three `2048` literals in `_MAX_PKT_LEN_SPEC` in `src/foundation/support/refactors/serial_cc/start_site_client_capture_wireless.py`. Change `prompt`, `high`, and `range_lines` to use `1536`. (delivered: src/foundation/support/refactors/serial_cc/start_site_client_capture_wireless.py)
 - [X] T014 [US2] Record the `wireless` cases from both final functions in `tests/unit/capture/test_multi_ap_scan_workflow.py`. Use the final green report and require complete settings or `None`. (delivered: data/issue-3337/green-pytest.xml)
 
 Preserve all other specification fields, minimum 64, default `"1300"`, and existing duration and packet-count behavior.
@@ -269,9 +269,9 @@ T019 measures these existing regions separately:
 
 | File | Region | Supplied final evidence |
 | --- | --- | --- |
-| `src/capture/_packet_capture_prompts.py` | `prompt_max_packet_length` | 11/11 statements, 100%, pass. |
-| `src/refactors/serial_cc/start_site_client_capture_wireless.py` | `_prompt_bounded_int` | 12/12 statements, 100%, pass. |
-| `src/refactors/serial_cc/start_site_client_capture_wireless.py` | `_collect_bounded_ints` | 8/8 statements, 100%, pass. |
+| `src/operations/execution/capture/_packet_capture_prompts.py` | `prompt_max_packet_length` | 11/11 statements, 100%, pass. |
+| `src/foundation/support/refactors/serial_cc/start_site_client_capture_wireless.py` | `_prompt_bounded_int` | 12/12 statements, 100%, pass. |
+| `src/foundation/support/refactors/serial_cc/start_site_client_capture_wireless.py` | `_collect_bounded_ints` | 8/8 statements, 100%, pass. |
 
 Use the existing AST-based inline measurement in `design/quickstart.md`.
 Do not add a coverage helper or guard file.
@@ -447,7 +447,7 @@ Use the same two function nodes after the six-literal correction:
 ```bash
 rtk proxy env -u MIST_APITOKEN -u MIST_API_TOKEN COVERAGE_FILE=data/issue-3337/.coverage \
   .venv/bin/python -m coverage run --branch \
-  --source=src.capture._packet_capture_prompts,src.refactors.serial_cc.start_site_client_capture_wireless \
+  --source=src.operations.execution.capture._packet_capture_prompts,src.foundation.support.refactors.serial_cc.start_site_client_capture_wireless \
   -m pytest \
   tests/unit/capture/test_multi_ap_scan_workflow.py::test_packet_length_prompt_limits \
   tests/unit/capture/test_multi_ap_scan_workflow.py::test_packet_length_prompt_defaults \
@@ -470,8 +470,8 @@ rtk proxy env -u MIST_APITOKEN -u MIST_API_TOKEN .venv/bin/python -m pytest \
   tests/integration/test_packet_capture_org_compatibility.py \
   -q --tb=short --junitxml=data/issue-3337/adjacent-pytest.xml
 rtk proxy .venv/bin/python -m py_compile MistHelper.py \
-  src/capture/_packet_capture_prompts.py \
-  src/refactors/serial_cc/start_site_client_capture_wireless.py \
+  src/operations/execution/capture/_packet_capture_prompts.py \
+  src/foundation/support/refactors/serial_cc/start_site_client_capture_wireless.py \
   tests/unit/capture/test_multi_ap_scan_workflow.py
 rtk proxy .venv/bin/python -m ruff check .
 rtk proxy .venv/bin/python -m black --check --diff .

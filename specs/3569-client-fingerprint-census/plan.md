@@ -41,7 +41,7 @@ specs/3569-client-fingerprint-census/
   wiring.md
   pr-body.md
   contracts/client-fingerprint-census.md
-src/reports/client_fingerprint_census/
+src/mist/intelligence/reports/client_fingerprint_census/
   __init__.py
   client.py
   model.py

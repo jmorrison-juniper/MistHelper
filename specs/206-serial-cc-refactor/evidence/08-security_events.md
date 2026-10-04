@@ -3,7 +3,7 @@
 ## Scope
 - Symbol: `OrgClientSecurityExporter.security_events`
 - Source file: `MistHelper.py`
-- Refactor target: `src/refactors/serial_cc/security_events.py`
+- Refactor target: `src/foundation/support/refactors/serial_cc/security_events.py`
 
 ## Change Summary
 - Extracted organization security export workflow into `SecurityEventsService.execute(fast)`.

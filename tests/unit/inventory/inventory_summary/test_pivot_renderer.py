@@ -1,4 +1,4 @@
-"""Wave 5 P2 coverage for src/inventory/inventory_summary/pivot_renderer.py (initiative #1018).
+"""Wave 5 P2 coverage for src/mist/resources/inventory/inventory_summary/pivot_renderer.py (initiative #1018).
 
 Covers every static method of ``PivotRenderer``:
 - ``render``: orchestrator delegates to compute/build/print/emit with expected args.
@@ -22,8 +22,8 @@ from unittest.mock import MagicMock, patch  # WHY: spec= mocks + patch decorator
 import pytest  # WHY: monkeypatch + caplog fixtures.
 from prettytable import PrettyTable  # WHY: verify _build_table returns a real PrettyTable.
 
-from src.inventory import org_device_inventory_summary as _parent  # WHY: DI slot patched here.
-from src.inventory.inventory_summary.pivot_renderer import PivotRenderer  # WHY: SUT direct import.
+from src.mist.resources.inventory import org_device_inventory_summary as _parent  # WHY: DI slot patched here.
+from src.mist.resources.inventory.inventory_summary.pivot_renderer import PivotRenderer  # WHY: SUT direct import.
 
 
 def _sample_rows() -> list[dict]:

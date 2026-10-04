@@ -11,7 +11,7 @@ Why:
     answer 401. The fixture reports a skip only when the workstation can run
     no WSGI server at all.
 
-    ``src/upgrade_portal/runtime/server.py`` picks the server for the platform.
+    ``src/interfaces/portals/upgrade_portal/runtime/server.py`` picks the server for the platform.
     Gunicorn stays the server for the Linux target and for the container.
     Windows takes Waitress, because Gunicorn imports ``fcntl`` and Windows
     ships no such module.
@@ -53,13 +53,25 @@ import flask
 import pytest
 from flask.sessions import SecureCookieSessionInterface
 
-from src.firmware.org_upgrade_service import OrgUpgradeResult
-from src.firmware.upgrade_service import CancelOutcome, UpgradeSubmission  # Build stand-in site child results.
-from src.upgrade_portal.api.run_controls import E2EFactoryOverrides  # Type the complete isolated dependency set.
-from src.upgrade_portal.app.config import PORT_VARIABLE, SECRET_KEY_VARIABLE  # Read child server setting names.
-from src.upgrade_portal.capture.devices import DeviceRead  # Issue #3438: the answer of a real picker read.
-from src.upgrade_portal.runtime import identity  # Build the signed test session owners.
-from src.upgrade_portal.runtime.server import build_server_command  # Start the platform server safely.
+from src.interfaces.portals.upgrade_portal.api.run_controls import (
+    E2EFactoryOverrides,
+)  # Type the complete isolated dependency set.
+from src.interfaces.portals.upgrade_portal.app.config import (
+    PORT_VARIABLE,
+    SECRET_KEY_VARIABLE,
+)  # Read child server setting names.
+from src.interfaces.portals.upgrade_portal.capture.devices import (
+    DeviceRead,
+)  # Issue #3438: the answer of a real picker read.
+from src.interfaces.portals.upgrade_portal.runtime import identity  # Build the signed test session owners.
+from src.interfaces.portals.upgrade_portal.runtime.server import (
+    build_server_command,
+)  # Start the platform server safely.
+from src.operations.execution.firmware.org_upgrade_service import OrgUpgradeResult
+from src.operations.execution.firmware.upgrade_service import (
+    CancelOutcome,
+    UpgradeSubmission,
+)  # Build stand-in site child results.
 from tests.e2e.upgrade_portal.empty_site_seeds import (  # Issue #3389: the site with no device.
     EMPTY_SITE_BROWSER_ID,
     EMPTY_SITE_EMAIL,
@@ -1442,7 +1454,9 @@ def stand_in_cloud_read(name: str, **parameters: Any) -> list[dict[str, Any]] | 
         A real-walk organization gets the records and the partial reasons.
     """
     if parameters.get("org_id") in (LOST_PAGE_ORG_ID, LATER_CHECK_ORG_ID):  # Issues #3438 and #3439: real walks.
-        from src.upgrade_portal.app.routes import select  # Late, so the module holds the seam of the child server.
+        from src.interfaces.portals.upgrade_portal.app.routes import (
+            select,
+        )  # Late, so the module holds the seam of the child server.
 
         if LaterCheckCloudSession.lose_page_requested():  # Issue #3439: a kept whole read would hide the lost page.
             logger.info("Clear the kept cloud reads, so the read of %s loses page two", name)  # Log before the clear.
@@ -1605,7 +1619,9 @@ def stand_in_view_of(devices: list[dict[str, Any]]) -> dict[str, Any]:
         The device rows, the version list of each model, the version selection
         of each device type, and no partial reason.
     """
-    from src.upgrade_portal.upgrade import options  # Late, so a plain collection never loads the portal.
+    from src.interfaces.portals.upgrade_portal.upgrade import (
+        options,
+    )  # Late, so a plain collection never loads the portal.
 
     logger.info("Build the stand-in options view of %s device(s)", len(devices))  # Record the build before it runs.
     by_model = stand_in_version_map()  # Every stand-in model offers the same two versions.
@@ -1719,7 +1735,9 @@ def stand_in_options_builder(
         PartialInventoryError: Issue #3424. The read of the short-read site
             stops after the first page, as the shipped builder refuses it.
     """
-    from src.upgrade_portal.upgrade import options  # Late, so a plain collection never loads the portal.
+    from src.interfaces.portals.upgrade_portal.upgrade import (
+        options,
+    )  # Late, so a plain collection never loads the portal.
 
     site_id = str(record.get("site_id") or "")  # Issue #3424: only the site of the record changes the result.
     if site_id == SHORT_SITE_ID:  # The shipped builder refuses a read that stopped after the first page.
@@ -1760,7 +1778,9 @@ def stand_in_capture_runner(job: dict[str, Any]) -> None:
         job: The capture job. This seam reads the key, the tier, the run, the
             role, and the site.
     """
-    from src.upgrade_portal.app.routes import capture  # Late, so a plain collection never loads the portal.
+    from src.interfaces.portals.upgrade_portal.app.routes import (
+        capture,
+    )  # Late, so a plain collection never loads the portal.
 
     tier = int(job.get("tier", capture.TIER_STANDARD))  # The tier that the operator chose.
     role = str(job.get("role") or "")  # The pre-check or the post-check.
@@ -1871,7 +1891,9 @@ def stand_in_capture(
     Returns:
         One capture document, ready for the comparison and for the history.
     """
-    from src.upgrade_portal.capture import devices  # Late, so a plain collection never loads the portal.
+    from src.interfaces.portals.upgrade_portal.capture import (
+        devices,
+    )  # Late, so a plain collection never loads the portal.
 
     records = [{**device, "version": version} for device in stand_in_site_devices(site_id)]  # The site inventory.
     logger.info("Build seed statistics for capture %s with inventory=%d", capture_id, len(records))
@@ -1936,7 +1958,9 @@ def stand_in_counts(capture: dict[str, Any]) -> dict[str, int]:
     Returns:
         The nine counts that a real capture of the same lists holds.
     """
-    from src.upgrade_portal.capture import assembly  # Late, so a plain collection never loads the portal.
+    from src.interfaces.portals.upgrade_portal.capture import (
+        assembly,
+    )  # Late, so a plain collection never loads the portal.
 
     logger.info("Build the count map of the seed capture %s", capture["capture_id"])  # Log before the build.
     sections = assembly.CaptureSections(  # The three parts of a capture that the builder reads.
@@ -2456,9 +2480,14 @@ def _write_fixture_runs(built: Any, upgrade: Any) -> None:
 def _reset_cached_state() -> None:  # Clear each process cache before isolated construction.
     """Reset every storage and readiness cache before E2E application construction."""
     logger.info("Reset the E2E storage and readiness caches")  # Record the reset before it starts.
-    from src.upgrade_portal.app import factory, wiring  # Load reset functions without constructing an application.
-    from src.upgrade_portal.capture import store as capture_store  # Own the cached ArangoDB connection.
-    from src.upgrade_portal.runtime import lock  # Own the cached Redis connection.
+    from src.interfaces.portals.upgrade_portal.app import (
+        factory,
+        wiring,
+    )  # Load reset functions without constructing an application.
+    from src.interfaces.portals.upgrade_portal.capture import (
+        store as capture_store,
+    )  # Own the cached ArangoDB connection.
+    from src.interfaces.portals.upgrade_portal.runtime import lock  # Own the cached Redis connection.
 
     wiring.reset_storage_bootstrap()  # Prevent an earlier production bootstrap state from crossing into E2E.
     factory.reset_readiness_cache()  # Prevent an earlier readiness result from crossing into E2E.
@@ -2527,9 +2556,13 @@ def build_stand_in_app() -> Any:  # Build one fully isolated browser test applic
     Returns:
         The Flask application that the server process serves.
     """
-    from src.upgrade_portal.app.factory import create_app  # Late, so a plain collection never builds an app.
-    from src.upgrade_portal.app.routes import upgrade  # Own the seeded run write helper.
-    from src.upgrade_portal.runtime import lock  # Issue #3512: the module that names the checkout trail.
+    from src.interfaces.portals.upgrade_portal.app.factory import (
+        create_app,
+    )  # Late, so a plain collection never builds an app.
+    from src.interfaces.portals.upgrade_portal.app.routes import upgrade  # Own the seeded run write helper.
+    from src.interfaces.portals.upgrade_portal.runtime import (
+        lock,
+    )  # Issue #3512: the module that names the checkout trail.
 
     _reset_cached_state()  # Clear each cached production handle before the override set installs.
     # WHY: Issue #3498. The site lock writes each lock action to the checkout
@@ -2543,8 +2576,8 @@ def build_stand_in_app() -> Any:  # Build one fully isolated browser test applic
     AuditTrailIsolation(ARTIFACT_DIRECTORY, checkout_trail).place()  # The move stays for the whole life of the child.
     overrides = _build_factory_overrides()  # Build every required process-owned dependency before routes.
     built = create_app(overrides)  # Validate and install overrides before blueprint registration.
-    from src.upgrade_portal.app.routes import org_upgrade
-    from src.upgrade_portal.app.routes import upgrade as upgrade_routes
+    from src.interfaces.portals.upgrade_portal.app.routes import org_upgrade
+    from src.interfaces.portals.upgrade_portal.app.routes import upgrade as upgrade_routes
 
     # WHY: Issue #2615 reads the Mist account before a firmware write. The
     # browser suite must open no socket at all, so this seam answers a fixed
@@ -2569,7 +2602,7 @@ def build_stand_in_app() -> Any:  # Build one fully isolated browser test applic
 
     CascadeSeamStandIn().install(built.config)  # The anchor read reaches no cloud.
     built.config[org_upgrade.CASCADE_STARTER_CONFIG_KEY] = ScriptedCascadeStarter()  # One step for each read.
-    from src.firmware.aggregate_upgrade_service import AggregateUpgradeService
+    from src.operations.execution.firmware.aggregate_upgrade_service import AggregateUpgradeService
 
     built.config[org_upgrade.AGGREGATE_SERVICE_CONFIG_KEY] = AggregateUpgradeService(
         E2EOrgUpgradeService,

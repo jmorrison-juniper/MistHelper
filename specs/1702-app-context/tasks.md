@@ -23,7 +23,7 @@
 
 **Purpose**: Move live session state into one explicit object.
 
-- [X] T004 Add `AppContext` to `src/refactors/main_entrypoint.py`.
+- [X] T004 Add `AppContext` to `src/foundation/support/refactors/main_entrypoint.py`.
 - [X] T005 Store parsed arguments on the context during bootstrap.
 - [X] T006 Replace MistHelper session-state reads with context reads.
 - [X] T007 Remove `ConfigUtils` mirror calls from `MistHelper.py`.
@@ -32,7 +32,7 @@
 
 **Purpose**: Remove run-time patching from normal session setup.
 
-- [X] T008 Add `MistSessionConfigurator` to `src/refactors/initialize_mist_session.py`.
+- [X] T008 Add `MistSessionConfigurator` to `src/foundation/support/refactors/initialize_mist_session.py`.
 - [X] T009 Configure the request timeout once per context.
 - [X] T010 Validate `mist_get` or `get` without adding an attribute.
 - [X] T011 Store token login state on `AppContext`.

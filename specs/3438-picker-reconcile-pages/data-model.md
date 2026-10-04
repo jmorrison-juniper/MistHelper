@@ -7,7 +7,7 @@ one request.
 
 ## Picker read
 
-The picker read reuses `DeviceRead` from `src/upgrade_portal/capture/devices.py`.
+The picker read reuses `DeviceRead` from `src/interfaces/portals/upgrade_portal/capture/devices.py`.
 
 | Field | Type | Rule |
 | - | - | - |
@@ -24,7 +24,7 @@ only.
 
 ## Site list
 
-`SiteList` is a new frozen type in `src/upgrade_portal/app/routes/select.py`.
+`SiteList` is a new frozen type in `src/interfaces/portals/upgrade_portal/app/routes/select.py`.
 
 | Field | Type | Rule |
 | - | - | - |

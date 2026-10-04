@@ -5,7 +5,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from src.gateway.gateway_export_utils import (
+from src.mist.resources.gateway.gateway_export_utils import (
     GatewayExportUtils,
     _response_status_code,
     configure_gateway_export_utils_dependencies,
@@ -59,7 +59,7 @@ def test_get_site_ids_with_devices_filters_gateway_entries_only() -> None:
     """Site-id helper should return only non-empty site IDs from gateway devices."""
     _configure_dependencies()
 
-    from src.gateway import gateway_export_utils as module
+    from src.mist.resources.gateway import gateway_export_utils as module
 
     module.APICoreFetchUtils.all_inventory_with_limit = MagicMock(
         return_value=[
@@ -79,7 +79,7 @@ def test_with_wan_overrides_delegates_to_wan_override_walker() -> None:
     """WAN override entrypoint should delegate execution to the WanOverrideWalker orchestrator."""
     _configure_dependencies()
 
-    from src.gateway import gateway_export_utils as module  # Module under test
+    from src.mist.resources.gateway import gateway_export_utils as module  # Module under test
 
     override_mock = MagicMock()  # Stand-in for the walker's walk classmethod
     original_method = module.WanOverrideWalker.walk  # Snapshot real method for restoration

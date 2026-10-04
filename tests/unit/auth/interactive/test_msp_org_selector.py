@@ -9,7 +9,7 @@ from unittest.mock import MagicMock  # WHY: MagicMock(spec=Callable) is mandator
 
 import pytest  # WHY: caplog/monkeypatch fixtures for log + state assertions
 
-from src.auth.interactive.msp_org_selector import MspOrgSelector  # WHY: SUT under test
+from src.mist.access.auth.interactive.msp_org_selector import MspOrgSelector  # WHY: SUT under test
 
 
 class _EofInput:

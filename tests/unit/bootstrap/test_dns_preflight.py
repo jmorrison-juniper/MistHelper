@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from src.bootstrap.dns_preflight import (
+from src.foundation.runtime.bootstrap.dns_preflight import (
     DNS_ANSWER_COUNT_OFFSET,
     ContainerDnsRepair,
     DnsRepairReport,

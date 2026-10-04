@@ -16,7 +16,7 @@ Plan at the end to drive fixes.
 
 | File | Score | Grade | Critical | High | Medium | Low | Total |
 | - | - | - | - | - | - | - | - |
-| src\firmware\site_auto_upgrade.py | 63.0 | D | 0 | 1 | 18 | 20 | 39 |
+| src\operations\execution\firmware\site_auto_upgrade.py | 63.0 | D | 0 | 1 | 18 | 20 | 39 |
 
 ## Machine-Readable Summary
 
@@ -46,7 +46,7 @@ Plan at the end to drive fixes.
 }
 ```
 
-## File: src\firmware\site_auto_upgrade.py
+## File: src\operations\execution\firmware\site_auto_upgrade.py
 
 - **Score**: 63.0 / 100
 - **Grade**: D
@@ -133,205 +133,205 @@ Plan at the end to drive fixes.
 
 ### Phase: High (1 task(s))
 
-- [ ] **CMP-001** `src\firmware\site_auto_upgrade.py:1232` - STRUCT-LENGTH (Structure)
+- [ ] **CMP-001** `src\operations\execution\firmware\site_auto_upgrade.py:1232` - STRUCT-LENGTH (Structure)
   - Symbol: `_get_shared_schedule`
   - Problem: Function spans 61 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `_get_shared_schedule` in `src\firmware\site_auto_upgrade.py`.
+  - Done when: analyzer reports no STRUCT-LENGTH for `_get_shared_schedule` in `src\operations\execution\firmware\site_auto_upgrade.py`.
 
 ### Phase: Medium (18 task(s))
 
-- [ ] **CMP-002** `src\firmware\site_auto_upgrade.py:48` - STRUCT-LENGTH (Structure)
+- [ ] **CMP-002** `src\operations\execution\firmware\site_auto_upgrade.py:48` - STRUCT-LENGTH (Structure)
   - Symbol: `__init__`
   - Problem: Function spans 35 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `__init__` in `src\firmware\site_auto_upgrade.py`.
-- [ ] **CMP-003** `src\firmware\site_auto_upgrade.py:89` - STRUCT-LENGTH (Structure)
+  - Done when: analyzer reports no STRUCT-LENGTH for `__init__` in `src\operations\execution\firmware\site_auto_upgrade.py`.
+- [ ] **CMP-003** `src\operations\execution\firmware\site_auto_upgrade.py:89` - STRUCT-LENGTH (Structure)
   - Symbol: `execute`
   - Problem: Function spans 49 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `execute` in `src\firmware\site_auto_upgrade.py`.
-- [ ] **CMP-004** `src\firmware\site_auto_upgrade.py:186` - STRUCT-LENGTH (Structure)
+  - Done when: analyzer reports no STRUCT-LENGTH for `execute` in `src\operations\execution\firmware\site_auto_upgrade.py`.
+- [ ] **CMP-004** `src\operations\execution\firmware\site_auto_upgrade.py:186` - STRUCT-LENGTH (Structure)
   - Symbol: `_apply_auto_upgrade_config`
   - Problem: Function spans 33 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `_apply_auto_upgrade_config` in `src\firmware\site_auto_upgrade.py`.
-- [ ] **CMP-005** `src\firmware\site_auto_upgrade.py:294` - STRUCT-LENGTH (Structure)
+  - Done when: analyzer reports no STRUCT-LENGTH for `_apply_auto_upgrade_config` in `src\operations\execution\firmware\site_auto_upgrade.py`.
+- [ ] **CMP-005** `src\operations\execution\firmware\site_auto_upgrade.py:294` - STRUCT-LENGTH (Structure)
   - Symbol: `_select_single_site`
   - Problem: Function spans 26 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `_select_single_site` in `src\firmware\site_auto_upgrade.py`.
-- [ ] **CMP-006** `src\firmware\site_auto_upgrade.py:386` - STRUCT-LENGTH (Structure)
+  - Done when: analyzer reports no STRUCT-LENGTH for `_select_single_site` in `src\operations\execution\firmware\site_auto_upgrade.py`.
+- [ ] **CMP-006** `src\operations\execution\firmware\site_auto_upgrade.py:386` - STRUCT-LENGTH (Structure)
   - Symbol: `_step3_fetch_available_versions`
   - Problem: Function spans 27 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `_step3_fetch_available_versions` in `src\firmware\site_auto_upgrade.py`.
-- [ ] **CMP-007** `src\firmware\site_auto_upgrade.py:430` - STRUCT-LENGTH (Structure)
+  - Done when: analyzer reports no STRUCT-LENGTH for `_step3_fetch_available_versions` in `src\operations\execution\firmware\site_auto_upgrade.py`.
+- [ ] **CMP-007** `src\operations\execution\firmware\site_auto_upgrade.py:430` - STRUCT-LENGTH (Structure)
   - Symbol: `_step4_select_versions`
   - Problem: Function spans 46 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `_step4_select_versions` in `src\firmware\site_auto_upgrade.py`.
-- [ ] **CMP-008** `src\firmware\site_auto_upgrade.py:512` - STRUCT-LENGTH (Structure)
+  - Done when: analyzer reports no STRUCT-LENGTH for `_step4_select_versions` in `src\operations\execution\firmware\site_auto_upgrade.py`.
+- [ ] **CMP-008** `src\operations\execution\firmware\site_auto_upgrade.py:512` - STRUCT-LENGTH (Structure)
   - Symbol: `_step6_confirm_and_apply`
   - Problem: Function spans 36 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `_step6_confirm_and_apply` in `src\firmware\site_auto_upgrade.py`.
-- [ ] **CMP-009** `src\firmware\site_auto_upgrade.py:555` - STRUCT-LENGTH (Structure)
+  - Done when: analyzer reports no STRUCT-LENGTH for `_step6_confirm_and_apply` in `src\operations\execution\firmware\site_auto_upgrade.py`.
+- [ ] **CMP-009** `src\operations\execution\firmware\site_auto_upgrade.py:555` - STRUCT-LENGTH (Structure)
   - Symbol: `_handle_msp_mode`
   - Problem: Function spans 31 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `_handle_msp_mode` in `src\firmware\site_auto_upgrade.py`.
-- [ ] **CMP-010** `src\firmware\site_auto_upgrade.py:609` - STRUCT-LENGTH (Structure)
+  - Done when: analyzer reports no STRUCT-LENGTH for `_handle_msp_mode` in `src\operations\execution\firmware\site_auto_upgrade.py`.
+- [ ] **CMP-010** `src\operations\execution\firmware\site_auto_upgrade.py:609` - STRUCT-LENGTH (Structure)
   - Symbol: `_msp_select_entities`
   - Problem: Function spans 28 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `_msp_select_entities` in `src\firmware\site_auto_upgrade.py`.
-- [ ] **CMP-011** `src\firmware\site_auto_upgrade.py:639` - STRUCT-LENGTH (Structure)
+  - Done when: analyzer reports no STRUCT-LENGTH for `_msp_select_entities` in `src\operations\execution\firmware\site_auto_upgrade.py`.
+- [ ] **CMP-011** `src\operations\execution\firmware\site_auto_upgrade.py:639` - STRUCT-LENGTH (Structure)
   - Symbol: `_msp_get_firmware_config`
   - Problem: Function spans 37 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `_msp_get_firmware_config` in `src\firmware\site_auto_upgrade.py`.
-- [ ] **CMP-012** `src\firmware\site_auto_upgrade.py:678` - STRUCT-LENGTH (Structure)
+  - Done when: analyzer reports no STRUCT-LENGTH for `_msp_get_firmware_config` in `src\operations\execution\firmware\site_auto_upgrade.py`.
+- [ ] **CMP-012** `src\operations\execution\firmware\site_auto_upgrade.py:678` - STRUCT-LENGTH (Structure)
   - Symbol: `_msp_confirm_and_apply`
   - Problem: Function spans 40 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `_msp_confirm_and_apply` in `src\firmware\site_auto_upgrade.py`.
-- [ ] **CMP-013** `src\firmware\site_auto_upgrade.py:720` - STRUCT-LENGTH (Structure)
+  - Done when: analyzer reports no STRUCT-LENGTH for `_msp_confirm_and_apply` in `src\operations\execution\firmware\site_auto_upgrade.py`.
+- [ ] **CMP-013** `src\operations\execution\firmware\site_auto_upgrade.py:720` - STRUCT-LENGTH (Structure)
   - Symbol: `_execute_msp_mode`
   - Problem: Function spans 40 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `_execute_msp_mode` in `src\firmware\site_auto_upgrade.py`.
-- [ ] **CMP-014** `src\firmware\site_auto_upgrade.py:762` - STRUCT-LENGTH (Structure)
+  - Done when: analyzer reports no STRUCT-LENGTH for `_execute_msp_mode` in `src\operations\execution\firmware\site_auto_upgrade.py`.
+- [ ] **CMP-014** `src\operations\execution\firmware\site_auto_upgrade.py:762` - STRUCT-LENGTH (Structure)
   - Symbol: `_apply_to_all_orgs`
   - Problem: Function spans 43 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `_apply_to_all_orgs` in `src\firmware\site_auto_upgrade.py`.
-- [ ] **CMP-015** `src\firmware\site_auto_upgrade.py:928` - STRUCT-LENGTH (Structure)
+  - Done when: analyzer reports no STRUCT-LENGTH for `_apply_to_all_orgs` in `src\operations\execution\firmware\site_auto_upgrade.py`.
+- [ ] **CMP-015** `src\operations\execution\firmware\site_auto_upgrade.py:928` - STRUCT-LENGTH (Structure)
   - Symbol: `_apply_family_selection`
   - Problem: Function spans 26 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `_apply_family_selection` in `src\firmware\site_auto_upgrade.py`.
-- [ ] **CMP-016** `src\firmware\site_auto_upgrade.py:1120` - STRUCT-LENGTH (Structure)
+  - Done when: analyzer reports no STRUCT-LENGTH for `_apply_family_selection` in `src\operations\execution\firmware\site_auto_upgrade.py`.
+- [ ] **CMP-016** `src\operations\execution\firmware\site_auto_upgrade.py:1120` - STRUCT-LENGTH (Structure)
   - Symbol: `_apply_settings_to_sites`
   - Problem: Function spans 36 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `_apply_settings_to_sites` in `src\firmware\site_auto_upgrade.py`.
-- [ ] **CMP-017** `src\firmware\site_auto_upgrade.py:1197` - STRUCT-LENGTH (Structure)
+  - Done when: analyzer reports no STRUCT-LENGTH for `_apply_settings_to_sites` in `src\operations\execution\firmware\site_auto_upgrade.py`.
+- [ ] **CMP-017** `src\operations\execution\firmware\site_auto_upgrade.py:1197` - STRUCT-LENGTH (Structure)
   - Symbol: `_print_msp_summary`
   - Problem: Function spans 33 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `_print_msp_summary` in `src\firmware\site_auto_upgrade.py`.
-- [ ] **CMP-018** `src\firmware\site_auto_upgrade.py:1295` - STRUCT-LENGTH (Structure)
+  - Done when: analyzer reports no STRUCT-LENGTH for `_print_msp_summary` in `src\operations\execution\firmware\site_auto_upgrade.py`.
+- [ ] **CMP-018** `src\operations\execution\firmware\site_auto_upgrade.py:1295` - STRUCT-LENGTH (Structure)
   - Symbol: `_get_shared_firmware_versions`
   - Problem: Function spans 51 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `_get_shared_firmware_versions` in `src\firmware\site_auto_upgrade.py`.
-- [ ] **CMP-019** `src\firmware\site_auto_upgrade.py:1423` - STRUCT-LENGTH (Structure)
+  - Done when: analyzer reports no STRUCT-LENGTH for `_get_shared_firmware_versions` in `src\operations\execution\firmware\site_auto_upgrade.py`.
+- [ ] **CMP-019** `src\operations\execution\firmware\site_auto_upgrade.py:1423` - STRUCT-LENGTH (Structure)
   - Symbol: `_select_versions_interactively`
   - Problem: Function spans 46 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `_select_versions_interactively` in `src\firmware\site_auto_upgrade.py`.
+  - Done when: analyzer reports no STRUCT-LENGTH for `_select_versions_interactively` in `src\operations\execution\firmware\site_auto_upgrade.py`.
 
 ### Phase: Low (20 task(s))
 
-- [ ] **CMP-020** `src\firmware\site_auto_upgrade.py:143` - STRUCT-COMPLEXITY (Complexity)
+- [ ] **CMP-020** `src\operations\execution\firmware\site_auto_upgrade.py:143` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `run_msp_mode`
   - Problem: Cyclomatic complexity is 6 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `run_msp_mode` in `src\firmware\site_auto_upgrade.py`.
-- [ ] **CMP-021** `src\firmware\site_auto_upgrade.py:321` - STRUCT-COMPLEXITY (Complexity)
+  - Done when: analyzer reports no STRUCT-COMPLEXITY for `run_msp_mode` in `src\operations\execution\firmware\site_auto_upgrade.py`.
+- [ ] **CMP-021** `src\operations\execution\firmware\site_auto_upgrade.py:321` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_fetch_current_site_settings`
   - Problem: Cyclomatic complexity is 10 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_fetch_current_site_settings` in `src\firmware\site_auto_upgrade.py`.
-- [ ] **CMP-022** `src\firmware\site_auto_upgrade.py:321` - STRUCT-BLOCKS (Structure)
+  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_fetch_current_site_settings` in `src\operations\execution\firmware\site_auto_upgrade.py`.
+- [ ] **CMP-022** `src\operations\execution\firmware\site_auto_upgrade.py:321` - STRUCT-BLOCKS (Structure)
   - Symbol: `_fetch_current_site_settings`
   - Problem: Function has 6 logical blocks (limit 5).
   - Fix: Split the function so each helper owns a single cohesive block of logic.
-  - Done when: analyzer reports no STRUCT-BLOCKS for `_fetch_current_site_settings` in `src\firmware\site_auto_upgrade.py`.
-- [ ] **CMP-023** `src\firmware\site_auto_upgrade.py:365` - STRUCT-COMPLEXITY (Complexity)
+  - Done when: analyzer reports no STRUCT-BLOCKS for `_fetch_current_site_settings` in `src\operations\execution\firmware\site_auto_upgrade.py`.
+- [ ] **CMP-023** `src\operations\execution\firmware\site_auto_upgrade.py:365` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_apply_site_indices`
   - Problem: Cyclomatic complexity is 6 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_apply_site_indices` in `src\firmware\site_auto_upgrade.py`.
-- [ ] **CMP-024** `src\firmware\site_auto_upgrade.py:386` - STRUCT-COMPLEXITY (Complexity)
+  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_apply_site_indices` in `src\operations\execution\firmware\site_auto_upgrade.py`.
+- [ ] **CMP-024** `src\operations\execution\firmware\site_auto_upgrade.py:386` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_step3_fetch_available_versions`
   - Problem: Cyclomatic complexity is 7 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_step3_fetch_available_versions` in `src\firmware\site_auto_upgrade.py`.
-- [ ] **CMP-025** `src\firmware\site_auto_upgrade.py:414` - STRUCT-COMPLEXITY (Complexity)
+  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_step3_fetch_available_versions` in `src\operations\execution\firmware\site_auto_upgrade.py`.
+- [ ] **CMP-025** `src\operations\execution\firmware\site_auto_upgrade.py:414` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_build_model_version_map`
   - Problem: Cyclomatic complexity is 6 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_build_model_version_map` in `src\firmware\site_auto_upgrade.py`.
-- [ ] **CMP-026** `src\firmware\site_auto_upgrade.py:430` - STRUCT-COMPLEXITY (Complexity)
+  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_build_model_version_map` in `src\operations\execution\firmware\site_auto_upgrade.py`.
+- [ ] **CMP-026** `src\operations\execution\firmware\site_auto_upgrade.py:430` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_step4_select_versions`
   - Problem: Cyclomatic complexity is 7 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_step4_select_versions` in `src\firmware\site_auto_upgrade.py`.
-- [ ] **CMP-027** `src\firmware\site_auto_upgrade.py:720` - STRUCT-COMPLEXITY (Complexity)
+  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_step4_select_versions` in `src\operations\execution\firmware\site_auto_upgrade.py`.
+- [ ] **CMP-027** `src\operations\execution\firmware\site_auto_upgrade.py:720` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_execute_msp_mode`
   - Problem: Cyclomatic complexity is 7 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_execute_msp_mode` in `src\firmware\site_auto_upgrade.py`.
-- [ ] **CMP-028** `src\firmware\site_auto_upgrade.py:843` - STRUCT-COMPLEXITY (Complexity)
+  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_execute_msp_mode` in `src\operations\execution\firmware\site_auto_upgrade.py`.
+- [ ] **CMP-028** `src\operations\execution\firmware\site_auto_upgrade.py:843` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_parse_index_selection`
   - Problem: Cyclomatic complexity is 6 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_parse_index_selection` in `src\firmware\site_auto_upgrade.py`.
-- [ ] **CMP-029** `src\firmware\site_auto_upgrade.py:928` - STRUCT-COMPLEXITY (Complexity)
+  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_parse_index_selection` in `src\operations\execution\firmware\site_auto_upgrade.py`.
+- [ ] **CMP-029** `src\operations\execution\firmware\site_auto_upgrade.py:928` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_apply_family_selection`
   - Problem: Cyclomatic complexity is 9 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_apply_family_selection` in `src\firmware\site_auto_upgrade.py`.
-- [ ] **CMP-030** `src\firmware\site_auto_upgrade.py:928` - STRUCT-BLOCKS (Structure)
+  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_apply_family_selection` in `src\operations\execution\firmware\site_auto_upgrade.py`.
+- [ ] **CMP-030** `src\operations\execution\firmware\site_auto_upgrade.py:928` - STRUCT-BLOCKS (Structure)
   - Symbol: `_apply_family_selection`
   - Problem: Function has 6 logical blocks (limit 5).
   - Fix: Split the function so each helper owns a single cohesive block of logic.
-  - Done when: analyzer reports no STRUCT-BLOCKS for `_apply_family_selection` in `src\firmware\site_auto_upgrade.py`.
-- [ ] **CMP-031** `src\firmware\site_auto_upgrade.py:986` - STRUCT-COMPLEXITY (Complexity)
+  - Done when: analyzer reports no STRUCT-BLOCKS for `_apply_family_selection` in `src\operations\execution\firmware\site_auto_upgrade.py`.
+- [ ] **CMP-031** `src\operations\execution\firmware\site_auto_upgrade.py:986` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_pick_stable_version`
   - Problem: Cyclomatic complexity is 7 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_pick_stable_version` in `src\firmware\site_auto_upgrade.py`.
-- [ ] **CMP-032** `src\firmware\site_auto_upgrade.py:1039` - STRUCT-COMPLEXITY (Complexity)
+  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_pick_stable_version` in `src\operations\execution\firmware\site_auto_upgrade.py`.
+- [ ] **CMP-032** `src\operations\execution\firmware\site_auto_upgrade.py:1039` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `parse_time_input`
   - Problem: Cyclomatic complexity is 7 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `parse_time_input` in `src\firmware\site_auto_upgrade.py`.
-- [ ] **CMP-033** `src\firmware\site_auto_upgrade.py:1120` - STRUCT-COMPLEXITY (Complexity)
+  - Done when: analyzer reports no STRUCT-COMPLEXITY for `parse_time_input` in `src\operations\execution\firmware\site_auto_upgrade.py`.
+- [ ] **CMP-033** `src\operations\execution\firmware\site_auto_upgrade.py:1120` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_apply_settings_to_sites`
   - Problem: Cyclomatic complexity is 6 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_apply_settings_to_sites` in `src\firmware\site_auto_upgrade.py`.
-- [ ] **CMP-034** `src\firmware\site_auto_upgrade.py:1197` - STRUCT-COMPLEXITY (Complexity)
+  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_apply_settings_to_sites` in `src\operations\execution\firmware\site_auto_upgrade.py`.
+- [ ] **CMP-034** `src\operations\execution\firmware\site_auto_upgrade.py:1197` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_print_msp_summary`
   - Problem: Cyclomatic complexity is 6 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_print_msp_summary` in `src\firmware\site_auto_upgrade.py`.
-- [ ] **CMP-035** `src\firmware\site_auto_upgrade.py:1232` - STRUCT-COMPLEXITY (Complexity)
+  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_print_msp_summary` in `src\operations\execution\firmware\site_auto_upgrade.py`.
+- [ ] **CMP-035** `src\operations\execution\firmware\site_auto_upgrade.py:1232` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_get_shared_schedule`
   - Problem: Cyclomatic complexity is 6 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_get_shared_schedule` in `src\firmware\site_auto_upgrade.py`.
-- [ ] **CMP-036** `src\firmware\site_auto_upgrade.py:1295` - STRUCT-COMPLEXITY (Complexity)
+  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_get_shared_schedule` in `src\operations\execution\firmware\site_auto_upgrade.py`.
+- [ ] **CMP-036** `src\operations\execution\firmware\site_auto_upgrade.py:1295` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_get_shared_firmware_versions`
   - Problem: Cyclomatic complexity is 8 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_get_shared_firmware_versions` in `src\firmware\site_auto_upgrade.py`.
-- [ ] **CMP-037** `src\firmware\site_auto_upgrade.py:1348` - STRUCT-COMPLEXITY (Complexity)
+  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_get_shared_firmware_versions` in `src\operations\execution\firmware\site_auto_upgrade.py`.
+- [ ] **CMP-037** `src\operations\execution\firmware\site_auto_upgrade.py:1348` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_build_version_map_from_list`
   - Problem: Cyclomatic complexity is 6 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_build_version_map_from_list` in `src\firmware\site_auto_upgrade.py`.
-- [ ] **CMP-038** `src\firmware\site_auto_upgrade.py:1423` - STRUCT-COMPLEXITY (Complexity)
+  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_build_version_map_from_list` in `src\operations\execution\firmware\site_auto_upgrade.py`.
+- [ ] **CMP-038** `src\operations\execution\firmware\site_auto_upgrade.py:1423` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_select_versions_interactively`
   - Problem: Cyclomatic complexity is 8 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_select_versions_interactively` in `src\firmware\site_auto_upgrade.py`.
-- [ ] **CMP-039** `src\firmware\site_auto_upgrade.py:1423` - STRUCT-BLOCKS (Structure)
+  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_select_versions_interactively` in `src\operations\execution\firmware\site_auto_upgrade.py`.
+- [ ] **CMP-039** `src\operations\execution\firmware\site_auto_upgrade.py:1423` - STRUCT-BLOCKS (Structure)
   - Symbol: `_select_versions_interactively`
   - Problem: Function has 6 logical blocks (limit 5).
   - Fix: Split the function so each helper owns a single cohesive block of logic.
-  - Done when: analyzer reports no STRUCT-BLOCKS for `_select_versions_interactively` in `src\firmware\site_auto_upgrade.py`.
+  - Done when: analyzer reports no STRUCT-BLOCKS for `_select_versions_interactively` in `src\operations\execution\firmware\site_auto_upgrade.py`.
 

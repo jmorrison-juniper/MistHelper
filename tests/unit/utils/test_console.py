@@ -15,9 +15,9 @@ from __future__ import annotations  # WHY: PEP 604 unions and consistent style.
 
 import logging  # WHY: caplog level assertions require the logging module.
 
-from src.utils.console import echo  # WHY: import proves clause C-6 (stable path).
+from src.foundation.support.utils.console import echo  # WHY: import proves clause C-6 (stable path).
 
-_CONSOLE_LOGGER_NAME = "src.utils.console"  # WHY: module logger name resolved by __name__.
+_CONSOLE_LOGGER_NAME = "src.foundation.support.utils.console"  # WHY: module logger name resolved by __name__.
 
 
 def test_echo_plain_literal_prints_stdout_and_logs_info(capsys, caplog) -> None:

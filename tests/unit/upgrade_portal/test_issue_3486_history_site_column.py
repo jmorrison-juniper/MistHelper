@@ -19,8 +19,8 @@ from typing import Any
 import pytest
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
-from src.upgrade_portal.app.routes import review
-from src.upgrade_portal.compare import render
+from src.interfaces.portals.upgrade_portal.app.routes import review
+from src.interfaces.portals.upgrade_portal.compare import render
 
 _ASSET_ROOT = Path(review.__file__).resolve().parents[1] / "assets"  # The real asset folder of the portal.
 _TEMPLATE_ROOT = _ASSET_ROOT / "templates"  # The real template folder.

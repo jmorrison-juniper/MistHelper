@@ -36,7 +36,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
 # WHY: The two files that must agree. The page writes the field and the script repaints it.
-ASSET_ROOT = REPO_ROOT / "src" / "upgrade_portal" / "app" / "assets"
+ASSET_ROOT = REPO_ROOT / "src" / "interfaces" / "portals" / "upgrade_portal" / "app" / "assets"
 SCRIPT_PATH = ASSET_ROOT / "static" / "js" / "portal.js"
 PAGE_PATH = ASSET_ROOT / "templates" / "capture" / "capture.html"
 

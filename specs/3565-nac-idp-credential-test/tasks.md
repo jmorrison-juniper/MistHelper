@@ -12,7 +12,7 @@
 
 **Purpose**: Create the owned feature paths and non-code feature records.
 
-- [x] T001 Create package structure in `src/troubleshooting/nac_idp_credential_test/` with `__init__.py`. (delivered: src/troubleshooting/nac_idp_credential_test/__init__.py)
+- [x] T001 Create package structure in `src/mist/intelligence/troubleshooting/nac_idp_credential_test/` with `__init__.py`. (delivered: src/mist/intelligence/troubleshooting/nac_idp_credential_test/__init__.py)
 - [x] T002 Create test structure in `tests/unit/troubleshooting/nac_idp_credential_test/` with `__init__.py`. (delivered: tests/unit/troubleshooting/nac_idp_credential_test/__init__.py)
 - [x] T003 Create release note `changelog.d/issue-3565-nac-idp-credential-test.md`. (delivered: changelog.d/issue-3565-nac-idp-credential-test.md)
 - [x] T004 Create wiring manifest `specs/3565-nac-idp-credential-test/wiring.md` and mark `MistHelper.py` registration as deferred to the integration pull request. (delivered: specs/3565-nac-idp-credential-test/wiring.md)
@@ -23,9 +23,9 @@
 
 **Purpose**: Build the pure model and client contracts that every story uses.
 
-- [x] T005 [P] Create `src/troubleshooting/nac_idp_credential_test/model.py` with dataclasses for provider choices, requests, results, and export rows. (delivered: src/troubleshooting/nac_idp_credential_test/model.py)
+- [x] T005 [P] Create `src/mist/intelligence/troubleshooting/nac_idp_credential_test/model.py` with dataclasses for provider choices, requests, results, and export rows. (delivered: src/mist/intelligence/troubleshooting/nac_idp_credential_test/model.py)
 - [x] T006 [P] Create `tests/unit/troubleshooting/nac_idp_credential_test/test_nac_idp_credential_test_model.py` for request body shape, response normalization, and password-free export rows. (delivered: tests/unit/troubleshooting/nac_idp_credential_test/test_nac_idp_credential_test_model.py)
-- [x] T007 Create `src/troubleshooting/nac_idp_credential_test/client.py` with SDK-backed `getOrgSettings`, `listOrgSsos`, and `validateOrgIdpCredential` calls. (delivered: src/troubleshooting/nac_idp_credential_test/client.py)
+- [x] T007 Create `src/mist/intelligence/troubleshooting/nac_idp_credential_test/client.py` with SDK-backed `getOrgSettings`, `listOrgSsos`, and `validateOrgIdpCredential` calls. (delivered: src/mist/intelligence/troubleshooting/nac_idp_credential_test/client.py)
 - [x] T008 Create `tests/unit/troubleshooting/nac_idp_credential_test/test_nac_idp_credential_test_client.py` with fixtures that prove provider source selection and request dispatch without network access. (delivered: tests/unit/troubleshooting/nac_idp_credential_test/test_nac_idp_credential_test_client.py)
 
 **Checkpoint**: Foundation ready. User story work can start.
@@ -44,9 +44,9 @@
 
 ### Implementation for User Story 1
 
-- [x] T010 [US1] Create `src/troubleshooting/nac_idp_credential_test/prompts.py` with numbered provider selection and username prompts. (delivered: `NacIdpCredentialPrompts`)
-- [x] T011 [US1] Create `src/troubleshooting/nac_idp_credential_test/operation.py` with class `NacIdpCredentialTest` and static `run()`. (delivered: `NacIdpCredentialTest.run`)
-- [x] T012 [US1] Export `NacIdpCredentialTest` from `src/troubleshooting/nac_idp_credential_test/__init__.py`. (delivered: package `__all__`)
+- [x] T010 [US1] Create `src/mist/intelligence/troubleshooting/nac_idp_credential_test/prompts.py` with numbered provider selection and username prompts. (delivered: `NacIdpCredentialPrompts`)
+- [x] T011 [US1] Create `src/mist/intelligence/troubleshooting/nac_idp_credential_test/operation.py` with class `NacIdpCredentialTest` and static `run()`. (delivered: `NacIdpCredentialTest.run`)
+- [x] T012 [US1] Export `NacIdpCredentialTest` from `src/mist/intelligence/troubleshooting/nac_idp_credential_test/__init__.py`. (delivered: package `__all__`)
 
 **Checkpoint**: User Story 1 is functional and testable.
 
@@ -64,8 +64,8 @@
 
 ### Implementation for User Story 2
 
-- [x] T014 [US2] Add hidden password prompt and `y` or `N` confirmation in `src/troubleshooting/nac_idp_credential_test/prompts.py`. (delivered: `ask_password` and `ask_confirmation`)
-- [x] T015 [US2] Ensure operation logging and export rows never include the password in `src/troubleshooting/nac_idp_credential_test/operation.py`. (delivered: result export uses password-free rows)
+- [x] T014 [US2] Add hidden password prompt and `y` or `N` confirmation in `src/mist/intelligence/troubleshooting/nac_idp_credential_test/prompts.py`. (delivered: `ask_password` and `ask_confirmation`)
+- [x] T015 [US2] Ensure operation logging and export rows never include the password in `src/mist/intelligence/troubleshooting/nac_idp_credential_test/operation.py`. (delivered: result export uses password-free rows)
 
 **Checkpoint**: User Story 2 is functional and testable.
 
@@ -83,8 +83,8 @@
 
 ### Implementation for User Story 3
 
-- [x] T017 [US3] Add failure reason formatting in `src/troubleshooting/nac_idp_credential_test/model.py` and `operation.py`. (delivered: `read_reason` and `_log_result`)
-- [x] T018 [US3] Add no-provider and declined-confirmation paths in `src/troubleshooting/nac_idp_credential_test/operation.py`. (delivered: no-provider and declined-confirmation returns)
+- [x] T017 [US3] Add failure reason formatting in `src/mist/intelligence/troubleshooting/nac_idp_credential_test/model.py` and `operation.py`. (delivered: `read_reason` and `_log_result`)
+- [x] T018 [US3] Add no-provider and declined-confirmation paths in `src/mist/intelligence/troubleshooting/nac_idp_credential_test/operation.py`. (delivered: no-provider and declined-confirmation returns)
 
 **Checkpoint**: All user stories are functional and testable.
 
@@ -94,8 +94,8 @@
 
 **Purpose**: Finish validation, documentation, and final SpecKit analysis repairs.
 
-- [x] T019 Run quickstart validation gates for `src/troubleshooting/nac_idp_credential_test` and `tests/unit/troubleshooting/nac_idp_credential_test`. (delivered: compile, Ruff, Black, mypy, pydocstyle, and pytest pass)
-- [x] T020 Run `vulture` and `interrogate` on `src/troubleshooting/nac_idp_credential_test`. (delivered: vulture passed and interrogate reported 100.0 percent)
+- [x] T019 Run quickstart validation gates for `src/mist/intelligence/troubleshooting/nac_idp_credential_test` and `tests/unit/troubleshooting/nac_idp_credential_test`. (delivered: compile, Ruff, Black, mypy, pydocstyle, and pytest pass)
+- [x] T020 Run `vulture` and `interrogate` on `src/mist/intelligence/troubleshooting/nac_idp_credential_test`. (delivered: vulture passed and interrogate reported 100.0 percent)
 - [x] T021 Verify inline comment coverage and action logging across the owned package. (delivered: each executable source line has a `WHY` comment, and prompts, API calls, transforms, validation results, and exports have safe action logs)
 - [x] T022 Add an operation test for export-backend failure handling without password leakage. (delivered: `test_nac_idp_credential_test_export_failure_logs_error`)
 - [x] T023 Add an operation test for the five-prompt acceptance limit. (delivered: `test_nac_idp_credential_test_happy_path_uses_five_or_fewer_prompts`)

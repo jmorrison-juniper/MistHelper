@@ -102,10 +102,10 @@ _EXTRA_EXCLUDES_ENV = "PORTAL_SCAN_EXCLUDE_DIRS"
 # `tests/unit/web_portal/test_output_scan_runtime_files.py` reads the owning
 # constant and fails when a rename leaves a stale entry here.
 RUNTIME_FILE_NAMES = (
-    "script.log",  # The application log. src/refactors/main_entrypoint.py opens it.
+    "script.log",  # The application log. src/foundation/support/refactors/main_entrypoint.py opens it.
     "portal_access.log",  # The Gunicorn access log. container/scripts/start.sh names it.
-    "delay_metrics.json",  # The rate-limiter metric store. src/utils/rate_limiting._METRICS_FILENAME.
-    "tuning_data.json",  # The rate-limiter tuning store. src/utils/rate_limiting._TUNING_FILENAME.
+    "delay_metrics.json",  # The rate-limiter metric store. src/foundation/support/utils/rate_limiting._METRICS_FILENAME.
+    "tuning_data.json",  # The rate-limiter tuning store. src/foundation/support/utils/rate_limiting._TUNING_FILENAME.
 )
 
 

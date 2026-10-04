@@ -1,7 +1,7 @@
 """The stand-in cloud of a rehearsal run.
 
 Why:
-    ``src/upgrade_portal/app/seam_shapes.py`` records the rule of issue #1991.
+    ``src/interfaces/portals/upgrade_portal/app/seam_shapes.py`` records the rule of issue #1991.
     A stand-in must answer the call that the caller really makes, and not a
     simpler shape that the author imagined. This module copies the signature of
     each shipped call from ``contracts/rehearsal-cloud.md``.
@@ -33,7 +33,7 @@ CATALOGUE_KEYS: tuple[str, ...] = ("GW_CONNECTED", "SW_CONNECTED", "AP_CONNECTED
 # ``type`` field of an event against the catalogue, so the two must agree.
 RECONNECT_TYPES: Mapping[str, str] = {"gateway": "GW_CONNECTED", "switch": "SW_CONNECTED", "ap": "AP_CONNECTED"}
 
-# WHY: The three write endpoints of ``src/firmware/upgrade_service.py``. The
+# WHY: The three write endpoints of ``src/operations/execution/firmware/upgrade_service.py``. The
 # resolver refuses each one, so a rehearsal can never reach real firmware.
 FIRMWARE_WRITE_NAMES: tuple[str, ...] = ("upgradeSiteDevices", "upgradeDevice", "upgradeOrgSsrs")
 

@@ -11,7 +11,7 @@
 
 ## Changes
 
-1. `src/firmware/aggregate_upgrade_service.py`
+1. `src/operations/execution/firmware/aggregate_upgrade_service.py`
    - Add a cancellation-request error for a safe submission stop.
    - Check the cancellation marker in the parent and child submission claims.
    - Stop the child loop when a concurrent cancel wins the child claim.

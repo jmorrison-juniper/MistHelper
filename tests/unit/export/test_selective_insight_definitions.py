@@ -23,18 +23,18 @@ from unittest.mock import MagicMock
 import pytest
 import requests
 
-from src.analytics import insight_metrics_utils as insight_module
-from src.analytics.insight_metrics_utils import InsightMetricsUtils
-from src.dataclasses.endpoint_config import EndpointConfig
-from src.export import const_definitions_exporter as const_module
-from src.export import org_export_utils as org_module
-from src.export.const_definitions_exporter import ConstDefinitionsExporter
-from src.export.data_exporter import DataExporter
-from src.export.org_export_utils import OrgExportUtils
-from src.export.site_insights.device_metric_operation import DeviceMetricOperation
-from src.export.site_insights.site_metric_operation import SiteMetricOperation
-from src.refactors.serial_cc import site_client_insights as client_module
-from src.refactors.serial_cc.site_client_insights import SiteClientInsightsService
+from src.foundation.models.dataclasses.endpoint_config import EndpointConfig
+from src.foundation.support.refactors.serial_cc import site_client_insights as client_module
+from src.foundation.support.refactors.serial_cc.site_client_insights import SiteClientInsightsService
+from src.mist.intelligence.analytics import insight_metrics_utils as insight_module
+from src.mist.intelligence.analytics.insight_metrics_utils import InsightMetricsUtils
+from src.operations.exporting.export import const_definitions_exporter as const_module
+from src.operations.exporting.export import org_export_utils as org_module
+from src.operations.exporting.export.const_definitions_exporter import ConstDefinitionsExporter
+from src.operations.exporting.export.data_exporter import DataExporter
+from src.operations.exporting.export.org_export_utils import OrgExportUtils
+from src.operations.exporting.export.site_insights.device_metric_operation import DeviceMetricOperation
+from src.operations.exporting.export.site_insights.site_metric_operation import SiteMetricOperation
 
 CALLERS = ("site", "client", "device", "org")
 CACHE_CLOCK = 1_800_000_000.0

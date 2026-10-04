@@ -17,9 +17,9 @@ from typing import Any
 
 import pytest
 
-from src.firmware.aggregate_upgrade_service import AggregateBuildInput, AggregateUpgradeService
-from src.firmware.org_upgrade_service import OrgUpgradeResult
-from src.firmware.upgrade_service import CancelOutcome, DeviceTarget, UpgradeOptions
+from src.operations.execution.firmware.aggregate_upgrade_service import AggregateBuildInput, AggregateUpgradeService
+from src.operations.execution.firmware.org_upgrade_service import OrgUpgradeResult
+from src.operations.execution.firmware.upgrade_service import CancelOutcome, DeviceTarget, UpgradeOptions
 
 ORG_ID = "66666666-6666-6666-6666-666666666666"  # The organization of the operation.
 SITE_ONE = "77777777-7777-7777-7777-777777777777"  # The first site of the operation.

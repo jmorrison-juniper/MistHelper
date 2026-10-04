@@ -13,7 +13,7 @@ from typing import Any
 
 import pytest
 
-from src.upgrade_portal.upgrade.org_cancel_text import OrgCancelText
+from src.interfaces.portals.upgrade_portal.upgrade.org_cancel_text import OrgCancelText
 
 STOPPED = "The cloud stopped 1 device(s), and no device was writing firmware."  # The sentence of a site cancel.
 

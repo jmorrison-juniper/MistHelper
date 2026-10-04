@@ -13,7 +13,7 @@ import time
 from unittest.mock import MagicMock
 
 import MistHelper
-from src.config import runtime_settings
+from src.foundation.runtime.config import runtime_settings
 
 
 class TestDeviceStatsAPIDataFetcherWiring:

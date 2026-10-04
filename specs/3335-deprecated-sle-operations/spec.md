@@ -224,7 +224,7 @@ This list does not authorize those edits during the specification phase.
 
 | Group | Reserved paths |
 | --- | --- |
-| Production registrations | `src/export/endpoint_family_exporter.py`, `src/export/endpoint_catalog.py`, `src/refactors/endpoint_primary_key_strategies.py` |
+| Production registrations | `src/operations/exporting/export/endpoint_family_exporter.py`, `src/operations/exporting/export/endpoint_catalog.py`, `src/foundation/support/refactors/endpoint_primary_key_strategies.py` |
 | Fixed menu labels | `MistHelper.py`, `web_portal/menu_registry.py`, `documentation/menu-highlights.md` |
 | Changed tests | `tests/guardrails/test_endpoint_catalog.py`, `tests/unit/export/test_endpoint_family_exporter.py` |
 | Generated wiki references | `documentation/menu_reference.md`, `documentation/wiki/Menu-Reference.md` |

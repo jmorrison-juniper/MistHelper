@@ -11,7 +11,7 @@ that audits the MistHelper test suite and emits a deterministic JSON report plus
 Markdown summary. It classifies findings across five detection categories (untested
 modules, weak assertions, missing failure-mode coverage, missing edge-case coverage,
 tautological tests), excludes the Mist Cloud API surface (`mistapi` imports and
-`src/api/**`) from analysis, and supports a JSON baseline for gate mode with exit
+`src/mist/access/api/**`) from analysis, and supports a JSON baseline for gate mode with exit
 codes 0/1/2. The engine ships with a golden regression set anchored on real
 MistHelper findings and a synthetic bad/good fixture library with meta-tests. No
 CI wiring in this feature; gate-mode CLI is shipped so a follow-up initiative can

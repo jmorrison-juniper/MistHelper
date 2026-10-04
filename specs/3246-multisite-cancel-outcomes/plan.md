@@ -6,8 +6,8 @@
 ## Technical context
 
 - Python 3.13, Flask 3, and Jinja templates.
-- The firmware layer is `src/firmware/`. It must not import `src/upgrade_portal/`.
-- The view layer is `src/upgrade_portal/upgrade/`. It makes no cloud call and no write.
+- The firmware layer is `src/operations/execution/firmware/`. It must not import `src/interfaces/portals/upgrade_portal/`.
+- The view layer is `src/interfaces/portals/upgrade_portal/upgrade/`. It makes no cloud call and no write.
 - The change adds no dependency, no environment variable, and no schema change. The durable record keeps its shape. The AP result of a new cancel adds the three list keys that a site result already holds.
 
 ## The current behavior
@@ -21,7 +21,7 @@
 
 ### Part 1. Share the sort rule in the firmware layer
 
-`src/firmware/upgrade_service.py`:
+`src/operations/execution/firmware/upgrade_service.py`:
 
 - Rename `_reboot_macs` to `reboot_macs`. The function keeps its rule.
 - Replace `_sort_cancel(macs, last_status, status)` with `sort_cancel(macs, writing, status)`. The argument `writing` is the set of normalized MAC addresses that write firmware, or `None` when the portal cannot tell.
@@ -29,7 +29,7 @@
 
 ### Part 2. Sort the AP child job
 
-The new module `src/firmware/org_cancel_sort.py` holds two classes. `OrgRebootLists` reads the reboot lists of the organization answer. `OrgCancelSort` builds the durable result. Two classes keep each class at five methods or fewer.
+The new module `src/operations/execution/firmware/org_cancel_sort.py` holds two classes. `OrgRebootLists` reads the reboot lists of the organization answer. `OrgCancelSort` builds the durable result. Two classes keep each class at five methods or fewer.
 
 | Class and method | Purpose |
 | - | - |
@@ -56,7 +56,7 @@ The rules of `writing`:
 
 ### Part 3. Build the panel rows in the view layer
 
-The new module `src/upgrade_portal/upgrade/org_cancel_outcomes.py` holds two classes. The module `org_child_controls.py` already holds five top-level items, so the new classes need their own module.
+The new module `src/interfaces/portals/upgrade_portal/upgrade/org_cancel_outcomes.py` holds two classes. The module `org_child_controls.py` already holds five top-level items, so the new classes need their own module.
 
 - `OrgCancelOutcomes.rows()` returns one row for each child job that holds a result, in the order of the plan.
 - `OrgCancelOutcomes.signature()` returns the pairs `child_id:status`, joined with commas.

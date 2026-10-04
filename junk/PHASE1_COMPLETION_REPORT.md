@@ -1,7 +1,7 @@
 # Phase 1 Implementation Report - Issue #1823
 
 > **Status note, 2026-09-25**: This report is historical. The current capture
-> portal implementation lives in `src/upgrade_portal/`, and the current feature
+> portal implementation lives in `src/interfaces/portals/upgrade_portal/`, and the current feature
 > record lives in `specs/1823-upgrade-capture-portal/`. Menu 239 and the
 > `--capture-portal` flag start the portal on port 8056.
 
@@ -33,7 +33,7 @@ Phase 1 establishes the foundation for the Capture Upgrade Portal with JWT authe
 ## Code Artifacts Created
 
 ### Audit Logging (T-0.5)
-**Location**: `src/upgrade_portal/audit/`
+**Location**: `src/interfaces/portals/upgrade_portal/audit/`
 
 1. **masker.py** (7,159 bytes)
    - SecretMasker class with regex patterns for JWT, API keys, passwords, auth tokens
@@ -62,7 +62,7 @@ Phase 1 establishes the foundation for the Capture Upgrade Portal with JWT authe
    - Target coverage: ≥80%
 
 ### JWT Authentication (T-001)
-**Location**: `src/upgrade_portal/auth/`
+**Location**: `src/interfaces/portals/upgrade_portal/auth/`
 
 1. **session.py** (14,391 bytes)
    - JWTSessionManager class with HS256 signing
@@ -82,7 +82,7 @@ Phase 1 establishes the foundation for the Capture Upgrade Portal with JWT authe
    - ✓ Error messages without leaking secrets
 
 ### Mist API Integration (T-002)
-**Location**: `src/upgrade_portal/api/` and `src/upgrade_portal/app/routes/`
+**Location**: `src/interfaces/portals/upgrade_portal/api/` and `src/interfaces/portals/upgrade_portal/app/routes/`
 
 1. **mist_client.py** (9,551 bytes)
    - MistAPIClient class with Redis caching
@@ -104,7 +104,7 @@ Phase 1 establishes the foundation for the Capture Upgrade Portal with JWT authe
    - Mock fixtures for API and cache
 
 ### Site/Device Selection UI (T-003)
-**Location**: `src/upgrade_portal/app/templates/`
+**Location**: `src/interfaces/portals/upgrade_portal/app/templates/`
 
 1. **upgrade_select.html** (15,397 bytes)
    - Responsive Bootstrap 5 layout
@@ -117,7 +117,7 @@ Phase 1 establishes the foundation for the Capture Upgrade Portal with JWT authe
    - ✓ Inline JavaScript comments for all logic
 
 ### Persistence Layer (T-004)
-**Location**: `src/upgrade_portal/persistence/`
+**Location**: `src/interfaces/portals/upgrade_portal/persistence/`
 
 1. **runs.py** (9,503 bytes)
    - UpgradeRunsService class for ArangoDB persistence
@@ -291,20 +291,20 @@ Phase 1 establishes the foundation for the Capture Upgrade Portal with JWT authe
 
 | File | Size | Purpose |
 |------|------|---------|
-| src/upgrade_portal/audit/masker.py | 7,159 | Secret redaction engine |
-| src/upgrade_portal/audit/logger.py | 12,691 | Audit trail service |
-| src/upgrade_portal/audit/__init__.py | 256 | Module export |
-| src/upgrade_portal/app/routes/audit.py | 7,010 | Audit API routes |
-| src/upgrade_portal/auth/session.py | 14,391 | JWT token management |
-| src/upgrade_portal/auth/__init__.py | 198 | Module export |
-| src/upgrade_portal/app/routes/jwt_auth.py | 11,387 | Auth API routes |
-| src/upgrade_portal/api/mist_client.py | 9,551 | Mist API client |
-| src/upgrade_portal/api/__init__.py | 156 | Module export |
-| src/upgrade_portal/app/routes/mist.py | 6,214 | Mist API routes |
-| src/upgrade_portal/app/templates/upgrade_select.html | 15,397 | Device selection UI |
-| src/upgrade_portal/persistence/runs.py | 9,503 | Upgrade runs service |
-| src/upgrade_portal/persistence/__init__.py | 168 | Module export |
-| src/upgrade_portal/app/routes/runs.py | 13,984 | Runs API routes |
+| src/interfaces/portals/upgrade_portal/audit/masker.py | 7,159 | Secret redaction engine |
+| src/interfaces/portals/upgrade_portal/audit/logger.py | 12,691 | Audit trail service |
+| src/interfaces/portals/upgrade_portal/audit/__init__.py | 256 | Module export |
+| src/interfaces/portals/upgrade_portal/app/routes/audit.py | 7,010 | Audit API routes |
+| src/interfaces/portals/upgrade_portal/auth/session.py | 14,391 | JWT token management |
+| src/interfaces/portals/upgrade_portal/auth/__init__.py | 198 | Module export |
+| src/interfaces/portals/upgrade_portal/app/routes/jwt_auth.py | 11,387 | Auth API routes |
+| src/interfaces/portals/upgrade_portal/api/mist_client.py | 9,551 | Mist API client |
+| src/interfaces/portals/upgrade_portal/api/__init__.py | 156 | Module export |
+| src/interfaces/portals/upgrade_portal/app/routes/mist.py | 6,214 | Mist API routes |
+| src/interfaces/portals/upgrade_portal/app/templates/upgrade_select.html | 15,397 | Device selection UI |
+| src/interfaces/portals/upgrade_portal/persistence/runs.py | 9,503 | Upgrade runs service |
+| src/interfaces/portals/upgrade_portal/persistence/__init__.py | 168 | Module export |
+| src/interfaces/portals/upgrade_portal/app/routes/runs.py | 13,984 | Runs API routes |
 | tests/test_upgrade_portal_audit.py | 17,232 | Audit unit tests |
 | tests/test_upgrade_portal_mist.py | 10,639 | Mist client unit tests |
 | **TOTAL** | **135,938 bytes** | **Phase 1 Implementation** |

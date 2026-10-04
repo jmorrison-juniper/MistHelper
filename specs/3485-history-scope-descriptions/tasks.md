@@ -17,7 +17,7 @@ Then verify organization descriptions and unchanged history behavior.
 ## Phase 2: Foundational
 
 - [x] T003 Restore missing tools from `requirements.txt` and `requirements-dev.txt` with the existing worktree bootstrap. (delivered: .venv/bin/python)
-- [x] T004 Verify the existing scope and organization contracts before changing `src/upgrade_portal/app/routes/review.py`. (delivered: tests/contract/upgrade_portal/test_issue_3484_history_org_isolation.py)
+- [x] T004 Verify the existing scope and organization contracts before changing `src/interfaces/portals/upgrade_portal/app/routes/review.py`. (delivered: tests/contract/upgrade_portal/test_issue_3484_history_org_isolation.py)
 
 The starting revision passed 270 existing scope and organization cases.
 The Bash plan script returned code 127 because it is absent.
@@ -32,9 +32,9 @@ Verify each complete note, caption, and empty statement.
 
 - [x] T005 [P] [US1] Add named and unnamed site text cases. (delivered: tests/unit/upgrade_portal/test_history_card_scope.py)
 - [x] T006 [P] [US1] Prove the original rendered empty-site failure across all nine descriptions. (delivered: tests/contract/upgrade_portal/test_history_card_scope_routes.py)
-- [x] T007 [US1] Add the bounded description record and card scope. (delivered: src/upgrade_portal/app/history_descriptions.py)
-- [x] T008 [US1] Wire validated scope fields into the existing history context. (delivered: src/upgrade_portal/app/routes/review.py)
-- [x] T009 [US1] Print settled descriptions and stable note identifiers. (delivered: src/upgrade_portal/app/assets/templates/review/history.html)
+- [x] T007 [US1] Add the bounded description record and card scope. (delivered: src/interfaces/portals/upgrade_portal/app/history_descriptions.py)
+- [x] T008 [US1] Wire validated scope fields into the existing history context. (delivered: src/interfaces/portals/upgrade_portal/app/routes/review.py)
+- [x] T009 [US1] Print settled descriptions and stable note identifiers. (delivered: src/interfaces/portals/upgrade_portal/app/assets/templates/review/history.html)
 - [x] T010 [US1] Verify stored-name escaping and ignored query names. (delivered: tests/contract/upgrade_portal/test_history_card_scope_routes.py)
 
 ## Phase 4: User Story 2 - Organization history (Priority: P1)
@@ -56,7 +56,7 @@ Verify all notes, captions, and empty statements.
 
 - [x] T014 [US3] Verify exact identifiers, totals, query binds, and later empty pages. (delivered: tests/contract/upgrade_portal/test_history_card_scope_routes.py)
 - [x] T015 [US3] Verify unchanged authentication and failure responses. (delivered: tests/contract/upgrade_portal/test_history_card_scope_routes.py)
-- [x] T016 [US3] Confirm unchanged reader bodies and the complete existing scope class. (delivered: src/upgrade_portal/app/routes/review.py)
+- [x] T016 [US3] Confirm unchanged reader bodies and the complete existing scope class. (delivered: src/interfaces/portals/upgrade_portal/app/routes/review.py)
 
 ## Phase 6: Local completion
 

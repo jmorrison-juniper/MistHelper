@@ -1,7 +1,7 @@
 # Touched-Block Checklist: wifi_clients
 
 - [x] Compatibility facade entrypoint preserved in `MistHelper.py`
-- [x] Extracted module exists at `src/export/wifi_clients_exporter.py`
+- [x] Extracted module exists at `src/operations/exporting/export/wifi_clients_exporter.py`
 - [x] CSV output and merge behavior preserved
 - [x] Key operations include pre-action `logging.info`
 - [x] Key operations include post-action `logging.debug`

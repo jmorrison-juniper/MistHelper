@@ -1,4 +1,4 @@
-"""Unit tests for src/ui/runtime/dotenv_loader.py."""
+"""Unit tests for src/interfaces/visualization/ui/runtime/dotenv_loader.py."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from src.ui.runtime.dotenv_loader import DotenvLoader, _strip_surrounding_quotes
+from src.interfaces.visualization.ui.runtime.dotenv_loader import DotenvLoader, _strip_surrounding_quotes
 
 
 @pytest.fixture(autouse=True)

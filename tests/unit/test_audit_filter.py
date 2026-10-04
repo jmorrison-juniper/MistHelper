@@ -1,9 +1,9 @@
-"""Unit tests for src.audit.filter module.
+"""Unit tests for src.mist.access.audit.filter module.
 
 Covers AuditLogFilter.__init__, is_noise, filter, and filter_with_stats.
 """
 
-from src.audit.filter import NOISE_PHRASES, AuditLogFilter
+from src.mist.access.audit.filter import NOISE_PHRASES, AuditLogFilter
 
 
 class TestAuditLogFilterInit:

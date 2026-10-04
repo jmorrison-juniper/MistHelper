@@ -1,4 +1,4 @@
-"""Unit tests for src.ssh.connection.connector.SshConnector (T013b)."""
+"""Unit tests for src.operations.execution.ssh.connection.connector.SshConnector (T013b)."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 import paramiko
 import pytest
 
-from src.ssh.connection.connector import SshConnector  # T013b: extracted connector
+from src.operations.execution.ssh.connection.connector import SshConnector  # T013b: extracted connector
 
 
 # ---------------------------------------------------------------------------
@@ -97,7 +97,7 @@ class TestKnownHostsManagement:
 class TestConnect:
     """The full connect flow with paramiko mocked out."""
 
-    @patch("src.ssh.connection.connector.SSHClient")
+    @patch("src.operations.execution.ssh.connection.connector.SSHClient")
     def test_connect_success_returns_client_and_kh_path(
         self, mock_ssh_class, tmp_path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -112,7 +112,7 @@ class TestConnect:
         assert client is mock_client
         assert kh_path is not None and "ssh_known_hosts" in kh_path
 
-    @patch("src.ssh.connection.connector.SSHClient")
+    @patch("src.operations.execution.ssh.connection.connector.SSHClient")
     def test_connect_auth_failure_returns_none(self, mock_ssh_class, tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.chdir(tmp_path)
         os.makedirs("data", exist_ok=True)
@@ -125,7 +125,7 @@ class TestConnect:
 
         assert client is None and kh_path is None
 
-    @patch("src.ssh.connection.connector.SSHClient")
+    @patch("src.operations.execution.ssh.connection.connector.SSHClient")
     def test_connect_timeout_returns_none(self, mock_ssh_class, tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.chdir(tmp_path)
         os.makedirs("data", exist_ok=True)
@@ -138,7 +138,7 @@ class TestConnect:
 
         assert client is None and kh_path is None
 
-    @patch("src.ssh.connection.connector.SSHClient")
+    @patch("src.operations.execution.ssh.connection.connector.SSHClient")
     def test_connect_dns_failure_returns_none(self, mock_ssh_class, tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.chdir(tmp_path)
         os.makedirs("data", exist_ok=True)
@@ -151,7 +151,7 @@ class TestConnect:
 
         assert client is None and kh_path is None
 
-    @patch("src.ssh.connection.connector.SSHClient")
+    @patch("src.operations.execution.ssh.connection.connector.SSHClient")
     def test_connect_bad_host_key_returns_none(self, mock_ssh_class, tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.chdir(tmp_path)
         os.makedirs("data", exist_ok=True)
@@ -164,7 +164,7 @@ class TestConnect:
 
         assert client is None and kh_path is None
 
-    @patch("src.ssh.connection.connector.SSHClient")
+    @patch("src.operations.execution.ssh.connection.connector.SSHClient")
     def test_connect_generic_ssh_exception_returns_none(
         self, mock_ssh_class, tmp_path, monkeypatch: pytest.MonkeyPatch
     ) -> None:

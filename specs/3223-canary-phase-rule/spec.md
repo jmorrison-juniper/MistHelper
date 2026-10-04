@@ -32,7 +32,7 @@ The multi-site journey of #3200 started a job with `50,10`.
 - **FR-003**: The last phase MUST be 100.
 - **FR-004**: The single-site help text MUST state the rule.
 - **FR-005**: The rule MUST live in one place, `_read_canary` of
-  `src/upgrade_portal/upgrade/options.py`, which both modes call.
+  `src/interfaces/portals/upgrade_portal/upgrade/options.py`, which both modes call.
 
 ## Non-goals
 

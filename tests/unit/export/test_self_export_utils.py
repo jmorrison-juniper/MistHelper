@@ -1,4 +1,4 @@
-"""Wave 7 P2 coverage for src/export/self_export_utils.py (initiative #1018).
+"""Wave 7 P2 coverage for src/operations/exporting/export/self_export_utils.py (initiative #1018).
 
 Covers every branch of ``SelfExportUtils``:
 
@@ -21,7 +21,9 @@ from unittest.mock import MagicMock, call  # WHY: FR-008 collaborator doubles + 
 
 import pytest  # WHY: monkeypatch + caplog fixtures.
 
-from src.export.self_export_utils import SelfExportUtils  # WHY: direct SUT import; only static methods.
+from src.operations.exporting.export.self_export_utils import (
+    SelfExportUtils,
+)  # WHY: direct SUT import; only static methods.
 
 
 @pytest.fixture
@@ -40,16 +42,20 @@ def wired_deps(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
 
     time_utils = MagicMock(name="TimeUtils")  # WHY: get_dynamic_lookback_hours + log_dynamic_lookback observed.
     time_utils.get_dynamic_lookback_hours.return_value = 6  # WHY: deterministic lookback for assertions.
-    monkeypatch.setattr("src.export.self_export_utils.TimeUtils", time_utils, raising=True)  # WHY: intercept helper.
+    monkeypatch.setattr(
+        "src.operations.exporting.export.self_export_utils.TimeUtils", time_utils, raising=True
+    )  # WHY: intercept helper.
 
     data_processing = MagicMock(name="DataProcessingUtils")  # WHY: flatten_nested_fields observed + identity here.
     data_processing.flatten_nested_fields.side_effect = lambda rows: rows  # WHY: identity for round-trip check.
     monkeypatch.setattr(  # WHY: intercept the imported name at module scope.
-        "src.export.self_export_utils.DataProcessingUtils", data_processing, raising=True
+        "src.operations.exporting.export.self_export_utils.DataProcessingUtils", data_processing, raising=True
     )
 
     mistapi_mod = MagicMock(name="mistapi")  # WHY: intercept both listSelfAuditLogs and get_all.
-    monkeypatch.setattr("src.export.self_export_utils.mistapi", mistapi_mod, raising=True)  # WHY: patch import ref.
+    monkeypatch.setattr(
+        "src.operations.exporting.export.self_export_utils.mistapi", mistapi_mod, raising=True
+    )  # WHY: patch import ref.
 
     return {
         "DataExporter": data_exporter,

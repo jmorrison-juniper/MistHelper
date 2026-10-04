@@ -14,7 +14,7 @@ All automated regressions are mock-first and must make no Mist write or mutating
 
 - [ ] T001 Verify the remote-read-only, mock-first, credential-redaction, and controlled-artifact rules in `specs/1021-testinteractive-reliability-defects/spec.md`, `specs/1021-testinteractive-reliability-defects/quickstart.md`, and `data/` before future implementation begins.
 - [ ] T002 Record the fixed non-stacked delivery order #1636 -> #1637 -> #1638 -> #1639 -> #1640 -> #1641 in `specs/1021-testinteractive-reliability-defects/plan.md` and prohibit a branch from another issue branch.
-- [ ] T003 Confirm the required future PR scope, squash-merge rule, and no-overlap hot-file control against `.specify/memory/constitution.md`, `MistHelper.py`, and `src/troubleshooting/interactive_test_runner.py`.
+- [ ] T003 Confirm the required future PR scope, squash-merge rule, and no-overlap hot-file control against `.specify/memory/constitution.md`, `MistHelper.py`, and `src/mist/intelligence/troubleshooting/interactive_test_runner.py`.
 
 ---
 
@@ -37,14 +37,14 @@ All automated regressions are mock-first and must make no Mist write or mutating
 
 **Serial example**: T006 -> T007 -> T008 -> T009 -> T010 -> T011 -> T012 -> T013. No task may overlap work for #1637.
 
-- [ ] T006 [US1] Create `fix/1636-interactive-telemetry` from the last squash-merged updated `main` worktree, verifying the branch base through `.git/HEAD` before touching `src/troubleshooting/interactive_test_runner.py`.
-- [ ] T007 [US1] Open a draft PR for Issue #1636 targeting `main` before source changes, declaring the intended files `src/troubleshooting/interactive_test_runner.py`, `src/analytics/telemetry_emitter.py`, `src/dataclasses/progress_event.py`, `tests/unit/troubleshooting/test_interactive_test_runner.py`, and `tests/unit/analytics/test_telemetry_emitter.py`.
-- [ ] T008 [US1] Narrow Issue #1636 implementation to scoped `ERROR`+ observation and outcome/summary propagation in `src/troubleshooting/interactive_test_runner.py`, `src/analytics/telemetry_emitter.py`, and `src/dataclasses/progress_event.py`; preserve existing JSONL fields and write any telemetry fixture only under `data/`.
+- [ ] T006 [US1] Create `fix/1636-interactive-telemetry` from the last squash-merged updated `main` worktree, verifying the branch base through `.git/HEAD` before touching `src/mist/intelligence/troubleshooting/interactive_test_runner.py`.
+- [ ] T007 [US1] Open a draft PR for Issue #1636 targeting `main` before source changes, declaring the intended files `src/mist/intelligence/troubleshooting/interactive_test_runner.py`, `src/mist/intelligence/analytics/telemetry_emitter.py`, `src/foundation/models/dataclasses/progress_event.py`, `tests/unit/troubleshooting/test_interactive_test_runner.py`, and `tests/unit/analytics/test_telemetry_emitter.py`.
+- [ ] T008 [US1] Narrow Issue #1636 implementation to scoped `ERROR`+ observation and outcome/summary propagation in `src/mist/intelligence/troubleshooting/interactive_test_runner.py`, `src/mist/intelligence/analytics/telemetry_emitter.py`, and `src/foundation/models/dataclasses/progress_event.py`; preserve existing JSONL fields and write any telemetry fixture only under `data/`.
 - [ ] T009 [US1] Write focused mock-first failing regressions for normal-return handlers that log `ERROR`, observer cleanup between handlers, summary error counts, and non-zero completion in `tests/unit/troubleshooting/test_interactive_test_runner.py` and `tests/unit/analytics/test_telemetry_emitter.py`.
-- [ ] T010 [US1] Implement handler-scoped `ERROR` observation, deterministic `logged_error` versus `raised_exception` outcome precedence, additive telemetry fields, and failure summary/exit semantics in `src/troubleshooting/interactive_test_runner.py`, `src/analytics/telemetry_emitter.py`, and `src/dataclasses/progress_event.py`.
+- [ ] T010 [US1] Implement handler-scoped `ERROR` observation, deterministic `logged_error` versus `raised_exception` outcome precedence, additive telemetry fields, and failure summary/exit semantics in `src/mist/intelligence/troubleshooting/interactive_test_runner.py`, `src/mist/intelligence/analytics/telemetry_emitter.py`, and `src/foundation/models/dataclasses/progress_event.py`.
 - [ ] T011 [US1] Run focused mock-first tests in `tests/unit/troubleshooting/test_interactive_test_runner.py` and `tests/unit/analytics/test_telemetry_emitter.py`, run `python -m py_compile` for `MistHelper.py`, and inspect `data/` so no artifact escaped the controlled location.
 - [ ] T012 [US1] Review the Issue #1636 diff for the contract in `contracts/interactive-test-telemetry.md`, wait for required CI, verify the PR description closes #1636 and lists changed files, then squash-merge the approved draft PR to `main`.
-- [ ] T013 [US1] Only after #1636 is squash-merged, update/rebase the next Issue #1637 worktree from merged `main` before work on `src/troubleshooting/interactive_test_runner.py` or `tests/unit/troubleshooting/test_interactive_test_runner.py`.
+- [ ] T013 [US1] Only after #1636 is squash-merged, update/rebase the next Issue #1637 worktree from merged `main` before work on `src/mist/intelligence/troubleshooting/interactive_test_runner.py` or `tests/unit/troubleshooting/test_interactive_test_runner.py`.
 
 ---
 
@@ -56,14 +56,14 @@ All automated regressions are mock-first and must make no Mist write or mutating
 
 **Serial example**: T014 -> T015 -> T016 -> T017 -> T018 -> T019 -> T020 -> T021. No task may overlap work for #1638.
 
-- [ ] T014 [US2] Create `fix/1637-interactive-selector-fallback` from the merged updated `main` worktree after T013, verifying `.git/HEAD` before touching `src/troubleshooting/interactive_test_runner.py`.
-- [ ] T015 [US2] Open a draft PR for Issue #1637 targeting `main` before source changes, declaring `src/troubleshooting/interactive_test_runner.py`, `src/analytics/telemetry_emitter.py`, and `tests/unit/troubleshooting/test_interactive_test_runner.py` as the only expected implementation/test surfaces.
-- [ ] T016 [US2] Narrow Issue #1637 to exact `MIST_INTERACTIVE_TEST_SITE` ID/full-name resolution, terminal unresolved reporting, and requested/actual target metadata in `src/troubleshooting/interactive_test_runner.py` and `src/analytics/telemetry_emitter.py`, without changing the unset-selector path.
+- [ ] T014 [US2] Create `fix/1637-interactive-selector-fallback` from the merged updated `main` worktree after T013, verifying `.git/HEAD` before touching `src/mist/intelligence/troubleshooting/interactive_test_runner.py`.
+- [ ] T015 [US2] Open a draft PR for Issue #1637 targeting `main` before source changes, declaring `src/mist/intelligence/troubleshooting/interactive_test_runner.py`, `src/mist/intelligence/analytics/telemetry_emitter.py`, and `tests/unit/troubleshooting/test_interactive_test_runner.py` as the only expected implementation/test surfaces.
+- [ ] T016 [US2] Narrow Issue #1637 to exact `MIST_INTERACTIVE_TEST_SITE` ID/full-name resolution, terminal unresolved reporting, and requested/actual target metadata in `src/mist/intelligence/troubleshooting/interactive_test_runner.py` and `src/mist/intelligence/analytics/telemetry_emitter.py`, without changing the unset-selector path.
 - [ ] T017 [US2] Write focused mock-first failing regressions for exact ID, exact full-name, partial, unknown, and no-selector cases in `tests/unit/troubleshooting/test_interactive_test_runner.py`, asserting no operation invocation after a supplied unresolved selector.
-- [ ] T018 [US2] Implement fail-closed supplied-selector resolution and prominent requested/actual site telemetry in `src/troubleshooting/interactive_test_runner.py` and `src/analytics/telemetry_emitter.py` according to `contracts/cli-invocation.md` and `contracts/interactive-test-telemetry.md`.
-- [ ] T019 [US2] Run the selector-focused mock tests in `tests/unit/troubleshooting/test_interactive_test_runner.py`, run `python -m py_compile` for `MistHelper.py` and `src/troubleshooting/interactive_test_runner.py`, and inspect `data/` for controlled local artifacts only.
+- [ ] T018 [US2] Implement fail-closed supplied-selector resolution and prominent requested/actual site telemetry in `src/mist/intelligence/troubleshooting/interactive_test_runner.py` and `src/mist/intelligence/analytics/telemetry_emitter.py` according to `contracts/cli-invocation.md` and `contracts/interactive-test-telemetry.md`.
+- [ ] T019 [US2] Run the selector-focused mock tests in `tests/unit/troubleshooting/test_interactive_test_runner.py`, run `python -m py_compile` for `MistHelper.py` and `src/mist/intelligence/troubleshooting/interactive_test_runner.py`, and inspect `data/` for controlled local artifacts only.
 - [ ] T020 [US2] Review the Issue #1637 diff against `contracts/cli-invocation.md`, wait for required CI, verify the PR description closes #1637 and lists changed files, then squash-merge the approved draft PR to `main`.
-- [ ] T021 [US2] Only after #1637 is squash-merged, update/rebase the next Issue #1638 worktree from merged `main` before work on `src/utils/input_utils.py`, `src/troubleshooting/interactive_test_runner.py`, or `tests/unit/troubleshooting/test_interactive_test_runner.py`.
+- [ ] T021 [US2] Only after #1637 is squash-merged, update/rebase the next Issue #1638 worktree from merged `main` before work on `src/foundation/support/utils/input_utils.py`, `src/mist/intelligence/troubleshooting/interactive_test_runner.py`, or `tests/unit/troubleshooting/test_interactive_test_runner.py`.
 
 ---
 
@@ -75,14 +75,14 @@ All automated regressions are mock-first and must make no Mist write or mutating
 
 **Serial example**: T022 -> T023 -> T024 -> T025 -> T026 -> T027 -> T028 -> T029. No task may overlap work for #1639.
 
-- [ ] T022 [US3] Create `fix/1638-interactive-site-context` from the merged updated `main` worktree after T021, verifying `.git/HEAD` before touching `src/utils/input_utils.py`.
-- [ ] T023 [US3] Open a draft PR for Issue #1638 targeting `main` before source changes, declaring `src/utils/input_utils.py`, `src/troubleshooting/interactive_test_runner.py`, `src/analytics/telemetry_emitter.py`, `src/dataclasses/progress_event.py`, `tests/unit/troubleshooting/test_interactive_test_runner.py`, and `tests/unit/analytics/test_telemetry_emitter.py`.
-- [ ] T024 [US3] Narrow Issue #1638 to the canonical safe-input termination seam, signature-derived site-context metadata, outcome precedence, and additive summary counts in `src/utils/input_utils.py`, `src/troubleshooting/interactive_test_runner.py`, `src/analytics/telemetry_emitter.py`, and `src/dataclasses/progress_event.py`.
+- [ ] T022 [US3] Create `fix/1638-interactive-site-context` from the merged updated `main` worktree after T021, verifying `.git/HEAD` before touching `src/foundation/support/utils/input_utils.py`.
+- [ ] T023 [US3] Open a draft PR for Issue #1638 targeting `main` before source changes, declaring `src/foundation/support/utils/input_utils.py`, `src/mist/intelligence/troubleshooting/interactive_test_runner.py`, `src/mist/intelligence/analytics/telemetry_emitter.py`, `src/foundation/models/dataclasses/progress_event.py`, `tests/unit/troubleshooting/test_interactive_test_runner.py`, and `tests/unit/analytics/test_telemetry_emitter.py`.
+- [ ] T024 [US3] Narrow Issue #1638 to the canonical safe-input termination seam, signature-derived site-context metadata, outcome precedence, and additive summary counts in `src/foundation/support/utils/input_utils.py`, `src/mist/intelligence/troubleshooting/interactive_test_runner.py`, `src/mist/intelligence/analytics/telemetry_emitter.py`, and `src/foundation/models/dataclasses/progress_event.py`.
 - [ ] T025 [US3] Write focused mock-first failing regressions for injected and unavailable `site_id`, EOF, interrupt, normal return, and higher-precedence logged/raised errors in `tests/unit/troubleshooting/test_interactive_test_runner.py` and `tests/unit/analytics/test_telemetry_emitter.py`.
-- [ ] T026 [US3] Implement structured safe-input termination observation and per-operation site-context/cancellation telemetry in `src/utils/input_utils.py`, `src/troubleshooting/interactive_test_runner.py`, `src/analytics/telemetry_emitter.py`, and `src/dataclasses/progress_event.py` without adding handler-wide signature migration.
-- [ ] T027 [US3] Run the context/cancellation-focused mock tests in `tests/unit/troubleshooting/test_interactive_test_runner.py` and `tests/unit/analytics/test_telemetry_emitter.py`, run `python -m py_compile` for `src/utils/input_utils.py` and `src/troubleshooting/interactive_test_runner.py`, and inspect `data/` for controlled local artifacts only.
+- [ ] T026 [US3] Implement structured safe-input termination observation and per-operation site-context/cancellation telemetry in `src/foundation/support/utils/input_utils.py`, `src/mist/intelligence/troubleshooting/interactive_test_runner.py`, `src/mist/intelligence/analytics/telemetry_emitter.py`, and `src/foundation/models/dataclasses/progress_event.py` without adding handler-wide signature migration.
+- [ ] T027 [US3] Run the context/cancellation-focused mock tests in `tests/unit/troubleshooting/test_interactive_test_runner.py` and `tests/unit/analytics/test_telemetry_emitter.py`, run `python -m py_compile` for `src/foundation/support/utils/input_utils.py` and `src/mist/intelligence/troubleshooting/interactive_test_runner.py`, and inspect `data/` for controlled local artifacts only.
 - [ ] T028 [US3] Review the Issue #1638 diff against `contracts/interactive-test-telemetry.md`, wait for required CI, verify the PR description closes #1638 and lists changed files, then squash-merge the approved draft PR to `main`.
-- [ ] T029 [US3] Only after #1638 is squash-merged, update/rebase the next Issue #1639 worktree from merged `main` before work on `src/export/wan_client_events_exporter.py` or `tests/unit/export/test_wan_client_events_exporter.py`.
+- [ ] T029 [US3] Only after #1638 is squash-merged, update/rebase the next Issue #1639 worktree from merged `main` before work on `src/operations/exporting/export/wan_client_events_exporter.py` or `tests/unit/export/test_wan_client_events_exporter.py`.
 
 ---
 
@@ -94,12 +94,12 @@ All automated regressions are mock-first and must make no Mist write or mutating
 
 **Serial example**: T030 -> T031 -> T032 -> T033 -> T034 -> T035 -> T036 -> T037. No task may overlap work for #1640.
 
-- [ ] T030 [US4] Create `fix/1639-wan-sdk-namespace` from the merged updated `main` worktree after T029, verifying `.git/HEAD` before touching `src/export/wan_client_events_exporter.py`.
-- [ ] T031 [US4] Open a draft PR for Issue #1639 targeting `main` before source changes, declaring `src/export/wan_client_events_exporter.py` and `tests/unit/export/test_wan_client_events_exporter.py` as the expected scope.
-- [ ] T032 [US4] Narrow Issue #1639 to the option-203 WAN endpoint lookup in `src/export/wan_client_events_exporter.py`, retaining the supported `mistapi==0.63.3` direct `sites.wan_clients.searchSiteWanClientEvents` namespace and adding no SDK adapter or dependency change.
+- [ ] T030 [US4] Create `fix/1639-wan-sdk-namespace` from the merged updated `main` worktree after T029, verifying `.git/HEAD` before touching `src/operations/exporting/export/wan_client_events_exporter.py`.
+- [ ] T031 [US4] Open a draft PR for Issue #1639 targeting `main` before source changes, declaring `src/operations/exporting/export/wan_client_events_exporter.py` and `tests/unit/export/test_wan_client_events_exporter.py` as the expected scope.
+- [ ] T032 [US4] Narrow Issue #1639 to the option-203 WAN endpoint lookup in `src/operations/exporting/export/wan_client_events_exporter.py`, retaining the supported `mistapi==0.63.3` direct `sites.wan_clients.searchSiteWanClientEvents` namespace and adding no SDK adapter or dependency change.
 - [ ] T033 [US4] Write a focused mock-first failing SDK-surface regression in `tests/unit/export/test_wan_client_events_exporter.py` using a stub with `countSiteWanClients`, `searchSiteWanClients`, and direct `searchSiteWanClientEvents` only.
-- [ ] T034 [US4] Replace only the obsolete nested WAN event endpoint lookup with the verified direct callable in `src/export/wan_client_events_exporter.py`, preserving read-only API behavior and existing controlled `data/` output handling.
-- [ ] T035 [US4] Run the focused mock-first exporter tests in `tests/unit/export/test_wan_client_events_exporter.py`, run `python -m py_compile` for `src/export/wan_client_events_exporter.py` and `MistHelper.py`, and inspect `data/` for controlled local artifacts only.
+- [ ] T034 [US4] Replace only the obsolete nested WAN event endpoint lookup with the verified direct callable in `src/operations/exporting/export/wan_client_events_exporter.py`, preserving read-only API behavior and existing controlled `data/` output handling.
+- [ ] T035 [US4] Run the focused mock-first exporter tests in `tests/unit/export/test_wan_client_events_exporter.py`, run `python -m py_compile` for `src/operations/exporting/export/wan_client_events_exporter.py` and `MistHelper.py`, and inspect `data/` for controlled local artifacts only.
 - [ ] T036 [US4] Review the Issue #1639 diff against `specs/1021-testinteractive-reliability-defects/research.md`, wait for required CI, verify the PR description closes #1639 and lists changed files, then squash-merge the approved draft PR to `main`.
 - [ ] T037 [US4] Only after #1639 is squash-merged, update/rebase the next Issue #1640 worktree from merged `main` before work on `MistHelper.py` or `tests/unit/refactors/test_main_entrypoint.py`.
 
@@ -114,13 +114,13 @@ All automated regressions are mock-first and must make no Mist write or mutating
 **Serial example**: T038 -> T039 -> T040 -> T041 -> T042 -> T043 -> T044 -> T045. No task may overlap work for #1641.
 
 - [ ] T038 [US5] Create `fix/1640-unsupported-test-flag` from the merged updated `main` worktree after T037, verifying `.git/HEAD` before touching `MistHelper.py`.
-- [ ] T039 [US5] Open a draft PR for Issue #1640 targeting `main` before source changes, declaring `MistHelper.py`, `src/refactors/main_entrypoint.py`, and `tests/unit/refactors/test_main_entrypoint.py` as the expected scope.
-- [ ] T040 [US5] Narrow Issue #1640 to explicit unsupported `--test-interactive` detection and an actionable `--testinteractive` suggestion in `MistHelper.py` and `src/refactors/main_entrypoint.py`, preserving the supported flag and leaving the hyphenated name unaliased.
+- [ ] T039 [US5] Open a draft PR for Issue #1640 targeting `main` before source changes, declaring `MistHelper.py`, `src/foundation/support/refactors/main_entrypoint.py`, and `tests/unit/refactors/test_main_entrypoint.py` as the expected scope.
+- [ ] T040 [US5] Narrow Issue #1640 to explicit unsupported `--test-interactive` detection and an actionable `--testinteractive` suggestion in `MistHelper.py` and `src/foundation/support/refactors/main_entrypoint.py`, preserving the supported flag and leaving the hyphenated name unaliased.
 - [ ] T041 [US5] Write focused mock-first parser/entrypoint regressions for unsupported `--test-interactive`, non-zero exit, suggestion text, and preserved `--testinteractive` dispatch in `tests/unit/refactors/test_main_entrypoint.py`.
-- [ ] T042 [US5] Implement the explicit unsupported-flag rejection path in `MistHelper.py` and `src/refactors/main_entrypoint.py` so it cannot silently enter the ordinary menu or expand the public flag interface.
-- [ ] T043 [US5] Run focused mock-first tests in `tests/unit/refactors/test_main_entrypoint.py` and `tests/unit/` filtered for `testinteractive or test_interactive`, run `python -m py_compile` for `MistHelper.py` and `src/refactors/main_entrypoint.py`, and inspect `data/` for controlled local artifacts only.
+- [ ] T042 [US5] Implement the explicit unsupported-flag rejection path in `MistHelper.py` and `src/foundation/support/refactors/main_entrypoint.py` so it cannot silently enter the ordinary menu or expand the public flag interface.
+- [ ] T043 [US5] Run focused mock-first tests in `tests/unit/refactors/test_main_entrypoint.py` and `tests/unit/` filtered for `testinteractive or test_interactive`, run `python -m py_compile` for `MistHelper.py` and `src/foundation/support/refactors/main_entrypoint.py`, and inspect `data/` for controlled local artifacts only.
 - [ ] T044 [US5] Review the Issue #1640 diff against `contracts/cli-invocation.md`, wait for required CI, verify the PR description closes #1640 and lists changed files, then squash-merge the approved draft PR to `main`.
-- [ ] T045 [US5] Only after #1640 is squash-merged, update/rebase the next Issue #1641 worktree from merged `main` before work on `MistHelper.py`, `src/refactors/main_entrypoint.py`, or `tests/unit/refactors/test_main_entrypoint.py`.
+- [ ] T045 [US5] Only after #1640 is squash-merged, update/rebase the next Issue #1641 worktree from merged `main` before work on `MistHelper.py`, `src/foundation/support/refactors/main_entrypoint.py`, or `tests/unit/refactors/test_main_entrypoint.py`.
 
 ---
 
@@ -133,11 +133,11 @@ All automated regressions are mock-first and must make no Mist write or mutating
 **Serial example**: T046 -> T047 -> T048 -> T049 -> T050 -> T051 -> T052 -> T053. This is the final implementation PR; T053 prepares only cumulative verification.
 
 - [ ] T046 [US6] Create `fix/1641-side-effect-free-help` from the merged updated `main` worktree after T045, verifying `.git/HEAD` before touching `MistHelper.py`.
-- [ ] T047 [US6] Open a draft PR for Issue #1641 targeting `main` before source changes, declaring `MistHelper.py`, `src/refactors/main_entrypoint.py`, and `tests/unit/refactors/test_main_entrypoint.py` as the expected scope.
-- [ ] T048 [US6] Narrow Issue #1641 to an early help-only parse/detection path in `MistHelper.py` and `src/refactors/main_entrypoint.py` that preserves the ordinary non-help initialization sequence.
+- [ ] T047 [US6] Open a draft PR for Issue #1641 targeting `main` before source changes, declaring `MistHelper.py`, `src/foundation/support/refactors/main_entrypoint.py`, and `tests/unit/refactors/test_main_entrypoint.py` as the expected scope.
+- [ ] T048 [US6] Narrow Issue #1641 to an early help-only parse/detection path in `MistHelper.py` and `src/foundation/support/refactors/main_entrypoint.py` that preserves the ordinary non-help initialization sequence.
 - [ ] T049 [US6] Write focused mock-first ordering regressions for `--help`, `-h`, and `--testinteractive --help` in `tests/unit/refactors/test_main_entrypoint.py`, asserting no deferred import, dependency/session initialization, or interactive dispatch call.
-- [ ] T050 [US6] Implement side-effect-free help handling in `MistHelper.py` and `src/refactors/main_entrypoint.py` so every help form renders parser usage and exits before deferred initialization.
-- [ ] T051 [US6] Run focused mock-first tests in `tests/unit/refactors/test_main_entrypoint.py`, run `python -m py_compile` for `MistHelper.py` and `src/refactors/main_entrypoint.py`, and inspect `data/` for controlled local artifacts only.
+- [ ] T050 [US6] Implement side-effect-free help handling in `MistHelper.py` and `src/foundation/support/refactors/main_entrypoint.py` so every help form renders parser usage and exits before deferred initialization.
+- [ ] T051 [US6] Run focused mock-first tests in `tests/unit/refactors/test_main_entrypoint.py`, run `python -m py_compile` for `MistHelper.py` and `src/foundation/support/refactors/main_entrypoint.py`, and inspect `data/` for controlled local artifacts only.
 - [ ] T052 [US6] Review the Issue #1641 diff against `contracts/cli-invocation.md`, wait for required CI, verify the PR description closes #1641 and lists changed files, then squash-merge the approved draft PR to `main`.
 - [ ] T053 [US6] Only after #1641 is squash-merged, update/rebase the cumulative-validation worktree from merged `main` before reading `tests/unit/troubleshooting/test_interactive_test_runner.py`, `tests/unit/analytics/test_telemetry_emitter.py`, `tests/unit/export/test_wan_client_events_exporter.py`, and `tests/unit/refactors/test_main_entrypoint.py`.
 
@@ -161,7 +161,7 @@ At the issue level: `#1636 / US1 -> #1637 / US2 -> #1638 / US3 -> #1639 / US4 ->
 
 ### Parallel opportunities
 
-There are **no parallel execution opportunities**. The specified non-stacked PR order, shared hot files (`MistHelper.py` and `src/troubleshooting/interactive_test_runner.py`), mandatory draft-before-change rule, and update-after-merge rule require all tasks to execute serially. Therefore no task is marked `[P]`, including tests within a story.
+There are **no parallel execution opportunities**. The specified non-stacked PR order, shared hot files (`MistHelper.py` and `src/mist/intelligence/troubleshooting/interactive_test_runner.py`), mandatory draft-before-change rule, and update-after-merge rule require all tasks to execute serially. Therefore no task is marked `[P]`, including tests within a story.
 
 ## Implementation strategy
 

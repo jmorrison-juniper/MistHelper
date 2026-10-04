@@ -32,7 +32,7 @@ from typing import Any
 import pytest
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
-from src.upgrade_portal.app.routes import upgrade
+from src.interfaces.portals.upgrade_portal.app.routes import upgrade
 
 # WHY: This file sits at tests/unit/upgrade_portal, so the root is three levels up.
 _REPO_ROOT = Path(__file__).resolve().parents[3]

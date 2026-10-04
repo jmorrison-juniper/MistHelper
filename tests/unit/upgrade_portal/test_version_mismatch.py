@@ -24,8 +24,8 @@ from __future__ import annotations
 
 import pytest
 
-from src.upgrade_portal.runtime.runs import RunStatusView, run_has_failures, target_needs_retry
-from src.upgrade_portal.upgrade import gate
+from src.interfaces.portals.upgrade_portal.runtime.runs import RunStatusView, run_has_failures, target_needs_retry
+from src.interfaces.portals.upgrade_portal.upgrade import gate
 
 # WHY: Two real firmware versions from the same train. They differ only after
 # the fourth character, so a loose comparison would call them equal.

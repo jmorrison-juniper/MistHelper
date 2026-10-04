@@ -6,7 +6,7 @@ import logging  # WHY: caplog assertions compare INFO and WARNING levels.
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from src.gateway.wan_probe_device_override_manager import (
+from src.mist.resources.gateway.wan_probe_device_override_manager import (
     WANProbeDeviceOverrideDependencies,
     WANProbeDeviceOverrideManager,
     configure_wan_probe_device_override_dependencies,
@@ -69,7 +69,7 @@ def test_confirm_operation_requires_apply_keyword() -> None:
     _configure_dependencies()
     manager = WANProbeDeviceOverrideManager()
 
-    from src.gateway import wan_probe_device_override_manager as module
+    from src.mist.resources.gateway import wan_probe_device_override_manager as module
 
     module.InputUtils.safe_input = MagicMock(return_value="nope")
     assert manager._confirm_operation(3) is False
@@ -84,7 +84,7 @@ def test_generate_report_calls_exporter_with_expected_output_filename(caplog) ->
     manager = WANProbeDeviceOverrideManager()
     manager.selected_template = {"id": "tmpl-1", "name": "Template-A"}
 
-    from src.gateway import wan_probe_device_override_manager as module
+    from src.mist.resources.gateway import wan_probe_device_override_manager as module
 
     exporter = MagicMock()
     module.DataExporter.write_with_format_selection = exporter

@@ -18,8 +18,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-import src.firmware.firmware_manager as fm_mod
-from src.firmware.firmware_manager import FirmwareManager, FirmwareManagerConfig
+import src.operations.execution.firmware.firmware_manager as fm_mod
+from src.operations.execution.firmware.firmware_manager import FirmwareManager, FirmwareManagerConfig
 
 
 def _make_manager(**overrides: Any) -> FirmwareManager:
@@ -201,7 +201,7 @@ class TestBulkUpgradeSwitchFirmwareBySite:
 
     def test_delegates_to_bulk_switch_upgrader(self, monkeypatch: pytest.MonkeyPatch) -> None:
         mgr = _make_manager()
-        import src.firmware.bulk_switch_upgrader as bsu
+        import src.operations.execution.firmware.bulk_switch_upgrader as bsu
 
         captured: dict[str, Any] = {}
 

@@ -20,15 +20,15 @@ from unittest.mock import Mock, call, patch
 
 import pytest  # Check the fail-closed exceptions.
 
-from src.upgrade_portal.api.run_controls import (  # Import the explicit factory value groups.
+from src.interfaces.portals.upgrade_portal.api.run_controls import (  # Import the explicit factory value groups.
     E2EActionOverrides,
     E2EExternalOverrides,
     E2EFactoryOverrides,
     E2ERecordOverrides,
     E2ESecurityOverrides,
 )
-from src.upgrade_portal.app.config import load_arango_settings, load_redis_settings
-from src.upgrade_portal.runtime import dependencies
+from src.interfaces.portals.upgrade_portal.app.config import load_arango_settings, load_redis_settings
+from src.interfaces.portals.upgrade_portal.runtime import dependencies
 from tests.support.upgrade_portal_e2e import (  # Import process stores and resource controls.
     ActionRecordStore,
     PortalRecordStore,

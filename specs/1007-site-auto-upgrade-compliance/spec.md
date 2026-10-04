@@ -2,7 +2,7 @@
 
 ## Problem
 
-`src/firmware/site_auto_upgrade.py` currently scores **63.0 / 100 (grade D)**
+`src/operations/execution/firmware/site_auto_upgrade.py` currently scores **63.0 / 100 (grade D)**
 against the project's coding guidelines. It carries **39 violations**
 (1 high, 18 medium, 20 low) across three rule families:
 
@@ -26,7 +26,7 @@ no-suppressions rule:
 
 | Metric | Value |
 | - | - |
-| File | `src/firmware/site_auto_upgrade.py` |
+| File | `src/operations/execution/firmware/site_auto_upgrade.py` |
 | LOC | 1487 |
 | Executable lines | 748 |
 | Functions | 58 |
@@ -79,7 +79,7 @@ Length hotspots (LOC descending):
 ## Success criteria
 
 1. Compliance analyzer reports **100.0 / 100 (A+)** with **zero violations**
-   for `src/firmware/site_auto_upgrade.py`.
+   for `src/operations/execution/firmware/site_auto_upgrade.py`.
 2. Every executable line carries a `# WHY:` (or equivalent trailing-hash)
    comment.
 3. Every workflow step logs `logging.info(...)` before mutation and
@@ -98,8 +98,8 @@ Length hotspots (LOC descending):
 
 - No behavioral changes: user-visible prompts, print output, and API calls
   remain identical.
-- No changes to `src/dataclasses/site_auto_upgrade_deps.py` or
-  `src/dataclasses/family_selection_context.py`.
+- No changes to `src/foundation/models/dataclasses/site_auto_upgrade_deps.py` or
+  `src/foundation/models/dataclasses/family_selection_context.py`.
 - No changes to `MistHelper.py`.
 
 ## Constraints (non-negotiable)

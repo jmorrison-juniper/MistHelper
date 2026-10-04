@@ -12,11 +12,11 @@
 Run these commands from the repository root.
 
 ```powershell
-C:\Users\jmorrison\mh-fleet\3565-nac-idp-credential-test\.venv\Scripts\python.exe -m py_compile src\troubleshooting\nac_idp_credential_test\__init__.py src\troubleshooting\nac_idp_credential_test\client.py src\troubleshooting\nac_idp_credential_test\model.py src\troubleshooting\nac_idp_credential_test\operation.py src\troubleshooting\nac_idp_credential_test\prompts.py
-C:\Users\jmorrison\mh-fleet\3565-nac-idp-credential-test\.venv\Scripts\python.exe -m ruff check src\troubleshooting\nac_idp_credential_test tests\unit\troubleshooting\nac_idp_credential_test
-C:\Users\jmorrison\mh-fleet\3565-nac-idp-credential-test\.venv\Scripts\python.exe -m black --check src\troubleshooting\nac_idp_credential_test tests\unit\troubleshooting\nac_idp_credential_test
-C:\Users\jmorrison\mh-fleet\3565-nac-idp-credential-test\.venv\Scripts\python.exe -m mypy src\troubleshooting\nac_idp_credential_test --config-file pyproject.toml
-C:\Users\jmorrison\mh-fleet\3565-nac-idp-credential-test\.venv\Scripts\python.exe -m pydocstyle src\troubleshooting\nac_idp_credential_test
+C:\Users\jmorrison\mh-fleet\3565-nac-idp-credential-test\.venv\Scripts\python.exe -m py_compile src\mist\intelligence\troubleshooting\nac_idp_credential_test\__init__.py src\mist\intelligence\troubleshooting\nac_idp_credential_test\client.py src\mist\intelligence\troubleshooting\nac_idp_credential_test\model.py src\mist\intelligence\troubleshooting\nac_idp_credential_test\operation.py src\mist\intelligence\troubleshooting\nac_idp_credential_test\prompts.py
+C:\Users\jmorrison\mh-fleet\3565-nac-idp-credential-test\.venv\Scripts\python.exe -m ruff check src\mist\intelligence\troubleshooting\nac_idp_credential_test tests\unit\troubleshooting\nac_idp_credential_test
+C:\Users\jmorrison\mh-fleet\3565-nac-idp-credential-test\.venv\Scripts\python.exe -m black --check src\mist\intelligence\troubleshooting\nac_idp_credential_test tests\unit\troubleshooting\nac_idp_credential_test
+C:\Users\jmorrison\mh-fleet\3565-nac-idp-credential-test\.venv\Scripts\python.exe -m mypy src\mist\intelligence\troubleshooting\nac_idp_credential_test --config-file pyproject.toml
+C:\Users\jmorrison\mh-fleet\3565-nac-idp-credential-test\.venv\Scripts\python.exe -m pydocstyle src\mist\intelligence\troubleshooting\nac_idp_credential_test
 C:\Users\jmorrison\mh-fleet\3565-nac-idp-credential-test\.venv\Scripts\python.exe -m pytest tests\unit\troubleshooting\nac_idp_credential_test -q --timeout=120
 ```
 

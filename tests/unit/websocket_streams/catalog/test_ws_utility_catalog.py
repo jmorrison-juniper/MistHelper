@@ -2,8 +2,10 @@
 
 from collections import Counter  # Count families and safety classes.
 
-from src.websocket_streams.catalog.model import Safety  # Import safety enum values.
-from src.websocket_streams.catalog.utilities.utility_catalog import UtilityCatalog  # Import the catalog leaf class.
+from src.mist.realtime.websocket_streams.catalog.model import Safety  # Import safety enum values.
+from src.mist.realtime.websocket_streams.catalog.utilities.utility_catalog import (
+    UtilityCatalog,
+)  # Import the catalog leaf class.
 
 
 def test_utility_catalog_counts_match_contract() -> None:

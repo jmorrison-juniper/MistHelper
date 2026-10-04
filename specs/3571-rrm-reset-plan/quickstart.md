@@ -17,11 +17,11 @@ Expected result: all RRM reset tests pass.
 ## Gate validation
 
 ```powershell
-C:\Users\jmorrison\mh-fleet\3571-rrm-reset-plan\.venv\Scripts\python.exe -m py_compile src/site/rrm_reset/__init__.py src/site/rrm_reset/client.py src/site/rrm_reset/model.py src/site/rrm_reset/operation.py src/site/rrm_reset/writer.py
-C:\Users\jmorrison\mh-fleet\3571-rrm-reset-plan\.venv\Scripts\python.exe -m ruff check src/site/rrm_reset tests/unit/site/rrm_reset
-C:\Users\jmorrison\mh-fleet\3571-rrm-reset-plan\.venv\Scripts\python.exe -m black --check src/site/rrm_reset tests/unit/site/rrm_reset
-C:\Users\jmorrison\mh-fleet\3571-rrm-reset-plan\.venv\Scripts\python.exe -m mypy src/site/rrm_reset --config-file pyproject.toml
-C:\Users\jmorrison\mh-fleet\3571-rrm-reset-plan\.venv\Scripts\python.exe -m pydocstyle src/site/rrm_reset
+C:\Users\jmorrison\mh-fleet\3571-rrm-reset-plan\.venv\Scripts\python.exe -m py_compile src/mist/resources/site/rrm_reset/__init__.py src/mist/resources/site/rrm_reset/client.py src/mist/resources/site/rrm_reset/model.py src/mist/resources/site/rrm_reset/operation.py src/mist/resources/site/rrm_reset/writer.py
+C:\Users\jmorrison\mh-fleet\3571-rrm-reset-plan\.venv\Scripts\python.exe -m ruff check src/mist/resources/site/rrm_reset tests/unit/site/rrm_reset
+C:\Users\jmorrison\mh-fleet\3571-rrm-reset-plan\.venv\Scripts\python.exe -m black --check src/mist/resources/site/rrm_reset tests/unit/site/rrm_reset
+C:\Users\jmorrison\mh-fleet\3571-rrm-reset-plan\.venv\Scripts\python.exe -m mypy src/mist/resources/site/rrm_reset --config-file pyproject.toml
+C:\Users\jmorrison\mh-fleet\3571-rrm-reset-plan\.venv\Scripts\python.exe -m pydocstyle src/mist/resources/site/rrm_reset
 ```
 
 Expected result: all gates pass.

@@ -12,7 +12,7 @@ class TestRetentionInit:
     """Verify RetentionManager initializes from config."""
 
     def test_default_thresholds(self) -> None:
-        from src.db.retention import RetentionManager
+        from src.foundation.persistence.db.retention import RetentionManager
 
         manager = RetentionManager(
             arango_writer=MagicMock(),
@@ -22,7 +22,7 @@ class TestRetentionInit:
         assert manager._check_interval_hours > 0
 
     def test_custom_thresholds_from_env(self) -> None:
-        from src.db.retention import RetentionManager
+        from src.foundation.persistence.db.retention import RetentionManager
 
         with patch.dict(
             "os.environ",
@@ -43,7 +43,7 @@ class TestArangoRetention:
     """Verify ArangoDB retention purges oldest data first."""
 
     def test_purge_skips_when_under_threshold(self) -> None:
-        from src.db.retention import RetentionManager
+        from src.foundation.persistence.db.retention import RetentionManager
 
         arango = MagicMock()
         manager = RetentionManager(
@@ -56,7 +56,7 @@ class TestArangoRetention:
         assert result == 0  # nothing purged
 
     def test_purge_removes_oldest_snapshots(self) -> None:
-        from src.db.retention import RetentionManager
+        from src.foundation.persistence.db.retention import RetentionManager
 
         arango = MagicMock()
         arango._database = MagicMock()
@@ -74,7 +74,7 @@ class TestArangoRetention:
         assert result >= 0
 
     def test_storage_usage_with_no_database_attr(self) -> None:
-        from src.db.retention import RetentionManager
+        from src.foundation.persistence.db.retention import RetentionManager
 
         arango = MagicMock(spec=[])  # no _database attribute
         manager = RetentionManager(
@@ -85,7 +85,7 @@ class TestArangoRetention:
         assert usage == 0.0
 
     def test_storage_usage_on_exception(self) -> None:
-        from src.db.retention import RetentionManager
+        from src.foundation.persistence.db.retention import RetentionManager
 
         arango = MagicMock()
         arango._database = MagicMock()
@@ -100,7 +100,7 @@ class TestArangoRetention:
         assert usage == 0.0
 
     def test_purge_with_no_database_returns_zero(self) -> None:
-        from src.db.retention import RetentionManager
+        from src.foundation.persistence.db.retention import RetentionManager
 
         arango = MagicMock(spec=[])
         manager = RetentionManager(
@@ -111,7 +111,7 @@ class TestArangoRetention:
         assert result == 0
 
     def test_purge_on_aql_error(self) -> None:
-        from src.db.retention import RetentionManager
+        from src.foundation.persistence.db.retention import RetentionManager
 
         arango = MagicMock()
         arango._database = MagicMock()
@@ -130,7 +130,7 @@ class TestRedisRetention:
     """Verify Redis retention rules are validated."""
 
     def test_verify_compaction_exists(self) -> None:
-        from src.db.retention import RetentionManager
+        from src.foundation.persistence.db.retention import RetentionManager
 
         redis_writer = MagicMock()
         redis_writer._client = MagicMock()
@@ -143,7 +143,7 @@ class TestRedisRetention:
         assert isinstance(result, int)
 
     def test_redis_retention_no_client(self) -> None:
-        from src.db.retention import RetentionManager
+        from src.foundation.persistence.db.retention import RetentionManager
 
         redis_writer = MagicMock(spec=[])
         manager = RetentionManager(
@@ -154,7 +154,7 @@ class TestRedisRetention:
         assert result == 0
 
     def test_redis_retention_on_error(self) -> None:
-        from src.db.retention import RetentionManager
+        from src.foundation.persistence.db.retention import RetentionManager
 
         redis_writer = MagicMock()
         redis_writer._client = MagicMock()
@@ -173,7 +173,7 @@ class TestRetentionPeriodic:
     """Verify start/stop of background sweep."""
 
     def test_start_and_stop(self) -> None:
-        from src.db.retention import RetentionManager
+        from src.foundation.persistence.db.retention import RetentionManager
 
         manager = RetentionManager(
             arango_writer=MagicMock(),
@@ -187,7 +187,7 @@ class TestRetentionPeriodic:
         assert manager._thread is None
 
     def test_start_idempotent(self) -> None:
-        from src.db.retention import RetentionManager
+        from src.foundation.persistence.db.retention import RetentionManager
 
         manager = RetentionManager(
             arango_writer=MagicMock(),
@@ -200,7 +200,7 @@ class TestRetentionPeriodic:
         manager.stop()
 
     def test_stop_without_start(self) -> None:
-        from src.db.retention import RetentionManager
+        from src.foundation.persistence.db.retention import RetentionManager
 
         manager = RetentionManager(
             arango_writer=MagicMock(),

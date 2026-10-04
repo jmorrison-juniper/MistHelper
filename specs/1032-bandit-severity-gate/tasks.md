@@ -25,7 +25,7 @@
 
 1. Locate each finding by the **anchor text** in the ledger, not by the baseline line number. Group D2 shifts every later line in two files.
 2. Every changed Python line carries an inline comment that states why the line exists. Principle VI requires this.
-3. Every meaningful action logs before the action and logs after the action. Principle VII requires this. `src/utils/logger_utils.py` is the single recorded deviation.
+3. Every meaningful action logs before the action and logs after the action. Principle VII requires this. `src/foundation/support/utils/logger_utils.py` is the single recorded deviation.
 4. Every added `# nosec` comment follows [contracts/suppression-comment.md](contracts/suppression-comment.md). The form is `# nosec RULE - reason.` with an ASCII hyphen.
 5. Every comment and every prose line follows the Simplified Technical English guide at `documentation/ASD-STE100_writing-guide.md`.
 6. Leave every existing `# noqa: S...` annotation in place. Research decision R4 proves that the annotation suppresses nothing. Removal is a separate cleanup.
@@ -68,8 +68,8 @@
 - [x] T009 [P] [US1] Resolve the `uv` executable in `starlink_dashboard.py` for ledger rows 7 and 11. Call `shutil.which("uv")` before each call, log the lookup before it runs, log the resolved path after it returns, and pass the resolved path to `subprocess.run`. Add one combined `# nosec B603 B607 - ...` comment on each of the two statements, near the `["uv", "--version"]` anchor and the PyQt6 install anchor.
 - [x] T010 [US1] Add the remaining Group A comments to `starlink_dashboard.py` for ledger rows 3, 8, 9, 10, 12, and 14. Add `# nosec B404` on `import subprocess`, `# nosec B603` on the four `sys.executable` calls and on the `["uv", "pip", "install"] + packages` call, and `# nosec B606` on the `os.execv(sys.executable, ...)` call. Each reason names the source of every argument. Depends on T009, because both tasks edit the same file.
 - [x] T011 [P] [US1] Clear ledger rows 4 and 13 in `tools/compliance_analyzer/engine.py`. Add `# nosec B404` on `import subprocess`. Resolve `git` with `shutil.which("git")`, log before and after the lookup, pass the resolved path, and add one combined `# nosec B603 B607 - ...` comment on the `["git", "check-ignore", "--stdin"]` statement.
-- [x] T012 [P] [US1] Clear ledger rows 1 and 5 in `src/site/address_audit/ui_geocoder.py`. Add `# nosec B404` on `import subprocess` in the style of `MistHelper.py` line 47, which names the seam and the runner. Add `# nosec B603` on the `proc = subprocess.Popen(` statement and state the source of each argument.
-- [x] T013 [P] [US1] Clear ledger rows 2 and 6 in `src/utils/zscaler_probe.py`. Add `# nosec B404` on `import subprocess`. Add `# nosec B603` on the `completed = subprocess.run(` statement. Keep the existing inert `# noqa: S603` annotation on that line, per research decision R4.
+- [x] T012 [P] [US1] Clear ledger rows 1 and 5 in `src/mist/resources/site/address_audit/ui_geocoder.py`. Add `# nosec B404` on `import subprocess` in the style of `MistHelper.py` line 47, which names the seam and the runner. Add `# nosec B603` on the `proc = subprocess.Popen(` statement and state the source of each argument.
+- [x] T013 [P] [US1] Clear ledger rows 2 and 6 in `src/foundation/support/utils/zscaler_probe.py`. Add `# nosec B404` on `import subprocess`. Add `# nosec B603` on the `completed = subprocess.run(` statement. Keep the existing inert `# noqa: S603` annotation on that line, per research decision R4.
 - [x] T014 [US1] Verify Group A. Re-run T005 and the T004 filter. Confirm that B404, B603, B606, and B607 each read 0 and that B101 reads 18, B105 reads 11, B107 reads 1, and B110 reads 7. Run `ruff check .` and `black --check --diff .`. Start `starlink_dashboard.py` and confirm that `tools/compliance_analyzer/engine.py` still reads the git ignore list. Append one evidence line for each SUPPRESS row to the ledger in `specs/1032-bandit-severity-gate/data-model.md`.
 
 **Checkpoint**: The in-scope total reads 37. Group B can start.
@@ -87,11 +87,11 @@
 **Warning**: T015 is a stop condition. If any value is a real credential, stop the group. Move the value to the environment and raise a rotation request. A suppression comment must never cover a real secret. Requirement FR-014 states this rule.
 
 - [x] T015 [US1] Prove that no Group B value is a credential. Read each value at ledger rows 15 to 26 and record its category in `specs/1032-bandit-severity-gate/data-model.md`. The expected categories are a Vault path prefix, an error-message fragment, a typed confirmation word, a prompt sentinel, an attribute name, a CSS alpha value, and a null-byte delimiter. Also search every caller of `EmailAdapter.__init__` in `mist-ops-platform/src/` and confirm that no caller passes a literal credential, per research decision R8.
-- [x] T016 [P] [US1] Clear ledger row 16 in `src/db/redis_writer.py`. Add `# nosec B105 - ...` on the `ALREADY_EXISTS_TOKEN` constant and state that the value is an error-message fragment used for matching.
-- [x] T017 [P] [US1] Clear ledger rows 17 and 18 in `src/gateway/wan_probe_device_override_manager.py`. Add `# nosec B105 - ...` on `APPLY_CONFIRM_TOKEN` and on `CANCEL_TOKEN`. State that one value is the typed confirmation word and that the other is the prompt cancel keyword.
-- [x] T018 [P] [US1] Clear ledger row 19 in `src/maps/_flask_viewer.py`. Add `# nosec B105 - ...` on `_TOKEN_ATTR` and state that the value is an attribute name, not a token value.
-- [x] T019 [P] [US1] Clear ledger rows 20, 21, and 22 in `src/maps/plotly_map_figure_builder.py`. Add `# nosec B105 - ...` on `_FILL_ALPHA_TOKEN`, on `_BORDER_ALPHA_TOKEN`, and on `_LABEL_BG_ALPHA_TOKEN`. State that each value is a CSS alpha string.
-- [x] T020 [P] [US1] Clear ledger rows 23 and 24 in `src/wan_vpn_builder.py`. Add `# nosec B105 - ...` on `CANCEL_TOKEN` and on `CONFIRM_TOKEN`. State that one value is the prompt sentinel and that the other is the typed confirmation word.
+- [x] T016 [P] [US1] Clear ledger row 16 in `src/foundation/persistence/db/redis_writer.py`. Add `# nosec B105 - ...` on the `ALREADY_EXISTS_TOKEN` constant and state that the value is an error-message fragment used for matching.
+- [x] T017 [P] [US1] Clear ledger rows 17 and 18 in `src/mist/resources/gateway/wan_probe_device_override_manager.py`. Add `# nosec B105 - ...` on `APPLY_CONFIRM_TOKEN` and on `CANCEL_TOKEN`. State that one value is the typed confirmation word and that the other is the prompt cancel keyword.
+- [x] T018 [P] [US1] Clear ledger row 19 in `src/interfaces/visualization/maps/_flask_viewer.py`. Add `# nosec B105 - ...` on `_TOKEN_ATTR` and state that the value is an attribute name, not a token value.
+- [x] T019 [P] [US1] Clear ledger rows 20, 21, and 22 in `src/interfaces/visualization/maps/plotly_map_figure_builder.py`. Add `# nosec B105 - ...` on `_FILL_ALPHA_TOKEN`, on `_BORDER_ALPHA_TOKEN`, and on `_LABEL_BG_ALPHA_TOKEN`. State that each value is a CSS alpha string.
+- [x] T020 [P] [US1] Clear ledger rows 23 and 24 in `src/operations/wan/wan_vpn_builder.py`. Add `# nosec B105 - ...` on `CANCEL_TOKEN` and on `CONFIRM_TOKEN`. State that one value is the prompt sentinel and that the other is the typed confirmation word.
 - [x] T021 [P] [US1] Clear ledger row 25 in `tools/ste_linter/parsing/wordcount.py`. Add `# nosec B105 - ...` on `_PROTECTED_TOKEN` and state that the value is a null-byte delimiter that survives a whitespace split.
 - [x] T022 [P] [US1] Clear ledger row 15 in `mist-ops-platform/src/shared/mist/session.py`. Add `# nosec B105 - ...` on `VAULT_SECRET_PREFIX` and state that the value is a Vault path prefix. Keep the line inside 99 characters, because that subtree holds its own `ruff` configuration.
 - [x] T023 [P] [US1] Clear ledger row 26 in `mist-ops-platform/src/shared/services/notification.py`. Add `# nosec B107 - ...` on the `password: str = ""` default in `EmailAdapter.__init__` and state that the empty string is a "not provided" sentinel. Keep the signature unchanged, per research decision R8. Keep the line inside 99 characters.
@@ -105,19 +105,19 @@
 
 **Goal**: Clear all 7 findings for rule B110. Five findings gain a narrowed exception type and a debug log. Two findings gain a suppression with a stated reason.
 
-**Independent Test**: A fresh scan reports 0 for B110. The unit suite keeps the pass count from T008. `src/utils/logger_utils.py` holds no new log call.
+**Independent Test**: A fresh scan reports 0 for B110. The unit suite keeps the pass count from T008. `src/foundation/support/utils/logger_utils.py` holds no new log call.
 
 **Rows covered**: 27 to 33.
 
 **Caution**: This group changes behavior. Narrow the exception type to the specific error that the block expects. A narrowed clause adds no branch, so the `radon` score stays flat.
 
-- [x] T025 [P] [US1] Clear ledger rows 27 and 28 in `mist-ops-platform/src/api/routes/health.py`. Replace the bare `except` on the Redis probe and on the worker probe with the specific exception type. Log the failure at debug level before the block returns. Keep each line inside 99 characters.
-- [x] T026 [P] [US1] Clear ledger row 29 in `src/auth/interactive/login_orchestrator.py`. Narrow the exception type around `configure_session_timeout(apisession)` and log the failure at debug level.
-- [x] T027 [P] [US1] Clear ledger row 30 in `src/export/site_insights/device_metric_operation.py`. Narrow the exception type at the `pass  # WHY: Degrade gracefully` block and log the failure at debug level.
-- [x] T028 [P] [US1] Clear ledger row 31 in `src/firmware/firmware_manager.py`. Narrow the exception type inside `_display_ssr_inventory_stats` and log the failure at debug level.
-- [x] T029 [P] [US1] Clear ledger row 32 in `src/utils/logger_utils.py`. Add `# nosec B110 - ...` on the `record.args = ()` cleanup block. State that a log call inside the logging filter can re-enter the filter and can recurse without end. Add no log call. This is the single recorded deviation from Principle VII.
-- [x] T030 [P] [US1] Clear ledger row 33 in `src/utils/zscaler_probe.py`. Add `# nosec B110 - ...` on the `conn.close()` cleanup block and state that the block is a best-effort cleanup. Keep the existing `# pragma: no cover` annotation.
-- [x] T031 [US1] Verify Group C. Re-run T005 and the T004 filter. Confirm that B110 reads 0 and that B101 reads 18. Run `ruff check .`, `black --check --diff .`, `mypy src/ --config-file pyproject.toml`, `radon cc src/ -a -nb`, and `.venv\Scripts\python.exe -m pytest tests/unit --no-cov -q`. Confirm that the pass count matches T008 and that `src/utils/logger_utils.py` holds no new log call. Append the evidence for rows 32 and 33 to the ledger in `specs/1032-bandit-severity-gate/data-model.md`.
+- [x] T025 [P] [US1] Clear ledger rows 27 and 28 in `mist-ops-platform/src/mist/access/api/routes/health.py`. Replace the bare `except` on the Redis probe and on the worker probe with the specific exception type. Log the failure at debug level before the block returns. Keep each line inside 99 characters.
+- [x] T026 [P] [US1] Clear ledger row 29 in `src/mist/access/auth/interactive/login_orchestrator.py`. Narrow the exception type around `configure_session_timeout(apisession)` and log the failure at debug level.
+- [x] T027 [P] [US1] Clear ledger row 30 in `src/operations/exporting/export/site_insights/device_metric_operation.py`. Narrow the exception type at the `pass  # WHY: Degrade gracefully` block and log the failure at debug level.
+- [x] T028 [P] [US1] Clear ledger row 31 in `src/operations/execution/firmware/firmware_manager.py`. Narrow the exception type inside `_display_ssr_inventory_stats` and log the failure at debug level.
+- [x] T029 [P] [US1] Clear ledger row 32 in `src/foundation/support/utils/logger_utils.py`. Add `# nosec B110 - ...` on the `record.args = ()` cleanup block. State that a log call inside the logging filter can re-enter the filter and can recurse without end. Add no log call. This is the single recorded deviation from Principle VII.
+- [x] T030 [P] [US1] Clear ledger row 33 in `src/foundation/support/utils/zscaler_probe.py`. Add `# nosec B110 - ...` on the `conn.close()` cleanup block and state that the block is a best-effort cleanup. Keep the existing `# pragma: no cover` annotation.
+- [x] T031 [US1] Verify Group C. Re-run T005 and the T004 filter. Confirm that B110 reads 0 and that B101 reads 18. Run `ruff check .`, `black --check --diff .`, `mypy src/ --config-file pyproject.toml`, `radon cc src/ -a -nb`, and `.venv\Scripts\python.exe -m pytest tests/unit --no-cov -q`. Confirm that the pass count matches T008 and that `src/foundation/support/utils/logger_utils.py` holds no new log call. Append the evidence for rows 32 and 33 to the ledger in `specs/1032-bandit-severity-gate/data-model.md`.
 
 **Checkpoint**: The in-scope total reads 18. Group D1 can start.
 
@@ -131,10 +131,10 @@
 
 **Rows covered**: 34 to 44.
 
-- [x] T032 [P] [US1] Clear ledger rows 34 to 38 in `src/export/data_exporter.py`. Add `# nosec B101 - ...` on `assert configure_db_logging is not None`, on `assert DatabaseConfig is not None`, on `assert DatabaseRouter is not None`, on `assert DataExporter._router is not None`, and on `assert api_function_name is not None`. Name `_polyglot_db_layer_available` for the first three and name the caller guard for the last two.
-- [x] T033 [P] [US1] Clear ledger rows 39 to 42 in `src/firmware/firmware_manager.py`. Add `# nosec B101 - ...` on `assert prepared is not None`, on `assert org_and_sites is not None`, on `assert config_and_version is not None`, and on `assert selected_sites is not None`. Each reason names the early return that proves the value.
-- [x] T034 [P] [US1] Clear ledger row 43 in `src/firmware/site_auto_upgrade.py`. Add `# nosec B101 - ...` on `assert isinstance(resolved, SiteAutoUpgradeConfig)` and name the `"config" in cfg` branch that already proves the shape.
-- [x] T035 [P] [US1] Clear ledger row 44 in `src/gateway/_wan2_variable_device.py`. Add `# nosec B101 - ...` on `assert self._pool_fn is not None`. Keep the existing inert `# noqa: S101` annotation, per research decision R4.
+- [x] T032 [P] [US1] Clear ledger rows 34 to 38 in `src/operations/exporting/export/data_exporter.py`. Add `# nosec B101 - ...` on `assert configure_db_logging is not None`, on `assert DatabaseConfig is not None`, on `assert DatabaseRouter is not None`, on `assert DataExporter._router is not None`, and on `assert api_function_name is not None`. Name `_polyglot_db_layer_available` for the first three and name the caller guard for the last two.
+- [x] T033 [P] [US1] Clear ledger rows 39 to 42 in `src/operations/execution/firmware/firmware_manager.py`. Add `# nosec B101 - ...` on `assert prepared is not None`, on `assert org_and_sites is not None`, on `assert config_and_version is not None`, and on `assert selected_sites is not None`. Each reason names the early return that proves the value.
+- [x] T034 [P] [US1] Clear ledger row 43 in `src/operations/execution/firmware/site_auto_upgrade.py`. Add `# nosec B101 - ...` on `assert isinstance(resolved, SiteAutoUpgradeConfig)` and name the `"config" in cfg` branch that already proves the shape.
+- [x] T035 [P] [US1] Clear ledger row 44 in `src/mist/resources/gateway/_wan2_variable_device.py`. Add `# nosec B101 - ...` on `assert self._pool_fn is not None`. Keep the existing inert `# noqa: S101` annotation, per research decision R4.
 - [x] T036 [US1] Verify Group D1. Re-run T005 and the T004 filter. Confirm that B101 reads 7 and that every other in-scope rule reads 0. Run `ruff check .`, `black --check --diff .`, and `mypy src/ --config-file pyproject.toml`. Append one evidence line for each of the 11 rows to the ledger in `specs/1032-bandit-severity-gate/data-model.md`.
 
 **Checkpoint**: The in-scope total reads 7. Group D2 can start.
@@ -151,9 +151,9 @@
 
 **Caution**: Each conversion adds one branch. Keep every converted function inside 25 lines and 5 blocks, per the Five-Item Rule. Confirm that `radon` reports no block above 10 in `src/`.
 
-- [x] T037 [P] [US1] Convert ledger rows 45 and 46 in `src/firmware/site_auto_upgrade.py`. Replace `assert isinstance(self.org_id, str)` and `assert isinstance(self.dry_run, bool)` inside `SiteAutoUpgradeConfig.__post_init__` with explicit checks that raise `TypeError`. Each message names the field and the expected type. Keep the function inside 25 lines.
-- [x] T038 [US1] Convert ledger rows 47 to 51 in `src/maps/plotly_map_templates.py`. Replace the five asserts inside `_rule_css_length`, `_rule_html_entry`, `_rule_html_style`, and `_rule_meta_shape` with explicit checks that raise. Raise `ValueError` for the four content checks. Raise `TypeError` for the `isinstance` check at row 50. Each message names the rule that failed.
-- [x] T039 [US1] Update the linked docstring in `src/maps/plotly_map_templates.py`. Change the `Raises:` section of `validate_template` from `AssertionError` to `ValueError`. The `pydocstyle` gate and the `interrogate` gate read this docstring. Depends on T038, because both tasks edit the same file.
+- [x] T037 [P] [US1] Convert ledger rows 45 and 46 in `src/operations/execution/firmware/site_auto_upgrade.py`. Replace `assert isinstance(self.org_id, str)` and `assert isinstance(self.dry_run, bool)` inside `SiteAutoUpgradeConfig.__post_init__` with explicit checks that raise `TypeError`. Each message names the field and the expected type. Keep the function inside 25 lines.
+- [x] T038 [US1] Convert ledger rows 47 to 51 in `src/interfaces/visualization/maps/plotly_map_templates.py`. Replace the five asserts inside `_rule_css_length`, `_rule_html_entry`, `_rule_html_style`, and `_rule_meta_shape` with explicit checks that raise. Raise `ValueError` for the four content checks. Raise `TypeError` for the `isinstance` check at row 50. Each message names the rule that failed.
+- [x] T039 [US1] Update the linked docstring in `src/interfaces/visualization/maps/plotly_map_templates.py`. Change the `Raises:` section of `validate_template` from `AssertionError` to `ValueError`. The `pydocstyle` gate and the `interrogate` gate read this docstring. Depends on T038, because both tasks edit the same file.
 - [x] T040 [US1] Re-run the affected test files with `.venv\Scripts\python.exe -m pytest tests/maps/test_plotly_map_templates.py tests/unit -k site_auto_upgrade --no-cov -q`. Confirm that no test expects `AssertionError` from either module, as research decision R5 verified.
 - [x] T041 [US1] Verify Group D2 and close User Story 1. Re-run T005 and the T004 filter. Confirm that B101 reads 0 and that the in-scope total reads 0. Run `ruff check .`, `black --check --diff .`, `mypy src/ --config-file pyproject.toml`, `pylint src/ --ignore=maps,ssh,ui`, `radon cc src/ -a -nb`, `vulture src/ --min-confidence 80`, and `.venv\Scripts\python.exe -m pytest tests/unit --no-cov -q`. Confirm that no block scores above 10.
 
@@ -238,17 +238,17 @@ Four files appear in more than one group. The phases run in order, so no conflic
 
 | File | Earlier task | Later task |
 | - | - | - |
-| `src/utils/zscaler_probe.py` | T013, Group A | T030, Group C |
-| `src/firmware/firmware_manager.py` | T028, Group C | T033, Group D1 |
-| `src/firmware/site_auto_upgrade.py` | T034, Group D1 | T037, Group D2 |
-| `src/maps/plotly_map_templates.py` | T038, Group D2 | T039, the docstring |
+| `src/foundation/support/utils/zscaler_probe.py` | T013, Group A | T030, Group C |
+| `src/operations/execution/firmware/firmware_manager.py` | T028, Group C | T033, Group D1 |
+| `src/operations/execution/firmware/site_auto_upgrade.py` | T034, Group D1 | T037, Group D2 |
+| `src/interfaces/visualization/maps/plotly_map_templates.py` | T038, Group D2 | T039, the docstring |
 
 ### Same-file sequencing inside a phase
 
 | Task | Depends on | Reason |
 | - | - | - |
 | T010 | T009 | Both edit `starlink_dashboard.py`. |
-| T039 | T038 | Both edit `src/maps/plotly_map_templates.py`. |
+| T039 | T038 | Both edit `src/interfaces/visualization/maps/plotly_map_templates.py`. |
 | T046 | T045 | Both edit `.github/workflows/ci.yml`. |
 
 ---

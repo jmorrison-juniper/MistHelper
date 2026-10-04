@@ -1,4 +1,4 @@
-"""Wave 6 P2 coverage for ``src.bootstrap.dependency_check.DependencyCheckOrchestrator``.
+"""Wave 6 P2 coverage for ``src.foundation.runtime.bootstrap.dependency_check.DependencyCheckOrchestrator``.
 
 The existing ``tests/unit/test_dependency_check.py`` covers only the
 ``DISABLE_AUTO_INSTALL`` short-circuit and the basic pip-install path. This
@@ -25,8 +25,8 @@ from unittest.mock import MagicMock  # WHY: Mandatory spec-based mocks per proje
 
 import pytest  # WHY: monkeypatch fixture avoids direct method assignment on the instance.
 
-from src.bootstrap.dependency_check import DependencyCheckOrchestrator, _InstallContext
-from src.bootstrap.package_installer import PackageInstaller  # WHY: spec anchor for installer.
+from src.foundation.runtime.bootstrap.dependency_check import DependencyCheckOrchestrator, _InstallContext
+from src.foundation.runtime.bootstrap.package_installer import PackageInstaller  # WHY: spec anchor for installer.
 
 
 def _build(

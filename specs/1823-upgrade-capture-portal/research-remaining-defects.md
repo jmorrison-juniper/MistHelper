@@ -36,7 +36,7 @@ nonce. The key keeps the form `cap-{hex}-01`. The document field `run_id` stays
 empty. The nonce is a `uuid4` hex value, and the portal never stores the nonce
 as a run identifier.
 
-**Root cause**: `src/upgrade_portal/app/routes/capture.py:618` reads
+**Root cause**: `src/interfaces/portals/upgrade_portal/app/routes/capture.py:618` reads
 `run_id = str(body.get(RUN_FIELD) or f"{RUN_PREFIX}{uuid.uuid4().hex}")`. A
 start with no run invents a run identifier. That invented value flows into the
 capture document `run_id` field. `capture/store.py::_link_capture_to_run`
@@ -44,10 +44,10 @@ capture document `run_id` field. `capture/store.py::_link_capture_to_run`
 document exists at that key, so the edge dangles.
 
 **Why the key cannot stay tied to the run**:
-`src/upgrade_portal/capture/assembly.py::capture_key` (line 414) derives the key
+`src/interfaces/portals/upgrade_portal/capture/assembly.py::capture_key` (line 414) derives the key
 from the run alone. `run_hex("")` returns an empty string, so
 `capture_key("", 1)` returns `cap--01`.
-`src/upgrade_portal/capture/collector.py::capture_identity` (line 949) records
+`src/interfaces/portals/upgrade_portal/capture/collector.py::capture_identity` (line 949) records
 this collision in its own docstring, and it raises `MISSING_RUN_MESSAGE` for an
 empty run for that reason. A standalone capture therefore needs its own key
 source that does not read a run.
@@ -81,7 +81,7 @@ already guards an empty run identifier. So no dangling edge forms.
 
 ## Design decision D2 - The one-time dangling-edge repair
 
-**Decision**: A repair function lives in `src/upgrade_portal/capture/store.py`.
+**Decision**: A repair function lives in `src/interfaces/portals/upgrade_portal/capture/store.py`.
 It scans the `capture_for_run` edge collection. It reads the run document that
 each edge names in its `_from` field. It removes every edge whose run document
 does not exist. It logs each removed edge. It leaves every capture document in
@@ -168,7 +168,7 @@ holds `None`.
 ## Design decision D5 - The unresolved-site lock state
 
 **Decision**: The lock banner gains a fifth state for a page that cannot name
-its site. `src/upgrade_portal/app/routes/select.py` adds the state constant.
+its site. `src/interfaces/portals/upgrade_portal/app/routes/select.py` adds the state constant.
 `lock_banner_context` (line 1790) returns the new state when the site
 identifier is empty. `partials/lock_banner.html` adds one sentence for the new
 state.
@@ -209,7 +209,7 @@ controls stay dropdowns, which FR-122 asks for.
 
 **Decision**: The comparison view needs no code change. It already builds one
 device difference table and one client difference table.
-`src/upgrade_portal/compare/render.py` builds a header with a before summary and
+`src/interfaces/portals/upgrade_portal/compare/render.py` builds a header with a before summary and
 an after summary, and it builds one difference table for each kind. The work is
 a documentation alignment of `spec.md`.
 

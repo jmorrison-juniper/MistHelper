@@ -21,7 +21,7 @@ No shared project structure or tooling changes are required.
 
 **Wave 2 — selector implementation:**
 
-- [x] **T002** [US1] Implement the typed compatibility selector, safe candidate ranking, warnings, and action logging without creating an upgrade submission path · src/upgrade_portal/upgrade/options.py
+- [x] **T002** [US1] Implement the typed compatibility selector, safe candidate ranking, warnings, and action logging without creating an upgrade submission path · src/interfaces/portals/upgrade_portal/upgrade/options.py
 
 ## Phase 3: User Story 1 — Receive safe defaults for each device type (Priority: P1)
 
@@ -42,14 +42,14 @@ No shared project structure or tooling changes are required.
 
 **Wave 2 — independent (different files):**
 
-- [x] **T005** [P] [US1] Replace the all-device version control with AP, switch, and gateway controls, per-type warnings, and stable contract test IDs while retaining individual and save controls · src/upgrade_portal/app/assets/templates/upgrade/options.html
-- [x] **T006** [P] [US1] Supply typed candidates, calculated defaults, saved choices, and warnings to the options render boundary without calling the upgrade launcher · src/upgrade_portal/app/routes/upgrade.py
+- [x] **T005** [P] [US1] Replace the all-device version control with AP, switch, and gateway controls, per-type warnings, and stable contract test IDs while retaining individual and save controls · src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/options.html
+- [x] **T006** [P] [US1] Supply typed candidates, calculated defaults, saved choices, and warnings to the options render boundary without calling the upgrade launcher · src/interfaces/portals/upgrade_portal/app/routes/upgrade.py
 
 **⟶ Wait for Wave 2 to finish, then:**
 
 **Wave 3 — integration:**
 
-- [x] **T007** [US1] Bind each type control to only same-type device rows that offer the exact selected version, preserving individual controls and save behavior · src/upgrade_portal/app/assets/static/js/portal.js
+- [x] **T007** [US1] Bind each type control to only same-type device rows that offer the exact selected version, preserving individual controls and save behavior · src/interfaces/portals/upgrade_portal/app/assets/static/js/portal.js
 
 **Checkpoint**: The options page is independently functional: it renders three safe, type-scoped controls with warnings where no common target exists.
 
@@ -72,13 +72,13 @@ No shared project structure or tooling changes are required.
 
 **Wave 2 — save validation:**
 
-- [x] **T010** [US3] Re-read current inventory and model availability on save; validate every submitted target before any record write; reject failures atomically and keep validation read-only · src/upgrade_portal/upgrade/options.py
+- [x] **T010** [US3] Re-read current inventory and model availability on save; validate every submitted target before any record write; reject failures atomically and keep validation read-only · src/interfaces/portals/upgrade_portal/upgrade/options.py
 
 **⟶ Wait for Wave 2 to finish, then:**
 
 **Wave 3 — route integration:**
 
-- [x] **T011** [US3] Keep the save route on the existing individual-target body and `bad_option` response contract while ensuring confirmation remains the only upgrade-start boundary · src/upgrade_portal/app/routes/upgrade.py
+- [x] **T011** [US3] Keep the save route on the existing individual-target body and `bad_option` response contract while ensuring confirmation remains the only upgrade-start boundary · src/interfaces/portals/upgrade_portal/app/routes/upgrade.py
 
 **Checkpoint**: A submitted plan is independently safe: current availability is checked before persistence and options reads/saves cannot start an upgrade.
 
@@ -100,7 +100,7 @@ No shared project structure or tooling changes are required.
 
 **Wave 2 — independent (different files):**
 
-- [x] **T013** [P] [US2] Read and validate the three type-specific environment overrides only against normalized common candidates, then retain the safe fallback and selection logs · src/upgrade_portal/upgrade/options.py
+- [x] **T013** [P] [US2] Read and validate the three type-specific environment overrides only against normalized common candidates, then retain the safe fallback and selection logs · src/interfaces/portals/upgrade_portal/upgrade/options.py
 - [x] **T014** [P] [US2] Document the three optional type-default variables, exact-compatibility rule, and safe fallback behavior · deploy/.env.example
 - [x] **T015** [P] [US2] Document per-type safe defaults, override behavior, no-common-target handling, and the unchanged confirmation gate · documentation/upgrade_capture_portal.md
 
@@ -111,7 +111,7 @@ No shared project structure or tooling changes are required.
 **Wave 1 — independent (different files):**
 
 - [x] **T016** [P] Run focused unit, route-contract, and browser suites covering all acceptance scenarios and no-upgrade guarantees · tests/unit/upgrade_portal/test_upgrade_options.py, tests/contract/upgrade_portal/test_upgrade_options.py, tests/e2e/upgrade_portal/test_upgrade.py
-- [x] **T017** [P] Run lint and format checks for changed Python, template, and browser assets · pyproject.toml, src/upgrade_portal/upgrade/options.py, src/upgrade_portal/app/routes/upgrade.py, src/upgrade_portal/app/assets/templates/upgrade/options.html, src/upgrade_portal/app/assets/static/js/portal.js
+- [x] **T017** [P] Run lint and format checks for changed Python, template, and browser assets · pyproject.toml, src/interfaces/portals/upgrade_portal/upgrade/options.py, src/interfaces/portals/upgrade_portal/app/routes/upgrade.py, src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/options.html, src/interfaces/portals/upgrade_portal/app/assets/static/js/portal.js
 - [x] **T018** [P] Verify the documented configuration variables and examples match the implementation and configuration contract · deploy/.env.example, documentation/upgrade_capture_portal.md, specs/991-upgrade-version-defaults/contracts/http-api.md
 
 **⟶ Wait for Wave 1 to finish, then:**

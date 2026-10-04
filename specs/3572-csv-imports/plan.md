@@ -8,7 +8,7 @@
 
 ## Summary
 
-Menu 292 adds a destructive CSV import operation for organization PSKs, organization user MACs, organization assets, site PSKs, and site assets. The feature owns the new package `src/inventory/csv_imports/`, unit tests under `tests/unit/inventory/csv_imports/`, one release note fragment, and a wiring manifest for the integration pull request.
+Menu 292 adds a destructive CSV import operation for organization PSKs, organization user MACs, organization assets, site PSKs, and site assets. The feature owns the new package `src/mist/resources/inventory/csv_imports/`, unit tests under `tests/unit/inventory/csv_imports/`, one release note fragment, and a wiring manifest for the integration pull request.
 
 ## Technical Context
 
@@ -31,7 +31,7 @@ Menu 292 adds a destructive CSV import operation for organization PSKs, organiza
 
 ## Constitution Review
 
-The assigned package adds `src/inventory/csv_imports/` under an existing noncompliant parent. `src/inventory/` already has more than five direct children in this worktree. The fleet contract assigns this package path, so this feature records the structural debt here and does not add any other direct child under `src/inventory/`. The incremental remediation is to move future inventory features under domain subpackages, then retire the older direct module files in a separate refactor.
+The assigned package adds `src/mist/resources/inventory/csv_imports/` under an existing noncompliant parent. `src/mist/resources/inventory/` already has more than five direct children in this worktree. The fleet contract assigns this package path, so this feature records the structural debt here and does not add any other direct child under `src/mist/resources/inventory/`. The incremental remediation is to move future inventory features under domain subpackages, then retire the older direct module files in a separate refactor.
 
 ## Safety Rules
 
@@ -46,12 +46,12 @@ The assigned package adds `src/inventory/csv_imports/` under an existing noncomp
 Run these commands before each implementation commit that changes code.
 
 ```powershell
-C:\Users\jmorrison\mh-fleet\3572-csv-imports\.venv\Scripts\python.exe -m py_compile src\inventory\csv_imports\__init__.py src\inventory\csv_imports\model.py src\inventory\csv_imports\client.py src\inventory\csv_imports\operation.py
-C:\Users\jmorrison\mh-fleet\3572-csv-imports\.venv\Scripts\python.exe -m ruff check src\inventory\csv_imports tests\unit\inventory\csv_imports
-C:\Users\jmorrison\mh-fleet\3572-csv-imports\.venv\Scripts\python.exe -m black --check src\inventory\csv_imports tests\unit\inventory\csv_imports
-C:\Users\jmorrison\mh-fleet\3572-csv-imports\.venv\Scripts\python.exe -m mypy src\inventory\csv_imports --config-file pyproject.toml
-C:\Users\jmorrison\mh-fleet\3572-csv-imports\.venv\Scripts\python.exe -m pydocstyle src\inventory\csv_imports
+C:\Users\jmorrison\mh-fleet\3572-csv-imports\.venv\Scripts\python.exe -m py_compile src\mist\resources\inventory\csv_imports\__init__.py src\mist\resources\inventory\csv_imports\model.py src\mist\resources\inventory\csv_imports\client.py src\mist\resources\inventory\csv_imports\operation.py
+C:\Users\jmorrison\mh-fleet\3572-csv-imports\.venv\Scripts\python.exe -m ruff check src\mist\resources\inventory\csv_imports tests\unit\inventory\csv_imports
+C:\Users\jmorrison\mh-fleet\3572-csv-imports\.venv\Scripts\python.exe -m black --check src\mist\resources\inventory\csv_imports tests\unit\inventory\csv_imports
+C:\Users\jmorrison\mh-fleet\3572-csv-imports\.venv\Scripts\python.exe -m mypy src\mist\resources\inventory\csv_imports --config-file pyproject.toml
+C:\Users\jmorrison\mh-fleet\3572-csv-imports\.venv\Scripts\python.exe -m pydocstyle src\mist\resources\inventory\csv_imports
 C:\Users\jmorrison\mh-fleet\3572-csv-imports\.venv\Scripts\python.exe -m pytest tests\unit\inventory\csv_imports -q --timeout=120
 ```
 
-Before the final commit, also run `vulture` and `interrogate` against `src\inventory\csv_imports`.
+Before the final commit, also run `vulture` and `interrogate` against `src\mist\resources\inventory\csv_imports`.

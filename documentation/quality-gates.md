@@ -148,7 +148,7 @@ accepted findings with the Ruff trial.
 If both tools ran, 81 existing lines would need both `# nosec` and `# noqa`
 comments. Dropping Bandit would lose measured findings and scopes. Bandit
 reported B404, B107, and B608 findings that the Ruff trial did not report on the
-same line. Bandit also scans `web_portal`, `mist-ops-platform`, and `src/maps`,
+same line. Bandit also scans `web_portal`, `mist-ops-platform`, and `src/interfaces/visualization/maps`,
 which the gate for Ruff at the root excludes.
 
 The decision is option 2 from issue #1780. Do not select `S` in Ruff. Do not

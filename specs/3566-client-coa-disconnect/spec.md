@@ -88,7 +88,7 @@ A helpdesk lead can review a CSV log that records each requested client session 
 - **FR-013**: Each CSV row MUST include at least the action, target, and result.
 - **FR-014**: The operation MUST report a clear success, dry run, confirmation failure, validation failure, or Mist failure result to the operator.
 - **FR-015**: The wiring manifest MUST specify destructive registration and automated test exclusion for the integration pull request.
-- **FR-016**: The implementation package MUST be `src/device/client_session_control/`.
+- **FR-016**: The implementation package MUST be `src/mist/resources/device/client_session_control/`.
 - **FR-017**: The handler MUST be class `ClientSessionControl` with static `run()`.
 - **FR-018**: Registration work MUST be deferred to `specs/3566-client-coa-disconnect/wiring.md` and MUST NOT edit repository wiring files during specification.
 - **FR-019**: The wiring manifest `specs/3566-client-coa-disconnect/wiring.md` MUST exist and include every section required by the implementation contract.

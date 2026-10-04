@@ -11,9 +11,15 @@ NEXT5_TARGET_FUNCTIONS = [
 ]
 
 NEXT5_TARGET_TO_MODULE = {
-    "_start_site_scan_capture_all_aps": "src.capture.multi_ap_scan_workflow.MultiApScanCaptureWorkflow",
-    "_wait_and_download_pcap": "src.capture.site_pcap_wait_download_workflow.SitePcapWaitDownloadWorkflow",
-    "_wait_and_download_pcap_org": "src.capture.org_pcap_wait_download_workflow.OrgPcapWaitDownloadWorkflow",
-    "wifi_clients": "src.export.wifi_clients_exporter.WifiClientsExporter",
-    "run_interactive_test": "src.troubleshooting.interactive_test_runner.InteractiveTestRunner",
+    "_start_site_scan_capture_all_aps": (
+        "src.operations.execution.capture.multi_ap_scan_workflow.MultiApScanCaptureWorkflow"
+    ),
+    "_wait_and_download_pcap": (
+        "src.operations.execution.capture.site_pcap_wait_download_workflow.SitePcapWaitDownloadWorkflow"
+    ),
+    "_wait_and_download_pcap_org": (
+        "src.operations.execution.capture.org_pcap_wait_download_workflow.OrgPcapWaitDownloadWorkflow"
+    ),
+    "wifi_clients": "src.operations.exporting.export.wifi_clients_exporter.WifiClientsExporter",
+    "run_interactive_test": "src.mist.intelligence.troubleshooting.interactive_test_runner.InteractiveTestRunner",
 }

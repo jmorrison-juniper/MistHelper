@@ -1,14 +1,14 @@
 # Contract: `ProbeResult` (extended)
 
 **Feature**: 1023-probe-tailored-synthetic-tests
-**Module**: `src/utils/zscaler_probe.py`
+**Module**: `src/foundation/support/utils/zscaler_probe.py`
 **Kind**: Internal Python API contract (dataclass + producing function)
 
 ## Scope
 
 Documents the extended `ProbeResult` dataclass, the new `_udp_check` helper,
 and the `_probe_fqdn` UDP-trigger predicate. All three are internal-only;
-callers outside `src/utils/` MUST NOT import them (existing convention).
+callers outside `src/foundation/support/utils/` MUST NOT import them (existing convention).
 
 ## `IKE_UDP_PORTS`
 
@@ -102,7 +102,7 @@ UDP probing fires for a host when EITHER of:
 ## Test Boundaries
 
 - Tests MUST mock `socket.socket` at
-  `src.utils.zscaler_probe.socket.socket`.
+  `src.foundation.support.utils.zscaler_probe.socket.socket`.
 - Tests MUST NOT instantiate a real `SOCK_DGRAM` socket.
 - Tests MUST cover: `"open"`, `"no_reply"`, and `"error:<ExcName>"` return
   branches of `_udp_check`; and the (a)/(b)/(neither) branches of the

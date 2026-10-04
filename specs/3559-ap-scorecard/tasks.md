@@ -22,8 +22,8 @@ Do not change the shared files below in this feature implementation. Record thei
 | Shared file or surface | Deferred work |
 | - | - |
 | `MistHelper.py` | Register menu `278` and import `ApScorecard`. |
-| `src/utils/operation_registry.py` | Register menu `278` as a `safe` operation. |
-| `src/refactors/endpoint_primary_key_strategies.py` | Add the two AP scorecard primary key strategies. |
+| `src/foundation/support/utils/operation_registry.py` | Register menu `278` as a `safe` operation. |
+| `src/foundation/support/refactors/endpoint_primary_key_strategies.py` | Add the two AP scorecard primary key strategies. |
 | `README.md` | Add the new menu operation to the user documentation. |
 | `documentation/menu_reference.md` and `documentation/wiki/**` | Regenerate the generated menu documentation. |
 | `.github/copilot-instructions.md` and `agents.md` | Update category counts or instructions only in the integration pull request. |
@@ -34,7 +34,7 @@ Do not change the shared files below in this feature implementation. Record thei
 
 **Purpose**: Prepare the package, test package, and support file placeholders.
 
-- [X] T001 Create the AP scorecard package directory with `src/reports/ap_scorecard/__init__.py`
+- [X] T001 Create the AP scorecard package directory with `src/mist/intelligence/reports/ap_scorecard/__init__.py`
 - [X] T002 Create the AP scorecard test package directory with `tests/unit/reports/ap_scorecard/__init__.py`
 - [X] T003 [P] Create shared pytest fixtures for AP statistics payloads in `tests/unit/reports/ap_scorecard/conftest.py`
 - [X] T004 [P] Verify the integration wiring manifest contains every fleet contract section in `specs/3559-ap-scorecard/wiring.md`
@@ -47,12 +47,12 @@ Do not change the shared files below in this feature implementation. Record thei
 
 **Critical**: No user story work can start until this phase is complete.
 
-- [X] T005 Create scorecard dataclasses and constants in `src/reports/ap_scorecard/model.py`
-- [X] T006 [P] Create the Mist AP statistics client class in `src/reports/ap_scorecard/client.py`
-- [X] T007 [P] Create the operation orchestrator class `ApScorecard` in `src/reports/ap_scorecard/operation.py`
-- [X] T008 Add logging and inline comments to all new executable lines in `src/reports/ap_scorecard/model.py`
-- [X] T009 Add logging and inline comments to all new executable lines in `src/reports/ap_scorecard/client.py`
-- [X] T010 Add logging and inline comments to all new executable lines in `src/reports/ap_scorecard/operation.py`
+- [X] T005 Create scorecard dataclasses and constants in `src/mist/intelligence/reports/ap_scorecard/model.py`
+- [X] T006 [P] Create the Mist AP statistics client class in `src/mist/intelligence/reports/ap_scorecard/client.py`
+- [X] T007 [P] Create the operation orchestrator class `ApScorecard` in `src/mist/intelligence/reports/ap_scorecard/operation.py`
+- [X] T008 Add logging and inline comments to all new executable lines in `src/mist/intelligence/reports/ap_scorecard/model.py`
+- [X] T009 Add logging and inline comments to all new executable lines in `src/mist/intelligence/reports/ap_scorecard/client.py`
+- [X] T010 Add logging and inline comments to all new executable lines in `src/mist/intelligence/reports/ap_scorecard/operation.py`
 
 **Checkpoint**: The feature has a package, a client seam, model objects, and an operation class.
 
@@ -75,10 +75,10 @@ Do not change the shared files below in this feature implementation. Record thei
 
 ### Implementation for User Story 1
 
-- [X] T017 [US1] Implement AP statistics fetch and response normalization in `src/reports/ap_scorecard/client.py`
-- [X] T018 [US1] Implement predominant version calculation per model in `src/reports/ap_scorecard/model.py`
-- [X] T019 [US1] Implement AP detail row creation for `ApScorecard.csv` in `src/reports/ap_scorecard/model.py`
-- [X] T020 [US1] Implement detail export through `DataExporter.write_with_format_selection()` in `src/reports/ap_scorecard/operation.py`
+- [X] T017 [US1] Implement AP statistics fetch and response normalization in `src/mist/intelligence/reports/ap_scorecard/client.py`
+- [X] T018 [US1] Implement predominant version calculation per model in `src/mist/intelligence/reports/ap_scorecard/model.py`
+- [X] T019 [US1] Implement AP detail row creation for `ApScorecard.csv` in `src/mist/intelligence/reports/ap_scorecard/model.py`
+- [X] T020 [US1] Implement detail export through `DataExporter.write_with_format_selection()` in `src/mist/intelligence/reports/ap_scorecard/operation.py`
 
 **Checkpoint**: User Story 1 can create AP detail rows and export `ApScorecard.csv`.
 
@@ -100,10 +100,10 @@ Do not change the shared files below in this feature implementation. Record thei
 
 ### Implementation for User Story 2
 
-- [X] T026 [US2] Implement tile color band calculation with AP thresholds in `src/reports/ap_scorecard/model.py`
-- [X] T027 [US2] Implement switch redundancy normalization and classification in `src/reports/ap_scorecard/model.py`
-- [X] T028 [US2] Implement site scorecard aggregation in `src/reports/ap_scorecard/model.py`
-- [X] T029 [US2] Implement site summary export through `DataExporter.write_with_format_selection()` in `src/reports/ap_scorecard/operation.py`
+- [X] T026 [US2] Implement tile color band calculation with AP thresholds in `src/mist/intelligence/reports/ap_scorecard/model.py`
+- [X] T027 [US2] Implement switch redundancy normalization and classification in `src/mist/intelligence/reports/ap_scorecard/model.py`
+- [X] T028 [US2] Implement site scorecard aggregation in `src/mist/intelligence/reports/ap_scorecard/model.py`
+- [X] T029 [US2] Implement site summary export through `DataExporter.write_with_format_selection()` in `src/mist/intelligence/reports/ap_scorecard/operation.py`
 
 **Checkpoint**: User Stories 1 and 2 can create both CSV exports without menu wiring.
 
@@ -124,9 +124,9 @@ Do not change the shared files below in this feature implementation. Record thei
 
 ### Implementation for User Story 3
 
-- [X] T034 [US3] Implement organization summary aggregation in `src/reports/ap_scorecard/model.py`
-- [X] T035 [US3] Implement console summary printing in `src/reports/ap_scorecard/operation.py`
-- [X] T036 [US3] Implement no-AP handling with a clear log message in `src/reports/ap_scorecard/operation.py`
+- [X] T034 [US3] Implement organization summary aggregation in `src/mist/intelligence/reports/ap_scorecard/model.py`
+- [X] T035 [US3] Implement console summary printing in `src/mist/intelligence/reports/ap_scorecard/operation.py`
+- [X] T036 [US3] Implement no-AP handling with a clear log message in `src/mist/intelligence/reports/ap_scorecard/operation.py`
 
 **Checkpoint**: User Stories 1, 2, and 3 can run through the operation class with no live Mist API call in tests.
 
@@ -156,16 +156,16 @@ Do not change the shared files below in this feature implementation. Record thei
 
 **Purpose**: Validate the feature-owned files and keep shared changes deferred.
 
-- [X] T041 [P] Run `C:\Users\jmorrison\mh-fleet\3559-ap-scorecard\.venv\Scripts\python.exe -m py_compile src\reports\ap_scorecard\__init__.py src\reports\ap_scorecard\client.py src\reports\ap_scorecard\model.py src\reports\ap_scorecard\operation.py`
-- [X] T042 [P] Run `C:\Users\jmorrison\mh-fleet\3559-ap-scorecard\.venv\Scripts\python.exe -m ruff check src\reports\ap_scorecard tests\unit\reports\ap_scorecard`
-- [X] T043 [P] Run `C:\Users\jmorrison\mh-fleet\3559-ap-scorecard\.venv\Scripts\python.exe -m black --check src\reports\ap_scorecard tests\unit\reports\ap_scorecard`
-- [X] T044 [P] Run `C:\Users\jmorrison\mh-fleet\3559-ap-scorecard\.venv\Scripts\python.exe -m mypy src\reports\ap_scorecard --config-file pyproject.toml`
-- [X] T045 [P] Run `C:\Users\jmorrison\mh-fleet\3559-ap-scorecard\.venv\Scripts\python.exe -m pydocstyle src\reports\ap_scorecard`
+- [X] T041 [P] Run `C:\Users\jmorrison\mh-fleet\3559-ap-scorecard\.venv\Scripts\python.exe -m py_compile src\mist\intelligence\reports\ap_scorecard\__init__.py src\mist\intelligence\reports\ap_scorecard\client.py src\mist\intelligence\reports\ap_scorecard\model.py src\mist\intelligence\reports\ap_scorecard\operation.py`
+- [X] T042 [P] Run `C:\Users\jmorrison\mh-fleet\3559-ap-scorecard\.venv\Scripts\python.exe -m ruff check src\mist\intelligence\reports\ap_scorecard tests\unit\reports\ap_scorecard`
+- [X] T043 [P] Run `C:\Users\jmorrison\mh-fleet\3559-ap-scorecard\.venv\Scripts\python.exe -m black --check src\mist\intelligence\reports\ap_scorecard tests\unit\reports\ap_scorecard`
+- [X] T044 [P] Run `C:\Users\jmorrison\mh-fleet\3559-ap-scorecard\.venv\Scripts\python.exe -m mypy src\mist\intelligence\reports\ap_scorecard --config-file pyproject.toml`
+- [X] T045 [P] Run `C:\Users\jmorrison\mh-fleet\3559-ap-scorecard\.venv\Scripts\python.exe -m pydocstyle src\mist\intelligence\reports\ap_scorecard`
 - [X] T046 [P] Run `C:\Users\jmorrison\mh-fleet\3559-ap-scorecard\.venv\Scripts\python.exe -m pytest tests\unit\reports\ap_scorecard -q --timeout=120`
-- [X] T047 [P] Run `C:\Users\jmorrison\mh-fleet\3559-ap-scorecard\.venv\Scripts\python.exe -m vulture src\reports\ap_scorecard --min-confidence 70`
-- [X] T048 [P] Run `C:\Users\jmorrison\mh-fleet\3559-ap-scorecard\.venv\Scripts\python.exe -m interrogate -v src\reports\ap_scorecard`
-- [X] T049 Verify that `MistHelper.py`, `src/utils/operation_registry.py`, `src/refactors/endpoint_primary_key_strategies.py`, `README.md`, generated docs, and copilot instructions changed only through `specs/3559-ap-scorecard/wiring.md`
-- [X] T050 [P] Run `C:\Users\jmorrison\mh-fleet\3559-ap-scorecard\.venv\Scripts\python.exe -m radon cc src\reports\ap_scorecard -j | C:\Users\jmorrison\mh-fleet\3559-ap-scorecard\.venv\Scripts\complexity-gate.exe --max 10`
+- [X] T047 [P] Run `C:\Users\jmorrison\mh-fleet\3559-ap-scorecard\.venv\Scripts\python.exe -m vulture src\mist\intelligence\reports\ap_scorecard --min-confidence 70`
+- [X] T048 [P] Run `C:\Users\jmorrison\mh-fleet\3559-ap-scorecard\.venv\Scripts\python.exe -m interrogate -v src\mist\intelligence\reports\ap_scorecard`
+- [X] T049 Verify that `MistHelper.py`, `src/foundation/support/utils/operation_registry.py`, `src/foundation/support/refactors/endpoint_primary_key_strategies.py`, `README.md`, generated docs, and copilot instructions changed only through `specs/3559-ap-scorecard/wiring.md`
+- [X] T050 [P] Run `C:\Users\jmorrison\mh-fleet\3559-ap-scorecard\.venv\Scripts\python.exe -m radon cc src\mist\intelligence\reports\ap_scorecard -j | C:\Users\jmorrison\mh-fleet\3559-ap-scorecard\.venv\Scripts\complexity-gate.exe --max 10`
 - [X] T051 [P] Run `C:\Users\jmorrison\mh-fleet\3559-ap-scorecard\.venv\Scripts\test-quality-analyzer.exe --gate --config .github\test-quality-config.toml --baseline .github\test-quality-baseline.json --changed-from origin/main`
 
 ---

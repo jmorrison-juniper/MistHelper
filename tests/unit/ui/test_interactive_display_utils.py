@@ -1,4 +1,4 @@
-"""Unit tests for src.ui.interactive_display_utils.
+"""Unit tests for src.interfaces.visualization.ui.interactive_display_utils.
 
 Wave 13 P2 coverage lift — InteractiveDisplayUtils is a thin static
 class that lazily imports MistHelper to resolve prompt / exporter /
@@ -12,7 +12,7 @@ import sys  # WHY: patch.dict on sys.modules to inject a fake MistHelper module 
 from types import SimpleNamespace  # WHY: build lightweight stub for the MistHelper attribute surface
 from unittest.mock import MagicMock, patch  # WHY: MagicMock for exporter/fetcher; patch for module swap
 
-from src.ui.interactive_display_utils import InteractiveDisplayUtils  # WHY: subject under test
+from src.interfaces.visualization.ui.interactive_display_utils import InteractiveDisplayUtils  # WHY: subject under test
 
 
 def _install_fake_misthelper(**attrs: object) -> MagicMock:

@@ -109,7 +109,7 @@ done
 # Warning: keep the "|| true" guard. A container that cannot resolve a name must
 # still start, because the portal then names the fault. A container that never
 # starts gives the operator no message at all.
-DNS_PREFLIGHT_REPORT="$(cd /app && /usr/local/bin/python3.13 -m src.bootstrap.dns_preflight 2>/dev/null)" || true
+DNS_PREFLIGHT_REPORT="$(cd /app && /usr/local/bin/python3.13 -m src.foundation.runtime.bootstrap.dns_preflight 2>/dev/null)" || true
 if [ -n "$DNS_PREFLIGHT_REPORT" ]; then
     log_container_event "$DNS_PREFLIGHT_REPORT"  # One line, so the container log stays readable.
 else

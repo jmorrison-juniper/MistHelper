@@ -6,8 +6,8 @@ from types import SimpleNamespace  # Build compact dependency doubles.
 from typing import Any  # Type the fake shared fetcher kwargs.
 from unittest.mock import MagicMock, patch  # Isolate the operation from network and disk.
 
-from src.reports.wan_edge_scorecard.client import WanEdgeGatewayStatsClient
-from src.reports.wan_edge_scorecard.scorecard import WanEdgeScorecard
+from src.mist.intelligence.reports.wan_edge_scorecard.client import WanEdgeGatewayStatsClient
+from src.mist.intelligence.reports.wan_edge_scorecard.scorecard import WanEdgeScorecard
 
 
 class _ResponseBackedFetcher:
@@ -170,7 +170,7 @@ def test_fetch_client_uses_list_org_devices_stats_gateway_type() -> None:
     fetcher_factory = MagicMock(return_value=fetcher)  # Capture the shared fetcher construction.
     fake_mistapi = MagicMock(name="mistapi")  # Provide a Mist SDK double.
     fake_host = SimpleNamespace(mistapi=fake_mistapi, APIDataFetcher=fetcher_factory)  # Provide resolver dependencies.
-    with patch("src.reports.wan_edge_scorecard.client.SourceDependencyResolver", fake_host):
+    with patch("src.mist.intelligence.reports.wan_edge_scorecard.client.SourceDependencyResolver", fake_host):
         rows = WanEdgeGatewayStatsClient.fetch_gateway_stats("org-1")  # Fetch rows through the client seam.
     assert rows == [{"id": "gw-1"}]  # Pagination result is returned to the caller.
     assert fetcher.org_id == "org-1"  # Confirm the fetch-only seam does not prompt for the org id.
@@ -199,7 +199,7 @@ def test_fetch_client_returns_empty_rows_for_http_4xx_response() -> None:
         mistapi=fake_mistapi,
         APIDataFetcher=lambda **kwargs: _ResponseBackedFetcher(**kwargs),
     )  # Provide the resolver dependencies used by the client.
-    with patch("src.reports.wan_edge_scorecard.client.SourceDependencyResolver", fake_host):
+    with patch("src.mist.intelligence.reports.wan_edge_scorecard.client.SourceDependencyResolver", fake_host):
         rows = WanEdgeGatewayStatsClient.fetch_gateway_stats("org-1")  # Fetch through the client seam.
     assert rows == []  # The client must not return stale rows after an HTTP 4xx failure.
     api_call.assert_called_once_with(
@@ -219,7 +219,7 @@ def test_fetch_client_returns_empty_rows_for_http_5xx_response() -> None:
         mistapi=fake_mistapi,
         APIDataFetcher=lambda **kwargs: _ResponseBackedFetcher(**kwargs),
     )  # Provide the resolver dependencies used by the client.
-    with patch("src.reports.wan_edge_scorecard.client.SourceDependencyResolver", fake_host):
+    with patch("src.mist.intelligence.reports.wan_edge_scorecard.client.SourceDependencyResolver", fake_host):
         rows = WanEdgeGatewayStatsClient.fetch_gateway_stats("org-1")  # Fetch through the client seam.
     assert rows == []  # The client must not return stale rows after an HTTP 5xx failure.
     api_call.assert_called_once_with(
@@ -232,13 +232,13 @@ def test_run_exports_three_reports_and_prints_summary(gateway_stats_sample: list
     exporter = MagicMock(name="DataExporter")  # Capture export calls without touching disk.
     config = SimpleNamespace(get_cached_or_prompted_org_id=MagicMock(return_value="org-1"))  # Provide org id.
     fake_host = SimpleNamespace(DataExporter=exporter, ConfigUtils=config)  # Provide operation dependencies.
-    with patch("src.reports.wan_edge_scorecard.scorecard.SourceDependencyResolver", fake_host):
+    with patch("src.mist.intelligence.reports.wan_edge_scorecard.scorecard.SourceDependencyResolver", fake_host):
         with patch(
-            "src.reports.wan_edge_scorecard.scorecard.WanEdgeGatewayStatsClient.fetch_gateway_stats",
+            "src.mist.intelligence.reports.wan_edge_scorecard.scorecard.WanEdgeGatewayStatsClient.fetch_gateway_stats",
             return_value=gateway_stats_sample,
         ):
             with patch(
-                "src.reports.wan_edge_scorecard.scorecard.SiteNameLookup.fetch",
+                "src.mist.intelligence.reports.wan_edge_scorecard.scorecard.SiteNameLookup.fetch",
                 return_value={"site-a": "Alpha", "site-b": "Beta"},
             ):
                 WanEdgeScorecard.run()  # Run the operation with isolated dependencies.

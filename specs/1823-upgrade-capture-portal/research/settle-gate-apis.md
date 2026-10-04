@@ -85,7 +85,7 @@ holds no `timestamp` parameter, so the table above drops the row. Bound the time
 range with `start` and `end`.
 
 **`type` accepts a comma-separated list.** Live code proves this at
-`src/firmware/firmware_manager.py:3825`, which passes
+`src/operations/execution/firmware/firmware_manager.py:3825`, which passes
 `type="SYSTEM_UPGRADE_COMPLETED,SYSTEM_UPGRADE_FAILED,SYSTEM_UPGRADE_STARTED"`.
 
 ### 3.2 Site scope
@@ -158,7 +158,7 @@ parameter. A call that passes `page` raises a `TypeError`. Page the event
 search with `search_after` only.
 
 MistHelper pages with `mistapi.get_all(response=..., mist_session=...)`. See
-`src/firmware/firmware_manager.py:3830`.
+`src/operations/execution/firmware/firmware_manager.py:3830`.
 
 ### 3.5 SDK signatures, verified against installed `mistapi` 0.63.3
 
@@ -234,7 +234,7 @@ Switch keys visible in the same rendering:
 
 ### 4.2 Confirmed from live MistHelper code
 
-`src/firmware/firmware_manager.py:3825` passes three keys to the live API:
+`src/operations/execution/firmware/firmware_manager.py:3825` passes three keys to the live API:
 
 - `SYSTEM_UPGRADE_STARTED`
 - `SYSTEM_UPGRADE_COMPLETED`
@@ -243,7 +243,7 @@ Switch keys visible in the same rendering:
 This `SYSTEM_UPGRADE_*` family is device-family neutral. It carries no `AP_`,
 `SW_`, or `GW_` prefix. The portal should treat it as the cross-family upgrade
 lifecycle signal. The code strips the prefix for display at
-`src/firmware/firmware_manager.py:3858`.
+`src/operations/execution/firmware/firmware_manager.py:3858`.
 
 `SW_RESTARTED` appears in a MistHelper contract example at
 `specs/561-mist-count-site-system-events/contracts/count_site_system_events.md:62`.
@@ -328,7 +328,7 @@ The `fields` parameter narrows nothing. Section 8 explains why that matters.
 **Gotcha.** The site call returns access point statistics only unless the caller
 passes `type="all"`
 (`documentation/api/sites/GET_sites_site_id_stats_devices.md:7599`). Live code
-already does this at `src/firmware/firmware_manager.py:505-507`.
+already does this at `src/operations/execution/firmware/firmware_manager.py:505-507`.
 
 Both list calls page with `limit` and `page`
 (`documentation/api/sites/GET_sites_site_id_stats_devices.md:7583`,
@@ -381,13 +381,13 @@ The blob is titled `fwupdate_stat`
 description names a string enum
 (`documentation/api/sites/GET_sites_site_id_stats_devices.md:662-666`). The
 declared type is wrong. Live MistHelper code reads `status` as a string and
-lowercases it. See `src/firmware/firmware_manager.py:3319-3354`. Follow the code,
+lowercases it. See `src/operations/execution/firmware/firmware_manager.py:3319-3354`. Follow the code,
 not the declared type.
 
 **Enum drift between code and schema.** The documented `fwupdate.status` enum
 does not include `upgrading` or `downloading`. Live code treats
 `("inprogress", "upgrading", "downloading")` as the active set at
-`src/firmware/firmware_manager.py:519` and `:3340-3354`. The two extra values
+`src/operations/execution/firmware/firmware_manager.py:519` and `:3340-3354`. The two extra values
 belong to the upgrade **job** enum in section 6, not to the statistics blob. The
 code mixes two enumerations. The portal should keep them apart.
 
@@ -418,7 +418,7 @@ mistapi.api.v1.orgs.devices.listOrgDeviceUpgrades(
 (`documentation/api/utilities/GET_sites_site_id_devices_upgrade_upgrade_id.md:237`).
 That path does not match the installed package. The runtime path is
 `mistapi.api.v1.sites.devices.getSiteDeviceUpgrade`, and live MistHelper code
-uses the runtime path at `src/firmware/firmware_manager.py:3743-3754`. Trust the
+uses the runtime path at `src/operations/execution/firmware/firmware_manager.py:3743-3754`. Trust the
 runtime path.
 
 ### 6.2 The `status` enumeration
@@ -532,8 +532,8 @@ are **epoch seconds**, never milliseconds.
 | `fwupdate` schema | `"timestamp": {"type": "number", "description": "Epoch (seconds)"}` | `documentation/api/sites/GET_sites_site_id_stats_devices.md:678-682` |
 | Vendor example | `"timestamp": 1461220784` — ten digits | `documentation/Site _ API _ Mist.html:15760` |
 | Constants example | `"timestamp": 1552408871` — ten digits | `documentation/api/constants/GET_const_device_events.md:63-74` |
-| Live code | `(time.time() - fw_timestamp) / 3600` treated as hours | `src/firmware/firmware_manager.py:3356-3374` |
-| Live code | `datetime.fromtimestamp(timestamp)` with no divisor | `src/firmware/firmware_manager.py:3403-3410` |
+| Live code | `(time.time() - fw_timestamp) / 3600` treated as hours | `src/operations/execution/firmware/firmware_manager.py:3356-3374` |
+| Live code | `datetime.fromtimestamp(timestamp)` with no divisor | `src/operations/execution/firmware/firmware_manager.py:3403-3410` |
 
 **Float capable.** The event `timestamp` and the `fwupdate.timestamp` both
 declare `"type": "number"`, not `"integer"`. Sub-second precision is possible.
@@ -580,26 +580,26 @@ The limit is **5000 calls per hour per API token**.
 
 | Constant | Value | Citation |
 |---|---|---|
-| `_DEFAULT_REQUEST_LIMIT` | `5000` | `src/utils/rate_limiting.py:56` |
+| `_DEFAULT_REQUEST_LIMIT` | `5000` | `src/foundation/support/utils/rate_limiting.py:56` |
 | `_api_usage_cache["limit"]` | `5000` | `MistHelper.py:2275` |
-| `_HOUR_SECONDS` | `3600` | `src/utils/rate_limiting.py:41` |
-| `_DELAY_HARD_MIN` | `0.01` | `src/utils/rate_limiting.py:39` |
-| `_DELAY_HARD_MAX` | `10.0` | `src/utils/rate_limiting.py:40` |
-| `_REFRESH_THRESHOLD_REQUESTS` | `100` | `src/utils/rate_limiting.py:51` |
-| `_REFRESH_ELAPSED_SECONDS` | `60` | `src/utils/rate_limiting.py:52` |
+| `_HOUR_SECONDS` | `3600` | `src/foundation/support/utils/rate_limiting.py:41` |
+| `_DELAY_HARD_MIN` | `0.01` | `src/foundation/support/utils/rate_limiting.py:39` |
+| `_DELAY_HARD_MAX` | `10.0` | `src/foundation/support/utils/rate_limiting.py:40` |
+| `_REFRESH_THRESHOLD_REQUESTS` | `100` | `src/foundation/support/utils/rate_limiting.py:51` |
+| `_REFRESH_ELAPSED_SECONDS` | `60` | `src/foundation/support/utils/rate_limiting.py:52` |
 
-The governing class is `RateLimitingUtils` at `src/utils/rate_limiting.py:113`.
+The governing class is `RateLimitingUtils` at `src/foundation/support/utils/rate_limiting.py:113`.
 It is a static-method facade that runs a PID controller. The controller compares
 actual usage against an ideal linear consumption curve and returns a per-call
 delay clamped between 0.01 and 10.0 seconds. See
-`src/utils/rate_limiting.py:326-333`.
+`src/foundation/support/utils/rate_limiting.py:326-333`.
 
 The usage cache lives at `MistHelper.py:2272-2279`. MistHelper imports the
 utilities at `MistHelper.py:3314`. A command line flag named `--fast` bypasses
 rate limiting (`MistHelper.py:4937-4939`).
 
 State files are `tuning_data.json` and `delay_metrics.json`, both resolved into
-the `data` directory (`src/utils/rate_limiting.py:27-29`).
+the `data` directory (`src/foundation/support/utils/rate_limiting.py:27-29`).
 
 ### 8.3 The arithmetic risk
 
@@ -630,7 +630,7 @@ The table above counts one call per poll. Pagination breaks that assumption.
   `mistapi.get_all()` will then follow `next` repeatedly, and one logical poll
   becomes many HTTP calls.
 - Live MistHelper code already raises the statistics page size to
-  `limit=1000` (`src/firmware/firmware_manager.py:505-512`).
+  `limit=1000` (`src/operations/execution/firmware/firmware_manager.py:505-512`).
 
 **Recommendation.** Raise `limit` on the event search and narrow the window with
 `start` and `end` so that each poll fits in one page. Narrow further with
@@ -688,12 +688,12 @@ is not per session.
 ```
 
 The operation registry agrees and classifies it as interactive
-(`src/utils/operation_registry.py:110-113`).
+(`src/foundation/support/utils/operation_registry.py:110-113`).
 
 The entry point is `FirmwareManager.check_firmware_upgrade_status` at
-`src/firmware/firmware_manager.py:260-277`. It resolves a scope choice, resolves
+`src/operations/execution/firmware/firmware_manager.py:260-277`. It resolves a scope choice, resolves
 an optional site filter, then dispatches
-(`src/firmware/firmware_manager.py:305-316`):
+(`src/operations/execution/firmware/firmware_manager.py:305-316`):
 
 - Scope `5` enters continuous monitoring.
 - Scope `6` lists organization-level upgrade jobs.
@@ -701,7 +701,7 @@ an optional site filter, then dispatches
 
 ### 9.2 The continuous monitoring loop
 
-The loop is at `src/firmware/firmware_manager.py:341-351`:
+The loop is at `src/operations/execution/firmware/firmware_manager.py:341-351`:
 
 ```python
 def _run_monitoring_loop(self, site_filter: str | None) -> None:
@@ -718,12 +718,12 @@ def _run_monitoring_loop(self, site_filter: str | None) -> None:
 ```
 
 **The sleep interval is 7 seconds**
-(`src/firmware/firmware_manager.py:351`). The banner discloses the same cadence
-at `src/firmware/firmware_manager.py:336`, and the audit log repeats it at
-`src/firmware/firmware_manager.py:339`.
+(`src/operations/execution/firmware/firmware_manager.py:351`). The banner discloses the same cadence
+at `src/operations/execution/firmware/firmware_manager.py:336`, and the audit log repeats it at
+`src/operations/execution/firmware/firmware_manager.py:339`.
 
 The loop exits on `KeyboardInterrupt`, caught at
-`src/firmware/firmware_manager.py:324-327`.
+`src/operations/execution/firmware/firmware_manager.py:324-327`.
 
 **Caution for the portal.** The existing cadence is 7 seconds. The settle gate
 specifies 20 seconds. These are different numbers for different jobs. The portal
@@ -732,13 +732,13 @@ calls per hour, which is 10.3 percent of quota — nearly three times the
 20-second cost.
 
 The banner also warns that "Each refresh scans ALL devices for active upgrades"
-(`src/firmware/firmware_manager.py:337`). That full scan at a 7-second cadence
+(`src/operations/execution/firmware/firmware_manager.py:337`). That full scan at a 7-second cadence
 is the existing cost model, and it does not scale to a per-device gate.
 
 ### 9.3 Data fetch inside the loop
 
 `_fetch_device_stats_for_monitoring` at
-`src/firmware/firmware_manager.py:504-514` selects the scope and pages the
+`src/operations/execution/firmware/firmware_manager.py:504-514` selects the scope and pages the
 result:
 
 ```python
@@ -759,45 +759,45 @@ large as the cloud can make it. See section 8.5. The portal should omit
 `fields` unless the gate needs a field that the default answer leaves out.
 
 `FirmwareUpgradeStatusChecker` repeats the same two calls in
-`_fetch_site_stats` (`src/firmware/firmware_manager.py:3227-3238`) and
-`_fetch_org_stats` (`src/firmware/firmware_manager.py:3240-3251`).
+`_fetch_site_stats` (`src/operations/execution/firmware/firmware_manager.py:3227-3238`) and
+`_fetch_org_stats` (`src/operations/execution/firmware/firmware_manager.py:3240-3251`).
 
 ### 9.4 `FirmwareUpgradeStatusChecker`
 
-The class starts at `src/firmware/firmware_manager.py:3112`.
+The class starts at `src/operations/execution/firmware/firmware_manager.py:3112`.
 
-**The staleness constant** is at `src/firmware/firmware_manager.py:3132`:
+**The staleness constant** is at `src/operations/execution/firmware/firmware_manager.py:3132`:
 
 ```python
 STALE_UPGRADE_HOURS = 1  # WHY: default staleness cutoff shared across helpers
 ```
 
-`_is_stale_upgrade` at `src/firmware/firmware_manager.py:3356-3374` applies it.
+`_is_stale_upgrade` at `src/operations/execution/firmware/firmware_manager.py:3356-3374` applies it.
 It requires the timestamp to be an `int` or `float` and greater than zero, then
 divides the elapsed seconds by 3600 and compares against the constant.
 
-`_categorize_status` at `src/firmware/firmware_manager.py:3340-3354` buckets the
+`_categorize_status` at `src/operations/execution/firmware/firmware_manager.py:3340-3354` buckets the
 `fwupdate.status` value:
 
 - active: `inprogress`, `upgrading`, `downloading`
 - failed: `failed`
 - complete: `upgraded`, `success`
 
-`_parse_fwupdate_data` at `src/firmware/firmware_manager.py:3319-3338` reads
+`_parse_fwupdate_data` at `src/operations/execution/firmware/firmware_manager.py:3319-3338` reads
 `status`, `progress`, `timestamp`, `status_id`, and `will_retry`. That matches
 the schema in section 5.4 exactly.
 
 **`_extract_device_info` does not read `uptime`.** At
-`src/firmware/firmware_manager.py:3282-3295` it reads `id`, `name`, `mac`,
+`src/operations/execution/firmware/firmware_manager.py:3282-3295` it reads `id`, `name`, `mac`,
 `model`, `type`, `version`, `site_id`, and `last_seen`. It reads neither
 `uptime` nor `serial`. The settle gate needs `uptime`. **The portal cannot reuse
 this extractor unchanged.**
 
-`_check_active_operations` at `src/firmware/firmware_manager.py:3610-3618` runs
+`_check_active_operations` at `src/operations/execution/firmware/firmware_manager.py:3610-3618` runs
 five probes: `_check_ssr_upgrades`, `_check_stored_upgrades`,
 `_check_audit_logs`, `_check_device_events`, and `_check_site_upgrades`.
 
-`_safe_get_site_upgrade_data` at `src/firmware/firmware_manager.py:3743-3754`
+`_safe_get_site_upgrade_data` at `src/operations/execution/firmware/firmware_manager.py:3743-3754`
 calls `getSiteDeviceUpgrade` and treats an empty response body as "upgrade no
 longer active". That is a useful pattern for the portal.
 
@@ -805,11 +805,11 @@ longer active". That is a useful pattern for the portal.
 
 | Artifact | Path used | Correct? | Citation |
 |---|---|---|---|
-| `ActiveUpgrades.json` | bare relative filename | **No** | `src/firmware/firmware_manager.py:3713` |
-| `ActiveUpgradeOperations_*.csv` | `os.path.join("data", ...)` | Yes | `src/firmware/firmware_manager.py:4001` |
-| `FirmwareUpgradeStatus_*.csv` | routed by `DataExporter` | Yes | `src/firmware/firmware_manager.py:3966-3969` |
-| `tuning_data.json` | `data` directory | Yes | `src/utils/rate_limiting.py:28` |
-| `delay_metrics.json` | `data` directory | Yes | `src/utils/rate_limiting.py:29` |
+| `ActiveUpgrades.json` | bare relative filename | **No** | `src/operations/execution/firmware/firmware_manager.py:3713` |
+| `ActiveUpgradeOperations_*.csv` | `os.path.join("data", ...)` | Yes | `src/operations/execution/firmware/firmware_manager.py:4001` |
+| `FirmwareUpgradeStatus_*.csv` | routed by `DataExporter` | Yes | `src/operations/execution/firmware/firmware_manager.py:3966-3969` |
+| `tuning_data.json` | `data` directory | Yes | `src/foundation/support/utils/rate_limiting.py:28` |
+| `delay_metrics.json` | `data` directory | Yes | `src/foundation/support/utils/rate_limiting.py:29` |
 
 ---
 
@@ -819,7 +819,7 @@ longer active". That is a useful pattern for the portal.
 
 **Severity: the defect the portal must not copy.**
 
-`_check_stored_upgrades` at `src/firmware/firmware_manager.py:3710-3717`:
+`_check_stored_upgrades` at `src/operations/execution/firmware/firmware_manager.py:3710-3717`:
 
 ```python
 def _check_stored_upgrades(self) -> None:
@@ -834,7 +834,7 @@ def _check_stored_upgrades(self) -> None:
 
 `upgrade_file` is a bare relative filename. It resolves against the process
 current working directory, not the `data` directory.
-`_load_org_upgrades_from_file` at `src/firmware/firmware_manager.py:3699-3708`
+`_load_org_upgrades_from_file` at `src/operations/execution/firmware/firmware_manager.py:3699-3708`
 opens the same bare path.
 
 Consequences:
@@ -847,14 +847,14 @@ Consequences:
   other.
 
 The same class writes its CSV output correctly with
-`os.path.join("data", ...)` at `src/firmware/firmware_manager.py:4001`. The
+`os.path.join("data", ...)` at `src/operations/execution/firmware/firmware_manager.py:4001`. The
 inconsistency is inside one class.
 
 **The portal must resolve its own tracker path into `data`.**
 
 ### 10.2 Stale menu number in a docstring
 
-`src/device/_utility_commands_show.py:384-385` claims menu 137:
+`src/mist/resources/device/_utility_commands_show.py:384-385` claims menu 137:
 
 ```python
 def run_top(self) -> None:
@@ -864,7 +864,7 @@ def run_top(self) -> None:
 
 `run_top` is actually menu **125** (`MistHelper.py:4237`). The companion
 `monitor_traffic` is menu **124** (`MistHelper.py:4234`). Menu 137 belongs to the
-firmware status check (`MistHelper.py:3835`, `src/utils/operation_registry.py:110`).
+firmware status check (`MistHelper.py:3835`, `src/foundation/support/utils/operation_registry.py:110`).
 
 Both the docstring and the log line are wrong. The log line is the worse of the
 two, because it writes a false menu number into the audit trail.
@@ -897,7 +897,7 @@ firmware manager was found.
 "Menu **15** uses `searchOrgDeviceEvents` at org level", while
 `documentation/api/orgs/GET_orgs_org_id_devices_events_search.md:269` says menus
 2 and 63 use it. The two documents disagree. Live code also calls it from the
-firmware status checker at `src/firmware/firmware_manager.py:3822`, which
+firmware status checker at `src/operations/execution/firmware/firmware_manager.py:3822`, which
 neither document lists.
 
 Treat the "MistHelper Notes" section of the vendored documents as unreliable.

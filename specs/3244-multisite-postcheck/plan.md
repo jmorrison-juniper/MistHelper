@@ -23,7 +23,7 @@ and a link to the comparison.
 
 ## Design
 
-### 1. `src/upgrade_portal/upgrade/org_postcheck.py` (new, pure)
+### 1. `src/interfaces/portals/upgrade_portal/upgrade/org_postcheck.py` (new, pure)
 
 - `POSTCHECK_FIELD = "post_captures"`, the five row states, and the sentences.
 - `PostCheckSite`: the site, the site name, the tier, and a flag for an
@@ -36,7 +36,7 @@ and a link to the comparison.
   These read the sites of a record, read and write the rows, and name the first
   failed capture.
 
-### 2. `src/upgrade_portal/upgrade/org_postcheck_view.py` (new, pure)
+### 2. `src/interfaces/portals/upgrade_portal/upgrade/org_postcheck_view.py` (new, pure)
 
 - `OrgPostCheckView.rows(record, active)` returns one row for each site with
   the state, the label, the sentence, the capture link, and the comparison
@@ -46,7 +46,7 @@ and a link to the comparison.
 - A row that holds `running` after the watch ended reads "Failed", because no
   thread takes that capture any more.
 
-### 3. `src/upgrade_portal/upgrade/org_cascade/close.py` (new)
+### 3. `src/interfaces/portals/upgrade_portal/upgrade/org_cascade/close.py` (new)
 
 - `OrgPostCheckStage` writes the watch note, then takes each site in order.
   The stage is re-entrant. A final row stays, and a `running` row is taken
@@ -58,18 +58,18 @@ and a link to the comparison.
   - `end(record, state, note)` puts each waiting phase back to pending and
     writes the state. It is the old `OrgCascade._end`.
 
-### 3a. `src/upgrade_portal/upgrade/org_cascade/walk.py`
+### 3a. `src/interfaces/portals/upgrade_portal/upgrade/org_cascade/walk.py`
 
 - `OrgCascadeDeps` gets the field `post_check`, with the default None.
 - `OrgCascade.run()` calls `finish()` and `stop()` in place of `_finish` and
   `_stop`. `OrgCascade.fail()` calls `OrgCascadeClose.end`.
 
-### 4. `src/upgrade_portal/capture/assembly.py`
+### 4. `src/interfaces/portals/upgrade_portal/capture/assembly.py`
 
 - `standalone_capture_key(ordinal=FIRST_ORDINAL)` gets the ordinal parameter.
   The default keeps every current caller unchanged.
 
-### 5. `src/upgrade_portal/app/routes/org_postcheck.py` (new)
+### 5. `src/interfaces/portals/upgrade_portal/app/routes/org_postcheck.py` (new)
 
 - `OrgPostCheckBridge.bind(operation, cloud_session)` runs inside the request.
   It keeps the bound method `current_app.app_context`, the runner of
@@ -81,7 +81,7 @@ and a link to the comparison.
 - Warning: the bridge holds the cloud session. No log line may hold the job or
   the bridge, because a log of either can leak the API token.
 
-### 6. `src/upgrade_portal/app/routes/org_upgrade.py`
+### 6. `src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py`
 
 - `_bind_post_check(operation, cloud_session)` calls
   `OrgPostCheckBridge.bind`. If the bind raises, the guard logs a warning and

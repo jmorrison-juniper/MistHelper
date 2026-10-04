@@ -4,7 +4,7 @@ Resolves OQ-001 and OQ-002. This tier is OFF by default, enabled only by
 `--ui-geocode`, invoked selectively (e.g. `AMBIGUOUS` rows), and MUST fail soft.
 
 > **Status**: connection foundation IMPLEMENTED and verified
-> (`src/site/address_audit/ui_geocoder.py`, `models.py`). Both connection modes
+> (`src/mist/resources/site/address_audit/ui_geocoder.py`, `models.py`). Both connection modes
 > below were proven end-to-end against the system browser on 2026-06-29. The
 > per-row resolver wiring (selective invocation from `AddressResolver`) lands
 > with the full feature implementation.

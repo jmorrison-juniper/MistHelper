@@ -21,7 +21,7 @@ Why:
 from __future__ import annotations
 
 import MistHelper  # WHY: menu_actions is the authoritative runtime mapping.
-from src.utils.operation_registry import OperationRegistry
+from src.foundation.support.utils.operation_registry import OperationRegistry
 
 CAPTURE_PORTAL_MENU = "239"  # The portal moved here when 238 reached main as the MSP export.
 MSP_LICENSE_MENU = "238"  # `listMspLicenses`, merged to main first, so it keeps the number.

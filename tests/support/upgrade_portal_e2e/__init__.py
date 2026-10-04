@@ -16,14 +16,16 @@ from collections.abc import Mapping  # Accept one named table of E2E stand-in ca
 from functools import partial  # Bind the process-owned lock client to the shipped lock reader.
 from typing import Any  # Stand-in callables use different concrete signatures.
 
-from src.upgrade_portal.api.run_controls import (  # Build the explicit factory value groups.
+from src.interfaces.portals.upgrade_portal.api.run_controls import (  # Build the explicit factory value groups.
     E2EActionOverrides,
     E2EExternalOverrides,
     E2EFactoryOverrides,
     E2ERecordOverrides,
     E2ESecurityOverrides,
 )
-from src.upgrade_portal.runtime.lock import read_site_locks  # Parse process-owned locks with shipped rules.
+from src.interfaces.portals.upgrade_portal.runtime.lock import (
+    read_site_locks,
+)  # Parse process-owned locks with shipped rules.
 
 from .environment import build_child_environment as build_child_environment  # Export the credential and path scrub.
 from .owner import RunOwnerHeaderCheck as RunOwnerHeaderCheck  # Issue #3501: export the run owner check.

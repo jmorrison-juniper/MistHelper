@@ -15,16 +15,16 @@ secret value.
 ### 1.1 Class and location
 
 `DatabaseRouter` is the single dispatch point for every polyglot write
-(`src/db/router.py:99-100`). The constructor stores the config, stores the
+(`src/foundation/persistence/db/router.py:99-100`). The constructor stores the config, stores the
 strategy map, and sets three availability flags to `False`
-(`src/db/router.py:102-115`). The constructor returns early when
+(`src/foundation/persistence/db/router.py:102-115`). The constructor returns early when
 `config.standalone_mode` is true, and it connects no backend
-(`src/db/router.py:116-118`). Otherwise it calls three connect helpers
-(`src/db/router.py:119-121`).
+(`src/foundation/persistence/db/router.py:116-118`). Otherwise it calls three connect helpers
+(`src/foundation/persistence/db/router.py:119-121`).
 
 Each connect helper wraps its writer constructor in `try`/`except`. A failure
 sets the flag to `False` and logs one warning. A failure never raises
-(`src/db/router.py:123-148`).
+(`src/foundation/persistence/db/router.py:123-148`).
 
 ### 1.2 The write method signature
 
@@ -32,11 +32,11 @@ sets the flag to `False` and logs one warning. A failure never raises
 def write(self, data: list[dict], api_function_name: str) -> WriteResult:
 ```
 
-Source: `src/db/router.py:150`.
+Source: `src/foundation/persistence/db/router.py:150`.
 
 ### 1.3 The result type
 
-`WriteResult` is a dataclass with five fields (`src/db/__init__.py:111-119`).
+`WriteResult` is a dataclass with five fields (`src/foundation/persistence/db/__init__.py:111-119`).
 
 | Field | Type | Meaning |
 | --- | --- | --- |
@@ -47,9 +47,9 @@ Source: `src/db/router.py:150`.
 | `error_message` | `str` | Empty on the happy path |
 
 `DualWriteResult` holds one `WriteResult` per leg
-(`src/db/__init__.py:122-127`). Its `combined` property merges both legs
-(`src/db/__init__.py:129-146`). `success` is true only when both legs succeed
-(`src/db/__init__.py:134`).
+(`src/foundation/persistence/db/__init__.py:122-127`). Its `combined` property merges both legs
+(`src/foundation/persistence/db/__init__.py:129-146`). `success` is true only when both legs succeed
+(`src/foundation/persistence/db/__init__.py:134`).
 
 ### 1.4 The routing type sets
 
@@ -60,36 +60,36 @@ TIMESERIES_TYPES  = {"timeseries_pk"}
 DEFAULT_STRATEGY_TYPE = "auto_increment_with_unique"
 ```
 
-Source: `src/db/router.py:22-25`.
+Source: `src/foundation/persistence/db/router.py:22-25`.
 
-Backend markers live at `src/db/router.py:27-30`. The module default strategy
-lives at `src/db/router.py:50-53`.
+Backend markers live at `src/foundation/persistence/db/router.py:27-30`. The module default strategy
+lives at `src/foundation/persistence/db/router.py:50-53`.
 
 ### 1.5 How a write is routed, step by step
 
-1. The caller invokes `write(data, api_function_name)` (`src/db/router.py:150`).
+1. The caller invokes `write(data, api_function_name)` (`src/foundation/persistence/db/router.py:150`).
 2. The router checks `config.standalone_mode`. If true, the router returns
    `WriteResult(success=True, backend="csv_only", records_written=0,
-   records_failed=0)` and touches no backend (`src/db/router.py:152-158`).
+   records_failed=0)` and touches no backend (`src/foundation/persistence/db/router.py:152-158`).
    **This is a silent-success path. See section 2.**
 3. The router resolves the strategy for the API function name
-   (`src/db/router.py:159`). `_resolve_strategy` prefers a per-endpoint entry,
+   (`src/foundation/persistence/db/router.py:159`). `_resolve_strategy` prefers a per-endpoint entry,
    then the caller `"default"` entry, then the module default
-   (`src/db/router.py:281-285`).
+   (`src/foundation/persistence/db/router.py:281-285`).
 4. The router reads `strategy["type"]` and defaults to
-   `auto_increment_with_unique` (`src/db/router.py:160`).
-5. `timeseries_pk` routes to `_write_redis` (`src/db/router.py:161-162`).
-6. `composite_pk` routes to `_write_dual` (`src/db/router.py:163-164`).
-7. Every other type routes to `_write_arango` (`src/db/router.py:165`).
+   `auto_increment_with_unique` (`src/foundation/persistence/db/router.py:160`).
+5. `timeseries_pk` routes to `_write_redis` (`src/foundation/persistence/db/router.py:161-162`).
+6. `composite_pk` routes to `_write_dual` (`src/foundation/persistence/db/router.py:163-164`).
+7. Every other type routes to `_write_arango` (`src/foundation/persistence/db/router.py:165`).
 
 `_write_arango` degrades to `_csv_fallback` when ArangoDB is unavailable
-(`src/db/router.py:174-175`). On success it triggers a config snapshot
-(`src/db/router.py:178-179`). An exception becomes an honest failure envelope
-through `_error_write_result` (`src/db/router.py:181-183`,
-`src/db/router.py:88-96`).
+(`src/foundation/persistence/db/router.py:174-175`). On success it triggers a config snapshot
+(`src/foundation/persistence/db/router.py:178-179`). An exception becomes an honest failure envelope
+through `_error_write_result` (`src/foundation/persistence/db/router.py:181-183`,
+`src/foundation/persistence/db/router.py:88-96`).
 
 `_write_dual` writes Redis JSON first, then ArangoDB, then merges both results
-(`src/db/router.py:266-279`).
+(`src/foundation/persistence/db/router.py:266-279`).
 
 ### 1.6 The health check
 
@@ -103,7 +103,7 @@ def health_check(self) -> dict[str, bool]:
     }
 ```
 
-Source: `src/db/router.py:287-294`.
+Source: `src/foundation/persistence/db/router.py:287-294`.
 
 The health check reads cached boolean flags. It issues no live probe. A backend
 that died after startup still reports `True`.
@@ -133,7 +133,7 @@ that died after startup still reports `True`.
 146        return False  # Containerized: not standalone.
 ```
 
-Source: `src/export/data_exporter.py:131-146`.
+Source: `src/operations/exporting/export/data_exporter.py:131-146`.
 
 ### 2.2 Confirmed: the decision depends on a container check
 
@@ -141,19 +141,19 @@ Line 141 is the whole test. The method returns `True` when
 `EnvironmentUtils.is_running_in_container()` returns `False`.
 
 `is_running_in_container` runs an override check, then five heuristics in order
-(`src/utils/environment_utils.py:142-154`, detector list at
-`src/utils/environment_utils.py:127-140`). The heuristics look for
+(`src/foundation/support/utils/environment_utils.py:142-154`, detector list at
+`src/foundation/support/utils/environment_utils.py:127-140`). The heuristics look for
 `/.dockerenv`, container environment variables, cgroup markers, the
 `misthelper` runtime user, and the `/app` plus `sshd` layout. None of the five
 probes contacts ArangoDB or Redis.
 
 A developer who runs the portal on a laptop with a reachable ArangoDB on
 `localhost:8529` therefore gets standalone mode. The polyglot layer is skipped
-before any connection attempt (`src/export/data_exporter.py:148-156`, the call
+before any connection attempt (`src/operations/exporting/export/data_exporter.py:148-156`, the call
 at line 153).
 
 A second, independent container check exists at
-`src/maps/_container_detection.py:134-151`.
+`src/interfaces/visualization/maps/_container_detection.py:134-151`.
 
 ### 2.3 Confirmed: the CSV fallback reports success
 
@@ -171,7 +171,7 @@ Two code paths report success while nothing reaches a database.
 158            )  # WHY: csv-only success envelope for standalone runs
 ```
 
-Source: `src/db/router.py:152-158`.
+Source: `src/foundation/persistence/db/router.py:152-158`.
 
 **Path B — the degraded-backend fallback.**
 
@@ -189,16 +189,16 @@ Source: `src/db/router.py:152-158`.
 382        )  # WHY: success=True keeps callers from treating csv fallback as a hard error
 ```
 
-Source: `src/db/router.py:372-382`.
+Source: `src/foundation/persistence/db/router.py:372-382`.
 
 `success=True` with `records_written=0`. The inline comment at line 382 states
 the intent plainly. A caller that checks only `result.success` cannot tell a
 real write from a no-op.
 
 A third layer hides the failure. `_perform_polyglot_write` catches every
-exception and logs a warning (`src/export/data_exporter.py:158-171`, the catch
+exception and logs a warning (`src/operations/exporting/export/data_exporter.py:158-171`, the catch
 at lines 170-171). `write_with_format_selection` returns the CSV result and
-discards the polyglot outcome entirely (`src/export/data_exporter.py:125-129`).
+discards the polyglot outcome entirely (`src/operations/exporting/export/data_exporter.py:125-129`).
 
 **Impact on feature 1823.** A capture that must be readable months later can
 land in CSV only, while the portal reports success. The user learns nothing.
@@ -235,7 +235,7 @@ def probe_polyglot_reachable(
 
     Why:
         The current standalone test reads container markers only
-        (src/export/data_exporter.py:141). A host process with a reachable
+        (src/operations/exporting/export/data_exporter.py:141). A host process with a reachable
         database is misclassified as standalone, so writes silently skip the
         polyglot layer. A live TCP probe answers the real question.
 
@@ -252,23 +252,23 @@ Behavior rules for the fix:
 
 1. Open a TCP socket to the ArangoDB host and port, then to the Redis host and
    port. Do not resolve DNS only. The current DNS-only helper at
-   `src/db/__init__.py:81-108` returns standalone only when **both** names fail
-   to resolve (`src/db/__init__.py:90`). A resolvable but dead host passes.
+   `src/foundation/persistence/db/__init__.py:81-108` returns standalone only when **both** names fail
+   to resolve (`src/foundation/persistence/db/__init__.py:90`). A resolvable but dead host passes.
 2. Cache the verdict for `PROBE_CACHE_SECONDS`. Store the cache in a
    module-level variable next to the existing one-shot latch pattern at
-   `src/export/data_exporter.py:131`.
+   `src/operations/exporting/export/data_exporter.py:131`.
 3. Emit exactly one `logging.warning` per process when either backend is
    unreachable. Latch it the same way `_standalone_logged` latches
-   (`src/export/data_exporter.py:142-144`). The warning must name the host and
+   (`src/operations/exporting/export/data_exporter.py:142-144`). The warning must name the host and
    the port and must state that the rows reached CSV only.
 4. Keep the `MISTHELPER_STANDALONE` override. An explicit value still wins
-   (`src/export/data_exporter.py:136-140`).
+   (`src/operations/exporting/export/data_exporter.py:136-140`).
 
 Second half of the fix — make the result honest:
 
-5. Add `persisted: bool = False` to `WriteResult` (`src/db/__init__.py:111-119`).
+5. Add `persisted: bool = False` to `WriteResult` (`src/foundation/persistence/db/__init__.py:111-119`).
    Set it `True` only when a backend accepted rows. Both CSV envelopes leave it
-   `False` (`src/db/router.py:152-158`, `src/db/router.py:372-382`). The default
+   `False` (`src/foundation/persistence/db/router.py:152-158`, `src/foundation/persistence/db/router.py:372-382`). The default
    keeps every existing caller compiling.
 6. The capture write path must check `persisted`, not `success`. A capture that
    did not persist must fail the run and tell the user.
@@ -280,15 +280,15 @@ Second half of the fix — make the result honest:
 ### 3.1 The writer class
 
 `ArangoDBWriter` is the primary document writer
-(`src/db/arango_writer.py:3893-3894`).
+(`src/foundation/persistence/db/arango_writer.py:3893-3894`).
 
 The constructor runs a DNS pre-flight, builds the client, ensures the database,
 reopens the client bound to that database, and ensures the named graph
-(`src/db/arango_writer.py:3896-3909`). The database handle is stored as
-`self._db` (`src/db/arango_writer.py:3903`).
+(`src/foundation/persistence/db/arango_writer.py:3896-3909`). The database handle is stored as
+`self._db` (`src/foundation/persistence/db/arango_writer.py:3903`).
 
 `_preflight_dns` raises `ConnectionError` when the host name does not resolve
-(`src/db/arango_writer.py:3911-3917`). It is a name lookup only. It proves
+(`src/foundation/persistence/db/arango_writer.py:3911-3917`). It is a name lookup only. It proves
 nothing about reachability. This is the same weakness described in section 2.
 
 ### 3.2 The write method
@@ -297,26 +297,26 @@ nothing about reachability. This is the same weakness described in section 2.
 def write(self, data: list[dict], collection_name: str, strategy: dict) -> WriteResult:
 ```
 
-Source: `src/db/arango_writer.py:3965`.
+Source: `src/foundation/persistence/db/arango_writer.py:3965`.
 
 The method ensures the collection, returns early on empty input, prepares every
 document, batch-imports, and repopulates the graph when at least one row landed
-(`src/db/arango_writer.py:3965-3984`).
+(`src/foundation/persistence/db/arango_writer.py:3965-3984`).
 
 ### 3.3 How collections are named
 
 The collection name is the API function name. The router passes
 `api_function_name` straight through as `collection_name`
-(`src/db/router.py:177`). `_ensure_collection` creates a missing collection and
+(`src/foundation/persistence/db/router.py:177`). `_ensure_collection` creates a missing collection and
 sets the edge flag when the name appears in `_EDGE_COLLECTION_NAMES`
-(`src/db/arango_writer.py:3957-3963`, name set at
-`src/db/arango_writer.py:1053`).
+(`src/foundation/persistence/db/arango_writer.py:3957-3963`, name set at
+`src/foundation/persistence/db/arango_writer.py:1053`).
 
 Vertex collections use short plural nouns such as `orgs`, `sites`, and
 `templates`. The mapping from API function name to vertex collection lives in
-`ENTITY_TYPE_TO_VERTEX` (`src/db/arango_writer.py:1058`). The mapping that
+`ENTITY_TYPE_TO_VERTEX` (`src/foundation/persistence/db/arango_writer.py:1058`). The mapping that
 drives vertex and edge population lives in `COLLECTION_VERTEX_MAP`
-(`src/db/arango_writer.py:1247`).
+(`src/foundation/persistence/db/arango_writer.py:1247`).
 
 ### 3.4 The batch size
 
@@ -324,13 +324,13 @@ drives vertex and edge population lives in `COLLECTION_VERTEX_MAP`
 IMPORT_BATCH_SIZE = 5000
 ```
 
-Source: `src/db/arango_writer.py:26`.
+Source: `src/foundation/persistence/db/arango_writer.py:26`.
 
 `_sum_batch_results` windows the document list in chunks of that size
-(`src/db/arango_writer.py:3997-4006`). `_import_single_batch` calls
+(`src/foundation/persistence/db/arango_writer.py:3997-4006`). `_import_single_batch` calls
 `collection.import_bulk(batch, on_duplicate="replace")`
-(`src/db/arango_writer.py:4012`). A driver exception marks the whole batch
-failed (`src/db/arango_writer.py:4013-4020`).
+(`src/foundation/persistence/db/arango_writer.py:4012`). A driver exception marks the whole batch
+failed (`src/foundation/persistence/db/arango_writer.py:4013-4020`).
 
 Redis batch sizes differ. See section 4.
 
@@ -340,52 +340,52 @@ Redis batch sizes differ. See section 4.
 GRAPH_NAME = "mist_network_topology"
 ```
 
-Source: `src/db/arango_writer.py:25`.
+Source: `src/foundation/persistence/db/arango_writer.py:25`.
 
 `_ensure_graph` creates the graph or refreshes it when the live edge definitions
-drift (`src/db/arango_writer.py:3931-3943`). `_refresh_graph_if_stale` deletes
+drift (`src/foundation/persistence/db/arango_writer.py:3931-3943`). `_refresh_graph_if_stale` deletes
 and recreates the graph with `drop_collections=False`, so the underlying data
-survives (`src/db/arango_writer.py:3945-3955`).
+survives (`src/foundation/persistence/db/arango_writer.py:3945-3955`).
 
 ### 3.6 Edge collection conventions
 
 Edge collection names use PascalCase verb phrases. Examples read directly from
 the source include `ConfigSnapshotForEntity`
-(`src/db/arango_writer.py:291`) and `TemplateAssignedToSite`
-(`src/db/arango_writer.py:4225`).
+(`src/foundation/persistence/db/arango_writer.py:291`) and `TemplateAssignedToSite`
+(`src/foundation/persistence/db/arango_writer.py:4225`).
 
 Two edge definition tables exist. `GRAPH_EDGE_DEFINITIONS` is the subset the
-named graph shows (`src/db/arango_writer.py:37`). `EDGE_DEFINITIONS` is the
-full list (`src/db/arango_writer.py:239`). All edge collections are created and
+named graph shows (`src/foundation/persistence/db/arango_writer.py:37`). `EDGE_DEFINITIONS` is the
+full list (`src/foundation/persistence/db/arango_writer.py:239`). All edge collections are created and
 populated. Only the graph subset is visible in the graph viewer
-(`src/db/arango_writer.py:3932-3937`).
+(`src/foundation/persistence/db/arango_writer.py:3932-3937`).
 
 Edge documents carry a deterministic key so re-runs upsert cleanly. The key is
 the first 16 characters of the sha256 of `"{from_id}:{to_id}"`
-(`src/db/arango_writer.py:4248-4253`). The edge body carries `_key`, `_from`,
-`_to`, and `_misthelper_updated_at` (`src/db/arango_writer.py:4134-4143`).
+(`src/foundation/persistence/db/arango_writer.py:4248-4253`). The edge body carries `_key`, `_from`,
+`_to`, and `_misthelper_updated_at` (`src/foundation/persistence/db/arango_writer.py:4134-4143`).
 
 Vertex identifiers are `"{collection}/{sanitized_key}"`
-(`src/db/arango_writer.py:4136-4137`). `_sanitize_key` replaces `/` and `:`
-with `_` (`src/db/arango_writer.py:4266-4269`). A capture key must therefore
+(`src/foundation/persistence/db/arango_writer.py:4136-4137`). `_sanitize_key` replaces `/` and `:`
+with `_` (`src/foundation/persistence/db/arango_writer.py:4266-4269`). A capture key must therefore
 avoid both characters.
 
 ### 3.7 Document preparation and key computation
 
 `_prepare_document` copies the record, assigns `_key`, and stamps two internal
-fields (`src/db/arango_writer.py:4025-4034`):
+fields (`src/foundation/persistence/db/arango_writer.py:4025-4034`):
 
 - `_key`
 - `_misthelper_updated_at` — epoch seconds
 - `_misthelper_deleted_at` — set to `None` on every fresh write
 
-`_compute_key` decides the key (`src/db/arango_writer.py:4036-4042`):
+`_compute_key` decides the key (`src/foundation/persistence/db/arango_writer.py:4036-4042`):
 
 - `auto_increment_with_unique` always returns a fresh `uuid4`
-  (`src/db/arango_writer.py:4039-4040`). **A second write of the same record
+  (`src/foundation/persistence/db/arango_writer.py:4039-4040`). **A second write of the same record
   creates a duplicate document.**
 - Every other type reads the first primary-key field, and falls back to a
-  `uuid4` when the field is missing (`src/db/arango_writer.py:4041`).
+  `uuid4` when the field is missing (`src/foundation/persistence/db/arango_writer.py:4041`).
 
 This behavior drives the strategy recommendation in section 6.
 
@@ -394,19 +394,19 @@ This behavior drives the strategy recommendation in section 6.
 Change detection exists today and uses sha256 over canonical JSON.
 
 - `_hash_body` returns `sha256(json.dumps(config_body, sort_keys=True))`
-  (`src/db/arango_writer.py:4319-4322`).
+  (`src/foundation/persistence/db/arango_writer.py:4319-4322`).
 - `_latest_snapshot_hash` runs an AQL query with `SORT ... DESC LIMIT 1` and
-  returns the newest stored hash (`src/db/arango_writer.py:4324-4332`).
+  returns the newest stored hash (`src/foundation/persistence/db/arango_writer.py:4324-4332`).
 - `snapshot` skips the write when the hash is unchanged
-  (`src/db/arango_writer.py:4306-4307`).
+  (`src/foundation/persistence/db/arango_writer.py:4306-4307`).
 
 The router has a parallel helper. `_hash_payload` adds `default=str` so
-non-JSON types survive (`src/db/router.py:82-85`). Prefer the router variant
+non-JSON types survive (`src/foundation/persistence/db/router.py:82-85`). Prefer the router variant
 for Mist payloads.
 
 Soft delete replaces hard delete. `mark_absent_as_deleted` scans a collection
 and stamps `_misthelper_deleted_at` on rows missing from the current key set
-(`src/db/arango_writer.py:4271-4293`).
+(`src/foundation/persistence/db/arango_writer.py:4271-4293`).
 
 ### 3.9 Warning — the word "snapshot" is already taken
 
@@ -418,29 +418,29 @@ Existing "snapshot" identifiers, recorded exactly:
 
 | Identifier | Location |
 | --- | --- |
-| `snapshot` | `src/db/arango_writer.py:4295` |
-| `_hash_body` | `src/db/arango_writer.py:4319` |
-| `_latest_snapshot_hash` | `src/db/arango_writer.py:4324` |
-| `_build_snapshot_doc` | `src/db/arango_writer.py:4334` |
-| `_create_snapshot_edge` | `src/db/arango_writer.py:4355` |
-| `_snapshot_edge_doc` | `src/db/arango_writer.py:4374` |
-| `_backfill_snapshot_edges` | `src/db/arango_writer.py:4385` |
-| `_backfill_already_done` | `src/db/arango_writer.py:4398` |
-| `_collect_backfill_edges` | `src/db/arango_writer.py:4405` |
-| `_backfill_edge_for` | `src/db/arango_writer.py:4417` |
-| `config_snapshots` collection | `src/db/arango_writer.py:4305` |
-| `ConfigSnapshotForEntity` edge collection | `src/db/arango_writer.py:291`, `src/db/arango_writer.py:4367` |
-| `SnapshotRequest` | `src/db/router.py:71-80` |
-| `_snapshot_if_config` | `src/db/router.py:185` |
-| `SNAPSHOT_SOURCE_API` | `src/db/router.py:32` |
-| `SNAPSHOT_SOURCE_WEBHOOK` | `src/db/router.py:33` |
-| `EVT_SNAPSHOT_FAILED` | `src/db/router.py:61` |
-| `EVT_WEBHOOK_SNAPSHOT_FAILED` | `src/db/router.py:62` |
-| `CONFIG_SNAPSHOT_APIS` | `src/db/router.py:38-48` |
-| `_check_periodic_snapshot` | `src/export/data_exporter.py:187` |
-| `_last_snapshot_times` | `src/export/data_exporter.py:198` |
+| `snapshot` | `src/foundation/persistence/db/arango_writer.py:4295` |
+| `_hash_body` | `src/foundation/persistence/db/arango_writer.py:4319` |
+| `_latest_snapshot_hash` | `src/foundation/persistence/db/arango_writer.py:4324` |
+| `_build_snapshot_doc` | `src/foundation/persistence/db/arango_writer.py:4334` |
+| `_create_snapshot_edge` | `src/foundation/persistence/db/arango_writer.py:4355` |
+| `_snapshot_edge_doc` | `src/foundation/persistence/db/arango_writer.py:4374` |
+| `_backfill_snapshot_edges` | `src/foundation/persistence/db/arango_writer.py:4385` |
+| `_backfill_already_done` | `src/foundation/persistence/db/arango_writer.py:4398` |
+| `_collect_backfill_edges` | `src/foundation/persistence/db/arango_writer.py:4405` |
+| `_backfill_edge_for` | `src/foundation/persistence/db/arango_writer.py:4417` |
+| `config_snapshots` collection | `src/foundation/persistence/db/arango_writer.py:4305` |
+| `ConfigSnapshotForEntity` edge collection | `src/foundation/persistence/db/arango_writer.py:291`, `src/foundation/persistence/db/arango_writer.py:4367` |
+| `SnapshotRequest` | `src/foundation/persistence/db/router.py:71-80` |
+| `_snapshot_if_config` | `src/foundation/persistence/db/router.py:185` |
+| `SNAPSHOT_SOURCE_API` | `src/foundation/persistence/db/router.py:32` |
+| `SNAPSHOT_SOURCE_WEBHOOK` | `src/foundation/persistence/db/router.py:33` |
+| `EVT_SNAPSHOT_FAILED` | `src/foundation/persistence/db/router.py:61` |
+| `EVT_WEBHOOK_SNAPSHOT_FAILED` | `src/foundation/persistence/db/router.py:62` |
+| `CONFIG_SNAPSHOT_APIS` | `src/foundation/persistence/db/router.py:38-48` |
+| `_check_periodic_snapshot` | `src/operations/exporting/export/data_exporter.py:187` |
+| `_last_snapshot_times` | `src/operations/exporting/export/data_exporter.py:198` |
 
-The stored snapshot document shape is at `src/db/arango_writer.py:4342-4353`.
+The stored snapshot document shape is at `src/foundation/persistence/db/arango_writer.py:4342-4353`.
 It holds `entity_type`, `entity_id`, `timestamp`, `config_hash`, `config_body`,
 and `trigger`. A capture document must not reuse this shape.
 
@@ -452,20 +452,20 @@ and `trigger`. A capture document must not reuse this shape.
 
 | Class | Location | Purpose |
 | --- | --- | --- |
-| `RedisTimeSeriesWriter` | `src/db/redis_writer.py:90` | Numeric metrics into Redis TimeSeries |
-| `RedisJSONWriter` | `src/db/redis_writer.py:530` | Full API responses into Redis JSON |
+| `RedisTimeSeriesWriter` | `src/foundation/persistence/db/redis_writer.py:90` | Numeric metrics into Redis TimeSeries |
+| `RedisJSONWriter` | `src/foundation/persistence/db/redis_writer.py:530` | Full API responses into Redis JSON |
 
 Both connect with `decode_responses=True`, so keys and values are `str`
-(`src/db/redis_writer.py:108`, `src/db/redis_writer.py:546`).
+(`src/foundation/persistence/db/redis_writer.py:108`, `src/foundation/persistence/db/redis_writer.py:546`).
 
 `RedisTimeSeriesWriter` requires the `timeseries` module
-(`src/db/redis_writer.py:122`). `RedisJSONWriter` accepts the module name
-`rejson` or `redisjson` (`src/db/redis_writer.py:551-555`). Both fail fast when
+(`src/foundation/persistence/db/redis_writer.py:122`). `RedisJSONWriter` accepts the module name
+`rejson` or `redisjson` (`src/foundation/persistence/db/redis_writer.py:551-555`). Both fail fast when
 the module is missing.
 
 Both share a DNS pre-flight that raises `ConnectionError` on an unresolvable
-host (`src/db/redis_writer.py:114-120`, reused at
-`src/db/redis_writer.py:541`).
+host (`src/foundation/persistence/db/redis_writer.py:114-120`, reused at
+`src/foundation/persistence/db/redis_writer.py:541`).
 
 ### 4.2 The key naming convention
 
@@ -485,7 +485,7 @@ host (`src/db/redis_writer.py:114-120`, reused at
 627        return ":".join(parts)  # WHY: colon-delimited keys align with Redis convention.
 ```
 
-Source: `src/db/redis_writer.py:617-627`.
+Source: `src/foundation/persistence/db/redis_writer.py:617-627`.
 
 The shape is `{endpoint}:{pk_1}:{pk_2}:...`. A missing field becomes the literal
 `unknown`.
@@ -496,11 +496,11 @@ The shape is `{endpoint}:{pk_1}:{pk_2}:...`. A missing field becomes the literal
 ts_key = f"{ctx.api_function_name}:{entity_id}:{field_name}"
 ```
 
-Source: `src/db/redis_writer.py:208`.
+Source: `src/foundation/persistence/db/redis_writer.py:208`.
 
 Compaction keys append `:avg_1h` and `:avg_1d`
-(`src/db/redis_writer.py:305-306`). The retention manager matches
-`"*.avg_1h"` (`src/db/retention.py:25`).
+(`src/foundation/persistence/db/redis_writer.py:305-306`). The retention manager matches
+`"*.avg_1h"` (`src/foundation/persistence/db/retention.py:25`).
 
 ### 4.3 Expiry
 
@@ -511,15 +511,15 @@ Compaction keys append `:avg_1h` and `:avg_1d`
 598            pipe.expire(key, REDIS_JSON_TTL_SECONDS)  # WHY: apply TTL so old docs are pruned by Redis.
 ```
 
-Source: `src/db/redis_writer.py:597-598`.
+Source: `src/foundation/persistence/db/redis_writer.py:597-598`.
 
 ```python
 REDIS_JSON_TTL_SECONDS = int(os.environ.get("REDIS_JSON_TTL_DAYS", "7")) * 86_400
 ```
 
-Source: `src/db/redis_writer.py:33`. The default is 7 days. The class docstring
+Source: `src/foundation/persistence/db/redis_writer.py:33`. The default is 7 days. The class docstring
 confirms the intent and names ArangoDB as the long-term archive
-(`src/db/redis_writer.py:531-536`).
+(`src/foundation/persistence/db/redis_writer.py:531-536`).
 
 **Warning.** A capture stored through `RedisJSONWriter` disappears after 7 days.
 Feature 1823 must let a user read a capture months later. Store captures in
@@ -529,20 +529,20 @@ ArangoDB. Never route a capture through a `composite_pk` strategy.
 
 | Constant | Value | Source |
 | --- | --- | --- |
-| `RAW_RETENTION_MS` | `REDIS_RAW_RETENTION_DAYS` days, default 7 | `src/db/redis_writer.py:28-30` |
-| `HOURLY_RETENTION_MS` | 90 days | `src/db/redis_writer.py:31` |
-| `DAILY_RETENTION_MS` | 365 days | `src/db/redis_writer.py:32` |
+| `RAW_RETENTION_MS` | `REDIS_RAW_RETENTION_DAYS` days, default 7 | `src/foundation/persistence/db/redis_writer.py:28-30` |
+| `HOURLY_RETENTION_MS` | 90 days | `src/foundation/persistence/db/redis_writer.py:31` |
+| `DAILY_RETENTION_MS` | 365 days | `src/foundation/persistence/db/redis_writer.py:32` |
 
-Batch sizes: `JSON_PIPELINE_BATCH = 500` (`src/db/redis_writer.py:34`),
-`KEY_CREATION_BATCH = 500` (`src/db/redis_writer.py:37`),
-`ADD_PIPELINE_BATCH = 10_000` (`src/db/redis_writer.py:38`).
+Batch sizes: `JSON_PIPELINE_BATCH = 500` (`src/foundation/persistence/db/redis_writer.py:34`),
+`KEY_CREATION_BATCH = 500` (`src/foundation/persistence/db/redis_writer.py:37`),
+`ADD_PIPELINE_BATCH = 10_000` (`src/foundation/persistence/db/redis_writer.py:38`).
 
 ### 4.4 Key namespaces for users and sites
 
 **No user namespace exists. No site namespace exists.**
 
 Every key begins with the API function name
-(`src/db/redis_writer.py:624`, `src/db/redis_writer.py:208`). A site
+(`src/foundation/persistence/db/redis_writer.py:624`, `src/foundation/persistence/db/redis_writer.py:208`). A site
 identifier appears only when `site_id` happens to be a primary-key field for
 that endpoint. An actor identity never appears.
 
@@ -552,16 +552,16 @@ the writers produce today.
 ### 4.5 Other Redis use in the source tree
 
 A repository search for `import redis`, `from redis`, `redis.Redis`, and
-`Redis(` inside `src/` returns exactly two files: `src/db/router.py` and
-`src/db/redis_writer.py`.
+`Redis(` inside `src/` returns exactly two files: `src/foundation/persistence/db/router.py` and
+`src/foundation/persistence/db/redis_writer.py`.
 
 Broader mentions resolve as follows.
 
 | Location | Use |
 | --- | --- |
-| `src/db/retention.py:118-132` | Counts compacted TimeSeries keys. Read-only validation |
+| `src/foundation/persistence/db/retention.py:118-132` | Counts compacted TimeSeries keys. Read-only validation |
 | `web_portal/routes/webhooks.py:87-89` | Reaches the router's private `_redis_writer` to ingest webhook stats |
-| `src/db/__init__.py:46-48`, `src/db/__init__.py:62-63`, `src/db/__init__.py:74` | Connection settings by variable name |
+| `src/foundation/persistence/db/__init__.py:46-48`, `src/foundation/persistence/db/__init__.py:62-63`, `src/foundation/persistence/db/__init__.py:74` | Connection settings by variable name |
 
 **Confirmed.** Redis holds no cache, no session store, and no queue today. The
 distributed lock introduces the first non-data use of Redis.
@@ -592,9 +592,9 @@ the two keys differ.
 The `misthelper:lock:` prefix is new. Section 4.4 confirms it cannot collide.
 
 Use a plain Redis string key. Do **not** use `RedisJSONWriter`. That writer
-would apply the 7 day JSON expiry (`src/db/redis_writer.py:598`) instead of the
+would apply the 7 day JSON expiry (`src/foundation/persistence/db/redis_writer.py:598`) instead of the
 5 minute cooldown. Open a direct `redis.Redis` client with the same constructor
-arguments the writers use (`src/db/redis_writer.py:542-547`).
+arguments the writers use (`src/foundation/persistence/db/redis_writer.py:542-547`).
 
 ### 5.3 The stored value shape
 
@@ -724,10 +724,10 @@ holder against the run document owner and warn on a mismatch.
 ### 6.1 The catalog
 
 `ENDPOINT_PRIMARY_KEY_STRATEGIES` is a bare module-level dict
-(`src/refactors/endpoint_primary_key_strategies.py:32`). It ends at the last
+(`src/foundation/support/refactors/endpoint_primary_key_strategies.py:32`). It ends at the last
 line of the file. Each value carries `type`, `primary_key`, `indexes`,
 `unique_constraints`, and `description`
-(`src/refactors/endpoint_primary_key_strategies.py:21-27`).
+(`src/foundation/support/refactors/endpoint_primary_key_strategies.py:21-27`).
 
 The dict holds **363 entries**. That count is 362 API endpoints plus one
 `"default"` entry.
@@ -736,20 +736,20 @@ The dict holds **363 entries**. That count is 362 API endpoints plus one
 
 | Strategy type | Entries | Routes to |
 | --- | --- | --- |
-| `auto_increment_with_unique` | 126 (includes `"default"`) | ArangoDB only (`src/db/router.py:22`) |
-| `composite_pk` | 120 | Redis JSON plus ArangoDB (`src/db/router.py:23`) |
-| `natural_pk` | 111 | ArangoDB only (`src/db/router.py:22`) |
-| `timeseries_pk` | 6 | Redis TimeSeries (`src/db/router.py:24`) |
+| `auto_increment_with_unique` | 126 (includes `"default"`) | ArangoDB only (`src/foundation/persistence/db/router.py:22`) |
+| `composite_pk` | 120 | Redis JSON plus ArangoDB (`src/foundation/persistence/db/router.py:23`) |
+| `natural_pk` | 111 | ArangoDB only (`src/foundation/persistence/db/router.py:22`) |
+| `timeseries_pk` | 6 | Redis TimeSeries (`src/foundation/persistence/db/router.py:24`) |
 
 Counts come from a match on `"type": "<name>"` across the file. The docstring
-example at `src/refactors/endpoint_primary_key_strategies.py:22` is excluded.
+example at `src/foundation/support/refactors/endpoint_primary_key_strategies.py:22` is excluded.
 
 The six `timeseries_pk` endpoints are `listOrgDevicesStats`,
 `listSiteDevicesStats`, `listSiteWirelessClientsStats`, `searchOrgSwOrGwPorts`,
 `searchSiteSwOrGwPorts`, and `searchOrgPeerPathStats`.
 
 **Note.** The module docstring at
-`src/refactors/endpoint_primary_key_strategies.py:22` lists `"auto_pk"` and
+`src/foundation/support/refactors/endpoint_primary_key_strategies.py:22` lists `"auto_pk"` and
 `"time_series"`. Neither name appears in any entry. The docstring is stale.
 
 ### 6.3 A default exists for an unknown endpoint
@@ -764,11 +764,11 @@ The six `timeseries_pk` endpoints are `listOrgDevicesStats`,
 2460    },
 ```
 
-Source: `src/refactors/endpoint_primary_key_strategies.py:2452-2460`.
+Source: `src/foundation/support/refactors/endpoint_primary_key_strategies.py:2452-2460`.
 
 `_resolve_strategy` prefers the per-endpoint entry, then this `"default"` entry,
-then the module fallback in the router (`src/db/router.py:281-285`,
-`src/db/router.py:50-53`). Both defaults use `auto_increment_with_unique`.
+then the module fallback in the router (`src/foundation/persistence/db/router.py:281-285`,
+`src/foundation/persistence/db/router.py:50-53`). Both defaults use `auto_increment_with_unique`.
 
 ### 6.4 What a new capture collection must declare — INFERENCE
 
@@ -786,17 +786,17 @@ Declare `natural_pk` with `primary_key: ["capture_id"]`.
 
 Three reasons.
 
-1. **`natural_pk` routes to ArangoDB only** (`src/db/router.py:22`,
-   `src/db/router.py:165`). ArangoDB is the durable store. The user must read a
+1. **`natural_pk` routes to ArangoDB only** (`src/foundation/persistence/db/router.py:22`,
+   `src/foundation/persistence/db/router.py:165`). ArangoDB is the durable store. The user must read a
    capture months later.
 2. **`natural_pk` makes `_compute_key` reuse the record's own field**
-   (`src/db/arango_writer.py:4041`). A re-write of one capture upserts in place.
+   (`src/foundation/persistence/db/arango_writer.py:4041`). A re-write of one capture upserts in place.
    `auto_increment_with_unique` mints a fresh `uuid4` on every write
-   (`src/db/arango_writer.py:4039-4040`), so a retry would leave two documents
+   (`src/foundation/persistence/db/arango_writer.py:4039-4040`), so a retry would leave two documents
    for one capture.
 3. **`composite_pk` is unsafe here.** It routes through `_write_dual`
-   (`src/db/router.py:163-164`), which writes Redis JSON with the 7 day expiry
-   (`src/db/redis_writer.py:598`). A capture must outlive 7 days.
+   (`src/foundation/persistence/db/router.py:163-164`), which writes Redis JSON with the 7 day expiry
+   (`src/foundation/persistence/db/redis_writer.py:598`). A capture must outlive 7 days.
 
 Do not leave a capture endpoint unregistered. An unregistered name falls back to
 `auto_increment_with_unique` and hits problem 2 above.
@@ -807,9 +807,9 @@ Do not leave a capture endpoint unregistered. An unregistered name falls back to
 
 ### 7.1 The class
 
-`DataExporter` is the export entry point (`src/export/data_exporter.py:36`).
+`DataExporter` is the export entry point (`src/operations/exporting/export/data_exporter.py:36`).
 It holds three class attributes: a shared router, an initialization flag, and a
-snapshot throttle map (`src/export/data_exporter.py:43-45`).
+snapshot throttle map (`src/operations/exporting/export/data_exporter.py:43-45`).
 
 ### 7.2 The mandated write method
 
@@ -824,10 +824,10 @@ snapshot throttle map (`src/export/data_exporter.py:43-45`).
 111    ) -> bool:
 ```
 
-Source: `src/export/data_exporter.py:104-111`.
+Source: `src/operations/exporting/export/data_exporter.py:104-111`.
 
 Every output path must call this method. It runs five steps
-(`src/export/data_exporter.py:112-129`):
+(`src/operations/exporting/export/data_exporter.py:112-129`):
 
 1. Resolve `ExportBackendOptions`, defaulting when the caller passes none
    (line 113).
@@ -835,7 +835,7 @@ Every output path must call this method. It runs five steps
    (lines 114-115).
 3. Validate the inputs (line 123). `_validate_write_inputs` rejects empty data
    and any format other than `csv` or `sqlite`
-   (`src/export/data_exporter.py:204-215`).
+   (`src/operations/exporting/export/data_exporter.py:204-215`).
 4. Dispatch to the CSV or SQLite writer (lines 125-127).
 5. Mirror to the polyglot layer (line 128), then return the CSV result
    (line 129).
@@ -859,14 +859,14 @@ only. See section 2.3.
 276        return resolved  # Final destination
 ```
 
-Source: `src/export/data_exporter.py:266-276`.
+Source: `src/operations/exporting/export/data_exporter.py:266-276`.
 
 The rule is `os.path.dirname`. A name with no directory part lands under
 `data/`. A name with any directory part is honored as given. The method creates
 `data/` when it is missing (line 270). The path is relative to the process
 working directory, not to the repository root.
 
-`write_to_csv` calls the resolver (`src/export/data_exporter.py:257`). Its
+`write_to_csv` calls the resolver (`src/operations/exporting/export/data_exporter.py:257`). Its
 signature is:
 
 ```python
@@ -877,11 +877,11 @@ def write_to_csv(
 ) -> None:
 ```
 
-Source: `src/export/data_exporter.py:239-244`.
+Source: `src/operations/exporting/export/data_exporter.py:239-244`.
 
 `_write_csv_format` appends `.csv` when the name lacks it
-(`src/export/data_exporter.py:224`). `_write_sqlite_format` strips a trailing
-`.csv` to build the table name (`src/export/data_exporter.py:232`).
+(`src/operations/exporting/export/data_exporter.py:224`). `_write_sqlite_format` strips a trailing
+`.csv` to build the table name (`src/operations/exporting/export/data_exporter.py:232`).
 
 The container mounts the host `./data` directory at `/app/data`
 (`compose.yml:17`). A capture written to `data/` survives a container restart.
@@ -990,7 +990,7 @@ The container mounts the host `./data` directory at `/app/data`
   "partial_reasons": []         // Filled when capture_status is "partial".
 
   // The ArangoDB writer stamps _key, _misthelper_updated_at, and
-  // _misthelper_deleted_at. See src/db/arango_writer.py:4025-4034.
+  // _misthelper_deleted_at. See src/foundation/persistence/db/arango_writer.py:4025-4034.
   // The feature must not set those three fields.
 }
 ```
@@ -1009,11 +1009,11 @@ The digests turn a deep comparison into a shallow one.
    The cost is linear in the device count with no nested walk.
 4. Walk the full device record only for the changed set.
 
-Compute the digests with the router helper style at `src/db/router.py:82-85`,
+Compute the digests with the router helper style at `src/foundation/persistence/db/router.py:82-85`,
 which uses `json.dumps(payload, sort_keys=True, default=str)` then sha256. The
 `default=str` argument matters. Mist payloads carry values that plain
 `json.dumps` rejects. The ArangoDB variant at
-`src/db/arango_writer.py:4319-4322` omits `default=str`, so it can raise.
+`src/foundation/persistence/db/arango_writer.py:4319-4322` omits `default=str`, so it can raise.
 
 ### 8.4 Companion collections
 
@@ -1023,15 +1023,15 @@ which uses `json.dumps(payload, sort_keys=True, default=str)` then sha256. The
 | `upgrade_runs` | `natural_pk` | `run_id` |
 
 One edge collection links them. Follow the existing PascalCase verb-phrase
-convention seen at `src/db/arango_writer.py:291` and
-`src/db/arango_writer.py:4225`:
+convention seen at `src/foundation/persistence/db/arango_writer.py:291` and
+`src/foundation/persistence/db/arango_writer.py:4225`:
 
 ```
 CaptureForRun   from upgrade_captures  to upgrade_runs
 ```
 
 Build the edge key with the existing deterministic helper pattern at
-`src/db/arango_writer.py:4248-4253`.
+`src/foundation/persistence/db/arango_writer.py:4248-4253`.
 
 ### 8.5 Schema version rules
 
@@ -1083,19 +1083,19 @@ On `upgrade_runs`:
 document the user must read months later.
 
 `_ensure_collection` creates a collection but creates no index
-(`src/db/arango_writer.py:3957-3963`). The feature must create these indexes
+(`src/foundation/persistence/db/arango_writer.py:3957-3963`). The feature must create these indexes
 itself, once, at startup. Make the call idempotent. ArangoDB accepts a repeat
 index creation with the same definition.
 
 ### 9.3 What the retention manager does today
 
 `RetentionManager` sweeps every 6 hours by default
-(`src/db/retention.py:19`, `src/db/retention.py:158-167`). It purges when the
+(`src/foundation/persistence/db/retention.py:19`, `src/foundation/persistence/db/retention.py:158-167`). It purges when the
 database exceeds 90 percent of a 100 GB ceiling
-(`src/db/retention.py:18`, `src/db/retention.py:21`,
-`src/db/retention.py:87-96`). Both numbers are overridable by the variables
+(`src/foundation/persistence/db/retention.py:18`, `src/foundation/persistence/db/retention.py:21`,
+`src/foundation/persistence/db/retention.py:87-96`). Both numbers are overridable by the variables
 `ARANGO_MAX_STORAGE_GB` and `RETENTION_CHECK_INTERVAL_HOURS`
-(`src/db/retention.py:27-28`).
+(`src/foundation/persistence/db/retention.py:27-28`).
 
 The purge query names one collection only.
 
@@ -1103,7 +1103,7 @@ The purge query names one collection only.
 FOR snapshot IN config_snapshots ... REMOVE doc IN config_snapshots
 ```
 
-Source: `src/db/retention.py:40-54`.
+Source: `src/foundation/persistence/db/retention.py:40-54`.
 
 **A new `upgrade_captures` collection is safe from this purge.** The query never
 names it.
@@ -1111,16 +1111,16 @@ names it.
 Two cautions.
 
 1. The purge trigger reads the whole-database size
-   (`src/db/retention.py:87-96`). Growing captures raise that number and can
+   (`src/foundation/persistence/db/retention.py:87-96`). Growing captures raise that number and can
    trigger a purge of unrelated `config_snapshots` rows.
 2. **Latent defect, unrelated to feature 1823.** `_get_storage_usage_gb` reads
-   `getattr(self._arango, "_database", None)` (`src/db/retention.py:100`).
+   `getattr(self._arango, "_database", None)` (`src/foundation/persistence/db/retention.py:100`).
    `ArangoDBWriter` names its handle `self._db`
-   (`src/db/arango_writer.py:3903`). No `_database` attribute exists. The
+   (`src/foundation/persistence/db/arango_writer.py:3903`). No `_database` attribute exists. The
    `getattr` returns `None`, so usage is always `0.0`
-   (`src/db/retention.py:101-102`) and the purge never runs. The same mismatch
+   (`src/foundation/persistence/db/retention.py:101-102`) and the purge never runs. The same mismatch
    makes `_purge_oldest_snapshots` return 0
-   (`src/db/retention.py:111-116`). Record this. Do not fix it in this feature.
+   (`src/foundation/persistence/db/retention.py:111-116`). Record this. Do not fix it in this feature.
 
 ### 9.4 Capture size control — INFERENCE
 
@@ -1191,7 +1191,7 @@ Source: `compose.yml:91-99`.
 
 The image is `redis/redis-stack:latest` (`compose.yml:92`). Redis Stack ships
 both the TimeSeries module and the JSON module, which the writers require
-(`src/db/redis_writer.py:122`, `src/db/redis_writer.py:551-555`).
+(`src/foundation/persistence/db/redis_writer.py:122`, `src/foundation/persistence/db/redis_writer.py:551-555`).
 
 The password comes from the variable `REDIS_PASSWORD`, passed through
 `REDIS_ARGS` (`compose.yml:101`). Data persists in the named volume
@@ -1225,7 +1225,7 @@ network.
 The application container defaults match. `ARANGO_HOST` is set to
 `http://arangodb:8529`, `REDIS_HOST` to `redis-stack`, and `REDIS_PORT` to
 `6379` (`compose.yml:28-30`). The same three defaults appear in code at
-`src/db/__init__.py:42`, `src/db/__init__.py:46`, and `src/db/__init__.py:47`.
+`src/foundation/persistence/db/__init__.py:42`, `src/foundation/persistence/db/__init__.py:46`, and `src/foundation/persistence/db/__init__.py:47`.
 
 **Confirmed.** The feature can rely on `arangodb:8529` and `redis-stack:6379`
 inside the compose network, and on `localhost:8529` and `localhost:6379` from
@@ -1261,13 +1261,13 @@ developer runs the portal on a host. That is the case section 2 describes.
 
 | # | Action | Reason |
 | --- | --- | --- |
-| 1 | Fix issue #1824 before trusting the router | Two silent-success paths (`src/db/router.py:152-158`, `src/db/router.py:372-382`) plus a container-only standalone test (`src/export/data_exporter.py:141`) |
+| 1 | Fix issue #1824 before trusting the router | Two silent-success paths (`src/foundation/persistence/db/router.py:152-158`, `src/foundation/persistence/db/router.py:372-382`) plus a container-only standalone test (`src/operations/exporting/export/data_exporter.py:141`) |
 | 2 | Declare `natural_pk` with `primary_key: ["capture_id"]` | Routes to ArangoDB only. Upserts in place. See section 6.4 |
-| 3 | Never route a capture through `composite_pk` | Redis JSON expires keys after 7 days (`src/db/redis_writer.py:598`) |
+| 3 | Never route a capture through `composite_pk` | Redis JSON expires keys after 7 days (`src/foundation/persistence/db/redis_writer.py:598`) |
 | 4 | Use the term "capture", never "snapshot" | The repository already owns "snapshot". See the table in section 3.9 |
 | 5 | Use a direct `redis.Redis` client for the lock | `RedisJSONWriter` would apply the 7 day expiry, not the 5 minute cooldown |
 | 6 | Take the lock with `SET ... NX EX 300` | One atomic command. See section 5.5 |
 | 7 | Refresh and release with a Lua `lock_token` guard | A bare `EXPIRE` lets a stale tab extend another user's lock |
-| 8 | Create the eight indexes yourself at startup | `_ensure_collection` creates no index (`src/db/arango_writer.py:3957-3963`) |
+| 8 | Create the eight indexes yourself at startup | `_ensure_collection` creates no index (`src/foundation/persistence/db/arango_writer.py:3957-3963`) |
 | 9 | Add no TTL index to the capture collections | The user must read a capture months later |
-| 10 | Do not set `_key`, `_misthelper_updated_at`, or `_misthelper_deleted_at` | `_prepare_document` stamps all three (`src/db/arango_writer.py:4025-4034`) |
+| 10 | Do not set `_key`, `_misthelper_updated_at`, or `_misthelper_deleted_at` | `_prepare_document` stamps all three (`src/foundation/persistence/db/arango_writer.py:4025-4034`) |

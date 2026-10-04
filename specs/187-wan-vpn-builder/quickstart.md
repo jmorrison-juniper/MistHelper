@@ -17,7 +17,7 @@ python MistHelper.py --menu 164
 
 | Decision | Choice | Reference |
 | - | - | - |
-| Module location | `src/wan_vpn_builder.py` | Follows Menu 163 pattern |
+| Module location | `src/operations/wan/wan_vpn_builder.py` | Follows Menu 163 pattern |
 | Class name | `WanVpnBuilder` | Constitution: class-based |
 | Entry point | `execute(apisession, get_org_id_func, safe_input_func)` | Dependency injection |
 | Path key format | `{PROFILE}-{IFACE}[-{SUFFIX}]` | Production data verified |

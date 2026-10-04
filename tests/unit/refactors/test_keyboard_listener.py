@@ -1,4 +1,4 @@
-"""Unit tests for src.refactors.keyboard_listener.
+"""Unit tests for src.foundation.support.refactors.keyboard_listener.
 
 Wave 13 P2 coverage lift — KeyboardListener.listen is a no-op stub
 preserving the legacy signature. Cover the pass-through invocation
@@ -8,7 +8,7 @@ file.
 
 from __future__ import annotations  # WHY: enable PEP 604 unions on older type checkers
 
-from src.refactors.keyboard_listener import KeyboardListener  # WHY: subject under test
+from src.foundation.support.refactors.keyboard_listener import KeyboardListener  # WHY: subject under test
 
 
 def test_listen_returns_none_with_no_args(caplog) -> None:

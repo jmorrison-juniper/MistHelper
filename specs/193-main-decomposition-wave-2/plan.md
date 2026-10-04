@@ -95,13 +95,13 @@ If any step fails: fix within current phase; do not start next phase.
 
 **Source cluster**: classes at `MistHelper.py` (~`30155`, `30707`) and their helper methods (`_scan_for_deviations`, `_apply_standard_configuration`, `_group_devices_by_site`, report/export helpers).  
 **Target modules**:
-- `src/analytics/site_analytics_configurator.py`
-- `src/analytics/site_inventory_health_analyzer.py`
+- `src/mist/intelligence/analytics/site_analytics_configurator.py`
+- `src/mist/intelligence/analytics/site_inventory_health_analyzer.py`
 
 **Dependency/coupling controls**:
 - New modules may depend only on shared utility contracts (`ConfigUtils`, `APICoreFetchUtils`, `DataExporter`, `InputUtils`) injected or imported from low-level utility modules.
 - `MistHelper.py` keeps menu registration and thin delegator only.
-- Prohibit reverse imports from `src/analytics/*` into `MistHelper.py` internals.
+- Prohibit reverse imports from `src/mist/intelligence/analytics/*` into `MistHelper.py` internals.
 
 **Test strategy**:
 - New tests: `tests/unit/analytics/test_site_analytics_configurator.py`, `tests/unit/analytics/test_site_inventory_health_analyzer.py`.
@@ -112,8 +112,8 @@ If any step fails: fix within current phase; do not start next phase.
 
 **Source cluster**: classes at `MistHelper.py` (~`22517`, `23125`) including Marvis workflows and SSH execution helpers (`_collect_missing_data`, `_execute_ssh`, template-targeted flows).  
 **Target modules**:
-- `src/troubleshooting/marvis_troubleshoot_utils.py`
-- `src/ssh/ssh_runner_manager.py`
+- `src/mist/intelligence/troubleshooting/marvis_troubleshoot_utils.py`
+- `src/operations/execution/ssh/ssh_runner_manager.py`
 
 **Dependency/coupling controls**:
 - Extract command-specific helpers into module-private functions/classes; expose class API only.
@@ -129,8 +129,8 @@ If any step fails: fix within current phase; do not start next phase.
 
 **Source cluster**: classes at `MistHelper.py` (~`23982`, `25651`) handling site variable setup, override detection, and device-level probe application.  
 **Target modules**:
-- `src/gateway/wan2_migration_manager.py`
-- `src/gateway/wan_probe_device_override_manager.py`
+- `src/mist/resources/gateway/wan2_migration_manager.py`
+- `src/mist/resources/gateway/wan_probe_device_override_manager.py`
 
 **Dependency/coupling controls**:
 - Keep destructive confirmation and audit/report writing inside module service layer.
@@ -146,7 +146,7 @@ If any step fails: fix within current phase; do not start next phase.
 
 **Source cluster**: class at `MistHelper.py` (~`26229`) with grouped destructive site/profile/template operations (`171-174`, RF template and profile assignment helpers).  
 **Target module**:
-- `src/site/site_config_manager.py`
+- `src/mist/resources/site/site_config_manager.py`
 
 **Dependency/coupling controls**:
 - Segment internal sub-services (`test_sites`, `rf_templates`, `device_profiles`) inside module to avoid monolith recreation.
@@ -162,8 +162,8 @@ If any step fails: fix within current phase; do not start next phase.
 
 **Source cluster**: class at `MistHelper.py` (~`17813`) covering site export helpers (`_export_data`, insights/device insights, stats/metrics exports, and supporting normalization helpers).  
 **Target modules**:
-- `src/export/site_export_utils.py`
-- `src/export/site_insights_exporter.py` (split high-complexity insights branch)
+- `src/operations/exporting/export/site_export_utils.py`
+- `src/operations/exporting/export/site_insights_exporter.py` (split high-complexity insights branch)
 
 **Dependency/coupling controls**:
 - Keep exporter interface (`DataExporter`) as sole output boundary.
@@ -179,8 +179,8 @@ If any step fails: fix within current phase; do not start next phase.
 
 **Source cluster**: class at `MistHelper.py` (~`14007`) including physical-count aggregation, MSP modes, combined pivots, and export composition.  
 **Target modules**:
-- `src/inventory/org_device_inventory_summary.py`
-- `src/inventory/org_device_inventory_msp.py` (MSP-specific orchestration split)
+- `src/mist/resources/inventory/org_device_inventory_summary.py`
+- `src/mist/resources/inventory/org_device_inventory_msp.py` (MSP-specific orchestration split)
 
 **Dependency/coupling controls**:
 - Separate aggregation logic from interactive prompt flow.
@@ -196,12 +196,12 @@ If any step fails: fix within current phase; do not start next phase.
 
 **Source cluster**: class at `MistHelper.py` (~`21649`) including management IP correlation, device configs, WAN override detection, template-based exports, and helper fetch functions.  
 **Target modules**:
-- `src/gateway/gateway_export_utils.py`
-- `src/gateway/gateway_stats_exporter.py`
-- `src/gateway/gateway_override_analyzer.py`
+- `src/mist/resources/gateway/gateway_export_utils.py`
+- `src/mist/resources/gateway/gateway_stats_exporter.py`
+- `src/mist/resources/gateway/gateway_override_analyzer.py`
 
 **Dependency/coupling controls**:
-- Break mutual dependencies by moving shared fetch/transform functions into a gateway-common utility module (`src/gateway/common.py`) if needed.
+- Break mutual dependencies by moving shared fetch/transform functions into a gateway-common utility module (`src/mist/resources/gateway/common.py`) if needed.
 - Keep stats exporter and override analyzer independent of menu wiring.
 - Forbid cross-import cycles among gateway modules via import-linter checks.
 
@@ -214,8 +214,8 @@ If any step fails: fix within current phase; do not start next phase.
 
 **Source cluster**: class at `MistHelper.py` (~`18595`) covering tenant/service discovery, payload creation, websocket setup, result display, and cleanup orchestration.  
 **Target modules**:
-- `src/websocket/service_ping_manager.py`
-- `src/websocket/service_ping_discovery.py`
+- `src/mist/realtime/websocket/service_ping_manager.py`
+- `src/mist/realtime/websocket/service_ping_discovery.py`
 
 **Dependency/coupling controls**:
 - Keep websocket transport abstraction in existing websocket layer; manager composes it.
@@ -231,11 +231,11 @@ If any step fails: fix within current phase; do not start next phase.
 
 **Source cluster**: class at `MistHelper.py` (~`6255`) already partially extracted; complete migration of remaining methods and remove duplicate source logic from `MistHelper.py`.  
 **Target modules**:
-- `src/capture/packet_capture.py` (complete class surface)
-- `src/capture/packet_capture_download.py` (download/poll loop split if required)
+- `src/operations/execution/capture/packet_capture.py` (complete class surface)
+- `src/operations/execution/capture/packet_capture_download.py` (download/poll loop split if required)
 
 **Dependency/coupling controls**:
-- One canonical implementation in `src/capture`; `MistHelper.py` retains delegator only.
+- One canonical implementation in `src/operations/execution/capture`; `MistHelper.py` retains delegator only.
 - Keep capture payload validation and download logic separate to reduce cycle risk.
 - Preserve API compatibility for menu options `134`, `135`.
 

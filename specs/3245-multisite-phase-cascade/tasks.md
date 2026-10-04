@@ -14,11 +14,11 @@
 
 ## Phase 2: The core modules
 
-- [x] T006 Add the `device_type` keyword to `read_fleet_statistics` in `src/upgrade_portal/upgrade/gate.py`.
-- [x] T007 Create `src/upgrade_portal/upgrade/org_cascade/record.py`.
-- [x] T008 Create `src/upgrade_portal/upgrade/org_cascade/readers.py`.
-- [x] T009 Create `src/upgrade_portal/upgrade/org_cascade/walk.py`.
-- [x] T010 Create `src/upgrade_portal/upgrade/org_cascade/view.py` and `__init__.py`.
+- [x] T006 Add the `device_type` keyword to `read_fleet_statistics` in `src/interfaces/portals/upgrade_portal/upgrade/gate.py`.
+- [x] T007 Create `src/interfaces/portals/upgrade_portal/upgrade/org_cascade/record.py`.
+- [x] T008 Create `src/interfaces/portals/upgrade_portal/upgrade/org_cascade/readers.py`.
+- [x] T009 Create `src/interfaces/portals/upgrade_portal/upgrade/org_cascade/walk.py`.
+- [x] T010 Create `src/interfaces/portals/upgrade_portal/upgrade/org_cascade/view.py` and `__init__.py`.
 
 ## Phase 3: The route and the page
 

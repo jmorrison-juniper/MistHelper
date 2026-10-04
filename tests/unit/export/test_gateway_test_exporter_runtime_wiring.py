@@ -6,14 +6,14 @@ import logging  # WHY: capture retry attempt warnings from synthetic test failur
 from types import SimpleNamespace  # WHY: provide focused MistHelper runtime doubles.
 from unittest.mock import MagicMock  # WHY: observe dependency wiring and delegated service calls.
 
-from src.export import (
+from src.foundation.support.refactors.serial_cc.test_results_by_site import (
+    GatewayTestResultsService,  # WHY: isolate the delegated site-results service.
+)
+from src.operations.exporting.export import (
     gateway_test_exporter as exporter_module,  # WHY: patch the exact lazy import lookup used at runtime.
 )
-from src.export.gateway_test_exporter import (
+from src.operations.exporting.export.gateway_test_exporter import (
     GatewayTestExporter,  # WHY: exercise the public gateway-test export entry points.
-)
-from src.refactors.serial_cc.test_results_by_site import (
-    GatewayTestResultsService,  # WHY: isolate the delegated site-results service.
 )
 
 

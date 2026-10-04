@@ -22,14 +22,14 @@
 
 **Wave 1 — independent (different files):**
 
-- [x] **T007** [P] [US1] Freeze environment-token presence at portal startup in `src/upgrade_portal/app/config.py`.
-- [x] **T008** [P] [US1] Extend session identity and credential modes for safe token-name ownership in `src/upgrade_portal/runtime/identity.py`.
-- [x] **T009** [P] [US2] Define selected-type validation and safe model fallback helpers in `src/upgrade_portal/upgrade/options.py`.
+- [x] **T007** [P] [US1] Freeze environment-token presence at portal startup in `src/interfaces/portals/upgrade_portal/app/config.py`.
+- [x] **T008** [P] [US1] Extend session identity and credential modes for safe token-name ownership in `src/interfaces/portals/upgrade_portal/runtime/identity.py`.
+- [x] **T009** [P] [US2] Define selected-type validation and safe model fallback helpers in `src/interfaces/portals/upgrade_portal/upgrade/options.py`.
 
 **⟶ Wait for Wave 1 to finish, then:**
 
-- [x] **T010** [US1] Build browser-token sessions, call `GetSelf`, and keep raw tokens out of output in `src/upgrade_portal/app/routes/auth.py`.
-- [x] **T011** [US2] Enforce selected types while saving upgrade options in `src/upgrade_portal/app/routes/upgrade.py`.
+- [x] **T010** [US1] Build browser-token sessions, call `GetSelf`, and keep raw tokens out of output in `src/interfaces/portals/upgrade_portal/app/routes/auth.py`.
+- [x] **T011** [US2] Enforce selected types while saving upgrade options in `src/interfaces/portals/upgrade_portal/app/routes/upgrade.py`.
 
 ## Phase 3: User Story 1 - Sign in with a browser token
 
@@ -41,12 +41,12 @@
 
 **Wave 1 — independent (different files):**
 
-- [x] **T013** [P] [US1] Add the startup-gated browser-token control and safe guidance to `src/upgrade_portal/app/assets/templates/auth/signin.html`.
-- [x] **T014** [P] [US1] Add client-side sign-in support that submits the token only to the sign-in route in `src/upgrade_portal/app/assets/static/js/portal.js`.
+- [x] **T013** [P] [US1] Add the startup-gated browser-token control and safe guidance to `src/interfaces/portals/upgrade_portal/app/assets/templates/auth/signin.html`.
+- [x] **T014** [P] [US1] Add client-side sign-in support that submits the token only to the sign-in route in `src/interfaces/portals/upgrade_portal/app/assets/static/js/portal.js`.
 
 **⟶ Wait for Wave 1 to finish, then:**
 
-- [x] **T015** [US1] Verify every guarded portal route receives the active registry session in `src/upgrade_portal/app/wiring.py`.
+- [x] **T015** [US1] Verify every guarded portal route receives the active registry session in `src/interfaces/portals/upgrade_portal/app/wiring.py`.
 
 **Checkpoint**: Browser-token sign-in is safe and independently testable.
 
@@ -60,12 +60,12 @@
 
 **Wave 1 — independent (different files):**
 
-- [x] **T017** [P] [US2] Add all, selected, and single type checkboxes to `src/upgrade_portal/app/assets/templates/upgrade/options.html`.
-- [x] **T018** [P] [US2] Submit selected types and filter rows in `src/upgrade_portal/app/assets/static/js/portal.js`.
+- [x] **T017** [P] [US2] Add all, selected, and single type checkboxes to `src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/options.html`.
+- [x] **T018** [P] [US2] Submit selected types and filter rows in `src/interfaces/portals/upgrade_portal/app/assets/static/js/portal.js`.
 
 **⟶ Wait for Wave 1 to finish, then:**
 
-- [x] **T019** [US2] Preserve complete capture rows and selected plan targets in `src/upgrade_portal/capture/assembly.py`.
+- [x] **T019** [US2] Preserve complete capture rows and selected plan targets in `src/interfaces/portals/upgrade_portal/capture/assembly.py`.
 
 **Checkpoint**: Type selection limits targets and plans but not capture completeness.
 
@@ -79,12 +79,12 @@
 
 **Wave 1 — independent (different files):**
 
-- [x] **T021** [P] [US3] Add target source and mismatch fields to option records in `src/upgrade_portal/upgrade/options.py`.
-- [x] **T022** [P] [US3] Show known firmware mismatch markers in `src/upgrade_portal/app/assets/templates/upgrade/options.html`.
+- [x] **T021** [P] [US3] Add target source and mismatch fields to option records in `src/interfaces/portals/upgrade_portal/upgrade/options.py`.
+- [x] **T022** [P] [US3] Show known firmware mismatch markers in `src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/options.html`.
 
 **⟶ Wait for Wave 1 to finish, then:**
 
-- [x] **T023** [US3] Keep known and unknown running firmware behavior in `src/upgrade_portal/capture/devices.py`.
+- [x] **T023** [US3] Keep known and unknown running firmware behavior in `src/interfaces/portals/upgrade_portal/capture/devices.py`.
 
 **Checkpoint**: The inventory clearly marks known differences and preserves unknown values.
 

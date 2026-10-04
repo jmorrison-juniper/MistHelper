@@ -19,10 +19,10 @@ import time
 from typing import Any
 from unittest.mock import MagicMock, patch
 
-from src.websocket import manager as manager_mod
-from src.websocket.manager import WebSocketManager
+from src.mist.realtime.websocket import manager as manager_mod
+from src.mist.realtime.websocket.manager import WebSocketManager
 
-_MANAGER_LOGGER = "src.websocket.manager"  # WHY: Same logger name the sibling manager tests assert on.
+_MANAGER_LOGGER = "src.mist.realtime.websocket.manager"  # WHY: Same logger name the sibling manager tests assert on.
 _JOIN_WAIT_SECONDS = 5.0  # WHY: Upper bound the fake reader waits for the stop signal.
 _EXIT_DELAY_SECONDS = 0.25  # WHY: Reader stays alive long enough to expose a missing join.
 
@@ -85,7 +85,7 @@ def test_start_websocket_thread_creates_daemon_reader() -> None:
     manager = WebSocketManager(_make_session())  # WHY: Real manager under test.
     fake_app = MagicMock()  # WHY: Replaces WebSocketApp so no socket is opened.
     fake_app.run_forever = lambda: None  # WHY: Returns at once, which keeps the test fast.
-    with patch("src.websocket.manager.websocket.WebSocketApp", return_value=fake_app):
+    with patch("src.mist.realtime.websocket.manager.websocket.WebSocketApp", return_value=fake_app):
         manager._start_websocket_thread(["Authorization: Token tok"])  # WHY: Exercises the real starter.
     assert manager.websocket_thread is not None  # WHY: The handle must be stored for the later join.
     assert manager.websocket_thread.daemon is True  # WHY: Acceptance criterion from issue #1875.

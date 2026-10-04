@@ -34,7 +34,7 @@ Add the shared performance monitoring package that issue #2533 requests. Keep th
 - The code keeps monitoring behind an explicit level setting.
 - The sink writes only bounded records and never raises into the measured operation.
 - The privacy policy uses deny-by-default label handling.
-- Existing `src/utils` already exceeds five children. This feature does not add another direct child there beyond the existing package.
+- Existing `src/foundation/support/utils` already exceeds five children. This feature does not add another direct child there beyond the existing package.
 
 ## Project Structure
 
@@ -50,7 +50,7 @@ specs/2533-perf-monitoring/
 ### Source Code (repository root)
 
 ```text
-src/utils/performance/
+src/foundation/support/utils/performance/
 ├── __init__.py
 ├── event.py
 ├── privacy.py
@@ -61,23 +61,23 @@ tests/unit/utils/performance/
 └── test_privacy_filter_storage.py
 ```
 
-**Structure Decision**: Keep the feature in `src/utils/performance/` because issue #2533 requires that import path. Keep all behavior inside classes in that package.
+**Structure Decision**: Keep the feature in `src/foundation/support/utils/performance/` because issue #2533 requires that import path. Keep all behavior inside classes in that package.
 
 ## Design
 
-### `src/utils/performance/event.py`
+### `src/foundation/support/utils/performance/event.py`
 
 `PerformanceEvent` stores the bounded event contract. `EventSource` reduces a raw source path to a safe source area before JSON output.
 
-### `src/utils/performance/privacy.py`
+### `src/foundation/support/utils/performance/privacy.py`
 
 `PerformancePrivacyPolicy` owns the deny patterns, allowed dimension keys, allowed dimension values, count buckets, status families, and source label scrubber.
 
-### `src/utils/performance/recorder.py`
+### `src/foundation/support/utils/performance/recorder.py`
 
 `RecorderSettings` holds the level, sample rate, queue bound, byte bound, and CPU clock flag. `Recorder` gates families before span allocation. `Span` reads wall and CPU clocks once at start and once at exit. `NullSpan` is the disabled path.
 
-### `src/utils/performance/sink.py`
+### `src/foundation/support/utils/performance/sink.py`
 
 `BoundedSink` bounds retained records by count and byte estimate. It flushes JSON Lines on request. It opens its circuit after repeated write failures.
 
@@ -96,5 +96,5 @@ python -m mypy src/ MistHelper.py wsgi.py scripts/mist_ideas_analyzer_pkg/__init
 python -m pydocstyle src/
 python -m bandit -q -c pyproject.toml -r src/
 python -m pytest tests/test_performance_monitoring.py tests/test_performance_memory.py tests/unit/utils/performance/test_privacy_filter_storage.py -v
-python -m pytest tests/test_performance_monitoring.py tests/test_performance_memory.py tests/unit/utils/performance/test_privacy_filter_storage.py --cov=src/utils/performance --cov-report=term-missing
+python -m pytest tests/test_performance_monitoring.py tests/test_performance_memory.py tests/unit/utils/performance/test_privacy_filter_storage.py --cov=src/foundation/support/utils/performance --cov-report=term-missing
 ```

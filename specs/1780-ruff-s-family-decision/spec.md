@@ -210,6 +210,6 @@ A reviewer reads a pull request that adds `# noqa: S603`. A gate rejects the ann
 
 - The team accepts a measured recommendation. [research.md](research.md) recommends Option 2 with two named corrections.
 - The tool versions stay pinned in `requirements-dev.txt`, so the measurement holds until Dependabot raises an update.
-- The `mist-ops-platform`, `web_portal`, and `src/maps` trees stay in the repository and stay in the ruff exclude list.
+- The `mist-ops-platform`, `web_portal`, and `src/interfaces/visualization/maps` trees stay in the repository and stay in the ruff exclude list.
 - The test suite keeps its `assert` statements. Pytest needs them, so `S101` in the test tree can never be a real result.
 - CodeQL stays in place and covers a different rule set, so it does not replace either tool.

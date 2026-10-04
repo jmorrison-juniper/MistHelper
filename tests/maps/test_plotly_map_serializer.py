@@ -1,6 +1,6 @@
 """Unit tests for PlotlyMapDataSerializer."""
 
-from src.maps.plotly_map_serializer import MapConfigParams, PlotlyMapDataSerializer
+from src.interfaces.visualization.maps.plotly_map_serializer import MapConfigParams, PlotlyMapDataSerializer
 
 
 def test_build_map_config() -> None:

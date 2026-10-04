@@ -6,7 +6,7 @@ Closes #3559
 
 ## Summary
 
-- Adds `src/reports/ap_scorecard/` with the `ApScorecard.run` handler for menu `278`.
+- Adds `src/mist/intelligence/reports/ap_scorecard/` with the `ApScorecard.run` handler for menu `278`.
 - Uses `listOrgDevicesStats` with `type=ap` through the existing `mistapi.get_all` pagination seam.
 - Writes `ApScorecard.csv` and `ApScorecardBySite.csv` through `DataExporter`.
 - Defers menu registration and shared-file wiring to `specs/3559-ap-scorecard/wiring.md`.
@@ -14,7 +14,7 @@ Closes #3559
 ## Files
 
 - `specs/3559-ap-scorecard/`
-- `src/reports/ap_scorecard/`
+- `src/mist/intelligence/reports/ap_scorecard/`
 - `tests/unit/reports/ap_scorecard/`
 - `changelog.d/issue-3559-ap-scorecard.md`
 
@@ -29,9 +29,9 @@ Closes #3559
 - [x] Tests added or updated for all changed functionality.
 - [x] Coverage meets or exceeds 80% threshold.
 - [x] New or changed guards state the measured count and prove one failing path.
-- [x] No new Ruff lint violations: `ruff check src\reports\ap_scorecard tests\unit\reports\ap_scorecard`.
-- [x] Code formatted with Black: `black --check src\reports\ap_scorecard tests\unit\reports\ap_scorecard`.
-- [x] mypy passes: `mypy src\reports\ap_scorecard --config-file pyproject.toml`.
+- [x] No new Ruff lint violations: `ruff check src\mist\intelligence\reports\ap_scorecard tests\unit\reports\ap_scorecard`.
+- [x] Code formatted with Black: `black --check src\mist\intelligence\reports\ap_scorecard tests\unit\reports\ap_scorecard`.
+- [x] mypy passes: `mypy src\mist\intelligence\reports\ap_scorecard --config-file pyproject.toml`.
 
 ## Security
 
@@ -60,14 +60,14 @@ Closes #3559
 ## Validation
 
 ```text
-C:\Users\jmorrison\mh-fleet\3559-ap-scorecard\.venv\Scripts\python.exe -m py_compile src\reports\ap_scorecard\__init__.py src\reports\ap_scorecard\client.py src\reports\ap_scorecard\model.py src\reports\ap_scorecard\operation.py tests\unit\reports\ap_scorecard\__init__.py tests\unit\reports\ap_scorecard\conftest.py tests\unit\reports\ap_scorecard\test_ap_scorecard_client.py tests\unit\reports\ap_scorecard\test_ap_scorecard_model.py tests\unit\reports\ap_scorecard\test_ap_scorecard_operation.py tests\unit\reports\ap_scorecard\test_ap_scorecard_support_files.py
-C:\Users\jmorrison\mh-fleet\3559-ap-scorecard\.venv\Scripts\python.exe -m ruff check src\reports\ap_scorecard tests\unit\reports\ap_scorecard
-C:\Users\jmorrison\mh-fleet\3559-ap-scorecard\.venv\Scripts\python.exe -m black --check src\reports\ap_scorecard tests\unit\reports\ap_scorecard
-C:\Users\jmorrison\mh-fleet\3559-ap-scorecard\.venv\Scripts\python.exe -m mypy src\reports\ap_scorecard --config-file pyproject.toml
-C:\Users\jmorrison\mh-fleet\3559-ap-scorecard\.venv\Scripts\python.exe -m pydocstyle src\reports\ap_scorecard
-C:\Users\jmorrison\mh-fleet\3559-ap-scorecard\.venv\Scripts\python.exe -m vulture src\reports\ap_scorecard --min-confidence 70
-C:\Users\jmorrison\mh-fleet\3559-ap-scorecard\.venv\Scripts\python.exe -m interrogate -v src\reports\ap_scorecard
-C:\Users\jmorrison\mh-fleet\3559-ap-scorecard\.venv\Scripts\python.exe -m radon cc src\reports\ap_scorecard -j | C:\Users\jmorrison\mh-fleet\3559-ap-scorecard\.venv\Scripts\complexity-gate.exe --max 10
+C:\Users\jmorrison\mh-fleet\3559-ap-scorecard\.venv\Scripts\python.exe -m py_compile src\mist\intelligence\reports\ap_scorecard\__init__.py src\mist\intelligence\reports\ap_scorecard\client.py src\mist\intelligence\reports\ap_scorecard\model.py src\mist\intelligence\reports\ap_scorecard\operation.py tests\unit\reports\ap_scorecard\__init__.py tests\unit\reports\ap_scorecard\conftest.py tests\unit\reports\ap_scorecard\test_ap_scorecard_client.py tests\unit\reports\ap_scorecard\test_ap_scorecard_model.py tests\unit\reports\ap_scorecard\test_ap_scorecard_operation.py tests\unit\reports\ap_scorecard\test_ap_scorecard_support_files.py
+C:\Users\jmorrison\mh-fleet\3559-ap-scorecard\.venv\Scripts\python.exe -m ruff check src\mist\intelligence\reports\ap_scorecard tests\unit\reports\ap_scorecard
+C:\Users\jmorrison\mh-fleet\3559-ap-scorecard\.venv\Scripts\python.exe -m black --check src\mist\intelligence\reports\ap_scorecard tests\unit\reports\ap_scorecard
+C:\Users\jmorrison\mh-fleet\3559-ap-scorecard\.venv\Scripts\python.exe -m mypy src\mist\intelligence\reports\ap_scorecard --config-file pyproject.toml
+C:\Users\jmorrison\mh-fleet\3559-ap-scorecard\.venv\Scripts\python.exe -m pydocstyle src\mist\intelligence\reports\ap_scorecard
+C:\Users\jmorrison\mh-fleet\3559-ap-scorecard\.venv\Scripts\python.exe -m vulture src\mist\intelligence\reports\ap_scorecard --min-confidence 70
+C:\Users\jmorrison\mh-fleet\3559-ap-scorecard\.venv\Scripts\python.exe -m interrogate -v src\mist\intelligence\reports\ap_scorecard
+C:\Users\jmorrison\mh-fleet\3559-ap-scorecard\.venv\Scripts\python.exe -m radon cc src\mist\intelligence\reports\ap_scorecard -j | C:\Users\jmorrison\mh-fleet\3559-ap-scorecard\.venv\Scripts\complexity-gate.exe --max 10
 C:\Users\jmorrison\mh-fleet\3559-ap-scorecard\.venv\Scripts\test-quality-analyzer.exe --gate --config .github\test-quality-config.toml --baseline .github\test-quality-baseline.json --changed-from origin/main
 C:\Users\jmorrison\mh-fleet\3559-ap-scorecard\.venv\Scripts\python.exe -m pytest tests\unit\reports\ap_scorecard -q --timeout=120
 Result: 26 passed. Interrogate reported 100.0% package docstring coverage. Complexity gate and test quality ratchet passed.

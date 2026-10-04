@@ -7,7 +7,7 @@ merge collapses two reports of one real event into one row.
 
 from __future__ import annotations
 
-from src.security.rogue_dhcp.records import (
+from src.operations.protection.security.rogue_dhcp.records import (
     SOURCE_MARVIS_ACTION,
     SOURCE_ORG_ALARM,
     SOURCE_ORG_EVENT,

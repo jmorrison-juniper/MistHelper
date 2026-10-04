@@ -11,9 +11,9 @@ from flask import Flask
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from src.upgrade_portal.api import numeric_input
-from src.upgrade_portal.app.routes import capture, select
-from src.upgrade_portal.capture import clients
+from src.interfaces.portals.upgrade_portal.api import numeric_input
+from src.interfaces.portals.upgrade_portal.app.routes import capture, select
+from src.interfaces.portals.upgrade_portal.capture import clients
 
 INVALID_TEXT = [
     pytest.param("\u00b2", id="superscript"),

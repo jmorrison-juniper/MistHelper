@@ -4,8 +4,8 @@
 
 This plan changes these files only:
 
-- `src/org/org_synthetic_probes_manager.py`
-- `src/device/ap_profile_migration_manager.py`
+- `src/mist/resources/org/org_synthetic_probes_manager.py`
+- `src/mist/resources/device/ap_profile_migration_manager.py`
 - `tests/unit/org/test_org_synthetic_probes_manager.py` if characterization coverage is needed
 - `tests/unit/device/test_ap_profile_migration_manager.py` if characterization coverage is needed
 - `specs/2827-compliance/spec.md`

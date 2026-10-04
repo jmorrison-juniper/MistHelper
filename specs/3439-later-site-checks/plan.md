@@ -49,9 +49,9 @@ The file `MistHelper.py` does not change.
 
 | File | Change |
 | - | - |
-| `src/upgrade_portal/app/routes/select.py` | Three new constants, `SiteListIncompleteError`, `SiteList.missing_sites`, and the error handler. `find_site` raises the error. The new `site_set_refusal` holds the site check of `site_choice_refusal`. |
-| `src/upgrade_portal/app/routes/org_upgrade.py` | `selected_rows` raises the error for a site list that lost a page. |
-| `src/upgrade_portal/app/assets/templates/error.html` | The template comment names the status 503 in the list of status codes. |
+| `src/interfaces/portals/upgrade_portal/app/routes/select.py` | Three new constants, `SiteListIncompleteError`, `SiteList.missing_sites`, and the error handler. `find_site` raises the error. The new `site_set_refusal` holds the site check of `site_choice_refusal`. |
+| `src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py` | `selected_rows` raises the error for a site list that lost a page. |
+| `src/interfaces/portals/upgrade_portal/app/assets/templates/error.html` | The template comment names the status 503 in the list of status codes. |
 | `specs/1823-upgrade-capture-portal/contracts/http-api.md` | The 503 answer of the inventory page, the inventory answer, and the capture start. |
 | `specs/1823-upgrade-capture-portal/contracts/README.md` | A 503 row in the status code table. |
 | `tests/unit/upgrade_portal/test_issue_3439_site_checks.py` | New. The missing-site rule, the raise rule, `find_site`, `site_set_refusal`, and `selected_rows`. |

@@ -1,7 +1,7 @@
 # Contract: VPN `_probe_target` Emits Bare Hostname
 
 **Feature**: 1024-vpn-icmp-reachability
-**Module**: `src/org/org_synthetic_probes_manager.py`
+**Module**: `src/mist/resources/org/org_synthetic_probes_manager.py`
 **Kind**: Internal Python API contract (VPN branches of a private function)
 
 ## Scope

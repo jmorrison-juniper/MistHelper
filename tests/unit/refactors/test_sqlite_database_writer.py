@@ -1,4 +1,4 @@
-"""Wave 12 P2 coverage for src/refactors/sqlite_database_writer.py (initiative #1018).
+"""Wave 12 P2 coverage for src/foundation/support/refactors/sqlite_database_writer.py (initiative #1018).
 
 Covers the SQLiteDatabaseWriter full write() pipeline including happy-path
 inserts, validation branches, directory creation errors, sqlite3.Error path,
@@ -22,9 +22,11 @@ from unittest.mock import MagicMock  # WHY: FR-008 mandates MagicMock(spec=...) 
 
 import pytest  # WHY: monkeypatch, caplog, tmp_path fixtures
 
-from src.db.database_schema_utils import DatabaseSchemaUtils  # WHY: the real DDL proves the ALTER names match CREATE.
-from src.refactors import sqlite_database_writer as swr_mod  # WHY: module handle for monkeypatching
-from src.refactors.sqlite_database_writer import SQLiteDatabaseWriter  # WHY: SUT direct import
+from src.foundation.persistence.db.database_schema_utils import (
+    DatabaseSchemaUtils,
+)  # WHY: the real DDL proves the ALTER names match CREATE.
+from src.foundation.support.refactors import sqlite_database_writer as swr_mod  # WHY: module handle for monkeypatching
+from src.foundation.support.refactors.sqlite_database_writer import SQLiteDatabaseWriter  # WHY: SUT direct import
 
 # ---------------------------------------------------------------------------
 # Fixture: install stub deps so no MistHelper.py import cost per test

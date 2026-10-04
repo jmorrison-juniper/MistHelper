@@ -6,7 +6,7 @@ Every MistHelper module binds the clock with ``import time``. That statement
 binds the one shared ``time`` module object, not a private copy. So a patch
 target that looks module-scoped is global in fact::
 
-    patch("src.api.api_fetch_utils.time.sleep")
+    patch("src.mist.access.api.api_fetch_utils.time.sleep")
 
 ``unittest.mock.patch`` splits that target on the last dot, resolves the shared
 ``time`` module, and sets ``sleep`` on it. The replacement reaches every thread
@@ -32,7 +32,7 @@ Pass the spy to ``patch`` through ``new``, then read the same attributes a
 ``MagicMock`` offers::
 
     spy = ThreadScopedSleepSpy()
-    with patch("src.api.api_fetch_utils.time.sleep", new=spy):
+    with patch("src.mist.access.api.api_fetch_utils.time.sleep", new=spy):
         APIFetchUtils.retry_one_item(...)
     spy.assert_called_once()
 """

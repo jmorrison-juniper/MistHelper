@@ -103,7 +103,7 @@ Format: **Decision** / **Rationale** / **Alternatives considered**.
 
 ### Cluster #898 — no-untyped-call via Protocols
 
-- **Decision**: Add Protocol classes in `src/utils/misthelper_facade.py` (creating the module if absent per FR-012). Each Protocol covers exactly the call surface used by `MistHelper.py`; `MistHelper.py` call sites are then typed to accept the Protocol, letting mypy resolve the call without suppression.
+- **Decision**: Add Protocol classes in `src/foundation/support/utils/misthelper_facade.py` (creating the module if absent per FR-012). Each Protocol covers exactly the call surface used by `MistHelper.py`; `MistHelper.py` call sites are then typed to accept the Protocol, letting mypy resolve the call without suppression.
 - **Rationale**: The suppression exists because module-level "facade globals" have implicit `Any` type. Protocols are the least-invasive typing tool for duck-typed facade patterns and do not require touching the underlying implementations.
 - **Alternatives considered**:
   - *Concrete type import*: Rejected because it couples `MistHelper.py` to specific implementations of the underlying `src/` subsystems, breaking the facade indirection.
@@ -127,7 +127,7 @@ Format: **Decision** / **Rationale** / **Alternatives considered**.
 
 ### Cluster #900 — Bandit
 
-- **Decision**: For `B603` (subprocess without `shell=True` review): audit each call site, add input validation (allow-list of executable names, `shlex.quote`-equivalent for arguments where dynamic), remove the `# nosec` once validation is in place. For `B404` (subprocess module import flagged at file top): if 3+ subprocess call sites remain post-audit, introduce `src/utils/subprocess_runner.py` as a single audited entry point and route `MistHelper.py` calls through it; if fewer than 3, keep per-site validation and add module-level justification comment.
+- **Decision**: For `B603` (subprocess without `shell=True` review): audit each call site, add input validation (allow-list of executable names, `shlex.quote`-equivalent for arguments where dynamic), remove the `# nosec` once validation is in place. For `B404` (subprocess module import flagged at file top): if 3+ subprocess call sites remain post-audit, introduce `src/foundation/support/utils/subprocess_runner.py` as a single audited entry point and route `MistHelper.py` calls through it; if fewer than 3, keep per-site validation and add module-level justification comment.
 - **Rationale**: Constitution's "Fix Over Suppress" principle explicitly forbids `# nosec` as a shortcut. Input validation is the root-cause fix for `B603`. Centralizing subprocess import at one file is the standard remediation for `B404` and also aligns with defense-in-depth.
 - **Alternatives considered**:
   - *`shell=True`*: Rejected outright — worse than the finding it would silence.
@@ -149,7 +149,7 @@ Format: **Decision** / **Rationale** / **Alternatives considered**.
 
 ### `subprocess_runner` helper threshold
 
-- **Decision**: Introduce `src/utils/subprocess_runner.py` (Story 7) if and only if the post-audit subprocess call-site count in `MistHelper.py` is ≥ 3. Otherwise perform per-site validation and delete `# nosec` per site.
+- **Decision**: Introduce `src/foundation/support/utils/subprocess_runner.py` (Story 7) if and only if the post-audit subprocess call-site count in `MistHelper.py` is ≥ 3. Otherwise perform per-site validation and delete `# nosec` per site.
 - **Rationale**: A one-off helper module for 1–2 call sites is over-engineered. Three or more sites justify the maintenance surface of the helper and its ≥ 90% coverage requirement (Story 7 Acceptance Scenario 3).
 
 ### `__all__` hoist threshold

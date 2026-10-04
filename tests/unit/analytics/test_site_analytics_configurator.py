@@ -5,7 +5,10 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from src.analytics.site_analytics_configurator import SiteAnalyticsConfigurator, SiteAnalyticsConfiguratorDeps
+from src.mist.intelligence.analytics.site_analytics_configurator import (
+    SiteAnalyticsConfigurator,
+    SiteAnalyticsConfiguratorDeps,
+)
 
 
 def _build_mistapi_stub() -> SimpleNamespace:

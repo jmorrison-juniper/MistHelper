@@ -8,12 +8,20 @@ from unittest.mock import MagicMock, patch  # WHY: replace cloud and writer boun
 
 import pytest  # WHY: pytest fixtures drive the real product functions.
 
-from src.ssh import cli_shell_manager as shell_module  # WHY: patch and drive the real CLI shell helper.
-from src.ssh.cli_shell_manager import CLIShellManager  # WHY: import the real product class.
-from src.ui import prompt_utils as prompt_module  # WHY: patch and drive the real prompt helpers.
-from src.ui.prompt_utils import PromptUtils  # WHY: import the real prompt helper.
-from src.upgrade_portal.api.run_controls import routes as run_routes  # WHY: patch the real evidence reader.
-from src.upgrade_portal.api.run_controls.routes import SiteStatsFirmwareEvidenceReader  # WHY: real reader.
+from src.interfaces.portals.upgrade_portal.api.run_controls import (
+    routes as run_routes,
+)  # WHY: patch the real evidence reader.
+from src.interfaces.portals.upgrade_portal.api.run_controls.routes import (
+    SiteStatsFirmwareEvidenceReader,
+)  # WHY: real reader.
+from src.interfaces.visualization.ui import (
+    prompt_utils as prompt_module,
+)  # WHY: patch and drive the real prompt helpers.
+from src.interfaces.visualization.ui.prompt_utils import PromptUtils  # WHY: import the real prompt helper.
+from src.operations.execution.ssh import (
+    cli_shell_manager as shell_module,
+)  # WHY: patch and drive the real CLI shell helper.
+from src.operations.execution.ssh.cli_shell_manager import CLIShellManager  # WHY: import the real product class.
 
 
 class _FailedResponse:

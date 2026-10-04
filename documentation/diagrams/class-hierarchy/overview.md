@@ -43,12 +43,12 @@ flowchart LR
 
 | Family | Count | Main package paths |
 |--------|-------|--------------------|
-| Exporters | 43 classes ending in `Exporter` | `src/export/`, `src/gateway/`, `src/reports/` |
-| Managers | 40 classes ending in `Manager` | `src/firmware/`, `src/device/`, `src/gateway/`, `src/maps/`, `src/capture/` |
-| Utilities | 31 classes ending in `Utils` | `src/utils/`, `src/export/`, `src/data/`, `src/network/` |
-| Config objects | 21 classes ending in `Config` | `src/dataclasses/`, `src/ssh/`, `src/capture/`, `src/firmware/` |
-| Runners | 16 classes ending in `Runner` | `src/ssh/`, `src/capture/`, `src/bootstrap/` |
-| Writers | 7 classes ending in `Writer` | `src/refactors/`, `src/db/`, `src/upgrade_portal/` |
+| Exporters | 43 classes ending in `Exporter` | `src/operations/exporting/export/`, `src/mist/resources/gateway/`, `src/mist/intelligence/reports/` |
+| Managers | 40 classes ending in `Manager` | `src/operations/execution/firmware/`, `src/mist/resources/device/`, `src/mist/resources/gateway/`, `src/interfaces/visualization/maps/`, `src/operations/execution/capture/` |
+| Utilities | 31 classes ending in `Utils` | `src/foundation/support/utils/`, `src/operations/exporting/export/`, `src/foundation/models/data/`, `src/mist/networking/network/` |
+| Config objects | 21 classes ending in `Config` | `src/foundation/models/dataclasses/`, `src/operations/execution/ssh/`, `src/operations/execution/capture/`, `src/operations/execution/firmware/` |
+| Runners | 16 classes ending in `Runner` | `src/operations/execution/ssh/`, `src/operations/execution/capture/`, `src/foundation/runtime/bootstrap/` |
+| Writers | 7 classes ending in `Writer` | `src/foundation/support/refactors/`, `src/foundation/persistence/db/`, `src/interfaces/portals/upgrade_portal/` |
 
 ## Family Sub-Diagrams
 

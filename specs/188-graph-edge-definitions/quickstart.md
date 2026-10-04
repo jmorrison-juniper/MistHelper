@@ -18,7 +18,7 @@ python -c "from arango import ArangoClient; c=ArangoClient('http://localhost:852
 
 ```powershell
 # 1. Syntax check
-python -m py_compile src/db/arango_writer.py
+python -m py_compile src/foundation/persistence/db/arango_writer.py
 
 # 2. Run full org collection (menu 165)
 python MistHelper.py --menu 165
@@ -54,4 +54,4 @@ for doc in cursor:
 
 | File | What Changed |
 |-|-|
-| `src/db/arango_writer.py` | `EDGE_DEFINITIONS`, `COLLECTION_VERTEX_MAP`, `ENTITY_TYPE_TO_VERTEX` expanded |
+| `src/foundation/persistence/db/arango_writer.py` | `EDGE_DEFINITIONS`, `COLLECTION_VERTEX_MAP`, `ENTITY_TYPE_TO_VERTEX` expanded |

@@ -1,10 +1,10 @@
-"""Tests for src.audit.time_parser module."""
+"""Tests for src.mist.access.audit.time_parser module."""
 
 import time
 
 import pytest
 
-from src.audit.time_parser import TimeRangeParser
+from src.mist.access.audit.time_parser import TimeRangeParser
 
 
 @pytest.fixture

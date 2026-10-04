@@ -4,7 +4,7 @@
 **Feature Branch**: `feat/2200-org-multisite-firmware-upgrade`
 **Updated**: 2026-09-11
 **Status**: Specified
-**Application**: `src/upgrade_portal`
+**Application**: `src/interfaces/portals/upgrade_portal`
 
 ## Purpose
 
@@ -38,9 +38,9 @@ The planner separates the selected devices by site and device family.
 | Family | Scope | Route |
 | - | - | - |
 | AP | Organization | One `upgradeOrgDevices` child job for all selected AP targets |
-| Switch | Site | One or more child jobs through `src/firmware/upgrade_service.py` |
-| Junos gateway | Site | One or more child jobs through `src/firmware/upgrade_service.py` |
-| SSR gateway | Organization | The existing SSR route from `src/firmware/upgrade_service.py` |
+| Switch | Site | One or more child jobs through `src/operations/execution/firmware/upgrade_service.py` |
+| Junos gateway | Site | One or more child jobs through `src/operations/execution/firmware/upgrade_service.py` |
+| SSR gateway | Organization | The existing SSR route from `src/operations/execution/firmware/upgrade_service.py` |
 | Mist Edge | None | The planner rejects the target |
 
 The planner uses the existing gateway classifier. If the classifier returns
@@ -163,9 +163,9 @@ children. The aggregate keeps all three outcomes.
 - **FR-005**: The planner MUST create at most one organization AP child.
 - **FR-006**: The AP child MUST contain AP targets only.
 - **FR-007**: The planner MUST route switches by site through
-  `src/firmware/upgrade_service.py`.
+  `src/operations/execution/firmware/upgrade_service.py`.
 - **FR-008**: The planner MUST route Junos gateways by site through
-  `src/firmware/upgrade_service.py`.
+  `src/operations/execution/firmware/upgrade_service.py`.
 - **FR-009**: The planner MUST use the existing organization SSR route when the
   gateway classifier returns SSR.
 - **FR-010**: The planner MUST reject Mist Edge targets.

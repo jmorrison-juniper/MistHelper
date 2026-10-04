@@ -53,7 +53,7 @@ region-resolver as an explicit `dedup_state` parameter (or as two positional
 `frozenset`-refs — final shape decided at data-model time).
 
 **Rationale**:
-- The target module `src/org/org_synthetic_probes_manager.py` is entirely
+- The target module `src/mist/resources/org/org_synthetic_probes_manager.py` is entirely
   function-based today. Introducing a class solely to hold two sets would
   be inconsistent with the module's established idiom and would trivially
   wrap a dict — a direct Principle II violation ("no wrapper classes").

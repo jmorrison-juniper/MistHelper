@@ -12,7 +12,7 @@
 
 ## Phase 3: Implementation
 
-- [x] T005 Render the state-gated confirmation link in `src/upgrade_portal/app/assets/templates/upgrade/progress.html`
+- [x] T005 Render the state-gated confirmation link in `src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/progress.html`
 - [x] T006 Run focused contract and Playwright tests and correct regressions
 
 ## Phase 4: Verification and issue update

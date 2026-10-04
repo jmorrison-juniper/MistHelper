@@ -1,6 +1,6 @@
 # Contract: Transport Classes
 
-The classes live in `src/websocket_streams/live/transport/`. Each class takes its socket
+The classes live in `src/mist/realtime/websocket_streams/live/transport/`. Each class takes its socket
 factory and its clock as constructor values, so the unit tests use fakes.
 
 ## MistStreamEndpoint

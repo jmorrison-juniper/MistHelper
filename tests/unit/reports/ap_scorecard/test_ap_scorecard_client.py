@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from src.reports.ap_scorecard import client
+from src.mist.intelligence.reports.ap_scorecard import client
 
 
 def test_ap_scorecard_client_calls_ap_stats_with_required_parameters(monkeypatch: pytest.MonkeyPatch) -> None:

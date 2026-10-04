@@ -8,7 +8,7 @@
 
 **Status**: Draft
 
-**Input**: User description: "Wire the AP profile migration manager (menus 207 and 208) into the project's PID-based API rate limiter at `src/utils/rate_limiting.py` so bulk migrations of thousands of APs stay under Mist's 5000-request-per-clock-hour ceiling."
+**Input**: User description: "Wire the AP profile migration manager (menus 207 and 208) into the project's PID-based API rate limiter at `src/foundation/support/utils/rate_limiting.py` so bulk migrations of thousands of APs stay under Mist's 5000-request-per-clock-hour ceiling."
 
 ## Scope of This Addendum
 
@@ -18,11 +18,11 @@ The parent spec covers the operator workflow, the backup file format, and the st
 
 ## Problem Statement
 
-The migration operation added in the parent spec issues one Mist `PUT /sites/{site_id}/devices/{device_id}` per AP that must move. The current implementation in `src/device/ap_profile_migration_manager.py` (see `_reassign_one_ap`, `_run_reassignment_loop`, and the revert path in `_revert_one_ap` and its enclosing loop near line 1120) has no pacing between PUT calls. The only pacing today is a per-retry `time.sleep(0.5)` before an attempt and a `time.sleep(1.0)` after a failed attempt, both of which run only inside the retry branch, not between successful PUT calls.
+The migration operation added in the parent spec issues one Mist `PUT /sites/{site_id}/devices/{device_id}` per AP that must move. The current implementation in `src/mist/resources/device/ap_profile_migration_manager.py` (see `_reassign_one_ap`, `_run_reassignment_loop`, and the revert path in `_revert_one_ap` and its enclosing loop near line 1120) has no pacing between PUT calls. The only pacing today is a per-retry `time.sleep(0.5)` before an attempt and a `time.sleep(1.0)` after a failed attempt, both of which run only inside the retry branch, not between successful PUT calls.
 
 Mist enforces a rate limit of 5000 requests per clock hour per API token. A bulk migration of 10,000 APs at full serial throughput can exceed this limit inside a single run and trigger 429 responses. Under the parent spec's stop-on-failure rule (FR-017), a 429 counted as a hard failure would halt a large migration mid-run, leaving the org in a mixed state and forcing the operator to revert or resume manually.
 
-The project already has a PID-based adaptive rate limiter at `src/utils/rate_limiting.py` (`RateLimitingUtils.get_rate_limited_delay(smoothed, apisession, api_usage_cache)`), and it is already the throttle used by `src/api/api_data_fetcher.py._apply_rate_limiting`. This addendum wires the migration manager into that same limiter so that bulk migrations self-throttle instead of hitting 429s.
+The project already has a PID-based adaptive rate limiter at `src/foundation/support/utils/rate_limiting.py` (`RateLimitingUtils.get_rate_limited_delay(smoothed, apisession, api_usage_cache)`), and it is already the throttle used by `src/mist/access/api/api_data_fetcher.py._apply_rate_limiting`. This addendum wires the migration manager into that same limiter so that bulk migrations self-throttle instead of hitting 429s.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -72,9 +72,9 @@ An operator reverts a migration whose backup lists 10,000 APs. The revert path (
 
 ### Functional Requirements
 
-- **FR-A01**: The migration operation MUST call the project's existing PID-based rate limiter (`RateLimitingUtils.get_rate_limited_delay(...)` in `src/utils/rate_limiting.py`) once before every PUT it issues against `PUT /sites/{site_id}/devices/{device_id}`, and MUST sleep for the returned delay. This applies to both the reassignment loop path (`_run_reassignment_loop` -> `_reassign_one_ap`) and to any retry attempt inside `_reassign_one_ap`.
+- **FR-A01**: The migration operation MUST call the project's existing PID-based rate limiter (`RateLimitingUtils.get_rate_limited_delay(...)` in `src/foundation/support/utils/rate_limiting.py`) once before every PUT it issues against `PUT /sites/{site_id}/devices/{device_id}`, and MUST sleep for the returned delay. This applies to both the reassignment loop path (`_run_reassignment_loop` -> `_reassign_one_ap`) and to any retry attempt inside `_reassign_one_ap`.
 
-- **FR-A02**: The revert operation MUST apply the same pacing rule as FR-A01 to every PUT it issues. This applies to `_revert_one_ap` and to its enclosing loop (the revert loop that begins near line 1120 of `src/device/ap_profile_migration_manager.py`).
+- **FR-A02**: The revert operation MUST apply the same pacing rule as FR-A01 to every PUT it issues. This applies to `_revert_one_ap` and to its enclosing loop (the revert loop that begins near line 1120 of `src/mist/resources/device/ap_profile_migration_manager.py`).
 
 - **FR-A03**: The migration and revert operations MUST feed HTTP 429 responses to the rate limiter as an error signal so subsequent delays adapt upward. This MUST use whatever error-signal path `RateLimitingUtils` already exposes; the addendum MUST NOT introduce a new limiter API surface.
 
@@ -98,7 +98,7 @@ An operator reverts a migration whose backup lists 10,000 APs. The revert path (
 
 ### Key Entities
 
-- **PID rate limiter (`RateLimitingUtils`)**: The existing `src/utils/rate_limiting.py` static-method facade. This addendum consumes it; it does not modify it. The limiter returns an adaptive delay in seconds based on smoothed history and the `apisession`'s known usage cache.
+- **PID rate limiter (`RateLimitingUtils`)**: The existing `src/foundation/support/utils/rate_limiting.py` static-method facade. This addendum consumes it; it does not modify it. The limiter returns an adaptive delay in seconds based on smoothed history and the `apisession`'s known usage cache.
 - **429 response**: A Mist HTTP response with `status_code == 429`, signaling that the token has approached or exceeded its clock-hour request budget. Under this addendum a 429 is a signal to the limiter, not a hard failure.
 - **Fallback delay**: A fixed, conservative sleep value used only if the limiter raises. This is a safety net so a limiter fault cannot halt a large migration.
 
@@ -116,11 +116,11 @@ An operator reverts a migration whose backup lists 10,000 APs. The revert path (
 
 - **SC-A05**: A unit test that raises an exception from `RateLimitingUtils.get_rate_limited_delay` on the 5th call verifies that the migration logs a warning, applies the fallback delay, and continues without halting. The run reports the same success count it would have reported without the fault.
 
-- **SC-A06**: The full existing MistHelper test suite (`cd src; pytest`) passes. `ruff check .` reports zero violations. Docstring coverage for `src/device/ap_profile_migration_manager.py` remains at or above 90 percent per the DOCS.md rule.
+- **SC-A06**: The full existing MistHelper test suite (`cd src; pytest`) passes. `ruff check .` reports zero violations. Docstring coverage for `src/mist/resources/device/ap_profile_migration_manager.py` remains at or above 90 percent per the DOCS.md rule.
 
 - **SC-A07**: The migration and revert summary output reports the pacing statistics required by FR-A09 (PUTs issued, 429 count, non-429 failure count, mean delay, max delay).
 
-- **SC-A08**: No new third-party dependency is added to `pyproject.toml` by this addendum. No new module is added under `src/utils/` for rate-limit handling; the existing `src/utils/rate_limiting.py` is the only limiter the migration and revert paths consult.
+- **SC-A08**: No new third-party dependency is added to `pyproject.toml` by this addendum. No new module is added under `src/foundation/support/utils/` for rate-limit handling; the existing `src/foundation/support/utils/rate_limiting.py` is the only limiter the migration and revert paths consult.
 
 ## Assumptions
 

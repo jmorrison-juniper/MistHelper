@@ -15,7 +15,8 @@ from unittest.mock import patch
 
 import pytest
 
-from src.marvis.actions.model import (
+from src.foundation.support.utils.input_utils import InputUtils
+from src.mist.intelligence.marvis.actions.model import (
     CATEGORY_NAMES,
     RESOLUTION_CODES,
     TOPIC_NAMES,
@@ -23,7 +24,7 @@ from src.marvis.actions.model import (
     MarvisActionRecordBuilder,
     MarvisCatalog,
 )
-from src.marvis.actions.selection import (
+from src.mist.intelligence.marvis.actions.selection import (
     COMMENT_MAX_LENGTH,
     MODE_ACTION_NOUNS,
     MODE_EXPORT_ALL,
@@ -38,8 +39,7 @@ from src.marvis.actions.selection import (
     MarvisTopicCount,
     MarvisTopicSelector,
 )
-from src.troubleshooting.interactive_test_runner import UnattendedInteractiveInputProvider
-from src.utils.input_utils import InputUtils
+from src.mist.intelligence.troubleshooting.interactive_test_runner import UnattendedInteractiveInputProvider
 from tests.unit.marvis.actions.conftest import make_raw
 
 CODES = {code.key: code for code in RESOLUTION_CODES}

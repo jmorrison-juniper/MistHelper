@@ -4,11 +4,11 @@
 
 | Original Function | Extracted Module | Owner Class | Facade Location | Owner |
 | - | - | - | - | - |
-| `_start_site_scan_capture_all_aps` | `src/capture/multi_ap_scan_workflow.py` | `MultiApScanCaptureWorkflow` | `MistHelper.py` | Packet-capture compatibility facade (`_LegacyPacketCaptureManager`) |
-| `_wait_and_download_pcap` | `src/capture/site_pcap_wait_download_workflow.py` | `SitePcapWaitDownloadWorkflow` | `MistHelper.py` | Packet-capture compatibility facade (`_LegacyPacketCaptureManager`) |
-| `_wait_and_download_pcap_org` | `src/capture/org_pcap_wait_download_workflow.py` | `OrgPcapWaitDownloadWorkflow` | `MistHelper.py` | Packet-capture compatibility facade (`_LegacyPacketCaptureManager`) |
-| `wifi_clients` | `src/export/wifi_clients_exporter.py` | `WifiClientsExporter` | `MistHelper.py` | Site client export compatibility facade (`SiteClientExporter`) |
-| `run_interactive_test` | `src/troubleshooting/interactive_test_runner.py` | `InteractiveTestRunner` | `MistHelper.py` | Interactive test compatibility facade (module-level entrypoint) |
+| `_start_site_scan_capture_all_aps` | `src/operations/execution/capture/multi_ap_scan_workflow.py` | `MultiApScanCaptureWorkflow` | `MistHelper.py` | Packet-capture compatibility facade (`_LegacyPacketCaptureManager`) |
+| `_wait_and_download_pcap` | `src/operations/execution/capture/site_pcap_wait_download_workflow.py` | `SitePcapWaitDownloadWorkflow` | `MistHelper.py` | Packet-capture compatibility facade (`_LegacyPacketCaptureManager`) |
+| `_wait_and_download_pcap_org` | `src/operations/execution/capture/org_pcap_wait_download_workflow.py` | `OrgPcapWaitDownloadWorkflow` | `MistHelper.py` | Packet-capture compatibility facade (`_LegacyPacketCaptureManager`) |
+| `wifi_clients` | `src/operations/exporting/export/wifi_clients_exporter.py` | `WifiClientsExporter` | `MistHelper.py` | Site client export compatibility facade (`SiteClientExporter`) |
+| `run_interactive_test` | `src/mist/intelligence/troubleshooting/interactive_test_runner.py` | `InteractiveTestRunner` | `MistHelper.py` | Interactive test compatibility facade (module-level entrypoint) |
 
 ## Test Coverage Mapping
 

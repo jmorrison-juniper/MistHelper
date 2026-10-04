@@ -19,7 +19,7 @@ gateway statistics.
 
 ## Files
 
-- `src/reports/wan_edge_scorecard/`
+- `src/mist/intelligence/reports/wan_edge_scorecard/`
 - `tests/unit/reports/wan_edge_scorecard/`
 - `changelog.d/issue-3560-wan-edge-scorecard.md`
 - `specs/3560-wan-edge-scorecard/`
@@ -75,14 +75,14 @@ The exact menu, registry, documentation, and import changes are in
 ## Local validation
 
 - `python -m pytest tests\unit\reports\wan_edge_scorecard -q --timeout=120`: 18 passed.
-- `python -m pytest tests\unit\reports\wan_edge_scorecard -q --timeout=120 --cov=src.reports.wan_edge_scorecard --cov-report=term-missing`: 18 passed, 96% coverage.
-- `python -m py_compile src\reports\wan_edge_scorecard\__init__.py src\reports\wan_edge_scorecard\client.py src\reports\wan_edge_scorecard\models.py src\reports\wan_edge_scorecard\scorecard.py src\reports\wan_edge_scorecard\scoring.py`: passed.
+- `python -m pytest tests\unit\reports\wan_edge_scorecard -q --timeout=120 --cov=src.mist.intelligence.reports.wan_edge_scorecard --cov-report=term-missing`: 18 passed, 96% coverage.
+- `python -m py_compile src\mist\intelligence\reports\wan_edge_scorecard\__init__.py src\mist\intelligence\reports\wan_edge_scorecard\client.py src\mist\intelligence\reports\wan_edge_scorecard\models.py src\mist\intelligence\reports\wan_edge_scorecard\scorecard.py src\mist\intelligence\reports\wan_edge_scorecard\scoring.py`: passed.
 - `python -m py_compile MistHelper.py`: passed.
-- `python -m ruff check MistHelper.py src\reports\wan_edge_scorecard tests\unit\reports\wan_edge_scorecard`: passed.
-- `python -m black --check MistHelper.py src\reports\wan_edge_scorecard tests\unit\reports\wan_edge_scorecard`: passed.
-- `python -m mypy src\reports\wan_edge_scorecard --config-file pyproject.toml`: passed.
-- `python -m pydocstyle src\reports\wan_edge_scorecard`: passed.
-- `python -m vulture src\reports\wan_edge_scorecard --min-confidence 70`: passed.
-- `python -m interrogate -v src\reports\wan_edge_scorecard`: 100 percent.
-- `python -m radon cc src\reports\wan_edge_scorecard -j | complexity-gate --max 10`: passed.
+- `python -m ruff check MistHelper.py src\mist\intelligence\reports\wan_edge_scorecard tests\unit\reports\wan_edge_scorecard`: passed.
+- `python -m black --check MistHelper.py src\mist\intelligence\reports\wan_edge_scorecard tests\unit\reports\wan_edge_scorecard`: passed.
+- `python -m mypy src\mist\intelligence\reports\wan_edge_scorecard --config-file pyproject.toml`: passed.
+- `python -m pydocstyle src\mist\intelligence\reports\wan_edge_scorecard`: passed.
+- `python -m vulture src\mist\intelligence\reports\wan_edge_scorecard --min-confidence 70`: passed.
+- `python -m interrogate -v src\mist\intelligence\reports\wan_edge_scorecard`: 100 percent.
+- `python -m radon cc src\mist\intelligence\reports\wan_edge_scorecard -j | complexity-gate --max 10`: passed.
 - `test-quality-analyzer --gate --config .github\test-quality-config.toml --baseline .github\test-quality-baseline.json --changed-from origin/main`: passed, 0 new findings.

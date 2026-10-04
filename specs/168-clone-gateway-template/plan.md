@@ -7,7 +7,7 @@
 
 ## Summary
 
-Add Menu 194 to MistHelper that lets a NOC engineer pick a gateway device at a site, strip device-specific metadata from its local config, and create a new org-level gateway template from the retained config fields. The source is always the device's live local config (not an existing template). Implementation follows the established extracted-class pattern: `DeviceConfigTemplateClonerManager` lives in `src/gateway/device_template_cloner.py`; a same-name delegation stub in `MistHelper.py` forwards calls to it.
+Add Menu 194 to MistHelper that lets a NOC engineer pick a gateway device at a site, strip device-specific metadata from its local config, and create a new org-level gateway template from the retained config fields. The source is always the device's live local config (not an existing template). Implementation follows the established extracted-class pattern: `DeviceConfigTemplateClonerManager` lives in `src/mist/resources/gateway/device_template_cloner.py`; a same-name delegation stub in `MistHelper.py` forwards calls to it.
 
 ---
 
@@ -105,7 +105,7 @@ classDiagram
 
 ### Module Location
 
-`src/gateway/device_template_cloner.py` — follows the pattern established by other extracted managers (e.g., `src/firmware/`, `src/ssh/`). If `src/gateway/` does not yet exist it must be created with an `__init__.py`.
+`src/mist/resources/gateway/device_template_cloner.py` — follows the pattern established by other extracted managers (e.g., `src/operations/execution/firmware/`, `src/operations/execution/ssh/`). If `src/mist/resources/gateway/` does not yet exist it must be created with an `__init__.py`.
 
 ---
 
@@ -239,7 +239,7 @@ Entry to add to `ENDPOINT_PRIMARY_KEY_STRATEGIES` in `MistHelper.py`:
 
 ## Files to Create / Modify
 
-### 1. CREATE `src/gateway/device_template_cloner.py`
+### 1. CREATE `src/mist/resources/gateway/device_template_cloner.py`
 
 New file. Contains:
 - `STRIP_FIELDS: frozenset` — module-level constant, list of metadata keys to remove
@@ -247,7 +247,7 @@ New file. Contains:
 - `DeviceConfigTemplateClonerManager` class with `__init__` and `run()` public method
 - Private helpers: `_select_site`, `_select_gateway_device`, `_fetch_device_config`, `_prompt_template_meta`, `_build_template_payload`, `_create_template`, `_export_result`
 
-If `src/gateway/__init__.py` does not exist, create it (empty, with module docstring).
+If `src/mist/resources/gateway/__init__.py` does not exist, create it (empty, with module docstring).
 
 ### 2. MODIFY `MistHelper.py`
 
@@ -267,7 +267,7 @@ Three changes:
 class DeviceConfigTemplateClonerManager:
     """Delegation stub — forwards all calls to the extracted implementation."""
     def __init__(self, apisession, org_id, input_fn, get_csv_path_fn, save_data_fn, check_and_generate_csv_fn):
-        from src.gateway.device_template_cloner import DeviceConfigTemplateClonerManager as _Impl
+        from src.mist.resources.gateway.device_template_cloner import DeviceConfigTemplateClonerManager as _Impl
         self._impl = _Impl(apisession, org_id, input_fn, get_csv_path_fn, save_data_fn, check_and_generate_csv_fn)
     def run(self):
         return self._impl.run()
@@ -332,7 +332,7 @@ def test_build_payload_never_leaks_strip_fields(device_config):
 ## Dependency Injection Signatures
 
 ```python
-# src/gateway/device_template_cloner.py
+# src/mist/resources/gateway/device_template_cloner.py
 class DeviceConfigTemplateClonerManager:
     def __init__(
         self,
@@ -365,4 +365,4 @@ The following are resolved inline (no external research needed):
 | New config fields added to future Mist API versions | Strip list may miss new metadata fields | Log a warning if any unknown top-level key is neither in STRIP nor KEEP at runtime |
 | Device with no local config overrides (all defaults) | Payload may be nearly empty but valid | Acceptable — Mist will create a minimal template |
 | Site with many devices (>50 gateways) | Numbered list becomes unwieldy | Out of scope; consistent with existing patterns |
-| `src/gateway/` package doesn't exist yet | Import error at startup | Create `src/gateway/__init__.py` as part of this feature |
+| `src/mist/resources/gateway/` package doesn't exist yet | Import error at startup | Create `src/mist/resources/gateway/__init__.py` as part of this feature |

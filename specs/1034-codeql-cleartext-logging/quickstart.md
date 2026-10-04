@@ -236,7 +236,7 @@ document under `specs/` never reaches that job, so this check runs by hand.
 **Proves**: SC-006 and FR-017.
 
 ```powershell
-Select-String -Path src\ssh\*.py, src\ssh\**\*.py -Pattern '!\?' |
+Select-String -Path src\operations\execution\ssh\*.py, src\operations\execution\ssh\**\*.py -Pattern '!\?' |
   ForEach-Object { "$($_.Path):$($_.LineNumber)" }
 ```
 

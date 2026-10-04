@@ -1,7 +1,7 @@
 """Unit tests for GlobalWiredClientReportGenerator (issue #878 tranche 32 -- un-omit).
 
 Covers every branch of every static method on
-``src.reports.global_wired_client_report_generator``: ``execute`` (cancel /
+``src.mist.intelligence.reports.global_wired_client_report_generator``: ``execute`` (cancel /
 no-records / happy paths), ``_prompt_filter_criteria`` (mac cancel, mfg cancel,
 both skipped, mac provided), ``_collect_single_filter`` (no-operator,
 value-required-and-invalid, value-required-and-valid, operator-with-no-value),
@@ -24,7 +24,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.reports.global_wired_client_report_generator import (
+from src.mist.intelligence.reports.global_wired_client_report_generator import (
     GlobalWiredClientReportGenerator as R,
 )
 
@@ -63,7 +63,7 @@ def _make_mh(**extra):
 
 def _patch_mh(fake_mh):
     """Patch importlib.import_module in the target module to return ``fake_mh``."""
-    return patch("src.reports.global_wired_client_report_generator.SourceDependencyResolver", fake_mh)
+    return patch("src.mist.intelligence.reports.global_wired_client_report_generator.SourceDependencyResolver", fake_mh)
 
 
 # ---------- execute ----------
@@ -84,7 +84,9 @@ def test_execute_returns_when_user_cancels_filter_prompt() -> None:
 
 def test_execute_returns_when_no_records(caplog: pytest.LogCaptureFixture) -> None:
     """Empty fetch prints notice and skips write."""
-    caplog.set_level(logging.INFO, logger="src.utils.console")  # 1031: echo() logs INFO on src.utils.console.
+    caplog.set_level(
+        logging.INFO, logger="src.foundation.support.utils.console"
+    )  # 1031: echo() logs INFO on src.foundation.support.utils.console.
     fake_mh = _make_mh()
     fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org-uuid"
     with (
@@ -121,7 +123,7 @@ def test_fetch_clients_503_logs_status_and_returns_empty(caplog: pytest.LogCaptu
     fake_mistapi = MagicMock(name="mistapi")  # WHY: block live Mist SDK access.
     fake_mistapi.api.v1.orgs.wired_clients.searchOrgWiredClients.return_value = fake_response  # WHY: drive branch.
     with (
-        patch("src.reports.global_wired_client_report_generator.mistapi", fake_mistapi),
+        patch("src.mist.intelligence.reports.global_wired_client_report_generator.mistapi", fake_mistapi),
         _patch_mh(fake_mh),
         caplog.at_level(logging.ERROR),
     ):
@@ -242,7 +244,9 @@ def test_resolve_operator_choice_returns_catalog_entry_for_valid_index() -> None
 
 def test_resolve_operator_choice_returns_none_when_out_of_range(caplog: pytest.LogCaptureFixture) -> None:
     """Index outside catalog -> None + warning."""
-    caplog.set_level(logging.INFO, logger="src.utils.console")  # 1031: echo() logs INFO on src.utils.console.
+    caplog.set_level(
+        logging.INFO, logger="src.foundation.support.utils.console"
+    )  # 1031: echo() logs INFO on src.foundation.support.utils.console.
     with _patch_mh(_make_mh()):
         assert R._resolve_operator_choice("99", "MAC") is None
     assert "Invalid selection" in caplog.text
@@ -250,7 +254,9 @@ def test_resolve_operator_choice_returns_none_when_out_of_range(caplog: pytest.L
 
 def test_resolve_operator_choice_returns_none_for_non_numeric(caplog: pytest.LogCaptureFixture) -> None:
     """Non-numeric input -> None + warning."""
-    caplog.set_level(logging.INFO, logger="src.utils.console")  # 1031: echo() logs INFO on src.utils.console.
+    caplog.set_level(
+        logging.INFO, logger="src.foundation.support.utils.console"
+    )  # 1031: echo() logs INFO on src.foundation.support.utils.console.
     with _patch_mh(_make_mh()):
         assert R._resolve_operator_choice("abc", "MAC") is None
     assert "Invalid selection" in caplog.text
@@ -261,7 +267,9 @@ def test_resolve_operator_choice_returns_none_for_non_numeric(caplog: pytest.Log
 
 def test_prompt_operator_delegates_to_resolve(caplog: pytest.LogCaptureFixture) -> None:
     """Prompt shows menu, reads input, then delegates parsing."""
-    caplog.set_level(logging.INFO, logger="src.utils.console")  # 1031: echo() logs INFO on src.utils.console.
+    caplog.set_level(
+        logging.INFO, logger="src.foundation.support.utils.console"
+    )  # 1031: echo() logs INFO on src.foundation.support.utils.console.
     fake_mh = _make_mh()
     fake_mh.InputUtils.safe_input.return_value = "1"
     with _patch_mh(fake_mh):
@@ -283,7 +291,7 @@ def test_fetch_clients_success_without_criteria() -> None:
     fake_mistapi.api.v1.orgs.wired_clients.searchOrgWiredClients.return_value = "resp"
     fake_mistapi.get_all.return_value = [{"mac": "aa"}]
     with (
-        patch("src.reports.global_wired_client_report_generator.mistapi", fake_mistapi),
+        patch("src.mist.intelligence.reports.global_wired_client_report_generator.mistapi", fake_mistapi),
         _patch_mh(fake_mh),
     ):
         records, remote_used = R._fetch_clients("org-uuid", None)
@@ -302,7 +310,7 @@ def test_fetch_clients_success_with_pushable_criteria() -> None:
     fake_mistapi.get_all.return_value = None  # exercise `or []`
     criteria = {"mac_operator": "equals", "mac_value": "aa"}
     with (
-        patch("src.reports.global_wired_client_report_generator.mistapi", fake_mistapi),
+        patch("src.mist.intelligence.reports.global_wired_client_report_generator.mistapi", fake_mistapi),
         _patch_mh(fake_mh),
     ):
         records, remote_used = R._fetch_clients("org-uuid", criteria)
@@ -314,12 +322,14 @@ def test_fetch_clients_success_with_pushable_criteria() -> None:
 
 def test_fetch_clients_returns_empty_on_exception(caplog: pytest.LogCaptureFixture) -> None:
     """API failure returns ([], False) and prints error."""
-    caplog.set_level(logging.INFO, logger="src.utils.console")  # 1031: echo() logs INFO on src.utils.console.
+    caplog.set_level(
+        logging.INFO, logger="src.foundation.support.utils.console"
+    )  # 1031: echo() logs INFO on src.foundation.support.utils.console.
     fake_mh = _make_mh()
     fake_mistapi = MagicMock(name="mistapi")
     fake_mistapi.api.v1.orgs.wired_clients.searchOrgWiredClients.side_effect = RuntimeError("boom")
     with (
-        patch("src.reports.global_wired_client_report_generator.mistapi", fake_mistapi),
+        patch("src.mist.intelligence.reports.global_wired_client_report_generator.mistapi", fake_mistapi),
         _patch_mh(fake_mh),
     ):
         records, remote_used = R._fetch_clients("org-uuid", None)
@@ -336,7 +346,7 @@ def test_fetch_clients_http_404_reports_status_and_skips_success(caplog: pytest.
     fake_mistapi.api.v1.orgs.wired_clients.searchOrgWiredClients.return_value = response  # WHY: feed 404.
     fake_mistapi.get_all.return_value = []  # WHY: success pagination must not matter.
     with (
-        patch("src.reports.global_wired_client_report_generator.mistapi", fake_mistapi),
+        patch("src.mist.intelligence.reports.global_wired_client_report_generator.mistapi", fake_mistapi),
         _patch_mh(fake_mh),
         caplog.at_level(logging.ERROR),
     ):
@@ -518,7 +528,9 @@ def test_build_metadata_with_both_filters() -> None:
 
 def test_write_outputs_prints_zero_match_message(caplog: pytest.LogCaptureFixture) -> None:
     """Zero matched records prints the no-matches notice."""
-    caplog.set_level(logging.INFO, logger="src.utils.console")  # 1031: echo() logs INFO on src.utils.console.
+    caplog.set_level(
+        logging.INFO, logger="src.foundation.support.utils.console"
+    )  # 1031: echo() logs INFO on src.foundation.support.utils.console.
     metadata = {"records_matched": 0, "records_retrieved": 5}
     with (
         patch.object(R, "_write_standard_export") as write_export,
@@ -532,7 +544,9 @@ def test_write_outputs_prints_zero_match_message(caplog: pytest.LogCaptureFixtur
 
 def test_write_outputs_with_matches_skips_no_match_notice(caplog: pytest.LogCaptureFixture) -> None:
     """When records match, only summary is printed; no zero-match notice."""
-    caplog.set_level(logging.INFO, logger="src.utils.console")  # 1031: echo() logs INFO on src.utils.console.
+    caplog.set_level(
+        logging.INFO, logger="src.foundation.support.utils.console"
+    )  # 1031: echo() logs INFO on src.foundation.support.utils.console.
     metadata = {"records_matched": 1, "records_retrieved": 5}
     matched = [{"mac": "aa"}]
     with (
@@ -549,7 +563,7 @@ def test_write_standard_export_skips_pipeline_when_empty() -> None:
     """Empty matches skip flatten/escape but still call write."""
     fake_mh = _make_mh()
     with (
-        patch("src.reports.global_wired_client_report_generator.DataProcessingUtils") as fake_dpu,
+        patch("src.mist.intelligence.reports.global_wired_client_report_generator.DataProcessingUtils") as fake_dpu,
         _patch_mh(fake_mh),
     ):
         R._write_standard_export([])
@@ -563,7 +577,7 @@ def test_write_standard_export_runs_pipeline_when_populated() -> None:
     """Populated matches flow through flatten -> escape_multiline -> write."""
     fake_mh = _make_mh()
     with (
-        patch("src.reports.global_wired_client_report_generator.DataProcessingUtils") as fake_dpu,
+        patch("src.mist.intelligence.reports.global_wired_client_report_generator.DataProcessingUtils") as fake_dpu,
         _patch_mh(fake_mh),
     ):
         fake_dpu.flatten_nested_fields.return_value = [{"flat": True}]
@@ -578,7 +592,9 @@ def test_write_standard_export_runs_pipeline_when_populated() -> None:
 
 def test_write_local_report_writes_summary_json(tmp_path, monkeypatch, caplog: pytest.LogCaptureFixture) -> None:
     """Writes JSON summary file to the data/ directory."""
-    caplog.set_level(logging.INFO, logger="src.utils.console")  # 1031: echo() logs INFO on src.utils.console.
+    caplog.set_level(
+        logging.INFO, logger="src.foundation.support.utils.console"
+    )  # 1031: echo() logs INFO on src.foundation.support.utils.console.
     monkeypatch.chdir(tmp_path)
     (tmp_path / "data").mkdir()
     metadata = {"records_matched": 1, "records_retrieved": 5}
@@ -590,10 +606,12 @@ def test_write_local_report_writes_summary_json(tmp_path, monkeypatch, caplog: p
 
 def test_write_local_report_handles_os_error(caplog: pytest.LogCaptureFixture) -> None:
     """OSError during write logs + warns without raising."""
-    caplog.set_level(logging.INFO, logger="src.utils.console")  # 1031: echo() logs INFO on src.utils.console.
+    caplog.set_level(
+        logging.INFO, logger="src.foundation.support.utils.console"
+    )  # 1031: echo() logs INFO on src.foundation.support.utils.console.
     metadata = {"records_matched": 0, "records_retrieved": 0}
     with patch(
-        "src.reports.global_wired_client_report_generator.open",
+        "src.mist.intelligence.reports.global_wired_client_report_generator.open",
         side_effect=OSError("disk full"),
     ):
         R._write_local_report([], metadata)

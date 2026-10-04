@@ -17,7 +17,7 @@ Decision / Rationale / Alternatives format required by
 ### Q1. Exact fallback pacing delay (FR-A06)
 
 **Decision**: `_LIMITER_FALLBACK_DELAY = 0.75` seconds, declared as a
-module-level constant in `src/device/ap_profile_migration_manager.py`.
+module-level constant in `src/mist/resources/device/ap_profile_migration_manager.py`.
 
 **Rationale**:
 
@@ -63,7 +63,7 @@ module-level constant in `src/device/ap_profile_migration_manager.py`.
   `mh.RateLimitingUtils.get_rate_limited_delay(smoothed, mh.apisession, mh._api_usage_cache)`
   and unpacks `(smoothed, delay) = ...`, then calls
   `time.sleep(delay)`. This exactly matches the call shape in
-  `src/api/api_data_fetcher.py._apply_rate_limiting` (lines
+  `src/mist/access/api/api_data_fetcher.py._apply_rate_limiting` (lines
   `88-97` region).
 - 429 feedback: after a PUT observes a 429 response, the loop
   sets `mh._api_usage_cache["initialized"] = False`. That flips
@@ -142,7 +142,7 @@ in MistHelper.
   couples menu 207 and 208 state without a real reason and makes
   hermetic testing harder (state must be reset between tests).
   Rejected.
-- New singleton limiter object under `src/utils/`: adds an entire
+- New singleton limiter object under `src/foundation/support/utils/`: adds an entire
   module for a scalar. Rejected -- violates FR-A08 in spirit and
   FR-A10 in letter (no new module for rate-limit handling).
 
@@ -150,14 +150,14 @@ in MistHelper.
 
 **Decision**:
 
-- Patch `src.device.ap_profile_migration_manager.time.sleep` in
+- Patch `src.mist.resources.device.ap_profile_migration_manager.time.sleep` in
   every test that exercises the migration or revert loop. The
   manager already imports `time` at module scope and calls
   `time.sleep(...)` by attribute access (documented at line 742
   of the manager). That existing seam is the only one required.
 - For pure-unit tests that assert call count without exercising
   the real PID math, additionally patch
-  `src.device.ap_profile_migration_manager.mh.RateLimitingUtils.get_rate_limited_delay`
+  `src.mist.resources.device.ap_profile_migration_manager.mh.RateLimitingUtils.get_rate_limited_delay`
   to a `Mock` that returns `(None, 0.0)` (or a fixed delay). This
   isolates the test from `_api_usage_cache` shape drift.
 - For one integration-style test that verifies the real limiter is
@@ -168,7 +168,7 @@ in MistHelper.
   its own math against that fixed input. Still patch
   `time.sleep`.
 - The limiter itself never calls `time.sleep(...)` (verified
-  against `src/utils/rate_limiting.py`; it only calls
+  against `src/foundation/support/utils/rate_limiting.py`; it only calls
   `time.time()`), so no patch on the limiter module is needed.
 
 **Rationale**:
@@ -270,11 +270,11 @@ in MistHelper.
 
 ## References
 
-- `src/utils/rate_limiting.py` (`RateLimitingUtils.get_rate_limited_delay`,
+- `src/foundation/support/utils/rate_limiting.py` (`RateLimitingUtils.get_rate_limited_delay`,
   `_needs_refresh`, `_refresh_api_usage`, `_FALLBACK_DELAY`).
-- `src/api/api_data_fetcher.py` (`_apply_rate_limiting`,
+- `src/mist/access/api/api_data_fetcher.py` (`_apply_rate_limiting`,
   `_is_rate_limit_error`) -- reference caller pattern.
-- `src/device/ap_profile_migration_manager.py` (`_reassign_one_ap`
+- `src/mist/resources/device/ap_profile_migration_manager.py` (`_reassign_one_ap`
   at line ~732, `_run_reassignment_loop` at line ~777, `_revert_one_ap`
   at line ~1158, revert loop at line ~360,
   `_RETRY_BACKOFF_SECONDS` at line ~51).

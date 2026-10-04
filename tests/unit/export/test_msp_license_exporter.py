@@ -16,9 +16,9 @@ from unittest.mock import MagicMock, patch
 import mistapi
 import pytest
 
-from src.export.msp_license_exporter import MSPLicenseExporter
-from src.refactors.endpoint_primary_key_strategies import ENDPOINT_PRIMARY_KEY_STRATEGIES
-from src.utils.input_utils import InputUtils
+from src.foundation.support.refactors.endpoint_primary_key_strategies import ENDPOINT_PRIMARY_KEY_STRATEGIES
+from src.foundation.support.utils.input_utils import InputUtils
+from src.operations.exporting.export.msp_license_exporter import MSPLicenseExporter
 
 # One realistic body, trimmed to the fields the exporter reads.
 _PAYLOAD: dict[str, Any] = {
@@ -57,7 +57,7 @@ class TestFetch:
         """The SDK contract is exactly two positional arguments, session first."""
         sdk_callable = MagicMock(return_value=MagicMock(data=_PAYLOAD))  # WHY: stand in for the SDK function.
         with (
-            patch("src.export.msp_license_exporter.SourceDependencyResolver", fake_mh),
+            patch("src.operations.exporting.export.msp_license_exporter.SourceDependencyResolver", fake_mh),
             patch.object(mistapi.api.v1.msps.licenses, "listMspLicenses", sdk_callable),
         ):
             assert MSPLicenseExporter._fetch("msp-1") == _PAYLOAD
@@ -68,7 +68,7 @@ class TestFetch:
         """A null body or a list body means the MSP holds no license record."""
         sdk_callable = MagicMock(return_value=MagicMock(data=body))  # WHY: drive the non-dict guard.
         with (
-            patch("src.export.msp_license_exporter.SourceDependencyResolver", fake_mh),
+            patch("src.operations.exporting.export.msp_license_exporter.SourceDependencyResolver", fake_mh),
             patch.object(mistapi.api.v1.msps.licenses, "listMspLicenses", sdk_callable),
         ):
             assert MSPLicenseExporter._fetch("msp-1") == {}
@@ -137,13 +137,13 @@ class TestPersist:
 
     def test_writes_nothing_when_there_is_no_row(self, fake_mh: Any) -> None:
         """An empty result must report plainly instead of writing an empty file."""
-        with patch("src.export.msp_license_exporter.SourceDependencyResolver", fake_mh):
+        with patch("src.operations.exporting.export.msp_license_exporter.SourceDependencyResolver", fake_mh):
             MSPLicenseExporter._persist([], "x.csv", "listMspLicenses", "license summary")
         fake_mh.DataExporter.write_with_format_selection.assert_not_called()
 
     def test_routes_the_write_through_the_declared_api_function_name(self, fake_mh: Any) -> None:
         """The api_function_name is what selects the primary-key strategy."""
-        with patch("src.export.msp_license_exporter.SourceDependencyResolver", fake_mh):
+        with patch("src.operations.exporting.export.msp_license_exporter.SourceDependencyResolver", fake_mh):
             MSPLicenseExporter._persist([{"msp_id": "msp-1"}], "x.csv", "listMspLicenses", "license summary")
         _, kwargs = fake_mh.DataExporter.write_with_format_selection.call_args  # WHY: read the routing key.
         assert kwargs["api_function_name"] == "listMspLicenses"
@@ -156,7 +156,7 @@ class TestLicensesEntryPoint:
         """No MSP identifier means no API call and no write."""
         sdk_callable = MagicMock()  # WHY: assert the SDK is never reached.
         with (
-            patch("src.export.msp_license_exporter.SourceDependencyResolver", fake_mh),
+            patch("src.operations.exporting.export.msp_license_exporter.SourceDependencyResolver", fake_mh),
             patch.object(InputUtils, "prompt_msp_id", return_value=None),
             patch.object(mistapi.api.v1.msps.licenses, "listMspLicenses", sdk_callable),
         ):
@@ -167,7 +167,7 @@ class TestLicensesEntryPoint:
     def test_writes_a_summary_file_and_a_detail_file(self, fake_mh: Any) -> None:
         """One API call must produce exactly two writes with distinct names."""
         with (
-            patch("src.export.msp_license_exporter.SourceDependencyResolver", fake_mh),
+            patch("src.operations.exporting.export.msp_license_exporter.SourceDependencyResolver", fake_mh),
             patch.object(InputUtils, "prompt_msp_id", return_value="msp-1"),
             patch.object(MSPLicenseExporter, "_fetch", return_value=_PAYLOAD),
         ):
@@ -178,7 +178,7 @@ class TestLicensesEntryPoint:
     def test_writes_nothing_when_the_msp_holds_no_license(self, fake_mh: Any) -> None:
         """An empty body must produce no summary row and no detail row."""
         with (
-            patch("src.export.msp_license_exporter.SourceDependencyResolver", fake_mh),
+            patch("src.operations.exporting.export.msp_license_exporter.SourceDependencyResolver", fake_mh),
             patch.object(InputUtils, "prompt_msp_id", return_value="msp-1"),
             patch.object(MSPLicenseExporter, "_fetch", return_value={}),
         ):
@@ -189,7 +189,7 @@ class TestLicensesEntryPoint:
         """A network or SDK failure must be logged, not raised into the menu loop."""
         caplog.set_level("ERROR")  # WHY: the handler reports the failure at ERROR level.
         with (
-            patch("src.export.msp_license_exporter.SourceDependencyResolver", fake_mh),
+            patch("src.operations.exporting.export.msp_license_exporter.SourceDependencyResolver", fake_mh),
             patch.object(InputUtils, "prompt_msp_id", return_value="msp-1"),
             patch.object(MSPLicenseExporter, "_fetch", side_effect=RuntimeError("connection reset")),
         ):
@@ -217,7 +217,7 @@ class TestMenuRegistration:
     def test_menu_238_calls_the_exporter_and_is_interactive_safe(self) -> None:
         """Menu 238 must route to the exporter and must skip the automated --test run."""
         import MistHelper  # WHY: menu_actions is the authoritative runtime mapping.
-        from src.utils.operation_registry import OperationRegistry
+        from src.foundation.support.utils.operation_registry import OperationRegistry
 
         assert MistHelper.menu_actions["238"].handler is MSPLicenseExporter.licenses
         assert OperationRegistry.get("238")["category"] == "interactive_safe"

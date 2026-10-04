@@ -7,8 +7,12 @@ import logging  # WHY: caplog checks for passphrase leakage.
 from pathlib import Path  # WHY: build repository-local test paths safely.
 from typing import Any  # WHY: dependency and response doubles are dynamic.
 
-from src.inventory.csv_imports.client import CsvImportClient  # WHY: satisfy dependency type annotations.
-from src.inventory.csv_imports.operation import CsvImportDependencies, CsvImportOperation, CsvImportOptions
+from src.mist.resources.inventory.csv_imports.client import CsvImportClient  # WHY: satisfy dependency type annotations.
+from src.mist.resources.inventory.csv_imports.operation import (
+    CsvImportDependencies,
+    CsvImportOperation,
+    CsvImportOptions,
+)
 
 RUNTIME_DIR = Path("tests") / "unit" / "inventory" / "csv_imports" / "_runtime_data"  # WHY: avoid temp dirs.
 

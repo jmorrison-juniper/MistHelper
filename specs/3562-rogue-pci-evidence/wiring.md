@@ -4,7 +4,7 @@
 
 | menu | title | handler import | handler attribute | category | skip_reason | destructive | supports_fast |
 | - | - | - | - | - | - | - | - |
-| 282 | Export the rogue and PCI evidence pack | src.reports.rogue_pci_evidence.operation | RoguePciEvidencePack.run | safe |  | False | False |
+| 282 | Export the rogue and PCI evidence pack | src.mist.intelligence.reports.rogue_pci_evidence.operation | RoguePciEvidencePack.run | safe |  | False | False |
 
 ## OperationRegistry comment
 
@@ -57,4 +57,4 @@ Update the README operation count and menu table during the integration pull req
 
 ## Import line for MistHelper.py
 
-`from src.reports.rogue_pci_evidence.operation import RoguePciEvidencePack  # Menu 282 (issue #3562) -- export rogue and PCI evidence files.`
+`from src.mist.intelligence.reports.rogue_pci_evidence.operation import RoguePciEvidencePack  # Menu 282 (issue #3562) -- export rogue and PCI evidence files.`

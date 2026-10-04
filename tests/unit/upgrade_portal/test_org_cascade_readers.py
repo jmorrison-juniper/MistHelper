@@ -14,8 +14,8 @@ from typing import Any
 import mistapi
 import pytest
 
-from src.upgrade_portal.upgrade.org_cascade import readers
-from src.upgrade_portal.upgrade.org_cascade.readers import (
+from src.interfaces.portals.upgrade_portal.upgrade.org_cascade import readers
+from src.interfaces.portals.upgrade_portal.upgrade.org_cascade.readers import (
     ANCHOR_GAP_NOTE,
     BudgetSleep,
     OrgSettleAnchors,

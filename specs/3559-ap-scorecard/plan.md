@@ -8,7 +8,7 @@
 
 ## Summary
 
-Menu `278` exports an organization access point scorecard from `listOrgDevicesStats` with `type=ap`. The design adds `src/reports/ap_scorecard/` with a client module, a pure model module, and an operation module. The operation uses `APIDataFetcher` or the same `mistapi.get_all` seam as `src/export/org_device_stats_exporter.py`, then writes `ApScorecard.csv` and `ApScorecardBySite.csv` through `DataExporter.write_with_format_selection()`. Shared wiring stays deferred to [wiring.md](wiring.md).
+Menu `278` exports an organization access point scorecard from `listOrgDevicesStats` with `type=ap`. The design adds `src/mist/intelligence/reports/ap_scorecard/` with a client module, a pure model module, and an operation module. The operation uses `APIDataFetcher` or the same `mistapi.get_all` seam as `src/operations/exporting/export/org_device_stats_exporter.py`, then writes `ApScorecard.csv` and `ApScorecardBySite.csv` through `DataExporter.write_with_format_selection()`. Shared wiring stays deferred to [wiring.md](wiring.md).
 
 ## Technical Context
 
@@ -36,7 +36,7 @@ Menu `278` exports an organization access point scorecard from `listOrgDevicesSt
 
 | Gate | Status | Evidence |
 | - | - | - |
-| Five-Item Rule | Pass | New code will live in `src/reports/ap_scorecard/`, a nested package. Planned modules are `client.py`, `model.py`, `operation.py`, and `__init__.py`. |
+| Five-Item Rule | Pass | New code will live in `src/mist/intelligence/reports/ap_scorecard/`, a nested package. Planned modules are `client.py`, `model.py`, `operation.py`, and `__init__.py`. |
 | Class-Based Architecture | Pass | The handler is `ApScorecard.run()` as a static method. The client and operation use classes. The model uses dataclasses and pure functions. |
 | Safety-First | Pass | The operation is read-only and safe. It must not prompt in `--test`. It must use existing organization resolution helpers. |
 | Output Backends | Pass | Both output files use `DataExporter.write_with_format_selection()` with registered endpoint names. |

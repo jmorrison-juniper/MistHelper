@@ -4,7 +4,7 @@ from __future__ import annotations  # WHY: keep annotations consistent with the 
 
 from typing import Any  # WHY: fake resolver attributes use dynamic test doubles.
 
-from src.reports.switch_scorecard.client import SwitchScorecardClient  # WHY: test the API seam only.
+from src.mist.intelligence.reports.switch_scorecard.client import SwitchScorecardClient  # WHY: test the API seam only.
 
 
 class _Config:

@@ -4,7 +4,7 @@
 
 | menu | title | handler import | handler attribute | category | skip_reason | destructive | supports_fast |
 | - | - | - | - | - | - | - | - |
-| 292 | DESTRUCTIVE: Import PSKs, user MACs, and assets from CSV | src.inventory.csv_imports.operation | CsvImportOperation.run | destructive |  | True | False |
+| 292 | DESTRUCTIVE: Import PSKs, user MACs, and assets from CSV | src.mist.resources.inventory.csv_imports.operation | CsvImportOperation.run | destructive |  | True | False |
 
 ## OperationRegistry comment
 
@@ -31,7 +31,7 @@ Add menu `292` to the `destructive` row. Increase the destructive count by one. 
 
 ## Import line for MistHelper.py
 
-`from src.inventory.csv_imports.operation import CsvImportOperation  # Menu 292 (issue #3572) -- destructive CSV imports for PSKs, user MACs, and assets.`
+`from src.mist.resources.inventory.csv_imports.operation import CsvImportOperation  # Menu 292 (issue #3572) -- destructive CSV imports for PSKs, user MACs, and assets.`
 
 ## Menu registration note
 

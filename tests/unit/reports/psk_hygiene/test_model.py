@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-from src.reports.psk_hygiene import model
+from src.mist.intelligence.reports.psk_hygiene import model
 
 
 def _now() -> datetime:

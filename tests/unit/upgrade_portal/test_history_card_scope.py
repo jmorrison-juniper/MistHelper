@@ -8,8 +8,8 @@ from unittest.mock import create_autospec
 
 import pytest
 
-from src.upgrade_portal.app.history_descriptions import HistoryCardDescription, HistoryCardScope
-from src.upgrade_portal.app.routes import review
+from src.interfaces.portals.upgrade_portal.app.history_descriptions import HistoryCardDescription, HistoryCardScope
+from src.interfaces.portals.upgrade_portal.app.routes import review
 
 
 class TestHistoryCardScope:

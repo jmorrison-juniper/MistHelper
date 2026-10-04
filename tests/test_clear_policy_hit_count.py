@@ -9,8 +9,8 @@ from unittest.mock import MagicMock
 import mistapi
 import pytest
 
-from src.device.utility_commands import DeviceUtilityCommands
-from src.utils.input_utils import InputUtils
+from src.foundation.support.utils.input_utils import InputUtils
+from src.mist.resources.device.utility_commands import DeviceUtilityCommands
 
 
 @pytest.mark.xfail(reason="Model capability detection / node handling not implemented")

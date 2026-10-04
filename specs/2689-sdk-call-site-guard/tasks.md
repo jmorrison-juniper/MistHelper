@@ -29,7 +29,7 @@
 **Purpose**: Keep the guard green after it found one real call-site typo on current main.
 
 - [x] T009 [US1] Report the new `getSiteSettings` defect on issue #2689 before repair. (delivered: issue comment)
-- [x] T010 [US1] Change `getSiteSettings` to `getSiteSetting` in the site auto-upgrade reader. (delivered: `src/firmware/site_auto_upgrade.py`)
+- [x] T010 [US1] Change `getSiteSettings` to `getSiteSetting` in the site auto-upgrade reader. (delivered: `src/operations/execution/firmware/site_auto_upgrade.py`)
 - [x] T011 [US1] Update site auto-upgrade unit mocks to match the installed SDK function name. (delivered: `tests/unit/test_site_auto_upgrade.py`)
 
 ## Phase 4: Negative proof tests

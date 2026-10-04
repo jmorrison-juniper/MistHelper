@@ -12,7 +12,7 @@ Measure the capture portal concurrency headroom without changing production beha
 
 **Language/Version**: Python 3.13 with `mistapi` 0.64.0.
 
-**Primary Dependencies**: Standard library plus existing `src.utils.performance` recorder and privacy filter.
+**Primary Dependencies**: Standard library plus existing `src.foundation.support.utils.performance` recorder and privacy filter.
 
 **Storage**: Raw benchmark rows and scrubbed recorder events under `specs\1988-capture-concurrency\measurements\`.
 
@@ -40,19 +40,19 @@ Measure the capture portal concurrency headroom without changing production beha
 
 ### Capture requests and data collection
 
-`src\upgrade_portal\capture\collector.py` states that reads run in two waves. Wave one runs the device, wired, wireless statistics, and wireless search groups through `CapturePool`. Wave two runs tier-three reads only after device statistics exist.
+`src\interfaces\portals\upgrade_portal\capture\collector.py` states that reads run in two waves. Wave one runs the device, wired, wireless statistics, and wireless search groups through `CapturePool`. Wave two runs tier-three reads only after device statistics exist.
 
-`src\upgrade_portal\runtime\pools.py` sets `CAPTURE_WORKER_TARGET` to 4. The four wave-one groups fill that target. Raising the target to 8 leaves no fifth wave-one group to start.
+`src\interfaces\portals\upgrade_portal\runtime\pools.py` sets `CAPTURE_WORKER_TARGET` to 4. The four wave-one groups fill that target. Raising the target to 8 leaves no fifth wave-one group to start.
 
 ### Upgrade status polling and settle gate
 
-`src\upgrade_portal\upgrade\phase_gate.py` polls two cloud streams every 20 seconds. `src\upgrade_portal\upgrade\gate.py` publishes 360 calls each hour, which is 7.2 percent of the 5000 call quota.
+`src\interfaces\portals\upgrade_portal\upgrade\phase_gate.py` polls two cloud streams every 20 seconds. `src\interfaces\portals\upgrade_portal\upgrade\gate.py` publishes 360 calls each hour, which is 7.2 percent of the 5000 call quota.
 
 Issue #2644 and pull request #2729 cap the schedule horizon below the site lock life. This evaluation does not change that work.
 
 ### Comparison generation
 
-`src\upgrade_portal\compare\diff.py` uses section digests to skip unchanged device sections. That makes comparison a poor target for more concurrency unless a future profile proves changed captures dominate.
+`src\interfaces\portals\upgrade_portal\compare\diff.py` uses section digests to skip unchanged device sections. That makes comparison a poor target for more concurrency unless a future profile proves changed captures dominate.
 
 ### Database and cache access
 
@@ -97,6 +97,6 @@ specs\1988-capture-concurrency\measurements\raw-data.events.jsonl
 
 ## Complexity Tracking
 
-No constitution violation exists. The change adds measurement and documentation only. It does not change `src\upgrade_portal\` production code.
+No constitution violation exists. The change adds measurement and documentation only. It does not change `src\interfaces\portals\upgrade_portal\` production code.
 
 

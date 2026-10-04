@@ -15,16 +15,16 @@ from typing import Any
 
 import pytest
 
-from src.upgrade_portal.upgrade.driver import PhaseOutcome
-from src.upgrade_portal.upgrade.org_cascade.close import OrgCascadeClose
-from src.upgrade_portal.upgrade.org_cascade.record import (
+from src.interfaces.portals.upgrade_portal.upgrade.driver import PhaseOutcome
+from src.interfaces.portals.upgrade_portal.upgrade.org_cascade.close import OrgCascadeClose
+from src.interfaces.portals.upgrade_portal.upgrade.org_cascade.record import (
     FINISHED_NOTE,
     STOPPED_NOTE,
     WATCH_KEY,
     OrgPhaseEntries,
     OrgPhaseStore,
 )
-from src.upgrade_portal.upgrade.org_postcheck import FAILURE_REASON, STAGE_NOTE, OrgPostCheckRows
+from src.interfaces.portals.upgrade_portal.upgrade.org_postcheck import FAILURE_REASON, STAGE_NOTE, OrgPostCheckRows
 from tests.support.org_cascade import (
     OPERATION_ID,
     SITE_IDS,

@@ -1,7 +1,7 @@
-"""Unit tests for src.refactors.device_config_template_cloner_manager.
+"""Unit tests for src.foundation.support.refactors.device_config_template_cloner_manager.
 
 Wave 13 P2 coverage lift — thin adapter that wires MistHelper globals
-into src.gateway.device_template_cloner. Cover the clone() dispatch
+into src.mist.resources.gateway.device_template_cloner. Cover the clone() dispatch
 end-to-end (proxy attribute resolution, deps bundle assembly, and
 final Impl.clone() call) to close the 48% gap in one file.
 """
@@ -29,7 +29,7 @@ def _install_fake_misthelper() -> MagicMock:
 
 def test_clone_wires_dependencies_and_delegates_to_impl() -> None:
     """clone() builds a deps bundle from MistHelper attrs and dispatches to Impl.clone()."""
-    from src.refactors.device_config_template_cloner_manager import (
+    from src.foundation.support.refactors.device_config_template_cloner_manager import (
         DeviceConfigTemplateClonerManager,  # WHY: import inside test to keep module-import graph clean
     )
 
@@ -37,14 +37,14 @@ def test_clone_wires_dependencies_and_delegates_to_impl() -> None:
     impl_instance = MagicMock()  # WHY: capture the Impl(...).clone() call
     impl_cls = MagicMock(return_value=impl_instance)  # WHY: Impl(...) returns our instance
     deps_cls = MagicMock()  # WHY: DeviceTemplateClonerDeps is called with 5 kwargs
-    fake_gateway = MagicMock()  # WHY: module stub for src.gateway.device_template_cloner
+    fake_gateway = MagicMock()  # WHY: module stub for src.mist.resources.gateway.device_template_cloner
     fake_gateway.DeviceConfigTemplateClonerManager = impl_cls  # WHY: attribute lookup in inline import
     fake_gateway.DeviceTemplateClonerDeps = deps_cls  # WHY: attribute lookup in second inline import
     with patch.dict(  # WHY: inject both MistHelper and the gateway impl module simultaneously
         sys.modules,
         {
             "MistHelper": fake_mh,
-            "src.gateway.device_template_cloner": fake_gateway,
+            "src.mist.resources.gateway.device_template_cloner": fake_gateway,
         },
     ):
         DeviceConfigTemplateClonerManager.clone()  # WHY: exercise the full clone dispatch

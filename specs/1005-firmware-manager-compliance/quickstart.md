@@ -19,8 +19,8 @@
 Run these two commands. Both MUST exit 0 with no output on stderr:
 
 ```bash
-python -m py_compile src/firmware/firmware_manager.py
-python -m ruff check src/firmware/firmware_manager.py
+python -m py_compile src/operations/execution/firmware/firmware_manager.py
+python -m ruff check src/operations/execution/firmware/firmware_manager.py
 ```
 
 If either fails, the refactor is not ready. Do not proceed.
@@ -34,7 +34,7 @@ Corresponds to acceptance criteria FR-002, FR-003, SC-006, SC-007.
 Run the compliance analyzer and confirm the score, grade, and violation counts:
 
 ```bash
-python -m tools.compliance_analyzer src/firmware/firmware_manager.py
+python -m tools.compliance_analyzer src/operations/execution/firmware/firmware_manager.py
 ```
 
 Expected output:
@@ -64,7 +64,7 @@ grep -n "FirmwareManager\.create\|from src\.firmware\.firmware_manager" MistHelp
 Expected output (exactly these lines, in this order):
 
 ```
-18795:        from src.firmware.firmware_manager import (
+18795:        from src.operations.execution.firmware.firmware_manager import (
 18797:    def create(apisession: Any, org_id: str) -> Any:
 19809:        firmware_manager = FirmwareManager.create(apisession, org_id)
 22097:    firmware_manager = FirmwareManager.create(apisession, org_id)
@@ -75,7 +75,7 @@ Expected output (exactly these lines, in this order):
 
 Line numbers may shift by a few positions if the factory body grew by 3 lines (import expanded to two-name form). What matters is:
 
-- Exactly one `from src.firmware.firmware_manager import` (the factory's local import).
+- Exactly one `from src.operations.execution.firmware.firmware_manager import` (the factory's local import).
 - Exactly one `def create(...)`.
 - Exactly five `FirmwareManager.create(apisession, org_id)` call-sites — identical text to pre-refactor.
 
@@ -97,9 +97,9 @@ Randomly sample 25 executable lines from the refactored file and count how many 
 
 ```bash
 # Rough sampling helper — reviewer picks 25 line numbers by inspection.
-sed -n '80,110p' src/firmware/firmware_manager.py     # spot-check __init__ / _bind_module_globals
-sed -n '700,730p' src/firmware/firmware_manager.py    # spot-check inside _upgrade_ap_firmware_by_gateway_template
-sed -n '1360,1385p' src/firmware/firmware_manager.py  # spot-check _split_results_by_status (rename site)
+sed -n '80,110p' src/operations/execution/firmware/firmware_manager.py     # spot-check __init__ / _bind_module_globals
+sed -n '700,730p' src/operations/execution/firmware/firmware_manager.py    # spot-check inside _upgrade_ap_firmware_by_gateway_template
+sed -n '1360,1385p' src/operations/execution/firmware/firmware_manager.py  # spot-check _split_results_by_status (rename site)
 ```
 
 At least **20 of the 25 sampled lines MUST have an inline comment**. Comments must explain *why* the line exists, not merely restate the code (Constitution VI).
@@ -110,7 +110,7 @@ Fast global sanity check:
 # Count executable lines and lines with inline comments; ratio should be >= 0.90.
 python - <<'EOF'
 import re
-with open("src/firmware/firmware_manager.py", encoding="utf-8") as fh:
+with open("src/operations/execution/firmware/firmware_manager.py", encoding="utf-8") as fh:
     lines = fh.readlines()
 executable = 0
 commented = 0
@@ -137,7 +137,7 @@ Corresponds to acceptance criteria FR-006, SC-009, Constitution VI.
 Confirm the info-before / debug-after pattern is present at the four HIGH-severity refactor sites (FR-012 companion behavior) and at the `__init__`:
 
 ```bash
-grep -n -B 1 -A 3 "def check_firmware_upgrade_status\|def _continuous_monitoring_mode\|def _upgrade_ap_firmware_by_gateway_template\|def _execute_msp_upgrade_plan\|def __init__" src/firmware/firmware_manager.py
+grep -n -B 1 -A 3 "def check_firmware_upgrade_status\|def _continuous_monitoring_mode\|def _upgrade_ap_firmware_by_gateway_template\|def _execute_msp_upgrade_plan\|def __init__" src/operations/execution/firmware/firmware_manager.py
 ```
 
 For each hit, verify:
@@ -150,7 +150,7 @@ Also confirm ASCII-only log strings and no f-strings inside `logging.*` calls:
 ```bash
 python - <<'EOF'
 import re
-with open("src/firmware/firmware_manager.py", encoding="utf-8") as fh:
+with open("src/operations/execution/firmware/firmware_manager.py", encoding="utf-8") as fh:
     for lineno, line in enumerate(fh, 1):
         if "logging." in line:
             for match in re.finditer(r"[\"'].*?[\"']", line):
@@ -174,7 +174,7 @@ Start a Python REPL from the repo root and verify the new constructor contract:
 ```python
 python
 >>> from unittest.mock import MagicMock
->>> from src.firmware.firmware_manager import FirmwareManager, FirmwareManagerConfig
+>>> from src.operations.execution.firmware.firmware_manager import FirmwareManager, FirmwareManagerConfig
 >>>
 >>> # C-1: Positive case — construct via config, verify no TypeError.
 >>> config = FirmwareManagerConfig(apisession=MagicMock(), org_id="test-org")
@@ -226,7 +226,7 @@ Corresponds to acceptance criteria FR-014, SC-005, and the six contract invarian
 Confirm the three CONV-NAME loop-variable renames landed:
 
 ```bash
-grep -n "for r in " src/firmware/firmware_manager.py
+grep -n "for r in " src/operations/execution/firmware/firmware_manager.py
 ```
 
 Expected output: **empty**. No single-letter `r` loop variables remain.
@@ -234,7 +234,7 @@ Expected output: **empty**. No single-letter `r` loop variables remain.
 Then confirm the intended replacements are present (line numbers approximate):
 
 ```bash
-grep -n "for result in \|for record in \|for report_row in " src/firmware/firmware_manager.py
+grep -n "for result in \|for record in \|for report_row in " src/operations/execution/firmware/firmware_manager.py
 ```
 
 Expected: three matches inside the (refactored) `_split_results_by_status` region.

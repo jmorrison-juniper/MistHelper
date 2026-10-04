@@ -19,7 +19,7 @@
 
 **Purpose**: Verify the API source, existing gateway statistics path, and feature wiring before implementation starts.
 
-- [X] T001 Read the reusable gateway statistics export path in `src/export/org_device_stats_exporter.py`
+- [X] T001 Read the reusable gateway statistics export path in `src/operations/exporting/export/org_device_stats_exporter.py`
 - [X] T002 Verify the menu 18 path `_dispatch_gateway_stats_device_stats_with_freshness` in `MistHelper.py`
 - [X] T003 [P] Verify the OpenAPI schemas `stats_gateway`, `dhcpd_stat_lan`, `vpn_peers`, and `bgp_peers` in `documentation/mist-api-openapi3json.json`
 - [X] T004 [P] Verify `requirements.txt` and the installed `mistapi` package expose `listOrgDevicesStats` with a gateway type parameter
@@ -33,11 +33,11 @@
 
 **Critical**: No user story implementation can start until this phase is complete.
 
-- [X] T006 Create package initializer in `src/reports/wan_edge_scorecard/__init__.py`
-- [X] T007 [P] Create gateway, DHCP pool, site scorecard, and organization scorecard models in `src/reports/wan_edge_scorecard/models.py`
-- [X] T008 [P] Create shared scoring helpers for percent math, predominant version, threshold parsing, and missing values in `src/reports/wan_edge_scorecard/scoring.py`
-- [X] T009 Create the `WanEdgeScorecard` class skeleton with static `run()` in `src/reports/wan_edge_scorecard/scorecard.py`
-- [X] T009A Create the shared gateway statistics client seam in `src/reports/wan_edge_scorecard/client.py`
+- [X] T006 Create package initializer in `src/mist/intelligence/reports/wan_edge_scorecard/__init__.py`
+- [X] T007 [P] Create gateway, DHCP pool, site scorecard, and organization scorecard models in `src/mist/intelligence/reports/wan_edge_scorecard/models.py`
+- [X] T008 [P] Create shared scoring helpers for percent math, predominant version, threshold parsing, and missing values in `src/mist/intelligence/reports/wan_edge_scorecard/scoring.py`
+- [X] T009 Create the `WanEdgeScorecard` class skeleton with static `run()` in `src/mist/intelligence/reports/wan_edge_scorecard/scorecard.py`
+- [X] T009A Create the shared gateway statistics client seam in `src/mist/intelligence/reports/wan_edge_scorecard/client.py`
 - [X] T010 [P] Create unit test fixture builders for gateway statistics samples in `tests/unit/reports/wan_edge_scorecard/conftest.py`
 - [X] T011 [P] Create package test initializer in `tests/unit/reports/wan_edge_scorecard/__init__.py`
 
@@ -60,11 +60,11 @@
 
 ### Implementation for User Story 1
 
-- [X] T016 [US1] Implement gateway statistics fetch reuse in `src/reports/wan_edge_scorecard/scorecard.py`
-- [X] T017 [US1] Implement gateway row creation in `src/reports/wan_edge_scorecard/scorecard.py`
-- [X] T018 [US1] Implement version compliance and missing value handling in `src/reports/wan_edge_scorecard/scoring.py`
-- [X] T019 [US1] Implement export of `WanEdgeScorecard.csv` through configured export behavior in `src/reports/wan_edge_scorecard/scorecard.py`
-- [X] T020 [US1] Add action logging before and after fetch, transform, and export actions in `src/reports/wan_edge_scorecard/scorecard.py`
+- [X] T016 [US1] Implement gateway statistics fetch reuse in `src/mist/intelligence/reports/wan_edge_scorecard/scorecard.py`
+- [X] T017 [US1] Implement gateway row creation in `src/mist/intelligence/reports/wan_edge_scorecard/scorecard.py`
+- [X] T018 [US1] Implement version compliance and missing value handling in `src/mist/intelligence/reports/wan_edge_scorecard/scoring.py`
+- [X] T019 [US1] Implement export of `WanEdgeScorecard.csv` through configured export behavior in `src/mist/intelligence/reports/wan_edge_scorecard/scorecard.py`
+- [X] T020 [US1] Add action logging before and after fetch, transform, and export actions in `src/mist/intelligence/reports/wan_edge_scorecard/scorecard.py`
 
 **Checkpoint**: User Story 1 creates the main gateway scorecard and passes its targeted tests.
 
@@ -85,10 +85,10 @@
 
 ### Implementation for User Story 2
 
-- [X] T025 [US2] Implement DHCP threshold parsing in `src/reports/wan_edge_scorecard/scoring.py`
-- [X] T026 [US2] Implement DHCP pool extraction and safe percent calculation in `src/reports/wan_edge_scorecard/scorecard.py`
-- [X] T027 [US2] Implement gateway worst pool utilization and pool count values in `src/reports/wan_edge_scorecard/scorecard.py`
-- [X] T028 [US2] Implement export of `WanEdgeDhcpPools.csv` through configured export behavior in `src/reports/wan_edge_scorecard/scorecard.py`
+- [X] T025 [US2] Implement DHCP threshold parsing in `src/mist/intelligence/reports/wan_edge_scorecard/scoring.py`
+- [X] T026 [US2] Implement DHCP pool extraction and safe percent calculation in `src/mist/intelligence/reports/wan_edge_scorecard/scorecard.py`
+- [X] T027 [US2] Implement gateway worst pool utilization and pool count values in `src/mist/intelligence/reports/wan_edge_scorecard/scorecard.py`
+- [X] T028 [US2] Implement export of `WanEdgeDhcpPools.csv` through configured export behavior in `src/mist/intelligence/reports/wan_edge_scorecard/scorecard.py`
 
 **Checkpoint**: User Story 2 creates the DHCP pool report and passes its targeted tests.
 
@@ -109,11 +109,11 @@
 
 ### Implementation for User Story 3
 
-- [X] T033 [US3] Implement VPN and BGP peer counts in `src/reports/wan_edge_scorecard/scorecard.py`
-- [X] T034 [US3] Implement site scorecard percentage calculation in `src/reports/wan_edge_scorecard/scoring.py`
-- [X] T035 [US3] Implement organization scorecard percentage calculation in `src/reports/wan_edge_scorecard/scoring.py`
-- [X] T036 [US3] Implement export of `WanEdgeScorecardBySite.csv` through configured export behavior in `src/reports/wan_edge_scorecard/scorecard.py`
-- [X] T037 [US3] Implement the organization console summary in `src/reports/wan_edge_scorecard/scorecard.py`
+- [X] T033 [US3] Implement VPN and BGP peer counts in `src/mist/intelligence/reports/wan_edge_scorecard/scorecard.py`
+- [X] T034 [US3] Implement site scorecard percentage calculation in `src/mist/intelligence/reports/wan_edge_scorecard/scoring.py`
+- [X] T035 [US3] Implement organization scorecard percentage calculation in `src/mist/intelligence/reports/wan_edge_scorecard/scoring.py`
+- [X] T036 [US3] Implement export of `WanEdgeScorecardBySite.csv` through configured export behavior in `src/mist/intelligence/reports/wan_edge_scorecard/scorecard.py`
+- [X] T037 [US3] Implement the organization console summary in `src/mist/intelligence/reports/wan_edge_scorecard/scorecard.py`
 
 **Checkpoint**: User Story 3 creates the site scorecard, prints the organization summary, and passes its targeted tests.
 
@@ -124,8 +124,8 @@
 **Purpose**: Mark repository integration work that must occur outside the feature package pull request.
 
 - [ ] T038 Deferred to the integration pull request: register menu 279 in `MistHelper.py`
-- [ ] T039 Deferred to the integration pull request: register menu 279 as safe in `src/utils/operation_registry.py`
-- [ ] T040 Deferred to the integration pull request: confirm no persistent endpoint primary key entry is required in `src/refactors/endpoint_primary_key_strategies.py`
+- [ ] T039 Deferred to the integration pull request: register menu 279 as safe in `src/foundation/support/utils/operation_registry.py`
+- [ ] T040 Deferred to the integration pull request: confirm no persistent endpoint primary key entry is required in `src/foundation/support/refactors/endpoint_primary_key_strategies.py`
 - [ ] T041 Deferred to the integration pull request: update operation count and menu entry in `README.md`
 - [ ] T042 Deferred to the integration pull request: update generated menu documentation in `documentation/menu_reference.md`
 - [ ] T043 Deferred to the integration pull request: run generated wiki updates with `python scripts/generate_menu_wiki.py` and `python -m scripts.menu_api_map`
@@ -139,12 +139,12 @@
 - [X] T044 [P] Create release note fragment in `changelog.d/issue-3560-wan-edge-scorecard.md`
 - [X] T045 Run `python -m pytest tests\unit\reports\wan_edge_scorecard` and record the result in the pull request
 - [X] T046 Run `python -m py_compile MistHelper.py` and record the result in the pull request
-- [X] T047 Run `python -m ruff check MistHelper.py src\reports\wan_edge_scorecard tests\unit\reports\wan_edge_scorecard` and record the result in the pull request
-- [X] T048 Run `python -m black --check MistHelper.py src\reports\wan_edge_scorecard tests\unit\reports\wan_edge_scorecard` and record the result in the pull request
+- [X] T047 Run `python -m ruff check MistHelper.py src\mist\intelligence\reports\wan_edge_scorecard tests\unit\reports\wan_edge_scorecard` and record the result in the pull request
+- [X] T048 Run `python -m black --check MistHelper.py src\mist\intelligence\reports\wan_edge_scorecard tests\unit\reports\wan_edge_scorecard` and record the result in the pull request
 - [ ] T049 Deferred to the integration pull request: run `python MistHelper.py --test` and confirm menu 279 completes without an operator prompt
 - [X] T050 Confirm the implementation changes do not edit `.specify/feature.json`
-- [X] T051 Confirm the implementation pull request includes `src/reports/wan_edge_scorecard/`, `tests/unit/reports/wan_edge_scorecard/`, and `changelog.d/issue-3560-wan-edge-scorecard.md`
-- [X] T052 Run the complexity gate for `src\reports\wan_edge_scorecard` and keep every function at complexity `10` or lower
+- [X] T051 Confirm the implementation pull request includes `src/mist/intelligence/reports/wan_edge_scorecard/`, `tests/unit/reports/wan_edge_scorecard/`, and `changelog.d/issue-3560-wan-edge-scorecard.md`
+- [X] T052 Run the complexity gate for `src\mist\intelligence\reports\wan_edge_scorecard` and keep every function at complexity `10` or lower
 - [X] T053 Run the test quality ratchet from `origin/main` and repair every new finding
 
 ---

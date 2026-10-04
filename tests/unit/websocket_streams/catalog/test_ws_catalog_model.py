@@ -1,6 +1,6 @@
 """Tests for the WebSocket catalog model records."""
 
-from src.websocket_streams.catalog.model import (
+from src.mist.realtime.websocket_streams.catalog.model import (
     ChannelDefinition,
     FieldKind,
     FieldSpec,

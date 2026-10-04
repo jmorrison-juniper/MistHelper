@@ -100,7 +100,7 @@ data-model.md.
 ## 6. Start the API Server
 
 ```bash
-uvicorn src.api.main:app --reload --host 0.0.0.0 --port 8000
+uvicorn src.mist.access.api.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 Open http://localhost:8000/docs for the interactive OpenAPI UI.

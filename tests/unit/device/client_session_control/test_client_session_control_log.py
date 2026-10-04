@@ -2,8 +2,12 @@
 
 import csv  # WHY: verify the audit file using the same format operators inspect.
 
-from src.device.client_session_control.audit import ClientSessionAuditWriter  # WHY: CSV writer under test.
-from src.device.client_session_control.models import ClientSessionControlLogRow  # WHY: row contract under test.
+from src.mist.resources.device.client_session_control.audit import (
+    ClientSessionAuditWriter,
+)  # WHY: CSV writer under test.
+from src.mist.resources.device.client_session_control.models import (
+    ClientSessionControlLogRow,
+)  # WHY: row contract under test.
 
 
 def test_audit_writer_creates_header_and_one_row(tmp_path) -> None:  # WHY: each attempt needs a durable audit row.

@@ -21,7 +21,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.upgrade_portal.runtime import lock  # WHY: The fixture drops the cached lock store handle.
+from src.interfaces.portals.upgrade_portal.runtime import lock  # WHY: The fixture drops the cached lock store handle.
 from tests.support.rehearsal.errors import RehearsalNetworkError  # WHY: The named error of the rehearsal guard.
 
 logger = logging.getLogger(__name__)

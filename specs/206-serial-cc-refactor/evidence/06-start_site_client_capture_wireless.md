@@ -3,7 +3,7 @@
 ## Scope
 - Symbol: `_LegacyPacketCaptureManager._start_site_client_capture_wireless`
 - Source file: `MistHelper.py`
-- Refactor target: `src/refactors/serial_cc/start_site_client_capture_wireless.py`
+- Refactor target: `src/foundation/support/refactors/serial_cc/start_site_client_capture_wireless.py`
 
 ## Change Summary
 - Extracted wireless client capture flow into `SiteWirelessClientCaptureService.execute(manager)`.
@@ -15,7 +15,7 @@
 - After: `A (1)` in `MistHelper.py`
 
 ## Validation Commands
-- `python -m py_compile MistHelper.py src/refactors/serial_cc/start_site_client_capture_wireless.py`
+- `python -m py_compile MistHelper.py src/foundation/support/refactors/serial_cc/start_site_client_capture_wireless.py`
 - `python -m pytest tests/unit/serial_cc/test_start_site_client_capture_wireless.py tests/integration/serial_cc/test_start_site_client_capture_wireless_integration.py -q`
 - `python -m pytest tests/unit/test_packet_capture.py -k wireless -q`
 - `python -m pytest tests/guardrails/test_wave1_entry_routing_guardrails.py tests/guardrails/test_wave1_safety_classification_guardrails.py tests/unit/test_exports.py tests/unit/test_menu_13_device_stats.py tests/unit/websocket/test_service_ping_manager.py -q`

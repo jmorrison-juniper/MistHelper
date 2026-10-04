@@ -1,4 +1,4 @@
-"""Unit tests for src/refactors/msp_privilege_detection.py.
+"""Unit tests for src/foundation/support/refactors/msp_privilege_detection.py.
 
 Covers the public entry point ``detect_msp_privileges`` and each of the six
 private helpers co-migrated in initiative 1015 T-05: ``_msp_fetch_user_data``,
@@ -39,7 +39,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.refactors.msp_privilege_detection import (
+from src.foundation.support.refactors.msp_privilege_detection import (
     _extract_msp_name,
     _fetch_msp_name,
     _msp_extract_from_user_data,

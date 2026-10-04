@@ -9,9 +9,9 @@ Why:
     and writes a markdown report so operators can audit the seeded probe plan
     against reality before pushing it to Mist.
 
-    The probe primitives themselves live in :mod:`src.utils.zscaler_probe` so
+    The probe primitives themselves live in :mod:`src.foundation.support.utils.zscaler_probe` so
     the same code path is used by the menu-206 auto-refresh gate in
-    :mod:`src.utils.zscaler_catalogue`. This script is now a thin CLI wrapper
+    :mod:`src.foundation.support.utils.zscaler_catalogue`. This script is now a thin CLI wrapper
     that reads the two JSON catalogues, invokes the shared probe runner, and
     renders the markdown report.
 
@@ -37,14 +37,14 @@ from pathlib import Path
 from typing import Any
 
 # Repo layout: this script lives in <repo>/scripts, and the reusable probe
-# primitives live in <repo>/src/utils/zscaler_probe.py. Make ``src`` importable
-# so ``from src.utils.zscaler_probe import ...`` works when the script is run
+# primitives live in <repo>/src/foundation/support/utils/zscaler_probe.py. Make ``src`` importable
+# so ``from src.foundation.support.utils.zscaler_probe import ...`` works when the script is run
 # directly (e.g. ``python scripts/probe_zscaler_endpoints.py``).
 REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from src.utils.zscaler_probe import (  # noqa: E402 -- sys.path tweak above must run first
+from src.foundation.support.utils.zscaler_probe import (  # noqa: E402 -- sys.path tweak above must run first
     DEFAULT_TIMEOUT,
     DEFAULT_WORKERS,
     ProbeResult,
@@ -85,7 +85,7 @@ def _load_cenr(sample: int) -> list[tuple[str, dict[str, Any]]]:
         at HTTPS/443. Probing every one on every CLI run is overkill; the
         script defaults to the first *sample* hosts so operators can spot-check
         quickly. (The menu-206 auto-refresh path in
-        :mod:`src.utils.zscaler_catalogue` uses the full fleet instead.)
+        :mod:`src.foundation.support.utils.zscaler_catalogue` uses the full fleet instead.)
 
     Args:
         sample: Number of hostnames to include (from the top of the list).
@@ -322,7 +322,7 @@ def main() -> int:
     """Parse CLI args, run the probes, and write the markdown report.
 
     Why:
-        Thin CLI wrapper over :func:`src.utils.zscaler_probe._run_probes`.
+        Thin CLI wrapper over :func:`src.foundation.support.utils.zscaler_probe._run_probes`.
         Kept as an operator entry point so folks can audit endpoint reality
         without importing the menu 206 machinery.
 

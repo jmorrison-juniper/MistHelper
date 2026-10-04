@@ -173,7 +173,7 @@ If the engineer's session is interrupted during any write phase (2–5), the per
 
 - **FR-001**: All code MUST be implemented as classes within `MistHelper.py`, following the same pattern as `E911BSSIDReportGenerator`, `FirmwareManager`, and other existing classes. No separate packages or modules.
 - **FR-002**: Feature MUST be registered as Menu option **159** in the main menu system, replacing the old broken implementation.
-- **FR-003**: The old implementation in `src/ssid_consolidation/` MUST be deleted as part of this rewrite.
+- **FR-003**: The old implementation in `src/operations/execution/ssid_consolidation/` MUST be deleted as part of this rewrite.
 
 **SSID Selector**
 

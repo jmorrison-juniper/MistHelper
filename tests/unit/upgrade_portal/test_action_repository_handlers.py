@@ -8,7 +8,7 @@ from typing import Any  # WHY: fake database seams accept the repository's dynam
 import pytest
 from arango.exceptions import ArangoError  # WHY: tests drive the narrowed driver-fault handlers.
 
-from src.upgrade_portal.persistence.actions import (
+from src.interfaces.portals.upgrade_portal.persistence.actions import (
     ActionIdentity,
     ActionInitialization,
     ActionIntent,

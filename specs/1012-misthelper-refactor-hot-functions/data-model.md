@@ -59,11 +59,11 @@ Represents a symbol the PR marks as intentionally not extracted (Action 1).
 
 ## Entity: Target Module
 
-Represents a new file the PR creates under `src/refactors/`.
+Represents a new file the PR creates under `src/foundation/support/refactors/`.
 
 **Fields**:
 
-- `path` — `src/refactors/is_debug_mode.py` or `src/refactors/connection_pool_executor.py`.
+- `path` — `src/foundation/support/refactors/is_debug_mode.py` or `src/foundation/support/refactors/connection_pool_executor.py`.
 - `contains_class` — `IsDebugMode` or `ConnectionPoolExecutor`.
 - `member_count` — 1 (Action 2) or 4 (Action 3: 1 public + 3 private static methods).
 - `compliance_grade` — must be `A+/100` at merge.
@@ -78,8 +78,8 @@ Represents a new file the PR creates under `src/refactors/`.
 
 **Validation rules**:
 
-- `python -m tools.compliance_analyzer src/refactors/is_debug_mode.py` reports `A+ / 100`.
-- `python -m tools.compliance_analyzer src/refactors/connection_pool_executor.py` reports `A+ / 100`.
+- `python -m tools.compliance_analyzer src/foundation/support/refactors/is_debug_mode.py` reports `A+ / 100`.
+- `python -m tools.compliance_analyzer src/foundation/support/refactors/connection_pool_executor.py` reports `A+ / 100`.
 - Aggregate compliance snapshot at `data/full_repo_compliance_current.md` stays `>=99.6/A+`.
 
 ---
@@ -114,7 +114,7 @@ Represents one location in the codebase that calls one of the two extracted call
 
 **Fields**:
 
-- `file` — `MistHelper.py` (majority), `src/gateway/gateway_export_utils.py`, `src/gateway/gateway_stats_exporter.py`.
+- `file` — `MistHelper.py` (majority), `src/mist/resources/gateway/gateway_export_utils.py`, `src/mist/resources/gateway/gateway_stats_exporter.py`.
 - `line_number` — original line before PR (may shift within tolerance during rewrite).
 - `original_call` — `is_debug_mode()` or `execute_with_connection_pool_management(...)`.
 - `rewritten_call` — `IsDebugMode.check()` or `ConnectionPoolExecutor.execute(...)`.
@@ -124,7 +124,7 @@ Represents one location in the codebase that calls one of the two extracted call
 
 - Every callsite is rewritten in the same PR as the extraction (FR-003 — no wrapper shims left behind).
 - Every rewritten callsite preserves the original argument list and keyword arguments verbatim.
-- Every caller file that previously did not import from `src.refactors.is_debug_mode` or `src.refactors.connection_pool_executor` gains the appropriate import statement.
+- Every caller file that previously did not import from `src.foundation.support.refactors.is_debug_mode` or `src.foundation.support.refactors.connection_pool_executor` gains the appropriate import statement.
 
 **Validation rules**:
 

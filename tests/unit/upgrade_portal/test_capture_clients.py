@@ -21,7 +21,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.upgrade_portal.capture import clients
+from src.interfaces.portals.upgrade_portal.capture import clients
 from tests.support.sdk_pages import HTML_TYPE, JSON_TYPE, PagedSession, build_sdk_answer
 
 # WHY: A site key in the shape of the data model, so a reader sees a realistic

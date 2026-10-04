@@ -10,7 +10,7 @@ This pull request adds the menu `289` client fingerprint census package. The men
 
 ## Files
 
-- `src/reports/client_fingerprint_census/`
+- `src/mist/intelligence/reports/client_fingerprint_census/`
 - `tests/unit/reports/client_fingerprint_census/`
 - `specs/3569-client-fingerprint-census/`
 - `changelog.d/issue-3569-client-fingerprint-census.md`
@@ -32,7 +32,7 @@ This pull request adds the menu `289` client fingerprint census package. The men
 ## Security
 
 - [x] No hardcoded secrets, tokens, or passwords
-- [x] Bandit passes with no new findings (`bandit -c pyproject.toml -r src\reports\client_fingerprint_census`)
+- [x] Bandit passes with no new findings (`bandit -c pyproject.toml -r src\mist\intelligence\reports\client_fingerprint_census`)
 - [ ] pip-audit clean (`pip-audit -r requirements.txt`)
 - [x] Sensitive data handled via `.env` / environment variables only
 
@@ -58,17 +58,17 @@ This pull request adds the menu `289` client fingerprint census package. The men
 
 ## Validation
 
-- `python -m py_compile src\reports\client_fingerprint_census\__init__.py src\reports\client_fingerprint_census\client.py src\reports\client_fingerprint_census\model.py src\reports\client_fingerprint_census\operation.py`: passed
-- `python -m ruff check src\reports\client_fingerprint_census tests\unit\reports\client_fingerprint_census`: passed
-- `python -m black --check src\reports\client_fingerprint_census tests\unit\reports\client_fingerprint_census`: passed
-- `python -m mypy src\reports\client_fingerprint_census --config-file pyproject.toml`: passed
-- `python -m pydocstyle src\reports\client_fingerprint_census`: passed
+- `python -m py_compile src\mist\intelligence\reports\client_fingerprint_census\__init__.py src\mist\intelligence\reports\client_fingerprint_census\client.py src\mist\intelligence\reports\client_fingerprint_census\model.py src\mist\intelligence\reports\client_fingerprint_census\operation.py`: passed
+- `python -m ruff check src\mist\intelligence\reports\client_fingerprint_census tests\unit\reports\client_fingerprint_census`: passed
+- `python -m black --check src\mist\intelligence\reports\client_fingerprint_census tests\unit\reports\client_fingerprint_census`: passed
+- `python -m mypy src\mist\intelligence\reports\client_fingerprint_census --config-file pyproject.toml`: passed
+- `python -m pydocstyle src\mist\intelligence\reports\client_fingerprint_census`: passed
 - `python -m pytest tests\unit\reports\client_fingerprint_census -q --timeout=120`: 12 passed
-- `python -m vulture src\reports\client_fingerprint_census --min-confidence 70`: passed
-- `python -m interrogate -v src\reports\client_fingerprint_census`: 100 percent
-- `python -m radon cc src\reports\client_fingerprint_census -j | complexity-gate --max 10`: passed
+- `python -m vulture src\mist\intelligence\reports\client_fingerprint_census --min-confidence 70`: passed
+- `python -m interrogate -v src\mist\intelligence\reports\client_fingerprint_census`: 100 percent
+- `python -m radon cc src\mist\intelligence\reports\client_fingerprint_census -j | complexity-gate --max 10`: passed
 - `test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json --changed-from origin/main`: passed
-- `python -m bandit -c pyproject.toml -r src\reports\client_fingerprint_census -q`: passed
+- `python -m bandit -c pyproject.toml -r src\mist\intelligence\reports\client_fingerprint_census -q`: passed
 - `python -m pytest tests\integration\test_mistapi_sdk_compatibility.py -q --timeout=120`: passed
 - `python -m pytest tests\unit\web_portal\test_output_scan_runtime_files.py -q --timeout=120`: passed
 - `speckit.analyze`: remaining findings are fleet-scope deferrals. `wiring.md` carries the README and shared-file integration path.

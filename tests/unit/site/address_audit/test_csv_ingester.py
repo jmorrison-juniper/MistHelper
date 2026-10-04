@@ -2,8 +2,8 @@
 
 import pytest
 
-from src.site.address_audit.csv_ingester import CSVAddressIngester
-from src.site.address_audit.models import AddressRow
+from src.mist.resources.site.address_audit.csv_ingester import CSVAddressIngester
+from src.mist.resources.site.address_audit.models import AddressRow
 
 _SAMPLE = (
     "2012233588\tSSR130\t5550 N Military Trail Unit 200\tBoca Raton\tFL\t33431\n"

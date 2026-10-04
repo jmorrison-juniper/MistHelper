@@ -7,7 +7,7 @@ from typing import Any  # WHY: fake session stores dynamic bodies.
 
 import pytest  # WHY: assert raised API failures.
 
-from src.site.rrm_reset.client import RESET_RRM_PATH, RrmResetClient
+from src.mist.resources.site.rrm_reset.client import RESET_RRM_PATH, RrmResetClient
 
 
 class FakePostSession:

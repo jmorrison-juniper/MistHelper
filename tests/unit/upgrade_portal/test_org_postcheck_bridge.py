@@ -18,10 +18,10 @@ from typing import Any
 import pytest
 from flask import Flask, has_app_context
 
-from src.upgrade_portal.app.config import POST_CHECK_MODE_VARIABLE
-from src.upgrade_portal.app.routes import capture as capture_routes
-from src.upgrade_portal.app.routes.org_postcheck import OrgPostCheckBridge
-from src.upgrade_portal.upgrade.org_postcheck import PostCheckResult, PostCheckSite
+from src.interfaces.portals.upgrade_portal.app.config import POST_CHECK_MODE_VARIABLE
+from src.interfaces.portals.upgrade_portal.app.routes import capture as capture_routes
+from src.interfaces.portals.upgrade_portal.app.routes.org_postcheck import OrgPostCheckBridge
+from src.interfaces.portals.upgrade_portal.upgrade.org_postcheck import PostCheckResult, PostCheckSite
 
 ORG_ID = "00000000-0000-0000-0000-00000000c244"  # An obviously fake organization.
 OPERATOR = "postcheck.operator@juniper.net"  # The address that the operation stores.

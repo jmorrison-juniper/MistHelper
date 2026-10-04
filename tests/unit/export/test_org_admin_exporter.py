@@ -1,6 +1,6 @@
 """Unit tests for OrgAdminExporter (issue #878 tranche 3 -- un-omit).
 
-Covers the seven static methods on ``src.export.org_admin_exporter``:
+Covers the seven static methods on ``src.operations.exporting.export.org_admin_exporter``:
 ``api_tokens``, ``admins``, ``sso``, ``_fetch_license_payload`` (wrapper +
 raw GET fallback + missing-session branch), ``_fetch_license_records``
 (list-normalisation branch), ``licenses`` (empty/success/error paths) and
@@ -14,10 +14,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.api import api_data_fetcher as fetcher_module
-from src.api.api_data_fetcher import APIDataFetcher
-from src.export import org_admin_exporter as admin_module
-from src.export.org_admin_exporter import OrgAdminExporter
+from src.mist.access.api import api_data_fetcher as fetcher_module
+from src.mist.access.api.api_data_fetcher import APIDataFetcher
+from src.operations.exporting.export import org_admin_exporter as admin_module
+from src.operations.exporting.export.org_admin_exporter import OrgAdminExporter
 
 
 def _make_mh(**extra):
@@ -41,7 +41,7 @@ def _make_mh(**extra):
 def test_api_tokens_delegates_to_apidata_fetcher_execute() -> None:
     """api_tokens must instantiate APIDataFetcher with the token endpoint and run it."""
     fake_mh = _make_mh()
-    with patch("src.export.org_admin_exporter.SourceDependencyResolver", fake_mh):
+    with patch("src.operations.exporting.export.org_admin_exporter.SourceDependencyResolver", fake_mh):
         OrgAdminExporter.api_tokens()
     fake_mh.APIDataFetcher.assert_called_once()
     kwargs = fake_mh.APIDataFetcher.call_args.kwargs
@@ -56,7 +56,7 @@ def test_api_tokens_delegates_to_apidata_fetcher_execute() -> None:
 def test_admins_delegates_to_apidata_fetcher_execute() -> None:
     """admins must instantiate APIDataFetcher with the admins endpoint and run it."""
     fake_mh = _make_mh()
-    with patch("src.export.org_admin_exporter.SourceDependencyResolver", fake_mh):
+    with patch("src.operations.exporting.export.org_admin_exporter.SourceDependencyResolver", fake_mh):
         OrgAdminExporter.admins()
     kwargs = fake_mh.APIDataFetcher.call_args.kwargs
     assert kwargs["filename"] == "OrgAdmins.csv"
@@ -69,7 +69,7 @@ def test_admins_delegates_to_apidata_fetcher_execute() -> None:
 def test_sso_delegates_to_orgexportutils_export_data() -> None:
     """sso must delegate to OrgExportUtils.export_data with data_type='sso'."""
     fake_mh = _make_mh()
-    with patch("src.export.org_admin_exporter.SourceDependencyResolver", fake_mh):
+    with patch("src.operations.exporting.export.org_admin_exporter.SourceDependencyResolver", fake_mh):
         OrgAdminExporter.sso()
     fake_mh.OrgExportUtils.export_data.assert_called_once()
     assert fake_mh.OrgExportUtils.export_data.call_args.kwargs["data_type"] == "sso"
@@ -89,8 +89,8 @@ def test_fetch_license_payload_uses_wrapper_when_present() -> None:
     fake_mistapi.get_all.return_value = [{"id": "L1"}]
 
     with (
-        patch("src.export.org_admin_exporter.mistapi", fake_mistapi),
-        patch("src.export.org_admin_exporter.SourceDependencyResolver", fake_mh),
+        patch("src.operations.exporting.export.org_admin_exporter.mistapi", fake_mistapi),
+        patch("src.operations.exporting.export.org_admin_exporter.SourceDependencyResolver", fake_mh),
     ):
         result = OrgAdminExporter._fetch_license_payload("org-uuid")
 
@@ -107,8 +107,8 @@ def test_fetch_license_payload_raw_get_fallback_when_wrapper_absent() -> None:
     fake_mistapi.api.v1.orgs.licenses = SimpleNamespace()  # No listOrgLicenses attribute.
 
     with (
-        patch("src.export.org_admin_exporter.mistapi", fake_mistapi),
-        patch("src.export.org_admin_exporter.SourceDependencyResolver", fake_mh),
+        patch("src.operations.exporting.export.org_admin_exporter.mistapi", fake_mistapi),
+        patch("src.operations.exporting.export.org_admin_exporter.SourceDependencyResolver", fake_mh),
     ):
         result = OrgAdminExporter._fetch_license_payload("org-uuid")
 
@@ -124,8 +124,8 @@ def test_fetch_license_payload_raw_get_defaults_none_data_to_empty_list() -> Non
     fake_mistapi.api.v1.orgs.licenses = SimpleNamespace()
 
     with (
-        patch("src.export.org_admin_exporter.mistapi", fake_mistapi),
-        patch("src.export.org_admin_exporter.SourceDependencyResolver", fake_mh),
+        patch("src.operations.exporting.export.org_admin_exporter.mistapi", fake_mistapi),
+        patch("src.operations.exporting.export.org_admin_exporter.SourceDependencyResolver", fake_mh),
     ):
         result = OrgAdminExporter._fetch_license_payload("org-uuid")
 
@@ -139,8 +139,8 @@ def test_fetch_license_payload_raises_when_session_not_initialized() -> None:
     fake_mistapi.api.v1.orgs.licenses = SimpleNamespace()
 
     with (
-        patch("src.export.org_admin_exporter.mistapi", fake_mistapi),
-        patch("src.export.org_admin_exporter.SourceDependencyResolver", fake_mh),
+        patch("src.operations.exporting.export.org_admin_exporter.mistapi", fake_mistapi),
+        patch("src.operations.exporting.export.org_admin_exporter.SourceDependencyResolver", fake_mh),
     ):
         with pytest.raises(ValueError, match="API session not initialized"):
             OrgAdminExporter._fetch_license_payload("org-uuid")
@@ -169,7 +169,7 @@ def test_licenses_writes_empty_csv_when_no_records() -> None:
     fake_mh = _make_mh()
     fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org-uuid"
     with (
-        patch("src.export.org_admin_exporter.SourceDependencyResolver", fake_mh),
+        patch("src.operations.exporting.export.org_admin_exporter.SourceDependencyResolver", fake_mh),
         patch.object(OrgAdminExporter, "_fetch_license_records", return_value=[]),
     ):
         OrgAdminExporter.licenses()
@@ -183,8 +183,8 @@ def test_licenses_flattens_escapes_and_writes_on_success() -> None:
     fake_mh = _make_mh()
     fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org-uuid"
     with (
-        patch("src.export.org_admin_exporter.DataProcessingUtils") as fake_dpu,
-        patch("src.export.org_admin_exporter.SourceDependencyResolver", fake_mh),
+        patch("src.operations.exporting.export.org_admin_exporter.DataProcessingUtils") as fake_dpu,
+        patch("src.operations.exporting.export.org_admin_exporter.SourceDependencyResolver", fake_mh),
         patch.object(OrgAdminExporter, "_fetch_license_records", return_value=[{"id": "L1"}]),
     ):
         fake_dpu.flatten_nested_fields.return_value = [{"flat": True}]
@@ -203,7 +203,7 @@ def test_licenses_best_effort_empty_write_on_fetch_failure_then_reraises() -> No
     fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org-uuid"
     boom = RuntimeError("fetch failed")
     with (
-        patch("src.export.org_admin_exporter.SourceDependencyResolver", fake_mh),
+        patch("src.operations.exporting.export.org_admin_exporter.SourceDependencyResolver", fake_mh),
         patch.object(OrgAdminExporter, "_fetch_license_records", side_effect=boom),
     ):
         with pytest.raises(RuntimeError, match="fetch failed"):
@@ -219,7 +219,7 @@ def test_licenses_swallows_secondary_write_failure() -> None:
     fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org-uuid"
     fake_mh.DataExporter.write_with_format_selection.side_effect = OSError("disk full")
     with (
-        patch("src.export.org_admin_exporter.SourceDependencyResolver", fake_mh),
+        patch("src.operations.exporting.export.org_admin_exporter.SourceDependencyResolver", fake_mh),
         patch.object(OrgAdminExporter, "_fetch_license_records", side_effect=RuntimeError("primary")),
     ):
         with pytest.raises(RuntimeError, match="primary"):
@@ -232,7 +232,7 @@ def test_licenses_swallows_secondary_write_failure() -> None:
 def test_usage_delegates_to_apidata_fetcher_execute(caplog: pytest.LogCaptureFixture) -> None:
     """usage must run APIDataFetcher for the by-site usage endpoint and log completion."""
     fake_mh = _make_mh()
-    with patch("src.export.org_admin_exporter.SourceDependencyResolver", fake_mh):
+    with patch("src.operations.exporting.export.org_admin_exporter.SourceDependencyResolver", fake_mh):
         OrgAdminExporter.usage()
     kwargs = fake_mh.APIDataFetcher.call_args.kwargs
     assert kwargs["filename"] == "OrgUsage"

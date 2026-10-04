@@ -68,7 +68,7 @@ class OrgAPUpgraderConfig:
 
 ## Field Mapping from Pre-Refactor `__init__`
 
-The current signature at `src/firmware/org_ap_upgrader.py:41` is:
+The current signature at `src/operations/execution/firmware/org_ap_upgrader.py:41` is:
 
 ```python
 def __init__(  # pylint: disable=too-many-arguments
@@ -281,7 +281,7 @@ upgrader = _Impl(
 )
 ```
 
-**Diff scope outside `src/firmware/org_ap_upgrader.py`**: **zero lines**. All four callsites remain byte-identical (FR-018, SC-007).
+**Diff scope outside `src/operations/execution/firmware/org_ap_upgrader.py`**: **zero lines**. All four callsites remain byte-identical (FR-018, SC-007).
 
 ---
 

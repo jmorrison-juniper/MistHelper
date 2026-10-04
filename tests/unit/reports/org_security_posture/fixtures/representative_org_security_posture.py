@@ -1,6 +1,6 @@
 """Representative source data for organization security posture tests."""
 
-from src.reports.org_security_posture.models import OrganizationSecuritySourceData
+from src.mist.intelligence.reports.org_security_posture.models import OrganizationSecuritySourceData
 
 
 class RepresentativeOrgSecurityPostureFixture:

@@ -23,7 +23,7 @@ the server builds one Cancellation text for the render and the poll.
 
 ## Design
 
-### 1. The service in `src/firmware/aggregate_upgrade_service.py`
+### 1. The service in `src/operations/execution/firmware/aggregate_upgrade_service.py`
 
 - Add `FINAL_OPERATION_STATES = frozenset({"cancelled", "completed", "failed"})`.
 - Add `FINAL_CANCEL_TEXT`, the refusal message with one `{state}` field.
@@ -33,7 +33,7 @@ the server builds one Cancellation text for the render and the poll.
 - `cancel()` calls `_refuse_final` after the write session check and before
   `_start_cancellation`.
 
-### 2. The route in `src/upgrade_portal/app/routes/org_upgrade.py`
+### 2. The route in `src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py`
 
 - Add the code `NOT_CANCELLABLE = "org_upgrade_not_cancellable"`.
 - Replace `TERMINAL_JOB_STATES` with the imported `FINAL_OPERATION_STATES`.
@@ -45,7 +45,7 @@ the server builds one Cancellation text for the render and the poll.
 - `_aggregate_child_summary` adds `cancellation_text`.
 - `_site_summary` adds `device_family: "ap"`.
 
-### 3. The new module `src/upgrade_portal/upgrade/org_cancel_text.py`
+### 3. The new module `src/interfaces/portals/upgrade_portal/upgrade/org_cancel_text.py`
 
 - The class `OrgCancelText` has one public class method, `text(cancellation)`.
 - It returns an empty text for a child job with no cancel result.

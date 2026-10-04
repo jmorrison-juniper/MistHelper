@@ -7,7 +7,9 @@ from collections.abc import Callable
 
 import pytest
 
-from src.websocket_streams.live.transport.runtime.logging.structured_logger import StructuredTransportLogger
+from src.mist.realtime.websocket_streams.live.transport.runtime.logging.structured_logger import (
+    StructuredTransportLogger,
+)
 from tests.unit.websocket_streams.live.runners import test_ws_shell_runner as shell_tests
 
 
@@ -40,13 +42,13 @@ def test_completion_already_captured_needs_no_poll(
     caplog.set_level(logging.DEBUG)
     clock = ControlledClock()
     monkeypatch.setattr(shell_tests, "time", clock)
-    target = logging.getLogger("src.websocket_streams.live.runners.shell.lifecycle.outcomes")
+    target = logging.getLogger("src.mist.realtime.websocket_streams.live.runners.shell.lifecycle.outcomes")
     StructuredTransportLogger(target).emit(logging.DEBUG, "terminal_outcome_completed")
     assert shell_tests.ShellLogCompletion.inspect(caplog) == (True, 1)
     shell_tests.ShellLogCompletion.wait(caplog)
     assert clock.polls == 0
     assert clock.elapsed == 0.0
-    assert target is logging.getLogger("src.websocket_streams.live.runners.shell.lifecycle.outcomes")
+    assert target is logging.getLogger("src.mist.realtime.websocket_streams.live.runners.shell.lifecycle.outcomes")
 
 
 def test_completion_delivered_after_first_check_permits_snapshot(
@@ -54,7 +56,7 @@ def test_completion_delivered_after_first_check_permits_snapshot(
 ) -> None:
     """The helper waits for the real event instead of accepting an early snapshot."""
     caplog.set_level(logging.DEBUG)
-    target = logging.getLogger("src.websocket_streams.live.runners.shell.lifecycle.outcomes")
+    target = logging.getLogger("src.mist.realtime.websocket_streams.live.runners.shell.lifecycle.outcomes")
     emitter = StructuredTransportLogger(target)
 
     def deliver() -> None:
@@ -74,9 +76,9 @@ def test_completion_delivered_after_first_check_permits_snapshot(
 @pytest.mark.parametrize(
     ("event", "logger_name"),
     [
-        (None, "src.websocket_streams.live.runners.shell.lifecycle.outcomes"),
-        ("terminal_outcome_started", "src.websocket_streams.live.runners.shell.lifecycle.outcomes"),
-        ("terminal_outcome_completed", "src.websocket_streams.live.runners.shell.lifecycle.reading"),
+        (None, "src.mist.realtime.websocket_streams.live.runners.shell.lifecycle.outcomes"),
+        ("terminal_outcome_started", "src.mist.realtime.websocket_streams.live.runners.shell.lifecycle.outcomes"),
+        ("terminal_outcome_completed", "src.mist.realtime.websocket_streams.live.runners.shell.lifecycle.reading"),
     ],
     ids=["missing", "wrong-event", "wrong-logger"],
 )

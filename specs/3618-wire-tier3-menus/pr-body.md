@@ -73,7 +73,7 @@ Menus 286, 287, 291, 292, 293, 280, and 281 follow after their human reviews.
 ## Verification
 - `py_compile` passed for each edited Python file.
 - `ruff check .` passed.
-- `black --check MistHelper.py src/utils/operation_registry.py src/refactors/endpoint_primary_key_strategies.py web_portal/services/operation.py web_portal/menu_registry.py` passed.
+- `black --check MistHelper.py src/foundation/support/utils/operation_registry.py src/foundation/support/refactors/endpoint_primary_key_strategies.py web_portal/services/operation.py web_portal/menu_registry.py` passed.
 - `mypy src/ MistHelper.py wsgi.py --config-file pyproject.toml` passed.
 - `pytest tests/unit/test_menu_entry_metadata.py tests/guardrails tests/unit/utils tests/unit/web_portal -q --timeout=120` timed out in `tests/guardrails/test_guard_proof_audit.py::TestRepositoryGuardProofAudit::test_analyzer_scope_metrics_cover_registered_detectors`.
 - `MistHelper.py --help` passed.

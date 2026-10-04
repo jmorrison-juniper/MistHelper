@@ -6,7 +6,7 @@ against a Mist test organization. Each scenario maps directly to a user
 story or acceptance test in `spec.md`.
 
 Implementation details (models, service internals, PUT wrappers) live in
-the source under `src/device/ap_profile_migration_manager.py` and in
+the source under `src/mist/resources/device/ap_profile_migration_manager.py` and in
 `data-model.md`. This document is a validation and run guide, not an
 implementation reference.
 

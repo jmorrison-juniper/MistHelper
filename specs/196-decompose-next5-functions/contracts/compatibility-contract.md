@@ -41,11 +41,11 @@ This contract defines mandatory invariants for refactoring targets in `specs/196
 
 | Original Function | Required Extracted Owner |
 | - | - |
-| `_start_site_scan_capture_all_aps` | `src/capture/multi_ap_scan_workflow.py::MultiApScanCaptureWorkflow` |
-| `_wait_and_download_pcap` | `src/capture/site_pcap_wait_download_workflow.py::SitePcapWaitDownloadWorkflow` |
-| `_wait_and_download_pcap_org` | `src/capture/org_pcap_wait_download_workflow.py::OrgPcapWaitDownloadWorkflow` |
-| `wifi_clients` | `src/export/wifi_clients_exporter.py::WifiClientsExporter` |
-| `run_interactive_test` | `src/troubleshooting/interactive_test_runner.py::InteractiveTestRunner` |
+| `_start_site_scan_capture_all_aps` | `src/operations/execution/capture/multi_ap_scan_workflow.py::MultiApScanCaptureWorkflow` |
+| `_wait_and_download_pcap` | `src/operations/execution/capture/site_pcap_wait_download_workflow.py::SitePcapWaitDownloadWorkflow` |
+| `_wait_and_download_pcap_org` | `src/operations/execution/capture/org_pcap_wait_download_workflow.py::OrgPcapWaitDownloadWorkflow` |
+| `wifi_clients` | `src/operations/exporting/export/wifi_clients_exporter.py::WifiClientsExporter` |
+| `run_interactive_test` | `src/mist/intelligence/troubleshooting/interactive_test_runner.py::InteractiveTestRunner` |
 
 ## Verification Matrix
 

@@ -6,8 +6,8 @@ from typing import Any
 
 import pytest
 
-from src.upgrade_portal.auth import session as auth_session
-from src.upgrade_portal.auth.session import JWTSessionManager
+from src.interfaces.portals.upgrade_portal.auth import session as auth_session
+from src.interfaces.portals.upgrade_portal.auth.session import JWTSessionManager
 
 
 def test_validate_token_unexpected_decode_attribute_error_reaches_operator(

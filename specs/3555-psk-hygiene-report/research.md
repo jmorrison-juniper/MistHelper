@@ -20,7 +20,7 @@ Alternatives considered: Direct HTTP calls were rejected because the SDK covers 
 
 ## Decision: keep Mist calls inside a client module
 
-Create a client module under `src/reports/psk_hygiene/` that fetches PSKs, organization WLANs, and organization templates.
+Create a client module under `src/mist/intelligence/reports/psk_hygiene/` that fetches PSKs, organization WLANs, and organization templates.
 
 Rationale: The client boundary makes network access easy to fake in unit tests. It also keeps `PskHygieneReport.run()` focused on dependency resolution, logging, model calls, and export.
 

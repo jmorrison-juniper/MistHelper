@@ -24,11 +24,15 @@ from flask import Flask
 from flask.testing import FlaskClient
 from requests.exceptions import ConnectionError as TransportError
 
-from src.firmware.aggregate_upgrade_service import AggregateUpgradeService
-from src.upgrade_portal.app.routes import org_upgrade, select
-from src.upgrade_portal.runtime import identity
-from src.upgrade_portal.upgrade import options as option_rules
-from src.upgrade_portal.upgrade.org_site_records import SHORT_MESSAGE, UNPLANNED_MESSAGE, UNREAD_MESSAGE
+from src.interfaces.portals.upgrade_portal.app.routes import org_upgrade, select
+from src.interfaces.portals.upgrade_portal.runtime import identity
+from src.interfaces.portals.upgrade_portal.upgrade import options as option_rules
+from src.interfaces.portals.upgrade_portal.upgrade.org_site_records import (
+    SHORT_MESSAGE,
+    UNPLANNED_MESSAGE,
+    UNREAD_MESSAGE,
+)
+from src.operations.execution.firmware.aggregate_upgrade_service import AggregateUpgradeService
 from tests.contract.upgrade_portal.test_org_advanced_options import (
     AP_ONE,
     AP_TARGET,

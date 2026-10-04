@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from MistHelper import PacketCaptureManager, SiteClientExporter
-from src.refactors.run_interactive_test import RunInteractiveTestManager
+from src.foundation.support.refactors.run_interactive_test import RunInteractiveTestManager
 from tests.fixtures.next5_parity_baseline import NEXT5_TARGET_FUNCTIONS
 from tests.integration.helpers.compatibility_assertions import (
     assert_callable_entrypoint,

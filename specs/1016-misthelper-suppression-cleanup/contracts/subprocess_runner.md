@@ -1,4 +1,4 @@
-# Contract: `src/utils/subprocess_runner.py` Helper
+# Contract: `src/foundation/support/utils/subprocess_runner.py` Helper
 
 **Feature**: `specs/1016-misthelper-suppression-cleanup/`
 
@@ -15,10 +15,10 @@ Centralize the `import subprocess` statement at a single audited entry point so 
 ## File location and structure
 
 ```
-src/utils/subprocess_runner.py
+src/foundation/support/utils/subprocess_runner.py
 ```
 
-The file is one of only two permitted `src/` additions in this workflow per FR-012 (the other is `src/utils/misthelper_facade.py`).
+The file is one of only two permitted `src/` additions in this workflow per FR-012 (the other is `src/foundation/support/utils/misthelper_facade.py`).
 
 ## Public entry point
 
@@ -77,7 +77,7 @@ At each `MistHelper.py` call site that previously carried `# nosec`:
 # subprocess.run([...], timeout=30)  # nosec B603
 
 # After (routed through helper):
-from src.utils.subprocess_runner import SubprocessRunner
+from src.foundation.support.utils.subprocess_runner import SubprocessRunner
 SubprocessRunner.run([...], timeout=30)
 ```
 
@@ -90,7 +90,7 @@ The `import subprocess` line in `MistHelper.py` is removed (satisfying `B404`).
 
 ## Validation checklist (Story 7 PR review)
 
-- [ ] `src/utils/subprocess_runner.py` created (only if threshold met).
+- [ ] `src/foundation/support/utils/subprocess_runner.py` created (only if threshold met).
 - [ ] `SubprocessRunner.ALLOWED_EXECUTABLES` matches the actual set of executables `MistHelper.py` invokes.
 - [ ] Every `MistHelper.py` subprocess call site routes through `SubprocessRunner.run(...)`.
 - [ ] `import subprocess` removed from `MistHelper.py` (or reduced to the single point required for type-hint imports if any remain).

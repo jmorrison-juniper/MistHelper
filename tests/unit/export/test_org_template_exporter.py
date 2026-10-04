@@ -1,4 +1,4 @@
-"""Unit tests for ``src.export.org_template_exporter.OrgTemplateExporter``.
+"""Unit tests for ``src.operations.exporting.export.org_template_exporter.OrgTemplateExporter``.
 
 Why: Exercises every branch of the 9 static methods so that un-omitting the
 module in ``[tool.coverage.run].omit`` keeps overall coverage above the 90%
@@ -40,7 +40,7 @@ class TestTemplateExportSpecs:
 
     def test_returns_five_specs(self):
         """Returns a spec tuple for gateway, network, RF, site, and AP templates."""
-        from src.export.org_template_exporter import OrgTemplateExporter
+        from src.operations.exporting.export.org_template_exporter import OrgTemplateExporter
 
         specs = OrgTemplateExporter._template_export_specs()
 
@@ -63,7 +63,7 @@ class TestExportOneTemplate:
 
     def test_success_calls_api_data_fetcher(self, fake_mh):
         """Happy path invokes APIDataFetcher(...).execute() with the given spec."""
-        from src.export.org_template_exporter import OrgTemplateExporter
+        from src.operations.exporting.export.org_template_exporter import OrgTemplateExporter
 
         api_call = MagicMock()
         OrgTemplateExporter._export_one_template("Title:", api_call, "File.csv", "label")
@@ -75,7 +75,7 @@ class TestExportOneTemplate:
 
     def test_exception_is_logged_not_raised(self, fake_mh):
         """APIDataFetcher failure is logged but does not propagate — other types keep exporting."""
-        from src.export.org_template_exporter import OrgTemplateExporter
+        from src.operations.exporting.export.org_template_exporter import OrgTemplateExporter
 
         fake_mh.APIDataFetcher.return_value.execute.side_effect = RuntimeError("boom")
         # Should not raise.
@@ -87,7 +87,7 @@ class TestAllTemplates:
 
     def test_iterates_all_specs(self, fake_mh):
         """all_templates delegates to _export_one_template once per spec."""
-        from src.export.org_template_exporter import OrgTemplateExporter
+        from src.operations.exporting.export.org_template_exporter import OrgTemplateExporter
 
         with patch.object(OrgTemplateExporter, "_export_one_template") as exp:
             OrgTemplateExporter.all_templates()
@@ -100,7 +100,7 @@ class TestNetworkTemplates:
 
     def test_delegates_to_org_export_utils(self, fake_mh):
         """Delegates to mh.OrgExportUtils.export_data with network templates data_type."""
-        from src.export.org_template_exporter import OrgTemplateExporter
+        from src.operations.exporting.export.org_template_exporter import OrgTemplateExporter
 
         OrgTemplateExporter.network_templates()
 
@@ -115,7 +115,7 @@ class TestRfTemplates:
 
     def test_delegates_to_org_export_utils(self, fake_mh):
         """Delegates to mh.OrgExportUtils.export_data with rf templates data_type."""
-        from src.export.org_template_exporter import OrgTemplateExporter
+        from src.operations.exporting.export.org_template_exporter import OrgTemplateExporter
 
         OrgTemplateExporter.rf_templates()
 
@@ -129,7 +129,7 @@ class TestPersistApTemplateProfiles:
 
     def test_empty_writes_empty_csv(self, fake_mh):
         """Empty profile list writes an empty file to keep output consistent."""
-        from src.export.org_template_exporter import OrgTemplateExporter
+        from src.operations.exporting.export.org_template_exporter import OrgTemplateExporter
 
         OrgTemplateExporter._persist_ap_template_profiles([], "OrgApTemplates.csv")
 
@@ -139,10 +139,10 @@ class TestPersistApTemplateProfiles:
 
     def test_non_empty_flattens_and_writes(self, fake_mh):
         """Non-empty list flows through flatten/escape/write."""
-        from src.export.org_template_exporter import OrgTemplateExporter
+        from src.operations.exporting.export.org_template_exporter import OrgTemplateExporter
 
         profiles = [{"id": "p1"}]
-        with patch("src.export.org_template_exporter.DataProcessingUtils") as dpu:
+        with patch("src.operations.exporting.export.org_template_exporter.DataProcessingUtils") as dpu:
             dpu.flatten_nested_fields.return_value = profiles
             dpu.escape_multiline.return_value = profiles
             OrgTemplateExporter._persist_ap_template_profiles(profiles, "OrgApTemplates.csv")
@@ -159,15 +159,15 @@ class TestApTemplates:
 
     def test_happy_path_persists_profiles(self, fake_mh):
         """Fetches ap-type deviceprofiles, pages them, delegates to _persist."""
-        from src.export.org_template_exporter import OrgTemplateExporter
+        from src.operations.exporting.export.org_template_exporter import OrgTemplateExporter
 
         profiles = [{"id": "ap1"}]
         with (
             patch(
-                "src.export.org_template_exporter.mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles",
+                "src.operations.exporting.export.org_template_exporter.mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles",
                 return_value=MagicMock(),
             ) as api,
-            patch("src.export.org_template_exporter.mistapi.get_all", return_value=profiles),
+            patch("src.operations.exporting.export.org_template_exporter.mistapi.get_all", return_value=profiles),
             patch.object(OrgTemplateExporter, "_persist_ap_template_profiles") as persist,
         ):
             fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org1"
@@ -178,14 +178,14 @@ class TestApTemplates:
 
     def test_get_all_none_becomes_empty_list(self, fake_mh):
         """mistapi.get_all returning None is coerced to [] via `or []`."""
-        from src.export.org_template_exporter import OrgTemplateExporter
+        from src.operations.exporting.export.org_template_exporter import OrgTemplateExporter
 
         with (
             patch(
-                "src.export.org_template_exporter.mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles",
+                "src.operations.exporting.export.org_template_exporter.mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles",
                 return_value=MagicMock(),
             ),
-            patch("src.export.org_template_exporter.mistapi.get_all", return_value=None),
+            patch("src.operations.exporting.export.org_template_exporter.mistapi.get_all", return_value=None),
             patch.object(OrgTemplateExporter, "_persist_ap_template_profiles") as persist,
         ):
             OrgTemplateExporter.ap_templates()
@@ -194,11 +194,11 @@ class TestApTemplates:
 
     def test_exception_writes_empty_and_reraises(self, fake_mh):
         """API failure writes empty CSV best-effort and re-raises."""
-        from src.export.org_template_exporter import OrgTemplateExporter
+        from src.operations.exporting.export.org_template_exporter import OrgTemplateExporter
 
         with (
             patch(
-                "src.export.org_template_exporter.mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles",
+                "src.operations.exporting.export.org_template_exporter.mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles",
                 side_effect=RuntimeError("api down"),
             ),
             pytest.raises(RuntimeError, match="api down"),
@@ -211,12 +211,12 @@ class TestApTemplates:
 
     def test_exception_and_cleanup_swallows_secondary_error(self, fake_mh):
         """Best-effort empty-write failure is swallowed; original error still re-raises."""
-        from src.export.org_template_exporter import OrgTemplateExporter
+        from src.operations.exporting.export.org_template_exporter import OrgTemplateExporter
 
         fake_mh.DataExporter.write_with_format_selection.side_effect = OSError("disk full")
         with (
             patch(
-                "src.export.org_template_exporter.mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles",
+                "src.operations.exporting.export.org_template_exporter.mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles",
                 side_effect=RuntimeError("api down"),
             ),
             pytest.raises(RuntimeError, match="api down"),
@@ -229,7 +229,7 @@ class TestPersistSwitchTemplateCsv:
 
     def test_empty_writes_empty_csv(self, fake_mh):
         """Empty list writes an empty CSV for output consistency."""
-        from src.export.org_template_exporter import OrgTemplateExporter
+        from src.operations.exporting.export.org_template_exporter import OrgTemplateExporter
 
         OrgTemplateExporter._persist_switch_template_csv([], "OrgSwitchTemplates.csv")
 
@@ -239,10 +239,10 @@ class TestPersistSwitchTemplateCsv:
 
     def test_non_empty_flattens_and_writes(self, fake_mh):
         """Non-empty list flows through flatten/escape/write."""
-        from src.export.org_template_exporter import OrgTemplateExporter
+        from src.operations.exporting.export.org_template_exporter import OrgTemplateExporter
 
         profiles = [{"id": "sw1"}]
-        with patch("src.export.org_template_exporter.DataProcessingUtils") as dpu:
+        with patch("src.operations.exporting.export.org_template_exporter.DataProcessingUtils") as dpu:
             dpu.flatten_nested_fields.return_value = profiles
             dpu.escape_multiline.return_value = profiles
             OrgTemplateExporter._persist_switch_template_csv(profiles, "OrgSwitchTemplates.csv")
@@ -259,15 +259,15 @@ class TestSwitchTemplates:
 
     def test_happy_path_persists_profiles(self, fake_mh):
         """Fetches networktemplates, pages them, delegates to _persist."""
-        from src.export.org_template_exporter import OrgTemplateExporter
+        from src.operations.exporting.export.org_template_exporter import OrgTemplateExporter
 
         profiles = [{"id": "sw1"}]
         with (
             patch(
-                "src.export.org_template_exporter.mistapi.api.v1.orgs.networktemplates.listOrgNetworkTemplates",
+                "src.operations.exporting.export.org_template_exporter.mistapi.api.v1.orgs.networktemplates.listOrgNetworkTemplates",
                 return_value=MagicMock(),
             ) as api,
-            patch("src.export.org_template_exporter.mistapi.get_all", return_value=profiles),
+            patch("src.operations.exporting.export.org_template_exporter.mistapi.get_all", return_value=profiles),
             patch.object(OrgTemplateExporter, "_persist_switch_template_csv") as persist,
         ):
             fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org1"
@@ -278,14 +278,14 @@ class TestSwitchTemplates:
 
     def test_get_all_none_becomes_empty_list(self, fake_mh):
         """mistapi.get_all returning None is coerced to [] via `or []`."""
-        from src.export.org_template_exporter import OrgTemplateExporter
+        from src.operations.exporting.export.org_template_exporter import OrgTemplateExporter
 
         with (
             patch(
-                "src.export.org_template_exporter.mistapi.api.v1.orgs.networktemplates.listOrgNetworkTemplates",
+                "src.operations.exporting.export.org_template_exporter.mistapi.api.v1.orgs.networktemplates.listOrgNetworkTemplates",
                 return_value=MagicMock(),
             ),
-            patch("src.export.org_template_exporter.mistapi.get_all", return_value=None),
+            patch("src.operations.exporting.export.org_template_exporter.mistapi.get_all", return_value=None),
             patch.object(OrgTemplateExporter, "_persist_switch_template_csv") as persist,
         ):
             OrgTemplateExporter.switch_templates()
@@ -294,11 +294,11 @@ class TestSwitchTemplates:
 
     def test_exception_writes_empty_and_reraises(self, fake_mh):
         """API failure writes empty CSV best-effort and re-raises."""
-        from src.export.org_template_exporter import OrgTemplateExporter
+        from src.operations.exporting.export.org_template_exporter import OrgTemplateExporter
 
         with (
             patch(
-                "src.export.org_template_exporter.mistapi.api.v1.orgs.networktemplates.listOrgNetworkTemplates",
+                "src.operations.exporting.export.org_template_exporter.mistapi.api.v1.orgs.networktemplates.listOrgNetworkTemplates",
                 side_effect=RuntimeError("api down"),
             ),
             pytest.raises(RuntimeError, match="api down"),
@@ -311,12 +311,12 @@ class TestSwitchTemplates:
 
     def test_exception_and_cleanup_swallows_secondary_error(self, fake_mh):
         """Best-effort empty-write failure is swallowed; original error still re-raises."""
-        from src.export.org_template_exporter import OrgTemplateExporter
+        from src.operations.exporting.export.org_template_exporter import OrgTemplateExporter
 
         fake_mh.DataExporter.write_with_format_selection.side_effect = OSError("disk full")
         with (
             patch(
-                "src.export.org_template_exporter.mistapi.api.v1.orgs.networktemplates.listOrgNetworkTemplates",
+                "src.operations.exporting.export.org_template_exporter.mistapi.api.v1.orgs.networktemplates.listOrgNetworkTemplates",
                 side_effect=RuntimeError("api down"),
             ),
             pytest.raises(RuntimeError, match="api down"),

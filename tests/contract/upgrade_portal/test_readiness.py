@@ -27,7 +27,7 @@ import pytest
 from flask import Flask
 from flask.testing import FlaskClient
 
-from src.upgrade_portal.app import factory
+from src.interfaces.portals.upgrade_portal.app import factory
 
 # WHY: The contract names this exact path. A constant keeps every request on it.
 READY_PATH = "/readyz"
@@ -231,7 +231,7 @@ def store_module() -> ModuleType:
         The imported capture store module.
     """
     return pytest.importorskip(  # WHY: Another lane may be writing this module.
-        "src.upgrade_portal.capture.store",
+        "src.interfaces.portals.upgrade_portal.capture.store",
         reason="The capture store module is not built yet.",
     )
 
@@ -248,7 +248,7 @@ def lock_module() -> ModuleType:
         The imported site lock module.
     """
     return pytest.importorskip(  # WHY: Another lane may be writing this module.
-        "src.upgrade_portal.runtime.lock",
+        "src.interfaces.portals.upgrade_portal.runtime.lock",
         reason="The site lock module is not built yet.",
     )
 

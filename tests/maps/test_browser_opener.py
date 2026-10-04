@@ -14,7 +14,7 @@ import webbrowser
 
 import pytest
 
-from src.maps._browser_opener import DelayedBrowserOpener
+from src.interfaces.visualization.maps._browser_opener import DelayedBrowserOpener
 
 _NO_DELAY_S = 0.0  # WHY: A zero delay keeps every test fast without a sleep.
 _LONG_DELAY_S = 30.0  # WHY: A long delay proves that stop ends the wait early, not that the wait expired.
@@ -157,7 +157,7 @@ def test_plotly_viewer_schedules_and_stops_the_open(
     a bound method whose signature took no argument and passed one argument to
     it. The thread then raised ``TypeError`` and opened no browser.
     """
-    from src.maps import _plotly_viewer
+    from src.interfaces.visualization.maps import _plotly_viewer
 
     monkeypatch.setattr(_plotly_viewer, "is_running_in_container", lambda: False)
     monkeypatch.setattr(
@@ -177,7 +177,7 @@ def test_plotly_viewer_schedules_and_stops_the_open(
 
 def test_plotly_viewer_skips_the_open_in_a_container(monkeypatch: pytest.MonkeyPatch, opened_urls: list[str]) -> None:
     """A container run schedules no browser open, because the host owns the browser."""
-    from src.maps import _plotly_viewer
+    from src.interfaces.visualization.maps import _plotly_viewer
 
     monkeypatch.setattr(_plotly_viewer, "is_running_in_container", lambda: True)
     viewer = _plotly_viewer._PlotlyViewer(None)
@@ -192,7 +192,7 @@ def test_plotly_viewer_skips_the_open_in_a_container(monkeypatch: pytest.MonkeyP
 def test_flask_viewer_returns_a_stoppable_opener(monkeypatch: pytest.MonkeyPatch, opened_urls: list[str]) -> None:
     """The Flask viewer hands the opener back, so the caller can join the thread."""
     pytest.importorskip("mistapi")  # WHY: The Flask viewer imports the Mist SDK at module scope.
-    from src.maps import _flask_viewer
+    from src.interfaces.visualization.maps import _flask_viewer
 
     monkeypatch.setattr(_flask_viewer, "is_running_in_container", lambda: False)
     monkeypatch.setattr(_flask_viewer, "_BROWSER_OPEN_DELAY_S", _NO_DELAY_S)
@@ -208,7 +208,7 @@ def test_flask_viewer_returns_a_stoppable_opener(monkeypatch: pytest.MonkeyPatch
 def test_flask_viewer_skips_the_open_in_a_container(monkeypatch: pytest.MonkeyPatch) -> None:
     """A container run returns no opener, so the caller has no thread to join."""
     pytest.importorskip("mistapi")  # WHY: The Flask viewer imports the Mist SDK at module scope.
-    from src.maps import _flask_viewer
+    from src.interfaces.visualization.maps import _flask_viewer
 
     monkeypatch.setattr(_flask_viewer, "is_running_in_container", lambda: True)
 

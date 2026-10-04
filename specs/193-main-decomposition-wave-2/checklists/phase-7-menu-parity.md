@@ -16,7 +16,7 @@ Date: 2026-05-26
 
 ## Delegation Integrity
 
-- `MistHelper.py` now delegates gateway export/stats implementation to extracted modules under `src/gateway/`.
+- `MistHelper.py` now delegates gateway export/stats implementation to extracted modules under `src/mist/resources/gateway/`.
 - User-facing operation flow and menu routing contract are preserved.
 
 ## Conclusion

@@ -10,7 +10,7 @@ from cryptography.hazmat.primitives import hashes, serialization  # Sign certifi
 from cryptography.hazmat.primitives.asymmetric import rsa  # Generate in-memory test keys only.
 from cryptography.x509.oid import NameOID  # Build certificate subjects and issuers.
 
-from src.reports.certificate_expiry.model import (  # Import the model contract under test.
+from src.mist.intelligence.reports.certificate_expiry.model import (  # Import the model contract under test.
     BAND_0_30,
     BAND_31_90,
     BAND_EXPIRED,

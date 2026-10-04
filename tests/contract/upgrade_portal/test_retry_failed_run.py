@@ -24,8 +24,8 @@ import pytest
 from flask import Flask
 from flask.testing import FlaskClient
 
-from src.upgrade_portal.app.routes import upgrade
-from src.upgrade_portal.runtime import identity
+from src.interfaces.portals.upgrade_portal.app.routes import upgrade
+from src.interfaces.portals.upgrade_portal.runtime import identity
 
 RUN_STORE_KEY = "RUN_STORE"
 LOCK_READER_KEY = "SITE_LOCK_READER"

@@ -7,7 +7,7 @@
 
 Create a new Menu 164 operation that automates hub-spoke VPN overlay creation in Juniper Mist Cloud. The builder fetches gateway device profiles, lets users assign hub/spoke roles, auto-generates VPN path keys from WAN/LAN interfaces, assigns pod numbers, creates the VPN via API, and optionally updates device profile `vpn_paths` references.
 
-Follows the same module pattern as Menu 163 (`src/wan_hub_group_manager.py`): a standalone class with `execute()` static entry point, dependency injection for `apisession`, `get_org_id_func`, and `safe_input_func`.
+Follows the same module pattern as Menu 163 (`src/operations/wan/wan_hub_group_manager.py`): a standalone class with `execute()` static entry point, dependency injection for `apisession`, `get_org_id_func`, and `safe_input_func`.
 
 ## Technical Context
 
@@ -27,7 +27,7 @@ Follows the same module pattern as Menu 163 (`src/wan_hub_group_manager.py`): a 
 
 | Principle | Status | Notes |
 | - | - | - |
-| 5-Item Rule (max 5 children per level) | PASS | Single new module `src/wan_vpn_builder.py`, single class `WanVpnBuilder` |
+| 5-Item Rule (max 5 children per level) | PASS | Single new module `src/operations/wan/wan_vpn_builder.py`, single class `WanVpnBuilder` |
 | Max 25 lines per function | PASS | Will decompose into small focused methods |
 | Max 5 parameters per function | PASS | Uses dependency injection via `execute()` with 3 params |
 | Class-based design (no wrappers) | PASS | All logic in `WanVpnBuilder` class |
@@ -70,5 +70,5 @@ CHANGELOG.md                     # EDIT: Add version entry
 documentation/                   # EDIT: Update wiki, diagrams
 ```
 
-**Structure Decision**: Single module pattern matching `src/wan_hub_group_manager.py` (Menu 163). One class per file, unit tests in `tests/unit/`.
+**Structure Decision**: Single module pattern matching `src/operations/wan/wan_hub_group_manager.py` (Menu 163). One class per file, unit tests in `tests/unit/`.
 

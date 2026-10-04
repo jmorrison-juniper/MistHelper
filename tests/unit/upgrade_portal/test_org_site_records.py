@@ -13,7 +13,7 @@ from typing import Any
 
 import pytest
 
-from src.upgrade_portal.upgrade.org_site_records import (
+from src.interfaces.portals.upgrade_portal.upgrade.org_site_records import (
     NAME_LIMIT,
     PARTIAL_REASONS_FIELD,
     SHORT_MESSAGE,

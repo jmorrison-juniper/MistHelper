@@ -11,8 +11,8 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import MistHelper
-from src.utils.menu_entry import MenuEntry  # WHY: synthetic rows must match production rows.
-from src.utils.operation_registry import (
+from src.foundation.support.utils.menu_entry import MenuEntry  # WHY: synthetic rows must match production rows.
+from src.foundation.support.utils.operation_registry import (
     OperationRegistry,
 )  # WHY: assert against the canonical fail-closed registry module.
 

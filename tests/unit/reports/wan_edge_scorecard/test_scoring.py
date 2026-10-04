@@ -4,7 +4,7 @@ from __future__ import annotations  # Keep annotations import-safe in tests.
 
 import logging  # Capture threshold warnings.
 
-from src.reports.wan_edge_scorecard.scoring import DEFAULT_DHCP_POOL_WARN_PERCENT, WanEdgeScoring
+from src.mist.intelligence.reports.wan_edge_scorecard.scoring import DEFAULT_DHCP_POOL_WARN_PERCENT, WanEdgeScoring
 
 
 def test_predominant_version_and_version_compliance(gateway_stats_sample: list[dict[str, object]]) -> None:

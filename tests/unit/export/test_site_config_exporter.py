@@ -1,4 +1,4 @@
-"""Unit tests for ``src.export.site_config_exporter.SiteConfigExporter``.
+"""Unit tests for ``src.operations.exporting.export.site_config_exporter.SiteConfigExporter``.
 
 Why: Un-omitting this module in ``[tool.coverage.run].omit`` requires 100%
 line + branch coverage on the seven static methods that ship site-level
@@ -50,12 +50,15 @@ class TestResolveWlanSiteName:
 
     def test_returns_matched_site_name(self, fake_mh):
         """Happy path: matching site id → returns that site's name."""
-        from src.export.site_config_exporter import SiteConfigExporter
+        from src.operations.exporting.export.site_config_exporter import SiteConfigExporter
 
         sites = [{"id": "s1", "name": "HQ"}, {"id": "s2", "name": "Branch"}]
         with (
-            patch("src.export.site_config_exporter.mistapi.api.v1.orgs.sites.listOrgSites", return_value=MagicMock()),
-            patch("src.export.site_config_exporter.mistapi.get_all", return_value=sites),
+            patch(
+                "src.operations.exporting.export.site_config_exporter.mistapi.api.v1.orgs.sites.listOrgSites",
+                return_value=MagicMock(),
+            ),
+            patch("src.operations.exporting.export.site_config_exporter.mistapi.get_all", return_value=sites),
         ):
             fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org1"
             result = SiteConfigExporter._resolve_wlan_site_name("s2")
@@ -64,12 +67,15 @@ class TestResolveWlanSiteName:
 
     def test_no_match_falls_back_to_site_id(self, fake_mh):
         """No matching id → falls back to the given site_id."""
-        from src.export.site_config_exporter import SiteConfigExporter
+        from src.operations.exporting.export.site_config_exporter import SiteConfigExporter
 
         sites = [{"id": "s1", "name": "HQ"}]
         with (
-            patch("src.export.site_config_exporter.mistapi.api.v1.orgs.sites.listOrgSites", return_value=MagicMock()),
-            patch("src.export.site_config_exporter.mistapi.get_all", return_value=sites),
+            patch(
+                "src.operations.exporting.export.site_config_exporter.mistapi.api.v1.orgs.sites.listOrgSites",
+                return_value=MagicMock(),
+            ),
+            patch("src.operations.exporting.export.site_config_exporter.mistapi.get_all", return_value=sites),
         ):
             result = SiteConfigExporter._resolve_wlan_site_name("unknown")
 
@@ -77,10 +83,10 @@ class TestResolveWlanSiteName:
 
     def test_exception_returns_site_id(self, fake_mh):
         """listOrgSites failure is logged and the site_id is returned as fallback."""
-        from src.export.site_config_exporter import SiteConfigExporter
+        from src.operations.exporting.export.site_config_exporter import SiteConfigExporter
 
         with patch(
-            "src.export.site_config_exporter.mistapi.api.v1.orgs.sites.listOrgSites",
+            "src.operations.exporting.export.site_config_exporter.mistapi.api.v1.orgs.sites.listOrgSites",
             side_effect=RuntimeError("api down"),
         ):
             result = SiteConfigExporter._resolve_wlan_site_name("s1")
@@ -89,10 +95,12 @@ class TestResolveWlanSiteName:
 
     def test_programming_error_raises(self, fake_mh):
         """A malformed site-list SDK call must raise."""
-        from src.export.site_config_exporter import SiteConfigExporter  # WHY: import the system under test.
+        from src.operations.exporting.export.site_config_exporter import (
+            SiteConfigExporter,
+        )  # WHY: import the system under test.
 
         with patch(
-            "src.export.site_config_exporter.mistapi.api.v1.orgs.sites.listOrgSites",
+            "src.operations.exporting.export.site_config_exporter.mistapi.api.v1.orgs.sites.listOrgSites",
             side_effect=TypeError("bad signature"),
         ):
             with pytest.raises(TypeError, match="bad signature"):  # WHY: prove the caller learns about the defect.
@@ -104,15 +112,15 @@ class TestFetchWlansWithFallback:
 
     def test_derived_success_returns_rows(self, fake_mh):
         """Happy path: derived listing succeeds and returns paged rows."""
-        from src.export.site_config_exporter import SiteConfigExporter
+        from src.operations.exporting.export.site_config_exporter import SiteConfigExporter
 
         rows = [{"ssid": "WiFi1"}]
         with (
             patch(
-                "src.export.site_config_exporter.mistapi.api.v1.sites.wlans.listSiteWlansDerived",
+                "src.operations.exporting.export.site_config_exporter.mistapi.api.v1.sites.wlans.listSiteWlansDerived",
                 return_value=MagicMock(),
             ) as api,
-            patch("src.export.site_config_exporter.mistapi.get_all", return_value=rows),
+            patch("src.operations.exporting.export.site_config_exporter.mistapi.get_all", return_value=rows),
         ):
             result = SiteConfigExporter._fetch_wlans_with_fallback("s1")
 
@@ -121,19 +129,19 @@ class TestFetchWlansWithFallback:
 
     def test_derived_failure_falls_back_to_local(self, fake_mh):
         """Derived listing failure → falls back to site-local WLAN listing."""
-        from src.export.site_config_exporter import SiteConfigExporter
+        from src.operations.exporting.export.site_config_exporter import SiteConfigExporter
 
         rows = [{"ssid": "Local"}]
         with (
             patch(
-                "src.export.site_config_exporter.mistapi.api.v1.sites.wlans.listSiteWlansDerived",
+                "src.operations.exporting.export.site_config_exporter.mistapi.api.v1.sites.wlans.listSiteWlansDerived",
                 side_effect=RuntimeError("derived down"),
             ),
             patch(
-                "src.export.site_config_exporter.mistapi.api.v1.sites.wlans.listSiteWlans",
+                "src.operations.exporting.export.site_config_exporter.mistapi.api.v1.sites.wlans.listSiteWlans",
                 return_value=MagicMock(),
             ) as local_api,
-            patch("src.export.site_config_exporter.mistapi.get_all", return_value=rows),
+            patch("src.operations.exporting.export.site_config_exporter.mistapi.get_all", return_value=rows),
         ):
             result = SiteConfigExporter._fetch_wlans_with_fallback("s1")
 
@@ -142,10 +150,12 @@ class TestFetchWlansWithFallback:
 
     def test_derived_programming_error_raises(self, fake_mh):
         """A malformed derived-WLAN SDK call must raise."""
-        from src.export.site_config_exporter import SiteConfigExporter  # WHY: import the system under test.
+        from src.operations.exporting.export.site_config_exporter import (
+            SiteConfigExporter,
+        )  # WHY: import the system under test.
 
         with patch(
-            "src.export.site_config_exporter.mistapi.api.v1.sites.wlans.listSiteWlansDerived",
+            "src.operations.exporting.export.site_config_exporter.mistapi.api.v1.sites.wlans.listSiteWlansDerived",
             side_effect=TypeError("bad signature"),
         ):
             with pytest.raises(TypeError, match="bad signature"):  # WHY: prove the caller learns about the defect.
@@ -157,7 +167,7 @@ class TestPersistSiteWlansCsv:
 
     def test_empty_writes_empty_csv(self, fake_mh, caplog):
         """Empty list → writes empty CSV and logs a zero-record notice."""
-        from src.export.site_config_exporter import SiteConfigExporter
+        from src.operations.exporting.export.site_config_exporter import SiteConfigExporter
 
         with caplog.at_level("INFO", logger="root"):
             SiteConfigExporter._persist_site_wlans_csv([], "SiteWlans_HQ.csv", "HQ")
@@ -170,12 +180,12 @@ class TestPersistSiteWlansCsv:
 
     def test_non_empty_flattens_sorts_and_writes(self, fake_mh, caplog):
         """Non-empty list flows through flatten/escape/sort/write with SSID ordering."""
-        from src.export.site_config_exporter import SiteConfigExporter
+        from src.operations.exporting.export.site_config_exporter import SiteConfigExporter
 
         rows = [{"ssid": "B"}, {"ssid": "A"}]
         with (
             caplog.at_level("INFO", logger="root"),
-            patch("src.export.site_config_exporter.DataProcessingUtils") as dpu,
+            patch("src.operations.exporting.export.site_config_exporter.DataProcessingUtils") as dpu,
         ):
             dpu.flatten_nested_fields.return_value = rows
             dpu.escape_multiline.return_value = rows
@@ -195,7 +205,7 @@ class TestWlans:
 
     def test_no_site_id_and_prompt_cancel_returns_early(self, fake_mh):
         """No site given and prompt returns None → aborts silently before any fetch."""
-        from src.export.site_config_exporter import SiteConfigExporter
+        from src.operations.exporting.export.site_config_exporter import SiteConfigExporter
 
         fake_mh.PromptUtils.select_site.return_value = None
         with (
@@ -211,7 +221,7 @@ class TestWlans:
 
     def test_prompts_when_no_site_and_dispatches(self, fake_mh):
         """No site_id + successful prompt → runs full resolve/fetch/persist pipeline."""
-        from src.export.site_config_exporter import SiteConfigExporter
+        from src.operations.exporting.export.site_config_exporter import SiteConfigExporter
 
         fake_mh.PromptUtils.select_site.return_value = "s1"
         with (
@@ -228,7 +238,7 @@ class TestWlans:
 
     def test_explicit_site_id_skips_prompt(self, fake_mh):
         """Explicit site_id → skips PromptUtils.select_site."""
-        from src.export.site_config_exporter import SiteConfigExporter
+        from src.operations.exporting.export.site_config_exporter import SiteConfigExporter
 
         with (
             patch.object(SiteConfigExporter, "_resolve_wlan_site_name", return_value="Branch"),
@@ -245,9 +255,9 @@ class TestMaps:
 
     def test_constructs_site_export_utils_and_delegates(self, fake_mh):
         """maps() builds a SiteExportUtils with mh.* dep symbols and calls _export_data."""
-        from src.export.site_config_exporter import SiteConfigExporter
+        from src.operations.exporting.export.site_config_exporter import SiteConfigExporter
 
-        with patch("src.export.site_config_exporter.SiteExportUtils") as SEU:
+        with patch("src.operations.exporting.export.site_config_exporter.SiteExportUtils") as SEU:
             SiteConfigExporter.maps()
 
         SEU.assert_called_once()
@@ -262,9 +272,9 @@ class TestZones:
 
     def test_constructs_site_export_utils_and_delegates(self, fake_mh):
         """zones() builds a SiteExportUtils with mh.* dep symbols and calls _export_data."""
-        from src.export.site_config_exporter import SiteConfigExporter
+        from src.operations.exporting.export.site_config_exporter import SiteConfigExporter
 
-        with patch("src.export.site_config_exporter.SiteExportUtils") as SEU:
+        with patch("src.operations.exporting.export.site_config_exporter.SiteExportUtils") as SEU:
             SiteConfigExporter.zones()
 
         SEU.assert_called_once()
@@ -279,11 +289,13 @@ class TestSettings:
 
     def test_no_data_warns_and_returns(self, fake_mh, caplog):
         """No data returned → warns "no site configurations" and skips the write."""
-        from src.export.site_config_exporter import SiteConfigExporter
+        from src.operations.exporting.export.site_config_exporter import SiteConfigExporter
 
         with (
             caplog.at_level("WARNING", logger="root"),
-            patch("src.export.site_config_exporter.APIFetchUtils.all_site_settings", return_value=[]),
+            patch(
+                "src.operations.exporting.export.site_config_exporter.APIFetchUtils.all_site_settings", return_value=[]
+            ),
         ):
             SiteConfigExporter.settings()
 
@@ -293,13 +305,16 @@ class TestSettings:
 
     def test_with_data_flattens_and_writes(self, fake_mh, caplog):
         """Data returned → flows through flatten/escape/write and reports the count."""
-        from src.export.site_config_exporter import SiteConfigExporter
+        from src.operations.exporting.export.site_config_exporter import SiteConfigExporter
 
         rows = [{"id": "s1"}]
         with (
             caplog.at_level("INFO", logger="root"),
-            patch("src.export.site_config_exporter.APIFetchUtils.all_site_settings", return_value=rows),
-            patch("src.export.site_config_exporter.DataProcessingUtils") as dpu,
+            patch(
+                "src.operations.exporting.export.site_config_exporter.APIFetchUtils.all_site_settings",
+                return_value=rows,
+            ),
+            patch("src.operations.exporting.export.site_config_exporter.DataProcessingUtils") as dpu,
         ):
             dpu.flatten_nested_fields.return_value = rows
             dpu.escape_multiline.return_value = rows

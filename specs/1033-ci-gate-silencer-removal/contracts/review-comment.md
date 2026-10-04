@@ -55,7 +55,7 @@ A suppression that omits any fact fails review. Requirement FR-018 states this r
 ```yaml
       # Pylint reads every package under SRC_PATH. Reviewed 2026-07-28 for issue #891.
       # The step ran with --ignore=maps,ssh,ui until this date. That flag hid 502 messages
-      # from src/maps, src/ssh, and src/ui. The measured run without the flag reports
+      # from src/interfaces/visualization/maps, src/operations/execution/ssh, and src/interfaces/visualization/ui. The measured run without the flag reports
       # 1259 messages and still exits 0 at the 9.5 threshold.
       # Before you add a new --ignore entry, record three facts in a comment: the date of
       # the review, a link to the evidence, and the condition that triggers the next review.
@@ -109,7 +109,7 @@ pylint ${{ env.SRC_PATH }} --fail-under=${{ env.PYLINT_THRESHOLD }}
 | Scope | `src/`, unchanged |
 | Forbidden flag | Any `--ignore` value without a Review Record |
 
-The job log must hold at least one message for `src/maps`, at least one for `src/ssh`, and at least one for `src/ui`. Success criterion SC-001 states this rule.
+The job log must hold at least one message for `src/interfaces/visualization/maps`, at least one for `src/operations/execution/ssh`, and at least one for `src/interfaces/visualization/ui`. Success criterion SC-001 states this rule.
 
 ### The vulture gate
 

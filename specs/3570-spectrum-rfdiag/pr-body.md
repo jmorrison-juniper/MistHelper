@@ -11,7 +11,7 @@ Closes #3570
 - Deferred menu, registry, endpoint catalog, README, generated reference, and category table changes to `specs/3570-spectrum-rfdiag/wiring.md`.
 
 ## Files
-- `src/troubleshooting/rf_diagnostics/**`
+- `src/mist/intelligence/troubleshooting/rf_diagnostics/**`
 - `tests/unit/troubleshooting/rf_diagnostics/**`
 - `specs/3570-spectrum-rfdiag/**`
 - `changelog.d/issue-3570-spectrum-rfdiag.md`
@@ -24,13 +24,13 @@ Closes #3570
 - [x] Tests added or updated for all changed functionality.
 - [x] Coverage meets or exceeds 80% threshold.
 - [x] New or changed guards state the measured count and prove one failing path.
-- [x] No new Ruff lint violations (`ruff check src/troubleshooting/rf_diagnostics tests/unit/troubleshooting/rf_diagnostics`).
-- [x] Code formatted with Black (`black --check src/troubleshooting/rf_diagnostics tests/unit/troubleshooting/rf_diagnostics`).
-- [x] mypy passes (`mypy src/troubleshooting/rf_diagnostics --config-file pyproject.toml`).
+- [x] No new Ruff lint violations (`ruff check src/mist/intelligence/troubleshooting/rf_diagnostics tests/unit/troubleshooting/rf_diagnostics`).
+- [x] Code formatted with Black (`black --check src/mist/intelligence/troubleshooting/rf_diagnostics tests/unit/troubleshooting/rf_diagnostics`).
+- [x] mypy passes (`mypy src/mist/intelligence/troubleshooting/rf_diagnostics --config-file pyproject.toml`).
 
 ## Security
 - [x] No hardcoded secrets, tokens, or passwords.
-- [x] Bandit passes with no new findings (`bandit -c pyproject.toml -r src/troubleshooting/rf_diagnostics -q`).
+- [x] Bandit passes with no new findings (`bandit -c pyproject.toml -r src/mist/intelligence/troubleshooting/rf_diagnostics -q`).
 - [x] pip-audit is not applicable because this change adds no dependency.
 - [x] Sensitive data handled via existing environment/session handling only.
 
@@ -57,5 +57,5 @@ Closes #3570
 - `pytest tests/unit/web_portal/test_output_scan_runtime_files.py -q --timeout=120`: 27 passed.
 - `test-quality-analyzer --gate`: 8 files checked, 0 findings.
 - `complexity-gate --max 10`: all functions within threshold.
-- `interrogate -v src/troubleshooting/rf_diagnostics`: 100 percent.
-- `bandit -c pyproject.toml -r src/troubleshooting/rf_diagnostics -q`: passed.
+- `interrogate -v src/mist/intelligence/troubleshooting/rf_diagnostics`: 100 percent.
+- `bandit -c pyproject.toml -r src/mist/intelligence/troubleshooting/rf_diagnostics -q`: passed.

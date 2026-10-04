@@ -9,10 +9,10 @@
 Land a **single bounded PR** consuming the three highest-value hot-bucket actions surfaced by the post-1011 analyzer catalog. Unlike the per-candidate serial workflow of 1010/1011, this initiative bundles three independent hot-bucket changes into one atomic diff because each individual action is either (a) a zero-extraction convention pin (Action 1), (b) a small wrapper-plus-extract that would be uneconomic to split across separate PRs (Action 2), or (c) a public+private helper cluster whose four members share a single lifecycle contract (Action 3). The three actions are:
 
 - **Action 1 — tqdm skip-pin (SC-001)**: No extraction. Add a mandatory NOTE breadcrumb at `MistHelper.py:635` documenting the `GlobalImportManager` rebind pattern that makes the fallback shim bootstrap-critical, so future refactor sweeps do not accidentally propose extracting it. Pin the analyzer's `SKIP_ALWAYS` conviction with a source-level marker.
-- **Action 2 — `is_debug_mode` extract (SC-002/SC-005/SC-011)**: Extract `def is_debug_mode()` at `MistHelper.py:318-320` to `IsDebugMode.check()` (static) in `src/refactors/is_debug_mode.py`. Delete `EnvironmentUtils.is_debug_mode` wrapper at `MistHelper.py:5891-5900` outright (0 callers per clarification Q1). Rewrite **12 callsites**. Rename DI slot `is_debug_mode_fn` -> `check_fn` at 5 occurrences in `src/export/site_export_utils.py` (L32/L52/L64/L76/L337) + 1 kwarg at `MistHelper.py:13372`.
-- **Action 3 — `execute_with_connection_pool_management` extract (SC-003/SC-005)**: Extract the public function plus three `_pool_*` private helpers at `MistHelper.py:7503-7576` to `ConnectionPoolExecutor` in `src/refactors/connection_pool_executor.py`. Public entry lands as `@staticmethod execute()`; three helpers land as private `@staticmethod` members. Rewrite **7 callsites** (`MistHelper.py:6309/10076/15399/15564`, `src/gateway/gateway_export_utils.py:48/550`, `src/gateway/gateway_stats_exporter.py:32`). Rename DI slot `connection_pool_fn` -> `execute_fn` at 6 occurrences (`src/gateway/overrides/_deps.py:18/33/41/49`, `src/gateway/overrides/device_data_fetcher.py:40`, + 1 kwarg at `MistHelper.py:15564`).
+- **Action 2 — `is_debug_mode` extract (SC-002/SC-005/SC-011)**: Extract `def is_debug_mode()` at `MistHelper.py:318-320` to `IsDebugMode.check()` (static) in `src/foundation/support/refactors/is_debug_mode.py`. Delete `EnvironmentUtils.is_debug_mode` wrapper at `MistHelper.py:5891-5900` outright (0 callers per clarification Q1). Rewrite **12 callsites**. Rename DI slot `is_debug_mode_fn` -> `check_fn` at 5 occurrences in `src/operations/exporting/export/site_export_utils.py` (L32/L52/L64/L76/L337) + 1 kwarg at `MistHelper.py:13372`.
+- **Action 3 — `execute_with_connection_pool_management` extract (SC-003/SC-005)**: Extract the public function plus three `_pool_*` private helpers at `MistHelper.py:7503-7576` to `ConnectionPoolExecutor` in `src/foundation/support/refactors/connection_pool_executor.py`. Public entry lands as `@staticmethod execute()`; three helpers land as private `@staticmethod` members. Rewrite **7 callsites** (`MistHelper.py:6309/10076/15399/15564`, `src/mist/resources/gateway/gateway_export_utils.py:48/550`, `src/mist/resources/gateway/gateway_stats_exporter.py:32`). Rename DI slot `connection_pool_fn` -> `execute_fn` at 6 occurrences (`src/mist/resources/gateway/overrides/_deps.py:18/33/41/49`, `src/mist/resources/gateway/overrides/device_data_fetcher.py:40`, + 1 kwarg at `MistHelper.py:15564`).
 
-Edit-surface total: **19 callsite rewrites + 12 DI-slot rename occurrences + 5 mandatory NOTE breadcrumbs = 36 symbol-level edits** in one PR. Two new modules created under `src/refactors/`. Zero wrapper shims remain. All 15 functional CI jobs green; pylint >=8.74/10 non-regressing; aggregate compliance >=99.6/A+; new files A+/100. Constitution v1.4.0 all seven principles PASS; VI and VII (NON-NEGOTIABLE) reinforced by the A+/100 module gate.
+Edit-surface total: **19 callsite rewrites + 12 DI-slot rename occurrences + 5 mandatory NOTE breadcrumbs = 36 symbol-level edits** in one PR. Two new modules created under `src/foundation/support/refactors/`. Zero wrapper shims remain. All 15 functional CI jobs green; pylint >=8.74/10 non-regressing; aggregate compliance >=99.6/A+; new files A+/100. Constitution v1.4.0 all seven principles PASS; VI and VII (NON-NEGOTIABLE) reinforced by the A+/100 module gate.
 
 ## Technical Context
 
@@ -24,7 +24,7 @@ Edit-surface total: **19 callsite rewrites + 12 DI-slot rename occurrences + 5 m
 **Project Type**: Single-project CLI tool with a monolithic entrypoint being decomposed into `src/*` sub-packages
 **Performance Goals**: No performance regression at any callsite after extraction; interactive latency for CLI menus unchanged; `ConnectionPoolExecutor.execute()` preserves the original pool-management contract byte-for-byte
 **Constraints**: Zero wrapper shims may be left in `MistHelper.py` (FR-003); every extracted module lands at A+/100 compliance; repo-wide baseline stays >=99.6/A+; pylint stays >=8.74/10; no `--admin` merge bypass (per `feedback_no_admin_bypass.md` — check `mergeStateStatus` first); analyzer `--skip` CLI flag drives the skip-pin (Action 1) with no code deletion; all 5 breadcrumb sites must land with the pinned template strings verbatim (FR-024, SC-014)
-**Scale/Scope**: 1 PR bundling 3 actions; 19 callsite rewrites + 12 DI-slot rename occurrences + 5 breadcrumbs = 36 symbol-level edits; ~90 LoC extracted net; 2 new modules under `src/refactors/`
+**Scale/Scope**: 1 PR bundling 3 actions; 19 callsite rewrites + 12 DI-slot rename occurrences + 5 breadcrumbs = 36 symbol-level edits; ~90 LoC extracted net; 2 new modules under `src/foundation/support/refactors/`
 
 ## Constitution Check
 
@@ -39,7 +39,7 @@ Constitution version 1.4.0 (ratified 2026-03-05). Evaluated per the seven core p
 | III. Safety-First Development (destructive operations gated) | PASS | Extraction moves existing behavior; no new destructive operations introduced. The `EnvironmentUtils.is_debug_mode` wrapper deletion is safe because clarification Q1 confirmed 0 callers via grep audit. |
 | IV. Full Deployment Pipeline (15 CI jobs must pass, no --admin bypass) | PASS + REINFORCED | FR-011 codifies the CI gate. `feedback_no_admin_bypass.md` applied — check `mergeStateStatus: CLEAN` before merging; do not cargo-cult `--admin`; SKIPPED conditionals are not blocking. |
 | V. Observability & Logging (structured, ASCII-only, `safe_input`, `pathlib.Path`) | PASS + REINFORCED | Both new modules land ASCII-only logs, no `input()` (extraction targets don't prompt), `pathlib.Path` where paths are used. Analyzer `guideline_flags` on extracted code are resolved in-flight (FR-006 carry-forward). |
-| VI. Inline Comments Every 5-10 Lines (NON-NEGOTIABLE) | PASS + REINFORCED | Both new modules under `src/refactors/` must land A+/100, which enforces the 5-10 line inline-comment cadence. |
+| VI. Inline Comments Every 5-10 Lines (NON-NEGOTIABLE) | PASS + REINFORCED | Both new modules under `src/foundation/support/refactors/` must land A+/100, which enforces the 5-10 line inline-comment cadence. |
 | VII. Action Logging Before Every Non-Trivial Action (NON-NEGOTIABLE) | PASS + REINFORCED | Any `missing_action_logging` flag on extracted code is resolved in the same PR (FR-006 carry-forward). Constitution's `[LOGIN]`, `[MENU]`, `[EXECUTE]`, `[SUCCESS]`, `[FAILURE]` prefix convention preserved. `ConnectionPoolExecutor.execute()` retains its original `[EXECUTE]` / `[SUCCESS]` / `[FAILURE]` breadcrumbs verbatim. |
 
 **Result**: All seven principles pass. Two principles (VI, VII) are NON-NEGOTIABLE and are reinforced rather than at risk. No violations require Complexity Tracking entries.
@@ -116,7 +116,7 @@ src/
                                              #   NOTE lives on `_deps.py`)
 ```
 
-**Structure Decision**: Single-project layout preserved from 1010/1011. Both new extractions land under `src/refactors/` as per-symbol module files, matching the established convention. Six cross-file editors (`site_export_utils.py`, `gateway_export_utils.py`, `gateway_stats_exporter.py`, `overrides/_deps.py`, `overrides/device_data_fetcher.py`, and MistHelper.py itself) participate in the atomic diff to close the extraction cleanly — no wrapper shims are left behind (FR-003).
+**Structure Decision**: Single-project layout preserved from 1010/1011. Both new extractions land under `src/foundation/support/refactors/` as per-symbol module files, matching the established convention. Six cross-file editors (`site_export_utils.py`, `gateway_export_utils.py`, `gateway_stats_exporter.py`, `overrides/_deps.py`, `overrides/device_data_fetcher.py`, and MistHelper.py itself) participate in the atomic diff to close the extraction cleanly — no wrapper shims are left behind (FR-003).
 
 ### Edit Surface (Authoritative Manifest)
 
@@ -125,24 +125,24 @@ Per FR-014, FR-024, and SC-014 the PR must land exactly the following edits atom
 | # | Category | File | Line(s) | Change |
 |---|----------|------|---------|--------|
 | 1 | Breadcrumb (Action 1) | `MistHelper.py` | 635 | Add NOTE explaining tqdm fallback + `GlobalImportManager` rebind pattern |
-| 2 | New module (Action 2) | `src/refactors/is_debug_mode.py` | new | Create `IsDebugMode` class with `@staticmethod check()` |
+| 2 | New module (Action 2) | `src/foundation/support/refactors/is_debug_mode.py` | new | Create `IsDebugMode` class with `@staticmethod check()` |
 | 3 | Delete (Action 2) | `MistHelper.py` | 318-320 | Remove `def is_debug_mode()` |
 | 4 | Delete (Action 2) | `MistHelper.py` | 5891-5900 | Remove `EnvironmentUtils.is_debug_mode` wrapper (0 callers per Q1) |
 | 5 | Callsite rewrite (Action 2) | `MistHelper.py` | 12 sites | Rewrite each `is_debug_mode()` -> `IsDebugMode.check()` |
 | 6 | Breadcrumb (Action 2) | `MistHelper.py` | at delete site | Add extraction NOTE (pinned template) |
-| 7 | DI rename (Action 2) | `src/export/site_export_utils.py` | 32, 52, 64, 76, 337 | `is_debug_mode_fn` -> `check_fn` (5 occurrences: slot, field, global list, LHS/RHS, kwarg) |
+| 7 | DI rename (Action 2) | `src/operations/exporting/export/site_export_utils.py` | 32, 52, 64, 76, 337 | `is_debug_mode_fn` -> `check_fn` (5 occurrences: slot, field, global list, LHS/RHS, kwarg) |
 | 8 | DI rename (Action 2) | `MistHelper.py` | 13372 | kwarg `is_debug_mode_fn=` -> `check_fn=` |
-| 9 | Breadcrumb (Action 2) | `src/export/site_export_utils.py` | at module-level slot (L32) | Add rename NOTE (pinned template — 1 NOTE per DI cluster) |
-| 10 | New module (Action 3) | `src/refactors/connection_pool_executor.py` | new | Create `ConnectionPoolExecutor` class with `@staticmethod execute()` + 3 private `@staticmethod _pool_*()` helpers |
+| 9 | Breadcrumb (Action 2) | `src/operations/exporting/export/site_export_utils.py` | at module-level slot (L32) | Add rename NOTE (pinned template — 1 NOTE per DI cluster) |
+| 10 | New module (Action 3) | `src/foundation/support/refactors/connection_pool_executor.py` | new | Create `ConnectionPoolExecutor` class with `@staticmethod execute()` + 3 private `@staticmethod _pool_*()` helpers |
 | 11 | Delete (Action 3) | `MistHelper.py` | 7503-7576 | Remove public function + 3 `_pool_*` helpers |
 | 12 | Callsite rewrite (Action 3) | `MistHelper.py` | 6309, 10076, 15399, 15564 | Rewrite -> `ConnectionPoolExecutor.execute()` |
-| 13 | Callsite rewrite (Action 3) | `src/gateway/gateway_export_utils.py` | 48, 550 | Rewrite -> `ConnectionPoolExecutor.execute()` |
-| 14 | Callsite rewrite (Action 3) | `src/gateway/gateway_stats_exporter.py` | 32 | Rewrite -> `ConnectionPoolExecutor.execute()` |
+| 13 | Callsite rewrite (Action 3) | `src/mist/resources/gateway/gateway_export_utils.py` | 48, 550 | Rewrite -> `ConnectionPoolExecutor.execute()` |
+| 14 | Callsite rewrite (Action 3) | `src/mist/resources/gateway/gateway_stats_exporter.py` | 32 | Rewrite -> `ConnectionPoolExecutor.execute()` |
 | 15 | Breadcrumb (Action 3) | `MistHelper.py` | at delete site | Add extraction NOTE (pinned template) |
-| 16 | DI rename (Action 3) | `src/gateway/overrides/_deps.py` | 18, 33, 41, 49 | `connection_pool_fn` -> `execute_fn` (4 occurrences) |
-| 17 | DI rename (Action 3) | `src/gateway/overrides/device_data_fetcher.py` | 40 | `connection_pool_fn` -> `execute_fn` |
+| 16 | DI rename (Action 3) | `src/mist/resources/gateway/overrides/_deps.py` | 18, 33, 41, 49 | `connection_pool_fn` -> `execute_fn` (4 occurrences) |
+| 17 | DI rename (Action 3) | `src/mist/resources/gateway/overrides/device_data_fetcher.py` | 40 | `connection_pool_fn` -> `execute_fn` |
 | 18 | DI rename (Action 3) | `MistHelper.py` | 15564 | kwarg `connection_pool_fn=` -> `execute_fn=` |
-| 19 | Breadcrumb (Action 3) | `src/gateway/overrides/_deps.py` | at module-level slot (L18) | Add rename NOTE (pinned template — 1 NOTE per DI cluster) |
+| 19 | Breadcrumb (Action 3) | `src/mist/resources/gateway/overrides/_deps.py` | at module-level slot (L18) | Add rename NOTE (pinned template — 1 NOTE per DI cluster) |
 
 **Pinned breadcrumb templates** (FR-024, SC-014):
 

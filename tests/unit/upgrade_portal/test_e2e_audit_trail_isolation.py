@@ -30,7 +30,7 @@ from typing import Any
 
 import pytest
 
-from src.upgrade_portal.runtime import lock
+from src.interfaces.portals.upgrade_portal.runtime import lock
 from tests.support.site_lock_trail import CheckoutTrailGuard
 from tests.support.upgrade_portal_e2e.records.audit import AuditTrailIsolation
 

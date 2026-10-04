@@ -20,9 +20,9 @@ from mistapi import APISession
 from mistapi.__api_request import APIRequest
 from requests.adapters import HTTPAdapter
 
-from src.firmware import org_upgrade_service
-from src.firmware.org_upgrade_body import OrgUpgradeBody
-from src.firmware.org_upgrade_service import OrgUpgradeService, OrgUpgradeSession
+from src.operations.execution.firmware import org_upgrade_service
+from src.operations.execution.firmware.org_upgrade_body import OrgUpgradeBody
+from src.operations.execution.firmware.org_upgrade_service import OrgUpgradeService, OrgUpgradeSession
 
 ORG_ID = "22222222-2222-2222-2222-222222222222"
 SITE_ID = "11111111-1111-1111-1111-111111111111"

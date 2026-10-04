@@ -4,7 +4,11 @@ from __future__ import annotations  # Keep annotations lazy during test collecti
 
 from pathlib import Path  # Build JSON Lines paths without hardcoded separators.
 
-from src.utils.performance import EventSource, Recorder, RecorderSettings  # Build one isolated recorder per test.
+from src.foundation.support.utils.performance import (
+    EventSource,
+    Recorder,
+    RecorderSettings,
+)  # Build one isolated recorder per test.
 
 
 def _stored_output(tmp_path: Path, forbidden_value: str) -> str:

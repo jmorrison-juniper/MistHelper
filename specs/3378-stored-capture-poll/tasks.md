@@ -20,10 +20,10 @@
 ## Phase 2: The change
 
 - [x] T005 Change `stored_progress` in
-  `src/upgrade_portal/app/routes/capture.py`. Correct the poll interval in the
+  `src/interfaces/portals/upgrade_portal/app/routes/capture.py`. Correct the poll interval in the
   docstring of `capture_status`.
 - [x] T006 Correct the docstring of `_result` in
-  `src/upgrade_portal/app/routes/org_postcheck.py`, and the stub in
+  `src/interfaces/portals/upgrade_portal/app/routes/org_postcheck.py`, and the stub in
   `tests/unit/upgrade_portal/test_org_postcheck_bridge.py`.
 - [x] T007 Correct the status section of
   `specs/1823-upgrade-capture-portal/contracts/http-api.md`.

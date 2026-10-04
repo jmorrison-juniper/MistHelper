@@ -17,7 +17,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.org.org_ticket_manager import OrgTicketManager
+from src.mist.resources.org.org_ticket_manager import OrgTicketManager
 
 
 @pytest.fixture(autouse=True)
@@ -71,7 +71,7 @@ def test_list_tickets_success_delegates_to_api_data_fetcher(caplog):
     fake_mh = _make_mh()
     fetcher_instance = fake_mh.APIDataFetcher.return_value
     caplog.set_level("INFO")
-    with patch("src.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
+    with patch("src.mist.resources.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
         OrgTicketManager.list_tickets()
     fake_mh.APIDataFetcher.assert_called_once()
     fetcher_instance.execute.assert_called_once_with()
@@ -87,7 +87,7 @@ def test_list_tickets_reraises_on_error(caplog):
     fake_mh = _make_mh()
     fake_mh.APIDataFetcher.return_value.execute.side_effect = RuntimeError("boom")
     caplog.set_level("ERROR")
-    with patch("src.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
+    with patch("src.mist.resources.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
         with pytest.raises(RuntimeError, match="boom"):
             OrgTicketManager.list_tickets()
     assert "Failed to export org tickets" in caplog.text
@@ -101,7 +101,7 @@ def test_create_ticket_blank_subject_cancels(caplog):
     fake_mh = _make_mh()
     fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org-1"
     fake_mh.InputUtils.safe_input.return_value = ""
-    with patch("src.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
+    with patch("src.mist.resources.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
         OrgTicketManager.create_ticket()
     assert "subject is required" in caplog.text
 
@@ -114,7 +114,7 @@ def test_create_ticket_full_flow_with_comment():
     fake_mh.InputUtils.safe_input.side_effect = ["My subject", "2", "hello"]
     api_response = SimpleNamespace(data={"id": "t-1", "status": "open"})
     fake_mh.mistapi.api.v1.orgs.tickets.createOrgTicket.return_value = api_response
-    with patch("src.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
+    with patch("src.mist.resources.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
         OrgTicketManager.create_ticket()
     body = fake_mh.mistapi.api.v1.orgs.tickets.createOrgTicket.call_args.args[2]
     assert body == {"subject": "My subject", "type": "problem", "comment": "hello"}
@@ -128,7 +128,7 @@ def test_create_ticket_flow_without_comment():
     fake_mh.mistapi.api.v1.orgs.tickets.createOrgTicket.return_value = SimpleNamespace(
         data={"id": "t-1", "status": "open"}
     )
-    with patch("src.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
+    with patch("src.mist.resources.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
         OrgTicketManager.create_ticket()
     body = fake_mh.mistapi.api.v1.orgs.tickets.createOrgTicket.call_args.args[2]
     assert "comment" not in body
@@ -142,7 +142,7 @@ def test_add_comment_cancels_when_no_ticket_selected(caplog):
     fake_mh = _make_mh()
     fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org-1"
     fake_mh.mistapi.api.v1.orgs.tickets.listOrgTickets.return_value = SimpleNamespace(data=[])
-    with patch("src.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
+    with patch("src.mist.resources.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
         OrgTicketManager.add_comment()
     assert "no ticket selected" in caplog.text
 
@@ -156,7 +156,7 @@ def test_add_comment_cancels_when_no_comment_or_file(caplog):
     )
     # selection "1" then blank comment, blank file
     fake_mh.InputUtils.safe_input.side_effect = ["1", "", ""]
-    with patch("src.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
+    with patch("src.mist.resources.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
         OrgTicketManager.add_comment()
     assert "provide a comment or file" in caplog.text
 
@@ -169,7 +169,7 @@ def test_add_comment_success_text_only(tmp_path):
         data=[{"id": "t-1", "subject": "s", "status": "open", "type": "question"}]
     )
     fake_mh.InputUtils.safe_input.side_effect = ["1", "text comment", ""]
-    with patch("src.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
+    with patch("src.mist.resources.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
         OrgTicketManager.add_comment()
     fake_mh.mistapi.api.v1.orgs.tickets.addOrgTicketComment.assert_called_once()
 
@@ -182,7 +182,7 @@ def test_update_ticket_cancels_when_no_ticket_selected(caplog):
     fake_mh = _make_mh()
     fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org-1"
     fake_mh.mistapi.api.v1.orgs.tickets.listOrgTickets.return_value = SimpleNamespace(data=[])
-    with patch("src.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
+    with patch("src.mist.resources.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
         OrgTicketManager.update_ticket()
     assert "no ticket selected" in caplog.text
 
@@ -196,7 +196,7 @@ def test_update_ticket_cancels_when_no_fields_changed(caplog):
     )
     # selection=1, then subject blank, status blank, type blank
     fake_mh.InputUtils.safe_input.side_effect = ["1", "", "", ""]
-    with patch("src.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
+    with patch("src.mist.resources.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
         OrgTicketManager.update_ticket()
     assert "No changes specified" in caplog.text
 
@@ -210,7 +210,7 @@ def test_update_ticket_success_updates_selected_fields(caplog):
     )
     fake_mh.InputUtils.safe_input.side_effect = ["1", "new subject", "closed", ""]
     fake_mh.mistapi.api.v1.orgs.tickets.updateOrgTicket.return_value = SimpleNamespace(data={"ok": True})
-    with patch("src.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
+    with patch("src.mist.resources.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
         OrgTicketManager.update_ticket()
     body = fake_mh.mistapi.api.v1.orgs.tickets.updateOrgTicket.call_args.args[3]
     assert body == {"subject": "new subject", "status": "closed"}
@@ -223,7 +223,7 @@ def test_prompt_subject_returns_input_value():
     """_prompt_subject returns whatever InputUtils.safe_input yields."""
     fake_mh = _make_mh()
     fake_mh.InputUtils.safe_input.return_value = "my subj"
-    with patch("src.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
+    with patch("src.mist.resources.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
         assert OrgTicketManager._prompt_subject() == "my subj"
 
 
@@ -231,7 +231,7 @@ def test_prompt_ticket_type_valid_choice():
     """_prompt_ticket_type maps '3' -> 'incident'."""
     fake_mh = _make_mh()
     fake_mh.InputUtils.safe_input.return_value = "3"
-    with patch("src.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
+    with patch("src.mist.resources.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
         assert OrgTicketManager._prompt_ticket_type() == "incident"
 
 
@@ -239,7 +239,7 @@ def test_prompt_ticket_type_non_numeric_defaults_to_question():
     """_prompt_ticket_type falls back to 'question' on non-numeric input."""
     fake_mh = _make_mh()
     fake_mh.InputUtils.safe_input.return_value = "abc"
-    with patch("src.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
+    with patch("src.mist.resources.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
         assert OrgTicketManager._prompt_ticket_type() == "question"
 
 
@@ -247,7 +247,7 @@ def test_prompt_ticket_type_out_of_range_defaults_to_question():
     """_prompt_ticket_type falls back to default when index is out of range."""
     fake_mh = _make_mh()
     fake_mh.InputUtils.safe_input.return_value = "99"
-    with patch("src.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
+    with patch("src.mist.resources.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
         assert OrgTicketManager._prompt_ticket_type() == "question"
 
 
@@ -255,7 +255,7 @@ def test_prompt_ticket_id_returns_input_value():
     """_prompt_ticket_id returns whatever InputUtils yields."""
     fake_mh = _make_mh()
     fake_mh.InputUtils.safe_input.return_value = "abc-123"
-    with patch("src.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
+    with patch("src.mist.resources.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
         assert OrgTicketManager._prompt_ticket_id() == "abc-123"
 
 
@@ -289,7 +289,7 @@ def test_submit_create_ticket_reraises_on_api_error(caplog):
     """_submit_create_ticket logs, prints and re-raises API errors."""
     fake_mh = _make_mh()
     fake_mh.mistapi.api.v1.orgs.tickets.createOrgTicket.side_effect = RuntimeError("api down")
-    with patch("src.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
+    with patch("src.mist.resources.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
         with pytest.raises(RuntimeError, match="api down"):
             OrgTicketManager._submit_create_ticket("org-1", {"subject": "s"}, "s", "problem")
     assert "Error creating ticket" in caplog.text
@@ -302,7 +302,7 @@ def test_build_update_body_returns_only_provided_fields():
     """_build_update_body includes only fields the user filled in."""
     fake_mh = _make_mh()
     fake_mh.InputUtils.safe_input.side_effect = ["new sub", "", "problem"]
-    with patch("src.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
+    with patch("src.mist.resources.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
         result = OrgTicketManager._build_update_body()
     assert result == {"subject": "new sub", "type": "problem"}
 
@@ -314,7 +314,7 @@ def test_update_via_api_success_prints_changes(caplog):
     """_update_via_api prints each changed field."""
     fake_mh = _make_mh()
     fake_mh.mistapi.api.v1.orgs.tickets.updateOrgTicket.return_value = SimpleNamespace(data={"ok": True})
-    with patch("src.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
+    with patch("src.mist.resources.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
         OrgTicketManager._update_via_api("org-1", "t-1", {"subject": "x"})
     text = caplog.text
     assert "updated successfully" in text
@@ -325,7 +325,7 @@ def test_update_via_api_reraises_on_error(caplog):
     """_update_via_api logs, prints, and re-raises API errors."""
     fake_mh = _make_mh()
     fake_mh.mistapi.api.v1.orgs.tickets.updateOrgTicket.side_effect = RuntimeError("x")
-    with patch("src.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
+    with patch("src.mist.resources.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
         with pytest.raises(RuntimeError):
             OrgTicketManager._update_via_api("org-1", "t-1", {"subject": "x"})
     assert "Error updating ticket" in caplog.text
@@ -338,7 +338,7 @@ def test_prompt_comment_and_file_returns_tuple():
     """_prompt_comment_and_file returns (comment, file_path)."""
     fake_mh = _make_mh()
     fake_mh.InputUtils.safe_input.side_effect = ["hello", "/tmp/a.txt"]
-    with patch("src.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
+    with patch("src.mist.resources.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
         assert OrgTicketManager._prompt_comment_and_file() == ("hello", "/tmp/a.txt")
 
 
@@ -350,7 +350,7 @@ def test_submit_comment_with_valid_file_uses_multipart(tmp_path, caplog):
     fake_mh = _make_mh()
     file_path = tmp_path / "attach.txt"
     file_path.write_text("data")
-    with patch("src.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
+    with patch("src.mist.resources.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
         OrgTicketManager._submit_comment("org-1", "t-1", "hello", str(file_path))
     fake_mh.mistapi.api.v1.orgs.tickets.addOrgTicketCommentFile.assert_called_once()
     assert "with attachment" in caplog.text
@@ -361,7 +361,7 @@ def test_submit_comment_with_missing_file_falls_back_to_text(caplog):
     fake_mh = _make_mh()
     with (
         patch("os.path.isfile", return_value=False),
-        patch("src.org.org_ticket_manager.SourceDependencyResolver", fake_mh),
+        patch("src.mist.resources.org.org_ticket_manager.SourceDependencyResolver", fake_mh),
     ):
         OrgTicketManager._submit_comment("org-1", "t-1", "hello", "/nope/x")
     assert "File not found" in caplog.text
@@ -371,7 +371,7 @@ def test_submit_comment_with_missing_file_falls_back_to_text(caplog):
 def test_submit_comment_no_file_submits_text_only():
     """_submit_comment goes text-only when no file path was given."""
     fake_mh = _make_mh()
-    with patch("src.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
+    with patch("src.mist.resources.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
         OrgTicketManager._submit_comment("org-1", "t-1", "hello", "")
     fake_mh.mistapi.api.v1.orgs.tickets.addOrgTicketComment.assert_called_once()
 
@@ -381,7 +381,7 @@ def test_submit_comment_with_file_and_no_text_passes_none(tmp_path):
     fake_mh = _make_mh()
     file_path = tmp_path / "a.txt"
     file_path.write_text("x")
-    with patch("src.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
+    with patch("src.mist.resources.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
         OrgTicketManager._submit_comment("org-1", "t-1", "", str(file_path))
     kwargs = fake_mh.mistapi.api.v1.orgs.tickets.addOrgTicketCommentFile.call_args.kwargs
     assert kwargs["comment"] is None
@@ -393,7 +393,7 @@ def test_submit_comment_with_file_and_no_text_passes_none(tmp_path):
 def test_submit_text_comment_calls_api(caplog):
     """_submit_text_comment sends addOrgTicketComment with body dict."""
     fake_mh = _make_mh()
-    with patch("src.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
+    with patch("src.mist.resources.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
         OrgTicketManager._submit_text_comment("org-1", "t-1", "hi")
     args = fake_mh.mistapi.api.v1.orgs.tickets.addOrgTicketComment.call_args.args
     assert args[3] == {"comment": "hi"}
@@ -408,7 +408,7 @@ def test_view_ticket_cancels_when_no_ticket_selected(caplog):
     fake_mh = _make_mh()
     fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org-1"
     fake_mh.mistapi.api.v1.orgs.tickets.listOrgTickets.return_value = SimpleNamespace(data=[])
-    with patch("src.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
+    with patch("src.mist.resources.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
         OrgTicketManager.view_ticket()
     assert "no ticket selected" in caplog.text
 
@@ -424,7 +424,7 @@ def test_view_ticket_prints_details_on_success(caplog):
         data={"id": "t-1", "subject": "s", "status": "open", "type": "question"}
     )
     fake_mh.InputUtils.safe_input.return_value = "1"
-    with patch("src.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
+    with patch("src.mist.resources.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
         OrgTicketManager.view_ticket()
     assert "Ticket" in caplog.text
 
@@ -438,7 +438,7 @@ def test_view_ticket_empty_detail_prints_message(caplog):
     )
     fake_mh.mistapi.api.v1.orgs.tickets.getOrgTicket.side_effect = RuntimeError("nope")
     fake_mh.InputUtils.safe_input.return_value = "1"
-    with patch("src.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
+    with patch("src.mist.resources.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
         OrgTicketManager.view_ticket()
     assert "Could not retrieve" in caplog.text
 
@@ -451,7 +451,7 @@ def test_export_ticket_details_no_tickets(caplog):
     fake_mh = _make_mh()
     fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org-1"
     fake_mh.mistapi.api.v1.orgs.tickets.listOrgTickets.return_value = SimpleNamespace(data=[])
-    with patch("src.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
+    with patch("src.mist.resources.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
         OrgTicketManager.export_ticket_details()
     assert "No tickets found" in caplog.text
 
@@ -462,7 +462,7 @@ def test_export_ticket_details_writes_when_details_exist():
     fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org-1"
     fake_mh.mistapi.api.v1.orgs.tickets.listOrgTickets.return_value = SimpleNamespace(data=[{"id": "t-1"}])
     fake_mh.mistapi.api.v1.orgs.tickets.getOrgTicket.return_value = SimpleNamespace(data={"id": "t-1", "subject": "s"})
-    with patch("src.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
+    with patch("src.mist.resources.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
         OrgTicketManager.export_ticket_details()
     fake_mh.DataExporter.write_with_format_selection.assert_called_once()
 
@@ -473,7 +473,7 @@ def test_export_ticket_details_no_details_retrieved(caplog):
     fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org-1"
     fake_mh.mistapi.api.v1.orgs.tickets.listOrgTickets.return_value = SimpleNamespace(data=[{"id": "t-1"}])
     fake_mh.mistapi.api.v1.orgs.tickets.getOrgTicket.side_effect = RuntimeError("nope")
-    with patch("src.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
+    with patch("src.mist.resources.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
         OrgTicketManager.export_ticket_details()
     assert "No ticket details could be retrieved" in caplog.text
 
@@ -485,7 +485,7 @@ def test_select_ticket_returns_empty_when_no_tickets():
     """_select_ticket returns '' when there are no tickets."""
     fake_mh = _make_mh()
     fake_mh.mistapi.api.v1.orgs.tickets.listOrgTickets.return_value = SimpleNamespace(data=[])
-    with patch("src.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
+    with patch("src.mist.resources.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
         assert OrgTicketManager._select_ticket("org-1") == ""
 
 
@@ -496,7 +496,7 @@ def test_select_ticket_manual_id_path():
         data=[{"id": "t-1", "subject": "s", "status": "o", "type": "q"}]
     )
     fake_mh.InputUtils.safe_input.side_effect = ["m", "manual-id"]
-    with patch("src.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
+    with patch("src.mist.resources.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
         assert OrgTicketManager._select_ticket("org-1") == "manual-id"
 
 
@@ -507,7 +507,7 @@ def test_select_ticket_numeric_choice():
         data=[{"id": "t-1", "subject": "s", "status": "o", "type": "q"}]
     )
     fake_mh.InputUtils.safe_input.return_value = "1"
-    with patch("src.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
+    with patch("src.mist.resources.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
         assert OrgTicketManager._select_ticket("org-1") == "t-1"
 
 
@@ -518,7 +518,7 @@ def test_select_ticket_blank_input_cancels():
         data=[{"id": "t-1", "subject": "s", "status": "o", "type": "q"}]
     )
     fake_mh.InputUtils.safe_input.return_value = ""
-    with patch("src.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
+    with patch("src.mist.resources.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
         assert OrgTicketManager._select_ticket("org-1") == ""
 
 
@@ -529,7 +529,7 @@ def test_fetch_tickets_for_selection_prints_when_empty(caplog):
     """_fetch_tickets_for_selection prints message when API returns []."""
     fake_mh = _make_mh()
     fake_mh.mistapi.api.v1.orgs.tickets.listOrgTickets.return_value = SimpleNamespace(data=[])
-    with patch("src.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
+    with patch("src.mist.resources.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
         assert OrgTicketManager._fetch_tickets_for_selection("org-1") == []
     assert "No tickets found" in caplog.text
 
@@ -538,7 +538,7 @@ def test_fetch_tickets_for_selection_handles_api_error(caplog):
     """_fetch_tickets_for_selection returns [] and prints error on exception."""
     fake_mh = _make_mh()
     fake_mh.mistapi.api.v1.orgs.tickets.listOrgTickets.side_effect = RuntimeError("x")
-    with patch("src.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
+    with patch("src.mist.resources.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
         assert OrgTicketManager._fetch_tickets_for_selection("org-1") == []
     assert "Error fetching tickets" in caplog.text
 
@@ -595,7 +595,7 @@ def test_fetch_ticket_detail_returns_data():
     """_fetch_ticket_detail returns ticket dict on success."""
     fake_mh = _make_mh()
     fake_mh.mistapi.api.v1.orgs.tickets.getOrgTicket.return_value = SimpleNamespace(data={"id": "t-1"})
-    with patch("src.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
+    with patch("src.mist.resources.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
         assert OrgTicketManager._fetch_ticket_detail("org-1", "t-1") == {"id": "t-1"}
 
 
@@ -603,7 +603,7 @@ def test_fetch_ticket_detail_returns_empty_dict_on_error(caplog):
     """_fetch_ticket_detail returns {} and prints on failure."""
     fake_mh = _make_mh()
     fake_mh.mistapi.api.v1.orgs.tickets.getOrgTicket.side_effect = RuntimeError("x")
-    with patch("src.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
+    with patch("src.mist.resources.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
         assert OrgTicketManager._fetch_ticket_detail("org-1", "t-1") == {}
     assert "Error fetching ticket" in caplog.text
 
@@ -612,7 +612,7 @@ def test_fetch_ticket_detail_returns_empty_when_data_none():
     """_fetch_ticket_detail returns {} when SDK data is None."""
     fake_mh = _make_mh()
     fake_mh.mistapi.api.v1.orgs.tickets.getOrgTicket.return_value = SimpleNamespace(data=None)
-    with patch("src.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
+    with patch("src.mist.resources.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
         assert OrgTicketManager._fetch_ticket_detail("org-1", "t-1") == {}
 
 
@@ -623,7 +623,7 @@ def test_fetch_all_ticket_summaries_returns_list():
     """_fetch_all_ticket_summaries returns SDK data list."""
     fake_mh = _make_mh()
     fake_mh.mistapi.api.v1.orgs.tickets.listOrgTickets.return_value = SimpleNamespace(data=[{"id": "t-1"}])
-    with patch("src.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
+    with patch("src.mist.resources.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
         assert OrgTicketManager._fetch_all_ticket_summaries("org-1") == [{"id": "t-1"}]
 
 
@@ -631,7 +631,7 @@ def test_fetch_all_ticket_summaries_reraises_on_error(caplog):
     """_fetch_all_ticket_summaries re-raises API error after logging."""
     fake_mh = _make_mh()
     fake_mh.mistapi.api.v1.orgs.tickets.listOrgTickets.side_effect = RuntimeError("x")
-    with patch("src.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
+    with patch("src.mist.resources.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
         with pytest.raises(RuntimeError):
             OrgTicketManager._fetch_all_ticket_summaries("org-1")
     assert "Error fetching tickets" in caplog.text
@@ -641,7 +641,7 @@ def test_fetch_all_ticket_summaries_none_data_returns_empty():
     """_fetch_all_ticket_summaries yields [] when SDK data is None."""
     fake_mh = _make_mh()
     fake_mh.mistapi.api.v1.orgs.tickets.listOrgTickets.return_value = SimpleNamespace(data=None)
-    with patch("src.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
+    with patch("src.mist.resources.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
         assert OrgTicketManager._fetch_all_ticket_summaries("org-1") == []
 
 
@@ -652,7 +652,7 @@ def test_collect_ticket_details_skips_ticket_without_id(caplog):
     """_collect_ticket_details skips tickets that have no id."""
     fake_mh = _make_mh()
     fake_mh.mistapi.api.v1.orgs.tickets.getOrgTicket.return_value = SimpleNamespace(data={"id": "t-1", "subject": "s"})
-    with patch("src.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
+    with patch("src.mist.resources.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
         details = OrgTicketManager._collect_ticket_details("org-1", [{}, {"id": "t-1"}])
     assert len(details) == 1
 
@@ -661,7 +661,7 @@ def test_collect_ticket_details_returns_empty_for_all_failed(caplog):
     """_collect_ticket_details returns [] when every fetch fails."""
     fake_mh = _make_mh()
     fake_mh.mistapi.api.v1.orgs.tickets.getOrgTicket.side_effect = RuntimeError("x")
-    with patch("src.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
+    with patch("src.mist.resources.org.org_ticket_manager.SourceDependencyResolver", fake_mh):
         assert OrgTicketManager._collect_ticket_details("org-1", [{"id": "t-1"}]) == []
 
 

@@ -21,7 +21,7 @@ import re
 
 import pytest
 
-from src.upgrade_portal.app.routes import select, upgrade
+from src.interfaces.portals.upgrade_portal.app.routes import select, upgrade
 
 # One run that writes firmware now, and one that ended. The takeover box names
 # the device count of the first and no count for the second.

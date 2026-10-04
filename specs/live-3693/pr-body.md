@@ -72,14 +72,14 @@ The live home organization returned 13 admins and 4 tokens.
 ## Gates
 
 ```text
-python -m py_compile src\reports\admin_token_hygiene\client.py src\reports\admin_token_hygiene\model.py src\reports\admin_token_hygiene\operation.py tests\unit\reports\admin_token_hygiene\test_admin_token_hygiene_model.py
-python -m ruff check src\reports\admin_token_hygiene tests\unit\reports\admin_token_hygiene
-python -m black --check src\reports\admin_token_hygiene tests\unit\reports\admin_token_hygiene
-python -m mypy src\reports\admin_token_hygiene --config-file pyproject.toml
-python -m pydocstyle src\reports\admin_token_hygiene
+python -m py_compile src\mist\intelligence\reports\admin_token_hygiene\client.py src\mist\intelligence\reports\admin_token_hygiene\model.py src\mist\intelligence\reports\admin_token_hygiene\operation.py tests\unit\reports\admin_token_hygiene\test_admin_token_hygiene_model.py
+python -m ruff check src\mist\intelligence\reports\admin_token_hygiene tests\unit\reports\admin_token_hygiene
+python -m black --check src\mist\intelligence\reports\admin_token_hygiene tests\unit\reports\admin_token_hygiene
+python -m mypy src\mist\intelligence\reports\admin_token_hygiene --config-file pyproject.toml
+python -m pydocstyle src\mist\intelligence\reports\admin_token_hygiene
 python -m pytest tests\unit\reports\admin_token_hygiene -q --timeout=120
-python -m radon cc src\reports\admin_token_hygiene -j | complexity-gate --max 10
+python -m radon cc src\mist\intelligence\reports\admin_token_hygiene -j | complexity-gate --max 10
 test-quality-analyzer --gate --config .github\test-quality-config.toml --baseline .github\test-quality-baseline.json --changed-from origin/main
-python -m bandit -c pyproject.toml -r src\reports\admin_token_hygiene -q
+python -m bandit -c pyproject.toml -r src\mist\intelligence\reports\admin_token_hygiene -q
 python -m pytest tests\integration\test_mistapi_sdk_compatibility.py tests\unit\web_portal\test_output_scan_runtime_files.py -q --timeout=120
 ```

@@ -3,7 +3,7 @@
 ## Handler
 
 ```text
-src.site.rrm_reset.operation.RrmResetOperation.run()
+src.mist.resources.site.rrm_reset.operation.RrmResetOperation.run()
 ```
 
 The handler takes no positional argument. It reads the active Mist API session from `SourceDependencyResolver.apisession`.

@@ -65,7 +65,7 @@ The count endpoint returns grouped rows with no stable Mist identifier. The wiri
 
 ## Decision: Reuse the count exporter prompt pattern
 
-`src/export/count_exporter.py` menus `235`, `236`, and `237` list count operations, ask the operator to select one, resolve the identifier, call the SDK, flatten rows, and pass rows to `DataExporter.write_with_format_selection`.
+`src/operations/exporting/export/count_exporter.py` menus `235`, `236`, and `237` list count operations, ask the operator to select one, resolve the identifier, call the SDK, flatten rows, and pass rows to `DataExporter.write_with_format_selection`.
 
 **Rationale**: Menu `289` needs a narrower version of that pattern: prompt for the site, prompt for the distinct field, call one count endpoint, then export.
 

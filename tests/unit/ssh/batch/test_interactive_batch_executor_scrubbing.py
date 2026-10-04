@@ -7,7 +7,7 @@ password replaced with ``***REDACTED***`` before reaching the inner writer.
 
 from __future__ import annotations
 
-from src.ssh.batch.interactive_batch_executor import InteractiveBatchExecutor
+from src.operations.execution.ssh.batch.interactive_batch_executor import InteractiveBatchExecutor
 
 
 def test_build_scrubbing_writer_replaces_password_literal() -> None:

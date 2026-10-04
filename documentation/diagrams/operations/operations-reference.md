@@ -113,9 +113,9 @@ flowchart TB
     end
 
     subgraph impl["Implementation"]
-        si["InputUtils.safe_input()<br/>src/utils/input_utils.py"]
-        registry["OperationRegistry<br/>src/utils/operation_registry.py"]
-        fm["FirmwareManager<br/>src/firmware/firmware_manager.py"]
+        si["InputUtils.safe_input()<br/>src/foundation/support/utils/input_utils.py"]
+        registry["OperationRegistry<br/>src/foundation/support/utils/operation_registry.py"]
+        fm["FirmwareManager<br/>src/operations/execution/firmware/firmware_manager.py"]
     end
 
     si -->|satisfies| SAF001

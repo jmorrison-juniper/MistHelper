@@ -23,14 +23,14 @@ from pathlib import Path
 
 import pytest
 
-from src.metrics_gateway.catalog import (
+from src.interfaces.monitoring.metrics_gateway.catalog import (
     ROW_IDENTITY_COLUMN,
     SUBTREE_BY_SCOPE,
     MetricCatalog,
     MetricKind,
     MetricScope,
 )
-from src.metrics_gateway.snmp import DEFAULT_BASE_OID
+from src.interfaces.monitoring.metrics_gateway.snmp import DEFAULT_BASE_OID
 
 MIB_PATH = Path(__file__).resolve().parents[2] / "documentation" / "mibs" / "MISTHELPER-MIB.mib"
 

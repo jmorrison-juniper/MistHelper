@@ -15,8 +15,8 @@ Why:
 
 from __future__ import annotations
 
-from src.upgrade_portal.app import factory
-from src.upgrade_portal.runtime import lock
+from src.interfaces.portals.upgrade_portal.app import factory
+from src.interfaces.portals.upgrade_portal.runtime import lock
 
 BEAT_SECONDS = 60  # The beat period that `portal.js` and `runtime.lock` both name.
 ONE_HOUR = 3600  # The old token life, and the value the framework still defaults to.

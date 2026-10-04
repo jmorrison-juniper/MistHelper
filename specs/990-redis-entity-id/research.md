@@ -13,16 +13,16 @@ the plan, and it records the measurements that ground them.
 
 | Item | Measured value | Source |
 | - | - | - |
-| Target line | `entity_id = str(record.get(ctx.entity_key_field, "unknown"))` | `src/db/redis_writer.py` line 190 |
+| Target line | `entity_id = str(record.get(ctx.entity_key_field, "unknown"))` | `src/foundation/persistence/db/redis_writer.py` line 190 |
 | Existing fallback order | `("device_id", "site_id", "org_id", "mac", "id")` | `_pick_entity_field`, line 446 |
 | Existing webhook helper | Walks `WEBHOOK_ENTITY_KEYS` and returns `"unknown"` last | `_pick_webhook_entity`, line 431 |
 | Webhook candidate constant | `WEBHOOK_ENTITY_KEYS = ("mac", "device_id")` | Module level, line 45 |
 | Sentinel dependency | `str(record.get(field, "unknown"))` | `RedisJSONWriter._build_key`, line 592 |
-| Highest complexity block in the file | 5 | `radon cc src/db/redis_writer.py -s` |
+| Highest complexity block in the file | 5 | `radon cc src/foundation/persistence/db/redis_writer.py -s` |
 | Radon gate limit | A block above 10 fails the gate | `.github/workflows/ci.yml` line 318 |
 | Ruff line length | 120 | `pyproject.toml` line 137 |
 | mypy target and mode | `mypy src/ --config-file pyproject.toml`, strict | `.github/workflows/ci.yml` line 156 |
-| mypy relaxation for this package | `src.db` and `src.db.*` turn off `disallow_untyped_calls`, `disallow_any_generics`, and `warn_return_any` | `pyproject.toml` line 315 |
+| mypy relaxation for this package | `src.foundation.persistence.db` and `src.foundation.persistence.db.*` turn off `disallow_untyped_calls`, `disallow_any_generics`, and `warn_return_any` | `pyproject.toml` line 315 |
 | Coverage gate | `pytest --cov=src/ --cov-fail-under=80` | `.github/workflows/ci.yml` line 190 |
 
 ---

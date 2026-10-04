@@ -20,10 +20,10 @@
 These edits are not implementation edits for this feature branch. The integration pull request owns them.
 
 - `MistHelper.py` menu 274 registration is deferred to the integration pull request.
-- `src/utils/operation_registry.py` menu 274 entry is deferred to the integration pull request.
+- `src/foundation/support/utils/operation_registry.py` menu 274 entry is deferred to the integration pull request.
 - `README.md` menu table and operation count edits are deferred to the integration pull request.
 - Generated menu reference edits from `scripts/generate_menu_wiki.py` and `python -m scripts.menu_api_map` are deferred to the integration pull request.
-- `src/refactors/endpoint_primary_key_strategies.py` edits are deferred to the integration pull request.
+- `src/foundation/support/refactors/endpoint_primary_key_strategies.py` edits are deferred to the integration pull request.
 - After those edits exist, the integration pull request must run `python MistHelper.py --test --menu 274`.
 
 ## Phase 1: Setup and traceability
@@ -31,7 +31,7 @@ These edits are not implementation edits for this feature branch. The integratio
 **Purpose**: Create the feature-owned skeleton and release evidence.
 
 - [X] T001 Verify fleet contract sections in specs/3555-psk-hygiene-report/wiring.md
-- [X] T002 Create package marker in src/reports/psk_hygiene/__init__.py
+- [X] T002 Create package marker in src/mist/intelligence/reports/psk_hygiene/__init__.py
 - [X] T003 Create test package marker in tests/unit/reports/psk_hygiene/__init__.py
 - [X] T004 [P] Add release note fragment in changelog.d/issue-3555-psk-hygiene-report.md
 
@@ -45,10 +45,10 @@ These edits are not implementation edits for this feature branch. The integratio
 
 - [X] T005 [P] Add failing model tests for sanitized PSK input in tests/unit/reports/psk_hygiene/test_model.py
 - [X] T006 [P] Add failing client tests for paginated PSK, WLAN, and template fetches in tests/unit/reports/psk_hygiene/test_client.py
-- [X] T007 Implement dataclasses, `PskHygieneScorer`, SSID normalization, and secret stripping in src/reports/psk_hygiene/model.py
-- [X] T008 Implement expire-time parsing and days remaining calculation in src/reports/psk_hygiene/model.py
-- [X] T009 Implement read-only mistapi client pagination in src/reports/psk_hygiene/client.py
-- [X] T010 Verify no model import references mistapi, DataExporter, ConfigUtils, or SourceDependencyResolver in src/reports/psk_hygiene/model.py
+- [X] T007 Implement dataclasses, `PskHygieneScorer`, SSID normalization, and secret stripping in src/mist/intelligence/reports/psk_hygiene/model.py
+- [X] T008 Implement expire-time parsing and days remaining calculation in src/mist/intelligence/reports/psk_hygiene/model.py
+- [X] T009 Implement read-only mistapi client pagination in src/mist/intelligence/reports/psk_hygiene/client.py
+- [X] T010 Verify no model import references mistapi, DataExporter, ConfigUtils, or SourceDependencyResolver in src/mist/intelligence/reports/psk_hygiene/model.py
 
 **Commit checkpoint**: Commit Phase 2 after the model and client tests pass.
 
@@ -69,9 +69,9 @@ These edits are not implementation edits for this feature branch. The integratio
 
 ### Implementation for User Story 1
 
-- [X] T014 [US1] Implement PskHygieneReport.run orchestration in src/reports/psk_hygiene/operation.py
+- [X] T014 [US1] Implement PskHygieneReport.run orchestration in src/mist/intelligence/reports/psk_hygiene/operation.py
 - [X] T015 [US1] Connect PskHygieneReport.run to DataExporter.write_with_format_selection with `PskHygiene.csv` so the approved export path writes under `data/`
-- [X] T016 [US1] Return a menu-test success value from PskHygieneReport.run in src/reports/psk_hygiene/operation.py
+- [X] T016 [US1] Return a menu-test success value from PskHygieneReport.run in src/mist/intelligence/reports/psk_hygiene/operation.py
 
 **Commit checkpoint**: Commit Phase 3 after the P1 tests pass with fake dependencies.
 
@@ -96,11 +96,11 @@ These edits are not implementation edits for this feature branch. The integratio
 
 ### Implementation for User Story 2
 
-- [X] T024 [US2] Implement stable finding order in src/reports/psk_hygiene/model.py
-- [X] T025 [US2] Implement uncapped multi-use detection in src/reports/psk_hygiene/model.py
-- [X] T026 [US2] Implement rotation pending detection with old_passphrase_present only in src/reports/psk_hygiene/model.py
-- [X] T027 [US2] Implement organization WLAN and template SSID matching in src/reports/psk_hygiene/model.py
-- [X] T028 [US2] Implement unknown WLAN scope handling in src/reports/psk_hygiene/model.py
+- [X] T024 [US2] Implement stable finding order in src/mist/intelligence/reports/psk_hygiene/model.py
+- [X] T025 [US2] Implement uncapped multi-use detection in src/mist/intelligence/reports/psk_hygiene/model.py
+- [X] T026 [US2] Implement rotation pending detection with old_passphrase_present only in src/mist/intelligence/reports/psk_hygiene/model.py
+- [X] T027 [US2] Implement organization WLAN and template SSID matching in src/mist/intelligence/reports/psk_hygiene/model.py
+- [X] T028 [US2] Implement unknown WLAN scope handling in src/mist/intelligence/reports/psk_hygiene/model.py
 
 **Commit checkpoint**: Commit Phase 4 after the P2 tests prove all finding labels and secret redaction.
 
@@ -120,10 +120,10 @@ These edits are not implementation edits for this feature branch. The integratio
 
 ### Implementation for User Story 3
 
-- [X] T032 [US3] Implement HygieneSummary aggregation in src/reports/psk_hygiene/model.py
-- [X] T033 [US3] Print sanitized summary counts in src/reports/psk_hygiene/operation.py
-- [X] T034 [US3] Log sanitized summary counts only in src/reports/psk_hygiene/operation.py
-- [X] T035 [US3] State and test that site-level WLANs are outside scope in src/reports/psk_hygiene/operation.py
+- [X] T032 [US3] Implement HygieneSummary aggregation in src/mist/intelligence/reports/psk_hygiene/model.py
+- [X] T033 [US3] Print sanitized summary counts in src/mist/intelligence/reports/psk_hygiene/operation.py
+- [X] T034 [US3] Log sanitized summary counts only in src/mist/intelligence/reports/psk_hygiene/operation.py
+- [X] T035 [US3] State and test that site-level WLANs are outside scope in src/mist/intelligence/reports/psk_hygiene/operation.py
 
 **Commit checkpoint**: Commit Phase 5 after the P3 summary tests pass.
 
@@ -155,8 +155,8 @@ These edits are not implementation edits for this feature branch. The integratio
 
 - [X] T040 Run pytest for feature tests with python -m pytest tests\unit\reports\psk_hygiene
 - [X] T041 Run syntax validation with python -m py_compile MistHelper.py
-- [X] T042 Run Ruff validation with python -m ruff check MistHelper.py src\reports\psk_hygiene tests\unit\reports\psk_hygiene
-- [X] T043 Run Black validation with python -m black --check MistHelper.py src\reports\psk_hygiene tests\unit\reports\psk_hygiene
+- [X] T042 Run Ruff validation with python -m ruff check MistHelper.py src\mist\intelligence\reports\psk_hygiene tests\unit\reports\psk_hygiene
+- [X] T043 Run Black validation with python -m black --check MistHelper.py src\mist\intelligence\reports\psk_hygiene tests\unit\reports\psk_hygiene
 - [X] T044 Record local validation evidence in specs/3555-psk-hygiene-report/wiring.md
 
 **Commit checkpoint**: Commit Phase 7 after all local validation commands pass.

@@ -5,7 +5,7 @@
 
 ## Summary
 
-Lift `src/firmware/firmware_manager.py` from **51.0 / F (82 violations)** to **100.0 / A+ (zero violations)** through a real structural refactor while preserving exact observable behavior for the six MistHelper.py callsites of `FirmwareManager.create(apisession, org_id)`. Concretely:
+Lift `src/operations/execution/firmware/firmware_manager.py` from **51.0 / F (82 violations)** to **100.0 / A+ (zero violations)** through a real structural refactor while preserving exact observable behavior for the six MistHelper.py callsites of `FirmwareManager.create(apisession, org_id)`. Concretely:
 
 1. Collapse the eight-parameter `__init__` into a single positional `FirmwareManagerConfig` frozen `slots=True` dataclass (resolves the sole STRUCT-PARAMS violation and enables downstream simplifications).
 2. Decompose the 36 STRUCT-LENGTH offenders — including four HIGH-severity ones (`check_firmware_upgrade_status`, `_continuous_monitoring_mode`, `_upgrade_ap_firmware_by_gateway_template`, `_execute_msp_upgrade_plan`) — via the PCPP pattern (Prepare / Compute / Present / Persist) so every helper is `<=25` lines and `<=5` blocks.
@@ -26,7 +26,7 @@ Lift `src/firmware/firmware_manager.py` from **51.0 / F (82 violations)** to **1
 **Target Platform**: CLI (MistHelper.py menu 196 primary launcher, plus five secondary callsites)
 **Project Type**: Single-project refactor within existing MistHelper codebase.
 **Performance Goals**: No behavior change — identical prompt sequence, log lines, and API call cadence for menu 196 vs. pre-refactor branch (FR-017).
-**Constraints**: Only two files touched: `src/firmware/firmware_manager.py` (full rewrite permitted) and `MistHelper.py` lines 18791-18807 (factory wrapper body only). Total LOC estimated to grow from **2450 -> ~4000** due to inline comment coverage + helper decomposition (NG-003 permits growth for compliance).
+**Constraints**: Only two files touched: `src/operations/execution/firmware/firmware_manager.py` (full rewrite permitted) and `MistHelper.py` lines 18791-18807 (factory wrapper body only). Total LOC estimated to grow from **2450 -> ~4000** due to inline comment coverage + helper decomposition (NG-003 permits growth for compliance).
 **Scale/Scope**: 82 functions, 1348 executable lines, six MistHelper.py callsites (18795 import, 19809, 22097, 22154, 22237, 22246 usage), zero pre-existing unit tests for this module.
 
 ## Constitution Check
@@ -70,7 +70,7 @@ specs/1005-firmware-manager-compliance/
 Only two files are modified — no additions, no deletions:
 
 ```text
-src/firmware/
+src/operations/execution/firmware/
 └── firmware_manager.py             # FULL REWRITE — 2450 -> ~4000 LOC, F -> A+
 
 MistHelper.py                       # Lines 18791-18807 ONLY (FirmwareManager.create body)

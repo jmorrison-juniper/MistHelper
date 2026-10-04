@@ -18,7 +18,7 @@ from urllib.parse import unquote  # WHY: Read the metric name back from the requ
 
 import pytest  # WHY: Parametrize the FR-006 cases and capture the log.
 
-from src.export.site_insights.site_metric_operation import SiteMetricOperation, SiteRunContext
+from src.operations.exporting.export.site_insights.site_metric_operation import SiteMetricOperation, SiteRunContext
 
 SITE_ID = "site-hq"  # WHY: A fixed site identifier for the path.
 SITE_NAME = "HQ Site"  # WHY: The site name that tags each record and names the report.

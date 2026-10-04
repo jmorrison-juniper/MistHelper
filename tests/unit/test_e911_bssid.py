@@ -1,4 +1,4 @@
-"""Unit tests for E911BSSIDReportGenerator in src/reports/e911_bssid.py."""
+"""Unit tests for E911BSSIDReportGenerator in src/mist/intelligence/reports/e911_bssid.py."""
 
 import logging
 import os
@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.reports.e911_bssid import E911BSSIDReportGenerator, SiteBatchContext
+from src.mist.intelligence.reports.e911_bssid import E911BSSIDReportGenerator, SiteBatchContext
 
 
 # ---------------------------------------------------------------------------
@@ -453,7 +453,9 @@ class TestDisplaySummary:
 
     def test_no_gaps(self, caplog: pytest.LogCaptureFixture):
         """Summary without gaps shows clean message."""
-        caplog.set_level(logging.INFO, logger="src.utils.console")  # 1031: echo() logs INFO on src.utils.console.
+        caplog.set_level(
+            logging.INFO, logger="src.foundation.support.utils.console"
+        )  # 1031: echo() logs INFO on src.foundation.support.utils.console.
         E911BSSIDReportGenerator._display_summary(5, 20, 320, [])
         output = caplog.text
         assert "Sites processed: 5" in output
@@ -461,7 +463,9 @@ class TestDisplaySummary:
 
     def test_with_gaps(self, caplog: pytest.LogCaptureFixture):
         """Summary with gaps lists each one."""
-        caplog.set_level(logging.INFO, logger="src.utils.console")  # 1031: echo() logs INFO on src.utils.console.
+        caplog.set_level(
+            logging.INFO, logger="src.foundation.support.utils.console"
+        )  # 1031: echo() logs INFO on src.foundation.support.utils.console.
         gaps = [{"ap_name": "AP-1", "ap_mac": "aa:bb", "reason": "No map"}]
         E911BSSIDReportGenerator._display_summary(5, 20, 320, gaps)
         output = caplog.text
@@ -558,7 +562,9 @@ class TestHandleRateLimit:
 
     def test_saves_checkpoint_and_returns_false(self, caplog: pytest.LogCaptureFixture):
         """Rate limit handler saves state and returns False."""
-        caplog.set_level(logging.INFO, logger="src.utils.console")  # 1031: echo() logs INFO on src.utils.console.
+        caplog.set_level(
+            logging.INFO, logger="src.foundation.support.utils.console"
+        )  # 1031: echo() logs INFO on src.foundation.support.utils.console.
         org_data = {"sites": {}}
         batch = SiteBatchContext(
             org_id="org-1",
@@ -671,7 +677,9 @@ class TestExecute:
 
     def test_no_aps_exits_early(self, caplog: pytest.LogCaptureFixture):
         """If no APs found, report exits with message."""
-        caplog.set_level(logging.INFO, logger="src.utils.console")  # 1031: echo() logs INFO on src.utils.console.
+        caplog.set_level(
+            logging.INFO, logger="src.foundation.support.utils.console"
+        )  # 1031: echo() logs INFO on src.foundation.support.utils.console.
         mock_api = MagicMock()
 
         def fake_fetch_bulk(*args, **kwargs):
@@ -1076,7 +1084,9 @@ class TestProcessSites:
 
     def test_all_cached_returns_true(self, caplog: pytest.LogCaptureFixture):
         """When all sites are already cached, returns True immediately."""
-        caplog.set_level(logging.INFO, logger="src.utils.console")  # 1031: echo() logs INFO on src.utils.console.
+        caplog.set_level(
+            logging.INFO, logger="src.foundation.support.utils.console"
+        )  # 1031: echo() logs INFO on src.foundation.support.utils.console.
         org_data = {
             "aps": {"aa": {"site_id": "s1"}},
             "sites": {"s1": {}},

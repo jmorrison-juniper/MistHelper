@@ -1,8 +1,8 @@
-"""Unit tests for src/ui/execution/output_formatter.py."""
+"""Unit tests for src/interfaces/visualization/ui/execution/output_formatter.py."""
 
 from __future__ import annotations
 
-from src.ui.execution.output_formatter import APIResponseParser, HierarchicalFormatter
+from src.interfaces.visualization.ui.execution.output_formatter import APIResponseParser, HierarchicalFormatter
 
 
 class _FakeAPIResponse:

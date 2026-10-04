@@ -12,8 +12,11 @@ from scripts.benchmarks.performance_memory import (  # Reuse the measured scenar
     EventFactory,
     PerformanceMemoryHarness,
 )
-from src.utils.performance import privacy  # Check the safe value cache bound.
-from src.utils.performance.sink import DEFAULT_MAX_BYTES, BoundedSink  # Check the queue capacity bound.
+from src.foundation.support.utils.performance import privacy  # Check the safe value cache bound.
+from src.foundation.support.utils.performance.sink import (
+    DEFAULT_MAX_BYTES,
+    BoundedSink,
+)  # Check the queue capacity bound.
 
 _LOGGER = logging.getLogger(__name__)  # Share one logger for this test module.
 

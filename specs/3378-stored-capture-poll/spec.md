@@ -15,7 +15,7 @@ words are `verified`, `failed`, and `write_failed` (`FINISHED_STATES` in
 The worker process holds the progress of each live capture in memory. A restart
 empties that memory, and a trim removes the oldest record after 200 records.
 The status endpoint then reads the stored capture instead, through
-`stored_progress` in `src/upgrade_portal/app/routes/capture.py`.
+`stored_progress` in `src/interfaces/portals/upgrade_portal/app/routes/capture.py`.
 
 That function copies the `capture_status` field of the document into `state`.
 The shipped store writes `complete`, `partial`, or `failed` into
@@ -68,7 +68,7 @@ An operator opens the page of a capture that ended before a restart.
 
 - **FR-001**: A stored capture reports `verified` in `state` when the read-back
   holds. It reports `failed` in every other case. The live path uses the same
-  rule (`progress_change` in `src/upgrade_portal/capture/collector.py`).
+  rule (`progress_change` in `src/interfaces/portals/upgrade_portal/capture/collector.py`).
 - **FR-002**: The `verified` field keeps the read-back result, so `state` holds
   `verified` exactly when `verified` holds true.
 - **FR-003**: The stored document keeps its `capture_status` field. The history

@@ -91,11 +91,11 @@ The structural count excludes the dictionary and noun-cluster false positives.
 
 | File | Structural |
 | - | - |
-| src/org/org_synthetic_probes_manager.py | 319 |
-| src/firmware/org_ap_upgrader.py | 228 |
-| src/firmware/firmware_manager.py | 210 |
-| src/firmware/bulk_ap_upgrader.py | 173 |
-| src/maps/maps_manager.py | 165 |
+| src/mist/resources/org/org_synthetic_probes_manager.py | 319 |
+| src/operations/execution/firmware/org_ap_upgrader.py | 228 |
+| src/operations/execution/firmware/firmware_manager.py | 210 |
+| src/operations/execution/firmware/bulk_ap_upgrader.py | 173 |
+| src/interfaces/visualization/maps/maps_manager.py | 165 |
 
 **Decision**: The `firmware` and `org` clusters carry the most work. Order the
 judgment phases to take the worst clusters first.

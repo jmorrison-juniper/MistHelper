@@ -50,7 +50,7 @@ specs/1785-testinteractive/
 ### Source Code
 
 ```text
-src/troubleshooting/interactive_test_runner.py
+src/mist/intelligence/troubleshooting/interactive_test_runner.py
 MistHelper.py
 tests/unit/troubleshooting/test_interactive_test_runner.py
 changelog.d/issue-1785-testinteractive.md

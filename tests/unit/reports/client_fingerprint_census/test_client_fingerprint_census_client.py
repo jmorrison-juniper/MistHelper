@@ -8,8 +8,8 @@ from typing import Any  # WHY: pytest monkeypatch fakes receive SDK-shaped value
 import pytest  # WHY: assert HTTP failure behavior.
 from pytest import MonkeyPatch  # WHY: replace SDK functions without network calls.
 
-from src.reports.client_fingerprint_census import client as client_module
-from src.reports.client_fingerprint_census.client import ClientFingerprintCensusClient
+from src.mist.intelligence.reports.client_fingerprint_census import client as client_module
+from src.mist.intelligence.reports.client_fingerprint_census.client import ClientFingerprintCensusClient
 
 
 def test_count_uses_org_path_with_site_filter_and_pages_response(monkeypatch: MonkeyPatch) -> None:

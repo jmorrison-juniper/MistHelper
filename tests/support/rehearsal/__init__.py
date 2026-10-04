@@ -7,7 +7,7 @@ Why:
     the harness that joins them to the shipped run driver.
 
     The package holds no settle rule and no phase order. Every rule that the
-    rehearsal proves lives in ``src/upgrade_portal/upgrade``.
+    rehearsal proves lives in ``src/interfaces/portals/upgrade_portal/upgrade``.
 """
 
 from tests.support.rehearsal.clock import START_EPOCH_SECONDS, RehearsalClock

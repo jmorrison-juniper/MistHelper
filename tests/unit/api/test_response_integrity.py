@@ -16,7 +16,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.api.response_integrity import ResponseIntegrityChecker
+from src.mist.access.api.response_integrity import ResponseIntegrityChecker
 
 
 def _reply(body: str | None = None, payload: object = None) -> SimpleNamespace:
@@ -117,7 +117,7 @@ class TestReportParseFailure:
 
     def test_the_report_names_the_subject_the_scope_and_the_length(self, caplog: pytest.LogCaptureFixture) -> None:
         """The operator must be able to act on the message alone."""
-        with caplog.at_level(logging.ERROR, logger="src.api.response_integrity"):
+        with caplog.at_level(logging.ERROR, logger="src.mist.access.api.response_integrity"):
             ResponseIntegrityChecker.report_parse_failure(_reply("this is not json", {}), "listOrgSites", "org-1")
         assert len(caplog.records) == 1  # Exactly one error, so no duplicate noise.
         message = caplog.records[0].getMessage()
@@ -128,7 +128,7 @@ class TestReportParseFailure:
 
     def test_the_report_survives_a_response_without_a_body(self, caplog: pytest.LogCaptureFixture) -> None:
         """The report must never raise while it explains a failure."""
-        with caplog.at_level(logging.ERROR, logger="src.api.response_integrity"):
+        with caplog.at_level(logging.ERROR, logger="src.mist.access.api.response_integrity"):
             ResponseIntegrityChecker.report_parse_failure(MagicMock(), "listOrgSites", "org-1")
         assert len(caplog.records) == 1  # The report still reaches the operator.
         assert "0 characters" in caplog.records[0].getMessage()  # A non-string body reports zero.

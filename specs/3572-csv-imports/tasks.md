@@ -4,10 +4,10 @@
 
 ## Phase 1 - Package foundations
 
-- [x] T001 Create `src/inventory/csv_imports/__init__.py` with the public operation export.
-- [x] T002 Create `src/inventory/csv_imports/model.py` with import definitions, CSV parsing, validation, preview masking, confirmation parsing, and result-row helpers.
-- [x] T003 Create `src/inventory/csv_imports/client.py` with a `CsvImportClient` class that calls the five SDK `*File` functions.
-- [x] T004 Create `src/inventory/csv_imports/operation.py` with `CsvImportOperation.run()` and dependency seams for tests.
+- [x] T001 Create `src/mist/resources/inventory/csv_imports/__init__.py` with the public operation export.
+- [x] T002 Create `src/mist/resources/inventory/csv_imports/model.py` with import definitions, CSV parsing, validation, preview masking, confirmation parsing, and result-row helpers.
+- [x] T003 Create `src/mist/resources/inventory/csv_imports/client.py` with a `CsvImportClient` class that calls the five SDK `*File` functions.
+- [x] T004 Create `src/mist/resources/inventory/csv_imports/operation.py` with `CsvImportOperation.run()` and dependency seams for tests.
 
 ## Phase 2 - Tests
 
@@ -32,6 +32,6 @@
 ## Deferred integration tasks
 
 - [ ] D001 Register menu 292 in `MistHelper.py`. Deferred because the fleet contract forbids edits to `MistHelper.py`.
-- [ ] D002 Add menu 292 to `src/utils/operation_registry.py` as `destructive`. Deferred because the fleet contract forbids edits to `operation_registry.py`.
+- [ ] D002 Add menu 292 to `src/foundation/support/utils/operation_registry.py` as `destructive`. Deferred because the fleet contract forbids edits to `operation_registry.py`.
 - [ ] D003 Add generated menu references and README operation count updates. Deferred because the fleet contract forbids these files.
 - [ ] D004 Add any endpoint primary key strategy required by the integration pull request. Deferred because this feature writes an audit CSV directly and the contract forbids edits to `endpoint_primary_key_strategies.py`.

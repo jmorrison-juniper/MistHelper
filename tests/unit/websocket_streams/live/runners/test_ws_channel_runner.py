@@ -6,18 +6,26 @@ import threading  # Fake sinks use a condition to wait for runner callbacks.
 import time  # Reconnect timing tests compare elapsed time.
 
 import pytest  # The post-open stop test patches the transport client.
-
 import websocket  # Tests build the same handshake exceptions as websocket-client.
-from src.websocket_streams.catalog.model import (
+
+from src.mist.realtime.websocket_streams.catalog.model import (
     ChannelDefinition,
     FieldKind,
     FieldSpec,
 )  # Tests build local definitions.
-from src.websocket_streams.intake.start_request.models import StartRequest  # Tests build checked requests by hand.
-from src.websocket_streams.live.runners.channel import runner as channel_runner_module  # Patch health timing.
-from src.websocket_streams.live.runners.channel.runner import ChannelStreamRunner  # Test channel behavior.
-from src.websocket_streams.live.sessions.record.state import SessionState  # Fake sinks record final state.
-from src.websocket_streams.live.transport.endpoint import (
+from src.mist.realtime.websocket_streams.intake.start_request.models import (
+    StartRequest,
+)  # Tests build checked requests by hand.
+from src.mist.realtime.websocket_streams.live.runners.channel import (
+    runner as channel_runner_module,
+)  # Patch health timing.
+from src.mist.realtime.websocket_streams.live.runners.channel.runner import (
+    ChannelStreamRunner,
+)  # Test channel behavior.
+from src.mist.realtime.websocket_streams.live.sessions.record.state import (
+    SessionState,
+)  # Fake sinks record final state.
+from src.mist.realtime.websocket_streams.live.transport.endpoint import (
     ConnectFailure,
     MistStreamEndpoint,
     TransportProfile,
@@ -405,7 +413,7 @@ class TestChannelStreamRunner:
         StopAfterOpenClient.instances = []  # Clear prior fake-client instances.
         StopAfterOpenClient.stop_event = runner._state.runtime.stop  # Inject the runner stop event for the fake client.
         monkeypatch.setattr(
-            "src.websocket_streams.live.runners.channel.runner.StreamClient", StopAfterOpenClient
+            "src.mist.realtime.websocket_streams.live.runners.channel.runner.StreamClient", StopAfterOpenClient
         )  # Replace only this test's stream client.
         runner.start()  # Start the daemon reader thread.
         finished = sink.wait_for_finished(1, 1.0)  # Wait for stopped state.

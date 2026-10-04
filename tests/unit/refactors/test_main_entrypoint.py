@@ -1,4 +1,4 @@
-"""Wave 2 P2 coverage for src/refactors/main_entrypoint.py (initiative #1018).
+"""Wave 2 P2 coverage for src/foundation/support/refactors/main_entrypoint.py (initiative #1018).
 
 Covers `MainEntrypoint.run()` end-to-end plus the `_MistHelperProxy` `__getattr__`
 lazy-lookup path. MistHelper module attributes are monkeypatched with MagicMock
@@ -16,14 +16,16 @@ from unittest.mock import MagicMock, call  # WHY: FR-008 mandates MagicMock(spec
 import pytest  # WHY: monkeypatch fixture for MistHelper attribute overrides.
 
 import MistHelper  # WHY: cache tests exercise the runtime menu and mode dispatch tables.
-from src.config.source_dependency_resolver import SourceDependencyResolver  # WHY: assert the source dependency seam.
-from src.refactors.main_entrypoint import (  # WHY: SUT direct imports.
+from src.foundation.runtime.config.source_dependency_resolver import (
+    SourceDependencyResolver,
+)  # WHY: assert the source dependency seam.
+from src.foundation.support.refactors.main_entrypoint import (  # WHY: SUT direct imports.
     _MH,
     AppContext,
     ApplicationBootstrap,
     MainEntrypoint,
 )
-from src.utils.menu_entry import MenuEntry  # WHY: menu cache fixtures use the production row model.
+from src.foundation.support.utils.menu_entry import MenuEntry  # WHY: menu cache fixtures use the production row model.
 
 
 @pytest.fixture

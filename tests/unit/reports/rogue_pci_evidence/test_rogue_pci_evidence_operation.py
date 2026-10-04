@@ -2,7 +2,9 @@
 
 from types import SimpleNamespace  # Build small fake dependency objects.
 
-from src.reports.rogue_pci_evidence.operation import RoguePciEvidencePack  # Import the operation under test.
+from src.mist.intelligence.reports.rogue_pci_evidence.operation import (
+    RoguePciEvidencePack,
+)  # Import the operation under test.
 
 
 class _FakeConfigUtils:
@@ -87,8 +89,12 @@ def test_operation_writes_three_outputs_without_prompt(monkeypatch, tmp_path):
         DataExporter=_FakeDataExporter,
         FilePathUtils=_FakeFilePathUtils,
     )
-    monkeypatch.setattr("src.reports.rogue_pci_evidence.operation.SourceDependencyResolver", fake_deps)  # Patch deps.
-    monkeypatch.setattr("src.reports.rogue_pci_evidence.operation.RoguePciEvidenceClient", _FakeClient)  # Patch client.
+    monkeypatch.setattr(
+        "src.mist.intelligence.reports.rogue_pci_evidence.operation.SourceDependencyResolver", fake_deps
+    )  # Patch deps.
+    monkeypatch.setattr(
+        "src.mist.intelligence.reports.rogue_pci_evidence.operation.RoguePciEvidenceClient", _FakeClient
+    )  # Patch client.
     RoguePciEvidencePack.run()  # Run the operation with no prompt.
     filenames = [write[1] for write in _FakeDataExporter.writes]  # Read the exported file names.
     _FakeFilePathUtils.summary_text = (tmp_path / "RogueEvidenceSummary.md").read_text(

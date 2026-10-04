@@ -1,4 +1,4 @@
-"""Tests for src.firmware.org_ap_upgrader -- OrgLevelAPFirmwareUpgrader.
+"""Tests for src.operations.execution.firmware.org_ap_upgrader -- OrgLevelAPFirmwareUpgrader.
 
 Covers: initialization, MSP mode selection, MSP/org selection, site scope,
 AP discovery, firmware stats, version selection, upgrade configuration,
@@ -28,7 +28,7 @@ with patch.dict(
         "mistapi.api.v1.sites.devices": MagicMock(),
     },
 ):
-    from src.firmware.org_ap_upgrader import OrgLevelAPFirmwareUpgrader
+    from src.operations.execution.firmware.org_ap_upgrader import OrgLevelAPFirmwareUpgrader
 
 
 # ===================================================================

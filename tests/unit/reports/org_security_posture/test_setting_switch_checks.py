@@ -1,12 +1,12 @@
 """Tests for switch-style organization setting checks."""
 
-from src.reports.org_security_posture.checks.access import (
+from src.mist.intelligence.reports.org_security_posture.checks.access import (
     JunosShellRoleAccessDisabledCheck,
     PacketCaptureDisabledCheck,
     RemoteShellDisabledCheck,
     StaleCleanupEnabledCheck,
 )
-from src.reports.org_security_posture.models import OrganizationSecuritySourceData
+from src.mist.intelligence.reports.org_security_posture.models import OrganizationSecuritySourceData
 from tests.unit.reports.org_security_posture.fixtures.representative_org_security_posture import (
     RepresentativeOrgSecurityPostureFixture,
 )

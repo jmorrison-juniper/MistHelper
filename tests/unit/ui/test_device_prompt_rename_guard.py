@@ -2,7 +2,7 @@
 
 Issue #431 removed ``PromptUtils.select_device`` and made
 ``PromptUtils.select_device_id_from_inventory`` the one device prompt. One call
-site in ``src/export/site_insights/device_metric_operation.py`` kept the old
+site in ``src/operations/exporting/export/site_insights/device_metric_operation.py`` kept the old
 name. No unit test covered it, so menu 76 raised ``AttributeError`` until a live
 ``--testinteractive`` run found it.
 
@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from src.ui.prompt_utils import PromptUtils
+from src.interfaces.visualization.ui.prompt_utils import PromptUtils
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SCANNED_DIRS = ("src", "web_portal")
@@ -78,7 +78,7 @@ def test_no_source_file_calls_the_removed_prompt() -> None:
 
 @pytest.mark.parametrize(
     "module_path",
-    ["src/export/site_insights/device_metric_operation.py"],
+    ["src/operations/exporting/export/site_insights/device_metric_operation.py"],
 )
 def test_known_regression_site_uses_canonical_prompt(module_path: str) -> None:
     """The menu 76 module must call the canonical prompt.

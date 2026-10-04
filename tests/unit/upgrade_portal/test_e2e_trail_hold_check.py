@@ -18,7 +18,9 @@ from typing import Any  # A trail row holds values of mixed types.
 
 import pytest  # Check each failure of the check.
 
-from src.upgrade_portal.runtime import lock  # The module that writes the trail and names each action.
+from src.interfaces.portals.upgrade_portal.runtime import (
+    lock,
+)  # The module that writes the trail and names each action.
 from tests.support.upgrade_portal_e2e.records.audit import TrailHoldCheck, TrailLine  # The classes under test.
 
 SITE_ID = "66666666-6666-6666-6666-666666666666"  # The site of the test of the lost action answer.

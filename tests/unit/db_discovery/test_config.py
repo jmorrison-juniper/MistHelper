@@ -13,9 +13,9 @@ from arango.exceptions import ArangoServerError
 from arango.request import Request
 from arango.response import Response
 
-from src.db import DatabaseConfig, host_resolver
-from src.db.host_resolver import ResolutionResult
-from src.db.router import DatabaseRouter
+from src.foundation.persistence.db import DatabaseConfig, host_resolver
+from src.foundation.persistence.db.host_resolver import ResolutionResult
+from src.foundation.persistence.db.router import DatabaseRouter
 from tests.unit.db_discovery.fakes import ResolverHarness
 
 DISCOVERY_ENV = {
@@ -70,7 +70,7 @@ class TestPartialBackendBoundary:
 
     def test_capture_store_skips_driver_when_only_redis_resolves(self, discovery: ResolverHarness) -> None:
         """A failed ArangoDB name must not repeat through the portal driver."""
-        from src.upgrade_portal.capture import store
+        from src.interfaces.portals.upgrade_portal.capture import store
 
         resolver = discovery.lookup
         resolver.answers["missing-redis.invalid"] = resolver.addresses()
@@ -88,7 +88,7 @@ class TestPartialBackendBoundary:
 
     def test_redis_preflight_reuses_the_failed_configuration_lookup(self, discovery: ResolverHarness) -> None:
         """A resolved ArangoDB name must not leave repeated Redis DNS."""
-        from src.db.redis_writer import RedisTimeSeriesWriter
+        from src.foundation.persistence.db.redis_writer import RedisTimeSeriesWriter
 
         resolver = discovery.lookup
         resolver.answers["missing-arango.invalid"] = resolver.addresses()
@@ -111,8 +111,8 @@ class TestPartialBackendBoundary:
         self, discovery: ResolverHarness, record_property
     ) -> None:
         """Refuse the unresolved backend before its driver while keeping Redis available."""
-        from src.db import arango_writer
-        from src.db import router as router_module
+        from src.foundation.persistence.db import arango_writer
+        from src.foundation.persistence.db import router as router_module
 
         config = self._partial_config(discovery)
         discovery.lookup.blocked_hosts.add("missing-arango.invalid")
@@ -203,7 +203,7 @@ class TestCaptureStoreRecovery:
     """Retry absent handles while preserving configured client URLs and errors."""
 
     def test_later_store_is_visible_after_expiry_and_keeps_tls_url(self, discovery: ResolverHarness) -> None:
-        from src.upgrade_portal.capture import store
+        from src.interfaces.portals.upgrade_portal.capture import store
 
         secret = "controlled" + "-url-value"
         environment = DISCOVERY_ENV | REQUIRED_ENV | {"ARANGO_HOST": f"https://uri-user:{secret}@store.invalid:9443"}
@@ -245,7 +245,7 @@ class TestCaptureStoreRecovery:
     def test_http_4xx_and_http_5xx_keep_driver_fallback_semantics(
         self, discovery: ResolverHarness, status_code: int
     ) -> None:
-        from src.upgrade_portal.capture import store
+        from src.interfaces.portals.upgrade_portal.capture import store
 
         discovery.lookup.answers["missing-arango.invalid"] = discovery.lookup.addresses()
         with (
@@ -258,7 +258,7 @@ class TestCaptureStoreRecovery:
         assert len(discovery.lookup.calls) == 2
 
     def test_malformed_json_driver_error_remains_visible(self, discovery: ResolverHarness) -> None:
-        from src.upgrade_portal.capture import store
+        from src.interfaces.portals.upgrade_portal.capture import store
 
         discovery.lookup.answers["missing-arango.invalid"] = discovery.lookup.addresses()
         with (
@@ -276,7 +276,7 @@ class TestCaptureStoreRecovery:
     ) -> None:
         import logging
 
-        from src.upgrade_portal.capture import store
+        from src.interfaces.portals.upgrade_portal.capture import store
 
         secret = "controlled" + "-uri-value"
         environment = DISCOVERY_ENV | REQUIRED_ENV | {"ARANGO_HOST": f"https://uri-user:{secret}@store.invalid:9443"}
@@ -305,7 +305,7 @@ class TestPreflightCacheEdges:
         assert discovery.lookup.calls == []
 
     def test_explicit_standalone_store_creates_no_dns_or_client(self, discovery: ResolverHarness) -> None:
-        from src.upgrade_portal.capture import store
+        from src.interfaces.portals.upgrade_portal.capture import store
 
         with patch.object(store, "ArangoClient") as client:
             assert store._open_database(DatabaseConfig(standalone_mode=True)) is None
@@ -313,7 +313,7 @@ class TestPreflightCacheEdges:
         assert discovery.lookup.calls == []
 
     def test_redis_json_and_timeseries_share_one_preflight_result(self, discovery: ResolverHarness) -> None:
-        from src.db import redis_writer
+        from src.foundation.persistence.db import redis_writer
 
         discovery.lookup.answers["missing-redis.invalid"] = discovery.lookup.addresses()
         with (
@@ -331,7 +331,7 @@ class TestPreflightCacheEdges:
     def test_redis_preflight_has_a_real_deadline_and_preserves_error_cause(
         self, discovery: ResolverHarness, record_property
     ) -> None:
-        from src.db.redis_writer import RedisTimeSeriesWriter
+        from src.foundation.persistence.db.redis_writer import RedisTimeSeriesWriter
 
         discovery.lookup.blocked_hosts.add("blocked-redis.invalid")
         started = time.monotonic()

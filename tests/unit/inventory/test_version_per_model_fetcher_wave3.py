@@ -1,7 +1,7 @@
 """Wave 3 top-up tests for VersionPerModelFetcher (initiative 1018).
 
 Targets the uncovered branches in
-``src/inventory/inventory_summary/version_per_model_fetcher.py``. All
+``src/mist/resources/inventory/inventory_summary/version_per_model_fetcher.py``. All
 network calls into ``_parent.OrgDeviceInventorySummaryCore`` are
 monkeypatched so the fetcher executes in-process with no live API.
 
@@ -22,8 +22,8 @@ from __future__ import annotations  # WHY: PEP 604 unions across the module.
 import pytest  # WHY: monkeypatch fixture + parametrize for exception branches.
 
 # WHY: SUT + parent module used to intercept the internal inventory-fetch calls.
-from src.inventory import org_device_inventory_summary as _parent
-from src.inventory.inventory_summary.version_per_model_fetcher import (
+from src.mist.resources.inventory import org_device_inventory_summary as _parent
+from src.mist.resources.inventory.inventory_summary.version_per_model_fetcher import (
     VersionPerModelFetcher,
 )
 

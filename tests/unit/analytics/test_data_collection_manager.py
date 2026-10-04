@@ -1,6 +1,6 @@
 """Unit tests for DataCollectionManager (issue #878 tranche 7 -- un-omit).
 
-Covers every static method on ``src.analytics.data_collection_manager``:
+Covers every static method on ``src.mist.intelligence.analytics.data_collection_manager``:
 ``_print_continuous_loop_banner`` (banner lines),
 ``continuous_loop`` (stop-signal / KeyboardInterrupt / Exception branches),
 ``_check_stop_signal`` (delegates to ConfigUtils),
@@ -20,11 +20,11 @@ from unittest.mock import MagicMock, call, patch
 
 import pytest
 
-from src.analytics.data_collection_manager import DataCollectionManager
+from src.mist.intelligence.analytics.data_collection_manager import DataCollectionManager
 from tests.support.thread_scoped_sleep import ThreadScopedSleepSpy
 
 # WHY: caplog must target the module logger so INFO/WARNING/ERROR records surface (issue #886).
-_LOGGER_NAME = "src.analytics.data_collection_manager"
+_LOGGER_NAME = "src.mist.intelligence.analytics.data_collection_manager"
 
 
 def _make_mh(**extra):
@@ -102,7 +102,7 @@ def test_check_stop_signal_delegates_to_config_utils() -> None:
     """Returns whatever ConfigUtils.check_stop_signal reports (coerced to bool)."""
     fake_mh = _make_mh()
     fake_mh.ConfigUtils.check_stop_signal.return_value = True
-    with patch("src.analytics.data_collection_manager.SourceDependencyResolver", fake_mh):
+    with patch("src.mist.intelligence.analytics.data_collection_manager.SourceDependencyResolver", fake_mh):
         assert DataCollectionManager._check_stop_signal() is True
     fake_mh.ConfigUtils.check_stop_signal.assert_called_once_with()
 
@@ -111,7 +111,7 @@ def test_check_stop_signal_false_path() -> None:
     """False result flows through."""
     fake_mh = _make_mh()
     fake_mh.ConfigUtils.check_stop_signal.return_value = False
-    with patch("src.analytics.data_collection_manager.SourceDependencyResolver", fake_mh):
+    with patch("src.mist.intelligence.analytics.data_collection_manager.SourceDependencyResolver", fake_mh):
         assert DataCollectionManager._check_stop_signal() is False
 
 
@@ -122,8 +122,8 @@ def test_collection_cycle_steps_returns_five_labelled_callables() -> None:
     """Returns the five ordered (banner, callable) tuples."""
     fake_mh = _make_mh()
     with (
-        patch("src.analytics.data_collection_manager.OrgInventoryExporter") as inv,
-        patch("src.analytics.data_collection_manager.SourceDependencyResolver", fake_mh),
+        patch("src.mist.intelligence.analytics.data_collection_manager.OrgInventoryExporter") as inv,
+        patch("src.mist.intelligence.analytics.data_collection_manager.SourceDependencyResolver", fake_mh),
     ):
         steps = DataCollectionManager._collection_cycle_steps()
     assert len(steps) == 5
@@ -153,7 +153,7 @@ def test_execute_collection_cycle_runs_all_steps_and_paces(caplog: pytest.LogCap
     sleep = ThreadScopedSleepSpy()  # Thread-scoped, so a leaked thread cannot shift this record.
     with (
         patch.object(DataCollectionManager, "_collection_cycle_steps", return_value=steps),
-        patch("src.analytics.data_collection_manager.time.sleep", new=sleep),
+        patch("src.mist.intelligence.analytics.data_collection_manager.time.sleep", new=sleep),
     ):
         DataCollectionManager._execute_collection_cycle(loop_count=3)
     step_a.assert_called_once_with()
@@ -168,7 +168,7 @@ def test_execute_collection_cycle_propagates_keyboard_interrupt() -> None:
     steps = [("  boom", step)]
     with (
         patch.object(DataCollectionManager, "_collection_cycle_steps", return_value=steps),
-        patch("src.analytics.data_collection_manager.time.sleep"),
+        patch("src.mist.intelligence.analytics.data_collection_manager.time.sleep"),
     ):
         with pytest.raises(KeyboardInterrupt):
             DataCollectionManager._execute_collection_cycle(loop_count=1)
@@ -182,7 +182,7 @@ def test_execute_collection_cycle_logs_and_backs_off_on_exception(caplog: pytest
     sleep = ThreadScopedSleepSpy()  # Thread-scoped, so a leaked thread cannot add a false back-off.
     with (
         patch.object(DataCollectionManager, "_collection_cycle_steps", return_value=steps),
-        patch("src.analytics.data_collection_manager.time.sleep", new=sleep),
+        patch("src.mist.intelligence.analytics.data_collection_manager.time.sleep", new=sleep),
     ):
         DataCollectionManager._execute_collection_cycle(loop_count=7)
     out = "\n".join(r.getMessage() for r in caplog.records)
@@ -223,8 +223,8 @@ def test_refresh_support_data_invokes_check_and_generate_for_each_pair() -> None
     """All seven filename/func pairs are refreshed via CacheUtils."""
     fake_mh = _make_mh()
     with (
-        patch("src.analytics.data_collection_manager.OrgInventoryExporter") as inv,
-        patch("src.analytics.data_collection_manager.SourceDependencyResolver", fake_mh),
+        patch("src.mist.intelligence.analytics.data_collection_manager.OrgInventoryExporter") as inv,
+        patch("src.mist.intelligence.analytics.data_collection_manager.SourceDependencyResolver", fake_mh),
     ):
         DataCollectionManager._refresh_support_data()
     call_args = fake_mh.CacheUtils.check_and_generate_csv.call_args_list
@@ -271,8 +271,8 @@ def test_load_support_data_sources_returns_all_six_groups_and_speedtest_when_pre
 
     fake_mh.CacheUtils.load_csv_grouped_by_key.side_effect = loader
     with (
-        patch("src.analytics.data_collection_manager.os.path.exists", return_value=True),
-        patch("src.analytics.data_collection_manager.SourceDependencyResolver", fake_mh),
+        patch("src.mist.intelligence.analytics.data_collection_manager.os.path.exists", return_value=True),
+        patch("src.mist.intelligence.analytics.data_collection_manager.SourceDependencyResolver", fake_mh),
     ):
         out = DataCollectionManager._load_support_data_sources()
     assert out["site_data"] == grouped["SiteList.csv"]
@@ -290,8 +290,8 @@ def test_load_support_data_sources_speedtest_empty_when_file_missing() -> None:
     fake_mh.FilePathUtils.get_csv_path.return_value = "/data/AllGatewayTestResults.csv"
     fake_mh.CacheUtils.load_csv_grouped_by_key.return_value = {}
     with (
-        patch("src.analytics.data_collection_manager.os.path.exists", return_value=False),
-        patch("src.analytics.data_collection_manager.SourceDependencyResolver", fake_mh),
+        patch("src.mist.intelligence.analytics.data_collection_manager.os.path.exists", return_value=False),
+        patch("src.mist.intelligence.analytics.data_collection_manager.SourceDependencyResolver", fake_mh),
     ):
         out = DataCollectionManager._load_support_data_sources()
     assert out["speedtest_data"] == {}
@@ -314,7 +314,7 @@ def test_generate_site_packages_skips_sites_without_alarms_or_events() -> None:
         "port_stats_data": {},
         "speedtest_data": {},
     }
-    with patch("src.analytics.data_collection_manager.SourceDependencyResolver", fake_mh):
+    with patch("src.mist.intelligence.analytics.data_collection_manager.SourceDependencyResolver", fake_mh):
         DataCollectionManager._generate_site_packages(data_sources)
     fake_mh.CacheUtils.write_support_data_to_csv.assert_not_called()
 
@@ -331,7 +331,7 @@ def test_generate_site_packages_writes_package_for_site_with_alarms() -> None:
         "port_stats_data": {"s1": [{"ps": 1}]},
         "speedtest_data": {"s1": [{"st": 1}]},
     }
-    with patch("src.analytics.data_collection_manager.SourceDependencyResolver", fake_mh):
+    with patch("src.mist.intelligence.analytics.data_collection_manager.SourceDependencyResolver", fake_mh):
         DataCollectionManager._generate_site_packages(data_sources)
     fake_mh.CacheUtils.write_support_data_to_csv.assert_called_once()
     written_data, filename = fake_mh.CacheUtils.write_support_data_to_csv.call_args[0]
@@ -358,7 +358,7 @@ def test_generate_site_packages_writes_package_for_site_with_events_only() -> No
         "port_stats_data": {},
         "speedtest_data": {},
     }
-    with patch("src.analytics.data_collection_manager.SourceDependencyResolver", fake_mh):
+    with patch("src.mist.intelligence.analytics.data_collection_manager.SourceDependencyResolver", fake_mh):
         DataCollectionManager._generate_site_packages(data_sources)
     fake_mh.CacheUtils.write_support_data_to_csv.assert_called_once()
     _, filename = fake_mh.CacheUtils.write_support_data_to_csv.call_args[0]

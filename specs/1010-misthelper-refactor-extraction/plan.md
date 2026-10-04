@@ -5,7 +5,7 @@
 
 ## Summary
 
-Systematically decompose `MistHelper.py` (~28K-line entrypoint monolith) into cohesive class modules under `src/refactors/` by consuming the analyzer catalog at `refactor_candidates.md`. The first-pass budget covers exactly 13 candidates — 2 Unused (delete only) and 11 Single-Use (move + rewrite single callsite + delete original) — processed in strict serial order (Unused first, then Single-Use LOC-DESC). Each extraction is a single PR that (a) creates the target module (or folds into an existing sibling module for `AddressComparisonCounters`), (b) rewrites the single callsite atomically, (c) deletes the original symbol from `MistHelper.py`, (d) resolves any analyzer `guideline_flags` in-flight, and (e) lands with all 15 functional CI jobs green and A+/100 compliance on affected files. No wrapper shims. No parallel branches. No `--admin` bypass except where `mergeStateStatus` is genuinely BLOCKED/DIRTY/BEHIND with root cause documented. Between merges, the analyzer is re-run and `refactor_candidates.md` is regenerated before the next PR is dispatched, so the queue always reflects the current `main` head.
+Systematically decompose `MistHelper.py` (~28K-line entrypoint monolith) into cohesive class modules under `src/foundation/support/refactors/` by consuming the analyzer catalog at `refactor_candidates.md`. The first-pass budget covers exactly 13 candidates — 2 Unused (delete only) and 11 Single-Use (move + rewrite single callsite + delete original) — processed in strict serial order (Unused first, then Single-Use LOC-DESC). Each extraction is a single PR that (a) creates the target module (or folds into an existing sibling module for `AddressComparisonCounters`), (b) rewrites the single callsite atomically, (c) deletes the original symbol from `MistHelper.py`, (d) resolves any analyzer `guideline_flags` in-flight, and (e) lands with all 15 functional CI jobs green and A+/100 compliance on affected files. No wrapper shims. No parallel branches. No `--admin` bypass except where `mergeStateStatus` is genuinely BLOCKED/DIRTY/BEHIND with root cause documented. Between merges, the analyzer is re-run and `refactor_candidates.md` is regenerated before the next PR is dispatched, so the queue always reflects the current `main` head.
 
 ## Technical Context
 
@@ -32,7 +32,7 @@ Constitution version 1.4.0 (ratified 2026-03-05). Evaluated per the seven core p
 | III. Safety-First Development (destructive operations gated) | PASS | Extraction moves existing behavior; no new destructive operations introduced. Pre-existing safety gates on `SQLiteDatabaseWriter` and other candidates are preserved verbatim. |
 | IV. Full Deployment Pipeline (15 CI jobs must pass, no --admin bypass) | PASS + REINFORCED | FR-011 codifies the CI gate; `feedback_no_admin_bypass.md` guidance applied — check `mergeStateStatus` before considering any bypass. |
 | V. Observability & Logging (structured, ASCII-only, `safe_input`, `pathlib.Path`) | PASS + REINFORCED | FR-007 mandates ASCII-only logs, `safe_input()`, `pathlib.Path` in every extracted module. Analyzer `guideline_flags` covering these are resolved in the extraction PR (FR-006). |
-| VI. Inline Comments Every 5-10 Lines (NON-NEGOTIABLE) | PASS + REINFORCED | Each new module under `src/refactors/` must land A+/100, which requires the inline-comment cadence. Any `missing_inline_comments` flag on extracted code is resolved in the same PR (FR-006). |
+| VI. Inline Comments Every 5-10 Lines (NON-NEGOTIABLE) | PASS + REINFORCED | Each new module under `src/foundation/support/refactors/` must land A+/100, which requires the inline-comment cadence. Any `missing_inline_comments` flag on extracted code is resolved in the same PR (FR-006). |
 | VII. Action Logging Before Every Non-Trivial Action (NON-NEGOTIABLE) | PASS + REINFORCED | Any `missing_action_logging` flag on extracted code is resolved in the same PR (FR-006). Constitution's `[LOGIN]`, `[MENU]`, `[EXECUTE]`, `[SUCCESS]`, `[FAILURE]` prefix convention is preserved. |
 
 **Result**: All seven principles pass. Two principles (VI, VII) are NON-NEGOTIABLE and are reinforced rather than at risk. No violations require Complexity Tracking entries.
@@ -83,7 +83,7 @@ src/
     └── csv_comparator.py                    # EXISTING — receives AddressComparisonCounters (PR-07) per FR-015
 ```
 
-**Structure Decision**: Single-project layout. Every Single-Use extraction lands under `src/refactors/` with a per-symbol module file, **except** `AddressComparisonCounters` which folds into `src/inventory/csv_comparator.py::CsvComparatorManager` because its sole caller already lives there (FR-015). The existing `src/refactors/serial_cc/` sub-package validates this layout convention. Unused deletions (`PerformanceMonitor`, `MapViewerConfig`) create no new files — the definition is simply removed from `MistHelper.py`.
+**Structure Decision**: Single-project layout. Every Single-Use extraction lands under `src/foundation/support/refactors/` with a per-symbol module file, **except** `AddressComparisonCounters` which folds into `src/mist/resources/inventory/csv_comparator.py::CsvComparatorManager` because its sole caller already lives there (FR-015). The existing `src/foundation/support/refactors/serial_cc/` sub-package validates this layout convention. Unused deletions (`PerformanceMonitor`, `MapViewerConfig`) create no new files — the definition is simply removed from `MistHelper.py`.
 
 ### PR Dispatch Queue (Authoritative Order)
 
@@ -93,17 +93,17 @@ Per FR-001 (Unused first, then Single-Use LOC-DESC) and FR-014 (exact 13-candida
 |----|--------|-----------|-----|-------------------------|-------------|
 | 01 | Unused | `PerformanceMonitor` | 40 | 365-404 | DELETE (no new file) |
 | 02 | Unused | `MapViewerConfig` | 9 | 441-449 | DELETE (no new file) |
-| 03 | Single-Use | `SQLiteDatabaseWriter` | 316 | 6949-7265 | `src/refactors/sqlite_database_writer.py` |
-| 04 | Single-Use | `TUILauncher` | 154 | (see analyzer output) | `src/refactors/tui_launcher.py` |
-| 05 | Single-Use | `DataDirectoryChecker` | 74 | (see analyzer output) | `src/refactors/data_directory_checker.py` |
-| 06 | Single-Use | `MapsManagerLauncher` | 64 | (see analyzer output) | `src/refactors/maps_manager_launcher.py` |
-| 07 | Single-Use | `AddressComparisonCounters` | 62 | (see analyzer output) | `src/inventory/csv_comparator.py::CsvComparatorManager` (FR-015 exception) |
-| 08 | Single-Use | `ServicePingManager` | 50 | (see analyzer output) | `src/refactors/service_ping_manager.py` |
-| 09 | Single-Use | `WAN2MigrationManager` | 48 | (see analyzer output) | `src/refactors/wan2_migration_manager.py` |
-| 10 | Single-Use | `run_systematic_test` (module-level fn) | ~35 | (see analyzer output) | `src/refactors/systematic_test_runner.py` (as class method per FR-005) |
-| 11 | Single-Use | `switch_to_interactive_login` (module-level fn) | ~30 | (see analyzer output) | `src/refactors/interactive_login_switcher.py` (as class method) |
-| 12 | Single-Use | `run_interactive_test` (module-level fn) | ~28 | (see analyzer output) | `src/refactors/interactive_test_runner.py` (as class method) |
-| 13 | Single-Use | `listen_keyboard` (module-level fn) | ~24 | (see analyzer output) | `src/refactors/keyboard_listener.py` (as class method) |
+| 03 | Single-Use | `SQLiteDatabaseWriter` | 316 | 6949-7265 | `src/foundation/support/refactors/sqlite_database_writer.py` |
+| 04 | Single-Use | `TUILauncher` | 154 | (see analyzer output) | `src/foundation/support/refactors/tui_launcher.py` |
+| 05 | Single-Use | `DataDirectoryChecker` | 74 | (see analyzer output) | `src/foundation/support/refactors/data_directory_checker.py` |
+| 06 | Single-Use | `MapsManagerLauncher` | 64 | (see analyzer output) | `src/foundation/support/refactors/maps_manager_launcher.py` |
+| 07 | Single-Use | `AddressComparisonCounters` | 62 | (see analyzer output) | `src/mist/resources/inventory/csv_comparator.py::CsvComparatorManager` (FR-015 exception) |
+| 08 | Single-Use | `ServicePingManager` | 50 | (see analyzer output) | `src/foundation/support/refactors/service_ping_manager.py` |
+| 09 | Single-Use | `WAN2MigrationManager` | 48 | (see analyzer output) | `src/foundation/support/refactors/wan2_migration_manager.py` |
+| 10 | Single-Use | `run_systematic_test` (module-level fn) | ~35 | (see analyzer output) | `src/foundation/support/refactors/systematic_test_runner.py` (as class method per FR-005) |
+| 11 | Single-Use | `switch_to_interactive_login` (module-level fn) | ~30 | (see analyzer output) | `src/foundation/support/refactors/interactive_login_switcher.py` (as class method) |
+| 12 | Single-Use | `run_interactive_test` (module-level fn) | ~28 | (see analyzer output) | `src/foundation/support/refactors/interactive_test_runner.py` (as class method) |
+| 13 | Single-Use | `listen_keyboard` (module-level fn) | ~24 | (see analyzer output) | `src/foundation/support/refactors/keyboard_listener.py` (as class method) |
 
 LOC figures are the analyzer's snapshot at spec creation; each PR uses the *fresh* analyzer output post-preceding-merge per FR-010, so line numbers may shift within tolerance.
 

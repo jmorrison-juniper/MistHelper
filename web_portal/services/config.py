@@ -26,7 +26,7 @@ import uuid
 
 from flask import Flask, abort, jsonify, request
 
-from src.utils.environment_utils import EnvironmentUtils
+from src.foundation.support.utils.environment_utils import EnvironmentUtils
 
 # Issue #3087: one sentence states the cause and the action. The operator used
 # to read a JSON parser message, which named neither.

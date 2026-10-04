@@ -37,7 +37,7 @@ each other count. The paragraph gets the test identifier
 
 | File | Change |
 | - | - |
-| `src/upgrade_portal/app/assets/templates/upgrade/org_options.html` | Two `set` statements for the count and the noun. The note prints both. The paragraph gets the test identifier. |
+| `src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_options.html` | Two `set` statements for the count and the noun. The note prints both. The paragraph gets the test identifier. |
 | `tests/contract/upgrade_portal/test_issue_3447_selected_site_count.py` | New. One site, two sites, a retry of one site, the end of that retry, and a retry of two sites. |
 | `tests/e2e/upgrade_portal/test_selected_site_count.py` | New. The note in a real browser for one site and for two sites, with one screenshot each. |
 | `changelog.d/issue-3447-selected-site-count.md` | New. The release note. |

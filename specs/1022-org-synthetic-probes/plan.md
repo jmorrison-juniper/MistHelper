@@ -13,26 +13,26 @@
 ```text
 MistHelper.py  (menu wire-up + dispatch)
     │
-    └─▶ src/org/org_synthetic_probes_manager.py  (this feature — new module)
+    └─▶ src/mist/resources/org/org_synthetic_probes_manager.py  (this feature — new module)
             │
             ├─ Loads: data/zscaler_client_connector_probes.json
             ├─ Loads: data/zscaler_cenr_hostnames.json
             ├─ Uses:  mistapi.api.v1.orgs.setting.getOrgSettings / updateOrgSettings
             └─ Emits: rich per-probe status via existing logging + stdout
 
-src/utils/operation_registry.py  (append: "206": {"category": "destructive", ...})
+src/foundation/support/utils/operation_registry.py  (append: "206": {"category": "destructive", ...})
 tests/unit/org/test_org_synthetic_probes_manager.py  (new)
 ```
 
 ### 1.1 Module boundary
 
-The new module `src/org/org_synthetic_probes_manager.py` exposes a single public callable:
+The new module `src/mist/resources/org/org_synthetic_probes_manager.py` exposes a single public callable:
 
 ```python
 def manage_org_synthetic_probes(mist_session, org_id: str) -> None: ...
 ```
 
-This mirrors the signature convention of neighbouring org-level exporters/managers in `src/org/` and is what the menu dispatch entry will call.
+This mirrors the signature convention of neighbouring org-level exporters/managers in `src/mist/resources/org/` and is what the menu dispatch entry will call.
 
 ### 1.2 Internal helpers (all module-private, `_`-prefixed)
 
@@ -74,14 +74,14 @@ Probe name = `zcc-<role>-<fqdn-slug>` where slug is FQDN with `.` → `-` and lo
 
 ### Phase B — Module skeleton + tests
 
-1. Create `src/org/__init__.py` if not present (verify first).
-2. Create `src/org/org_synthetic_probes_manager.py` with public entry + all `_`-prefixed helpers documented per DOCS.md (Google-style docstrings, ≥90% coverage).
+1. Create `src/mist/resources/org/__init__.py` if not present (verify first).
+2. Create `src/mist/resources/org/org_synthetic_probes_manager.py` with public entry + all `_`-prefixed helpers documented per DOCS.md (Google-style docstrings, ≥90% coverage).
 3. Create `tests/unit/org/__init__.py` if not present.
 4. Create `tests/unit/org/test_org_synthetic_probes_manager.py` covering: Story 1 build-from-empty, Story 2 merge, Story 3 swap preserving foreign, wildcard skipping, empty-VLAN rejection, no-changes-required, malformed-source-file failure.
 
 ### Phase C — Registry + menu wire-up
 
-5. Append `"206": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Modifies org synthetic_test.custom_probes"}` to `src/utils/operation_registry.py`.
+5. Append `"206": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Modifies org synthetic_test.custom_probes"}` to `src/foundation/support/utils/operation_registry.py`.
 6. Import the manager in `MistHelper.py` and add `"206": (lambda mist_session, org_id: manage_org_synthetic_probes(mist_session, org_id), "Manage org Zscaler synthetic probes")` to the `menu_actions` dispatch table (line ~5755).
 
 ### Phase D — Quality gates

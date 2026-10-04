@@ -2,7 +2,7 @@
 
 import json
 
-from src.audit.renderer import AuditReportRenderer
+from src.mist.access.audit.renderer import AuditReportRenderer
 
 with open("data/orgaudit-filtered.json", encoding="utf-8") as f:
     raw = json.load(f)

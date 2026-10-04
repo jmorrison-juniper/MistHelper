@@ -6,7 +6,9 @@ import logging  # caplog checks warning lines.
 
 import pytest  # The settings tests use the caplog fixture type.
 
-from src.websocket_streams.live.sessions.settings import StreamSettings  # The tests cover environment parsing.
+from src.mist.realtime.websocket_streams.live.sessions.settings import (
+    StreamSettings,
+)  # The tests cover environment parsing.
 
 
 class TestStreamSettings:

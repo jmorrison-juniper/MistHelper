@@ -4,7 +4,9 @@ from __future__ import annotations  # Keep test annotations import-safe.
 
 from typing import Any  # Type simple response doubles for offline tests.
 
-from src.reports.site_variable_audit.client import SiteVariableAuditClient  # Test the client contract.
+from src.mist.intelligence.reports.site_variable_audit.client import (
+    SiteVariableAuditClient,
+)  # Test the client contract.
 
 
 class _MistApiDouble:

@@ -70,7 +70,7 @@ The skill requires the agent to confirm host, scope, safety class, pagination, a
 - **FR-001**: The skill MUST name the installed `mistapi` package as the source for SDK call signatures.
 - **FR-002**: The skill MUST name the OpenAPI 3.1 JSON and YAML files as the source for HTTP paths and schemas.
 - **FR-003**: The skill MUST route readers to `documentation/api/INDEX.md` and endpoint pages for discovery.
-- **FR-004**: The skill MUST route MistHelper support claims to `src/export/endpoint_catalog.py` and `src/utils/operation_registry.py`.
+- **FR-004**: The skill MUST route MistHelper support claims to `src/operations/exporting/export/endpoint_catalog.py` and `src/foundation/support/utils/operation_registry.py`.
 - **FR-005**: The skill MUST warn that generated notes and saved examples require verification.
 - **FR-006**: The skill MUST state that no live Mist request occurs for documentation or code examples.
 - **FR-007**: The skill MUST warn about stale SDK calls such as `getSite` and `listSites`.

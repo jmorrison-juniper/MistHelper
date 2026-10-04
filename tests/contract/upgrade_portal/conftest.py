@@ -21,7 +21,7 @@ from typing import Any
 
 import pytest
 
-from src.upgrade_portal.app.routes import auth  # The auth route owns the dependency row seam key.
+from src.interfaces.portals.upgrade_portal.app.routes import auth  # The auth route owns the dependency row seam key.
 from tests.support.lock_store_double import FakeLockStore  # The store stand-in that keeps every test off Redis.
 
 logger = logging.getLogger(__name__)
@@ -230,7 +230,7 @@ def portal_app(monkeypatch: pytest.MonkeyPatch) -> Any:
         The Flask application with the test settings applied.
     """
     factory = pytest.importorskip(  # WHY: The factory arrives at task T027.
-        "src.upgrade_portal.app.factory",
+        "src.interfaces.portals.upgrade_portal.app.factory",
         reason="The capture portal application factory is not built yet.",
     )
     logger.info("Build the capture portal application for a contract test")  # WHY: ASCII, %s style, no credential.

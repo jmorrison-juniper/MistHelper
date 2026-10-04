@@ -264,7 +264,7 @@ with a test.
 2. Each new start route refuses a run whose type does not match its own.
 3. The ordinary body builder never names a BIOS endpoint, an FPGA endpoint, or a
    Mist Edge endpoint. The allowed endpoint tuple of
-   `src/firmware/upgrade_service.py` already holds this rule for the ordinary
+   `src/operations/execution/firmware/upgrade_service.py` already holds this rule for the ordinary
    run, and each new workflow gets its own tuple.
 4. A BIOS request and an FPGA request always carry `device_ids`, and they never
    carry `models`.

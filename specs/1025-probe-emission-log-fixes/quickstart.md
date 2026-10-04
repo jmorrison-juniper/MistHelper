@@ -159,11 +159,11 @@ The GitHub Actions pipeline runs the full `pytest` suite plus `ruff`,
 The 1025 changes are expected to be green out of the box on these:
 
 ```bash
-ruff check src/org/org_synthetic_probes_manager.py
-black --check src/org/org_synthetic_probes_manager.py
-mypy src/org/org_synthetic_probes_manager.py
-interrogate -v src/org/org_synthetic_probes_manager.py
-pytest tests/unit/org/ --cov=src.org.org_synthetic_probes_manager
+ruff check src/mist/resources/org/org_synthetic_probes_manager.py
+black --check src/mist/resources/org/org_synthetic_probes_manager.py
+mypy src/mist/resources/org/org_synthetic_probes_manager.py
+interrogate -v src/mist/resources/org/org_synthetic_probes_manager.py
+pytest tests/unit/org/ --cov=src.mist.resources.org.org_synthetic_probes_manager
 ```
 
 Docstring coverage target: `>= 90 %` (per project-level `DOCS.md`).

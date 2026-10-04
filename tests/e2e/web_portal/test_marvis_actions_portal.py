@@ -36,7 +36,7 @@ from typing import Any
 
 import pytest
 
-from src.marvis.actions.model import CATEGORY_NAMES, RESOLUTION_CODES, TOPIC_NAMES
+from src.mist.intelligence.marvis.actions.model import CATEGORY_NAMES, RESOLUTION_CODES, TOPIC_NAMES
 
 logger = logging.getLogger(__name__)  # A module logger keeps the record source readable.
 

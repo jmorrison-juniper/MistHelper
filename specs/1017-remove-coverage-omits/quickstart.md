@@ -16,10 +16,10 @@ pip install -e .[dev]
 
 ```bash
 # Per-file coverage
-pytest --cov=src.utils.environment_utils \
-       --cov=src.utils.filter_operator_engine \
-       --cov=src.troubleshooting.troubleshoot_utils \
-       --cov=src.input.prompt_client_utils \
+pytest --cov=src.foundation.support.utils.environment_utils \
+       --cov=src.foundation.support.utils.filter_operator_engine \
+       --cov=src.mist.intelligence.troubleshooting.troubleshoot_utils \
+       --cov=src.foundation.runtime.input.prompt_client_utils \
        --cov-report=term-missing \
        --cov-fail-under=90 \
        tests/unit/utils/ tests/unit/troubleshooting/ tests/unit/input/
@@ -28,18 +28,18 @@ pytest --cov=src.utils.environment_utils \
 pytest --cov --cov-fail-under=90
 
 # pyproject omit removed
-grep -c "src/utils/environment_utils.py" pyproject.toml    # -> 0
-grep -c "src/utils/filter_operator_engine.py" pyproject.toml  # -> 0
+grep -c "src/foundation/support/utils/environment_utils.py" pyproject.toml    # -> 0
+grep -c "src/foundation/support/utils/filter_operator_engine.py" pyproject.toml  # -> 0
 ```
 
 ## PR-2 — Export helpers (5 modules)
 
 ```bash
-pytest --cov=src.export.org_export_utils \
-       --cov=src.export.license_export_utils \
-       --cov=src.export.const_definitions_exporter \
-       --cov=src.export.gateway_test_exporter \
-       --cov=src.export.data_exporter \
+pytest --cov=src.operations.exporting.export.org_export_utils \
+       --cov=src.operations.exporting.export.license_export_utils \
+       --cov=src.operations.exporting.export.const_definitions_exporter \
+       --cov=src.operations.exporting.export.gateway_test_exporter \
+       --cov=src.operations.exporting.export.data_exporter \
        --cov-report=term-missing \
        --cov-fail-under=90 \
        tests/unit/export/
@@ -48,7 +48,7 @@ pytest --cov=src.export.org_export_utils \
 ## PR-3 — API / DB / analytics (7 modules)
 
 ```bash
-pytest --cov=src.api --cov=src.cache --cov=src.db --cov=src.analytics \
+pytest --cov=src.mist.access.api --cov=src.foundation.persistence.cache --cov=src.foundation.persistence.db --cov=src.mist.intelligence.analytics \
        --cov-report=term-missing --cov-fail-under=90 \
        tests/unit/api/ tests/unit/cache/ tests/unit/db/ tests/unit/analytics/
 
@@ -61,19 +61,19 @@ grep -n "def mock_config" tests/conftest.py
 
 ```bash
 # PR-4a
-pytest --cov=src.export.org_device_stats_exporter \
-       --cov=src.export.org_template_exporter \
-       --cov=src.export.org_admin_exporter \
+pytest --cov=src.operations.exporting.export.org_device_stats_exporter \
+       --cov=src.operations.exporting.export.org_template_exporter \
+       --cov=src.operations.exporting.export.org_admin_exporter \
        --cov-fail-under=90 tests/unit/export/
 
 # Verify golden-file conftest introduced
 grep -n "def golden_json_writer\|def golden_csv_writer" tests/unit/export/conftest.py
 
 # PR-4b
-pytest --cov=src.export.org_config_exporter \
-       --cov=src.export.org_alarm_event_exporter \
-       --cov=src.export.org_client_security_exporter \
-       --cov=src.export.org_site_exporter \
+pytest --cov=src.operations.exporting.export.org_config_exporter \
+       --cov=src.operations.exporting.export.org_alarm_event_exporter \
+       --cov=src.operations.exporting.export.org_client_security_exporter \
+       --cov=src.operations.exporting.export.org_site_exporter \
        --cov-fail-under=90 tests/unit/export/
 ```
 
@@ -81,26 +81,26 @@ pytest --cov=src.export.org_config_exporter \
 
 ```bash
 # PR-5a
-pytest --cov=src.export.site_anomaly_exporter \
-       --cov=src.export.site_config_exporter \
-       --cov=src.export.site_device_exporter \
-       --cov=src.export.sites_by_ap_model_exporter \
-       --cov=src.gateway.gateway_ha_exporter \
+pytest --cov=src.operations.exporting.export.site_anomaly_exporter \
+       --cov=src.operations.exporting.export.site_config_exporter \
+       --cov=src.operations.exporting.export.site_device_exporter \
+       --cov=src.operations.exporting.export.sites_by_ap_model_exporter \
+       --cov=src.mist.resources.gateway.gateway_ha_exporter \
        --cov-fail-under=90 tests/unit/export/ tests/unit/gateway/
 
 # PR-5b
-pytest --cov=src.reports --cov=src.inventory.org_device_inventory_summary_facade \
+pytest --cov=src.mist.intelligence.reports --cov=src.mist.resources.inventory.org_device_inventory_summary_facade \
        --cov-fail-under=90 tests/unit/reports/ tests/unit/inventory/
 ```
 
 ## PR-6 — State-changing managers (5 modules, Principle III)
 
 ```bash
-pytest --cov=src.device.arp_command_manager \
-       --cov=src.device.device_reboot_manager \
-       --cov=src.firmware.firmware_manager \
-       --cov=src.site.bulk_radius_wlan_config_manager \
-       --cov=src.org.org_ticket_manager \
+pytest --cov=src.mist.resources.device.arp_command_manager \
+       --cov=src.mist.resources.device.device_reboot_manager \
+       --cov=src.operations.execution.firmware.firmware_manager \
+       --cov=src.mist.resources.site.bulk_radius_wlan_config_manager \
+       --cov=src.mist.resources.org.org_ticket_manager \
        --cov-fail-under=90 \
        tests/unit/device/ tests/unit/firmware/ tests/unit/site/ tests/unit/org/
 
@@ -112,9 +112,9 @@ grep -rn "confirmation.*UPGRADE\|reject\|early-return\|early_return" \
 ## PR-7 — SSH / TUI / prompt (3 modules, FR-015 candidates)
 
 ```bash
-pytest --cov=src.ssh.cli_shell_manager \
-       --cov=src.ui.tui \
-       --cov=src.ui.prompt_utils \
+pytest --cov=src.operations.execution.ssh.cli_shell_manager \
+       --cov=src.interfaces.visualization.ui.tui \
+       --cov=src.interfaces.visualization.ui.prompt_utils \
        --cov-fail-under=90 \
        tests/unit/ssh/ tests/unit/ui/
 
@@ -122,7 +122,7 @@ pytest --cov=src.ssh.cli_shell_manager \
 python -c "
 import tomllib, pathlib
 data = tomllib.loads(pathlib.Path('pyproject.toml').read_text())
-retained = {'tests/*','venv/*','.venv/*','setup.py','*/site-packages/*','src/maps/*'}
+retained = {'tests/*','venv/*','.venv/*','setup.py','*/site-packages/*','src/interfaces/visualization/maps/*'}
 hatches = [e for e in data['tool']['coverage']['run']['omit'] if e not in retained]
 assert len(hatches) <= 2, f'FR-015 violated: {len(hatches)} > 2'
 print(f'FR-015 OK: {len(hatches)} escape hatches remain')
@@ -133,15 +133,15 @@ print(f'FR-015 OK: {len(hatches)} escape hatches remain')
 
 ```bash
 # PR-8a (toplevel)
-pytest --cov=src.websocket --cov-fail-under=90 tests/unit/websocket/
+pytest --cov=src.mist.realtime.websocket --cov-fail-under=90 tests/unit/websocket/
 grep -n "def mock_websocket_transport" tests/unit/websocket/conftest.py
 
 # PR-8b (diagnostics)
-pytest --cov=src.websocket.diagnostics --cov-fail-under=90 \
+pytest --cov=src.mist.realtime.websocket.diagnostics --cov-fail-under=90 \
        tests/unit/websocket/diagnostics/
 
 # PR-8c (polling)
-pytest --cov=src.websocket.polling --cov-fail-under=90 \
+pytest --cov=src.mist.realtime.websocket.polling --cov-fail-under=90 \
        tests/unit/websocket/polling/
 ```
 
@@ -152,7 +152,7 @@ python -c "
 import tomllib, pathlib
 data = tomllib.loads(pathlib.Path('pyproject.toml').read_text())
 omit = data['tool']['coverage']['run']['omit']
-expected = ['tests/*','venv/*','.venv/*','setup.py','*/site-packages/*','src/maps/*']
+expected = ['tests/*','venv/*','.venv/*','setup.py','*/site-packages/*','src/interfaces/visualization/maps/*']
 assert sorted(omit) == sorted(expected), f'SC-001 violated: {sorted(omit)}'
 print('SC-001 OK')
 "

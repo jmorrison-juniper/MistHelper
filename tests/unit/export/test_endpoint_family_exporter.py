@@ -9,7 +9,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.export.endpoint_family_exporter import (
+from src.foundation.support.refactors.endpoint_primary_key_strategies import ENDPOINT_PRIMARY_KEY_STRATEGIES
+from src.operations.exporting.export.endpoint_family_exporter import (
     _MSP_DETAIL_OPS,
     _ORG_DETAIL_OPS,
     _OTHER_DETAIL_OPS,
@@ -20,13 +21,12 @@ from src.export.endpoint_family_exporter import (
     EndpointFamilyExporter,
     _EndpointFamilyOp,
 )
-from src.export.endpoint_family_exporter import (
+from src.operations.exporting.export.endpoint_family_exporter import (
     _ORG_DETAIL_OPS as FAILURE_MODE_ORG_DETAIL_OPS,
 )
-from src.export.endpoint_family_exporter import (
+from src.operations.exporting.export.endpoint_family_exporter import (
     EndpointFamilyExporter as FailureModeEndpointFamilyExporter,
 )
-from src.refactors.endpoint_primary_key_strategies import ENDPOINT_PRIMARY_KEY_STRATEGIES
 
 EXPECTED_BUCKET_COUNTS = {
     "SITE_SLE": 15,
@@ -126,7 +126,9 @@ def test_prompt_sequence_preserves_identifier_order(entry: _EndpointFamilyOp) ->
     fake.InputUtils.safe_input.side_effect = _safe_input
     with (
         patch.object(EndpointFamilyExporter, "_mist_helper", return_value=fake),
-        patch("src.export.endpoint_family_exporter.InputUtils.prompt_msp_id", return_value="msp-one"),
+        patch(
+            "src.operations.exporting.export.endpoint_family_exporter.InputUtils.prompt_msp_id", return_value="msp-one"
+        ),
     ):
         result = EndpointFamilyExporter._collect_arguments(entry)
     assert result is not None and len(result.values) == len(entry.required)  # Require all collected identifiers.
@@ -187,7 +189,7 @@ def test_run_uses_identifiers_in_order() -> None:
             "_collect_arguments",
             return_value=MagicMock(values=("site-one", "map-one"), label="target"),
         ),
-        patch("src.export.endpoint_family_exporter.mistapi.get_all", return_value=[]),
+        patch("src.operations.exporting.export.endpoint_family_exporter.mistapi.get_all", return_value=[]),
     ):
         EndpointFamilyExporter._run(entry)
     callable_obj.assert_called_once_with(fake.apisession, "site-one", "map-one")
@@ -240,7 +242,7 @@ if TYPE_CHECKING:
     from mistapi import APISession
     from requests import Response
 
-    from src.export.simple_endpoint_exporter import _SimpleEndpointOp
+    from src.operations.exporting.export.simple_endpoint_exporter import _SimpleEndpointOp
     from tests.guardrails.test_endpoint_catalog import GuardDecision, RegistrationInput, RegistrationKind
 
 _catalog_guards = importlib.import_module("tests.guardrails.test_endpoint_catalog")
@@ -316,7 +318,7 @@ def test_retained_trend_rows_and_keys_are_exact(
     operation: str, required: tuple[str, ...], issue: int, description: str
 ) -> None:
     """Both supported rows retain their original SDK routing and keys."""
-    from src.export.endpoint_catalog import ENDPOINT_CATALOG, INTERACTIVE_SAFE, EndpointInfo
+    from src.operations.exporting.export.endpoint_catalog import ENDPOINT_CATALOG, INTERACTIVE_SAFE, EndpointInfo
 
     row = next(entry for entry in _SITE_SLE_OPS if entry.operation == operation)
     assert row == _EndpointFamilyOp(operation, "mistapi.api.v1.sites.sle", required, (issue,))
@@ -429,10 +431,10 @@ def local_trend_session(
 @pytest.fixture
 def local_trend_context(local_trend_session: APISession, monkeypatch: pytest.MonkeyPatch) -> None:
     """Seed real context and selectors through the existing local setters."""
-    from src.config import runtime_settings
-    from src.config.config_utils import ConfigUtils
-    from src.config.source_dependency_resolver import SourceDependencyResolver
-    from src.refactors.main_entrypoint import AppContext, MainEntrypoint
+    from src.foundation.runtime.config import runtime_settings
+    from src.foundation.runtime.config.config_utils import ConfigUtils
+    from src.foundation.runtime.config.source_dependency_resolver import SourceDependencyResolver
+    from src.foundation.support.refactors.main_entrypoint import AppContext, MainEntrypoint
 
     session = local_trend_session
     monkeypatch.setattr(MainEntrypoint, "context", AppContext(mistapi=_mistapi, apisession=session, org_id="org-3335"))
@@ -459,7 +461,7 @@ def local_trend_boundaries(
     local_trend_session: APISession, local_trend_context: None, trend_sdk_absence: bool
 ) -> Iterator[tuple[APISession, MagicMock, MagicMock]]:
     """Only local HTTP transport and final output can use stand-ins."""
-    from src.export.data_exporter import DataExporter
+    from src.operations.exporting.export.data_exporter import DataExporter
 
     with (
         patch.object(

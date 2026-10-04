@@ -5,7 +5,7 @@
 ### Automated Safe-Operation Test (`--test`)
 
 Behavior:
-- Dynamically enumerates the 73 `safe` menu items from `src/utils/operation_registry.py`
+- Dynamically enumerates the 73 `safe` menu items from `src/foundation/support/utils/operation_registry.py`
 - Skips resource-intensive, interactive, WebSocket, continuous-loop, and destructive operations
 - Executes in optimized order (fastest endpoints first) to minimize cumulative runtime
 - Saves partial results even on rate limiting or exceptions

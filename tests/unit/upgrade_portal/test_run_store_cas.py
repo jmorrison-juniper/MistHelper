@@ -7,8 +7,8 @@ from threading import Barrier, Lock, Thread
 from types import SimpleNamespace
 from typing import Any
 
-from src.upgrade_portal.app import wiring
-from src.upgrade_portal.app.routes import upgrade
+from src.interfaces.portals.upgrade_portal.app import wiring
+from src.interfaces.portals.upgrade_portal.app.routes import upgrade
 
 
 def test_memory_run_store_allows_one_concurrent_child_claim() -> None:

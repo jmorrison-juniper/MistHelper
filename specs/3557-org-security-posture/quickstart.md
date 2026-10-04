@@ -14,7 +14,7 @@ This guide validates the planned feature after implementation.
 Run the feature handler in test mode after implementation:
 
 ```powershell
-python -c "from src.reports.org_security_posture.runner import OrgSecurityPostureChecklist; OrgSecurityPostureChecklist.run(test_mode=True)"
+python -c "from src.mist.intelligence.reports.org_security_posture.runner import OrgSecurityPostureChecklist; OrgSecurityPostureChecklist.run(test_mode=True)"
 ```
 
 Expected result:

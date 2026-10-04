@@ -6,7 +6,7 @@ from typing import Any
 
 from pytest import LogCaptureFixture
 
-from src.reports.org_security_posture.io.sources import OrgSecurityPostureSourceClient
+from src.mist.intelligence.reports.org_security_posture.io.sources import OrgSecurityPostureSourceClient
 
 
 @dataclass(frozen=True)

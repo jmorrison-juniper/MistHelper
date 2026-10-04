@@ -1,4 +1,4 @@
-"""Wave 5 P2 coverage for src/gateway/overrides/device_data_fetcher.py (initiative #1018).
+"""Wave 5 P2 coverage for src/mist/resources/gateway/overrides/device_data_fetcher.py (initiative #1018).
 
 Covers all static methods of ``DeviceDataFetcher``:
 - ``fetch_all`` routes to fast vs sequential based on size + fast flag.
@@ -23,8 +23,8 @@ from unittest.mock import MagicMock, patch  # WHY: mandatory spec= mocks + patch
 
 import pytest  # WHY: fixtures + parametrize.
 
-from src.gateway.overrides import _deps  # WHY: patch module-level DI slots directly.
-from src.gateway.overrides.device_data_fetcher import DeviceDataFetcher  # WHY: SUT direct import.
+from src.mist.resources.gateway.overrides import _deps  # WHY: patch module-level DI slots directly.
+from src.mist.resources.gateway.overrides.device_data_fetcher import DeviceDataFetcher  # WHY: SUT direct import.
 
 
 class TestFetchAll:

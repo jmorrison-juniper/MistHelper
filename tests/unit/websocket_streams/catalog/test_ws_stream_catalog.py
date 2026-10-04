@@ -5,10 +5,17 @@ import logging  # Capture the catalog logging levels.
 
 import pytest  # Type the log capture fixture.
 
-from src.websocket_streams.catalog.channels import ChannelCatalog  # Import channel catalog.
-from src.websocket_streams.catalog.model import Safety, UtilityDefinition  # Check the class of the shell entry.
-from src.websocket_streams.catalog.registry.stream_catalog import StreamCatalog  # Import the registry leaf class.
-from src.websocket_streams.catalog.utilities.utility_catalog import UtilityCatalog  # Import the utility leaf class.
+from src.mist.realtime.websocket_streams.catalog.channels import ChannelCatalog  # Import channel catalog.
+from src.mist.realtime.websocket_streams.catalog.model import (
+    Safety,
+    UtilityDefinition,
+)  # Check the class of the shell entry.
+from src.mist.realtime.websocket_streams.catalog.registry.stream_catalog import (
+    StreamCatalog,
+)  # Import the registry leaf class.
+from src.mist.realtime.websocket_streams.catalog.utilities.utility_catalog import (
+    UtilityCatalog,
+)  # Import the utility leaf class.
 
 
 def build_catalog(changes: bool = False, shell: bool = False) -> StreamCatalog:

@@ -41,7 +41,7 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`OrgSiteExporter.sites`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/org_site_exporter.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`OrgSiteExporter.sites`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/org_site_exporter.py) | Reference |
 
 ## Menu 2
 
@@ -52,7 +52,7 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`APICoreFetchUtils.all_sites_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/api/api_core_fetch_utils.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`APICoreFetchUtils.all_sites_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/access/api/api_core_fetch_utils.py) | Call |
 
 ## Menu 3
 
@@ -63,7 +63,7 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`APICoreFetchUtils.all_sites_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/api/api_core_fetch_utils.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`APICoreFetchUtils.all_sites_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/access/api/api_core_fetch_utils.py) | Call |
 
 ## Menu 4
 
@@ -74,7 +74,7 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/guests/search` | [`orgs.guests.searchOrgGuestAuthorization`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/guests/search-org-guest-authorization) | [`OrgSiteExporter.current_guests`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/org_site_exporter.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/guests/search` | [`orgs.guests.searchOrgGuestAuthorization`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/guests/search-org-guest-authorization) | [`OrgSiteExporter.current_guests`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/org_site_exporter.py) | Call |
 
 ## Menu 5
 
@@ -85,7 +85,7 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/exports/e911_report` | [`orgs.exports.getOrgE911Report`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/reports/get-org-e911-report) | [`OrgExportUtils.e911_report`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/org_export_utils.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/exports/e911_report` | [`orgs.exports.getOrgE911Report`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/reports/get-org-e911-report) | [`OrgExportUtils.e911_report`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/org_export_utils.py) | Reference |
 
 ## Menu 6
 
@@ -107,9 +107,9 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`APICoreFetchUtils.all_sites_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/api/api_core_fetch_utils.py) | Call |
-| GET | `/api/v1/sites/{site_id}/setting` | [`sites.setting.getSiteSetting`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/setting/get-site-setting) | [`_collect_one_setting`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/analytics/zone_analyzer.py) | Call |
-| GET | `/api/v1/sites/{site_id}/zones` | [`sites.zones.listSiteZones`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/zones/list-site-zones) | [`_collect_one_zone`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/analytics/zone_analyzer.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`APICoreFetchUtils.all_sites_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/access/api/api_core_fetch_utils.py) | Call |
+| GET | `/api/v1/sites/{site_id}/setting` | [`sites.setting.getSiteSetting`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/setting/get-site-setting) | [`_collect_one_setting`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/intelligence/analytics/zone_analyzer.py) | Call |
+| GET | `/api/v1/sites/{site_id}/zones` | [`sites.zones.listSiteZones`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/zones/list-site-zones) | [`_collect_one_zone`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/intelligence/analytics/zone_analyzer.py) | Call |
 
 ## Menu 7
 
@@ -120,8 +120,8 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/inventory` | [`orgs.inventory.getOrgInventory`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/inventory/get-org-inventory) | [`SiteInventoryHealthAnalyzer._fetch_devices`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/analytics/site_inventory_health_analyzer.py) | Call |
-| GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`APICoreFetchUtils.all_sites_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/api/api_core_fetch_utils.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/inventory` | [`orgs.inventory.getOrgInventory`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/inventory/get-org-inventory) | [`SiteInventoryHealthAnalyzer._fetch_devices`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/intelligence/analytics/site_inventory_health_analyzer.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`APICoreFetchUtils.all_sites_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/access/api/api_core_fetch_utils.py) | Call |
 
 ## Menu 8
 
@@ -132,7 +132,7 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/inventory` | [`orgs.inventory.getOrgInventory`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/inventory/get-org-inventory) | [`OrgInventoryExporter.inventory`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/org_inventory_exporter.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/inventory` | [`orgs.inventory.getOrgInventory`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/inventory/get-org-inventory) | [`OrgInventoryExporter.inventory`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/org_inventory_exporter.py) | Reference |
 
 ## Menu 9
 
@@ -143,7 +143,7 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/devices` | [`orgs.devices.listOrgDevices`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/devices/list-org-devices) | [`OrgInventoryExporter.devices`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/org_inventory_exporter.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/devices` | [`orgs.devices.listOrgDevices`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/devices/list-org-devices) | [`OrgInventoryExporter.devices`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/org_inventory_exporter.py) | Reference |
 
 ## Menu 10
 
@@ -154,8 +154,8 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/inventory` | [`orgs.inventory.getOrgInventory`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/inventory/get-org-inventory) | [`APICoreFetchUtils.all_inventory_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/api/api_core_fetch_utils.py) | Call |
-| GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`APICoreFetchUtils.all_sites_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/api/api_core_fetch_utils.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/inventory` | [`orgs.inventory.getOrgInventory`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/inventory/get-org-inventory) | [`APICoreFetchUtils.all_inventory_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/access/api/api_core_fetch_utils.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`APICoreFetchUtils.all_sites_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/access/api/api_core_fetch_utils.py) | Call |
 
 ## Menu 11
 
@@ -166,8 +166,8 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/inventory` | [`orgs.inventory.getOrgInventory`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/inventory/get-org-inventory) | [`APICoreFetchUtils.all_inventory_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/api/api_core_fetch_utils.py) | Call |
-| GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`APICoreFetchUtils.all_sites_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/api/api_core_fetch_utils.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/inventory` | [`orgs.inventory.getOrgInventory`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/inventory/get-org-inventory) | [`APICoreFetchUtils.all_inventory_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/access/api/api_core_fetch_utils.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`APICoreFetchUtils.all_sites_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/access/api/api_core_fetch_utils.py) | Call |
 
 ## Menu 12
 
@@ -188,9 +188,9 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}` | [`orgs.orgs.getOrg`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/get-org) | [`OrgInventoryExporter._resolve_combined_inventory_org_name`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/org_inventory_exporter.py) | Call |
-| GET | `/api/v1/orgs/{org_id}/inventory` | [`orgs.inventory.getOrgInventory`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/inventory/get-org-inventory) | [`OrgInventoryExporter._fetch_and_persist_raw_inventory_variant`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/org_inventory_exporter.py) | Call |
-| GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`APICoreFetchUtils.all_sites_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/api/api_core_fetch_utils.py) | Call |
+| GET | `/api/v1/orgs/{org_id}` | [`orgs.orgs.getOrg`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/get-org) | [`OrgInventoryExporter._resolve_combined_inventory_org_name`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/org_inventory_exporter.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/inventory` | [`orgs.inventory.getOrgInventory`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/inventory/get-org-inventory) | [`OrgInventoryExporter._fetch_and_persist_raw_inventory_variant`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/org_inventory_exporter.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`APICoreFetchUtils.all_sites_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/access/api/api_core_fetch_utils.py) | Call |
 
 ## Menu 13
 
@@ -212,10 +212,10 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/msps/{msp_id}/orgs` | [`msps.orgs.listMspOrgs`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/msps/orgs/list-msp-orgs) | [`_call_list_msp_orgs`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/inventory/org_device_inventory_msp.py) | Call |
-| GET | `/api/v1/orgs/{org_id}` | [`orgs.orgs.getOrg`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/get-org) | [`OrgDeviceInventorySummaryCore._lookup_org_name_from_api`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/inventory/org_device_inventory_summary.py) | Call |
-| GET | `/api/v1/orgs/{org_id}/devices/search` | [`orgs.devices.searchOrgDevices`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/devices/search-org-devices) | [`OrgDeviceInventorySummaryCore._search_switch_page`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/inventory/org_device_inventory_summary.py) | Call |
-| GET | `/api/v1/orgs/{org_id}/inventory` | [`orgs.inventory.getOrgInventory`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/inventory/get-org-inventory) | [`OrgDeviceInventorySummaryCore._fetch_ap_inventory`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/inventory/org_device_inventory_summary.py) | Call |
+| GET | `/api/v1/msps/{msp_id}/orgs` | [`msps.orgs.listMspOrgs`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/msps/orgs/list-msp-orgs) | [`_call_list_msp_orgs`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/resources/inventory/org_device_inventory_msp.py) | Call |
+| GET | `/api/v1/orgs/{org_id}` | [`orgs.orgs.getOrg`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/get-org) | [`OrgDeviceInventorySummaryCore._lookup_org_name_from_api`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/resources/inventory/org_device_inventory_summary.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/devices/search` | [`orgs.devices.searchOrgDevices`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/devices/search-org-devices) | [`OrgDeviceInventorySummaryCore._search_switch_page`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/resources/inventory/org_device_inventory_summary.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/inventory` | [`orgs.inventory.getOrgInventory`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/inventory/get-org-inventory) | [`OrgDeviceInventorySummaryCore._fetch_ap_inventory`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/resources/inventory/org_device_inventory_summary.py) | Call |
 
 ## Menu 15
 
@@ -226,7 +226,7 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/stats/devices` | [`orgs.stats.listOrgDevicesStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/stats/devices/list-org-devices-stats) | [`OrgDeviceStatsExporter.device_stats`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/org_device_stats_exporter.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/stats/devices` | [`orgs.stats.listOrgDevicesStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/stats/devices/list-org-devices-stats) | [`OrgDeviceStatsExporter.device_stats`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/org_device_stats_exporter.py) | Reference |
 
 ## Menu 16
 
@@ -237,7 +237,7 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/stats/vpn_peers/search` | [`orgs.stats.searchOrgPeerPathStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/stats/vpn-peers/search-org-peer-path-stats) | [`OrgDeviceStatsExporter.vpn_peer_stats`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/org_device_stats_exporter.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/stats/vpn_peers/search` | [`orgs.stats.searchOrgPeerPathStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/stats/vpn-peers/search-org-peer-path-stats) | [`OrgDeviceStatsExporter.vpn_peer_stats`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/org_device_stats_exporter.py) | Reference |
 
 ## Menu 17
 
@@ -248,8 +248,8 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/inventory` | [`orgs.inventory.getOrgInventory`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/inventory/get-org-inventory) | [`OrgInventoryExporter.inventory`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/org_inventory_exporter.py) | Reference |
-| GET | `/api/v1/sites/{site_id}/devices/{device_id}/vc` | [`sites.devices.getSiteDeviceVirtualChassis`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/devices/wired/virtual-chassis/get-site-device-virtual-chassis) | [`SwitchVcStatsService._fetch_vc_for_switch`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/refactors/serial_cc/switch_vc_stats.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/inventory` | [`orgs.inventory.getOrgInventory`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/inventory/get-org-inventory) | [`OrgInventoryExporter.inventory`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/org_inventory_exporter.py) | Reference |
+| GET | `/api/v1/sites/{site_id}/devices/{device_id}/vc` | [`sites.devices.getSiteDeviceVirtualChassis`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/devices/wired/virtual-chassis/get-site-device-virtual-chassis) | [`SwitchVcStatsService._fetch_vc_for_switch`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/foundation/support/refactors/serial_cc/switch_vc_stats.py) | Call |
 
 ## Menu 20
 
@@ -260,7 +260,7 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/alarms/search` | [`orgs.alarms.searchOrgAlarms`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/alarms/search-org-alarms) | [`OrgAlarmEventExporter.alarms`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/org_alarm_event_exporter.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/alarms/search` | [`orgs.alarms.searchOrgAlarms`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/alarms/search-org-alarms) | [`OrgAlarmEventExporter.alarms`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/org_alarm_event_exporter.py) | Reference |
 
 ## Menu 21
 
@@ -271,7 +271,7 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/devices/events/search` | [`orgs.devices.searchOrgDeviceEvents`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/devices/search-org-device-events) | [`OrgAlarmEventExporter.device_events`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/org_alarm_event_exporter.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/devices/events/search` | [`orgs.devices.searchOrgDeviceEvents`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/devices/search-org-device-events) | [`OrgAlarmEventExporter.device_events`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/org_alarm_event_exporter.py) | Call |
 
 ## Menu 22
 
@@ -282,7 +282,7 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/logs/search` | [`orgs.logs.listOrgAuditLogs`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/logs/list-org-audit-logs) | [`OrgExportUtils.audit_logs`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/org_export_utils.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/logs/search` | [`orgs.logs.listOrgAuditLogs`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/logs/list-org-audit-logs) | [`OrgExportUtils.audit_logs`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/org_export_utils.py) | Call |
 
 ## Menu 23
 
@@ -293,7 +293,7 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/self/logs` | [`self.logs.listSelfAuditLogs`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/self/audit-logs/list-self-audit-logs) | [`SelfExportUtils.audit_logs`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/self_export_utils.py) | Call |
+| GET | `/api/v1/self/logs` | [`self.logs.listSelfAuditLogs`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/self/audit-logs/list-self-audit-logs) | [`SelfExportUtils.audit_logs`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/self_export_utils.py) | Call |
 
 ## Menu 24
 
@@ -317,11 +317,11 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/secintelprofiles` | [`orgs.secintelprofiles.listOrgSecIntelProfiles`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/secintel-profiles/list-org-sec-intel-profiles) | [`SecurityEventsService._build_flattened_specs`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/refactors/serial_cc/security_events.py) | Call |
-| GET | `/api/v1/orgs/{org_id}/secpolicies` | [`orgs.secpolicies.listOrgSecPolicies`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/security-policies/list-org-sec-policies) | [`SecurityEventsService._build_flattened_specs`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/refactors/serial_cc/security_events.py) | Call |
-| GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`OrgSiteExporter.sites`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/org_site_exporter.py) | Reference |
-| GET | `/api/v1/sites/{site_id}/insights/rogues` | [`sites.insights.listSiteRogueAPs`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/rogues/list-site-rogue-a-ps) | [`_ROGUE_KINDS`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/refactors/serial_cc/security_events.py) | Name |
-| GET | `/api/v1/sites/{site_id}/insights/rogues/clients` | [`sites.insights.listSiteRogueClients`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/rogues/list-site-rogue-clients) | [`SecurityEventsService._export_rogue_combined`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/refactors/serial_cc/security_events.py) | Name |
+| GET | `/api/v1/orgs/{org_id}/secintelprofiles` | [`orgs.secintelprofiles.listOrgSecIntelProfiles`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/secintel-profiles/list-org-sec-intel-profiles) | [`SecurityEventsService._build_flattened_specs`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/foundation/support/refactors/serial_cc/security_events.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/secpolicies` | [`orgs.secpolicies.listOrgSecPolicies`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/security-policies/list-org-sec-policies) | [`SecurityEventsService._build_flattened_specs`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/foundation/support/refactors/serial_cc/security_events.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`OrgSiteExporter.sites`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/org_site_exporter.py) | Reference |
+| GET | `/api/v1/sites/{site_id}/insights/rogues` | [`sites.insights.listSiteRogueAPs`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/rogues/list-site-rogue-a-ps) | [`_ROGUE_KINDS`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/foundation/support/refactors/serial_cc/security_events.py) | Name |
+| GET | `/api/v1/sites/{site_id}/insights/rogues/clients` | [`sites.insights.listSiteRogueClients`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/rogues/list-site-rogue-clients) | [`SecurityEventsService._export_rogue_combined`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/foundation/support/refactors/serial_cc/security_events.py) | Name |
 
 ## Menu 25
 
@@ -332,7 +332,7 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/logs/search` | [`orgs.logs.listOrgAuditLogs`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/logs/list-org-audit-logs) | [`AuditAnalysisOps._fetch_filtered_audit_entries`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/audit/audit_analysis_ops.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/logs/search` | [`orgs.logs.listOrgAuditLogs`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/logs/list-org-audit-logs) | [`AuditAnalysisOps._fetch_filtered_audit_entries`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/access/audit/audit_analysis_ops.py) | Call |
 
 ## Menu 26
 
@@ -343,8 +343,8 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`APICoreFetchUtils.all_sites_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/api/api_core_fetch_utils.py) | Call |
-| GET | `/api/v1/orgs/{org_id}/stats/devices` | [`orgs.stats.listOrgDevicesStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/stats/devices/list-org-devices-stats) | [`OfflineDeviceReporter._fetch_data`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/offline_device_reporter.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`APICoreFetchUtils.all_sites_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/access/api/api_core_fetch_utils.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/stats/devices` | [`orgs.stats.listOrgDevicesStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/stats/devices/list-org-devices-stats) | [`OfflineDeviceReporter._fetch_data`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/intelligence/reports/offline_device_reporter.py) | Call |
 
 ## Menu 27
 
@@ -355,7 +355,7 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/clients/search` | [`orgs.clients.searchOrgWirelessClients`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/clients/wireless/search-org-wireless-clients) | [`OrgClientSecurityExporter.wireless_clients`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/org_client_security_exporter.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/clients/search` | [`orgs.clients.searchOrgWirelessClients`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/clients/wireless/search-org-wireless-clients) | [`OrgClientSecurityExporter.wireless_clients`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/org_client_security_exporter.py) | Reference |
 
 ## Menu 28
 
@@ -366,7 +366,7 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/wired_clients/search` | [`orgs.wired_clients.searchOrgWiredClients`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/clients/wired/search-org-wired-clients) | [`OrgClientSecurityExporter.wired_clients`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/org_client_security_exporter.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/wired_clients/search` | [`orgs.wired_clients.searchOrgWiredClients`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/clients/wired/search-org-wired-clients) | [`OrgClientSecurityExporter.wired_clients`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/org_client_security_exporter.py) | Reference |
 
 ## Menu 29
 
@@ -387,9 +387,9 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`OrgSiteExporter.sites`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/org_site_exporter.py) | Reference |
-| GET | `/api/v1/sites/{site_id}/insights/rogues` | [`sites.insights.listSiteRogueAPs`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/rogues/list-site-rogue-a-ps) | [`OrgClientSecurityExporter._export_rogues`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/org_client_security_exporter.py) | Name |
-| GET | `/api/v1/sites/{site_id}/insights/rogues/clients` | [`sites.insights.listSiteRogueClients`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/rogues/list-site-rogue-clients) | [`OrgClientSecurityExporter.rogue_clients`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/org_client_security_exporter.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`OrgSiteExporter.sites`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/org_site_exporter.py) | Reference |
+| GET | `/api/v1/sites/{site_id}/insights/rogues` | [`sites.insights.listSiteRogueAPs`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/rogues/list-site-rogue-a-ps) | [`OrgClientSecurityExporter._export_rogues`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/org_client_security_exporter.py) | Name |
+| GET | `/api/v1/sites/{site_id}/insights/rogues/clients` | [`sites.insights.listSiteRogueClients`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/rogues/list-site-rogue-clients) | [`OrgClientSecurityExporter.rogue_clients`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/org_client_security_exporter.py) | Reference |
 
 ## Menu 30
 
@@ -400,8 +400,8 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`OrgSiteExporter.sites`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/org_site_exporter.py) | Reference |
-| GET | `/api/v1/sites/{site_id}/insights/rogues` | [`sites.insights.listSiteRogueAPs`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/rogues/list-site-rogue-a-ps) | [`OrgClientSecurityExporter.rogue_aps`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/org_client_security_exporter.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`OrgSiteExporter.sites`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/org_site_exporter.py) | Reference |
+| GET | `/api/v1/sites/{site_id}/insights/rogues` | [`sites.insights.listSiteRogueAPs`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/rogues/list-site-rogue-a-ps) | [`OrgClientSecurityExporter.rogue_aps`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/org_client_security_exporter.py) | Reference |
 
 ## Menu 31
 
@@ -426,12 +426,12 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/gatewaytemplates` | [`orgs.gatewaytemplates.listOrgGatewayTemplates`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/gateway-templates/list-org-gateway-templates) | [`GatewayExportUtils.templates`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/gateway/gateway_export_utils.py) | Call |
-| GET | `/api/v1/orgs/{org_id}/inventory` | [`orgs.inventory.getOrgInventory`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/inventory/get-org-inventory) | [`APICoreFetchUtils.all_inventory_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/api/api_core_fetch_utils.py) | Call |
-| GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`APICoreFetchUtils.all_sites_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/api/api_core_fetch_utils.py) | Call |
-| GET | `/api/v1/sites/{site_id}/devices` | [`sites.devices.listSiteDevices`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/devices/list-site-devices) | [`GatewayExportUtils._finalise_management_ip_output`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/gateway/gateway_export_utils.py) | Name |
-| GET | `/api/v1/sites/{site_id}/devices/{device_id}` | [`sites.devices.getSiteDevice`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/devices/get-site-device) | [`APIFetchUtils._gw_fetch_one_config`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/api/api_fetch_utils.py) | Call |
-| GET | `/api/v1/sites/{site_id}/stats/ports/search` | [`sites.stats.searchSiteSwOrGwPorts`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/ports/search-site-sw-or-gw-ports) | [`GatewayExportUtils._save_filtered_port_configs`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/gateway/gateway_export_utils.py) | Name |
+| GET | `/api/v1/orgs/{org_id}/gatewaytemplates` | [`orgs.gatewaytemplates.listOrgGatewayTemplates`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/gateway-templates/list-org-gateway-templates) | [`GatewayExportUtils.templates`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/resources/gateway/gateway_export_utils.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/inventory` | [`orgs.inventory.getOrgInventory`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/inventory/get-org-inventory) | [`APICoreFetchUtils.all_inventory_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/access/api/api_core_fetch_utils.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`APICoreFetchUtils.all_sites_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/access/api/api_core_fetch_utils.py) | Call |
+| GET | `/api/v1/sites/{site_id}/devices` | [`sites.devices.listSiteDevices`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/devices/list-site-devices) | [`GatewayExportUtils._finalise_management_ip_output`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/resources/gateway/gateway_export_utils.py) | Name |
+| GET | `/api/v1/sites/{site_id}/devices/{device_id}` | [`sites.devices.getSiteDevice`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/devices/get-site-device) | [`APIFetchUtils._gw_fetch_one_config`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/access/api/api_fetch_utils.py) | Call |
+| GET | `/api/v1/sites/{site_id}/stats/ports/search` | [`sites.stats.searchSiteSwOrGwPorts`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/ports/search-site-sw-or-gw-ports) | [`GatewayExportUtils._save_filtered_port_configs`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/resources/gateway/gateway_export_utils.py) | Name |
 
 ## Menu 32
 
@@ -442,7 +442,7 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/gatewaytemplates` | [`orgs.gatewaytemplates.listOrgGatewayTemplates`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/gateway-templates/list-org-gateway-templates) | [`GatewayExportUtils.templates`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/gateway/gateway_export_utils.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/gatewaytemplates` | [`orgs.gatewaytemplates.listOrgGatewayTemplates`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/gateway-templates/list-org-gateway-templates) | [`GatewayExportUtils.templates`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/resources/gateway/gateway_export_utils.py) | Call |
 
 ## Menu 33
 
@@ -464,9 +464,9 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/inventory` | [`orgs.inventory.getOrgInventory`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/inventory/get-org-inventory) | [`APICoreFetchUtils.all_inventory_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/api/api_core_fetch_utils.py) | Call |
-| GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`_fetch_site_name_lookup_from_api`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/gateway/gateway_export_utils.py) | Call |
-| GET | `/api/v1/sites/{site_id}/devices/{device_id}/synthetic_test` | [`sites.devices.getSiteDeviceSyntheticTest`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/synthetic-tests/get-site-device-synthetic-test) | [`GatewayTestExporter._call_synthetic_endpoint`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/gateway_test_exporter.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/inventory` | [`orgs.inventory.getOrgInventory`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/inventory/get-org-inventory) | [`APICoreFetchUtils.all_inventory_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/access/api/api_core_fetch_utils.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`_fetch_site_name_lookup_from_api`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/resources/gateway/gateway_export_utils.py) | Call |
+| GET | `/api/v1/sites/{site_id}/devices/{device_id}/synthetic_test` | [`sites.devices.getSiteDeviceSyntheticTest`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/synthetic-tests/get-site-device-synthetic-test) | [`GatewayTestExporter._call_synthetic_endpoint`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/gateway_test_exporter.py) | Call |
 
 ## Menu 34
 
@@ -477,8 +477,8 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/inventory` | [`orgs.inventory.getOrgInventory`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/inventory/get-org-inventory) | [`APICoreFetchUtils.all_inventory_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/api/api_core_fetch_utils.py) | Call |
-| GET | `/api/v1/sites/{site_id}/synthetic_test/search` | [`sites.synthetic_test.searchSiteSyntheticTest`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/synthetic-tests/search-site-synthetic-test) | [`GatewayTestResultsService._invoke_search_api`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/refactors/serial_cc/test_results_by_site.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/inventory` | [`orgs.inventory.getOrgInventory`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/inventory/get-org-inventory) | [`APICoreFetchUtils.all_inventory_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/access/api/api_core_fetch_utils.py) | Call |
+| GET | `/api/v1/sites/{site_id}/synthetic_test/search` | [`sites.synthetic_test.searchSiteSyntheticTest`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/synthetic-tests/search-site-synthetic-test) | [`GatewayTestResultsService._invoke_search_api`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/foundation/support/refactors/serial_cc/test_results_by_site.py) | Call |
 
 ## Menu 35
 
@@ -504,12 +504,12 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/inventory` | [`orgs.inventory.getOrgInventory`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/inventory/get-org-inventory) | [`APIFetchUtils._gw_load_inventory`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/api/api_fetch_utils.py) | Call |
-| GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`APICoreFetchUtils.all_sites_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/api/api_core_fetch_utils.py) | Call |
-| GET | `/api/v1/sites/{site_id}/devices` | [`sites.devices.listSiteDevices`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/devices/list-site-devices) | [`GatewayExportUtils.device_configs`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/gateway/gateway_export_utils.py) | Name |
-| GET | `/api/v1/sites/{site_id}/devices/{device_id}` | [`sites.devices.getSiteDevice`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/devices/get-site-device) | [`DeviceDataFetcher._fetch_port_configs`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/gateway/overrides/device_data_fetcher.py) | Call |
-| GET | `/api/v1/sites/{site_id}/stats/devices/{device_id}` | [`sites.stats.getSiteDeviceStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/devices/get-site-device-stats) | [`DeviceDataFetcher._fetch_interface_stats`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/gateway/overrides/device_data_fetcher.py) | Call |
-| GET | `/api/v1/sites/{site_id}/stats/ports/search` | [`sites.stats.searchSiteSwOrGwPorts`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/ports/search-site-sw-or-gw-ports) | [`GatewayExportUtils._save_filtered_port_configs`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/gateway/gateway_export_utils.py) | Name |
+| GET | `/api/v1/orgs/{org_id}/inventory` | [`orgs.inventory.getOrgInventory`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/inventory/get-org-inventory) | [`APIFetchUtils._gw_load_inventory`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/access/api/api_fetch_utils.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`APICoreFetchUtils.all_sites_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/access/api/api_core_fetch_utils.py) | Call |
+| GET | `/api/v1/sites/{site_id}/devices` | [`sites.devices.listSiteDevices`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/devices/list-site-devices) | [`GatewayExportUtils.device_configs`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/resources/gateway/gateway_export_utils.py) | Name |
+| GET | `/api/v1/sites/{site_id}/devices/{device_id}` | [`sites.devices.getSiteDevice`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/devices/get-site-device) | [`DeviceDataFetcher._fetch_port_configs`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/resources/gateway/overrides/device_data_fetcher.py) | Call |
+| GET | `/api/v1/sites/{site_id}/stats/devices/{device_id}` | [`sites.stats.getSiteDeviceStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/devices/get-site-device-stats) | [`DeviceDataFetcher._fetch_interface_stats`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/resources/gateway/overrides/device_data_fetcher.py) | Call |
+| GET | `/api/v1/sites/{site_id}/stats/ports/search` | [`sites.stats.searchSiteSwOrGwPorts`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/ports/search-site-sw-or-gw-ports) | [`GatewayExportUtils._save_filtered_port_configs`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/resources/gateway/gateway_export_utils.py) | Name |
 
 ## Menu 36
 
@@ -531,9 +531,9 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/inventory` | [`orgs.inventory.getOrgInventory`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/inventory/get-org-inventory) | [`APICoreFetchUtils.all_inventory_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/api/api_core_fetch_utils.py) | Call |
-| GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`_fetch_site_name_lookup_from_api`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/gateway/gateway_export_utils.py) | Call |
-| GET | `/api/v1/sites/{site_id}/stats/devices/{device_id}` | [`sites.stats.getSiteDeviceStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/devices/get-site-device-stats) | [`_call_get_site_device_stats`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/gateway/gateway_stats_exporter.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/inventory` | [`orgs.inventory.getOrgInventory`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/inventory/get-org-inventory) | [`APICoreFetchUtils.all_inventory_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/access/api/api_core_fetch_utils.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`_fetch_site_name_lookup_from_api`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/resources/gateway/gateway_export_utils.py) | Call |
+| GET | `/api/v1/sites/{site_id}/stats/devices/{device_id}` | [`sites.stats.getSiteDeviceStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/devices/get-site-device-stats) | [`_call_get_site_device_stats`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/resources/gateway/gateway_stats_exporter.py) | Call |
 
 ## Menu 37
 
@@ -555,11 +555,11 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/aptemplates` | [`orgs.aptemplates.listOrgAptemplates`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/ap-templates/list-org-aptemplates) | [`OrgTemplateExporter._template_export_specs`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/org_template_exporter.py) | Reference |
-| GET | `/api/v1/orgs/{org_id}/gatewaytemplates` | [`orgs.gatewaytemplates.listOrgGatewayTemplates`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/gateway-templates/list-org-gateway-templates) | [`OrgTemplateExporter._template_export_specs`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/org_template_exporter.py) | Reference |
-| GET | `/api/v1/orgs/{org_id}/networktemplates` | [`orgs.networktemplates.listOrgNetworkTemplates`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/network-templates/list-org-network-templates) | [`OrgTemplateExporter._template_export_specs`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/org_template_exporter.py) | Reference |
-| GET | `/api/v1/orgs/{org_id}/rftemplates` | [`orgs.rftemplates.listOrgRfTemplates`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/rf-templates/list-org-rf-templates) | [`OrgTemplateExporter._template_export_specs`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/org_template_exporter.py) | Reference |
-| GET | `/api/v1/orgs/{org_id}/sitetemplates` | [`orgs.sitetemplates.listOrgSiteTemplates`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/site-templates/list-org-site-templates) | [`OrgTemplateExporter._template_export_specs`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/org_template_exporter.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/aptemplates` | [`orgs.aptemplates.listOrgAptemplates`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/ap-templates/list-org-aptemplates) | [`OrgTemplateExporter._template_export_specs`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/org_template_exporter.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/gatewaytemplates` | [`orgs.gatewaytemplates.listOrgGatewayTemplates`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/gateway-templates/list-org-gateway-templates) | [`OrgTemplateExporter._template_export_specs`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/org_template_exporter.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/networktemplates` | [`orgs.networktemplates.listOrgNetworkTemplates`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/network-templates/list-org-network-templates) | [`OrgTemplateExporter._template_export_specs`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/org_template_exporter.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/rftemplates` | [`orgs.rftemplates.listOrgRfTemplates`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/rf-templates/list-org-rf-templates) | [`OrgTemplateExporter._template_export_specs`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/org_template_exporter.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/sitetemplates` | [`orgs.sitetemplates.listOrgSiteTemplates`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/site-templates/list-org-site-templates) | [`OrgTemplateExporter._template_export_specs`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/org_template_exporter.py) | Reference |
 
 ## Menu 38
 
@@ -570,7 +570,7 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/networktemplates` | [`orgs.networktemplates.listOrgNetworkTemplates`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/network-templates/list-org-network-templates) | [`OrgTemplateExporter.network_templates`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/org_template_exporter.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/networktemplates` | [`orgs.networktemplates.listOrgNetworkTemplates`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/network-templates/list-org-network-templates) | [`OrgTemplateExporter.network_templates`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/org_template_exporter.py) | Reference |
 
 ## Menu 39
 
@@ -581,7 +581,7 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/rftemplates` | [`orgs.rftemplates.listOrgRfTemplates`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/rf-templates/list-org-rf-templates) | [`OrgTemplateExporter.rf_templates`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/org_template_exporter.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/rftemplates` | [`orgs.rftemplates.listOrgRfTemplates`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/rf-templates/list-org-rf-templates) | [`OrgTemplateExporter.rf_templates`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/org_template_exporter.py) | Reference |
 
 ## Menu 40
 
@@ -592,7 +592,7 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/deviceprofiles` | [`orgs.deviceprofiles.listOrgDeviceProfiles`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/device-profiles/list-org-device-profiles) | [`OrgTemplateExporter.ap_templates`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/org_template_exporter.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/deviceprofiles` | [`orgs.deviceprofiles.listOrgDeviceProfiles`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/device-profiles/list-org-device-profiles) | [`OrgTemplateExporter.ap_templates`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/org_template_exporter.py) | Call |
 
 ## Menu 41
 
@@ -603,7 +603,7 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/networktemplates` | [`orgs.networktemplates.listOrgNetworkTemplates`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/network-templates/list-org-network-templates) | [`OrgTemplateExporter.switch_templates`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/org_template_exporter.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/networktemplates` | [`orgs.networktemplates.listOrgNetworkTemplates`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/network-templates/list-org-network-templates) | [`OrgTemplateExporter.switch_templates`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/org_template_exporter.py) | Call |
 
 ## Menu 42
 
@@ -614,7 +614,7 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{current_org_id}/licenses` | None (raw request) | [`OrgAdminExporter._fetch_license_payload`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/org_admin_exporter.py) | Path |
+| GET | `/api/v1/orgs/{current_org_id}/licenses` | None (raw request) | [`OrgAdminExporter._fetch_license_payload`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/org_admin_exporter.py) | Path |
 
 ## Menu 43
 
@@ -625,7 +625,7 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/licenses/usages` | [`orgs.licenses.getOrgLicensesBySite`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/licenses/get-org-licenses-by-site) | [`OrgAdminExporter.usage`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/org_admin_exporter.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/licenses/usages` | [`orgs.licenses.getOrgLicensesBySite`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/licenses/get-org-licenses-by-site) | [`OrgAdminExporter.usage`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/org_admin_exporter.py) | Reference |
 
 ## Menu 44
 
@@ -636,7 +636,7 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/psks` | [`orgs.psks.listOrgPsks`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/psks/list-org-psks) | [`OrgConfigExporter.psks`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/org_config_exporter.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/psks` | [`orgs.psks.listOrgPsks`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/psks/list-org-psks) | [`OrgConfigExporter.psks`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/org_config_exporter.py) | Reference |
 
 ## Menu 45
 
@@ -647,7 +647,7 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/webhooks` | [`orgs.webhooks.listOrgWebhooks`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/webhooks/list-org-webhooks) | [`OrgConfigExporter.webhooks`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/org_config_exporter.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/webhooks` | [`orgs.webhooks.listOrgWebhooks`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/webhooks/list-org-webhooks) | [`OrgConfigExporter.webhooks`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/org_config_exporter.py) | Reference |
 
 ## Menu 46
 
@@ -658,7 +658,7 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/wlans` | [`orgs.wlans.listOrgWlans`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/wlans/list-org-wlans) | [`OrgConfigExporter.wlans`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/org_config_exporter.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/wlans` | [`orgs.wlans.listOrgWlans`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/wlans/list-org-wlans) | [`OrgConfigExporter.wlans`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/org_config_exporter.py) | Reference |
 
 ## Menu 47
 
@@ -669,7 +669,7 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/apitokens` | [`orgs.apitokens.listOrgApiTokens`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/api-tokens/list-org-api-tokens) | [`OrgAdminExporter.api_tokens`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/org_admin_exporter.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/apitokens` | [`orgs.apitokens.listOrgApiTokens`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/api-tokens/list-org-api-tokens) | [`OrgAdminExporter.api_tokens`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/org_admin_exporter.py) | Reference |
 
 ## Menu 48
 
@@ -680,7 +680,7 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/admins` | [`orgs.admins.listOrgAdmins`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/admins/list-org-admins) | [`OrgAdminExporter.admins`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/org_admin_exporter.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/admins` | [`orgs.admins.listOrgAdmins`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/admins/list-org-admins) | [`OrgAdminExporter.admins`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/org_admin_exporter.py) | Reference |
 
 ## Menu 49
 
@@ -691,7 +691,7 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/ssos` | [`orgs.ssos.listOrgSsos`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sso/list-org-ssos) | [`OrgAdminExporter.sso`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/org_admin_exporter.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/ssos` | [`orgs.ssos.listOrgSsos`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sso/list-org-ssos) | [`OrgAdminExporter.sso`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/org_admin_exporter.py) | Reference |
 
 ## Menu 50
 
@@ -702,7 +702,7 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/mxedges` | [`orgs.mxedges.listOrgMxEdges`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/mxedges/list-org-mx-edges) | [`OrgConfigExporter.mx_edges`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/org_config_exporter.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/mxedges` | [`orgs.mxedges.listOrgMxEdges`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/mxedges/list-org-mx-edges) | [`OrgConfigExporter.mx_edges`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/org_config_exporter.py) | Reference |
 
 ## Menu 51
 
@@ -713,8 +713,8 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/insights/sites-sle` | [`orgs.insights.getOrgSitesSle`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sles/get-org-sites-sle) | [`SLEMetricsService._fetch_aggregated_category`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/refactors/serial_cc/sle_metrics.py) | Call |
-| GET | `/api/v1/orgs/{org_id}/insights/{metric}` | [`orgs.insights.getOrgSle`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sles/get-org-sle) | [`SLEMetricsService._fetch_single_sle`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/refactors/serial_cc/sle_metrics.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/insights/sites-sle` | [`orgs.insights.getOrgSitesSle`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sles/get-org-sites-sle) | [`SLEMetricsService._fetch_aggregated_category`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/foundation/support/refactors/serial_cc/sle_metrics.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/insights/{metric}` | [`orgs.insights.getOrgSle`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sles/get-org-sle) | [`SLEMetricsService._fetch_single_sle`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/foundation/support/refactors/serial_cc/sle_metrics.py) | Call |
 
 ## Menu 52
 
@@ -725,7 +725,7 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/insights/sites-sle` | [`orgs.insights.getOrgSitesSle`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sles/get-org-sites-sle) | [`OrgExportUtils._collect_one_sle_type`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/org_export_utils.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/insights/sites-sle` | [`orgs.insights.getOrgSitesSle`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sles/get-org-sites-sle) | [`OrgExportUtils._collect_one_sle_type`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/org_export_utils.py) | Call |
 
 ## Menu 53
 
@@ -748,11 +748,11 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/const/countries` | [`const.countries.listCountryCodes`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-country-codes) | [`ConstDefinitionsExporter._get_channel_country_codes`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/const_definitions_exporter.py) | Reference |
-| GET | `/api/v1/const/device_models` | [`const.device_models.listDeviceModels`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/models/list-device-models) | [`ConstDefinitionsExporter._get_gateway_models_list`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/const_definitions_exporter.py) | Reference |
-| GET | `/api/v1/const/insight_metrics` | [`const.insight_metrics.listInsightMetrics`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-insight-metrics) | [`OrgExportUtils._load_parameterized_metric_choices`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/org_export_utils.py) | Call |
-| GET | `/api/v1/orgs/{org_id}/insights/sites-sle` | [`orgs.insights.getOrgSitesSle`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sles/get-org-sites-sle) | [`OrgExportUtils._insight_fetch_sites_sle_summary`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/org_export_utils.py) | Call |
-| GET | `/api/v1/orgs/{org_id}/insights/{metric}` | [`orgs.insights.getOrgSle`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sles/get-org-sle) | [`OrgExportUtils._insight_fetch_default_metric`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/org_export_utils.py) | Call |
+| GET | `/api/v1/const/countries` | [`const.countries.listCountryCodes`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-country-codes) | [`ConstDefinitionsExporter._get_channel_country_codes`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/const_definitions_exporter.py) | Reference |
+| GET | `/api/v1/const/device_models` | [`const.device_models.listDeviceModels`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/models/list-device-models) | [`ConstDefinitionsExporter._get_gateway_models_list`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/const_definitions_exporter.py) | Reference |
+| GET | `/api/v1/const/insight_metrics` | [`const.insight_metrics.listInsightMetrics`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-insight-metrics) | [`OrgExportUtils._load_parameterized_metric_choices`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/org_export_utils.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/insights/sites-sle` | [`orgs.insights.getOrgSitesSle`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sles/get-org-sites-sle) | [`OrgExportUtils._insight_fetch_sites_sle_summary`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/org_export_utils.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/insights/{metric}` | [`orgs.insights.getOrgSle`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sles/get-org-sle) | [`OrgExportUtils._insight_fetch_default_metric`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/org_export_utils.py) | Call |
 
 ## Menu 54
 
@@ -782,34 +782,34 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/const/alarm_defs` | [`const.alarm_defs.listAlarmDefinitions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/events/list-alarm-definitions) | [`ConstDefinitionsExporter._discover_endpoints`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/const_definitions_exporter.py) | Curated |
-| GET | `/api/v1/const/ap_channels` | [`const.ap_channels.listApChannels`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-ap-channels) | [`ConstDefinitionsExporter._discover_endpoints`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/const_definitions_exporter.py) | Curated |
-| GET | `/api/v1/const/ap_esl_versions` | [`const.ap_esl_versions.listApLEslVersions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-ap-l-esl-versions) | [`ConstDefinitionsExporter._discover_endpoints`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/const_definitions_exporter.py) | Curated |
-| GET | `/api/v1/const/ap_led_status` | [`const.ap_led_status.listApLedDefinition`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-ap-led-definition) | [`ConstDefinitionsExporter._discover_endpoints`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/const_definitions_exporter.py) | Curated |
-| GET | `/api/v1/const/app_categories` | [`const.app_categories.listAppCategoryDefinitions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-app-category-definitions) | [`ConstDefinitionsExporter._discover_endpoints`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/const_definitions_exporter.py) | Curated |
-| GET | `/api/v1/const/app_subcategories` | [`const.app_subcategories.listAppSubCategoryDefinitions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-app-sub-category-definitions) | [`ConstDefinitionsExporter._discover_endpoints`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/const_definitions_exporter.py) | Curated |
-| GET | `/api/v1/const/applications` | [`const.applications.listApplications`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-applications) | [`ConstDefinitionsExporter._discover_endpoints`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/const_definitions_exporter.py) | Curated |
-| GET | `/api/v1/const/client_events` | [`const.client_events.listClientEventsDefinitions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/events/list-client-events-definitions) | [`ConstDefinitionsExporter._discover_endpoints`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/const_definitions_exporter.py) | Curated |
-| GET | `/api/v1/const/countries` | [`const.countries.listCountryCodes`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-country-codes) | [`ConstDefinitionsExporter._get_channel_country_codes`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/const_definitions_exporter.py) | Reference |
-| GET | `/api/v1/const/default_gateway_config` | [`const.default_gateway_config.getGatewayDefaultConfig`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/models/get-gateway-default-config) | [`ConstDefinitionsExporter._discover_endpoints`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/const_definitions_exporter.py) | Curated |
-| GET | `/api/v1/const/device_events` | [`const.device_events.listDeviceEventsDefinitions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/events/list-device-events-definitions) | [`ConstDefinitionsExporter._discover_endpoints`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/const_definitions_exporter.py) | Curated |
-| GET | `/api/v1/const/device_models` | [`const.device_models.listDeviceModels`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/models/list-device-models) | [`ConstDefinitionsExporter._get_gateway_models_list`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/const_definitions_exporter.py) | Reference |
-| GET | `/api/v1/const/fingerprint_types` | [`const.fingerprint_types.listFingerprintTypes`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-fingerprint-types) | [`ConstDefinitionsExporter._discover_endpoints`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/const_definitions_exporter.py) | Curated |
-| GET | `/api/v1/const/gateway_applications` | [`const.gateway_applications.listGatewayApplications`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-gateway-applications) | [`ConstDefinitionsExporter._discover_endpoints`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/const_definitions_exporter.py) | Curated |
-| GET | `/api/v1/const/insight_metrics` | [`const.insight_metrics.listInsightMetrics`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-insight-metrics) | [`ConstDefinitionsExporter._discover_endpoints`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/const_definitions_exporter.py) | Curated |
-| GET | `/api/v1/const/languages` | [`const.languages.listSiteLanguages`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-site-languages) | [`ConstDefinitionsExporter._discover_endpoints`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/const_definitions_exporter.py) | Curated |
-| GET | `/api/v1/const/license_types` | [`const.license_types.listLicenseTypes`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-license-types) | [`ConstDefinitionsExporter._discover_endpoints`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/const_definitions_exporter.py) | Curated |
-| GET | `/api/v1/const/marvisclient_events` | [`const.marvisclient_events.listMarvisClientEventsDefinitions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-marvis-client-events-definitions) | [`ConstDefinitionsExporter._discover_endpoints`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/const_definitions_exporter.py) | Curated |
-| GET | `/api/v1/const/marvisclient_versions` | [`const.marvisclient_versions.listMarvisClientVersions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-marvis-client-versions) | [`ConstDefinitionsExporter._discover_endpoints`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/const_definitions_exporter.py) | Curated |
-| GET | `/api/v1/const/mxedge_events` | [`const.mxedge_events.listMxEdgeEventsDefinitions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/events/list-mx-edge-events-definitions) | [`ConstDefinitionsExporter._discover_endpoints`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/const_definitions_exporter.py) | Curated |
-| GET | `/api/v1/const/mxedge_models` | [`const.mxedge_models.listMxEdgeModels`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/models/list-mx-edge-models) | [`ConstDefinitionsExporter._discover_endpoints`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/const_definitions_exporter.py) | Curated |
-| GET | `/api/v1/const/nac_events` | [`const.nac_events.listNacEventsDefinitions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/events/list-nac-events-definitions) | [`ConstDefinitionsExporter._discover_endpoints`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/const_definitions_exporter.py) | Curated |
-| GET | `/api/v1/const/otherdevice_events` | [`const.otherdevice_events.listOtherDeviceEventsDefinitions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/events/list-other-device-events-definitions) | [`ConstDefinitionsExporter._discover_endpoints`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/const_definitions_exporter.py) | Curated |
-| GET | `/api/v1/const/otherdevice_models` | [`const.otherdevice_models.listSupportedOtherDeviceModels`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/models/list-supported-other-device-models) | [`ConstDefinitionsExporter._discover_endpoints`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/const_definitions_exporter.py) | Curated |
-| GET | `/api/v1/const/states` | [`const.states.listStates`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-states) | [`ConstDefinitionsExporter._discover_endpoints`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/const_definitions_exporter.py) | Curated |
-| GET | `/api/v1/const/system_events` | [`const.system_events.listSystemEventsDefinitions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/events/list-system-events-definitions) | [`ConstDefinitionsExporter._discover_endpoints`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/const_definitions_exporter.py) | Curated |
-| GET | `/api/v1/const/traffic_types` | [`const.traffic_types.listTrafficTypes`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-traffic-types) | [`ConstDefinitionsExporter._discover_endpoints`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/const_definitions_exporter.py) | Curated |
-| GET | `/api/v1/const/webhook_topics` | [`const.webhook_topics.listWebhookTopics`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-webhook-topics) | [`ConstDefinitionsExporter._discover_endpoints`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/const_definitions_exporter.py) | Curated |
+| GET | `/api/v1/const/alarm_defs` | [`const.alarm_defs.listAlarmDefinitions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/events/list-alarm-definitions) | [`ConstDefinitionsExporter._discover_endpoints`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/const_definitions_exporter.py) | Curated |
+| GET | `/api/v1/const/ap_channels` | [`const.ap_channels.listApChannels`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-ap-channels) | [`ConstDefinitionsExporter._discover_endpoints`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/const_definitions_exporter.py) | Curated |
+| GET | `/api/v1/const/ap_esl_versions` | [`const.ap_esl_versions.listApLEslVersions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-ap-l-esl-versions) | [`ConstDefinitionsExporter._discover_endpoints`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/const_definitions_exporter.py) | Curated |
+| GET | `/api/v1/const/ap_led_status` | [`const.ap_led_status.listApLedDefinition`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-ap-led-definition) | [`ConstDefinitionsExporter._discover_endpoints`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/const_definitions_exporter.py) | Curated |
+| GET | `/api/v1/const/app_categories` | [`const.app_categories.listAppCategoryDefinitions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-app-category-definitions) | [`ConstDefinitionsExporter._discover_endpoints`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/const_definitions_exporter.py) | Curated |
+| GET | `/api/v1/const/app_subcategories` | [`const.app_subcategories.listAppSubCategoryDefinitions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-app-sub-category-definitions) | [`ConstDefinitionsExporter._discover_endpoints`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/const_definitions_exporter.py) | Curated |
+| GET | `/api/v1/const/applications` | [`const.applications.listApplications`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-applications) | [`ConstDefinitionsExporter._discover_endpoints`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/const_definitions_exporter.py) | Curated |
+| GET | `/api/v1/const/client_events` | [`const.client_events.listClientEventsDefinitions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/events/list-client-events-definitions) | [`ConstDefinitionsExporter._discover_endpoints`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/const_definitions_exporter.py) | Curated |
+| GET | `/api/v1/const/countries` | [`const.countries.listCountryCodes`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-country-codes) | [`ConstDefinitionsExporter._get_channel_country_codes`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/const_definitions_exporter.py) | Reference |
+| GET | `/api/v1/const/default_gateway_config` | [`const.default_gateway_config.getGatewayDefaultConfig`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/models/get-gateway-default-config) | [`ConstDefinitionsExporter._discover_endpoints`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/const_definitions_exporter.py) | Curated |
+| GET | `/api/v1/const/device_events` | [`const.device_events.listDeviceEventsDefinitions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/events/list-device-events-definitions) | [`ConstDefinitionsExporter._discover_endpoints`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/const_definitions_exporter.py) | Curated |
+| GET | `/api/v1/const/device_models` | [`const.device_models.listDeviceModels`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/models/list-device-models) | [`ConstDefinitionsExporter._get_gateway_models_list`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/const_definitions_exporter.py) | Reference |
+| GET | `/api/v1/const/fingerprint_types` | [`const.fingerprint_types.listFingerprintTypes`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-fingerprint-types) | [`ConstDefinitionsExporter._discover_endpoints`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/const_definitions_exporter.py) | Curated |
+| GET | `/api/v1/const/gateway_applications` | [`const.gateway_applications.listGatewayApplications`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-gateway-applications) | [`ConstDefinitionsExporter._discover_endpoints`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/const_definitions_exporter.py) | Curated |
+| GET | `/api/v1/const/insight_metrics` | [`const.insight_metrics.listInsightMetrics`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-insight-metrics) | [`ConstDefinitionsExporter._discover_endpoints`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/const_definitions_exporter.py) | Curated |
+| GET | `/api/v1/const/languages` | [`const.languages.listSiteLanguages`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-site-languages) | [`ConstDefinitionsExporter._discover_endpoints`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/const_definitions_exporter.py) | Curated |
+| GET | `/api/v1/const/license_types` | [`const.license_types.listLicenseTypes`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-license-types) | [`ConstDefinitionsExporter._discover_endpoints`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/const_definitions_exporter.py) | Curated |
+| GET | `/api/v1/const/marvisclient_events` | [`const.marvisclient_events.listMarvisClientEventsDefinitions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-marvis-client-events-definitions) | [`ConstDefinitionsExporter._discover_endpoints`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/const_definitions_exporter.py) | Curated |
+| GET | `/api/v1/const/marvisclient_versions` | [`const.marvisclient_versions.listMarvisClientVersions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-marvis-client-versions) | [`ConstDefinitionsExporter._discover_endpoints`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/const_definitions_exporter.py) | Curated |
+| GET | `/api/v1/const/mxedge_events` | [`const.mxedge_events.listMxEdgeEventsDefinitions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/events/list-mx-edge-events-definitions) | [`ConstDefinitionsExporter._discover_endpoints`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/const_definitions_exporter.py) | Curated |
+| GET | `/api/v1/const/mxedge_models` | [`const.mxedge_models.listMxEdgeModels`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/models/list-mx-edge-models) | [`ConstDefinitionsExporter._discover_endpoints`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/const_definitions_exporter.py) | Curated |
+| GET | `/api/v1/const/nac_events` | [`const.nac_events.listNacEventsDefinitions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/events/list-nac-events-definitions) | [`ConstDefinitionsExporter._discover_endpoints`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/const_definitions_exporter.py) | Curated |
+| GET | `/api/v1/const/otherdevice_events` | [`const.otherdevice_events.listOtherDeviceEventsDefinitions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/events/list-other-device-events-definitions) | [`ConstDefinitionsExporter._discover_endpoints`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/const_definitions_exporter.py) | Curated |
+| GET | `/api/v1/const/otherdevice_models` | [`const.otherdevice_models.listSupportedOtherDeviceModels`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/models/list-supported-other-device-models) | [`ConstDefinitionsExporter._discover_endpoints`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/const_definitions_exporter.py) | Curated |
+| GET | `/api/v1/const/states` | [`const.states.listStates`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-states) | [`ConstDefinitionsExporter._discover_endpoints`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/const_definitions_exporter.py) | Curated |
+| GET | `/api/v1/const/system_events` | [`const.system_events.listSystemEventsDefinitions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/events/list-system-events-definitions) | [`ConstDefinitionsExporter._discover_endpoints`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/const_definitions_exporter.py) | Curated |
+| GET | `/api/v1/const/traffic_types` | [`const.traffic_types.listTrafficTypes`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-traffic-types) | [`ConstDefinitionsExporter._discover_endpoints`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/const_definitions_exporter.py) | Curated |
+| GET | `/api/v1/const/webhook_topics` | [`const.webhook_topics.listWebhookTopics`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-webhook-topics) | [`ConstDefinitionsExporter._discover_endpoints`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/const_definitions_exporter.py) | Curated |
 
 ## Menu 55
 
@@ -820,7 +820,7 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/stats/ospf_peers/search` | [`orgs.stats.searchOrgOspfStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/stats/ospf/search-org-ospf-stats) | [`OrgExportUtils.ospf_stats`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/org_export_utils.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/stats/ospf_peers/search` | [`orgs.stats.searchOrgOspfStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/stats/ospf/search-org-ospf-stats) | [`OrgExportUtils.ospf_stats`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/org_export_utils.py) | Reference |
 
 ## Menu 56
 
@@ -831,7 +831,7 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/jsi/pbn/search` | [`orgs.jsi.searchOrgJsiPbn`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/jsi/search-org-jsi-pbn) | [`OrgExportUtils.jsi_pbn`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/org_export_utils.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/jsi/pbn/search` | [`orgs.jsi.searchOrgJsiPbn`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/jsi/search-org-jsi-pbn) | [`OrgExportUtils.jsi_pbn`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/org_export_utils.py) | Reference |
 
 ## Menu 57
 
@@ -842,7 +842,7 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/jsi/sirt/search` | [`orgs.jsi.searchOrgJsiSirt`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/jsi/search-org-jsi-sirt) | [`OrgExportUtils.jsi_sirt`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/org_export_utils.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/jsi/sirt/search` | [`orgs.jsi.searchOrgJsiSirt`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/jsi/search-org-jsi-sirt) | [`OrgExportUtils.jsi_sirt`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/org_export_utils.py) | Reference |
 
 ## Menu 58
 
@@ -872,19 +872,19 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}` | [`orgs.orgs.getOrg`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/get-org) | [`OrgConfigMigrationManager._get_org_name`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/org/org_config_migration_manager.py) | Call |
-| GET | `/api/v1/orgs/{org_id}/deviceprofiles` | [`orgs.deviceprofiles.listOrgDeviceProfiles`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/device-profiles/list-org-device-profiles) | [`OrgConfigMigrationManager.CONFIG_TYPES`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/org/org_config_migration_manager.py) | Reference |
-| POST | `/api/v1/orgs/{org_id}/deviceprofiles` | [`orgs.deviceprofiles.createOrgDeviceProfile`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/device-profiles/create-org-device-profile) | [`OrgConfigMigrationManager.CONFIG_TYPES`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/org/org_config_migration_manager.py) | Reference |
-| GET | `/api/v1/orgs/{org_id}/gatewaytemplates` | [`orgs.gatewaytemplates.listOrgGatewayTemplates`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/gateway-templates/list-org-gateway-templates) | [`OrgConfigMigrationManager.CONFIG_TYPES`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/org/org_config_migration_manager.py) | Reference |
-| POST | `/api/v1/orgs/{org_id}/gatewaytemplates` | [`orgs.gatewaytemplates.createOrgGatewayTemplate`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/gateway-templates/create-org-gateway-template) | [`OrgConfigMigrationManager.CONFIG_TYPES`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/org/org_config_migration_manager.py) | Reference |
-| GET | `/api/v1/orgs/{org_id}/networks` | [`orgs.networks.listOrgNetworks`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/networks/list-org-networks) | [`OrgConfigMigrationManager.CONFIG_TYPES`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/org/org_config_migration_manager.py) | Reference |
-| POST | `/api/v1/orgs/{org_id}/networks` | [`orgs.networks.createOrgNetwork`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/networks/create-org-network) | [`OrgConfigMigrationManager.CONFIG_TYPES`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/org/org_config_migration_manager.py) | Reference |
-| GET | `/api/v1/orgs/{org_id}/servicepolicies` | [`orgs.servicepolicies.listOrgServicePolicies`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/service-policies/list-org-service-policies) | [`OrgConfigMigrationManager.CONFIG_TYPES`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/org/org_config_migration_manager.py) | Reference |
-| POST | `/api/v1/orgs/{org_id}/servicepolicies` | [`orgs.servicepolicies.createOrgServicePolicy`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/service-policies/create-org-service-policy) | [`OrgConfigMigrationManager.CONFIG_TYPES`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/org/org_config_migration_manager.py) | Reference |
-| GET | `/api/v1/orgs/{org_id}/services` | [`orgs.services.listOrgServices`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/services/list-org-services) | [`OrgConfigMigrationManager.CONFIG_TYPES`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/org/org_config_migration_manager.py) | Reference |
-| POST | `/api/v1/orgs/{org_id}/services` | [`orgs.services.createOrgService`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/services/create-org-service) | [`OrgConfigMigrationManager.CONFIG_TYPES`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/org/org_config_migration_manager.py) | Reference |
-| GET | `/api/v1/orgs/{org_id}/vpns` | [`orgs.vpns.listOrgVpns`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/vpns/list-org-vpns) | [`OrgConfigMigrationManager.CONFIG_TYPES`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/org/org_config_migration_manager.py) | Reference |
-| POST | `/api/v1/orgs/{org_id}/vpns` | [`orgs.vpns.createOrgVpn`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/vpns/create-org-vpn) | [`OrgConfigMigrationManager.CONFIG_TYPES`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/org/org_config_migration_manager.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}` | [`orgs.orgs.getOrg`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/get-org) | [`OrgConfigMigrationManager._get_org_name`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/resources/org/org_config_migration_manager.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/deviceprofiles` | [`orgs.deviceprofiles.listOrgDeviceProfiles`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/device-profiles/list-org-device-profiles) | [`OrgConfigMigrationManager.CONFIG_TYPES`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/resources/org/org_config_migration_manager.py) | Reference |
+| POST | `/api/v1/orgs/{org_id}/deviceprofiles` | [`orgs.deviceprofiles.createOrgDeviceProfile`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/device-profiles/create-org-device-profile) | [`OrgConfigMigrationManager.CONFIG_TYPES`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/resources/org/org_config_migration_manager.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/gatewaytemplates` | [`orgs.gatewaytemplates.listOrgGatewayTemplates`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/gateway-templates/list-org-gateway-templates) | [`OrgConfigMigrationManager.CONFIG_TYPES`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/resources/org/org_config_migration_manager.py) | Reference |
+| POST | `/api/v1/orgs/{org_id}/gatewaytemplates` | [`orgs.gatewaytemplates.createOrgGatewayTemplate`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/gateway-templates/create-org-gateway-template) | [`OrgConfigMigrationManager.CONFIG_TYPES`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/resources/org/org_config_migration_manager.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/networks` | [`orgs.networks.listOrgNetworks`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/networks/list-org-networks) | [`OrgConfigMigrationManager.CONFIG_TYPES`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/resources/org/org_config_migration_manager.py) | Reference |
+| POST | `/api/v1/orgs/{org_id}/networks` | [`orgs.networks.createOrgNetwork`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/networks/create-org-network) | [`OrgConfigMigrationManager.CONFIG_TYPES`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/resources/org/org_config_migration_manager.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/servicepolicies` | [`orgs.servicepolicies.listOrgServicePolicies`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/service-policies/list-org-service-policies) | [`OrgConfigMigrationManager.CONFIG_TYPES`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/resources/org/org_config_migration_manager.py) | Reference |
+| POST | `/api/v1/orgs/{org_id}/servicepolicies` | [`orgs.servicepolicies.createOrgServicePolicy`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/service-policies/create-org-service-policy) | [`OrgConfigMigrationManager.CONFIG_TYPES`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/resources/org/org_config_migration_manager.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/services` | [`orgs.services.listOrgServices`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/services/list-org-services) | [`OrgConfigMigrationManager.CONFIG_TYPES`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/resources/org/org_config_migration_manager.py) | Reference |
+| POST | `/api/v1/orgs/{org_id}/services` | [`orgs.services.createOrgService`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/services/create-org-service) | [`OrgConfigMigrationManager.CONFIG_TYPES`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/resources/org/org_config_migration_manager.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/vpns` | [`orgs.vpns.listOrgVpns`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/vpns/list-org-vpns) | [`OrgConfigMigrationManager.CONFIG_TYPES`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/resources/org/org_config_migration_manager.py) | Reference |
+| POST | `/api/v1/orgs/{org_id}/vpns` | [`orgs.vpns.createOrgVpn`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/vpns/create-org-vpn) | [`OrgConfigMigrationManager.CONFIG_TYPES`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/resources/org/org_config_migration_manager.py) | Reference |
 
 ## Menu 188
 
@@ -895,7 +895,7 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/tickets` | [`orgs.tickets.listOrgTickets`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/tickets/list-org-tickets) | [`OrgTicketManager.list_tickets`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/org/org_ticket_manager.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/tickets` | [`orgs.tickets.listOrgTickets`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/tickets/list-org-tickets) | [`OrgTicketManager.list_tickets`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/resources/org/org_ticket_manager.py) | Reference |
 
 ## Menu 193
 
@@ -906,8 +906,8 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/tickets` | [`orgs.tickets.listOrgTickets`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/tickets/list-org-tickets) | [`OrgTicketManager._fetch_all_ticket_summaries`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/org/org_ticket_manager.py) | Call |
-| GET | `/api/v1/orgs/{org_id}/tickets/{ticket_id}` | [`orgs.tickets.getOrgTicket`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/tickets/get-org-ticket) | [`OrgTicketManager._fetch_ticket_detail`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/org/org_ticket_manager.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/tickets` | [`orgs.tickets.listOrgTickets`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/tickets/list-org-tickets) | [`OrgTicketManager._fetch_all_ticket_summaries`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/resources/org/org_ticket_manager.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/tickets/{ticket_id}` | [`orgs.tickets.getOrgTicket`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/tickets/get-org-ticket) | [`OrgTicketManager._fetch_ticket_detail`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/resources/org/org_ticket_manager.py) | Call |
 
 ## Menu 204
 
@@ -918,7 +918,7 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/jsi/inventory/search` | [`orgs.jsi.searchOrgJsiAssetsAndContracts`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/jsi/search-org-jsi-assets-and-contracts) | [`OrgExportUtils.jsi_assets`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/org_export_utils.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/jsi/inventory/search` | [`orgs.jsi.searchOrgJsiAssetsAndContracts`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/jsi/search-org-jsi-assets-and-contracts) | [`OrgExportUtils.jsi_assets`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/org_export_utils.py) | Reference |
 
 ## Menu 205
 
@@ -929,7 +929,7 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/mxedges/events/search` | [`orgs.mxedges.searchOrgMistEdgeEvents`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/mxedges/search-org-mist-edge-events) | [`OrgExportUtils.mist_edge_events`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/org_export_utils.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/mxedges/events/search` | [`orgs.mxedges.searchOrgMistEdgeEvents`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/mxedges/search-org-mist-edge-events) | [`OrgExportUtils.mist_edge_events`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/org_export_utils.py) | Reference |
 
 ## Menu 230
 
@@ -940,7 +940,7 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/clients/sessions/search` | [`orgs.clients.searchOrgWirelessClientSessions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/clients/wireless/search-org-wireless-client-sessions) | [`OrgSearchExporter.wireless_client_sessions`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/org_search_exporter.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/clients/sessions/search` | [`orgs.clients.searchOrgWirelessClientSessions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/clients/wireless/search-org-wireless-client-sessions) | [`OrgSearchExporter.wireless_client_sessions`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/org_search_exporter.py) | Reference |
 
 ## Menu 231
 
@@ -951,7 +951,7 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/clients/events/search` | [`orgs.clients.searchOrgWirelessClientEvents`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/clients/wireless/search-org-wireless-client-events) | [`OrgSearchExporter.wireless_client_events`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/org_search_exporter.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/clients/events/search` | [`orgs.clients.searchOrgWirelessClientEvents`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/clients/wireless/search-org-wireless-client-events) | [`OrgSearchExporter.wireless_client_events`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/org_search_exporter.py) | Reference |
 
 ## Menu 232
 
@@ -962,7 +962,7 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/wan_clients/search` | [`orgs.wan_clients.searchOrgWanClients`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/clients/wan/search-org-wan-clients) | [`OrgSearchExporter.wan_clients`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/org_search_exporter.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/wan_clients/search` | [`orgs.wan_clients.searchOrgWanClients`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/clients/wan/search-org-wan-clients) | [`OrgSearchExporter.wan_clients`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/org_search_exporter.py) | Reference |
 
 ## Menu 233
 
@@ -973,7 +973,7 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/wan_clients/events/search` | [`orgs.wan_clients.searchOrgWanClientEvents`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/clients/wan/search-org-wan-client-events) | [`OrgSearchExporter.wan_client_events`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/org_search_exporter.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/wan_clients/events/search` | [`orgs.wan_clients.searchOrgWanClientEvents`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/clients/wan/search-org-wan-client-events) | [`OrgSearchExporter.wan_client_events`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/org_search_exporter.py) | Reference |
 
 ## Menu 234
 
@@ -984,7 +984,7 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/events/system/search` | [`orgs.events.searchOrgSystemEvents`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/events/search-org-system-events) | [`OrgSearchExporter.system_events`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/org_search_exporter.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/events/system/search` | [`orgs.events.searchOrgSystemEvents`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/events/search-org-system-events) | [`OrgSearchExporter.system_events`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/org_search_exporter.py) | Reference |
 
 ## Menu 243
 
@@ -1003,7 +1003,7 @@ Menu 243 builds the SNMP MIB from the local Mist OpenAPI file and the metric cat
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/sites/search` | [`orgs.sites.searchOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/search-org-sites) | [`OrgSearchExporter.sites`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/org_search_exporter.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/sites/search` | [`orgs.sites.searchOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/search-org-sites) | [`OrgSearchExporter.sites`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/org_search_exporter.py) | Reference |
 
 ## Menu 249
 
@@ -1014,7 +1014,7 @@ Menu 243 builds the SNMP MIB from the local Mist OpenAPI file and the metric cat
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/devices/search` | [`orgs.devices.searchOrgDevices`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/devices/search-org-devices) | [`OrgSearchExporter.devices`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/org_search_exporter.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/devices/search` | [`orgs.devices.searchOrgDevices`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/devices/search-org-devices) | [`OrgSearchExporter.devices`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/org_search_exporter.py) | Reference |
 
 ## Menu 250
 
@@ -1025,7 +1025,7 @@ Menu 243 builds the SNMP MIB from the local Mist OpenAPI file and the metric cat
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/vars/search` | [`orgs.vars.searchOrgVars`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/vars/search-org-vars) | [`OrgSearchExporter.org_vars`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/org_search_exporter.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/vars/search` | [`orgs.vars.searchOrgVars`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/vars/search-org-vars) | [`OrgSearchExporter.org_vars`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/org_search_exporter.py) | Reference |
 
 ## Menu 251
 
@@ -1036,7 +1036,7 @@ Menu 243 builds the SNMP MIB from the local Mist OpenAPI file and the metric cat
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/usermacs/search` | [`orgs.usermacs.searchOrgUserMacs`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/user-macs/search-org-user-macs) | [`OrgSearchExporter.user_macs`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/org_search_exporter.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/usermacs/search` | [`orgs.usermacs.searchOrgUserMacs`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/user-macs/search-org-user-macs) | [`OrgSearchExporter.user_macs`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/org_search_exporter.py) | Reference |
 
 ## Menu 252
 
@@ -1047,7 +1047,7 @@ Menu 243 builds the SNMP MIB from the local Mist OpenAPI file and the metric cat
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/otherdevices/events/search` | [`orgs.otherdevices.searchOrgOtherDeviceEvents`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/devices/others/search-org-other-device-events) | [`OrgExportUtils.other_device_events`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/org_export_utils.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/otherdevices/events/search` | [`orgs.otherdevices.searchOrgOtherDeviceEvents`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/devices/others/search-org-other-device-events) | [`OrgExportUtils.other_device_events`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/org_export_utils.py) | Reference |
 
 ## Menu 253
 
@@ -1058,7 +1058,7 @@ Menu 243 builds the SNMP MIB from the local Mist OpenAPI file and the metric cat
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/mxedges/search` | [`orgs.mxedges.searchOrgMxEdges`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/mxedges/search-org-mx-edges) | [`OrgSearchExporter.mx_edges`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/org_search_exporter.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/mxedges/search` | [`orgs.mxedges.searchOrgMxEdges`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/mxedges/search-org-mx-edges) | [`OrgSearchExporter.mx_edges`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/org_search_exporter.py) | Reference |
 
 ## Menu 255
 
@@ -1069,7 +1069,7 @@ Menu 243 builds the SNMP MIB from the local Mist OpenAPI file and the metric cat
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/pskportals/logs/search` | [`orgs.pskportals.searchOrgPskPortalLogs`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/psk-portals/search-org-psk-portal-logs) | [`OrgSearchExporter.psk_portal_logs`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/export/org_search_exporter.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/pskportals/logs/search` | [`orgs.pskportals.searchOrgPskPortalLogs`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/psk-portals/search-org-psk-portal-logs) | [`OrgSearchExporter.psk_portal_logs`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/org_search_exporter.py) | Reference |
 
 ## Menu 269
 
@@ -1092,12 +1092,12 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/alarms/search` | [`orgs.alarms.searchOrgAlarms`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/alarms/search-org-alarms) | [`RogueDhcpScanner._default_api`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/security/rogue_dhcp/scanner.py) | Reference |
-| GET | `/api/v1/orgs/{org_id}/devices/events/search` | [`orgs.devices.searchOrgDeviceEvents`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/devices/search-org-device-events) | [`RogueDhcpScanner._default_api`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/security/rogue_dhcp/scanner.py) | Reference |
-| GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`RogueDhcpScanner._default_api`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/security/rogue_dhcp/scanner.py) | Reference |
-| GET | `/api/v1/sites/{site_id}/alarms/search` | [`sites.alarms.searchSiteAlarms`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/alarms/search-site-alarms) | [`RogueDhcpScanner._default_api`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/security/rogue_dhcp/scanner.py) | Reference |
-| GET | `/api/v1/sites/{site_id}/devices/events/search` | [`sites.devices.searchSiteDeviceEvents`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/devices/search-site-device-events) | [`RogueDhcpScanner._default_api`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/security/rogue_dhcp/scanner.py) | Reference |
-| GET | `/api/v1/sites/{site_id}/marvis_configs/search` | [`sites.marvis_configs.searchSiteMarvisConfigActions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/marvis-configs/search-site-marvis-config-actions) | [`RogueDhcpScanner._default_api`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/security/rogue_dhcp/scanner.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/alarms/search` | [`orgs.alarms.searchOrgAlarms`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/alarms/search-org-alarms) | [`RogueDhcpScanner._default_api`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/protection/security/rogue_dhcp/scanner.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/devices/events/search` | [`orgs.devices.searchOrgDeviceEvents`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/devices/search-org-device-events) | [`RogueDhcpScanner._default_api`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/protection/security/rogue_dhcp/scanner.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`RogueDhcpScanner._default_api`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/protection/security/rogue_dhcp/scanner.py) | Reference |
+| GET | `/api/v1/sites/{site_id}/alarms/search` | [`sites.alarms.searchSiteAlarms`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/alarms/search-site-alarms) | [`RogueDhcpScanner._default_api`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/protection/security/rogue_dhcp/scanner.py) | Reference |
+| GET | `/api/v1/sites/{site_id}/devices/events/search` | [`sites.devices.searchSiteDeviceEvents`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/devices/search-site-device-events) | [`RogueDhcpScanner._default_api`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/protection/security/rogue_dhcp/scanner.py) | Reference |
+| GET | `/api/v1/sites/{site_id}/marvis_configs/search` | [`sites.marvis_configs.searchSiteMarvisConfigActions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/marvis-configs/search-site-marvis-config-actions) | [`RogueDhcpScanner._default_api`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/protection/security/rogue_dhcp/scanner.py) | Reference |
 
 ## Menu 271
 
@@ -1117,9 +1117,9 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/jsi/inventory/search` | [`orgs.jsi.searchOrgJsiAssetsAndContracts`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/jsi/search-org-jsi-assets-and-contracts) | [`SubscriptionExpiryClient.search_jsi_assets_and_contracts`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/subscription_expiry/client.py) | Call |
-| GET | `/api/v1/orgs/{org_id}/licenses` | [`orgs.licenses.getOrgLicensesSummary`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/licenses/get-org-licenses-summary) | [`SubscriptionExpiryClient.fetch_license_summary`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/subscription_expiry/client.py) | Call |
-| GET | `/api/v1/orgs/{org_id}/licenses/usages` | [`orgs.licenses.getOrgLicensesBySite`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/licenses/get-org-licenses-by-site) | [`SubscriptionExpiryClient.fetch_license_usage_by_site`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/subscription_expiry/client.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/jsi/inventory/search` | [`orgs.jsi.searchOrgJsiAssetsAndContracts`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/jsi/search-org-jsi-assets-and-contracts) | [`SubscriptionExpiryClient.search_jsi_assets_and_contracts`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/intelligence/reports/subscription_expiry/client.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/licenses` | [`orgs.licenses.getOrgLicensesSummary`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/licenses/get-org-licenses-summary) | [`SubscriptionExpiryClient.fetch_license_summary`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/intelligence/reports/subscription_expiry/client.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/licenses/usages` | [`orgs.licenses.getOrgLicensesBySite`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/licenses/get-org-licenses-by-site) | [`SubscriptionExpiryClient.fetch_license_usage_by_site`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/intelligence/reports/subscription_expiry/client.py) | Call |
 
 ## Menu 272
 
@@ -1142,12 +1142,12 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/cert` | [`orgs.cert.listOrgCertificates`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/cert/list-org-certificates) | [`CertificateExpiryClient.read_org_certificates`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/certificate_expiry/client.py) | Reference |
-| GET | `/api/v1/orgs/{org_id}/pskportals` | [`orgs.pskportals.listOrgPskPortals`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/psk-portals/list-org-psk-portals) | [`CertificateExpiryClient._read_org_psk_portals_page`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/certificate_expiry/client.py) | Call |
-| GET | `/api/v1/orgs/{org_id}/setting` | [`orgs.setting.getOrgSettings`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/setting/get-org-settings) | [`CertificateExpiryClient.read_org_settings`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/certificate_expiry/client.py) | Reference |
-| GET | `/api/v1/orgs/{org_id}/setting/mist_nac_crls` | [`orgs.setting.getOrgNacCrl`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/nac-crl/get-org-nac-crl) | [`CertificateExpiryClient.read_crl_metadata`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/certificate_expiry/client.py) | Name |
-| GET | `/api/v1/orgs/{org_id}/ssos` | [`orgs.ssos.listOrgSsos`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sso/list-org-ssos) | [`CertificateExpiryClient._read_org_ssos_page`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/certificate_expiry/client.py) | Call |
-| GET | `/api/v1/orgs/{org_id}/stats/devices` | [`orgs.stats.listOrgDevicesStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/stats/devices/list-org-devices-stats) | [`CertificateExpiryClient._read_device_stats_page`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/certificate_expiry/client.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/cert` | [`orgs.cert.listOrgCertificates`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/cert/list-org-certificates) | [`CertificateExpiryClient.read_org_certificates`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/intelligence/reports/certificate_expiry/client.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/pskportals` | [`orgs.pskportals.listOrgPskPortals`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/psk-portals/list-org-psk-portals) | [`CertificateExpiryClient._read_org_psk_portals_page`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/intelligence/reports/certificate_expiry/client.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/setting` | [`orgs.setting.getOrgSettings`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/setting/get-org-settings) | [`CertificateExpiryClient.read_org_settings`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/intelligence/reports/certificate_expiry/client.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/setting/mist_nac_crls` | [`orgs.setting.getOrgNacCrl`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/nac-crl/get-org-nac-crl) | [`CertificateExpiryClient.read_crl_metadata`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/intelligence/reports/certificate_expiry/client.py) | Name |
+| GET | `/api/v1/orgs/{org_id}/ssos` | [`orgs.ssos.listOrgSsos`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sso/list-org-ssos) | [`CertificateExpiryClient._read_org_ssos_page`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/intelligence/reports/certificate_expiry/client.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/stats/devices` | [`orgs.stats.listOrgDevicesStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/stats/devices/list-org-devices-stats) | [`CertificateExpiryClient._read_device_stats_page`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/intelligence/reports/certificate_expiry/client.py) | Call |
 
 ## Menu 273
 
@@ -1167,9 +1167,9 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/admins` | [`orgs.admins.listOrgAdmins`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/admins/list-org-admins) | [`AdminTokenHygieneClient.list_admins`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/admin_token_hygiene/client.py) | Call |
-| GET | `/api/v1/orgs/{org_id}/apitokens` | [`orgs.apitokens.listOrgApiTokens`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/api-tokens/list-org-api-tokens) | [`AdminTokenHygieneClient.list_tokens`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/admin_token_hygiene/client.py) | Call |
-| GET | `/api/v1/orgs/{org_id}/setting` | [`orgs.setting.getOrgSettings`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/setting/get-org-settings) | [`AdminTokenHygieneClient.get_settings`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/admin_token_hygiene/client.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/admins` | [`orgs.admins.listOrgAdmins`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/admins/list-org-admins) | [`AdminTokenHygieneClient.list_admins`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/intelligence/reports/admin_token_hygiene/client.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/apitokens` | [`orgs.apitokens.listOrgApiTokens`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/api-tokens/list-org-api-tokens) | [`AdminTokenHygieneClient.list_tokens`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/intelligence/reports/admin_token_hygiene/client.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/setting` | [`orgs.setting.getOrgSettings`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/setting/get-org-settings) | [`AdminTokenHygieneClient.get_settings`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/intelligence/reports/admin_token_hygiene/client.py) | Call |
 
 ## Menu 274
 
@@ -1202,13 +1202,13 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/deviceprofiles` | [`orgs.deviceprofiles.listOrgDeviceProfiles`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/device-profiles/list-org-device-profiles) | [`SiteVariableAuditClient._default_operations`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/site_variable_audit/client.py) | Reference |
-| GET | `/api/v1/orgs/{org_id}/gatewaytemplates` | [`orgs.gatewaytemplates.listOrgGatewayTemplates`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/gateway-templates/list-org-gateway-templates) | [`SiteVariableAuditClient._default_operations`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/site_variable_audit/client.py) | Reference |
-| GET | `/api/v1/orgs/{org_id}/networktemplates` | [`orgs.networktemplates.listOrgNetworkTemplates`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/network-templates/list-org-network-templates) | [`SiteVariableAuditClient._default_operations`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/site_variable_audit/client.py) | Reference |
-| GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`SiteVariableAuditClient._default_operations`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/site_variable_audit/client.py) | Reference |
-| GET | `/api/v1/orgs/{org_id}/templates` | [`orgs.templates.listOrgTemplates`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/wlan-templates/list-org-templates) | [`SiteVariableAuditClient._default_operations`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/site_variable_audit/client.py) | Reference |
-| GET | `/api/v1/orgs/{org_id}/vars/search` | [`orgs.vars.searchOrgVars`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/vars/search-org-vars) | [`SiteVariableAuditClient._default_operations`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/site_variable_audit/client.py) | Reference |
-| GET | `/api/v1/orgs/{org_id}/wlans` | [`orgs.wlans.listOrgWlans`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/wlans/list-org-wlans) | [`SiteVariableAuditClient._default_operations`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/site_variable_audit/client.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/deviceprofiles` | [`orgs.deviceprofiles.listOrgDeviceProfiles`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/device-profiles/list-org-device-profiles) | [`SiteVariableAuditClient._default_operations`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/intelligence/reports/site_variable_audit/client.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/gatewaytemplates` | [`orgs.gatewaytemplates.listOrgGatewayTemplates`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/gateway-templates/list-org-gateway-templates) | [`SiteVariableAuditClient._default_operations`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/intelligence/reports/site_variable_audit/client.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/networktemplates` | [`orgs.networktemplates.listOrgNetworkTemplates`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/network-templates/list-org-network-templates) | [`SiteVariableAuditClient._default_operations`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/intelligence/reports/site_variable_audit/client.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`SiteVariableAuditClient._default_operations`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/intelligence/reports/site_variable_audit/client.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/templates` | [`orgs.templates.listOrgTemplates`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/wlan-templates/list-org-templates) | [`SiteVariableAuditClient._default_operations`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/intelligence/reports/site_variable_audit/client.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/vars/search` | [`orgs.vars.searchOrgVars`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/vars/search-org-vars) | [`SiteVariableAuditClient._default_operations`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/intelligence/reports/site_variable_audit/client.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/wlans` | [`orgs.wlans.listOrgWlans`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/wlans/list-org-wlans) | [`SiteVariableAuditClient._default_operations`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/intelligence/reports/site_variable_audit/client.py) | Reference |
 
 ## Menu 276
 
@@ -1230,11 +1230,11 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/admins` | [`orgs.admins.listOrgAdmins`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/admins/list-org-admins) | [`OrgSecurityPostureSourceClient.collect`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/org_security_posture/io/sources.py) | Call |
-| GET | `/api/v1/orgs/{org_id}/apitokens` | [`orgs.apitokens.listOrgApiTokens`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/api-tokens/list-org-api-tokens) | [`OrgSecurityPostureSourceClient.collect`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/org_security_posture/io/sources.py) | Call |
-| GET | `/api/v1/orgs/{org_id}/setting` | [`orgs.setting.getOrgSettings`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/setting/get-org-settings) | [`OrgSecurityPostureSourceClient.collect`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/org_security_posture/io/sources.py) | Call |
-| GET | `/api/v1/orgs/{org_id}/ssos` | [`orgs.ssos.listOrgSsos`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sso/list-org-ssos) | [`OrgSecurityPostureSourceClient.collect`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/org_security_posture/io/sources.py) | Call |
-| GET | `/api/v1/orgs/{org_id}/webhooks` | [`orgs.webhooks.listOrgWebhooks`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/webhooks/list-org-webhooks) | [`OrgSecurityPostureSourceClient.collect`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/org_security_posture/io/sources.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/admins` | [`orgs.admins.listOrgAdmins`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/admins/list-org-admins) | [`OrgSecurityPostureSourceClient.collect`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/intelligence/reports/org_security_posture/io/sources.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/apitokens` | [`orgs.apitokens.listOrgApiTokens`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/api-tokens/list-org-api-tokens) | [`OrgSecurityPostureSourceClient.collect`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/intelligence/reports/org_security_posture/io/sources.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/setting` | [`orgs.setting.getOrgSettings`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/setting/get-org-settings) | [`OrgSecurityPostureSourceClient.collect`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/intelligence/reports/org_security_posture/io/sources.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/ssos` | [`orgs.ssos.listOrgSsos`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sso/list-org-ssos) | [`OrgSecurityPostureSourceClient.collect`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/intelligence/reports/org_security_posture/io/sources.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/webhooks` | [`orgs.webhooks.listOrgWebhooks`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/webhooks/list-org-webhooks) | [`OrgSecurityPostureSourceClient.collect`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/intelligence/reports/org_security_posture/io/sources.py) | Call |
 
 ## Menu 277
 
@@ -1245,8 +1245,8 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`APICoreFetchUtils.all_sites_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/api/api_core_fetch_utils.py) | Call |
-| GET | `/api/v1/orgs/{org_id}/stats/devices` | [`orgs.stats.listOrgDevicesStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/stats/devices/list-org-devices-stats) | [`SwitchScorecardClient.list_switch_stats`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/switch_scorecard/client.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`APICoreFetchUtils.all_sites_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/access/api/api_core_fetch_utils.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/stats/devices` | [`orgs.stats.listOrgDevicesStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/stats/devices/list-org-devices-stats) | [`SwitchScorecardClient.list_switch_stats`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/intelligence/reports/switch_scorecard/client.py) | Reference |
 
 ## Menu 278
 
@@ -1257,8 +1257,8 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`APICoreFetchUtils.all_sites_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/api/api_core_fetch_utils.py) | Call |
-| GET | `/api/v1/orgs/{org_id}/stats/devices` | [`orgs.stats.listOrgDevicesStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/stats/devices/list-org-devices-stats) | [`ApScorecardClient.list_ap_stats`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/ap_scorecard/client.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`APICoreFetchUtils.all_sites_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/access/api/api_core_fetch_utils.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/stats/devices` | [`orgs.stats.listOrgDevicesStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/stats/devices/list-org-devices-stats) | [`ApScorecardClient.list_ap_stats`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/intelligence/reports/ap_scorecard/client.py) | Call |
 
 ## Menu 279
 
@@ -1269,8 +1269,8 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`APICoreFetchUtils.all_sites_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/api/api_core_fetch_utils.py) | Call |
-| GET | `/api/v1/orgs/{org_id}/stats/devices` | [`orgs.stats.listOrgDevicesStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/stats/devices/list-org-devices-stats) | [`WanEdgeGatewayStatsClient.fetch_gateway_stats`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/wan_edge_scorecard/client.py) | Reference |
+| GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`APICoreFetchUtils.all_sites_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/access/api/api_core_fetch_utils.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/stats/devices` | [`orgs.stats.listOrgDevicesStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/stats/devices/list-org-devices-stats) | [`WanEdgeGatewayStatsClient.fetch_gateway_stats`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/intelligence/reports/wan_edge_scorecard/client.py) | Reference |
 
 ## Menu 280
 
@@ -1290,9 +1290,9 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/const/alarm_defs` | [`const.alarm_defs.listAlarmDefinitions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/events/list-alarm-definitions) | [`AlertDigestClient.list_alarm_definitions`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/alert_digest/client.py) | Call |
-| GET | `/api/v1/orgs/{org_id}/alarms/search` | [`orgs.alarms.searchOrgAlarms`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/alarms/search-org-alarms) | [`AlertDigestClient._read_first_alarm_page`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/alert_digest/client.py) | Call |
-| GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`AlertDigestClient.list_org_sites`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/alert_digest/client.py) | Call |
+| GET | `/api/v1/const/alarm_defs` | [`const.alarm_defs.listAlarmDefinitions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/events/list-alarm-definitions) | [`AlertDigestClient.list_alarm_definitions`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/intelligence/reports/alert_digest/client.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/alarms/search` | [`orgs.alarms.searchOrgAlarms`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/alarms/search-org-alarms) | [`AlertDigestClient._read_first_alarm_page`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/intelligence/reports/alert_digest/client.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`AlertDigestClient.list_org_sites`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/intelligence/reports/alert_digest/client.py) | Call |
 
 ## Menu 282
 
@@ -1314,8 +1314,8 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/events/search` | [`orgs.events.searchOrgEvents`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/events/search-org-events) | [`RoguePciEvidenceClient.list_org_rogue_events`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/rogue_pci_evidence/client.py) | Call |
-| GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`RoguePciEvidenceClient.list_org_sites`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/rogue_pci_evidence/client.py) | Call |
-| GET | `/api/v1/orgs/{org_id}/wlans` | [`orgs.wlans.listOrgWlans`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/wlans/list-org-wlans) | [`RoguePciEvidenceClient.list_org_wlans`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/rogue_pci_evidence/client.py) | Call |
-| GET | `/api/v1/sites/{site_id}/insights/rogues` | [`sites.insights.listSiteRogueAPs`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/rogues/list-site-rogue-a-ps) | [`RoguePciEvidenceClient.list_site_rogue_aps`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/rogue_pci_evidence/client.py) | Call |
-| GET | `/api/v1/sites/{site_id}/setting` | [`sites.setting.getSiteSetting`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/setting/get-site-setting) | [`RoguePciEvidenceClient.list_site_settings`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/reports/rogue_pci_evidence/client.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/events/search` | [`orgs.events.searchOrgEvents`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/events/search-org-events) | [`RoguePciEvidenceClient.list_org_rogue_events`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/intelligence/reports/rogue_pci_evidence/client.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`RoguePciEvidenceClient.list_org_sites`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/intelligence/reports/rogue_pci_evidence/client.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/wlans` | [`orgs.wlans.listOrgWlans`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/wlans/list-org-wlans) | [`RoguePciEvidenceClient.list_org_wlans`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/intelligence/reports/rogue_pci_evidence/client.py) | Call |
+| GET | `/api/v1/sites/{site_id}/insights/rogues` | [`sites.insights.listSiteRogueAPs`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/rogues/list-site-rogue-a-ps) | [`RoguePciEvidenceClient.list_site_rogue_aps`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/intelligence/reports/rogue_pci_evidence/client.py) | Call |
+| GET | `/api/v1/sites/{site_id}/setting` | [`sites.setting.getSiteSetting`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/setting/get-site-setting) | [`RoguePciEvidenceClient.list_site_settings`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/intelligence/reports/rogue_pci_evidence/client.py) | Call |

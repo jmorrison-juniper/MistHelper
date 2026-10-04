@@ -2,7 +2,7 @@
 
 from unittest.mock import MagicMock
 
-from src.export.device_events_52w_exporter import DeviceEvents52wExporter
+from src.operations.exporting.export.device_events_52w_exporter import DeviceEvents52wExporter
 
 
 def test_device_events_exporter_handles_empty_results(tmp_path, monkeypatch) -> None:

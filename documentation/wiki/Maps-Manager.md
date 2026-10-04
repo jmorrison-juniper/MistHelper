@@ -1,7 +1,7 @@
 # Standalone Maps Manager
 
 The Maps Manager is menu 142 in MistHelper. It also runs on its own from
-`src/maps/maps_manager.py`.
+`src/interfaces/visualization/maps/maps_manager.py`.
 
 ## Quick Start
 
@@ -10,16 +10,16 @@ The Maps Manager is menu 142 in MistHelper. It also runs on its own from
 python MistHelper.py -M 142
 
 # Standalone. Launches the interactive viewer by default.
-python src/maps/maps_manager.py
+python src/interfaces/visualization/maps/maps_manager.py
 
 # Standalone with the operations menu instead of the viewer
-python src/maps/maps_manager.py --menu
+python src/interfaces/visualization/maps/maps_manager.py --menu
 
 # Standalone against a specific organization
-python src/maps/maps_manager.py --org YOUR_ORG_ID
+python src/interfaces/visualization/maps/maps_manager.py --org YOUR_ORG_ID
 
 # Debug mode
-python src/maps/maps_manager.py --debug
+python src/interfaces/visualization/maps/maps_manager.py --debug
 ```
 
 ## Command Line Options
@@ -40,8 +40,8 @@ The standalone module reads from `.env` or environment variables:
 
 ## Architecture
 
-The `src/maps/maps_manager.py` module holds the `MapsManager` class.
-`MistHelper.py` reaches it through `src/refactors/maps_manager_launcher.py`, so
+The `src/interfaces/visualization/maps/maps_manager.py` module holds the `MapsManager` class.
+`MistHelper.py` reaches it through `src/foundation/support/refactors/maps_manager_launcher.py`, so
 both entry points share one implementation. This enables:
 
 - Independent execution without loading the full MistHelper

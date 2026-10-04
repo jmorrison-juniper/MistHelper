@@ -9,7 +9,7 @@ Why:
     test fails when a value disappears.
 
     Every expected value below is literal text. These tests import no constant
-    from ``src.upgrade_portal.app.security``, because a test that reads the
+    from ``src.interfaces.portals.upgrade_portal.app.security``, because a test that reads the
     value it checks proves nothing. A weakened constant must break a test.
 
     The token rule and the session rule come from
@@ -35,7 +35,7 @@ from flask import Flask, Response, jsonify, render_template, request
 from flask.testing import FlaskClient
 from werkzeug.test import TestResponse
 
-from src.upgrade_portal.runtime import identity
+from src.interfaces.portals.upgrade_portal.runtime import identity
 
 # ---------------------------------------------------------------------------
 # The contract values. Every value below is literal, never imported.
@@ -833,7 +833,7 @@ def build_peer_client(monkeypatch: pytest.MonkeyPatch, trusted_hops: int) -> Fla
         A test client of the built portal, with one probe route in place.
     """
     factory = pytest.importorskip(  # WHY: The factory arrives at task T027, as in conftest.
-        "src.upgrade_portal.app.factory",
+        "src.interfaces.portals.upgrade_portal.app.factory",
         reason="The capture portal application factory is not built yet.",
     )
     monkeypatch.setenv(PROXY_HOPS_VARIABLE, str(trusted_hops))

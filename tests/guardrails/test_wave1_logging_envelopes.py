@@ -16,7 +16,7 @@ Reference: specs/192-compliance-decomposition-wave1/high-risk-function-map.md
 import logging  # For log-level constants used in caplog assertions
 
 import MistHelper  # Main module under test (all classes are module-level)
-from src.refactors.mist_site_exclude_prefix import (  # Import the canonical site filter owner.
+from src.foundation.support.refactors.mist_site_exclude_prefix import (  # Import the canonical site filter owner.
     MIST_SITE_EXCLUDE_PREFIX,  # Use the moved constant without a MistHelper pass-through.
 )
 
@@ -145,7 +145,7 @@ class TestGetSiteSelectionEnvelopes:
 
     def _make_manager(self, monkeypatch):
         """Build a canonical WAN2MigrationManager with a mocked org and fake sites."""
-        from src.gateway import wan2_migration_manager as wan2_module  # Import canonical module
+        from src.mist.resources.gateway import wan2_migration_manager as wan2_module  # Import canonical module
 
         wan2_module.configure_wan2_migration_dependencies(  # Wire runtime deps into canonical module
             wan2_module.WAN2MigrationDependencies(  # Frozen bundle mirrors production wiring
@@ -218,7 +218,7 @@ class TestConfirmSiteVariableOperationEnvelopes:
 
     def _make_manager(self, monkeypatch):
         """Build a canonical WAN2MigrationManager with a mocked org."""
-        from src.gateway import wan2_migration_manager as wan2_module  # Import canonical module
+        from src.mist.resources.gateway import wan2_migration_manager as wan2_module  # Import canonical module
 
         wan2_module.configure_wan2_migration_dependencies(  # Wire runtime deps into canonical module
             wan2_module.WAN2MigrationDependencies(  # Frozen bundle mirrors production wiring

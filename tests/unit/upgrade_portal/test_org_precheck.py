@@ -16,8 +16,8 @@ from typing import Any
 
 import pytest
 
-from src.upgrade_portal.capture import store
-from src.upgrade_portal.upgrade.org_precheck import OrgPrecheckGate, OrgPrecheckState, SitePrecheck
+from src.interfaces.portals.upgrade_portal.capture import store
+from src.interfaces.portals.upgrade_portal.upgrade.org_precheck import OrgPrecheckGate, OrgPrecheckState, SitePrecheck
 
 SITE_ONE = "00000000-0000-0000-0000-0000000000b1"  # The first selected site.
 SITE_TWO = "00000000-0000-0000-0000-0000000000b2"  # The second selected site.

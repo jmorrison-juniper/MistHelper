@@ -6,14 +6,14 @@ Date: 2026-05-26
 
 - Menu entry remains option `139` with unchanged description text.
 - `MistHelper.py` retains orchestration in `TroubleshootUtils.launch_interactive()`.
-- Option handlers (`client_connectivity`, `device_performance`, `network_connectivity`, `view_insights`) now delegate to `src/troubleshooting/marvis_troubleshoot_utils.py` via dependency container.
+- Option handlers (`client_connectivity`, `device_performance`, `network_connectivity`, `view_insights`) now delegate to `src/mist/intelligence/troubleshooting/marvis_troubleshoot_utils.py` via dependency container.
 - Prompt flow and option routing are preserved.
 
 ## Operation 175 - Enhanced SSH Command Runner
 
 - Menu entry remains option `175` with unchanged description text.
 - `MistHelper.py` retains class-level orchestration/delegation surface (`SSHRunnerManager`).
-- Execution helpers now delegate to `src/ssh/ssh_runner_manager.py`.
+- Execution helpers now delegate to `src/operations/execution/ssh/ssh_runner_manager.py`.
 - Interactive flow remains unchanged from menu perspective.
 
 ## Operation 176 - SSH Runner by Gateway Template
