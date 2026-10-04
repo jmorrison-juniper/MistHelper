@@ -35,8 +35,8 @@ from typing import Any  # The records hold JSON values of mixed types.
 
 import pytest  # The fixtures and the parameters of the decision tests.
 
-from tests.e2e.upgrade_portal.retry_run_seeds import FAILED_RUN_ID, RETRY_SITE_ID, STOPPED_RUN_ID  # Issue #3292.
 from src.interfaces.portals.upgrade_portal.app.routes.upgrade import run_is_live  # The shipped rule of the site scan.
+from tests.e2e.upgrade_portal.retry_run_seeds import FAILED_RUN_ID, RETRY_SITE_ID, STOPPED_RUN_ID  # Issue #3292.
 
 logger = logging.getLogger(__name__)  # Keep the records of this module under one name.
 
