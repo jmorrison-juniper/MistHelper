@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from src.upgrade_portal.upgrade import options as module
+from src.interfaces.portals.upgrade_portal.upgrade import options as module
 from tests.unit.upgrade_portal.test_upgrade_options import SWITCH_ROW
 
 
