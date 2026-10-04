@@ -1142,7 +1142,7 @@ def capture_pre_upgrade_for_run(run_id: str) -> tuple[Response, int]:
     device_ids = body.get("device_ids", [])  # List of device identifiers to capture
     org_id = body.get("org_id", "")  # Organization ID for Mist API context
     site_id = body.get("site_id", "")  # Site ID for the devices being captured
-    tier = body.get("tier", TIER_STANDARD)  # Data tier for the capture (standard or extra)
+    body.get("tier", TIER_STANDARD)  # Preserve the accepted tier field for request compatibility.
 
     # WHY: Validate required parameters before making any API calls to avoid wasted work
     if not run_id or not device_ids or not org_id or not site_id:
@@ -1164,15 +1164,21 @@ def capture_pre_upgrade_for_run(run_id: str) -> tuple[Response, int]:
 
         # WHY: Invoke CaptureService.capture_pre_upgrade() to fetch device state from Mist API
         # This returns capture result with capture data stored in ArangoDB
-        capture_result = capture_service.capture_pre_upgrade(
-            run_id=run_id, device_ids=device_ids, org_id=org_id, site_id=site_id, tier=tier
+        capture_id = capture_service.capture_pre_upgrade(
+            run_id=run_id,
+            org_id=org_id,
+            site_id=site_id,
+            device_ids=device_ids,
+            user_id=actor_address(),
         )
 
         logger.debug("capture: pre-upgrade capture for run %s completed with result", run_id)  # AFTER service call
+        if not capture_id:  # A false result means the service did not persist a verified capture.
+            return json_error(SERVER_ERROR_STATUS, "capture_failed", "CaptureService could not store the capture")
 
         # WHY: Build success response with capture ID and status for the browser to poll
         response_body = {
-            "capture_id": capture_result.get("capture_id", ""),  # ID used for status polling
+            "capture_id": capture_id,  # ID used for status polling
             "status": "pending",  # Initial status while capture is being processed
             "devices_count": len(device_ids),  # Number of devices in this capture
             "run_id": run_id,  # Echo back the run ID for reference
