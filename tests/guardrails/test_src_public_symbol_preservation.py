@@ -36,6 +36,21 @@ MODULE_PATHS = {  # Map each old direct module to its new canonical module.
 }  # Cover every moved direct source module.
 
 
+def ensure_origin_main() -> None:
+    """Ensure the baseline source ref exists before archive comparisons."""
+    result = subprocess.run(
+        ["git", "show-ref", "--verify", "--quiet", "refs/remotes/origin/main"],
+        cwd=REPOSITORY_ROOT,
+        check=False,
+    )  # Check whether the workflow checkout fetched the required baseline ref.
+    if result.returncode != 0:
+        subprocess.run(
+            ["git", "fetch", "origin", "main", "--depth=1"],
+            cwd=REPOSITORY_ROOT,
+            check=True,
+        )  # Fetch the baseline when a manual workflow checkout omitted it.
+
+
 def path_map() -> dict[str, str]:
     """Return every old and new source-relative path."""  # Build one canonical mapping for archived modules.
     mapping = dict(MODULE_PATHS)  # Start with direct module moves.
@@ -98,6 +113,7 @@ def test_moved_modules_lose_no_module_level_symbol() -> None:
 
     Replace the path-limited symbol-diff check for renamed files.
     """
+    ensure_origin_main()  # Make the baseline available in pull request and manual runs.
     command = [
         "git",
         "archive",
@@ -141,6 +157,7 @@ def test_moved_modules_lose_no_module_level_symbol() -> None:
 
 def test_moved_packages_preserve_tracked_data_files() -> None:
     """Require each tracked package-data file to keep its relative package path."""
+    ensure_origin_main()  # Make the baseline available in pull request and manual runs.
     command = [
         "git",
         "ls-tree",
