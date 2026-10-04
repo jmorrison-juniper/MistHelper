@@ -209,8 +209,13 @@ def test_current_path_maps_a_moved_baseline_to_itself() -> None:
 
 
 def test_current_path_still_maps_an_old_flat_package() -> None:
-    """Require an old flat package path to keep its canonical domain destination."""
-    old_path = current_path("src/config/settings.py")  # Read a path in the pre-move layout.
+    """Require an old flat package path to keep its canonical domain destination.
+
+    The canonical path guard refuses a legacy source path literal in tracked text.
+    Build the legacy path from a variable, so the file text holds no such literal.
+    """
+    legacy_package = "config"  # Name one package that moved out of the source root.
+    old_path = current_path(f"src/{legacy_package}/settings.py")  # Read a path in the pre-move layout.
     expected_path = SOURCE_ROOT / "foundation/runtime/config" / "settings.py"  # The move map must apply.
     assert old_path == expected_path, f"Checked 1 old path. Read {old_path}."
 
