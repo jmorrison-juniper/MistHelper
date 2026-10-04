@@ -84,7 +84,7 @@ class ClientRecords(list["ClientRecord"]):
 
     def __init__(
         self,
-        records: Sequence["ClientRecord"],
+        records: Sequence[ClientRecord],
         partial_reasons: Sequence[dict[str, Any]] = (),
     ) -> None:
         """Store normalized records and any source read reasons."""

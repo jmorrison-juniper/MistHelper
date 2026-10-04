@@ -14,7 +14,6 @@ Why:
 
 import logging  # The portal logs with the standard library only.
 import os
-from pathlib import Path  # The environment is the only source of a setting.
 import re  # Checks that a theme name holds safe characters only.
 import secrets  # Builds a session key when the operator sets none.
 from dataclasses import dataclass  # Builds the frozen settings records.

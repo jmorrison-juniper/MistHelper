@@ -1011,6 +1011,7 @@ __all__ = [
     "last_seen_advanced",
     "normalize_version",
     "polls_per_hour",
+    "read_every_page",
     "read_fleet_statistics",
     "read_reboot_hint",
     "reading_from_record",
