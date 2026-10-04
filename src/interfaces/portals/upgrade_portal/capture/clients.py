@@ -100,6 +100,8 @@ def _response_rows(response: Any) -> tuple[list[dict[str, Any]] | None, int]:
     if not isinstance(rows, list):
         return None, status
     return [row for row in rows if isinstance(row, dict)], status
+
+
 # ---------------------------------------------------------------------------
 # The records
 # ---------------------------------------------------------------------------
@@ -366,16 +368,6 @@ def page_limit() -> int:
     result = max(MIN_PAGE_LIMIT, value)
     logger.debug("Capture setting checked=1 field=%s clamped=%s.", PAGE_LIMIT_VARIABLE, result != value)
     return result
-
-
-def _response_rows(response: Any) -> tuple[list[dict[str, Any]] | None, int]:
-    """Return valid rows and the response status."""
-    payload = getattr(response, "data", None)
-    rows = payload.get("results") if isinstance(payload, Mapping) else payload
-    status = int(getattr(response, "status_code", 0) or 0)
-    if not isinstance(rows, list):
-        return None, status
-    return [row for row in rows if isinstance(row, dict)], status
 
 
 def _collect(session: Any, response: Any) -> list[dict[str, Any]]:

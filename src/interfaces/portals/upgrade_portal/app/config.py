@@ -436,11 +436,6 @@ def read_secret_key() -> str:
     return secrets.token_urlsafe(SECRET_KEY_BYTES)  # A fresh key drops the open sessions.
 
 
-def _is_container_runtime() -> bool:
-    """Return whether the process runs under Docker or Podman."""
-    return any(Path(marker).exists() for marker in ("/.dockerenv", "/run/.containerenv"))
-
-
 def read_poll_interval() -> int:
     """Read the wait between two browser status calls.
 
