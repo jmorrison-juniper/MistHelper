@@ -95,9 +95,7 @@ class TestEveryCallSitePassesTheLimits:
         # WHY: a module can call redis_lib.Redis.from_url or a bare from_url that it
         # imported by name. Both forms build a client, so both forms need the limits.
         calls = [
-            node
-            for node in ast.walk(tree)
-            if isinstance(node, ast.Call) and self._callee_name(node) == "from_url"
+            node for node in ast.walk(tree) if isinstance(node, ast.Call) and self._callee_name(node) == "from_url"
         ]
         assert len(calls) > 0, f"{module_path} builds no Redis client, so this list is stale"
         for call in calls:
@@ -113,8 +111,7 @@ class TestEveryCallSitePassesTheLimits:
                 if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
             }
             assert "redis_timeout_kwargs" in names, (
-                f"{module_path} line {call.lineno}: from_url spreads a value that is not "
-                "redis_timeout_kwargs()"
+                f"{module_path} line {call.lineno}: from_url spreads a value that is not " "redis_timeout_kwargs()"
             )
 
     @staticmethod

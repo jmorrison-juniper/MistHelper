@@ -34,7 +34,11 @@ SCHEMA_PATH = (
     / "performance-event.schema.json"
 )
 
-SOURCE = EventSource(file="src/api/api_data_fetcher.py", symbol="execute", class_name="ApiFetcher")
+SOURCE = EventSource(
+    file="src/mist/access/api/api_data_fetcher.py",
+    symbol="execute",
+    class_name="ApiFetcher",
+)
 
 
 def _event(**overrides: object) -> PerformanceEvent:
@@ -64,7 +68,7 @@ class TestEventContract:
     def test_the_source_names_the_file_symbol_and_class(self) -> None:
         """The source block gives per-file, per-function, and per-class attribution."""
         source = _event().to_dict()["source"]
-        assert source["file"] == "src_api"
+        assert source["file"] == "src_mist"
         assert source["symbol"] == "execute"
         assert source["class"] == "ApiFetcher"
 

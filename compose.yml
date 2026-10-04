@@ -139,7 +139,7 @@ services:
       # Database connection. The service names below resolve on the project
       # network, and the ports match the non-default ports each service binds.
       - ARANGO_HOST=http://misthelper-arangodb:9529
-      # Issue #3113: src/db requires this account name whenever MistHelper is
+      # Issue #3113: the persistence layer requires this account name whenever MistHelper is
       # not standalone. Without it the router refuses to build, and every
       # operation silently keeps the CSV file as its only copy. ArangoDB
       # creates the `root` account on first boot.
