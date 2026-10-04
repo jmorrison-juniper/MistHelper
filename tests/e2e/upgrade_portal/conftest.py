@@ -101,12 +101,12 @@ from tests.e2e.upgrade_portal.org_control_seeds import (  # Issue #3247: the see
     OrgControlSeeds,
 )
 from tests.e2e.upgrade_portal.org_ended_seeds import OrgEndedSeeds  # Issue #3367: a child job that ended first.
-from tests.e2e.upgrade_portal.screenshot import install_screenshot_retry  # Retry the known Chromium screenshot flake.
 from tests.e2e.upgrade_portal.retry_run_seeds import (  # Issue #3292: keep retry setup off the shared site.
     FAILED_RUN_ID,
     STOPPED_RUN_ID,
     RetryRunSeeds,
 )
+from tests.e2e.upgrade_portal.screenshot import install_screenshot_retry  # Retry the known Chromium screenshot flake.
 from tests.e2e.upgrade_portal.short_read_seeds import (  # Issue #3424: the site whose read stops early.
     SHORT_SITE_BROWSER_ID,
     SHORT_SITE_DEVICE_COUNT,
