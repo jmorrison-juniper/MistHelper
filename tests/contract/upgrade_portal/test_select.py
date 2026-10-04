@@ -1006,11 +1006,13 @@ def test_the_refusal_of_a_read_names_no_operator(select_client: FlaskClient) -> 
 
 
 def test_the_site_list_answers_the_documented_shape(signed_in_client: FlaskClient, fake_org_id: str) -> None:
-    """The site list answers one ``sites`` list of five-field rows and two completeness fields.
+    """The site list answers one ``sites`` list of five-field rows and three note fields.
 
     Why:
         Issue #3438 adds ``site_list_complete`` and ``device_counts_complete``.
         A whole read of the canned payloads sets both fields true.
+        Issue #3840 adds ``empty_sites_hidden``, the count of the sites with no
+        hardware that the answer leaves out.
 
     Args:
         signed_in_client: The signed-in test client.
@@ -1018,9 +1020,16 @@ def test_the_site_list_answers_the_documented_shape(signed_in_client: FlaskClien
     """
     response = fetch_sites(signed_in_client, fake_org_id)  # Read the site list through the public path.
     assert response.status_code == 200  # The read succeeds.
-    assert set(response.get_json()) == {"sites", "site_list_complete", "device_counts_complete"}  # The contract.
+    expected_fields = {
+        "sites",
+        "site_list_complete",
+        "device_counts_complete",
+        "empty_sites_hidden",
+    }  # The four documented fields.
+    assert set(response.get_json()) == expected_fields  # The contract.
     assert response.get_json()["site_list_complete"] is True  # The canned site read is whole.
     assert response.get_json()["device_counts_complete"] is True  # The canned device count read is whole.
+    assert response.get_json()["empty_sites_hidden"] == 0  # Every canned site holds hardware.
     assert [set(row) for row in read_rows(response)] == [SITE_ROW_FIELDS]  # Each row keeps the five fields.
 
 
