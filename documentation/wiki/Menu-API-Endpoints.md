@@ -324,7 +324,7 @@ pie showData
 | [236](Menu-API-Endpoints-Interactive-Safe#menu-236) | Run any site-scoped Mist count endpoint (33 operations) | `interactive_safe` | 34 |
 | [237](Menu-API-Endpoints-Interactive-Safe#menu-237) | Run any MSP-scoped Mist count endpoint (3 operations) | `interactive_safe` | 3 |
 | [238](Menu-API-Endpoints-Interactive-Safe#menu-238) | Export the license entitlement, usage, and subscriptions for an MSP (listMspLicenses) | `interactive_safe` | 1 |
-| [239](Menu-API-Endpoints-Destructive#menu-239) | Launch the upgrade capture portal on port 8056 (pre-check, upgrade, post-check) | `destructive` | 19 |
+| [239](Menu-API-Endpoints-Destructive#menu-239) | Launch the upgrade capture portal on port 8056 (pre-check, upgrade, post-check) | `destructive` | 20 |
 | [240](Menu-API-Endpoints-Interactive-Safe#menu-240) | Export one organization security intelligence profile (getOrgSecIntelProfile) | `interactive_safe` | 2 |
 | [241](Menu-API-Endpoints-Interactive-Safe#menu-241) | Serve Mist Cloud health to a monitoring system on port 8057 (Prometheus and SNMP) | `interactive_safe` | 4 |
 | [242](Menu-API-Endpoints-Interactive-Safe#menu-242) | Find sites where an SSID is not broadcast by any AP | `interactive_safe` | 2 |
@@ -400,7 +400,7 @@ The map finds no Mist API request for 8 menu options.
 | 119 | GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) |
 | 41 | GET | `/api/v1/sites/{site_id}/stats/devices/{device_id}` | [`sites.stats.getSiteDeviceStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/devices/get-site-device-stats) |
 | 35 | GET | `/api/v1/orgs/{org_id}/inventory` | [`orgs.inventory.getOrgInventory`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/inventory/get-org-inventory) |
-| 28 | GET | `/api/v1/sites/{site_id}/devices` | [`sites.devices.listSiteDevices`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/devices/list-site-devices) |
+| 29 | GET | `/api/v1/sites/{site_id}/devices` | [`sites.devices.listSiteDevices`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/devices/list-site-devices) |
 | 22 | GET | `/api/v1/orgs/{org_id}/gatewaytemplates` | [`orgs.gatewaytemplates.listOrgGatewayTemplates`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/gateway-templates/list-org-gateway-templates) |
 | 15 | GET | `/api/v1/orgs/{org_id}/stats/devices` | [`orgs.stats.listOrgDevicesStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/stats/devices/list-org-devices-stats) |
 | 15 | GET | `/api/v1/sites/{site_id}/devices/{device_id}` | [`sites.devices.getSiteDevice`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/devices/get-site-device) |

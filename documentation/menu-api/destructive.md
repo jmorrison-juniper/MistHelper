@@ -932,7 +932,7 @@ flowchart LR
 
 - Title: Launch the upgrade capture portal on port 8056 (pre-check, upgrade, post-check)
 - Handler: `lambda: _launch_capture_portal()`
-- Endpoints: 19
+- Endpoints: 20
 
 ```mermaid
 flowchart LR
@@ -950,11 +950,11 @@ flowchart LR
     c2 --> e9["GET<br/>/api/v1/orgs<br/>/{org_id}/stats<br/>/sites"]
     menu --> c3["AggregateUpgrade<br/>Service"]
     c3 --> e10["POST<br/>/api/v1/orgs<br/>/{org_id}/devices<br/>/upgrade"]
-    menu --> c4["ENDPOINT_ORG_SSRS"]
-    c4 --> e11["POST<br/>/api/v1/orgs<br/>/{org_id}/ssr<br/>/upgrade"]
-    menu --> c5["ENDPOINT_SITE_DEVICE"]
-    c5 --> e12["POST<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}/upgrade"]
-    menu --> more["7 more endpoints in<br/>the table"]
+    menu --> c4["DEVICE_LISTING_ENDPO<br/>INT"]
+    c4 --> e11["GET<br/>/api/v1/sites<br/>/{site_id}/devices"]
+    menu --> c5["ENDPOINT_ORG_SSRS"]
+    c5 --> e12["POST<br/>/api/v1/orgs<br/>/{org_id}/ssr<br/>/upgrade"]
+    menu --> more["8 more endpoints in<br/>the table"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -970,6 +970,7 @@ flowchart LR
 | GET | `/api/v1/orgs/{org_id}/stats/devices` | [`orgs.stats.listOrgDevicesStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/stats/devices/list-org-devices-stats) | [`read_fleet_statistics`](../../src/upgrade_portal/upgrade/gate.py) | Reference |
 | GET | `/api/v1/orgs/{org_id}/stats/sites` | [`orgs.stats.listOrgSiteStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/stats/sites/list-org-site-stats) | [`build_site_rows`](../../src/upgrade_portal/app/routes/select.py) | Name |
 | GET | `/api/v1/self` | [`self.self.getSelf`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/self/account/get-self) | [`default_token_identity`](../../src/upgrade_portal/app/routes/auth.py) | Call |
+| GET | `/api/v1/sites/{site_id}/devices` | [`sites.devices.listSiteDevices`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/devices/list-site-devices) | [`DEVICE_LISTING_ENDPOINT`](../../src/firmware/running_version.py) | Name |
 | GET | `/api/v1/sites/{site_id}/devices/events/search` | [`sites.devices.searchSiteDeviceEvents`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/devices/search-site-device-events) | [`_ENDPOINT_MODULES`](../../src/firmware/upgrade_service.py) | Name |
 | POST | `/api/v1/sites/{site_id}/devices/upgrade` | [`sites.devices.upgradeSiteDevices`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/upgrade/upgrade-site-devices) | [`ENDPOINT_SITE_DEVICES`](../../src/firmware/upgrade_service.py) | Name |
 | GET | `/api/v1/sites/{site_id}/devices/upgrade/{upgrade_id}` | [`sites.devices.getSiteDeviceUpgrade`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/upgrade/get-site-device-upgrade) | [`_ENDPOINT_MODULES`](../../src/firmware/upgrade_service.py) | Name |

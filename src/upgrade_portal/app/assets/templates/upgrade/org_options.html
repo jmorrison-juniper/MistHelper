@@ -565,6 +565,7 @@
         <th scope="col">Type</th>
         <th scope="col">Model</th>
         <th scope="col">Version now</th>
+        <th scope="col">Upgrade status</th>
         <th scope="col">Target version</th>
       </tr>
     </thead>
@@ -580,7 +581,20 @@
             <th scope="row">{{ target.name }}</th>
             <td>{{ target.device_type }}</td>
             <td>{{ target.model }}</td>
-            <td class="cell-mono">{{ target.version_before | default('unknown', true) }}</td>
+            <td class="cell-mono">
+              {{ target.version_before | default('unknown', true) }}
+              {% if target.version_note | default('', true) %}
+                <span class="portal-note">{{ target.version_note }}</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if target.skip_reason | default('', true) %}
+                <span class="portal-note"
+                      data-testid="org-upgrade-skip-reason-{{ mac }}">{{ target.skip_reason }}</span>
+              {% else %}
+                Ready for selection
+              {% endif %}
+            </td>
             <td>
               <select class="form-select form-select-sm"
                       id="org-upgrade-version-{{ mac }}"
@@ -589,7 +603,8 @@
                       data-org-version-for="{{ mac }}"
                       data-device-type="{{ target.device_type }}"
                       data-gateway-family="{{ target.gateway_family | default('', true) }}"
-                      aria-label="Target version for {{ target.name | default('Unnamed device', true) }}">
+                      aria-label="Target version for {{ target.name | default('Unnamed device', true) }}"
+                      {{ 'disabled' if not target.type_supported else '' }}>
                 <option value="">Do not upgrade this device</option>
                 {% if chosen_version and chosen_version not in offered_versions %}
                   <option value="{{ chosen_version }}" selected>{{ chosen_version }}</option>
@@ -603,7 +618,7 @@
           </tr>
         {% endfor %}
       {% else %}
-        <tr><td colspan="6">The portal found no supported device.</td></tr>
+        <tr><td colspan="7">The portal found no device.</td></tr>
       {% endfor %}
     </tbody>
   </table>

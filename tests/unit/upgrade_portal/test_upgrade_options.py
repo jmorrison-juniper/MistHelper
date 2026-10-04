@@ -301,6 +301,9 @@ class TestVersionOptions:
                 # Issue #2211 marks the row that the portal cannot upgrade. A
                 # switch is a modeled type, so the row reads true.
                 "type_supported": True,
+                "skip_reason": "",
+                "version_is_running": False,
+                "version_note": "",
                 # Issue #2157 shows the router controls only for a router row,
                 # so every row names its gateway family. A switch has none.
                 "gateway_family": "",
@@ -328,6 +331,7 @@ class TestVersionOptions:
         rows = module.build_version_options([router_row], {})
         assert rows[0]["device_type"] == "router"
         assert rows[0]["type_supported"] is False
+        assert rows[0]["skip_reason"] == "The portal skips router devices because this type is not supported."
 
     def test_an_unmodeled_device_type_reads_no_version_override(self) -> None:
         """The portal names no environment variable for a type it does not model."""
@@ -744,6 +748,23 @@ class TestBuildOptionsView:
         answer = module.build_options_view(fake_mist_session, ORG_ID, SITE_ID)
         assert answer["versions_by_model"]["EX4400-48P"] == ["23.4R2-S4.11", "24.2R1.17"]
 
+    def test_the_view_uses_the_running_version_reader(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        fake_mist_session: Any,
+    ) -> None:
+        """The table view must overlay the running version before rendering."""
+        record_inventory_call(monkeypatch, [SWITCH_ROW])
+        monkeypatch.setattr(fake_mist_session, "mist_get", lambda **_: None, raising=False)
+        monkeypatch.setattr(
+            module.RunningFirmwareVersionResolver,
+            "fetch_site_running_versions",
+            lambda _resolver, site_id: {SWITCH_ROW["mac"]: "24.2R1.17"},
+        )
+        answer = module.build_options_view(fake_mist_session, ORG_ID, SITE_ID)
+        assert answer["targets"][0]["version_before"] == "24.2R1.17"
+        assert answer["targets"][0]["version_is_running"] is True
+
     def test_an_empty_read_spends_no_second_call(
         self,
         monkeypatch: pytest.MonkeyPatch,
@@ -977,7 +998,7 @@ class TestShortReadSave:
             module.build_options_record(fake_mist_session, ORG_ID, SITE_ID, THIN_BODY)
         lines = [record.getMessage() for record in caplog.records]  # Each log line of the save.
         refusal_lines = [line for line in lines if REASON_SHORT_READ in line]  # The lines that name the reason.
-        assert refusal_lines, lines  # The save logs the reason code of the short read.
+        assert len(refusal_lines) == 1, lines  # The save logs one reason code for the short read.
         assert all(SITE_ID in line for line in refusal_lines)  # The same line names the site.
         assert not any("5c5b350e0001" in line for line in lines)  # The log holds no device address.
         assert not any(str(SWITCH_ROW["mac"]) in line for line in lines)  # Not in the form of the cloud either.
@@ -1105,7 +1126,7 @@ class TestModuleProhibitions:
     def test_the_module_calls_no_console_function(self) -> None:
         """A source module never reads the console and never prints."""
         source = (module.__file__ or "").strip()
-        assert source
+        assert source.endswith("options.py")  # The test reads the upgrade options module.
         with open(source, encoding="utf-8") as handle:
             text = handle.read()
         for forbidden in ("print(", "input(", "safe_input("):
