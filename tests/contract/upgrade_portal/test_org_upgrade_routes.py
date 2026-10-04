@@ -11,6 +11,7 @@ from collections.abc import Iterator
 from copy import deepcopy
 from datetime import UTC, datetime
 from threading import Lock
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -223,6 +224,11 @@ class AggregateStoreStandIn:
             self.records[run_id] = deepcopy(replacement)
             return True
 
+    def delete_run(self, run_id: str) -> bool:
+        """Delete one planned record."""
+        with self.guard:
+            return self.records.pop(run_id, None) is not None
+
 
 class AggregateBoundaryStandIn:
     """Model the aggregate contract without a cloud write."""
@@ -361,6 +367,61 @@ class QuietAggregateService(AggregateUpgradeService):
         """Return the stored record as it is."""
         del cloud_session, store  # The test record already holds the cloud answers.
         return record
+
+
+def test_busy_site_refusal_names_owner_sites_and_progress_link(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Issue #3224: a busy-site refusal names the owning operation and held sites."""
+    owner = {  # Model the durable operation that owns the blocking site.
+        "operation_id": "org-run-owner",  # The safe job identity shown to the operator.
+        "org_id": "org-1",  # Keep the link inside the selected organization.
+        "site_locks": {"site-1": {}, "site-2": {}},  # Name every site held by the owner.
+        "site_names": {"site-1": "Austin", "site-2": "Boston"},  # Use safe display names.
+    }
+    monkeypatch.setattr(  # Return the owner operation only for the lock's run identifier.
+        org_upgrade,
+        "_read_operation",
+        lambda operation_id: owner if operation_id == "org-run-owner" else None,
+    )
+    monkeypatch.setattr(org_upgrade.lock, "read_lock", lambda *_args: SimpleNamespace(run_id="org-run-owner"))
+    app = Flask(__name__)  # Build the context needed by Flask's JSON response helper.
+    with app.app_context():
+        response, status = org_upgrade._busy_site_refusal("org-1", "site-2")
+    body = response.get_json()  # Read the structured refusal envelope.
+    assert status == 409  # A conflicting owner operation remains a recoverable refusal.
+    assert body["error"]["details"] == {  # Keep the browser contract explicit.
+        "operation_id": "org-run-owner",
+        "held_sites": [
+            {"site_id": "site-1", "name": "Austin"},
+            {"site_id": "site-2", "name": "Boston"},
+        ],
+        "next": "/upgrade/org/jobs/org-run-owner",
+    }
+    assert "org-run-owner" in body["error"]["message"]  # The plain message names the owning job.
+
+
+def test_unconfirmed_plan_cleanup_deletes_planned_record(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Issue #3224: a refused plan leaves no durable record."""
+    store = AggregateStoreStandIn()  # Use the contract store without a database.
+    record = {"run_id": "org-run-planned", "state": "planned", "children": [{"status": "planned"}], "site_locks": {}}
+    store.write_run(record)  # Model the plan written before typed confirmation.
+    monkeypatch.setattr(org_upgrade.upgrade_routes, "run_store", lambda: store)
+    org_upgrade._discard_unconfirmed_operation(record)  # Apply the refusal cleanup.
+    assert store.read_run("org-run-planned") is None  # The unconfirmed plan must not remain.
+
+
+def test_unconfirmed_plan_cleanup_keeps_started_record(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Issue #3224: cleanup never removes a claimed operation."""
+    store = AggregateStoreStandIn()  # Use the contract store without a database.
+    record = {  # Model the durable claim that proves a start.
+        "run_id": "org-run-started",
+        "state": "submission_claimed",
+        "children": [{"status": "planned"}],
+        "site_locks": {},
+    }
+    store.write_run(record)  # Model the durable claim that proves a start.
+    monkeypatch.setattr(org_upgrade.upgrade_routes, "run_store", lambda: store)
+    org_upgrade._discard_unconfirmed_operation(record)  # Attempt the same cleanup path.
+    assert store.read_run("org-run-started") == record  # Started evidence must remain durable and unchanged.
 
 
 @pytest.fixture

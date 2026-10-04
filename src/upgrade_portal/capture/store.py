@@ -1436,6 +1436,30 @@ def write_run(document: Mapping[str, Any], database: Any = None) -> StoreResult:
     return _store(dict(document), _RUN_TARGET, database)
 
 
+def delete_run(run_id: str, database: Any = None) -> bool:
+    """Remove one unconfirmed aggregate run from the document store.
+
+    Why:
+        A plan is written before typed confirmation. A refusal before the first
+        child claim must not leave that plan as a visible operation.
+    """
+    key = str(run_id).strip()  # Use the same durable key that the run reader uses.
+    if not key:  # An empty key cannot identify a safe deletion target.
+        logger.warning("Upgrade portal refused to delete a run with no run_id")  # Name the invalid request.
+        return False  # Fail closed without touching the store.
+    handle = database if database is not None else connect_database()  # Reuse a test handle or open production storage.
+    if handle is None:  # A missing database cannot prove that the record was removed.
+        logger.warning("Upgrade portal could not delete planned run %s because the store is unavailable", key)
+        return False  # Keep the record when deletion cannot be verified.
+    try:  # Delete only the named run document.
+        handle.collection(RUN_COLLECTION).delete(key)  # Remove the unconfirmed operation from durable storage.
+    except ArangoError as error:  # A missing document or store failure needs visible failure handling.
+        logger.warning("Upgrade portal could not delete planned run %s: %s", key, type(error).__name__)
+        return False  # Do not claim cleanup when the store rejected it.
+    logger.debug("Upgrade portal deleted planned run %s", key)  # Report the completed cleanup.
+    return True  # The durable document no longer exists.
+
+
 # ---------------------------------------------------------------------------
 # The CaptureForRun edge
 # ---------------------------------------------------------------------------
