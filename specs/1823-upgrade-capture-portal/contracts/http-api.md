@@ -92,8 +92,8 @@ site. The section "Later site checks after a lost page" below holds the rule.
 
 | Item | Value |
 | --- | --- |
-| Query | `q` optional text filter |
-| 200 | `{ "sites": [ { "site_id", "name", "device_count", "locked_by", "lock_state" } ], "site_list_complete": true, "device_counts_complete": true }` |
+| Query | `q` optional text filter, `show_empty` optional flag that keeps the sites with no hardware |
+| 200 | `{ "sites": [ { "site_id", "name", "device_count", "locked_by", "lock_state" } ], "site_list_complete": true, "device_counts_complete": true, "empty_sites_hidden": 0 }` |
 | 400 | `org_not_chosen` when neither the path nor the session names an organization |
 | 403 | `org_not_permitted` |
 
@@ -115,6 +115,19 @@ site list and every page of the device counts.
 | --- | --- |
 | `site_list_complete` | `true` when the site read got every page. `false` when a page is lost. |
 | `device_counts_complete` | `true` when the device count read got every page. `false` when a page is lost. |
+
+Issue #3840 adds one more field beside the rows.
+
+| Field | Value |
+| --- | --- |
+| `empty_sites_hidden` | The count of the sites that the portal removed, because they hold no hardware. The value is `0` when `show_empty` is set, `0` when `device_counts_complete` is `false`, and `0` when the device count read gave no record. |
+
+A site with no hardware of any type is hidden by default, because an operator
+cannot upgrade it. Send `show_empty=1` to keep every site. The portal hides no
+site when `device_counts_complete` is `false`, because a lost page can report a
+count of 0 for a site that holds hardware. The portal also hides no site when
+the device count read gave no record at all, because an empty read proves
+nothing about any site.
 
 A lost page keeps the rows of the pages before it. If a field is `false`, the
 list can leave out a site, or a site can show 0 devices. Read the list again

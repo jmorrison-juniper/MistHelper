@@ -58,6 +58,14 @@ NO_ORG_REASON = "The portal holds no organization identifier. Set MIST_ORG_ID in
 NO_SITE_REASON = "No site was chosen, so the portal cannot list this data."
 NO_ROWS_REASON = "The Mist API answered with no rows for this request."
 API_ERROR_REASON = "The Mist API request failed with {error}. Read the portal error log for the full report."
+ALL_SITES_EMPTY_REASON = "Every site holds no hardware. Add show_empty=1 to list them."
+
+# WHY: the request may ask for the hidden sites. These are the accepted raw values.
+SHOW_EMPTY_VALUES = ("1", "true", "yes", "on")
+
+# WHY: the site statistics record names the device count in these fields.
+DEVICE_COUNT_FIELD = "num_devices"
+DEVICE_COUNT_PARTS = ("num_ap", "num_switch", "num_gateway")
 
 
 class PickList(list):
@@ -222,10 +230,16 @@ def operation_parameters(menu_number):
 @operations_bp.route("/api/operations/sites")
 def list_sites():
     """Return org sites for site selector dropdowns."""
-    apisession = current_app.config.get("APISESSION")
-    org_id = current_app.config.get("ORG_ID")
-    sites = _fetch_org_sites(apisession, org_id)
-    return jsonify(_pick_list_payload("sites", sites))
+    apisession = current_app.config.get("APISESSION")  # The portal holds one Mist session.
+    org_id = current_app.config.get("ORG_ID")  # The portal serves one organization.
+    show_empty = _read_show_empty(request.args.get("show_empty"))  # Issue #3840: the operator can ask for every site.
+    logger.info("Listing sites for org %s with show_empty=%s", org_id, show_empty)  # Log before the read.
+    sites = _fetch_org_sites(apisession, org_id, show_empty)  # Read the sites, then drop the empty ones.
+    payload = _pick_list_payload("sites", sites)  # Build the standard pick list body.
+    hidden = getattr(sites, "empty_hidden", 0)  # Read the count of the sites that the filter removed.
+    payload["empty_sites_hidden"] = hidden  # State the hidden count, so the page can explain it.
+    logger.debug("Listed %d sites and hid %d", len(sites), payload["empty_sites_hidden"])  # Log after the read.
+    return jsonify(payload)
 
 
 @operations_bp.route("/api/operations/sites/<site_id>/devices")
@@ -418,8 +432,59 @@ def _pick_list_payload(key: str, items: PickList) -> dict:
     return payload
 
 
-def _fetch_org_sites(apisession, org_id: str) -> PickList:
-    """Fetch organization sites from Mist API."""
+def _read_show_empty(value: str | None) -> bool:
+    """Return True when the request asks for the sites that hold no hardware."""
+    if value is None:  # The argument is absent, so the portal hides the empty sites.
+        return False
+    return value.strip().casefold() in SHOW_EMPTY_VALUES  # Accept the documented raw values.
+
+
+def _read_site_device_count(record: dict) -> int:
+    """Return the device count that one site statistics record names."""
+    total = record.get(DEVICE_COUNT_FIELD)  # The record usually names one total.
+    if isinstance(total, int):  # Trust the total when the record supplies it.
+        return total
+    parts = [record.get(name) for name in DEVICE_COUNT_PARTS]  # Fall back to the per-type counts.
+    return sum(part for part in parts if isinstance(part, int))  # Ignore an absent or odd part.
+
+
+def _fetch_org_site_counts(apisession, org_id: str) -> dict[str, int]:
+    """Return a site identifier to device count map, or an empty map on any fault."""
+    try:
+        import mistapi  # Import here, so the module loads without the SDK.
+
+        logger.info("Reading site statistics for org %s", org_id)  # Log before the read.
+        response = mistapi.api.v1.orgs.stats.listOrgSiteStats(apisession, org_id)  # Read the counts.
+        records = response.data if hasattr(response, "data") else []  # Read the rows defensively.
+    except Exception as error:  # A count fault must not hide a site.
+        logger.warning("Could not read site statistics for org %s: %s", org_id, type(error).__name__)
+        return {}  # An empty map disables the filter, so no site disappears without proof.
+    counts = {str(row.get("id", "")): _read_site_device_count(row) for row in records if row.get("id")}
+    logger.debug("Read device counts for %d sites", len(counts))  # Log after the read.
+    return counts
+
+
+def _build_site_row(site: dict) -> dict:
+    """Return the five fields that the site picker shows for one site."""
+    return {
+        "id": site.get("id", ""),  # The picker posts this identifier back to the portal.
+        "name": site.get("name", ""),  # The operator reads the name, not the identifier.
+        "address": site.get("address", ""),  # The address separates two sites with one name.
+        "country_code": site.get("country_code", ""),  # The country helps a global operator.
+        "timezone": site.get("timezone", ""),  # The time zone explains an odd event time.
+    }
+
+
+def _drop_empty_sites(rows: list[dict], counts: dict[str, int]) -> tuple[list[dict], int]:
+    """Return the sites that hold hardware, plus the count of the hidden sites."""
+    if not counts:  # No count was observed, so a zero is not proof that a site is empty.
+        return rows, 0
+    kept = [row for row in rows if counts.get(row.get("id", ""), 0) > 0]  # Keep a proven non-zero site.
+    return kept, len(rows) - len(kept)  # Name the hidden count, so the page can explain it.
+
+
+def _fetch_org_sites(apisession, org_id: str, show_empty: bool = False) -> PickList:
+    """Fetch organization sites from Mist API, hiding the sites that hold no hardware."""
     if not apisession:
         # Name the missing piece, so an operator does not read an empty list as a stall.
         logger.warning("Cannot list the sites, because the portal holds no Mist API session.")
@@ -432,20 +497,14 @@ def _fetch_org_sites(apisession, org_id: str) -> PickList:
 
         response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id)
         sites = response.data if hasattr(response, "data") else []
-        return PickList(
-            sort_by_name(
-                [
-                    {
-                        "id": site.get("id", ""),
-                        "name": site.get("name", ""),
-                        "address": site.get("address", ""),
-                        "country_code": site.get("country_code", ""),
-                        "timezone": site.get("timezone", ""),
-                    }
-                    for site in sites
-                ]
-            )
-        )  # Issue #3083: the dropdown lists the sites by name.
+        rows = sort_by_name([_build_site_row(site) for site in sites])  # Issue #3083: list by name.
+        if show_empty:  # The operator asked for every site, so keep them all.
+            return PickList(rows)
+        counts = _fetch_org_site_counts(apisession, org_id)  # Read the device count for each site.
+        kept, hidden = _drop_empty_sites(rows, counts)  # Issue #3840: hide a proven empty site.
+        picks = PickList(kept, reason=ALL_SITES_EMPTY_REASON if hidden and not kept else None)
+        picks.empty_hidden = hidden  # Carry the hidden count, so the route can state it.
+        return picks
     except Exception as error:  # Keep the site selector usable when the Mist API request fails.
         # Use logger.exception() so the full traceback appears at ERROR level.
         # Name the org ID so the operator can find the failing request in logs.

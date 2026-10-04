@@ -62,6 +62,15 @@
 {% set chosen_site_ids = selected_site_ids | default([], true) %}
 {% set list_partial = site_list_partial | default(false, true) %}
 {% set count_partial = site_count_partial | default(false, true) %}
+{#
+  Issue #3840. The picker hides a site that holds no hardware, because an
+  upgrade cannot run there. empty_hidden holds the count of the hidden sites,
+  and show_empty holds the state of the toggle. search_text carries the text
+  filter into the toggle link, so the toggle keeps the current search.
+#}
+{% set empty_hidden = empty_sites_hidden | default(0, true) %}
+{% set show_empty = show_empty_sites | default(false, true) %}
+{% set search_text = request.args.get('q', '') if request else '' %}
 
 <div class="portal-card">
   <h2 class="portal-card-title">{{ 'Select sites' if operation_mode == 'multi_site' else 'Find a site' }}</h2>
@@ -93,6 +102,27 @@
       The list shows the sites of {{ org_label }}.
     {% endif %}
   </p>
+  {#
+    Issue #3840. The server hides a site that holds no hardware, because an
+    upgrade cannot run there. The note states the count, and the link restores
+    the hidden rows. The link carries the current search text, so the toggle
+    does not clear the search.
+  #}
+  {% if show_empty %}
+    <p class="portal-card-note" data-testid="empty-site-note">
+      The list shows every site, including a site that holds no hardware.
+      <a href="{{ url_for('select.sites_page', q=search_text) }}"
+         data-testid="empty-site-toggle">Hide the sites with no hardware</a>
+    </p>
+  {% elif empty_hidden %}
+    <p class="portal-card-note" data-testid="empty-site-note">
+      The list hides {{ empty_hidden }}
+      {{ 'site' if empty_hidden == 1 else 'sites' }} that
+      {{ 'holds' if empty_hidden == 1 else 'hold' }} no hardware.
+      <a href="{{ url_for('select.sites_page', q=search_text, show_empty='1') }}"
+         data-testid="empty-site-toggle">Show the sites with no hardware</a>
+    </p>
+  {% endif %}
   <p class="portal-card-note" data-testid="site-mode-description">
     {% if operation_mode == 'multi_site' %}
       <strong>Multi-site:</strong> Select one or more sites.
