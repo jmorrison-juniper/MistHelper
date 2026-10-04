@@ -23,6 +23,10 @@ logger = logging.getLogger(__name__)  # Keep the records of this module under on
 
 START_NOW_TEXT = "The upgrade starts at once after you confirm."  # The text for a plan with no start time.
 PLANNED_STATE = "planned"  # The one state in which no child job reached the cloud.
+UNCERTAIN_RETRY_NOTE = (  # Explain why the portal blocks a retry of an uncertain child job.
+    "A retry is unavailable while a child job is uncertain. "
+    "The check can prove success only. If it cannot prove success, inspect the Mist dashboard before another upgrade."
+)
 
 
 class OrgScheduleView:
@@ -125,4 +129,5 @@ class OrgControlsView:
             "available": bool(children) and not claimed,
             "word": f"RECONCILE {operation_id}",
             "children": children,
+            "retry_note": UNCERTAIN_RETRY_NOTE if children else "",
         }

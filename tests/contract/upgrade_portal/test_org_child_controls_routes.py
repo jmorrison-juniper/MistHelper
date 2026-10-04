@@ -714,6 +714,8 @@ def test_the_progress_page_offers_the_check_of_each_uncertain_child(harness: Con
     assert 'data-testid="org-upgrade-reconcile-child-child-switch-two"' in page  # The second uncertain job.
     assert f'data-confirm-word="{RECONCILE_WORD}"' in page  # The typed word names this operation.
     assert 'data-testid="org-upgrade-retry-controls"' not in page  # No retry while a job is uncertain.
+    assert "A retry is unavailable while a child job is uncertain." in page  # Explain the safe retry block.
+    assert "inspect the Mist dashboard before another upgrade." in page  # Give the operator the next safe step.
 
 
 def test_a_proven_check_completes_each_child_and_frees_both_sites(harness: ControlsHarness) -> None:
