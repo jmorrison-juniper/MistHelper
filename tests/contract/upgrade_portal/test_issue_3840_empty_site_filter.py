@@ -261,3 +261,15 @@ def test_apply_empty_site_filter_hides_only_a_proven_zero() -> None:
     assert apply_empty_site_filter(list(rows), True, True, True) == (rows, 0)  # The override hides nothing.
     assert apply_empty_site_filter(list(rows), False, False, True) == (rows, 0)  # A lost page hides nothing.
     assert apply_empty_site_filter(list(rows), True, False, False) == (rows, 0)  # An unobserved count hides nothing.
+
+
+def test_apply_empty_site_filter_accepts_an_empty_row_list() -> None:
+    """Edge case: an empty row list keeps the empty answer and reports no hidden site."""
+    kept, hidden = apply_empty_site_filter([], True, False, True)  # Filter an empty list under the hide rule.
+    assert kept == []  # The filter answers an empty list, so no caller reads a missing row.
+    assert hidden == 0  # The filter hid no site, because the list held no site.
+
+
+def test_read_show_empty_accepts_a_none_argument() -> None:
+    """Edge case: a missing query argument reads as ``None`` and keeps the default hide rule."""
+    assert read_show_empty(None) is False  # A missing argument must never show the empty sites.
