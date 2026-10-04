@@ -365,7 +365,13 @@ def test_the_site_list_answer_names_the_completeness_of_each_read(
     answer = client.get(_site_list_path(path_kind, fake_org_id))  # Read the site list.
     body = answer.get_json()  # The JSON answer.
     assert answer.status_code == 200  # A lost page is not a refusal.
-    assert set(body) == {"sites", "site_list_complete", "device_counts_complete"}  # The three fields.
+    expected_fields = {
+        "sites",
+        "site_list_complete",
+        "device_counts_complete",
+        "empty_sites_hidden",
+    }  # The four fields, including the issue #3840 hidden count.
+    assert set(body) == expected_fields  # The documented shape.
     assert body["site_list_complete"] is case.sites_whole  # The completeness of the site read.
     assert body["device_counts_complete"] is case.counts_whole  # The completeness of the device count read.
     assert body["sites"] == EXPECTED_ROWS  # The rows do not change.

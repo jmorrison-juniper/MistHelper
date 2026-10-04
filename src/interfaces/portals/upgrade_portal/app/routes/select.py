@@ -120,6 +120,8 @@ SINGLE_SITE_MODE = "single_site"  # One site uses the current workflow.
 MULTI_SITE_MODE = "multi_site"  # Many sites use the organization workflow.
 UPGRADE_MODES = (SINGLE_SITE_MODE, MULTI_SITE_MODE)  # The complete set of accepted modes.
 FILTER_FIELD = "q"  # The optional text filter of the site list and of the organization picker.
+SHOW_EMPTY_FIELD = "show_empty"  # Issue #3840: the query argument that restores the sites with no hardware.
+SHOW_EMPTY_VALUES = ("1", "true", "yes", "on")  # Issue #3840: the accepted true values of that argument.
 NEXT_AFTER_ORG = MODE_PAGE_PATH  # The operator chooses the operation mode after the organization.
 NEXT_AFTER_MODE = SITE_PAGE_PATH  # Both modes use the familiar site selection page.
 NEXT_AFTER_MULTI_SITE = "/upgrade/org/options"  # The organization upgrade configuration page.
@@ -943,11 +945,15 @@ class SiteList:
         rows: One row for each site, in cloud order.
         sites_complete: True when the site read is whole.
         counts_complete: True when the device count read is whole.
+        counts_observed: True when the device count read answered at least one
+            record. Issue #3840 hides an empty site, and an answer that holds
+            no record proves nothing about any site.
     """
 
     rows: list[dict[str, Any]]  # The rows that the picker shows. The row shape does not change.
     sites_complete: bool = True  # False when the site read lost a page.
     counts_complete: bool = True  # False when the device count read lost a page.
+    counts_observed: bool = False  # False until one device count record arrives. Issue #3840.
 
     @staticmethod
     def read_is_whole(answer: Any) -> bool:
@@ -1057,7 +1063,13 @@ def build_site_rows(org_id: str) -> SiteList:
     counts = build_count_index(as_records(count_answer))  # The device count of each site.
     locks = read_site_locks(org_id, [str(site.get("id", "")) for site in sites])  # An absent entry reads unknown.
     rows = [build_site_row(site, counts, locks) for site in sites]  # One row for each site, in cloud order.
-    built = SiteList(rows, SiteList.read_is_whole(site_answer), SiteList.read_is_whole(count_answer))  # Issue #3438.
+    counts_seen = bool(counts)  # True when the statistics read gave at least one device count. Issue #3840.
+    built = SiteList(
+        rows,
+        SiteList.read_is_whole(site_answer),  # Issue #3438.
+        SiteList.read_is_whole(count_answer),  # Issue #3438.
+        counts_seen,  # An unobserved count never hides a site. Issue #3840.
+    )
     logger.debug(  # Log the count and the two flags, never a site record.
         "select: built %s site row(s). Site list whole: %s. Device counts whole: %s",
         len(rows),
@@ -1099,6 +1111,62 @@ def row_matches(row: dict[str, Any], text: str) -> bool:
         True when the name or the identifier holds the fragment.
     """
     return text in str(row["name"]).casefold() or text in str(row["site_id"]).casefold()  # Either field matches.
+
+
+def read_show_empty(value: str | None) -> bool:
+    """Report whether the operator asked to see the sites with no hardware.
+
+    Why:
+        Issue #3840 hides an empty site by default. The operator can restore
+        every row with one query argument, so no site becomes unreachable.
+
+    Args:
+        value: The raw query argument. A missing argument reads as False.
+
+    Returns:
+        True when the argument holds one accepted true value.
+    """
+    if value is None:  # The operator sent no argument.
+        return False  # Hide the empty sites, which is the default.
+    return value.strip().casefold() in SHOW_EMPTY_VALUES  # One spelling for each accepted value.
+
+
+def apply_empty_site_filter(
+    rows: list[dict[str, Any]],
+    counts_complete: bool,
+    show_empty: bool,
+    counts_observed: bool = False,
+    chosen_site_ids: frozenset[str] | None = None,
+) -> tuple[list[dict[str, Any]], int]:
+    """Hide the sites that hold no hardware, and report how many were hidden.
+
+    Why:
+        Issue #3840 asks the picker to omit a site with no hardware of any
+        type. A hidden site cannot be chosen, so the filter never runs when
+        the device counts are incomplete or when no device count arrived.
+        A site that the operator already chose stays visible, because the
+        refusal message tells the operator to clear that site on this page.
+
+    Args:
+        rows: The rows to filter.
+        counts_complete: Whether every device count was read.
+        show_empty: Whether the operator asked to see every site.
+        counts_observed: Whether the statistics read gave at least one record.
+        chosen_site_ids: The sites the operator already chose.
+
+    Returns:
+        The kept rows and the count of hidden rows.
+    """
+    if show_empty or not counts_complete or not counts_observed:  # A zero count is unproven, so hide nothing.
+        return rows, 0  # Hide nothing, because a hidden site cannot be chosen.
+    chosen = chosen_site_ids or frozenset()  # Treat a missing selection as an empty set.
+    kept = [
+        row
+        for row in rows
+        if int(row.get("device_count", 0)) > 0  # Keep each site that holds hardware.
+        or row.get("site_id") in chosen  # Keep a chosen site, so the operator can clear it.
+    ]
+    return kept, len(rows) - len(kept)  # The rows to render and the count the page states.
 
 
 def device_reader() -> Callable[..., Any] | None:
@@ -1865,6 +1933,14 @@ def sites_page() -> str:
     logger.info("select: show the site picker of organization %s", chosen)  # Log before the three reads.
     site_list = build_site_rows(chosen)  # The rows and the completeness of each cloud read.
     rows = apply_text_filter(site_list.rows, request.args.get(FILTER_FIELD, ""))  # The optional filter.
+    show_empty = read_show_empty(request.args.get(SHOW_EMPTY_FIELD))  # Issue #3840: the operator can restore them.
+    rows, hidden = apply_empty_site_filter(
+        rows,  # The rows that the text filter kept.
+        site_list.counts_complete,  # False when the device count read lost a page.
+        show_empty,  # True when the operator asked for every site.
+        site_list.counts_observed,  # Issue #3840: an unobserved count hides nothing.
+        frozenset(selected_site_ids()),  # Issue #3840: a chosen site stays visible.
+    )
     name = org_display_name(chosen)  # The heading names the organization, not only its identifier.
     logger.debug("select: the site picker shows %s row(s)", len(rows))  # Log the count after the filter.
     return render_page(
@@ -1876,6 +1952,8 @@ def sites_page() -> str:
         selected_site_ids=selected_site_ids(),  # The multi-site choice that the operator saved before.
         site_list_partial=not site_list.sites_complete,  # Issue #3438: the site read lost a page.
         site_count_partial=not site_list.counts_complete,  # Issue #3438: the device count read lost a page.
+        empty_sites_hidden=hidden,  # Issue #3840: the count of the sites that hold no hardware.
+        show_empty_sites=show_empty,  # Issue #3840: the state of the toggle.
     )
 
 
@@ -2037,11 +2115,20 @@ def list_sites(org_id: str | None = None) -> tuple[Response, int]:
     logger.info("select: list the sites of organization %s", chosen)  # Log before the three reads.
     site_list = build_site_rows(chosen)  # The rows and the completeness of each cloud read.
     rows = apply_text_filter(site_list.rows, request.args.get(FILTER_FIELD, ""))  # The optional filter.
+    show_empty = read_show_empty(request.args.get(SHOW_EMPTY_FIELD))  # Issue #3840: the caller can restore them.
+    rows, hidden = apply_empty_site_filter(
+        rows,  # The rows that the text filter kept.
+        site_list.counts_complete,  # False when the device count read lost a page.
+        show_empty,  # True when the caller asked for every site.
+        site_list.counts_observed,  # Issue #3840: an unobserved count hides nothing.
+        frozenset(selected_site_ids()),  # Issue #3840: a chosen site stays visible.
+    )
     logger.debug("select: the site list holds %s row(s)", len(rows))  # Log the count after the filter.
     body = {
         "sites": rows,  # The row shape does not change.
         "site_list_complete": site_list.sites_complete,  # False when the site read lost a page.
         "device_counts_complete": site_list.counts_complete,  # False when the device count read lost a page.
+        "empty_sites_hidden": hidden,  # Issue #3840: the count of the hidden sites that hold no hardware.
     }
     return jsonify(body), OK_STATUS  # The shape that `contracts/http-api.md` names.
 
