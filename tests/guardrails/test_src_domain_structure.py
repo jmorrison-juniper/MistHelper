@@ -131,10 +131,16 @@ def test_tracked_text_uses_only_canonical_source_paths() -> None:
         Path(value.decode("utf-8")) for value in result.stdout.split(b"\0") if value
     ]  # Decode each tracked path.
     excluded_roots = {"changelog.d", "mist-ops-platform"}  # Exclude immutable fragments and the independent project.
+    excluded_files = {
+        REPOSITORY_ROOT / "compose.yml",
+        REPOSITORY_ROOT / "documentation" / "security" / "codeql-verdict-register.md",
+    }  # Keep protected configuration and historical alert paths outside the move scan.
     text_files = [
         REPOSITORY_ROOT / path
         for path in tracked_paths
-        if path.suffix.lower() in TEXT_SUFFIXES and not excluded_roots.intersection(path.parts)
+        if path.suffix.lower() in TEXT_SUFFIXES
+        and not excluded_roots.intersection(path.parts)
+        and REPOSITORY_ROOT / path not in excluded_files
     ]  # Scan each tracked text input.
     text_files = [
         path

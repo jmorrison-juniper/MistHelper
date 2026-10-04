@@ -69,7 +69,11 @@ RowReader = Callable[[Any, str], list[dict[str, Any]]]
 class PagedRows(list[dict[str, Any]]):
     """Hold rows and the reason for a partial page walk."""
 
-    def __init__(self, rows: Sequence[dict[str, Any]], partial_reasons: Sequence[dict[str, Any]] = ()) -> None:
+    def __init__(
+        self,
+        rows: Sequence[dict[str, Any]],
+        partial_reasons: Sequence[dict[str, Any]] = (),
+    ) -> None:
         """Store the rows and any reasons that the page walk found."""
         super().__init__(rows)
         self.partial_reasons = list(partial_reasons)
@@ -78,12 +82,24 @@ class PagedRows(list[dict[str, Any]]):
 class ClientRecords(list["ClientRecord"]):
     """Hold normalized client records and source read reasons."""
 
-    def __init__(self, records: Sequence[ClientRecord], partial_reasons: Sequence[dict[str, Any]] = ()) -> None:
+    def __init__(
+        self,
+        records: Sequence["ClientRecord"],
+        partial_reasons: Sequence[dict[str, Any]] = (),
+    ) -> None:
         """Store normalized records and any source read reasons."""
         super().__init__(records)
         self.partial_reasons = list(partial_reasons)
 
 
+def _response_rows(response: Any) -> tuple[list[dict[str, Any]] | None, int]:
+    """Return valid rows and the response status."""
+    payload = getattr(response, "data", None)
+    rows = payload.get("results") if isinstance(payload, Mapping) else payload
+    status = int(getattr(response, "status_code", 0) or 0)
+    if not isinstance(rows, list):
+        return None, status
+    return [row for row in rows if isinstance(row, dict)], status
 # ---------------------------------------------------------------------------
 # The records
 # ---------------------------------------------------------------------------

@@ -35,6 +35,16 @@ from src.interfaces.portals.upgrade_portal.runtime.pools import CapturePool, Cap
 
 logger = logging.getLogger(__name__)
 
+
+def _partial_reasons_of(value: Any) -> list[dict[str, Any]]:
+    """Collect partial reasons attached to a read result."""
+    reasons = [dict(reason) for reason in getattr(value, "partial_reasons", ())]
+    if isinstance(value, (list, tuple)):
+        for item in value:
+            reasons.extend(_partial_reasons_of(item))
+    return reasons
+
+
 # ---------------------------------------------------------------------------
 # The document constants
 # ---------------------------------------------------------------------------

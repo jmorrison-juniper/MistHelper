@@ -13,7 +13,8 @@ Why:
 """
 
 import logging  # The portal logs with the standard library only.
-import os  # The environment is the only source of a setting.
+import os
+from pathlib import Path  # The environment is the only source of a setting.
 import re  # Checks that a theme name holds safe characters only.
 import secrets  # Builds a session key when the operator sets none.
 from dataclasses import dataclass  # Builds the frozen settings records.
@@ -23,6 +24,13 @@ from pathlib import Path  # Checks standard container marker files.
 logger = logging.getLogger(__name__)  # One logger for each module keeps the source visible in the log.
 
 Network = IPv4Network | IPv6Network  # One name for both address families.
+
+
+def _is_container_runtime() -> bool:
+    """Return whether the process runs under Docker or Podman."""
+    return any(
+        Path(marker).exists() for marker in ("/.dockerenv", "/run/.containerenv")
+    )  # One name for both address families.
 
 
 class SettingsError(RuntimeError):
