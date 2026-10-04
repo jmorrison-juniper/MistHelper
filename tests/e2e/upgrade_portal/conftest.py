@@ -101,6 +101,11 @@ from tests.e2e.upgrade_portal.org_control_seeds import (  # Issue #3247: the see
     OrgControlSeeds,
 )
 from tests.e2e.upgrade_portal.org_ended_seeds import OrgEndedSeeds  # Issue #3367: a child job that ended first.
+from tests.e2e.upgrade_portal.retry_run_seeds import (  # Issue #3292: keep retry setup off the shared site.
+    FAILED_RUN_ID,
+    STOPPED_RUN_ID,
+    RetryRunSeeds,
+)
 from tests.e2e.upgrade_portal.screenshot import install_screenshot_retry  # Retry the known Chromium screenshot flake.
 from tests.e2e.upgrade_portal.short_read_seeds import (  # Issue #3424: the site whose read stops early.
     SHORT_SITE_BROWSER_ID,
@@ -2314,8 +2319,6 @@ def _register_operator(email: str, browser_id: str, cloud_session: StandInCloudS
     logger.debug("Registered one operator with a %s", type(session).__name__)  # Log the session class only.
 
 
-FAILED_RUN_ID = "e2e-failed-run-0001"  # The seeded run that the retry test opens. One fixed key, so no test guesses.
-STOPPED_RUN_ID = "e2e-stopped-run-0001"  # The seeded run that proves a cancelled attempt can restart.
 PREPARED_RUN_ID = "e2e-prepared-run-0001"  # The seeded run that proves the confirmation link works.
 START_READY_RUN_ID = "e2e-start-ready-run-0001"  # The seeded run that proves the firmware start call.
 BULK_RETRY_RUN_ID = "e2e-bulk-retry-run-0001"
@@ -2324,39 +2327,6 @@ LIFECYCLE_RUN_ID = "e2e-lifecycle-run-0001"
 LIFECYCLE_SITE_ID = "66666666-6666-6666-6666-666666666666"
 PREPARED_SITE_ID = "e2e-confirm-site"  # A separate site keeps this live run from blocking other E2E journeys.
 START_READY_SITE_ID = "e2e-start-site"  # A separate site keeps the start proof from changing another test.
-
-
-def _failed_run_record() -> dict[str, Any]:
-    """Build one run record that already failed.
-
-    Why:
-        Issue #2202 shows the retry control for a failed run and for no other
-        state. No journey through the pages reaches that state, because a real
-        failure needs a real upgrade fault at a real site. The retry rebuilds a
-        run from the settings of the failed one, so the record carries the same
-        fields that a finished run carries.
-
-    Returns:
-        The run record, in the state `failed`.
-    """
-    return {
-        "run_id": FAILED_RUN_ID,  # The one key that the retry test opens.
-        "site_id": STAND_IN_SITE_ID,  # The same site every other test drives, so one lock covers both.
-        "org_id": STAND_IN_ORG_ID,  # The lock key needs both halves, so the record must carry the org.
-        "state": "failed",  # The one state that offers the retry control.
-        "message": "A stand-in failure, so the retry control appears for the browser test.",
-        "targets": [],  # The retry copies this list. An empty list keeps the record small and valid.
-        "options": {},  # The retry copies every option. An empty table still exercises the copy.
-    }
-
-
-def _stopped_run_record() -> dict[str, Any]:
-    """Build one stopped run that can start a fresh attempt."""
-    record = _failed_run_record()
-    record["run_id"] = STOPPED_RUN_ID
-    record["state"] = "stopped"
-    record["message"] = "The stand-in run stopped after an operator cancellation."
-    return record
 
 
 def _prepared_run_record() -> dict[str, Any]:
@@ -2446,8 +2416,8 @@ def _write_fixture_runs(built: Any, upgrade: Any) -> None:
     logger.info("Write the seeded run records of the browser server")  # Log before the writes.
     try:  # A refusal must not stop the server, so each related test reports the missing state.
         with built.app_context():  # The store reads the application settings.
-            failed_written = upgrade.save_run(_failed_run_record())  # The run of the retry journey.
-            stopped_written = upgrade.save_run(_stopped_run_record())  # The run of the fresh-attempt journey.
+            failed_written = upgrade.save_run(RetryRunSeeds.failed_record(STAND_IN_ORG_ID))  # The retry journey run.
+            stopped_written = upgrade.save_run(RetryRunSeeds.stopped_record(STAND_IN_ORG_ID))  # The fresh attempt.
             prepared_written = upgrade.save_run(_prepared_run_record())  # The run of the confirmation link.
             start_ready_written = upgrade.save_run(_start_ready_run_record())  # The run of the firmware start.
             stale_written = StaleRunSeeds.write(upgrade, STAND_IN_ORG_ID)  # Issue #3507: on the stale site.

@@ -69,7 +69,12 @@ class ScriptedRequests:
         self, url_or_request: str, *, method: str, headers: dict[str, str], data: str | None, timeout: float
     ) -> StandInAnswer:
         """Record one call, and return the next scripted answer for its method and path."""
-        call = {"method": method, "path": url_or_request, "headers": dict(headers), "data": data}  # One record.
+        call: dict[str, Any] = {
+            "method": method,
+            "path": url_or_request,
+            "headers": dict(headers),
+            "data": data,
+        }  # One record.
         call["timeout"] = timeout  # The bound that the class under test chose.
         self.calls.append(call)  # The test reads the order of the calls later.
         return self.script[(method, url_or_request)].pop(0)  # A call with no script raises, and the test fails.
@@ -116,6 +121,13 @@ class TestTheRunLedger:
         url = f"{CAPTURE_URL}?site_id={SITE_ID}&run_id={RETRY_RUN_ID}&role=pre"  # The address after the retry.
         assert ledger.record_from_url(url) == RETRY_RUN_ID  # The ledger gives back the key that it read.
         assert ledger.runs == (RETRY_RUN_ID,)  # The teardown ends the retry run too.
+        assert ledger.sites == (SITE_ID,)  # The teardown frees the retry site too.
+
+    @pytest.mark.parametrize("site_id", ["", "   "])
+    def test_the_ledger_refuses_an_empty_site(self, site_id: str) -> None:
+        """An empty site identifier names no lock, so the ledger refuses it."""
+        with pytest.raises(ValueError, match="needs the identifier of a site"):  # A caller fault stops teardown.
+            RunLedger().record_site(site_id)  # No teardown could free an empty site.
 
     def test_an_address_with_no_run_fails_and_names_the_address(self) -> None:
         """An address with no run fails, because the teardown then cannot end the retry run."""
