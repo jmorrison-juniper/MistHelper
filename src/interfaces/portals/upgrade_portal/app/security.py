@@ -126,7 +126,7 @@ class PortalSecurity:
             x_for=trusted_hops,  # Sets `REMOTE_ADDR`, which the allow list then tests.
             x_proto=trusted_hops,  # Sets the scheme, which decides the `Secure` cookie flag.
         )
-        logger.info("The portal trusts the forwarded headers of %s proxies.", trusted_hops)  # State the count.
+        logger.info("The portal trusts configured headers.")  # Avoid logging configuration values.
 
     def _register_headers(self, app: Flask) -> None:
         """Add the standard headers to every response.

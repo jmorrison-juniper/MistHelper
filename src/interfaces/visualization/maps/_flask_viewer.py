@@ -176,10 +176,10 @@ def _handle_map_image_request(api_session, site_id: str, map_id: str):
             return f"Image fetch failed: {image_response.status_code}", _HTTP_NOT_FOUND  # WHY: keep body brief.
         content_type = image_response.headers.get(_CONTENT_TYPE_HEADER, _DEFAULT_IMAGE_MIMETYPE)  # WHY: passthrough.
         return Response(image_response.content, mimetype=content_type)  # WHY: stream bytes through as-is.
-    except ValueError as error:  # WHY: missing credentials must name the bad input, not become a remote error.
+    except ValueError as error:  # WHY: missing credentials must not expose the error detail to the client.
         logging.info("Map image request lacks a required credential")  # WHY: mark the authentication failure path.
         logging.debug("Map image credential failure: %s", error)  # WHY: name the missing attribute without a value.
-        return str(error), _HTTP_UNAUTHORIZED  # WHY: tell the operator which session field is missing.
+        return "Map image authentication failed.", _HTTP_UNAUTHORIZED  # Hide credential details.
     except Exception as e:  # WHY: broad catch so a network hiccup never leaks a stack trace into the browser.
         logging.exception("Error fetching map image: %s", e)  # WHY: full stack captured server-side.
         return _ERR_MAP_IMAGE_FAILED, _HTTP_SERVER_ERROR  # WHY: generic 500 keeps upstream details hidden.
