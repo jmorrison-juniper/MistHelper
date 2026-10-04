@@ -38,5 +38,5 @@
 
 - [x] T020 Rebase the committed branch onto the current `origin/main`.
 - [x] T021 Rerun affected gates after the rebase.
-- [ ] T022 Push the branch and open a template-compliant pull request.
-- [ ] T023 Monitor the initial required checks and record each result.
+- [x] T022 Push the branch and open a template-compliant pull request.
+- [x] T023 Monitor the initial required checks and record each result.
