@@ -133,9 +133,10 @@ def test_moved_modules_lose_no_module_level_symbol() -> None:
             ):  # Select moved Python modules only.
                 continue  # Ignore directories, non-Python files, and the unchanged source initializer.
             extracted = source_archive.extractfile(member)  # Open the archived module content.
-            assert (
-                extracted is not None
-            ), f"Cannot read archived module {member.name}"  # Fail if the required base input is unreadable.
+            if extracted is None:  # Detect an unreadable required base module explicitly.
+                raise AssertionError(
+                    f"Cannot read archived module {member.name}"
+                )  # Fail with the missing archive entry.
             new_path = current_path(member.name)  # Resolve the canonical current module path.
             assert (
                 new_path.is_file()
