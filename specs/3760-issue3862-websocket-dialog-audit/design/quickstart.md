@@ -170,6 +170,21 @@ Do not publish screenshots, raw browser errors, selector values, or authenticati
 
 ## Scenario 5: Later repair and merge checks
 
+### Test-harness type-check scope
+
+Repository strict mypy discovery excludes the test tree.
+The explicit strict check found 238 `no-untyped-call` findings in these pytest helpers.
+Do not describe the harness as strictly typed.
+The supplemental relaxed check passed for nine source files:
+
+```text
+rtk proxy .venv/bin/python -m mypy --follow-imports=silent --allow-untyped-defs --allow-untyped-calls --allow-incomplete-defs tests/tools/websocket_dialog_audit/*.py tests/tools/websocket_dialog_audit/support/*.py
+```
+
+These flags permit unannotated test helpers.
+They do not change repository configuration or the required production type gate.
+The pull request must disclose this distinction and the strict-check result.
+
 Run each repaired defect's regression before and after the repair.
 Run applicable syntax, lint, formatting, type, complexity, security, SDK, and browser checks.
 Use the repository's required test-quality procedure.
