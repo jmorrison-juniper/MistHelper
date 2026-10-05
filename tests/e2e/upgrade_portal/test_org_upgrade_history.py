@@ -84,6 +84,17 @@ class TestMultiSiteHistory:
         sync_api.expect(page.get_by_test_id(f"history-operation-types-{operation_id}")).to_have_text(DEVICE_TYPES)
         operator_cell = page.get_by_test_id(f"history-operation-operator-address-{operation_id}")
         sync_api.expect(operator_cell).to_have_text(FIRMWARE_EMAIL)
+        operation_table = page.get_by_test_id("history-operation-table")  # Issue #3491: the table style.
+        operation_style = (
+            operation_table.locator("tbody tr")
+            .first.locator("th")
+            .evaluate(  # Read the row header.
+                "(cell) => ({whiteSpace: getComputedStyle(cell).whiteSpace, "
+                "background: getComputedStyle(cell).backgroundColor})"
+            )
+        )
+        assert operation_style["whiteSpace"] == "nowrap", f"The operation text wraps: {operation_style}"
+        assert operation_style["background"] != "rgb(0, 0, 0)", f"The operation row header is black: {operation_style}"
         assert page.locator("[data-testid^='history-run-row-org-run-']").count() == 0  # No broken run row.
         page.screenshot(path=str(tmp_path / "history-owner.png"), full_page=True)
 
