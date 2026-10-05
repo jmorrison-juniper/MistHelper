@@ -286,16 +286,20 @@ FIRMWARE_BROWSER_ID = "e2eBrowserIdentity0004"  # A separate browser identity ke
 # signed-in page renders real rows and opens no socket to the Mist cloud.
 STAND_IN_ORG_ID = "11111111-1111-1111-1111-111111111111"  # The organization that the picker shows.
 STAND_IN_ORG_NAME = "E2E Stand-In Organization"  # The text of the organization row.
-STAND_IN_SITE_ID = "22222222-2222-2222-2222-222222222222"  # The first site in the picker.
-STAND_IN_SITE_NAME = "E2E Stand-In Site"  # The text of the first site row.
-SECOND_SITE_ID = "33333333-3333-3333-3333-333333333333"  # The second site for organization tests.
-SECOND_SITE_NAME = "E2E Second Stand-In Site"  # The text of the second site row.
-# WHY: Issue #3377. Seeded live runs and multi-site journeys hold the first two
-# sites, and FR-037 allows one live run for each site. The single-site upgrade
-# journey of `test_upgrade.py` therefore owns this third site. No seed and no
-# other module names it, so every run on it belongs to that journey.
+# WHY: Issue #3910. The picker sorts the rows by name at `select.py:1065`, so
+# no constant here holds a fixed row position. Each comment names the role of
+# the site instead of a position.
+STAND_IN_SITE_ID = "22222222-2222-2222-2222-222222222222"  # The default site of the single-site tests.
+STAND_IN_SITE_NAME = "E2E Stand-In Site"  # The row text of the default site.
+SECOND_SITE_ID = "33333333-3333-3333-3333-333333333333"  # The extra site for organization tests.
+SECOND_SITE_NAME = "E2E Second Stand-In Site"  # The row text of the extra site.
+# WHY: Issue #3377. Seeded live runs and multi-site journeys hold the default
+# site and the extra site, and FR-037 allows one live run for each site. The
+# single-site upgrade journey of `test_upgrade.py` therefore owns the site
+# below. No seed and no other module names it, so every run on it belongs to
+# that journey.
 JOURNEY_SITE_ID = "44444444-4444-4444-4444-444444444444"  # The site of the single-site upgrade journey.
-JOURNEY_SITE_NAME = "E2E Upgrade Journey Site"  # The text of the third site row.
+JOURNEY_SITE_NAME = "E2E Upgrade Journey Site"  # The row text of the journey site.
 STAND_IN_DEVICE_TYPES = ("ap", "gateway", "switch")  # Mirrors `select.DEVICE_TYPES`, which FR-013 fixes.
 STAND_IN_VERSIONS = ("0.14.29216", "0.15.1")  # The version that runs now, then one newer version to pick.
 # WHY: Issue #3244. A standalone capture names no run. The pre-check reads the
@@ -1471,11 +1475,11 @@ def stand_in_cloud_read(name: str, **parameters: Any) -> list[dict[str, Any]] | 
     del parameters  # Every other organization answers the fixed records below.
     if name == "listOrgSites":  # The name and the identifier of each site.
         return [
-            {"id": STAND_IN_SITE_ID, "name": STAND_IN_SITE_NAME},  # The first row, which most journeys read.
-            {"id": SECOND_SITE_ID, "name": SECOND_SITE_NAME},  # The second row, which the multi-site journeys add.
-            {"id": JOURNEY_SITE_ID, "name": JOURNEY_SITE_NAME},  # Issue #3377: the last row, so no first row moves.
-            {"id": EMPTY_SITE_ID, "name": EMPTY_SITE_NAME},  # Issue #3389: a site with no device, after every row.
-            {"id": SHORT_SITE_ID, "name": SHORT_SITE_NAME},  # Issue #3424: a site whose read stops, the last row.
+            {"id": STAND_IN_SITE_ID, "name": STAND_IN_SITE_NAME},  # The default site of the single-site tests.
+            {"id": SECOND_SITE_ID, "name": SECOND_SITE_NAME},  # The extra site that the multi-site journeys add.
+            {"id": JOURNEY_SITE_ID, "name": JOURNEY_SITE_NAME},  # Issue #3377: the site of the upgrade journey.
+            {"id": EMPTY_SITE_ID, "name": EMPTY_SITE_NAME},  # Issue #3389: the site that holds no device.
+            {"id": SHORT_SITE_ID, "name": SHORT_SITE_NAME},  # Issue #3424: the site whose read stops early.
         ]
     if name == "listOrgSiteStats":  # The device count of each site, read from `num_devices`.
         return [
