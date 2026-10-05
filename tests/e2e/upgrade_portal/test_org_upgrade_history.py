@@ -30,7 +30,7 @@ MODE_PATH = "/select/mode"
 HISTORY_PATH = "/history"
 SITE_ID = "22222222-2222-2222-2222-222222222222"
 SECOND_SITE_ID = "33333333-3333-3333-3333-333333333333"
-SITE_NAMES = "E2E Stand-In Site, E2E Second Stand-In Site"  # `conftest.py` fixes both names, in the site order.
+SITE_NAMES = "E2E Second Stand-In Site, E2E Stand-In Site"  # The picker sorts by name (#3216).
 DEVICE_TYPES = "Access points, Switches, Gateways"  # The three families that the options page selects.
 FIRMWARE_EMAIL = "e2e.operator@juniper.net"  # The typed address of the firmware operator.
 

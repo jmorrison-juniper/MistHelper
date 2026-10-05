@@ -95,6 +95,14 @@
          aria-controls="site-table"
          aria-describedby="site-search-note">
 
+  <label class="portal-filter-check">
+    <input type="checkbox"
+           data-testid="site-has-devices"
+           data-filter-target="site-table"
+           data-filter-mode="has-devices">
+    Show only sites with devices
+  </label>
+
   <p class="portal-card-note" id="site-search-note">
     The list filters in the browser. The filter reads the site name and the site
     identifier.
@@ -183,7 +191,7 @@
          name="csrf_token"
          value="{{ csrf_token() if csrf_token is defined else '' }}">
 {% endif %}
-<div class="portal-table-scroll">
+<div class="portal-table-scroll site-picker-table-scroll">
   {#
     Issue #2227: this was the one table of the portal that never sorted. An
     organization with many sites showed one long unordered list, and the
@@ -214,7 +222,8 @@
         {% set open_url = site.open_url | default('/select/site/' ~ site_id, true) %}
 
         <tr data-testid="site-row-{{ site_id }}"
-            data-filter-text="{{ site_name }} {{ site_id }}">
+            data-filter-text="{{ site_name }} {{ site_id }}"
+            data-device-count="{{ site.device_count | default(0, true) }}">
 
           <th scope="row">{{ site_name }}</th>
 
@@ -292,7 +301,7 @@
   </table>
 </div>
 {% if operation_mode == 'multi_site' %}
-  <div class="portal-card">
+  <div class="portal-card site-picker-actions">
     <button type="submit"
             class="portal-button portal-button-primary"
             data-testid="multi-site-continue">Continue</button>

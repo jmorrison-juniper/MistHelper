@@ -1268,7 +1268,8 @@ class E2EOrgUpgradeService:
     @staticmethod
     def submit(cloud_session: Any, org_id: str, body: dict[str, object]) -> OrgUpgradeResult:
         """Return one accepted organization job with a new identifier."""
-        assert body["site_ids"] == [STAND_IN_SITE_ID, SECOND_SITE_ID]  # Every organization journey picks both sites.
+        chosen = sorted(body["site_ids"])  # The picker sorts by name, so the request order is immaterial (#3216).
+        assert chosen == sorted([STAND_IN_SITE_ID, SECOND_SITE_ID])  # Every organization journey picks both sites.
         upgrade_id = StandInJobIds.org_job()  # A real cloud gives each job its own identifier.
         return OrgUpgradeResult(org_id, upgrade_id, 200, {"id": upgrade_id}, None)  # A valid accepted answer.
 
