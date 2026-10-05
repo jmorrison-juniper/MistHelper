@@ -1130,7 +1130,7 @@ ENTITY_TYPE_TO_VERTEX: dict[str, str] = {  # WHY: map API function names to vert
     "listSiteApps": "applications",
     "searchSiteCalls": "calls",
     "searchSiteWanUsage": "wan_usage",
-    "searchSiteClientFingerprints": "fingerprints",
+    "searchOrgClientFingerprints": "fingerprints",
     "listSiteUiSettings": "ui_settings",
     "listSiteTroubleshootCalls": "troubleshoot_calls",
     "troubleshootSiteCall": "troubleshoot_calls",
@@ -2053,7 +2053,7 @@ COLLECTION_VERTEX_MAP: dict[str, dict[str, Any]] = {  # WHY: drives graph popula
             },
         ],
     },
-    "searchSiteClientFingerprints": {
+    "searchOrgClientFingerprints": {
         "vertex": "fingerprints",
         "key_field": "mac",
         "edges": [],

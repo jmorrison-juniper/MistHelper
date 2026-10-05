@@ -375,8 +375,8 @@ class TestMenuText:
     @pytest.mark.parametrize(
         "path,count,expected",
         (
-            ("MistHelper.py", 293, "f532b6295e41646128f22c21689119066ecc80868ffee4427a2eb069a310aee2"),
-            ("web_portal/menu_registry.py", 179, "57aa44e8b4598b9bcaa9881c63fa36fe82b813d8de049ca334fa75d8770a71e6"),
+            ("MistHelper.py", 293, "d06379ed0e18ac41fc79678c547afdca86d33bf8fb0bfabf2c3e87261756dce9"),
+            ("web_portal/menu_registry.py", 179, "8107cfce5b5c495866486057c28acf24928d1a90530775389dc4b16b82b77430"),
         ),
     )
     def test_menu_263_complete_identity(self, path: str, count: int, expected: str) -> None:

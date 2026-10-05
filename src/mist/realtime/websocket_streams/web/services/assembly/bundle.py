@@ -31,3 +31,4 @@ class PickerServices:
 
     site: Any  # Read device, map, and asset rows.
     related: Any  # Read SDK client and Mist Edge rows.
+    clients: Any  # Read verified client choices for a selected device.
