@@ -92,7 +92,6 @@ _SITE_OPS: tuple[_CountOp, ...] = (
     _CountOp("countSiteAssets", "mistapi.api.v1.sites.stats"),
     _CountOp("countSiteBgpStats", "mistapi.api.v1.sites.stats"),
     _CountOp("countSiteCalls", "mistapi.api.v1.sites.stats"),
-    _CountOp("countSiteClientFingerprints", "mistapi.api.v1.sites.insights"),
     _CountOp("countSiteDeviceConfigHistory", "mistapi.api.v1.sites.devices"),
     _CountOp("countSiteDeviceEvents", "mistapi.api.v1.sites.devices"),
     _CountOp("countSiteDeviceLastConfig", "mistapi.api.v1.sites.devices"),
