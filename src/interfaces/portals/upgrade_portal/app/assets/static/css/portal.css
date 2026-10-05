@@ -404,15 +404,19 @@
     min-width: 60rem;
 }
 
+/* Issue #3491. The `Capture` header and its sort arrow need 112 pixels at a
+ * window of 1280 pixels. 6 percent gave 77 pixels, so the next header covered
+ * the arrow. This column takes 9 percent, and columns 2, 7, and 10 give the
+ * 3 percent back. */
 .history-table.history-table-sites thead th:nth-child(1) {
-    width: 8%;
+    width: 9%;
 }
 
-/* A site name such as `E2E Stored Poll Site` fits this share at a window of
- * 1280 pixels. A longer name clips, and the title attribute holds the whole
- * name. */
+/* The `Site` header is short, so its header and sort arrow fit 9 percent at a
+ * window of 1280 pixels. A site name such as `E2E Stored Poll Site` fits this
+ * share. A longer name clips, and the title attribute holds the whole name. */
 .history-table.history-table-sites thead th:nth-child(2) {
-    width: 10%;
+    width: 9%;
 }
 
 .history-table.history-table-sites thead th:nth-child(3) {
@@ -431,20 +435,28 @@
     width: 8%;
 }
 
+/* Issue #3495. The device type phrase needs 310 pixels at a window of 1280
+ * pixels. 24 percent gave 297 pixels and clipped the phrase, so this column
+ * takes 25 percent, which gives 320 pixels. */
 .history-table.history-table-sites thead th:nth-child(7) {
-    width: 24%;
+    width: 25%;
 }
 
 .history-table.history-table-sites thead th:nth-child(8) {
     width: 7%;
 }
 
+/* The `Stored size` header and its sort arrow need 115 pixels at a window of
+ * 1280 pixels. 8 percent gave 102 pixels and covered the arrow, so this column
+ * keeps 9 percent. */
 .history-table.history-table-sites thead th:nth-child(9) {
     width: 9%;
 }
 
+/* The `Action` header carries `data-no-sort`, so it prints no sort arrow and
+ * needs less width than every other header. */
 .history-table.history-table-sites thead th:nth-child(10) {
-    width: 9%;
+    width: 8%;
 }
 
 /* The row header of this table reads as a plain cell. `.portal-table` styles
@@ -499,13 +511,18 @@
     white-space: nowrap;
 }
 
-/* Issue #3495. The device type phrase must fit at common desktop widths. */
+/* Issue #3495. The device type phrase must fit at common desktop widths. A
+ * phrase such as `1 gateway, 1 switch, 1 access point` needs 310 pixels at a
+ * window of 1280 pixels, and 24 percent gave 297 pixels, so the phrase clipped.
+ * 26 percent gives 322 pixels and holds the phrase on one line. */
 .history-table:not(.history-table-sites) thead th:nth-child(6) {
-    width: 24%;
+    width: 26%;
 }
 
+/* The 2 percent comes from the capture column, because `.cell-capture` already
+ * clips and the title attribute holds the whole identifier. */
 .history-table:not(.history-table-sites) thead th:nth-child(1) {
-    width: 17%;
+    width: 15%;
 }
 
 .history-table:not(.history-table-sites) thead th:nth-child(2) {
