@@ -55,7 +55,7 @@ class CaptureVersionComparison:
         status = _click_and_wait(page, "compare-run-button")
         page.wait_for_load_state("domcontentloaded")
         _require_built_route(status, page.url)
-        notice = page.get_by_test_id("flash-message")
+        notice = page.get_by_test_id("compare-refusal")  # The page-local alert of the compare picker (#3908).
         notice_text = " ".join(" ".join(notice.all_text_contents()).split())
         assert notice_text == "", f"The selected comparison was refused: {notice_text}"
         sync_api.expect(page.get_by_test_id("compare-statistics")).to_be_visible()
