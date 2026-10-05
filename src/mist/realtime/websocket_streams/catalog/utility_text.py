@@ -66,6 +66,23 @@ class UtilityText:
         "topCommand": "Show the busiest processes on the device. The view changes as the device sends output.",
         "traceroute": "Trace the network path from the device to one host.",
     }
+    _DHCP_CHANGE = "This changes client state, so each client must ask for a new address."  # State the effect.
+    _DHCP_EX_TARGETS = (
+        "Use one of these target sets: Network and MAC addresses, Network and Port, or Port only."  # SDK EX sets.
+    )
+    _DHCP_SRX_TARGETS = (  # The SDK accepts five target sets on SRX and SSR devices.
+        "Use one of these target sets: Network only, Network and MAC addresses, Network and Port,"
+        " Port only, or Port and MAC addresses."
+    )
+    _UTILITY_SENTENCES = {  # Issue #3890: text keyed by family, because the SDK targets differ by family.
+        "ex.releaseDhcpLeases": f"Release DHCP leases on an EX switch. {_DHCP_CHANGE} {_DHCP_EX_TARGETS}",
+        "srx.releaseDhcpLeases": f"Release DHCP leases on an SRX device. {_DHCP_CHANGE} {_DHCP_SRX_TARGETS}",
+        "ssr.releaseDhcpLeases": f"Release DHCP leases on an SSR device. {_DHCP_CHANGE} {_DHCP_SRX_TARGETS}",
+        "ex.retrieveMacTable": (
+            "Get the MAC table from the switch. All filters are optional. Leave them empty to get the full table."
+            " Type a MAC address, a port, or a VLAN ID to show fewer entries."
+        ),
+    }
     _HINTS = {
         "host": "Type a host name or an IP address.",
         "interfaces": "Type one or more Mist Edge interface names. Put a comma between the names.",
@@ -102,17 +119,20 @@ class UtilityText:
         return text[:1].upper() + text[1:]  # Capitalize only the first letter, so acronyms stay intact.
 
     @classmethod
-    def sentence(cls, name: str, safety: Safety) -> str:
+    def sentence(cls, name: str, safety: Safety, utility_key: str = "") -> str:
         """Return one plain sentence that tells what a utility does.
 
         Args:
             name: The SDK function name.
             safety: The safety class of the utility.
+            utility_key: The catalog key, which selects family-specific text.
 
         Returns:
-            One or two short sentences for the page.
+            One or more short sentences for the page.
         """
         logger.debug("Building the WebSocket sentence for %s", name)  # Debug level: the catalog builds many texts.
+        if utility_key in cls._UTILITY_SENTENCES:  # Issue #3890: some families accept different targets.
+            return cls._UTILITY_SENTENCES[utility_key]  # Return the family-specific guidance.
         if safety is Safety.CAPTURE:  # All captures share one limit and one output.
             return "Capture packets for 60 seconds and show each packet record."  # Describe the capture result.
         if name in cls._SENTENCES:  # A curated sentence states the effect of the utility.

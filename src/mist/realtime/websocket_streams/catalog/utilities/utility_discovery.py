@@ -82,7 +82,7 @@ class UtilityDiscovery:
             family,
             name,
             UtilityText.label(name),
-            UtilityText.sentence(name, safety),
+            UtilityText.sentence(name, safety, f"{family}.{name}"),  # The key selects family-specific text.
             fields,
             safety,
             self._profile.output(name, safety),
