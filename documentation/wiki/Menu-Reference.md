@@ -269,7 +269,7 @@ never runs in an automated test pass.
 | 233 | Search WAN client events for the organization (searchOrgWanClientEvents) | Safe org exports | `OrgSearchExporter.wan_client_events` |
 | 234 | Search system events for the organization (searchOrgSystemEvents) | Safe org exports | `OrgSearchExporter.system_events` |
 | 235 | Run any org-scoped Mist count endpoint (35 operations) | Interactive safe | `CountExporter.org_counts` |
-| 236 | Run any site-scoped Mist count endpoint (33 operations) | Interactive safe | `CountExporter.site_counts` |
+| 236 | Run any site-scoped Mist count endpoint (32 operations) | Interactive safe | `CountExporter.site_counts` |
 | 237 | Run any MSP-scoped Mist count endpoint (3 operations) | Interactive safe | `CountExporter.msp_counts` |
 | 238 | Export the license entitlement, usage, and subscriptions for an MSP (listMspLicenses) | Interactive safe | `MSPLicenseExporter.licenses` |
 | 239 | Launch the upgrade capture portal on port 8056 (pre-check, upgrade, post-check) | Destructive | `lambda: _launch_capture_portal()` |
@@ -293,8 +293,8 @@ never runs in an automated test pass.
 | 257 | Search NAC clients for a selected site (searchSiteNacClients) | Interactive safe | `SiteSearchExporter.nac_clients` |
 | 258 | Search other-device events for a selected site (searchSiteOtherDeviceEvents) | Interactive safe | `SiteOtherDeviceEventsExporter.other_device_events` |
 | 259 | Run any no-identifier Mist get or list endpoint (29 operations) | Interactive safe | `SimpleEndpointExporter.global_endpoints` |
-| 260 | Run any org-scoped Mist get or list endpoint (55 operations) | Interactive safe | `SimpleEndpointExporter.org_endpoints` |
-| 261 | Run any site-scoped simple Mist read endpoint (58 operations) | Interactive safe | `SimpleEndpointExporter.site_endpoints` |
+| 260 | Run any org-scoped Mist get or list endpoint (56 operations) | Interactive safe | `SimpleEndpointExporter.org_endpoints` |
+| 261 | Run any site-scoped simple Mist read endpoint (57 operations) | Interactive safe | `SimpleEndpointExporter.site_endpoints` |
 | 262 | Run any MSP-scoped Mist get or list endpoint (10 operations) | Interactive safe | `SimpleEndpointExporter.msp_endpoints` |
 | 263 | Run any site SLE endpoint with scope prompts (15 operations) | Interactive safe | `EndpointFamilyExporter.site_sle_endpoints` |
 | 264 | Run any site map endpoint with map prompts (7 operations) | Interactive safe | `EndpointFamilyExporter.site_map_endpoints` |

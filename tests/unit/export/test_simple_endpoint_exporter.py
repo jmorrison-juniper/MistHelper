@@ -33,8 +33,8 @@ def _fake_mist_helper() -> Any:
 def test_scope_table_counts_match_discovery() -> None:
     """The shipped tables must match the measured unique stage-one counts."""
     assert len(_NONE_OPS) == 29
-    assert len(_ORG_OPS) == 55
-    assert len(_SITE_OPS) == 58  # WHY: issue #1369 adds the corrected site fingerprint search.
+    assert len(_ORG_OPS) == 56  # WHY: issue #3334 moves search to the org endpoint.
+    assert len(_SITE_OPS) == 57  # WHY: issue #3334 removes the invalid site operation.
     assert len(_MSP_OPS) == 10
 
 
@@ -46,10 +46,10 @@ def test_operation_table_has_no_duplicate_operation() -> None:
 
 def test_phantom_endpoint_is_not_in_the_table() -> None:
     """The known phantom from issue 1369 must not ship as a callable row."""
-    assert "searchOrgClientFingerprints" not in {entry.operation for entry in ALL_OPS}  # WHY: that SDK name is wrong.
-    assert "searchSiteClientFingerprints" in {
-        entry.operation for entry in _SITE_OPS
-    }  # WHY: the SDK exposes the site-scoped operation.
+    assert "searchOrgClientFingerprints" in {entry.operation for entry in _ORG_OPS}  # WHY: the org path is valid.
+    assert "searchSiteClientFingerprints" not in {
+        entry.operation for entry in ALL_OPS
+    }  # WHY: the site path never worked.
 
 
 @pytest.mark.parametrize("entry", ALL_OPS, ids=lambda entry: entry.operation)

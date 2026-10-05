@@ -87,6 +87,9 @@ _ORG_OPS: tuple[_SimpleEndpointOp, ...] = (
     _SimpleEndpointOp("getOrgSsrRegistrationCommands", "mistapi.api.v1.orgs.ssr"),  # Issue #1158.
     _SimpleEndpointOp("getOrgStats", "mistapi.api.v1.orgs.stats"),  # Issue #1160.
     _SimpleEndpointOp("getOrgZscalerIntegration", "mistapi.api.v1.orgs.setting"),  # Issue #1170.
+    _SimpleEndpointOp(
+        "searchOrgClientFingerprints", "src.mist.access.api.client_fingerprint_operations"
+    ),  # Issue #3334.
     _SimpleEndpointOp("listInstallerAlarmTemplates", "mistapi.api.v1.installer.orgs.alarmtemplates"),  # Issue #1249.
     _SimpleEndpointOp("listInstallerDeviceProfiles", "mistapi.api.v1.installer.orgs.deviceprofiles"),  # Issue #1250.
     _SimpleEndpointOp(
@@ -187,9 +190,6 @@ _SITE_OPS: tuple[_SimpleEndpointOp, ...] = (
     _SimpleEndpointOp("listSiteWxTags", "mistapi.api.v1.sites.wxtags"),  # Issue #1358.
     _SimpleEndpointOp("listSiteWxTunnels", "mistapi.api.v1.sites.wxtunnels"),  # Issue #1359.
     _SimpleEndpointOp("listSiteZonesStats", "mistapi.api.v1.sites.stats"),  # Issue #1360.
-    _SimpleEndpointOp(
-        "searchSiteClientFingerprints", "mistapi.api.v1.sites.insights"
-    ),  # Issue #1369 corrected the spec name.
 )
 
 _MSP_OPS: tuple[_SimpleEndpointOp, ...] = (

@@ -16,6 +16,7 @@ from src.foundation.support.refactors.endpoint_primary_key_strategies import END
 from src.operations.exporting.export.count_exporter import _MSP_OPS, _ORG_OPS, _SITE_OPS, CountExporter, _CountOp
 
 ALL_OPS = list(_ORG_OPS) + list(_SITE_OPS) + list(_MSP_OPS)
+EXCLUDED_SDK_COUNT_OPERATIONS = {"countSiteClientFingerprints"}
 
 
 def _sdk_count_operations() -> set[str]:
@@ -30,7 +31,8 @@ def _sdk_count_operations() -> set[str]:
 
 def test_table_covers_every_sdk_count_operation() -> None:
     """The table must not drift from the SDK in either direction."""
-    assert {entry.operation for entry in ALL_OPS} == _sdk_count_operations()
+    expected = _sdk_count_operations() - EXCLUDED_SDK_COUNT_OPERATIONS
+    assert {entry.operation for entry in ALL_OPS} == expected
 
 
 @pytest.mark.parametrize("entry", ALL_OPS, ids=lambda entry: entry.operation)

@@ -1,6 +1,6 @@
 # Mist API Endpoint Index
 
-> 1059 spec operations, 23 library-only stubs (1082 total)
+> 1072 spec operations, 23 library-only stubs (1095 total)
 
 ## Admins
 
@@ -700,6 +700,13 @@
 | POST | /api/v1/orgs/{org_id}/setting/mist_nac_crls | importOrgNacCrl | importOrgNacCrl | [POST_orgs_org_id_setting_mist_nac_crls.md](orgs/POST_orgs_org_id_setting_mist_nac_crls.md) |
 | DELETE | /api/v1/orgs/{org_id}/setting/mist_nac_crls/{naccrl_id} | deleteOrgNacCrl | deleteOrgNacCrl | [DELETE_orgs_org_id_setting_mist_nac_crls_naccrl_id.md](orgs/DELETE_orgs_org_id_setting_mist_nac_crls_naccrl_id.md) |
 
+## Orgs NAC Fingerprints
+
+| Method | Path | operationId | Summary | File |
+|--------|------|-------------|---------|------|
+| GET | /api/v1/orgs/{org_id}/insights/fingerprints/count | countOrgClientFingerprints | countOrgClientFingerprints | [GET_orgs_org_id_insights_fingerprints_count.md](orgs/GET_orgs_org_id_insights_fingerprints_count.md) |
+| GET | /api/v1/orgs/{org_id}/insights/fingerprints/search | searchOrgClientFingerprints | searchOrgClientFingerprints | [GET_orgs_org_id_insights_fingerprints_search.md](orgs/GET_orgs_org_id_insights_fingerprints_search.md) |
+
 ## Orgs NAC IDP
 
 | Method | Path | operationId | Summary | File |
@@ -825,6 +832,7 @@
 | DELETE | /api/v1/orgs/{org_id}/setting/mist_scep | disableOrgMistScep | disableOrgMistScep | [DELETE_orgs_org_id_setting_mist_scep.md](orgs/DELETE_orgs_org_id_setting_mist_scep.md) |
 | GET | /api/v1/orgs/{org_id}/setting/mist_scep/client_certs | listOrgIssuedClientCertificates | listOrgIssuedClientCertificates | [GET_orgs_org_id_setting_mist_scep_client_certs.md](orgs/GET_orgs_org_id_setting_mist_scep_client_certs.md) |
 | POST | /api/v1/orgs/{org_id}/setting/mist_scep/client_certs/revoke | revokeOrgIssuedClientCertificates | revokeOrgIssuedClientCertificates | [POST_orgs_org_id_setting_mist_scep_client_certs_revoke.md](orgs/POST_orgs_org_id_setting_mist_scep_client_certs_revoke.md) |
+| GET | /api/v1/orgs/{org_id}/setting/mist_scep/events/search | searchOrgScepEvents | searchOrgScepEvents | [GET_orgs_org_id_setting_mist_scep_events_search.md](orgs/GET_orgs_org_id_setting_mist_scep_events_search.md) |
 
 ## Orgs SDK Invites
 
@@ -900,6 +908,16 @@
 | GET | /api/v1/orgs/{org_id}/secpolicies/{secpolicy_id} | getOrgSecPolicy | getOrgSecPolicy | [GET_orgs_org_id_secpolicies_secpolicy_id.md](orgs/GET_orgs_org_id_secpolicies_secpolicy_id.md) |
 | PUT | /api/v1/orgs/{org_id}/secpolicies/{secpolicy_id} | updateOrgSecPolicy | updateOrgSecPolicy | [PUT_orgs_org_id_secpolicies_secpolicy_id.md](orgs/PUT_orgs_org_id_secpolicies_secpolicy_id.md) |
 | DELETE | /api/v1/orgs/{org_id}/secpolicies/{secpolicy_id} | deleteOrgSecPolicy | deleteOrgSecPolicy | [DELETE_orgs_org_id_secpolicies_secpolicy_id.md](orgs/DELETE_orgs_org_id_secpolicies_secpolicy_id.md) |
+
+## Orgs Security Zones
+
+| Method | Path | operationId | Summary | File |
+|--------|------|-------------|---------|------|
+| GET | /api/v1/orgs/{org_id}/securityzones | listOrgSecurityZones | listOrgSecurityZones | [GET_orgs_org_id_securityzones.md](orgs/GET_orgs_org_id_securityzones.md) |
+| POST | /api/v1/orgs/{org_id}/securityzones | createOrgSecurityZone | createOrgSecurityZone | [POST_orgs_org_id_securityzones.md](orgs/POST_orgs_org_id_securityzones.md) |
+| GET | /api/v1/orgs/{org_id}/securityzones/{securityzone_id} | getOrgSecurityZone | getOrgSecurityZone | [GET_orgs_org_id_securityzones_securityzone_id.md](orgs/GET_orgs_org_id_securityzones_securityzone_id.md) |
+| PUT | /api/v1/orgs/{org_id}/securityzones/{securityzone_id} | updateOrgSecurityZone | updateOrgSecurityZone | [PUT_orgs_org_id_securityzones_securityzone_id.md](orgs/PUT_orgs_org_id_securityzones_securityzone_id.md) |
+| DELETE | /api/v1/orgs/{org_id}/securityzones/{securityzone_id} | deleteOrgSecurityZone | deleteOrgSecurityZone | [DELETE_orgs_org_id_securityzones_securityzone_id.md](orgs/DELETE_orgs_org_id_securityzones_securityzone_id.md) |
 
 ## Orgs Service Policies
 
@@ -1093,6 +1111,7 @@
 
 | Method | Path | operationId | Summary | File |
 |--------|------|-------------|---------|------|
+| GET | /api/v1/orgs/{org_id}/vars/count | countOrgVars | countOrgVars | [GET_orgs_org_id_vars_count.md](orgs/GET_orgs_org_id_vars_count.md) |
 | GET | /api/v1/orgs/{org_id}/vars/search | searchOrgVars | searchOrgVars | [GET_orgs_org_id_vars_search.md](orgs/GET_orgs_org_id_vars_search.md) |
 
 ## Orgs WLAN Templates
@@ -1508,6 +1527,9 @@
 |--------|------|-------------|---------|------|
 | GET | /api/v1/sites/{site_id}/mapstacks | listSiteMapStacks | listSiteMapStacks | [GET_sites_site_id_mapstacks.md](sites/GET_sites_site_id_mapstacks.md) |
 | POST | /api/v1/sites/{site_id}/mapstacks | createSiteMapStack | createSiteMapStack | [POST_sites_site_id_mapstacks.md](sites/POST_sites_site_id_mapstacks.md) |
+| GET | /api/v1/sites/{site_id}/mapstacks/{mapstack_id} | getSiteMapStack | getSiteMapStack | [GET_sites_site_id_mapstacks_mapstack_id.md](sites/GET_sites_site_id_mapstacks_mapstack_id.md) |
+| PUT | /api/v1/sites/{site_id}/mapstacks/{mapstack_id} | updateSiteMapStack | updateSiteMapStack | [PUT_sites_site_id_mapstacks_mapstack_id.md](sites/PUT_sites_site_id_mapstacks_mapstack_id.md) |
+| DELETE | /api/v1/sites/{site_id}/mapstacks/{mapstack_id} | deleteSiteMapStack | deleteSiteMapStack | [DELETE_sites_site_id_mapstacks_mapstack_id.md](sites/DELETE_sites_site_id_mapstacks_mapstack_id.md) |
 
 ## Sites Maps
 
@@ -1570,13 +1592,6 @@
 | PUT | /api/v1/sites/{site_id}/mxedges/{mxedge_id} | updateSiteMxEdge | updateSiteMxEdge | [PUT_sites_site_id_mxedges_mxedge_id.md](sites/PUT_sites_site_id_mxedges_mxedge_id.md) |
 | DELETE | /api/v1/sites/{site_id}/mxedges/{mxedge_id} | deleteSiteMxEdge | deleteSiteMxEdge | [DELETE_sites_site_id_mxedges_mxedge_id.md](sites/DELETE_sites_site_id_mxedges_mxedge_id.md) |
 | POST | /api/v1/sites/{site_id}/mxedges/{mxedge_id}/support | uploadSiteMxEdgeSupportFiles | uploadSiteMxEdgeSupportFiles | [POST_sites_site_id_mxedges_mxedge_id_support.md](sites/POST_sites_site_id_mxedges_mxedge_id_support.md) |
-
-## Sites NAC Fingerprints
-
-| Method | Path | operationId | Summary | File |
-|--------|------|-------------|---------|------|
-| GET | /api/v1/sites/{site_id}/insights/fingerprints/count | countSiteClientFingerprints | countSiteClientFingerprints | [GET_sites_site_id_insights_fingerprints_count.md](sites/GET_sites_site_id_insights_fingerprints_count.md) |
-| GET | /api/v1/sites/{site_id}/insights/fingerprints/search | searchSiteClientFingerprints | searchSiteClientFingerprints | [GET_sites_site_id_insights_fingerprints_search.md](sites/GET_sites_site_id_insights_fingerprints_search.md) |
 
 ## Sites Network Templates
 
@@ -2043,6 +2058,9 @@
 | GET | /api/v1/orgs/{org_id}/pcaps/capture | getOrgCapturingStatus | getOrgCapturingStatus | [GET_orgs_org_id_pcaps_capture.md](utilities/GET_orgs_org_id_pcaps_capture.md) |
 | POST | /api/v1/orgs/{org_id}/pcaps/capture | startOrgPacketCapture | startOrgPacketCapture | [POST_orgs_org_id_pcaps_capture.md](utilities/POST_orgs_org_id_pcaps_capture.md) |
 | DELETE | /api/v1/orgs/{org_id}/pcaps/capture | stopOrgPacketCapture | stopOrgPacketCapture | [DELETE_orgs_org_id_pcaps_capture.md](utilities/DELETE_orgs_org_id_pcaps_capture.md) |
+| GET | /api/v1/sites/{site_id}/flow_capture | getSiteFlowCaptureStatus | getSiteFlowCaptureStatus | [GET_sites_site_id_flow_capture.md](utilities/GET_sites_site_id_flow_capture.md) |
+| POST | /api/v1/sites/{site_id}/flow_capture | startSiteFlowCapture | startSiteFlowCapture | [POST_sites_site_id_flow_capture.md](utilities/POST_sites_site_id_flow_capture.md) |
+| DELETE | /api/v1/sites/{site_id}/flow_capture | stopSiteFlowCapture | stopSiteFlowCapture | [DELETE_sites_site_id_flow_capture.md](utilities/DELETE_sites_site_id_flow_capture.md) |
 | GET | /api/v1/sites/{site_id}/pcaps | listSitePacketCaptures | listSitePacketCaptures | [GET_sites_site_id_pcaps.md](utilities/GET_sites_site_id_pcaps.md) |
 | GET | /api/v1/sites/{site_id}/pcaps/capture | getSiteCapturingStatus | getSiteCapturingStatus | [GET_sites_site_id_pcaps_capture.md](utilities/GET_sites_site_id_pcaps_capture.md) |
 | POST | /api/v1/sites/{site_id}/pcaps/capture | startSitePacketCapture | startSitePacketCapture | [POST_sites_site_id_pcaps_capture.md](utilities/POST_sites_site_id_pcaps_capture.md) |
