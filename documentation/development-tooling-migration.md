@@ -87,8 +87,6 @@ workflows and jobs to the shared copies.
 
 | MistHelper workflow | Shared workflow |
 | - | - |
-| `copilot-auto-assign.yml` | `reusable-copilot-assign.yml` |
-| `copilot-label-checkbox.yml` | `reusable-copilot-assign.yml` |
 | `close-linked-issues.yml` | `reusable-close-linked-issues.yml` |
 | `container-build.yml`, job `build-and-push` | `reusable-container-image.yml` |
 | `release.yml`, job `build-container` | `reusable-container-image.yml` |
@@ -102,10 +100,10 @@ a comment. Dependabot reads that comment and proposes a new pin after a devtools
 release. It does not update the `requirements-dev.txt` pin, so change that pin
 by hand to the same release.
 
-The Copilot assignment needs the `COPILOT_ASSIGN_TOKEN` repository secret.
-GitHub assigns the Copilot cloud agent only for a user token. Without the
-secret, the shared workflow writes one comment on the issue that tells how to
-set it up, and it adds no `in-progress` label.
+Phase 3 also moved two Copilot assignment workflows to the shared
+`reusable-copilot-assign.yml` workflow. Issue #3900 removed both workflows and
+the setup file of the Copilot cloud agent, because the owner cannot use that
+agent.
 
 Phase 3 kept two sets of jobs local: the jobs of `auto-merge.yml` and the
 `create_failure_issues` and `close_resolved_issues` jobs of `ci.yml`. Phase 6
