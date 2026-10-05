@@ -92,5 +92,5 @@ class TestRegisterReporting:
         """The shared job reads each result from the needs context, so the gate must be in needs once."""
         job = workflow["jobs"][ISSUE_JOB]
         assert job["needs"].count(GATE_JOB) == 1
-        assert "always()" in job["if"]
+        assert "!cancelled()" in job["if"]  # Issue #3926: always() ignores a cancelled run.
         assert job["with"]["results"] == "${{ toJSON(needs) }}"

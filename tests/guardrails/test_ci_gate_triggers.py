@@ -166,6 +166,50 @@ class TestConcurrency:
         )
 
 
+class CancellableJobAudit:
+    """Find each job that a cancelled run cannot stop (issue #3926).
+
+    GitHub Actions does not cancel a job whose `if` condition calls `always()`.
+    A cancelled run then keeps each such job, and the jobs that wait on it,
+    until they finish. On pull request #3898 the older run held the concurrency
+    group for 21 minutes, and the newer run waited for it.
+    """
+
+    @staticmethod
+    def uncancellable_jobs(workflow: dict[str, Any]) -> list[str]:
+        """Return the name of each job whose condition calls always()."""
+        jobs = workflow.get("jobs", {})  # Read every job, because any one job can hold the group.
+        return sorted(name for name, job in jobs.items() if "always()" in str(job.get("if", "")))  # Name each blocker.
+
+    @staticmethod
+    def gated_jobs(workflow: dict[str, Any]) -> list[str]:
+        """Return the name of each job that runs after a failed dependency."""
+        jobs = workflow.get("jobs", {})  # Read every job, because each one needs a cancel-aware condition.
+        return sorted(name for name, job in jobs.items() if "!cancelled()" in str(job.get("if", "")))  # Count them.
+
+
+class TestCancelledRunStops:
+    """Check that a cancelled quality gate run stops each job (issue #3926)."""
+
+    def test_no_job_survives_a_cancelled_run(self, workflow: dict[str, Any]) -> None:
+        """A job that calls always() keeps a cancelled run alive."""
+        blockers = CancellableJobAudit.uncancellable_jobs(workflow)  # Find each job that ignores the cancel.
+        checked = len(workflow["jobs"])  # Count the jobs, so the report shows the examined scope.
+        print(f"Checked {checked} jobs in ci.yml, found {len(blockers)} that ignore a cancel.")  # Report the count.
+        assert blockers == [], f"Use !cancelled(), not always(). These jobs ignore a cancel: {blockers}"
+
+    def test_each_gate_after_a_failure_still_runs(self, workflow: dict[str, Any]) -> None:
+        """The jobs that ran after a failed gate keep that behavior through !cancelled()."""
+        gated = CancellableJobAudit.gated_jobs(workflow)  # Read the jobs that run after a failed dependency.
+        assert len(gated) == 8, f"Expected 8 jobs with !cancelled(), found {len(gated)}: {gated}"  # Pin the set.
+        assert "quality_gate_issues" in gated, "The issue job must still run after a failed gate."
+
+    def test_the_audit_rejects_an_always_condition(self) -> None:
+        """The direct proof: a synthetic job with always() must fail the audit."""
+        synthetic = {"jobs": {"mypy": {"if": "${{ always() }}"}, "ruff": {}}}  # Model the issue #3926 workflow.
+        assert CancellableJobAudit.uncancellable_jobs(synthetic) == ["mypy"]  # The audit names the blocker.
+
+
 class TestCodeqlTrigger:
     """Check the events that start the CodeQL scan, a required check."""
 
