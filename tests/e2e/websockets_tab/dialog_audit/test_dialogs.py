@@ -27,6 +27,13 @@ class TestDialogs:
         report = AuditReportWriter.build(
             expected, records, time.monotonic() - started, audit_inventory["sdk_version"]
         )  # Actual duration and SDK.
+        cancel_supported = "supported: 1 visible operation-form Cancel control"  # Current form contract.
+        assert all(
+            record["cancel"] == cancel_supported for record in records
+        )  # Preserve visible cancellation evidence.
+        assert not any(
+            finding["topic"] == "operation-cancel" for record in records for finding in record["ux_review"]["findings"]
+        )  # Existing visible Cancel controls are not missing.
         destination = request.config.getoption("--ws-audit-artifacts")  # Saving evidence is opt-in.
         if destination:
             AuditReportWriter.write(report, destination)  # Write restricted JSON and sanitized Markdown only.
@@ -40,6 +47,44 @@ class TestDialogs:
             record for record in records if record["status"] == "failed"
         ]  # Keep actionable public observations.
         assert not failures, failures  # Fail after all forms and the partial report are recorded.
+
+    def test_cancel_measurement_matches_utility_review(self, audit_page, audit_inventory, monkeypatch):
+        page, policy = audit_page  # Use the browser route guard and synthetic selector data.
+        original_count = UtilityExperienceInspector.visible_cancel_count  # Keep the real visibility measurement.
+        cases = (
+            ("visible", "site.stats.clients", "supported: 1 visible operation-form Cancel control", False),
+            ("hidden", "location.clients", "unsupported: no visible operation-form Cancel control (0)", True),
+            ("missing", "diag.sdkclient", "unsupported: no visible operation-form Cancel control (0)", True),
+            (
+                "duplicate",
+                "site.stats.devices",
+                "unsupported: multiple visible operation-form Cancel controls (2)",
+                False,
+            ),
+        )  # Exercise each rendered control state with a distinct operation form.
+        for index, (mutation, key, expected_cancel, missing_finding) in enumerate(cases):
+            entry = next(item for item in audit_inventory["entries"] if item["key"] == key)  # Real catalog entry.
+
+            def mutate_and_count(inspector, state=mutation):
+                controls = page.locator("#wsStartForm [data-testid='ws-cancel-selection-button']")
+                if state == "hidden":
+                    controls.first.evaluate("(node) => { node.hidden = true; }")
+                elif state == "missing":
+                    controls.first.evaluate("(node) => node.remove()")
+                elif state == "duplicate":
+                    controls.first.evaluate("(node) => node.parentElement.appendChild(node.cloneNode(true))")
+                return original_count(inspector)  # Count the real rendered result after this synthetic mutation.
+
+            monkeypatch.setattr(
+                UtilityExperienceInspector, "visible_cancel_count", mutate_and_count
+            )  # Mutate only the local page before the real measurement.
+            record = DialogInspector(page, audit_inventory).inspect(entry)  # Inspect without submitting the form.
+            topics = [finding["topic"] for finding in record["ux_review"]["findings"]]  # Shared UX evidence.
+            assert record["cancel"] == expected_cancel  # Report the exact visible control count.
+            assert ("operation-cancel" in topics) is missing_finding  # Share the count with UX findings.
+            if index < len(cases) - 1:
+                page.reload()  # Reset static form controls before the next synthetic browser state.
+        assert policy.transmitted == 0 and not policy.denied  # No live or mutation request is sent.
 
     def test_forbidden_browser_requests_never_leave_context(self, audit_page):
         page, policy = audit_page  # Use the same installed route boundary as the inspection.

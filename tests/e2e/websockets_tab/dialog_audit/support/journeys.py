@@ -179,6 +179,7 @@ class DialogInspector:
         return records  # Caller writes partial evidence before asserting findings.
 
     def inspect(self, entry, deadline=float("inf")):
+        """Inspect one selected form and retain sanitized cancellation evidence."""
         key, problems = entry["key"], []  # Public keys and fixed observation text only.
         logger.info("Inspecting operation form %s", key)  # No target values enter logs.
         self.page.get_by_test_id("ws-catalog-entry-" + key).click()  # Normal-user selection, not direct JS invocation.
@@ -203,16 +204,24 @@ class DialogInspector:
         if bool(self.page.locator("#wsStartButton").is_disabled()) != disabled:
             problems.append("The start control does not match the catalog lock state.")  # Inspection only.
         logger.debug("Completed form inspection with %d observations", len(problems))  # Bounded count.
+        utility = UtilityExperienceInspector(self.page, self.inventory)  # Share one cancellation measurement.
+        cancel_count = utility.visible_cancel_count()  # Count visible exact-name controls in this operation form.
+        ux_review = utility.inspect(entry, cancel_count)  # Findings use the same count as the report record.
+        cancel_evidence = {
+            0: "unsupported: no visible operation-form Cancel control (0)",
+            1: "supported: 1 visible operation-form Cancel control",
+        }.get(
+            cancel_count,
+            "unsupported: multiple visible operation-form Cancel controls (" + str(cancel_count) + ")",
+        )  # Hidden and duplicate controls cannot report one supported control.
         return {
             "key": key,
             "status": "failed" if problems else "blocked" if picker_problems else "passed",
             "observations": problems + (picker_problems if self.live else []),
             "selectors": picker.measurements,  # Names are source field names, never private site or device names.
             "sdk_signature_verified": self.oracle.verified(key),
-            "cancel": "unsupported: no operation-form Cancel control",
-            "ux_review": UtilityExperienceInspector(self.page, self.inventory).inspect(
-                entry
-            ),  # Independent UX evidence.
+            "cancel": cancel_evidence,  # Sanitized evidence gives the visible control count.
+            "ux_review": ux_review,  # Preserve the existing report schema and shared finding measurement.
             "source": "src/mist/realtime/websocket_streams/web/static/websockets.js:selectEntry/renderStartForm",
             "reproduction": "Open WebSockets. Select catalog key "
             + key
@@ -324,18 +333,18 @@ class UtilityExperienceInspector:
     def __init__(self, page, inventory):
         self.page, self.definitions = page, inventory["definitions"]  # Retain actual SDK-linked definitions.
 
-    def inspect(self, entry):
+    def inspect(self, entry, cancel_count=None):
+        """Return utility findings that share the form's measured Cancel count."""
         findings = []  # UX gaps do not assert that an SDK operation fails.
-        cancel_count = (
-            self.page.locator("#wsStartForm").get_by_role("button", name="Cancel", exact=True).count()
-        )  # Actual visible form.
+        if cancel_count is None:
+            cancel_count = self.visible_cancel_count()  # Standalone UX checks use the same visible-control rule.
         if cancel_count == 0:
             findings.append(
                 {
                     "category": "user-story-gap",
                     "topic": "operation-cancel",
                     "evidence": (
-                        "The operation form has no Cancel control. "
+                        "The operation form has no visible Cancel control. "
                         "Replacing a selection is not explicit cancellation."
                     ),
                     "source": "src/mist/realtime/websocket_streams/web/templates/websockets_page.html:wsStartForm",
@@ -367,6 +376,18 @@ class UtilityExperienceInspector:
             "findings": findings,
             "functional_defect_confirmed": False,
         }  # Explicitly separate gaps from verified operation failures.
+
+    def visible_cancel_count(self):
+        """Count visible exact-name Cancel buttons within the operation form."""
+        controls = self.page.locator("#wsStartForm").get_by_role(
+            "button", name="Cancel", exact=True
+        )  # Exact accessible names exclude unrelated buttons.
+        return sum(
+            1
+            for index in range(controls.count())
+            if controls.nth(index).get_attribute("data-testid") == "ws-cancel-selection-button"
+            and controls.nth(index).is_visible()
+        )  # Exclude hidden, unrelated, or non-exact form controls.
 
     def client_fields(self, definition, entry):
         module = importlib.import_module("mistapi.device_utils." + definition.family)  # Definition inspection only.
