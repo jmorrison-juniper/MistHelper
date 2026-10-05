@@ -120,6 +120,8 @@ The integrated design follows `checklists/research.md` and
 - `tests/e2e/websockets_tab/test_websockets_terminal.py`: extends the existing
   fake-harness browser coverage with catalog, cancellation, stale-picker, and
   live-session checks.
+- `documentation/wiki/Web-Portal.md`: explains form cancellation and its
+  separation from live-session controls.
 - `changelog.d/issue-3888-websocket-form-cancellation.md`: exactly one
   issue-specific release fragment.
 - `specs/3888-websocket-form-cancellation/plan.md`, `tasks.md`, and
@@ -160,6 +162,9 @@ src/mist/realtime/websocket_streams/web/
 
 tests/e2e/websockets_tab/
 └── test_websockets_terminal.py   # existing fake-harness browser regression
+
+documentation/wiki/
+└── Web-Portal.md                 # cancellation and live-session behavior
 
 changelog.d/
 └── issue-3888-websocket-form-cancellation.md

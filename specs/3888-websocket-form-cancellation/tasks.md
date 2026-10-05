@@ -102,6 +102,7 @@ normal-user regression.
 
 - [X] T008 Create exactly one release fragment at `changelog.d/issue-3888-websocket-form-cancellation.md` describing explicit cancellation of unsubmitted WebSocket operation forms; do not edit `CHANGELOG.md`.
 - [X] T009 Run the normal-user Playwright regression with fake routes using `.venv/bin/python -m pytest tests/e2e/websockets_tab/test_websockets_terminal.py -k 'cancellation or cancel_is_hidden' -q`; it passed 2 tests with no live operation.
+- [X] T010 Update `documentation/wiki/Web-Portal.md` to explain how Cancel clears an unsubmitted form without stopping a live session.
 
 ## Dependencies & Execution Order
 

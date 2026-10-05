@@ -40,6 +40,10 @@ each second. It reads terminal sessions with a long poll.
 
 The tab gives three kinds of entry.
 
+Select an entry in the catalog to prepare a session. Select **Cancel** to clear
+the selected entry and its values before you start it. Cancel does not stop a
+live session. The page ignores responses from earlier selections.
+
 | Kind | Action | Examples |
 | - | - | - |
 | Channel | Subscribes to one Mist API stream and shows each message. | Device statistics, client statistics, and map locations |
