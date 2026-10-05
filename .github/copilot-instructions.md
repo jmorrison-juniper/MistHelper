@@ -499,6 +499,11 @@ unchanged.
   zero checks. A workflow that reports a required check carries no `paths` filter and no
   `branches` filter.
 
+- Issue #3926: GitHub Actions does not cancel a job whose `if` condition calls `always()`. A
+  force-push cancelled the older Quality Gates run, but each `always()` job ran to its end, and
+  the newer run waited 21 minutes. Use `!cancelled()` for a job that must run after a failed
+  gate. `tests/guardrails/test_ci_gate_triggers.py` fails on an `always()` job in `ci.yml`.
+
 ## Key files
 
 | File | Purpose |

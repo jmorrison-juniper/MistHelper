@@ -124,9 +124,9 @@ class TestTheWorkflowCallsTheSharedJob:
 
     @pytest.mark.parametrize("relative_path", WORKFLOW_FILES, ids=lambda path: path.name)
     def test_the_job_runs_after_a_failed_gate(self, relative_path: Path) -> None:
-        """Without always(), a failed gate skips the job that must open its issue."""
+        """Without !cancelled(), a failed gate skips the job that must open its issue (issue #3926)."""
         condition = issue_job(relative_path)["if"]
-        assert "always()" in condition, f"{relative_path} must run the job after a failed gate"
+        assert "!cancelled()" in condition, f"{relative_path} must run the job after a failed gate"
 
     @pytest.mark.parametrize("relative_path", WORKFLOW_FILES, ids=lambda path: path.name)
     def test_the_job_can_read_the_pull_request_state(self, relative_path: Path) -> None:

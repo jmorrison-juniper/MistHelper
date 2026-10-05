@@ -56,6 +56,13 @@ concurrency:
   # WHY this condition: a push to main must not cancel an earlier main run.
   # That run reports the state of a merged tree, and the Auto-merge workflow
   # reads it.
+  #
+  # WHY !cancelled() and not always(): GitHub Actions does not cancel a job
+  # whose condition calls always(). On pull request #3898 the cancel reached
+  # the older run, but each always() job ran to its end. The older run held
+  # this group for 21 minutes, and the newer run waited (issue #3926). The
+  # condition !cancelled() still runs a job after a failed gate, and a cancel
+  # stops it.
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
@@ -162,7 +169,7 @@ jobs:
       - playwright
       - pylint
       - pytest
-    if: ${{ always() }}
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -200,7 +207,7 @@ jobs:
       - bandit
       - pydocstyle
       - test_quality_gate
-    if: ${{ always() }}
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -234,7 +241,7 @@ jobs:
     needs:
       - pip_audit
       - mypy
-    if: ${{ always() }}
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: ${{ matrix.timeout_minutes }}
     strategy:
@@ -317,7 +324,7 @@ jobs:
     name: "pytest (coverage gate)"
     needs:
       - pytest_coverage_shards
-    if: ${{ always() }}
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
@@ -438,7 +445,7 @@ jobs:
       - mermaid_lint
       - bandit
       - pydocstyle
-    if: ${{ always() }}
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -482,7 +489,7 @@ jobs:
     needs:
       - pip_audit
       - mypy
-    if: ${{ always() }}
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -736,7 +743,7 @@ jobs:
     needs:
       - pip_audit
       - mypy
-    if: ${{ always() }}
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     # Issue #2242: the browser suite could cover no write journey, because the
@@ -1110,7 +1117,7 @@ jobs:
       - codeql_register_check
       - ops_portal
       - ops_platform_pytest
-    if: ${{ always() }}
+    if: ${{ !cancelled() }}
     permissions:
       issues: write
       pull-requests: read
