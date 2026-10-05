@@ -7,6 +7,7 @@ Why:
 
 from __future__ import annotations  # Keep annotations lazy for Playwright imports.
 
+import json  # Build controlled fake route responses.
 import logging  # Capture log text for the leak scan journey.
 import time  # Bound the footer wait in the resize journey.
 from pathlib import Path  # Read the downloaded terminal history file.
@@ -1086,3 +1087,223 @@ def test_review_screen_reset_shows_plain_reason(page: Any, terminal_harness: Ter
     _shot(page, harness, "review-screen-reset-network.png")  # Save evidence of the plain reason.
     assert page.locator("#wsStopButton").is_disabled() is True  # A failed session cannot stop again.
     assert len(harness.cloud.requests) >= 1  # The open reached the fake cloud before the reset.
+
+
+FAKE_CANCELLATION_SESSION = {  # Keep one stable fake live card visible during form cancellation.
+    "session_id": "fake-session-3888",  # Identify the unrelated session card.
+    "title": "Existing fake session",  # Keep the card label stable.
+    "key": "existing.fake",  # Supply the catalog key the session renderer expects.
+    "state": "running",  # Show the card as live.
+    "live": True,  # Keep its stop control in its normal live state.
+    "counters": {"received": 4, "dropped": 0},  # Hold the card counters constant.
+    "rate_per_second": 1.0,  # Hold the displayed rate constant.
+}  # Use only an intercepted fake session, not a live session.
+STALE_DEVICE_ID = "bbbbbbbb-cccc-dddd-eeee-ffffffffffff"  # Give delayed picker replies a distinct device.
+
+
+def _fulfill_json(route: Any, payload: dict[str, Any], status: int = 200) -> None:
+    """Return one controlled JSON response through a fake browser route."""
+    route.fulfill(  # End the intercepted request without reaching a live service.
+        status=status,  # Keep success and refusal cases explicit.
+        content_type="application/json",  # Match the portal API response type.
+        body=json.dumps(payload),  # Serialize only test-owned values.
+    )  # Complete the fake response.
+
+
+class CancellationRouteController:
+    """Control fake session and picker routes for the cancellation journeys."""
+
+    def __init__(self, page: Any) -> None:
+        """Store the browser page and route observations."""
+        self.page = page  # Keep route registration on the normal-user page.
+        self.starts = 0  # Count fake start requests.
+        self.stops = 0  # Count fake stop requests.
+        self.hold_start = False  # Hold a start only in the in-flight test.
+        self.held_starts: list[Any] = []  # Keep held start routes for explicit release.
+        self.hold_next_device = False  # Hold only the selected delayed device read.
+        self.held_devices: list[Any] = []  # Keep delayed device routes for explicit release.
+
+    def install(self) -> None:
+        """Register fake session, stop, and picker routes."""
+        self.page.route("**/api/websockets/sessions", self.sessions)  # Intercept lists and operation starts.
+        self.page.route("**/api/websockets/sessions/*/stop", self.stops_route)  # Intercept session stops.
+        self.page.route("**/api/websockets/sites/*/devices", self.devices)  # Control device picker replies.
+
+    def sessions(self, route: Any) -> None:
+        """Return a fixed session list or hold a fake start request."""
+        if route.request.method == "POST":  # Starts cannot reach the portal service.
+            self.starts += 1  # Record the attempted start for the caller.
+            if self.hold_start:  # Hold only the request used to test the in-flight control.
+                self.held_starts.append(route)  # Let the test release it after checking Cancel.
+                return  # Keep the browser request pending.
+            _fulfill_json(route, {"error": "The fake start request was blocked."}, status=409)  # Block the start.
+            return  # Do not return a session to the browser.
+        _fulfill_json(  # Keep the unrelated live card identical on every list refresh.
+            route,
+            {"sessions": [FAKE_CANCELLATION_SESSION], "limits": {"live_count": 1, "max_sessions": 8}},
+        )  # Return the fake card only.
+
+    def devices(self, route: Any) -> None:
+        """Hold one device response or pass the request to the fake portal."""
+        if self.hold_next_device:  # Pause only the read selected by the test.
+            self.hold_next_device = False  # Let later device reads complete normally.
+            self.held_devices.append(route)  # Save the route until the test releases it.
+            return  # Leave this picker response pending.
+        route.continue_()  # Use the existing fake portal service for every other device read.
+
+    def stops_route(self, route: Any) -> None:
+        """Count and block any session stop request."""
+        self.stops += 1  # Record a stop attempt without reaching the portal service.
+        _fulfill_json(route, {"error": "The fake session stop was blocked."}, status=409)  # Keep the card unchanged.
+
+
+def _wait_for_held_route(page: Any, routes: list[Any]) -> Any:
+    """Wait for one intercepted request, then return its held route."""
+    deadline = time.monotonic() + READY_TIMEOUT_MS / 1000  # Bound the route wait by the browser timeout.
+    while not routes and time.monotonic() < deadline:  # Allow Playwright to dispatch the request callback.
+        page.wait_for_timeout(25)  # Yield to browser events without blocking the route handler.
+    assert routes, "The browser did not request the expected delayed picker."  # Fail with the missing request.
+    return routes.pop(0)  # Release each held request once.
+
+
+def _release_device_route(route: Any, label: str) -> None:
+    """Return one delayed fake device result."""
+    _fulfill_json(  # Give the delayed response a row that identifies its selection.
+        route,
+        {
+            "rows": [{"id": STALE_DEVICE_ID, "label": label, "family": "ex", "detail": "EX4100"}],
+            "reason": None,
+        },
+    )  # Return only a controlled fake picker result.
+
+
+def _assert_form_is_unselected(page: Any) -> None:
+    """Check that cancellation removed all selection-specific form state."""
+    assert page.locator("#wsSelectedTitle").inner_text() == "Select a stream"  # Restore the base title.
+    description = page.locator("#wsSelectedDescription").inner_text()  # Read the restored base description.
+    assert description == (  # Require the exact unselected description.
+        "Choose a channel or a device utility from the catalog."  # Keep the existing page wording.
+    )
+    assert page.locator(".ws-catalog-entry.active").count() == 0  # Remove selection styling.
+    assert page.locator("#wsTargetFields").locator("*").count() == 0  # Remove all target controls.
+    assert page.locator("#wsParameterFields").locator("*").count() == 0  # Remove all parameter controls.
+    assert page.get_by_test_id("ws-confirmation-input").input_value() == ""  # Clear confirmation text.
+    assert page.get_by_test_id("ws-confirmation-group").is_visible() is False  # Hide confirmation presentation.
+    assert page.get_by_test_id("ws-safety-warning").is_visible() is False  # Hide selection warnings.
+    assert page.get_by_test_id("ws-start-error").is_visible() is False  # Hide selection errors.
+    assert page.get_by_test_id("ws-start-button").is_disabled() is True  # Prevent an unselected start.
+    assert page.get_by_test_id("ws-cancel-selection-button").is_visible() is False  # Hide Cancel without a selection.
+
+
+def test_websocket_form_cancellation_fences_picker_responses_and_preserves_sessions(
+    page: Any, terminal_harness: TerminalPortalHarness
+) -> None:
+    """Cancel any catalog selection without starting work or changing a live card."""
+    observed = CancellationRouteController(page)  # Keep every session action inside fake browser routes.
+    observed.install()  # Register routes before the harness loads the portal page.
+    terminal_harness.open_page(page)  # Use the existing normal-user portal harness.
+    cancel = page.get_by_test_id("ws-cancel-selection-button")  # Locate the form-only Cancel action.
+    assert page.get_by_test_id("ws-catalog-count").inner_text() == "72"  # Keep the live catalog size unchanged.
+    assert cancel.is_visible() is False  # Do not show form cancellation before selection.
+    card = page.get_by_test_id("ws-session-fake-session-3888")  # Locate the unrelated fake live session.
+    card.wait_for(state="visible", timeout=READY_TIMEOUT_MS)  # Wait for the intercepted session list.
+    card_before = (card.get_attribute("class"), card.inner_text())  # Capture the card identity and state.
+    _verify_cancel_for_all_catalog_entries(page, cancel)  # Check Cancel across all 72 entries.
+    _cancel_repeatable_target(page)  # Check that a repeated target value is discarded.
+    _cancel_parameter_and_confirmation(page, terminal_harness)  # Check that text and confirmation values are discarded.
+    _cancel_delayed_picker(page, observed, cancel)  # Check that a canceled picker cannot restore form state.
+    _check_superseded_picker(  # Check that an older selection cannot affect a newer one.
+        page, terminal_harness, observed  # Pass the current page and controlled fake routes.
+    )
+    assert observed.starts == 0  # Cancellation never sent a start request.
+    assert observed.stops == 0  # Form cancellation never sent a session stop request.
+    assert (card.get_attribute("class"), card.inner_text()) == card_before  # Keep the fake live card unchanged.
+
+
+def _verify_cancel_for_all_catalog_entries(page: Any, cancel: Any) -> None:
+    """Select every live catalog entry and verify its shared form offers Cancel."""
+    entries = page.locator(".ws-catalog-entry")  # Read all live catalog buttons.
+    assert entries.count() == 72  # Match the catalog count displayed to users.
+    for index in range(entries.count()):  # Select each entry as a normal user.
+        entries.nth(index).click()  # Load that entry into the shared form.
+        assert cancel.is_visible() is True  # Offer Cancel for every selected entry.
+    cancel.click()  # Return to the unselected state before other scenarios.
+    _assert_form_is_unselected(page)  # Confirm the base form has no pending entry.
+
+
+def _cancel_repeatable_target(page: Any) -> None:
+    """Select and cancel a channel with a repeatable target picker."""
+    page.get_by_test_id("ws-catalog-entry-site.stats.clients").click()  # Choose the catalog's repeatable site stream.
+    site = page.get_by_test_id("ws-field-site_id")  # Locate its repeatable target picker.
+    site.select_option(terminal_support.SITE_ID)  # Populate the target through the visible picker.
+    assert site.get_attribute("multiple") is not None  # Confirm the selected field accepts repeated values.
+    assert site.input_value() == terminal_support.SITE_ID  # Confirm a pending target value exists.
+    page.get_by_test_id("ws-cancel-selection-button").click()  # Discard the unsent selection.
+    _assert_form_is_unselected(page)  # Verify the repeated target control and value are gone.
+
+
+def _cancel_parameter_and_confirmation(page: Any, terminal_harness: TerminalPortalHarness) -> None:
+    """Select a utility, fill its fields, and discard its confirmation and values."""
+    page.get_by_test_id("ws-catalog-entry-ex.ping").click()  # Choose a read-only utility with a text parameter.
+    terminal_harness._choose_device(page)  # Fill the fake site and device targets through the form.
+    parameter = page.locator('[data-ws-target="0"]').first  # Locate the utility's first parameter control.
+    parameter.fill("192.0.2.1")  # Enter a synthetic address without starting the utility.
+    page.get_by_test_id("ws-cancel-selection-button").click()  # Discard the target and parameter controls.
+    _assert_form_is_unselected(page)  # Verify the target and parameter groups are empty.
+
+
+def _cancel_delayed_picker(page: Any, observed: CancellationRouteController, cancel: Any) -> None:
+    """Cancel a shell form while its device picker response is held."""
+    observed.hold_next_device = True  # Hold only the device read started by this selection.
+    page.get_by_test_id("ws-catalog-entry-ex.createShellSession").click()  # Select a form with confirmation.
+    page.get_by_test_id("ws-field-site_id").select_option(terminal_support.SITE_ID)  # Trigger its device picker.
+    delayed = _wait_for_held_route(page, observed.held_devices)  # Wait until the device response is held.
+    page.get_by_test_id("ws-confirmation-input").fill("EX Switch 1")  # Enter confirmation without submitting.
+    cancel.click()  # Discard the pending shell form.
+    _assert_form_is_unselected(page)  # Verify cancellation before the response arrives.
+    _release_device_route(delayed, "Canceled device")  # Release the canceled selection's picker response.
+    page.wait_for_timeout(100)  # Let the response callback run after cancellation.
+    _assert_form_is_unselected(page)  # Confirm the late response has no visible effect.
+
+
+def _check_superseded_picker(
+    page: Any, terminal_harness: TerminalPortalHarness, observed: CancellationRouteController
+) -> None:
+    """Replace one pending selection, then release its old device result."""
+    observed.hold_next_device = True  # Hold the first selection's next device read.
+    page.get_by_test_id("ws-catalog-entry-ex.createShellSession").click()  # Select the earlier operation.
+    page.get_by_test_id("ws-field-site_id").select_option(terminal_support.SITE_ID)  # Start its device picker.
+    delayed = _wait_for_held_route(page, observed.held_devices)  # Keep the earlier response pending.
+    page.get_by_test_id("ws-catalog-entry-ex.topCommand").click()  # Replace it with a different operation.
+    title = page.locator("#wsSelectedTitle").inner_text()  # Record the newer selection title.
+    terminal_harness._choose_device(page)  # Load the newer selection's normal fake picker response.
+    page.get_by_test_id("ws-field-device_id").locator("option").filter(has_text="EX Switch 1").wait_for(
+        state="attached", timeout=READY_TIMEOUT_MS
+    )  # Wait for the newer picker options.
+    _release_device_route(delayed, "Superseded device")  # Release the earlier result after selection replacement.
+    page.wait_for_timeout(100)  # Let the older callback run before checking the new form.
+    assert page.locator("#wsSelectedTitle").inner_text() == title  # Keep the newer selection active.
+    assert page.get_by_test_id("ws-field-site_id").input_value() == terminal_support.SITE_ID  # Keep its target.
+    assert (
+        page.get_by_test_id("ws-field-device_id").locator("option").filter(has_text="Superseded device").count() == 0
+    )  # Keep the stale option out of the current picker.
+
+
+def test_websocket_cancel_is_hidden_while_start_request_is_in_flight(
+    page: Any, terminal_harness: TerminalPortalHarness
+) -> None:
+    """Keep form Cancel unavailable while an intercepted start request is pending."""
+    observed = CancellationRouteController(page)  # Block every start and stop at the browser boundary.
+    observed.install()  # Register fake routes before page initialization.
+    observed.hold_start = True  # Hold the next fake start until the assertion completes.
+    terminal_harness.open_page(page)  # Use the same normal-user fake portal harness.
+    page.get_by_test_id("ws-catalog-entry-org.insights.summary").click()  # Choose a no-target channel form.
+    page.get_by_test_id("ws-start-button").click()  # Submit only to the intercepted fake route.
+    pending = _wait_for_held_route(page, observed.held_starts)  # Wait until the fake start is in flight.
+    assert observed.starts == 1  # Confirm the browser reached only the intercepted start route.
+    assert page.get_by_test_id("ws-cancel-selection-button").is_visible() is False  # Hide Cancel during submission.
+    assert page.get_by_test_id("ws-start-button").is_disabled() is True  # Prevent a second pending start.
+    _fulfill_json(pending, {"error": "The browser test blocked the start."}, status=409)  # Refuse without a session.
+    page.get_by_test_id("ws-start-error").wait_for(state="visible", timeout=READY_TIMEOUT_MS)  # Wait for refusal.
+    assert page.get_by_test_id("ws-cancel-selection-button").is_visible() is True  # Restore Cancel after refusal.
+    assert observed.stops == 0  # Never send a session-stop request.

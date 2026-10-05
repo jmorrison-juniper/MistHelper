@@ -1,0 +1,38 @@
+{
+  "feature": "3888-websocket-form-cancellation",
+  "issue": 3888,
+  "branch": "3760-websocket-form-cancellation",
+  "currentStep": "analyze",
+  "status": "implemented",
+  "artifacts": [
+    "spec.md",
+    "plan.md",
+    "tasks.md",
+    "checklists/requirements.md",
+    "checklists/research.md",
+    "checklists/data-model.md",
+    "checklists/quickstart.md",
+    "checklists/contracts/ui-cancellation.md"
+  ],
+  "tasksPath": "specs/3888-websocket-form-cancellation/tasks.md",
+  "taskCounts": {
+    "total": 9,
+    "completed": 9,
+    "remaining": 0
+  },
+  "ownershipBlocker": {
+    "status": "resolved",
+    "mergedPullRequests": [
+      3814,
+      3891
+    ]
+  },
+  "validation": {
+    "status": "passed",
+    "command": ".venv/bin/python -m pytest tests/e2e/websockets_tab/test_websockets_terminal.py -k 'cancellation or cancel_is_hidden' -q",
+    "result": "2 passed; 51 deselected; fake routes only; no live operation."
+  },
+  "workflow": "speckit",
+  "specName": "WebSocket Operation Form Cancellation",
+  "history": []
+}
