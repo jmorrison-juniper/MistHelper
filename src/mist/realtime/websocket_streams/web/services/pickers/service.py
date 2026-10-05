@@ -44,3 +44,24 @@ class SitePickerService:
             raise StreamRequestError("not_ready", self._reason or "The WebSocket engine is not ready.")  # Refuse.
         logger.emit(logging.DEBUG, "web.picker.read", {"action": action})  # Log only the fixed picker kind.
         return self._picker  # Return the ready Mist picker.
+
+
+class ClientSuggestionService:
+    """Read verified client choices through the authenticated picker."""
+
+    def __init__(self, picker: Any | None, reason: str | None) -> None:
+        """Store the Mist picker and readiness."""
+        self._picker = picker  # A not-ready service has no Mist picker.
+        self._reason = reason  # A reason blocks client discovery.
+
+    def clients(self, site_id: str, device_id: str) -> dict[str, object]:
+        """Return client suggestions for one selected device."""
+        picker = self._ready_picker()  # Require the authenticated Mist picker.
+        return cast(dict[str, object], picker.clients(site_id, device_id))  # Preserve scoped lookup errors.
+
+    def _ready_picker(self) -> Any:
+        """Return the ready picker or raise the contract error."""
+        if self._reason is not None or self._picker is None:  # Discovery needs credentials and imports.
+            raise StreamRequestError("not_ready", self._reason or "The WebSocket engine is not ready.")  # Refuse.
+        logger.emit(logging.DEBUG, "web.picker.read", {"action": "clients"})  # Log the fixed picker kind.
+        return self._picker  # Return the ready Mist picker.

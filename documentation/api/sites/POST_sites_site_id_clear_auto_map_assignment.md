@@ -112,8 +112,8 @@ Common use cases:
 
 ## Related Endpoints
 
-- [GET_sites_site_id_insights_fingerprints_count.md](../orgs/GET_sites_site_id_insights_fingerprints_count.md) -- countOrgClientFingerprints uses `GET /api/v1/sites/{site_id}/insights/fingerprints/count`.
-- [GET_sites_site_id_insights_fingerprints_search.md](../orgs/GET_sites_site_id_insights_fingerprints_search.md) -- searchOrgClientFingerprints uses `GET /api/v1/sites/{site_id}/insights/fingerprints/search`.
+- [GET_orgs_org_id_insights_fingerprints_count.md](../orgs/GET_orgs_org_id_insights_fingerprints_count.md) -- countOrgClientFingerprints uses `GET /api/v1/orgs/{org_id}/insights/fingerprints/count`.
+- [GET_orgs_org_id_insights_fingerprints_search.md](../orgs/GET_orgs_org_id_insights_fingerprints_search.md) -- searchOrgClientFingerprints uses `GET /api/v1/orgs/{org_id}/insights/fingerprints/search`.
 - [DELETE_sites_site_id.md](DELETE_sites_site_id.md) -- deleteSite uses `DELETE /api/v1/sites/{site_id}`.
 
 ## MistHelper Notes

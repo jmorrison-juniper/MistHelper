@@ -153,15 +153,19 @@ class TestUtilityExperience:
             client = [
                 item for item in review["findings"] if item["topic"] == "client-choice-assistance"
             ]  # Independent SDK+DOM evidence.
-            assert (
-                len(client) == 1 and client[0]["category"] == "optional-enhancement"
-            )  # Optional input is not universally required.
-            assert (
-                client[0]["observed_control"]["type"] == "text" and not client[0]["sdk_required"]
-            )  # Actual control and SDK requirement.
-            assert (
-                review["status"] == "gap" and not review["functional_defect_confirmed"]
-            )  # No invented functional failure.
+            assert not client  # The rendered client helper closes this optional-enhancement gap.
+            assert review["status"] == "reviewed" and not review["functional_defect_confirmed"]
+            if entry["key"].startswith("ex."):
+                field_name = "mac_address" if entry["key"] == "ex.retrieveMacTable" else "macs"
+                field = page.get_by_test_id("ws-field-" + field_name)
+                assert field.input_value() == ""
+                assert field.is_editable() and field.get_attribute("required") is None
+                assert page.get_by_test_id("ws-client-options").evaluate("(node) => node.multiple") == (
+                    field_name == "macs"
+                )
+            else:
+                assert page.get_by_test_id("ws-client-options").count() == 0
+                assert page.get_by_test_id("ws-client-manual-guidance").is_visible()
         assert policy.transmitted == 0 and not policy.denied  # Inspection did not trigger a utility.
 
     def test_aggregate_streams_and_ap_mac_are_not_client_targets(self, audit_page, audit_inventory):

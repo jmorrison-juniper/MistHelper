@@ -4497,7 +4497,7 @@ menu_actions: dict[str, Any] = {
     "236": GlobalImportManager.MenuEntry(  # Use named fields for menu 236.
         menu_id="236",  # Store key for drift checks.
         handler=CountExporter.site_counts,
-        title="Run any site-scoped Mist count endpoint (33 operations)",
+        title="Run any site-scoped Mist count endpoint (32 operations)",
         category=OperationRegistry.skip_category("236"),  # Read the safety class.
         destructive=False,  # Keep the safety flag.
         supports_fast=False,  # Avoid fast-mode inspection.
@@ -4521,7 +4521,7 @@ menu_actions: dict[str, Any] = {
     "260": GlobalImportManager.MenuEntry(  # Use named fields for menu 260.
         menu_id="260",  # Store key for drift checks.
         handler=SimpleEndpointExporter.org_endpoints,
-        title="Run any org-scoped Mist get or list endpoint (55 operations)",
+        title="Run any org-scoped Mist get or list endpoint (56 operations)",
         category=OperationRegistry.skip_category("260"),  # Read the safety class.
         destructive=False,  # Keep the safety flag.
         supports_fast=False,  # Avoid fast-mode inspection.
@@ -4529,7 +4529,7 @@ menu_actions: dict[str, Any] = {
     "261": GlobalImportManager.MenuEntry(  # Use named fields for menu 261.
         menu_id="261",  # Store key for drift checks.
         handler=SimpleEndpointExporter.site_endpoints,
-        title="Run any site-scoped simple Mist read endpoint (58 operations)",
+        title="Run any site-scoped simple Mist read endpoint (57 operations)",
         category=OperationRegistry.skip_category("261"),  # Read the safety class.
         destructive=False,  # Keep the safety flag.
         supports_fast=False,  # Avoid fast-mode inspection.

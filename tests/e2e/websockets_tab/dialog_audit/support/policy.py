@@ -48,12 +48,15 @@ class BrowserRequestPolicy:
         else:
             parsed = urlsplit(request.url)  # The complete resource already passed the exact-set check.
             resource = parsed.path + ("?" + parsed.query if parsed.query else "")  # Keep exact scoped selector queries.
-            content_type, body = self.responses[resource]  # Use only local prebuilt evidence.
+            response = self.responses[resource]  # Use only local prebuilt evidence.
+            status, content_type, body = (
+                (200, *response) if len(response) == 2 else response
+            )  # Keep synthetic error cases local.
             if resource in self.delayed:
                 self.delayed[resource].append((route, content_type, body))  # Hold only a previously approved local GET.
             else:
                 route.fulfill(
-                    status=200,
+                    status=status,
                     content_type=content_type,
                     body=body,
                     headers=self.page_headers if resource == "/websockets" else {},

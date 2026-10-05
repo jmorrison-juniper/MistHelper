@@ -121,7 +121,7 @@ POLICY_SNAPSHOTS = {
         r"Write `Closes #<issue>` in the body",
         r"Rebase onto `main`",
         r"Remove the branch and the worktree after the merge",
-        r"Do not force-push to `main`",
+        r"Do not push to `main`",
     ],
     # The commit types that `scripts/pr_title_guard` accepts. `AGENTS.md` must
     # name the same nine types in its commit block.
