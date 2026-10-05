@@ -39,6 +39,11 @@ ROUTE_TABLE_TEXT = (
     '{"columns":[{"id":"Destination","display_name":"Destination"},{"id":"Gateway","display_name":"Gateway"}],'
     '"rows":[{"Destination":"10.0.0.0/24","Gateway":"192.168.1.1"}],"status":"SUCCESS","message":""}'
 )  # A route table as the device sends it, as JSON text.
+PING_OUTPUT_CHUNKS = (
+    "reply from 8.8.8.8\napbr_SL-Only.inet6.0: 1 d",
+    "estinations, 1 routes (1 active, 0 holddown, 0 hidden)\nNext ",
+    "line stays complete.\n",
+)  # The fake cloud splits one word and one line at unstable message boundaries.
 
 
 @dataclass
@@ -346,7 +351,7 @@ class FakeWebSocketServices:
         elif session.key == "ex.retrieveRoutes":  # The route utility sends a table as JSON text.
             self._add_message(session, "text", ROUTE_TABLE_TEXT, None)  # Route table.
         elif session.output == "lines":  # Line view reads text lines.
-            self._add_message(session, "text", "reply from 8.8.8.8", None)  # Ping line.
+            self._add_message(session, "text", PING_OUTPUT_CHUNKS[index], None)  # Emit unstable command chunks.
         else:  # Channel view reads JSON.
             self._add_message(session, "json", {"site": session.title, "count": index}, None)  # JSON row.
 
@@ -509,6 +514,26 @@ def test_read_only_ping_journey(page: Any, websocket_portal: str) -> None:
         timeout=READY_TIMEOUT_MS
     )  # Output.
     shot = screenshot(page, "02-ping-lines.png")  # Keep evidence.
+    assert shot.exists()  # The screenshot was written.
+
+
+def test_command_output_preserves_boundaries_and_filter_matches(page: Any, websocket_portal: str) -> None:
+    """Issue #3723: command chunks show as complete lines and filter as one stream."""
+    open_page(page, websocket_portal)  # Load the WebSockets page.
+    page.get_by_test_id("ws-catalog-entry-ex.ping").click()  # Choose a line-output utility.
+    choose_device(page)  # Choose site and device.
+    page.get_by_test_id("ws-start-button").click()  # Start the split command output.
+    output = page.get_by_test_id("ws-output")  # Scope all assertions to the command output.
+    output.get_by_text("Next line stays complete.").wait_for(timeout=READY_TIMEOUT_MS)  # Wait for all chunks.
+    text = output.inner_text()  # Read the joined command stream.
+    assert "1 destinations, 1 routes" in text  # The word boundary survives the cloud split.
+    assert "Next line stays complete." in text  # The line boundary survives the cloud split.
+    assert "#2 HQ" not in text  # A message header does not interrupt the command line.
+    page.get_by_test_id("ws-message-filter").fill("destinations")  # Filter for the word that spans chunks.
+    output.get_by_text("apbr_SL-Only.inet6.0: 1 destinations, 1 routes").wait_for(timeout=READY_TIMEOUT_MS)
+    filtered = output.inner_text()  # Read the filtered complete line.
+    shot = screenshot(page, "08-command-output-boundaries.png")  # Keep UI evidence for the repaired flow.
+    assert "Next line stays complete." not in filtered  # The filter hides nonmatching complete lines.
     assert shot.exists()  # The screenshot was written.
 
 
