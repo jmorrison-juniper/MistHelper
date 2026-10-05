@@ -62,6 +62,46 @@ def ensure_origin_main() -> None:
         )  # Fetch the baseline when a manual workflow checkout omitted it.
 
 
+def baseline_ref() -> str:
+    """Return the merge base of this worktree and the baseline branch.
+
+    Compare against the merge base, so a worktree that trails the baseline
+    reports no phantom symbol loss.
+    """
+    ensure_origin_main()  # Make the baseline ref available before the merge-base read.
+    result = subprocess.run(
+        ["git", "merge-base", "HEAD", "refs/remotes/origin/main"],
+        cwd=REPOSITORY_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )  # Fail if Git cannot place this branch against the baseline.
+    return result.stdout.strip()  # Supply the exact commit that both branches share.
+
+
+def trailing_commit_count(baseline: str) -> int:
+    """Return the count of baseline commits that this worktree does not hold."""
+    result = subprocess.run(
+        ["git", "rev-list", "--count", f"{baseline}..refs/remotes/origin/main"],
+        cwd=REPOSITORY_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )  # Measure the distance between the merge base and the baseline tip.
+    return int(result.stdout.strip())  # Supply the measured commit count.
+
+
+def trailing_notice(behind_count: int) -> str:
+    """Return the operator message for a worktree that trails the baseline."""
+    if behind_count <= 0:  # The worktree holds every baseline commit.
+        return ""  # Add no message, because no action is needed.
+    return (
+        f" This worktree trails origin/main by {behind_count} commit(s)."
+        " The guard compared against the merge base."
+        " Rebase onto origin/main to compare against the current baseline."
+    )  # Name the condition and the remedy, so the reader does not read a phantom loss.
+
+
 def path_map() -> dict[str, str]:
     """Return every old and new source-relative path."""  # Build one canonical mapping for archived modules.
     mapping = dict(MODULE_PATHS)  # Start with direct module moves.
@@ -126,12 +166,13 @@ def test_moved_modules_lose_no_module_level_symbol() -> None:
 
     Replace the path-limited symbol-diff check for renamed files.
     """
-    ensure_origin_main()  # Make the baseline available in pull request and manual runs.
+    baseline = baseline_ref()  # Read the shared commit instead of the moving baseline tip.
+    notice = trailing_notice(trailing_commit_count(baseline))  # Build the trailing-worktree message.
     command = [
         "git",
         "archive",
         "--format=tar",
-        "origin/main",
+        baseline,
         "src",
     ]  # Read all base modules with one bounded Git command.
     archive = subprocess.run(
@@ -165,20 +206,23 @@ def test_moved_modules_lose_no_module_level_symbol() -> None:
             if lost_symbols:  # Record each module that lost a name.
                 violations[member.name] = lost_symbols  # Keep exact names for repair evidence.
             checked_count += 1  # Record one complete module comparison.
-    assert (
-        not violations
-    ), f"Checked {checked_count} moved modules. Lost symbols: {violations}"  # Report the measured scope and failures.
+    # State the measured scope on every run, so a passing run still reports its coverage.
+    print(f"Checked {checked_count} moved modules against {baseline}.{notice}")
+    # Report the measured scope, the failures, and the trailing remedy.
+    message = f"Checked {checked_count} moved modules against {baseline}. Lost symbols: {violations}.{notice}"
+    assert not violations, message  # Fail only on an unapproved module-level removal.
 
 
 def test_moved_packages_preserve_tracked_data_files() -> None:
     """Require each tracked package-data file to keep its relative package path."""
-    ensure_origin_main()  # Make the baseline available in pull request and manual runs.
+    baseline = baseline_ref()  # Read the shared commit instead of the moving baseline tip.
+    notice = trailing_notice(trailing_commit_count(baseline))  # Build the trailing-worktree message.
     command = [
         "git",
         "ls-tree",
         "-r",
         "--name-only",
-        "origin/main",
+        baseline,
         "src",
     ]  # Read the base tracked source file inventory.
     result = subprocess.run(
@@ -193,7 +237,10 @@ def test_moved_packages_preserve_tracked_data_files() -> None:
         if not current_path(old_path).is_file()
     ]  # Record each package-data file that did not move with its package.
     checked_count = len(old_paths)  # Report the measured package-data scope.
-    message = f"Checked {checked_count} package-data files. Missing: {missing_paths}"  # Build failure evidence.
+    # State the measured scope on every run, so a passing run still reports its coverage.
+    print(f"Checked {checked_count} package-data files against {baseline}.{notice}")
+    # Build failure evidence that names the scope and the trailing remedy.
+    message = f"Checked {checked_count} package-data files against {baseline}. Missing: {missing_paths}.{notice}"
     assert not missing_paths, message  # Fail if one tracked asset did not move with its package.
 
 
@@ -257,3 +304,16 @@ def test_intentional_removals_use_only_canonical_module_keys() -> None:
     """Require every waiver key to name a canonical domain root under the source tree."""
     bad_keys = [key for key in INTENTIONAL_SYMBOL_REMOVALS if Path(key).parts[1] not in CANONICAL_ROOTS]
     assert not bad_keys, f"Checked {len(INTENTIONAL_SYMBOL_REMOVALS)} waiver keys. Bad keys: {bad_keys}."
+
+
+def test_trailing_notice_stays_silent_for_a_current_worktree() -> None:
+    """Require no operator message when the worktree holds every baseline commit."""
+    notice = trailing_notice(0)  # Model a worktree that trails the baseline by zero commits.
+    assert notice == "", f"Checked 1 notice for a current worktree. Read {notice!r}."
+
+
+def test_trailing_notice_names_the_count_and_the_remedy() -> None:
+    """Require the operator message to name the trailing count and the rebase remedy."""
+    notice = trailing_notice(7)  # Model a worktree that trails the baseline by seven commits.
+    assert "7 commit(s)" in notice, f"Checked 1 notice. The count is absent from {notice!r}."
+    assert "Rebase onto origin/main" in notice, f"Checked 1 notice. The remedy is absent from {notice!r}."
