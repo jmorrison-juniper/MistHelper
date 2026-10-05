@@ -211,6 +211,7 @@ Validation results:
 - `rtk proxy .venv/bin/python -m pytest -q tests/guardrails/local_test_quality_loop/test_guidance.py::TestLiveGuides` passed. It ran 1 preflight test.
 - `rtk proxy .venv/bin/python -m pytest -q tests/guardrails/test_changelog_fragment_policy.py` passed. It ran 17 tests with 1 skipped.
 - `rtk proxy test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json --changed-from origin/main --full-gate-path .github/workflows/ci.yml --full-gate-path requirements-dev.txt` passed. It checked 4 changed test files, reported 0 findings and 0 new findings, parsed 3 files, and skipped 3.
+- The full `rtk proxy test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json` gate passed. It checked 1,077 files, reported 727 baseline findings, 0 new findings, 46 skipped files, and 0 parse errors.
 - No live Mist request, DHCP release, device utility, capture, or shell call ran.
 
 ## Implementation Strategy
