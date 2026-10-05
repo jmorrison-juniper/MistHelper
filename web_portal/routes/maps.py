@@ -16,7 +16,9 @@ from dataclasses import dataclass
 from typing import Any
 
 import requests
-from flask import Blueprint, Response, current_app, jsonify, render_template, url_for
+from flask import Blueprint, Response, current_app, jsonify, render_template, request, url_for
+
+from web_portal.routes.site_filtering import EmptySiteFilter  # Issue #3915: one shared filter.
 
 logger = logging.getLogger(__name__)  # Use a module logger so map failures name this route module.
 
@@ -67,12 +69,15 @@ def maps_page():
 @maps_bp.route("/api/maps/sites")
 def list_sites():
     """Return list of sites for the map viewer dropdown."""
-    apisession = current_app.config.get("APISESSION")
-    org_id = current_app.config.get("ORG_ID")
-    if not apisession or not org_id:
+    apisession = current_app.config.get("APISESSION")  # The site read needs the Mist session.
+    org_id = current_app.config.get("ORG_ID")  # The site read needs the organization.
+    if not apisession or not org_id:  # A portal with no session cannot read the site list.
         return jsonify({"sites": [], "error": "Not authenticated"})
-    sites = _fetch_sites(apisession, org_id)
-    return jsonify({"sites": sites})
+    show_empty = EmptySiteFilter.read_show_empty(request.args.get("show_empty"))  # Issue #3915: read the override.
+    logger.info("Fetching the map site list of org %s, show_empty %s", org_id, show_empty)  # Log before the read.
+    sites, hidden = _fetch_sites(apisession, org_id, show_empty)  # Issue #3915: the helper reports the hidden count.
+    logger.debug("Returning %d map sites and %d hidden sites", len(sites), hidden)  # Log the counts after the call.
+    return jsonify({"sites": sites, "empty_sites_hidden": hidden})  # Issue #3915: the page can state the hidden count.
 
 
 @maps_bp.route("/api/maps/site/<site_id>/maps")
@@ -115,19 +120,26 @@ def map_image(site_id, map_id):
     return answer
 
 
-def _fetch_sites(apisession, org_id: str) -> list:
-    """Fetch site list from Mist API."""
+def _fetch_sites(apisession, org_id: str, show_empty: bool = False) -> tuple[list, int]:
+    """Fetch the site list from the Mist API and report the hidden empty count."""
     try:
-        import mistapi
+        import mistapi  # Import on first use, like the other map helpers of this module.
 
-        response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id)
-        sites = response.data if hasattr(response, "data") else []
-        return [{"id": site.get("id", ""), "name": site.get("name", "")} for site in sites]
+        logger.info("Fetching the site list of org %s", org_id)  # Log before the API call.
+        response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id)  # Every site of the org.
+        sites = response.data if hasattr(response, "data") else []  # The SDK answer carries the list in data.
+        logger.debug("Received %d sites for org %s", len(sites), org_id)  # Log the count after the call.
+        rows = [
+            {"id": site.get("id", ""), "name": site.get("name", "")} for site in sites
+        ]  # The picker needs the identifier and the name only.
+        return EmptySiteFilter(apisession, org_id).apply(
+            rows, show_empty
+        )  # Issue #3915: hide a site that holds no hardware.
     except Exception as error:  # Keep the map selector usable when the Mist API request fails.
         logger.exception(
             "Map site list failed for org %s with %s: %s", org_id, type(error).__name__, error
         )  # Log the exception class and text for issue triage.
-        return []
+        return [], 0  # Issue #3915: the caller expects a row list and a hidden count.
 
 
 def _fetch_site_maps(apisession, site_id: str) -> list:
