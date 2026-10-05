@@ -84,7 +84,7 @@ class AuditReportWriter:
 
     @staticmethod
     def write(report, destination):
-        root = Path(__file__).resolve().parents[4]  # Bind artifacts to this checkout only.
+        root = Path(__file__).resolve().parents[5]  # Bind artifacts to this checkout only.
         expected = root / "test-artifacts" / "websocket-dialog-audit"  # Existing ignore policy covers this directory.
         path = Path(destination).absolute()  # Do not accept arbitrary public or external paths.
         if (

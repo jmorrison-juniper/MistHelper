@@ -44,7 +44,7 @@ Do not disable the repository bootstrap guard to use fewer packages.
 After the parent prepares the environment, run:
 
 ```text
-rtk proxy .venv/bin/python -B -m pytest -p no:cacheprovider -q tests/tools/websocket_dialog_audit/test_inventory.py tests/tools/websocket_dialog_audit/test_dialogs.py tests/tools/websocket_dialog_audit/test_live.py::TestLiveResponseFailures --ws-audit-mode=isolated --timeout=120 --ws-audit-artifacts="$PWD/test-artifacts/websocket-dialog-audit"
+rtk proxy .venv/bin/python -B -m pytest -p no:cacheprovider -q tests/e2e/websockets_tab/dialog_audit/test_inventory.py tests/e2e/websockets_tab/dialog_audit/test_dialogs.py tests/e2e/websockets_tab/dialog_audit/test_live.py::TestLiveResponseFailures --ws-audit-mode=isolated --timeout=120 --ws-audit-artifacts="$PWD/test-artifacts/websocket-dialog-audit"
 ```
 
 Expected outcomes:
@@ -67,10 +67,10 @@ Do not report the existing fake browser suite as live validation.
 Use the parent's temporary branch-coverage configuration with no omit patterns:
 
 ```text
-rtk proxy .venv/bin/python -B -m pytest -p no:cacheprovider -q tests/tools/websocket_dialog_audit/test_inventory.py tests/tools/websocket_dialog_audit/test_dialogs.py tests/tools/websocket_dialog_audit/test_live.py::TestLiveResponseFailures --ws-audit-mode=isolated --timeout=120 --cov=tests/tools/websocket_dialog_audit/support --cov-config=/Users/jmorrison/.copilot/session-state/4927d431-5214-440a-acc1-c9e86cfe62e6/files/audit-coverage.ini --cov-report=term-missing:skip-covered --cov-fail-under=80
+rtk proxy .venv/bin/python -B -m pytest -p no:cacheprovider -q tests/e2e/websockets_tab/dialog_audit/test_inventory.py tests/e2e/websockets_tab/dialog_audit/test_dialogs.py tests/e2e/websockets_tab/dialog_audit/test_live.py::TestLiveResponseFailures --ws-audit-mode=isolated --timeout=120 --cov=tests/e2e/websockets_tab/dialog_audit/support --cov-config=/Users/jmorrison/.copilot/session-state/4927d431-5214-440a-acc1-c9e86cfe62e6/files/audit-coverage.ini --cov-report=term-missing:skip-covered --cov-fail-under=80
 ```
 
-Final result: 103 passed in 23.72 seconds, support branch coverage 81.22%.
+After migration into the browser CI job: 103 passed in 24.16 seconds, support branch coverage 81.22%.
 All prior 86 tests are preserved; 17 isolated cases add real-form failure/parent evidence,
 scope rejection, unsolicited socket denial and restricted-writer checks.
 The existing repository configuration omits tests and cannot establish this targeted denominator.
@@ -79,13 +79,31 @@ This is total support coverage, not a claim that each support module reaches 80%
 The table reports `journeys.py` at 60%, `policy.py` at 92%, `inventory.py` at 95%,
 with reporting and package initializer fully covered.
 
+### Browser CI placement and option discovery
+
+The complete harness lives under `tests/e2e/websockets_tab/dialog_audit/`.
+The existing e2e job installs Chromium; the root-and-contracts shard excludes `tests/e2e/`.
+No unrelated shard installs a browser, and missing Chromium is not converted into a skip.
+Use the explicit harness directory when supplying its local CLI options:
+
+```text
+rtk proxy .venv/bin/python -B -m pytest -p no:cacheprovider --collect-only -q tests/e2e/websockets_tab/dialog_audit --ws-audit-mode=isolated --timeout=120
+rtk proxy .venv/bin/python -m ruff check tests/e2e/websockets_tab/dialog_audit --output-format concise
+rtk proxy .venv/bin/python -m black --check tests/e2e/websockets_tab/dialog_audit
+```
+
+Explicit-directory collection found 96 offline tests and excluded `test_live.py`.
+Ordinary full `tests/e2e/` collection found 811 tests, including the same 96 audit tests and no live audit module.
+The 103-test command explicitly adds seven local response regressions from that otherwise excluded module.
+These results verify collection and targeted execution, not execution of all 811 e2e tests.
+
 ## Scenario 2: Opt-in live GET-only dialog inspection
 
 Use the authorized URL stored locally in `PORTAL_URL`.
 Do not paste authentication values into commands or reports.
 
 ```text
-rtk proxy .venv/bin/python -B -m pytest -p no:cacheprovider -q tests/tools/websocket_dialog_audit/test_live.py --ws-audit-mode=live-inspection --ws-audit-base-url="$PORTAL_URL" --timeout=120 --ws-audit-artifacts="$PWD/test-artifacts/websocket-dialog-audit"
+rtk proxy .venv/bin/python -B -m pytest -p no:cacheprovider -q tests/e2e/websockets_tab/dialog_audit/test_live.py --ws-audit-mode=live-inspection --ws-audit-base-url="$PORTAL_URL" --timeout=120 --ws-audit-artifacts="$PWD/test-artifacts/websocket-dialog-audit"
 ```
 
 Expected outcomes:
@@ -113,7 +131,7 @@ The parent verifies that the running container revision `2900f56` matches the lo
 This is revision verification, not another approval requirement.
 
 ```text
-rtk proxy .venv/bin/python -B -m pytest -p no:cacheprovider -q tests/tools/websocket_dialog_audit/test_live.py::TestReadonlyLive --ws-audit-mode=live-readonly --ws-audit-base-url="$PORTAL_URL" --timeout=120 --ws-audit-artifacts="$PWD/test-artifacts/websocket-dialog-audit"
+rtk proxy .venv/bin/python -B -m pytest -p no:cacheprovider -q tests/e2e/websockets_tab/dialog_audit/test_live.py::TestReadonlyLive --ws-audit-mode=live-readonly --ws-audit-base-url="$PORTAL_URL" --timeout=120 --ws-audit-artifacts="$PWD/test-artifacts/websocket-dialog-audit"
 ```
 
 The test reconciles the live catalog and asset bytes, chooses an actual returned site with device choices,
@@ -178,7 +196,7 @@ Do not describe the harness as strictly typed.
 The supplemental relaxed check passed for nine source files:
 
 ```text
-rtk proxy .venv/bin/python -m mypy --follow-imports=silent --allow-untyped-defs --allow-untyped-calls --allow-incomplete-defs tests/tools/websocket_dialog_audit/*.py tests/tools/websocket_dialog_audit/support/*.py
+rtk proxy .venv/bin/python -m mypy --follow-imports=silent --allow-untyped-defs --allow-untyped-calls --allow-incomplete-defs tests/e2e/websockets_tab/dialog_audit/*.py tests/e2e/websockets_tab/dialog_audit/support/*.py
 ```
 
 These flags permit unannotated test helpers.
@@ -210,10 +228,10 @@ test-quality-analyzer --gate --config .github/test-quality-config.toml --baselin
 
 Require exit zero and zero new findings.
 Do not rewrite the baseline to hide failures.
-For the untracked harness before the parent commits, use explicit files:
+For the moved harness before the parent commits, use explicit files:
 
 ```text
-rtk proxy .venv/bin/test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json --roots tests/tools/websocket_dialog_audit/test_inventory.py tests/tools/websocket_dialog_audit/test_dialogs.py tests/tools/websocket_dialog_audit/test_live.py --report test-artifacts/websocket-dialog-audit/quality-report.json --summary test-artifacts/websocket-dialog-audit/quality-summary.md
+rtk proxy .venv/bin/test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json --roots tests/e2e/websockets_tab/dialog_audit/test_inventory.py tests/e2e/websockets_tab/dialog_audit/test_dialogs.py tests/e2e/websockets_tab/dialog_audit/test_live.py --report test-artifacts/websocket-dialog-audit/quality-report.json --summary test-artifacts/websocket-dialog-audit/quality-summary.md
 ```
 
 This gate inspected three files with zero new findings. It is not the later full release gate.
@@ -230,8 +248,9 @@ Deployment and production restart need separate human approval.
 
 ## Cleanup
 
-The fixture closes only its browser context.
-It creates no session, server listener, authentication state, screenshot, or trace.
+Inspection fixtures close only their browser contexts and create no session.
+The opt-in lifecycle test stops only its own response-issued local session, including failure cleanup.
+Neither mode creates a server listener, authentication state, screenshot, or trace.
 Reports use directory mode `0700` and file mode `0600`.
 Keep reports local and owner-only.
 Keep only sanitized summaries for issue and pull request publication.

@@ -2,14 +2,14 @@
 
 import time  # Measure actual inspection duration.
 
-from tests.tools.websocket_dialog_audit.support.inventory import InventoryBuilder  # Complete inventory.
-from tests.tools.websocket_dialog_audit.support.journeys import (
+from tests.e2e.websockets_tab.dialog_audit.support.inventory import InventoryBuilder  # Complete inventory.
+from tests.e2e.websockets_tab.dialog_audit.support.journeys import (
     DialogInspector,
     IsolatedPage,
     LivePickerInspector,
     UtilityExperienceInspector,
 )  # Actual catalog controls.
-from tests.tools.websocket_dialog_audit.support.reporting import AuditReportWriter  # Separate blockers.
+from tests.e2e.websockets_tab.dialog_audit.support.reporting import AuditReportWriter  # Separate blockers.
 
 
 class TestDialogs:
@@ -239,10 +239,10 @@ class TestReadonlyBrowser:
 
         from playwright.sync_api import Route
 
-        from tests.tools.websocket_dialog_audit.support.policy import ReadonlyLifecyclePolicy
-        from tests.tools.websocket_dialog_audit.test_live import TestReadonlyLive
+        from tests.e2e.websockets_tab.dialog_audit.support.policy import ReadonlyLifecyclePolicy
+        from tests.e2e.websockets_tab.dialog_audit.test_live import TestReadonlyLive
 
-        renderer = IsolatedPage(Path(__file__).resolve().parents[3], audit_inventory)
+        renderer = IsolatedPage(Path(__file__).resolve().parents[4], audit_inventory)
         policy = ReadonlyLifecyclePolicy("https://audit.invalid", renderer.responses())
         session = {
             "session_id": "2222222233334444",
@@ -333,7 +333,8 @@ class TestInspectorFailureEvidence:
         inspector = DialogInspector(page, audit_inventory, live=True)
         clock = iter([0, 1000] + [1000] * len(audit_inventory["entries"]))
         monkeypatch.setattr(
-            "tests.tools.websocket_dialog_audit.support.journeys.time", SimpleNamespace(monotonic=lambda: next(clock))
+            "tests.e2e.websockets_tab.dialog_audit.support.journeys.time",
+            SimpleNamespace(monotonic=lambda: next(clock)),
         )  # Replace this module's clock only; do not disrupt Playwright or pytest timers.
         records = inspector.inspect_all()  # Expiry precedes any operation click or selector request.
         assert len(records) == 72 and {record["status"] for record in records} == {"blocked"}
@@ -376,7 +377,7 @@ class TestInspectorFailureEvidence:
         assert policy.transmitted == 0 and policy.denied == []
 
     def test_empty_missing_and_nonpicker_controls_do_not_get_forced_values(self, audit_page, audit_inventory):
-        from tests.tools.websocket_dialog_audit.support.journeys import PickerInspector
+        from tests.e2e.websockets_tab.dialog_audit.support.journeys import PickerInspector
 
         page, policy = audit_page
         entry = next(item for item in audit_inventory["entries"] if item["key"] == "site.stats.clients")
@@ -392,7 +393,7 @@ class TestInspectorFailureEvidence:
     def test_parent_deadline_and_family_mismatch_are_not_success(self, audit_page, audit_inventory):
         import pytest
 
-        from tests.tools.websocket_dialog_audit.support.journeys import PickerInspector
+        from tests.e2e.websockets_tab.dialog_audit.support.journeys import PickerInspector
 
         page, policy = audit_page
         entry = next(item for item in audit_inventory["entries"] if item["key"] == "ex.retrieveMacTable")

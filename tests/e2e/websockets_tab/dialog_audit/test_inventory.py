@@ -6,15 +6,15 @@ from types import SimpleNamespace  # Trap actual route decisions without a remot
 
 import pytest  # Parameterize negative policy cases with explicit expected outcomes.
 
-from tests.tools.websocket_dialog_audit.support.inventory import InventoryBuilder, OperationOracle  # Source oracle.
-from tests.tools.websocket_dialog_audit.support.policy import (
+from tests.e2e.websockets_tab.dialog_audit.support.inventory import InventoryBuilder, OperationOracle  # Source oracle.
+from tests.e2e.websockets_tab.dialog_audit.support.policy import (
     BrowserRequestPolicy,
     LiveGate,
     LiveRequestPolicy,
     ReadonlyLifecyclePolicy,
     ReadScope,
 )  # Test both boundaries before transmission.
-from tests.tools.websocket_dialog_audit.support.reporting import AuditReportWriter  # Separate evidence modes.
+from tests.e2e.websockets_tab.dialog_audit.support.reporting import AuditReportWriter  # Separate evidence modes.
 
 
 class TestInventory:
@@ -429,7 +429,7 @@ class TestReadonlySource:
         from src.mist.realtime.websocket_streams.live.runners.channel.runner import ChannelStreamRunner
         from src.mist.realtime.websocket_streams.live.sessions.manager.factory import RunnerFactory
         from src.mist.realtime.websocket_streams.live.transport.stream_client import SubscriptionCoordinator
-        from tests.tools.websocket_dialog_audit.test_live import TestReadonlyLive
+        from tests.e2e.websockets_tab.dialog_audit.test_live import TestReadonlyLive
 
         TestReadonlyLive.verify_source(audit_inventory)  # Installed SDK and actual server path agree.
         policy = TestReadonlyLifecyclePolicy.armed()
@@ -576,7 +576,7 @@ class TestReports:
         import stat
         from pathlib import Path
 
-        destination = Path(__file__).resolve().parents[3] / "test-artifacts" / "websocket-dialog-audit"
+        destination = Path(__file__).resolve().parents[4] / "test-artifacts" / "websocket-dialog-audit"
         report = AuditReportWriter.build(["synthetic"], [{"key": "synthetic", "status": "passed"}])
         previous = {
             name: (destination / name).read_bytes() if (destination / name).exists() else None

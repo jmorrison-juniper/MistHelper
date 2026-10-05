@@ -9,16 +9,19 @@ from urllib.parse import urlsplit  # Normalize only the explicitly supplied orig
 import pytest  # Keep live work opt-in and report capability failures distinctly.
 from playwright.sync_api import expect  # Normal-user visible state checks respect portal CSP.
 
-from tests.tools.websocket_dialog_audit.support.inventory import InventoryBuilder  # Reconcile the real live catalog.
-from tests.tools.websocket_dialog_audit.support.journeys import DialogInspector, IsolatedPage  # Normal-user controls.
-from tests.tools.websocket_dialog_audit.support.policy import (
+from tests.e2e.websockets_tab.dialog_audit.support.inventory import InventoryBuilder  # Reconcile the real live catalog.
+from tests.e2e.websockets_tab.dialog_audit.support.journeys import (
+    DialogInspector,
+    IsolatedPage,
+)  # Normal-user controls.
+from tests.e2e.websockets_tab.dialog_audit.support.policy import (
     LiveGate,
     LiveRequestPolicy,
     ReadonlyLifecyclePolicy,
     ReadScope,
 )  # Default deny with one separately selected observation exception.
-from tests.tools.websocket_dialog_audit.support.reporting import AuditReportWriter  # No raw targets or screenshots.
-from tests.tools.websocket_dialog_audit.test_inventory import (
+from tests.e2e.websockets_tab.dialog_audit.support.reporting import AuditReportWriter  # No raw targets or screenshots.
+from tests.e2e.websockets_tab.dialog_audit.test_inventory import (
     LiveReadTrap,
 )  # Reuse the independent no-network response trap.
 
@@ -39,7 +42,7 @@ class TestLive:
             )  # No secrets.
         parsed = urlsplit(supplied)  # URL credentials and ambiguous path/query values were rejected.
         origin = f"{parsed.scheme}://{parsed.netloc}"  # Bind every forwarded GET to one exact origin.
-        renderer = IsolatedPage(Path(__file__).resolve().parents[3], audit_inventory)  # Exact reviewed asset set.
+        renderer = IsolatedPage(Path(__file__).resolve().parents[4], audit_inventory)  # Exact reviewed asset set.
         with browser.new_context(service_workers="block", accept_downloads=False) as context:
             policy = LiveRequestPolicy(origin, renderer.responses())  # No request starts before installation.
             policy.install(context)  # Block HTTP writes, unknown reads, redirects, and all WebSockets.
@@ -157,7 +160,7 @@ class TestReadonlyLive:
         self.verify_source(audit_inventory)  # Verify source and installed SDK path before any live traffic.
         supplied = request.config.getoption("--ws-audit-base-url")
         LiveGate.validate_url(supplied)  # Explicit same-origin URL; do not guess authentication.
-        renderer = IsolatedPage(Path(__file__).resolve().parents[3], audit_inventory)
+        renderer = IsolatedPage(Path(__file__).resolve().parents[4], audit_inventory)
         started = time.monotonic()
         with browser.new_context(service_workers="block", accept_downloads=False) as context:
             policy = ReadonlyLifecyclePolicy(supplied.rstrip("/"), renderer.responses())

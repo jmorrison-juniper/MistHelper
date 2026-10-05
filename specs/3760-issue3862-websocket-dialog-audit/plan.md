@@ -31,7 +31,7 @@ The workspace instruction requires direct commits on that branch.
 That instruction takes precedence over the repository branch-name convention.
 The pull request title and commit subject will use Conventional Commits.
 
-The explicit feature manifest contains this specification directory and `tests/tools/websocket_dialog_audit/`.
+The explicit feature manifest contains this specification directory and `tests/e2e/websockets_tab/dialog_audit/`.
 It excludes `.env`, local reports, coverage configuration, container overrides, and shared SpecKit feature-selection metadata.
 No release-note fragment is required for this internal-only harness.
 The repository fragment policy requires that reason in the pull request body.
@@ -142,7 +142,7 @@ Track incremental process-folder organization separately. Do not move unrelated 
 ### Implemented harness
 
 ```text
-tests/tools/websocket_dialog_audit/
+tests/e2e/websockets_tab/dialog_audit/
   conftest.py                  # Local options and isolated network/browser fixtures
   support/
     __init__.py
@@ -155,11 +155,12 @@ tests/tools/websocket_dialog_audit/
   test_live.py
 ```
 
-`tests/tools/` currently has one child. Adding this package preserves its limit.
 Each implemented package has at most five children; the harness root uses namespace imports, not another initializer.
-Do not add a direct child to `tests/e2e/`, which already has five children.
-Do not add a child to `tests/e2e/websockets_tab/`, which already has six files.
-That folder's existing debt needs a separate ownership-coordinated remediation action.
+The designated browser CI job collects `tests/e2e/` and installs Chromium.
+The root-and-contracts shard does not install Chromium; browser tests must not live under its test-tools scope.
+Place this nested harness in the existing WebSockets e2e group.
+Correct browser-job ownership takes precedence over that group's existing five-item folder debt.
+No sibling browser tests or production files are changed by this migration.
 Use explicit test selection. Live tests must not execute through ordinary collection.
 
 ### Existing source boundaries

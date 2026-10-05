@@ -5,7 +5,7 @@ It adds no product endpoint and no Mist transport.
 
 ## Harness interface
 
-Later tests live under `tests/tools/websocket_dialog_audit/`.
+Tests live under `tests/e2e/websockets_tab/dialog_audit/`, in the existing Chromium-equipped browser CI job.
 Default collection must run offline or skip live cases with a recorded reason.
 The live entrypoint requires an explicit audit mode and an authorized base URL.
 Never obtain a live URL from a default, guess, redirect, or public report.

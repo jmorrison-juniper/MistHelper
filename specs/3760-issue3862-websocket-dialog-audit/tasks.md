@@ -4,7 +4,7 @@
 
 **Prerequisites**: `plan.md`, `spec.md`, `design/research.md`, `design/data-model.md`, `design/contracts/audit-contract.md`, and `design/quickstart.md`.
 
-**Scope and safety**: Build the independent harness under `tests/tools/websocket_dialog_audit/` and update relevant specification documents. Keep production files and the branch unchanged. The parent installed the environment and started the user-authorized normal portal on loopback8055. This session does not change containers or read credentials. Default inspection permits reviewed GET reads only. The separate user-authorized `live-readonly` mode permits one exact `site.stats.devices` observation lifecycle and only its own returned session's reads/local stop. Other starts, streams, utilities, captures, shell, and remote mutations remain prohibited. Preserve initial unavailability as historical evidence. The parent handles authorized GitHub updates/publication after checks and ownership clearance. This session does not commit or push.
+**Scope and safety**: Build the independent harness under `tests/e2e/websockets_tab/dialog_audit/` and update relevant specification documents. Keep production files and the branch unchanged. The parent installed the environment and started the user-authorized normal portal on loopback8055. This session does not change containers or read credentials. Default inspection permits reviewed GET reads only. The separate user-authorized `live-readonly` mode permits one exact `site.stats.devices` observation lifecycle and only its own returned session's reads/local stop. Other starts, streams, utilities, captures, shell, and remote mutations remain prohibited. Preserve initial unavailability as historical evidence. The parent handles authorized GitHub updates/publication after checks and ownership clearance. This session does not commit or push.
 
 **Organization**: Tasks are grouped by the four user stories in `spec.md`. Live capability blockers do not prevent isolated harness work and must remain separate from passed results.
 
@@ -12,14 +12,14 @@
 
 **Purpose**: Create the independent harness boundary without installing dependencies, starting services, or changing repository-wide test configuration.
 
-- [X] T001 Create the audit support package initializer in `tests/tools/websocket_dialog_audit/support/__init__.py`; keep the audit directory to the planned five direct entries and do not add files outside it.
-- [X] T002 Add audit-only pytest options, default-isolated mode, explicit live opt-in, URL/artifact-path validation, and a fixture that never starts or restarts a portal in `tests/tools/websocket_dialog_audit/conftest.py`.
+- [X] T001 Create the audit support package initializer in `tests/e2e/websockets_tab/dialog_audit/support/__init__.py`; keep the audit directory to the planned five direct entries and do not add files outside it.
+- [X] T002 Add audit-only pytest options, default-isolated mode, explicit live opt-in, URL/artifact-path validation, and a fixture that never starts or restarts a portal in `tests/e2e/websockets_tab/dialog_audit/conftest.py`.
 
 ## Phase 2: Foundational
 
 **Purpose**: Establish a shared fail-closed browser and egress policy before any story-specific journey.
 
-- [X] T003 Implement default-deny browser request handling and the isolated server-egress boundary in `tests/tools/websocket_dialog_audit/support/policy.py`; block service workers, unknown endpoints/origins, redirects, unsolicited WebSockets, operation starts, utility/shell/capture/mutation paths, and unowned session controls before transmission.
+- [X] T003 Implement default-deny browser request handling and the isolated server-egress boundary in `tests/e2e/websockets_tab/dialog_audit/support/policy.py`; block service workers, unknown endpoints/origins, redirects, unsolicited WebSockets, operation starts, utility/shell/capture/mutation paths, and unowned session controls before transmission.
 
 **Checkpoint**: Audit tests can use the real portal assets in isolated mode, while live execution remains opt-in and denied unless a later per-operation decision permits it.
 
@@ -31,14 +31,14 @@
 
 ### Tests for User Story 1
 
-- [X] T004 [P] [US1] Add isolated real-catalog reconciliation tests, including missing, duplicate, extra, locked, and unverified keys, in `tests/tools/websocket_dialog_audit/test_inventory.py`.
-- [ ] T005 [P] [US1] Add real-asset Playwright dialog tests for purpose, scope, labels, required selectors, dependent choices, empty/failure states, stale responses, abandonment, and cancellation without operation submission in `tests/tools/websocket_dialog_audit/test_dialogs.py`.
+- [X] T004 [P] [US1] Add isolated real-catalog reconciliation tests, including missing, duplicate, extra, locked, and unverified keys, in `tests/e2e/websockets_tab/dialog_audit/test_inventory.py`.
+- [ ] T005 [P] [US1] Add real-asset Playwright dialog tests for purpose, scope, labels, required selectors, dependent choices, empty/failure states, stale responses, abandonment, and cancellation without operation submission in `tests/e2e/websockets_tab/dialog_audit/test_dialogs.py`.
 
 ### Implementation for User Story 1
 
-- [ ] T006 [US1] Implement `InventoryBuilder` and `OperationOracle` using the selected revision's real catalog, source definitions, SDK signatures, and runner paths in `tests/tools/websocket_dialog_audit/support/inventory.py`; never use display names or safety badges as proof of behavior.
-- [X] T007 [US1] Implement `DialogInspector` against the real rendered page and controls in `tests/tools/websocket_dialog_audit/support/journeys.py`; report the absence of a supported operation-cancel path rather than treating terminal-paste cancellation or navigation as a pass.
-- [X] T008 [US1] Run and refine the isolated Story 1 suite in `tests/tools/websocket_dialog_audit/test_inventory.py` and `tests/tools/websocket_dialog_audit/test_dialogs.py`; retain every operation in the denominator and report blockers or exclusions explicitly.
+- [ ] T006 [US1] Implement `InventoryBuilder` and `OperationOracle` using the selected revision's real catalog, source definitions, SDK signatures, and runner paths in `tests/e2e/websockets_tab/dialog_audit/support/inventory.py`; never use display names or safety badges as proof of behavior.
+- [X] T007 [US1] Implement `DialogInspector` against the real rendered page and controls in `tests/e2e/websockets_tab/dialog_audit/support/journeys.py`; report the absence of a supported operation-cancel path rather than treating terminal-paste cancellation or navigation as a pass.
+- [X] T008 [US1] Run and refine the isolated Story 1 suite in `tests/e2e/websockets_tab/dialog_audit/test_inventory.py` and `tests/e2e/websockets_tab/dialog_audit/test_dialogs.py`; retain every operation in the denominator and report blockers or exclusions explicitly.
 
 ## Phase 4: User Story 2 - Observe and Stop a Verified Read-Only Stream (Priority: P1)
 
@@ -48,7 +48,7 @@
 
 ### Tests for User Story 2
 
-- [ ] T009 [US2] Add opt-in live-gate and synthetic negative tests for unreachable portal, missing authentication or server guard, unverified operations, forbidden requests, bounded timeouts, and zero forbidden transmissions in `tests/tools/websocket_dialog_audit/test_live.py`; keep live cases out of ordinary collection.
+- [ ] T009 [US2] Add opt-in live-gate and synthetic negative tests for unreachable portal, missing authentication, unverified operations, forbidden requests, bounded timeouts, and zero forbidden transmissions in `tests/e2e/websockets_tab/dialog_audit/test_live.py`; keep live cases out of ordinary collection.
 
 ### Implementation for User Story 2
 
@@ -64,13 +64,13 @@
 
 ### Tests for User Story 3
 
-- [ ] T013 [US3] Add report-schema, status-total, redaction, restricted-artifact, incomplete-inventory, and cause-based defect-deduplication tests in `tests/tools/websocket_dialog_audit/test_inventory.py`.
+- [ ] T013 [US3] Add report-schema, status-total, redaction, restricted-artifact, incomplete-inventory, and cause-based defect-deduplication tests in `tests/e2e/websockets_tab/dialog_audit/test_inventory.py`.
 
 ### Implementation for User Story 3
 
-- [ ] T014 [US3] Implement `AuditReportWriter` and `DefectRegistry` for restricted JSON and sanitized Markdown, including exact sanitized command, duration, evidence mode, revision, status, stage outcome, and blocker fields in `tests/tools/websocket_dialog_audit/support/reporting.py`.
-- [ ] T015 [US3] Emit separate inventory, isolated-inspection, live-inspection, and live-subscription totals in `tests/tools/websocket_dialog_audit/support/reporting.py`; preserve the known portal-unreachable preflight as BLOCKED in `test-artifacts/websocket-dialog-audit/report.json` and `test-artifacts/websocket-dialog-audit/report.md`, and never overwrite it with a pass or treat isolated evidence as live evidence.
-- [ ] T016 [US3] For each confirmed distinct defect, reuse a matching issue or create exactly one repair issue linked to parent issue #3862, with sanitized reproduction and acceptance criteria; record the issue link in `tests/tools/websocket_dialog_audit/support/reporting.py`, and do not create issues for blockers or unverified suspicions.
+- [ ] T014 [US3] Implement `AuditReportWriter` and `DefectRegistry` for restricted JSON and sanitized Markdown, including exact sanitized command, duration, evidence mode, revision, status, stage outcome, and blocker fields in `tests/e2e/websockets_tab/dialog_audit/support/reporting.py`.
+- [ ] T015 [US3] Emit separate inventory, isolated-inspection, live-inspection, and live-subscription totals in `tests/e2e/websockets_tab/dialog_audit/support/reporting.py`; preserve the known portal-unreachable preflight as BLOCKED in `test-artifacts/websocket-dialog-audit/report.json` and `test-artifacts/websocket-dialog-audit/report.md`, and never overwrite it with a pass or treat isolated evidence as live evidence.
+- [ ] T016 [US3] For each confirmed distinct defect, reuse a matching issue or create exactly one repair issue linked to parent issue #3862, with sanitized reproduction and acceptance criteria; record the issue link in `tests/e2e/websockets_tab/dialog_audit/support/reporting.py`, and do not create issues for blockers or unverified suspicions.
 
 ## Phase 6: User Story 4 - Repair a Confirmed Defect Without Changing Operation Meaning (Priority: P3)
 
@@ -130,8 +130,8 @@
 
 ```text
 After T003, run these independent test-authoring tasks in parallel:
-T004: real inventory reconciliation tests in tests/tools/websocket_dialog_audit/test_inventory.py
-T005: real dialog inspection tests in tests/tools/websocket_dialog_audit/test_dialogs.py
+T004: real inventory reconciliation tests in tests/e2e/websockets_tab/dialog_audit/test_inventory.py
+T005: real dialog inspection tests in tests/e2e/websockets_tab/dialog_audit/test_dialogs.py
 
 Then complete T006 before T007, and run T008 as the independent Story 1 acceptance check.
 ```
@@ -363,3 +363,41 @@ The obsolete whole-server guard condition is removed from current evidence.
 All-parent traversal uses a 90-second shared deadline inside the 120-second outer test bound.
 No additional live run occurred; the accepted 12.14-second real lifecycle evidence is preserved.
 Parent retains ownership of final publication checklist, metadata and manifests.
+
+### PR #3892 browser CI placement correction
+
+CI failure tracking: [#3895](https://github.com/jmorrison-juniper/MistHelper/issues/3895).
+This repair moves browser-dependent tests into the existing Chromium-equipped e2e job.
+
+Moved the entire nine-file harness with `git mv` into
+`tests/e2e/websockets_tab/dialog_audit/`, the existing Chromium-equipped browser job.
+The root-and-contracts shard excludes this tree; no workflow/browser-install workaround or
+missing-browser skip was added. Updated namespace imports, repository-root parent offsets,
+feature manifest/tree, task paths, contract paths and quickstart commands.
+
+Post-migration validation:
+- Explicit-directory collection recognizes local CLI options: 96 offline tests, live module excluded.
+- Ordinary full e2e collection: 811 tests, including the same 96 offline audit tests, live module excluded.
+  Collection is not a claim that the full e2e suite was executed.
+- Follow-up ordinary collection with CI-style `--base-url=http://127.0.0.1:9600 --timeout=180`
+  and no `--ws-audit-*` flags: 811 collected, 96 audit items, live module excluded.
+  The audit's local options are registered during normal recursive collection.
+- Default audit-directory execution with those same CI options and no audit flags:
+  96 passed in 22.05 seconds. The inherited e2e fixtures do not replace `audit_page`:
+  it uses a separately guarded browser context, real local rendered assets at `https://audit.invalid`,
+  and Python socket denial, without requesting the parent's Flask `client`/`flask_app` fixtures.
+  The generic base URL does not become an audit destination. The inherited timeout hook adds
+  the existing 120-second per-item mark despite the CI command's 180-second global timeout.
+- Explicit isolated/local response selection: 103 passed in 24.16 seconds;
+  total support branch-aware coverage 81.22%, exceeding the unchanged 80% gate.
+- Ruff passed; Black check leaves all nine files unchanged.
+- Supplemental relaxed explicit-file mypy passed for nine files; exact flags are in quickstart.
+  This is not strict typing and does not change repository configuration.
+- Required guide preflight: one passed in 0.59 seconds; six input validations, three guide checks.
+- Targeted analyzer: three test files checked, zero findings, zero NEW, zero parse errors;
+  two detector scopes skipped. Baseline unchanged, quality artifacts owner-only.
+- No old harness-path references remain in tracked file contents; `git diff --check` passed.
+
+No live runs were repeated. Accepted `2900f56` live evidence remains historical and unchanged.
+No production, sibling browser, workflow, baseline or credential files were edited.
+No commit, push or GitHub change was performed; parent retains publication ownership.

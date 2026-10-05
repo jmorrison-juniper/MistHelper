@@ -5,9 +5,9 @@ from pathlib import Path  # Resolve repository assets without working-directory 
 
 import pytest  # Register local options and fixtures, not repository-wide configuration.
 
-from tests.tools.websocket_dialog_audit.support.inventory import InventoryBuilder  # Read real definitions.
-from tests.tools.websocket_dialog_audit.support.journeys import IsolatedPage  # Render without a server.
-from tests.tools.websocket_dialog_audit.support.policy import BrowserRequestPolicy  # Guard before page creation.
+from tests.e2e.websockets_tab.dialog_audit.support.inventory import InventoryBuilder  # Read real definitions.
+from tests.e2e.websockets_tab.dialog_audit.support.journeys import IsolatedPage  # Render without a server.
+from tests.e2e.websockets_tab.dialog_audit.support.policy import BrowserRequestPolicy  # Guard before page creation.
 
 
 def pytest_addoption(parser):
@@ -46,7 +46,7 @@ def audit_inventory(monkeypatch):
 @pytest.fixture  # Standard pytest fixture registration requires a function.
 def audit_page(browser, audit_inventory):
     """Fulfill approved requests locally. No Flask listener or SDK session exists."""
-    renderer = IsolatedPage(Path(__file__).resolve().parents[3], audit_inventory)  # Use tracked source assets.
+    renderer = IsolatedPage(Path(__file__).resolve().parents[4], audit_inventory)  # Use tracked source assets.
     context = browser.new_context(service_workers="block")  # Prevent worker requests from bypassing routing.
     policy = BrowserRequestPolicy("https://audit.invalid", renderer.responses())  # Deny every unknown request.
     policy.install(context)  # Install HTTP and WebSocket routing before page creation.
