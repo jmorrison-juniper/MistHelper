@@ -201,26 +201,53 @@ class TestBothRouteModulesCallTheFilterCorrectly:
         assert getattr(picks, "empty_hidden", 0) == 1  # The route reads this count.
 
 
-class TestTheMapImageRouteAnswersAFailure:
-    """Prove the map image route answers a client fault and a server fault."""
+class TestTheMapImageSourceAnswersAFailure:
+    """Prove the image source answers a client fault and a server fault."""
 
-    def test_a_strange_path_value_answers_404(self, client: Any) -> None:
-        """FR-3915-14: a path value that is not a UUID must answer HTTP 404."""
-        # The route rejects a non-UUID path value before it reads the Mist API.
-        response = client.get("/api/maps/site/not-a-uuid/map/not-a-uuid/image")
-        assert response.status_code == 404  # The client fault must answer 404.
-        assert response.get_json()["error"] == "Map not found"  # The message must stay stable.
+    def test_a_missing_map_record_answers_404(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """FR-3915-14: a map read that finds no record must answer HTTP 404."""
 
-    def test_a_failed_image_read_answers_500(self, client: Any, monkeypatch: pytest.MonkeyPatch) -> None:
-        """FR-3915-15: a failed image download must pass the server status through."""
+        def read_no_record(_session: Any, _site_id: str, _map_id: str) -> None:
+            """Answer no record, the shape a failed Mist API read produces."""
+            return None  # The source treats a None record as a missing map.
 
-        def fail_fetch(_session: Any, _site_id: str, _map_id: str) -> SimpleNamespace:
-            """Answer the shape the route reads, with a server fault status."""
-            return SimpleNamespace(status=500, error="the image read failed")  # The route reads both fields.
+        # Replace the record read so no Mist API call happens in this test.
+        monkeypatch.setattr("web_portal.routes.maps.MapImageSource.read_record", read_no_record)
+        # Call the source the way the route calls it, with a session, a site, and a map.
+        result = maps_module.MapImageSource.fetch(SimpleNamespace(), FULL_SITE_ID, FULL_SITE_ID)
+        assert result.status == 404  # The client fault must answer 404.
+        assert result.error == maps_module.MAP_NOT_FOUND_MESSAGE  # The message must stay stable.
 
-        # Replace the image source so no network read happens in this test.
-        monkeypatch.setattr("web_portal.routes.maps.MapImageSource.fetch", fail_fetch)
-        # Both path values are valid UUIDs, so the route reaches the image source.
-        response = client.get(f"/api/maps/site/{FULL_SITE_ID}/map/{FULL_SITE_ID}/image")
-        assert response.status_code == 500  # The server fault must pass through.
-        assert response.get_json()["error"] == "the image read failed"  # The reason must reach the caller.
+    def test_an_unusable_image_answers_502(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """FR-3915-15: bytes that are not a raster image must answer HTTP 502."""
+
+        def read_one_record(_session: Any, _site_id: str, _map_id: str) -> dict[str, Any]:
+            """Answer a map record that carries a usable https image link."""
+            return {"type": "image", "url": "https://example.invalid/plan.png"}  # The source reads both keys.
+
+        def download_html(_url: str) -> bytes:
+            """Answer bytes that no raster signature matches."""
+            return b"<html>an error page</html>"  # A failed download often returns a page, not an image.
+
+        # Replace the record read so the source reaches the download step.
+        monkeypatch.setattr("web_portal.routes.maps.MapImageSource.read_record", read_one_record)
+        # Replace the download so no network read happens in this test.
+        monkeypatch.setattr("web_portal.routes.maps.MapImageDownloader.download", download_html)
+        # Call the source the way the route calls it, with a session, a site, and a map.
+        result = maps_module.MapImageSource.fetch(SimpleNamespace(), FULL_SITE_ID, FULL_SITE_ID)
+        assert result.status == 502  # The server fault must answer 502.
+        assert result.error == maps_module.MapImageSource.DOWNLOAD_FAILED_MESSAGE  # The reason must stay stable.
+
+    def test_a_map_with_no_image_link_answers_404(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """FR-3915-16: a map record with no https image link must answer HTTP 404."""
+
+        def read_google_record(_session: Any, _site_id: str, _map_id: str) -> dict[str, Any]:
+            """Answer a map record that holds no floor plan file."""
+            return {"type": "google"}  # A Google map carries no image file.
+
+        # Replace the record read so no Mist API call happens in this test.
+        monkeypatch.setattr("web_portal.routes.maps.MapImageSource.read_record", read_google_record)
+        # Call the source the way the route calls it, with a session, a site, and a map.
+        result = maps_module.MapImageSource.fetch(SimpleNamespace(), FULL_SITE_ID, FULL_SITE_ID)
+        assert result.status == 404  # A map with no image is a client fault, not a server fault.
+        assert result.error == maps_module.MapImageSource.NO_IMAGE_MESSAGE  # The message must stay stable.
