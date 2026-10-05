@@ -89,10 +89,22 @@ class UtilityFieldFactory:
         if function_name == "retrieveDhcpLeases" and parameter.name == "network":  # Preserve the contract override.
             required = True  # Require the network for lease retrieval.
         choices = SdkAnnotation.enum_choices(annotation)  # Read fixed values from the resolved enum.
-        field = self.named(parameter.name, required, "", choices)  # Apply the central field contract.
+        field = replace(
+            self.named(parameter.name, required, "", choices),
+            client_picker=self.client_picker_mode(family, function_name, parameter.name),
+        )  # Add optional client assistance without changing the SDK field name.
         if family == "srx" and function_name == "retrieveRoutes" and parameter.name == "protocol":
             return replace(field, hint=UtilityText.hint("protocol", "srx.retrieveRoutes"))
         return field  # Preserve shared field behavior for every other parameter.
+
+    @staticmethod
+    def client_picker_mode(family: str, function_name: str, parameter_name: str) -> str | None:
+        """Return only client-selector modes supported by verified associations."""
+        if function_name == "releaseDhcpLeases" and parameter_name == "macs":
+            return "multiple" if family == "ex" else "manual" if family in {"srx", "ssr"} else None
+        if family == "ex" and function_name == "retrieveMacTable" and parameter_name == "mac_address":
+            return "single"
+        return None
 
     def named(
         self,

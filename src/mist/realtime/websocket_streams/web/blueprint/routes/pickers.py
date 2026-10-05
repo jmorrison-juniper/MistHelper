@@ -25,6 +25,18 @@ class PickerRoutes:
         )  # Validate and return device rows inside the error boundary.
 
     @staticmethod
+    def clients(site_id: str, device_id: str) -> Response | tuple[Response, int]:
+        """Return wired-client suggestions for one selected device."""
+        services = ServiceRequest.current()  # Resolve the app-scoped service bundle.
+        return JsonResponse.call(
+            lambda: (
+                IdentifierRequest.require_uuid(site_id, "site_id"),
+                IdentifierRequest.require_uuid(device_id, "device_id"),
+                services.pickers.site.clients(site_id, device_id),
+            )[2]
+        )  # Validate both target identifiers before the Mist read.
+
+    @staticmethod
     def maps(site_id: str) -> Response | tuple[Response, int]:
         """Return map picker rows."""
         services = ServiceRequest.current()  # Resolve the app-scoped service bundle.

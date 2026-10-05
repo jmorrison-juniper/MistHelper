@@ -71,6 +71,7 @@ class FieldSpec:
     default: str | int | bool | None = None  # A JSON-safe first value for the page.
     hint: str = ""  # An empty hint shows no help text.
     picker: str | None = None  # The picker name, such as "sites", "devices", or "maps".
+    client_picker: str | None = None  # Optional client choices for one reviewed utility field.
 
     def to_payload(self) -> dict[str, object]:
         """Return the JSON form of the field for the page.
@@ -89,6 +90,7 @@ class FieldSpec:
             "default": self.default,  # The first value of the input.
             "hint": self.hint,  # The help text under the input.
             "picker": self.picker,  # The page fills the input from this picker.
+            "client_picker": self.client_picker,  # Keep client assistance separate from the SDK field name.
         }
 
 

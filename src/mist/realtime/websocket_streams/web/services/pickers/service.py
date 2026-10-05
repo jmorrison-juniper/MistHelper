@@ -38,6 +38,11 @@ class SitePickerService:
         picker = self._ready_picker("assets")  # Require the production picker.
         return cast(dict[str, object], picker.assets(site_id))  # Preserve asset filtering and cache behavior.
 
+    def clients(self, site_id: str, device_id: str) -> dict[str, object]:
+        """Return client suggestions for one selected device."""
+        picker = self._ready_picker("clients")  # Require the authenticated Mist picker.
+        return cast(dict[str, object], picker.clients(site_id, device_id))  # Preserve scoped lookup errors.
+
     def _ready_picker(self, action: str) -> Any:
         """Return the ready picker or raise the contract error."""
         if self._reason is not None or self._picker is None:  # Pickers need credentials and imports.

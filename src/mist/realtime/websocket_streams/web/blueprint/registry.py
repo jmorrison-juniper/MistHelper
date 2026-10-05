@@ -80,6 +80,9 @@ class WebSocketBlueprint:
         blueprint.add_url_rule(
             "/api/websockets/sites/<site_id>/devices", view_func=PickerRoutes.devices
         )  # Preserve device picker.
+        blueprint.add_url_rule(
+            "/api/websockets/sites/<site_id>/devices/<device_id>/clients", view_func=PickerRoutes.clients
+        )  # Add the read-only scoped client picker.
         blueprint.add_url_rule("/api/websockets/sites/<site_id>/maps", view_func=PickerRoutes.maps)  # Preserve maps.
         blueprint.add_url_rule(
             "/api/websockets/sites/<site_id>/assets", view_func=PickerRoutes.assets
