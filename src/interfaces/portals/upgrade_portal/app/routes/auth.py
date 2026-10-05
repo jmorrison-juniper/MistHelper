@@ -50,8 +50,9 @@ from src.interfaces.portals.upgrade_portal.app.config import (
 from src.interfaces.portals.upgrade_portal.app.factory import (
     BROWSER_MIME,
     json_error,
+    remember_refusal_code,
     wants_browser_page,
-)  # The envelope, the page type, and the page rule.
+)  # The envelope, the page type, the access field, and the page rule.
 from src.interfaces.portals.upgrade_portal.app.seam_shapes import (
     check_stand_in,
 )  # Issue #1991: compare each stand-in against the real callee.
@@ -781,7 +782,13 @@ def two_factor_context() -> dict[str, Any]:
     }
 
 
-def error_page(name: str, context: dict[str, Any], message: str, status: int) -> tuple[Response, int]:
+def error_page(
+    name: str,
+    context: dict[str, Any],
+    message: str,
+    status: int,
+    code: str,
+) -> tuple[Response, int]:
     """Render one sign-in page again, with the refusal text inside it.
 
     Why:
@@ -800,6 +807,7 @@ def error_page(name: str, context: dict[str, Any], message: str, status: int) ->
     Returns:
         The rendered page and the status.
     """
+    remember_refusal_code(code)  # Preserve the browser refusal for the access log header.
     context[ERROR_KEY] = message  # The page shows this text inside its own error region.
     return Response(render_page(name, **context), mimetype=BROWSER_MIME), status  # The form, and the reason.
 
@@ -823,7 +831,13 @@ def credential_refusal(message: str = BAD_CREDENTIALS_MESSAGE) -> tuple[Response
         The refusal envelope and the status, or the form again and the status.
     """
     if wants_browser_page():  # A browser form post must read the form again, never a JSON body.
-        return error_page(SIGNIN_TEMPLATE, signin_context(), message, BAD_REQUEST_STATUS)  # The form, and the cure.
+        return error_page(  # The form, and the cure.
+            SIGNIN_TEMPLATE,
+            signin_context(),
+            message,
+            BAD_REQUEST_STATUS,
+            BAD_CREDENTIALS,
+        )
     return json_error(BAD_REQUEST_STATUS, BAD_CREDENTIALS, message)  # The script shape, with the fixed code.
 
 
@@ -839,7 +853,7 @@ def rate_limit_refusal() -> tuple[Response, int]:
         The refusal envelope and the status, or the form again and the status.
     """
     if wants_browser_page():  # A browser form post must read the form again, never a JSON body.
-        return error_page(SIGNIN_TEMPLATE, signin_context(), RATE_LIMITED_MESSAGE, RATE_LIMIT_STATUS)
+        return error_page(SIGNIN_TEMPLATE, signin_context(), RATE_LIMITED_MESSAGE, RATE_LIMIT_STATUS, RATE_LIMITED)
     return json_error(RATE_LIMIT_STATUS, RATE_LIMITED, RATE_LIMITED_MESSAGE)  # The contract fixes both parts.
 
 
@@ -860,7 +874,7 @@ def two_factor_refusal(message: str) -> tuple[Response, int]:
         The refusal envelope and the status, or the page again and the status.
     """
     if wants_browser_page():  # A browser form post must read the page again, never a JSON body.
-        return error_page(TWO_FACTOR_TEMPLATE, two_factor_context(), message, BAD_REQUEST_STATUS)
+        return error_page(TWO_FACTOR_TEMPLATE, two_factor_context(), message, BAD_REQUEST_STATUS, BAD_TWO_FACTOR_CODE)
     return json_error(BAD_REQUEST_STATUS, BAD_TWO_FACTOR_CODE, message)  # The code stays fixed for both cases.
 
 

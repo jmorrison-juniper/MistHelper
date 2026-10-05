@@ -17,6 +17,7 @@ Why:
 """
 
 import logging  # The portal logs with the standard library only.
+import re  # Validates the refusal code before it reaches an HTTP header.
 import threading  # Guards the readiness cache against the worker threads.
 from functools import partial  # Binds one status code to the shared error handler.
 from importlib import import_module  # Imports each route module late.
@@ -148,6 +149,8 @@ RUN_FIELD = "run_id"  # The log field that follows one upgrade run.
 SITE_FIELD = "site_id"  # The log field that names the site.
 MISSING_FIELD = "-"  # The placeholder for a record that carries neither field.
 HANDLER_NAME = "upgrade_portal"  # The handler name stops a duplicate on a second build.
+REFUSAL_CODE_HEADER = "X-MistHelper-Refusal-Code"  # Gunicorn reads this safe field for refused requests.
+REFUSAL_CODE_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")  # Reject header injection and unstable code text.
 LOG_FORMAT = (
     "%(asctime)s [%(levelname)s] %(name)s "  # The standard prefix of every record.
     "run=%(run_id)s site=%(site_id)s: %(message)s"
@@ -285,10 +288,32 @@ def build_error_envelope(code: str, message: str, details: dict[str, Any] | None
     Returns:
         The envelope, ready for `jsonify`.
     """
+    remember_refusal_code(code)  # Preserve the stable code for the access log header.
     body: dict[str, Any] = {"code": code, "message": message}  # The two keys the contract always requires.
     if details is not None:  # The third key is optional.
         body["details"] = details  # An empty dict is still a caller choice, so test against None.
     return {"error": body}  # The contract wraps the body under one key.
+
+
+def remember_refusal_code(code: str) -> None:
+    """Remember one validated refusal code for the current response."""
+    if not REFUSAL_CODE_PATTERN.fullmatch(code):  # Reject text that cannot safely enter an HTTP header.
+        logger.warning("The portal refused an unsafe refusal code for access logging.")  # Keep the code out of logs.
+        return  # The response remains valid without the optional access field.
+    if has_request_context():  # Tests may build an envelope outside a request.
+        g.refusal_code = code  # The after-request hook copies only this validated value.
+
+
+def register_refusal_code_header(app: Flask) -> None:
+    """Add the validated refusal code to each response that carries one."""
+
+    @app.after_request  # Gunicorn reads the response header in its access format.
+    def add_refusal_code_header(response: Response) -> Response:
+        """Attach the current refusal code without changing the response body."""
+        code = getattr(g, "refusal_code", None)  # A successful response has no refusal code.
+        if isinstance(code, str) and REFUSAL_CODE_PATTERN.fullmatch(code):  # Apply only safe fixed-word values.
+            response.headers[REFUSAL_CODE_HEADER] = code  # Expose the code to the access logger.
+        return response  # Keep the Flask response unchanged apart from the diagnostic header.
 
 
 def json_error(
@@ -303,6 +328,7 @@ def json_error(
         status: The HTTP status code.
         code: The error code. The status supplies the default.
         message: The sentence for the operator. The status supplies the default.
+        details: The extra fields for the envelope. The default is no detail.
 
     Returns:
         The response body and the status code.
@@ -345,6 +371,7 @@ def error_page(
     """
     chosen_code = code or ERROR_CODES.get(status, ERROR_CODES[500])  # An unknown status reads as a fault.
     chosen_message = message or ERROR_MESSAGES.get(status, ERROR_MESSAGES[500])  # The matching sentence.
+    remember_refusal_code(chosen_code)  # Preserve the page refusal for the access log header.
     signed_in = identity.current_session() is not None  # A refused post after a restart holds no session.
     logger.info("The portal renders the error page for the status %s and the code %s.", status, chosen_code)
     page = render_template(  # Jinja escapes each value, and the template marks no value as safe.
@@ -1138,6 +1165,7 @@ def arm_application(
     """
     PortalSecurity().apply(app, settings)  # The guards register first, so they run before any view.
     register_error_handlers(app)  # The JSON envelope must cover a fault the guards raise.
+    register_refusal_code_header(app)  # The access log must name the refusal code for every response shape.
     register_health(app)  # The container probe needs this route from the first day.
     register_readiness(app)  # The orchestrator readiness probe needs the store reading.
     register_teardown(app)  # Every request must release its sockets.

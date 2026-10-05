@@ -210,6 +210,7 @@ CONTAINER_KILL_MARGIN_SECONDS=10
 # threads caused.
 PORTAL_THREADS="${PORTAL_THREADS:-24}"
 log_container_event "[PORTAL] Using $PORTAL_THREADS worker threads."  # Name the count, so a later outage has the value in the log.
+ACCESS_LOG_FORMAT='%(h)s %(l)s %(u)s %(t)s "%(r)s" status=%(s)s bytes=%(b)s response_time_us=%(D)s refusal_code=%({X-MistHelper-Refusal-Code}o)s'  # Keep timing and refusal data in safe fixed fields.
 
 # Start Gunicorn web portal in the background
 # Warning: do not add a dash to `su`. A dash starts a login shell, which clears
@@ -226,6 +227,7 @@ su misthelper -c "cd /app && gunicorn wsgi:app \
     --timeout 120 \
     --graceful-timeout ${SHUTDOWN_GRACE_SECONDS} \
     --access-logfile /app/data/portal_access.log \
+    --access-logformat "$ACCESS_LOG_FORMAT" \
     --error-logfile /app/data/portal_error.log" &
 GUNICORN_PID=$!
 SSHD_PID=""  # Clear the sshd PID, because a signal can start the cleanup before the daemon starts.
@@ -315,6 +317,7 @@ su misthelper -c "cd /app && gunicorn wsgi_capture:app \
     --threads 4 \
     --timeout 120 \
     --access-logfile /app/data/capture_access.log \
+    --access-logformat "$ACCESS_LOG_FORMAT" \
     --error-logfile /app/data/capture_error.log" &
 CAPTURE_PID=$!
 log_container_event "[CAPTURE] Started the upgrade capture portal with PID $CAPTURE_PID."  # Name the PID, so the operator can match a later crash line to this service.

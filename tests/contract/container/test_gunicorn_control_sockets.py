@@ -48,6 +48,7 @@ class TestGunicornStartupControls:
                     "--timeout": "120",
                     "--graceful-timeout": "${SHUTDOWN_GRACE_SECONDS}",
                     "--access-logfile": "/app/data/portal_access.log",
+                    "--access-logformat": "$ACCESS_LOG_FORMAT",  # The branch adds the access log field template.
                     "--error-logfile": "/app/data/portal_error.log",
                 },
             ),
@@ -60,6 +61,7 @@ class TestGunicornStartupControls:
                     "--threads": "4",
                     "--timeout": "120",
                     "--access-logfile": "/app/data/capture_access.log",
+                    "--access-logformat": "$ACCESS_LOG_FORMAT",  # The branch adds the access log field template.
                     "--error-logfile": "/app/data/capture_error.log",
                 },
             ),
