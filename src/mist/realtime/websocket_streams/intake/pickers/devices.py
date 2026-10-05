@@ -6,6 +6,9 @@ import logging  # Structured records write through standard repository handlers.
 import time  # Cache age uses a monotonic clock.
 from typing import cast  # Device family data is checked before record construction.
 
+from src.mist.realtime.websocket_streams.intake.identifiers.identity_rules import (
+    IdentityIdentifierRules,
+)  # Validate device MACs before they scope a client read.
 from src.mist.realtime.websocket_streams.intake.pickers.records import PickerRuntime  # Shared state and row shaping.
 from src.mist.realtime.websocket_streams.intake.start_request.models import (
     DeviceFacts,
@@ -23,7 +26,9 @@ class DevicePicker(PickerRuntime):
     def devices(self, site_id: str) -> dict[str, object]:
         """Return device rows for one site."""
         logger.emit(logging.INFO, "intake_device_picker_started", {"action": "list"})  # Log no site identifier.
-        rows = self._cached_devices(site_id)  # Reuse the cache for picker and request checks.
+        rows = [
+            {key: value for key, value in row.items() if key != "_device_mac"} for row in self._cached_devices(site_id)
+        ]  # Keep server-only scope data out of the JSON answer.
         logger.emit(logging.DEBUG, "intake_device_picker_finished", {"count": len(rows)})  # Log the bounded count.
         return self._payload(rows, "The site has no devices that the portal can list.")  # Explain an empty list.
 
@@ -38,7 +43,13 @@ class DevicePicker(PickerRuntime):
         )  # Log the result only.
         if match is None:  # The selected device is absent from the current site list.
             return None  # The request checker converts absence to a contract error.
-        return DeviceFacts(str(match.get("label") or ""), cast(str | None, match.get("family")))  # Return safe facts.
+        value = match.get("_device_mac")  # Read the MAC retained from this site's Mist response.
+        device_mac = (
+            IdentityIdentifierRules.normalize_mac(str(value)) if IdentityIdentifierRules.is_mac(value) else None
+        )  # Validate scope identity.
+        return DeviceFacts(
+            str(match.get("label") or ""), cast(str | None, match.get("family")), device_mac
+        )  # Return safe device facts and optional identity.
 
     def _cached_devices(self, site_id: str) -> list[dict[str, object]]:
         """Return fresh copied device rows."""
@@ -69,4 +80,7 @@ class DevicePicker(PickerRuntime):
     def _device_row(self, record: dict[str, object]) -> dict[str, object]:
         """Return one normalized device row."""
         family = self._device_family(record)  # Utility filtering needs the family.
-        return self._row(record, ("name", "mac", "id"), ("model", "type"), family)  # Prefer names for operators.
+        row = self._row(record, ("name", "mac", "id"), ("model", "type"), family)  # Prefer names for operators.
+        device_mac = record.get("mac")  # Keep the SDK device MAC for a verified lookup.
+        row["_device_mac"] = device_mac if IdentityIdentifierRules.is_mac(device_mac) else None  # Keep it server-side.
+        return row  # Preserve the validated device scope for later picker actions.

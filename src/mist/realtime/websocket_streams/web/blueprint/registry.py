@@ -10,7 +10,10 @@ from src.mist.realtime.websocket_streams.web.blueprint.responses.download import
 from src.mist.realtime.websocket_streams.web.blueprint.routes.page import (
     PageRoutes,
 )  # Register page and catalog routes.
-from src.mist.realtime.websocket_streams.web.blueprint.routes.pickers import PickerRoutes  # Register picker routes.
+from src.mist.realtime.websocket_streams.web.blueprint.routes.pickers import (
+    ClientPickerRoutes,
+    PickerRoutes,
+)  # Register resource picker routes.
 from src.mist.realtime.websocket_streams.web.blueprint.routes.sessions import SessionRoutes  # Register session routes.
 from src.mist.realtime.websocket_streams.web.blueprint.routes.terminal import (
     TerminalRoutes,
@@ -80,6 +83,9 @@ class WebSocketBlueprint:
         blueprint.add_url_rule(
             "/api/websockets/sites/<site_id>/devices", view_func=PickerRoutes.devices
         )  # Preserve device picker.
+        blueprint.add_url_rule(
+            "/api/websockets/sites/<site_id>/devices/<device_id>/clients", view_func=ClientPickerRoutes.clients
+        )  # Add the read-only scoped client picker.
         blueprint.add_url_rule("/api/websockets/sites/<site_id>/maps", view_func=PickerRoutes.maps)  # Preserve maps.
         blueprint.add_url_rule(
             "/api/websockets/sites/<site_id>/assets", view_func=PickerRoutes.assets

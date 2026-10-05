@@ -24,6 +24,10 @@ class StreamRequestError(Exception):
         "input_full": 409,
         "too_large": 413,
         "rate_limited": 429,
+        "picker_unavailable": 503,
+        "picker_request_failed": 502,
+        "picker_service_failed": 503,
+        "picker_incomplete": 503,
     }  # Keep every contract code in one explicit table.
 
     def __init__(self, code: str, message: str, extra: Mapping[str, object] | None = None) -> None:

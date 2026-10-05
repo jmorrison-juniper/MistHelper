@@ -441,7 +441,7 @@ class TestWebSocketFeatureStructure:
         root = Path(__file__).resolve().parents[6]  # Resolve the worktree root from this test location.
         PythonStructureGuard().inspect([Path(__file__)])  # Keep this guard within the same structural limits.
         counts, scope = self._measure_feature(root)  # Run checks against the complete T091 mapping table.
-        assert counts == StructureCounts(145, 204, 622)  # Pin the complete feature measurement to known values.
+        assert counts == StructureCounts(145, 208, 635)  # Pin the expanded picker feature measurement.
         print("T091 mapping scope: " + " | ".join(f"{old} -> {new}" for old, new in scope))  # Print every mapping.
         print(  # Print the exact checked source counts.
             f"checked mappings={len(scope)} paths={len(self.ANALYSIS_SCOPE)} modules={counts.modules} "

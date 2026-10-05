@@ -97,6 +97,11 @@ class IsolatedPage:
                 for number, family in enumerate(("ap", "ex", "srx", "ssr"), start=1)
             ]
         }  # Exercise family filtering.
+        data[base + "/devices/aaaaaaaa-bbbb-cccc-dddd-000000000002/clients"] = {
+            "rows": [],
+            "total_count": 0,
+            "reason": None,
+        }  # The optional EX client picker uses an exact local empty result by default.
         data[base + "/maps/" + self.MAP + "/sdkclients"] = {
             "rows": [{"id": "bbbbbbbb-cccc-dddd-eeee-ffffffffffff", "name": "Synthetic SDK client"}]
         }  # Dependent read.
@@ -376,12 +381,17 @@ class UtilityExperienceInspector:
                 continue  # Missing input is already handled by the independent required-field oracle.
             actual = control.evaluate(
                 "(node) => ({tag: node.tagName, type: node.type, "
-                "picker: node.dataset.wsPicker || '', required: node.required})"
+                "picker: node.dataset.wsPicker || '', required: node.required, "
+                "clientMode: node.dataset.wsClientField || ''})"
             )  # No typed values saved.
             optional = (
                 parameter.default is not inspect.Parameter.empty
             )  # Signature is independent from catalog required flags.
-            if actual["tag"] == "INPUT" and not actual["picker"]:
+            if (
+                actual["tag"] == "INPUT"
+                and not actual["picker"]
+                and actual["clientMode"] not in {"single", "multiple", "manual"}
+            ):
                 findings.append(
                     self.observation(entry, parameter.name, optional, actual, documentation)
                 )  # Measured UX gap.
