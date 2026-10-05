@@ -123,7 +123,7 @@ class ProtectedGuard:
 
     HASHES = {  # Byte identity also protects settings outside the tested readiness matrix.
         "compose.yml": "dd50436f3e5e92df9dc57071ba35ec6155f2ac2e371e1a9c2e3e15c913b335fb",
-        "web_portal/routes/dashboard.py": "8d5f41817efbb24fd2b4e856399afee62617f56450ed993a091e0ddb7d0f9424",
+        "web_portal/routes/dashboard.py": "d1005a15b48f456703bbf40f0fa305588dde60fb71e7fe5db02df1dbebc6a427",
     }
 
     @classmethod
@@ -193,7 +193,7 @@ class ContractCopies:
         "a9550853151c638cdf8ab1c80e5b5f2680753689467038411b3b58832207c77a",
         "62a16f51d5477694a3f270a318bdbb432dc3dfed55a3a6132a1fcde60053c8d8",
         "dd50436f3e5e92df9dc57071ba35ec6155f2ac2e371e1a9c2e3e15c913b335fb",
-        "8d5f41817efbb24fd2b4e856399afee62617f56450ed993a091e0ddb7d0f9424",
+        "d1005a15b48f456703bbf40f0fa305588dde60fb71e7fe5db02df1dbebc6a427",
     )
     FALSE_INSTRUCTION = "Set `--output-format sqlite` or `OUTPUT_FORMAT=sqlite` environment variable."
     CORRECT_INSTRUCTION = "Use `--output-format sqlite` to select SQLite output."

@@ -185,7 +185,7 @@ class TestReadinessDataDirectory:
 
         assert payload["failed_checks"] == ["data_directory_writable"]
         assert payload["status"] == "not ready"
-        assert "Permission denied" in payload["checks"]["data_directory_writable"]["detail"]
+        assert "PermissionError" in payload["checks"]["data_directory_writable"]["detail"]
 
     def test_ready_returns_503_when_the_data_directory_is_absent(self, tmp_path) -> None:
         """An absent data directory must produce code 503."""
@@ -437,3 +437,76 @@ class TestLivenessEndpoint:
 
         assert client.get("/health").status_code == 200
         assert client.get("/ready").status_code == 503
+
+
+SECRET_EXCEPTION_TEXT = "internal-path /srv/secret/stack-frame-3925"  # WHY: a marker that must never reach a client.
+
+
+class TestReadinessHidesExceptionText:
+    """Regression cover for issue #3925 (CodeQL py/stack-trace-exposure).
+
+    Each failed readiness check must name the exception class only. The
+    exception message stays in the server log and never enters the body.
+    """
+
+    def test_data_directory_failure_hides_the_exception_message(
+        self,
+        writable_data_dir: str,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """A write failure must keep its message out of the response body."""
+
+        def _deny_with_secret(probe_path: str) -> None:
+            raise PermissionError(13, SECRET_EXCEPTION_TEXT, probe_path)
+
+        monkeypatch.setattr(dashboard_module, "_write_and_remove_probe_file", _deny_with_secret)
+        client = _build_test_app(writable_data_dir).test_client()
+
+        with caplog.at_level("WARNING", logger=dashboard_module.__name__):
+            response = client.get("/ready")
+
+        assert response.status_code == 503
+        assert SECRET_EXCEPTION_TEXT not in response.get_data(as_text=True)
+        detail = response.get_json()["checks"]["data_directory_writable"]["detail"]
+        assert detail.endswith("PermissionError. Read the portal log for the full report.")
+        assert SECRET_EXCEPTION_TEXT in caplog.text, "The server log must keep the full exception text"
+
+    def test_sqlite_failure_hides_the_exception_message(
+        self,
+        writable_data_dir: str,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A database failure must keep its message out of the response body."""
+        db_path = os.path.join(writable_data_dir, dashboard_module.SQLITE_DATABASE_FILENAME)
+        with open(db_path, "wb") as handle:  # WHY: the check runs only when the file exists.
+            handle.write(b"placeholder")
+
+        def _fail_query(path: str) -> None:
+            raise sqlite3.DatabaseError(SECRET_EXCEPTION_TEXT)
+
+        monkeypatch.setattr(dashboard_module, "_query_sqlite_database", _fail_query)
+        client = _build_test_app(writable_data_dir).test_client()
+
+        response = client.get("/ready")
+
+        assert response.status_code == 503
+        assert SECRET_EXCEPTION_TEXT not in response.get_data(as_text=True)
+        assert "DatabaseError" in response.get_json()["checks"]["sqlite_database"]["detail"]
+
+    def test_backend_socket_failure_hides_the_exception_message(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A refused connection must keep its message out of the check result."""
+
+        def _refuse(address: tuple, timeout: float) -> None:
+            raise ConnectionRefusedError(111, SECRET_EXCEPTION_TEXT)
+
+        monkeypatch.setattr(dashboard_module.socket, "create_connection", _refuse)
+
+        result = dashboard_module._check_backend_socket("redis", "misthelper-redis", 9379)
+
+        assert result["ok"] is False
+        assert SECRET_EXCEPTION_TEXT not in result["detail"]
+        assert result["detail"] == (
+            "cannot reach redis at misthelper-redis:9379: ConnectionRefusedError. "
+            "Read the portal log for the full report."
+        )
