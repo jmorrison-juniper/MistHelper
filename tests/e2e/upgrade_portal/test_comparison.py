@@ -50,8 +50,8 @@ CLIENT_TABLE_ID = "compare-client-table"
 CSV_EXPORT_ID = "compare-export-csv"
 JSON_EXPORT_ID = "compare-export-json"
 
-# The shared message region. The picker shows the refusal sentence here.
-FLASH_ID = "flash-message"
+# The page-local alert of the compare picker. It carries the refusal sentence.
+REFUSAL_ID = "compare-refusal"
 
 # The identifier prefixes that rule 5 fixes for a dynamic row.
 DEVICE_ROW_PREFIX = "compare-device-row-"
@@ -290,23 +290,31 @@ def picker_page(portal_page: Any) -> Any:
 
 
 def _capture_keys(page: Any) -> list[str]:
-    """Read the capture identifier of every choice in the pre-check list.
+    """Read the capture identifiers that one single site offers.
 
     Why:
         A browser test cannot know a stored capture identifier in advance. The
         picker publishes each identifier as the value of a choice, so the test
-        reads what the page offers. The first choice holds an empty value, and
-        the filter below drops it.
+        reads what the page offers. The portal refuses a pair that names two
+        sites, so this reader keeps the choices of one site only. Issue #3909
+        records the refusals that a mixed pair caused.
 
     Args:
         page: The Playwright page object, on the picker.
 
     Returns:
-        One capture identifier for each real choice, in page order.
+        One capture identifier for each choice of a single site, in page order.
     """
     chooser = page.get_by_test_id(BEFORE_SELECT_ID)  # The control itself comes from `data-testid`.
-    values = chooser.evaluate("node => Array.from(node.options).map(choice => choice.value)")
-    return [str(value) for value in values if value]
+    reader = "node => Array.from(node.options).map(choice => [choice.value, choice.dataset.siteId || ''])"
+    pairs = chooser.evaluate(reader)  # Each entry holds one capture identifier and its site identifier.
+    by_site: dict[str, list[str]] = {}  # The capture identifiers, grouped under the site that holds them.
+    for value, site in pairs:  # The page order survives, because a list keeps the order of its appends.
+        if value:  # An empty value is the "Choose a capture" prompt, never a stored capture.
+            by_site.setdefault(str(site), []).append(str(value))
+    if not by_site:  # The picker offers no stored capture at all, so the caller skips.
+        return []
+    return max(by_site.values(), key=len)  # The largest site gives the best chance of two captures.
 
 
 def _skip_without_comparison(page: Any) -> None:
@@ -323,8 +331,8 @@ def _skip_without_comparison(page: Any) -> None:
     """
     if page.get_by_test_id(STATISTICS_ID).count() > 0:  # The comparison rendered, so the journey went through.
         return
-    notice = page.get_by_test_id(FLASH_ID)  # Two regions carry this identifier (#3216).
-    spoken = [text.strip() for text in notice.all_inner_texts() if text.strip()]  # This reader is not strict.
+    notice = page.get_by_test_id(REFUSAL_ID)  # One element only carries this identifier (#3908).
+    spoken = [text.strip() for text in notice.all_inner_texts() if text.strip()]  # An absent region reads as empty.
     reason = spoken[0] if spoken else "The portal named no reason."
     pytest.skip(f"The portal showed the picker again rather than a comparison. Reason: {reason}")
 
@@ -335,8 +343,9 @@ def comparison_page(picker_page: Any) -> Any:
 
     Why:
         The journey starts at the picker, so this fixture drives the real path
-        rather than building an address of its own. It takes the first choice
-        and the last choice, because those two are the furthest apart in time.
+        rather than building an address of its own. The reader below returns
+        the choices of one site, and this fixture takes the first and the last
+        of them, because those two are the furthest apart in time.
 
     Args:
         picker_page: The page that shows the capture picker.
