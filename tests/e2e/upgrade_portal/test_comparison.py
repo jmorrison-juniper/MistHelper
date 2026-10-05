@@ -384,6 +384,10 @@ class TestComparisonPicker:
         sync_api.expect(picker_page.get_by_test_id(BEFORE_SELECT_ID)).to_be_visible()
         sync_api.expect(picker_page.get_by_test_id(AFTER_SELECT_ID)).to_be_visible()
         sync_api.expect(picker_page.get_by_test_id(RUN_BUTTON_ID)).to_be_visible()
+        # State the outcome as a literal check, because a hidden button stops the operator here.
+        assert picker_page.get_by_test_id(
+            RUN_BUTTON_ID
+        ).is_visible(), f"{RUN_BUTTON_ID} is hidden, so the operator cannot start the comparison."
 
     def test_run_button_carries_the_two_choices_into_the_address(self, comparison_page: Any) -> None:
         """The run button puts the two capture identifiers in the address bar.
@@ -412,6 +416,10 @@ class TestComparisonStatistics:
             comparison_page: The page that shows the comparison.
         """
         sync_api.expect(comparison_page.get_by_test_id(STATISTICS_ID)).to_be_visible()
+        # State the outcome as a literal check, because a hidden region shows the operator no numbers.
+        assert comparison_page.get_by_test_id(
+            STATISTICS_ID
+        ).is_visible(), f"{STATISTICS_ID} is hidden, so the operator reads no upgrade numbers."
 
     def test_region_shows_one_value_for_each_statistic_name(self, comparison_page: Any) -> None:
         """The region shows all eleven statistics of the contract.
@@ -424,8 +432,14 @@ class TestComparisonStatistics:
         Args:
             comparison_page: The page that shows the comparison.
         """
+        # Guard the loop, because an empty list would make the loop check nothing.
+        assert STAT_TEST_IDS, "The statistic name list is empty, so this test proves nothing."
         for test_id in STAT_TEST_IDS:
             sync_api.expect(comparison_page.get_by_test_id(test_id)).to_be_visible()
+            # State the outcome as a literal check for each name of the contract.
+            assert comparison_page.get_by_test_id(
+                test_id
+            ).is_visible(), f"{test_id} is hidden, so the operator misses one class of change."
 
 
 class TestComparisonTables:
@@ -439,6 +453,13 @@ class TestComparisonTables:
         """
         sync_api.expect(comparison_page.get_by_test_id(DEVICE_TABLE_ID)).to_be_visible()
         sync_api.expect(comparison_page.get_by_test_id(CLIENT_TABLE_ID)).to_be_visible()
+        # State each outcome as a literal check, because a hidden table hides every difference.
+        assert comparison_page.get_by_test_id(
+            DEVICE_TABLE_ID
+        ).is_visible(), f"{DEVICE_TABLE_ID} is hidden, so the operator reads no device difference."
+        assert comparison_page.get_by_test_id(
+            CLIENT_TABLE_ID
+        ).is_visible(), f"{CLIENT_TABLE_ID} is hidden, so the operator reads no client difference."
 
     def test_every_device_row_appends_a_mac_address_key(self, comparison_page: Any) -> None:
         """Each device row appends a MAC address in one spelling.
@@ -447,6 +468,10 @@ class TestComparisonTables:
             comparison_page: The page that shows the comparison.
         """
         _assert_row_keys_are_addresses(comparison_page, DEVICE_ROW_PREFIX, DEVICE_TABLE_ID)
+        # Read the keys again, because the helper skips an empty table and then proves nothing.
+        assert _row_keys(
+            comparison_page, DEVICE_ROW_PREFIX
+        ), f"{DEVICE_TABLE_ID} holds no row key, so the operator cannot name one device."
 
     def test_every_client_row_appends_a_mac_address_key(self, comparison_page: Any) -> None:
         """Each client row appends a MAC address in one spelling.
@@ -455,6 +480,10 @@ class TestComparisonTables:
             comparison_page: The page that shows the comparison.
         """
         _assert_row_keys_are_addresses(comparison_page, CLIENT_ROW_PREFIX, CLIENT_TABLE_ID)
+        # Read the keys again, because the helper skips an empty table and then proves nothing.
+        assert _row_keys(
+            comparison_page, CLIENT_ROW_PREFIX
+        ), f"{CLIENT_TABLE_ID} holds no row key, so the operator cannot name one client."
 
 
 class TestComparisonFilters:
@@ -471,8 +500,14 @@ class TestComparisonFilters:
         Args:
             comparison_page: The page that shows the comparison.
         """
+        # Guard the loop, because an empty list would make the loop check nothing.
+        assert FILTER_TEST_IDS, "The filter control list is empty, so this test proves nothing."
         for test_id in FILTER_TEST_IDS:
             sync_api.expect(comparison_page.get_by_test_id(test_id)).to_be_visible()
+            # State the outcome as a literal check for each filter control.
+            assert comparison_page.get_by_test_id(
+                test_id
+            ).is_visible(), f"{test_id} is hidden, so the operator cannot read that outcome alone."
 
     def test_a_filter_control_carries_its_outcome_into_the_address(self, comparison_page: Any) -> None:
         """A filter control puts its outcome in the address bar.
@@ -503,6 +538,13 @@ class TestComparisonDownloads:
         """
         sync_api.expect(comparison_page.get_by_test_id(CSV_EXPORT_ID)).to_be_visible()
         sync_api.expect(comparison_page.get_by_test_id(JSON_EXPORT_ID)).to_be_visible()
+        # State each outcome as a literal check, because a hidden link gives the operator no file.
+        assert comparison_page.get_by_test_id(
+            CSV_EXPORT_ID
+        ).is_visible(), f"{CSV_EXPORT_ID} is hidden, so the operator cannot download the CSV file."
+        assert comparison_page.get_by_test_id(
+            JSON_EXPORT_ID
+        ).is_visible(), f"{JSON_EXPORT_ID} is hidden, so the operator cannot download the JSON file."
 
     def test_each_download_link_names_the_export_path_and_its_format(self, comparison_page: Any) -> None:
         """Each download link points at the export endpoint with its own format.
