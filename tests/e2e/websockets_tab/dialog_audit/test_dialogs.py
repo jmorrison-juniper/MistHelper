@@ -83,9 +83,10 @@ class TestDialogs:
             page.locator("[data-ws-field]").count() == 0
         )  # Organization-wide streams have no individual target picker.
         assert policy.transmitted == 0 and not policy.denied  # Abandonment must not start an operation.
+        cancel_control = page.get_by_role("button", name="Cancel", exact=True)
         assert (
-            page.locator("#wsStartForm").get_by_role("button", name="Cancel", exact=True).count() == 0
-        )  # Record unsupported cancel.
+            cancel_control.count() == 1 and cancel_control.is_visible()
+        )  # Selected operations expose one visible Cancel control.
 
     def test_delayed_map_reply_cannot_replace_new_parent(self, audit_page):
         page, policy = audit_page  # Synthetic responses exercise unchanged picker serial handling.
@@ -167,16 +168,17 @@ class TestUtilityExperience:
         page, policy = audit_page  # Keep the request boundary installed.
         for key in ("site.stats.clients", "location.clients", "ap.remotePcapWireless"):
             page.get_by_test_id("ws-catalog-entry-" + key).click()  # Inspect without starting stream or capture.
+            cancel_control = page.get_by_role("button", name="Cancel", exact=True)
+            assert cancel_control.is_visible()  # Every selected operation keeps explicit cancellation available.
             review = UtilityExperienceInspector(page, audit_inventory).inspect(
                 {"key": key}
             )  # Source and SDK semantics only.
             assert not any(
                 item["topic"] == "client-choice-assistance" for item in review["findings"]
             )  # No client-picker invention.
-            assert any(
-                item["topic"] == "operation-cancel" and item["category"] == "user-story-gap"
-                for item in review["findings"]
-            )  # Cancellation is not passed merely by switching forms.
+            assert not any(
+                item["topic"] == "operation-cancel" for item in review["findings"]
+            )  # The visible control closes the cancellation gap without inventing a client target.
         assert policy.transmitted == 0 and not policy.denied  # No remote traffic or execution.
 
 
@@ -372,7 +374,11 @@ class TestInspectorFailureEvidence:
         page.get_by_test_id("ws-catalog-entry-" + utility["key"]).click()
         page.get_by_test_id("ws-field-mac_address").evaluate("(node) => node.remove()")
         review = UtilityExperienceInspector(page, audit_inventory).inspect(utility)
-        assert [finding["topic"] for finding in review["findings"]] == ["operation-cancel"]
+        cancel_control = page.get_by_role("button", name="Cancel", exact=True)
+        assert cancel_control.is_visible()  # A separate missing client field does not hide form cancellation.
+        assert not any(
+            finding["topic"] == "operation-cancel" for finding in review["findings"]
+        )  # The audit no longer reports the repaired cancellation gap.
         assert "A declared field has no unique rendered control." in inspector.field_problems(utility)
         assert policy.transmitted == 0 and policy.denied == []
 

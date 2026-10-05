@@ -69,6 +69,9 @@
     var state = {
         catalog: { channels: [], utilities: [], ready: false, reason: '' },  // The catalog payload from the server.
         selectedEntry: null,  // The catalog entry of the start form.
+        selectionGeneration: 0,  // Reject picker results from older form selections.
+        startRequestPending: false,  // Keep form actions stable while a start request is pending.
+        submittedEntry: null,  // Prevent form Cancel from controlling a submitted operation.
         selectedSession: null,  // The session of the message panel.
         nextAfter: 0,  // The newest message number that the page holds.
         paused: false,  // True while the operator paused the message view.
@@ -131,6 +134,7 @@
 
     function wireStaticEvents() {
         byId('wsStartForm').addEventListener('submit', startSelected);  // Start the selected entry.
+        byId('wsCancelSelectionButton').addEventListener('click', cancelSelection);  // Discard an unsubmitted form.
         byId('wsCatalogFilter').addEventListener('input', renderCatalog);  // Filter the catalog while the operator types.
         byId('wsPauseButton').addEventListener('click', function() { setPaused(true); });  // Freeze the message view.
         byId('wsResumeButton').addEventListener('click', resumePolling);  // Read the new messages again.
@@ -227,12 +231,48 @@
     }
 
     function selectEntry(entry, type) {
+        state.selectionGeneration += 1;  // Invalidate every picker read from the prior selection.
         state.selectedEntry = Object.assign({ entryType: type }, entry);  // Keep the type with the entry.
+        state.submittedEntry = null;  // A replacement entry has not been submitted.
+        state.labels = {};  // Keep labels only for picker rows of the current selection.
         setText('wsSelectedTitle', entry.name || entry.key);  // Form title.
         setText('wsSelectedDescription', entry.description || '');  // Form sentence.
         markSelectedEntry(entry.key);  // Show the chosen entry in the catalog.
         renderSafety(entry);  // Show the warning and the lock text.
+        showStartError(null);  // Remove a refusal that belongs to the prior selection.
         renderStartForm(state.selectedEntry);  // Build the fields for this entry.
+        updateCancelButton();  // Show Cancel only when this entry is unsubmitted.
+    }
+
+    function cancelSelection() {
+        if (!canCancelSelection()) return;  // Keep submitted or absent selections unchanged.
+        state.selectionGeneration += 1;  // Invalidate picker reads before clearing their selected entry.
+        state.selectedEntry = null;  // Clear the authoritative pending selection.
+        state.submittedEntry = null;  // Return to the unsubmitted base state.
+        state.labels = {};  // Discard labels that belong to the canceled selection.
+        clearNode(byId('wsTargetFields'));  // Remove every target control and its value.
+        clearNode(byId('wsParameterFields'));  // Remove every parameter control and its value.
+        byId('wsConfirmation').value = '';  // Clear selection-specific confirmation text.
+        show(byId('wsConfirmationGroup'), false);  // Hide confirmation presentation.
+        show(byId('wsSafetyWarning'), false);  // Hide the selected operation warning.
+        showStartError(null);  // Hide a selected operation refusal.
+        setText('wsSelectedTitle', 'Select a stream');  // Restore the base form title.
+        setText('wsSelectedDescription', 'Choose a channel or a device utility from the catalog.');  // Restore the base form description.
+        markSelectedEntry(null);  // Remove selected-entry styling from the catalog.
+        byId('wsStartButton').textContent = START_LABELS.channel;  // Restore the base start label.
+        byId('wsStartButton').disabled = true;  // Prevent a start without an authoritative selection.
+        updateCancelButton();  // Hide Cancel after the pending selection is cleared.
+    }
+
+    function canCancelSelection() {
+        var hasSelection = !!state.selectedEntry;  // Require an authoritative pending entry.
+        var requestPending = state.startRequestPending;  // Keep Cancel unavailable during submission.
+        var alreadySubmitted = state.submittedEntry === state.selectedEntry;  // Keep Cancel separate from session control.
+        return hasSelection && !requestPending && !alreadySubmitted;  // Allow only an unsubmitted selection to cancel.
+    }
+
+    function updateCancelButton() {
+        show(byId('wsCancelSelectionButton'), canCancelSelection());  // Keep Cancel separate from live session controls.
     }
 
     function markSelectedEntry(key) {
@@ -273,7 +313,7 @@
         show(byId('wsConfirmationGroup'), needsConfirmation(entry));  // A locked entry cannot start, so it needs no confirmation.
         byId('wsConfirmation').value = '';  // One confirmation applies to one start only.
         button.textContent = startLabel(entry);  // Name the action of this entry.
-        button.disabled = !state.catalog.ready || !!entry.locked;  // A locked entry cannot start.
+        button.disabled = !state.catalog.ready || !!entry.locked || state.startRequestPending;  // A locked or pending start cannot run.
     }
 
     function needsConfirmation(entry) {
@@ -381,14 +421,24 @@
     function loadPickerOptions(select) {
         var name = select.dataset.wsPicker;  // The picker name, such as "devices".
         var url = pickerUrl(name);  // Empty when a parent value is missing.
+        var selection = state.selectedEntry;  // Bind the read to its authoritative entry object.
+        var generation = state.selectionGeneration;  // Bind the read to this selection lifetime.
         var serial = String(++state.pickerLoads);  // Mark this read, so a slow old answer cannot replace a newer list.
         select.dataset.wsLoad = serial;  // Keep the newest read mark on the select.
         setSingleOption(select, url ? 'Loading...' : parentText(name));  // Show the state until the rows arrive.
         if (!url) return;  // Wait for the operator to choose the parent value.
         apiJson(url).then(function(payload) {
-            if (select.dataset.wsLoad !== serial) return;  // A newer read replaced this one.
+            if (!pickerReadIsCurrent(select, selection, generation, serial)) return;  // Reject stale replies before any side effect.
             fillPicker(select, payload.rows || payload.sites || [], payload.reason || payload.error);  // Show the rows or the reason.
         });
+    }
+
+    function pickerReadIsCurrent(select, selection, generation, serial) {
+        var sameGeneration = generation === state.selectionGeneration;  // Require the current selection lifetime.
+        var sameEntry = state.selectedEntry === selection;  // Require the exact entry object that started the read.
+        var notSubmitted = state.submittedEntry !== selection;  // Ignore a result after its entry submits successfully.
+        var newestControlRead = select.dataset.wsLoad === serial;  // Retain the per-control request serial.
+        return sameGeneration && sameEntry && notSubmitted && newestControlRead;  // Require every picker fence.
     }
 
     function setSingleOption(select, text) {
@@ -455,11 +505,22 @@
     function startSelected(event) {
         var button = byId('wsStartButton');  // Block a second start while the request runs.
         event.preventDefault();  // The page sends JSON instead of a form post.
-        if (!state.selectedEntry) return;  // No entry means nothing to start.
+        if (!state.selectedEntry || state.startRequestPending) return;  // No entry or pending start means nothing new can start.
+        var submittedEntry = state.selectedEntry;  // Keep this request tied to its selected operation.
+        var generation = state.selectionGeneration;  // Identify this submission's selected form.
+        state.startRequestPending = true;  // Hide form cancellation until the request resolves.
         button.disabled = true;  // One click starts one session.
+        updateCancelButton();  // Cancel cannot discard a request that is in flight.
         apiJson('/api/websockets/sessions', { method: 'POST', body: JSON.stringify(buildStartBody()) }).then(function(payload) {
-            button.disabled = !state.catalog.ready || !!state.selectedEntry.locked;  // Allow the next start.
-            showStartError(payload.error ? payload : null);  // Show a refusal, or hide an old one.
+            state.startRequestPending = false;  // Re-enable the current form after the request resolves.
+            var currentEntry = state.selectedEntry;  // Read the active form after the asynchronous request.
+            var sameGeneration = generation === state.selectionGeneration;  // Fence request feedback from a newer selection.
+            var sameEntry = currentEntry === submittedEntry;  // Require the exact entry that was submitted.
+            var sameSelection = sameGeneration && sameEntry;  // Apply this response only to its selected form.
+            button.disabled = !state.catalog.ready || !currentEntry || !!currentEntry.locked;  // Enable only the current start action.
+            if (!payload.error) state.submittedEntry = submittedEntry;  // Submitted forms cannot be canceled as sessions.
+            if (sameSelection) showStartError(payload.error ? payload : null);  // Show a refusal only for its selected form.
+            updateCancelButton();  // Restore Cancel only for a different unsubmitted selection or a refusal.
             if (payload.error) return;  // A refused start has no session.
             loadSessions(true);  // Add the new session to the list.
             selectSession(payload);  // Show the messages of the new session.
