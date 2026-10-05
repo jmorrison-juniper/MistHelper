@@ -142,10 +142,20 @@ def _check_backend_socket(backend: str, host: str, port: int) -> dict:
         with socket.create_connection((host, port), timeout=READINESS_QUERY_TIMEOUT_SECONDS):  # WHY: bound probe time.
             result = {"ok": True, "detail": f"{backend} answered at {host}:{port}"}
     except OSError as exc:
-        logging.warning("Readiness probe cannot reach %s at %s:%s: %s", backend, host, port, exc)
-        result = {"ok": False, "detail": f"cannot reach {backend} at {host}:{port}: {exc}"}
+        logger.warning("Readiness probe cannot reach %s at %s:%s: %s", backend, host, port, exc)  # WHY: full text.
+        result = {"ok": False, "detail": _failure_detail(f"cannot reach {backend} at {host}:{port}", exc)}
     logger.debug("Readiness probe completed %s check with ok=%s", backend, result["ok"])  # WHY: record the result.
     return result
+
+
+def _failure_detail(summary: str, error: BaseException) -> str:
+    """Return a client-safe failure text that names the exception class only.
+
+    The exception message can hold internal paths and library text, so the
+    response body gets the class name and the server log keeps the full text
+    (CodeQL py/stack-trace-exposure, issue #3925).
+    """
+    return f"{summary}: {type(error).__name__}. Read the portal log for the full report."  # WHY: no message text.
 
 
 def _collect_failed_check_names(checks: dict) -> list:
@@ -161,8 +171,8 @@ def _check_data_dir_writable(data_dir: str) -> dict:
     try:
         _write_and_remove_probe_file(probe_path)  # WHY: only a real write proves the mount is writable.
     except OSError as exc:
-        logging.warning("Readiness probe cannot write in %s: %s", data_dir, exc)  # WHY: name the failure.
-        return {"ok": False, "detail": f"cannot write in {data_dir}: {exc}"}
+        logger.warning("Readiness probe cannot write in %s: %s", data_dir, exc)  # WHY: name the failure.
+        return {"ok": False, "detail": _failure_detail(f"cannot write in {data_dir}", exc)}
     logger.debug("Readiness probe wrote and removed %s", probe_path)  # WHY: record the successful write.
     return {"ok": True, "detail": f"write access confirmed in {data_dir}"}
 
@@ -185,8 +195,8 @@ def _check_sqlite_database(data_dir: str) -> dict:
     try:
         _query_sqlite_database(db_path)  # WHY: one query proves the file opens and answers.
     except sqlite3.Error as exc:
-        logging.warning("Readiness probe cannot read %s: %s", db_path, exc)  # WHY: name the failure.
-        return {"ok": False, "detail": f"cannot read {db_path}: {exc}"}
+        logger.warning("Readiness probe cannot read %s: %s", db_path, exc)  # WHY: name the failure.
+        return {"ok": False, "detail": _failure_detail(f"cannot read {db_path}", exc)}
     logger.debug("Readiness probe read the database at %s", db_path)  # WHY: record the successful read.
     return {"ok": True, "detail": "database answered a query"}
 
