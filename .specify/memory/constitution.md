@@ -1,29 +1,43 @@
 <!--
   Sync Impact Report
   ==================
-  Version change: 1.7.0 -> 1.7.1
+  Version change: 1.7.1 -> 1.7.2 (PATCH)
+  Bump rationale: PATCH, because the amendment corrects stale references and
+    stale menu numbers. No principle is added, removed, or redefined. The
+    operation registry already enforced the corrected destructive set.
   Modified principles:
-    - IV. Full Deployment Pipeline: replaced the release-version commit format
-      with the Conventional Commit format that the pull request title guard
-      accepts.
+    - III. Safety-First: replaced the stale destructive range with the
+      destructive set of the operation registry.
+  Modified sections:
+    - Development Workflow > Testing: replaced the stale skip list with the
+      registry categories.
+    - Development Workflow > Documentation: replaced the retired lowercase agent
+      guide entry with `AGENTS.md` and `.github/copilot-instructions.md`.
+    - Complexity-Driven SpecKit Escalation: corrected the destructive set.
+    - Multi-Agent Git Workflow: replaced the retired user-profile
+      standards file reference with `AGENTS.md`.
+    - Governance > Runtime guidance: replaced the retired lowercase agent guide
+      with `AGENTS.md` and `.github/copilot-instructions.md`.
+    - Header comment: replaced the user-profile standards file with
+      `AGENTS.md`.
   Added sections: None.
   Removed sections: None.
-  Governance updated: None.
   Templates requiring updates:
-    - .specify/templates/plan-template.md: updated.
+    - .specify/templates/plan-template.md: no update required.
     - .specify/templates/spec-template.md: no update required.
     - .specify/templates/tasks-template.md: no update required.
-    - .specify/templates/commands/*.md: no command files present.
+    - .specify/templates/checklist-template.md: no update required.
+    - .specify/templates/agent-file-template.md: no update required.
+    - .specify/templates/constitution-template.md: no update required.
   Related files updated simultaneously: None.
   Follow-up actions: None.
 -->
 
-<!-- Global coding standards (5-Item Rule, class-based architecture,
-     safety-first input, logging, quality gates) are defined in the
-     user-level VS Code instructions file.
-     The file is
-       `%APPDATA%/Code/User/prompts/coding-standards.instructions.md`.
-     This constitution extends those global standards with
+<!-- Generic coding standards (5-Item Rule, class-based architecture,
+     safety-first input, logging, quality gates) live in `AGENTS.md` at the
+     repository root. `.github/copilot-instructions.md` holds the rules
+     that apply to MistHelper only.
+     This constitution extends those standards with
      MistHelper-specific principles and constraints. -->
 
 # MistHelper Constitution
@@ -103,8 +117,10 @@ and context logging. Every `input()` call in SSH/container contexts,
 destructive confirmations, and interactive menus MUST be wrapped.
 
 Destructive operations (firmware upgrades, reboots, VC conversions,
-device command execution — menu items 90-100) MUST require explicit
-typed confirmation following the NASA/JPL pattern:
+device command execution, and other changes to the Mist cloud) MUST require
+explicit typed confirmation following the NASA/JPL pattern. The
+`destructive` category of `src/foundation/support/utils/operation_registry.py`
+is the source of truth. It holds menus 154-187, 189-191, 194, 206-208, 239, 281, 286-287, and 291-293:
 ```python
 confirmation = safe_input("Type 'UPGRADE' to proceed: ", context="...")
 if confirmation != "UPGRADE":
@@ -340,8 +356,11 @@ Every new operation MUST follow this sequence:
 
 - **Local development**: Windows 11 + venv
   (`python MistHelper.py --test`).
-- **Skip list**: Operations 14, 18 (heavy), 63-65 (WIP), 90-100
-  (destructive) are excluded from automated tests.
+- **Skip list**: `OperationRegistry` decides. `--test` runs only the
+  `safe` category, and `--testinteractive` adds `interactive_safe`. The
+  automated tests skip every other category: `resource_intensive`
+  (14, 18-19, 59, 97-101, 153), `destructive` (154-187, 189-191, 194, 206-208, 239, 281, 286-287, and 291-293),
+  `interactive`, `websocket`, and `continuous_loop`.
 - **Syntax validation**: `python -m py_compile MistHelper.py` MUST
   pass before every commit (enforced by Principle IV).
 
@@ -374,8 +393,10 @@ findings left unresolved become real attack surfaces.
 
 - **README.md**: User-facing operations guide. MUST be updated for
   every new operation or behavior change.
-- **agents.md**: Internal agent coding guide (~400 lines). MUST be
-  consulted before making architectural decisions.
+- **AGENTS.md** and **.github/copilot-instructions.md**: The agent
+  guides. `AGENTS.md` holds the generic rules, and
+  `.github/copilot-instructions.md` holds the rules for MistHelper only.
+  Both MUST be consulted before making architectural decisions.
 - **Version format**: `YY.MM.DD.HH.MM` (UTC timestamp), consistent
   across released changelog entries, commit messages, and container
   tags. The release coordinator writes that stamp.
@@ -405,7 +426,7 @@ Not every task needs full ceremony. Use this decision tree:
 - New menu operations or API integrations.
 - Architectural changes (new classes, module splits, data flow).
 - Bug fixes where root cause is unclear or spans multiple components.
-- Any change to destructive operations (menu 90-100).
+- Any change to destructive operations (menus 154-187, 189-191, 194, 206-208, 239, 281, 286-287, and 291-293).
 - Performance or concurrency work.
 - Database schema or primary key strategy changes.
 
@@ -425,9 +446,8 @@ minutes. A botched multi-file change without a spec costs hours.
 
 ## Multi-Agent Git Workflow (NON-NEGOTIABLE)
 
-The global coding standards
-(`%APPDATA%/Code/User/prompts/coding-standards.instructions.md`)
-define the general multi-agent workflow. This section adds
+`AGENTS.md` at the repository root defines the general multi-agent
+workflow. This section adds
 MistHelper-specific enforcement.
 
 ### Issue-First Error Pipeline
@@ -528,9 +548,9 @@ Principles VI (Inline Comments) and VII (Action Logging) are
 non-negotiable quality gates -- code lacking either MUST NOT pass
 review, regardless of other merits.
 
-**Runtime guidance**: `agents.md` provides detailed implementation
-patterns and is the primary reference for day-to-day coding decisions.
-The constitution provides the non-negotiable rules; agents.md provides
-the how-to.
+**Runtime guidance**: `AGENTS.md` and `.github/copilot-instructions.md`
+provide detailed implementation patterns and are the primary references for
+day-to-day coding decisions. The constitution provides the non-negotiable
+rules. The two guides provide the how-to.
 
-**Version**: 1.7.1 | **Ratified**: 2026-03-05 | **Last Amended**: 2026-10-03
+**Version**: 1.7.2 | **Ratified**: 2026-03-05 | **Last Amended**: 2026-10-05
