@@ -165,6 +165,117 @@ class TestLivePolicy:
         assert not policy.allowed("GET", policy.origin + base + "/maps/" + site + "/sdkclients")  # Wrong map denied.
         assert not policy.allowed("GET", policy.origin + base + "/maps?extra=1")  # Unexpected query denied.
 
+    def test_device_client_read_requires_approved_site_and_same_site_device(self):
+        policy = LiveRequestPolicy("http://localhost:9600", {})  # Use guarded synthetic responses only.
+        site, other_site = "11111111-2222-3333-4444-555555555555", "33333333-4444-5555-6666-777777777777"
+        device, other_device = "22222222-3333-4444-5555-666666666666", "44444444-5555-6666-7777-888888888888"
+        client_id = "55555555-6666-7777-8888-999999999999"  # A client identifier never becomes a device grant.
+        device_path = "/api/websockets/sites/" + site + "/devices"  # Device evidence has one site parent.
+        client_path = device_path + "/" + device + "/clients"  # Exact approved child path.
+        assert not policy.allowed("GET", policy.origin + client_path)  # No site or device evidence exists.
+        for path, payload in (
+            ("/api/operations/sites", {"sites": [{"id": site}, {"id": other_site}]}),
+            (device_path, {"rows": [{"id": device}]}),
+            ("/api/websockets/sites/" + other_site + "/devices", {"rows": [{"id": other_device}]}),
+        ):
+            trap = LiveReadTrap("GET", policy.origin + path, payload)  # Each parent response is synthetic.
+            policy.handle(trap)  # Register evidence only after the guarded read.
+            assert trap.fulfilled and trap.transmitted == 1  # Each parent is one approved read.
+        permitted = LiveReadTrap(
+            "GET", policy.origin + client_path, {"rows": [{"id": client_id}]}
+        )  # Child identifiers cannot expand device scope.
+        policy.handle(permitted)  # Exercise the actual request handler.
+        assert permitted.fulfilled and permitted.transmitted == 1  # Exact same-site device read is allowed.
+        client_as_device = LiveReadTrap(
+            "GET", policy.origin + device_path + "/" + client_id + "/clients", {"rows": []}
+        )  # A returned client ID cannot become device scope.
+        policy.handle(client_as_device)
+        assert client_as_device.aborted and client_as_device.transmitted == 0  # Client rows grant no parent access.
+        policy.scope.devices[site].clear()  # Simulate a current site response that removes the device.
+        cached = LiveReadTrap("GET", policy.origin + client_path, {"rows": []})  # The first response is cached.
+        policy.handle(cached)  # Permission is checked before a cached response can be reused.
+        assert cached.aborted and cached.transmitted == 0  # Stale cache data cannot restore removed scope.
+        for path in (
+            "/api/websockets/sites/" + other_site + "/devices/" + device + "/clients",
+            device_path + "/" + other_device + "/clients",
+        ):
+            denied = LiveReadTrap("GET", policy.origin + path, {"rows": []})  # Cross-site and unrelated IDs.
+            policy.handle(denied)  # Refuse the path before its route can fetch.
+            assert denied.aborted and denied.transmitted == 0  # No disallowed request leaves the trap.
+
+    def test_device_reads_require_an_authorized_site(self):
+        policy = LiveRequestPolicy("http://localhost:9600", {})  # No parent has been read.
+        site, device = "11111111-2222-3333-4444-555555555555", "22222222-3333-4444-5555-666666666666"
+        path = "/api/websockets/sites/" + site + "/devices"  # A device path cannot establish site scope.
+        trap = LiveReadTrap("GET", policy.origin + path, {"rows": [{"id": device}]})
+        policy.handle(trap)  # The guard blocks the child parent before transmission.
+        assert trap.aborted and trap.transmitted == 0  # Unapproved site scope remains closed.
+        with pytest.raises(ValueError, match="site"):
+            policy.scope.register(path, {"rows": [{"id": device}]})  # Direct registration cannot bypass the parent.
+
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            {"rows": [{"id": "22222222-3333-4444-5555-666666666666"}, {"id": "invalid"}]},
+            {"rows": {}},
+        ],
+    )  # Invalid and empty responses cannot leave a partial or stale device grant.
+    def test_bad_device_responses_fail_closed_without_partial_scope(self, payload):
+        policy = LiveRequestPolicy("http://localhost:9600", {})  # Begin with valid, guarded scope.
+        site, device = "11111111-2222-3333-4444-555555555555", "22222222-3333-4444-5555-666666666666"
+        site_read = LiveReadTrap(
+            "GET", policy.origin + "/api/operations/sites", {"sites": [{"id": site}]}
+        )  # Approve the site before devices.
+        policy.handle(site_read)
+        device_path = "/api/websockets/sites/" + site + "/devices"
+        initial = LiveReadTrap("GET", policy.origin + device_path, {"rows": [{"id": device}]})
+        policy.handle(initial)  # Seed one valid association before the bad refresh.
+        policy.cache.pop(device_path)  # Force a new approved parent response instead of its valid cached body.
+        refresh = LiveReadTrap("GET", policy.origin + device_path, payload)
+        policy.handle(refresh)  # A failed refresh must not retain stale or partial grants.
+        assert refresh.aborted and refresh.transmitted == 1  # The response is rejected after one guarded read.
+        client_path = device_path + "/" + device + "/clients"
+        assert not policy.allowed("GET", policy.origin + client_path)  # Invalid evidence clears device scope.
+
+    def test_empty_device_response_is_no_data_without_client_permission(self):
+        policy = LiveRequestPolicy("http://localhost:9600", {})
+        site, device = "11111111-2222-3333-4444-555555555555", "22222222-3333-4444-5555-666666666666"
+        policy.handle(LiveReadTrap("GET", policy.origin + "/api/operations/sites", {"sites": [{"id": site}]}))
+        path = "/api/websockets/sites/" + site + "/devices"
+        policy.handle(LiveReadTrap("GET", policy.origin + path, {"rows": [{"id": device}]}))
+        policy.cache.pop(path)
+        empty = LiveReadTrap("GET", policy.origin + path, {"rows": []})
+        policy.handle(empty)
+        assert empty.fulfilled and not empty.aborted and empty.transmitted == 1
+        assert policy.scope.devices[site] == set() and policy.errors == []
+        assert not policy.allowed("GET", policy.origin + path + "/" + device + "/clients")
+
+    def test_client_scope_denies_method_origin_query_redirect_and_encoded_path(self):
+        policy = LiveRequestPolicy("http://localhost:9600", {})  # One synthetic origin only.
+        site, device = "11111111-2222-3333-4444-555555555555", "22222222-3333-4444-5555-666666666666"
+        for path, payload in (
+            ("/api/operations/sites", {"sites": [{"id": site}]}),
+            ("/api/websockets/sites/" + site + "/devices", {"rows": [{"id": device}]}),
+        ):
+            policy.handle(LiveReadTrap("GET", policy.origin + path, payload))  # Approve both request parents.
+        client_path = "/api/websockets/sites/" + site + "/devices/" + device + "/clients"
+        denied_requests = [
+            LiveReadTrap("POST", policy.origin + client_path),
+            LiveReadTrap("PUT", policy.origin + client_path),
+            LiveReadTrap("PATCH", policy.origin + client_path),
+            LiveReadTrap("DELETE", policy.origin + client_path),
+            LiveReadTrap("GET", policy.origin + client_path + "?limit=1"),
+            LiveReadTrap("GET", "http://localhost:9601" + client_path),
+            LiveReadTrap("GET", policy.origin + client_path.replace("/devices/", "/%64evices/")),
+            LiveReadTrap("GET", policy.origin + client_path + "/delete"),
+            LiveReadTrap("GET", policy.origin + client_path),
+        ]
+        denied_requests[-1].request.redirected_from = object()  # Redirected requests remain blocked.
+        for trap in denied_requests:
+            policy.handle(trap)  # Verify each decision at the pre-transmission boundary.
+            assert trap.aborted and trap.transmitted == 0  # Every invalid request is blocked locally.
+        assert policy.transmitted == 2  # Only the two approved parent reads were transmitted.
+
     def test_redirects_and_cross_origin_never_expand_permission(self):
         policy = LiveRequestPolicy("http://localhost:9600", {})  # Exact origin includes the isolated port.
         assert not policy.allowed("GET", "http://localhost:9601/websockets")  # Same host alone is insufficient.
@@ -188,6 +299,10 @@ class TestLivePolicy:
         )  # Invalid scope.
         policy.handle(malformed)  # Validate before allowing child reads.
         assert malformed.aborted and not policy.scope.sites  # No invalid parent can authorize a picker.
+        assert not policy.allowed(
+            "GET",
+            policy.origin + "/api/websockets/sites/not-an-id/devices/22222222-3333-4444-5555-666666666666/clients",
+        )  # Invalid site evidence cannot authorize a child read.
 
     def test_installed_sdk_reads_and_local_session_substitution(self, audit_inventory):
         assert audit_inventory["sdk_version"]  # Bind verification to the real installed catalog.
@@ -198,6 +313,24 @@ class TestLivePolicy:
         trap = LiveReadTrap("GET", policy.origin + "/api/websockets/sessions")  # Automatic page list request.
         policy.handle(trap)  # Fulfill locally rather than disclose another user's sessions.
         assert trap.fulfilled and trap.transmitted == 0 and policy.reads == 0  # No real list or session control.
+
+    def test_client_sdk_method_drift_fails_source_verification(self, monkeypatch, caplog):
+        """Reject a client SDK mutation before the harness can authorize live reads."""
+        from tests.e2e.websockets_tab.dialog_audit.support import policy as policy_module
+
+        with caplog.at_level("DEBUG", logger=policy_module.__name__):
+            ReadScope.verify_sdk()
+        assert "Verified 9 installed selector GET implementations" in caplog.text
+        real_source = policy_module.inspect.getsource
+
+        def changed_source(function):
+            if function.__name__ == "searchSiteWiredClients":
+                return "return session.mist_post(path)"
+            return real_source(function)
+
+        monkeypatch.setattr(policy_module.inspect, "getsource", changed_source)
+        with pytest.raises(ValueError, match="not a verified GET"):
+            ReadScope.verify_sdk()
 
 
 class TestRejectedScopeEvidence:

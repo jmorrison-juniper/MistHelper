@@ -113,37 +113,81 @@ class ReadScope:
     def __init__(self):
         self.sites = set()  # Keep real identifiers in memory only.
         self.maps = {}  # Bind map identifiers to the site response that supplied them.
+        self.devices = {}  # Bind device identifiers to the approved site response.
 
     def allowed(self, resource):
         parts = resource.split("/")  # Query strings are rejected by the browser policy.
-        if len(parts) == 6 and parts[:4] == ["", "api", "websockets", "sites"]:
-            return parts[4] in self.sites and parts[5] in {"devices", "maps", "assets"}  # Exact reviewed GETs.
-        if len(parts) == 8 and parts[:4] == ["", "api", "websockets", "sites"]:
-            return (
-                parts[5] == "maps" and parts[7] == "sdkclients" and parts[6] in self.maps.get(parts[4], set())
-            )  # Bound map.
-        if resource.startswith("/api/websockets/mxedges?site_id="):
-            return resource.split("=", 1)[1] in self.sites  # Only one exact registered site query.
-        return False  # Unknown selector paths and session operations cannot become reads.
+        prefix = ["", "api", "websockets", "sites"]  # Only reviewed site picker endpoints enter scope.
+        if len(parts) == 6:
+            return all(
+                (parts[:4] == prefix, parts[4] in self.sites, parts[5] in {"devices", "maps", "assets"})
+            )  # Approve exact site-scoped parent reads.
+        if len(parts) == 8:
+            scopes = {("maps", "sdkclients"): self.maps, ("devices", "clients"): self.devices}
+            identifiers = scopes.get((parts[5], parts[7]), {}).get(parts[4], set())
+            return all(
+                (parts[:4] == prefix, parts[4] in self.sites, parts[6] in identifiers)
+            )  # Approve only established map or device associations.
+        return (
+            resource.startswith("/api/websockets/mxedges?site_id=") and resource.split("=", 1)[1] in self.sites
+        )  # Keep the exact authorized site query.
 
     def register(self, resource, payload):
+        """Replace scope only after a complete approved parent response validates."""
+        parts = resource.split("/")  # Identify a reviewed parent response before accepting any scope.
+        device_parent = (
+            len(parts) == 6 and parts[:4] == ["", "api", "websockets", "sites"] and parts[5] == "devices"
+        )  # Only the exact guarded devices endpoint can establish device IDs.
+        if device_parent:
+            self.devices.pop(parts[4], None)  # Invalid refreshes cannot retain stale or partial device access.
+        kind, site_id, identifiers = self.validated_scope(resource, payload, parts)  # Validate before scope changes.
+        if kind == "sites":
+            self.sites = identifiers  # Only the portal's selected organization supplies sites.
+            return  # Site responses have no child identifier set.
+        scope = self.maps if kind == "maps" else self.devices  # Select only the validated parent scope.
+        scope[site_id] = identifiers  # Keep the complete validated set under its authorized site.
+
+    def validated_scope(self, resource, payload, parts):
+        """Validate one site, map, or device parent before scope changes."""
         if not isinstance(payload, dict):
             raise ValueError("The approved picker returned an invalid response.")  # Never infer scope from HTML.
-        rows = payload.get("sites" if resource == "/api/operations/sites" else "rows", [])  # Real handler envelopes.
-        if not isinstance(rows, list) or len(rows) > 10000:
-            raise ValueError("The picker response exceeded the bounded scope.")  # Refuse an unbounded traversal.
-        identifiers = set()  # Collect only validated IDs, never names or labels.
-        for row in rows:
-            if not isinstance(row, dict):
+
+        def validate_parent():
+            """Return the authorized parent type and its response rows."""
+            if resource == "/api/operations/sites":
+                return "sites", None, payload.get("sites", [])  # Organization response names approved sites.
+            if len(parts) != 6:
+                raise ValueError("The picker response has no authorized site parent.")  # Reject unreviewed endpoints.
+            if parts[:4] != ["", "api", "websockets", "sites"]:
+                raise ValueError(
+                    "The picker response has no authorized site parent."
+                )  # Require the exact route prefix.
+            if parts[5] not in {"maps", "devices"}:
+                raise ValueError("The picker response has no authorized site parent.")  # Permit only reviewed parents.
+            if parts[4] not in self.sites:
+                raise ValueError(
+                    "The picker response has no authorized site parent."
+                )  # Require the approved site read.
+            return parts[5], parts[4], payload.get("rows", [])  # Associate rows with the authorized site.
+
+        def validate_rows(rows):
+            """Return identifiers only when every row is valid."""
+            if not isinstance(rows, list):
+                raise ValueError("The picker response exceeded the bounded scope.")  # Refuse malformed response rows.
+            if len(rows) > 10000:
+                raise ValueError("The picker response exceeded the bounded scope.")  # Refuse an unbounded traversal.
+            if any(not isinstance(row, dict) for row in rows):
                 raise ValueError("The picker returned an invalid row.")  # Do not authorize malformed records.
-            value = row.get("id")  # Parent scope comes from the actual portal response.
-            if not isinstance(value, str) or str(UUID(value)) != value:
+            values = [row.get("id") for row in rows]  # Parent scope comes from the actual portal response.
+            if any(not isinstance(value, str) for value in values):
+                raise ValueError("The picker returned an invalid identifier.")  # Refuse non-text identifiers.
+            if any(str(UUID(value)) != value for value in values):
                 raise ValueError("The picker returned an invalid identifier.")  # Refuse encoded or malformed IDs.
-            identifiers.add(value)  # Keep private identifiers out of reports and logs.
-        if resource == "/api/operations/sites":
-            self.sites = identifiers  # Only the portal's selected organization supplies sites.
-        elif resource.endswith("/maps"):
-            self.maps[resource.split("/")[4]] = identifiers  # No cross-site maps are authorized.
+            return set(values)  # Keep private identifiers out of reports and logs.
+
+        kind, site_id, rows = validate_parent()  # Resolve one reviewed parent response.
+        identifiers = validate_rows(rows)  # Validate the complete response before changing scope.
+        return kind, site_id, identifiers  # Caller replaces only a complete validated association.
 
     @staticmethod
     def verify_sdk():
@@ -154,9 +198,10 @@ class ReadScope:
             ("sites.maps", "listSiteMaps"),
             ("sites.assets", "listSiteAssets"),
             ("sites.stats", "getSiteSdkStatsByMap"),
+            ("sites.wired_clients", "searchSiteWiredClients"),
             ("sites.mxedges", "listSiteMxEdges"),
             ("orgs.mxedges", "listOrgMxEdges"),
-        )  # These are the eight SDK calls in the reviewed picker handlers.
+        )  # These are the nine SDK calls in the reviewed picker handlers.
         logger.info("Verifying installed selector SDK read methods")  # Do not call any method or attach credentials.
         for namespace, name in methods:
             function = getattr(
@@ -167,7 +212,7 @@ class ReadScope:
                 term in source for term in (".mist_post(", ".mist_put(", ".mist_delete(", ".mist_patch(")
             ):
                 raise ValueError("An installed selector SDK method is not a verified GET.")  # Fail closed on drift.
-        logger.debug("Verified eight installed selector GET implementations")  # Version is recorded separately.
+        logger.debug("Verified %d installed selector GET implementations", len(methods))  # Keep the count exact.
 
 
 class LiveRequestPolicy(BrowserRequestPolicy):
@@ -273,8 +318,8 @@ class LiveRequestPolicy(BrowserRequestPolicy):
                     )  # No unreviewed browser code.
             elif resource == "/api/websockets/catalog":
                 self.catalog = payload  # Keep real catalog in memory for source reconciliation.
-            elif resource == "/api/operations/sites" or resource.endswith("/maps"):
-                self.scope.register(resource, payload)  # Bind future reads to returned site/map identifiers.
+            elif resource == "/api/operations/sites" or resource.endswith(("/maps", "/devices")):
+                self.scope.register(resource, payload)  # Bind future reads to returned site/map/device identifiers.
             if resource == "/api/operations/sites" or resource.startswith(
                 ("/api/websockets/sites/", "/api/websockets/mxedges")
             ):
@@ -285,9 +330,16 @@ class LiveRequestPolicy(BrowserRequestPolicy):
             route.fulfill(response=response)  # Supply the verified read, never follow a redirect.
             logger.debug("Completed approved live inspection GET")  # No response body or IDs enter logs.
         except Exception as error:
+            self.clear_failed_device_scope(resource)  # A failed parent read cannot retain stale device authorization.
             self.cache[resource] = None  # Do not flood a refused or failed handler with automatic retries.
             self.errors.append("Live read blocked: " + type(error).__name__)  # Sanitized reason.
             route.abort("blockedbyclient")  # Leave the dialog blocked, never start an operation to recover.
+
+    def clear_failed_device_scope(self, resource):
+        """Clear only the device association whose guarded refresh failed."""
+        parts = resource.split("/")  # Keep cleanup inside the exact reviewed parent path.
+        if len(parts) == 6 and parts[:4] == ["", "api", "websockets", "sites"] and parts[5] == "devices":
+            self.scope.devices.pop(parts[4], None)  # Do not retain stale device access after a failed refresh.
 
 
 class ReadonlyLifecyclePolicy(LiveRequestPolicy):

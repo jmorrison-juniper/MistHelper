@@ -1,0 +1,19 @@
+{
+  "feature": "3923-websocket-audit-compatibility",
+  "issue": 3923,
+  "branch": "jmorrison-juniper-websocket-live-audit-compatibility",
+  "currentStep": "implement",
+  "status": "implemented",
+  "artifacts": [
+    "spec.md",
+    "checklists/requirements.md",
+    "plan.md",
+    "research.md",
+    "data-model.md",
+    "quickstart.md",
+    "tasks.md"
+  ],
+  "workflow": "speckit",
+  "specName": "WebSocket Audit Compatibility",
+  "history": []
+}
