@@ -2,7 +2,7 @@
 
 Refs issue #433 phase C tranche 3 (STRUCT-PARAMS sweep on maps_manager.py).
 Each frozen, slots-enabled dataclass groups related arguments so the
-intelligent-replacement wizard's scaling math stays within the agents.md
+intelligent-replacement wizard's scaling math stays within the AGENTS.md
 5-parameter-per-function limit while keeping intent obvious at call sites.
 """
 

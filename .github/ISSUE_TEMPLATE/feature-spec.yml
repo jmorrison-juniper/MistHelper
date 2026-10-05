@@ -94,7 +94,7 @@ body:
       description: Any technical context, prior art, or suggested approaches?
       placeholder: |
         Relevant existing code, libraries to use, patterns to follow.
-        References to agents.md or copilot-instructions.md conventions.
+        References to AGENTS.md or .github/copilot-instructions.md conventions.
     validations:
       required: false
 
@@ -104,8 +104,8 @@ body:
       label: UI Behavior & Automated Testing Expectations
       description: |
         For features involving the web UI (Gunicorn portal on port 8055, Maps Manager, ops portal).
-        The AI agent uses VS Code Browser Agent Tools to autonomously open, interact with, and test these pages.
-        See agents.md "Web UI Autonomy" section for the full capability reference.
+        The AI agent opens, exercises, and tests these pages, then saves a Playwright test under tests/e2e/.
+        See the "Web UI tests" section of .github/copilot-instructions.md for the rules.
       placeholder: |
         1. Target URL(s): e.g., http://localhost:8055/, /dashboard, /jobs
         2. Critical user journeys:

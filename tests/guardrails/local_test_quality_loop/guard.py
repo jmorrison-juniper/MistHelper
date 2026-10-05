@@ -153,16 +153,14 @@ class SectionCommands:  # Correct dormant text must not satisfy an active local 
     """Locate only the four active fences in each exact named section."""
 
     GUIDES = {  # Keep section ownership explicit without copying CI trigger controls.
-        ".github/copilot-instructions.md": ((3, "Validate locally, then push once"),),  # Check this local procedure.
-        "agents.md": ((2, "Local Development Quick Reference"),),  # Check the independent quick reference.
-        ".github/instructions/git-flow-multi-agent.instructions.md": (  # Require the correct parent section.
-            (2, "Part 3. GitHub Actions minutes"),  # Reject a lookalike section under another part.
-            (3, "The local-first loop"),  # Stop at the next peer section.
+        ".github/copilot-instructions.md": (  # The one repository guide. `AGENTS.md` holds no local command.
+            (2, "Local gates"),  # Reject a lookalike section under another parent.
+            (3, "Test quality ratchet"),  # Stop at the next peer section.
         ),
     }
     LABELS = (  # Only these visible labels identify active procedure commands.
         "**Intended base for the required check:**",  # Require base assignment, fetch, and resolution.
-        "**Required input preflight:**",  # Require six-input validation before analyzer evidence.
+        "**Required input preflight:**",  # Require four-input validation before analyzer evidence.
         "**Required check after the local commit and before push:**",  # Identify committed changed scope.
         "**Full-suite check for push or manual CI:**",  # Identify the unscoped full-suite equivalent.
     )
@@ -588,7 +586,7 @@ class CommandControls:  # Reject commands that look similar but change gate beha
         if (  # Require exact direct invocation.
             len(commands) != 1 or SectionCommands.Shell.prefix(commands[0]) != expected
         ):  # Require exact direct invocation.
-            raise ValueError("incorrect required-input preflight")  # Block a bypass of the six required reads.
+            raise ValueError("incorrect required-input preflight")  # Block a bypass of the four required reads.
         logging.debug("Checked one direct required-input preflight")  # Record completed validation coverage.
 
 
@@ -740,7 +738,7 @@ class GuideGuard:  # Preserve independent input failures and completed guide dec
             CommandControls.Base.validate(  # Validate matching assignment, fetch, and resolution.
                 commands[SectionCommands.LABELS[0]]
             )  # Validate matching assignment, fetch, and resolution.
-            CommandControls.preflight(commands[SectionCommands.LABELS[1]])  # Require the direct six-input guard.
+            CommandControls.preflight(commands[SectionCommands.LABELS[1]])  # Require the direct four-input guard.
             CommandControls.analyzer(  # Match live PR controls.
                 commands[SectionCommands.LABELS[2]], self.contract.scoped
             )  # Match live PR controls.
@@ -752,7 +750,7 @@ class GuideGuard:  # Preserve independent input failures and completed guide dec
 
         @staticmethod
         def inputs(ledger: InputLedger) -> CiGateContract | None:  # Complete independent required input operations.
-            paths = (*SectionCommands.GUIDES, ".github/workflows/ci.yml", *CommandControls.PATHS)  # Require six inputs.
+            paths = (*SectionCommands.GUIDES, ".github/workflows/ci.yml", *CommandControls.PATHS)  # Four inputs.
             ledger.read_all(paths)  # Attempt every read once, including later inputs after failures.
             ledger.validate(CommandControls.PATHS[0], InputLedger.Validation.settings)  # Validate readable settings.
             ledger.validate(CommandControls.PATHS[1], InputLedger.Validation.baseline)  # Validate usable identities.

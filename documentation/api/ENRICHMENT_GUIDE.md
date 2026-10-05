@@ -93,7 +93,7 @@ Use this endpoint to [action] when [scenario]. Common use cases:
 ## MistHelper Notes
 
 Used by Menu Operation **11** (List Site Devices). MistHelper calls this endpoint
-with `type=all` to include switches and gateways (see Device Type Filtering in agents.md).
+with `type=all` to include switches and gateways (see Known pitfalls in `.github/copilot-instructions.md`).
 ```
 
 ## Regeneration

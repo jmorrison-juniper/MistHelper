@@ -3,7 +3,7 @@
 Refs issue #433 phase C tranche 3 (STRUCT-PARAMS sweep on maps_manager.py).
 Each frozen, slots-enabled dataclass groups related arguments so the
 ``_print_clone_summary`` / ``_clone_zones`` flow stays within the
-agents.md 5-parameter-per-function limit.
+AGENTS.md 5-parameter-per-function limit.
 """
 
 from __future__ import annotations  # PEP 604 unions on Python 3.10+ codebases.

@@ -85,7 +85,7 @@ If you remove a public name, update the related test or tool first.
 
 ## Add a menu operation
 
-Use the menu-operation rule in [`.github\copilot-instructions.md`](../.github/copilot-instructions.md#adding-new-menu-operations).
+Use the menu-operation rule in [`.github\copilot-instructions.md`](../.github/copilot-instructions.md#add-a-menu-operation).
 Keep the rule in one place, so the instructions cannot disagree.
 
 In short, choose the endpoint in the Mist API first.

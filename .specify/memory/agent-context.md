@@ -1,6 +1,6 @@
 # MistHelper Development Guidelines
 
-Auto-generated from all feature plans. Last updated: 2026-03-03
+Auto-generated from all feature plans. Last updated: 2026-07-14
 
 ## Active Technologies
 - Python 3.13+ (per pyproject.toml `requires-python = ">=3.13"`) + mistapi >= 0.59.0 (Mist API SDK), python-dotenv >= 1.0.0 (001-radius-wlan-config)
@@ -84,6 +84,22 @@ Auto-generated from all feature plans. Last updated: 2026-03-03
 - None. The harness holds the run record in memory. (1992-upgrade-rehearsal)
 
 - Python 3.13+ + mistapi>=0.59.0, python-dotenv>=1.0.0 (001-radius-wlan-config)
+- Python 3.13+ (per constitution and `pyproject.toml` py313 target). + mistapi>=0.64.0,<0.65, requests, pytest/pytest-cov, ruff/black/mypy (no new dependency added). (1020-safe-test-clean-run)
+- Python 3.13+ (`pyproject.toml` requires `>=3.13`) + Standard-library `argparse`, `logging`, and `inspect`; `mistapi>=0.64.0,<0.65` (1021-testinteractive-reliability-defects)
+- Python 3.13+ (per constitution binding minimum and + stdlib only. `socket` (existing), `struct` (new use (1023-probe-tailored-synthetic-tests)
+- Local append-only JSON files under `data/`: (1023-probe-tailored-synthetic-tests)
+- Python 3.13+ (`pyproject.toml` requires `>=3.13`; + Standard library only (`logging`, `pathlib`, (1024-vpn-icmp-reachability)
+- Local append-only JSONL under `data/` for US3 (1024-vpn-icmp-reachability)
+- Python 3.13+ (constitution binding minimum; per `pyproject.toml` py313 target) + Standard library only (`logging`, `pathlib`, `re`, `json`); no new dependencies (1025-probe-emission-log-fixes)
+- No persistent state beyond the existing JSONL telemetry pattern; load-time dedup state is per-invocation `set[str]` in memory only (FR-012) (1025-probe-emission-log-fixes)
+- Python 3.13+ (per constitution binding minimum + `mistapi>=0.64.0,<0.65` (1029-ap-profile-migration)
+- Local files under `data/` only. (1029-ap-profile-migration)
+- Python 3.13+ + `mistapi>=0.64.0,<0.65`, `python-dotenv`, `PyYAML`, `structlog`, existing MistHelper utility modules (`InputUtils`, `DataExporter`) (671-mist-get-site-beacon)
+- Python 3.13+ + `mistapi>=0.64.0,<0.65`, Flask 3.x, `flask-wtf`, `redis`, `python-arango` through `DatabaseRouter` (1823-upgrade-capture-portal)
+- ArangoDB primary (collections `upgrade_captures`, `upgrade_runs`, edge `capture_for_run`, all `natural_pk`); Redis for the site lock only; CSV under `data/` as fallback (1823-upgrade-capture-portal)
+- New package `src/interfaces/portals/upgrade_portal/` on port 8056 (`CAPTURE_PORT`). Menu 239 and the `--capture-portal` flag both start it (1823-upgrade-capture-portal)
+- Python 3.13. + pytest, `mistapi>=0.64.0,<0.65`, and the shipped package (1992-upgrade-rehearsal)
+- Python 3.13 (matches project constitution binding minimum). (1019-test-quality-analyzer)
 
 ## Project Structure
 
@@ -101,29 +117,21 @@ cd src; pytest; ruff check .
 Python 3.13+: Follow standard conventions
 
 ## Recent Changes
-- 1992-upgrade-rehearsal: Added Python 3.13. + pytest, `mistapi` 0.63.3, and the shipped package
-- 1823-upgrade-capture-portal: Added Python 3.13+. `pyproject.toml` requires `>=3.13` and targets + `mistapi` 0.63.3 (installed and verified), Flask 3.x with
-- 1034-codeql-cleartext-logging: Added Python 3.13 or newer. The `pyproject.toml` file targets `py313`. + `mistapi>=0.63.1`. This feature adds no dependency.
-
+- 1992-upgrade-rehearsal: Added Python 3.13. + pytest, `mistapi>=0.64.0,<0.65`, and the shipped package
+- 1823-upgrade-capture-portal: New package `src/interfaces/portals/upgrade_portal/` (outside `web_portal/`, which ruff and mypy exclude) on port 8056; new upgrade seam `src/operations/execution/firmware/upgrade_service.py`; menu 239; 30-second JSON poll instead of server-sent events; Redis site lock.
+- 671-mist-get-site-beacon: Added Python 3.13+ + `mistapi>=0.64.0,<0.65`, `python-dotenv`, `PyYAML`, `structlog`, existing MistHelper utility modules (`InputUtils`, `DataExporter`)
 
 <!-- MANUAL ADDITIONS START -->
-## Branching, parallel agents, and Actions minutes
+## Where the rules live
 
-The branch model, the rules that hold parallel agents apart, and the rules that
-protect the GitHub Actions minute balance live in one file:
-`.github/instructions/git-flow-multi-agent.instructions.md`. That file is
-authoritative. Read it before you create a branch, before you commit, and
-before you start a workflow run.
+This file holds the technology context that Spec Kit generates from each plan.
+It holds no rule. `AGENTS.md` at the repository root holds the rules that apply
+to each repository of this owner, and `.github/copilot-instructions.md` holds
+the rules that apply to MistHelper only. Read the two files before you change
+a file. If this file disagrees with one of them, obey that file.
 
-Three rules matter most.
-
-1. Branch from `main`. Never branch from another feature branch.
-2. Use a worktree. Never run `git checkout` in a shared checkout.
-3. Validate on your own machine first. Never push a commit only to start a
-   workflow. MistHelper is public, so a standard runner costs nothing. A
-   private repository spends the 2,000 free minutes each month.
-
-Caution: this file carries a stale generation date. If it disagrees with
-`.github/copilot-instructions.md`, obey `.github/copilot-instructions.md`.
-
+Caution: this file carries a stale generation date and old dependency pins,
+because each entry records the plan of one feature at its own time. Read the
+current pin from `requirements.txt`, otherwise a change can target an old
+`mistapi` release.
 <!-- MANUAL ADDITIONS END -->

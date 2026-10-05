@@ -51,10 +51,11 @@ SHARED_STEMS = frozenset({"index", "summary", "unreleased", "changelog", "notes"
 # drops the directory name returns this repository to one shared record.
 # `changelog.d/README.md` is absent here, because that file describes the
 # directory it sits in and writes "this directory" instead of the path.
+# `AGENTS.md` is absent too, because the generic rules name the fragment folder
+# only through the repository file, which is the first entry here.
 GUIDANCE_FILES = (
     Path(".github/copilot-instructions.md"),
     Path(".specify/memory/constitution.md"),
-    Path("agents.md"),
     Path(".github/PULL_REQUEST_TEMPLATE.md"),
 )
 
@@ -169,7 +170,8 @@ class TestFragmentNaming:
             if match is None:
                 continue  # The name uses the pull request form or the issue form.
             year, month, day = (int(part) for part in match.group(1).split("-"))
-            date(year, month, day)  # A value outside the calendar raises ValueError.
+            parsed = date(year, month, day)  # A value outside the calendar raises ValueError.
+            assert parsed.isoformat() == match.group(1), f"{path.name} does not name a canonical ISO date"
 
 
 class TestFragmentContent:

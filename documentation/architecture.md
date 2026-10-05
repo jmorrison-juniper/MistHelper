@@ -168,11 +168,12 @@ mindmap
 | `data/` | SQLite DB (`mist_data.db`), generated CSV outputs, derived artifacts; polyglot backends run in containers |
 | `CombinedInventory_ByWeek/` | Time-series weekly inventory snapshots |
 | `data/SSH_COMMANDS.CSV` | Fallback SSH command list (legacy root path still supported) |
-| `delay_metrics.json` / `tuning_data.json` | Adaptive rate / tuning persistence |
+| `data/tuning_data.json` | Adaptive rate-limit tuning persistence for each endpoint |
 | `data/script.log` | Unified runtime log |
 | `Dockerfile` / `Containerfile` | Byte-identical container build files. Both verify TLS certificates. |
 | `compose.yml` | Orchestrated service definition with no build section in the default file |
-| `agents.md` | Internal "Agents Guide" (style, safety, refactor guidance) |
+| `AGENTS.md` | The agent rules that apply to each repository of this owner |
+| `.github/copilot-instructions.md` | The agent rules that apply to MistHelper only |
 
 All export CSVs are now written inside `data/` (the code enforces a data directory even if a legacy doc claims root CSV placement).
 

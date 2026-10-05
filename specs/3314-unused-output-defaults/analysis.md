@@ -121,7 +121,7 @@ No production port, stack, datastore, or unrelated image tag changed.
 The read-only agent reported five conflicts with older general constitution text.
 These concern parent child counts, blanket comments, image builds, commit subjects, and branch names.
 The current task explicitly reserves unique files and requires a local image build and a Conventional Commit.
-The [authoritative Git workflow](../../.github/instructions/git-flow-multi-agent.instructions.md) requires local checks and Conventional Commits.
+The [authoritative Git workflow](../../AGENTS.md) requires local checks and Conventional Commits.
 The app owns this isolated branch.
 This repair does not change any shared instruction or constitution.
 It does not claim complete compliance with inherited structural debt.
