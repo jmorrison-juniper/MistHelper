@@ -200,18 +200,23 @@ filter syntax. This does not prove that the existing validator rejects a
 supported filter, so no separate defect issue was filed. Keep broader filter
 support out of issue #3889 until the device contract proves a supported form.
 
-Validation results:
+CI first failed the feature structure guard because four classes exceeded five
+methods. The coverage-gate job then failed because the unit shard failed.
+No other CI failures were reported. The implementation now separates client
+association checks, client discovery, suggestion routing, and its readiness
+service. The guard remains active and its measured expected totals now match
+the expanded source: 145 modules, 208 classes, and 635 functions.
 
-- `rtk proxy .venv/bin/python -m pytest -q tests/unit/websocket_streams/intake/test_ws_client_discovery_3889.py tests/unit/websocket_streams/catalog/test_ws_client_field_modes_3889.py tests/e2e/websockets_tab/dialog_audit tests/e2e/websockets_tab/test_websockets_page.py` passed. It ran 141 tests.
-- `rtk proxy .venv/bin/python -m ruff check` on the changed Python files passed.
-- `rtk proxy .venv/bin/python -m black --check` on the changed Python files passed.
+Validation after the structural repair:
+
+- `rtk proxy .venv/bin/python -m pytest -q tests/unit/websocket_streams tests/unit/websocket_streams/live/transport/runtime/test_ws_feature_structure.py` passed. It ran 399 tests, including the structural guard.
+- `rtk proxy .venv/bin/python -m pytest -q --cov=src.mist.realtime.websocket_streams.intake.fields.error --cov=src.mist.realtime.websocket_streams.intake.start_request.models --cov=src.mist.realtime.websocket_streams.intake.pickers.devices --cov=src.mist.realtime.websocket_streams.intake.pickers.resources --cov=src.mist.realtime.websocket_streams.intake.pickers.service --cov=src.mist.realtime.websocket_streams.web.blueprint.registry --cov=src.mist.realtime.websocket_streams.web.blueprint.routes.pickers --cov=src.mist.realtime.websocket_streams.web.services.pickers.service --cov=src.mist.realtime.websocket_streams.web.services.assembly.bundle --cov=src.mist.realtime.websocket_streams.web.services.assembly.factory --cov-branch --cov-report=term-missing tests/unit/websocket_streams tests/e2e/websockets_tab/dialog_audit/test_client_selection.py` passed. It ran 418 tests and measured 93.24% coverage across the listed modules. Misses were `devices.py` lines 76-78; `resources.py` lines 47-49, 120, 183-185; `pickers/service.py` line 41; `assembly/factory.py` lines 58-60, 64, 84-86; and `pickers/service.py` lines 59-60, 64-67. The report showed 100% for the client error model, device facts, blueprint registry, picker routes, and service bundle.
+- `rtk proxy .venv/bin/python -m ruff check src/mist/realtime/websocket_streams tests/unit/websocket_streams tests/e2e/websockets_tab/dialog_audit` passed.
+- `rtk proxy .venv/bin/python -m black --check src/mist/realtime/websocket_streams tests/unit/websocket_streams tests/e2e/websockets_tab/dialog_audit` passed. It checked 208 files.
 - `rtk proxy .venv/bin/python -m mypy src/ MistHelper.py wsgi.py scripts/mist_ideas_analyzer_pkg/__init__.py scripts/mist_ideas_distiller_v2_pkg/__init__.py --config-file pyproject.toml` passed. It checked 804 source files.
-- `rtk proxy .venv/bin/python -m bandit -c pyproject.toml -r src/mist/realtime/websocket_streams tests/e2e/websockets_tab/dialog_audit/support/journeys.py tests/e2e/websockets_tab/dialog_audit/support/policy.py tests/e2e/websockets_tab/dialog_audit/test_dialogs.py tests/e2e/websockets_tab/dialog_audit/test_client_selection.py tests/unit/websocket_streams/catalog/test_ws_client_field_modes_3889.py tests/unit/websocket_streams/intake/test_ws_client_discovery_3889.py -q` passed.
+- `rtk proxy .venv/bin/python -m bandit -c pyproject.toml -r src/mist/realtime/websocket_streams tests/e2e/websockets_tab/dialog_audit/support/journeys.py tests/e2e/websockets_tab/dialog_audit/support/policy.py tests/e2e/websockets_tab/dialog_audit/test_dialogs.py tests/e2e/websockets_tab/dialog_audit/test_client_selection.py tests/unit/websocket_streams/catalog/test_ws_client_field_modes_3889.py tests/unit/websocket_streams/intake/test_ws_client_discovery_3889.py tests/unit/websocket_streams/live/transport/runtime/test_ws_feature_structure.py -q` passed on the changed Python scope.
 - `rtk proxy .venv/bin/python -m py_compile` on the changed Python files passed.
-- `rtk proxy .venv/bin/python -m pytest -q tests/guardrails/local_test_quality_loop/test_guidance.py::TestLiveGuides` passed. It ran 1 preflight test.
-- `rtk proxy .venv/bin/python -m pytest -q tests/guardrails/test_changelog_fragment_policy.py` passed. It ran 17 tests with 1 skipped.
-- `rtk proxy test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json --changed-from origin/main --full-gate-path .github/workflows/ci.yml --full-gate-path requirements-dev.txt` passed. It checked 4 changed test files, reported 0 findings and 0 new findings, parsed 3 files, and skipped 3.
-- The full `rtk proxy test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json` gate passed. It checked 1,077 files, reported 727 baseline findings, 0 new findings, 46 skipped files, and 0 parse errors.
+- The required live-guide preflight and full test-quality analyzer must run again after the repair commit and before push.
 - No live Mist request, DHCP release, device utility, capture, or shell call ran.
 
 ## Implementation Strategy

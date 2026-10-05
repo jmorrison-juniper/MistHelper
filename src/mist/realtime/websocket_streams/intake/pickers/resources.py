@@ -21,6 +21,54 @@ logger = StructuredTransportLogger(logging.getLogger(__name__))  # Keep resource
 class ResourcePicker(PickerRuntime):
     """List site resources used by start request fields."""
 
+    def maps(self, site_id: str) -> dict[str, object]:
+        """Return map rows for one site."""
+        return self._site_picker(site_id, "maps", "listSiteMaps", "The site has no maps.")  # Use the shared SDK flow.
+
+    def assets(self, site_id: str) -> dict[str, object]:
+        """Return BLE asset rows for one site."""
+        return self._site_picker(site_id, "assets", "listSiteAssets", "The site has no assets.")  # Use shared flow.
+
+    def sdkclients(self, site_id: str, map_id: str) -> dict[str, object]:
+        """Return SDK client rows for one map."""
+        logger.emit(logging.INFO, "intake_sdkclient_picker_started", {"action": "list"})  # Log no identifiers.
+        try:
+            import mistapi  # Import here so focused tests can replace the SDK seam.
+
+            response = mistapi.api.v1.sites.stats.getSiteSdkStatsByMap(
+                self._apisession, site_id, map_id
+            )  # Read clients.
+            rows = [
+                self._row(item, ("name", "hostname", "mac"), ("mac", "status"), None)
+                for item in self._records(response)
+            ]
+            logger.emit(logging.DEBUG, "intake_sdkclient_picker_finished", {"count": len(rows)})  # Log safe count.
+            return self._payload(rows, "The map has no SDK clients.")  # Explain an empty list.
+        except Exception as error:
+            logger.emit(logging.ERROR, "intake_sdkclient_picker_failed", {"detail": type(error).__name__})  # Safe type.
+            return self._payload([], "The portal could not list SDK clients from Mist.")  # Keep the form usable.
+
+    def _site_picker(self, site_id: str, family: str, function_name: str, empty_reason: str) -> dict[str, object]:
+        """Return rows from one simple site SDK list."""
+        logger.emit(logging.INFO, "intake_site_picker_started", {"detail": family})  # Log the fixed picker family.
+        try:
+            import mistapi  # Import here so focused tests can replace the SDK seam.
+
+            namespace = getattr(mistapi.api.v1.sites, family)  # Select the fixed SDK namespace.
+            response = getattr(namespace, function_name)(self._apisession, site_id)  # Call the fixed read function.
+            rows = [self._row(item, ("name", "id"), ("type", "status"), None) for item in self._records(response)]
+            logger.emit(
+                logging.DEBUG, "intake_site_picker_finished", {"detail": family, "count": len(rows)}
+            )  # Safe data.
+            return self._payload(rows, empty_reason)  # Return the common contract shape.
+        except Exception as error:
+            logger.emit(logging.ERROR, "intake_site_picker_failed", {"detail": type(error).__name__})  # Log safe type.
+            return self._payload([], "The portal could not list this data from Mist.")  # Keep the form usable.
+
+
+class WiredClientPicker(PickerRuntime):
+    """Read client choices for one explicitly selected EX switch."""
+
     def clients(self, site_id: str, device_mac: str) -> dict[str, object]:
         """Return verified wired clients for one selected EX switch."""
         logger.emit(logging.INFO, "intake_client_picker_started", {"action": "wired"})  # Log no client identifiers.
@@ -84,17 +132,21 @@ class ResourcePicker(PickerRuntime):
         client_mac = record.get("mac")  # Mist uses the client MAC as the stable choice value.
         if record.get("site_id") != site_id or not IdentityIdentifierRules.is_mac(client_mac):
             return None  # Missing or malformed identity evidence cannot become a choice.
-        if not self._record_matches_device(record, device_mac):
+        if not WiredClientAssociation.matches(record, device_mac):
             return None  # A site-wide client is not evidence of switch association.
         normalized = IdentityIdentifierRules.normalize_mac(str(client_mac))  # Match utility input format.
         label = self._first_text(record, ("hostname", "dhcp_hostname", "mac")) or normalized  # Prefer a host name.
         return {"id": normalized, "label": label, "family": "ex", "detail": normalized}  # Show identity clearly.
 
+
+class WiredClientAssociation:
+    """Check explicit site-switch association evidence in wired-client rows."""
+
     @staticmethod
-    def _record_matches_device(record: dict[str, object], device_mac: str) -> bool:
-        """Check both documented wired association fields."""
-        return ResourcePicker._mac_list_matches(record.get("device_mac"), device_mac) or (
-            ResourcePicker._port_list_matches(record.get("device_mac_port"), device_mac)
+    def matches(record: dict[str, object], device_mac: str) -> bool:
+        """Check the documented wired association fields."""
+        return WiredClientAssociation._mac_list_matches(record.get("device_mac"), device_mac) or (
+            WiredClientAssociation._port_list_matches(record.get("device_mac_port"), device_mac)
         )  # Require one explicit association source.
 
     @staticmethod
@@ -111,53 +163,9 @@ class ResourcePicker(PickerRuntime):
     def _port_list_matches(ports: object, device_mac: str) -> bool:
         """Check per-port association records for the selected switch."""
         return isinstance(ports, list) and any(
-            isinstance(port, dict) and ResourcePicker._mac_list_matches([port.get("device_mac")], device_mac)
+            isinstance(port, dict) and WiredClientAssociation._mac_list_matches([port.get("device_mac")], device_mac)
             for port in ports
         )  # Require a per-port MAC that matches the selected switch.
-
-    def maps(self, site_id: str) -> dict[str, object]:
-        """Return map rows for one site."""
-        return self._site_picker(site_id, "maps", "listSiteMaps", "The site has no maps.")  # Use the shared SDK flow.
-
-    def assets(self, site_id: str) -> dict[str, object]:
-        """Return BLE asset rows for one site."""
-        return self._site_picker(site_id, "assets", "listSiteAssets", "The site has no assets.")  # Use shared flow.
-
-    def sdkclients(self, site_id: str, map_id: str) -> dict[str, object]:
-        """Return SDK client rows for one map."""
-        logger.emit(logging.INFO, "intake_sdkclient_picker_started", {"action": "list"})  # Log no identifiers.
-        try:
-            import mistapi  # Import here so focused tests can replace the SDK seam.
-
-            response = mistapi.api.v1.sites.stats.getSiteSdkStatsByMap(
-                self._apisession, site_id, map_id
-            )  # Read clients.
-            rows = [
-                self._row(item, ("name", "hostname", "mac"), ("mac", "status"), None)
-                for item in self._records(response)
-            ]
-            logger.emit(logging.DEBUG, "intake_sdkclient_picker_finished", {"count": len(rows)})  # Log safe count.
-            return self._payload(rows, "The map has no SDK clients.")  # Explain an empty list.
-        except Exception as error:
-            logger.emit(logging.ERROR, "intake_sdkclient_picker_failed", {"detail": type(error).__name__})  # Safe type.
-            return self._payload([], "The portal could not list SDK clients from Mist.")  # Keep the form usable.
-
-    def _site_picker(self, site_id: str, family: str, function_name: str, empty_reason: str) -> dict[str, object]:
-        """Return rows from one simple site SDK list."""
-        logger.emit(logging.INFO, "intake_site_picker_started", {"detail": family})  # Log the fixed picker family.
-        try:
-            import mistapi  # Import here so focused tests can replace the SDK seam.
-
-            namespace = getattr(mistapi.api.v1.sites, family)  # Select the fixed SDK namespace.
-            response = getattr(namespace, function_name)(self._apisession, site_id)  # Call the fixed read function.
-            rows = [self._row(item, ("name", "id"), ("type", "status"), None) for item in self._records(response)]
-            logger.emit(
-                logging.DEBUG, "intake_site_picker_finished", {"detail": family, "count": len(rows)}
-            )  # Safe data.
-            return self._payload(rows, empty_reason)  # Return the common contract shape.
-        except Exception as error:
-            logger.emit(logging.ERROR, "intake_site_picker_failed", {"detail": type(error).__name__})  # Log safe type.
-            return self._payload([], "The portal could not list this data from Mist.")  # Keep the form usable.
 
 
 class EdgePicker(PickerRuntime):

@@ -60,6 +60,12 @@ The `specs/` process directory already exceeds the five-child structural limit. 
 
 If the wired query returns a next page, follow only the pagination method that the pinned SDK supports. If the complete result cannot be established within ten seconds, show unavailable instead of a partial list.
 
+Keep each class at five methods or fewer. Separate wired-client response
+validation and association checks from the general site-resource picker.
+Keep the client suggestion route and readiness service separate from the
+existing site-picker actions. Keep device identity in the validated
+site-scoped device facts.
+
 ## Implemented File Set
 
 This manifest records the implemented paths. The parent transferred the page scope after PR #3897 merged.

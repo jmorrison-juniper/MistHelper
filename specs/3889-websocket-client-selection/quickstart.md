@@ -24,6 +24,16 @@ Result on 2026-10-05: **141 passed**.
 The browser policy blocks requests that are not explicitly listed.
 The tests do not send a utility request.
 
+Run the feature structure guard with the complete WebSocket unit suite:
+
+```bash
+rtk proxy .venv/bin/python -m pytest -q tests/unit/websocket_streams tests/unit/websocket_streams/live/transport/runtime/test_ws_feature_structure.py
+```
+
+Result after the class-boundary repair: **399 passed**. The guard rejects
+classes with more than five methods. Its measured feature totals are
+145 modules, 208 classes, and 635 functions.
+
 ## Scenarios
 
 - EX client results match the selected site and device MAC.

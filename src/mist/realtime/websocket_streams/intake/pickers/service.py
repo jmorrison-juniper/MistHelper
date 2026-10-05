@@ -11,10 +11,11 @@ from src.mist.realtime.websocket_streams.intake.pickers.devices import (
 from src.mist.realtime.websocket_streams.intake.pickers.resources import (
     EdgePicker,
     ResourcePicker,
+    WiredClientPicker,
 )  # Site and edge SDK reads.
 
 
-class StreamPickerService(DevicePicker, ResourcePicker, EdgePicker):
+class StreamPickerService(DevicePicker, ResourcePicker, WiredClientPicker, EdgePicker):
     """Provide all picker capabilities through named behavior classes."""
 
     def __init__(self, apisession: object, org_id: str) -> None:
@@ -35,9 +36,9 @@ class StreamPickerService(DevicePicker, ResourcePicker, EdgePicker):
                 "picker_unavailable",
                 "Gateway association is not verified. Enter a client MAC address manually.",
             )  # Do not use site-wide WAN clients for gateways.
-        device_mac = self.device_mac(site_id, device_id)  # Resolve the private MAC from the scoped device cache.
+        device_mac = device.mac  # Use the validated MAC from the site-scoped device record.
         if device_mac is None:
             raise StreamRequestError(
                 "picker_unavailable", "The selected switch has no verified MAC address. Enter a MAC address manually."
             )  # Do not query a switch with unknown identity.
-        return ResourcePicker.clients(self, site_id, device_mac)  # Run only the proven EX wired-client lookup.
+        return WiredClientPicker.clients(self, site_id, device_mac)  # Run only the proven EX wired-client lookup.

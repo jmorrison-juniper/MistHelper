@@ -91,7 +91,8 @@ def install_search(monkeypatch: Any, answer: SimpleNamespace, calls: list[tuple[
 
 def build_test_client(monkeypatch: Any, service: StreamPickerService) -> Any:
     """Build a Flask client with an injected WebSocket service."""
-    services = SimpleNamespace(pickers=SimpleNamespace(site=service))  # Match the route's app service shape.
+    clients = SimpleNamespace(clients=service.clients)  # Keep client suggestions in their own route service.
+    services = SimpleNamespace(pickers=SimpleNamespace(clients=clients))  # Match the route's app service shape.
     monkeypatch.setattr(ServiceRequest, "current", staticmethod(lambda: services))  # Inject local services.
     app = Flask(__name__)  # Create an isolated route host.
     app.register_blueprint(WebSocketBlueprint.create())  # Register the WebSocket routes.

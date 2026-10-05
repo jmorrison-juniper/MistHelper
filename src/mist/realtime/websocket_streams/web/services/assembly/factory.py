@@ -39,7 +39,10 @@ from src.mist.realtime.websocket_streams.web.services.operations.terminal import
 from src.mist.realtime.websocket_streams.web.services.pickers.related import (
     RelatedPickerService,
 )  # Related picker actions.
-from src.mist.realtime.websocket_streams.web.services.pickers.service import SitePickerService  # Site picker actions.
+from src.mist.realtime.websocket_streams.web.services.pickers.service import (
+    ClientSuggestionService,
+    SitePickerService,
+)  # Site and client suggestion actions.
 
 logger = StructuredTransportLogger(logging.getLogger(__name__))  # Keep assembly fields safe and bounded.
 
@@ -92,10 +95,11 @@ class WebSocketServiceFactory:
         terminal = WebSocketTerminalService(collaborators.manager, reason)  # Build terminal actions.
         site_pickers = SitePickerService(collaborators.picker, reason)  # Build site picker actions.
         related_pickers = RelatedPickerService(collaborators.picker, reason)  # Build related picker actions.
+        client_suggestions = ClientSuggestionService(collaborators.picker, reason)  # Build scoped client suggestions.
         return WebSocketServiceBundle(
             catalog,
             SessionServices(lifecycle, messages),
             artifacts,
             terminal,
-            PickerServices(site_pickers, related_pickers),
+            PickerServices(site_pickers, related_pickers, client_suggestions),
         )  # Keep the service set fixed and explicit.
