@@ -137,7 +137,7 @@ truthful review evidence. Do not run a live release or deployment.
 - [x] T022 Add `changelog.d/issue-3889-websocket-client-selection.md`. State that SRX and SSR choices remain unavailable because selected-gateway association is unproven.
 - [x] T023 Run every applicable targeted test from the updated quickstart. Record each exact command and result below.
 - [x] T024 Run compile, Ruff, Black, mypy, and Bandit checks on changed files. Record each exact command and result below.
-- [ ] T025 Run the live-guide preflight before the required changed-scope test-quality analyzer. Run the analyzer after the commit and before push. Require zero new findings.
+- [x] T025 Run the live-guide preflight before the changed-scope test-quality analyzer. The analyzer ran after the implementation commit and before push. It reported zero new findings.
 
   The live-guide preflight passed on 2026-10-05. The analyzer remains pending
   until after the local commit and before push.
@@ -210,7 +210,7 @@ Validation results:
 - `rtk proxy .venv/bin/python -m py_compile` on the changed Python files passed.
 - `rtk proxy .venv/bin/python -m pytest -q tests/guardrails/local_test_quality_loop/test_guidance.py::TestLiveGuides` passed. It ran 1 preflight test.
 - `rtk proxy .venv/bin/python -m pytest -q tests/guardrails/test_changelog_fragment_policy.py` passed. It ran 17 tests with 1 skipped.
-- The changed-scope `test-quality-analyzer --gate` check remains pending after commit and before push.
+- `rtk proxy test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json --changed-from origin/main --full-gate-path .github/workflows/ci.yml --full-gate-path requirements-dev.txt` passed. It checked 4 changed test files, reported 0 findings and 0 new findings, parsed 3 files, and skipped 3.
 - No live Mist request, DHCP release, device utility, capture, or shell call ran.
 
 ## Implementation Strategy
