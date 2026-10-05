@@ -8,8 +8,8 @@
 # rules only. Grade the same files with a dictionary on your own machine too.
 #
 # The `uses:` line pins a full commit SHA of misthelper-devtools, and the
-# comment after it names the release. This copy pins the commit that added the
-# canonical agent instruction templates, one commit after v0.6.1.
+# comment after it names the release. This copy pins release v0.6.2, the
+# release that requirements-dev.txt and the other callers pin.
 # Re-pin the SHA and the comment together when you adopt a later release, and
 # let Dependabot move the pin with a `github-actions` entry in
 # `.github/dependabot.yml`.
@@ -39,7 +39,7 @@ jobs:
   ste-lint:
     permissions:
       contents: read
-    uses: jmorrison-juniper/misthelper-devtools/.github/workflows/reusable-ste-lint.yml@d00c9af1fccafe5858b76ad088a22ed8b046f8ae # main after v0.6.1, devtools #49
+    uses: jmorrison-juniper/misthelper-devtools/.github/workflows/reusable-ste-lint.yml@da02d4c6a2163d1882f2ad25fce80b8ba38304d1 # v0.6.2
     with:
       files: README.md AGENTS.md .github/copilot-instructions.md CLAUDE.md documentation/ASD-STE100_writing-guide.md
       config: .ste-linter.toml
