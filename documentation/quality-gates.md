@@ -221,4 +221,10 @@ grades each Markdown file and each Python file at a threshold of 80.
 .venv\Scripts\ste-linter.exe --config .ste-linter.toml --min-score 80 <file>
 ```
 
+The `ste-lint.yml` workflow grades `README.md`, `AGENTS.md`,
+`.github/copilot-instructions.md`, `CLAUDE.md`, and this guide on each pull
+request. The runner holds no ASD-STE100 dictionary, so it runs the structural
+rules only. Grade the same files with the dictionary on your own machine, because
+each file must score 80 or above in both modes.
+
 Read [the writing guide](ASD-STE100_writing-guide.md) for the rules.

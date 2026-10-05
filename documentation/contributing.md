@@ -34,7 +34,8 @@ Add `in-progress` while you work.
 - Every path uses `os.path.join` or `pathlib.Path`.
 - Every document follows [the writing guide](ASD-STE100_writing-guide.md).
 
-`.github/instructions/coding-standards.instructions.md` holds the full set.
+`AGENTS.md` at the repository root holds the full set, and
+`.github/copilot-instructions.md` holds the rules for this repository only.
 
 ## Hot files
 

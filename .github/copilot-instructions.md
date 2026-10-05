@@ -1,200 +1,126 @@
-# MistHelper - AI Agent Instructions
+# MistHelper agent instructions
 
-Global coding standards (autonomous workflow, 5-item rule, inline comments, action logging, quality gates) are in [coding-standards.instructions.md](instructions/coding-standards.instructions.md) and apply automatically. This file adds MistHelper-specific guidance only.
+This file holds the rules that apply to `MistHelper` only. The rules that apply to each
+repository of this owner are in `AGENTS.md` at the repository root. Read `AGENTS.md` first. This
+file adds to it, and it does not hold a copy of a rule from it. Where the two files disagree, obey
+`AGENTS.md` for a writing rule, a safety rule, or a security rule.
 
-When refactoring code, avoid using wrappers; actually restructure into classes as per project conventions.
+## What this repository is
 
----
+MistHelper is a Python tool for the operation of a network on the Juniper Mist cloud. It gives a
+network operations center 293 registered menu operations, numbered 0 through 293, for data
+export, device management, and firmware upgrades. Each export writes to CSV, to SQLite, or to
+ArangoDB and Redis. The audience is a junior engineer in a network operations center, so each
+message uses plain words. The tool runs on Windows 11, on macOS, and on Linux, and it ships as a
+Podman container.
 
-## Project Overview
-MistHelper is a production-grade Python tool for Juniper Mist Cloud network operations. It provides 269 menu-driven operations for data extraction, device management, and firmware upgrades with multi-backend output (CSV, SQLite, or polyglot ArangoDB/Redis) and containerized SSH access.
+## Language and environment
 
-**Target Audience**: Junior NOC engineers. Use clear, professional language without jargon. Think Fred Rogers meets NASA/JPL safety standards.
+The language is Python 3.13 or newer, because `pyproject.toml` requires `>=3.13`. The package
+`mistapi>=0.64.0,<0.65` is the only interface to the Mist REST API. UV is the preferred
+installer, and `requirements.txt` stays current for pip. Podman is the container runtime, and
+each example uses Podman.
 
----
-
-## Writing & Communication Style (Simplified Technical English)
-
-All documentation, code comments, pull request text, error messages, user-facing communication and printed output, and agent output MUST follow the Simplified Technical English (STE) writing guide: `documentation/ASD-STE100_writing-guide.md` (distilled from ASD-STE100 Issue 9).
-
-Core defaults: one word = one meaning; one term per concept, reused consistently (no synonym swapping); active voice; simple tenses; short sentences (<=20 words for instructions, <=25 for descriptions); imperative for instructions with one action per step and the condition first ("If X, do Y"); no semicolons, slang, jargon, phrasal verbs, or Latin abbreviations (e.g./i.e./etc.); American spelling; never alter quoted strings or identifiers. Warnings lead with a signal word (Warning = harm/irreversible; Caution = recoverable) and state the specific consequence. These rules reinforce the existing NON-NEGOTIABLE inline-comment and action-logging conventions.
-
-### Precedence: STE outranks caveman
-
-STE outranks the caveman compression rules in `.github/instructions/caveman.instructions.md`. If the two rule sets conflict, obey STE. STE is NON-NEGOTIABLE. Caveman is a preference.
-
-Caveman may remove filler, pleasantries, and hedging. Caveman must not drop an article, write a fragment, swap a synonym, or use slang. Use the caveman `lite` level, because it is the only level that obeys STE. Use a higher caveman level only when the user states that STE is suspended for the session.
-
----
-
-## Core Architecture
-
-### Python Project Hierarchy (5-Item Rule)
-See [coding-standards.instructions.md](instructions/coding-standards.instructions.md) § Structural Discipline for limits (max 5 params, 5 blocks, 25 lines).
-
-Python hierarchy levels:
-1. **Project Root** → 2. **Packages/Directories** → 3. **Module Files** → 4. **Classes/Functions/Constants** → 5. **Methods/Attributes/Expressions**
-
-### Design Pattern
-- **Classes**: `GlobalImportManager`, `WebSocketManager`, `PacketCaptureManager`, `FirmwareManager`, `EnhancedSSHRunner`, `SFPTransceiverDataProcessor`
-- **No wrappers**: All functionality lives within appropriately named classes, never use standalone wrapper functions
-
-### Critical Dependencies
-- **Python**: 3.13 or newer required
-- **mistapi**: >=0.64.0,<0.65 (Primary Mist API SDK by Thomas Munzer - tmunzer/mistapi_python)
-- **UV Package Manager**: Preferred over pip for speed (auto-fallback configured). Note: `requirements.txt` maintained for pip compatibility
-- **Container Runtime**: Podman (primary), Docker (compatible but not documented - all examples use Podman)
-
-### Data Flow
-```text
-Menu Selection -> API Call -> Flatten/Normalize -> Output Backend (CSV / SQLite / ArangoDB+Redis)
-                                                 -> Rate Limiting -> Retry Logic
-```
-
----
-
-## Database Strategy (CRITICAL)
-
-### Hybrid Primary Key System
-MistHelper uses **natural business keys** from the Mist API, not artificial IDs. Configuration is centralized in the `ENDPOINT_PRIMARY_KEY_STRATEGIES` dictionary in `src/foundation/support/refactors/endpoint_primary_key_strategies.py`.
-
-**Three Primary Key Types**:
-
-1. **Natural PK**: Entities with stable UUIDs (`sites`, `devices`, `templates`)
-   ```python
-   'listOrgSites': {
-       'type': 'natural_pk',
-       'primary_key': ['id'],  # API-provided UUID
-       'indexes': ['org_id', 'name', 'country_code']
-   }
-   ```
-
-2. **Composite PK**: Time-series data (`events`, `stats`, `metrics`)
-   ```python
-   'searchOrgDeviceEvents': {
-       'type': 'composite_pk',
-       'primary_key': ['id', 'device_id', 'timestamp']
-   }
-   ```
-
-3. **Auto-increment with Unique**: Aggregated/summary data without stable keys
-   ```python
-   'getOrgLicensesSummary': {
-       'type': 'auto_increment_with_unique',
-       'primary_key': ['misthelper_internal_id']
-   }
-   ```
-
-**Upsert Logic**: `INSERT OR REPLACE` for natural/composite keys enables updates without duplicates.
-
-**Adding New Operations**: Always define primary key strategy in `ENDPOINT_PRIMARY_KEY_STRATEGIES` before implementation.
-
----
-
-## Essential Workflows
-
-### Adding New Menu Operations
-1. **API Discovery**: Check `mistapi.api.v1.orgs.*` or `mistapi.api.v1.sites.*`
-2. **Primary Key Strategy**: Add to `ENDPOINT_PRIMARY_KEY_STRATEGIES` with appropriate type (see Database Strategy section)
-3. **Flatten JSON**: Use existing `flatten_dict()` helpers for nested structures
-4. **Multi-Backend Output**: Call `DataExporter.write_with_format_selection(data, filename, api_function_name=...)`
-5. **Update README**: Modify operation count and add to menu table
-6. **Generated References**: Run `python scripts/generate_menu_wiki.py` and `python -m scripts.menu_api_map`. Commit the changed pages. The `menu_reference_drift` CI job fails when either set is stale.
-7. **Release Note**: Add one new fragment file under `changelog.d/`. Never edit `CHANGELOG.md` on a feature branch. See [Release notes](#release-notes-each-change-owns-one-fragment)
-8. **Git Workflow**: Follow [git-flow-multi-agent.instructions.md](instructions/git-flow-multi-agent.instructions.md)
-
-#### Gates that a new menu operation trips
-
-The 2026-09 feature program added menus 271 through 293 across 22 branches.
-Seven gates failed at least one of those pull requests. Each failure cost one
-CI run and one repair commit. Run each check before you push.
-
-| Gate | What fails | Local command |
-| - | - | - |
-| Complexity | A function above cyclomatic complexity 10. Split a long classifier or summary function into helpers. | `radon cc <package> -j \| complexity-gate --max 10` |
-| Test quality | A new API client test module with no HTTP 4xx test and no HTTP 5xx test, or a weak assertion such as a bare `assert result`. | `test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json --changed-from origin/main` |
-| SDK compatibility | A call that forwards `*args` or `**kwargs` into a `mistapi.api.v1` function. Pass explicit arguments. | `python -m pytest tests/integration/test_mistapi_sdk_compatibility.py` |
-| Output scan | A test module that names a folder under `data/` with the word `test` in its name. Use `tmp_path`. | `python -m pytest tests/unit/web_portal/test_output_scan_runtime_files.py` |
-| Bandit | An `assert` in production code, a hardcoded credential string, or a bare `try/except/pass`. Repair the cause. Never add `# nosec`. | `bandit -c pyproject.toml -r <package> -q` |
-| Portal registry | A regenerated `web_portal/menu_registry.py` that holds a row the portal cannot run. Feed the generator only the `safe` and `interactive_safe` titles. | `python -m pytest tests/guardrails/test_portal_operation_coverage.py` |
-| Destructive marker | A `destructive` registry entry whose `skip_reason` lacks the word `DESTRUCTIVE`. | `python -m pytest tests/guardrails/test_operation_registry_menu_coverage.py` |
-
-When several agents add menu operations at the same time, give each feature
-branch its own package under `src/` and its own test directory. Each branch
-also writes a `specs/<issue>-<slug>/wiring.md` manifest. The manifest lists
-the menu row, the registry entry, the primary key strategies, and the import
-line. One integration pull request for each batch then applies every manifest
-to `MistHelper.py`, to `src/foundation/support/utils/operation_registry.py`, to the category
-table above, and to the generated references. Pull requests #3643, #3644,
-#3645, and #3679 show the shape. A feature branch never touches a shared file,
-so two feature branches never conflict.
-[Menu operations 271 to 293](../documentation/menu-operations-271-293.md)
-describes the operations that this pattern delivered.
-
-### Validate locally, then push once
-
-Branching, agent coordination, and Actions minute rules live in
-[git-flow-multi-agent.instructions.md](instructions/git-flow-multi-agent.instructions.md).
-That file is authoritative. This section states the local loop only.
-
-Run these checks before every commit.
+A new worktree holds no `.venv`. Build the environment one time with these two commands.
 
 ```powershell
-python -m py_compile MistHelper.py    # Syntax check. No output means valid.
-python -m ruff check MistHelper.py    # Lint check. Must pass clean.
-python -m black --check MistHelper.py # Format check. Drop --check to auto-fix.
+python scripts/bootstrap_worktree.py
+.venv\Scripts\Activate.ps1
 ```
 
-On Windows, use the bounded `pytest-chunks` command of `misthelper-devtools`
-for full local test evidence. It splits the large portal test trees and prints
-one final summary line. With `-x`, it stops after the first failed chunk.
-Measured on 2026-09-17 in the OneDrive worktree, the unit shard took
-1179.3 seconds and the contract, guardrail, and integration shard took
-366.3 seconds.
+On macOS or Linux, run `python3 scripts/bootstrap_worktree.py`, then `source .venv/bin/activate`.
+The bootstrap installs `requirements.txt` and `requirements-dev.txt`, downloads the Chromium
+browser for the browser tests, and sets the git credential account to `jmorrison-juniper`.
+
+The `misthelper-devtools` package in `requirements-dev.txt` supplies the shared commands:
+`test-quality-analyzer`, `complexity-gate`, `check-citations`, `speckit-task-audit`,
+`symbol-diff`, `stranded-branch-report`, `codeql-verdict-register`, `bandit-exclude-check`,
+`diagram-refs`, `exclusion-drift`, `pytest-chunks`, `worktree-cleanup`, `markdown-link-check`,
+and `ste-linter`. The same repository supplies the shared workflows that `.github/workflows/`
+calls at one pinned commit.
+
+Spec Kit writes its generated technology context to `.specify/memory/agent-context.md`, and the
+project constitution is `.specify/memory/constitution.md`. Spec Kit does not write `AGENTS.md`,
+`CLAUDE.md`, or this file.
+
+## Local gates
+
+Run each gate that applies to the changed files. The `ci.yml` workflow runs the same gates in 24
+quality jobs and one issue job, so a local pass predicts the CI result.
+
+| Gate | Command | Expected result |
+| - | - | - |
+| Compile | `python -m py_compile MistHelper.py` | No output |
+| Lint | `python -m ruff check .` | `All checks passed` |
+| Format | `python -m black --check .` | No file needs a change |
+| Types | `python -m mypy $MYPY_PATHS --config-file pyproject.toml` | `Success`. Read `MYPY_PATHS` from `.github/workflows/ci.yml`. |
+| Tests | `python -m pytest tests/<the changed file>` | All tests pass |
+| Full tests | The two `pytest-chunks` commands below | One summary line for each shard |
+| Safe sweep | `python MistHelper.py --test` | Each `safe` operation completes. Without `MIST_APITOKEN` or `MIST_API_TOKEN`, the Mist API checks skip with a credential reason. |
+| Coverage | `python -m pytest tests --ignore=tests/e2e --cov=src --cov-report=` | The CI shards combine the reports and require 80 percent or above |
+| Test quality | The `test-quality-analyzer` procedure below | `gate: 0 new findings vs baseline` |
+| Complexity | `radon cc <package> -j \| complexity-gate --max 10` | No block above cyclomatic complexity 10 |
+| Security lint | `bandit -c pyproject.toml -r <package> -q` | No finding at any severity |
+| Dependency audit | `pip-audit -r requirements.txt` | No known vulnerability |
+| Code quality | `pylint src/ --fail-under=9.5` | Score 9.5 or above |
+| Dead code | `vulture $VULTURE_PATHS --min-confidence 70` | No finding. Read `VULTURE_PATHS` from `ci.yml`. |
+| Docstrings | `pydocstyle $PYDOCSTYLE_PATHS` and `interrogate $INTERROGATE_PATHS --fail-under 90` | No violation, and coverage at 90 percent or above |
+| Menu reference | `python scripts/generate_menu_wiki.py` and `python -m scripts.menu_api_map` | No changed file after the run |
+| Symbols | `symbol-diff --base <base> <file>` | `no module-level name changed`, exit code 0 |
+| STE | `ste-linter --config .ste-linter.toml --min-score 80 README.md AGENTS.md .github/copilot-instructions.md CLAUDE.md documentation/ASD-STE100_writing-guide.md` | Each file scores 80 or above |
+| Ops portal | `npm audit --audit-level=high`, `npm run typecheck`, `npm run lint`, and `npm test` in `ops-portal/` | Each command exits 0 |
+| Ops platform | `pytest --cov=src --cov-fail-under=56` in `mist-ops-platform/` | At least 390 tests, coverage at 56 percent or above |
+
+The `ops_portal` job is the one gate that reads the npm dependency tree. It is the only check
+that can report an advisory in `ops-portal/package-lock.json` (issue #1847).
+
+On Windows, the `pytest-chunks` command divides the two large test trees of the portals into
+chunks. It prints one summary line for each shard. With `-x`, it stops after the first failed chunk.
+Measured on 2026-09-17, the unit shard took 1179.3 seconds and the second shard took 366.3
+seconds.
 
 ```powershell
 pytest-chunks -x --chunk-timeout 900 --test-timeout 120 tests\unit --split tests\unit\upgrade_portal
 pytest-chunks -x --chunk-timeout 900 --test-timeout 120 tests\contract tests\guardrails tests\integration --split tests\contract\upgrade_portal --split tests\integration\upgrade_portal
 ```
 
-Run all applicable local checks before the local commit.
-Commit all intended tests and relevant inputs.
-Require clean relevant working-tree content before the required check.
-If relevant staged, unstaged, or untracked changes remain, stop.
-Run each command separately.
-If any command fails, stop before the next command.
+A scripted sweep of many files runs the compile, lint, type, and symbol gates on each changed
+file. The symbol gate exists because the other three gates miss a lost declaration. Pull request
+#1791 removed a live declaration inside a 515-line comment sweep, and issue #1796 records it.
+
+### Test quality ratchet
+
+The `test_quality_gate` job in `ci.yml` is the authority for this procedure. The guard
+`tests/guardrails/local_test_quality_loop/test_guidance.py` reads this section and fails when a
+command below drifts from the live job. Commit the intended tests first, and stop if a relevant
+staged, unstaged, or untracked change remains. Run each command separately, and stop at the
+first failed command.
 
 **Intended base for the required check:**
 
 ```powershell
-$BASE_REF = "main" # Use main only when it is the intended pull-request base.
-rtk proxy git fetch --no-tags origin "+refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}"
-rtk proxy git rev-parse --verify "origin/${BASE_REF}^{commit}"
+$BASE_REF = "main"
+git fetch --no-tags origin "+refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}"
+git rev-parse --verify "origin/${BASE_REF}^{commit}"
 ```
 
-Set `BASE_REF` to the intended base branch.
-Do not substitute another resolving reference.
-The fetch destination, commit resolution, and comparison must use the same base.
-Use the activated worktree environment for the commands below.
+Set `BASE_REF` to the branch that the pull request targets. The fetch destination, the commit
+resolution, and the comparison must use the same branch.
 
 **Required input preflight:**
 
 ```powershell
-rtk proxy python -B -m pytest -p no:cacheprovider -s -q tests/guardrails/local_test_quality_loop/test_guidance.py::TestLiveGuides
+python -B -m pytest -p no:cacheprovider -s -q tests/guardrails/local_test_quality_loop/test_guidance.py::TestLiveGuides
 ```
 
-Run this preflight before either analyzer command.
-It reads all six required files and checks all three active guide procedures.
-It rejects missing required files, including repository settings.
-The analyzer alone uses defaults for missing or empty settings.
-Unreadable or malformed settings cause analyzer errors.
-Gate mode requires a valid baseline, even at empty scope.
-Zero counts do not prove required-input readability.
+The preflight reads the four required inputs and checks this procedure against the live job. It
+fails when a required file is absent or malformed, because the analyzer alone uses defaults for
+an absent settings file. Zero counts do not prove that the inputs are readable.
 
 **Required check after the local commit and before push:**
 
 ```powershell
-rtk proxy test-quality-analyzer --gate `
+test-quality-analyzer --gate `
   --config .github/test-quality-config.toml `
   --baseline .github/test-quality-baseline.json `
   --changed-from "origin/$BASE_REF" `
@@ -202,243 +128,182 @@ rtk proxy test-quality-analyzer --gate `
   --full-gate-path requirements-dev.txt
 ```
 
-`--changed-from` compares the intended base with `HEAD`, using two revision endpoints.
-The installed comparison is `git diff --name-only --relative -z REVISION HEAD`.
-It does not use a merge-base or triple-dot comparison.
-Staged, unstaged, and untracked-only paths do not enter selection.
-The analyzer then reads selected files from the current working tree.
-A selected dirty file can change findings without changing `HEAD`.
-Recognized filenames are `test_*.py` and `*_test.py`.
-Deleted tests have no existing file to analyze.
-For renames, only existing recognized paths from the committed difference enter analysis.
-Git rename detection can change which names enter that difference.
-
-If the committed difference names a trigger below, the analyzer scans every test root.
-
-| Trigger path | Source |
-| - | - |
-| `.github/test-quality-config.toml` | Automatic settings trigger |
-| `.github/test-quality-baseline.json` | Automatic baseline trigger |
-| `.github/workflows/ci.yml` | Explicit CI `--full-gate-path` |
-| `requirements-dev.txt` | Explicit CI `--full-gate-path` |
+The `--changed-from` option compares the intended base with `HEAD` through
+`git diff --name-only --relative -z REVISION HEAD`. It does not use a merge base. Only committed
+`test_*.py` and `*_test.py` files enter the selection, and the analyzer reads them from the
+working tree. If the committed difference names `.github/test-quality-config.toml`,
+`.github/test-quality-baseline.json`, `.github/workflows/ci.yml`, or `requirements-dev.txt`, the
+analyzer scans every test root.
 
 **Full-suite check for push or manual CI:**
 
 ```powershell
-rtk proxy test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json
+test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json
 ```
 
-Push and manual CI runs scan every discovered test root.
-This complete local equivalent has no changed-scope controls.
-Use the same required-input preflight before it.
+The `gate_scope` line counts the discovered files and the checked findings. The separate
+`gate: K new findings vs baseline` line counts the new findings, and `K` must be zero before a
+push. Do not rewrite `.github/test-quality-baseline.json` to hide a new finding.
+`documentation/quality-gates.md` tells how to update that file for an accepted finding.
 
-`gate_scope: N files checked, M findings checked` contains only those two counts.
-`N` counts discovered files before parsing and exclusions.
-`M` counts findings after rule filters, not only new findings.
-The separate `gate: K new findings vs baseline` line counts new findings.
-Accepted baseline findings can make `M` positive while `K` remains zero.
-Parsed counts and selection reasons appear in stderr logging.
-JSON reports list `analyzed_files` when a report exists.
-Do not equate discovered, parsed, and analyzed counts.
-A valid empty scope prints zero gate counts and writes no report.
-Stop on an unknown base, unreadable input, failed command, or skipped check.
-Require exit 0 and zero new findings before push.
-Do not rewrite the baseline to hide new findings.
-If the candidate, checked content, or fetched base changes, repeat the affected checks.
+## Architecture and conventions
 
-Build and run the container on your own machine. Podman builds the same
-image that the registry builds.
+`MistHelper.py` is the entry point and the menu. It parses `--menu <number>` for one
+operation, `--test` and `--testinteractive` for the unattended sweeps, `--fast` for the
+multithreaded mode, and `--capture-portal` for the upgrade capture portal.
 
-```powershell
-podman build -t misthelper:local .
-podman rm -f misthelper-app
-.\scripts\compose.ps1 up -d --no-deps misthelper
-podman ps
+The `src/` tree holds four packages. The `foundation` package holds the runtime, the models, and
+the support code. The `operations` package holds the export, the execution, the firmware, and
+the SSH code. The `interfaces` package holds the portals and the visualization code. The `mist`
+package holds the API access by domain.
+
+`web_portal/` serves the Gunicorn web UI on port 8055 through `wsgi.py`. The package
+`src/interfaces/portals/upgrade_portal/` serves the upgrade capture portal on port 8056 through
+`wsgi_capture.py`. `ops-portal/` holds the npm frontend, and `mist-ops-platform/` holds the ops
+platform backend.
+
+```text
+Menu selection -> Mist API call -> flatten -> DataExporter.write_with_format_selection()
+                                                -> CSV / SQLite / ArangoDB and Redis
 ```
 
-Caution: pass `--no-deps` and name the service. Without both, compose tries to
-create `misthelper-arangodb` and `misthelper-redis` again, and it stops with
-`the container name is already in use`. Those two stores hold every capture and
-every upgrade run, so this pair of commands is the one that leaves them
-untouched. Issue #2228 holds that report.
+Class names give the subject: `GlobalImportManager`, `WebSocketManager`, `PacketCaptureManager`,
+`FirmwareManager`, `EnhancedSSHRunner`, `DataExporter`, and `SFPTransceiverDataProcessor`.
+Shared helpers are `InputUtils.safe_input` for each keyboard read,
+`DataProcessingUtils.flatten_dict` for a nested response, and
+`DataExporter.write_with_format_selection` for each export.
 
-Caution: do not push a commit to make a registry build an image that Podman
-builds here in one minute. A registry build spends runner minutes, and the
-account holds a fixed balance each month. Pull
-`ghcr.io/jmorrison-juniper/misthelper:latest` only when you need the exact
-image that a release produced.
+### Primary keys
 
-Every container that you start for a test, for a debug session, or for an
-end-to-end run obeys four rules. The "Test and Debug Containers" section below
-holds them. Start it in the compose group. Name it for its issue or its pull
-request. Keep it off a production local port. Remove it when the test ends.
+Each table uses a natural key from the Mist API. The dictionary `ENDPOINT_PRIMARY_KEY_STRATEGIES`
+in `src/foundation/support/refactors/endpoint_primary_key_strategies.py` holds one entry for each
+endpoint, and three types exist.
 
-### Prove new guard behavior
-
-If a change adds or changes a guard, prove that the guard can fail.
-The guard output must state how many files, records, events, tests, or call sites it checked.
-A required guard must fail when it cannot read its input.
-If a guard skips for an environmental reason, it must print that reason and name the missing capability.
-
-Use one of two proofs.
-
-1. Link a red run from a temporary bad commit, then remove the commit before merge.
-2. Test the guard decision directly with no network and no environment need.
-
-Pull request #2591 proves the first method.
-Pull request #2611 proves the second method.
-Issue #2689 shows the current risk.
-The SDK compatibility guard skipped all seven tests and still reported green.
-
-### Automated Sweep Safety
-
-An automated sweep is a code change. It carries more risk than a hand edit,
-because it changes many lines at once and because a reviewer reads it as a
-comment-only diff. Pull request #1791 deleted a live declaration and a comment
-marker inside a 515-line "delete comments" diff. Issue #1796 records the case.
-
-Run these four checks on every changed file before you commit a sweep.
-
-| Check | Command | Expected result |
+| Type | Use it for | Example |
 | - | - | - |
-| Compile | `python -m py_compile <file>` | No output |
-| Lint | `python -m ruff check .` | `All checks passed` |
-| Types | `python -m mypy $MYPY_PATHS --config-file pyproject.toml` | `Success` |
-| Symbols | `symbol-diff --base <base> <file>` | `no module-level name changed`, exit code 0 |
+| `natural_pk` | An entity with a stable UUID, such as a site or a device | `'primary_key': ['id']` |
+| `composite_pk` | Time-series data, such as an event or a statistic | `'primary_key': ['id', 'device_id', 'timestamp']` |
+| `auto_increment_with_unique` | A summary with no stable key | `'primary_key': ['misthelper_internal_id']` |
 
-Read the type check scope from the `MYPY_PATHS` value in
-`.github/workflows/ci.yml`. Do not repeat the value here, because a repeated
-value drifts when the scope moves.
+The writer uses `INSERT OR REPLACE` for a natural key and a composite key, so a second run
+updates a row and does not duplicate it. Define the strategy before you write the operation.
 
-The symbol check exists because the other three checks miss a lost declaration.
-A deleted module global still compiles, and no test read that global. The tool
-compares the module-level names of the base revision against the work tree and
-reports every lost name and every added name. An added name can shadow an
-import, so the tool reports both directions.
+### Menu categories
 
-Obey these four rules for a sweep.
+`src/foundation/support/utils/operation_registry.py` is the single source of truth for the
+category of each menu. The measurement date of the counts below is 2026-10-04. The guard
+`tests/guardrails/test_destructive_menu_docs.py` fails when this table drifts from the registry.
 
-1. A comment sweep deletes comment lines only.
-2. The pull request body states the count of deleted lines that are not
-   comments. The expected count is zero.
-3. A rebase repeats all four checks, because a rebase can reintroduce a loss.
-4. The pull request title names the sweep. A title such as "delete comments"
-   sets the wrong expectation, and a reviewer then reads a 515-line difference
-   as safe.
+| Category | Count | Menu numbers |
+| - | - | - |
+| `interactive_safe` | 95 | 60-96, 195-203, 209-229, 235-238, 240-242, 244-247, 254, 256-268, 270, 288-289 |
+| `safe` | 84 | 1-13, 15-17, 20-58, 188, 193, 204-205, 230-234, 243, 248-253, 255, 269, 271-280, 282 |
+| `destructive` | 48 | 154-187, 189-191, 194, 206-208, 239, 281, 286-287, 291-293 |
+| `interactive` | 33 | 0, 124-150, 192, 283-285, 290 |
+| `websocket` | 22 | 102-123 |
+| `resource_intensive` | 10 | 14, 18-19, 59, 97-101, 153 |
+| `continuous_loop` | 1 | 151 |
 
-### Data Directory Permissions (CRITICAL)
-The container runs MistHelper as the non-root user `misthelper`, which holds UID 1000. The mounted `data/` directory must accept a write from that identifier.
+`--test` runs the `safe` category only, and `--testinteractive` adds `interactive_safe`. The
+sweeps skip each other category.
 
-On Windows and on macOS no step is needed, because the runtime virtual machine shares the folder as writable. On Linux with rootless Podman, give the folder to the container account:
-```bash
-podman unshare chown -R 1000:1000 data
-```
-Never run `chmod -R 777 data`. That command gives every account on the host the right to read the captures.
+### Add a menu operation
 
-**Symptom**: `PermissionError: [Errno 13] Permission denied: '/app/data/script.log'` indicates the data directory needs permissions fixed.
+Write the operation in five steps.
 
-### Running Tests
-```powershell
-# Local development (Windows 11 + venv required - standard environment)
-# A new worktree holds no .venv, so create the environment one time first.
-python scripts/bootstrap_worktree.py   # Creates .venv and installs the requirements
-.venv\Scripts\Activate.ps1
-python MistHelper.py --test
-```
-**Skip List**: `OperationRegistry` decides. `--test` runs only `safe`, and `--testinteractive` adds `interactive_safe`. Every other category is skipped, which covers `resource_intensive` (14, 18-19, 59, 97-101, 153), `destructive` (154-187, 189-191, 194, 206-208, 239, 281, 286-287, 291-293), `interactive`, `websocket`, and `continuous_loop`.
+1. Find the endpoint in `mistapi.api.v1.orgs.*` or `mistapi.api.v1.sites.*`.
+2. Add the primary key strategy to `ENDPOINT_PRIMARY_KEY_STRATEGIES`.
+3. Flatten the response with `DataProcessingUtils.flatten_dict`.
+4. Write the rows with `DataExporter.write_with_format_selection(data, filename, api_function_name=...)`.
+5. Register the operation in `OperationRegistry` with its category.
 
-**Warning**: `git worktree add` copies the tracked files only. `.venv` is not tracked, so a new
-worktree has no virtual environment. The activation line then fails, and the tests run against the
-global interpreter. `python -m pytest` stops with one message that names the bootstrap command,
-instead of one import error for each test module. Run `python scripts/bootstrap_worktree.py` in the
-new worktree, activate the environment, then run the tests again. See issue #1866.
+Then publish the operation in three steps.
 
-The bootstrap also configures the repository credential username as
-`jmorrison-juniper`. If `GH_TOKEN` or `GITHUB_TOKEN` names another account, clear both variables
-before a push, then run `gh auth switch --user jmorrison-juniper`. See issue #1893.
+1. Update the operation count and the menu table in `README.md`.
+2. Run `python scripts/generate_menu_wiki.py` and `python -m scripts.menu_api_map`, then commit the changed pages.
+3. Add one release-note fragment under `changelog.d/`.
 
----
+The `menu_reference_drift` job fails when a generated page is stale. The 2026-09 feature program
+added menus 271 through 293 across 22 branches, and seven gates failed at least one of those
+pull requests. Run each check before you push.
 
-## Critical Patterns
+| Gate | What fails | Local command |
+| - | - | - |
+| Complexity | A function above cyclomatic complexity 10. Divide a long classifier into helpers. | `radon cc <package> -j \| complexity-gate --max 10` |
+| Test quality | A new API client test module with no HTTP 4xx test and no HTTP 5xx test, or a bare `assert result`. | The test quality ratchet above |
+| SDK compatibility | A call that forwards `*args` or `**kwargs` into a `mistapi.api.v1` function. Pass explicit arguments. | `python -m pytest tests/integration/test_mistapi_sdk_compatibility.py` |
+| Output scan | A test module that names a folder under `data/` with the word `test` in its name. Use `tmp_path`. | `python -m pytest tests/unit/web_portal/test_output_scan_runtime_files.py` |
+| Bandit | An `assert` in production code, a hardcoded credential string, or a bare `try/except/pass`. | `bandit -c pyproject.toml -r <package> -q` |
+| Portal registry | A regenerated `web_portal/menu_registry.py` that holds a row the portal cannot run. Feed the generator only the `safe` and `interactive_safe` titles. | `python -m pytest tests/guardrails/test_portal_operation_coverage.py` |
+| Destructive marker | A `destructive` registry entry with a `skip_reason` that lacks the word `DESTRUCTIVE`. | `python -m pytest tests/guardrails/test_operation_registry_menu_coverage.py` |
 
-### Safety-First Input Handling
-**Consolidated pattern for all input operations** - handles destructive confirmations, SSH/container EOF, and Windows compatibility:
+When several agents add menu operations at the same time, give each feature branch its own
+package under `src/` and its own test directory. Each branch writes a
+`specs/<issue>-<slug>/wiring.md` manifest with the menu row, the registry entry, the primary key
+strategies, and the import line. One integration pull request for each batch applies every
+manifest to `MistHelper.py`, to `operation_registry.py`, to the category table above, and to the
+generated references. Pull requests #3643, #3644, #3645, and #3679 show the shape, and
+`documentation/menu-operations-271-293.md` describes the result.
 
-```python
-def safe_input(prompt: str, context: str = "unknown") -> str:
-    try:
-        return input(prompt)
-    except EOFError:
-        logging.info(f"EOF detected in {context} - session disconnected")
-        sys.exit(0)
+### Hot files
 
-# DESTRUCTIVE operations require explicit confirmation (NASA/JPL pattern)
-confirmation = safe_input("Type 'UPGRADE' to proceed: ", context="firmware_upgrade")
-if confirmation != "UPGRADE":
-    logging.warning("Operation cancelled - confirmation failed")
-    return  # Early return on validation failure
-```
+`MistHelper.py` takes one open pull request at a time. If another agent holds that pull request,
+wait, or work on a file that does not overlap. The integration pull request of a batch owns
+`src/foundation/support/utils/operation_registry.py`,
+`src/foundation/support/refactors/endpoint_primary_key_strategies.py`, `README.md`,
+`documentation/menu_reference.md`, and the category table in this file.
 
-Use for all `input()` calls, destructive confirmations, menu selections, and any context that could encounter EOF.
+### Web UI tests
 
-### Inline Comments (NON-NEGOTIABLE)
-See [coding-standards.instructions.md](instructions/coding-standards.instructions.md) § Inline Comments for full rules. Python example:
+A change to the web UI carries a test under `tests/e2e/`. The `flask_app` and `client` fixtures
+in `tests/e2e/conftest.py` build a Flask test client with no browser, and
+`tests/e2e/upgrade_portal/` holds the Playwright browser tests. Give each new interactive element
+a stable `data-testid` attribute, and keep a screenshot or a trace of a failed flow as a CI
+artifact.
 
-```python
-result = api.get_sites(org_id)  # Fetch all sites for this org from Mist API
-sites = [s for s in result if s.get("name")]  # Exclude unnamed/placeholder sites
-```
+## Safety in this repository
 
-### Action Logging (NON-NEGOTIABLE)
-See [coding-standards.instructions.md](instructions/coding-standards.instructions.md) § Action Logging for full rules. Python example:
+Warning: a `destructive` operation changes the Mist cloud or a production device, and a wrong
+run can cause an outage that nobody can undo. Do not automate one without an explicit
+confirmation from the user. The destructive set is 154-187, 189-191, 194, 206-208, 239, 281,
+286-287, and 291-293. It is not one block, so do not treat a range boundary as a shortcut.
 
-```python
-logging.info("Fetching device list for site %s", site_id)  # Log before API call
-result = api.list_devices(site_id)  # Call Mist API for all devices at this site
-logging.debug("Received %d devices from API", len(result))  # Log result count after API call
-```
+Menu 239 starts the upgrade capture portal and drives a firmware upgrade for the selected site.
+Menus 281, 286-287, and 291-293 change alarm state, client sessions, inventory, RRM, CSV imports,
+or Mist Edge state. An earlier version of the table stopped at 208, and issue #2825 records that
+gap.
 
-### Logging Standards
-See [coding-standards.instructions.md](instructions/coding-standards.instructions.md) § Logging Standards.
-- **ASCII Only**: Replace Unicode with ASCII equivalents (emoji map in agents.md). No Unicode in logs.
+A destructive operation asks the operator to type a word such as `UPGRADE`, `REBOOT`, `CONVERT`,
+or `CLEAR` through `InputUtils.safe_input`, and it returns at the first wrong answer.
 
-### File Path Management
-- **All outputs**: `data/` directory (enforced at runtime)
-- **SSH logs**: `data/per-host-logs/`
-- **CSV commands**: `data/SSH_COMMANDS.CSV` (fallback supported at root)
-- **Database**: `data/mist_data.db` (SQLite), ArangoDB and Redis run as containers
+| Location | Holds |
+| - | - |
+| `data/` | Each product output. The runtime enforces this directory. |
+| `data/mist_data.db` | The SQLite store. ArangoDB and Redis run as containers. |
+| `data/per-host-logs/` | The SSH session logs. |
+| `data/SSH_COMMANDS.CSV` | The SSH command list. The root path is a fallback. |
+| `data/tuning_data.json` | The adaptive rate-limit tuning data for each endpoint. |
+| `data/script.log` | The runtime log. |
+| `data/agent_logs/` | The agent telemetry directory. The portal output scan skips it. |
+| `test-artifacts/` | Generated test evidence. Git ignores it. |
 
----
+The container runs as the account `misthelper` with UID 1000, and the mounted `data/` directory
+must accept a write from that identifier. On Windows and on macOS the runtime virtual machine
+shares the folder as writable. On Linux with rootless Podman, run
+`podman unshare chown -R 1000:1000 data`. The symptom of a wrong owner is
+`PermissionError: [Errno 13] Permission denied: '/app/data/script.log'`.
 
-## Rate Limiting & Performance
+The volumes `misthelper-arangodb-data` and `misthelper-redis-data` hold every capture and every
+upgrade run. A removed volume is not recoverable, so remove a test volume by its own name only.
 
-### Adaptive Delay System
-- **Metrics File**: `delay_metrics.json` (persistent PID-like control)
-- **Tuning Data**: `tuning_data.json` (endpoint-specific learning)
-- **Default Page Size**: `DEFAULT_API_PAGE_LIMIT=1000` (configurable via `MIST_PAGE_LIMIT`)
+The default page size is `DEFAULT_API_PAGE_LIMIT = 1000`, and the `MIST_PAGE_LIMIT` variable
+changes it in the range 1 through 1000. The `--fast` flag bypasses the adaptive rate limit, and
+the `FAST_MODE_*` variables in `MistHelper.py` tune it.
 
-### Fast Mode
-```python
---fast  # Reduces retries, increases concurrency
-FAST_MODE_MAX_CONCURRENT_CONNECTIONS=8  # Environment tunable
-```
+## Containers and ports
 
----
-
-## Container & SSH Architecture
-
-### Test and Debug Containers (NON-NEGOTIABLE)
-
-This policy covers every container that you start for a test, for a debug
-session, or for an end-to-end run. Issue #2059 records the collision that
-created the policy. A second project took the vendor default port, and the
-upgrade portal then read a foreign database as its own store.
-
-**Rule 1. Start the container inside the compose group.**
-
-Never start a one-off container outside the group. A container outside the
-group joins no project network, so it cannot reach `misthelper-arangodb` or
-`misthelper-redis` by name. Use one of these three forms.
+The compose group is `compose.yml`, and `scripts/compose.ps1` starts it. Start a test container
+in one of these three forms.
 
 ```powershell
 .\scripts\compose.ps1 run --rm misthelper python -m pytest tests/<file>
@@ -446,29 +311,13 @@ group joins no project network, so it cannot reach `misthelper-arangodb` or
 .\scripts\compose.ps1 up -d --no-deps misthelper
 ```
 
-If a test needs a new service, add the service to `compose.yml` under a
-profile. A profile keeps the service out of the normal `up`. Do not replace
-the service with a bare `podman run`.
+If a test needs a new service, add the service to `compose.yml` under a profile. Name an
+ephemeral container, its volume, and its network `misthelper-tmp-<issue|pr><number>-<slug>`, for
+example `misthelper-tmp-issue2059-portcheck`. The guard
+`tests/guardrails/test_compose_naming_policy.py` reads the `misthelper` prefix.
 
-**Rule 2. Name an ephemeral container for its issue or its pull request.**
-
-An ephemeral container serves one investigation and then goes away. Its name
-states the reason it exists. Use this format for the container, the volume, and
-the network.
-
-```text
-misthelper-tmp-<issue|pr><number>-<slug>
-```
-
-For example, `misthelper-tmp-issue2059-portcheck`. A reader who finds the
-container three days later can open the issue and learn why it runs. Keep the
-`misthelper` prefix, because the guardrail test
-`tests/guardrails/test_compose_naming_policy.py` reads that prefix.
-
-**Rule 3. Never publish a production local port.**
-
-These ports belong to the production local stack. An ephemeral container must
-not publish one of them.
+Issue #2059 records the collision that created the policy. A second project took the vendor
+default port, and the upgrade portal read a foreign database as its own store.
 
 | Port | Owner |
 | - | - |
@@ -483,22 +332,15 @@ not publish one of them.
 | 9526 | The RedisInsight web UI |
 | 9529 | ArangoDB |
 
-Read `compose.yml` before you pick a port. That file is the source of truth,
-and the table above can drift.
+Read `compose.yml` before you select a port, because the table can drift. Publish an ephemeral
+port in the range 9600 through 9699, and bind it to `127.0.0.1`. The guard
+`tests/guardrails/test_container_policy_docs.py` compares this table with `compose.yml`.
 
-Publish an ephemeral port in the range 9600 through 9699 instead. That range
-sits inside the policy range 1000 through 10000, and it holds no production
-service. Bind the port to `127.0.0.1`.
+Warning: a test container on port 9529 or 9379 takes the port from the running store, so the
+portal can write to the wrong database. The operator then loses the upgrade record.
 
-Warning: an ephemeral container that publishes 9529 or 9379 takes the port
-from the running store. The portal then writes a capture into the wrong
-database, and the operator loses the upgrade record.
-
-**Rule 4. Remove the container when the test ends.**
-
-Never leave a test container running. A stopped container still holds its
-image layers, its volume, and its log file. Run the cleanup in the same session
-that started the container.
+Remove the container in the same session that started it. The two list commands confirm the
+cleanup, and an empty result from each one means that the cleanup finished.
 
 ```powershell
 .\scripts\compose.ps1 rm -s -f <the test service>
@@ -509,582 +351,176 @@ podman ps -a --filter "name=misthelper-tmp-" --format "{{.Names}} {{.Status}}"
 podman volume ls --filter "name=misthelper-tmp-" --format "{{.Name}}"
 ```
 
-The two list commands confirm the cleanup. An empty result from each one means
-the cleanup finished. Read `podman system df` when you want the reclaimed space.
+Build and start the product container on your own machine with these commands. Podman builds the
+same image that the registry builds.
 
-Warning: never run `podman volume prune`, and never pass `-v` to a compose
-`down` command. Both remove `misthelper-arangodb-data` and
-`misthelper-redis-data`. Those two volumes hold every capture and every upgrade
-run, and a removed volume is not recoverable. Remove a test volume by name
-instead.
-
-### Container Registry & CI/CD
-- **Registry**: `ghcr.io/jmorrison-juniper/misthelper`
-- **Build Workflow**: `.github/workflows/container-build.yml`
-- **Version Format**: `YY.MM.DD.HH.MM` (UTC timestamp - consistent with changelog)
-- **Triggers**: Push to `main` (when key files change) or manual workflow dispatch
-
-#### Zscaler/Corporate Proxy Workaround
-Corporate environments using Zscaler SSL inspection block chunked blob uploads to `ghcr.io` (403 Forbidden with HTML comment signature `kHKLKT6ZtNFTsrn4L61Mr17SZnTqQnKT6PWW1LNd`). **Do not attempt local `podman push` behind Zscaler** - it will fail.
-
-**Solution**: Use GitHub Actions for all container builds and pushes:
 ```powershell
-# Trigger manually
-gh workflow run container-build.yml
-
-# Or push changes to trigger automatically
-git push origin main
+podman build -t misthelper:local .
+podman rm -f misthelper-app
+.\scripts\compose.ps1 up -d --no-deps misthelper
+podman ps
 ```
 
-GitHub Actions runs on GitHub infrastructure (not behind corporate proxy), bypassing Zscaler entirely.
+Caution: pass `--no-deps` and name the service, otherwise compose tries to create
+`misthelper-arangodb` and `misthelper-redis` again. It then stops with
+`the container name is already in use`. Issue #2228 holds that report.
 
-### Container Detection
-```python
-is_running_in_container()  # Checks /.dockerenv, /run/.containerenv
-```
+The registry is `ghcr.io/jmorrison-juniper/misthelper`, and `.github/workflows/container-build.yml`
+pushes the image on a push to `main` or on a manual dispatch. The version format is
+`YY.MM.DD.HH.MM` in UTC. A corporate Zscaler proxy blocks a local `podman push` to `ghcr.io`
+with a 403 response, so run `gh workflow run container-build.yml` when the registry must hold a
+new image. Pull the registry image only when you need the exact image that a release produced.
 
-### SSH Remote Access
-- **Port**: 2200 (non-standard for security)
-- **ForceCommand**: Direct MistHelper launch (no shell access)
-- **Session Isolation**: Unique directory per connection (`/app/sessions/session_<id>/`)
-- **Credentials**: Default `misthelper` / `misthelper123!` (change in production)
+The container exposes SSH on port 2200. A `ForceCommand` starts MistHelper directly, each
+connection gets its own directory under `/app/sessions/`, and the account `misthelper` uses the
+default password that the `Dockerfile` sets. Change that password in production. For a host
+deployment, `deploy/misthelper.service` is the systemd unit, `deploy/misthelper.container` is
+the Podman Quadlet unit, and `deploy/.env.example` is the template for the `.env` file.
 
----
+## Git and GitHub in this repository
 
-## Menu System & Operations
+Each issue and each pull request carries one type label and one scope label, and an issue in
+progress carries `in-progress`.
 
-### Menu Categories (Full Range: 0-293)
-
-`src/foundation/support/utils/operation_registry.py` is the single source of truth. Read it before
-you trust this table. Counts were measured on 2026-10-01. Run
-`python scripts/generate_menu_wiki.py` to regenerate the full reference.
-`tests/guardrails/test_destructive_menu_docs.py` proves that this table matches
-the registry, so a stale count now fails the gate.
-
-| Category | Count | Menu numbers |
-| - | - | - |
-| `interactive_safe` | 95 | 60-96, 195-203, 209-229, 235-238, 240-242, 244-247, 254, 256-268, 270, 288-289 |
-| `safe` | 84 | 1-13, 15-17, 20-58, 188, 193, 204-205, 230-234, 243, 248-253, 255, 269, 271-280, 282 |
-| `destructive` | 48 | 154-187, 189-191, 194, 206-208, 239, 281, 286-287, 291-293 |
-| `interactive` | 33 | 0, 124-150, 192, 283-285, 290 |
-| `websocket` | 22 | 102-123 |
-| `resource_intensive` | 10 | 14, 18-19, 59, 97-101, 153 |
-| `continuous_loop` | 1 | 151 |
-
-Warning: A `destructive` operation changes the Mist cloud configuration. Never
-automate one without explicit user confirmation. The destructive set is
-154-187, 189-191, 194, 206-208, 239, 281, 286-287, and 291-293. It is not a single block, so do not
-treat any range boundary as a shortcut.
-
-Warning: menu 239 and menus 281, 286-287, and 291-293 sit far from the other
-destructive numbers. Menu 239 starts the upgrade capture portal on port 8056,
-and it drives a firmware upgrade for the selected site. The later menus change
-alarm state, client sessions, inventory, RRM, CSV imports, or Mist Edge state.
-An earlier version of this table stopped at 208, so a reader could treat these
-menus as safe. Issue #2825 records the first gap.
-
-Operations 195 through 209 were the newest set in the 2026-08 measurement.
-Three of them are destructive: 206 manages Zscaler synthetic probes, 207
-migrates access points between device profiles, and 208 reverts that migration.
-
-### Interactive vs Direct Invocation
-- **Interactive**: No args = menu-driven selection with safe navigation
-- **Direct**: `--menu 11` for automation
-
----
-
-## Common Pitfalls
-
-### Dash 3.x API Changes (Maps Manager)
-```python
-# WRONG: Deprecated in Dash 3.x - throws ObsoleteAttributeException
-app.run_server(host=host, port=port, debug=True)
-
-# CORRECT: Dash 3.x uses app.run()
-app.run(host=host, port=port, debug=True, use_reloader=False, threaded=True)
-```
-**Note**: Always use `use_reloader=False` to prevent double-execution issues on Windows.
-
-### Device Type Filtering
-```python
-# WRONG: API defaults to APs only
-listSiteDevices(site_id)
-
-# CORRECT: Specify type=all for switches/gateways
-listSiteDevices(site_id, type="all")
-```
-
-### Stale Firmware Version (issue #2006)
-Three endpoints report a firmware version for one device, and they do not agree.
-
-| Endpoint | Reports |
+| Label set | Labels |
 | - | - |
-| `listSiteDevicesStats` | The running version. Safe for a firmware decision. |
-| `getOrgInventory` | The running version. Safe for a firmware decision. |
-| `listSiteDevices` | The configured version. It can be old, or `None`. |
+| Type | `bug`, `feature`, `chore`, `lint`, `security`, `refactor` |
+| Scope | `MistHelper.py`, `tests`, `ci`, `container`, `docs`, `web-portal` |
+| Status | `in-progress` |
 
-Warning: A firmware decision that reads the `version` field of `listSiteDevices`
-can name a release the device left long ago. An operator then plans the wrong
-upgrade on production hardware.
+| Error | Labels | Issue title |
+| - | - | - |
+| A `ruff check` violation | `lint` and the rule code | `Lint: <rule> -- <description>` |
+| A `pytest` failure | `bug`, `test` | `Test failure: <test name>` |
+| A `mypy` error | `chore`, `types` | `Type error: <file>:<line>` |
+| A runtime exception | `bug` | `Runtime: <exception> in <function>` |
+| A security finding | `security` | `Security: <tool> -- <finding>` |
+| A workflow failure | `ci` | `CI: <workflow> -- <failure>` |
 
-```python
-# WRONG: the device listing carries the configured version
-version = listSiteDevices(site_id, type="all").data[0]["version"]
+A change that a user sees adds one fragment under `changelog.d/`. Name it `pr-<number>.md` when
+the pull request exists. Name it `issue-<number>-<slug>.md` when only the issue exists, and
+`<YYYY-MM-DD>-<slug>.md` when neither exists. Write one `###` heading in the fragment. Write one
+bullet for each change type, and name the issue in the bullet. The change types are `Added`,
+`Changed`, `Fixed`, `Removed`, and `Security`. `changelog.d/README.md` holds the full rule.
 
-# CORRECT: read the running version through the shared resolver
-from src.operations.execution.firmware.running_version import RunningFirmwareVersionResolver
+The release coordinator moves the merged fragments into `CHANGELOG.md` on the release branch.
+`CHANGELOG.md` carries a `merge=union` attribute as a safety net for old branches. That attribute
+is not the release-note process.
 
-resolver = RunningFirmwareVersionResolver(apisession)
-running = resolver.fetch_site_running_versions(site_id)
-reading = resolver.read(device_row, running)
-```
+The pull request template is `.github/PULL_REQUEST_TEMPLATE.md`, and a feature starts as an issue
+from `.github/ISSUE_TEMPLATE/feature-spec.yml`. A new environment variable also enters
+`deploy/.env.example`.
 
-`reading.is_running` states whether the value is safe for a firmware decision.
-A `False` value means no running version was found, so the caller must warn
-instead of deciding.
+| Workflow | Purpose | Trigger |
+| - | - | - |
+| `ci.yml` | The 24 quality jobs and the `quality_gate_issues` job | Each pull request and each push to `main` |
+| `codeql.yml` | CodeQL static analysis. Branch protection requires its check. | Each pull request, each push to `main`, and a weekly schedule |
+| `pull-request-title.yml` | The `Conventional Commits PR title` check | Each pull request title change |
+| `ste-lint.yml` | The `STE compliance` check on the instruction files and the README | Each pull request and each push to `main` |
+| `auto-merge.yml` | Squash merges a pull request that carries the `auto-merge` label after each required check passes | A label, a push to the pull request, a push to `main`, and a schedule every six hours |
+| `close-linked-issues.yml` | Closes the issue that a merged pull request names | A closed pull request and a schedule every twelve hours |
+| `container-build.yml` | Builds and pushes the container image | A push to `main` that changes a product file, or a manual dispatch |
+| `release.yml` | Builds the wheel, the source archive, the standalone ZIP, and the multi-arch image | A tag that matches `v*.*.*` |
+| `stranded-branch-report.yml` | Reports a branch with no pull request | A weekly schedule or a manual dispatch |
+| `wiki-publish.yml` | Publishes the generated wiki pages | A push to `main` that changes `documentation/wiki/`, or a daily schedule |
 
-### Windows Path Compatibility
-Use `os.path.join()` or `Path()`, never hardcoded `/` or `\\`
+MistHelper is a public repository, so a standard runner costs no minutes. The `quality_gate_issues`
+job opens a `quality-gate` issue when a gate fails on `main`, closes it when the gate passes, and
+titles the issue `... failed (PR #<number>)` for a pull request. Wait for CodeQL before you add
+the `auto-merge` label, because the check takes two to three minutes after the other gates.
 
----
+### Pull request titles
 
-## Project-Specific Conventions
+The `Pull request title` workflow reports the `Conventional Commits PR title` check. The check
+reads one exact title from `GITHUB_EVENT_PATH`. It applies the same rule to contributors, bots,
+drafts, forks, and documentation-only changes. The check does not change the supplied title.
 
-See [coding-standards.instructions.md](instructions/coding-standards.instructions.md) for naming standards and code readability rules.
-- **Class-based**: All features organized under semantic class names, no wrapper functions
-
----
-
-## Key Files & Documentation
-| File | Purpose |
-|------|---------|
-| `MistHelper.py` | Entrypoint and menu registry. Measured on 2026-09-25, it has 8,071 lines, and `src/` holds 621 Python files with 223,491 lines. |
-| `documentation/CONTRIBUTING-MistHelper.md` | Contributor map for stable `MistHelper.py` symbols and `src/` packages. |
-| `CHANGELOG.md` | Released version history (Keep a Changelog format). The release coordinator owns it. |
-| `changelog.d/` | One release-note fragment for each change. Add your file here. |
-| `agents.md` | VS Code Chat agent supplement (points here) |
-| `README.md` | User-facing operations guide |
-| `documentation/SSH_GUIDE.md` | SSH runner detailed usage |
-| `requirements.txt` | Python dependencies (pip compatibility) |
-| `uv.lock` | UV package lock file (if using UV) |
-| `.env` (git-ignored) | Credentials & config |
-| `data/mist_data.db` | SQLite persistence (local fallback) |
-| `documentation/` | Sample files, API specs (`mist-api-openapi3*`) |
-
----
-
-## Multi-Agent Git Workflow
-
-The branch model, the rules for parallel agents, and the rules that protect the
-GitHub Actions minute balance live in
-[git-flow-multi-agent.instructions.md](instructions/git-flow-multi-agent.instructions.md).
-That file is authoritative. This section adds MistHelper-specific detail only.
-
-### MistHelper-Specific Error-to-Issue Triggers
-
-| Trigger | Label(s) | Issue Title Pattern |
-|---------|----------|---------------------|
-| `ruff check` violation | `lint`, rule code | `Lint: <rule> -- <description>` |
-| `pytest` failure | `bug`, `test` | `Test failure: <test_name>` |
-| `mypy` type error | `chore`, `types` | `Type error: <file>:<line>` |
-| Runtime exception | `bug` | `Runtime: <exception> in <function>` |
-| Security finding | `security` | `Security: <tool> -- <finding>` |
-| CI pipeline failure | `ci` | `CI: <workflow> -- <failure>` |
-
-**Lesson learned**: PRs 12-15 were stacked (branched from each other instead of main),
-causing cascading merge conflicts. Never branch from feature branches.
-
-### Required Labels
-
-Every issue and PR MUST have at least:
-1. A **type** label: `bug`, `feature`, `chore`, `lint`, `security`, `refactor`
-2. A **scope** label: `MistHelper.py`, `tests`, `ci`, `container`, `docs`, `web-portal`
-3. A **status** label when in progress: `in-progress`
-
-### Fleet Coordination (MistHelper-Specific)
-
-See [git-flow-multi-agent.instructions.md](instructions/git-flow-multi-agent.instructions.md)
-§ Part 2 for the general rules. MistHelper adds these:
-
-- **MistHelper.py is a hot file**: Only one agent should have an open PR modifying it at a time.
-  Others should wait or work on non-overlapping files (tests, docs, CI, web portal).
-- **Auto-merge label**: Wait for **CodeQL** (~2-3 min) before adding. Use `gh pr checks <pr> --watch`.
-
-### Agent Worktree Examples
+The check accepts these four forms.
 
 ```text
-MistHelper/                    # main checkout (human or merge agent only)
-../MistHelper-agent-1/         # worktree for Agent 1 (feat/101-new-menu)
-../MistHelper-agent-2/         # worktree for Agent 2 (fix/102-rate-limit)
+type: description
+type(scope): description
+type!: description
+type(scope)!: description
 ```
 
-Each worktree needs its own virtual environment. Run the bootstrap one time after
-`git worktree add`:
+The type must use lowercase. If you use a scope, give it a nonblank value without parentheses.
+The optional `!` marker goes immediately before the colon. Use a colon followed by an ASCII
+space. Use a nonblank one-line description.
 
-```powershell
-git worktree add ../MistHelper-agent-1 -b feat/101-new-menu main
-cd ../MistHelper-agent-1
-python scripts/bootstrap_worktree.py   # Creates .venv and installs the requirements
-.venv\Scripts\Activate.ps1
-```
+Additional description spaces and Unicode text are valid. Do not use control characters U+0000
+through U+001F or U+007F through U+009F. Do not use the Unicode line separator U+2028 or the
+Unicode paragraph separator U+2029.
 
-### Copilot Coding Agent, Spaces & Scratchpads
+If the title fails, correct the pull request title. A title edit starts another check through the
+`edited` event. A title decision prints the exact title through reversible ASCII JSON escapes. It
+prints `Checked 1 pull request title`.
 
-| Scenario | Surface |
+If the input is unavailable or invalid, the check fails. It prints
+`Checked 0 pull request titles`. The check sends ASCII key/value action logs to stderr.
+
+New pip updates use `chore`. New npm updates in `/ops-portal` use `chore(ops-portal)`. GitHub
+Actions updates keep `ci`. Existing `deps` and `deps(ops-portal)` titles fail. A maintainer must
+rename each existing invalid title. Do not close update pull requests or disable update streams.
+
+The `Conventional Commits PR title` check is not a required status check. Require separate owner
+approval before anyone makes this check required. This feature changes no repository settings,
+branch protection, or required statuses. The `squash_merge_commit_title=PR_TITLE` setting stays
+unchanged.
+
+## Known pitfalls
+
+- Issue #1866: a new worktree has no `.venv`, so the tests ran against the global interpreter.
+  Run `python scripts/bootstrap_worktree.py` first. `python -m pytest` now stops with one message
+  that names the bootstrap command.
+
+- Issue #1893: `GH_TOKEN` or `GITHUB_TOKEN` named another account, and the push went to the wrong
+  identity. Clear both variables, then run `gh auth switch --user jmorrison-juniper`.
+
+- Issue #2006: `listSiteDevices` reports the configured firmware version, which can be old or
+  `None`. Read the running version through `RunningFirmwareVersionResolver` in
+  `src/operations/execution/firmware/running_version.py`, and warn when `reading.is_running` is
+  `False`. `listSiteDevicesStats` and `getOrgInventory` report the running version.
+
+- `listSiteDevices(site_id)` returns access points only. Pass `type="all"` to include switches
+  and gateways.
+
+- Dash 3 removed `app.run_server`. Call `app.run(host=host, port=port, debug=False,
+  use_reloader=False, threaded=True)`, because a reloader starts the process twice on Windows.
+
+- Issue #2689: the SDK compatibility guard skipped all seven tests and reported green. A guard
+  prints the count that it checked and fails when it cannot read its input. Pull request #2591
+  proves a guard with a red run, and pull request #2611 proves one with a direct decision test.
+
+- Issue #2541: five instruction files held the release-note rule, and no gate read one of them.
+  `tests/guardrails/test_changelog_fragment_policy.py` now reads the directory and this file.
+
+- Issue #1952: a branch filter on a `pull_request` trigger let a stacked pull request merge with
+  zero checks. A workflow that reports a required check carries no `paths` filter and no
+  `branches` filter.
+
+## Key files
+
+| File | Purpose |
 | - | - |
-| Well-defined issue, single concern | Copilot Coding Agent (assign to issue) |
-| Multi-step feature, needs planning | Copilot Space + SpecKit workflow |
-| Quick prototype or API exploration | Scratchpad |
-| Local implementation with testing | VS Code Copilot Chat + worktree |
-| Complex refactor touching hot files | VS Code Copilot Chat + worktree (human oversight) |
-
-**Copilot Coding Agent**: Triggered by assigning Copilot to an issue. Creates branch,
-implements, opens PR -- all autonomously on GitHub infrastructure (not behind Zscaler).
-Follows `.github/copilot-instructions.md` automatically. Cannot run `--test` (no API creds in CI).
-
-**Copilot Spaces**: Persistent shared context across sessions. Attach `agents.md`,
-`MistHelper.py`, `CHANGELOG.md` for deep project context. Best for planning and architecture.
-
-**Scratchpads**: Throwaway exploration. No git. Discard after use.
-
-### Release notes: each change owns one fragment
-
-`CHANGELOG.md` holds more than 5,000 lines, and every change added its entry at
-the top of the same `## [Unreleased]` section. Each open pull request therefore
-touched the same lines, and every rebase reported a conflict. One unique file for
-each change removes that shared line.
-
-`CHANGELOG.md` has a `merge=union` rule as a safety net for old branches. Do not
-use that rule as the release-note process. A union merge can keep duplicate
-entries, and it cannot prove that each branch kept the correct release note.
-
-Add one new Markdown file under `changelog.d/` for a user-visible change. Use the
-first name rule that fits.
-
-| Condition | File name | Example |
-| - | - | - |
-| The pull request exists. | `pr-<number>.md` | `pr-2451.md` |
-| The issue exists, and the pull request does not. | `issue-<number>-<slug>.md` | `issue-2439-dashboard-summary.md` |
-| No issue and no pull request exist. | `<YYYY-MM-DD>-<slug>.md` | `2026-09-11-token-refresh.md` |
-
-Write one `###` heading and one bullet for each change type. Use `Added`,
-`Changed`, `Fixed`, `Removed`, or `Security`. Name the issue in the bullet. A
-fragment carries no version number, because the release coordinator writes the
-`version YY.MM.DD.HH.MM` heading at release time.
-
-Obey these rules.
-
-1. Edit your own fragment only.
-2. Do not edit `CHANGELOG.md` on a feature branch.
-3. Do not edit the fragment of another change.
-4. Add no fragment for an internal-only change. State that reason in the pull
-   request body.
-5. Create no index file and no summary file under `changelog.d/`.
-
-Only the release coordinator moves the merged fragments into `CHANGELOG.md`, on
-the release branch, after the feature merges. The coordinator deletes the
-fragments in that release only.
-
-[`changelog.d/README.md`](../changelog.d/README.md) holds the full rule and an
-example fragment.
-
-### Conflict Resolution Playbook
-
-See [git-flow-multi-agent.instructions.md](instructions/git-flow-multi-agent.instructions.md)
-§ "When the same files keep conflicting" for the three strategies and the rules.
-One MistHelper addition: paste both versions into chat and let Copilot propose
-the resolution.
-
-Warning: never resolve a `CHANGELOG.md` conflict by deleting the entry of another
-change. That delete removes a released record, and no gate reports the loss. Move
-each conflicting entry into its own fragment under `changelog.d/`, then resolve
-the rest of the difference.
-
-### Agent Observability & Efficiency
-
-**Logging Requirements**:
-- Log every agent call: timestamp, model, prompt hash, token counts (input/output), latency
-- Log every subagent spawn: parent agent, child agent name, task description, model used
-- Log reasoning traces: key decision points and tool selections for post-mortem analysis
-- Store agent logs in `data/agent_logs/` with structured JSON format
-- Include session ID to correlate multi-agent workflows across a single task
-
-**Token & Cost Tracking**:
-- Maintain a running token/dollar meter per session (input tokens, output tokens, total cost)
-- Log per-call cost estimates using model-specific pricing
-- Alert when a single session exceeds cost thresholds (configurable via `.env`)
-- Track cumulative daily/weekly spend for budget visibility
-
-**Subagent Best Practices**:
-- **Small focused contexts**: Give subagents only the files and context they need. Never dump
-  the full codebase into a subagent prompt. Specify exactly what to search for or implement.
-- **Model routing**: Use cheaper/faster models for simple tasks (search, grep, file reads).
-  Reserve expensive models for complex reasoning (architecture, multi-file refactors).
-  Match model capability to task complexity.
-- **Prompt caching**: Keep system prompts stable across calls to maximize cache hits.
-  Do not inject variable data (timestamps, random IDs) into system prompts.
-  Move volatile content to user messages instead.
-
-**Failure Detection**:
-
-| Signal | Action |
-| - | - |
-| Cache miss rate > 50% | Audit system prompt for instability; remove volatile content |
-| Subagent called > 3x for same query | Break the loop; escalate to human or try different approach |
-| MCP tool result > 50KB | Truncate or filter before passing to model; log the oversized result |
-| Token count > 100K in single call | Split task into smaller subtasks; review context window usage |
-| Same error repeated 3x | Stop retrying; log the failure pattern and try alternative approach |
-
-### Copilot Token Efficiency
-
-See `copilot-token-efficiency.instructions.md` in the VS Code user profile at
-`%APPDATA%\Code\User\prompts\`. That file governs the model choice, the MCP
-servers, and the chat session. A cloud agent makes none of those choices, so
-the file stays out of this repository and costs no tokens here.
-
-### Windows Branch Switching & Post-Merge Fix Timing
-
-See [git-flow-multi-agent.instructions.md](instructions/git-flow-multi-agent.instructions.md)
-§ "Rules for shared state". Use a worktree instead of `git checkout`. Never push
-a commit to a branch after a maintainer squash-merged its pull request.
-
-### NEVER Do These
-
-See [git-flow-multi-agent.instructions.md](instructions/git-flow-multi-agent.instructions.md)
-for the full rules. The short list:
-
-- Push fixes to a branch after its PR is squash-merged (commits become orphaned)
-- Add `auto-merge` label before CodeQL finishes on code PRs
-- Branch from feature branches (no stacking -- PRs 12-15 lesson)
-- Force-push to `main` or shared branches
-- Run `git checkout` while VS Code has files open (use worktrees instead)
-- Skip `python -m py_compile`, `ruff check`, or `black --check` before committing
-- Push a commit only to make a workflow build a container that Podman builds here
-- Start a test container outside the compose group with a bare `podman run`
-- Publish a production local port (1161/udp, 1514/udp, 2200, 8055, 8056, 8057,
-  8668, 9379, 9526, 9529) from a test container
-- Leave a test container running after the test ends
-
----
-
-## External Resources
-- Mist API Docs: `documentation/mist-api-openapi3*.{json,yaml}`
-- Thomas Munzer's mistapi: https://github.com/tmunzer/mistapi_python
-- Reference implementations: https://github.com/tmunzer/mist_library
-
----
-
-## Autonomous AI Pipeline (End-to-End)
-
-### Scope & Operating Modes
-
-**Run Mode A -- Standalone**: `MistHelper.py` executed directly on a host under systemd.
-- systemd unit: `deploy/misthelper.service`
-- Tokens/config loaded via `EnvironmentFile=/opt/misthelper/.env`
-
-**Run Mode B -- Containerized**: Podman/Docker image managed by systemd Quadlet (preferred for single-node).
-- Quadlet unit: `deploy/misthelper.container`
-- Registry: `ghcr.io/jmorrison-juniper/misthelper`
-- Podman Quadlet is the recommended systemd integration; `podman generate systemd` is deprecated.
-
-All tokens and org IDs live in `.env` (git-ignored), never in code or image layers. Committed template: `deploy/.env.example`.
-
-### Specifying Integration
-
-Every new feature begins as a **Feature Spec** (using SpecKit / Specifying). The Spec is the contract that drives AI-assisted multi-file edits; the PR proves conformance and triggers quality gates then auto-merge.
-
-**Feature Spec (Issue)**: Use `.github/ISSUE_TEMPLATE/feature-spec.yml`. Required sections:
-1. **Problem / Goal** -- User problem, desired outcome, non-goals.
-2. **Interfaces & Behavior** -- CLI flags, `.env` vars, I/O, error model.
-3. **Constraints / Performance** -- Latency, throughput, resource bounds.
-4. **Security & Secrets** -- `.env` only; logging/redaction expectations.
-5. **Test Plan** -- Unit cases, Hypothesis properties, E2E host+container dry-runs, coverage threshold (>=80%).
-6. **Migration / Compatibility** -- Data/flag changes, deprecation plan.
-7. **Acceptance Criteria** -- Verifiable outcome checklist.
-8. **Implementation Notes (AI hints)** -- Pseudocode, modules, files, risk hotspots.
-9. **UI Behavior & Automated Testing** -- Target URLs, interactions, assertions, Playwright scenarios (see Web UI Autonomy section below).
-
-**PR Conformance**: Use `.github/PULL_REQUEST_TEMPLATE.md`. The PR must:
-- Link to the Spec Issue.
-- Check all conformance boxes (acceptance criteria, tests, coverage, no secrets, dry-runs).
-- Show CI status for all quality gates.
-
-### Quality Gates (CI Must Pass Before Merge)
-
-The `.github/workflows/ci.yml` workflow runs the repository quality gates. A PR cannot auto-merge unless every required gate is green.
-
-| Gate | Tool | What It Checks |
-|------|------|----------------|
-| Lint | **Ruff** | Style violations, import order, auto-fixable issues |
-| Format | **Black** | Formatting. Zero files may need reformatting. |
-| Type Safety | **mypy** | PEP 484 type annotations under the `pyproject.toml` settings |
-| Tests + Coverage | **pytest + pytest-cov** | Unit and integration tests, coverage >= 80 percent |
-| Test Quality | **`test-quality-analyzer`** | New or changed tests must not add quality findings |
-| Security Lint | **Bandit** | AST-based Python security issues at every severity |
-| Static Analysis Register | **`codeql-verdict-register`** | Dismissed CodeQL alerts must match the checked-in register |
-| Dependency CVEs | **pip-audit** | Known vulnerabilities in `requirements.txt` |
-| Code Quality | **Pylint** | Score >= 9.5 |
-| Complexity | **Radon** and **`complexity-gate`** | No block above cyclomatic complexity 10 |
-| Dead Code | **Vulture** | Zero findings at confidence 70 |
-| Docstring Style | **pydocstyle** | Zero violations |
-| Docstring Coverage | **interrogate** | Coverage >= 90 percent |
-| Diagram References | **`diagram-refs`** with `.github/diagram-refs-allowlist.txt` | Every diagram reference resolves |
-| Mermaid Syntax | **`mermaid-lint` action** of `misthelper-devtools` | Mermaid blocks parse successfully |
-| Citation References | **`check-citations`** | Citations in `src/` and `tests/` resolve |
-| Menu Reference | **`scripts/generate_menu_wiki.py`** and **`scripts.menu_api_map`** | The generated menu reference and the menu API endpoint map match the source |
-| SpecKit Tasks | **`speckit-task-audit`** | Open SpecKit task records are reported as advisory output |
-| Exclusion Drift | **`exclusion-drift`** | Quality exclusion drift is reported as advisory output |
-| E2E Browser | **Playwright** (CI `playwright` job) | Gunicorn web UI functional tests |
-| Ops Portal | **npm** (CI `ops_portal` job) | `npm audit --audit-level=high`, `typecheck`, `lint`, and `test` for `ops-portal/`. All four block a merge. |
-| Ops Platform Tests | **pytest** (CI `ops_platform_pytest` job) | The ops platform tests collect at least 390 tests and meet 56 percent coverage |
-| Ops Platform Lint | **Ruff** (CI `ops_platform_ruff` job) | The ops platform Ruff correctness gate must pass |
-| Static Analysis | **CodeQL** (`.github/workflows/codeql.yml`) | Deep code and workflow vulnerability scanning |
-| Dependency Updates | **Dependabot** (`.github/dependabot.yml`) | Weekly pip update PRs |
-
-The workflow defines 24 quality jobs and one issue-management job. Read the job
-list from `.github/workflows/ci.yml` before you trust this count. CodeQL runs in
-a separate workflow, and Dependabot is not a gate. A caller can override each
-threshold through a `workflow_call` input. The table lists the default.
-
-The `misthelper-devtools` package supplies `test-quality-analyzer`,
-`complexity-gate`, `check-citations`, `speckit-task-audit`, `symbol-diff`,
-`stranded-branch-report`, `codeql-verdict-register`, `bandit-exclude-check`,
-`diagram-refs`, `exclusion-drift`, `pytest-chunks`, `worktree-cleanup`, and
-`markdown-link-check`. The same repository supplies the `mermaid-lint` action.
-`requirements-dev.txt` pins that package to one commit. The test quality
-ratchet compares each run against `.github/test-quality-baseline.json` in this
-repository. `documentation/quality-gates.md` tells how to update that file. The
-Copilot, auto-merge, linked-issue, quality-gate issue, stranded branch, STE lint,
-CodeQL, container build, and release image workflows call the shared reusable
-workflows of that repository at one pinned commit.
-`documentation/development-tooling-migration.md` lists them.
-
-Every gate above `Ops Portal` reads Python only. The `ops_portal` job is the one
-gate that reads the npm dependency tree, so it is the only check that can report
-an advisory in `ops-portal/package-lock.json` (issue #1847).
-
-**Pre-commit hooks** (`.pre-commit-config.yaml`) run Ruff, mypy, Bandit, and the shared `ste-linter` and `markdown-link-check` hooks of `misthelper-devtools` locally to catch issues before push.
-
-**Automated issue lifecycle** (the `quality_gate_issues` job, `scope: all`):
-- Gate fails on `main` → GitHub issue auto-created with `quality-gate` label
-- Gate passes on `main` → matching open issue auto-closed
-- Gate fails in a PR → issue titled `... failed (PR #<number>)`; a later passing run of that PR closes it
-- A `main` run keeps a PR issue open while that PR is open
-
-### Security Findings: Fix Over Suppress
-
-See [coding-standards.instructions.md](instructions/coding-standards.instructions.md) § Security Findings. Project-specific tools: bandit, pip-audit, CodeQL.
-
-### Delivery Artifacts (Per Release Tag)
-
-Triggered by tag push (`v*.*.*`) via `.github/workflows/release.yml`:
-1. **Python wheel + sdist** -- standard `python -m build` output
-2. **Standalone ZIP** -- `MistHelper.py` + `requirements.txt` + `README.md` bundled
-3. **Container image** -- multi-arch (amd64/arm64) pushed to GHCR
-
-### Auto-Merge & Governance
-
-**Branch protection** on `main` requires all CI checks to pass, **including CodeQL**.
-**Auto-merge** workflow (`.github/workflows/auto-merge.yml`): PRs labeled `auto-merge` get squash-merged once all required checks are green. No human click needed.
-
-**Policy for AI-authored PRs**:
-- AI must link the PR to the originating Spec Issue.
-- AI must tick all conformance checklist boxes in the PR template.
-- AI must **wait for CodeQL to pass** before adding the `auto-merge` label.
-  Use `gh pr checks <pr-number> --watch` to confirm all checks are green.
-- Destructive operations (154-187, 189-191, 194, 206-208, 239, 281, 286-287, 291-293) require explicit human review regardless of AI authorship.
-
----
-
-## Web UI Autonomy (AI-Driven Browser Interaction)
-
-MistHelper serves a Gunicorn web UI (port 8055). AI agents use VS Code browser tools to interact autonomously.
-
-**Enable**: Setting `workbench.browser.enableChatTools` must be on.
-
-**Workflow**: Open page (`-p 8055:8055`) → inspect DOM with `readPage` → execute user journeys (`clickElement`, `typeInPage`, etc.) → validate DOM state → generate Playwright tests (`runPlaywrightCode`) → save to `tests/e2e/`. The `gunicorn_server` fixture in `tests/e2e/conftest.py` handles server lifecycle.
-
-### UI Section in Feature Specs
-
-When a Spec involves web UI changes, include:
-1. **Target URL(s)** (e.g., `/`, `/dashboard`, `/jobs`)
-2. **Critical user journeys**: buttons, forms, dialogs, expected state transitions
-3. **Assertions**: DOM changes, text presence, attribute/state updates
-4. **Stability contracts**: `data-testid` attributes (prefer over brittle CSS/XPath)
-5. **Artifacts**: screenshots and Playwright traces for failures
-
-### PR Conformance: UI Testing
-
-PRs touching web UI must include:
-- Playwright tests for changed UI flows (saved to `tests/e2e/`)
-- Stable `data-testid` attributes where needed
-- Screenshots/traces as CI artifacts on failures
-
----
-
-## Complexity-Driven SpecKit Escalation
-
-See [git-flow-multi-agent.instructions.md](instructions/git-flow-multi-agent.instructions.md)
-§ Part 7 for the full decision table.
-
-**MistHelper-specific escalation triggers**:
-- Any change to a destructive operation (154-187, 189-191, 194, 206-208, 239, 281, 286-287, 291-293)
-- Database schema or primary key strategy changes
-- Changes touching 3+ files or 2+ classes
-
----
-
-## AI Agent Operating Instructions (Summary for Copilot/Workspace)
-
-When implementing a Feature Spec, AI agents must follow this protocol:
-
-1. **Create or claim a GitHub issue** before writing any code. Add `in-progress` label.
-2. **Create a branch from `main`** using `fix/<issue>-<slug>`, `feat/<issue>-<slug>`, or `chore/<issue>-<slug>`.
-3. **Check for file overlap** with other open PRs (`gh pr list --json files`). Wait if MistHelper.py is contested.
-4. **Read the Feature Spec Issue** as the authoritative plan; confirm all Acceptance Criteria.
-5. **Implement only necessary files/modules**; keep secrets externalized to `.env`.
-6. **Add/modify tests** to meet unit + property requirements and maintain >= 80% coverage.
-7. **Update `deploy/.env.example`** if introducing new environment variables.
-8. **For UI features**: open the Gunicorn page using browser agent tools, interact to validate behavior, generate Playwright tests, save to `tests/e2e/`.
-9. **Prepare the PR** using the PR template; include `Closes #<issue-number>`, link the Spec, add the `changelog.d/` fragment for a user-visible change, and complete all checklist items.
-10. **Ensure CI is green**: Ruff, mypy, pytest+cov, Bandit, pip-audit, CodeQL, Playwright E2E, ops portal, and ops platform.
-11. **Add the `auto-merge` label** once all checks pass.
-12. **Do not skip deployment steps**: the release tag publishes host bundle + wheel and pushes the GHCR image.
-
----
-
-**Remember**: This codebase prioritizes NOC engineer safety and operational clarity over clever abstractions. Explicit > Implicit. Readable > Concise. Safe > Fast.
-
-<!-- SPECKIT START -->
-For additional context about technologies to be used, project structure,
-shell commands, and other important information, read the current plan
-at specs/1016-misthelper-suppression-cleanup/plan.md
-<!-- SPECKIT END -->
-
-<!-- rtk-instructions v2 -->
-## RTK — Token-Optimized CLI
-
-**rtk** is a CLI proxy that filters and compresses command outputs, saving 60-90% tokens.
-
-## Rule
-
-Always prefix shell commands with `rtk`:
-
-```bash
-# Instead of:              Use:
-git status                 rtk git status
-git log -10                rtk git log -10
-cargo test                 rtk cargo test
-docker ps                  rtk docker ps
-kubectl get pods           rtk kubectl pods
-```
-
-## Meta commands (use directly)
-
-```bash
-rtk gain              # Token savings dashboard
-rtk gain --history    # Per-command savings history
-rtk discover          # Find missed rtk opportunities
-rtk proxy <cmd>       # Run raw (no filtering) but track usage
-```
-<!-- /rtk-instructions -->
+| `MistHelper.py` | The entry point and the menu. Measured on 2026-10-04, it has 8,382 lines, and `src/` holds 828 Python files with 235,285 lines. |
+| `src/foundation/support/utils/operation_registry.py` | The category of each menu operation. |
+| `src/foundation/support/refactors/endpoint_primary_key_strategies.py` | The primary key strategy of each endpoint. |
+| `documentation/CONTRIBUTING-MistHelper.md` | The map of the stable `MistHelper.py` symbols and the `src/` packages. |
+| `documentation/quality-gates.md` | Each quality gate and the way to update the test quality baseline. |
+| `documentation/menu_reference.md` | The generated operator reference. `scripts/generate_menu_wiki.py` writes it. |
+| `documentation/container-deployment.md` | The deployment methods and the test container policy for an operator. |
+| `documentation/SSH_GUIDE.md` | The SSH runner guide. |
+| `changelog.d/` | One release-note fragment for each change. |
+| `CHANGELOG.md` | The released history in the Keep a Changelog format. The release coordinator owns it. |
+| `compose.yml` | The compose group and the published ports. |
+| `requirements.txt` and `requirements-dev.txt` | The runtime dependencies and the development tools. |
+| `.env` | The credentials and the configuration. Git ignores it, and `deploy/.env.example` is the template. |
+| `.specify/memory/constitution.md` | The project constitution for the Spec Kit workflow. |
+
+## External resources
+
+- The Mist API specification is `documentation/mist-api-openapi31json.json` and the other
+  `documentation/mist-api-openapi3*` files.
+- The `mistapi` SDK by Thomas Munzer: <https://github.com/tmunzer/mistapi_python>
+- Example implementations: <https://github.com/tmunzer/mist_library>

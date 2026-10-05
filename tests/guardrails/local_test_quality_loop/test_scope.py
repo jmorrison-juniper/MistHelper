@@ -556,7 +556,7 @@ class TestAnalyzerInputsAndDrift:  # Require real errors and real finding change
         self, tmp_path: Path
     ) -> None:  # Pair T16 text drift with real behavior.
         guides = GuidanceFixture(tmp_path / "guides")  # Keep direct guard inputs separate from analyzer history.
-        guide_path = "agents.md"  # Select one guide independently for the behavioral pair.
+        guide_path = ".github/copilot-instructions.md"  # Select the one guide for the behavioral pair.
         guides.change(  # Weaken actual controls.
             guide_path, SectionCommands.LABELS[2], "--gate", "--gate --disable-rule weak_is_not_none"
         )  # Weaken actual controls.

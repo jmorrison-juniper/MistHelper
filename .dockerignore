@@ -84,7 +84,8 @@ documentation/*
 !documentation/mist-api-openapi31json.json
 docs/
 docs/_build/
-agents.md
+AGENTS.md
+CLAUDE.md
 SSH_GUIDE.md
 run-misthelper.py
 

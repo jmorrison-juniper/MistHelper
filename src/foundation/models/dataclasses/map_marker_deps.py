@@ -2,7 +2,7 @@
 
 Refs issue #433 phase C tranche 3 (STRUCT-PARAMS sweep on maps_manager.py).
 Splitting the marker call signature into position + style keeps the
-``_add_device_orientation_markers`` helper under the agents.md
+``_add_device_orientation_markers`` helper under the AGENTS.md
 5-parameter limit while the call site stays self-documenting.
 """
 

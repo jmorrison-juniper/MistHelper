@@ -54,16 +54,21 @@ VOLUME_RM_PATTERN = re.compile(r"\bpodman\s+volume\s+rm\s+([^\r\n]+)")  # Match 
 # these files is a command that a reader copies. The `managing-podman` skill
 # left this list when the agent skills moved to the user level at
 # ~/.copilot/skills, because a repository test cannot read a home directory.
+# `AGENTS.md` holds the four generic container rules, and `CLAUDE.md` points at
+# the two instruction files, so both stay in the list.
 POLICY_DOCUMENTS = (
     Path(".github") / "copilot-instructions.md",
-    Path(".github") / "instructions" / "git-flow-multi-agent.instructions.md",
+    Path("AGENTS.md"),
     Path("documentation") / "container-deployment.md",
     Path("documentation") / "development-setup.md",
     Path("documentation") / "wiki" / "Container-Setup.md",
-    Path("agents.md"),
     Path("CLAUDE.md"),
     Path("README.md"),
 )
+
+# The heading of the authoritative section in `.github/copilot-instructions.md`.
+# Every other document points at this section, so a rename breaks each link.
+POLICY_SECTION = "## Containers and ports"
 
 
 def published_port_tokens() -> dict[str, str]:
@@ -112,7 +117,7 @@ class TestPolicyStatesItsRules:
 
     def test_the_authoritative_section_exists(self, policy_text: str) -> None:
         """Every other document points at this section, so a rename breaks each link."""
-        assert "### Test and Debug Containers" in policy_text
+        assert POLICY_SECTION in policy_text
 
     def test_the_section_names_the_container_name_format(self, policy_text: str) -> None:
         """Without the marker a reader cannot learn which name an ephemeral container takes."""
@@ -128,7 +133,7 @@ class TestPortTableMatchesCompose:
 
     def test_every_published_port_appears_in_the_table(self, policy_text: str) -> None:
         """A missing row lets a reader pick a port that the stack already holds."""
-        table = policy_text.split("### Test and Debug Containers")[1]  # Read the policy section only.
+        table = policy_text.split(POLICY_SECTION)[1]  # Read the policy section only.
         for token, service in published_port_tokens().items():  # Check each port the stack publishes.
             assert f"| {token} |" in table, f"The policy table omits port {token}, which {service} publishes"
 
@@ -184,7 +189,7 @@ class TestNoDestructiveCommandInABlock:
     def test_authoritative_cleanup_includes_empty_container_and_volume_checks(self, policy_text: str) -> None:
         """The proof must show that no temporary container or volume remains."""
         LOGGER.info("Checking authoritative cleanup proof commands")  # Log the policy proof check.
-        section = policy_text.split("### Test and Debug Containers")[1]  # Limit the check to the policy.
+        section = policy_text.split(POLICY_SECTION)[1]  # Limit the check to the policy.
         LOGGER.debug("Authoritative policy section length is %s", len(section))  # Record the checked size.
         assert 'podman ps -a --filter "name=misthelper-tmp-"' in section
         assert 'podman volume ls --filter "name=misthelper-tmp-"' in section

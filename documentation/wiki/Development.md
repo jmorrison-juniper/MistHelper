@@ -43,6 +43,7 @@ This page does not repeat that table. One copy cannot drift from itself.
 
 ## Internal Documentation
 
-- **[agents.md](https://github.com/jmorrison-juniper/MistHelper/blob/main/agents.md)**: Internal agent guide with safety patterns, refactor guidance
+- **[AGENTS.md](https://github.com/jmorrison-juniper/MistHelper/blob/main/AGENTS.md)**: The agent rules that apply to each repository of this owner
+- **[.github/copilot-instructions.md](https://github.com/jmorrison-juniper/MistHelper/blob/main/.github/copilot-instructions.md)**: The agent rules that apply to MistHelper only, with the safety patterns and the gates
 - **[documentation/](https://github.com/jmorrison-juniper/MistHelper/tree/main/documentation)**: Sample files, API specs, diagrams
 - **[documentation/diagrams/](https://github.com/jmorrison-juniper/MistHelper/tree/main/documentation/diagrams)**: Mermaid diagrams covering architecture, operations, and infrastructure

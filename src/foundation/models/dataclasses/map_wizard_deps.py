@@ -1,7 +1,7 @@
 """Dataclasses that pack the Intelligent Map Replacement Wizard arguments.
 
 Refs issue #433 phase C tranche 3 (STRUCT-PARAMS sweep on maps_manager.py).
-The wizard's preview/apply/summary helpers are kept under the agents.md
+The wizard's preview/apply/summary helpers are kept under the AGENTS.md
 5-parameter limit by grouping current_map / map_name / assets / errors /
 backup_file into purpose-specific dataclasses.
 """

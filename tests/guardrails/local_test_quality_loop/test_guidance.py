@@ -12,12 +12,10 @@ from .guard import GuideGuard, InputLedger, SectionCommands  # Exercise direct g
 
 
 class TestInputLedger:  # Prove failures do not become claimed successful reads.
-    """Prove all six independent read attempts and validation measurements."""
+    """Prove all four independent read attempts and validation measurements."""
 
     paths = (  # Define expectations independently of the guard's manifest.
-        ".github/copilot-instructions.md",  # Count the first required guide.
-        "agents.md",  # Count the second required guide.
-        ".github/instructions/git-flow-multi-agent.instructions.md",  # Count the third required guide.
+        ".github/copilot-instructions.md",  # Count the one required guide.
         ".github/workflows/ci.yml",  # Count the live contract input.
         ".github/test-quality-config.toml",  # Count the required settings input.
         ".github/test-quality-baseline.json",  # Count the required baseline input.
@@ -36,21 +34,21 @@ class TestInputLedger:  # Prove failures do not become claimed successful reads.
 
     def test_complete_reads(self, tmp_path: Path) -> None:  # Prove the successful accounting contract.
         ledger = self.prepare(tmp_path)  # Create all required inputs.
-        ledger.read_all(self.paths)  # Exercise six real reads.
+        ledger.read_all(self.paths)  # Exercise four real reads.
         assert ledger.progress.attempted == set(self.paths)  # Require every independent attempt.
         assert ledger.progress.reads == set(self.paths)  # Require every complete UTF-8 read.
-        assert ledger.progress.guide_reads == set(self.paths[:3])  # Count only the three guide inputs.
+        assert ledger.progress.guide_reads == set(self.paths[:1])  # Count only the one guide input.
         assert ledger.progress.guide_checks == set()  # Do not claim decisions from reads.
         assert ledger.progress.validations == set()  # Do not claim validations from reads.
-        assert ledger.validate(self.paths[4], InputLedger.Validation.settings) is True  # Accept readable empty TOML.
-        assert ledger.validate(self.paths[5], InputLedger.Validation.baseline) is True  # Accept empty identities.
-        assert ledger.progress.validations == set(self.paths[4:])  # Measure only the two completed validations.
+        assert ledger.validate(self.paths[2], InputLedger.Validation.settings) is True  # Accept readable empty TOML.
+        assert ledger.validate(self.paths[3], InputLedger.Validation.baseline) is True  # Accept empty identities.
+        assert ledger.progress.validations == set(self.paths[2:])  # Measure only the two completed validations.
         assert ledger.errors == []  # Require named errors to remain empty only on success.
 
     @pytest.mark.parametrize("path", paths, ids=lambda path: f"T15-{path}")
     @pytest.mark.parametrize("form", ("missing", "directory", "invalid_utf8"))
     def test_failed_read(self, tmp_path: Path, path: str, form: str) -> None:  # Prove portable read failures.
-        ledger = self.prepare(tmp_path)  # Keep the other five inputs readable.
+        ledger = self.prepare(tmp_path)  # Keep the other three inputs readable.
         logging.info("Making ledger input %s %s", path, form)  # Identify the controlled failure.
         destination = tmp_path / path  # Keep the mutation inside the fixture.
         destination.unlink()  # Remove only this fixture's required file.
@@ -60,9 +58,9 @@ class TestInputLedger:  # Prove failures do not become claimed successful reads.
             destination.write_bytes(b"\xff")  # Supply invalid bytes without changing permissions.
         logging.debug("Prepared ledger failure %s for %s", form, path)  # Confirm the controlled state.
         ledger.read_all(self.paths)  # Require later independent reads after the failure.
-        assert ledger.progress.attempted == set(self.paths)  # Require all six attempted reads.
+        assert ledger.progress.attempted == set(self.paths)  # Require all four attempted reads.
         assert ledger.progress.reads == set(self.paths) - {path}  # Do not count the failed read.
-        assert ledger.progress.guide_reads == set(self.paths[:3]) - {path}  # Preserve successful guide reads.
+        assert ledger.progress.guide_reads == set(self.paths[:1]) - {path}  # Preserve a successful guide read.
         assert set(ledger.texts) == set(self.paths) - {path}  # Never retain unusable input as empty text.
         assert len(ledger.errors) == 1 and path in ledger.errors[0]  # Require the exact failed input.
         assert "read_failed" in ledger.errors[0]  # Distinguish read failure from validation failure.
@@ -70,27 +68,27 @@ class TestInputLedger:  # Prove failures do not become claimed successful reads.
     @pytest.mark.parametrize(
         ("path", "text"),
         (
-            (paths[4], "[rules\n"),  # Reject malformed TOML without losing the completed read.
-            (paths[5], "{"),  # Reject malformed JSON without losing the completed read.
-            (paths[5], "{}"),  # Require a baseline list rather than an arbitrary JSON value.
-            (paths[5], '[{"file_path": "tests/test_one.py"}]'),  # Require complete finding identities.
+            (paths[2], "[rules\n"),  # Reject malformed TOML without losing the completed read.
+            (paths[3], "{"),  # Reject malformed JSON without losing the completed read.
+            (paths[3], "{}"),  # Require a baseline list rather than an arbitrary JSON value.
+            (paths[3], '[{"file_path": "tests/test_one.py"}]'),  # Require complete finding identities.
             (
-                paths[5],
+                paths[3],
                 '[{"category":"weak_assertion","file_path":"tests/test_one.py","line_number":true,"rule_id":"x"}]',
             ),  # Reject booleans as baseline line numbers.
         ),
         ids=("T15-toml", "T15-json", "T15-list", "T15-identity", "T15-line-type"),
     )
     def test_invalid_validation(self, tmp_path: Path, path: str, text: str) -> None:  # Keep failed validation visible.
-        ledger = self.prepare(tmp_path)  # Preserve the five other required reads.
+        ledger = self.prepare(tmp_path)  # Preserve the three other required reads.
         logging.info("Writing invalid ledger content to %s", path)  # Announce the controlled parse failure.
         (tmp_path / path).write_text(text, encoding="utf-8")  # Mutate only the declared fixture input.
         logging.debug("Wrote %s invalid characters to %s", len(text), path)  # Measure the fixture write.
         ledger.read_all(self.paths)  # Count readable malformed text as a completed read.
-        ledger.validate(self.paths[4], InputLedger.Validation.settings)  # Attempt settings independently.
-        ledger.validate(self.paths[5], InputLedger.Validation.baseline)  # Attempt baseline independently.
+        ledger.validate(self.paths[2], InputLedger.Validation.settings)  # Attempt settings independently.
+        ledger.validate(self.paths[3], InputLedger.Validation.baseline)  # Attempt baseline independently.
         assert ledger.progress.reads == set(self.paths)  # Do not erase successful reads after parsing.
-        assert ledger.progress.validations == set(self.paths[4:]) - {path}  # Count only usable inputs.
+        assert ledger.progress.validations == set(self.paths[2:]) - {path}  # Count only usable inputs.
         assert len(ledger.errors) == 1 and path in ledger.errors[0]  # Name the failed validation.
         assert "validation_failed" in ledger.errors[0]  # Do not mislabel a parse failure as a read failure.
 
@@ -170,9 +168,9 @@ class TestGuideNormalization:  # Accept only changes that preserve executable co
         @classmethod
         def guides(  # Apply supported syntax to both modes of every independent guide.
             cls, fixture: GuidanceFixture, form: str
-        ) -> None:  # Keep three independent procedure variants valid.
+        ) -> None:  # Keep each independent procedure variant valid.
             shell = "bash" if form == "bash_continuation" else "powershell"  # Preserve the selected shell's grammar.
-            for path in TestInputLedger.paths[:3]:  # Prove every guide accepts harmless normalization.
+            for path in TestInputLedger.paths[:1]:  # Prove the guide accepts harmless normalization.
                 text = fixture.Template.guide(path, fixture.contract, shell)  # Construct a real active procedure.
                 fixture.files.write(path, text)  # Keep writes and action logging fixture-local.
                 fixture.texts[path] = text  # Do not reread or silently normalize fixture content.
@@ -199,16 +197,16 @@ class TestGuideNormalization:  # Accept only changes that preserve executable co
         ids=lambda form: f"T16-equivalent-{form}",
     )
     def test_equivalent_controls(self, tmp_path: Path, form: str) -> None:  # Prove semantic normalization is real.
-        fixture = GuidanceFixture(tmp_path)  # Build six real readable fixture inputs.
+        fixture = GuidanceFixture(tmp_path)  # Build four real readable fixture inputs.
         self.Variants.guides(fixture, form)  # Preserve all controls while changing harmless spelling or order.
         guard = GuideGuard(tmp_path)  # Read inputs through the direct guard.
         assert guard.run() is True, guard.summary()  # Equivalent syntax must preserve a successful decision.
-        assert guard.counts() == {  # Require actual six-input and three-guide accounting.
-            "inputs_attempted": 6,
-            "input_reads": 6,
-            "input_validations": 6,
-            "guide_reads": 3,
-            "guide_checks": 3,
+        assert guard.counts() == {  # Require actual four-input and one-guide accounting.
+            "inputs_attempted": 4,
+            "input_reads": 4,
+            "input_validations": 4,
+            "guide_reads": 1,
+            "guide_checks": 1,
             "explicit_paths": 2,
             "automatic_paths": 2,
             "effective_paths": 4,
@@ -231,7 +229,7 @@ class TestGuideNormalization:  # Accept only changes that preserve executable co
         """Accept a standard Markdown comment without promoting malformed HTML."""
         fixture = GuidanceFixture(tmp_path)  # Keep all command input mutations local.
         close, hidden_commands, reason = comment_case
-        for path in TestInputLedger.paths[:3]:  # Require a complete independent procedure in every guide.
+        for path in TestInputLedger.paths[:1]:  # Require a complete independent procedure in the guide.
             text = fixture.Template.guide(path, fixture.contract, shell).replace(  # Remove only a prefix.
                 "rtk proxy ", ""
             )  # Remove only a prefix.
@@ -241,21 +239,21 @@ class TestGuideNormalization:  # Accept only changes that preserve executable co
             fixture.files.write(path, text)  # Keep active base, preflight, and analyzer fences executable.
         guard = GuideGuard(tmp_path)  # Read the plain active procedure directly.
         assert guard.run() is (reason is None), guard.summary()
-        assert guard.counts()["input_validations"] == (6 if reason is None else 3)
-        assert guard.counts()["input_reads"] == 6 and guard.counts()["guide_checks"] == 3
+        assert guard.counts()["input_validations"] == (4 if reason is None else 3)
+        assert guard.counts()["input_reads"] == 4 and guard.counts()["guide_checks"] == 1
         if reason is not None:
-            assert len(guard.ledger.errors) == 3 and all(reason in error for error in guard.ledger.errors)
+            assert len(guard.ledger.errors) == 1 and all(reason in error for error in guard.ledger.errors)
 
     def test_readable_empty_settings_and_baseline(  # Preserve readable empty input semantics.
         self, tmp_path: Path
     ) -> None:  # Preserve installed default semantics.
-        fixture = GuidanceFixture(tmp_path)  # Create all six readable fixture inputs.
+        fixture = GuidanceFixture(tmp_path)  # Create all four readable fixture inputs.
         fixture.files.write(".github/test-quality-config.toml", "\n")  # Keep readable empty settings valid.
         fixture.files.write(".github/test-quality-baseline.json", "[ ]\n")  # Keep a valid empty comparator list.
         guard = GuideGuard(tmp_path)  # Require actual reads before interpreting analyzer evidence.
         assert guard.run() is True, guard.summary()  # Do not confuse missing files with usable empty files.
         assert (  # Measure complete success.
-            guard.counts()["input_reads"] == 6 and guard.counts()["input_validations"] == 6
+            guard.counts()["input_reads"] == 4 and guard.counts()["input_validations"] == 4
         )  # Measure complete success.
 
     @pytest.mark.parametrize(
@@ -286,7 +284,7 @@ class TestGuideNormalization:  # Accept only changes that preserve executable co
         fixture.replace(".github/workflows/ci.yml", *mutation)  # Normalize only supported actual named script syntax.
         guard = GuideGuard(tmp_path)  # Read current fixture CI rather than cached controls.
         assert guard.run() is True, guard.summary()  # Accept equivalent live executable controls.
-        assert guard.counts()["input_validations"] == 6  # Require all complete independent decisions.
+        assert guard.counts()["input_validations"] == 4  # Require all complete independent decisions.
 
 
 class TestGuideMutations:  # Reject every controlled active-procedure change in each guide.
@@ -464,7 +462,7 @@ class TestGuideMutations:  # Reject every controlled active-procedure change in 
                     "fenced_label": (label, "```text\n" + label + "\n```"),  # Ignore fenced labels.
                     "outside_section": (label, "## Outside the required section\n" + label),  # Respect the boundary.
                     "wrong_heading": (SectionCommands.GUIDES[path][-1][1], "Unrelated section"),  # Require exact names.
-                    "wrong_parent": (SectionCommands.GUIDES[path][0][1], "Unrelated parent"),  # Require Part 3.
+                    "wrong_parent": (SectionCommands.GUIDES[path][0][1], "Unrelated parent"),  # Require the parent.
                 }
                 if form in replacements:  # These cases change only fixture Markdown structure.
                     fixture.replace(path, *replacements[form])  # Preserve unrelated independent inputs.
@@ -511,18 +509,18 @@ class TestGuideMutations:  # Reject every controlled active-procedure change in 
         def failure(guard: GuideGuard, path: str) -> None:  # Require a specific guide failure with complete progress.
             assert guard.run() is False, guard.summary()  # A mutation must return a failing guard decision.
             assert len(guard.ledger.errors) == 1 and path in guard.ledger.errors[0]  # Name this exact guide.
-            assert guard.counts() == {  # Preserve the five independent valid inputs and all completed decisions.
-                "inputs_attempted": 6,
-                "input_reads": 6,
-                "input_validations": 5,
-                "guide_reads": 3,
-                "guide_checks": 3,
+            assert guard.counts() == {  # Preserve the three independent valid inputs and all completed decisions.
+                "inputs_attempted": 4,
+                "input_reads": 4,
+                "input_validations": 3,
+                "guide_reads": 1,
+                "guide_checks": 1,
                 "explicit_paths": 2,
                 "automatic_paths": 2,
                 "effective_paths": 4,
             }
 
-    @pytest.mark.parametrize("path", TestInputLedger.paths[:3])
+    @pytest.mark.parametrize("path", TestInputLedger.paths[:1])
     @pytest.mark.parametrize("mutation", Cases.scoped, ids=lambda mutation: f"T16-scoped-{mutation[0]}-{mutation[1]}")
     def test_scoped_control(  # Require a named failure for each scoped semantic mutation.
         self, tmp_path: Path, path: str, mutation: tuple[str, str]
@@ -534,7 +532,7 @@ class TestGuideMutations:  # Reject every controlled active-procedure change in 
         self.Cases.failure(guard, path)  # Require a named measured failure.
         assert guard.ledger.errors[0].startswith(path + ": validation_failed")  # Require this active guide failure.
 
-    @pytest.mark.parametrize("path", TestInputLedger.paths[:3])
+    @pytest.mark.parametrize("path", TestInputLedger.paths[:1])
     @pytest.mark.parametrize("mutation", Cases.full, ids=lambda mutation: f"T16-full-{mutation[0]}-{mutation[1]}")
     def test_full_control(  # Reject controls that narrow or change the required full suite.
         self, tmp_path: Path, path: str, mutation: tuple[str, str]
@@ -546,7 +544,7 @@ class TestGuideMutations:  # Reject every controlled active-procedure change in 
         self.Cases.failure(guard, path)  # Require this guide to fail without hiding other progress.
         assert guard.ledger.errors[0].startswith(path + ": validation_failed")  # Require this full-suite guide failure.
 
-    @pytest.mark.parametrize("path", TestInputLedger.paths[:3])
+    @pytest.mark.parametrize("path", TestInputLedger.paths[:1])
     @pytest.mark.parametrize(
         "case",
         tuple((0, *mutation, "powershell") for mutation in Cases.Preparation.base)
@@ -569,7 +567,7 @@ class TestGuideMutations:  # Reject every controlled active-procedure change in 
         self.Cases.failure(guard, path)  # Require a semantic relationship failure.
         assert guard.ledger.errors[0].startswith(path + ": validation_failed")  # Require this preparation failure.
 
-    @pytest.mark.parametrize("path", TestInputLedger.paths[:3])
+    @pytest.mark.parametrize("path", TestInputLedger.paths[:1])
     @pytest.mark.parametrize(
         "case",
         tuple((index, form) for form in Cases.Inactive.forms[:7] for index in range(4))
@@ -606,11 +604,11 @@ class TestRequiredInputs:  # Make missing or unusable capabilities fail with mea
             guard = GuideGuard(fixture.root)  # Read the new live authority rather than cached controls.
             assert guard.run() is False  # Every old guide command must now fail.
             assert guard.counts() == {  # Require measured reads, decisions, and newly decoded controls.
-                "inputs_attempted": 6,
-                "input_reads": 6,
+                "inputs_attempted": 4,
+                "input_reads": 4,
                 "input_validations": 3,
-                "guide_reads": 3,
-                "guide_checks": 3,
+                "guide_reads": 1,
+                "guide_checks": 1,
                 "explicit_paths": 3,
                 "automatic_paths": 2,
                 "effective_paths": 5,
@@ -619,22 +617,22 @@ class TestRequiredInputs:  # Make missing or unusable capabilities fail with mea
 
         @staticmethod
         def repaired(fixture: GuidanceFixture) -> GuideGuard:  # Repair every active scoped fixture fence.
-            for path in TestInputLedger.paths[:3]:  # Do not let another guide satisfy this guide's contract.
+            for path in TestInputLedger.paths[:1]:  # Repair the active scoped fence of the guide.
                 fixture.change(  # Keep all production documents and workflows unchanged.
                     path,
                     SectionCommands.LABELS[2],
                     "--full-gate-path requirements-dev.txt",
                     "--full-gate-path requirements-dev.txt --full-gate-path scripts/additional-trigger.txt",
                 )
-            guard = GuideGuard(fixture.root)  # Reread all six inputs for the repaired invocation.
+            guard = GuideGuard(fixture.root)  # Reread all four inputs for the repaired invocation.
             assert guard.run() is True, guard.summary()  # Accept only the complete updated live contract.
-            assert guard.counts()["input_validations"] == 6  # Require all complete successful validations.
+            assert guard.counts()["input_validations"] == 4  # Require all complete successful validations.
             assert guard.counts()["explicit_paths"] == 3 and guard.counts()["effective_paths"] == 5  # Measure drift.
             return guard  # Retain the complete observed progress for the direct test.
 
     @pytest.mark.parametrize("path", TestInputLedger.paths)
     @pytest.mark.parametrize("form", ("missing", "directory", "invalid_utf8"), ids=lambda form: f"T15-{form}")
-    def test_read_failure(self, tmp_path: Path, path: str, form: str) -> None:  # Prove six independent read attempts.
+    def test_read_failure(self, tmp_path: Path, path: str, form: str) -> None:  # Prove four independent read attempts.
         fixture = GuidanceFixture(tmp_path)  # Keep every other input usable and independent.
         fixture.files.remove(path)  # Remove only the selected temporary input.
         logging.info("Preparing required-input failure %s for %s", form, path)  # Announce portable failure evidence.
@@ -643,15 +641,15 @@ class TestRequiredInputs:  # Make missing or unusable capabilities fail with mea
         elif form == "invalid_utf8":  # Make the required complete UTF-8 read fail.
             (tmp_path / path).write_bytes(b"\xff")  # Supply an actual invalid input.
         logging.debug("Prepared required-input failure %s for %s", form, path)  # Confirm the fixture state.
-        guard = GuideGuard(tmp_path)  # Read all six inputs even after this failure.
+        guard = GuideGuard(tmp_path)  # Read all four inputs even after this failure.
         assert guard.run() is False  # A missing capability must not become a successful empty scope.
         assert len(guard.ledger.errors) == 1 and path in guard.ledger.errors[0]  # Name the failed input.
         ci_failed = path == ".github/workflows/ci.yml"  # State the independent expected dependency boundary.
-        guides = 2 if path in TestInputLedger.paths[:3] else 3  # Count available guide reads explicitly.
+        guides = 0 if path in TestInputLedger.paths[:1] else 1  # Count available guide reads explicitly.
         assert guard.counts() == {  # Retain independent reads and validations when CI is unavailable.
-            "inputs_attempted": 6,
-            "input_reads": 5,
-            "input_validations": 2 if ci_failed else 5,
+            "inputs_attempted": 4,
+            "input_reads": 3,
+            "input_validations": 2 if ci_failed else 3,
             "guide_reads": guides,
             "guide_checks": 0 if ci_failed else guides,
             "explicit_paths": 0 if ci_failed else 2,
@@ -663,20 +661,18 @@ class TestRequiredInputs:  # Make missing or unusable capabilities fail with mea
         ("path", "text"),
         (
             (TestInputLedger.paths[0], ""),
-            (TestInputLedger.paths[1], ""),
-            (TestInputLedger.paths[2], ""),
-            (TestInputLedger.paths[3], "jobs: [\n"),
-            (TestInputLedger.paths[4], "[rules\n"),
-            (TestInputLedger.paths[4], "[rules]\nunknown_rule = true\n"),  # Reject actual installed semantic errors.
-            (TestInputLedger.paths[4], "[rules]\nweak_assert_not_none = 1\n"),  # Require boolean switch values.
-            (TestInputLedger.paths[4], "rules = 1\n"),  # Reject unusable table shapes before installed parsing.
+            (TestInputLedger.paths[1], "jobs: [\n"),
+            (TestInputLedger.paths[2], "[rules\n"),
+            (TestInputLedger.paths[2], "[rules]\nunknown_rule = true\n"),  # Reject actual installed semantic errors.
+            (TestInputLedger.paths[2], "[rules]\nweak_assert_not_none = 1\n"),  # Require boolean switch values.
+            (TestInputLedger.paths[2], "rules = 1\n"),  # Reject unusable table shapes before installed parsing.
             (
-                TestInputLedger.paths[4],
+                TestInputLedger.paths[2],
                 '[severity]\nweak_assert_not_none = "invalid"\n',
             ),  # Preserve installed taxonomy.
-            (TestInputLedger.paths[5], "{"),
-            (TestInputLedger.paths[5], "{}"),
-            (TestInputLedger.paths[5], "[{}]"),
+            (TestInputLedger.paths[3], "{"),
+            (TestInputLedger.paths[3], "{}"),
+            (TestInputLedger.paths[3], "[{}]"),
         ),
         ids=lambda value: f"T15-invalid-{value}",
     )
@@ -687,12 +683,12 @@ class TestRequiredInputs:  # Make missing or unusable capabilities fail with mea
         assert guard.run() is False  # Readability alone must not satisfy the procedure.
         assert len(guard.ledger.errors) == 1 and path in guard.ledger.errors[0]  # Identify this unusable input.
         ci_failed = path == ".github/workflows/ci.yml"  # Invalid CI blocks guide comparisons only.
-        assert guard.counts() == {  # Preserve all six completed reads even for malformed text.
-            "inputs_attempted": 6,
-            "input_reads": 6,
-            "input_validations": 2 if ci_failed else 5,
-            "guide_reads": 3,
-            "guide_checks": 0 if ci_failed else 3,
+        assert guard.counts() == {  # Preserve all four completed reads even for malformed text.
+            "inputs_attempted": 4,
+            "input_reads": 4,
+            "input_validations": 2 if ci_failed else 3,
+            "guide_reads": 1,
+            "guide_checks": 0 if ci_failed else 1,
             "explicit_paths": 0 if ci_failed else 2,
             "automatic_paths": 0 if ci_failed else 2,
             "effective_paths": 0 if ci_failed else 4,
@@ -702,7 +698,7 @@ class TestRequiredInputs:  # Make missing or unusable capabilities fail with mea
         fixture = GuidanceFixture(tmp_path)  # Use the current named CI script as fixture authority.
         outdated = self.Drift.outdated(fixture)  # Require the old commands to fail against changed live authority.
         failed_paths = {error.split(": ", 1)[0] for error in outdated.ledger.errors}  # Keep every named failed guide.
-        assert failed_paths == set(TestInputLedger.paths[:3])  # Require three independent outdated decisions.
+        assert failed_paths == set(TestInputLedger.paths[:1])  # Require the one outdated guide decision.
         repaired = self.Drift.repaired(fixture)  # Verify complete fixture command repair against the third control.
         assert repaired.ledger.errors == []  # Complete updated commands must not hide an unsupported decision.
 
@@ -761,10 +757,10 @@ class TestRequiredInputs:  # Make missing or unusable capabilities fail with mea
             len(guard.ledger.errors) == 1 and ".github/workflows/ci.yml" in guard.ledger.errors[0]
         )  # Name the source.
         assert guard.counts() == {  # Independent settings and baseline validations remain visible.
-            "inputs_attempted": 6,
-            "input_reads": 6,
+            "inputs_attempted": 4,
+            "input_reads": 4,
             "input_validations": 2,
-            "guide_reads": 3,
+            "guide_reads": 1,
             "guide_checks": 0,
             "explicit_paths": 0,
             "automatic_paths": 0,
@@ -777,15 +773,15 @@ class TestLiveGuides:  # Check the actual worktree without executing any documen
 
     def test_required_local_procedures(self) -> None:  # Provide the direct measured preflight required by every guide.
         root = Path(__file__).resolve().parents[3]  # Read only this worktree, never another checkout.
-        guard = GuideGuard(root)  # Bind all six independent reads to the current worktree.
+        guard = GuideGuard(root)  # Bind all four independent reads to the current worktree.
         passed = guard.run()  # Print real completed reads, validations, decisions, and live controls.
         assert passed is True, guard.summary()  # Current omissions must fail before the guide edits.
         assert guard.counts() == {  # Require exact current successful measurements.
-            "inputs_attempted": 6,
-            "input_reads": 6,
-            "input_validations": 6,
-            "guide_reads": 3,
-            "guide_checks": 3,
+            "inputs_attempted": 4,
+            "input_reads": 4,
+            "input_validations": 4,
+            "guide_reads": 1,
+            "guide_checks": 1,
             "explicit_paths": 2,
             "automatic_paths": 2,
             "effective_paths": 4,

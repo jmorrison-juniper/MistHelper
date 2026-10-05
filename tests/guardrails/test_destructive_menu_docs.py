@@ -28,8 +28,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]  # Locate the repository root f
 # Each document repeats the destructive set as text. A reader trusts the text,
 # so the text must match the registry. Add a file here when it repeats the set.
 DOCUMENTS_THAT_REPEAT_THE_SET: tuple[str, ...] = (
-    ".github/copilot-instructions.md",  # The instruction file that every agent reads.
-    "agents.md",  # The VS Code chat supplement.
+    ".github/copilot-instructions.md",  # The repository instruction file that every agent reads.
     "documentation/diagrams/operations/operations-reference.md",  # The safety diagram page.
     "documentation/menu_reference.md",  # The generated operator reference.
     "documentation/wiki/Menu-Reference.md",  # The generated wiki copy.

@@ -142,7 +142,7 @@ on a host with Docker installed.
 
 This section covers every container that you start for a test, for a debug
 session, or for an end-to-end run. It does not cover the deployment methods
-above. `.github/copilot-instructions.md` § "Test and Debug Containers" holds the
+above. `.github/copilot-instructions.md` § "Containers and ports" holds the
 same policy for an agent.
 
 **Rule 1. Start the container inside the compose group.**

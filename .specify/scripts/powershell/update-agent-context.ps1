@@ -44,23 +44,32 @@ $IMPL_PLAN     = $envData.IMPL_PLAN
 $NEW_PLAN = $IMPL_PLAN
 
 # Agent file paths
-$CLAUDE_FILE   = Join-Path $REPO_ROOT 'CLAUDE.md'
+#
+# This repository keeps its agent rules in two hand-written files: AGENTS.md at
+# the root holds the generic rules, and .github/copilot-instructions.md holds
+# the repository rules. CLAUDE.md is a pointer to those two files. Spec Kit must
+# not overwrite any of the three, so every agent type that Spec Kit would send
+# to one of them writes the shared context file below instead. The file holds
+# the generated technology context for each agent, and the two rule files tell
+# an agent where to find it.
+$SPECKIT_CONTEXT_FILE = Join-Path $REPO_ROOT '.specify/memory/agent-context.md'
+$CLAUDE_FILE   = $SPECKIT_CONTEXT_FILE
 $GEMINI_FILE   = Join-Path $REPO_ROOT 'GEMINI.md'
-$COPILOT_FILE  = Join-Path $REPO_ROOT '.github/agents/copilot-instructions.md'
+$COPILOT_FILE  = $SPECKIT_CONTEXT_FILE
 $CURSOR_FILE   = Join-Path $REPO_ROOT '.cursor/rules/specify-rules.mdc'
 $QWEN_FILE     = Join-Path $REPO_ROOT 'QWEN.md'
-$AGENTS_FILE   = Join-Path $REPO_ROOT 'AGENTS.md'
+$AGENTS_FILE   = $SPECKIT_CONTEXT_FILE
 $WINDSURF_FILE = Join-Path $REPO_ROOT '.windsurf/rules/specify-rules.md'
 $KILOCODE_FILE = Join-Path $REPO_ROOT '.kilocode/rules/specify-rules.md'
 $AUGGIE_FILE   = Join-Path $REPO_ROOT '.augment/rules/specify-rules.md'
 $ROO_FILE      = Join-Path $REPO_ROOT '.roo/rules/specify-rules.md'
 $CODEBUDDY_FILE = Join-Path $REPO_ROOT 'CODEBUDDY.md'
 $QODER_FILE    = Join-Path $REPO_ROOT 'QODER.md'
-$AMP_FILE      = Join-Path $REPO_ROOT 'AGENTS.md'
+$AMP_FILE      = $SPECKIT_CONTEXT_FILE
 $SHAI_FILE     = Join-Path $REPO_ROOT 'SHAI.md'
-$Q_FILE        = Join-Path $REPO_ROOT 'AGENTS.md'
+$Q_FILE        = $SPECKIT_CONTEXT_FILE
 $AGY_FILE      = Join-Path $REPO_ROOT '.agent/rules/specify-rules.md'
-$BOB_FILE      = Join-Path $REPO_ROOT 'AGENTS.md'
+$BOB_FILE      = $SPECKIT_CONTEXT_FILE
 
 $TEMPLATE_FILE = Join-Path $REPO_ROOT '.specify/templates/agent-file-template.md'
 
@@ -410,12 +419,12 @@ function Update-SpecificAgent {
 function Update-AllExistingAgents {
     $found = $false
     $ok = $true
-    if (Test-Path $CLAUDE_FILE)   { if (-not (Update-AgentFile -TargetFile $CLAUDE_FILE   -AgentName 'Claude Code')) { $ok = $false }; $found = $true }
+    # The shared context file serves Claude Code, GitHub Copilot, Codex, opencode, Amp, Amazon Q, and IBM Bob.
+    # One update covers all of them, so the loop below names the file one time.
+    if (Test-Path $SPECKIT_CONTEXT_FILE) { if (-not (Update-AgentFile -TargetFile $SPECKIT_CONTEXT_FILE -AgentName 'shared Spec Kit')) { $ok = $false }; $found = $true }
     if (Test-Path $GEMINI_FILE)   { if (-not (Update-AgentFile -TargetFile $GEMINI_FILE   -AgentName 'Gemini CLI')) { $ok = $false }; $found = $true }
-    if (Test-Path $COPILOT_FILE)  { if (-not (Update-AgentFile -TargetFile $COPILOT_FILE  -AgentName 'GitHub Copilot')) { $ok = $false }; $found = $true }
     if (Test-Path $CURSOR_FILE)   { if (-not (Update-AgentFile -TargetFile $CURSOR_FILE   -AgentName 'Cursor IDE')) { $ok = $false }; $found = $true }
     if (Test-Path $QWEN_FILE)     { if (-not (Update-AgentFile -TargetFile $QWEN_FILE     -AgentName 'Qwen Code')) { $ok = $false }; $found = $true }
-    if (Test-Path $AGENTS_FILE)   { if (-not (Update-AgentFile -TargetFile $AGENTS_FILE   -AgentName 'Codex/opencode')) { $ok = $false }; $found = $true }
     if (Test-Path $WINDSURF_FILE) { if (-not (Update-AgentFile -TargetFile $WINDSURF_FILE -AgentName 'Windsurf')) { $ok = $false }; $found = $true }
     if (Test-Path $KILOCODE_FILE) { if (-not (Update-AgentFile -TargetFile $KILOCODE_FILE -AgentName 'Kilo Code')) { $ok = $false }; $found = $true }
     if (Test-Path $AUGGIE_FILE)   { if (-not (Update-AgentFile -TargetFile $AUGGIE_FILE   -AgentName 'Auggie CLI')) { $ok = $false }; $found = $true }
@@ -423,12 +432,10 @@ function Update-AllExistingAgents {
     if (Test-Path $CODEBUDDY_FILE) { if (-not (Update-AgentFile -TargetFile $CODEBUDDY_FILE -AgentName 'CodeBuddy CLI')) { $ok = $false }; $found = $true }
     if (Test-Path $QODER_FILE)    { if (-not (Update-AgentFile -TargetFile $QODER_FILE    -AgentName 'Qoder CLI')) { $ok = $false }; $found = $true }
     if (Test-Path $SHAI_FILE)     { if (-not (Update-AgentFile -TargetFile $SHAI_FILE     -AgentName 'SHAI')) { $ok = $false }; $found = $true }
-    if (Test-Path $Q_FILE)        { if (-not (Update-AgentFile -TargetFile $Q_FILE        -AgentName 'Amazon Q Developer CLI')) { $ok = $false }; $found = $true }
     if (Test-Path $AGY_FILE)      { if (-not (Update-AgentFile -TargetFile $AGY_FILE      -AgentName 'Antigravity')) { $ok = $false }; $found = $true }
-    if (Test-Path $BOB_FILE)      { if (-not (Update-AgentFile -TargetFile $BOB_FILE      -AgentName 'IBM Bob')) { $ok = $false }; $found = $true }
     if (-not $found) {
-        Write-Info 'No existing agent files found, creating default Claude file...'
-        if (-not (Update-AgentFile -TargetFile $CLAUDE_FILE -AgentName 'Claude Code')) { $ok = $false }
+        Write-Info 'No existing agent files found, creating the shared Spec Kit context file...'
+        if (-not (Update-AgentFile -TargetFile $SPECKIT_CONTEXT_FILE -AgentName 'shared Spec Kit')) { $ok = $false }
     }
     return $ok
 }

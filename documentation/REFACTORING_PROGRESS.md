@@ -5,7 +5,7 @@ layout. The current menu entries 115 through 120 are WebSocket operations in
 [`documentation/menu_reference.md`](menu_reference.md). Verify any method name
 against the current source before you use this list for planning.
 
-**Goal**: Refactor all functions/methods to comply with 25-line limit per agents.md
+**Goal**: Refactor all functions/methods to comply with the 25-line limit in `AGENTS.md`
 
 **Status Key**: [ ] Not Started | [~] In Progress | [X] Complete | [-] Skipped
 

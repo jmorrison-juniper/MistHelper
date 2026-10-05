@@ -4,7 +4,7 @@ Refs issue #433 phase D (critical CC hotspots). The original ``audit``
 function had cyclomatic complexity 30 because it inlined seven emptiness
 metrics, a per-row slug-vs-title comparison loop, and a status-sampling
 block. This rewrite splits the work across a :class:`CsvAuditor` class so
-every method stays under the agents.md 5-block / 5-deep complexity limit
+every method stays under the AGENTS.md 5-block / 5-deep complexity limit
 while preserving the same printed output for downstream tooling.
 """
 

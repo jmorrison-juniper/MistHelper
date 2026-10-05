@@ -531,8 +531,8 @@ class GuidanceFixture:  # Keep valid guide input and every mutation fixture-loca
         workflow = live_path.read_text(encoding="utf-8")  # Copy current CI, not an obsolete command.
         logging.debug("Read %s live CI characters for fixture inputs", len(workflow))  # Measure the completed read.
         self.contract = CiGateContract.from_text(workflow)  # Derive explicit controls dynamically.
-        self.texts = {  # Give all six required input reads real local files.
-            path: self.Template.guide(path, self.contract) for path in SectionCommands.GUIDES  # Build three guides.
+        self.texts = {  # Give all four required input reads real local files.
+            path: self.Template.guide(path, self.contract) for path in SectionCommands.GUIDES  # Build each guide.
         }
         self.texts.update(  # Use usable local settings and an empty local comparator.
             {

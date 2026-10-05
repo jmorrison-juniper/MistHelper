@@ -1,7 +1,7 @@
 """Dataclasses that pack the Plotly/Dash map viewer arguments.
 
 Refs issue #433 phase C tranche 3 (STRUCT-PARAMS sweep on maps_manager.py).
-The viewer launcher and heatmap helper are kept under the agents.md
+The viewer launcher and heatmap helper are kept under the AGENTS.md
 5-parameter limit by grouping scope, payload, and optional features into
 focused dataclasses that document call-site intent.
 """
