@@ -256,8 +256,8 @@ def _require_built_route(status: int, path: str) -> None:
     assert status == OK_STATUS, f"{path} answered {status}. `contracts/http-api.md` fixes 200 for this page."
 
 
-def _first_site_id(page: Any) -> str:
-    """Open the site picker and return the identifier of the first site row.
+def _listed_site_id(page: Any) -> str:
+    """Open the site picker and return the identifier of the site that it lists first.
 
     Why:
         A capture reads one site, so the capture page needs a real site
@@ -268,7 +268,7 @@ def _first_site_id(page: Any) -> str:
         page: The Playwright page object.
 
     Returns:
-        The site identifier of the first row.
+        The site identifier of the site that the picker lists first.
     """
     _require_built_route(_page_status(page, SITE_PAGE_PATH), SITE_PAGE_PATH)
     rows = page.locator(f'[data-testid^="{SITE_ROW_PREFIX}"]')  # A prefix match still selects by `data-testid`.
@@ -294,7 +294,7 @@ def capture_page(portal_page: Any) -> Any:
     Returns:
         The Playwright page object, on the capture view.
     """
-    site_id = _first_site_id(portal_page)
+    site_id = _listed_site_id(portal_page)
     path = CAPTURE_PAGE_PATH.format(site_id=site_id)
     _require_built_route(_page_status(portal_page, path), path)  # A skip here would hide a broken capture page.
     return portal_page
@@ -597,7 +597,7 @@ def _walk_to_capture_view(page: Any) -> None:
     Args:
         page: The Playwright page object.
     """
-    site_id = _first_site_id(page)  # This call opens the site list, which is the one entry the walk types.
+    site_id = _listed_site_id(page)  # This call opens the site list, which is the one entry the walk types.
     with page.expect_response(lambda answer: answer.request.is_navigation_request()):
         page.get_by_test_id(f"{SITE_OPEN_PREFIX}{site_id}").click()  # The site row opens the inventory page.
     with page.expect_response(lambda answer: answer.request.is_navigation_request()):
