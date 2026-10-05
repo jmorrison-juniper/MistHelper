@@ -79,6 +79,16 @@ The portal writes one audit line at the WARNING level for each start of a
 `change` utility or a shell. The line never holds the text that you type in a
 shell.
 
+### Client suggestions
+
+Some utility forms show client suggestions for a selected EX switch.
+The portal reads wired-client records and shows only clients associated with that switch.
+This lookup does not start a utility.
+
+Keep the MAC field editable. You can enter a disconnected or unlisted client.
+For SRX and SSR, enter a MAC address manually because gateway association is unverified.
+Client selection does not release a lease. The utility still uses its lock and confirmation checks.
+
 The tab obeys these session limits.
 
 - The tab keeps 5 live sessions or fewer.
