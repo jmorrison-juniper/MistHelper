@@ -232,3 +232,11 @@ Issue #3672 moved MistHelper to devtools release v0.6.0.
 | Change | File |
 | - | - |
 | The development requirements pin the v0.6.0 commit. Each workflow caller, the Mermaid action, and the pre-commit hook pin the same release. | `requirements-dev.txt`, `.github/workflows/`, and `.pre-commit-config.yaml` |
+
+## Phase 9: adopt devtools release v0.6.2
+
+Issue #3901 moved MistHelper to devtools release v0.6.2. Before this change, the STE lint caller pinned a different commit than the other callers.
+
+| Change | File |
+| - | - |
+| The development requirements pin the v0.6.2 commit. Each workflow caller, the STE lint caller, the Mermaid action, and the pre-commit hook pin the same release. | `requirements-dev.txt`, `.github/workflows/`, and `.pre-commit-config.yaml` |
