@@ -433,7 +433,7 @@ class TestComparisonStatistics:
             comparison_page: The page that shows the comparison.
         """
         # Guard the loop, because an empty list would make the loop check nothing.
-        assert STAT_TEST_IDS, "The statistic name list is empty, so this test proves nothing."
+        assert len(STAT_TEST_IDS) == 11, "The statistic name list must hold eleven names."
         for test_id in STAT_TEST_IDS:
             sync_api.expect(comparison_page.get_by_test_id(test_id)).to_be_visible()
             # State the outcome as a literal check for each name of the contract.
@@ -501,7 +501,7 @@ class TestComparisonFilters:
             comparison_page: The page that shows the comparison.
         """
         # Guard the loop, because an empty list would make the loop check nothing.
-        assert FILTER_TEST_IDS, "The filter control list is empty, so this test proves nothing."
+        assert len(FILTER_TEST_IDS) == 8, "The filter control list must hold eight names."
         for test_id in FILTER_TEST_IDS:
             sync_api.expect(comparison_page.get_by_test_id(test_id)).to_be_visible()
             # State the outcome as a literal check for each filter control.
