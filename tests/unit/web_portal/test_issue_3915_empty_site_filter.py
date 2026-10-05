@@ -199,3 +199,28 @@ class TestBothRouteModulesCallTheFilterCorrectly:
         )  # Call the helper the way the route calls it.
         assert [pick["id"] for pick in picks] == [FULL_SITE_ID]  # The filter must run.
         assert getattr(picks, "empty_hidden", 0) == 1  # The route reads this count.
+
+
+class TestTheMapImageRouteAnswersAFailure:
+    """Prove the map image route answers a client fault and a server fault."""
+
+    def test_a_strange_path_value_answers_404(self, client: Any) -> None:
+        """FR-3915-14: a path value that is not a UUID must answer HTTP 404."""
+        # The route rejects a non-UUID path value before it reads the Mist API.
+        response = client.get("/api/maps/site/not-a-uuid/map/not-a-uuid/image")
+        assert response.status_code == 404  # The client fault must answer 404.
+        assert response.get_json()["error"] == "Map not found"  # The message must stay stable.
+
+    def test_a_failed_image_read_answers_500(self, client: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+        """FR-3915-15: a failed image download must pass the server status through."""
+
+        def fail_fetch(_session: Any, _site_id: str, _map_id: str) -> SimpleNamespace:
+            """Answer the shape the route reads, with a server fault status."""
+            return SimpleNamespace(status=500, error="the image read failed")  # The route reads both fields.
+
+        # Replace the image source so no network read happens in this test.
+        monkeypatch.setattr("web_portal.routes.maps.MapImageSource.fetch", fail_fetch)
+        # Both path values are valid UUIDs, so the route reaches the image source.
+        response = client.get(f"/api/maps/site/{FULL_SITE_ID}/map/{FULL_SITE_ID}/image")
+        assert response.status_code == 500  # The server fault must pass through.
+        assert response.get_json()["error"] == "the image read failed"  # The reason must reach the caller.
