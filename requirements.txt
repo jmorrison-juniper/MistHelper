@@ -4,7 +4,7 @@
 # Core API and networking
 mistapi>=0.64.0,<0.65
 # Issue #3553: parse certificate expiry metadata from PEM certificates.
-cryptography>=50.0.1,<51
+cryptography>=50.0.2,<51
 requests>=2.34.2,<3
 websocket-client>=1.8.0,<2
 urllib3>=2.8.0,<3
