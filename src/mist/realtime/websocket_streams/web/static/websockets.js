@@ -17,6 +17,7 @@
     var SESSION_REFRESH_MS = 5000;  // Refresh the counters of all sessions every five seconds.
     var SESSION_KEY = 'misthelper-websocket-session';  // Browser storage key of the last selected session.
     var NETWORK_ERROR = 'The portal did not answer. Check the network, then try again.';  // Text for a failed request.
+    var CLIENT_LOOKUP_TIMEOUT_MS = 10000;  // Keep optional discovery from holding the form open.
     var NUMBER_KINDS = ['integer', 'vlan'];  // Field kinds that hold a whole number.
     var SCOPE_TITLES = {
         organization: 'Organization channels',
@@ -79,6 +80,10 @@
         pollTimer: null,  // The timer that reads new messages.
         sessionTimer: null,  // The timer that refreshes the session list.
         pickerLoads: 0,  // A counter that marks the newest picker read.
+        clientLookupGeneration: 0,  // Reject stale client reads after a target changes.
+        clientLookupTimer: null,  // Bound one client lookup to ten seconds.
+        clientLookupScope: '',  // Keep each client response tied to its site, device, and utility.
+        clientSelections: [],  // Store explicit suggestions separately from manual DHCP entries.
         messages: [],  // The messages of the selected session, oldest first.
         labels: {},  // Picker labels by identifier, for the session title.
         terminalController: null  // The xterm.js controller for terminal sessions.
@@ -231,6 +236,7 @@
     }
 
     function selectEntry(entry, type) {
+        clearClientSuggestions();  // Discard choices and requests from the previous operation.
         state.selectionGeneration += 1;  // Invalidate every picker read from the prior selection.
         state.selectedEntry = Object.assign({ entryType: type }, entry);  // Keep the type with the entry.
         state.submittedEntry = null;  // A replacement entry has not been submitted.
@@ -246,6 +252,7 @@
 
     function cancelSelection() {
         if (!canCancelSelection()) return;  // Keep submitted or absent selections unchanged.
+        clearClientSuggestions();  // Restore manual text and reject client replies before clearing the form.
         state.selectionGeneration += 1;  // Invalidate picker reads before clearing their selected entry.
         state.selectedEntry = null;  // Clear the authoritative pending selection.
         state.submittedEntry = null;  // Return to the unsubmitted base state.
@@ -306,6 +313,7 @@
         var targetBox = byId('wsTargetFields');  // Identifier fields, such as the site and the device.
         var paramBox = byId('wsParameterFields');  // Parameter fields of the utility.
         var button = byId('wsStartButton');  // The start button of the form.
+        clearClientSuggestions();  // A rebuilt form starts without selections from another operation.
         clearNode(targetBox);  // Remove the fields of the last entry.
         clearNode(paramBox);  // Remove the fields of the last entry.
         (entry.identifiers || entry.targets || []).forEach(function(field) { targetBox.appendChild(fieldControl(field, true)); });  // Targets first.
@@ -345,8 +353,10 @@
         input.dataset.wsTarget = isTarget ? '1' : '0';  // Targets and parameters go to separate body keys.
         input.dataset.wsKind = field.kind || 'text';  // Keep the field kind on the input.
         input.dataset.wsPicker = field.picker || '';  // The picker reload code reads this name.
+        input.dataset.wsClientField = field.client_picker || '';  // Use the reviewed operation-specific assistance mode.
         input.dataset.testid = 'ws-field-' + field.name;  // Stable test hook.
         if (field.required) input.required = true;  // The browser blocks an empty required value.
+        if (input.dataset.wsClientField === 'single') input.addEventListener('input', onManualClientFilter);  // Track edits.
     }
 
     function configureControl(input, field) {
@@ -387,7 +397,141 @@
         group.appendChild(label);  // Label above the input.
         group.appendChild(input);  // The input itself.
         hintTexts(field, input).forEach(function(text) { group.appendChild(make('div', 'form-text', text)); });  // Help under the input.
+        appendClientPicker(group, input);  // Add suggestions only to the reviewed utility fields.
         return group;  // The caller adds the group to the form.
+    }
+
+    function appendClientPicker(group, input) {
+        var mode = input.dataset.wsClientField;  // Read the operation-scoped field mode.
+        if (!mode) return;  // Leave unrelated fields unchanged.
+        if (mode === 'manual') {
+            appendGatewayGuidance(group);  // Preserve manual gateway input without unverified choices.
+            return;
+        }
+        group.appendChild(clientPickerControl(mode));  // Add accessible optional choices beside the manual field.
+    }
+
+    function appendGatewayGuidance(group) {
+        var guidance = make(
+            'div',
+            'form-text',
+            'Client suggestions are unavailable for this device type. Enter MAC addresses manually.'
+        );
+        guidance.dataset.testid = 'ws-client-manual-guidance';  // Give tests a stable capability marker.
+        group.appendChild(guidance);  // Keep manual input available for SRX and SSR.
+    }
+
+    function clientPickerControl(mode) {
+        var wrapper = make('div', 'mt-2');  // Keep optional suggestions separate from manual text.
+        var status = make('div', 'form-text', 'Choose a site and EX switch to load client suggestions.');
+        status.id = 'wsClientPickerStatus';  // One active form has one client lookup.
+        status.dataset.testid = 'ws-client-picker-status';  // Expose an accessible browser test hook.
+        status.setAttribute('role', 'status');  // Announce lookup state changes.
+        status.setAttribute('aria-live', 'polite');  // Avoid interrupting the operator.
+        var select = make('select', 'form-select mt-2');  // Use native keyboard-accessible selection.
+        select.id = 'wsClientOptions';  // The add action reads this fixed control.
+        select.dataset.testid = 'ws-client-options';  // Expose client choices to browser tests.
+        select.setAttribute('aria-label', 'Available clients');  // Name the suggestion control.
+        select.multiple = mode === 'multiple';  // DHCP accepts several selected client addresses.
+        if (select.multiple) select.size = 6;  // Show several rows for keyboard and pointer use.
+        show(select, false);  // Do not show an empty selector before a scope is ready.
+        var add = make('button', 'btn btn-sm btn-outline-secondary mt-2', 'Add selected clients');
+        add.id = 'wsClientAdd';  // Keep the helper action separate from the utility action.
+        add.type = 'button';  // Selecting clients must never submit the form.
+        add.dataset.testid = 'ws-client-add';  // Expose the inert action to browser tests.
+        add.addEventListener('click', addClientSelection);  // Copy only explicit choices.
+        var selected = make('div', 'd-flex flex-wrap gap-2 mt-2');  // Show removable choices before submission.
+        selected.id = 'wsClientSelected';  // The display remains operation-local.
+        selected.dataset.testid = 'ws-client-selected';  // Expose selected values to tests.
+        wrapper.appendChild(status);  // Show loading, result, or error state.
+        wrapper.appendChild(select);  // Show verified choices only.
+        wrapper.appendChild(add);  // Require a separate explicit selection action.
+        wrapper.appendChild(selected);  // Keep every chosen MAC visible and removable.
+        wrapper.appendChild(make('div', 'form-text', 'Manual entry remains available for clients that are not listed.'));
+        refreshClientSuggestions();  // Read only after target fields have a valid scope.
+        return wrapper;  // The field group owns the complete selector.
+    }
+
+    function onManualClientFilter(event) {
+        if (!state.clientSelections.length) return;  // No suggested value needs restoring.
+        state.clientSelections = [];  // A typed filter becomes the operator's value.
+        delete event.currentTarget.dataset.wsClientManualValue;  // The edited field now owns its value.
+        renderClientSelections();  // Remove the suggestion marker without changing the field.
+    }
+
+    function addClientSelection() {
+        var select = byId('wsClientOptions');  // Read the explicit native selection.
+        var input = document.querySelector(
+            '[data-ws-client-field="multiple"], [data-ws-client-field="single"]'
+        );  // Exclude target controls and find only an eligible SDK field.
+        if (!select || !input || !select.selectedOptions.length) return;  // Ignore an empty add action.
+        var values = Array.from(select.selectedOptions).map(function(option) { return option.value; });
+        if (input.dataset.wsClientField === 'single') addSingleClient(values[values.length - 1], input);
+        else addMultipleClients(values);  // Keep DHCP suggestions separate from manual text.
+        select.selectedIndex = -1;  // Require a new choice before the next add action.
+    }
+
+    function addSingleClient(mac, input) {
+        if (!state.clientSelections.length) {
+            input.dataset.wsClientManualValue = input.value;  // Keep the independent filter with its input.
+        }
+        state.clientSelections = [mac];  // One MAC-table filter can use one suggested client.
+        input.value = mac;  // Show the exact value that the next request will use.
+        renderClientSelections();  // Make the source of the field value clear.
+    }
+
+    function addMultipleClients(values) {
+        values.forEach(function(mac) {
+            if (state.clientSelections.indexOf(mac) < 0) state.clientSelections.push(mac);  // Avoid duplicate choices.
+        });
+        renderClientSelections();  // Keep selected DHCP clients visible beside manual input.
+    }
+
+    function renderClientSelections() {
+        var container = byId('wsClientSelected');  // The current form may have been canceled.
+        if (!container) return;  // A detached form cannot accept a late update.
+        clearNode(container);  // Rebuild the selected-value list from current state.
+        state.clientSelections.forEach(function(mac) { container.appendChild(clientSelectionChip(mac)); });
+        var count = state.clientSelections.length;  // The status uses a bounded count only.
+        setText('wsClientPickerStatus', count ? 'Selected ' + count + ' client(s).' : '');
+    }
+
+    function clientSelectionChip(mac) {
+        var chip = make('span', 'badge bg-secondary d-inline-flex align-items-center gap-2', 'Client ' + mac);
+        var remove = make('button', 'btn-close btn-close-white', '');  // Native button supports keyboard removal.
+        remove.type = 'button';  // A chip action must not submit the utility form.
+        remove.setAttribute('aria-label', 'Remove selected client ' + mac);  // Name this item for assistive tools.
+        remove.dataset.testid = 'ws-client-remove-' + mac;  // Expose removal behavior to browser tests.
+        remove.addEventListener('click', function() { removeClientSelection(mac); });  // Remove only this choice.
+        chip.appendChild(remove);  // Keep the MAC and its action together.
+        return chip;  // The selection list adds one chip for each unique MAC.
+    }
+
+    function removeClientSelection(mac) {
+        state.clientSelections = state.clientSelections.filter(function(value) { return value !== mac; });
+        var input = document.querySelector('[data-ws-client-field="single"]');  // Only one MAC-table field mirrors a choice.
+        if (input && !state.clientSelections.length) {
+            input.value = input.dataset.wsClientManualValue || '';  // Restore the independent manual filter.
+            delete input.dataset.wsClientManualValue;  // Do not reuse it after the choice is removed.
+        }
+        renderClientSelections();  // Keep visible choices in sync with request data.
+    }
+
+    function clearClientSuggestions() {
+        state.clientLookupGeneration += 1;  // Invalidate current and delayed client responses.
+        if (state.clientLookupTimer !== null) window.clearTimeout(state.clientLookupTimer);  // Stop the old timeout.
+        state.clientLookupTimer = null;  // No timeout belongs to the new form.
+        state.clientLookupScope = '';  // Remove the prior site and device identity.
+        var input = document.querySelector('[data-ws-client-field="single"]');  // Restore manual MAC-table filters.
+        if (input && state.clientSelections.length) {
+            input.value = input.dataset.wsClientManualValue || '';  // Keep independent manual text during target changes.
+            delete input.dataset.wsClientManualValue;  // Discard selector state with its old target.
+        }
+        state.clientSelections = [];  // Remove selector-derived values before a target or operation changes.
+        clearNode(byId('wsClientOptions'));  // Remove every stale result immediately.
+        clearNode(byId('wsClientSelected'));  // Remove every stale selected chip.
+        show(byId('wsClientOptions'), false);  // Hide stale choice controls.
+        setText('wsClientPickerStatus', 'Choose a site and EX switch to load client suggestions.');
     }
 
     function hintTexts(field, input) {
@@ -416,6 +560,87 @@
             var parents = PICKER_PARENTS[child.dataset.wsPicker] || [];  // The pickers that this list depends on.
             if (child !== select && parents.indexOf(parent) >= 0) loadPickerOptions(child);  // Reload a dependent list only.
         });
+        if (parent === 'sites' || parent === 'devices') {
+            clearClientSuggestions();  // Remove choices before any target-scoped read.
+            refreshClientSuggestions();  // Read again only when the new site and device are both selected.
+        }
+    }
+
+    function refreshClientSuggestions() {
+        var input = document.querySelector('[data-ws-client-field="multiple"], [data-ws-client-field="single"]');
+        if (!input) return;  // Only the two reviewed EX operations read client suggestions.
+        var site = valueOf('site_id');  // Scope the lookup to the selected site.
+        var device = valueOf('device_id');  // Scope the lookup to the selected switch.
+        if (!site || !device) return;  // Do not query until both target fields are selected.
+        var entry = state.selectedEntry;  // Bind this read to the current operation.
+        var scope = [entry.key, site, device].join('|');  // Fence each result by its exact target.
+        var generation = ++state.clientLookupGeneration;  // Give this read a unique lifetime.
+        var url = '/api/websockets/sites/' + encodeURIComponent(site) + '/devices/' + encodeURIComponent(device) + '/clients';
+        state.clientLookupScope = scope;  // Keep only the current request scope.
+        setText('wsClientPickerStatus', 'Loading client suggestions.');
+        show(byId('wsClientOptions'), false);  // Never leave old options visible during a new read.
+        state.clientLookupTimer = window.setTimeout(function() {
+            expireClientLookup(entry, scope, generation);
+        }, CLIENT_LOOKUP_TIMEOUT_MS);  // End loading even when the service does not answer.
+        apiJson(url).then(function(payload) { finishClientLookup(entry, scope, generation, payload); });
+    }
+
+    function expireClientLookup(entry, scope, generation) {
+        if (!clientReadIsCurrent(entry, scope, generation)) return;  // Ignore a timeout for an old target.
+        state.clientLookupGeneration += 1;  // Reject a response that arrives after the deadline.
+        state.clientLookupTimer = null;  // The bounded wait has ended.
+        setText('wsClientPickerStatus', 'Client suggestions are unavailable.');
+        show(byId('wsClientOptions'), false);  // Manual input stays available without stale choices.
+    }
+
+    function finishClientLookup(entry, scope, generation, payload) {
+        if (!clientReadIsCurrent(entry, scope, generation)) return;  // Ignore stale, canceled, or submitted requests.
+        if (state.clientLookupTimer !== null) window.clearTimeout(state.clientLookupTimer);  // Stop the ten-second guard.
+        state.clientLookupTimer = null;  // The response owns no timer.
+        if (payload.error) return showClientLookupError(payload);  // Keep errors distinct from empty results.
+        if (!Array.isArray(payload.rows)) {
+            showClientLookupError({ error: 'Client suggestions are unavailable.' });  // Refuse malformed envelopes.
+            return;
+        }
+        fillClientSuggestions(payload.rows);  // Show only complete rows returned by the scoped service.
+    }
+
+    function clientReadIsCurrent(entry, scope, generation) {
+        var currentScope = [entry.key, valueOf('site_id'), valueOf('device_id')].join('|');
+        return state.selectedEntry === entry && state.submittedEntry !== entry
+            && state.clientLookupGeneration === generation && state.clientLookupScope === scope && currentScope === scope;
+    }
+
+    function showClientLookupError(payload) {
+        setText('wsClientPickerStatus', payload.error || 'Client suggestions are unavailable.');
+        show(byId('wsClientOptions'), false);  // Keep manual entry available after every read failure.
+    }
+
+    function fillClientSuggestions(rows) {
+        var select = byId('wsClientOptions');  // The current form may have been canceled.
+        if (!select) return;  // A detached form cannot accept a response.
+        var unique = {};  // Deduplicate only verified MAC identities.
+        rows.forEach(function(row) {
+            if (!row || row.family !== 'ex' || !validClientMac(row.id) || unique[row.id]) return;
+            unique[row.id] = row;  // Keep the first identifying label for each scoped client.
+        });
+        var macs = Object.keys(unique).sort();  // Make repeated reads stable.
+        clearNode(select);  // Replace loading or prior options.
+        macs.forEach(function(mac) { select.appendChild(clientOption(unique[mac])); });
+        show(select, macs.length > 0);  // An empty list has status text, not an empty selector.
+        setText('wsClientPickerStatus', macs.length
+            ? 'Client suggestions are available. Manual entry remains available.'
+            : 'No clients are listed for this switch. Enter a MAC address manually.');
+    }
+
+    function validClientMac(value) {
+        return typeof value === 'string' && /^(?:[0-9a-f]{12}|(?:[0-9a-f]{2}:){5}[0-9a-f]{2})$/i.test(value);
+    }
+
+    function clientOption(row) {
+        var mac = row.id;  // The backend returns the normalized MAC as its stable identifier.
+        var label = row.label && row.label !== mac ? row.label + ' (' + mac + ')' : mac;
+        return new Option(label, mac);  // Always show the MAC when names are identical.
     }
 
     function loadPickerOptions(select) {
@@ -562,9 +787,27 @@
             var name = input.dataset.wsField;  // The body key of this field.
             if (input.type === 'checkbox') values[name] = input.checked;  // A check box sends true or false.
             else if (input.multiple) values[name] = Array.from(input.selectedOptions).map(function(option) { return option.value; }).filter(Boolean);  // A list.
-            else if (input.value !== '') values[name] = input.value;  // An empty optional value stays out of the body.
+            else {
+                var value = clientParameterValue(input);  // Add only explicit client choices to the existing field.
+                if (value !== '') values[name] = value;  // An empty optional value stays out of the body.
+            }
         });
         return values;  // The server checks each value.
+    }
+
+    function clientParameterValue(input) {
+        if (input.dataset.wsClientField !== 'multiple' || !state.clientSelections.length) return input.value;
+        var manual = input.value.trim();  // Keep a disconnected or unlisted client in the same SDK field.
+        var values = manual ? manual.split(',').map(function(value) { return value.trim(); }).filter(Boolean) : [];
+        var known = values.map(clientMacIdentity);  // Compare normalized identities without rewriting manual text.
+        state.clientSelections.forEach(function(mac) {
+            if (known.indexOf(clientMacIdentity(mac)) < 0) values.push(mac);  // Avoid an invalid duplicate list item.
+        });
+        return values.join(', ');  // Preserve the existing comma-separated request field.
+    }
+
+    function clientMacIdentity(value) {
+        return value.replace(/[:-]/g, '').toLowerCase();  // Match selected and manually formatted MAC addresses.
     }
 
     function showStartError(payload) {

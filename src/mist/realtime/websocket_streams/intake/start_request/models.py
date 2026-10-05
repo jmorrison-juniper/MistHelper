@@ -41,6 +41,7 @@ class DeviceFacts:
 
     name: str  # Typed confirmation must match this Mist device name.
     family: str | None  # Utility selection must match this device family.
+    mac: str | None = None  # Client discovery needs the validated device MAC.
 
 
 class DeviceDirectory(Protocol):
