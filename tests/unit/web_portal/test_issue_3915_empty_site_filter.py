@@ -11,7 +11,6 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Any
 
-import mistapi
 import pytest
 from flask import Flask
 
@@ -53,12 +52,10 @@ def stat_rows() -> list[dict]:
 @pytest.fixture
 def client(monkeypatch: pytest.MonkeyPatch, site_rows: list[dict], stat_rows: list[dict]) -> Any:
     """Serve the maps blueprint from a bare Flask app with fake Mist endpoints."""
-    monkeypatch.setattr(
-        mistapi.api.v1.orgs.sites, "listOrgSites", lambda *_a, **_k: FakeResponse(site_rows)
-    )  # The route reads the org site list through this endpoint.
-    monkeypatch.setattr(
-        mistapi.api.v1.orgs.stats, "listOrgSiteStats", lambda *_a, **_k: FakeResponse(stat_rows)
-    )  # The filter reads the device counts through this endpoint.
+    # The route reads the org site list through this endpoint.
+    monkeypatch.setattr("mistapi.api.v1.orgs.sites.listOrgSites", lambda *_a, **_k: FakeResponse(site_rows))
+    # The filter reads the device counts through this endpoint.
+    monkeypatch.setattr("mistapi.api.v1.orgs.stats.listOrgSiteStats", lambda *_a, **_k: FakeResponse(stat_rows))
     app = Flask(__name__)  # A bare app avoids the portal factory and its threads.
     app.config["APISESSION"] = SimpleNamespace()  # The route only tests that a session exists.
     app.config["ORG_ID"] = "test-org"  # The site read needs an organization.
@@ -125,9 +122,8 @@ class TestTheFilterFailsOpen:
             """Fail the way a transport fault fails."""
             raise RuntimeError("the statistics read failed")  # Any class must be caught.
 
-        monkeypatch.setattr(
-            mistapi.api.v1.orgs.stats, "listOrgSiteStats", raise_error
-        )  # The filter must survive the fault.
+        # The filter must survive the fault.
+        monkeypatch.setattr("mistapi.api.v1.orgs.stats.listOrgSiteStats", raise_error)
         site_filter = EmptySiteFilter(SimpleNamespace(), "test-org")  # Build the filter under test.
         kept, hidden = site_filter.apply(site_rows)  # Run the filter against the faulty read.
         assert kept == site_rows  # Every row must survive the fault.
@@ -146,9 +142,8 @@ class TestTheOverrideSkipsTheStatisticsRead:
             reads.append("read")  # One entry for each call.
             return FakeResponse([])  # The answer does not matter here.
 
-        monkeypatch.setattr(
-            mistapi.api.v1.orgs.stats, "listOrgSiteStats", record_read
-        )  # Watch the endpoint that the filter would call.
+        # Watch the endpoint that the filter would call.
+        monkeypatch.setattr("mistapi.api.v1.orgs.stats.listOrgSiteStats", record_read)
         site_filter = EmptySiteFilter(SimpleNamespace(), "test-org")  # Build the filter under test.
         kept, hidden = site_filter.apply(site_rows, show_empty=True)  # Ask for every site.
         assert kept == site_rows  # Every row must survive.
