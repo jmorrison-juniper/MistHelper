@@ -3,13 +3,21 @@
 from src.mist.realtime.websocket_streams.catalog.channels import ChannelCatalog  # Import the catalog under test.
 
 
-def test_channel_catalog_has_18_entries_in_page_order() -> None:
+def test_channel_catalog_has_16_entries_in_page_order() -> None:
     """The channel catalog holds each channel from the contract."""
     catalog = ChannelCatalog()  # Build the channel catalog.
     entries = catalog.entries()  # Read all entries.
-    assert len(entries) == 18  # The contract requires 18 channels.
+    assert len(entries) == 16  # The contract requires 16 channels.
     assert entries[0].key == "org.pcaps"  # The first entry follows the page order.
     assert entries[-1].key == "diag.sdkclient"  # The last entry follows the page order.
+    assert catalog.get("org.mxedges") is None  # Deprecated organization events are absent.
+    assert catalog.get("site.mxedges") is None  # Deprecated site events are absent.
+    org_stats = catalog.get("org.stats.mxedges")  # Read the retained organization statistics channel.
+    site_stats = catalog.get("site.stats.mxedges")  # Read the retained site statistics channel.
+    assert org_stats is not None  # The organization statistics channel remains available.
+    assert org_stats.path_template == "/orgs/{org_id}/stats/mxedges"  # Keep the working organization path.
+    assert site_stats is not None  # The site statistics channel remains available.
+    assert site_stats.path_template == "/sites/{site_id}/stats/mxedges"  # Keep the working site path.
 
 
 def test_channel_catalog_lookup_and_repeatable_path() -> None:
