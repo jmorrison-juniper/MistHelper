@@ -28,6 +28,10 @@ future edit that empties the fixture cannot pass silently.
 
 from __future__ import annotations
 
+import ast
+from collections import Counter
+from pathlib import Path
+
 import pytest
 
 from src.foundation.support.utils.menu_entry import MenuEntry  # WHY: fixtures must match the production menu row.
@@ -35,15 +39,52 @@ from src.foundation.support.utils.operation_registry import OperationRegistry
 from web_portal.services.operation import CATEGORY_RANGES, PARAMETER_REGISTRY, OperationExecutor
 
 MARVIS_MENU = "270"  # The menu number this feature added.
-CONTROL_NAMES = (  # The seven controls, in the order of the seven prompts.
-    "marvis_mode",
-    "marvis_category",
-    "marvis_subcategory",
-    "marvis_resolution_code",
-    "marvis_comment",
-    "marvis_confirmation",
-    "marvis_alarm_ack_confirmation",
-)
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]  # Read the production prompt source from this checkout.
+SELECTION_SOURCE = REPOSITORY_ROOT / "src/mist/intelligence/marvis/actions/selection.py"
+PROMPT_CONTEXT_PREFIX = "marvis_actions."  # Select only menu 270 prompts from the shared input helper calls.
+
+
+def _prompt_contexts() -> tuple[str, ...]:
+    """Return the menu 270 prompt contexts in production source order."""
+    source = SELECTION_SOURCE.read_text(encoding="utf-8")  # Read the source that owns each prompt context.
+    tree = ast.parse(source, filename=str(SELECTION_SOURCE))  # Parse syntax so comments and strings cannot match.
+    calls = sorted(
+        (node for node in ast.walk(tree) if isinstance(node, ast.Call)),
+        key=lambda node: node.lineno,
+    )
+    contexts: list[str] = []
+    for call in calls:
+        if not isinstance(call.func, ast.Attribute) or call.func.attr != "safe_input":
+            continue
+        context = next((keyword.value for keyword in call.keywords if keyword.arg == "context"), None)
+        if isinstance(context, ast.Constant) and isinstance(context.value, str):
+            if context.value.startswith(PROMPT_CONTEXT_PREFIX):
+                contexts.append(context.value)
+    return tuple(contexts)
+
+
+def _control_name(prompt_context: str) -> str:
+    """Return the portal control name for one production prompt context."""
+    prompt_name = prompt_context.removeprefix(PROMPT_CONTEXT_PREFIX)
+    portal_name = "_".join("ack" if word == "acknowledge" else word for word in prompt_name.split("_"))
+    return f"marvis_{portal_name}"
+
+
+def _expected_control_names() -> tuple[str, ...]:
+    """Return portal control names from the production prompt context order."""
+    return tuple(_control_name(context) for context in _prompt_contexts())
+
+
+def _control_differences(expected: tuple[str, ...], actual: tuple[str, ...]) -> tuple[list[str], list[str], list[str]]:
+    """Return named missing, extra, and out-of-order controls."""
+    missing = sorted((Counter(expected) - Counter(actual)).elements())
+    extra = sorted((Counter(actual) - Counter(expected)).elements())
+    order = [
+        f"position {position}: expected={expected_name} actual={actual_name}"
+        for position, (expected_name, actual_name) in enumerate(zip(expected, actual, strict=False), start=1)
+        if expected_name != actual_name
+    ]
+    return missing, extra, order
 
 
 def _noop() -> None:
@@ -79,9 +120,11 @@ def test_the_guard_measured_every_decision(executor) -> None:
     """Report the count of decisions and controls this guard checked, so an empty fixture cannot pass."""
     decisions = {key: executor._is_portal_runnable(key) for key in executor._menu_actions}
     controls = PARAMETER_REGISTRY[MARVIS_MENU]["parameters"]
+    expected_controls = _expected_control_names()
     print(f"The Marvis Actions portal guard checked {len(decisions)} gate decisions and {len(controls)} controls.")
     assert len(decisions) == 2, "The fixture must hold two gate decisions."
-    assert len(controls) == len(CONTROL_NAMES), "The row must hold one control for each prompt."
+    assert expected_controls, "The production prompt inventory is empty, so the guard measured nothing."
+    assert controls, "The portal control inventory is empty, so the guard measured nothing."
 
 
 def test_the_registry_calls_the_menu_interactive_safe() -> None:
@@ -136,5 +179,7 @@ def test_the_static_registry_describes_the_menu() -> None:
 
 def test_the_controls_follow_the_prompt_order() -> None:
     """FR-032. The browser sends one answer for each control, in control order."""
-    names = tuple(param["name"] for param in PARAMETER_REGISTRY[MARVIS_MENU]["parameters"])
-    assert names == CONTROL_NAMES
+    expected = _expected_control_names()
+    actual = tuple(param["name"] for param in PARAMETER_REGISTRY[MARVIS_MENU]["parameters"])
+    missing, extra, order = _control_differences(expected, actual)
+    assert actual == expected, f"Marvis portal controls differ: missing={missing} extra={extra} order={order}"
