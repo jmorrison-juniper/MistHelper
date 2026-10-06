@@ -1257,6 +1257,7 @@ def confirm_page() -> str | tuple[Response, int]:
         device_count=target_count or _site_device_count(rows),  # Keep the AP-only count fallback.
         device_families=families,  # Show each planned family.
         options=view,  # Show the confirmed choices.
+        strategy_children=_mapping_children(operation),  # Explain each child schema without changing its request.
         firmware_summary=firmware_line,  # Name each model, unless the cloud selects the vendor stable build.
         advanced_summary=OrgAdvancedSummary.lines(view, _mapping_children(operation)),  # Each stored child body.
         reboot_moment=OrgUpgradeScheduleReader.reboot_moment_text(operation),  # Show the absolute or submit rule.

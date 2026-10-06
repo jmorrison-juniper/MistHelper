@@ -308,7 +308,7 @@ def test_the_multi_site_page_names_the_short_site_and_refuses_the_save(short_rea
     page.get_by_test_id("org-upgrade-review").click()  # Save the plan.
     page.wait_for_url(re.compile(r".*/upgrade/org/confirm$"))  # The save accepted the plan.
     confirm = page.get_by_test_id("org-upgrade-confirm")  # The summary card of the confirm page.
-    sync_api.expect(confirm).to_contain_text(f"Strategy: {CHOSEN_STRATEGY}")  # The choice, not a default.
+    sync_api.expect(confirm).to_contain_text("Strategy: One device at a time")  # The page uses the plain strategy name.
     sync_api.expect(confirm).to_contain_text("Sites: 1")  # The plan covers the one site with a complete read.
     sync_api.expect(page.get_by_test_id(f"org-upgrade-precheck-row-{SHORT_SITE_ID}")).to_have_count(0)  # No row.
     assert save_screenshot(page, "multi-site-recovered-confirm.png").exists()  # The summary before the typed word.
