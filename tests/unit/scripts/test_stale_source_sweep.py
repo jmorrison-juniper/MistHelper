@@ -102,18 +102,24 @@ def test_the_sweep_keeps_the_cache_directory_of_the_source_root(tmp_path: Path) 
     assert cache.is_dir(), "The sweep removed the cache directory of the source root."
 
 
-def test_the_sweep_keeps_a_tracked_directory(tmp_path: Path) -> None:
-    """The sweep MUST keep a directory that git tracks, even when the worktree copy is empty."""
+def test_the_sweep_keeps_canonical_source_directories(tmp_path: Path) -> None:
+    """The sweep MUST keep the canonical source directories and the source cache."""
     source_root = build_source_root(tmp_path)  # Build the root the sweep reads.
-    tracked = source_root / "committed"  # Name the directory that a commit records.
-    tracked.mkdir()  # Create the tracked directory with no file inside it.
+    canonical_names = ("foundation", "interfaces", "mist", "operations")  # Name the committed packages.
+    canonical = [source_root / name for name in canonical_names]  # Build each canonical package path.
+    for directory in canonical:  # Create each package without requiring a source file.
+        directory.mkdir()  # Create the canonical package directory.
+    cache = source_root / StaleSourceSweeper.CACHE_NAME  # Build the source cache path.
+    cache.mkdir()  # Create the source cache directory.
     logger.info("Running the sweep against %s", source_root)
-    removed = build_sweeper(tmp_path, {"committed"}).sweep()  # Report the name as tracked.
+    removed = build_sweeper(tmp_path, set(canonical_names)).sweep()  # Report the canonical names as tracked.
 
     # WHY: a tracked name holds committed work, so a removal would damage the checkout.
-    assert removed == [], f"The sweep removed {removed} although git tracks the name."
-    # WHY: the directory itself proves the rule held.
-    assert tracked.is_dir(), "The sweep removed a directory that git tracks."
+    assert removed == [], f"The sweep removed {removed} although canonical names must stay."
+    # WHY: the canonical directories prove the preservation rule held.
+    assert all(directory.is_dir() for directory in canonical), "The sweep removed a canonical source directory."
+    # WHY: the source cache is a protected directory even when Git reports no child name.
+    assert cache.is_dir(), "The sweep removed the source cache directory."
 
 
 def test_the_sweep_removes_nothing_when_the_tracked_names_are_unknown(tmp_path: Path) -> None:
@@ -135,16 +141,22 @@ def test_the_sweep_removes_nothing_when_the_tracked_names_are_unknown(tmp_path: 
 # ---------------------------------------------------------------------------
 
 
-def test_the_sweep_reports_the_count_to_the_operator(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
-    """The sweep MUST print the removed count, because the operator reads it."""
+def test_the_sweep_reports_checked_and_removed_counts(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    """The sweep MUST print checked and removed counts, because the operator reads them."""
     source_root = build_source_root(tmp_path)  # Build the root the sweep reads.
     for name in ("alpha", "beta"):  # Create two orphaned directories, so the count is not one.
         (source_root / name).mkdir()  # Create the empty directory.
+    unsafe = source_root / "unsafe"  # Name a candidate that must fail the safety check.
+    unsafe.mkdir()  # Create the unsafe candidate directory.
+    (unsafe / "work.py").write_text("value = 1\n", encoding="utf-8")  # Add a file that must survive.
     logger.info("Running the sweep and capturing the log records")
     with caplog.at_level(logging.INFO):  # Capture the records the operator sees on the console.
         removed = build_sweeper(tmp_path, set()).sweep()  # Run the sweep with no tracked name at all.
 
-    # WHY: both names must reach the caller in a stable order.
+    # WHY: removable names must reach the caller in a stable order.
     assert removed == ["alpha", "beta"], f"The sweep reported {removed} instead of both orphaned names."
-    # WHY: issue #3846 states the operator must see the count.
+    # WHY: issue #3846 requires a measured candidate count and a removal count.
+    assert "checked 3 untracked source directories" in caplog.text, "The sweep did not report the checked count."
     assert "removed 2 orphaned source directories" in caplog.text, "The sweep did not report the removed count."
+    # WHY: the unsafe candidate proves that the content check refused removal.
+    assert (unsafe / "work.py").exists(), "The sweep removed a candidate with a non-cache file."
