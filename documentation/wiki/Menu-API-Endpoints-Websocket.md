@@ -74,7 +74,7 @@ flowchart LR
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/sites/{site_id}/devices` | [`sites.devices.listSiteDevices`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/devices/list-site-devices) | [`RoutingUtils._fetch_device_info`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/networking/network/routing_utils.py) | Call |
-| POST | `/api/v1/sites/{site_id}/devices/{device_id}/{endpoint}` | None (raw request) | [`_RoutingUtilsPayload._post_device_command`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/networking/network/_routing_utils_payload.py) | Path |
+| POST | `/api/v1/sites/{site_id}/devices/{device_id}/{endpoint}` | None (raw request) | [`_RoutingUtilsPayload._post_device_command`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/networking/network/support/_routing_utils_payload.py) | Path |
 | WS | `/sites/{site_id}/devices/{device_id}/cmd` | None (WebSocket channel) | [`RoutingUtils._subscribe_command_channel`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/networking/network/routing_utils.py) | Channel |
 
 ## Menu 104
@@ -97,7 +97,7 @@ flowchart LR
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/sites/{site_id}/devices` | [`sites.devices.listSiteDevices`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/devices/list-site-devices) | [`RoutingUtils._fetch_device_info`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/networking/network/routing_utils.py) | Call |
-| POST | `/api/v1/sites/{site_id}/devices/{device_id}/{endpoint}` | None (raw request) | [`_RoutingUtilsPayload._post_device_command`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/networking/network/_routing_utils_payload.py) | Path |
+| POST | `/api/v1/sites/{site_id}/devices/{device_id}/{endpoint}` | None (raw request) | [`_RoutingUtilsPayload._post_device_command`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/networking/network/support/_routing_utils_payload.py) | Path |
 | WS | `/sites/{site_id}/devices/{device_id}/cmd` | None (WebSocket channel) | [`RoutingUtils._subscribe_command_channel`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/networking/network/routing_utils.py) | Channel |
 
 ## Menu 105
@@ -120,7 +120,7 @@ flowchart LR
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/sites/{site_id}/devices` | [`sites.devices.listSiteDevices`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/devices/list-site-devices) | [`RoutingUtils._fetch_device_info`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/networking/network/routing_utils.py) | Call |
-| POST | `/api/v1/sites/{site_id}/devices/{device_id}/show_route` | [`sites.devices.showSiteSsrAndSrxRoutes`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/wan/show-site-ssr-and-srx-routes) | [`_RoutingUtilsPayload._invoke_ssr_route_api`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/networking/network/_routing_utils_payload.py) | Call |
+| POST | `/api/v1/sites/{site_id}/devices/{device_id}/show_route` | [`sites.devices.showSiteSsrAndSrxRoutes`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/wan/show-site-ssr-and-srx-routes) | [`_RoutingUtilsPayload._invoke_ssr_route_api`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/networking/network/support/_routing_utils_payload.py) | Call |
 | WS | `/sites/{site_id}/devices/{device_id}/cmd` | None (WebSocket channel) | [`RoutingUtils._subscribe_command_channel`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/networking/network/routing_utils.py) | Channel |
 
 ## Menu 106

@@ -12,7 +12,7 @@ The parent binds an instance as ``self._selection`` and its
 ``__getattr__`` proxies unknown attribute lookups here so shared state
 (dependency callables, mistapi module) stays transparent. This module
 mirrors the wrapper + ``__getattr__`` pattern used by
-:mod:`src.mist.networking.network._routing_utils_payload`.
+:mod:`src.mist.networking.network.support._routing_utils_payload`.
 """
 
 # pylint: disable=logging-fstring-interpolation
