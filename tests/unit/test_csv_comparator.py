@@ -1656,13 +1656,13 @@ class TestFinalization:
         assert "- bad: 2" in capsys.readouterr().out
 
     def test_print_processing_rate(self, capsys: object) -> None:
-        """Print processing rate."""
+        """Print processing rate for a fixed two-second duration."""
         comp = _make_comparator()
-        comp.counters.total_devices = 100
-        comp.counters.start_timing()
-        comp.counters.end_timing()
+        comp.counters.total_devices = 100  # WHY: numerator of the rate calculation.
+        comp.counters.start_time = 1000.0  # WHY: fixed start removes the real clock.
+        comp.counters.end_time = 1002.0  # WHY: fixed end gives an exact 2.0 second duration.
         comp._print_processing_rate()
-        assert "Processing rate:" in capsys.readouterr().out
+        assert "Processing rate: 50.0 devices/second" in capsys.readouterr().out
 
     def test_print_header_fast(self, capsys: object) -> None:
         """Print header in fast mode."""
