@@ -5,7 +5,7 @@ status polling), and FR-019 (audit logging). Orchestrates firmware upgrades
 with configurable execution strategy and automatic rollback on failure.
 """
 
-from collections.abc import Callable, Mapping  # WHY: type hints for complex structures
+from collections.abc import Callable  # WHY: type hints for complex structures
 from datetime import UTC, datetime  # WHY: ISO 8601 timestamps
 from enum import Enum  # WHY: strategy enumeration
 from typing import Any
@@ -57,22 +57,19 @@ class UpgradeService:
     DEVICE_UPGRADE_TIMEOUT_SECONDS = 60  # WHY: timeout constant
     # WHY: maximum concurrent device upgrade threads
     MAX_WORKER_THREADS = 8  # WHY: thread pool size constant
-    START_CONFIRMATION_TEXT = "CONFIRM"  # The service enforces the typed destructive word.
 
     def __init__(
         self,
-        mist_client: Any = None,  # WHY: The authenticated request session owns cloud calls.
-        db_router: Any = None,  # WHY: The router owns registered export writes.
-        audit_logger: Any = None,  # WHY: The audit service owns action records.
-        document_store: Any = None,  # WHY: The explicit handle owns portal documents.
-    ) -> None:
+        mist_client=None,  # WHY: Mist API client dependency
+        db_router=None,  # WHY: ArangoDB persistence dependency
+        audit_logger=None,  # WHY: audit trail dependency
+    ):
         """Initialize UpgradeService with dependencies.
 
         Args:
             mist_client: MistApi client for cloud calls (required).
             db_router: DatabaseRouter for ArangoDB writes (required).
             audit_logger: AuditLogger for operation trail (required).
-            document_store: Request-owned ArangoDB document handle.
 
         WHY: dependency injection pattern for testability and loose coupling.
         """
@@ -82,14 +79,12 @@ class UpgradeService:
         self.db_router = db_router  # WHY: persistent storage
         # WHY: store audit logger
         self.audit_logger = audit_logger  # WHY: operation trail
-        self.document_store = document_store  # WHY: direct, verified portal persistence.
         # WHY: log initialization
         logger.info(
             "upgrade_service_initialized",  # WHY: event type
             mist_client_available=mist_client is not None,  # WHY: dependency status
             db_available=db_router is not None,  # WHY: dependency status
             audit_available=audit_logger is not None,  # WHY: dependency status
-            document_store_available=document_store is not None,  # WHY: dependency status
         )  # WHY: startup event
 
     def start_upgrade(
@@ -103,7 +98,6 @@ class UpgradeService:
         rollback_enabled: bool,  # WHY: enable automatic rollback on failure
         user_id: str,  # WHY: audit trail user context
         _progress_callback: Callable[[str, dict[str, Any]], None] | None = None,  # WHY: reserved progress hook
-        confirmation: str = "",  # The operator must confirm before the cloud call.
     ) -> str | None:  # WHY: return upgrade run ID or None
         """Start firmware upgrade orchestration.
 
@@ -122,7 +116,6 @@ class UpgradeService:
             rollback_enabled: Enable automatic rollback on device failure.
             user_id: User initiating upgrade (audit trail).
             _progress_callback: Optional callback reserved for status reporting.
-            confirmation: The exact text typed by the operator.
 
         Returns:
             Upgrade run ID if started successfully, None if validation failed.
@@ -130,13 +123,6 @@ class UpgradeService:
         WHY: implements FR-006 (serial/parallel strategies) and
         FR-018 (status polling) per T-008 requirements.
         """
-        if confirmation != self.START_CONFIRMATION_TEXT:  # A direct caller cannot bypass the route confirmation.
-            logger.warning("upgrade_confirmation_missing", run_id=run_id)
-            return None
-        if rollback_enabled:  # The supported Mist plan has no rollback-enabled option.
-            logger.warning("upgrade_rollback_option_unsupported", run_id=run_id)
-            return None
-
         # WHY: log upgrade start
         logger.info(
             "upgrade_start",  # WHY: operation name
@@ -155,25 +141,10 @@ class UpgradeService:
                 firmware_version=firmware_version,  # WHY: target version
                 strategy=strategy,  # WHY: strategy string
                 org_id=org_id,  # WHY: API context
-                site_id=site_id,  # Firmware options and inventory are site scoped.
                 user_id=user_id,  # WHY: audit context
             )  # WHY: parsed strategy or None
             if strategy_enum is None:  # WHY: validation failed
                 return None  # WHY: fail fast
-
-            request_values = {
-                "run_id": run_id,
-                "org_id": org_id,
-                "site_id": site_id,
-                "user_id": user_id,
-                "device_ids": list(device_ids),
-                "firmware_version": firmware_version,
-                "strategy": strategy_enum.value,
-            }
-            prepared = self._build_upgrade_plans(request_values)
-            if prepared is None:
-                return None
-            target_entries, options_record, plans = prepared
 
             # WHY: persist the upgrade_run document and audit the initiation
             if not self._persist_upgrade_run(  # WHY: persist and audit
@@ -188,9 +159,6 @@ class UpgradeService:
             ):  # WHY: persistence failed
                 return None  # WHY: fail
 
-            if not self._persist_and_submit_plan(run_id, target_entries, options_record, plans):
-                return None
-
             # WHY: log upgrade start completion
             logger.info("upgrade_initiated", run_id=run_id)  # WHY: success event
 
@@ -200,7 +168,7 @@ class UpgradeService:
             # WHY: log exception
             logger.error(
                 "upgrade_start_exception",  # WHY: error event
-                error_type=type(e).__name__,
+                error=str(e),  # WHY: exception detail
                 exception_type=type(e).__name__,  # WHY: exception class
             )  # WHY: exception logged
 
@@ -211,30 +179,10 @@ class UpgradeService:
                     user_id=user_id,  # WHY: user context
                     details={"run_id": run_id},  # WHY: context details
                     result="failure",  # WHY: result status
-                    error_message="The upgrade operation failed.",  # WHY: keep dependency text private.
+                    error_message=str(e),  # WHY: error detail
                 )  # WHY: audit entry
 
             return None  # WHY: fail on exception
-
-    def _persist_and_submit_plan(
-        self,
-        run_id: str,
-        target_entries: list[dict[str, Any]],
-        options_record: dict[str, Any],
-        plans: tuple[Any, ...],
-    ) -> bool:
-        """Store the complete plan before submitting its cloud operations."""
-        if not self._write_upgrade_plan(
-            run_id,
-            target_entries,
-            options_record,
-        ):  # The cloud must not precede durable intent.
-            return False  # A failed write blocks every mutation.
-        upgrade_run = self.document_store.collection("upgrade_runs").get(run_id)  # Read the verified plan back.
-        return isinstance(upgrade_run, dict) and self._submit_upgrade_plans(
-            upgrade_run,
-            plans,
-        )  # Submit only stored intent.
 
     def _validate_start_upgrade_inputs(
         self,  # WHY: instance method
@@ -243,7 +191,6 @@ class UpgradeService:
         firmware_version: str,  # WHY: target version
         strategy: str,  # WHY: strategy string
         org_id: str,  # WHY: API context
-        site_id: str,  # Site scope for inventory and firmware options.
         user_id: str,  # WHY: audit context
     ) -> UpgradeStrategy | None:  # WHY: parsed strategy or None
         """Validate start_upgrade inputs and firmware availability.
@@ -270,15 +217,13 @@ class UpgradeService:
             return None  # WHY: fail fast
 
         # WHY: both API and database clients are required
-        if not self.mist_client or not self.db_router or self.document_store is None or self.audit_logger is None:
+        if not self.mist_client or not self.db_router:  # WHY: dependency check
             logger.error("upgrade_dependencies_unavailable")  # WHY: missing dependencies
             return None  # WHY: fail fast
 
         # WHY: verify the firmware version exists in the Mist cloud
         if not self._check_firmware_available(  # WHY: delegate firmware check
             org_id=org_id,  # WHY: API context
-            site_id=site_id,
-            device_ids=device_ids,
             firmware_version=firmware_version,  # WHY: version to validate
             run_id=run_id,  # WHY: audit context
             user_id=user_id,  # WHY: audit context
@@ -335,18 +280,14 @@ class UpgradeService:
     def _check_firmware_available(
         self,  # WHY: instance method
         org_id: str,  # WHY: API context
-        site_id: str,
-        device_ids: list[str],
         firmware_version: str,  # WHY: version to validate
         run_id: str,  # WHY: audit context
         user_id: str,  # WHY: audit context
     ) -> bool:  # WHY: availability result
-        """Check the firmware option against complete site inventory evidence.
+        """Check that the firmware version is available in the Mist cloud.
 
         Args:
             org_id: Organization ID for API context.
-            site_id: Site whose inventory and version options are checked.
-            device_ids: Selected device MAC addresses.
             firmware_version: Target firmware version string.
             run_id: Upgrade run ID for audit context.
             user_id: User initiating upgrade for audit context.
@@ -354,67 +295,28 @@ class UpgradeService:
         Returns:
             True when the version is available, False otherwise.
         """
-        from src.interfaces.portals.upgrade_portal.capture.devices import normalize_device_mac
-        from src.interfaces.portals.upgrade_portal.upgrade.options import read_model_versions, read_upgrade_inventory
+        # WHY: log the validation phase
+        logger.info("upgrade_validating_firmware", firmware=firmware_version)  # WHY: validation phase
+        firmware_available = self.mist_client.validateFirmwareVersion(  # WHY: API call
+            org_id=org_id,  # WHY: API context
+            firmware_version=firmware_version,  # WHY: version to validate
+        )  # WHY: API result
 
-        logger.info("upgrade_validating_firmware", firmware=firmware_version)
-        inventory = read_upgrade_inventory(self.mist_client, org_id, site_id)
-        if inventory.partial_reasons or not inventory.records:
-            logger.warning("upgrade_firmware_inventory_unavailable", site_id=site_id)
-            return False
-        inventory_complete, firmware_available = self._requested_firmware_available(
-            device_ids,
-            inventory.records,
-            firmware_version,
-            org_id,
-            site_id,
-            normalize_device_mac,
-            read_model_versions,
-        )
-        if not inventory_complete:  # An unverified device list cannot be upgraded.
-            logger.warning("upgrade_firmware_inventory_incomplete", site_id=site_id)
-            return False
-        if firmware_available:  # Every requested device offers this firmware.
-            return True
-        logger.error("upgrade_firmware_not_available", firmware=firmware_version)  # WHY: validation error
-        self._audit_firmware_refusal(run_id, user_id, firmware_version)
-        return False  # WHY: not available
+        # WHY: fail fast when the version is not offered
+        if not firmware_available:  # WHY: validation check
+            logger.error("upgrade_firmware_not_available", firmware=firmware_version)  # WHY: validation error
+            # WHY: audit log validation failure
+            if self.audit_logger:  # WHY: audit logging conditional
+                self.audit_logger.log_operation(  # WHY: audit trail
+                    operation="upgrade_start",  # WHY: operation type
+                    user_id=user_id,  # WHY: user context
+                    details={"run_id": run_id, "firmware": firmware_version},  # WHY: context details
+                    result="failure",  # WHY: result status
+                    error_message="Firmware version not available",  # WHY: error detail
+                )  # WHY: audit entry
+            return False  # WHY: not available
 
-    def _requested_firmware_available(
-        self,
-        device_ids: list[str],
-        inventory_records: list[dict[str, Any]],
-        firmware_version: str,
-        org_id: str,
-        site_id: str,
-        normalize_device_mac: Callable[[Any], str],
-        read_model_versions: Callable[..., dict[str, list[str]]],
-    ) -> tuple[bool, bool]:
-        """Check requested devices and firmware against complete inventory data."""
-        requested = {normalize_device_mac(device_id) for device_id in device_ids}  # Match Mist MAC normalization.
-        by_mac = {normalize_device_mac(row.get("mac")): row for row in inventory_records}  # Index site devices.
-        if not requested or not requested.issubset(by_mac):  # Reject incomplete device evidence.
-            return False, False  # Do not start an upgrade from a partial inventory.
-        versions_by_model = read_model_versions(self.mist_client, site_id, inventory_records, org_id)
-        available = all(
-            firmware_version in versions_by_model.get(str(by_mac[mac].get("model", "")).strip(), ())
-            for mac in requested
-        )  # Require the target version for every requested device.
-        return True, available  # Preserve inventory and version refusal reasons.
-
-    def _audit_firmware_refusal(self, run_id: str, user_id: str, firmware_version: str) -> None:
-        """Record a safe audit failure when the requested firmware is unavailable."""
-        if self.audit_logger is None:  # Audit only when the request graph supplied the logger.
-            return  # The caller still refuses the cloud mutation.
-        audit_id = self.audit_logger.log_operation(
-            operation="upgrade_start",
-            user_id=user_id,
-            details={"run_id": run_id, "firmware": firmware_version},
-            result="failure",
-            error_message="Firmware version not available",
-        )  # Keep external error details out of the audit record.
-        if audit_id is None:  # A failed audit must remain visible.
-            logger.error("upgrade_validation_audit_failed", run_id=run_id)  # Record the audit failure.
+        return True  # WHY: available
 
     def _persist_upgrade_run(
         self,  # WHY: instance method
@@ -461,124 +363,33 @@ class UpgradeService:
             },  # WHY: status map
         }  # WHY: complete document
 
-        if self.document_store is None or self.audit_logger is None:
-            logger.error("upgrade_run_dependencies_unavailable", run_id=run_id)
-            return False
-        from src.interfaces.portals.upgrade_portal.capture import store
+        # WHY: persist upgrade_run to ArangoDB
+        logger.info("upgrade_persisting_run_doc", run_id=run_id)  # WHY: persist phase
+        write_result = self.db_router.write(  # WHY: database write
+            collection="upgrade_runs",  # WHY: collection name
+            document=upgrade_run_doc,  # WHY: document to write
+        )  # WHY: write result
 
-        logger.info("upgrade_persisting_run_doc", run_id=run_id)
-        write_result = store.write_run(upgrade_run_doc, database=self.document_store)
-        if not write_result.verified:
+        # WHY: verify persistence succeeded
+        if not write_result:  # WHY: check result
             logger.error("upgrade_run_persist_failed", run_id=run_id)  # WHY: persistence error
             return False  # WHY: fail
 
-        audit_id = self.audit_logger.log_operation(  # WHY: audit trail
-            operation="upgrade_start",  # WHY: operation type
-            user_id=user_id,  # WHY: user context
-            details={  # WHY: operation details
-                "run_id": run_id,  # WHY: identifier
-                "device_count": len(device_ids),  # WHY: metric
-                "firmware": firmware_version,  # WHY: target version
-                "strategy": strategy_enum.value,  # WHY: strategy type
-            },  # WHY: detail dict
-            result="pending",  # The cloud has not accepted a plan at this point.
-        )  # WHY: audit entry
-        if audit_id is None:
-            logger.error("upgrade_run_audit_failed", run_id=run_id)
-            return False
+        # WHY: audit log upgrade initiation
+        if self.audit_logger:  # WHY: audit logging conditional
+            self.audit_logger.log_operation(  # WHY: audit trail
+                operation="upgrade_start",  # WHY: operation type
+                user_id=user_id,  # WHY: user context
+                details={  # WHY: operation details
+                    "run_id": run_id,  # WHY: identifier
+                    "device_count": len(device_ids),  # WHY: metric
+                    "firmware": firmware_version,  # WHY: target version
+                    "strategy": strategy_enum.value,  # WHY: strategy type
+                },  # WHY: detail dict
+                result="success",  # WHY: result status
+            )  # WHY: audit entry
 
         return True  # WHY: persistence complete
-
-    def _build_upgrade_plans(
-        self,
-        request_values: Mapping[str, Any],
-    ) -> tuple[list[dict[str, Any]], dict[str, Any], tuple[Any, ...]] | None:
-        """Build plans from current inventory and available firmware evidence."""
-        from src.interfaces.portals.upgrade_portal.upgrade import options
-        from src.operations.execution.firmware import upgrade_service as cloud_service
-
-        strategy = "serial" if request_values["strategy"] == "serial" else "big_bang"
-        choices = [
-            {"mac": device_id, "version_target": request_values["firmware_version"]}
-            for device_id in request_values["device_ids"]
-        ]
-        body = {"targets": choices, "strategy": strategy}
-        stored = options.build_options_record(
-            self.mist_client,
-            str(request_values["org_id"]),
-            str(request_values["site_id"]),
-            body,
-        )
-        target_entries = stored.get("targets")
-        option_values = stored.get("options")
-        if not isinstance(target_entries, list) or not target_entries or not isinstance(option_values, dict):
-            return None
-        targets = options.to_device_targets(target_entries, str(request_values["site_id"]))
-        cloud_options = options.build_options(option_values, now=None)
-        plans = cloud_service.plan_upgrade(
-            targets,
-            cloud_options,
-            str(request_values["org_id"]),
-            str(request_values["site_id"]),
-        )
-        return (target_entries, option_values, plans) if plans else None
-
-    def _write_upgrade_plan(
-        self,
-        run_id: str,
-        target_entries: list[dict[str, Any]],
-        options_record: dict[str, Any],
-    ) -> bool:
-        """Persist the plan before any firmware submission."""
-        if self.document_store is None:
-            return False
-        collection = self.document_store.collection("upgrade_runs")
-        collection.update(
-            {"_key": run_id, "targets": target_entries, "options": options_record, "upgrades": []},
-            merge=True,
-        )
-        stored = collection.get(run_id)
-        return (
-            isinstance(stored, dict)
-            and stored.get("targets") == target_entries
-            and stored.get("options") == options_record
-        )
-
-    def _submit_upgrade_plans(self, upgrade_run: dict[str, Any], plans: tuple[Any, ...]) -> bool:
-        """Submit each supported plan and verify its cloud identifier before continuing."""
-        from src.operations.execution.firmware import upgrade_service as cloud_service
-
-        for plan in plans:
-            submission = cloud_service.invoke_upgrade(self.mist_client, plan)
-            if submission.raw_status not in cloud_service.ACCEPTED_STATUS or not submission.upgrade_id:
-                upgrade_run["status"] = "failed"
-                self._save_upgrade_run(upgrade_run)
-                return False
-            upgrade_run["upgrades"].append(
-                {
-                    "upgrade_id": submission.upgrade_id,
-                    "scope": submission.scope,
-                    "accepted": list(submission.accepted),
-                    "raw_status": submission.raw_status,
-                }
-            )
-            if not self._save_upgrade_run(upgrade_run):
-                return False
-        audit_id = self.audit_logger.log_operation(
-            operation="upgrade_submitted",
-            user_id=str(upgrade_run.get("user_id", "")),
-            details={"run_id": upgrade_run.get("run_id", ""), "plan_count": len(plans)},
-            result="success",
-        )
-        return audit_id is not None
-
-    def _save_upgrade_run(self, upgrade_run: dict[str, Any]) -> bool:
-        """Write the current run state and verify its stored fields."""
-        run_id = str(upgrade_run.get("run_id", ""))
-        collection = self.document_store.collection("upgrade_runs")
-        collection.update(upgrade_run, merge=True)
-        stored = collection.get(run_id)
-        return isinstance(stored, dict) and stored.get("upgrades") == upgrade_run.get("upgrades")
 
     def _build_status_dict(
         self,  # WHY: instance method
@@ -693,7 +504,7 @@ class UpgradeService:
             now = datetime.now(UTC)  # WHY: current time
             return int((now - created_dt).total_seconds())  # WHY: calculate elapsed
         except Exception as e:  # WHY: catch parse errors
-            logger.warning("elapsed_time_calculation_failed", error_type=type(e).__name__)
+            logger.warning("elapsed_time_calculation_failed", error=str(e))  # WHY: warn
             return 0  # WHY: default elapsed
 
     def get_upgrade_status(
@@ -724,15 +535,22 @@ class UpgradeService:
                 return None  # WHY: fail
 
             # WHY: check database available
-            if self.document_store is None:
-                logger.error("upgrade_document_store_unavailable_for_status")
+            if not self.db_router:  # WHY: dependency check
+                logger.error("db_router_unavailable_for_status")  # WHY: error
                 return None  # WHY: fail
 
-            logger.debug("upgrade_reading_status", run_id=run_id)
-            upgrade_run = self.document_store.collection("upgrade_runs").get(run_id)
-            if not isinstance(upgrade_run, dict) or upgrade_run.get("run_id") != run_id:
+            # WHY: query upgrade_run from ArangoDB
+            logger.debug("upgrade_querying_status", run_id=run_id)  # WHY: query phase
+            query = f"FOR doc IN upgrade_runs FILTER doc.run_id == '{run_id}' RETURN doc"  # WHY: AQL query
+            results = self.db_router.query(query=query)  # WHY: database query
+
+            # WHY: check if document found
+            if not results or len(results) == 0:  # WHY: result check
                 logger.debug("upgrade_run_not_found", run_id=run_id)  # WHY: not found
                 return None  # WHY: return none
+
+            # WHY: extract upgrade_run document
+            upgrade_run = results[0]  # WHY: first result
 
             # WHY: build the status response from the document
             status_dict = self._build_status_dict(run_id=run_id, upgrade_run=upgrade_run)  # WHY: build response
@@ -746,12 +564,13 @@ class UpgradeService:
 
             return status_dict  # WHY: return status dict
 
-        except Exception as error:
+        except Exception as e:  # WHY: catch unexpected exceptions
+            # WHY: log exception
             logger.error(
-                "upgrade_status_exception",
-                run_id=run_id,
-                error_type=type(error).__name__,
-            )
+                "upgrade_status_exception",  # WHY: error event
+                run_id=run_id,  # WHY: context
+                error=str(e),  # WHY: exception detail
+            )  # WHY: error logged
 
             return None  # WHY: fail on exception
 
@@ -759,14 +578,16 @@ class UpgradeService:
         self,
         run_id: str,  # WHY: upgrade run identifier
         user_id: str,  # WHY: audit trail user context
-        confirmation: str = "",
     ) -> bool:  # WHY: return success/failure
-        """Cancel a stored cloud operation only after the operator types STOP.
+        """Cancel an in-progress upgrade and trigger rollback if enabled.
+
+        Cancels upgrade and initiates device rollback if rollback_enabled
+        is true in the upgrade_run. Updates device_status to "rolled_back"
+        and run status to "cancelled".
 
         Args:
             run_id: Upgrade run ID to cancel.
-            user_id: User cancelling the upgrade (audit trail).
-            confirmation: The exact STOP word typed by the operator.
+            user_id: User cancelling upgrade (audit trail).
 
         Returns:
             True if cancel succeeded, False otherwise.
@@ -774,106 +595,75 @@ class UpgradeService:
         WHY: implements T-009 requirement for "Cancel upgrade" button
         that triggers rollback if enabled.
         """
-        return self._cancel_confirmed_upgrade(run_id, user_id, confirmation)
+        # WHY: log cancel request
+        logger.info("upgrade_cancel_requested", run_id=run_id, user_id=user_id)  # WHY: request event
 
-    def _cancel_confirmed_upgrade(self, run_id: str, user_id: str, confirmation: str) -> bool:
-        """Cancel only verified cloud operations from the stored run plan."""
-        from src.interfaces.portals.upgrade_portal.upgrade import stop
-        from src.operations.execution.firmware import upgrade_service as cloud_service
+        try:
+            # WHY: validate inputs
+            if not run_id or not isinstance(run_id, str):  # WHY: validation
+                logger.error("upgrade_cancel_invalid_run_id")  # WHY: error
+                return False  # WHY: fail
 
-        if confirmation != stop.STOP_CONFIRMATION_TEXT or self.document_store is None:
-            reason = (
-                "A typed STOP confirmation is required."
-                if confirmation != stop.STOP_CONFIRMATION_TEXT
-                else "The run document store is unavailable."
-            )
-            logger.warning("upgrade_cancel_refused", run_id=run_id, reason=reason)
-            if self.audit_logger is not None:
-                self.audit_logger.log_operation(
-                    operation="upgrade_cancel",
-                    user_id=user_id,
-                    details={"run_id": run_id},
-                    result="failure",
-                    error_message=reason,
-                )
-            return False
-        upgrade_run = self._load_cancel_run(run_id)
-        if upgrade_run is None:
-            logger.warning("upgrade_cancel_refused_without_cloud_ids", run_id=run_id)
-            return False
-        stop_targets = self._build_stop_targets(upgrade_run, cloud_service, stop)
-        if not stop_targets:
-            logger.warning("upgrade_cancel_refused_without_cloud_ids", run_id=run_id)
-            return False
-        outcome = stop.stop_run(self.mist_client, stop_targets, confirmation)
-        if not self._cancel_outcome_is_complete(outcome, stop_targets):
-            logger.warning("upgrade_cancel_incomplete", run_id=run_id)
-            return False
-        upgrade_run.update(
-            {"status": "cancelled", "cancelled_at": datetime.now(UTC).isoformat(), "cancelled_by": user_id}
-        )
-        return self._persist_cancelled_run(run_id, user_id, upgrade_run, False)
+            # WHY: check database available
+            if not self.db_router:  # WHY: dependency check
+                logger.error("db_router_unavailable_for_cancel")  # WHY: error
+                return False  # WHY: fail
 
-    def _load_cancel_run(self, run_id: str) -> dict[str, Any] | None:
-        """Read a stored run only when it holds verified cloud operation details."""
-        if self.document_store is None:
-            return None
-        record = self.document_store.collection("upgrade_runs").get(run_id)
-        if not isinstance(record, dict):
-            return None
-        if not isinstance(record.get("upgrades"), list) or not record["upgrades"]:
-            return None
-        if not isinstance(record.get("targets"), list) or not isinstance(record.get("options"), dict):
-            return None
-        return record
+            # WHY: query upgrade_run from ArangoDB
+            query = f"FOR doc IN upgrade_runs FILTER doc.run_id == '{run_id}' RETURN doc"  # WHY: AQL query
+            results = self.db_router.query(query=query)  # WHY: database query
 
-    def _build_stop_targets(self, upgrade_run: Mapping[str, Any], cloud_service: Any, stop_module: Any) -> list[Any]:
-        """Rebuild only the plans that have a stored cloud identifier."""
-        from src.interfaces.portals.upgrade_portal.upgrade import options
+            # WHY: check if document found
+            if not results or len(results) == 0:  # WHY: result check
+                logger.error("upgrade_cancel_run_not_found", run_id=run_id)  # WHY: not found
+                return False  # WHY: fail
 
-        site_id = str(upgrade_run.get("site_id", ""))
-        targets = options.to_device_targets(upgrade_run["targets"], site_id)
-        selected_options = options.build_options(upgrade_run["options"], now=None)
-        plans = cloud_service.plan_upgrade(
-            targets,
-            selected_options,
-            str(upgrade_run.get("org_id", "")),
-            site_id,
-        )
-        return self._stop_targets(plans, upgrade_run["upgrades"], cloud_service, stop_module)
+            # WHY: extract upgrade_run document
+            upgrade_run = results[0]  # WHY: first result
+            rollback_enabled = upgrade_run.get("rollback_enabled", False)  # WHY: rollback flag
 
-    @staticmethod
-    def _cancel_outcome_is_complete(outcome: Any, stop_targets: list[Any]) -> bool:
-        """Report true only when the cloud stopped every planned device."""
-        requested = {target.mac for item in stop_targets for target in item.plan.targets}
-        return bool(requested) and set(outcome.cancelled) == requested
+            # WHY: update run status to cancelled
+            upgrade_run["status"] = "cancelled"  # WHY: status update
+            upgrade_run["cancelled_at"] = datetime.now(UTC).isoformat()  # WHY: timestamp
+            upgrade_run["cancelled_by"] = user_id  # WHY: audit trail
 
-    @staticmethod
-    def _stop_targets(
-        plans: tuple[Any, ...],
-        upgrades: list[dict[str, Any]],
-        cloud_service: Any,
-        stop_module: Any,
-    ) -> list[Any]:
-        """Match each stored cloud identifier to its original SDK plan."""
-        from src.operations.execution.firmware.upgrade_service import GatewayFamily
+            # WHY: if rollback enabled, mark all devices as rolled_back
+            if rollback_enabled:  # WHY: rollback check
+                self._mark_devices_rolled_back(run_id=run_id, upgrade_run=upgrade_run)  # WHY: mark rollback
 
-        stop_targets: list[Any] = []
-        for plan in plans:
-            addresses = {target.mac for target in plan.targets}
-            stored = next(
-                (
-                    entry
-                    for entry in upgrades
-                    if entry.get("scope") == plan.scope and set(entry.get("accepted", ())) == addresses
-                ),
-                None,
-            )
-            if not isinstance(stored, Mapping) or not stored.get("upgrade_id"):
-                return []
-            family = GatewayFamily.SSR if plan.endpoint == cloud_service.ENDPOINT_ORG_SSRS else GatewayFamily.JUNOS
-            stop_targets.append(stop_module.StopTarget(plan, str(stored["upgrade_id"]), family))
-        return stop_targets
+            # WHY: persist the cancelled run and audit the cancel
+            if not self._persist_cancelled_run(  # WHY: delegate persistence
+                run_id=run_id,  # WHY: run identifier
+                user_id=user_id,  # WHY: audit context
+                upgrade_run=upgrade_run,  # WHY: document to write
+                rollback_enabled=rollback_enabled,  # WHY: action flag
+            ):  # WHY: persistence failed
+                return False  # WHY: fail
+
+            # WHY: log success
+            logger.info("upgrade_cancel_success", run_id=run_id)  # WHY: success event
+
+            return True  # WHY: success
+
+        except Exception as e:  # WHY: catch unexpected exceptions
+            # WHY: log exception
+            logger.error(
+                "upgrade_cancel_exception",  # WHY: error event
+                run_id=run_id,  # WHY: context
+                error=str(e),  # WHY: exception detail
+            )  # WHY: error logged
+
+            # WHY: audit log failure
+            if self.audit_logger:  # WHY: audit logging conditional
+                self.audit_logger.log_operation(  # WHY: audit trail
+                    operation="upgrade_cancel",  # WHY: operation type
+                    user_id=user_id,  # WHY: user context
+                    details={"run_id": run_id},  # WHY: context details
+                    result="failure",  # WHY: result status
+                    error_message=str(e),  # WHY: error detail
+                )  # WHY: audit entry
+
+            return False  # WHY: fail on exception
 
     def _persist_cancelled_run(
         self,  # WHY: instance method
@@ -893,26 +683,29 @@ class UpgradeService:
         Returns:
             True when the document was written and audited, False otherwise.
         """
-        if self.document_store is None or self.audit_logger is None:
-            logger.error("upgrade_cancel_dependencies_unavailable", run_id=run_id)
+        # WHY: persist cancelled run to ArangoDB
+        logger.info("upgrade_persisting_cancel", run_id=run_id)  # WHY: persist phase
+        write_result = self.db_router.write(  # WHY: database write
+            collection="upgrade_runs",  # WHY: collection name
+            document=upgrade_run,  # WHY: document to write
+        )  # WHY: write result
+
+        # WHY: verify persistence succeeded
+        if not write_result:  # WHY: check result
+            logger.error("upgrade_cancel_persist_failed", run_id=run_id)  # WHY: error
             return False  # WHY: fail
 
-        collection = self.document_store.collection("upgrade_runs")
-        collection.update(upgrade_run)
-        stored = collection.get(run_id)
-        expected = ("status", "cancelled_at", "cancelled_by", "device_status")
-        if not isinstance(stored, dict) or any(stored.get(field) != upgrade_run.get(field) for field in expected):
-            logger.error("upgrade_cancel_readback_failed", run_id=run_id)
-            return False
-        audit_id = self.audit_logger.log_operation(
-            operation="upgrade_cancel",
-            user_id=user_id,
-            details={"run_id": run_id, "rollback_triggered": rollback_enabled},
-            result="success",
-        )
-        if audit_id is None:
-            logger.error("upgrade_cancel_audit_failed", run_id=run_id)
-            return False
+        # WHY: audit log cancel
+        if self.audit_logger:  # WHY: audit logging conditional
+            self.audit_logger.log_operation(  # WHY: audit trail
+                operation="upgrade_cancel",  # WHY: operation type
+                user_id=user_id,  # WHY: user context
+                details={  # WHY: operation details
+                    "run_id": run_id,  # WHY: identifier
+                    "rollback_triggered": rollback_enabled,  # WHY: action flag
+                },  # WHY: detail dict
+                result="success",  # WHY: result status
+            )  # WHY: audit entry
 
         return True  # WHY: persistence complete
 

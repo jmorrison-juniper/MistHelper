@@ -105,7 +105,7 @@ REQUEST_HANDLES = (
     "database_router",
     "redis_client",
     "database_client",
-)  # Each request owns its handles.
+)  # The teardown closes each request-owned handle.
 
 ERROR_CODES = {
     400: "bad_request",  # The portal could not read the request.
@@ -867,10 +867,11 @@ def close_handle(name: str, handle: object | None) -> None:
         logger.debug("The request handle %s closed.", name)  # Log after the close succeeds.
     except Exception as error:  # A close fault must not hide the fault that ended the request.
         logger.warning(
-            "The portal could not close the handle %s after %s.",
+            "The portal could not close the handle %s after %s: %s.",
             name,
             type(error).__name__,
-        )  # Report the safe fault class and continue.
+            error,
+        )  # Report the close fault and continue.
 
 
 def import_route_module(name: str) -> ModuleType:

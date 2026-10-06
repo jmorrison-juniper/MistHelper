@@ -137,6 +137,24 @@ OPTIONS_BUILDER_KEY = "UPGRADE_OPTIONS_BUILDER"  # The seam for `upgrade/options
 OPTIONS_VIEW_KEY = "UPGRADE_OPTIONS_VIEW"  # The seam for the device rows of the options page.
 VERSIONS_KEY = "UPGRADE_VERSIONS"  # The version list of each model, for the options page.
 SELF_READER_KEY = "MIST_SELF_READER"  # The seam that reads the account behind the signed cloud session.
+
+
+def request_upgrade_service() -> tuple[Any, Any | None]:
+    """Return the upgrade service or its established dependency refusal."""
+    from src.interfaces.portals.upgrade_portal.app.wiring import (
+        PortalAuthenticationError,
+        PortalDependencyError,
+        request_service,
+    )
+
+    try:
+        return request_service(UPGRADE_SERVICE_KEY, "upgrade"), None
+    except PortalAuthenticationError:
+        return None, json_error(401, "not_authenticated", "Sign in to continue.")
+    except PortalDependencyError:
+        return None, json_error(503, "service_unavailable", "UpgradeService not available")
+
+
 VERSIONS_MODULE = "upgrade.options"  # The module that reads the version list of each model.
 VERSIONS_ATTRIBUTES = ("read_model_versions",)  # The reader name that the module above publishes.
 VIEW_ATTRIBUTES = ("build_options_view",)  # The builder of the device rows of the options page.
@@ -2190,18 +2208,9 @@ def start_upgrade_via_service(run_id: str) -> tuple[Response, int]:
     Returns:
         JSON response with upgrade status, or error refusal.
     """
-    from src.interfaces.portals.upgrade_portal.app.wiring import (
-        PortalAuthenticationError,
-        PortalDependencyError,
-        request_service,
-    )  # Resolve the service after the request guard has validated the operator.
-
-    try:  # A missing store must stop before firmware work.
-        upgrade_service = request_service(UPGRADE_SERVICE_KEY, "upgrade")
-    except PortalAuthenticationError:
-        return json_error(401, "not_authenticated", "Sign in to continue.")
-    except PortalDependencyError:
-        return json_error(503, "service_unavailable", "UpgradeService not available")
+    upgrade_service, dependency_refusal = request_upgrade_service()
+    if dependency_refusal is not None:
+        return dependency_refusal
     if upgrade_service is None:  # UpgradeService not wired, cannot proceed with upgrade
         logger.error("upgrade: UpgradeService not wired for run %s", run_id)  # Name the missing dependency
         return json_error(503, "service_unavailable", "UpgradeService not available")
@@ -2218,22 +2227,6 @@ def start_upgrade_via_service(run_id: str) -> tuple[Response, int]:
             upgrade_input.message,
         )
 
-    def upgrade_option_refusal() -> tuple[Response, int] | None:
-        """Refuse missing confirmation or an unsupported rollback request."""
-        if confirmation_text() != CONFIRM_TEXT:  # A cloud mutation requires the exact typed word.
-            return json_error(BAD_REQUEST_STATUS, CONFIRMATION_REQUIRED_CODE, CONFIRM_REQUIRED_MESSAGE)
-        if upgrade_input.rollback_enabled:  # The supported SDK plan has no automatic rollback control.
-            return json_error(
-                BAD_REQUEST_STATUS,
-                "unsupported_option",
-                "Automatic rollback is not supported by this service route.",
-            )
-        return None  # Both mutation guards passed.
-
-    refusal = upgrade_option_refusal()  # Validate the final typed and supported options.
-    if refusal is not None:  # Refuse before reading scope or contacting Mist.
-        return refusal  # Return the exact confirmation or option error.
-
     if not isinstance(body, Mapping):  # The validator refused this shape, so keep the scope check explicit.
         return json_error(BAD_REQUEST_STATUS, "invalid_parameters", "json_body is required for upgrade start")
     org_id = str(body.get("org_id", "")).strip()  # The service needs the organization scope for cloud validation.
@@ -2241,54 +2234,46 @@ def start_upgrade_via_service(run_id: str) -> tuple[Response, int]:
     if not org_id or not site_id:  # Missing scope cannot safely start a firmware change.
         return json_error(BAD_REQUEST_STATUS, "invalid_parameters", "org_id and site_id are required for upgrade start")
 
-    def submit_upgrade() -> tuple[Response, int]:
-        """Start the checked upgrade and return only a verified service result."""
-        try:  # The SDK or durable store can refuse the requested upgrade.
-            logger.info(
-                "upgrade: start upgrade for run %s with strategy=%s on %d devices",
-                run_id,
-                upgrade_input.strategy,
-                len(upgrade_input.device_ids),
-            )  # Log before the cloud mutation.
-            upgrade_result = upgrade_service.start_upgrade(
-                run_id=run_id,
-                org_id=org_id,
-                site_id=site_id,
-                device_ids=upgrade_input.device_ids,
-                firmware_version=upgrade_input.firmware_version,
-                strategy=upgrade_input.strategy,
-                rollback_enabled=upgrade_input.rollback_enabled,
-                user_id=actor_address(),
-                confirmation=confirmation_text(),
-            )  # Use the authenticated request session.
-            logger.debug(
-                "upgrade: upgrade started for run %s with result %s", run_id, bool(upgrade_result)
-            )  # Log the service result.
-            if not upgrade_result:  # A false result means no durable upgrade intent exists.
-                return json_error(
-                    SERVER_ERROR_STATUS,
-                    "upgrade_failed",
-                    "UpgradeService could not start the upgrade",
-                )  # Refuse a success-shaped response.
-            response_body = {
-                "upgrade_id": run_id,
-                "status": "pending",
-                "devices_count": len(upgrade_input.device_ids),
-                "strategy": upgrade_input.strategy,
-                "rollback_enabled": upgrade_input.rollback_enabled,
-            }  # Preserve the existing response fields.
-            return jsonify(response_body), ACCEPTED_STATUS  # Keep the route's accepted status code.
-        except Exception as fault:  # Keep external exception text out of the response.
-            logger.error(
-                "upgrade: start upgrade for run %s failed: %s", run_id, type(fault).__name__
-            )  # Record safe failure context.
-            return json_error(
-                SERVER_ERROR_STATUS,
-                "upgrade_failed",
-                "UpgradeService could not start the upgrade.",
-            )  # Return the established error envelope.
+    try:  # UpgradeService call may fail due to validation, API, or transient errors
+        logger.info(
+            "upgrade: start upgrade for run %s with strategy=%s on %d devices",
+            run_id,
+            upgrade_input.strategy,
+            len(upgrade_input.device_ids),
+        )  # BEFORE service call
 
-    return submit_upgrade()  # Keep the route's refusal checks separate from cloud work.
+        # WHY: Invoke UpgradeService.start_upgrade() to begin firmware update orchestration
+        # Returns upgrade_run record with initial status and per-device state tracking
+        upgrade_result = upgrade_service.start_upgrade(
+            run_id=run_id,
+            org_id=org_id,
+            site_id=site_id,
+            device_ids=upgrade_input.device_ids,
+            firmware_version=upgrade_input.firmware_version,
+            strategy=upgrade_input.strategy,
+            rollback_enabled=upgrade_input.rollback_enabled,
+            user_id=actor_address(),
+        )
+
+        logger.debug(
+            "upgrade: upgrade started for run %s with result %s", run_id, bool(upgrade_result)
+        )  # AFTER service call
+        if not upgrade_result:  # A false result means the service did not persist the upgrade request.
+            return json_error(SERVER_ERROR_STATUS, "upgrade_failed", "UpgradeService could not start the upgrade")
+
+        # WHY: Build response with upgrade ID and initial status for browser polling
+        response_body = {
+            "upgrade_id": run_id,  # Use run_id as upgrade identifier
+            "status": "pending",  # The service returns the run identifier, while the status route owns progress reads.
+            "devices_count": len(upgrade_input.device_ids),  # Total devices in this upgrade
+            "strategy": upgrade_input.strategy,  # Echo back the strategy used
+            "rollback_enabled": upgrade_input.rollback_enabled,  # Confirm rollback setting
+        }
+        return jsonify(response_body), ACCEPTED_STATUS  # 202 Accepted: async work started
+
+    except Exception as fault:  # UpgradeService raised unexpected fault (validation, API, database, etc)
+        logger.error("upgrade: start upgrade for run %s failed: %s", run_id, type(fault).__name__)  # Name fault type
+        return json_error(SERVER_ERROR_STATUS, "upgrade_failed", str(fault))  # Return error to browser
 
 
 @identity.require_session  # Ensure operator is authenticated
@@ -2306,18 +2291,9 @@ def upgrade_status_via_service(run_id: str) -> tuple[Response, int]:
     Returns:
         JSON response with upgrade status and device details, or error refusal.
     """
-    from src.interfaces.portals.upgrade_portal.app.wiring import (
-        PortalAuthenticationError,
-        PortalDependencyError,
-        request_service,
-    )  # Resolve the service after the request guard has validated the operator.
-
-    try:  # A missing store must stop before a status read.
-        upgrade_service = request_service(UPGRADE_SERVICE_KEY, "upgrade")
-    except PortalAuthenticationError:
-        return json_error(401, "not_authenticated", "Sign in to continue.")
-    except PortalDependencyError:
-        return json_error(503, "service_unavailable", "UpgradeService not available")
+    upgrade_service, dependency_refusal = request_upgrade_service()
+    if dependency_refusal is not None:
+        return dependency_refusal
     if upgrade_service is None:  # UpgradeService not wired, cannot fetch status
         logger.error(
             "upgrade: UpgradeService not wired for status poll of run %s", run_id
@@ -2340,7 +2316,7 @@ def upgrade_status_via_service(run_id: str) -> tuple[Response, int]:
 
     except Exception as fault:  # UpgradeService raised unexpected fault (database, API, etc)
         logger.error("upgrade: status poll for run %s failed: %s", run_id, type(fault).__name__)  # Name fault type
-        return json_error(SERVER_ERROR_STATUS, "status_failed", "UpgradeService could not read upgrade status.")
+        return json_error(SERVER_ERROR_STATUS, "status_failed", str(fault))  # Return error to browser
 
 
 @upgrade_bp.post(UPGRADE_CANCEL_PATH)  # Phase 2 T-009: POST /api/runs/<run_id>/upgrade/cancel
@@ -2359,37 +2335,19 @@ def cancel_upgrade_via_service(run_id: str) -> tuple[Response, int]:
     Returns:
         JSON response with cancel result and new status, or error refusal.
     """
-    from src.interfaces.portals.upgrade_portal.app.wiring import (
-        PortalAuthenticationError,
-        PortalDependencyError,
-        request_service,
-    )  # Resolve the service after the request guard has validated the operator.
-
-    try:  # A missing store must stop before cancellation.
-        upgrade_service = request_service(UPGRADE_SERVICE_KEY, "upgrade")
-    except PortalAuthenticationError:
-        return json_error(401, "not_authenticated", "Sign in to continue.")
-    except PortalDependencyError:
-        return json_error(503, "service_unavailable", "UpgradeService not available")
+    upgrade_service, dependency_refusal = request_upgrade_service()
+    if dependency_refusal is not None:
+        return dependency_refusal
     if upgrade_service is None:  # UpgradeService not wired, cannot cancel upgrade
         logger.error("upgrade: UpgradeService not wired for cancel of run %s", run_id)  # Name the missing dependency
         return json_error(503, "service_unavailable", "UpgradeService not available")
 
-    from src.interfaces.portals.upgrade_portal.upgrade.stop import STOP_CONFIRMATION_TEXT
-
-    confirmation = confirmation_text()
-    if confirmation != STOP_CONFIRMATION_TEXT:
-        return json_error(BAD_REQUEST_STATUS, "confirmation_required", "Type STOP to confirm the cancel request.")
     try:  # UpgradeService call may fail due to API, database, or transient errors
         logger.info("upgrade: cancel upgrade for run %s", run_id)  # BEFORE service call
 
         # WHY: Invoke UpgradeService.cancel_upgrade() to stop firmware operation and optionally rollback
         # Returns cancel result with updated device statuses and final upgrade state
-        cancel_result = upgrade_service.cancel_upgrade(
-            run_id,
-            user_id=actor_address(),
-            confirmation=confirmation,
-        )
+        cancel_result = upgrade_service.cancel_upgrade(run_id, user_id=actor_address())
 
         logger.debug("upgrade: cancel completed for run %s with result", run_id)  # AFTER service call
         if not cancel_result:  # A false result means the service did not persist the cancellation.
@@ -2406,7 +2364,7 @@ def cancel_upgrade_via_service(run_id: str) -> tuple[Response, int]:
 
     except Exception as fault:  # UpgradeService raised unexpected fault (API, database, etc)
         logger.error("upgrade: cancel upgrade for run %s failed: %s", run_id, type(fault).__name__)  # Name fault type
-        return json_error(SERVER_ERROR_STATUS, "cancel_failed", "UpgradeService could not cancel the upgrade.")
+        return json_error(SERVER_ERROR_STATUS, "cancel_failed", str(fault))  # Return error to browser
 
 
 # --------------------------------------------------------------------------

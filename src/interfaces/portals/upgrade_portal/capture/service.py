@@ -7,7 +7,6 @@ to ArangoDB with automatic retry on transient errors.
 
 import time  # WHY: retry backoff and timing measurements
 import uuid  # WHY: unique capture IDs
-from collections.abc import Mapping  # WHY: accept canonical capture request records.
 from concurrent.futures import ThreadPoolExecutor, as_completed  # WHY: parallel device fetches
 from datetime import UTC, datetime  # WHY: ISO 8601 timestamps
 from typing import Any  # WHY: type hints for complex structures
@@ -36,18 +35,16 @@ class CaptureService:
 
     def __init__(
         self,
-        mist_client: Any = None,  # WHY: The authenticated request session owns cloud calls.
-        db_router: Any = None,  # WHY: The router owns registered export writes.
-        audit_logger: Any = None,  # WHY: The audit service owns action records.
-        document_store: Any = None,  # WHY: The explicit handle owns portal documents.
-    ) -> None:
+        mist_client=None,  # WHY: Mist API client dependency
+        db_router=None,  # WHY: ArangoDB persistence dependency
+        audit_logger=None,  # WHY: audit trail dependency
+    ):
         """Initialize CaptureService with dependencies.
 
         Args:
             mist_client: MistApi client for cloud calls (required).
             db_router: DatabaseRouter for ArangoDB writes (required).
             audit_logger: AuditLogger for operation trail (required).
-            document_store: Request-owned ArangoDB document handle.
 
         WHY: dependency injection pattern for testability and loose coupling.
         """
@@ -57,14 +54,12 @@ class CaptureService:
         self.db_router = db_router  # WHY: persistent storage
         # WHY: store audit logger
         self.audit_logger = audit_logger  # WHY: operation trail
-        self.document_store = document_store  # WHY: direct, verified portal persistence.
         # WHY: log initialization
         logger.info(
             "capture_service_initialized",
             mist_client_available=mist_client is not None,  # WHY: dependency status
             db_available=db_router is not None,  # WHY: dependency status
             audit_available=audit_logger is not None,  # WHY: dependency status
-            document_store_available=document_store is not None,  # WHY: dependency status
         )  # WHY: startup event
 
     def capture_pre_upgrade(
@@ -94,16 +89,6 @@ class CaptureService:
         WHY: implements FR-001 (pre-upgrade capture) with automatic retry
         and persistent storage per SC-004 (ArangoDB primary storage).
         """
-        return self._capture_site(
-            {
-                "run_id": run_id,
-                "org_id": org_id,
-                "site_id": site_id,
-                "device_ids": device_ids,
-                "user_id": user_id,
-                "capture_type": "pre",
-            }
-        )
         # WHY: log capture start
         logger.info(
             "capture_pre_upgrade_start",  # WHY: operation name
@@ -171,7 +156,7 @@ class CaptureService:
             # WHY: log exception
             logger.error(
                 "capture_pre_upgrade_exception",  # WHY: error event
-                error_type=type(e).__name__,
+                error=str(e),  # WHY: exception detail
                 exception_type=type(e).__name__,  # WHY: exception class
             )  # WHY: exception logged
 
@@ -182,7 +167,7 @@ class CaptureService:
                     user_id=user_id,  # WHY: user context
                     details={"run_id": run_id},  # WHY: context details
                     result="failure",  # WHY: result status
-                    error_message="The capture operation failed.",  # WHY: keep dependency text private.
+                    error_message=str(e),  # WHY: error detail
                 )  # WHY: audit entry
 
             return None  # WHY: fail on exception
@@ -281,28 +266,33 @@ class CaptureService:
         WHY: shared persistence keeps both capture methods under the
         complexity limit while preserving the exact log and audit order.
         """
-        if self.document_store is None:
-            logger.error("capture_document_store_unavailable", capture_id=capture_id)
+        # WHY: persist to ArangoDB
+        logger.info("capture_persisting_to_arangodb", capture_id=capture_id)  # WHY: persist start
+        write_result = self.db_router.write(  # WHY: database write operation
+            collection="upgrade_captures",  # WHY: collection name
+            document=capture_doc,  # WHY: document to write
+        )  # WHY: write operation result
+
+        # WHY: verify persistence succeeded
+        if not write_result:  # WHY: check write result
+            logger.error("capture_persist_failed", capture_id=capture_id)  # WHY: persistence error
             return False  # WHY: persistence failed
 
-        from src.interfaces.portals.upgrade_portal.capture import store
+        # WHY: audit log capture completion
+        if self.audit_logger:  # WHY: audit logging conditional
+            self.audit_logger.log_operation(  # WHY: audit trail
+                operation="capture_start" if capture_type == "pre" else "capture_post",  # WHY: operation type
+                user_id=capture_doc.get("user_id", ""),  # WHY: user context from document
+                details={  # WHY: operation details
+                    "capture_id": capture_id,  # WHY: identifier
+                    "capture_type": capture_type,  # WHY: type marker
+                    "device_count": device_count,  # WHY: metric
+                    "run_id": run_id,  # WHY: run link
+                },  # WHY: detail dict
+                result="success",  # WHY: result status
+            )  # WHY: audit entry
 
-        result = store.write_capture(capture_doc, database=self.document_store)
-        if not result.verified or not result.comparable or self.audit_logger is None:
-            logger.error("capture_persist_failed", capture_id=capture_id, reason=result.reason)
-            return False
-        audit_id = self.audit_logger.log_operation(
-            operation="capture_start" if capture_type == "pre" else "capture_post",
-            user_id=capture_doc.get("user_id", ""),
-            details={
-                "capture_id": capture_id,
-                "capture_type": capture_type,
-                "device_count": device_count,
-                "run_id": run_id,
-            },
-            result="success",
-        )
-        return audit_id is not None
+        return True  # WHY: persistence succeeded
 
     def capture_post_upgrade(
         self,
@@ -329,16 +319,6 @@ class CaptureService:
 
         WHY: implements FR-016 (post-upgrade capture) and T-011 requirement.
         """
-        return self._capture_site(
-            {
-                "run_id": run_id,
-                "org_id": org_id,
-                "site_id": site_id,
-                "device_ids": device_ids,
-                "user_id": user_id,
-                "capture_type": "post",
-            }
-        )
         # WHY: log capture start
         logger.info(
             "capture_post_upgrade_start",  # WHY: operation name
@@ -406,7 +386,7 @@ class CaptureService:
             # WHY: log exception
             logger.error(
                 "capture_post_upgrade_exception",  # WHY: error event
-                error_type=type(e).__name__,
+                error=str(e),  # WHY: exception detail
                 exception_type=type(e).__name__,  # WHY: exception class
             )  # WHY: exception logged
 
@@ -417,7 +397,7 @@ class CaptureService:
                     user_id=user_id,  # WHY: user context
                     details={"run_id": run_id},  # WHY: context details
                     result="failure",  # WHY: result status
-                    error_message="The capture operation failed.",  # WHY: keep dependency text private.
+                    error_message=str(e),  # WHY: error detail
                 )  # WHY: audit entry
 
             return None  # WHY: fail on exception
@@ -503,7 +483,7 @@ class CaptureService:
                     logger.error(
                         "device_capture_fetch_exception",  # WHY: event type
                         device_id=device_id,  # WHY: device context
-                        error_type=type(e).__name__,
+                        error=str(e),  # WHY: exception detail
                     )  # WHY: error event
 
         # WHY: log fetch completion
@@ -587,7 +567,7 @@ class CaptureService:
                 logger.error(
                     "device_fetch_exception",  # WHY: event type
                     device_id=device_id,  # WHY: device context
-                    error_type=type(e).__name__,
+                    error=str(e),  # WHY: exception detail
                     exception_type=type(e).__name__,  # WHY: exception class
                 )  # WHY: error event
 
@@ -611,89 +591,71 @@ class CaptureService:
         Returns:
             Device capture dict if successful, None if data is empty.
         """
-        from src.interfaces.portals.upgrade_portal.capture.devices import normalize_device_mac, read_device_statistics
+        # WHY: client availability check
+        if not self.mist_client:  # WHY: dependency check
+            logger.error("mist_client_unavailable")  # WHY: dependency error
+            return None  # WHY: fail
 
-        if self.mist_client is None:
-            return None
-        reading = read_device_statistics(self.mist_client, site_id)
-        if reading.partial_reasons:
-            return None
-        wanted = normalize_device_mac(device_id)
-        row = next((entry for entry in reading.records if normalize_device_mac(entry.get("mac")) == wanted), None)
-        if row is None:
-            return None
-        return {"device_id": wanted, "device_stats": dict(row), "fetch_timestamp": datetime.now(UTC).isoformat()}
+        # WHY: call Mist API to get device stats
+        device_stats = self.mist_client.listSiteDeviceStats(  # WHY: API call
+            org_id=org_id,  # WHY: API context
+            site_id=site_id,  # WHY: API scope
+            device_id=device_id,  # WHY: device identifier
+        )  # WHY: API result
 
-    def _capture_site(self, request: Mapping[str, Any]) -> str | None:
-        """Assemble, persist, and verify one canonical site capture."""
-        if self._validate_capture_inputs(str(request.get("run_id", "")), list(request.get("device_ids", []))):
-            return None
-        if self.document_store is None:
-            logger.error("capture_document_store_unavailable")
-            return None
-        try:
-            from src.interfaces.portals.upgrade_portal.capture import assembly, collector, store
+        # WHY: check if API returned data
+        if not device_stats:  # WHY: empty response check
+            logger.warning(
+                "device_stats_empty",  # WHY: event type
+                device_id=device_id,  # WHY: device context
+            )  # WHY: warning event
+            return None  # WHY: return None on empty
 
-            run_id = str(request["run_id"])
-            ordinal = 1 if request.get("capture_type") == "pre" else 2
-            capture_id = assembly.capture_key(run_id, ordinal)
-            job = self._capture_job(request, capture_id, ordinal)
-            resources = self._capture_resources(collector, store)
-            document = collector.build_document(job, self.mist_client, resources)
-            if not self._requested_devices_present(request, document):
-                return None
-            collector.store_capture(capture_id, document, resources)
-            loaded = store.load_capture_for_comparison(capture_id, database=self.document_store)
-            if not loaded.comparable or self.audit_logger is None:
-                return None
-            audit_id = self.audit_logger.log_operation(
-                operation="capture_start",
-                user_id=str(request.get("user_id", "")),
-                details={"run_id": run_id, "capture_id": capture_id, "capture_type": request.get("capture_type")},
-                result="success",
-            )
-            return capture_id if audit_id is not None else None
-        except Exception as fault:
-            logger.error("capture_site_failed", error_type=type(fault).__name__)
-            return None
+        # WHY: fetch device configuration
+        device_config = self.mist_client.listSiteDeviceConfig(  # WHY: API call
+            org_id=org_id,  # WHY: API context
+            site_id=site_id,  # WHY: API scope
+            device_id=device_id,  # WHY: device identifier
+        )  # WHY: API result
 
-    @staticmethod
-    def _capture_job(request: Mapping[str, Any], capture_id: str, ordinal: int) -> dict[str, Any]:
-        """Build the request-free job record required by the existing collector."""
-        return {
-            "capture_id": capture_id,
-            "run_id": str(request.get("run_id", "")),
-            "ordinal": ordinal,
-            "actor_email": str(request.get("user_id", "")),
-            "org_id": str(request.get("org_id", "")),
-            "site_id": str(request.get("site_id", "")),
-            "tier": 3,
-        }
+        # WHY: fetch radio settings
+        radio_settings = self.mist_client.listSiteDeviceRadios(  # WHY: API call
+            org_id=org_id,  # WHY: API context
+            site_id=site_id,  # WHY: API scope
+            device_id=device_id,  # WHY: device identifier
+        )  # WHY: API result
 
-    def _capture_resources(self, collector: Any, store: Any) -> Any:
-        """Bind the canonical store to this request's document handle."""
-        capture_store = collector.CaptureStore(
-            write=lambda document: store.write_capture(document, database=self.document_store),
-            read_back=lambda capture_id: store.load_capture_for_comparison(capture_id, database=self.document_store),
-        )
-        return collector.CaptureResources(
-            session=self.mist_client,
-            store=capture_store,
-            report=lambda capture_id, changes: logger.debug(
-                "capture_progress_recorded", capture_id=capture_id, fields=len(changes)
-            ),
-        )
+        # WHY: fetch security policies
+        policies = self.mist_client.listSiteNetworkPolicies(  # WHY: API call
+            org_id=org_id,  # WHY: API context
+            site_id=site_id,  # WHY: API scope
+        )  # WHY: API result
 
-    @staticmethod
-    def _requested_devices_present(request: Mapping[str, Any], document: Mapping[str, Any]) -> bool:
-        """Require every requested address in the canonical site capture."""
-        from src.interfaces.portals.upgrade_portal.capture.devices import normalize_device_mac
+        # WHY: fetch LLDP neighbors
+        lldp_neighbors = self.mist_client.listSiteDeviceLldpNeighbors(  # WHY: API call
+            org_id=org_id,  # WHY: API context
+            site_id=site_id,  # WHY: API scope
+            device_id=device_id,  # WHY: device identifier
+        )  # WHY: API result
 
-        index = document.get("device_index")
-        if not isinstance(index, Mapping) or not index:
-            return False
-        requested = {normalize_device_mac(device_id) for device_id in request.get("device_ids", [])}
-        return bool(requested) and requested.issubset(index.keys())
+        # WHY: build capture dict
+        capture = {  # WHY: capture structure
+            "device_id": device_id,  # WHY: device identifier
+            "device_stats": device_stats or {},  # WHY: stats data
+            "device_config": device_config or {},  # WHY: config data
+            "radio_settings": radio_settings or {},  # WHY: radio data
+            "policies": policies or {},  # WHY: policy data
+            "lldp_neighbors": lldp_neighbors or {},  # WHY: neighbor data
+            "fetch_timestamp": datetime.now(UTC).isoformat(),  # WHY: fetch time
+        }  # WHY: complete capture
+
+        # WHY: log successful fetch
+        logger.debug(
+            "device_capture_fetched",  # WHY: event type
+            device_id=device_id,  # WHY: device context
+        )  # WHY: success event
+
+        return capture  # WHY: return capture
 
     def _timeout_backoff(
         self,

@@ -1,1 +1,1 @@
-"""Integration contracts for issue 3834 portal dependency wiring."""
+"""Hold focused integration tests for issue 3834."""

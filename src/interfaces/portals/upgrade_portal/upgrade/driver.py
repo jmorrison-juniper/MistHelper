@@ -802,7 +802,6 @@ class RunDriverDeps:
     clock: Clock = field(default_factory=SystemClock)
     heartbeat: LockHeartbeat | None = None  # No member moved, so every existing positional call still builds
     post_check_mode: str = DEFAULT_POST_CHECK_MODE  # Last member, so every existing positional call still builds
-    worker_cleanup: Callable[[], None] | None = None  # The worker owns its document client until run completion.
 
 
 def data_root() -> Path:
@@ -1393,23 +1392,10 @@ class RunDriver:
             live = RunDriver._THREADS.get(run_id)
             if live is not None and live.is_alive():
                 logger.info("Run %s already holds a driver thread", run_id)
-                duplicate = True
-                thread = live
-            else:
-                duplicate = False
-                thread = threading.Thread(target=self.run, args=(record,), name=f"driver-{run_id}", daemon=True)
-                RunDriver._THREADS[run_id] = thread
-        if duplicate:
-            self._close_worker_resources(run_id)  # This unused request must release its separate worker client.
-            return live  # The first thread remains the only writer of this run.
-        try:
-            thread.start()  # Start only after the request bound every worker dependency.
-        except Exception:
-            with RunDriver._GUARD:
-                if RunDriver._THREADS.get(run_id) is thread:
-                    RunDriver._THREADS.pop(run_id, None)  # Remove the thread that failed to start.
-            self._close_worker_resources(run_id)  # A failed start still releases request-owned storage.
-            raise
+                return live
+            thread = threading.Thread(target=self.run, args=(record,), name=f"driver-{run_id}", daemon=True)
+            RunDriver._THREADS[run_id] = thread
+        thread.start()
         return thread
 
     def run(self, record: MutableMapping[str, Any]) -> dict[str, Any]:
@@ -1427,30 +1413,17 @@ class RunDriver:
         """
         run_id = str(record.get("run_id", ""))
         logger.info("Run %s starts the driver thread", run_id)
+        self._watch_lock(record)  # The run thread now renews the site lock, so a closed page keeps the site
         try:
-            self._watch_lock(record)  # The worker binds its heartbeat before the first operation.
             self._submit(record)
             self._cascade(record)
         except Exception as error:  # WHY: The thread must write the reason, never die silently.
             self._fail(record, error)
         finally:
-            try:
-                self._quiet_lock()  # A final run no longer needs its heartbeat.
-                self._free_lock(record)  # A final state gives the site back.
-            finally:
-                self._close_worker_resources(run_id)  # Keep storage open through the last run write.
-                RunDriver._release(run_id)  # Clear ownership even when lock cleanup fails.
+            self._quiet_lock()  # The run reached a final state, so the heartbeat stops
+            self._free_lock(record)  # A final state gives the site back, and no other state does
+            RunDriver._release(run_id)
         return dict(record)
-
-    def _close_worker_resources(self, run_id: str) -> None:
-        """Close storage that the request bound for this worker only."""
-        cleanup = self._deps.worker_cleanup  # No cleanup callback means the caller owns its test double.
-        if cleanup is None:  # Existing callers may provide only the original driver dependencies.
-            return  # No request resource belongs to this run.
-        try:
-            cleanup()  # Release the worker-owned database client after its last write.
-        except Exception as error:
-            logger.warning("Run %s could not close worker storage (%s)", run_id, type(error).__name__)
 
     @classmethod
     def _release(cls, run_id: str) -> None:

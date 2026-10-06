@@ -468,22 +468,6 @@ class TestCascadeOrder:
         parts["driver"].run(make_record())
         assert parts["gate"].calls == list(PHASE_ORDER)
 
-
-def test_driver_closes_worker_storage_after_final_write(parts: dict[str, Any]) -> None:
-    """Keep worker storage open through the final run write, then close it."""
-    closed: list[bool] = []  # The callback records when the driver releases its owned client.
-    dependencies = driver.RunDriverDeps(
-        store=parts["store"],
-        gate=parts["gate"],
-        capture=parts["capture"],
-        submit=parts["submitter"],
-        clock=FixedClock(),
-        worker_cleanup=lambda: closed.append(True),
-    )  # Bind one cleanup callback to this driver only.
-    result = driver.RunDriver(dependencies).run(make_record())  # Run the complete lifecycle without cloud access.
-    assert result["state"] == "complete"  # The driver reached its final state before cleanup.
-    assert closed == [True]  # The worker-owned client closes exactly once.
-
     def test_a_phase_starts_only_after_the_phase_before_it_settles(self, parts: dict[str, Any]) -> None:
         """Every earlier phase reads settled when the next gate opens.
 

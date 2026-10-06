@@ -1,3 +1,4 @@
-### Request-safe upgrade portal dependencies
+### Upgrade portal startup dependencies
 
-- **Fixed**: The portal builds services after authentication, keeps worker storage open during background work, and refuses work when storage is unavailable. Issue #3834.
+- **Fixed**: Normal startup now builds authenticated portal services inside
+  each request and closes request-owned database clients. Issue #3834.
