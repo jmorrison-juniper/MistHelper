@@ -2,6 +2,18 @@
 
 **Purpose**: Define the standard pattern for migrating from raw `websocket.WebSocketApp` to `mistapi.websockets.*`.
 
+## Owned Transport Exception
+
+MistHelper uses `mistapi` for every Mist REST request.
+MistHelper MAY own the WebSocket transport only while the matching SDK path
+loses the first output or a split control sequence.
+The contract test `tests/contract/websocket_streams/test_ws_sdk_contract.py`
+proves this limitation and pins the four private `APISession` fields that the
+owned transport reads: `_apitoken`, `_apitoken_index`, `_session`, and
+`_cloud_uri`.
+When a mistapi release preserves the first output and split control sequences,
+replace the owned transport with the matching SDK WebSocket path.
+
 ## Current Pattern (Raw WebSocket)
 
 ```python
