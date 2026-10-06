@@ -16,6 +16,12 @@ Shape of the response:
     ``error`` and ``last_status``. The exporter reads ``response.data``
     directly, because the endpoint is not paginated and ``mistapi.get_all``
     would return nothing useful.
+
+Transport status gate (issue #3819):
+    The exporter reads the payload only after the HTTP transport status proves
+    a completed ``2xx`` success. An absent, malformed, or non-success status
+    raises with a named outcome, because a guessed status can write a row that
+    says the integration is active when the HTTP result is unknown.
 """
 
 from __future__ import annotations  # WHY: enable PEP 604 unions on the project toolchain.
@@ -36,8 +42,12 @@ logger = logging.getLogger(__name__)  # Name the logger for this module so a rea
 
 # The operationId that selects the primary-key strategy for the written row.
 _OPERATION = "testOrgCradlepointConnection"
-_HTTP_OK = 200  # Keep response doubles without a status on the existing success path.
-_HTTP_ERROR_MIN = 400  # Treat every HTTP refusal or server failure as an export failure.
+_HTTP_SUCCESS_MIN = 200  # Only a completed 2xx result proves that the cloud answered the status question.
+_HTTP_SUCCESS_MAX = 299  # A 3xx redirect is an unfinished exchange, so it ends the success band here.
+_ABSENT_STATUS = object()  # A unique sentinel keeps an absent attribute distinct from every real value.
+_OUTCOME_ABSENT = "absent"  # Name the case where the SDK response carries no transport status at all.
+_OUTCOME_MALFORMED = "malformed"  # Name the case where the transport status is not a usable integer.
+_OUTCOME_OUT_OF_RANGE = "out-of-range"  # Name the case where the integer status is not a completed success.
 
 
 class OrgCradlepointConnectionExporter:
@@ -48,6 +58,61 @@ class OrgCradlepointConnectionExporter:
         endpoint. Static methods only, with no per-instance state, matching the
         peer exporters such as ``OrgSecIntelProfileExporter``.
     """
+
+    @staticmethod
+    def _require_success_status(response: Any, org_id: str) -> int:
+        """Return the HTTP status only when it proves a completed success.
+
+        Why:
+            Issue #3819. The previous gate changed an absent ``status_code`` to
+            ``200`` and accepted ``None``, a string, a float, ``True``,
+            ``False``, ``1xx``, and ``3xx``. A payload of ``last_status:
+            active`` then reached CSV and SQLite although the HTTP result was
+            unknown, and an engineer could read that row as a confirmed state.
+            This helper binds each untrustworthy case to a named outcome,
+            reports it, and refuses. It never invents a status value.
+
+        Args:
+            response: The SDK response whose transport status must be proved.
+            org_id: The organization under export, logged for operator context.
+
+        Returns:
+            The HTTP status, which is always an integer in the 2xx band.
+
+        Raises:
+            RuntimeError: The transport status is absent, malformed, or not a
+                completed success. The message names the condition and never
+                carries the response body or the unusable value.
+        """
+        raw_status = getattr(response, "status_code", _ABSENT_STATUS)  # A sentinel marks an absent attribute.
+        if raw_status is _ABSENT_STATUS:  # An absent status proves nothing, so it must not become a success.
+            logger.error(  # Report the condition, because a silent default would write a false row.
+                "The Cradlepoint status response for org %s carried no HTTP transport status, outcome=%s",
+                org_id,
+                _OUTCOME_ABSENT,
+            )
+            raise RuntimeError(f"Cradlepoint status request returned an {_OUTCOME_ABSENT} HTTP transport status")
+        if isinstance(raw_status, bool) or not isinstance(raw_status, int):  # bool subclasses int, so test it first.
+            logger.error(  # Log the type name only, because the value itself is untrusted response content.
+                "The Cradlepoint status for org %s carried an unusable transport status of type %s, outcome=%s",
+                org_id,
+                type(raw_status).__name__,
+                _OUTCOME_MALFORMED,
+            )
+            raise RuntimeError(
+                f"Cradlepoint status request returned a {_OUTCOME_MALFORMED} HTTP transport status "
+                f"of type {type(raw_status).__name__}"
+            )
+        if not _HTTP_SUCCESS_MIN <= raw_status <= _HTTP_SUCCESS_MAX:  # A 1xx, 3xx, 4xx, or 5xx result is not a success.
+            logger.error(  # Report only the operation and status, never the response body.
+                "The cloud returned HTTP %s for the Cradlepoint status at org %s, outcome=%s",
+                raw_status,
+                org_id,
+                _OUTCOME_OUT_OF_RANGE,
+            )
+            raise RuntimeError(f"Cradlepoint status request returned HTTP {raw_status}")
+        logger.debug("The Cradlepoint status for org %s carried a trusted HTTP %s", org_id, raw_status)  # Proved.
+        return raw_status
 
     @staticmethod
     def _fetch(org_id: str) -> dict[str, Any]:
@@ -62,22 +127,19 @@ class OrgCradlepointConnectionExporter:
 
         Returns:
             The status body as a dict, or an empty dict when the body is absent.
+
+        Raises:
+            RuntimeError: The HTTP transport status does not prove a success, so
+                no payload may be read. See ``_require_success_status``.
         """
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logger.info("Calling testOrgCradlepointConnection for org_id=%s", org_id)  # Pre-call log.
         response = mistapi.api.v1.orgs.setting.testOrgCradlepointConnection(
             mh.apisession, org_id
         )  # The SDK call for the Cradlepoint status.
-        status_code = getattr(response, "status_code", _HTTP_OK)  # Read the SDK HTTP result before its payload.
-        if isinstance(status_code, int) and status_code >= _HTTP_ERROR_MIN:  # Refused responses can still carry a dict.
-            logger.error(  # Report only the operation and status, never the response body.
-                "The cloud returned HTTP %s for the Cradlepoint status at org %s",
-                status_code,
-                org_id,
-            )
-            raise RuntimeError(  # Stop the exporter before it creates or persists a false status row.
-                f"Cradlepoint status request returned HTTP {status_code}"
-            )
+        OrgCradlepointConnectionExporter._require_success_status(
+            response, org_id
+        )  # Prove the transport result before any payload read, so no false row can be built.
         payload = getattr(response, "data", None)  # The SDK exposes the body on .data.
         logger.debug(
             "testOrgCradlepointConnection returned payload_type=%s", type(payload).__name__
