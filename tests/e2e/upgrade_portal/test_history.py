@@ -205,7 +205,7 @@ def site_id(portal_page: Any) -> str:
     _require_built_route(_page_status(portal_page, SITE_PAGE_PATH), SITE_PAGE_PATH)
     keys = _marker_keys(portal_page, SITE_ROW_PREFIX)
     if not keys:  # The portal reached no site, so no history path can be built.
-        pytest.skip("The site picker shows no site row, so no site key exists to read a history for.")
+        pytest.fail("The site picker shows no site row, so no site key exists to read a history for.")
     return keys[0]
 
 
@@ -253,7 +253,7 @@ def _stored_rows(page: Any, site: str) -> list[dict[str, Any]]:
     body = _read_json(page, HISTORY_API_TEMPLATE.format(site_id=site))
     rows = body.get(CAPTURES_FIELD) or []
     if not rows:  # The store holds no capture, so no row can reach the page.
-        pytest.skip("The capture store holds no stored capture, so no history row exists to read.")
+        pytest.fail("The capture store holds no stored capture, so no history row exists to read.")
     return [dict(row) for row in rows]
 
 
@@ -292,7 +292,7 @@ def _earlier_page_window(page: Any, query: str) -> dict[str, str]:
     sync_api.expect(control).to_be_visible(timeout=GATE_TIMEOUT_MS)
     href = control.get_attribute("href")
     if not href:  # The control is the locked button, so this page holds no earlier page.
-        pytest.skip(f"{path} shows no earlier page link, so the page window cannot be read.")
+        pytest.fail(f"{path} shows no earlier page link, so the page window cannot be read.")
     return _window_values(href)
 
 

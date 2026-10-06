@@ -153,7 +153,9 @@ that a region search caused.
 | Identifier | Control |
 | --- | --- |
 | `upgrade-version-select-{mac}` | Target version for one device |
-| `upgrade-version-select-all` | Apply one version to every matching model |
+| `upgrade-version-select-ap` | Target version for all access points in the run |
+| `upgrade-version-select-switch` | Target version for all switches in the run |
+| `upgrade-version-select-gateway` | Target version for all gateways in the run |
 | `upgrade-reboot-group` | The reboot radio group. Holds `upgrade-reboot-yes` and `upgrade-reboot-no` (Delta U2). |
 | `upgrade-junos-file-action-group` | The Junos file action radio group. Holds `upgrade-junos-file-action-yes` and `upgrade-junos-file-action-no` (Delta U2). |
 | `upgrade-strategy-group` | The strategy radio group. Holds `upgrade-strategy-big-bang` and `upgrade-strategy-canary` (Delta U2). |
@@ -174,6 +176,10 @@ that a region search caused.
 | `upgrade-device-version-check-{mac}` | The version check badge for one device (FR-051) |
 | `upgrade-site-name` | The site name on the options page, the confirm page, and the run page |
 | `upgrade-site-id` | The site identifier on those same three pages |
+
+The portal removed the bulk `upgrade-version-select-all` control. Each device
+type now has a separate control, so the test must select a real option from each
+control.
 
 `upgrade-target-table` and `upgrade-run-table` are two different tables. The
 target table lists what the run will do. The run table lists what the run has

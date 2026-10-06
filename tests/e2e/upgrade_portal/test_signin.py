@@ -244,7 +244,7 @@ def _first_row_key(page: Any, prefix: str) -> str:
     """
     keys = _row_keys(page, prefix)
     if not keys:  # The sign-in reached no organization, so no key exists to drive.
-        pytest.skip(f"The page shows no element with the identifier prefix {prefix}, so no key exists to drive.")
+        pytest.fail(f"The page shows no element with the identifier prefix {prefix}, so no key exists to drive.")
     return keys[0]
 
 
