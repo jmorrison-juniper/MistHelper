@@ -1,7 +1,7 @@
 # Implementation Plan: Menu 256 Webhook Control
 
-**Branch**: `jmorrison-juniper-endpoint-explorer-sweep-3188`  
-**Date**: 2026-10-06  
+**Branch**: `jmorrison-juniper-endpoint-explorer-sweep-3188`
+**Date**: 2026-10-06
 **Spec**: `specs/3188-menu-256-webhook-control/spec.md`
 
 **Input**: The approved issue #3188 specification and the assigned implementation file set.
