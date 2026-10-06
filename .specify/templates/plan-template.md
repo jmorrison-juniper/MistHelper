@@ -2,7 +2,7 @@
 
 **Branch**: `[###-feature-name]` | **Date**: [DATE] | **Spec**: [link]
 
-**Input**: Feature specification from `/specs/[###-feature-name]/spec.md`
+**Input**: Numeric feature specification from `/specs/numbered/[base-5-route]/[###-feature-name]/spec.md`, or timestamp feature specification from `/specs/live/[timestamp-feature-name]/spec.md`
 
 **Note**: This template is filled in by the `/speckit.plan` command. See `.specify/templates/plan-template.md` for the execution workflow.
 
@@ -71,7 +71,9 @@ For a feature that uses Juniper Mist Cloud:
 ### Documentation (this feature)
 
 ```text
-specs/[###-feature]/
+specs/numbered/[base-5-route]/[###-feature]/
+or
+specs/live/[timestamp-feature]/
 ├── plan.md              # This file (/speckit.plan command output)
 ├── research.md          # Phase 0 output (/speckit.plan command)
 ├── data-model.md        # Phase 1 output (/speckit.plan command)

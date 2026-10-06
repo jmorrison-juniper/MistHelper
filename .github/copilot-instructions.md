@@ -152,6 +152,14 @@ push. Do not rewrite `.github/test-quality-baseline.json` to hide a new finding.
 operation, `--test` and `--testinteractive` for the unattended sweeps, `--fast` for the
 multithreaded mode, and `--capture-portal` for the upgrade capture portal.
 
+New Spec Kit records MUST use the managed roots `specs/numbered/`, `specs/live/`,
+`specs/skills/`, or `specs/indexes/`. Numeric records MUST use the fixed
+eight-level base-5 route from `.specify/scripts/powershell/spec-route.ps1`.
+Timestamp records MUST use `specs/live/`. The guard reads
+`tests/guardrails/process_folder_baseline.json`, reports examined counts, and
+rejects each new direct child that is not a managed root or a grandfathered
+baseline entry.
+
 The `src/` tree holds four packages. The `foundation` package holds the runtime, the models, and
 the support code. The `operations` package holds the export, the execution, the firmware, and
 the SSH code. The `interfaces` package holds the portals and the visualization code. The `mist`
