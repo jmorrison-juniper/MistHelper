@@ -36,6 +36,12 @@ MODULE_PATHS = {  # Map each old direct module to its new canonical module.
     "constants.py": "foundation/constants.py",
     "foundation/persistence/db/arango_writer.py": "foundation/persistence/db/writers/arango_writer.py",
     "foundation/persistence/db/redis_writer.py": "foundation/persistence/db/writers/redis_writer.py",
+    "mist/access/audit/renderer.py": "mist/access/audit/rendering/renderer.py",
+    "mist/access/audit/_renderer_delta.py": "mist/access/audit/rendering/helpers/_renderer_delta.py",
+    "mist/access/audit/_renderer_format.py": "mist/access/audit/rendering/helpers/_renderer_format.py",
+    "mist/access/audit/_renderer_html.py": "mist/access/audit/rendering/helpers/_renderer_html.py",
+    "mist/access/audit/_renderer_mermaid.py": "mist/access/audit/rendering/helpers/_renderer_mermaid.py",
+    "mist/access/audit/_renderer_time.py": "mist/access/audit/rendering/helpers/_renderer_time.py",
     "mist/intelligence/juniper_docs/classify/manual_sorter.py": (
         "mist/intelligence/juniper_docs/classify/reprocessing/manual_sorter.py"
     ),

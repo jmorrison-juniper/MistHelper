@@ -5,10 +5,10 @@ Generates two output formats:
 2. Interactive HTML - Plotly charts + collapsible JSON diffs
 
 Rendering logic is split into cohesive cluster modules:
-    * :mod:`src.mist.access.audit._renderer_mermaid` - Mermaid markdown sections
-    * :mod:`src.mist.access.audit._renderer_html` - HTML document + fragments
-    * :mod:`src.mist.access.audit._renderer_format` - HTML delta formatter
-    * :mod:`src.mist.access.audit._renderer_delta` - shared delta / diff engine
+    * :mod:`src.mist.access.audit.rendering.helpers._renderer_mermaid` - Mermaid markdown sections
+    * :mod:`src.mist.access.audit.rendering.helpers._renderer_html` - HTML document + fragments
+    * :mod:`src.mist.access.audit.rendering.helpers._renderer_format` - HTML delta formatter
+    * :mod:`src.mist.access.audit.rendering.helpers._renderer_delta` - shared delta / diff engine
 
 The static methods bound below preserve the historical public surface
 consumed by ``tests/test_audit_renderer.py``.
@@ -19,7 +19,7 @@ from __future__ import annotations  # WHY: postponed evaluation for forward-ref 
 import os  # WHY: filesystem primitives for output-path handling
 from typing import TYPE_CHECKING  # WHY: TYPE_CHECKING avoids runtime import cycle
 
-from src.mist.access.audit._renderer_delta import (  # WHY: relative import avoids pylint E0401 in CI
+from src.mist.access.audit.rendering.helpers._renderer_delta import (  # WHY: absolute import avoids pylint E0401
     DiffKeyContext,
     build_identity_map,
     check_reorder,
@@ -33,10 +33,16 @@ from src.mist.access.audit._renderer_delta import (  # WHY: relative import avoi
     reorder_label,
     strip_id_prefix,
 )
-from src.mist.access.audit._renderer_format import format_delta_html  # WHY: relative import for pylint E0401 fix
-from src.mist.access.audit._renderer_html import _HtmlCluster  # WHY: relative import for pylint E0401 fix
-from src.mist.access.audit._renderer_mermaid import _MermaidCluster  # WHY: relative import for pylint E0401 fix
-from src.mist.access.audit._renderer_time import (
+from src.mist.access.audit.rendering.helpers._renderer_format import (  # WHY: absolute import avoids pylint E0401
+    format_delta_html,
+)
+from src.mist.access.audit.rendering.helpers._renderer_html import (  # WHY: absolute import avoids pylint E0401
+    _HtmlCluster,
+)
+from src.mist.access.audit.rendering.helpers._renderer_mermaid import (  # WHY: absolute import avoids pylint E0401
+    _MermaidCluster,
+)
+from src.mist.access.audit.rendering.helpers._renderer_time import (
     epoch_to_readable,
     epoch_to_short,
 )  # WHY: relative import for pylint E0401 fix
