@@ -1,4 +1,4 @@
-"""Unit tests for src.operations.execution.ssh.shell_execution.shell_executor.ShellExecutor (T013b)."""
+"""Unit tests for src.operations.execution.ssh.runtime.shell_execution.shell_executor.ShellExecutor (T013b)."""
 
 from __future__ import annotations
 
@@ -7,7 +7,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.operations.execution.ssh.shell_execution.shell_executor import ShellExecutor  # T013b: extracted shell executor
+from src.operations.execution.ssh.runtime.shell_execution.shell_executor import (
+    ShellExecutor,
+)  # T013b: extracted shell executor
 
 
 class TestPreconditions:
@@ -79,7 +81,7 @@ class TestSuccessEvaluation:
 class TestFullExecution:
     """End-to-end execute() with mocked shell channel returns a sensible tuple."""
 
-    @patch("src.operations.execution.ssh.shell_execution.shell_executor.time")
+    @patch("src.operations.execution.ssh.runtime.shell_execution.shell_executor.time")
     def test_successful_execution_returns_tuple(self, mock_time) -> None:
         """The execute() loop completes and returns a (bool, str, str) tuple."""
         # Provide a monotonically advancing clock so the no-data-timeout fires

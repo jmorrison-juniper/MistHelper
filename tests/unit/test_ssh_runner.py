@@ -32,7 +32,7 @@ from src.operations.execution.ssh.config.validators import validate_command, val
 from src.operations.execution.ssh.connection.connector import SshConnector  # T013b  # noqa: F401
 from src.operations.execution.ssh.runtime.app_runner import AppRunner  # T013d: concrete CLI orchestrator
 from src.operations.execution.ssh.runtime.interactive_mode import InteractiveMode  # T013d: concrete REPL implementation
-from src.operations.execution.ssh.shell_execution.shell_executor import ShellExecutor  # T013b  # noqa: F401
+from src.operations.execution.ssh.runtime.shell_execution.shell_executor import ShellExecutor  # T013b  # noqa: F401
 from src.operations.execution.ssh.ssh_runner import EnhancedSSHRunner, SSHConnectionConfig, SSHExecutionConfig
 
 

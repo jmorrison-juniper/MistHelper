@@ -16,7 +16,7 @@ from functools import partial  # WHY: build a per-log-file writer without an inn
 from src.operations.execution.ssh.connection.connector import (
     SshConnector,
 )  # WHY: T013b - extracted connection establishment
-from src.operations.execution.ssh.shell_execution.shell_executor import (
+from src.operations.execution.ssh.runtime.shell_execution.shell_executor import (
     ShellExecutor,
 )  # WHY: T013b - extracted interactive-shell executor
 
@@ -453,7 +453,8 @@ class EnhancedSSHRunner:
             "STDERR (%s chars): %s%s", len(stderr_output), stderr_sample, _sample_suffix(stderr_output)
         )
 
-    # T013b: _execute_with_shell moved to src.operations.execution.ssh.shell_execution.shell_executor.ShellExecutor.
+    # T013b: _execute_with_shell moved to
+    # src.operations.execution.ssh.runtime.shell_execution.shell_executor.ShellExecutor.
     # Callers (_execute_command) instantiate ShellExecutor inline (real call, not facade).
 
     def _disconnect(self) -> None:
