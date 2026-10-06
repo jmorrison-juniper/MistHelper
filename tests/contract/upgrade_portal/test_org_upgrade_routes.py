@@ -789,6 +789,89 @@ def family_view(session: Any, org_id: str, site_id: str) -> dict[str, Any]:
     return {"targets": FAMILY_VIEW_ROWS}  # Each selected site answers with the same two devices.
 
 
+def test_checked_family_without_target_version_creates_no_plan(
+    org_upgrade_client: FlaskClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Issue #3394: a checked family with no target version must fail closed."""
+    store = AggregateStoreStandIn()  # A refused save must persist no aggregate plan.
+    boundary = AggregateBoundaryStandIn()  # A refused save must not reach the plan builder.
+    org_upgrade_client.application.config["RUN_STORE"] = store  # Record any unsafe plan write.
+    org_upgrade_client.application.config[org_upgrade.AGGREGATE_SERVICE_CONFIG_KEY] = boundary  # Record builds.
+    monkeypatch.setattr(org_upgrade, "build_options_view", family_view)  # Keep the inventory read offline.
+
+    def build_record(session: Any, org_id: str, site_id: str, body: dict[str, Any]) -> dict[str, Any]:
+        """Return each submitted target in the aggregate record."""
+        del session, org_id  # The contract uses no cloud service.
+        choices = {row["mac"]: row["version_target"] for row in body["targets"]}  # Index submitted targets.
+        targets = [  # Build only the targets that survived the route filter.
+            {**device, "version_before": "old", "version_target": choices[device["mac"]], "site_id": site_id}
+            for device in FAMILY_VIEW_ROWS  # Preserve the complete inventory order.
+            if device["mac"] in choices  # Model the unsafe silent drop of the switch.
+        ]
+        return {"targets": targets, "options": {"strategy": "big_bang"}, "warnings": []}  # Valid partial record.
+
+    monkeypatch.setattr(org_upgrade, "build_options_record", build_record)  # Keep target mapping offline.
+    answer = org_upgrade_client.post(  # Check both families, but submit an AP target only.
+        ORG_OPTIONS_API,
+        json={
+            "selected_types": ["ap", "switch"],
+            "strategy": "big_bang",
+            "targets": [{"mac": AP_ONE, "version_target": "0.15.1"}],
+        },
+    )
+    assert answer.status_code == 400  # The save must refuse the incomplete checked family.
+    error = answer.get_json()["error"]  # Read the existing structured refusal.
+    assert error["code"] == "org_upgrade_options_invalid"  # Keep the existing browser error contract.
+    assert "switch" in error["message"].lower()  # Name the checked family that needs a target.
+    assert boundary.requests == []  # No aggregate plan may contain the partial device set.
+    assert store.records == {}  # No durable plan may survive a refused save.
+    with org_upgrade_client.session_transaction() as browser_session:  # Inspect the signed browser state.
+        assert org_upgrade.OPTIONS_SESSION_KEY not in browser_session  # Preserve no successful options record.
+
+
+def test_checked_ap_and_switch_targets_reach_the_saved_aggregate_plan(
+    org_upgrade_client: FlaskClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Issue #3394: valid checked families must keep both device targets."""
+    store = AggregateStoreStandIn()  # Keep the durable plan for the target assertions.
+    boundary = AggregateBoundaryStandIn()  # Record each target that reaches the plan builder.
+    org_upgrade_client.application.config["RUN_STORE"] = store  # Persist the aggregate plan in memory.
+    org_upgrade_client.application.config[org_upgrade.AGGREGATE_SERVICE_CONFIG_KEY] = boundary  # Build offline.
+    monkeypatch.setattr(org_upgrade, "build_options_view", family_view)  # Keep the inventory read offline.
+    switch_mac = str(FAMILY_VIEW_ROWS[1]["mac"])  # Use the switch address from the shared device view.
+
+    def build_record(session: Any, org_id: str, site_id: str, body: dict[str, Any]) -> dict[str, Any]:
+        """Return both submitted device targets in the aggregate record."""
+        del session, org_id  # The contract uses no cloud service.
+        choices = {row["mac"]: row["version_target"] for row in body["targets"]}  # Index submitted targets.
+        targets = [  # Add the fields that the aggregate request stores.
+            {**device, "version_before": "old", "version_target": choices[device["mac"]], "site_id": site_id}
+            for device in FAMILY_VIEW_ROWS  # Preserve the complete inventory order.
+            if device["mac"] in choices  # Keep each submitted AP and switch target.
+        ]
+        return {"targets": targets, "options": {"strategy": "big_bang"}, "warnings": []}  # Valid mixed record.
+
+    monkeypatch.setattr(org_upgrade, "build_options_record", build_record)  # Keep target mapping offline.
+    answer = org_upgrade_client.post(  # Save one non-empty target for each checked family.
+        ORG_OPTIONS_API,
+        json={
+            "selected_types": ["ap", "switch"],
+            "strategy": "big_bang",
+            "targets": [
+                {"mac": AP_ONE, "version_target": "0.15.1"},
+                {"mac": switch_mac, "version_target": "23.4R1.9"},
+            ],
+        },
+    )
+    assert answer.status_code == 200  # A complete mixed-family save must reach confirmation.
+    assert answer.get_json()["next"] == ORG_CONFIRM_PAGE  # Keep the existing confirmation route.
+    saved = store.records["org-run-contract"]  # Read the durable aggregate plan.
+    saved_macs = {mac for child in saved["children"] for mac in child["target_ids"]}  # Combine child targets.
+    assert saved_macs == {AP_ONE, switch_mac}  # Keep both checked-family devices in the saved aggregate plan.
+
+
 def test_a_refused_switch_version_names_the_switch_control(
     org_upgrade_client: FlaskClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -889,11 +972,11 @@ def test_a_shared_mapper_refusal_names_the_multisite_label(
     assert "Failures allowed across the whole run" not in message  # The single-site label is absent.
 
 
-def test_no_typed_target_names_a_multisite_control(
+def test_no_typed_target_names_the_checked_device_type(
     org_upgrade_client: FlaskClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Issue #3273: a request with no typed target names a control that the multi-site page paints."""
+    """Issue #3394: a request with no target names the checked device type."""
     monkeypatch.setattr(org_upgrade, "build_options_view", family_view)  # Keep the inventory read offline.
     monkeypatch.setattr(  # Each site answers with no target, as the shared mapper does for no choice.
         org_upgrade,
@@ -904,8 +987,8 @@ def test_no_typed_target_names_a_multisite_control(
         org_upgrade_client,
         {"selected_types": ["switch"], "version_switch": "", "strategy": "big_bang"},
     )
-    assert '"Device target versions"' in message  # The multi-site page paints this heading.
-    assert "Target version control" not in message  # The multi-site page paints no control with this label.
+    assert "switch" in message.lower()  # Name the checked family that the operator must repair.
+    assert "target version" in message.lower()  # Name the empty choice without a fallback value.
 
 
 def test_disabled_writes_call_no_service(

@@ -400,6 +400,54 @@ class OrgOptionRefusal:
             logger.warning("The organization upgrade refused the field %s, which holds no whole number", field)
             raise BadOptionError(field, labels=ORG_OPTION_HELP) from error
 
+    @staticmethod
+    def require_selected_targets(
+        cloud_session: Any,
+        org_id: str,
+        site_ids: Sequence[str],
+        options: Mapping[str, Any],
+        selected: Sequence[str],
+    ) -> None:
+        """Refuse a checked device family that has no submitted target version."""
+        logger.info("Validate target versions for %s checked device family or families", len(selected))  # Start guard.
+        targeted = OrgOptionRefusal.targeted_families(cloud_session, org_id, site_ids, options, selected)  # Measure.
+        missing = [family for family in selected if family not in targeted]  # Keep the submitted family order.
+        if not missing:  # Every checked family has at least one explicit target version.
+            logger.debug("Each checked device family has a target version")  # Record the safe validation result.
+            return  # Continue to the existing target filters only after the complete validation.
+        logger.warning("The organization upgrade refused the checked device family %s", missing[0])  # Name family.
+        message = (  # Name the existing page label and the checked family that has no version.
+            f'"Device target versions" requires a target version for the checked {missing[0]} device type.'
+        )
+        raise ValueError(message)  # Fail closed with the existing page label and the missing family.
+
+    @staticmethod
+    def targeted_families(
+        cloud_session: Any,
+        org_id: str,
+        site_ids: Sequence[str],
+        options: Mapping[str, Any],
+        selected: Sequence[str],
+    ) -> set[str]:
+        """Return checked device families that have a submitted target version."""
+        explicit = options.get("targets")  # The current page sends one non-empty choice for each selected device.
+        if not isinstance(explicit, list):  # An older client sends one target version for each family.
+            return {  # Keep only checked families with a non-empty legacy target field.
+                family for family in selected if str(options.get(f"version_{family}", "")).strip()
+            }
+        versions = _explicit_target_versions(explicit)  # Index each complete target before any site filter runs.
+        targeted: set[str] = set()  # Collect each checked family that owns an explicit target address.
+        for site_id in site_ids:  # Read every selected site before the existing target filtering starts.
+            view = aggregate_options_view(cloud_session, org_id, site_id)  # Map submitted addresses to families.
+            targeted.update(  # Add each family that has at least one selected device version.
+                str(row.get("device_type", ""))
+                for row in view.get("targets", [])
+                if isinstance(row, Mapping)
+                and str(row.get("device_type", "")) in selected
+                and str(row.get("mac", "")) in versions
+            )
+        return targeted  # The caller refuses each checked family that is absent.
+
 
 def upgrade_service() -> Any:
     """Return the injected service or the production service class."""
@@ -643,6 +691,7 @@ def _aggregate_option_record(org_id: str, site_ids: list[str], options: Mapping[
     if uses_org_inventory_defaults():  # Injected per-site seams keep their existing read behavior.
         prepare_org_inventory(cloud_session, org_id, site_ids)  # One org read serves every selected site.
     selected = _selected_families(options)  # Keep the checked family order.
+    OrgOptionRefusal.require_selected_targets(cloud_session, org_id, site_ids, options, selected)  # Fail closed.
     every_site_planned = current_retry_plan() is None  # Issue #3247: the request cache holds the retry plan.
     records = OrgSiteRecords(every_site_planned)  # Issue #3389: collect the targets and the options of each site.
     logger.info("Build the option record of %s selected site(s)", len(site_ids))  # Log before the site reads.
