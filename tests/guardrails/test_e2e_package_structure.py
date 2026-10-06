@@ -16,5 +16,5 @@ def test_e2e_root_contains_only_coherent_packages() -> None:
 def test_web_portal_package_contains_all_shared_portal_tests() -> None:
     """Keep shared portal tests in one package for focused collection."""
     test_files = sorted((E2E_ROOT / "web_portal").glob("test_*.py"))
-    assert len(test_files) == 15
+    assert len(test_files) == 16
     assert all(test_file.parent.name == "web_portal" for test_file in test_files)
