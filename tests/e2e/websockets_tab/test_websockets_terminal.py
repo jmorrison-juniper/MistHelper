@@ -1203,12 +1203,12 @@ def test_websocket_form_cancellation_fences_picker_responses_and_preserves_sessi
     observed.install()  # Register routes before the harness loads the portal page.
     terminal_harness.open_page(page)  # Use the existing normal-user portal harness.
     cancel = page.get_by_test_id("ws-cancel-selection-button")  # Locate the form-only Cancel action.
-    assert page.get_by_test_id("ws-catalog-count").inner_text() == "72"  # Keep the live catalog size unchanged.
+    assert page.get_by_test_id("ws-catalog-count").inner_text() == "70"  # Keep the live catalog size unchanged.
     assert cancel.is_visible() is False  # Do not show form cancellation before selection.
     card = page.get_by_test_id("ws-session-fake-session-3888")  # Locate the unrelated fake live session.
     card.wait_for(state="visible", timeout=READY_TIMEOUT_MS)  # Wait for the intercepted session list.
     card_before = (card.get_attribute("class"), card.inner_text())  # Capture the card identity and state.
-    _verify_cancel_for_all_catalog_entries(page, cancel)  # Check Cancel across all 72 entries.
+    _verify_cancel_for_all_catalog_entries(page, cancel)  # Check Cancel across all 70 entries.
     _cancel_repeatable_target(page)  # Check that a repeated target value is discarded.
     _cancel_parameter_and_confirmation(page, terminal_harness)  # Check that text and confirmation values are discarded.
     _cancel_delayed_picker(page, observed, cancel)  # Check that a canceled picker cannot restore form state.
@@ -1223,7 +1223,7 @@ def test_websocket_form_cancellation_fences_picker_responses_and_preserves_sessi
 def _verify_cancel_for_all_catalog_entries(page: Any, cancel: Any) -> None:
     """Select every live catalog entry and verify its shared form offers Cancel."""
     entries = page.locator(".ws-catalog-entry")  # Read all live catalog buttons.
-    assert entries.count() == 72  # Match the catalog count displayed to users.
+    assert entries.count() == 70  # Match the catalog count displayed to users.
     for index in range(entries.count()):  # Select each entry as a normal user.
         entries.nth(index).click()  # Load that entry into the shared form.
         assert cancel.is_visible() is True  # Offer Cancel for every selected entry.

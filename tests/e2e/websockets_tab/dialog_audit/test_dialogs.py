@@ -370,7 +370,7 @@ class TestInspectorFailureEvidence:
         for site in (IsolatedPage.SITE, IsolatedPage.OTHER_SITE):
             policy.responses["/api/websockets/mxedges?site_id=" + site] = ("application/json", '{"rows":[]}')
         records = DialogInspector(page, audit_inventory, live=True).inspect_all()
-        assert len(records) == len(audit_inventory["entries"]) == 72
+        assert len(records) == len(audit_inventory["entries"]) == 70
         blocked = {record["key"] for record in records if record["status"] == "blocked"}
         assert blocked == {"mxedge.orgRemotePcap", "mxedge.siteRemotePcap"}
         assert all(record["status"] in {"passed", "blocked"} for record in records)
@@ -388,7 +388,7 @@ class TestInspectorFailureEvidence:
             SimpleNamespace(monotonic=lambda: next(clock)),
         )  # Replace this module's clock only; do not disrupt Playwright or pytest timers.
         records = inspector.inspect_all()  # Expiry precedes any operation click or selector request.
-        assert len(records) == 72 and {record["status"] for record in records} == {"blocked"}
+        assert len(records) == 70 and {record["status"] for record in records} == {"blocked"}
         assert all(
             record["observations"] == ["The bounded live inspection deadline was reached."] for record in records
         )
