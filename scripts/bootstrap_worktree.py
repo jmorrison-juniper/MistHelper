@@ -468,6 +468,95 @@ def report_result(bootstrapper: WorktreeBootstrapper, installed: list[str], brow
     LOGGER.warning("  %s", bootstrapper.browser_repair_command(sys.platform))
 
 
+class StaleSourceSweeper:
+    """Remove each orphaned package directory under the source root.
+
+    A branch switch leaves a directory behind when a commit moves or deletes a
+    package. Git does not track an empty directory, so the old name stays on
+    disk. Ruff then reads that leftover name as a first-party package and sorts
+    an import into the wrong block. The pipeline never reports the finding,
+    because the pipeline checks out a clean tree. See issue #3846.
+    """
+
+    CACHE_NAME = "__pycache__"  # The compiled-byte-code directory never holds source.
+    SOURCE_NAME = "src"  # The package root, named here so no literal legacy path appears in the code.
+    GIT_TIMEOUT_SECONDS = 30  # Bound the tracked-name read, because a locked repository can hang.
+
+    def __init__(self, root: Path) -> None:
+        """Store the worktree root and the source root that the sweep reads."""
+        self.root = root  # Keep the worktree root, because the tracked-name read runs there.
+        self.source_root = root / self.SOURCE_NAME  # Build the source root from parts, not from a literal path.
+        LOGGER.debug("Prepared the stale source sweep for %s", self.source_root)  # Report the target before any read.
+
+    def read_tracked_names(self) -> set[str] | None:
+        """Return the first child name of each tracked source file, or None when git cannot answer."""
+        executable = shutil.which("git")  # Find Git without assuming its install path.
+        if executable is None:  # A worktree without Git cannot name the tracked directories.
+            LOGGER.debug("The git command is absent, so the sweep keeps every directory.")
+            return None  # Report the unknown answer, because a guess could delete real work.
+        LOGGER.info("Reading the tracked directory names under %s", self.source_root)  # Trace before the read.
+        command = [executable, "-C", str(self.root), "ls-files", "--", self.SOURCE_NAME]  # Ask Git for the index.
+        try:  # A locked repository or a missing index must not stop the bootstrap.
+            result = subprocess.run(  # nosec B603 - the argument list holds no shell input.
+                command, capture_output=True, text=True, timeout=self.GIT_TIMEOUT_SECONDS, check=False
+            )
+        except (OSError, subprocess.SubprocessError) as error:  # Treat any failure as an unknown answer.
+            LOGGER.debug("The tracked-name read failed (%s).", type(error).__name__)  # Keep the path detail private.
+            return None  # Report the unknown answer, because the sweep then removes nothing.
+        if result.returncode != 0:  # Git reports an unreadable index through its status.
+            LOGGER.debug("The tracked-name read returned code %d", result.returncode)
+            return None  # Report the unknown answer, because the sweep then removes nothing.
+        names: set[str] = set()  # Collect one name for each tracked child of the source root.
+        for line in result.stdout.splitlines():  # Git prints one tracked path for each line.
+            parts = line.strip().split("/")  # Git always prints a forward slash, on every platform.
+            if len(parts) > 1:  # A file directly inside the source root names no child directory.
+                names.add(parts[1])  # Keep the child name that follows the source root.
+        LOGGER.debug("Read %d tracked directory names under the source root.", len(names))
+        return names  # Give the caller the set of names that the sweep must keep.
+
+    def holds_only_cache(self, directory: Path) -> bool:
+        """Return True when the directory holds no file outside a cache directory."""
+        for item in directory.rglob("*"):  # Walk the whole subtree, because a file can sit several levels down.
+            if not item.is_file():  # A directory alone never blocks the removal.
+                continue  # Read the next entry.
+            if self.CACHE_NAME in item.relative_to(directory).parts:  # A cached byte-code file is not source.
+                continue  # Read the next entry.
+            LOGGER.debug("Found the real file %s, so the directory stays.", item.name)
+            return False  # Report that the directory holds real work.
+        return True  # Report that the directory holds nothing that a removal could lose.
+
+    def sweep(self) -> list[str]:
+        """Remove each untracked cache-only directory under the source root and return the removed names."""
+        LOGGER.info("Sweeping the orphaned directories under %s", self.source_root)  # Trace before any removal.
+        removed: list[str] = []  # Collect the removed names, because the operator reads the count.
+        if not self.source_root.is_dir():  # A worktree without a source root needs no sweep.
+            LOGGER.debug("The source root is absent, so the sweep removes nothing.")
+            return removed  # Report the empty result to the caller.
+        tracked = self.read_tracked_names()  # Ask Git which child names the sweep must keep.
+        if tracked is None:  # An unknown answer must never cause a removal.
+            LOGGER.warning("Caution: the tracked names are unknown, so the sweep removes nothing.")
+            return removed  # Report the empty result to the caller.
+        for directory in sorted(self.source_root.iterdir()):  # Sort the entries so the report reads the same way.
+            if not directory.is_dir():  # A file directly inside the source root is not a package directory.
+                continue  # Read the next entry.
+            if directory.name == self.CACHE_NAME:  # The cache directory of the source root always stays.
+                continue  # Read the next entry.
+            if directory.name in tracked:  # A tracked directory holds committed work.
+                continue  # Read the next entry.
+            if not self.holds_only_cache(directory):  # A directory with a real file holds uncommitted work.
+                LOGGER.debug("Kept %s, because it holds a file outside the cache.", directory.name)
+                continue  # Read the next entry.
+            try:  # A locked file or a permission fault must not stop the bootstrap.
+                shutil.rmtree(directory)  # Remove the orphaned directory and its cached byte code.
+            except OSError as error:  # Name the directory that the sweep could not remove.
+                LOGGER.warning("Caution: the sweep could not remove %s: %s", directory.name, error)
+                continue  # Read the next entry.
+            removed.append(directory.name)  # Record the name, because the operator reads the report.
+            LOGGER.info("Removed the orphaned source directory %s", directory.name)
+        LOGGER.info("The sweep removed %d orphaned source directories.", len(removed))  # Show the count.
+        return removed  # Give the caller the removed names, so a test can assert on them.
+
+
 class GitHubAccountChecker:
     """Report the GitHub account that a push and a pull request will use.
 
@@ -560,6 +649,7 @@ def main(argv: list[str] | None = None) -> int:
     root = REPOSITORY_ROOT  # Reuse the root that also made repository package imports safe.
     LOGGER.info("Preparing the worktree at %s", root)
     bootstrapper = WorktreeBootstrapper(root)  # Build the object that owns every step.
+    StaleSourceSweeper(root).sweep()  # Remove the orphaned package directories that a branch switch left behind.
     try:  # Report a failed step as one clear message, because the user reads the console.
         bootstrapper.create_environment(recreate=args.recreate)  # Create the environment first.
         installed = bootstrapper.install_requirements()  # Install the declared dependencies.
