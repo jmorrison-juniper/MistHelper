@@ -9,9 +9,8 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
-import mistapi
 import pytest
 from flask import Flask
 from flask.testing import FlaskClient
@@ -110,7 +109,11 @@ def t005_client(
         "ORG_INVENTORY_CACHE",
         CloudReadCache(60, 256, inventory_clock),
     )  # No cache state from another test.
-    monkeypatch.setattr(mistapi.api.v1.orgs.inventory, "getOrgInventory", inventory.read)  # No cloud call.
+    monkeypatch.setattr(
+        cast(Any, options_module).mistapi.api.v1.orgs.inventory,
+        "getOrgInventory",
+        inventory.read,
+    )  # No cloud call.
     monkeypatch.setattr(
         options_module,
         "read_model_versions",
@@ -208,6 +211,32 @@ def test_direct_post_reads_organization_inventory_once(
     answer = t005_client.post(OPTIONS_API, json=options_body(inventory.rows))
     assert answer.status_code == 200
     assert len(inventory.calls) == 1
+
+
+def test_empty_body_returns_http_400_without_a_plan(
+    t005_client: FlaskClient,
+    inventory: InventoryStandIn,
+) -> None:
+    """An empty JSON body cannot create a plan."""
+    configure_sites(t005_client, inventory, 2)
+    answer = t005_client.post(OPTIONS_API, data=b"", content_type="application/json")
+    assert answer.status_code == 400
+    assert len(inventory.calls) == 1
+    service = t005_client.application.config[org_upgrade.AGGREGATE_SERVICE_CONFIG_KEY]
+    assert service.requests == []
+
+
+def test_malformed_json_returns_http_400_without_a_plan(
+    t005_client: FlaskClient,
+    inventory: InventoryStandIn,
+) -> None:
+    """Malformed JSON cannot create a plan."""
+    configure_sites(t005_client, inventory, 2)
+    answer = t005_client.post(OPTIONS_API, data=b"{not valid JSONDecodeError", content_type="application/json")
+    assert answer.status_code == 400
+    assert len(inventory.calls) == 1
+    service = t005_client.application.config[org_upgrade.AGGREGATE_SERVICE_CONFIG_KEY]
+    assert service.requests == []
 
 
 def test_expired_inventory_refresh_refuses_a_removed_target(
