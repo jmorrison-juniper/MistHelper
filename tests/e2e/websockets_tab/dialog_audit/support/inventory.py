@@ -61,14 +61,12 @@ class OperationOracle:
         "org": {
             "org.insights.summary": "InsightsEvents",
             "org.stats.mxedges": "MxEdgesStatsEvents",
-            "org.mxedges": "MxEdgesEvents",
         },
         "site": {
             "site.stats.clients": "ClientsStatsEvents",
             "site.stats.devices": "DeviceStatsEvents",
             "site.devices": "DeviceEvents",
             "site.stats.mxedges": "MxEdgesStatsEvents",
-            "site.mxedges": "MxEdgesEvents",
         },
         "location": {
             "location.assets": "BleAssetsEvents",

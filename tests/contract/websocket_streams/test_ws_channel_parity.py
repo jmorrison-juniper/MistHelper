@@ -40,11 +40,6 @@ def test_public_sdk_channel_classes_match_catalog_paths() -> None:
             {"org_id": (ORG_ID,)},
         ),  # Organization Mist Edge stats.
         (
-            "org.mxedges",
-            lambda: orgs.MxEdgesEvents(object(), ORG_ID),
-            {"org_id": (ORG_ID,)},
-        ),  # Organization Mist Edges.
-        (
             "site.stats.clients",
             lambda: sites.ClientsStatsEvents(object(), [SITE_ID]),
             {"site_id": (SITE_ID,)},
@@ -69,11 +64,6 @@ def test_public_sdk_channel_classes_match_catalog_paths() -> None:
             lambda: sites.MxEdgesStatsEvents(object(), [SITE_ID]),
             {"site_id": (SITE_ID,)},
         ),  # Site Mist Edge stats.
-        (
-            "site.mxedges",
-            lambda: sites.MxEdgesEvents(object(), [SITE_ID]),
-            {"site_id": (SITE_ID,)},
-        ),  # Site Mist Edge events.
         ("site.pcaps", lambda: sites.PcapEvents(object(), SITE_ID), {"site_id": (SITE_ID,)}),  # Site packet captures.
         (
             "location.assets",
