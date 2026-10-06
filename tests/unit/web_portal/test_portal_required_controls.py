@@ -27,7 +27,17 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from misthelper_devtools.prompt_audit import FunctionIndex, PromptWalker, read_menu_handlers  # noqa: E402
+# The prompt audit tool is an optional development dependency. A module-level
+# import of it stops collection of this whole directory when the package body
+# is absent, so this module skips instead. See issue #3918.
+prompt_audit = pytest.importorskip(
+    "misthelper_devtools.prompt_audit",
+    reason="The misthelper_devtools prompt audit tool is not installed.",
+)
+
+FunctionIndex = prompt_audit.FunctionIndex  # Read the index class from the optional module.
+PromptWalker = prompt_audit.PromptWalker  # Read the walker class from the optional module.
+read_menu_handlers = prompt_audit.read_menu_handlers  # Read the handler reader from the optional module.
 
 from web_portal.menu_registry import build_static_menu_actions  # noqa: E402
 from web_portal.services.operation import PARAMETER_REGISTRY, OperationExecutor  # noqa: E402
