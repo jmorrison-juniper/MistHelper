@@ -1685,10 +1685,10 @@ class HistoryScope:
 
     Why:
         Issue #3482. The page with no site read the site name of its first
-        row. For the captures of two sites, the note then said "The list shows
-        the stored captures of E2E Stand-In Site. The site holds 5 captures."
-        The scope holds the request values, and each text is a property. The
-        template prints the texts and holds no rule.
+        row. For the captures of two sites, the note then named that one site
+        and gave the count of every site, so the text described a scope that
+        the page did not show. The scope holds the request values, and each
+        text is a property. The template prints the texts and holds no rule.
 
         The page with no site reads every capture in the store, so the texts
         say "every site" and "The portal holds". Issue #3484 holds the change
