@@ -126,7 +126,7 @@ Mist-managed, and this index does not apply.
 | `gw_bgp_neighbor_down` | [GW_BGP_NEIGHBOR_DOWN.md](GW_BGP_NEIGHBOR_DOWN.md) | `show bgp summary` |
 | `gw_vpn_path_down` | [GW_VPN_PATH_DOWN.md](GW_VPN_PATH_DOWN.md) | `show peers detail` |
 | `gw_vpn_peer_down` and `vpn_peer_down` | [GW_VPN_PEER_DOWN.md](GW_VPN_PEER_DOWN.md) | `show peers` |
-| `bad_wan_uplink` | No dedicated runbook. Use stage C and stage D of [SSR_CONSOLE_HEALTH_CHECK.md](SSR_CONSOLE_HEALTH_CHECK.md). | `show device-interface <name> extended-statistics` |
+| `bad_wan_uplink` | No dedicated runbook. Use stage C and stage D of [SSR_CONSOLE_HEALTH_CHECK.md](SSR_CONSOLE_HEALTH_CHECK.md). | `show device-interface name <name> extended-statistics` |
 | `intermittent_wan_connectivity` | No dedicated runbook. Use stage D and step E2 of [SSR_CONSOLE_HEALTH_CHECK.md](SSR_CONSOLE_HEALTH_CHECK.md). | `show peers detail` |
 
 ## 4. Choose the right document

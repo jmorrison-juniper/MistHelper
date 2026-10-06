@@ -141,8 +141,8 @@ Validate from the Mist cloud first. The gateway is usually still reachable when 
 | System, model, and uptime | `show system` |
 | Mist cloud link | `show mist` |
 | Physical port state | `show device-interface` |
-| Port error counters | `show device-interface <name> extended-statistics` |
-| Optical transmit and receive levels | `show device-interface <name> optics-statistics` |
+| Port error counters | `show device-interface name <name> extended-statistics` |
+| Optical transmit and receive levels (SSR 7.1.0 and later) | `show device-interface name <name> optics-statistics` |
 | Logical interface state | `show network-interface` |
 | Neighbor that the port sees | `show lldp-neighbors` |
 | Alarms on the box | `show alarms` |
@@ -151,6 +151,8 @@ Validate from the Mist cloud first. The gateway is usually still reachable when 
 | SVR peer paths | `show peers` |
 | BGP session summary | `show bgp summary` |
 | Reachability to the hub over a chosen path | `ping egress-interface <network-interface> <hub-public-ip>` |
+
+The `name` keyword is mandatory before the port name. The `optics-statistics` value needs SSR 7.1.0 or later. On SSR 7.0.x, the console shows no light level. Follow [Check an optic without optics-statistics](SSR_CONSOLE_HEALTH_CHECK.md#check-an-optic-without-optics-statistics).
 
 **Never** run a bare `ping <target>` on an SSR. The request can leave through the wrong interface and report a false failure. Name the path with `egress-interface <network-interface>`. The `ping` command holds no `source` keyword. See Shared Appendix §7 and [SSR_CONSOLE_HEALTH_CHECK.md](SSR_CONSOLE_HEALTH_CHECK.md) stage C.
 
@@ -177,7 +179,7 @@ Classify the port first, using `ifName` from the `reasons` string. The correct r
 | Administrative disable | If `ifAdminStatus` is `down(2)`, this is a change and not a fault. Review Organization → Audit Logs for the last 24 hours. If a push disabled the port, roll the push back through Mist. |
 | ISP transport port | Verify the ISP demarcation device shows link. Open a ticket with that ISP and supply the circuit ID. A dead transport port on the branch side and a dark demarcation device look identical from Mist. |
 | Dual-ISP branch | Confirm the surviving ISP carries the load. Verify both SVR peer paths and both BGP sessions on the surviving transport before you downgrade the ticket. |
-| Cable or optic | Reseat or replace the cable, the direct-attach cable, or the transceiver. For fiber, compare the transmit and receive readings against the vendor threshold. |
+| Cable or optic | Reseat or replace the cable, the direct-attach cable, or the transceiver. For fiber, clean and inspect each connector before you replace a part. Then compare each transmit level and receive level with the thresholds in the same output. On an SSR, use step C2 of [SSR_CONSOLE_HEALTH_CHECK.md](SSR_CONSOLE_HEALTH_CHECK.md). A new 10G LR optic that does not operate in ports `xe-0-0` through `xe-0-3` of an SSR1300 or an SSR1400 can match knowledge base article I95-65908. Read the caution in [Check an optic without optics-statistics](SSR_CONSOLE_HEALTH_CHECK.md#check-an-optic-without-optics-statistics). |
 | LAN uplink member | Confirm the surviving member carries traffic. Check the matching port on the EX4100 Virtual Chassis, which usually raises `sw_critical_port_down` at the same time. Fix whichever end shows the fault. |
 | LAN uplink at zero members | Treat this as a branch outage. Follow the `GATEWAY_DOWN` runbook in parallel, because Mist will lose the gateway shortly. |
 | Marvis co-fires | If `gw_bad_cable`, `gw_negotiation_mismatch`, or `gw_mtu_mismatch` is active on the same port, act on that alarm first. Marvis has already identified the physical or negotiation fault. |
@@ -226,8 +228,8 @@ SSR uses PCLI. Do not paste Junos syntax into an SSR.
 | Mist cloud link | `show mist` |
 | Physical ports | `show device-interface` |
 | Physical ports, one line each | `show device-interface summary` |
-| Port error counters | `show device-interface <name> extended-statistics` |
-| Optical levels | `show device-interface <name> optics-statistics` |
+| Port error counters | `show device-interface name <name> extended-statistics` |
+| Optical levels (SSR 7.1.0 and later) | `show device-interface name <name> optics-statistics` |
 | Logical interfaces | `show network-interface` |
 | Neighbor that each port sees | `show lldp-neighbors` |
 | Take one port down without a config change | `set provisional-status node <node> <device-interface> down` |

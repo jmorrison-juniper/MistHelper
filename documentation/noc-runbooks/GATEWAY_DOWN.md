@@ -77,6 +77,7 @@ The SSR130 is unreachable from the NOC when this alarm fires. Validate from the 
 |---|---|
 | System state, role, version, uptime, alarm count | `show system` |
 | Mist cloud link | `show mist` |
+| Path to the Mist cloud (DNS and TCP port 443) | `show mist detail`. Then follow [Test the path to the Mist cloud](SSR_CONSOLE_HEALTH_CHECK.md#test-the-path-to-the-mist-cloud). |
 | Alarms | `show alarms` |
 | Recent events | `show events from 1d` |
 | Interfaces (physical) | `show device-interface` |
@@ -87,6 +88,8 @@ The SSR130 is unreachable from the NOC when this alarm fires. Validate from the 
 | Reachability to the hub over a chosen path | `ping egress-interface <network-interface> <hub-public-ip>` |
 
 **Never** run a bare `ping <target>` on an SSR. The request can leave through the wrong interface and report a false failure. Name the path with `egress-interface <network-interface>`. The `ping` command holds no `source` keyword. To test the path that a user takes, run `service-ping`. See Shared Appendix §7 and [SSR_CONSOLE_HEALTH_CHECK.md](SSR_CONSOLE_HEALTH_CHECK.md) stage D.
+
+Do not use `ping` to test the path to the Mist cloud. Run step D7 of [SSR_CONSOLE_HEALTH_CHECK.md](SSR_CONSOLE_HEALTH_CHECK.md#test-the-path-to-the-mist-cloud) instead.
 
 ### From the branch (on-site or via alternate access)
 
@@ -106,6 +109,7 @@ Sequence the response by which correlated alarms are co-firing — the alarm pay
 | Correlated underlay (one ISP) | If only one ISP is co-firing an underlay alarm, the branch should still be reachable — a single-ISP outage should not knock the gateway `gateway_down`. Continue investigating the SSR130 itself as primary suspect. |
 | Correlated LAN | If `switch_down` is co-firing on the EX4100 VC serving the SSR130's LAN side, the SSR130 may be up but its LAN reach (and therefore Mist visibility) is broken. Fix the VC first — the `gateway_down` alarm should clear on its own. |
 | Correlated management | If `sw_alarm_chassis_mgmt_link_down` is co-firing and the branch is management-in-band (typical), management is riding a broken path — fix the VC / uplink first; the gateway itself may be fine. |
+| Management path to the Mist cloud | If a console session works and `show mist` reports `down` in the `Connection` column, the box is up and the path to the Mist cloud is broken. Follow [Test the path to the Mist cloud](SSR_CONSOLE_HEALTH_CHECK.md#test-the-path-to-the-mist-cloud). |
 | Power / physical | For no-correlated-alarm cases — coordinate with the branch to verify the SSR130 has power and is not showing hardware faults on the front panel. This is the most common no-correlation root cause. |
 | ISP handoff | If both underlays are marked down on a dual-ISP branch — open tickets with both ISPs simultaneously. Single-ISP outages should not knock the gateway `gateway_down`, so a dual-ISP hit is either coincidence or a shared upstream fault. |
 | Hardware | If `show alarms` (once reachable) or the front panel indicates PSU / fan / thermal fault, plan an RMA. |
@@ -147,6 +151,7 @@ SSR uses PCLI, not Junos. Do not paste Junos syntax into an SSR. These commands 
 |---|---|
 | System state, role, version, uptime, alarm count | `show system` |
 | Mist cloud link | `show mist` |
+| Mist cloud link, full record | `show mist detail` |
 | Link between the nodes of one router | `show system connectivity` |
 | Alarms | `show alarms` |
 | Events (scoped by time) | `show events from 1d` |
