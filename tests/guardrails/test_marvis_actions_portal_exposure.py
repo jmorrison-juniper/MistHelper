@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import ast
 from collections import Counter
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -105,7 +106,7 @@ def _entry(menu_id: str, title: str) -> MenuEntry:
 
 
 @pytest.fixture
-def executor():
+def executor() -> Iterator[OperationExecutor]:
     """Build an executor whose menu holds one row for each gate decision under test."""
     menu_actions = {
         MARVIS_MENU: _entry(MARVIS_MENU, "Export or resolve Marvis Actions by category and subcategory"),
@@ -116,7 +117,7 @@ def executor():
     built._pool.shutdown(wait=False)  # Release the thread pool, so the test leaves no thread.
 
 
-def test_the_guard_measured_every_decision(executor) -> None:
+def test_the_guard_measured_every_decision(executor: OperationExecutor) -> None:
     """Report the count of decisions and controls this guard checked, so an empty fixture cannot pass."""
     decisions = {key: executor._is_portal_runnable(key) for key in executor._menu_actions}
     controls = PARAMETER_REGISTRY[MARVIS_MENU]["parameters"]
@@ -132,17 +133,17 @@ def test_the_registry_calls_the_menu_interactive_safe() -> None:
     assert OperationRegistry.skip_category(MARVIS_MENU) == "interactive_safe"
 
 
-def test_the_gate_admits_the_menu(executor) -> None:
+def test_the_gate_admits_the_menu(executor: OperationExecutor) -> None:
     """FR-031. An operator must be able to start the menu from the browser."""
     assert executor._is_portal_runnable(MARVIS_MENU) is True
 
 
-def test_the_run_path_admits_the_menu(executor) -> None:
+def test_the_run_path_admits_the_menu(executor: OperationExecutor) -> None:
     """FR-031. The listing and the run path must agree, or the Run button would fail."""
     assert executor._validate_operation(MARVIS_MENU) is None
 
 
-def test_the_menu_appears_in_a_named_category(executor) -> None:
+def test_the_menu_appears_in_a_named_category(executor: OperationExecutor) -> None:
     """An operation outside every range would land in the generic 'Other' group."""
     names = {
         category["name"]
@@ -158,13 +159,13 @@ def test_the_category_range_covers_the_menu() -> None:
     assert (270, 270, "Marvis Actions") in CATEGORY_RANGES
 
 
-def test_the_menu_still_needs_a_safe_category(monkeypatch, executor) -> None:
+def test_the_menu_still_needs_a_safe_category(monkeypatch: pytest.MonkeyPatch, executor: OperationExecutor) -> None:
     """Prove the failure path. The registry verdict is the only gate that remains."""
     monkeypatch.setattr(OperationRegistry, "skip_category", staticmethod(lambda _number: "destructive"))
     assert executor._is_portal_runnable(MARVIS_MENU) is False
 
 
-def test_the_gate_still_refuses_a_destructive_ticket_write(executor) -> None:
+def test_the_gate_still_refuses_a_destructive_ticket_write(executor: OperationExecutor) -> None:
     """Menu 190 writes a support ticket, so the portal must never run it."""
     assert executor._is_portal_runnable("190") is False
 
