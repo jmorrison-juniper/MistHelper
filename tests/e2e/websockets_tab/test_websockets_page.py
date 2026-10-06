@@ -427,7 +427,7 @@ def websocket_portal(fake_services: FakeWebSocketServices) -> Iterator[str]:
     def list_sites(_session: object, _org_id: str) -> SimpleNamespace:
         """Return two sites for the multi-site picker."""
         rows = [{"id": SITE_ID, "name": "HQ"}, {"id": SITE_ID_2, "name": "Branch"}]  # Sites.
-        return SimpleNamespace(data=rows)  # SDK answer shape.
+        return SimpleNamespace(status_code=200, data=rows)  # Model one successful SDK answer.
 
     with pytest.MonkeyPatch.context() as patcher:  # Undo SDK patches when the server stops.
         patcher.setattr(mistapi.api.v1.orgs.sites, "listOrgSites", list_sites)  # Patch site picker.

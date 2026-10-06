@@ -27,7 +27,8 @@ class FakeResponse:
     """Carry a row list the way the Mist SDK answer carries it."""
 
     def __init__(self, data: list[dict]) -> None:
-        """Hold the rows that the fake endpoint returns."""
+        """Hold the successful response that the fake endpoint returns."""
+        self.status_code = 200  # The picker accepts rows only after a successful HTTP response.
         self.data = data  # The route reads the rows through the data attribute.
 
 

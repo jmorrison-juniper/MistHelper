@@ -111,7 +111,9 @@ def wording_portal() -> Iterator[str]:
 
     def list_sites(_session: object, _org_id: str) -> SimpleNamespace:
         """Return one site for the site picker."""
-        return SimpleNamespace(data=[{"id": SITE_ID, "name": "HQ"}])  # SDK answer shape.
+        return SimpleNamespace(
+            status_code=200, data=[{"id": SITE_ID, "name": "HQ"}]
+        )  # Model one successful SDK answer.
 
     with pytest.MonkeyPatch.context() as patcher:  # Undo SDK patches when the server stops.
         patcher.setattr(mistapi.api.v1.orgs.sites, "listOrgSites", list_sites)  # Patch the site picker.
