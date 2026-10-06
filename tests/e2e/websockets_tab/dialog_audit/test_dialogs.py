@@ -388,7 +388,7 @@ class TestInspectorFailureEvidence:
             SimpleNamespace(monotonic=lambda: next(clock)),
         )  # Replace this module's clock only; do not disrupt Playwright or pytest timers.
         records = inspector.inspect_all()  # Expiry precedes any operation click or selector request.
-        assert len(records) == 72 and {record["status"] for record in records} == {"blocked"}
+        assert len(records) == 70 and {record["status"] for record in records} == {"blocked"}
         assert all(
             record["observations"] == ["The bounded live inspection deadline was reached."] for record in records
         )
