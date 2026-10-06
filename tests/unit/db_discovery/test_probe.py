@@ -14,10 +14,11 @@ import structlog
 from arango.exceptions import ArangoError
 
 from src.foundation.persistence import db  # Import the moved database package from its canonical persistence group.
-from src.foundation.persistence.db import DatabaseConfig, arango_writer
-from src.foundation.persistence.db.arango_writer import ArangoDBWriter
+from src.foundation.persistence.db import DatabaseConfig
 from src.foundation.persistence.db.host_resolver import ResolverLimits
-from src.foundation.persistence.db.redis_writer import RedisTimeSeriesWriter
+from src.foundation.persistence.db.writers import arango_writer
+from src.foundation.persistence.db.writers.arango_writer import ArangoDBWriter
+from src.foundation.persistence.db.writers.redis_writer import RedisTimeSeriesWriter
 from src.foundation.support.refactors.endpoint_primary_key_strategies import ENDPOINT_PRIMARY_KEY_STRATEGIES
 from tests.unit.arango_indexes.fakes import ArangoIndexWriterHarness
 from tests.unit.db_discovery.fakes import ControlledPreflightCall, ControlledSockets, ResolverHarness
@@ -384,7 +385,7 @@ class TestRedisConstructorPreflight:
         error = socket.gaierror("Name or service not known")
         discovery.lookup.answers["localhost"] = error
         config = DatabaseConfig(redis_host="localhost", redis_port=6379)
-        with patch("src.foundation.persistence.db.redis_writer.redis.Redis") as client:
+        with patch("src.foundation.persistence.db.writers.redis_writer.redis.Redis") as client:
             with pytest.raises(ConnectionError, match="not resolvable") as failure:
                 RedisTimeSeriesWriter(config)
         assert failure.value.__cause__ is error

@@ -13,7 +13,7 @@ import structlog
 from arango.collection import StandardCollection
 
 from src.foundation.persistence.db import DatabaseConfig
-from src.foundation.persistence.db.arango_writer import ArangoDBWriter
+from src.foundation.persistence.db.writers.arango_writer import ArangoDBWriter
 from src.foundation.support.refactors.endpoint_primary_key_strategies import ENDPOINT_PRIMARY_KEY_STRATEGIES
 
 logger = structlog.get_logger(__name__)
@@ -142,7 +142,7 @@ class TestIsolatedArangoDeclaredIndexes:
         strategy = ENDPOINT_PRIMARY_KEY_STRATEGIES[api_name]
         initial_strategy = {**deepcopy(strategy), "indexes": []}
         rows = IsolatedIndexQueryProof.rows()
-        with patch("src.foundation.persistence.db.arango_writer.time.time", return_value=1770000000):
+        with patch("src.foundation.persistence.db.writers.arango_writer.time.time", return_value=1770000000):
             first = owned_writer.write(rows, api_name, initial_strategy)
             before = IsolatedIndexQueryProof.documents(owned_writer)
             before_plan = IsolatedIndexQueryProof.query_plan(owned_writer)

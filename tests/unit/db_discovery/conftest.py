@@ -5,7 +5,8 @@ from collections.abc import Iterator
 import pytest
 import structlog
 
-from src.foundation.persistence.db import DatabaseConfig, arango_writer, host_resolver
+from src.foundation.persistence.db import DatabaseConfig, host_resolver
+from src.foundation.persistence.db.writers import arango_writer
 from src.interfaces.portals.upgrade_portal.capture import store
 from tests.unit.db_discovery.fakes import ResolverHarness
 

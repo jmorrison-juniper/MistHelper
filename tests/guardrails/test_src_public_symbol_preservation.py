@@ -34,6 +34,8 @@ PACKAGE_GROUPS = {  # Map every old direct package to its new domain and group.
 }  # Keep the test map identical to the approved package data model.
 MODULE_PATHS = {  # Map each old direct module to its new canonical module.
     "constants.py": "foundation/constants.py",
+    "foundation/persistence/db/arango_writer.py": "foundation/persistence/db/writers/arango_writer.py",
+    "foundation/persistence/db/redis_writer.py": "foundation/persistence/db/writers/redis_writer.py",
     "org_data_collector.py": "operations/wan/org_data_collector.py",
     "wan_hub_group_manager.py": "operations/wan/wan_hub_group_manager.py",
     "wan_vpn_builder.py": "operations/wan/wan_vpn_builder.py",
@@ -166,6 +168,9 @@ def current_path(old_path: str) -> Path:
     Resolve the moved module without a compatibility wrapper.
     """
     relative_path = Path(old_path).relative_to("src")  # Remove the common source root.
+    mapped_path = path_map().get(relative_path.as_posix())  # Read an explicit nested or direct module move.
+    if mapped_path is not None:  # An exact move must override the canonical-root shortcut.
+        return SOURCE_ROOT / mapped_path  # Resolve the module at its approved canonical destination.
     first_part = relative_path.parts[0]  # Read the old direct package or module name.
     if first_part in CANONICAL_ROOTS:  # The baseline already holds the moved layout.
         return SOURCE_ROOT / relative_path  # Compare the module against itself at the same path.

@@ -15,7 +15,7 @@ from requests.exceptions import ConnectionError as RequestConnectionError
 from requests.exceptions import Timeout
 
 from src.foundation.persistence.db import WriteResult
-from src.foundation.persistence.db.arango_writer import ArangoDBWriter
+from src.foundation.persistence.db.writers.arango_writer import ArangoDBWriter
 from src.foundation.support.refactors.endpoint_primary_key_strategies import ENDPOINT_PRIMARY_KEY_STRATEGIES
 from tests.unit.arango_indexes.fakes import (
     ArangoIndexCollectionFake,

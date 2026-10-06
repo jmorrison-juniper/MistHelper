@@ -9,7 +9,7 @@ Why:
 
     The match key is the client address alone. A composite registry key joins
     the endpoint, the address, and a timestamp with a colon
-    (``src/foundation/persistence/db/redis_writer.py:627``). A comparison that matched on the whole
+    (``src/foundation/persistence/db/writers/redis_writer.py:627``). A comparison that matched on the whole
     key would see a new key on every capture and would report the whole site
     as new. This module therefore strips the timestamp from the key and keeps
     the address.
@@ -269,7 +269,7 @@ def strip_timestamp_key(key: object) -> str:
 
     Why:
         The registry joins the endpoint, the address, and a timestamp
-        (``src/foundation/persistence/db/redis_writer.py:627``). The timestamp differs in every
+        (``src/foundation/persistence/db/writers/redis_writer.py:627``). The timestamp differs in every
         capture, so a comparison that matched on the whole key would report
         every client as new. This reader keeps the address and drops the rest.
 

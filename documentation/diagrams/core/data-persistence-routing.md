@@ -77,6 +77,6 @@ flowchart TD
 | `src/foundation/support/refactors/endpoint_primary_key_strategies.py` | `ENDPOINT_PRIMARY_KEY_STRATEGIES` dict |
 | `src/operations/exporting/export/data_exporter.py` | `DataExporter.write_with_format_selection()`, `_route_to_polyglot()` |
 | `src/foundation/persistence/db/router.py` | `DatabaseRouter` — strategy lookup and backend dispatch |
-| `src/foundation/persistence/db/arango_writer.py` | `ArangoDBWriter` — batch `import_bulk()`, snapshots, graph edges |
-| `src/foundation/persistence/db/redis_writer.py` | `RedisTimeSeriesWriter` and `RedisJSONWriter` |
+| `src/foundation/persistence/db/writers/arango_writer.py` | `ArangoDBWriter` — batch `import_bulk()`, snapshots, graph edges |
+| `src/foundation/persistence/db/writers/redis_writer.py` | `RedisTimeSeriesWriter` and `RedisJSONWriter` |
 | `src/foundation/persistence/db/__init__.py` | `DatabaseConfig`, `WriteResult`, shared logger |

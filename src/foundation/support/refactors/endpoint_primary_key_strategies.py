@@ -2717,7 +2717,7 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
     },
     # ==============================
     # UPGRADE CAPTURE PORTAL (menu 239, issue #1823)
-    # Both entries MUST stay natural_pk. src/foundation/persistence/db/redis_writer.py:598 puts a 7-day
+    # Both entries MUST stay natural_pk. src/foundation/persistence/db/writers/redis_writer.py:598 puts a 7-day
     # time to live on every composite_pk document, and the portal keeps a capture
     # and a run forever.
     #

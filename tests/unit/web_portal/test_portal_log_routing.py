@@ -165,7 +165,7 @@ def test_a_database_info_line_goes_to_the_debug_panel():
     """A site cache refresh writes one JSON line for each collection, which is plumbing."""
     handler = _handler()
     message = '{"collection": "sitegroups", "written": 5, "failed": 0, "event": "import_complete"}'
-    handler.emit(_record(message, name="src.foundation.persistence.db.arango_writer"))
+    handler.emit(_record(message, name="src.foundation.persistence.db.writers.arango_writer"))
     assert handler._run["log_messages"] == [], "a database INFO line reached the Execution Log"
     assert [entry["message"] for entry in handler._run["debug_messages"]] == [message]
 
@@ -174,7 +174,7 @@ def test_a_database_warning_still_reaches_the_operator():
     """A failed write is a real problem, so the prefix rule applies below WARNING only."""
     handler = _handler()
     message = "Polyglot write failed for listOrgSites: the store refused 144 rows"
-    handler.emit(_record(message, level=logging.WARNING, name="src.foundation.persistence.db.arango_writer"))
+    handler.emit(_record(message, level=logging.WARNING, name="src.foundation.persistence.db.writers.arango_writer"))
     assert [entry["message"] for entry in handler._run["log_messages"]] == [message]
 
 

@@ -1561,7 +1561,7 @@ def _insert_edge(database: Any, edge: Mapping[str, Any]) -> bool:
     Why:
         A repeat write must leave one edge and never two. The bulk import with
         the replace rule is the idiom the shared writer uses for every edge of
-        this codebase (``src/foundation/persistence/db/arango_writer.py:4370``).
+        this codebase (``src/foundation/persistence/db/writers/arango_writer.py:4370``).
 
     Args:
         database: The database handle.
