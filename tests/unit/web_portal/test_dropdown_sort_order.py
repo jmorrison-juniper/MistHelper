@@ -88,11 +88,12 @@ class TestTheSiteDropdown:
         """Issue #3083. The API order is not the name order."""
         api = MagicMock()
         api.api.v1.orgs.sites.listOrgSites.return_value = MagicMock(
+            status_code=200,
             data=[
                 {"id": "3", "name": "Zulu Site"},
                 {"id": "1", "name": "alpha Site"},
                 {"id": "2", "name": "Mike Site"},
-            ]
+            ],
         )
         with patch.dict("sys.modules", {"mistapi": api}):
             result = _fetch_org_sites(object(), "org-1")
@@ -102,7 +103,8 @@ class TestTheSiteDropdown:
         """A site with no name must not sit above a named one."""
         api = MagicMock()
         api.api.v1.orgs.sites.listOrgSites.return_value = MagicMock(
-            data=[{"id": "1", "name": ""}, {"id": "2", "name": "alpha"}]
+            status_code=200,
+            data=[{"id": "1", "name": ""}, {"id": "2", "name": "alpha"}],
         )
         with patch.dict("sys.modules", {"mistapi": api}):
             result = _fetch_org_sites(object(), "org-1")
@@ -123,11 +125,12 @@ class TestTheDeviceDropdown:
         """Issue #3083. A long device list is unreadable in API order."""
         api = MagicMock()
         api.api.v1.sites.devices.listSiteDevices.return_value = MagicMock(
+            status_code=200,
             data=[
                 {"id": "3", "name": "SW-EDGE-03"},
                 {"id": "1", "name": "sw-core-01"},
                 {"id": "2", "name": "SW-DIST-02"},
-            ]
+            ],
         )
         with patch.dict("sys.modules", {"mistapi": api}):
             result = _fetch_site_devices(object(), "site-1", "all")
@@ -141,7 +144,8 @@ class TestTheDeviceDropdown:
         """
         api = MagicMock()
         api.api.v1.sites.devices.listSiteDevices.return_value = MagicMock(
-            data=[{"id": "1", "name": "", "mac": "aabbccddeeff"}, {"id": "2", "name": "SW-01"}]
+            status_code=200,
+            data=[{"id": "1", "name": "", "mac": "aabbccddeeff"}, {"id": "2", "name": "SW-01"}],
         )
         with patch.dict("sys.modules", {"mistapi": api}):
             result = _fetch_site_devices(object(), "site-1", "all")
@@ -167,8 +171,12 @@ class TestTheClientDropdown:
     def build_api(wireless: list, wired: list) -> MagicMock:
         """Return a stand-in SDK that answers both client searches."""
         api = MagicMock()
-        api.api.v1.sites.clients.searchSiteWirelessClients.return_value = MagicMock(data={"results": wireless})
-        api.api.v1.sites.wired_clients.searchSiteWiredClients.return_value = MagicMock(data={"results": wired})
+        api.api.v1.sites.clients.searchSiteWirelessClients.return_value = MagicMock(
+            status_code=200, data={"results": wireless}
+        )
+        api.api.v1.sites.wired_clients.searchSiteWiredClients.return_value = MagicMock(
+            status_code=200, data={"results": wired}
+        )
         return api
 
     def test_the_two_client_types_interleave_by_name(self) -> None:
@@ -269,7 +277,8 @@ class TestACloudFailureLeavesTheSelectorUsable:
         """A wired failure must not hide every wireless client as well."""
         api = MagicMock()
         api.api.v1.sites.clients.searchSiteWirelessClients.return_value = MagicMock(
-            data={"results": [{"mac": "w1", "hostname": "alpha"}]}
+            status_code=200,
+            data={"results": [{"mac": "w1", "hostname": "alpha"}]},
         )
         api.api.v1.sites.wired_clients.searchSiteWiredClients.side_effect = RuntimeError("HTTP 500")
         with patch.dict("sys.modules", {"mistapi": api}):
