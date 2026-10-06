@@ -26,8 +26,8 @@ description: "Implementation tasks for the WebSocket utility text catalog move"
 
 - [X] T007 Add the issue-specific changelog fragment.
 - [X] T008 Run compile, Ruff, Black, Mypy, Bandit, complexity, applicable docstring, changelog, and Markdown-link checks.
-- [ ] T009 Commit the verified bounded change locally with the required co-author trailer.
-- [ ] T010 Run the required post-commit test-quality procedure and report its result.
+- [X] T009 Commit the verified bounded change locally with the required co-author trailer.
+- [X] T010 Run the required post-commit test-quality procedure and report its result.
 
 ## Scope Boundary
 
