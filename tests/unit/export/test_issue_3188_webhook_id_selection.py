@@ -80,8 +80,32 @@ class TestWebhookSearchSuppression:
             patch(f"{_MODULE}.mistapi.api.v1.orgs.webhooks.searchOrgWebhooksDeliveries") as search_call,
         ):
             OrgWebhookDeliveriesExporter.deliveries()  # Run the real list and resolver flow.
-        search_call.assert_not_called()  # Invalid input must stop before the delivery endpoint.
-        mist_helper.DataExporter.write_with_format_selection.assert_not_called()  # Invalid input writes nothing.
+        assert search_call.call_count == 0  # Invalid input must stop before the delivery endpoint.
+        assert mist_helper.DataExporter.write_with_format_selection.call_count == 0  # Invalid input writes nothing.
+
+    @pytest.mark.parametrize("status_code", [404, 503])
+    def test_delivery_search_http_failure_is_logged(
+        self,
+        mist_helper: MagicMock,
+        caplog: pytest.LogCaptureFixture,
+        status_code: int,
+    ) -> None:
+        """Keep HTTP client and server failures inside the menu operation."""
+        error = RuntimeError(f"HTTP {status_code}")  # Preserve the failed status for operator evidence.
+        with (
+            patch(f"{_MODULE}.mistapi.api.v1.orgs.webhooks.listOrgWebhooks", return_value=object()),
+            patch(f"{_MODULE}.InputUtils.safe_input", return_value="wh-b"),
+            patch(f"{_MODULE}.mistapi.get_all", return_value=_WEBHOOKS),
+            patch(
+                f"{_MODULE}.mistapi.api.v1.orgs.webhooks.searchOrgWebhooksDeliveries",
+                side_effect=error,
+            ),
+            caplog.at_level("ERROR"),
+        ):
+            OrgWebhookDeliveriesExporter.deliveries()  # Run the real menu failure boundary.
+        assert f"HTTP {status_code}" in caplog.text  # Keep the cloud status visible to the operator.
+        assert "Error fetching organization webhook deliveries" in caplog.text  # Name the failed operation.
+        assert mist_helper.DataExporter.write_with_format_selection.call_count == 0  # Failed searches write nothing.
 
     def test_stable_identifier_reaches_delivery_search_once(self, mist_helper: MagicMock) -> None:
         """Send the selected stable identifier through the existing export flow."""
