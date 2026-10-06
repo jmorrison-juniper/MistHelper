@@ -8,7 +8,7 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as hypothesis_strategies
 
-from src.foundation.persistence.db.arango_writer import IMPORT_BATCH_SIZE
+from src.foundation.persistence.db.writers.arango_writer import IMPORT_BATCH_SIZE
 from src.foundation.support.refactors.endpoint_primary_key_strategies import ENDPOINT_PRIMARY_KEY_STRATEGIES
 from tests.unit.arango_indexes.fakes import ArangoIndexWriterHarness
 
@@ -26,8 +26,8 @@ class TestDocumentPreservation:
         record = {"id": "record-1", "device_id": "device-1", "timestamp": 7, "nested": {"enabled": True, "value": None}}
         original = deepcopy(record)
         with (
-            patch("src.foundation.persistence.db.arango_writer.time.time", return_value=1770000000),
-            patch("src.foundation.persistence.db.arango_writer.uuid.uuid4", return_value="summary-key"),
+            patch("src.foundation.persistence.db.writers.arango_writer.time.time", return_value=1770000000),
+            patch("src.foundation.persistence.db.writers.arango_writer.uuid.uuid4", return_value="summary-key"),
         ):
             result = writer.write([record], api_name, strategy)
         key = "summary-key" if strategy["type"] == "auto_increment_with_unique" else "record-1"

@@ -17,7 +17,7 @@ from arango.request import Request
 from arango.response import Response
 
 from src.foundation.persistence.db import DatabaseConfig
-from src.foundation.persistence.db.arango_writer import GRAPH_EDGE_DEFINITIONS, ArangoDBWriter
+from src.foundation.persistence.db.writers.arango_writer import GRAPH_EDGE_DEFINITIONS, ArangoDBWriter
 
 
 @dataclass
@@ -129,7 +129,9 @@ class ArangoIndexWriterHarness:
 
     def writer(self) -> ArangoDBWriter:
         """Run the actual constructor without a live connection."""
-        with patch("src.foundation.persistence.db.arango_writer.ArangoClient", autospec=True, return_value=self.client):
+        with patch(
+            "src.foundation.persistence.db.writers.arango_writer.ArangoClient", autospec=True, return_value=self.client
+        ):
             writer = ArangoDBWriter(self.config)
         self.writers.append(writer)
         return writer

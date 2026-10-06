@@ -8,7 +8,7 @@ Why:
     the whole client list as new.
 
     The registry joins the endpoint, the address, and a timestamp with a colon
-    (``src/foundation/persistence/db/redis_writer.py:627``), so the tests below drive that exact key
+    (``src/foundation/persistence/db/writers/redis_writer.py:627``), so the tests below drive that exact key
     form. Every test feeds plain dictionaries. No test opens a socket, reads
     the ``.env`` file, or names a real credential.
 """

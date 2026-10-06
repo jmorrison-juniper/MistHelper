@@ -25,7 +25,7 @@ def config() -> DatabaseConfig:
 @pytest.fixture
 def mock_redis():
     """Patch redis.Redis and return mock objects."""
-    with patch("src.foundation.persistence.db.redis_writer.redis.Redis") as mock_cls:
+    with patch("src.foundation.persistence.db.writers.redis_writer.redis.Redis") as mock_cls:
         mock_client = MagicMock()
         mock_cls.return_value = mock_client
         mock_ts = MagicMock()
@@ -47,7 +47,7 @@ class TestRedisTimeSeriesWriterInit:
     """Tests for RedisTimeSeriesWriter.__init__."""
 
     def test_connects_and_verifies_ts_module(self, config, mock_redis):
-        from src.foundation.persistence.db.redis_writer import RedisTimeSeriesWriter
+        from src.foundation.persistence.db.writers.redis_writer import RedisTimeSeriesWriter
 
         writer = RedisTimeSeriesWriter(config)
         mock_redis["client_cls"].assert_called_once()
@@ -55,7 +55,7 @@ class TestRedisTimeSeriesWriterInit:
         assert writer._ts is not None
 
     def test_raises_if_ts_module_missing(self, config, mock_redis):
-        from src.foundation.persistence.db.redis_writer import RedisTimeSeriesWriter
+        from src.foundation.persistence.db.writers.redis_writer import RedisTimeSeriesWriter
 
         mock_redis["client"].module_list.return_value = []
         with pytest.raises(RuntimeError, match="TimeSeries"):
@@ -66,7 +66,7 @@ class TestRedisTimeSeriesWriterWrite:
     """Tests for RedisTimeSeriesWriter.write."""
 
     def test_writes_numeric_values_as_timeseries(self, config, mock_redis):
-        from src.foundation.persistence.db.redis_writer import RedisTimeSeriesWriter
+        from src.foundation.persistence.db.writers.redis_writer import RedisTimeSeriesWriter
 
         writer = RedisTimeSeriesWriter(config)
         # Pipeline called 3 times: key creation, compaction, TS.ADD
@@ -97,7 +97,7 @@ class TestRedisTimeSeriesWriterWrite:
         assert result.records_written == 2
 
     def test_skips_non_numeric_fields(self, config, mock_redis):
-        from src.foundation.persistence.db.redis_writer import RedisTimeSeriesWriter
+        from src.foundation.persistence.db.writers.redis_writer import RedisTimeSeriesWriter
 
         writer = RedisTimeSeriesWriter(config)
         strategy = {
@@ -110,7 +110,7 @@ class TestRedisTimeSeriesWriterWrite:
         assert result.records_written == 0
 
     def test_key_naming_convention(self, config, mock_redis):
-        from src.foundation.persistence.db.redis_writer import RedisTimeSeriesWriter
+        from src.foundation.persistence.db.writers.redis_writer import RedisTimeSeriesWriter
 
         writer = RedisTimeSeriesWriter(config)
         strategy = {
@@ -128,7 +128,7 @@ class TestRedisTimeSeriesWriterWrite:
             assert "cpu" in key
 
     def test_empty_data_returns_success(self, config, mock_redis):
-        from src.foundation.persistence.db.redis_writer import RedisTimeSeriesWriter
+        from src.foundation.persistence.db.writers.redis_writer import RedisTimeSeriesWriter
 
         writer = RedisTimeSeriesWriter(config)
         strategy = {"type": "composite_pk", "primary_key": ["id"]}
@@ -138,7 +138,7 @@ class TestRedisTimeSeriesWriterWrite:
         assert result.records_written == 0
 
     def test_handles_write_error_gracefully(self, config, mock_redis):
-        from src.foundation.persistence.db.redis_writer import RedisTimeSeriesWriter
+        from src.foundation.persistence.db.writers.redis_writer import RedisTimeSeriesWriter
 
         writer = RedisTimeSeriesWriter(config)
         # 1 numeric field → 1 key creation, 4 compaction cmds, 1 TS.ADD (fails)
@@ -161,7 +161,7 @@ class TestRedisTimeSeriesCompaction:
     """Tests for compaction rule creation."""
 
     def test_creates_hourly_and_daily_compaction(self, config, mock_redis):
-        from src.foundation.persistence.db.redis_writer import RedisTimeSeriesWriter
+        from src.foundation.persistence.db.writers.redis_writer import RedisTimeSeriesWriter
 
         writer = RedisTimeSeriesWriter(config)
         writer._ensure_single_compaction("test:dev-1:cpu")
@@ -173,7 +173,7 @@ class TestRedisTimeSeriesCompaction:
         assert any("avg_1d" in k for k in dest_keys)
 
     def test_skips_duplicate_compaction(self, config, mock_redis):
-        from src.foundation.persistence.db.redis_writer import RedisTimeSeriesWriter
+        from src.foundation.persistence.db.writers.redis_writer import RedisTimeSeriesWriter
 
         writer = RedisTimeSeriesWriter(config)
         writer._ensure_single_compaction("test:dev-1:cpu")
@@ -192,7 +192,7 @@ class TestExtractAllAddsThreadPoolBranch:
 
     def test_over_1000_records_uses_thread_pool(self, config, mock_redis) -> None:
         """Lines 143-173: Exactly 1001 records must trigger the thread pool branch."""
-        from src.foundation.persistence.db.redis_writer import (
+        from src.foundation.persistence.db.writers.redis_writer import (
             RedisTimeSeriesWriter,
             _ExtractContext,
         )  # Import module under test
@@ -224,7 +224,7 @@ class TestCoverageGapTargets:
         """Lines 56-57: ConnectionError must be raised when Redis host DNS fails."""
         import socket  # Import for socket.gaierror exception type
 
-        from src.foundation.persistence.db.redis_writer import RedisTimeSeriesWriter  # Import module under test
+        from src.foundation.persistence.db.writers.redis_writer import RedisTimeSeriesWriter  # Import module under test
 
         with patch.dict(
             isolated_redis_dns.answers, {"localhost": socket.gaierror("Name or service not known")}
@@ -234,7 +234,7 @@ class TestCoverageGapTargets:
 
     def test_extract_chunk_with_ts_value_fields_calls_listed_fields(self, config, mock_redis) -> None:
         """Line 189: when ts_value_fields is provided, _extract_listed_fields is called instead of _extract_numeric."""
-        from src.foundation.persistence.db.redis_writer import (
+        from src.foundation.persistence.db.writers.redis_writer import (
             RedisTimeSeriesWriter,
             _ExtractContext,
         )  # Import module under test
@@ -249,7 +249,7 @@ class TestCoverageGapTargets:
             ts_value_fields=["cpu"],
         )
         with patch(  # Patch on the class since _select_numeric references the static via class binding
-            "src.foundation.persistence.db.redis_writer.RedisTimeSeriesWriter._extract_listed_fields",
+            "src.foundation.persistence.db.writers.redis_writer.RedisTimeSeriesWriter._extract_listed_fields",
             return_value=listed_return,
         ) as mock_lf:
             writer._extract_chunk(records, ctx)  # Trigger the listed-fields branch via context.ts_value_fields
@@ -257,7 +257,7 @@ class TestCoverageGapTargets:
 
     def test_create_single_key_skips_when_key_already_cached(self, config, mock_redis) -> None:
         """Line 341: _create_single_key must return early when ts_key is already in _created_keys."""
-        from src.foundation.persistence.db.redis_writer import RedisTimeSeriesWriter  # Import module under test
+        from src.foundation.persistence.db.writers.redis_writer import RedisTimeSeriesWriter  # Import module under test
 
         writer = RedisTimeSeriesWriter(config)  # Create writer with mocked redis
         writer._created_keys = {"existing:ts:key"}  # Pre-populate cache with the target key
@@ -271,7 +271,7 @@ class TestCoverageGapTargets:
         """Lines 350-352: ResponseError not containing 'already exists' must be re-raised by _ensure_key_single."""
         import redis  # Import redis for redis.ResponseError exception class
 
-        from src.foundation.persistence.db.redis_writer import RedisTimeSeriesWriter  # Import module under test
+        from src.foundation.persistence.db.writers.redis_writer import RedisTimeSeriesWriter  # Import module under test
 
         writer = RedisTimeSeriesWriter(config)  # Create writer with mocked redis (empty _created_keys)
         mock_redis["ts"].create.side_effect = redis.ResponseError("permission denied")  # Non-exists error
@@ -283,7 +283,7 @@ class TestCoverageGapTargets:
 
 def _entity_context(entity_key_field: str = "entity_id"):  # WHY: every resolution test needs the same frozen context.
     """Return an _ExtractContext that names one strategy field and turns off the allow-list."""
-    from src.foundation.persistence.db.redis_writer import (
+    from src.foundation.persistence.db.writers.redis_writer import (
         _ExtractContext,
     )  # WHY: import inside the helper to match the file style.
 
@@ -300,7 +300,7 @@ class TestResolveEntityIdFallbackBranch:
 
     def test_record_without_strategy_field_uses_device_id(self) -> None:
         """FR-002: a record that omits the strategy field resolves through the fallback list."""
-        from src.foundation.persistence.db.redis_writer import (
+        from src.foundation.persistence.db.writers.redis_writer import (
             RedisTimeSeriesWriter,
         )  # WHY: import the class that owns the rule.
 
@@ -311,7 +311,7 @@ class TestResolveEntityIdFallbackBranch:
 
     def test_two_records_produce_two_distinct_keys(self, config, mock_redis) -> None:
         """SC-001: two records with different device_id values must not collapse into one key."""
-        from src.foundation.persistence.db.redis_writer import (
+        from src.foundation.persistence.db.writers.redis_writer import (
             RedisTimeSeriesWriter,
         )  # WHY: import the class under test.
 
@@ -329,7 +329,7 @@ class TestResolveEntityIdFallbackBranch:
     @pytest.mark.parametrize("unusable", [None, "", "   "])  # WHY: the three unusable strategy values.
     def test_unusable_strategy_value_falls_back(self, unusable) -> None:
         """Edge cases 1 to 3: an unusable strategy value must not block the fallback list."""
-        from src.foundation.persistence.db.redis_writer import (
+        from src.foundation.persistence.db.writers.redis_writer import (
             RedisTimeSeriesWriter,
         )  # WHY: import the class under test.
 
@@ -340,7 +340,7 @@ class TestResolveEntityIdFallbackBranch:
 
     def test_fallback_order_prefers_the_earlier_name(self) -> None:
         """FR-006: the fallback order decides the winner when a record carries two candidate fields."""
-        from src.foundation.persistence.db.redis_writer import (
+        from src.foundation.persistence.db.writers.redis_writer import (
             RedisTimeSeriesWriter,
         )  # WHY: import the class under test.
 
@@ -358,7 +358,7 @@ class TestResolveEntityIdStrategyBranch:
 
     def test_usable_strategy_value_wins(self) -> None:
         """FR-001: a usable strategy value returns its text form and the source 'strategy'."""
-        from src.foundation.persistence.db.redis_writer import (
+        from src.foundation.persistence.db.writers.redis_writer import (
             RedisTimeSeriesWriter,
         )  # WHY: import the class under test.
 
@@ -369,7 +369,7 @@ class TestResolveEntityIdStrategyBranch:
 
     def test_strategy_value_outranks_a_fallback_field(self) -> None:
         """INV-3: the strategy field wins even when the record also carries a fallback field."""
-        from src.foundation.persistence.db.redis_writer import (
+        from src.foundation.persistence.db.writers.redis_writer import (
             RedisTimeSeriesWriter,
         )  # WHY: import the class under test.
 
@@ -380,7 +380,7 @@ class TestResolveEntityIdStrategyBranch:
 
     def test_zero_is_a_usable_identifier(self) -> None:
         """INV-5: the number 0 must resolve to the text '0' and not to the sentinel."""
-        from src.foundation.persistence.db.redis_writer import (
+        from src.foundation.persistence.db.writers.redis_writer import (
             RedisTimeSeriesWriter,
         )  # WHY: import the class under test.
 
@@ -392,7 +392,7 @@ class TestResolveEntityIdStrategyBranch:
 
     def test_existing_key_stays_byte_identical(self, config, mock_redis) -> None:
         """SC-002 and SC-004: a record with the strategy field produces the same three-part key as before."""
-        from src.foundation.persistence.db.redis_writer import (
+        from src.foundation.persistence.db.writers.redis_writer import (
             RedisTimeSeriesWriter,
         )  # WHY: import the class under test.
 
@@ -404,7 +404,7 @@ class TestResolveEntityIdStrategyBranch:
 
     def test_strategy_field_name_that_matches_a_fallback_name(self) -> None:
         """Edge case 7: a strategy field name that also sits in the fallback list reads the field once."""
-        from src.foundation.persistence.db.redis_writer import (
+        from src.foundation.persistence.db.writers.redis_writer import (
             RedisTimeSeriesWriter,
         )  # WHY: import the class under test.
 
@@ -419,7 +419,7 @@ class TestResolveEntityIdUnknownBranch:
 
     def test_record_without_any_identifier_uses_the_sentinel(self, config, mock_redis) -> None:
         """FR-003: a record that carries no identifier still writes under the sentinel."""
-        from src.foundation.persistence.db.redis_writer import (
+        from src.foundation.persistence.db.writers.redis_writer import (
             RedisTimeSeriesWriter,
         )  # WHY: import the class under test.
 
@@ -431,7 +431,7 @@ class TestResolveEntityIdUnknownBranch:
 
     def test_empty_record_raises_no_error(self) -> None:
         """INV-1: the rule accepts an empty dictionary and returns the sentinel."""
-        from src.foundation.persistence.db.redis_writer import (
+        from src.foundation.persistence.db.writers.redis_writer import (
             RedisTimeSeriesWriter,
         )  # WHY: import the class under test.
 
@@ -445,7 +445,7 @@ class TestResolutionSummaryLogging:
 
     def test_one_summary_event_reports_three_counts(self, config, mock_redis) -> None:
         """FR-007 and FR-008: the writer emits one debug summary per call and no per-record line."""
-        from src.foundation.persistence.db.redis_writer import (
+        from src.foundation.persistence.db.writers.redis_writer import (
             RedisTimeSeriesWriter,
         )  # WHY: import the class under test.
 
@@ -468,7 +468,7 @@ class TestResolutionSummaryLogging:
 
     def test_parallel_path_emits_one_summary_for_a_large_export(self, config, mock_redis) -> None:
         """SC-007: an extraction of 10000 records emits one summary whose counts sum to 10000."""
-        from src.foundation.persistence.db.redis_writer import (
+        from src.foundation.persistence.db.writers.redis_writer import (
             RedisTimeSeriesWriter,
         )  # WHY: import the class under test.
 

@@ -21,8 +21,8 @@ from src.foundation.persistence.db import (
     DualWriteResult,
     WriteResult,
 )  # WHY: reuse shared package value types
-from src.foundation.persistence.db.arango_writer import ArangoDBWriter  # WHY: primary document store writer
-from src.foundation.persistence.db.redis_writer import (
+from src.foundation.persistence.db.writers.arango_writer import ArangoDBWriter  # WHY: primary document store writer
+from src.foundation.persistence.db.writers.redis_writer import (
     RedisJSONWriter,
     RedisTimeSeriesWriter,
 )  # WHY: event and metric writers

@@ -53,7 +53,7 @@ class TestRedisWebhookIngestion:
     """Verify stats payloads dispatch to Redis writer."""
 
     def test_ingest_webhook_called_for_stats(self) -> None:
-        from src.foundation.persistence.db.redis_writer import RedisTimeSeriesWriter
+        from src.foundation.persistence.db.writers.redis_writer import RedisTimeSeriesWriter
 
         writer = MagicMock(spec=RedisTimeSeriesWriter)
         records = [{"mac": "aa:bb:cc", "rssi": -65, "duration": 120}]

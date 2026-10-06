@@ -484,7 +484,7 @@ class TestRepositoryGuardrails:
         """Each portal write endpoint uses the natural primary key strategy.
 
         Why:
-            ``src/foundation/persistence/db/redis_writer.py:598`` puts a 7-day time to live on every
+            ``src/foundation/persistence/db/writers/redis_writer.py:598`` puts a 7-day time to live on every
             ``composite_pk`` document. The portal keeps a capture and a run
             forever, so a change to the strategy would delete the history.
 

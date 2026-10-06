@@ -1006,7 +1006,7 @@ compares the schema version and the digest. A capture reaches the state
 ### The retention purge never runs
 
 `src/foundation/persistence/db/retention.py:100` reads the attribute `_database` from the ArangoDB
-writer. `src/foundation/persistence/db/arango_writer.py:3903` names that handle `self._db`. The read
+writer. `src/foundation/persistence/db/writers/arango_writer.py:3903` names that handle `self._db`. The read
 therefore answers `None`, the usage measure answers `0.0`, and the purge never
 starts.
 
