@@ -20,7 +20,7 @@
   <p><strong>Devices:</strong> {{ device_count }}</p>
   <p><strong>Device families:</strong> {{ device_families | join(', ') if device_families else 'Access points' }}</p>
   <p data-testid="org-upgrade-firmware"><strong>Firmware:</strong> {{ firmware_summary }}</p>
-  <p><strong>Strategy:</strong> {{ options.strategy }}</p>
+  <p><strong>Strategy:</strong> {{ strategy_summary | default('All devices at the same time', true) }}</p>
   {% if options.reboot_at %}
     <p data-testid="org-upgrade-reboot-at"><strong>Reboot each switch and each gateway after this much time:</strong> {{ options.reboot_at }}</p>
     <p data-testid="org-upgrade-reboot-moment"><strong>The reboot moment:</strong> {{ reboot_moment }}</p>
