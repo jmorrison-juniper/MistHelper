@@ -303,11 +303,13 @@ STAND_IN_VERSIONS = ("0.14.29216", "0.15.1")  # The version that runs now, then 
 # so the comparison of one site shows a firmware change.
 STANDALONE_ROLE_VERSIONS = {"pre": STAND_IN_VERSIONS[0], "post": STAND_IN_VERSIONS[1]}  # The version of each role.
 # WHY: Issue #3249. The multi-site device table keys each row by the MAC
-# address, so the second site holds its own addresses. The cloud job of the
-# access points lists the first-site AP as upgraded and the second-site AP as
+# address, so each site holds its own addresses. The cloud job of the access
+# points lists one access point as upgraded and the other access point as
 # failed, so the table shows one version match and one version mismatch.
-FIRST_SITE_AP_MAC = "000000000001"  # The access point of the first site, which is device one.
-SECOND_SITE_AP_MAC = "000000000101"  # The access point of the second site, which is device one.
+# WHY: Issue #3932. Each name states the cloud result, because the picker
+# sorts by name and the sort decides which site appears first.
+UPGRADED_SITE_AP_MAC = "000000000001"  # The access point that the cloud job reports as upgraded.
+FAILED_SITE_AP_MAC = "000000000101"  # The access point that the cloud job reports as failed.
 # WHY: Issue #3424. The short-read site shows its devices in the same table as
 # the second site, so it needs its own addresses too. Each entry gives a site
 # one address digit and one name word. The second site keeps digit 1, so its
@@ -1293,13 +1295,13 @@ class E2EOrgUpgradeService:
                         "site_id": STAND_IN_SITE_ID,
                         "id": "55555555-5555-5555-5555-555555555555",
                         "status": site_state,
-                        "targets": {"total": 2, "upgraded": [FIRST_SITE_AP_MAC], "failed": []},  # Issue #3249.
+                        "targets": {"total": 2, "upgraded": [UPGRADED_SITE_AP_MAC], "failed": []},  # Issue #3249.
                     },
                     {
                         "site_id": SECOND_SITE_ID,
                         "id": "66666666-6666-6666-6666-666666666666",
                         "status": site_state,
-                        "targets": {"total": 2, "upgraded": [], "failed": [SECOND_SITE_AP_MAC]},  # Issue #3249.
+                        "targets": {"total": 2, "upgraded": [], "failed": [FAILED_SITE_AP_MAC]},  # Issue #3249.
                     },
                 ],
             },

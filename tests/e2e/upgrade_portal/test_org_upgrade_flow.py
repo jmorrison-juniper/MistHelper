@@ -17,13 +17,15 @@ MODE_PATH = "/select/mode"
 SITE_ID = "22222222-2222-2222-2222-222222222222"
 SECOND_SITE_ID = "33333333-3333-3333-3333-333333333333"
 UPGRADE_ID = "44444444-4444-4444-4444-444444444444"
-# WHY: Issue #3249. `conftest.py` fixes these values. The cloud job lists the
-# first-site AP as upgraded and the second-site AP as failed. The first site
-# runs the new version, and the second site still runs the old version.
-FIRST_SITE_AP_MAC = "000000000001"
-FIRST_SITE_SWITCH_MAC = "000000000003"
-SECOND_SITE_AP_MAC = "000000000101"
-SECOND_SITE_SWITCH_MAC = "000000000103"
+# WHY: Issue #3249. `conftest.py` fixes these values. The cloud job lists one
+# access point as upgraded and the other access point as failed. The upgraded
+# site runs the new version, and the failed site still runs the old version.
+# WHY: Issue #3932. Each name states the cloud result of its site, because the
+# picker sorts by name and the sort decides which site appears first.
+UPGRADED_SITE_AP_MAC = "000000000001"
+UPGRADED_SITE_SWITCH_MAC = "000000000003"
+FAILED_SITE_AP_MAC = "000000000101"
+FAILED_SITE_SWITCH_MAC = "000000000103"
 FIRMWARE_EMAIL = "e2e.operator@juniper.net"  # The typed address of the firmware operator.
 CLOUD_ACCOUNT = "e2e.operator@example.invalid"  # The Mist account that the self-read seam answers.
 LISTED_FAILURE = "The cloud lists this device as failed."  # The reason when the child holds no error text.
@@ -117,12 +119,12 @@ class TestOrganizationUpgradeBrowserFlow:
         assert device_rows.count() == 6  # One access point, one switch, and one gateway at each of two sites.
         expect_device(
             page,
-            FIRST_SITE_AP_MAC,
+            UPGRADED_SITE_AP_MAC,
             {"state": "upgraded", "version-after": "0.15.1", "version-check": "Version matches", "failure": ""},
         )
         expect_device(
             page,
-            SECOND_SITE_AP_MAC,
+            FAILED_SITE_AP_MAC,
             {
                 "state": "failed",
                 "version-after": "0.14.29216",
@@ -130,8 +132,8 @@ class TestOrganizationUpgradeBrowserFlow:
                 "failure": LISTED_FAILURE,
             },
         )
-        expect_device(page, FIRST_SITE_SWITCH_MAC, {"state": "pending", "version-check": "Awaiting version"})
-        expect_device(page, SECOND_SITE_SWITCH_MAC, {"state": "pending", "version-check": "Awaiting version"})
+        expect_device(page, UPGRADED_SITE_SWITCH_MAC, {"state": "pending", "version-check": "Awaiting version"})
+        expect_device(page, FAILED_SITE_SWITCH_MAC, {"state": "pending", "version-check": "Awaiting version"})
         sync_api.expect(page.get_by_test_id("org-upgrade-operator-address")).to_have_text(FIRMWARE_EMAIL)
         sync_api.expect(page.get_by_test_id("org-upgrade-cloud-account")).to_have_text(CLOUD_ACCOUNT)
         sync_api.expect(page.get_by_test_id("org-upgrade-last-update-age")).not_to_have_text("unknown")
@@ -208,7 +210,7 @@ class TestOrganizationUpgradeBrowserFlow:
             "The operation is final: cancelled."
         )  # The operator reads why the cancel is gone.
         # WHY: Issue #3249. A cancelled child is final, so the table reads the
-        # version that each device runs now. The first site runs the new
-        # version, and the second site still runs the old version.
-        expect_device(page, FIRST_SITE_SWITCH_MAC, {"state": "cancelled", "version-check": "Version matches"})
-        expect_device(page, SECOND_SITE_SWITCH_MAC, {"state": "cancelled", "version-check": "Version mismatch"})
+        # version that each device runs now. The upgraded site runs the new
+        # version, and the failed site still runs the old version.
+        expect_device(page, UPGRADED_SITE_SWITCH_MAC, {"state": "cancelled", "version-check": "Version matches"})
+        expect_device(page, FAILED_SITE_SWITCH_MAC, {"state": "cancelled", "version-check": "Version mismatch"})
