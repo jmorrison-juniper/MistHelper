@@ -1244,6 +1244,12 @@ def _replace_holder(request: LockRequest, held: LockRecord, handle: Any, state: 
         lambda: handle.eval(_TAKEOVER_SCRIPT, 1, request.key, held.lock_token, fresh.to_json(), LOCK_TTL_SECONDS),
     )
     if int(won) != _SCRIPT_HELD:  # Another request took the site between the read and the write
+        _LOGGER.warning(
+            "lock: operator %s lost site %s with code %s",  # The template excludes the work address and token.
+            request.owner.email_digest,  # The digest identifies the operator without the address.
+            request.site_id,  # The site identifier lets the operator place the refusal.
+            "site_locked",  # The machine code distinguishes the cause.
+        )
         raise SiteLockedError(SITE_BUSY_MESSAGE)
     return LockGrant(record=fresh, state=state)
 
@@ -1272,6 +1278,12 @@ def _grant_to_same_owner(request: LockRequest, held: LockRecord, handle: Any) ->
         _LOGGER.info("lock: operator %s resumes site %s", request.owner.email_digest, request.site_id)
         return LockGrant(record=held, state=LockState.RESUMED)
     if request.confirmation_text != RESUME_CONFIRMATION_TEXT:  # Exact text and exact letter case
+        _LOGGER.info(
+            "lock: operator %s needs confirmation for site %s with code %s",  # The template excludes the word.
+            request.owner.email_digest,  # The digest identifies the operator without the address.
+            request.site_id,  # The site identifier lets the operator place the refusal.
+            "confirmation_required",  # The machine code distinguishes the cause.
+        )
         raise ConfirmationRequiredError(RESUME_MESSAGE, RESUME_CONFIRMATION_TEXT)
     _LOGGER.info("lock: operator %s takes back a quiet session on site %s", request.owner.email_digest, request.site_id)
     return _replace_holder(request, held, handle, LockState.RESUMED)
@@ -1301,8 +1313,20 @@ def _grant_to_new_owner(request: LockRequest, held: LockRecord, handle: Any) -> 
         TakeoverAuditError: When the sink cannot store the record.
     """
     if not held.is_quiet():  # Another operator is driving this site right now
+        _LOGGER.warning(
+            "lock: operator %s lost site %s with code %s",  # The template excludes both work addresses.
+            request.owner.email_digest,  # The digest identifies the refused operator without the address.
+            request.site_id,  # The site identifier lets the operator place the refusal.
+            "site_locked",  # The machine code distinguishes the cause.
+        )
         raise SiteLockedError(SITE_LOCKED_MESSAGE)
     if request.confirmation_text != TAKEOVER_CONFIRMATION_TEXT:  # Exact text and exact letter case
+        _LOGGER.info(
+            "lock: operator %s needs confirmation for site %s with code %s",  # The template excludes the word.
+            request.owner.email_digest,  # The digest identifies the operator without the address.
+            request.site_id,  # The site identifier lets the operator place the refusal.
+            "confirmation_required",  # The machine code distinguishes the cause.
+        )
         raise ConfirmationRequiredError(TAKEOVER_MESSAGE, TAKEOVER_CONFIRMATION_TEXT)
     audit = TakeoverAudit.build(held.owner.actor_email, request.owner.actor_email)
     # A second operator can win the compare-and-set below, which leaves one row for a
@@ -1354,6 +1378,12 @@ def acquire_site_lock(request: LockRequest, client: Any = None) -> LockGrant:
         held = _read_record(handle, request.key)
         if held is not None:  # A holder exists, so answer the operator about that holder
             return _resolve_conflict(request, held, handle)
+    _LOGGER.warning(
+        "lock: operator %s lost site %s with code %s",  # The template excludes the work address and token.
+        request.owner.email_digest,  # The digest identifies the refused operator without the address.
+        request.site_id,  # The site identifier lets the operator place the refusal.
+        "site_locked",  # The machine code distinguishes the cause.
+    )
     raise SiteLockedError(SITE_BUSY_MESSAGE)  # The lock expired twice between the write and the read
 
 
@@ -1411,6 +1441,11 @@ def refresh_site_lock(key: str, record: LockRecord, client: Any = None) -> int:
         lambda: handle.eval(_REFRESH_SCRIPT, 1, key, record.lock_token, renewed.to_json(), lease),
     )
     if int(held) != _SCRIPT_HELD:  # The lock expired, or a takeover moved it
+        _LOGGER.warning(
+            "lock: run %s lost the site lock with code %s",  # The template excludes the lock key and token.
+            record.run_id,  # The run identifier lets the operator place the refusal.
+            "lock_lost",  # The machine code distinguishes the cause.
+        )
         raise LockLostError(LOCK_LOST_MESSAGE)
     _LOGGER.debug("lock: run %s renewed the site lock for %s seconds", record.run_id, lease)  # Safe result summary.
     return lease

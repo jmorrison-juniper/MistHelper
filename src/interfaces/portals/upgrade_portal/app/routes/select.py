@@ -2327,6 +2327,18 @@ def lock_failure_answer(site_id: str, error: lock.SiteLockError) -> tuple[Respon
     code = str(getattr(error, "code", LOCK_FAILED_CODE))  # Every class of the lock module names its own code.
     status = LOCK_ERROR_STATUS.get(code, CONFLICT_STATUS)  # An unmapped code still refuses the write.
     details = lock_failure_details(site_id, code, error)  # None for a refusal that needs no detail block.
+    level = logging.WARNING  # Lock contention, lock loss, and store faults need operator attention.
+    if code == CONFIRMATION_REQUIRED_CODE:  # A typed word is an expected operator action, not a fault.
+        level = logging.INFO  # Information is sufficient for the expected confirmation step.
+    elif code == TAKEOVER_AUDIT_CODE:  # A missing safety record stops the takeover.
+        level = logging.ERROR  # The portal cannot complete the safe action without the record.
+    logger.log(
+        level,  # The machine code selects the urgency without changing the refusal.
+        "select: site %s refused the lock with code %s and status %s",  # The template holds no credential.
+        site_id,  # The site identifier lets the operator place the refusal.
+        code,  # The machine code distinguishes the cause.
+        status,  # The status confirms the unchanged HTTP decision.
+    )
     return jsonify(build_error_envelope(code, str(error), details)), status  # The one error shape of the contract.
 
 
@@ -2342,6 +2354,12 @@ def lock_lost_answer() -> tuple[Response, int]:
         The refusal envelope and the 409 status.
     """
     body = build_error_envelope(LOCK_LOST_CODE, LOCK_LOST_MESSAGE)  # No detail block, because no cure needs one.
+    logger.warning(
+        "select: site %s refused the lock with code %s and status %s",  # The template holds no credential.
+        request.view_args.get("site_id", ""),  # The route path names the site without reading request data.
+        LOCK_LOST_CODE,  # The machine code distinguishes the cause.
+        CONFLICT_STATUS,  # The status confirms the unchanged HTTP decision.
+    )
     return jsonify(body), CONFLICT_STATUS  # `contracts/site-lock.md:90` and line 103 fix this status.
 
 
@@ -2689,16 +2707,24 @@ def take_site_lock(site_id: str) -> tuple[Response, int]:
     """
     org_id = resolve_org(None)  # The lock path carries no organization, so the session answers.
     if org_id is None:  # The key needs both halves, so no lock may move yet.
+        logger.warning(
+            "select: site %s refused the lock with code %s",  # The template holds no credential.
+            site_id,  # The path value identifies the refused site.
+            ORG_NOT_CHOSEN,  # The machine code distinguishes the missing choice.
+        )
         return json_error(BAD_REQUEST_STATUS, ORG_NOT_CHOSEN, ORG_NOT_CHOSEN_MESSAGE)  # The contract fixes this.
     ask = build_lock_request(org_id, site_id)  # None means the session carries no owner.
     if ask is None:  # The guard above passed, so this state is rare and still needs an answer.
+        logger.warning("select: site %s refused the lock because the session owner is absent", site_id)  # Evidence.
         return identity.not_authenticated_response()  # The one envelope that names a missing session.
+    logger.info("select: request the lock for site %s", site_id)  # Record the action before the lock store call.
     try:  # Every write of the lock module fails closed, so each failure carries a code.
         grant = lock.acquire_site_lock(ask, client=lock_client())  # The store decides the race, never this route.
     except lock.SiteLockError as error:  # One base class covers every refusal of the lock module.
         return lock_failure_answer(site_id, error)  # The map above fixes the status of each code.
     store_lock_record(site_id, grant.record)  # The beat and the release both read this record back.
     store_chosen_site(site_id)  # The operator now drives this site, so the later routes read the same pick.
+    logger.debug("select: site %s granted the lock with state %s", site_id, grant.state.value)  # Safe result.
     return jsonify(lock_grant_body(grant)), OK_STATUS  # The one shape the contract names.
 
 
@@ -2721,6 +2747,7 @@ def beat_site_lock(site_id: str) -> tuple[Response, int]:
     """
     org_id = resolve_org(None)  # The beat path carries no organization, so the session answers.
     record = held_record(site_id) if org_id is not None else None  # None means this session holds no matching lock.
+    logger.info("select: renew the lock for site %s", site_id)  # Record the action before the lock decision.
     if org_id is None or record is None:  # Nothing to extend, so the page must take the site again.
         return lock_lost_answer()  # `contracts/site-lock.md:90` fixes this code and this status.
     try:  # A beat fails closed, because a portal that assumes a lock is worse than one that refuses.
@@ -2728,6 +2755,7 @@ def beat_site_lock(site_id: str) -> tuple[Response, int]:
     except lock.SiteLockError as error:  # The store refused, or the token no longer matches the stored one.
         drop_lock_record(site_id)  # This session lost the site, so the stored record must not survive.
         return lock_failure_answer(site_id, error)  # The map above fixes the status of each code.
+    logger.debug("select: site %s renewed the lock for %s seconds", site_id, remaining)  # Safe result summary.
     return jsonify({"expires_in": remaining}), OK_STATUS  # The one shape the contract names.
 
 
@@ -2749,6 +2777,7 @@ def free_site_lock(site_id: str) -> tuple[Response, int]:
     """
     org_id = resolve_org(None)  # The release path carries no organization, so the session answers.
     record = held_record(site_id) if org_id is not None else None  # None means this session holds no matching lock.
+    logger.info("select: release the lock for site %s", site_id)  # Record the action before the lock decision.
     if org_id is None or record is None:  # Nothing to release, so the caller already lost the site.
         return lock_lost_answer()  # `contracts/site-lock.md:103` fixes this code and this status.
     try:  # The compare and the delete run as one step, so a release cannot free another operator.
@@ -2757,4 +2786,5 @@ def free_site_lock(site_id: str) -> tuple[Response, int]:
         drop_lock_record(site_id)  # This session lost the site either way, so the stored record must go.
         return lock_failure_answer(site_id, error)  # The map above fixes the status of each code.
     drop_lock_record(site_id)  # The site is free, so this browser holds no record of it.
+    logger.debug("select: site %s released the lock", site_id)  # Record the successful result without the token.
     return jsonify({"released": True}), OK_STATUS  # The one shape the contract names.
