@@ -15,7 +15,6 @@ import dataclasses
 import threading
 from typing import Any
 
-import mistapi
 import pytest
 
 from src.interfaces.portals.upgrade_portal.runtime.runs import PHASE_ORDER
@@ -95,6 +94,8 @@ class StandInLockLease:
 
 def attach(monkeypatch: pytest.MonkeyPatch, clock: RehearsalClock, fleet: FleetScript) -> CloudLog:
     """Attach the stand-in cloud, and record each statistics read."""
+    import mistapi
+
     cloud = RehearsalHarness(RehearsalDeps(clock=clock, fleet=fleet)).attach(monkeypatch)  # The stand-in answers.
     monkeypatch.setattr(readers, "resolve_page_limit", lambda: 1000)  # One page for each read.
     log = CloudLog(clock)  # The record of each read.
