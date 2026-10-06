@@ -5,4 +5,4 @@
 - [x] Update the single-site confirmation template.
 - [x] Add normal, mixed, and all-per-device contract tests.
 - [x] Add the issue changelog fragment.
-- [ ] Run focused tests and quality gates.
+- [x] Run focused tests and quality gates.

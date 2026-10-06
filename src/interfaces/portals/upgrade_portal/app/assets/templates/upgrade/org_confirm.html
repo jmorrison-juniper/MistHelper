@@ -8,6 +8,39 @@
   follow the retry sites too.
 #}
 {% set one_site = site_count == 1 %}
+{% set chosen_strategy = options.strategy | default('big_bang', true) %}
+{% set strategy_names = {
+  'big_bang': 'All devices at the same time',
+  'canary': 'A few devices first, then the rest',
+  'serial': 'One device at a time',
+  'rrm': 'Access points in radio batches'
+} %}
+{% set device_group_names = {
+  'ap': 'the access point group',
+  'gateway': 'the gateway group',
+  'ssr': 'the session smart router group',
+  'switch': 'the switch group'
+} %}
+{% set strategy_groups = namespace(no_strategy=[], count=0) %}
+{% set child_rows = strategy_children | default([], true) %}
+{% for child in child_rows %}
+  {% set body = child.get('body') | default({}, true) %}
+  {% if 'strategy' not in body %}
+    {% set strategy_groups.count = strategy_groups.count + 1 %}
+    {% set group_name = device_group_names.get(child.get('device_family') | default(''), 'the selected device group') %}
+    {% set site_name = child.get('site_name') | default('', true) %}
+    {% set group_label = group_name ~ (' at ' ~ site_name if site_name else '') %}
+    {% if group_label not in strategy_groups.no_strategy %}
+      {% set strategy_groups.no_strategy = strategy_groups.no_strategy + [group_label] %}
+    {% endif %}
+  {% endif %}
+{% endfor %}
+{% set strategy_text = strategy_names.get(chosen_strategy, chosen_strategy) %}
+{% if strategy_groups.count == child_rows | length and child_rows %}
+  {% set strategy_text = 'The cloud applies no strategy.' %}
+{% elif strategy_groups.no_strategy %}
+  {% set strategy_text = strategy_text ~ '. The cloud applies no strategy to ' ~ (strategy_groups.no_strategy | join(', ')) ~ '.' %}
+{% endif %}
 
 {% block title %}Confirm the upgrade{% endblock %}
 {% block heading %}<h1>Confirm the upgrade</h1>{% endblock %}
@@ -20,7 +53,7 @@
   <p><strong>Devices:</strong> {{ device_count }}</p>
   <p><strong>Device families:</strong> {{ device_families | join(', ') if device_families else 'Access points' }}</p>
   <p data-testid="org-upgrade-firmware"><strong>Firmware:</strong> {{ firmware_summary }}</p>
-  <p><strong>Strategy:</strong> {{ strategy_summary | default('All devices at the same time', true) }}</p>
+  <p><strong>Strategy:</strong> {{ strategy_text }}</p>
   {% if options.reboot_at %}
     <p data-testid="org-upgrade-reboot-at"><strong>Reboot each switch and each gateway after this much time:</strong> {{ options.reboot_at }}</p>
     <p data-testid="org-upgrade-reboot-moment"><strong>The reboot moment:</strong> {{ reboot_moment }}</p>

@@ -127,6 +127,12 @@
   'serial': 'One device at a time',
   'rrm': 'Access points in radio batches'
 } %}
+{% set device_group_names = {
+  'ap': 'the access point group',
+  'gateway': 'the gateway group',
+  'ssr': 'the session smart router group',
+  'switch': 'the switch group'
+} %}
 {% set force_chosen = option_values.force | default(false) %}
 {% set stable_version_chosen = option_values.stable_version | default(false) %}
 {% set p2p_chosen = option_values.get('peer_to_peer', {}).get('enable_p2p', false) %}
@@ -137,11 +143,12 @@
 #}
 {% set strategy_groups = namespace(keys=[], no_strategy=[], total=0) %}
 {% for target in target_rows %}
+  {% set device_type = target.get('device_type') | default('') %}
   {% set family = target.get('gateway_family') | default('', true) %}
-  {% if not family and (target.get('device_type') | default('') == 'ssr' or (target.get('model') | default('') | upper).startswith('SSR')) %}
+  {% if not family and (device_type == 'ssr' or (target.get('model') | default('') | upper).startswith('SSR')) %}
     {% set family = 'ssr' %}
   {% endif %}
-  {% set group_key = (target.get('device_type') | default('')) ~ '|' ~ family ~ '|' ~ (target.get('version_target') | default('')) %}
+  {% set group_key = device_type ~ '|' ~ family ~ '|' ~ (target.get('version_target') | default('')) %}
   {% if group_key not in strategy_groups.keys %}
     {% set strategy_groups.keys = strategy_groups.keys + [group_key] %}
     {% set group_count = namespace(value=0) %}
@@ -156,8 +163,11 @@
       {% endif %}
     {% endfor %}
     {% set strategy_groups.total = strategy_groups.total + 1 %}
-    {% if not reboot_chosen and group_count.value == 1 and family != 'ssr' %}
-      {% set strategy_groups.no_strategy = strategy_groups.no_strategy + [target.get('device_type') | default('selected device group')] %}
+    {% set per_device_call = not reboot_chosen and group_count.value == 1 and family != 'ssr' %}
+    {% set strategy_not_supported = (chosen_strategy == 'rrm' and device_type != 'ap') or (family == 'ssr' and chosen_strategy not in ['big_bang', 'serial']) %}
+    {% set group_name = device_group_names.get(device_type, 'the selected device group') %}
+    {% if (per_device_call or strategy_not_supported) and group_name not in strategy_groups.no_strategy %}
+      {% set strategy_groups.no_strategy = strategy_groups.no_strategy + [group_name] %}
     {% endif %}
   {% endif %}
 {% endfor %}
@@ -165,7 +175,7 @@
 {% if strategy_groups.no_strategy | length == strategy_groups.total and strategy_groups.total > 0 %}
   {% set strategy_text = 'The cloud applies no strategy.' %}
 {% elif strategy_groups.no_strategy %}
-  {% set strategy_text = strategy_text ~ '. The cloud applies no strategy to the ' ~ (strategy_groups.no_strategy | join(', ')) ~ ' group.' %}
+  {% set strategy_text = strategy_text ~ '. The cloud applies no strategy to ' ~ (strategy_groups.no_strategy | join(', ')) ~ '.' %}
 {% endif %}
 
 {#
@@ -428,4 +438,3 @@
   </div>
 </div>
 {% endblock %}
-

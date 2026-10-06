@@ -859,18 +859,6 @@ def options_view(options: Mapping[str, Any]) -> dict[str, Any]:
 FAMILY_LABELS = (("version_ap", "Access points"), ("version_switch", "Switches"), ("version_gateway", "Gateways"))
 STABLE_FAMILY_FIELDS = frozenset({"version_switch", "version_gateway"})  # Issue #3383: these read the stable build.
 STABLE_BUILD_TEXT = "the vendor stable build"  # Issue #3383: the cloud picks the build, so no version number shows.
-STRATEGY_DISPLAY_NAMES = {  # Use the same plain words on both confirmation pages.
-    "big_bang": "All devices at the same time",
-    "canary": "A few devices first, then the rest",
-    "rrm": "Access points in radio batches",
-    "serial": "One device at a time",
-}
-DEVICE_FAMILY_DISPLAY_NAMES = {  # Name the child groups that receive no strategy.
-    "ap": "the access point group",
-    "gateway": "the gateway group",
-    "ssr": "the session smart router group",
-    "switch": "the switch group",
-}
 
 
 def firmware_summary(view: Mapping[str, Any], families: Sequence[str]) -> str:
@@ -906,33 +894,6 @@ def operation_firmware_summary(operation: Mapping[str, Any] | None) -> str:
     parts = list(dict.fromkeys(f"{model} {version}" for model, version in pairs if model and version))  # Unique models.
     logger.debug("The aggregate firmware summary names %s model version(s)", len(parts))  # Log after the build.
     return ", ".join(parts)  # An older child with no target records uses the caller fallback.
-
-
-def strategy_summary(options: Mapping[str, Any], children: Sequence[Mapping[str, Any]]) -> str:
-    """Return the strategy words that each durable child body carries."""
-    chosen = str(options.get("strategy", "big_bang"))  # Read the saved operator choice.
-    chosen_name = STRATEGY_DISPLAY_NAMES.get(chosen, chosen)  # Keep an explicit fallback for old records.
-    without_strategy = [  # Find child calls whose schema has no strategy field.
-        child for child in children if "strategy" not in _child_body(child)
-    ]
-    if not without_strategy:  # Every child receives the selected strategy.
-        return chosen_name  # The normal plan needs one plain-language name.
-    if len(without_strategy) == len(children):  # Every call is a per-device call.
-        return "The cloud applies no strategy."  # The cloud ignores the selected strategy for every call.
-    groups = ", ".join(_child_group_name(child) for child in without_strategy)  # Name each dropped group.
-    return f"{chosen_name}. The cloud applies no strategy to {groups}."  # Explain the mixed plan.
-
-
-def _child_body(child: Mapping[str, Any]) -> Mapping[str, Any]:
-    """Return one durable child body when it has the expected mapping shape."""
-    body = child.get("body")  # The durable plan stores the exact request body.
-    return body if isinstance(body, Mapping) else {}  # A damaged body proves no strategy field.
-
-
-def _child_group_name(child: Mapping[str, Any]) -> str:
-    """Return a plain group name for a child that carries no strategy."""
-    family = str(child.get("device_family", "")).strip().lower()  # Read the durable family label.
-    return DEVICE_FAMILY_DISPLAY_NAMES.get(family, "the selected device group")  # Keep malformed records readable.
 
 
 def _summary_version(view: Mapping[str, Any], field: str) -> str:
@@ -1296,7 +1257,7 @@ def confirm_page() -> str | tuple[Response, int]:
         device_count=target_count or _site_device_count(rows),  # Keep the AP-only count fallback.
         device_families=families,  # Show each planned family.
         options=view,  # Show the confirmed choices.
-        strategy_summary=strategy_summary(view, _mapping_children(operation)),  # Explain each child schema.
+        strategy_children=_mapping_children(operation),  # Explain each child schema without changing its request.
         firmware_summary=firmware_line,  # Name each model, unless the cloud selects the vendor stable build.
         advanced_summary=OrgAdvancedSummary.lines(view, _mapping_children(operation)),  # Each stored child body.
         reboot_moment=OrgUpgradeScheduleReader.reboot_moment_text(operation),  # Show the absolute or submit rule.
