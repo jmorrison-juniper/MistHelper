@@ -35,6 +35,7 @@ from src.interfaces.portals.upgrade_portal.capture.devices import (
     REASON_UNKNOWN_SHAPE,
 )
 from src.interfaces.portals.upgrade_portal.upgrade import options as module
+from src.operations.execution.firmware.running_version import RunningFirmwareVersionResolver
 from src.operations.execution.firmware.upgrade_service import SCOPE_ORG, SCOPE_SITE, STRATEGY_DEFAULT, UpgradeOptions
 from tests.support.sdk_pages import HTML_TYPE, JSON_TYPE, PagedSession, build_sdk_answer
 
@@ -252,6 +253,82 @@ class TestReadUpgradeInventory:
         assert result.partial_reasons == [
             {"section": module.SECTION_UPGRADE_INVENTORY, "reason": REASON_READ_FAILED, "http_status": 0}
         ]
+
+
+class TestReadUpgradeOrgInventory:
+    """The organization inventory read and its selected-site partitions."""
+
+    def test_the_org_call_omits_site_type_and_virtual_chassis_filters(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        fake_mist_session: Any,
+    ) -> None:
+        """One organization call returns every logical device for later partitioning."""
+        seen = record_inventory_call(monkeypatch, [{**SWITCH_ROW, "site_id": SITE_ID}])
+        module.read_upgrade_org_inventory(fake_mist_session, ORG_ID, page_limit=PAGE_LIMIT)
+        assert seen["args"][1] == ORG_ID
+        assert seen["kwargs"] == {"limit": PAGE_LIMIT}
+
+    def test_the_partition_keeps_selected_order_and_ignores_other_rows(self) -> None:
+        """Only selected sites receive detached rows from the organization answer."""
+        site_two = "site-2"
+        inventory = module.InventoryRead(
+            [
+                {**AP_ROW, "site_id": site_two},
+                {**SWITCH_ROW, "site_id": SITE_ID},
+                {**JUNOS_ROW, "site_id": "site-other"},
+                {**SSR_ROW, "site_id": None},
+            ],
+            [],
+        )
+        result = module.inventory_reads_by_site(inventory, [SITE_ID, site_two, "site-empty"])
+        assert list(result) == [SITE_ID, site_two, "site-empty"]
+        assert [row["mac"] for row in result[SITE_ID].records] == [SWITCH_ROW["mac"]]
+        assert [row["mac"] for row in result[site_two].records] == [AP_ROW["mac"]]
+        assert result["site-empty"].records == []
+
+    def test_a_partial_org_reason_applies_to_every_selected_site(self) -> None:
+        """A short organization read cannot prove that any selected site is complete."""
+        inventory = module.InventoryRead([{**SWITCH_ROW, "site_id": SITE_ID}], [SHORT_REASON])
+        result = module.inventory_reads_by_site(inventory, [SITE_ID, "site-empty"])
+        assert result[SITE_ID].partial_reasons == [SHORT_REASON]
+        assert result["site-empty"].partial_reasons == [SHORT_REASON]
+        result[SITE_ID].partial_reasons[0]["reason"] = "changed"
+        assert result["site-empty"].partial_reasons == [SHORT_REASON]
+
+    def test_the_view_uses_supplied_inventory_without_another_read(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A multi-site view transforms its site slice without a second inventory call."""
+        monkeypatch.setattr(
+            module,
+            "read_upgrade_inventory",
+            lambda *args: pytest.fail("The supplied inventory was not reused."),
+        )
+        monkeypatch.setattr(module, "read_model_versions", lambda *args: VERSION_MAP)
+        answer = module.build_options_view(object(), ORG_ID, SITE_ID, module.InventoryRead([SWITCH_ROW], []))
+        assert [target["mac"] for target in answer["targets"]] == ["5c5b350e0001"]
+
+    def test_the_record_uses_supplied_inventory_without_another_read(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A multi-site save validates its site slice without a second inventory call."""
+        monkeypatch.setattr(
+            module,
+            "read_upgrade_inventory",
+            lambda *args: pytest.fail("The supplied inventory was not reused."),
+        )
+        monkeypatch.setattr(module, "read_model_versions", lambda *args: VERSION_MAP)
+        answer = module.build_options_record(
+            object(),
+            ORG_ID,
+            SITE_ID,
+            {**THIN_BODY, "selected_types": ["switch"]},
+            module.InventoryRead([SWITCH_ROW], []),
+        )
+        assert [target["mac"] for target in answer["targets"]] == ["5c5b350e0001"]
 
 
 class TestVersionOptions:
@@ -761,7 +838,7 @@ class TestBuildOptionsView:
         record_inventory_call(monkeypatch, [SWITCH_ROW])
         monkeypatch.setattr(fake_mist_session, "mist_get", lambda **_: None, raising=False)
         monkeypatch.setattr(
-            module.RunningFirmwareVersionResolver,
+            RunningFirmwareVersionResolver,
             "fetch_site_running_versions",
             lambda _resolver, site_id: {SWITCH_ROW["mac"]: "24.2R1.17"},
         )
