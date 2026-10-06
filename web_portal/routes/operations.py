@@ -59,7 +59,7 @@ NO_SESSION_REASON = "The portal holds no Mist API session. Check the API token i
 NO_ORG_REASON = "The portal holds no organization identifier. Set MIST_ORG_ID in the environment file."
 NO_SITE_REASON = "No site was chosen, so the portal cannot list this data."
 NO_ROWS_REASON = "The Mist API answered with no rows for this request."
-API_ERROR_REASON = "The Mist API request failed with {error}. Read the portal error log for the full report."
+API_ERROR_REASON = "The portal could not reach the Mist API. Try again."
 ALL_SITES_EMPTY_REASON = "Every site holds no hardware. Add show_empty=1 to list them."
 
 
@@ -77,6 +77,20 @@ class PickList(list):
         """Store the rows and the reason the list may be empty."""
         super().__init__(items)  # Keep list behavior, so every existing caller still works.
         self.reason = reason  # Hold the explanation for the route that renders the control.
+
+    @classmethod
+    def failure_for_response(cls, response: object, operation: str, target: str) -> "PickList | None":
+        """Return a failed picker when the SDK response has no usable HTTP 2xx status."""
+        status = getattr(response, "status_code", None)  # Read status before any response data can look successful.
+        if type(status) is int and 200 <= status < 300:  # Accept only a final integer HTTP 2xx answer.
+            logger.debug(
+                "Mist API pick-list read succeeded for %s target %s with status %d", operation, target, status
+            )  # Record the usable response after the external request.
+            return None  # Let the caller read rows, including an ordinary valid empty result.
+        logger.error(
+            "Failed Mist API pick-list read for %s target %s with status %r", operation, target, status
+        )  # Name the safe operation context without a token or response body.
+        return cls(reason=API_ERROR_REASON)  # Mark the empty list as a failed read that the operator can retry.
 
 
 operations_bp = Blueprint("operations", __name__)
@@ -450,9 +464,14 @@ def _fetch_org_sites(apisession, org_id: str, show_empty: bool = False) -> PickL
     try:
         import mistapi
 
+        logger.info("Reading Mist API sites for org %s", org_id)  # Log before the external read.
         response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id)
+        failure = PickList.failure_for_response(response, "listOrgSites", org_id)  # Validate before data extraction.
+        if failure is not None:  # A missing or refused response cannot become a valid empty organization.
+            return failure  # Return the explicit retry reason without reading response data.
         sites = response.data if hasattr(response, "data") else []
         rows = sort_by_name([_build_site_row(site) for site in sites])  # Issue #3083: list by name.
+        logger.debug("Prepared %d Mist API site rows for org %s", len(rows), org_id)  # Log the transform result.
         site_filter = EmptySiteFilter(apisession, org_id)  # Issue #3915: use the shared filter.
         kept, hidden = site_filter.apply(rows, show_empty)  # Issue #3840: hide a proven empty site.
         picks = PickList(kept, reason=ALL_SITES_EMPTY_REASON if hidden and not kept else None)
@@ -466,7 +485,7 @@ def _fetch_org_sites(apisession, org_id: str, show_empty: bool = False) -> PickL
         )  # Log the exception class and text for issue triage.
         # Return an empty list because the route reads len() directly and cannot
         # handle a non-list. The log record above makes the failure visible.
-        return PickList(reason=API_ERROR_REASON.format(error=type(error).__name__))
+        return PickList(reason=API_ERROR_REASON)
 
 
 def _fetch_site_devices(apisession, site_id: str, device_type: str) -> PickList:
@@ -486,9 +505,13 @@ def _fetch_site_devices(apisession, site_id: str, device_type: str) -> PickList:
             kwargs["type"] = device_type
         else:
             kwargs["type"] = "all"
+        logger.info("Reading Mist API devices for site %s", site_id)  # Log before the external read.
         response = mistapi.api.v1.sites.devices.listSiteDevices(apisession, **kwargs)
+        failure = PickList.failure_for_response(response, "listSiteDevices", site_id)  # Validate before data access.
+        if failure is not None:  # A missing or refused response cannot look like a site with no devices.
+            return failure  # Return the explicit retry reason without reading response data.
         devices = response.data if hasattr(response, "data") else []
-        return PickList(
+        picks = PickList(
             sort_by_name(
                 [
                     {
@@ -503,7 +526,9 @@ def _fetch_site_devices(apisession, site_id: str, device_type: str) -> PickList:
                 ],
                 DEVICE_LABEL_FIELDS,
             )
-        )  # Issue #3083: the dropdown lists the devices by the label it shows.
+        )
+        logger.debug("Prepared %d Mist API device rows for site %s", len(picks), site_id)  # Log the transform result.
+        return picks  # Return sorted device rows for the dropdown.
     except Exception as error:  # Keep the device selector usable when the Mist API request fails.
         # Use logger.exception() so the full traceback appears at ERROR level.
         # Name the site ID and device type so the operator can trace the request.
@@ -511,7 +536,7 @@ def _fetch_site_devices(apisession, site_id: str, device_type: str) -> PickList:
             "Failed to list devices for site %s type %s with %s: %s", site_id, device_type, type(error).__name__, error
         )  # Log the exception class and text for issue triage.
         # Return an empty list because the route reads len() directly on this result.
-        return PickList(reason=API_ERROR_REASON.format(error=type(error).__name__))
+        return PickList(reason=API_ERROR_REASON)
 
 
 def _fetch_site_clients(apisession, site_id: str) -> PickList:
@@ -545,16 +570,22 @@ def _fetch_site_clients(apisession, site_id: str) -> PickList:
         logger.exception(
             "Failed to list clients for site %s with %s: %s", site_id, type(client_error).__name__, client_error
         )
-        return PickList(reason=API_ERROR_REASON.format(error=type(client_error).__name__))
+        return PickList(reason=API_ERROR_REASON)
 
 
 def _fetch_wireless_clients(mistapi, apisession, site_id: str) -> PickList:
     """Fetch wireless clients for a site."""
     try:
+        logger.info("Reading Mist API wireless clients for site %s", site_id)  # Log before the external read.
         response = mistapi.api.v1.sites.clients.searchSiteWirelessClients(apisession, site_id)
+        failure = PickList.failure_for_response(
+            response, "searchSiteWirelessClients", site_id
+        )  # Validate before client data access.
+        if failure is not None:  # A missing or refused response cannot look like no wireless clients.
+            return failure  # Preserve the failed source for the client merger.
         raw = response.data if hasattr(response, "data") else []
         results = raw.get("results", []) if isinstance(raw, dict) else raw
-        return PickList(
+        picks = PickList(
             {
                 "mac": client.get("mac", ""),
                 "hostname": client.get("hostname", ""),
@@ -567,6 +598,8 @@ def _fetch_wireless_clients(mistapi, apisession, site_id: str) -> PickList:
             }
             for client in results
         )
+        logger.debug("Prepared %d wireless client rows for site %s", len(picks), site_id)  # Log the transform result.
+        return picks  # Return the validated and transformed wireless client rows.
     except Exception as error:  # Keep the client list usable when the wireless query fails.
         # Use logger.exception() so the full traceback appears at ERROR level.
         # Name the site ID so the operator can cross-reference with the Mist portal.
@@ -574,7 +607,7 @@ def _fetch_wireless_clients(mistapi, apisession, site_id: str) -> PickList:
             "Failed to list wireless clients for site %s with %s: %s", site_id, type(error).__name__, error
         )  # Log the exception class and text for issue triage.
         # Carry the reason, so the caller can tell a failure from a true zero count.
-        return PickList(reason=API_ERROR_REASON.format(error=type(error).__name__))
+        return PickList(reason=API_ERROR_REASON)
 
 
 def _fetch_wired_clients(mistapi, apisession, site_id: str) -> PickList:
@@ -584,10 +617,16 @@ def _fetch_wired_clients(mistapi, apisession, site_id: str) -> PickList:
         # no wired search in mistapi 0.64.0. The call raised AttributeError, so
         # every client pick list lost its wired half, and a site with only wired
         # clients offered an empty list. The function lives in `wired_clients`.
+        logger.info("Reading Mist API wired clients for site %s", site_id)  # Log before the external read.
         response = mistapi.api.v1.sites.wired_clients.searchSiteWiredClients(apisession, site_id)
+        failure = PickList.failure_for_response(
+            response, "searchSiteWiredClients", site_id
+        )  # Validate before client data access.
+        if failure is not None:  # A missing or refused response cannot look like no wired clients.
+            return failure  # Preserve the failed source for the client merger.
         raw = response.data if hasattr(response, "data") else []
         results = raw.get("results", []) if isinstance(raw, dict) else raw
-        return PickList(
+        picks = PickList(
             {
                 "mac": client.get("mac", ""),
                 "hostname": client.get("hostname", ""),
@@ -598,6 +637,8 @@ def _fetch_wired_clients(mistapi, apisession, site_id: str) -> PickList:
             }
             for client in results
         )
+        logger.debug("Prepared %d wired client rows for site %s", len(picks), site_id)  # Log the transform result.
+        return picks  # Return the validated and transformed wired client rows.
     except Exception as error:  # Keep the client list usable when the wired query fails.
         # Use logger.exception() so the full traceback appears at ERROR level.
         # Name the site ID so the operator knows which site's wired query failed.
@@ -605,4 +646,4 @@ def _fetch_wired_clients(mistapi, apisession, site_id: str) -> PickList:
             "Failed to list wired clients for site %s with %s: %s", site_id, type(error).__name__, error
         )  # Log the exception class and text for issue triage.
         # Carry the reason, so the caller can tell a failure from a true zero count.
-        return PickList(reason=API_ERROR_REASON.format(error=type(error).__name__))
+        return PickList(reason=API_ERROR_REASON)
