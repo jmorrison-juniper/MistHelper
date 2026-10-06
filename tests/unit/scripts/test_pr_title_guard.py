@@ -54,9 +54,9 @@ OUTPUTS = {
         ("absent", None, "environment", "TypeError"),
         ("empty", None, "environment", "TypeError"),
         ("missing", None, "file", "FileNotFoundError"),
-        ("directory", None, "file", "IsADirectoryError"),
+        ("directory", None, "file", "IsADirectoryError|PermissionError"),  # Windows denies a directory open.
         ("too_long", None, "file", "OSError"),
-        ("not_a_directory", None, "file", "NotADirectoryError"),
+        ("not_a_directory", None, "file", "NotADirectoryError|FileNotFoundError"),  # Windows reports absent.
         ("whitespace", None, "file", "FileNotFoundError"),
         ("file", b"\xffevent-secret", "utf8", "UnicodeDecodeError"),
         ("file", b"", "json", "JSONDecodeError"),
@@ -320,7 +320,8 @@ class TestEventInput:
         assert messages[:2] == OUTPUTS["failed_read_logs"]
         assert len(messages) == 3
         category_text, frames_text = messages[2].removeprefix("action=read_event category=").split(" frames=", 1)
-        assert json.loads(category_text) == category
+        accepted = category.split("|")  # One row can accept more than one platform error name.
+        assert json.loads(category_text) in accepted  # The exit code and the message stay identical on each platform.
         assert all(name in json.loads(frames_text) for name in ("main", "read_title")) is True
         assert (stdout + "".join(messages)).isascii() is True
         assert all("\n" not in message for message in messages) is True
