@@ -488,8 +488,8 @@ flowchart LR
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`APICoreFetchUtils.all_sites_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/access/api/api_core_fetch_utils.py) | Call |
-| GET | `/api/v1/sites/{site_id}/setting` | [`sites.setting.getSiteSetting`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/setting/get-site-setting) | [`SiteAnalyticsConfigurator._fetch_current_settings`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/intelligence/analytics/site_analytics_configurator.py) | Call |
-| PUT | `/api/v1/sites/{site_id}/setting` | [`sites.setting.updateSiteSettings`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/setting/update-site-settings) | [`SiteAnalyticsConfigurator._push_updated_settings`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/intelligence/analytics/site_analytics_configurator.py) | Call |
+| GET | `/api/v1/sites/{site_id}/setting` | [`sites.setting.getSiteSetting`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/setting/get-site-setting) | [`SiteAnalyticsConfigurator._fetch_current_settings`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/intelligence/analytics/site/site_analytics_configurator.py) | Call |
+| PUT | `/api/v1/sites/{site_id}/setting` | [`sites.setting.updateSiteSettings`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/setting/update-site-settings) | [`SiteAnalyticsConfigurator._push_updated_settings`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/intelligence/analytics/site/site_analytics_configurator.py) | Call |
 
 ## Menu 170
 
