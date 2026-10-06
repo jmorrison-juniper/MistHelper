@@ -529,21 +529,45 @@ class EndpointFamilyExporter:
         return [{"value": rawdata}]
 
     @staticmethod
-    def _persist(rawdata: Any, filename: str, operation: str) -> None:
+    def _persist(rawdata: Any, filename: str, operation: str) -> int:
         """Flatten and persist endpoint rows through the shared exporter."""
         mh = EndpointFamilyExporter._mist_helper()  # Load the shared DataExporter only when needed.
         rows = EndpointFamilyExporter._normalize(rawdata)  # Convert single-object responses to one row.
         logger.debug("%s returned %d normalized rows", operation, len(rows))  # Record the normalized size.
         if not rows:
             logger.info("! No %s data found", operation)  # Empty read results are valid.
-            return
+            return 0
         flattened_data = DataProcessingUtils.flatten_nested_fields(rows)  # Flatten nested JSON for tabular output.
         sanitized_data = DataProcessingUtils.escape_multiline(flattened_data)  # Keep line breaks safe in CSV cells.
-        mh.DataExporter.write_with_format_selection(
+        write_succeeded = mh.DataExporter.write_with_format_selection(
             sanitized_data, filename, api_function_name=operation
         )  # Persist data.
-        logger.info("! %d %s records exported to %s", len(rows), operation, filename)  # Tell the operator.
-        logger.debug("%s persisted %d rows to %s", operation, len(rows), filename)  # Record the write result.
+        written_count = len(sanitized_data) if write_succeeded else 0  # Count rows only after the writer confirms success.
+        if write_succeeded:
+            logger.info("! %d %s records exported to %s", written_count, operation, filename)  # Tell the operator.
+        else:
+            logger.error("! %s write failed after receiving %d records", operation, len(rows))  # Expose a write loss.
+        logger.debug("%s persisted %d rows to %s", operation, written_count, filename)  # Record the write result.
+        return written_count
+
+    @staticmethod
+    def _recover_unpaginated_object(response: Any, rawdata: Any, operation: str) -> Any:
+        """Recover a non-empty object that the SDK pagination helper cannot collect."""
+        if rawdata:
+            return rawdata
+        payload = getattr(response, "data", None)
+        if isinstance(payload, dict) and payload:
+            if payload.get("results") == []:
+                return rawdata
+            logger.warning(
+                "! %s returned one unpaginated object that the SDK pagination helper skipped",
+                operation,
+            )  # Expose the SDK shape mismatch.
+            return payload
+        if payload not in (None, [], {}):
+            shape = type(payload).__name__
+            logger.error("! Discarded non-empty %s payload with shape %s", operation, shape)  # Expose data loss.
+        return rawdata
 
     @staticmethod
     def _run(operation: _EndpointFamilyOp) -> None:
@@ -560,8 +584,21 @@ class EndpointFamilyExporter:
             logger.info("Calling %s for %s", operation.operation, arguments.label)  # Log before the SDK call.
             response = callable_obj(mh.apisession, *arguments.values)  # Call the SDK with identifiers in order.
             rawdata = mistapi.get_all(response=response, mist_session=mh.apisession)  # Collect every page.
+            rawdata = EndpointFamilyExporter._recover_unpaginated_object(
+                response, rawdata, operation.operation
+            )  # Recover documented objects that the SDK helper drops.
             filename = f"{operation.operation}_{arguments.label.replace(' ', '_')}.csv"  # Build a readable export name.
-            EndpointFamilyExporter._persist(rawdata, filename, operation.operation)  # Write the selected output format.
+            received_count = len(EndpointFamilyExporter._normalize(rawdata))  # Count records before persistence.
+            written_count = EndpointFamilyExporter._persist(
+                rawdata, filename, operation.operation
+            )  # Write the selected output format.
+            if received_count != written_count:
+                logger.error(
+                    "! Incomplete %s export: received %d records, wrote %d",
+                    operation.operation,
+                    received_count,
+                    written_count,
+                )  # Expose a received-to-written count mismatch.
         except Exception as exc:
             logging.exception(
                 "Error running %s for %s", operation.operation, arguments.label

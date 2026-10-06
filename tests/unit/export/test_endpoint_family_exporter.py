@@ -170,6 +170,23 @@ def test_persist_wraps_single_object_response() -> None:
     assert kwargs["api_function_name"] == "getOrgSso"
 
 
+def test_persist_reports_failed_write_count(caplog: pytest.LogCaptureFixture) -> None:
+    """A failed writer must report zero written rows."""
+    fake = _fake_mist_helper()
+    fake.DataExporter.write_with_format_selection.return_value = False
+    with patch.object(EndpointFamilyExporter, "_mist_helper", return_value=fake):
+        written_count = EndpointFamilyExporter._persist([{"id": "one"}], "one.csv", "getOrgSso")
+    assert written_count == 0
+    assert "write failed after receiving 1 records" in caplog.text
+
+
+def test_recover_logs_a_discarded_non_object_payload(caplog: pytest.LogCaptureFixture) -> None:
+    """A non-empty payload that the SDK cannot collect must produce a loud error."""
+    response = MagicMock(data="unexpected")
+    assert EndpointFamilyExporter._recover_unpaginated_object(response, [], "getOrgSso") == []
+    assert "Discarded non-empty getOrgSso payload with shape str" in caplog.text
+
+
 def test_resolve_returns_none_for_a_missing_module() -> None:
     """A bad SDK module path must not crash the menu."""
     bad = _EndpointFamilyOp("listNothing", "mistapi.api.v1.not_a_module", ("org_id", "item_id"), (1,))
@@ -544,6 +561,70 @@ def test_real_trend_generic_payloads_repeat_exact_dispatch(
     assert writer.call_args_list == [call(expected, filename, api_function_name=operation)] * 2
 
 
+@pytest.fixture
+def documented_trend_body(trend_case: tuple[str, str, str]) -> dict[str, object]:
+    """Return the documented object shape for the selected trend operation."""
+    operation, _uri, _filename = trend_case
+    if operation == "getSiteSleSummaryTrend":
+        return {
+            "start": 1_728_144_000,
+            "end": 1_728_147_600,
+            "sle": {
+                "interval": 300,
+                "name": "coverage",
+                "x_label": "time",
+                "y_label": "value",
+                "samples": {"degraded": [0], "total": [1], "value": [42]},
+            },
+            "classifiers": [],
+        }
+    return {
+        "start": 1_728_144_000,
+        "end": 1_728_147_600,
+        "metric": "coverage",
+        "classifier": {
+            "interval": 300,
+            "name": "low-rssi",
+            "x_label": "time",
+            "y_label": "duration",
+            "samples": {"degraded": [0], "duration": [42], "total": [1]},
+        },
+    }
+
+
+@pytest.mark.parametrize("trend_case", TREND_ROUTES, indirect=True, ids=[row[0] for row in TREND_ROUTES])
+def test_real_trend_documented_object_exports_one_record(
+    trend_case: tuple[str, str, str],
+    trend_answers: list[str],
+    documented_trend_body: dict[str, object],
+    local_trend_boundaries: tuple[APISession, MagicMock, MagicMock],
+) -> None:
+    """Documented non-empty trend objects must reach the existing writer."""
+    from unittest.mock import call
+
+    _operation, uri, filename = trend_case
+    _session, transport, writer = local_trend_boundaries
+    url = LOCAL_TREND_HOST + uri
+    transport.side_effect = {
+        LOCAL_SITE_URL: _trend_response(LOCAL_SITE_URL, [{"id": "site-3335", "name": "Local Site"}]),
+        url: _trend_response(url, documented_trend_body),
+    }.__getitem__
+    with patch("builtins.input", side_effect=trend_answers):
+        EndpointFamilyExporter.site_sle_endpoints()
+    assert transport.call_args_list == [call(LOCAL_SITE_URL), call(url)]
+    assert writer.call_count == 1
+    assert writer.call_args.kwargs["api_function_name"] == _operation
+    assert writer.call_args.args[1] == filename
+    row = writer.call_args.args[0][0]
+    assert row["start"] == documented_trend_body["start"]
+    assert row["end"] == documented_trend_body["end"]
+    if _operation == "getSiteSleSummaryTrend":
+        assert row["sle_samples_value"] == "42"
+    else:
+        assert row["metric"] == "coverage"
+        assert row["classifier_samples_duration"] == "42"
+
+
 @pytest.mark.parametrize("trend_case", TREND_ROUTES, indirect=True, ids=[row[0] for row in TREND_ROUTES])
 @pytest.mark.parametrize(
     "query,query_suffix",
@@ -578,7 +659,7 @@ def test_real_trend_optional_queries(
 
 @pytest.fixture
 def trend_empty_payload(trend_case: tuple[str, str, str], empty_body: object) -> tuple[dict[str, Response], list[str]]:
-    """Preserve empty SDK results and dictionaries without a results list."""
+    """Preserve empty SDK results without treating documented objects as empty."""
     _operation, uri, _filename = trend_case
     url = LOCAL_TREND_HOST + uri
     return {
@@ -588,13 +669,13 @@ def trend_empty_payload(trend_case: tuple[str, str, str], empty_body: object) ->
 
 
 @pytest.mark.parametrize("trend_case", TREND_ROUTES, indirect=True, ids=[row[0] for row in TREND_ROUTES])
-@pytest.mark.parametrize("empty_body", ([], {"results": []}, {"summary": {"value": 42}}))
+@pytest.mark.parametrize("empty_body", ([], {"results": []}))
 def test_real_trend_empty_results_skip_output(
     trend_answers: list[str],
     trend_empty_payload: tuple[dict[str, Response], list[str]],
     local_trend_boundaries: tuple[APISession, MagicMock, MagicMock],
 ) -> None:
-    """Preserve current SDK collection behavior, not the separate object-response repair."""
+    """True empty results must not create an export file."""
     from unittest.mock import call
 
     _session, transport, writer = local_trend_boundaries
