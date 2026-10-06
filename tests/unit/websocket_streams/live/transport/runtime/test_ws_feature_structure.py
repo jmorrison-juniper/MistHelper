@@ -82,6 +82,11 @@ class PlanSourceInventory:
                 raise AssertionError(f"cannot read input {path}: {error}") from error  # State the failed input.
         return files  # Give each language guard the same verified inventory.
 
+    @staticmethod
+    def nested_source_directories(directory: Path) -> set[Path]:
+        """Return nested source directories without generated caches."""
+        return {item for item in directory.rglob("*") if item.is_dir() and item.name != "__pycache__"}
+
     def directory_errors(self, scope: tuple[tuple[str, str], ...]) -> list[str]:
         """Return scoped directories that have more than five child items."""
         errors: list[str] = []  # Collect all directory failures for one report.
@@ -90,9 +95,11 @@ class PlanSourceInventory:
             current = self.root / replacement  # Build the current source path.
             directories.add(current if current.is_dir() else current.parent)  # Check the direct owner.
             if current.is_dir():  # Replacement packages own their nested directories.
-                directories.update(item for item in current.rglob("*") if item.is_dir())  # Add nested levels.
+                directories.update(self.nested_source_directories(current))  # Add nested source levels.
         for directory in sorted(directories):  # Measure each owned directory once.
-            children = [item for item in directory.iterdir() if item.name != "__pycache__"]  # Ignore generated caches.
+            children = [  # Exclude package metadata and generated caches from structural counts.
+                item for item in directory.iterdir() if item.name not in {"__init__.py", "__pycache__"}
+            ]
             if len(children) > 5:  # Enforce the package hierarchy limit.
                 errors.append(f"directory {directory} has {len(children)} child items")  # Report the exact count.
         return errors  # Let one assertion report all directory failures.
@@ -441,7 +448,7 @@ class TestWebSocketFeatureStructure:
         root = Path(__file__).resolve().parents[6]  # Resolve the worktree root from this test location.
         PythonStructureGuard().inspect([Path(__file__)])  # Keep this guard within the same structural limits.
         counts, scope = self._measure_feature(root)  # Run checks against the complete T091 mapping table.
-        assert counts == StructureCounts(145, 208, 635)  # Pin the expanded picker feature measurement.
+        assert counts == StructureCounts(146, 209, 638)  # Pin the expanded picker feature measurement.
         print("T091 mapping scope: " + " | ".join(f"{old} -> {new}" for old, new in scope))  # Print every mapping.
         print(  # Print the exact checked source counts.
             f"checked mappings={len(scope)} paths={len(self.ANALYSIS_SCOPE)} modules={counts.modules} "

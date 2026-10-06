@@ -15,7 +15,7 @@ from src.mist.realtime.websocket_streams.catalog.sdk_annotation import SdkAnnota
 from src.mist.realtime.websocket_streams.catalog.utilities.utility_catalog import (
     UtilityCatalog,
 )  # Read installed SDK signatures.
-from src.mist.realtime.websocket_streams.catalog.utility_text import UtilityText  # The class under test.
+from src.mist.realtime.websocket_streams.catalog.utilities.utility_text import UtilityText  # The class under test.
 
 
 class SampleMode(Enum):
