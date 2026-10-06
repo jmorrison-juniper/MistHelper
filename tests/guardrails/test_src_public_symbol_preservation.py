@@ -7,11 +7,13 @@ import io  # Give tarfile an in-memory archive stream.
 import subprocess  # Read the base source tree through Git.
 import tarfile  # Read all base modules from one Git archive command.
 from pathlib import Path  # Resolve the current repository and moved modules.
+from unittest.mock import Mock  # Simulate exact Git outcomes in direct guard tests.
 
 import pytest  # Prove that the guard still refuses an unknown package name.
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]  # Resolve the active worktree from this guard file.
 SOURCE_ROOT = REPOSITORY_ROOT / "src"  # Read current modules from the refactored source tree.
+MERGE_BASE_DEEPEN = "100"  # Fetch bounded history beyond the shallow checkout boundary.
 PACKAGE_GROUPS = {  # Map every old direct package to its new domain and group.
     "foundation/runtime": {"bootstrap", "config", "input", "time", "validation"},
     "foundation/models": {"data", "dataclasses"},
@@ -69,14 +71,61 @@ def baseline_ref() -> str:
     reports no phantom symbol loss.
     """
     ensure_origin_main()  # Make the baseline ref available before the merge-base read.
-    result = subprocess.run(
+    result = merge_base_result()  # Read the common ancestor before changing the shallow checkout.
+    if result.returncode != 0:  # A shallow checkout may hide the shared ancestor.
+        deepen_origin_history()  # Fetch only the current commit and main ancestry.
+        result = merge_base_result()  # Retry after Git adds the missing history.
+    if result.returncode != 0:  # A failed retry means these histories have no readable common ancestor.
+        raise RuntimeError("No merge base exists between HEAD and origin/main after targeted history deepening.")
+    return result.stdout.strip()  # Supply the exact commit that both branches share.
+
+
+def merge_base_result() -> subprocess.CompletedProcess[str]:
+    """Return Git's merge-base result without hiding the no-common-ancestor case."""
+    return subprocess.run(
         ["git", "merge-base", "HEAD", "refs/remotes/origin/main"],
+        cwd=REPOSITORY_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )  # Preserve the return code so a shallow history can be deepened.
+
+
+def deepen_origin_history() -> None:
+    """Deepen the current commit and main ref so a shallow checkout can find its merge base."""
+    head_commit = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
         cwd=REPOSITORY_ROOT,
         check=True,
         capture_output=True,
         text=True,
-    )  # Fail if Git cannot place this branch against the baseline.
-    return result.stdout.strip()  # Supply the exact commit that both branches share.
+    ).stdout.strip()  # Identify the checked-out commit without relying on a local branch name.
+    result = subprocess.run(
+        [
+            "git",
+            "fetch",
+            f"--deepen={MERGE_BASE_DEEPEN}",
+            "origin",
+            head_commit,
+            "+refs/heads/main:refs/remotes/origin/main",
+        ],
+        cwd=REPOSITORY_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )  # Fetch only the checked-out commit and the required baseline branch.
+    if result.returncode != 0:  # A failed fetch cannot support a safe symbol comparison.
+        raise RuntimeError(
+            f"Cannot deepen required Git history. Fetch exited with code {result.returncode}."
+        )  # Stop with an explicit required-input failure.
+
+
+def read_archived_module(archive: tarfile.TarFile, member: tarfile.TarInfo) -> str:
+    """Read one required module from the baseline archive or fail with its path."""
+    extracted = archive.extractfile(member)  # Read the required archived module.
+    if extracted is None:  # A missing member means the archive input is incomplete.
+        raise AssertionError(f"Cannot read archived module {member.name}")  # Fail with the required path.
+    return extracted.read().decode("utf-8")  # Return source text for the module symbol check.
 
 
 def trailing_commit_count(baseline: str) -> int:
@@ -187,17 +236,12 @@ def test_moved_modules_lose_no_module_level_symbol() -> None:
                 not member.isfile() or not member.name.endswith(".py") or member.name == "src/__init__.py"
             ):  # Select moved Python modules only.
                 continue  # Ignore directories, non-Python files, and the unchanged source initializer.
-            extracted = source_archive.extractfile(member)  # Open the archived module content.
-            if extracted is None:  # Detect an unreadable required base module explicitly.
-                raise AssertionError(
-                    f"Cannot read archived module {member.name}"
-                )  # Fail with the missing archive entry.
             new_path = current_path(member.name)  # Resolve the canonical current module path.
             assert (
                 new_path.is_file()
             ), f"Missing moved module for {member.name}: {new_path}"  # Reject an incomplete move.
             old_symbols = module_symbols(
-                extracted.read().decode("utf-8"), member.name
+                read_archived_module(source_archive, member), member.name
             )  # Read the base module symbol set.
             new_symbols = module_symbols(
                 new_path.read_text(encoding="utf-8"), str(new_path)
@@ -325,3 +369,77 @@ def test_trailing_notice_names_the_count_and_the_remedy() -> None:
     notice = trailing_notice(7)  # Model a worktree that trails the baseline by seven commits.
     assert "7 commit(s)" in notice, f"Checked 1 notice. The count is absent from {notice!r}."
     assert "Rebase onto origin/main" in notice, f"Checked 1 notice. The remedy is absent from {notice!r}."
+
+
+def test_baseline_ref_deepens_shallow_history(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Require a targeted history fetch when a shallow checkout hides the merge base."""
+    mocked_run = Mock(  # Model the initial shallow failure and the successful retry.
+        side_effect=[
+            subprocess.CompletedProcess([], 0),  # The origin main ref already exists.
+            subprocess.CompletedProcess([], 1, "", ""),  # The shallow history has no visible merge base.
+            subprocess.CompletedProcess([], 0, "head-sha\n", ""),  # Read the checked-out commit.
+            subprocess.CompletedProcess([], 0, "", ""),  # Deepen only the required history.
+            subprocess.CompletedProcess([], 0, "base-sha\n", ""),  # Find the shared commit after deepening.
+        ]
+    )
+    monkeypatch.setattr(subprocess, "run", mocked_run)  # Replace Git so the shallow path stays deterministic.
+
+    baseline = baseline_ref()  # Exercise the same retry path used by the guard.
+
+    assert baseline == "base-sha", f"Checked 1 merge base. Read {baseline!r}."
+    assert mocked_run.call_args_list[3].args[0] == [  # Inspect the required targeted fetch.
+        "git",
+        "fetch",
+        f"--deepen={MERGE_BASE_DEEPEN}",
+        "origin",
+        "head-sha",
+        "+refs/heads/main:refs/remotes/origin/main",
+    ], f"Checked 1 history fetch. Read {mocked_run.call_args_list[3].args[0]!r}."
+
+
+def test_baseline_ref_rejects_histories_without_a_common_ancestor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Require an explicit failure when targeted deepening finds no common ancestor."""
+    mocked_run = Mock(  # Model a successful fetch between unrelated repository histories.
+        side_effect=[
+            subprocess.CompletedProcess([], 0),  # The origin main ref exists.
+            subprocess.CompletedProcess([], 1, "", ""),  # The shallow graph has no visible merge base.
+            subprocess.CompletedProcess([], 0, "head-sha\n", ""),  # Read the checked-out commit.
+            subprocess.CompletedProcess([], 0, "", ""),  # Fetch the requested history successfully.
+            subprocess.CompletedProcess([], 1, "", ""),  # The full targeted graph still has no merge base.
+        ]
+    )
+    monkeypatch.setattr(subprocess, "run", mocked_run)  # Isolate the fail-closed decision from Git state.
+
+    with pytest.raises(RuntimeError, match="No merge base exists"):
+        baseline_ref()  # Refuse to compare symbols when the required ancestor is absent.
+
+
+def test_baseline_ref_returns_an_existing_merge_base_without_fetching(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Require normal histories to use their existing merge base without a fetch."""
+    mocked_run = Mock(  # Model an ordinary checkout with visible shared history.
+        side_effect=[
+            subprocess.CompletedProcess([], 0),  # The origin main ref exists.
+            subprocess.CompletedProcess([], 0, "base-sha\n", ""),  # Git finds the merge base.
+        ]
+    )
+    monkeypatch.setattr(subprocess, "run", mocked_run)  # Keep the normal path independent of the host repository.
+
+    baseline = baseline_ref()  # Read the existing common ancestor.
+
+    assert baseline == "base-sha", f"Checked 1 merge base. Read {baseline!r}."
+    assert mocked_run.call_count == 2, f"Checked 2 Git calls. Read {mocked_run.call_count}."
+
+
+def test_read_archived_module_rejects_unreadable_required_input() -> None:
+    """Require an explicit failure when Git archive cannot read a tracked module."""
+    archive = Mock(spec=tarfile.TarFile)  # Model the required archive input.
+    member = Mock(spec=tarfile.TarInfo)  # Model one required Python module.
+    member.name = "src/example.py"  # Name the unreadable required module.
+    archive.extractfile.return_value = None  # Report that Git archive cannot read this module.
+
+    with pytest.raises(AssertionError, match="Cannot read archived module src/example.py"):
+        read_archived_module(archive, member)  # Refuse to treat missing source as a successful comparison.
