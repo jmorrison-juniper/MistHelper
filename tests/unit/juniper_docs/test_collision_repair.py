@@ -38,6 +38,12 @@ _UNCAT_ROOTS = (
     "https://www.juniper.net/documentation/us/en/software/topology-gamma/",
 )
 _SHARED_HREF = "topology-summary.pdf"  # Every uncategorized index page names this companion PDF.
+_PDF_FIXTURE = Path(__file__).parent / "fixtures" / "minimal.pdf"  # The shared offline PDF fixture.
+
+
+def _pdf_payload(marker: bytes) -> bytes:
+    """Return a valid PDF with a distinct trailing comment marker."""
+    return _PDF_FIXTURE.read_bytes() + b"\n% " + marker + b"\n"  # Keep parser structure and vary the bytes.
 
 
 def _downloader(tmp_path: Path, owners: dict[str, str], payloads: dict[str, bytes]) -> CorpusDownloader:
@@ -59,7 +65,7 @@ def test_two_urls_same_name_produce_two_files(tmp_path: Path) -> None:
     """Two different URLs with one base name each write a distinct file (path one)."""
     url_a = "https://x/apstra4.2/apstra-user-guide.pdf"  # The first version URL.
     url_b = "https://x/apstra6.2/apstra-user-guide.pdf"  # The second version URL.
-    payloads = {url_a: b"%PDF-A first version body", url_b: b"%PDF-B second version longer body"}
+    payloads = {url_a: _pdf_payload(b"first version"), url_b: _pdf_payload(b"second version")}
     owners: dict[str, str] = {}  # The path-to-URL owner map for the run.
     downloader = _downloader(tmp_path, owners, payloads)  # An owner-aware downloader.
     folder = tmp_path / "guides"  # Both versions target the same category folder.
@@ -74,7 +80,7 @@ def test_two_urls_same_name_produce_two_files(tmp_path: Path) -> None:
 def test_same_url_twice_downloads_once(tmp_path: Path) -> None:
     """The same URL downloaded twice keeps one file and skips the second fetch (resume)."""
     url = "https://x/apstra4.2/apstra-user-guide.pdf"  # One resolved PDF URL.
-    payloads = {url: b"%PDF-A single body"}  # One scripted payload for the URL.
+    payloads = {url: _pdf_payload(b"single body")}  # One scripted payload for the URL.
     owners: dict[str, str] = {}  # The path-to-URL owner map for the run.
     downloader = _downloader(tmp_path, owners, payloads)  # An owner-aware downloader.
     folder = tmp_path / "guides"  # The category folder for the document.
@@ -89,7 +95,7 @@ def test_two_urls_identical_bytes_produce_one_file(tmp_path: Path) -> None:
     """Two different URLs with identical bytes keep one file (the ctpview case)."""
     url_a = "https://x/ctp9.1/ctpview-server.pdf"  # The first ctpview URL.
     url_b = "https://x/ctp/ctpview-server.pdf"  # The second ctpview URL.
-    body = b"%PDF ctpview identical bytes for both urls"  # One byte payload for both URLs.
+    body = _pdf_payload(b"ctpview identical bytes")  # One byte payload for both URLs.
     owners: dict[str, str] = {}  # The path-to-URL owner map for the run.
     downloader = _downloader(tmp_path, owners, {url_a: body, url_b: body})  # Owner-aware.
     folder = tmp_path / "uncategorized" / "configuration"  # The shared destination folder.
@@ -151,7 +157,7 @@ def _fake_for_apstra() -> tuple[FakeCatalogClient, str, str]:
     pdf_a = _APSTRA_A + href  # The first version resolves to its own PDF URL.
     pdf_b = _APSTRA_B + href  # The second version resolves to its own PDF URL.
     texts = {_APSTRA_A: f'<a href="{href}">PDF</a>', _APSTRA_B: f'<a href="{href}">PDF</a>'}
-    payloads = {pdf_a: b"%PDF-1.4 apstra 4.2 body", pdf_b: b"%PDF-1.4 apstra 6.2 longer body"}
+    payloads = {pdf_a: _pdf_payload(b"apstra 4.2"), pdf_b: _pdf_payload(b"apstra 6.2")}
     return FakeCatalogClient(texts=texts, payloads=payloads), pdf_a, pdf_b
 
 
@@ -194,7 +200,7 @@ def test_real_apstra_collision_keeps_every_version(tmp_path: Path) -> None:
     """The recorded apstra collision keeps one file for each distinct version (evidence)."""
     urls = _distinct_urls_for(_load_smoke_manifest(), "apstra-user-guide.pdf")  # Real competing URLs.
     assert len(urls) >= 2  # The recorded run mapped several versions onto one path.
-    payloads = {url: b"%PDF-1.4 apstra unique " + bytes([index]) * (index + 5) for index, url in enumerate(urls)}
+    payloads = {url: _pdf_payload(b"apstra unique " + str(index).encode()) for index, url in enumerate(urls)}
     owners: dict[str, str] = {}  # The path-to-URL owner map for the run.
     downloader = _downloader(tmp_path, owners, payloads)  # An owner-aware downloader.
     folder = tmp_path / "uncategorized" / "apstra__configuration__routing"  # The recorded label folder.
@@ -209,7 +215,7 @@ def test_real_ctpview_identical_stays_one_file(tmp_path: Path) -> None:
     """The recorded ctpview case keeps one file because every URL holds identical bytes (evidence)."""
     urls = _distinct_urls_for(_load_smoke_manifest(), "ctpview-server.pdf")  # Real competing URLs.
     assert len(urls) >= 2  # The recorded run reached ctpview from more than one URL.
-    body = b"%PDF-1.4 ctpview identical bytes for every url"  # One byte payload for every URL.
+    body = _pdf_payload(b"ctpview identical bytes")  # One byte payload for every URL.
     owners: dict[str, str] = {}  # The path-to-URL owner map for the run.
     downloader = _downloader(tmp_path, owners, {url: body for url in urls})  # Owner-aware downloader.
     folder = tmp_path / "uncategorized" / "configuration"  # The recorded ctpview label folder.
@@ -233,9 +239,8 @@ def _collisions_by_path(manifest: list[dict]) -> dict[str, list[str]]:
 def _distinct_payloads(urls: list[str]) -> dict[str, bytes]:
     """Return a distinct valid PDF payload for each URL, so each is a distinct document."""
     return {
-        url: b"%PDF-1.4 distinct " + str(index).encode() + b" " + bytes([index % 240 + 1]) * (index + 4)
-        for index, url in enumerate(urls)
-    }  # A unique body and a unique length per URL model distinct documents.
+        url: _pdf_payload(b"distinct " + str(index).encode()) for index, url in enumerate(urls)
+    }  # A unique trailing marker per URL models distinct documents.
 
 
 def test_real_every_recorded_collision_keeps_every_distinct_url(tmp_path: Path) -> None:
@@ -266,8 +271,8 @@ def _fake_for_uncategorized(roots: tuple[str, ...]) -> FakeCatalogClient:
     """Return a client that serves an index page and a distinct PDF for each root."""
     texts = {root: f'<a href="{_SHARED_HREF}">PDF</a>' for root in roots}  # One index page per root.
     payloads = {
-        root + _SHARED_HREF: b"%PDF-1.4 body " + bytes([index + 1]) * (index + 5) for index, root in enumerate(roots)
-    }  # A distinct body and length per root, so each root is a distinct document with one file name.
+        root + _SHARED_HREF: _pdf_payload(b"body " + str(index).encode()) for index, root in enumerate(roots)
+    }  # A distinct PDF per root gives each document the same file name.
     return FakeCatalogClient(texts=texts, payloads=payloads)  # A client scripted for every root.
 
 
