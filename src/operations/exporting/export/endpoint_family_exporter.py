@@ -433,6 +433,108 @@ ALL_STAGE_TWO_ENDPOINT_OPS: tuple[_EndpointFamilyOp, ...] = (
 class EndpointFamilyExporter:
     """Exporter for remaining endpoint issues from issue #1807."""
 
+    _PROVEN_OBJECT_OPERATIONS: frozenset[str] = frozenset(
+        {
+            "GetOrgTicketAttachment",
+            "adoptOrgJsiDevice",
+            "generateSecretFor2faVerification",
+            "getApiToken",
+            "getInstallerDeviceVirtualChassis",
+            "getMspAdmin",
+            "getMspInventoryByMac",
+            "getMspOrg",
+            "getMspOrgGroup",
+            "getMspSamlMetadata",
+            "getMspSso",
+            "getOauth2AuthorizationUrlForLogin",
+            "getOauth2UrlForLinking",
+            "getOrgAAMWProfile",
+            "getOrgAlarmTemplate",
+            "getOrgAntivirusProfile",
+            "getOrgApiToken",
+            "getOrgAptemplate",
+            "getOrgAsset",
+            "getOrgAssetFilter",
+            "getOrgDeviceUpgrade",
+            "getOrgEvpnTopology",
+            "getOrgGuestAuthorization",
+            "getOrgIdpProfile",
+            "getOrgMarvisClientInvite",
+            "getOrgMxEdge",
+            "getOrgMxEdgeCluster",
+            "getOrgMxEdgeUpgrade",
+            "getOrgMxEdgeVmParams",
+            "getOrgMxTunnel",
+            "getOrgNacPortal",
+            "getOrgNacPortalSamlMetadata",
+            "getOrgNacRule",
+            "getOrgNacTag",
+            "getOrgNetwork",
+            "getOrgNetworkTemplate",
+            "getOrgOauthAppLinkedStatus",
+            "getOrgOtherDevice",
+            "getOrgOtherDeviceStats",
+            "getOrgPsk",
+            "getOrgPskPortal",
+            "getOrgRfTemplate",
+            "getOrgSamlMetadata",
+            "getOrgSecPolicy",
+            "getOrgService",
+            "getOrgServicePolicy",
+            "getOrgSiteGroup",
+            "getOrgSso",
+            "getOrgSsoRole",
+            "getOrgSsrUpgrade",
+            "getOrgTemplate",
+            "getOrgUiSetting",
+            "getOrgUserMac",
+            "getOrgVpn",
+            "getOrgWLAN",
+            "getOrgWebhook",
+            "getOrgWxRule",
+            "getOrgWxTag",
+            "getOrgWxTunnel",
+            "getSdkInvite",
+            "getSdkTemplate",
+            "getSiteApAutoOrientation",
+            "getSiteApAutoPlacement",
+            "getSiteAssetStats",
+            "getSiteDeviceConfigCmd",
+            "getSiteEvpnTopology",
+            "getSiteGuestAuthorization",
+            "getSiteMapAutoZoneStatus",
+            "getSiteMxEdgeStats",
+            "getSitePsk",
+            "getSiteRogueAP",
+            "getSiteRssiZoneStats",
+            "getSiteSdkStats",
+            "getSiteSleClassifierSummaryTrend",
+            "getSiteSleHistogram",
+            "getSiteSleImpactSummary",
+            "getSiteSleSummaryTrend",
+            "getSiteSleThreshold",
+            "getSiteSsrUpgrade",
+            "getSiteUiSetting",
+            "getSiteVBeacon",
+            "getSiteWebhook",
+            "getSiteWlan",
+            "getSiteWxRule",
+            "getSiteWxTag",
+            "getSiteWxTunnel",
+            "getSiteZone",
+            "getSiteZoneStats",
+            "listSiteSleImpactedApplications",
+            "listSiteSleImpactedAps",
+            "listSiteSleImpactedChassis",
+            "listSiteSleImpactedGateways",
+            "listSiteSleImpactedInterfaces",
+            "listSiteSleImpactedSwitches",
+            "listSiteSleImpactedWiredClients",
+            "listSiteSleImpactedWirelessClients",
+            "listSiteSlesMetrics",
+        }
+    )  # OpenAPI schemas with declared object properties prove these response shapes.
+
     @staticmethod
     def _mist_helper() -> Any:
         """Return the source dependency resolver."""
@@ -542,7 +644,7 @@ class EndpointFamilyExporter:
         write_succeeded = mh.DataExporter.write_with_format_selection(
             sanitized_data, filename, api_function_name=operation
         )  # Persist data.
-        written_count = len(sanitized_data) if write_succeeded else 0  # Count rows only after the writer confirms success.
+        written_count = len(sanitized_data) if write_succeeded else 0  # Count rows after confirmed success.
         if write_succeeded:
             logger.info("! %d %s records exported to %s", written_count, operation, filename)  # Tell the operator.
         else:
@@ -556,17 +658,25 @@ class EndpointFamilyExporter:
         if rawdata:
             return rawdata
         payload = getattr(response, "data", None)
+        status = getattr(response, "status_code", "unknown")  # Report the response boundary without payload content.
         if isinstance(payload, dict) and payload:
             if payload.get("results") == []:
                 return rawdata
-            logger.warning(
-                "! %s returned one unpaginated object that the SDK pagination helper skipped",
-                operation,
-            )  # Expose the SDK shape mismatch.
-            return payload
+            if operation in EndpointFamilyExporter._PROVEN_OBJECT_OPERATIONS:
+                logger.warning(
+                    "! %s returned 1 proven object with status %s that the SDK pagination helper skipped",
+                    operation,
+                    status,
+                )  # Expose the SDK shape mismatch.
+                return payload
         if payload not in (None, [], {}):
             shape = type(payload).__name__
-            logger.error("! Discarded non-empty %s payload with shape %s", operation, shape)  # Expose data loss.
+            logger.error(
+                "! Discarded 1 non-empty %s payload with status %s and shape %s",
+                operation,
+                status,
+                shape,
+            )  # Expose data loss.
         return rawdata
 
     @staticmethod

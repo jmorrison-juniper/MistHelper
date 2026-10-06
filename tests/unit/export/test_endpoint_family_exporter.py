@@ -36,6 +36,14 @@ EXPECTED_BUCKET_COUNTS = {
     "MSP_DETAIL": 10,
     "OTHER_DETAIL": 6,
 }
+EXPECTED_OBJECT_COUNTS = {
+    "SITE_SLE": 14,
+    "SITE_MAP": 3,
+    "SITE_DETAIL": 19,
+    "ORG_DETAIL": 52,
+    "MSP_DETAIL": 5,
+    "OTHER_DETAIL": 4,
+}
 GROUPS = {
     "SITE_SLE": _SITE_SLE_OPS,
     "SITE_MAP": _SITE_MAP_OPS,
@@ -75,6 +83,16 @@ def test_group_counts_match_discovery() -> None:
     """The shipped tables must match the measured stage-two groups."""
     assert {name: len(entries) for name, entries in GROUPS.items()} == EXPECTED_BUCKET_COUNTS
     assert len(ALL_STAGE_TWO_ENDPOINT_OPS) == 132
+
+
+def test_proven_object_counts_match_openapi_measurement() -> None:
+    """The allowlist must retain the measured OpenAPI object counts."""
+    actual = {
+        name: sum(entry.operation in EndpointFamilyExporter._PROVEN_OBJECT_OPERATIONS for entry in entries)
+        for name, entries in GROUPS.items()
+    }
+    assert actual == EXPECTED_OBJECT_COUNTS
+    assert len(EndpointFamilyExporter._PROVEN_OBJECT_OPERATIONS) == 97
 
 
 def test_operation_table_has_no_duplicate_operation() -> None:
@@ -182,9 +200,21 @@ def test_persist_reports_failed_write_count(caplog: pytest.LogCaptureFixture) ->
 
 def test_recover_logs_a_discarded_non_object_payload(caplog: pytest.LogCaptureFixture) -> None:
     """A non-empty payload that the SDK cannot collect must produce a loud error."""
-    response = MagicMock(data="unexpected")
+    response = MagicMock(data="unexpected", status_code=200)
     assert EndpointFamilyExporter._recover_unpaginated_object(response, [], "getOrgSso") == []
-    assert "Discarded non-empty getOrgSso payload with shape str" in caplog.text
+    assert "Discarded 1 non-empty getOrgSso payload" in caplog.text
+    assert "status 200" in caplog.text
+    assert "shape str" in caplog.text
+
+
+def test_recover_rejects_an_unproven_object_payload(caplog: pytest.LogCaptureFixture) -> None:
+    """An object without a declared OpenAPI shape must not become export success."""
+    response = MagicMock(data={"A1": 1, "DO": 0}, status_code=200)
+    result = EndpointFamilyExporter._recover_unpaginated_object(response, [], "getSiteDeviceIotPort")
+    assert result == []
+    assert "Discarded 1 non-empty getSiteDeviceIotPort payload" in caplog.text
+    assert "status 200" in caplog.text
+    assert "shape dict" in caplog.text
 
 
 def test_resolve_returns_none_for_a_missing_module() -> None:
