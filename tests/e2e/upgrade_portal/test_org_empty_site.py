@@ -123,7 +123,7 @@ def test_an_empty_last_site_stops_the_save_and_the_operator_recovers(empty_site_
     page.get_by_test_id("org-upgrade-review").click()  # Save the plan.
     page.wait_for_url(re.compile(r".*/upgrade/org/confirm$"))  # The save accepted the plan.
     confirm = page.get_by_test_id("org-upgrade-confirm")  # The summary card of the confirm page.
-    sync_api.expect(confirm).to_contain_text(f"Strategy: {CHOSEN_STRATEGY}")  # The choice, not a default.
+    sync_api.expect(confirm).to_contain_text("Strategy: One device at a time")  # The page uses the plain strategy name.
     sync_api.expect(confirm).to_contain_text("Sites: 1")  # The plan covers the one site that holds devices.
     sync_api.expect(page.get_by_test_id(f"org-upgrade-precheck-row-{SITE_ID}")).to_be_visible()  # The site row.
     sync_api.expect(page.get_by_test_id(f"org-upgrade-precheck-row-{EMPTY_SITE_ID}")).to_have_count(0)  # No row.

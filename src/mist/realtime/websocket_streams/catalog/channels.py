@@ -2,7 +2,7 @@
 
 Why:
     Issue #3551. The portal must start streams from checked catalog keys only.
-    This module keeps the 18 channel definitions in page order. It keeps each
+    This module keeps the 16 channel definitions in page order. It keeps each
     Mist channel path on the server.
 """
 
@@ -52,15 +52,6 @@ class ChannelCatalog:
             None,
         ),
         (
-            "org.mxedges",
-            "organization",
-            "Organization Mist Edges",
-            "Live Mist Edge events for the organization.",
-            "/orgs/{org_id}/mxedges",
-            (),
-            None,
-        ),
-        (
             "site.stats.clients",
             "site",
             "Client statistics",
@@ -102,15 +93,6 @@ class ChannelCatalog:
             "Site Mist Edge statistics",
             "Live Mist Edge statistics for each selected site.",
             "/sites/{site_id}/stats/mxedges",
-            (("site_id", "Site", "sites"),),
-            "site_id",
-        ),
-        (
-            "site.mxedges",
-            "site",
-            "Site Mist Edges",
-            "Live Mist Edge events for each selected site.",
-            "/sites/{site_id}/mxedges",
             (("site_id", "Site", "sites"),),
             "site_id",
         ),

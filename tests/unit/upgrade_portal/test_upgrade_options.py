@@ -23,18 +23,18 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any
+from typing import Any, cast
 
-import mistapi
 import pytest
-from mistapi.__api_response import APIResponse
 
 from src.interfaces.portals.upgrade_portal.capture.devices import (
+    REASON_ERROR_STATUS,
     REASON_READ_FAILED,
     REASON_SHORT_READ,
     REASON_UNKNOWN_SHAPE,
 )
 from src.interfaces.portals.upgrade_portal.upgrade import options as module
+from src.operations.execution.firmware.running_version import RunningFirmwareVersionResolver
 from src.operations.execution.firmware.upgrade_service import SCOPE_ORG, SCOPE_SITE, STRATEGY_DEFAULT, UpgradeOptions
 from tests.support.sdk_pages import HTML_TYPE, JSON_TYPE, PagedSession, build_sdk_answer
 
@@ -180,7 +180,11 @@ def record_inventory_call(
         seen["kwargs"] = kwargs  # The site and the page size, by keyword.
         return FakeResponse({"results": rows, "total": reported})  # The first page and its reported total.
 
-    monkeypatch.setattr(mistapi.api.v1.orgs.inventory, "getOrgInventory", fake_endpoint)  # No cloud call.
+    monkeypatch.setattr(
+        cast(Any, module).mistapi.api.v1.orgs.inventory,
+        "getOrgInventory",
+        fake_endpoint,
+    )  # No cloud call.
     monkeypatch.setattr(module, "list_available_versions", lambda *args: VERSION_MAP)  # No version read.
     return seen  # The test reads the recorded call.
 
@@ -227,7 +231,7 @@ class TestReadUpgradeInventory:
     ) -> None:
         """A body with no readable list gives no row and no error, so the guard names the shape."""
         monkeypatch.setattr(
-            mistapi.api.v1.orgs.inventory,
+            cast(Any, module).mistapi.api.v1.orgs.inventory,
             "getOrgInventory",
             lambda *args, **kwargs: FakeResponse({"devices": []}),
         )
@@ -246,12 +250,134 @@ class TestReadUpgradeInventory:
         def raise_error(*args: Any, **kwargs: Any) -> FakeResponse:
             raise RuntimeError("the cloud refused the read")
 
-        monkeypatch.setattr(mistapi.api.v1.orgs.inventory, "getOrgInventory", raise_error)
+        monkeypatch.setattr(cast(Any, module).mistapi.api.v1.orgs.inventory, "getOrgInventory", raise_error)
         result = module.read_upgrade_inventory(fake_mist_session, "org-1", "site-1", page_limit=PAGE_LIMIT)
         assert result.records == []
         assert result.partial_reasons == [
             {"section": module.SECTION_UPGRADE_INVENTORY, "reason": REASON_READ_FAILED, "http_status": 0}
         ]
+
+
+class TestReadUpgradeOrgInventory:
+    """The organization inventory read and its selected-site partitions."""
+
+    @pytest.mark.parametrize("status_code", [404, 429])
+    def test_http_4xx_response_becomes_a_partial_reason(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        fake_mist_session: Any,
+        status_code: int,
+    ) -> None:
+        """A client refusal returns no trusted row and preserves its HTTP status."""
+        monkeypatch.setattr(
+            cast(Any, module).mistapi.api.v1.orgs.inventory,
+            "getOrgInventory",
+            lambda *args, **kwargs: FakeResponse({"error": "refused"}, status_code),
+        )
+        result = module.read_upgrade_org_inventory(fake_mist_session, ORG_ID, page_limit=PAGE_LIMIT)
+        assert result.records == []
+        assert result.partial_reasons == [
+            {
+                "section": module.SECTION_UPGRADE_INVENTORY,
+                "reason": REASON_ERROR_STATUS,
+                "http_status": status_code,
+            }
+        ]
+
+    @pytest.mark.parametrize("status_code", [500, 503])
+    def test_http_5xx_response_becomes_a_partial_reason(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        fake_mist_session: Any,
+        status_code: int,
+    ) -> None:
+        """A server fault returns no trusted row and preserves its HTTP status."""
+        monkeypatch.setattr(
+            cast(Any, module).mistapi.api.v1.orgs.inventory,
+            "getOrgInventory",
+            lambda *args, **kwargs: FakeResponse({"error": "unavailable"}, status_code),
+        )
+        result = module.read_upgrade_org_inventory(fake_mist_session, ORG_ID, page_limit=PAGE_LIMIT)
+        assert result.records == []
+        assert result.partial_reasons == [
+            {
+                "section": module.SECTION_UPGRADE_INVENTORY,
+                "reason": REASON_ERROR_STATUS,
+                "http_status": status_code,
+            }
+        ]
+
+    def test_the_org_call_omits_site_type_and_virtual_chassis_filters(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        fake_mist_session: Any,
+    ) -> None:
+        """One organization call returns every logical device for later partitioning."""
+        seen = record_inventory_call(monkeypatch, [{**SWITCH_ROW, "site_id": SITE_ID}])
+        module.read_upgrade_org_inventory(fake_mist_session, ORG_ID, page_limit=PAGE_LIMIT)
+        assert seen["args"][1] == ORG_ID
+        assert seen["kwargs"] == {"limit": PAGE_LIMIT}
+
+    def test_the_partition_keeps_selected_order_and_ignores_other_rows(self) -> None:
+        """Only selected sites receive detached rows from the organization answer."""
+        site_two = "site-2"
+        inventory = module.InventoryRead(
+            [
+                {**AP_ROW, "site_id": site_two},
+                {**SWITCH_ROW, "site_id": SITE_ID},
+                {**JUNOS_ROW, "site_id": "site-other"},
+                {**SSR_ROW, "site_id": None},
+            ],
+            [],
+        )
+        result = module.inventory_reads_by_site(inventory, [SITE_ID, site_two, "site-empty"])
+        assert list(result) == [SITE_ID, site_two, "site-empty"]
+        assert [row["mac"] for row in result[SITE_ID].records] == [SWITCH_ROW["mac"]]
+        assert [row["mac"] for row in result[site_two].records] == [AP_ROW["mac"]]
+        assert result["site-empty"].records == []
+
+    def test_a_partial_org_reason_applies_to_every_selected_site(self) -> None:
+        """A short organization read cannot prove that any selected site is complete."""
+        inventory = module.InventoryRead([{**SWITCH_ROW, "site_id": SITE_ID}], [SHORT_REASON])
+        result = module.inventory_reads_by_site(inventory, [SITE_ID, "site-empty"])
+        assert result[SITE_ID].partial_reasons == [SHORT_REASON]
+        assert result["site-empty"].partial_reasons == [SHORT_REASON]
+        result[SITE_ID].partial_reasons[0]["reason"] = "changed"
+        assert result["site-empty"].partial_reasons == [SHORT_REASON]
+
+    def test_the_view_uses_supplied_inventory_without_another_read(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A multi-site view transforms its site slice without a second inventory call."""
+        monkeypatch.setattr(
+            module,
+            "read_upgrade_inventory",
+            lambda *args: pytest.fail("The supplied inventory was not reused."),
+        )
+        monkeypatch.setattr(module, "read_model_versions", lambda *args: VERSION_MAP)
+        answer = module.build_options_view(object(), ORG_ID, SITE_ID, module.InventoryRead([SWITCH_ROW], []))
+        assert [target["mac"] for target in answer["targets"]] == ["5c5b350e0001"]
+
+    def test_the_record_uses_supplied_inventory_without_another_read(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A multi-site save validates its site slice without a second inventory call."""
+        monkeypatch.setattr(
+            module,
+            "read_upgrade_inventory",
+            lambda *args: pytest.fail("The supplied inventory was not reused."),
+        )
+        monkeypatch.setattr(module, "read_model_versions", lambda *args: VERSION_MAP)
+        answer = module.build_options_record(
+            object(),
+            ORG_ID,
+            SITE_ID,
+            {**THIN_BODY, "selected_types": ["switch"]},
+            module.InventoryRead([SWITCH_ROW], []),
+        )
+        assert [target["mac"] for target in answer["targets"]] == ["5c5b350e0001"]
 
 
 class TestVersionOptions:
@@ -761,7 +887,7 @@ class TestBuildOptionsView:
         record_inventory_call(monkeypatch, [SWITCH_ROW])
         monkeypatch.setattr(fake_mist_session, "mist_get", lambda **_: None, raising=False)
         monkeypatch.setattr(
-            module.RunningFirmwareVersionResolver,
+            RunningFirmwareVersionResolver,
             "fetch_site_running_versions",
             lambda _resolver, site_id: {SWITCH_ROW["mac"]: "24.2R1.17"},
         )
@@ -940,7 +1066,11 @@ class TestShortReadView:
         fake_mist_session: Any,
     ) -> None:
         """US1 scenario 3: a failed read shows the same banner as a short read."""
-        monkeypatch.setattr(mistapi.api.v1.orgs.inventory, "getOrgInventory", raise_cloud_fault)  # The read fails.
+        monkeypatch.setattr(
+            cast(Any, module).mistapi.api.v1.orgs.inventory,
+            "getOrgInventory",
+            raise_cloud_fault,
+        )  # The read fails.
         answer = module.build_options_view(fake_mist_session, ORG_ID, SITE_ID)  # The view of the options page.
         assert answer == {"targets": [], "versions_by_model": {}, "partial_reasons": [READ_FAILED_REASON]}
 
@@ -987,7 +1117,11 @@ class TestShortReadSave:
         fake_mist_session: Any,
     ) -> None:
         """FR-005: a read with no row and a reason keeps the empty record of issue #3389."""
-        monkeypatch.setattr(mistapi.api.v1.orgs.inventory, "getOrgInventory", raise_cloud_fault)  # The read fails.
+        monkeypatch.setattr(
+            cast(Any, module).mistapi.api.v1.orgs.inventory,
+            "getOrgInventory",
+            raise_cloud_fault,
+        )  # The read fails.
         assert module.build_options_record(fake_mist_session, ORG_ID, SITE_ID, THIN_BODY) == {}  # No refusal.
 
     def test_the_log_names_the_site_and_the_reason_and_no_device(
@@ -1038,7 +1172,7 @@ def lost_page_reason(http_status: int) -> dict[str, Any]:
     return {"section": module.SECTION_UPGRADE_INVENTORY, "reason": REASON_SHORT_READ, "http_status": http_status}
 
 
-def plan_paged_read(monkeypatch: pytest.MonkeyPatch, later_page: APIResponse) -> PagedSession:
+def plan_paged_read(monkeypatch: pytest.MonkeyPatch, later_page: Any) -> PagedSession:
     """Answer page one with two rows of three, and plan the answer for page two.
 
     Why:
@@ -1056,7 +1190,11 @@ def plan_paged_read(monkeypatch: pytest.MonkeyPatch, later_page: APIResponse) ->
     """
     body = json.dumps([SWITCH_ROW, AP_ROW]).encode("utf-8")  # Two rows of three.
     first = build_sdk_answer(200, body, PAGE_ONE_HEADERS, FIRST_PAGE_URL)  # Page one, as the SDK builds it.
-    monkeypatch.setattr(mistapi.api.v1.orgs.inventory, "getOrgInventory", lambda *args, **kwargs: first)  # No cloud.
+    monkeypatch.setattr(
+        cast(Any, module).mistapi.api.v1.orgs.inventory,
+        "getOrgInventory",
+        lambda *args, **kwargs: first,
+    )  # No cloud.
     monkeypatch.setattr(module, "list_available_versions", lambda *args: VERSION_MAP)  # No version read.
     return PagedSession([later_page])  # The session answers page two.
 
@@ -1119,7 +1257,11 @@ class TestLostLaterPage:
         """A malformed row marks the read failed, so the page does not answer HTTP 500."""
         body = json.dumps([SWITCH_ROW, "not a map"]).encode("utf-8")  # One row is text, not a map.
         first = build_sdk_answer(200, body, JSON_TYPE, FIRST_PAGE_URL)  # No page headers, so no page two.
-        monkeypatch.setattr(mistapi.api.v1.orgs.inventory, "getOrgInventory", lambda *args, **kwargs: first)
+        monkeypatch.setattr(
+            cast(Any, module).mistapi.api.v1.orgs.inventory,
+            "getOrgInventory",
+            lambda *args, **kwargs: first,
+        )
         read = module.read_upgrade_inventory(PagedSession([]), ORG_ID, SITE_ID, page_limit=SMALL_PAGE_LIMIT)
         assert (read.records, read.partial_reasons) == ([], [READ_FAILED_REASON])  # The read failed as one unit.
 

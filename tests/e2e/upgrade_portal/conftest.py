@@ -46,7 +46,7 @@ from collections.abc import Iterator
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, ClassVar
+from typing import Any, ClassVar, NoReturn
 from urllib.parse import urlencode  # Issue #3438: the query of page one of a lost-page read.
 
 import flask
@@ -189,17 +189,13 @@ BASE_URL = f"http://{LOOPBACK_HOST}:{CAPTURE_PORT}"  # Point every browser reque
 CONFIG_PATH = Path(__file__).with_name("playwright.config.py")
 CONFIG_MODULE_NAME = "upgrade_portal_playwright_config"
 
-# WHY: 20 tries of 0.5 seconds gives a 10-second budget for the server to open
-# its port. Issue #1998: this comment once cited a fixture of
-# tests/e2e/conftest.py that no longer exists. That file starts no server now,
-# so it names no budget to match.
 READY_PAUSE_SECONDS = 0.5
-# WHY: Issue #3200. Under load, for example when the journey runner starts
-# several portals at once, the import alone takes longer than 10 seconds and
-# every test of that server errors at setup. The variable raises the budget for
-# such a run and leaves the default of 20 tries for every other run.
 READY_BUDGET_VARIABLE = "UPGRADE_PORTAL_E2E_READY_SECONDS"  # The optional start budget in seconds.
-READY_TRIES = max(20, int(float(os.environ.get(READY_BUDGET_VARIABLE, "10")) / READY_PAUSE_SECONDS))
+DEFAULT_READY_BUDGET_SECONDS = 60.0  # Issue #3516: a loaded workstation can need more than 10 seconds.
+READY_TRIES = max(
+    20,
+    int(float(os.environ.get(READY_BUDGET_VARIABLE, str(DEFAULT_READY_BUDGET_SECONDS))) / READY_PAUSE_SECONDS),
+)
 PROBE_TIMEOUT_SECONDS = 0.5  # One connection attempt against a port that may hold no listener.
 STOP_TIMEOUT_SECONDS = 5  # The server gets 5 seconds to stop before this fixture ends it.
 
@@ -257,6 +253,16 @@ TEST_SECRET_KEY = "upgrade-portal-e2e-cookie-signing-key"  # A test value. No pr
 COOKIE_APP_NAME = "upgrade_portal_e2e_cookie"  # Names the bare Flask object that signs, and never serves.
 SESSION_COOKIE_NAME = "session"  # Flask's default name. `factory.create_app` sets no other name.
 
+
+@dataclass(frozen=True)
+class PortalStartWait:
+    """Hold the result of the bounded wait for the portal child process."""
+
+    ready: bool  # True means the port answered before the budget ended.
+    elapsed_seconds: float  # The measured wait helps diagnose a near timeout.
+    exit_code: int | None  # A value means the child stopped before the port answered.
+
+
 # WHY: `identity.SessionOwner` checks both halves of the pair. The address is
 # already in its normalized form, and the reserved `.invalid` domain can reach
 # no mail host. The browser identifier holds 22 characters of the allowed set.
@@ -286,16 +292,20 @@ FIRMWARE_BROWSER_ID = "e2eBrowserIdentity0004"  # A separate browser identity ke
 # signed-in page renders real rows and opens no socket to the Mist cloud.
 STAND_IN_ORG_ID = "11111111-1111-1111-1111-111111111111"  # The organization that the picker shows.
 STAND_IN_ORG_NAME = "E2E Stand-In Organization"  # The text of the organization row.
-STAND_IN_SITE_ID = "22222222-2222-2222-2222-222222222222"  # The first site in the picker.
-STAND_IN_SITE_NAME = "E2E Stand-In Site"  # The text of the first site row.
-SECOND_SITE_ID = "33333333-3333-3333-3333-333333333333"  # The second site for organization tests.
-SECOND_SITE_NAME = "E2E Second Stand-In Site"  # The text of the second site row.
-# WHY: Issue #3377. Seeded live runs and multi-site journeys hold the first two
-# sites, and FR-037 allows one live run for each site. The single-site upgrade
-# journey of `test_upgrade.py` therefore owns this third site. No seed and no
-# other module names it, so every run on it belongs to that journey.
+# WHY: Issue #3910. The picker sorts the rows by name at `select.py:1065`, so
+# no constant here holds a fixed row position. Each comment names the role of
+# the site instead of a position.
+STAND_IN_SITE_ID = "22222222-2222-2222-2222-222222222222"  # The default site of the single-site tests.
+STAND_IN_SITE_NAME = "E2E Stand-In Site"  # The row text of the default site.
+SECOND_SITE_ID = "33333333-3333-3333-3333-333333333333"  # The extra site for organization tests.
+SECOND_SITE_NAME = "E2E Second Stand-In Site"  # The row text of the extra site.
+# WHY: Issue #3377. Seeded live runs and multi-site journeys hold the default
+# site and the extra site, and FR-037 allows one live run for each site. The
+# single-site upgrade journey of `test_upgrade.py` therefore owns the site
+# below. No seed and no other module names it, so every run on it belongs to
+# that journey.
 JOURNEY_SITE_ID = "44444444-4444-4444-4444-444444444444"  # The site of the single-site upgrade journey.
-JOURNEY_SITE_NAME = "E2E Upgrade Journey Site"  # The text of the third site row.
+JOURNEY_SITE_NAME = "E2E Upgrade Journey Site"  # The row text of the journey site.
 STAND_IN_DEVICE_TYPES = ("ap", "gateway", "switch")  # Mirrors `select.DEVICE_TYPES`, which FR-013 fixes.
 STAND_IN_VERSIONS = ("0.14.29216", "0.15.1")  # The version that runs now, then one newer version to pick.
 # WHY: Issue #3244. A standalone capture names no run. The pre-check reads the
@@ -489,20 +499,33 @@ def _probe_port(port: int) -> bool:
         return False
 
 
-def _wait_for_port(port: int) -> bool:
-    """Wait until the server answers on one port.
+def _wait_for_port(port: int, process: subprocess.Popen[bytes]) -> PortalStartWait:
+    """Wait until the server answers or the child process stops.
 
     Args:
         port: The port to test.
+        process: The portal child process.
 
     Returns:
-        True when the port answers, or False after the last try.
+        The ready state, elapsed seconds, and child exit code.
     """
-    for _ in range(READY_TRIES):
-        if _probe_port(port):
-            return True
+    started = time.monotonic()  # Use a monotonic clock, because wall-clock changes must not alter the budget.
+    logger.info("Wait up to %.1f seconds for the capture portal", READY_TRIES * READY_PAUSE_SECONDS)
+    for _ in range(READY_TRIES):  # Keep each existing probe and pause until one terminal state occurs.
+        if _probe_port(port):  # A listener proves that the child completed its startup.
+            elapsed = time.monotonic() - started  # Measure the real startup time for the test record.
+            logger.debug("The capture portal answered after %.2f seconds", elapsed)
+            return PortalStartWait(True, elapsed, None)  # Report the ready state without another process read.
+        exit_code = process.poll()  # Read the child state before another pause can hide an import failure.
+        if exit_code is not None:  # A stopped child can never open the port later.
+            elapsed = time.monotonic() - started  # State how quickly the child failed.
+            logger.error("The capture portal stopped with exit code %s after %.2f seconds", exit_code, elapsed)
+            return PortalStartWait(False, elapsed, exit_code)  # Preserve the exit code for the failure message.
         time.sleep(READY_PAUSE_SECONDS)  # WHY: The server is not ready yet. Wait and try again.
-    return False
+    elapsed = time.monotonic() - started  # Measure the complete bounded wait.
+    exit_code = process.poll()  # Capture an exit that occurred during the last pause.
+    logger.error("The capture portal did not answer after %.2f seconds", elapsed)
+    return PortalStartWait(False, elapsed, exit_code)  # Report timeout and any final child exit.
 
 
 def _stop_server(process: subprocess.Popen[bytes]) -> None:
@@ -688,6 +711,19 @@ def _report_server_output() -> None:
         logger.warning("The capture portal wrote this before it stopped: %s", text)
 
 
+def _fail_start(process: subprocess.Popen[bytes], wait: PortalStartWait) -> NoReturn:
+    """Stop a live child and report the exact portal start failure."""
+    if wait.exit_code is None:  # A live child exceeded the budget and must not outlive the run.
+        _stop_server(process)  # The process runs and never answered, so it must not outlive the run.
+        detail = f"The start budget ended after {wait.elapsed_seconds:.2f} seconds."  # Name the timeout.
+    else:  # A stopped child needs no signal, and its exit code is the primary cause.
+        detail = (  # Keep the complete cause in the pytest failure message.
+            f"The child stopped with exit code {wait.exit_code} after {wait.elapsed_seconds:.2f} seconds."
+        )
+    _report_server_output()  # The output waits in a file, so this read cannot block.
+    pytest.fail(f"{START_FAILED_MESSAGE} {detail}", pytrace=False)  # Fail setup with the measured cause.
+
+
 def _start_server() -> subprocess.Popen[bytes] | None:
     """Start the capture portal and wait until it answers.
 
@@ -705,12 +741,11 @@ def _start_server() -> subprocess.Popen[bytes] | None:
     process = _spawn(command)
     if process is None:  # The process did not start.
         return None
-    if _wait_for_port(CAPTURE_PORT):  # The portal answers, so a browser test may open a page.
+    wait = _wait_for_port(CAPTURE_PORT, process)  # Stop at readiness, child exit, or the finite budget.
+    if wait.ready:  # The portal answers, so a browser test may open a page.
         _record_owner(process)  # Issue #2260: the next run can then reclaim this port.
         return process
-    _stop_server(process)  # The process runs and never answered, so it must not outlive the run.
-    _report_server_output()  # The output waits in a file, so this read cannot block.
-    return None
+    _fail_start(process, wait)  # The helper stops a live child and raises the measured pytest failure.
 
 
 AUDIT_GUARD_KEY = pytest.StashKey[str]()  # Issue #3498: the measure that the terminal summary prints.
@@ -1471,11 +1506,11 @@ def stand_in_cloud_read(name: str, **parameters: Any) -> list[dict[str, Any]] | 
     del parameters  # Every other organization answers the fixed records below.
     if name == "listOrgSites":  # The name and the identifier of each site.
         return [
-            {"id": STAND_IN_SITE_ID, "name": STAND_IN_SITE_NAME},  # The first row, which most journeys read.
-            {"id": SECOND_SITE_ID, "name": SECOND_SITE_NAME},  # The second row, which the multi-site journeys add.
-            {"id": JOURNEY_SITE_ID, "name": JOURNEY_SITE_NAME},  # Issue #3377: the last row, so no first row moves.
-            {"id": EMPTY_SITE_ID, "name": EMPTY_SITE_NAME},  # Issue #3389: a site with no device, after every row.
-            {"id": SHORT_SITE_ID, "name": SHORT_SITE_NAME},  # Issue #3424: a site whose read stops, the last row.
+            {"id": STAND_IN_SITE_ID, "name": STAND_IN_SITE_NAME},  # The default site of the single-site tests.
+            {"id": SECOND_SITE_ID, "name": SECOND_SITE_NAME},  # The extra site that the multi-site journeys add.
+            {"id": JOURNEY_SITE_ID, "name": JOURNEY_SITE_NAME},  # Issue #3377: the site of the upgrade journey.
+            {"id": EMPTY_SITE_ID, "name": EMPTY_SITE_NAME},  # Issue #3389: the site that holds no device.
+            {"id": SHORT_SITE_ID, "name": SHORT_SITE_NAME},  # Issue #3424: the site whose read stops early.
         ]
     if name == "listOrgSiteStats":  # The device count of each site, read from `num_devices`.
         return [

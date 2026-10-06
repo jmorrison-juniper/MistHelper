@@ -33,7 +33,7 @@ How each test leaves the site:
     live run of that record, and then it frees the site lock. A refusal in the
     teardown reports an error, because a skip would hide the next leak.
 
-Which runs share the first site:
+Which runs share the first sorted site:
     Issue #3507. The two stale seed runs of the bulk tests sat on the first
     site. So each create call of this module met a seed run in place of its
     own run, and the module passed only when `test_bulk.py` ran first. The
@@ -417,7 +417,7 @@ def fixture_scheduled_run_page(portal_page: Any, run_ledger: RunLedger) -> Any:
 
     Raises:
         AssertionError: If the run page holds no schedule region. Issue #3507:
-            a skip here hid a seed run that held the first site, because the
+            a skip here hid a seed run that held the first sorted site, because the
             create call then named that seed run in place of a fresh run.
     """
     logger.info("Open the run page of a run that has not begun")  # Log before the create call and the page.

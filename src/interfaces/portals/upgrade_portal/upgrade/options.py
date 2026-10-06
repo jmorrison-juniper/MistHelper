@@ -733,6 +733,35 @@ def read_upgrade_inventory(session: Any, org_id: str, site_id: str, page_limit: 
     return _read_paged(session, call)
 
 
+def read_upgrade_org_inventory(session: Any, org_id: str, page_limit: int | None = None) -> InventoryRead:
+    """Read every logical device of one organization for a multi-site upgrade."""
+    limit = page_limit if page_limit is not None else resolve_page_limit()  # Keep the shared page-size rule.
+    logger.info("Upgrade portal reads the logical devices of organization %s", org_id)  # Before the cloud read.
+    call = partial(  # Omit site, type, and VC filters so one call covers every selected site.
+        mistapi.api.v1.orgs.inventory.getOrgInventory,
+        session,
+        org_id,
+        limit=limit,
+    )
+    return _read_paged(session, call)  # Preserve the existing partial-page safety rules.
+
+
+def inventory_reads_by_site(inventory: InventoryRead, site_ids: Sequence[str]) -> dict[str, InventoryRead]:
+    """Partition one organization inventory read across selected sites."""
+    grouped: dict[str, list[dict[str, Any]]] = {  # Keep an empty entry for every selected site.
+        site_id: [] for site_id in site_ids
+    }
+    for record in inventory.records:  # One linear pass avoids a pass for each selected site.
+        site_id = str(record.get("site_id") or "")  # Unassigned rows have no selected site.
+        if site_id in grouped:  # Ignore unassigned sites and sites outside the current selection.
+            grouped[site_id].append(dict(record))  # Detach each row from the organization response.
+    reasons = [dict(reason) for reason in inventory.partial_reasons]  # A short org read can affect every site.
+    return {
+        site_id: InventoryRead(records, [dict(reason) for reason in reasons])  # Give each site its own copies.
+        for site_id, records in grouped.items()
+    }
+
+
 def collect_models(devices: Sequence[Mapping[str, Any]]) -> tuple[str, ...]:
     """Return the model of each device, with no repeat.
 
@@ -1963,7 +1992,12 @@ def to_device_targets(entries: Sequence[Mapping[str, Any]], site_id: str) -> tup
     )
 
 
-def build_options_view(session: Any, org_id: str, site_id: str) -> dict[str, Any]:
+def build_options_view(
+    session: Any,
+    org_id: str,
+    site_id: str,
+    inventory: InventoryRead | None = None,
+) -> dict[str, Any]:
     """Build the device rows and the version map that the options page draws.
 
     Why:
@@ -1977,6 +2011,7 @@ def build_options_view(session: Any, org_id: str, site_id: str) -> dict[str, Any
         session: The cloud session of the signed-in operator.
         org_id: The organization that holds the site.
         site_id: The site under upgrade.
+        inventory: A supplied site slice of one organization read.
 
     Returns:
         A mapping with a ``targets`` list of device rows, a
@@ -1984,8 +2019,9 @@ def build_options_view(session: Any, org_id: str, site_id: str) -> dict[str, Any
         ``partial_reasons`` list. Issue #3424: the page shows a Caution banner
         when the list holds a reason, and the list is empty after a whole read.
     """
-    logger.info("Upgrade portal builds the options view of site %s", site_id)  # Log before the inventory read.
-    inventory = read_upgrade_inventory(session, org_id, site_id)  # One read of every logical device of the site.
+    logger.info("Upgrade portal builds the options view of site %s", site_id)  # Log before the inventory transform.
+    if inventory is None:  # Single-site callers still own one site-filtered inventory read.
+        inventory = read_upgrade_inventory(session, org_id, site_id)  # Read every logical device of the site.
     reasons = [dict(reason) for reason in inventory.partial_reasons]  # Issue #3424: detached copies for the page.
     if not inventory.records:  # A failed read must never spend a second call for no gain.
         logger.warning("Upgrade portal read no device of site %s for the options page", site_id)  # The gap.
@@ -2018,7 +2054,13 @@ def build_options_view(session: Any, org_id: str, site_id: str) -> dict[str, Any
     }
 
 
-def build_options_record(session: Any, org_id: str, site_id: str, body: Mapping[str, Any]) -> dict[str, Any]:
+def build_options_record(
+    session: Any,
+    org_id: str,
+    site_id: str,
+    body: Mapping[str, Any],
+    inventory: InventoryRead | None = None,
+) -> dict[str, Any]:
     """Build the stored target list and option record from the browser choices.
 
     Why:
@@ -2033,6 +2075,7 @@ def build_options_record(session: Any, org_id: str, site_id: str, body: Mapping[
         org_id: The organization that holds the site.
         site_id: The site under upgrade.
         body: The request body of the save call.
+        inventory: A supplied site slice of one organization read.
 
     Returns:
         A mapping with the ``targets`` entries, the ``options`` record, and the
@@ -2045,8 +2088,9 @@ def build_options_record(session: Any, org_id: str, site_id: str, body: Mapping[
         PartialInventoryError: Issue #3424. The site read kept the rows of the
             first page and lost the rest, so a plan would leave out devices.
     """
-    logger.info("Upgrade portal builds the option record of site %s", site_id)  # Log before the inventory read.
-    inventory = read_upgrade_inventory(session, org_id, site_id)  # The save reads the site again.
+    logger.info("Upgrade portal builds the option record of site %s", site_id)  # Log before the transformation.
+    if inventory is None:  # Single-site callers still own one site-filtered inventory read.
+        inventory = read_upgrade_inventory(session, org_id, site_id)  # Read the site before the save.
     if not inventory.records:  # A failed read must never look like a bad choice by the operator.
         logger.warning("Upgrade portal read no device of site %s, so the body carries the targets", site_id)
         return {}  # Issue #3389 keeps this rule, and issue #3435 records its defect.
@@ -2098,7 +2142,9 @@ __all__ = [
     "selected_device_types",
     "build_version_options",
     "collect_models",
+    "inventory_reads_by_site",
     "read_model_versions",
+    "read_upgrade_org_inventory",
     "read_upgrade_inventory",
     "resolve_family_scope",
     "target_warnings",

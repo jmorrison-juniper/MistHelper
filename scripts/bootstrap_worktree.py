@@ -529,6 +529,7 @@ class StaleSourceSweeper:
         """Remove each untracked cache-only directory under the source root and return the removed names."""
         LOGGER.info("Sweeping the orphaned directories under %s", self.source_root)  # Trace before any removal.
         removed: list[str] = []  # Collect the removed names, because the operator reads the count.
+        checked = 0  # Count each untracked candidate before the safety check.
         if not self.source_root.is_dir():  # A worktree without a source root needs no sweep.
             LOGGER.debug("The source root is absent, so the sweep removes nothing.")
             return removed  # Report the empty result to the caller.
@@ -543,6 +544,7 @@ class StaleSourceSweeper:
                 continue  # Read the next entry.
             if directory.name in tracked:  # A tracked directory holds committed work.
                 continue  # Read the next entry.
+            checked += 1  # Measure each untracked directory that the sweep examines.
             if not self.holds_only_cache(directory):  # A directory with a real file holds uncommitted work.
                 LOGGER.debug("Kept %s, because it holds a file outside the cache.", directory.name)
                 continue  # Read the next entry.
@@ -553,7 +555,11 @@ class StaleSourceSweeper:
                 continue  # Read the next entry.
             removed.append(directory.name)  # Record the name, because the operator reads the report.
             LOGGER.info("Removed the orphaned source directory %s", directory.name)
-        LOGGER.info("The sweep removed %d orphaned source directories.", len(removed))  # Show the count.
+        LOGGER.info(  # Show both measured counts, so the operator can verify the sweep scope.
+            "The sweep checked %d untracked source directories and removed %d orphaned source directories.",
+            checked,
+            len(removed),
+        )
         return removed  # Give the caller the removed names, so a test can assert on them.
 
 

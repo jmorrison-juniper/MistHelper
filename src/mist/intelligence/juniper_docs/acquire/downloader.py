@@ -62,13 +62,18 @@ class CorpusDownloader(JvdDownloader):
         _LOGGER.info("Fetching %s into %s", pdf_url, category_dir)  # Log the intent.
         target = self._prepare_target(pdf_url, category_dir)  # Build the clean target path.
         reuse = self._allocator.existing_for_url(target, pdf_url)  # A same-URL file, if any.
+        invalid_reuse: Path | None = None  # Track a damaged file that needs replacement.
         if reuse is not None:  # This exact URL already produced a stored file.
-            _LOGGER.debug("Skipped existing %s", reuse.name)  # Report the resume skip.
-            return "skipped", str(reuse), reuse.stat().st_size, None  # Reuse it with no fetch.
-        payload, reason = self._fetch_valid(pdf_url)  # Fetch the bytes and check the marker.
+            if self._is_valid_pdf(reuse.read_bytes(), str(reuse)):  # Reject damaged resume files.
+                _LOGGER.debug("Skipped existing %s", reuse.name)  # Report the resume skip.
+                return "skipped", str(reuse), reuse.stat().st_size, None  # Reuse the valid file.
+            _LOGGER.warning("Stored PDF %s is invalid, fetching a replacement", reuse)  # Repair the resume.
+            invalid_reuse = reuse  # Force the fetched bytes to replace this damaged file.
+        payload, reason = self._fetch_valid(pdf_url)  # Fetch the bytes and check the structure.
         if payload is None:  # The read failed or the body is not a PDF.
             return "failed", None, None, reason  # A bad response reports its reason.
         final, write = self._allocator.plan_bytes(target, pdf_url, payload)  # Resolve the path.
+        write = write or final == invalid_reuse  # Replace an invalid same-URL file in place.
         return self._store_payload(final, payload, write)  # Write or reuse, then report it.
 
     def _store_payload(self, final: Path, payload: bytes, write: bool) -> tuple[str, str, int, None]:
@@ -106,7 +111,35 @@ class CorpusDownloader(JvdDownloader):
             _LOGGER.error("Download failed for %s: %s", pdf_url, error)  # Record failure.
             prefix = "transient" if is_transient_error(error) else "permanent"  # Classify.
             return None, f"{prefix}: {error}"  # A failed read reports its reason.
-        if not payload.startswith(b"%PDF"):  # Guard against an HTML error page.
+        if not self._is_valid_pdf(payload, pdf_url):  # Guard against damaged or non-PDF content.
             _LOGGER.error("The response for %s is not a PDF", pdf_url)  # Record the reject.
-            return None, "permanent: not a PDF"  # A non-PDF body is a permanent failure.
+            return None, "permanent: invalid PDF"  # A damaged or non-PDF body is a permanent failure.
         return payload, None  # The body is a real PDF, so return the bytes.
+
+    @staticmethod
+    def _is_valid_pdf(payload: bytes, source: str) -> bool:
+        """Return whether bytes have a parser-usable PDF structure."""
+        if not payload.startswith(b"%PDF"):  # Reject an HTML response before parser work.
+            _LOGGER.error("The response for %s is not a PDF", source)  # Record the marker failure.
+            return False  # A body without the PDF marker cannot be stored.
+        import io  # Wrap downloaded bytes for the PDF parser.
+
+        import pdfplumber  # Parse PDF structure before the corpus stores a document.
+        from pdfminer.pdfexceptions import PDFException  # Catch parser failures from pdfplumber.
+        from pdfplumber.utils.exceptions import PdfminerException  # Catch wrapped parser failures.
+
+        try:
+            with pdfplumber.open(io.BytesIO(payload)) as document:  # Parse the in-memory document.
+                len(document.pages)  # Force page and object validation before storage.
+        except (
+            PdfminerException,
+            PDFException,
+            OSError,
+            ValueError,
+            TypeError,
+            IndexError,
+            KeyError,
+        ) as error:  # Parser rejects it.
+            _LOGGER.error("PDF validation failed for %s: %s", source, error)  # Record the parser reason.
+            return False  # Damaged PDF bytes cannot enter or remain in the corpus.
+        return True  # The parser accepted the complete PDF structure.
