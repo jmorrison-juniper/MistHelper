@@ -25,7 +25,7 @@ def test_web_portal_package_contains_all_shared_portal_tests() -> None:
     """Keep shared portal tests in one package for focused collection."""
     expected_names = _shared_portal_test_names()
     actual_names = sorted(path.name for path in WEB_PORTAL_ROOT.glob("test_*.py"))
-    assert expected_names, "The shared portal test inventory is empty, so the guard measured nothing."
+    assert len(expected_names) > 0, "The shared portal test inventory is empty, so the guard measured nothing."
     missing = sorted((Counter(expected_names) - Counter(actual_names)).elements())
     extra = sorted((Counter(actual_names) - Counter(expected_names)).elements())
     assert (

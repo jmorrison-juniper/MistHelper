@@ -124,8 +124,8 @@ def test_the_guard_measured_every_decision(executor: OperationExecutor) -> None:
     expected_controls = _expected_control_names()
     print(f"The Marvis Actions portal guard checked {len(decisions)} gate decisions and {len(controls)} controls.")
     assert len(decisions) == 2, "The fixture must hold two gate decisions."
-    assert expected_controls, "The production prompt inventory is empty, so the guard measured nothing."
-    assert controls, "The portal control inventory is empty, so the guard measured nothing."
+    assert len(expected_controls) > 0, "The production prompt inventory is empty, so the guard measured nothing."
+    assert len(controls) > 0, "The portal control inventory is empty, so the guard measured nothing."
 
 
 def test_the_registry_calls_the_menu_interactive_safe() -> None:
