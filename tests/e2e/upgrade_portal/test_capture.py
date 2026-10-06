@@ -106,7 +106,11 @@ CSRF_META_ID = "csrf-meta"  # `layout.html` publishes the token under this ident
 
 # The options page and the confirm page of the run the upgrade button creates.
 # `contracts/http-api.md` section 5 fixes both page paths and the create path.
-VERSION_SELECT_ALL_ID = "upgrade-version-select-all"
+VERSION_SELECT_IDS = (  # Each device type has its own current version control.
+    "upgrade-version-select-ap",  # Access points use their supported firmware list.
+    "upgrade-version-select-switch",  # Switches use their supported firmware list.
+    "upgrade-version-select-gateway",  # Gateways use their supported firmware list.
+)
 OPTIONS_SAVE_ID = "upgrade-options-save-button"
 CONFIRM_LINK_ID = "upgrade-confirm-link"
 CONFIRM_INPUT_ID = "upgrade-confirm-input"
@@ -275,7 +279,7 @@ def _listed_site_id(page: Any) -> str:
     markers = rows.evaluate_all("found => found.map(node => node.getAttribute('data-testid'))")
     keys = [str(marker)[len(SITE_ROW_PREFIX) :] for marker in markers if marker]
     if not keys:  # The portal reached no site, so no capture can start.
-        pytest.skip("The site picker shows no site row, so no site identifier exists to capture.")
+        pytest.fail("The site picker shows no site row, so no site identifier exists to capture.")
     return keys[0]
 
 
@@ -720,8 +724,11 @@ def _release_the_site(page: Any) -> None:
     """
     try:  # A teardown must never turn one failure into two.
         release = page.get_by_test_id(LOCK_RELEASE_BUTTON_ID)
-        if release.count() < 1 or not release.is_visible():  # This browser holds no site to give back.
-            return
+        if release.count() < 1 or not release.is_visible():  # A run page has no lock banner to drive.
+            _walk_to_capture_view(page)  # Return through the browser to the page that owns the release control.
+            release = page.get_by_test_id(LOCK_RELEASE_BUTTON_ID)  # Resolve the control after the browser walk.
+        if release.count() < 1 or not release.is_visible():  # The browser holds no visible release step.
+            return  # The shared trail guard reports any lock that still exists.
         release.click()  # A plain press gives the site back at once.
         sync_api.expect(page.get_by_test_id(LOCK_TAKE_BUTTON_ID)).to_be_visible(timeout=LOCK_SETTLE_MS)
     except Exception as failure:  # A closed page or a dead portal must not mask the real result.
@@ -832,10 +839,13 @@ class TestUpgradeJourney:
         walking_page.wait_for_url(f"**/runs/*{OPTIONS_PAGE_SUFFIX}", timeout=START_TIMEOUT_MS)
         run_id = _run_id_from_url(walking_page.url)  # The options URL holds the run key that the walk follows.
         run_ledger.record(run_id)  # Issue #3511: the teardown ends this run, so the site stays free.
-        picker = walking_page.get_by_test_id(VERSION_SELECT_ALL_ID)  # The bulk control fills every device version.
-        if picker.locator("option").count() <= 1:  # Only the empty prompt exists, so no version can plan a device.
-            pytest.skip("The options page offered no version, so the save would keep an empty plan.")
-        picker.select_option(index=1)  # The first real version, because index 0 is the empty prompt.
+        for selector in VERSION_SELECT_IDS:  # Set one real version for each current device type.
+            picker = walking_page.get_by_test_id(selector)  # Resolve the control through its stable identifier.
+            if not picker.is_visible():  # A hidden or absent control cannot receive an operator choice.
+                pytest.fail(f"The options page offered no visible control for {selector}.")
+            if picker.locator("option").count() <= 1:  # Only the empty prompt means the type has no real version.
+                pytest.fail(f"The options page offered no real option for {selector}.")
+            picker.select_option(index=1)  # Index zero is the empty prompt, so index one is the first real version.
         walking_page.get_by_test_id(OPTIONS_SAVE_ID).click()  # The save writes the plan and opens the confirm page.
 
         walking_page.wait_for_url(f"**/runs/{run_id}{CONFIRM_PAGE_SUFFIX}", timeout=START_TIMEOUT_MS)

@@ -93,7 +93,7 @@ def operations_page(page: Any, portal_url: str) -> Any:
         page.wait_for_timeout(250)  # Let the accordion animation settle.
         if page.locator(".op-item:visible").count() > 0:  # This category holds a visible row now.
             return page
-    pytest.skip("No accordion category revealed an operation row, so the workflow cannot run.")
+    pytest.fail("No accordion category revealed an operation row, so the workflow cannot run.")
     return page
 
 

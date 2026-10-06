@@ -224,7 +224,7 @@ def _listed_site_id(page: Any) -> str:
         raise AssertionError(f"{SITE_PAGE_PATH} answered {answer.status}, so no site identifier exists.")
     rows = page.locator(f"[data-testid^='{SITE_ROW_PREFIX}']")  # Every row carries the prefix.
     if rows.count() < 1:  # A portal with no site cannot host an upgrade run.
-        pytest.skip("The site picker shows no site row, so no site identifier exists to upgrade.")
+        pytest.fail("The site picker shows no site row, so no site identifier exists to upgrade.")
     marker = str(rows.first.get_attribute("data-testid") or "")  # The row names its own site.
     return marker[len(SITE_ROW_PREFIX) :]  # The remainder is the identifier.
 
