@@ -28,6 +28,6 @@ def test_web_portal_package_contains_all_shared_portal_tests() -> None:
     assert expected_names, "The shared portal test inventory is empty, so the guard measured nothing."
     missing = sorted((Counter(expected_names) - Counter(actual_names)).elements())
     extra = sorted((Counter(actual_names) - Counter(expected_names)).elements())
-    assert not missing and not extra, (
-        f"The web_portal package differs from the shared portal test inventory: missing={missing} extra={extra}"
-    )
+    assert (
+        not missing and not extra
+    ), f"The web_portal package differs from the shared portal test inventory: missing={missing} extra={extra}"
