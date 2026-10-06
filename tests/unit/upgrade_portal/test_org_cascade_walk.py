@@ -367,12 +367,15 @@ def test_a_final_watch_never_runs_again(monkeypatch: pytest.MonkeyPatch, state: 
     assert store.writes == 0  # The final watch must write nothing.
 
 
-def test_an_internal_error_writes_the_failed_state(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_an_internal_error_writes_the_failed_state(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
     """FR-004. A fault inside a phase ends the thread with a state that the page shows."""
     clock = RehearsalClock()  # The clock controls the test time.
     fleet = cascade_fleet(clock.now())  # The fleet defines the test devices.
     attach(monkeypatch, clock, fleet)  # The stand-in cloud handles the reads.
     store = VersionedStore(OrgRecordBuilder.build(fleet))  # The store holds the record.
+    caplog.set_level("ERROR", logger="src.interfaces.portals.upgrade_portal.upgrade.org_cascade.walk")
 
     def broken(_gates: OrgPhaseGates, _chosen: Any) -> Any:
         raise RuntimeError("the gate did not build")  # The fault tests the failed watch state.
@@ -385,6 +388,7 @@ def test_an_internal_error_writes_the_failed_state(monkeypatch: pytest.MonkeyPat
     assert watch(store)["state"] == "failed"  # The watch state must fail.
     assert watch(store)["note"] == FAILED_NOTE  # The watch note must show failure.
     assert phases(store)["gateways"] == ("pending", 0, 0, "")  # The gateway phase must match the case.
+    assert "the gate did not build" in caplog.text  # The portal log must report the caught exception.
 
 
 def test_the_failed_state_write_never_raises() -> None:

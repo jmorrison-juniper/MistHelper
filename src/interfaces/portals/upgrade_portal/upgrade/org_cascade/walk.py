@@ -402,9 +402,9 @@ class OrgCascadeRegistry:
         try:  # The guard makes sure that the thread always ends.
             state = walk.run()  # Blocks until every phase ended or the operator cancelled.
             logger.info("org cascade: the watch thread of %s ended in state %s", operation_id, state)  # After.
-        except Exception:  # Keep broad: a fault must end with a state that the page shows.
+        except Exception as error:  # Keep broad: a fault must end with a state that the page shows.
             logger.exception(  # After the fault. The portal log keeps the traceback.
-                "org cascade: the watch of %s stopped after an internal error", operation_id
+                "org cascade: the watch of %s stopped after an internal error: %s", operation_id, error
             )
             walk.fail()  # FR-004: the page shows the failed watch.
         finally:
