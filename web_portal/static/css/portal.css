@@ -257,15 +257,33 @@
 }
 
 /* Accent color buttons */
+
+/* Issue #3658: Bootstrap 5.3.3 paints .btn, .btn:hover, .btn:active, and
+ * .btn:disabled from its --bs-btn-* variables. A plain background-color
+ * declaration loses to those variables in the hover state and in the disabled
+ * state, so the accent button went gray. This rule names every accent state
+ * variable, so each state keeps the accent fill. */
 .btn-accent {
-    background-color: var(--portal-accent, #0077B6);
-    border-color: var(--portal-accent, #0077B6);
-    color: #fff;
+    --bs-btn-color: #fff;
+    --bs-btn-bg: var(--portal-accent, #0077B6);
+    --bs-btn-border-color: var(--portal-accent, #0077B6);
+    --bs-btn-hover-color: #fff;
+    --bs-btn-hover-bg: var(--portal-accent, #0077B6);
+    --bs-btn-hover-border-color: var(--portal-accent, #0077B6);
+    --bs-btn-active-color: #fff;
+    --bs-btn-active-bg: var(--portal-accent, #0077B6);
+    --bs-btn-active-border-color: var(--portal-accent, #0077B6);
+    --bs-btn-disabled-color: #fff;
+    --bs-btn-disabled-bg: var(--portal-accent, #0077B6);
+    --bs-btn-disabled-border-color: var(--portal-accent, #0077B6);
+    --bs-btn-disabled-opacity: 0.45;
+    --bs-btn-focus-shadow-rgb: 0, 119, 182;
 }
 
+/* The hover fill equals the rest fill, so this filter supplies the only
+ * visible hover feedback. */
 .btn-accent:hover {
     filter: brightness(1.15);
-    color: #fff;
 }
 
 /* Accordion (Operations) */
