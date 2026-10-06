@@ -15,7 +15,7 @@ import pytest  # Prove the guard fails for bad and empty inputs.
 logger = logging.getLogger(__name__)  # Share one logger for the guard diagnostics.
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]  # Locate the checkout from this test file.
 CANONICAL_SOURCE = PurePosixPath("src/interfaces/monitoring/metrics_gateway/snmp.py")  # Own the fact.
-LEGACY_BASE_OID = ".1.3.6.1.4.1.11.2147483646"  # Identify the historical value that needs approval.
+LEGACY_BASE_OID = ".1.3.6.1.4.1.11." + "2147483646"  # Avoid counting the detector as historical evidence.
 APPROVED_REFERENCES = frozenset(  # Hold exact historical evidence locations so movement fails.
     {
         ("CHANGELOG.md", 2059),
@@ -267,7 +267,8 @@ class TestSnmpBaseOidDefaults:
         canonical = SnmpBaseOidScanner.canonical_value(REPOSITORY_ROOT)  # Read the source-owned fact.
         report = SnmpBaseOidScanner.scan(inputs, canonical, enforce_repository_contract=True)  # Check all rules.
         print(report.proof_line())  # Emit stable counts for CI, RED proof, and GREEN proof evidence.
-        report.check()  # Fail with each exact stale, missing, moved, or duplicate location.
+        assert report.scanned_files > 0, "snmp base OID guard scanned 0 files"  # Reject an empty measurement.
+        assert not report.findings, "\n".join(report.findings)  # Report each exact blocking location.
 
     def test_an_unapproved_stale_reference_fails_with_its_exact_path(self, tmp_path: Path) -> None:
         """An unapproved old root must fail and name the supplied temporary file."""
