@@ -125,6 +125,31 @@ class TestPushTrigger:
         assert push["branches"] == ["main"], "The push trigger must stay on main."
 
 
+class TestCoverageShardHistory:
+    """Check the checkout depth for the shard that compares source history."""
+
+    def test_root_and_contracts_shard_fetches_full_history(self, workflow: dict[str, Any]) -> None:
+        """The symbol guard needs a merge base, so its shard needs full history."""
+        coverage_job = workflow["jobs"]["pytest_coverage_shards"]  # Read the job that runs the guard.
+        shards = coverage_job["strategy"]["matrix"]["include"]  # Read each shard's checkout depth.
+        depths = {shard["shard"]: shard["fetch_depth"] for shard in shards}  # Map each shard to its fetch depth.
+        checkout = next(
+            step  # Select the shared repository checkout.
+            for step in coverage_job["steps"]  # Scan each step in the guard job.
+            if step.get("uses", "").startswith("actions/checkout@")  # Match the checkout action.
+        )
+
+        assert depths == {
+            "root-and-contracts": 0,  # Keep history for the merge-base guard.
+            "upgrade-contracts": 1,  # Limit history where tests do not compare commits.
+            "root-units": 1,  # Limit history where tests do not compare commits.
+            "upgrade-units": 1,  # Limit history where tests do not compare commits.
+        }, "Only the guard shard must fetch full history."  # Limit full history to the merge-base guard.
+        assert (
+            checkout["with"]["fetch-depth"] == "${{ matrix.fetch_depth }}"
+        ), "The checkout must apply each shard's history depth."  # Apply the selected shard depth.
+
+
 class TestConcurrency:
     """Check the group that cancels a stale quality gate run."""
 

@@ -249,18 +249,22 @@ jobs:
       matrix:
         include:
           - shard: root-and-contracts
+            fetch_depth: 0 # The symbol guard needs full history to find a merge base.
             test_paths: "tests/test_*.py tests/bootstrap tests/contract tests/guardrails tests/integration tests/maps tests/tools"
             extra_ignore: "--ignore=tests/contract/upgrade_portal"
             timeout_minutes: 15
           - shard: upgrade-contracts
+            fetch_depth: 1 # This shard does not compare commit history.
             test_paths: "tests/contract/upgrade_portal"
             extra_ignore: ""
             timeout_minutes: 15
           - shard: root-units
+            fetch_depth: 1 # This shard does not compare commit history.
             test_paths: "tests/unit"
             extra_ignore: "--ignore=tests/unit/upgrade_portal"
             timeout_minutes: 20
           - shard: upgrade-units
+            fetch_depth: 1 # This shard does not compare commit history.
             test_paths: "tests/unit/upgrade_portal"
             extra_ignore: ""
             timeout_minutes: 15
@@ -268,6 +272,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: false
+          fetch-depth: ${{ matrix.fetch_depth }} # Issue #3896: The symbol guard needs shared history with main.
       - name: Fetch submodules if present
         run: |
           if [ -f .gitmodules ]; then

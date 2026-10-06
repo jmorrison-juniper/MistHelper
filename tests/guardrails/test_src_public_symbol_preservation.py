@@ -179,6 +179,7 @@ def test_moved_modules_lose_no_module_level_symbol() -> None:
         command, cwd=REPOSITORY_ROOT, check=True, capture_output=True
     ).stdout  # Fail if Git cannot read the base.
     checked_count = 0  # Count each compared Python module.
+    checked_symbol_count = 0  # Count each baseline module-level name checked for loss.
     violations: dict[str, list[str]] = {}  # Collect lost names by old module path.
     with tarfile.open(fileobj=io.BytesIO(archive), mode="r:") as source_archive:  # Read the in-memory base source tree.
         for member in source_archive.getmembers():  # Inspect each archived source entry.
@@ -201,15 +202,22 @@ def test_moved_modules_lose_no_module_level_symbol() -> None:
             new_symbols = module_symbols(
                 new_path.read_text(encoding="utf-8"), str(new_path)
             )  # Read the current module symbol set.
+            checked_symbol_count += len(old_symbols)  # Count each baseline name tested for preservation.
             allowed = INTENTIONAL_SYMBOL_REMOVALS.get(member.name, set())  # Read the reviewed removal list.
             lost_symbols = sorted(old_symbols - new_symbols - allowed)  # Measure only an unapproved removal.
             if lost_symbols:  # Record each module that lost a name.
                 violations[member.name] = lost_symbols  # Keep exact names for repair evidence.
             checked_count += 1  # Record one complete module comparison.
     # State the measured scope on every run, so a passing run still reports its coverage.
-    print(f"Checked {checked_count} moved modules against {baseline}.{notice}")
+    print(
+        f"Checked {checked_count} moved modules and {checked_symbol_count} baseline symbols "
+        f"against {baseline}.{notice}"
+    )
     # Report the measured scope, the failures, and the trailing remedy.
-    message = f"Checked {checked_count} moved modules against {baseline}. Lost symbols: {violations}.{notice}"
+    message = (
+        f"Checked {checked_count} moved modules and {checked_symbol_count} baseline symbols "
+        f"against {baseline}. Lost symbols: {violations}.{notice}"
+    )
     assert not violations, message  # Fail only on an unapproved module-level removal.
 
 
