@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "rule_id": "blind_broad_exception_handler",
+  "scope": {
+    "tracked_python_files": true,
+    "excluded_path_components": ["tests"]
+  },
+  "files": {
+    "src/foundation/persistence/db/writers/arango_writer.py": 1,
+    "src/foundation/support/utils/zscaler_catalogue.py": 1,
+    "src/foundation/support/utils/zscaler_probe.py": 1,
+    "src/interfaces/portals/upgrade_portal/app/routes/upgrade.py": 6,
+    "src/interfaces/portals/upgrade_portal/upgrade/org_cascade/walk.py": 1,
+    "src/interfaces/visualization/ui/execution/debug_saver.py": 1,
+    "src/mist/intelligence/reports/certificate_expiry/client.py": 3,
+    "src/mist/intelligence/reports/certificate_expiry/model.py": 1,
+    "src/mist/intelligence/reports/psk_hygiene/operation.py": 2,
+    "src/mist/resources/device/ap_profile_migration_manager.py": 3,
+    "src/mist/resources/site/address_audit/ui_geocoder.py": 1,
+    "src/operations/execution/firmware/bulk_ap_upgrader.py": 1,
+    "src/operations/execution/firmware/bulk_switch_upgrader.py": 1,
+    "src/operations/execution/firmware/firmware_manager.py": 2,
+    "web_portal/services/data_browser.py": 1
+  }
+}
