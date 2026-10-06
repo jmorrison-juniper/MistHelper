@@ -19,4 +19,4 @@
 - [x] T008 Run Ruff and Black on the changed Python files.
 - [x] T009 Run the changelog fragment guard.
 - [x] T010 Run Bandit and the complexity gate on the changed Python files.
-- [ ] T011 Run the test quality preflight and changed-test gate.
+- [x] T011 Run the test quality preflight and changed-test gate.
