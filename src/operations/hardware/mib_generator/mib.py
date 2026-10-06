@@ -19,7 +19,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
-from src.interfaces.monitoring.metrics_gateway.catalog import (
+from src.interfaces.monitoring.metrics_gateway.core.catalog import (
     RATIO_SNMP_SCALE,
     ROW_IDENTITY_COLUMN,
     SECONDS_SNMP_SCALE,
@@ -425,7 +425,7 @@ _HEADER_TEMPLATE = """{module} DEFINITIONS ::= BEGIN
 --
 -- The generator reads three inputs:
 --   documentation/mist-api-openapi31json.json  the Mist field types.
---   src/interfaces/monitoring/metrics_gateway/catalog.py             the readings the agent
+--   src/interfaces/monitoring/metrics_gateway/core/catalog.py             the readings the agent
 --                                              answers.
 --   data/mib_generator/oid_assignments.json    the number of each
 --                                              field, so no OID moves.

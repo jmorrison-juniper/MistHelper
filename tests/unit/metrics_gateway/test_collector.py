@@ -7,11 +7,16 @@ from typing import Any
 
 import pytest
 
-from src.interfaces.monitoring.metrics_gateway.catalog import MetricCatalog, MetricDefinition, MetricKind, MetricScope
-from src.interfaces.monitoring.metrics_gateway.collector import MistMetricsCollector, MistStatsReader
-from src.interfaces.monitoring.metrics_gateway.collector import MistStatsReader as FailureModeMistStatsReader
+from src.interfaces.monitoring.metrics_gateway.core.catalog import (
+    MetricCatalog,
+    MetricDefinition,
+    MetricKind,
+    MetricScope,
+)
+from src.interfaces.monitoring.metrics_gateway.core.collector import MistMetricsCollector, MistStatsReader
+from src.interfaces.monitoring.metrics_gateway.core.collector import MistStatsReader as FailureModeMistStatsReader
+from src.interfaces.monitoring.metrics_gateway.core.samples import MetricSnapshot
 from src.interfaces.monitoring.metrics_gateway.prometheus import NAME_PATTERN
-from src.interfaces.monitoring.metrics_gateway.samples import MetricSnapshot
 from tests.unit.metrics_gateway.conftest import ORG_ID, SITE_A, SITE_B, StubResponse, build_overrides
 
 
@@ -212,7 +217,7 @@ class TestCollectorFailures:
         """A server-error organization response must produce no payload and log the status."""
         response = StubResponse(None, status_code=503)  # WHY: model a failed Mist statistics response.
         caplog.set_level(
-            "ERROR", logger="src.interfaces.monitoring.metrics_gateway.collector"
+            "ERROR", logger="src.interfaces.monitoring.metrics_gateway.core.collector"
         )  # WHY: capture the product status log.
         payload = FailureModeMistStatsReader._payload(response, "getOrgStats")  # WHY: drive the real src parser.
         assert payload is None  # WHY: a 503 response must not feed the collector.

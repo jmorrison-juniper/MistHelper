@@ -17,7 +17,7 @@ MISTHELPER-MIB DEFINITIONS ::= BEGIN
 --
 -- The generator reads three inputs:
 --   documentation/mist-api-openapi31json.json  the Mist field types.
---   src/interfaces/monitoring/metrics_gateway/catalog.py             the readings the agent
+--   src/interfaces/monitoring/metrics_gateway/core/catalog.py             the readings the agent
 --                                              answers.
 --   data/mib_generator/oid_assignments.json    the number of each
 --                                              field, so no OID moves.

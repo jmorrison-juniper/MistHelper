@@ -23,7 +23,7 @@ from pathlib import Path
 
 import pytest
 
-from src.interfaces.monitoring.metrics_gateway.catalog import (
+from src.interfaces.monitoring.metrics_gateway.core.catalog import (
     ROW_IDENTITY_COLUMN,
     SUBTREE_BY_SCOPE,
     MetricCatalog,

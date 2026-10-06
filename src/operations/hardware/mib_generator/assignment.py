@@ -21,7 +21,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
-from src.interfaces.monitoring.metrics_gateway.catalog import SUBTREE_BY_SCOPE, MetricCatalog, MetricScope
+from src.interfaces.monitoring.metrics_gateway.core.catalog import SUBTREE_BY_SCOPE, MetricCatalog, MetricScope
 from src.interfaces.monitoring.metrics_gateway.snmp import DEFAULT_BASE_OID
 from src.operations.hardware.mib_generator.document import LOG_PREFIX, OpenApiDocument
 

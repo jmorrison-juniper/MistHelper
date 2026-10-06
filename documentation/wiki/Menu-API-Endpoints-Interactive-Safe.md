@@ -1146,9 +1146,9 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/stats` | [`orgs.stats.getOrgStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/stats/get-org-stats) | [`ENDPOINT_ORG_STATS`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/interfaces/monitoring/metrics_gateway/collector.py) | Name |
-| GET | `/api/v1/orgs/{org_id}/stats/devices` | [`orgs.stats.listOrgDevicesStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/stats/devices/list-org-devices-stats) | [`ENDPOINT_DEVICE_STATS`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/interfaces/monitoring/metrics_gateway/collector.py) | Name |
-| GET | `/api/v1/orgs/{org_id}/stats/sites` | [`orgs.stats.listOrgSiteStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/stats/sites/list-org-site-stats) | [`ENDPOINT_SITE_STATS`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/interfaces/monitoring/metrics_gateway/collector.py) | Name |
+| GET | `/api/v1/orgs/{org_id}/stats` | [`orgs.stats.getOrgStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/stats/get-org-stats) | [`ENDPOINT_ORG_STATS`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/interfaces/monitoring/metrics_gateway/core/collector.py) | Name |
+| GET | `/api/v1/orgs/{org_id}/stats/devices` | [`orgs.stats.listOrgDevicesStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/stats/devices/list-org-devices-stats) | [`ENDPOINT_DEVICE_STATS`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/interfaces/monitoring/metrics_gateway/core/collector.py) | Name |
+| GET | `/api/v1/orgs/{org_id}/stats/sites` | [`orgs.stats.listOrgSiteStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/stats/sites/list-org-site-stats) | [`ENDPOINT_SITE_STATS`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/interfaces/monitoring/metrics_gateway/core/collector.py) | Name |
 | GET | `/api/v1/self` | None (raw request) | [`_check_token_rate_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/MistHelper.py) | Path |
 
 ## Menu 242

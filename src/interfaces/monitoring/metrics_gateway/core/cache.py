@@ -25,9 +25,9 @@ import threading
 import time
 from collections.abc import Callable
 
-from src.interfaces.monitoring.metrics_gateway.catalog import MetricCatalog, MetricScope
-from src.interfaces.monitoring.metrics_gateway.collector import MistMetricsCollector
-from src.interfaces.monitoring.metrics_gateway.samples import MetricSample, MetricSnapshot
+from src.interfaces.monitoring.metrics_gateway.core.catalog import MetricCatalog, MetricScope
+from src.interfaces.monitoring.metrics_gateway.core.collector import MistMetricsCollector
+from src.interfaces.monitoring.metrics_gateway.core.samples import MetricSample, MetricSnapshot
 
 logger = logging.getLogger(__name__)
 

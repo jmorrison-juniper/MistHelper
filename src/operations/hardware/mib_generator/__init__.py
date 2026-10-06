@@ -11,7 +11,7 @@ Why:
 
     - `documentation/mist-api-openapi31json.json` gives the type, the
       description, and the proof that a Mist field still exists.
-    - `src/interfaces/monitoring/metrics_gateway/catalog.py` gives the truth about the readings that
+    - `src/interfaces/monitoring/metrics_gateway/core/catalog.py` gives the truth about the readings that
       the agent answers.
     - `data/mib_generator/oid_assignments.json` gives the number of each field,
       so a live OID never moves.

@@ -34,6 +34,10 @@ PACKAGE_GROUPS = {  # Map every old direct package to its new domain and group.
 }  # Keep the test map identical to the approved package data model.
 MODULE_PATHS = {  # Map each old direct module to its new canonical module.
     "constants.py": "foundation/constants.py",
+    "interfaces/monitoring/metrics_gateway/cache.py": ("interfaces/monitoring/metrics_gateway/core/cache.py"),
+    "interfaces/monitoring/metrics_gateway/catalog.py": ("interfaces/monitoring/metrics_gateway/core/catalog.py"),
+    "interfaces/monitoring/metrics_gateway/collector.py": ("interfaces/monitoring/metrics_gateway/core/collector.py"),
+    "interfaces/monitoring/metrics_gateway/samples.py": ("interfaces/monitoring/metrics_gateway/core/samples.py"),
     "foundation/persistence/db/arango_writer.py": "foundation/persistence/db/writers/arango_writer.py",
     "foundation/persistence/db/redis_writer.py": "foundation/persistence/db/writers/redis_writer.py",
     "mist/intelligence/juniper_docs/classify/manual_sorter.py": (

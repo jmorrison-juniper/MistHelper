@@ -8,11 +8,11 @@ from typing import Any
 
 import pytest
 
-from src.interfaces.monitoring.metrics_gateway.cache import MetricsCache
-from src.interfaces.monitoring.metrics_gateway.catalog import ROW_IDENTITY_COLUMN, MetricScope
-from src.interfaces.monitoring.metrics_gateway.collector import MistMetricsCollector, MistStatsReader
-from src.interfaces.monitoring.metrics_gateway.collector import MistStatsReader as FailureModeMistStatsReader
-from src.interfaces.monitoring.metrics_gateway.samples import MetricSnapshot
+from src.interfaces.monitoring.metrics_gateway.core.cache import MetricsCache
+from src.interfaces.monitoring.metrics_gateway.core.catalog import ROW_IDENTITY_COLUMN, MetricScope
+from src.interfaces.monitoring.metrics_gateway.core.collector import MistMetricsCollector, MistStatsReader
+from src.interfaces.monitoring.metrics_gateway.core.collector import MistStatsReader as FailureModeMistStatsReader
+from src.interfaces.monitoring.metrics_gateway.core.samples import MetricSnapshot
 from src.interfaces.monitoring.metrics_gateway.service import (
     ALL_INTERFACES_HOST,
     DEFAULT_HOST,
@@ -56,7 +56,7 @@ def test_payload_returns_none_and_logs_429(caplog: pytest.LogCaptureFixture) -> 
     """A 429 Mist response must produce no payload and report the status."""
     response = StubResponse(status_code=429, data={"detail": "rate limited"})  # Model a rate-limited endpoint.
     caplog.set_level(
-        "ERROR", logger="src.interfaces.monitoring.metrics_gateway.collector"
+        "ERROR", logger="src.interfaces.monitoring.metrics_gateway.core.collector"
     )  # Capture the product error record.
     payload = MistStatsReader._payload(response, "getOrgStats")  # Drive the product status parser.
     assert payload is None  # A 429 reply must not feed the metric collector.
@@ -67,7 +67,7 @@ def test_payload_returns_none_and_logs_503(caplog: pytest.LogCaptureFixture) -> 
     """A 503 Mist response must produce no payload and report the status."""
     response = StubResponse(status_code=503, data={"detail": "unavailable"})  # Model a server-error endpoint.
     caplog.set_level(
-        "ERROR", logger="src.interfaces.monitoring.metrics_gateway.collector"
+        "ERROR", logger="src.interfaces.monitoring.metrics_gateway.core.collector"
     )  # Capture the product error record.
     payload = FailureModeMistStatsReader._payload(response, "getOrgStats")  # Drive the real src status parser.
     assert payload is None  # A 503 reply must not feed the metric collector.
@@ -354,7 +354,7 @@ def test_the_package_exports_stay_importable() -> None:
 
 def test_the_scope_set_covers_every_subtree() -> None:
     """A scope without a subtree number would raise during a walk."""
-    from src.interfaces.monitoring.metrics_gateway.catalog import SUBTREE_BY_SCOPE
+    from src.interfaces.monitoring.metrics_gateway.core.catalog import SUBTREE_BY_SCOPE
 
     assert set(SUBTREE_BY_SCOPE) == set(MetricScope)
     assert len(set(SUBTREE_BY_SCOPE.values())) == len(MetricScope)

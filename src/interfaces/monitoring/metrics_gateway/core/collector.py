@@ -25,8 +25,13 @@ import time
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
-from src.interfaces.monitoring.metrics_gateway.catalog import MetricCatalog, MetricDefinition, MetricKind, MetricScope
-from src.interfaces.monitoring.metrics_gateway.samples import LabelPairs, MetricSnapshot, SampleBuilder
+from src.interfaces.monitoring.metrics_gateway.core.catalog import (
+    MetricCatalog,
+    MetricDefinition,
+    MetricKind,
+    MetricScope,
+)
+from src.interfaces.monitoring.metrics_gateway.core.samples import LabelPairs, MetricSnapshot, SampleBuilder
 
 logger = logging.getLogger(__name__)
 

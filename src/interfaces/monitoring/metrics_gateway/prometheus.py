@@ -22,8 +22,8 @@ import logging
 import math
 import re
 
-from src.interfaces.monitoring.metrics_gateway.catalog import MetricKind
-from src.interfaces.monitoring.metrics_gateway.samples import LabelPairs, MetricSample, MetricSnapshot
+from src.interfaces.monitoring.metrics_gateway.core.catalog import MetricKind
+from src.interfaces.monitoring.metrics_gateway.core.samples import LabelPairs, MetricSample, MetricSnapshot
 
 logger = logging.getLogger(__name__)
 

@@ -109,6 +109,27 @@ def test_new_domain_levels_follow_five_item_rule() -> None:
     assert not violations, message  # Fail with the checked level count and each violation.
 
 
+def test_metrics_gateway_core_has_the_expected_children() -> None:
+    """Require the gateway root and core package to keep their approved shapes."""
+    gateway_root = SOURCE_ROOT / "interfaces" / "monitoring" / "metrics_gateway"
+    core_root = gateway_root / "core"
+    gateway_children = visible_children(gateway_root)
+    core_children = visible_children(core_root)
+    assert {child.name for child in gateway_children} == {
+        "core",
+        "prometheus.py",
+        "service.py",
+        "snmp.py",
+        "web.py",
+    }, f"Checked {len(gateway_children)} gateway children: {sorted(child.name for child in gateway_children)}"
+    assert {child.name for child in core_children} == {
+        "cache.py",
+        "catalog.py",
+        "collector.py",
+        "samples.py",
+    }, f"Checked {len(core_children)} core children: {sorted(child.name for child in core_children)}"
+
+
 def test_tracked_text_uses_only_canonical_source_paths() -> None:
     """Reject each source path that existed before the move."""  # Preserve the existing behavior.
     separators = r"[./\\]"  # Accept import paths and both filesystem separator forms.

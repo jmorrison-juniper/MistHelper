@@ -42,8 +42,8 @@ logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
 from src.interfaces.monitoring.metrics_gateway.snmp import SnmpPassPersistResponder, protect_protocol_streams
 protect_protocol_streams()
 
-from src.interfaces.monitoring.metrics_gateway.cache import MetricsCache
-from src.interfaces.monitoring.metrics_gateway.collector import MistMetricsCollector, MistStatsReader
+from src.interfaces.monitoring.metrics_gateway.core.cache import MetricsCache
+from src.interfaces.monitoring.metrics_gateway.core.collector import MistMetricsCollector, MistStatsReader
 
 class R:
     def __init__(self, data):

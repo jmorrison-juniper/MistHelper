@@ -19,8 +19,8 @@ import threading
 from dataclasses import dataclass, replace
 from typing import Any
 
-from src.interfaces.monitoring.metrics_gateway.cache import DEFAULT_REFRESH_SECONDS, MetricsCache
-from src.interfaces.monitoring.metrics_gateway.collector import MistMetricsCollector, MistStatsReader
+from src.interfaces.monitoring.metrics_gateway.core.cache import DEFAULT_REFRESH_SECONDS, MetricsCache
+from src.interfaces.monitoring.metrics_gateway.core.collector import MistMetricsCollector, MistStatsReader
 from src.interfaces.monitoring.metrics_gateway.snmp import DEFAULT_BASE_OID
 
 logger = logging.getLogger(__name__)

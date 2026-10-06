@@ -13,7 +13,12 @@ from pathlib import Path
 
 import pytest
 
-from src.interfaces.monitoring.metrics_gateway.catalog import MetricCatalog, MetricDefinition, MetricKind, MetricScope
+from src.interfaces.monitoring.metrics_gateway.core.catalog import (
+    MetricCatalog,
+    MetricDefinition,
+    MetricKind,
+    MetricScope,
+)
 from src.interfaces.monitoring.metrics_gateway.snmp import DEFAULT_BASE_OID
 from src.operations.hardware.mib_generator.assignment import (
     AllowList,

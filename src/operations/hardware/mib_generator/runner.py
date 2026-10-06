@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
-from src.interfaces.monitoring.metrics_gateway.catalog import (
+from src.interfaces.monitoring.metrics_gateway.core.catalog import (
     SUBTREE_BY_SCOPE,
     MetricCatalog,
     MetricDefinition,

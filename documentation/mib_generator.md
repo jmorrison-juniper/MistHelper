@@ -10,7 +10,7 @@ The generator reads three inputs:
 | Input | Path | Question it answers |
 | --- | --- | --- |
 | The Mist OpenAPI file | `documentation/mist-api-openapi31json.json` | What type does a Mist field carry? |
-| The metric catalog | `src/interfaces/monitoring/metrics_gateway/catalog.py` | Which readings does the agent answer? |
+| The metric catalog | `src/interfaces/monitoring/metrics_gateway/core/catalog.py` | Which readings does the agent answer? |
 | The OID ledger | `data/mib_generator/oid_assignments.json` | Which number does each reading own? |
 
 A fourth file, `data/mib_generator/allowlist.json`, names the Mist endpoints
@@ -105,5 +105,5 @@ can take that number, so no stored history can change meaning.
 ## When Mist adds a field
 
 The generator does not add a column on its own. Add the reading to
-`src/interfaces/monitoring/metrics_gateway/catalog.py` first, then run the generator. Use
+`src/interfaces/monitoring/metrics_gateway/core/catalog.py` first, then run the generator. Use
 `--mib-report` to see which fields are available.

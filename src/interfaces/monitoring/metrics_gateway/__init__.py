@@ -23,11 +23,16 @@ Why:
 import importlib
 from typing import TYPE_CHECKING, Any
 
-from src.interfaces.monitoring.metrics_gateway.cache import MetricsCache
-from src.interfaces.monitoring.metrics_gateway.catalog import MetricCatalog, MetricDefinition, MetricKind, MetricScope
-from src.interfaces.monitoring.metrics_gateway.collector import MistMetricsCollector, MistStatsReader
+from src.interfaces.monitoring.metrics_gateway.core.cache import MetricsCache
+from src.interfaces.monitoring.metrics_gateway.core.catalog import (
+    MetricCatalog,
+    MetricDefinition,
+    MetricKind,
+    MetricScope,
+)
+from src.interfaces.monitoring.metrics_gateway.core.collector import MistMetricsCollector, MistStatsReader
+from src.interfaces.monitoring.metrics_gateway.core.samples import MetricSample, MetricSnapshot
 from src.interfaces.monitoring.metrics_gateway.prometheus import PrometheusRenderer
-from src.interfaces.monitoring.metrics_gateway.samples import MetricSample, MetricSnapshot
 from src.interfaces.monitoring.metrics_gateway.service import GatewaySettings, build_cache, start_refresh_thread
 from src.interfaces.monitoring.metrics_gateway.snmp import OidTree, SnmpPassPersistResponder
 

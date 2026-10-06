@@ -6,16 +6,16 @@ from typing import Any
 
 import pytest
 
-from src.interfaces.monitoring.metrics_gateway.cache import MINIMUM_REFRESH_SECONDS, MetricsCache
-from src.interfaces.monitoring.metrics_gateway.catalog import MetricCatalog, MetricDefinition, MetricKind
-from src.interfaces.monitoring.metrics_gateway.collector import MistMetricsCollector, MistStatsReader
+from src.interfaces.monitoring.metrics_gateway.core.cache import MINIMUM_REFRESH_SECONDS, MetricsCache
+from src.interfaces.monitoring.metrics_gateway.core.catalog import MetricCatalog, MetricDefinition, MetricKind
+from src.interfaces.monitoring.metrics_gateway.core.collector import MistMetricsCollector, MistStatsReader
+from src.interfaces.monitoring.metrics_gateway.core.samples import MetricSample, MetricSnapshot
 from src.interfaces.monitoring.metrics_gateway.prometheus import (
     NAME_PATTERN,
     PrometheusRenderer,
     escape_label_value,
     format_value,
 )
-from src.interfaces.monitoring.metrics_gateway.samples import MetricSample, MetricSnapshot
 from tests.unit.metrics_gateway.conftest import ORG_ID, StubResponse, build_overrides
 
 
@@ -148,7 +148,7 @@ class TestPrometheusRenderer:
         """A 429 Mist response must produce no metrics payload and report the status."""
         response = StubResponse(status_code=429, data={"detail": "rate limited"})  # Model a rate-limited endpoint.
         caplog.set_level(
-            "ERROR", logger="src.interfaces.monitoring.metrics_gateway.collector"
+            "ERROR", logger="src.interfaces.monitoring.metrics_gateway.core.collector"
         )  # Capture the product error record.
         payload = MistStatsReader._payload(response, "getOrgStats")  # Drive the product status parser.
         assert payload is None  # A 429 reply must not feed the metric renderer.
@@ -338,13 +338,13 @@ def _reading(snapshot: MetricSnapshot, name: str) -> float | None:
 
 def test_metrics_payload_returns_none_and_logs_503(caplog: pytest.LogCaptureFixture) -> None:
     """A 503 Mist response must produce no metrics payload and report the status."""
-    from src.interfaces.monitoring.metrics_gateway.collector import (
+    from src.interfaces.monitoring.metrics_gateway.core.collector import (
         MistStatsReader as FailureModeMistStatsReader,
     )  # WHY: prove src import.
 
     response = StubResponse(status_code=503, data={"detail": "down"})  # WHY: model a server-side API outage.
     caplog.set_level(
-        "ERROR", logger="src.interfaces.monitoring.metrics_gateway.collector"
+        "ERROR", logger="src.interfaces.monitoring.metrics_gateway.core.collector"
     )  # WHY: capture the product error record.
     payload = FailureModeMistStatsReader._payload(response, "getOrgStats")  # WHY: drive the real status parser.
     assert payload is None  # WHY: a 503 reply must not feed the metric renderer.

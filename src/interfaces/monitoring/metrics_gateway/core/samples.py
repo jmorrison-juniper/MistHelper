@@ -16,7 +16,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 
-from src.interfaces.monitoring.metrics_gateway.catalog import MetricDefinition, MetricScope
+from src.interfaces.monitoring.metrics_gateway.core.catalog import MetricDefinition, MetricScope
 
 logger = logging.getLogger(__name__)
 

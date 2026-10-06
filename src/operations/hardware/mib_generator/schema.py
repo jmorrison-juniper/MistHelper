@@ -19,7 +19,7 @@ import logging
 from dataclasses import dataclass
 from typing import Any
 
-from src.interfaces.monitoring.metrics_gateway.catalog import MetricScope
+from src.interfaces.monitoring.metrics_gateway.core.catalog import MetricScope
 from src.operations.hardware.mib_generator.document import LOG_PREFIX, OpenApiDocument
 
 logger = logging.getLogger(__name__)

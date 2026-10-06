@@ -13,7 +13,7 @@ import logging
 
 from flask import Flask, Response
 
-from src.interfaces.monitoring.metrics_gateway.cache import MetricsCache
+from src.interfaces.monitoring.metrics_gateway.core.cache import MetricsCache
 from src.interfaces.monitoring.metrics_gateway.prometheus import CONTENT_TYPE, PrometheusRenderer
 
 logger = logging.getLogger(__name__)

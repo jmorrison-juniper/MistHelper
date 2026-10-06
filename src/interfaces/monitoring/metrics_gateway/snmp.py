@@ -36,16 +36,16 @@ import sys
 from collections.abc import Iterator
 from typing import IO, TYPE_CHECKING
 
-from src.interfaces.monitoring.metrics_gateway.catalog import (
+from src.interfaces.monitoring.metrics_gateway.core.catalog import (
     ROW_IDENTITY_COLUMN,
     MetricCatalog,
     MetricKind,
     MetricScope,
 )
-from src.interfaces.monitoring.metrics_gateway.samples import MetricSample, MetricSnapshot
+from src.interfaces.monitoring.metrics_gateway.core.samples import MetricSample, MetricSnapshot
 
 if TYPE_CHECKING:  # An import for a type only. It must not run, because it would form an import cycle.
-    from src.interfaces.monitoring.metrics_gateway.cache import MetricsCache
+    from src.interfaces.monitoring.metrics_gateway.core.cache import MetricsCache
 
 logger = logging.getLogger(__name__)
 
