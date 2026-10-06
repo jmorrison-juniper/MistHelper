@@ -42,8 +42,9 @@ logger = logging.getLogger(__name__)  # Name the logger for this module so a rea
 
 # The operationId that selects the primary-key strategy for the written row.
 _OPERATION = "testOrgCradlepointConnection"
-_HTTP_SUCCESS_MIN = 200  # Only a completed 2xx result proves that the cloud answered the status question.
+_HTTP_OK = 200  # Preserve the established symbol and mark the first completed success status.
 _HTTP_SUCCESS_MAX = 299  # A 3xx redirect is an unfinished exchange, so it ends the success band here.
+_HTTP_ERROR_MIN = 400  # Preserve the established symbol and classify a completed HTTP error response.
 _ABSENT_STATUS = object()  # A unique sentinel keeps an absent attribute distinct from every real value.
 _OUTCOME_ABSENT = "absent"  # Name the case where the SDK response carries no transport status at all.
 _OUTCOME_MALFORMED = "malformed"  # Name the case where the transport status is not a usable integer.
@@ -103,11 +104,13 @@ class OrgCradlepointConnectionExporter:
                 f"Cradlepoint status request returned a {_OUTCOME_MALFORMED} HTTP transport status "
                 f"of type {type(raw_status).__name__}"
             )
-        if not _HTTP_SUCCESS_MIN <= raw_status <= _HTTP_SUCCESS_MAX:  # A 1xx, 3xx, 4xx, or 5xx result is not a success.
+        if not _HTTP_OK <= raw_status <= _HTTP_SUCCESS_MAX:  # A 1xx, 3xx, 4xx, or 5xx result is not a success.
+            status_class = "error" if raw_status >= _HTTP_ERROR_MIN else "non-success"  # Classify without trust.
             logger.error(  # Report only the operation and status, never the response body.
-                "The cloud returned HTTP %s for the Cradlepoint status at org %s, outcome=%s",
+                "The cloud returned HTTP %s for the Cradlepoint status at org %s, class=%s, outcome=%s",
                 raw_status,
                 org_id,
+                status_class,
                 _OUTCOME_OUT_OF_RANGE,
             )
             raise RuntimeError(f"Cradlepoint status request returned HTTP {raw_status}")
