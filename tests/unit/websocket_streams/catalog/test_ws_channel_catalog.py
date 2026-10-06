@@ -14,10 +14,12 @@ def test_channel_catalog_has_16_entries_in_page_order() -> None:
     assert catalog.get("site.mxedges") is None  # Deprecated site events are absent.
     org_stats = catalog.get("org.stats.mxedges")  # Read the retained organization statistics channel.
     site_stats = catalog.get("site.stats.mxedges")  # Read the retained site statistics channel.
-    assert org_stats is not None  # The organization statistics channel remains available.
-    assert org_stats.path_template == "/orgs/{org_id}/stats/mxedges"  # Keep the working organization path.
-    assert site_stats is not None  # The site statistics channel remains available.
-    assert site_stats.path_template == "/sites/{site_id}/stats/mxedges"  # Keep the working site path.
+    assert (
+        org_stats is not None and org_stats.path_template == "/orgs/{org_id}/stats/mxedges"
+    )  # The organization statistics channel keeps its working path.
+    assert (
+        site_stats is not None and site_stats.path_template == "/sites/{site_id}/stats/mxedges"
+    )  # The site statistics channel keeps its working path.
 
 
 def test_channel_catalog_lookup_and_repeatable_path() -> None:
