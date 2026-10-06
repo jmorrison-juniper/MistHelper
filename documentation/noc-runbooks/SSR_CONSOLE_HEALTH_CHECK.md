@@ -5,7 +5,7 @@
 | Field | Value |
 |---|---|
 | **Document type** | Cross-alarm procedure. This document is not an alarm runbook. No Mist alarm key maps to it. |
-| **Platform** | Any Mist-managed Juniper Session Smart Router. The steps are model agnostic. Two steps are platform dependent, and each one says so. |
+| **Platform** | Any Mist-managed Juniper Session Smart Router. The steps are model agnostic. Two steps are platform dependent, and each one says so. Step C2 needs SSR 7.1.0 or later. |
 | **Management model** | Mist-managed only. A conductor-managed router uses a different command set. See §11. |
 | **Access method** | A local console session, or an out-of-band console server session. The steps do not need cloud reachability. |
 | **Purpose** | Give a technician one ordered health check that proves whether the box is healthy, and that names the failure signature at each step. |
@@ -71,7 +71,7 @@ the only record of the state before the reboot.
 | A3 | `show system services` | Lists the systemd services that sit outside the process manager. The web service and the plugin adapter live here. | Every service reports `active`. | A service that reports `failed` or `inactive` needs Tier 2. Record the service name. |
 | A4 | `show alarms` | Lists every active alarm that the router raised about itself. The router names its own fault before you guess at it. | `There are 0 shelved alarms`, and no rows above that line. | Read the `Category` column. Map the category to the stage in §10, then go to that stage. Record the alarm identifier and the message text word for word. |
 | A5 | `show events` | Shows the historical event record. This is the only way to learn what happened before the current state. | Events match the known work. No unexplained restart. | Narrow the window with `show events from 1d`. Narrow the type with `show events type system`. A configuration change appears as `admin.running_config_change`. A time correction appears as `system.ntp_adjustment`. |
-| A6 | `show mist` | States the link between the router and the Mist cloud. Use it when Mist reports the device as disconnected but the console works. | The command reports a connected state. Add `detail` for the full record. | No connection means that the box is healthy and the management path is broken. Go to stage C and stage D. Do not treat the device as down. |
+| A6 | `show mist` | States the link between the router and the Mist cloud. Use it when Mist reports the device as disconnected but the console works. | The `Agent` column reports `assigned`. The `Connection` column reports `up`. Add `detail` for the full record. | `down` in the `Connection` column means that the box is healthy and the management path is broken. The column can add a cause after `down`, such as `no DNS response`. Record that text word for word. Run stage C, then stage D through step D7. Do not treat the device as down. `unassigned` in the `Agent` column means that the device has no site in Mist. `released` means that an administrator released the device from Mist. Escalate either state to Tier 2. |
 | A7 | `show system connectivity` | States the connection between the nodes of this router. It matters only on a two-node router. | Every row reports `connected`. | `disconnected` on a two-node router means that the pair lost its link. Check the high-availability interface in stage C. |
 | A8 | `show system version detail` | States the exact build and the package version. Firmware mismatch explains many faults that look random. | The version matches the version that Mist reports for this device. | A mismatch between the console and Mist means that Mist holds stale data, or that a local override is in force. Go to A9. |
 | A9 | `show config version` and `show config local-override` | The first states when the running configuration was committed. The second states whether someone froze local changes against the cloud. | The commit time matches a known change. Local override is disabled. | A commit time that matches the start of the fault points at a configuration change. Local override that is enabled means that Mist cannot push a repair. Tier 2 must clear the override. |
@@ -101,14 +101,28 @@ instead.
 | Step | Command | Why you run it | Healthy output | Unhealthy signature and next action |
 |---|---|---|---|---|
 | C1 | `show device-interface` | Reports the physical ports. This is the layer-one truth. Add `summary` for one line per port. | Each port that carries service reports an operational state of up. | A port that reports down is the fault. Check the cable, the transceiver, and the far-end port. The `interface operational down` alarm reports this same state. |
-| C2 | `show device-interface <name> optics-statistics` | Reports the optical transmit and receive levels for a fiber port. A marginal optic causes loss that no other command shows. | The receive level sits inside the range that the transceiver datasheet states. | A receive level near the lower limit means a dirty connector, a bent fiber, or a failing optic. Clean the connector first, then replace the transceiver. |
-| C3 | `show device-interface <name> extended-statistics` | Reports the error counters for the port. | The error counters hold at zero, or they do not grow between two runs. | A growing error counter means a physical fault. Repeat the command after 60 seconds to prove growth. A duplex mismatch and a bad cable both appear here. |
+| C2 | `show device-interface name <name> optics-statistics` | Reports the optical power levels, the vendor data, and the hardware thresholds of a fiber port. A marginal optic causes loss that no other command shows. Take the port name from step C1, such as `xe-0-1`. The `name` keyword is mandatory. This step needs SSR 7.1.0 or later. On SSR 7.0.x, use the procedure below this table. | Each power level sits inside the thresholds in the same output. | A low receive level means a dirty connector, a bent fiber, a failing optic, or a weak far-end transmitter. Clean and inspect the connector, then read the level again. If the level stays low, read the transmit level at the far end. A receive level above the high threshold means that the receiver is in overload. Install an optical attenuator at the receiver. |
+| C3 | `show device-interface name <name> extended-statistics` | Reports the error counters for the port. | The error counters hold at zero, or they do not grow between two runs. | A growing error counter means a physical fault. Repeat the command after 60 seconds to prove growth. A duplex mismatch and a bad cable both appear here. |
 | C4 | `show network-interface` | Reports the logical interfaces, the addresses, the gateway, the VLAN, and the admin and operational status. This is the layer-three truth. | Each interface holds the expected address. `Admin Status` and `Oper Status` both report up. | An address of `--` on an interface that uses DHCP means no lease, so go to C6. An operational status of down with a physical port that is up means a configuration fault. |
 | C5 | `show arp` and `show arp detail` | Reports the address resolution table. A gateway that does not resolve stops all traffic on that interface. | The gateway address appears with a `Valid` state. | A state of `Refresh` with a rising retry count means that the gateway does not answer. A missing gateway entry stops the forwarding on that interface. Check the far-end device. Clear one entry with `clear arp device-interface <name> ip <address>`. |
 | C6 | `show dhcp v4` and `show dhcp v4 detail` | Reports the DHCP lease on each interface that learns its address. | `Dhcp State: Resolved`. The lease expiration time sits in the future. | Any other state means no address. The `giid` alarm reports this same condition. Confirm that the port is up, then confirm that the provider hands out a lease. Release and relearn with `release dhcp lease network-interface <name>`. |
 | C7 | `show lte summary`, `show lte signal`, and `show lte sim` | Reports the cellular backup path. Run these steps only on a router that holds an LTE interface. | The registration status and the connection status both report a connected state. The signal rating is good. | A signal rating of marginal, poor, or zero means a radio fault or an antenna fault. A system mode that does not report LTE means a radio fault. A SIM that does not register means a carrier problem. |
 | C8 | `show lldp-neighbors` | Reports the neighbor that each port sees. This proves the physical wiring without a site visit. | Each port reports the neighbor that the design names. | No neighbor on a port that should hold one means a wrong patch, a dead far-end port, or a far end that does not run the protocol. |
 | C9 | `show network-interface redundancy` | Reports the state of an interface pair. Run this step only when the design uses interface redundancy. | The output matches the intended active and standby roles. | A pair that lost its partner runs with no protection. Repair it before the next maintenance window. |
+
+### Check an optic without optics-statistics
+
+SSR 7.0.x does not have the `optics-statistics` value, so the console shows no light level. Do these steps instead of step C2.
+
+1. Run `show device-interface name <name>`. Record the admin status, the operational status, the speed, and the error counters.
+2. Run step C3 two times, 60 seconds apart. An error counter that grows proves a physical fault.
+3. Clean and inspect each connector, then read the counters again. Dirt on the end face of a connector is a frequent cause of loss.
+4. Install a known good optic of the same type. If the fault stops, replace the first optic.
+5. Read the transmit level and the receive level on the far-end device, if your team can reach it.
+
+Do not try `ethtool -m` from the Linux shell. The `ethtool` command needs access as the root user. The SSR documentation states that the command is not available on a Mist-managed router. Ask Juniper TAC for a diagnostic at the operating system level.
+
+Caution: one vendor variant of the Juniper 10G LR SFP+ optic `740-021309` can keep a port out of service. This fault occurs in ports `xe-0-0` through `xe-0-3` of an SSR1300 or an SSR1400. The port reports `Admin Status: down`, `Operational Status: unknown`, `Speed: 0 Mb/s`, and `Plugin Info: unavailable`, and it carries no traffic. No software workaround exists. Open a case with HPE technical support for an RMA of the optic only. Knowledge base article I95-65908 gives the detail.
 
 ## 6. Stage D. Can the router reach anything?
 
@@ -124,6 +138,32 @@ report a healthy router that carries no user traffic.
 | D4 | `traceroute <destination-ip>` | Shows each hop toward the target. It names the hop where the path stops. | The path reaches the target. Each hop answers. | The last hop that answers names the boundary of your control. A path that stops at the first upstream hop belongs to the provider. Add `egress-interface <name>` and `gateway-ip <address>` to bypass the service and the routing table. |
 | D5 | `show ntp` | Reports the time source. Wrong time breaks the certificates, the logs, and the correlation between the console and Mist. | At least one source shows the `syspeer` tally code. The offset stays small. | No source means that the clock drifts. A certificate then fails, and the cloud link drops. Confirm that the router reaches the time source on UDP port 123. |
 | D6 | `show dns resolutions` | Reports every hostname that the configuration needs, and whether the router resolved it. | Every row reports a resolved state, and holds an address. | An unresolved hostname stops the feature that uses it. Confirm the name server with `show network-interface`, then force a retry with `refresh dns resolutions`. |
+| D7 | `show mist detail` | Reports the state of the link that the Mist agent uses to reach the cloud. The agent connects by host name on TCP port 443, so an ICMP test cannot prove this path. | The `Agent` field reports `assigned`. The `Connection` field reports `up`. | `down` while D1 passes means that DNS or a firewall blocks the agent. A cause such as `no DNS response` points at DNS. Do the checks in [Test the path to the Mist cloud](#test-the-path-to-the-mist-cloud). Then escalate to Tier 2 with the cause text and the result of each check. |
+
+### Test the path to the Mist cloud
+
+The Mist agent on the router connects to the Mist cloud on TCP port 443. It finds each cloud host by name through DNS. Step D7 reads the state of that link from the agent itself. That state is the best proof of the path at the console.
+
+Do not use an ICMP `ping` as proof of the path, for these reasons:
+
+- Some hosts of the Mist cloud do not reply to ICMP. On 2026-10-05, `ep-terminator.mistsys.net` sent no ICMP reply, but TCP port 443 on the same host accepted a connection.
+- The `ping` command and the `traceroute` command accept an IP address only.
+- The `ping` command bypasses the service policy, so it does not follow the path of the agent.
+
+On an SSR1300, the agent uses the MGMT port `mgmt-0-0` when that port has a DHCP lease and a default route. Otherwise, the agent uses a WAN port. Step C4 names the network interface on each port.
+
+For the Global 01 cloud, the SSR hosts are `ep-terminator.mistsys.net`, `portal.mist.com`, `redirect.mist.com`, `software.128technology.com`, and `rp.cloud.threatseeker.com`. The firewall page in §14 gives the hosts for each cloud.
+
+When step D7 reports `down`, do these checks:
+
+1. Run step D1 to 8.8.8.8 and to 1.1.1.1. The SSR must send its DNS requests to one of these two addresses.
+2. Make sure that the site firewall lets the router reach 8.8.8.8 and 1.1.1.1 for DNS. A reply in step 1 does not prove this.
+3. Make sure that the site firewall lets the router connect to each SSR host on TCP port 443.
+4. Make sure that each firewall rule uses a host name, because the IP addresses of the terminator hosts change.
+
+If the case needs a TCP test from the router itself, ask Juniper TAC.
+
+The portal sends each `Testing Tools` command through the cloud link, so the portal tools do not run while the link is down.
 
 ## 7. Stage E. Do the SVR overlay peers work?
 
@@ -195,7 +235,7 @@ stage A takes under one minute and it names the fault in many cases.
 Jacob Skidmore reported that several commands in the current runbooks do not run.
 That report is correct. This section names each one, and gives the command that
 works. Every replacement comes from the Session Smart Networking command line
-reference. See §13.
+reference. See §14.
 
 ### Commands that no SSR release accepts
 
@@ -207,6 +247,8 @@ reference. See §13.
 | `show sessions summary` | The PCLI rejects it. No `summary` subcommand exists. | `show sessions rows 20` for the table. `show sessions top bandwidth` for the largest consumers. |
 | `show events filter type <type>` | The PCLI rejects the `filter` keyword. | `show events type <type>`. |
 | `ping <target> source <ip>` | The `ping` command holds no `source` keyword. | `ping egress-interface <name> <target>` to choose the path. `service-ping source-ip <ip> <target>` to test as a user. |
+| `show device-interface <name> optics-statistics` | The command fails, because the port name needs the `name` keyword. The `optics-statistics` value also needs SSR 7.1.0 or later. | `show device-interface name <name> optics-statistics`. See step C2. On SSR 7.0.x, see [Check an optic without optics-statistics](#check-an-optic-without-optics-statistics). |
+| `show device-interface <name> extended-statistics` | The command fails, because the port name needs the `name` keyword. | `show device-interface name <name> extended-statistics`. See step C3. |
 
 Warning: the difference between `ping` and `service-ping` is not cosmetic. The
 `ping` command bypasses the policy plane. A successful `ping` therefore proves the
@@ -292,6 +334,20 @@ Run `python scripts/fetch_ssr_docs.py` to build a local copy of every page above
 under `documentation/references/ssr/`. Use `python scripts/pdf_to_markdown.py` on
 a downloaded PDF. Neither output is committed, because both hold verbatim vendor
 text. Confirm a command against the local copy when you have no network access.
+
+### Sources for the optic check and the cloud path check
+
+The fetch script does not copy these pages. Open each page at its address.
+
+| Source | Where |
+|---|---|
+| SSR 7.1 release notes. Item I95-44742 adds the `optics-statistics` value. | <https://docs.128technology.com/docs/release_notes_128t_7.1> |
+| Link settings. The note on the `ethtool` command. | <https://docs.128technology.com/docs/howto_config_link_settings> |
+| Knowledge base article I95-65908. The 10G LR optic on an SSR1300 or an SSR1400. | <https://docs.128technology.com/kb/2026/09/25/I95-65908> |
+| WAN telemetry troubleshooting. The `Agent` column and the `Connection` column of `show mist`. | <https://docs.128technology.com/docs/wan_telemetry_troubleshooting> |
+| SSR1300 quickstart. The MGMT port rule. | <https://docs.128technology.com/docs/wan_assurance_ssr1300_quickstart> |
+| Juniper Mist firewall ports. The SSR hosts and the DNS rule. | <https://www.juniper.net/documentation/us/en/software/mist/mist-management/topics/ref/firewall-ports-to-open.html> |
+| Fiber Optic Association, Guidelines For Testing And Troubleshooting Cable Plant Installations (2024). The cleaning rule and the power level rules. | <https://www.thefoa.org/tech/> |
 
 ## 15. Escalation
 

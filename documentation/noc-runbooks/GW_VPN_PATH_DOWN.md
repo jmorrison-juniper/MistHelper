@@ -119,7 +119,7 @@ If BGP is `Established` while SVR paths are down, transport-to-BGP-peer-IP is fi
 |---|---|
 | Underlay link | If a WAN link alarm (`bad_wan_uplink`, `intermittent_wan_connectivity`) is co-firing on the ISP that carries this path, resolve that first — SVR will re-establish once transport recovers. |
 | ISP degradation | If the underlay is technically `up` but performance is bad (loss / latency / jitter above SVR thresholds), open an ISP ticket with the affected circuit ID; SVR is doing the right thing by marking the path down. |
-| Interface / optics | Check CRC, drops, and optics DDM on the WAN-facing interface (`show device-interface`). Replace cable / SFP if physical-layer fault is confirmed. |
+| Interface / optics | Run step C2 and step C3 of [SSR_CONSOLE_HEALTH_CHECK.md](SSR_CONSOLE_HEALTH_CHECK.md) on the WAN-facing port. The default `show device-interface` output shows no light level. Replace the cable or the SFP when those steps confirm a physical fault. |
 | Peer device | Verify the DC-hub SSR1300's SVR process is up and its side of the path is not the problem (hub-side runbook / Mist WAN Edges view for that hub). If the hub-side gateway is impaired, coordinate with the hub-side on-call rather than driving from the branch. |
 | Reachability | From SSR, confirm the remote peer's public IP is reachable over the affected transport with `ping egress-interface <network-interface> <remote-public-ip>`. |
 | MTU / PMTUD | SVR encapsulates in UDP; a PMTUD blackhole on the underlay will cause paths to flap or stay down. Verify path MTU on the affected transport. |

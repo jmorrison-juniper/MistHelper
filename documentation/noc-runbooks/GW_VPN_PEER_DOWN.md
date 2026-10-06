@@ -138,7 +138,7 @@ Because `vpn_peer_down` is the aggregate of all constituent paths failing, resol
 | Constituent paths | If any `gw_vpn_path_down` alarms are co-firing (they usually are), resolve them per `GW_VPN_PATH_DOWN.md` — the peer will come back on its own once at least one path is restored. |
 | Underlay link | If a WAN link alarm (`bad_wan_uplink`, `intermittent_wan_connectivity`) is co-firing on any ISP, resolve that first. |
 | Simultaneous ISP outages | If both ISPs are down, this is not an SVR problem — it is a dual-ISP branch outage. Open ISP tickets in parallel and treat as a site outage; page hub-side on-call. |
-| Interface / optics | Check CRC, drops, and optics DDM on all WAN-facing interfaces (`show device-interface`). Replace cable / SFP if physical-layer fault is confirmed. |
+| Interface / optics | Run step C2 and step C3 of [SSR_CONSOLE_HEALTH_CHECK.md](SSR_CONSOLE_HEALTH_CHECK.md) on each WAN-facing port. The default `show device-interface` output shows no light level. Replace the cable or the SFP when those steps confirm a physical fault. |
 | Default route / gateway | Verify default route and next-hop resolution on each transport (`show rib` and `show fib <peer-public-ip>/32`). |
 | Firewall / NAT (branch-side) | Verify branch firewall / NAT is not blocking outbound to the peer's public IP(s) on the transport ports SVR uses. |
 | Peer device | Verify the DC-hub SSR1300 (peer end) is up and its side of the peering is not the problem (hub-side runbook / Mist WAN Edges view for that hub). If the hub-side gateway is impaired, coordinate with the hub-side on-call rather than driving from the branch. |

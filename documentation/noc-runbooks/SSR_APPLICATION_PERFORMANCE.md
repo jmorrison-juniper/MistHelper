@@ -103,7 +103,7 @@ The answer depends on the traffic type. Read the `Type` column from
 | `show stats bfd by-peer-path latency` | Reports the measured latency for each path, from the protocol that watches the path. | The value matches the transport type. | A rise that matches the complaint time confirms a transport fault. Open a case with the transport provider, and quote the figure. |
 | `show stats bfd by-peer-path jitter` | Reports the measured jitter for each path. | A low and steady value. | High jitter breaks voice and video while data still works. This explains a complaint that names only the phones. |
 | `show stats bfd by-peer-path async received miss` | Counts the path-watch packets that did not arrive in time. | The count does not grow between two runs. | A growing count proves loss on the path, even when the interface counters stay clean. |
-| `show device-interface <name> summary` | Confirms that the transport port is up. | The port reports up. | A port that is down moves the ticket to [GW_PORT_DOWN.md](GW_PORT_DOWN.md). |
+| `show device-interface name <name> summary` | Confirms that the transport port is up. | The port reports up. | A port that is down moves the ticket to [GW_PORT_DOWN.md](GW_PORT_DOWN.md). |
 
 ### When every path is healthy but the application is still slow
 

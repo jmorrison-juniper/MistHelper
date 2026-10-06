@@ -57,7 +57,7 @@ its own, because Mist reports the push and not the outcome.
 | 7 | `show peers` | Every designed peer path reports `up` or `standby`. |
 | 8 | `show bgp summary` | Every neighbor holds a time value under `Up/Down`. |
 | 9 | `show service-path` | Every service reports `Up`. |
-| 10 | `show mist` | The cloud link is present. |
+| 10 | `show mist` | The `Agent` column reports `assigned`, and the `Connection` column reports `up`. |
 
 A failure at any step means that the upgrade did not deliver a working router.
 Record the step number in the ticket, and escalate.
@@ -81,7 +81,7 @@ Start here when the ticket says "it broke after the upgrade".
 | Symptom | Real cause | Command that proves it |
 |---|---|---|
 | The router reports the old version, and Mist reports the new version. | Local configuration override is in force, so the cloud cannot push. | `show config local-override` |
-| Every feature works, and the cloud shows the device as disconnected. | The management path failed. The software is fine. | `show mist`, then stage C and stage D of [SSR_CONSOLE_HEALTH_CHECK.md](SSR_CONSOLE_HEALTH_CHECK.md) |
+| Every feature works, and the cloud shows the device as disconnected. | The management path failed. The software is fine. | `show mist`, then stage C and stage D of [SSR_CONSOLE_HEALTH_CHECK.md](SSR_CONSOLE_HEALTH_CHECK.md), with step D7 |
 
 ## 5. Commands that change software
 

@@ -124,9 +124,12 @@ see [SSR_CONSOLE_HEALTH_CHECK.md](SSR_CONSOLE_HEALTH_CHECK.md).
 |---|---|
 | System state, role, version, uptime, alarm count | `show system` |
 | Mist cloud link | `show mist` |
+| Mist cloud link, full record | `show mist detail` |
 | Link between the nodes of one router | `show system connectivity` |
 | Process state | `show system processes` |
 | Device interfaces (physical) | `show device-interface` |
+| Port error counters | `show device-interface name <name> extended-statistics` |
+| Optical levels (SSR 7.1.0 and later) | `show device-interface name <name> optics-statistics` |
 | Network interfaces (logical) | `show network-interface` |
 | Address resolution table | `show arp` |
 | Routes that the router learned | `show rib` |
