@@ -89,6 +89,17 @@ and not a guess.
 Open `http://127.0.0.1:8056/healthz` to test the web process alone. That route
 reads no store.
 
+### Request-owned resources
+
+Normal startup installs request resource construction rules. The new provider
+opens no additional external connection at startup.
+
+An authenticated request can create one real database router when a future
+integration calls the provider. Request teardown closes that owned router. It
+does not close the operator Mist session.
+
+Services and mutation routes remain unchanged for #3977.
+
 ## Start the portal
 
 The portal has two start paths. Both paths reach the same program.
