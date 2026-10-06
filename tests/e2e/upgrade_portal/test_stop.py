@@ -389,7 +389,7 @@ def run_id(portal_page: Any, run_ledger: RunLedger) -> Iterator[str]:
         AssertionError: If the create call fails, or if a cancel of the
             teardown answers a refusal.
     """
-    path = RUNS_API_TEMPLATE.format(site_id=_listed_site_id(portal_page))  # The create path of the listed site.
+    path = RUNS_API_TEMPLATE.format(site_id=_listed_site_id(portal_page))  # The create path of the sorted first site.
     answer = _post_the_run(portal_page, path)  # A fault of the portal fails here.
     yield _run_key(answer, path, run_ledger)  # The test opens this run.
     _end_the_stop_runs(portal_page, run_ledger)  # Issue #3511: the next create call at this site then answers 201.
