@@ -119,6 +119,8 @@ NO_OUTPUT_REASON_MARKERS = (
 )
 
 # A missing required answer is not a successful run, even when the handler returned.
+# Issue #3168: the classifier evaluates these markers before the broad "no " output marker,
+# because the broad marker otherwise swallows a specific missing-input message.
 MISSING_INPUT_MARKERS = (
     "no site selected",  # Site-scoped handlers log this when the portal supplied no site answer.
     "no client input provided",  # Client insight handlers log this when no client answer arrived.
@@ -127,6 +129,7 @@ MISSING_INPUT_MARKERS = (
     "no beacon selected",  # Beacon detail handlers log this when the beacon ID is blank.
     "no value provided",  # Shared identifier prompts log this when a required value is blank.
     "not available in web portal",  # The executor logs this when raw interactive input is required.
+    "no org_id available",  # Site and org exporters log this when the organization context is absent.
 )
 
 # A handler that catches its own API error still did not produce a successful result.
@@ -1217,6 +1220,8 @@ class OperationExecutor:
         """Return the first log line that explains a completed run with no file."""
         for message in reversed(self._run_log_messages(run)):  # Prefer the latest summary line.
             lowered = message.lower()  # Normalize case so marker checks stay simple.
+            if any(marker in lowered for marker in MISSING_INPUT_MARKERS):  # Issue #3168: a missing answer first.
+                continue  # Skip the line, because a missing required input is not an honest empty result.
             if any(marker in lowered for marker in NO_OUTPUT_REASON_MARKERS):  # Detect an empty-result explanation.
                 return message  # Return the exact line from the handler.
         return None  # No empty-result message appeared.

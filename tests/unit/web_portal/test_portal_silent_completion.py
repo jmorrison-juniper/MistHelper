@@ -2,6 +2,8 @@
 
 from __future__ import annotations  # WHY: keep annotations cheap and consistent with project style.
 
+from typing import NamedTuple  # WHY: carry the classifier answer in a typed record, not three loose booleans.
+
 from src.foundation.support.utils.menu_entry import (
     MenuEntry,
 )  # WHY: OperationExecutor expects menu entries, not raw callables.
@@ -19,6 +21,28 @@ REQUIRED_CONTROL_NAMES = {  # WHY: each site or identifier row must offer these 
 }
 NO_DATA_LINE = "! No data found for this operation"  # WHY: the honest empty-result line that a handler logs.
 NO_DATA_COMPLETION = f"Operation completed with no output file: {NO_DATA_LINE}"  # WHY: the exact operator message.
+MISSING_ORG_LINE = "No org_id available. Exiting."  # WHY: the tracked issue #3168 message that reported Complete.
+EXPECTED_COMPLETION_GUARD_SCOPE = 8  # WHY: measured count of the issue #3144 completion rows on 2026-10-06.
+EXPECTED_PARAMETER_GUARD_SCOPE = 7  # WHY: measured count of the issue #3320 control rows on 2026-10-06.
+
+
+class _Classification(NamedTuple):
+    """Hold the three portal classifier answers for one log message."""
+
+    missing_input: bool  # WHY: a required answer never arrived, so the operation did not run.
+    handled_error: bool  # WHY: the handler caught an error and returned without a result.
+    no_output: bool  # WHY: the handler ran and honestly produced an empty result.
+
+
+def _classify(executor: OperationExecutor, message: str) -> _Classification:
+    """Return the typed classifier answer for one handler log message."""
+    run = executor._build_run_record("210")  # WHY: menu 210 calls the resolver that logs the tracked message.
+    run["log_messages"].append({"message": message, "level": "error"})  # WHY: emulate the exact handler log line.
+    return _Classification(  # WHY: one typed record keeps the three answers readable in the assertion output.
+        missing_input=executor._missing_input_reason(run) is not None,  # WHY: read the production missing-input scan.
+        handled_error=executor._handled_error_reason(run) is not None,  # WHY: read the production handled-error scan.
+        no_output=executor._no_output_reason(run) is not None,  # WHY: read the production empty-result scan.
+    )
 
 
 class _EventBus:
@@ -50,6 +74,11 @@ def _build_executor() -> OperationExecutor:
 def test_issue_3144_controls_cover_site_and_identifier_prompts() -> None:
     """Every site or identifier scoped silent-completion row must offer controls."""
     print(f"The issue #3144 parameter guard checked {len(REQUIRED_CONTROL_NAMES)} operations.")  # WHY: guard proof.
+    assert len(REQUIRED_CONTROL_NAMES) == EXPECTED_PARAMETER_GUARD_SCOPE, (  # WHY: a zero scope is a silent no-op.
+        f"The parameter guard scope is {len(REQUIRED_CONTROL_NAMES)} rows, "
+        f"but the measured scope is {EXPECTED_PARAMETER_GUARD_SCOPE} rows. "
+        "An empty or changed scope makes this guard pass without a check."
+    )
     for menu, required_names in REQUIRED_CONTROL_NAMES.items():  # WHY: check each affected row, not only one example.
         entry = PARAMETER_REGISTRY.get(menu, {})  # WHY: a missing definition reads as empty, so it fails below.
         offered = {parameter.get("name") for parameter in entry.get("parameters", [])}  # WHY: one control per name.
@@ -62,6 +91,11 @@ def test_completed_issue_3144_runs_explain_no_output() -> None:
     executor = _build_executor()  # WHY: build the production executor helpers under test.
     try:
         print(f"The issue #3144 completion guard checked {len(ISSUE_3144_MENUS)} operations.")  # WHY: guard proof.
+        assert len(ISSUE_3144_MENUS) == EXPECTED_COMPLETION_GUARD_SCOPE, (  # WHY: a zero scope is a silent no-op.
+            f"The completion guard scope is {len(ISSUE_3144_MENUS)} menus, "
+            f"but the measured scope is {EXPECTED_COMPLETION_GUARD_SCOPE} menus. "
+            "An empty or changed scope makes this guard pass without a check."
+        )
         for menu in ISSUE_3144_MENUS:  # WHY: every issue row gets the same no-output contract.
             run = executor._build_run_record(menu)  # WHY: use the production run record shape.
             run["log_messages"].append(  # WHY: emulate a handler that returned an honest empty result.
@@ -100,5 +134,40 @@ def test_handled_handler_error_does_not_complete() -> None:
         executor._finish_successful_operation(run)  # WHY: this is the path used after a handler returns.
         assert run["status"] == "failed", "A handled API error reported as Complete."  # WHY: fail honestly.
         assert "Error fetching site beacon detail" in str(run["error_message"])  # WHY: preserve the real cause.
+    finally:
+        executor.shutdown(0)  # WHY: release the executor thread pool created for the test.
+
+
+def test_missing_org_identifier_classifies_as_missing_input() -> None:
+    """Issue #3168: a missing organization identifier is a missing input, not an empty result."""
+    executor = _build_executor()  # WHY: drive the production classifier helpers directly.
+    try:
+        result = _classify(executor, MISSING_ORG_LINE)  # WHY: read the typed answer for the tracked message.
+        assert result.missing_input is True, f"{MISSING_ORG_LINE!r} classified as {result!r}."  # WHY: the live gap.
+        assert result.no_output is False, f"{MISSING_ORG_LINE!r} classified as {result!r}."  # WHY: no false Complete.
+    finally:
+        executor.shutdown(0)  # WHY: release the executor thread pool created for the test.
+
+
+def test_missing_org_identifier_run_reports_failed() -> None:
+    """Issue #3168: a missing organization identifier must fail the run, not complete it."""
+    executor = _build_executor()  # WHY: drive the production completion path, not only the classifier.
+    try:
+        run = executor._build_run_record("210")  # WHY: menu 210 calls the resolver that logs this message.
+        run["log_messages"].append({"message": MISSING_ORG_LINE, "level": "error"})  # WHY: emulate the handler log.
+        executor._finish_successful_operation(run)  # WHY: this is the path used after a handler returns.
+        assert run["status"] == "failed", "A missing organization identifier reported as Complete."  # WHY: unsafe.
+        assert "required input was missing" in str(run["error_message"])  # WHY: the operator needs the cause.
+    finally:
+        executor.shutdown(0)  # WHY: release the executor thread pool created for the test.
+
+
+def test_empty_result_line_still_classifies_as_no_output() -> None:
+    """Issue #3168: the repair must not turn an honest empty result into a missing input."""
+    executor = _build_executor()  # WHY: prove the opposite direction of the classifier still holds.
+    try:
+        result = _classify(executor, NO_DATA_LINE)  # WHY: read the typed answer for an honest empty result.
+        assert result.no_output is True, f"{NO_DATA_LINE!r} classified as {result!r}."  # WHY: keep the empty result.
+        assert result.missing_input is False, f"{NO_DATA_LINE!r} classified as {result!r}."  # WHY: no wider marker.
     finally:
         executor.shutdown(0)  # WHY: release the executor thread pool created for the test.
