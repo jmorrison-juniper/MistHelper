@@ -204,14 +204,14 @@ def _free_the_site(page: Any, ledger: RunLedger) -> None:
     logger.info("Free the stand-in site after one test of the run controls")  # Log before the teardown.
     release = SiteRelease(page.request, _csrf_token(page))  # The same session holds the lock record.
     ended = release.end_runs(ledger.runs)  # A live run would hold the site for the next test.
-    site_ids = ledger.sites or (_first_site_id(page),)  # A no-run test still frees the shared site.
+    site_ids = ledger.sites or (_listed_site_id(page),)  # A no-run test still frees the shared site.
     for site_id in site_ids:  # Each local setup may use a different site.
         release.free_site(site_id)  # A held lock would resume in the next module.
     logger.debug("The teardown ended %s run(s) and freed %s site(s)", ended, len(site_ids))  # Log after teardown.
 
 
-def _first_site_id(page: Any) -> str:
-    """Return the identifier of the first site that the picker lists.
+def _listed_site_id(page: Any) -> str:
+    """Return the identifier of a site that the picker lists.
 
     Args:
         page: The browser page that points at the portal.
@@ -270,7 +270,7 @@ def _named_live_run(answer: Any, path: str) -> str:
 
 
 def _create_run(page: Any, ledger: RunLedger, site_id: str | None = None) -> str:
-    """Create one upgrade run for the first site and return its key.
+    """Create one upgrade run for the listed site and return its key.
 
     Args:
         page: The browser page that points at the portal.
@@ -284,12 +284,12 @@ def _create_run(page: Any, ledger: RunLedger, site_id: str | None = None) -> str
             401 or 404. All three name a fault of the portal that this run
             started, so none of them may report a skip.
     """
-    listed_site_id = _first_site_id(page)  # Load the signed-in page and its CSRF token before any request.
+    listed_site_id = _listed_site_id(page)  # Load the signed-in page and its CSRF token before any request.
     site_id = site_id or listed_site_id  # Use a local site when the test owns one.
     ledger.record_site(site_id)  # Teardown must free the site even when the run is final.
     path = RUNS_API_TEMPLATE.format(site_id=site_id)  # The create route of that site.
     headers = {CSRF_HEADER: _csrf_token(page), "Content-Type": "application/json"}  # Each write needs both.
-    logger.info("Create one run for the first site")  # Log before the create call.
+    logger.info("Create one run for the listed site")  # Log before the create call.
     try:  # The fixture started this portal, so a call that fails names a fault of it.
         answer = page.request.post(path, headers=headers, data="{}", timeout=CREATE_TIMEOUT_MS)
     except Exception as failure:  # The portal died, or it never bound the port.
@@ -318,7 +318,7 @@ def _take_site_lock_without_a_live_run(page: Any, ledger: RunLedger, site_id: st
     Raises:
         AssertionError: If the cancel or the take answers any status but 200.
     """
-    site_id = site_id or _first_site_id(page)  # Use the retry site when the fixture owns one.
+    site_id = site_id or _listed_site_id(page)  # Use the retry site when the fixture owns one.
     run_id = _create_run(page, ledger, site_id)  # The create call takes the site lock for this browser.
     path = f"/api/runs/{run_id}/cancel"  # The cancel route of the temporary run.
     headers = {CSRF_HEADER: _csrf_token(page), "Content-Type": "application/json"}  # Each write needs both.
