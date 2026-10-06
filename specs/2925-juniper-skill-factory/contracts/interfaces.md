@@ -162,7 +162,8 @@ The factory reads these roots. Each one grows while the factory runs.
 
 | Root | Holds |
 | - | - |
-| `C:\Users\jmorrison\Downloads\juniper-harvest-md` | The current converted corpus and the manifests. |
+| `C:\Users\jmorrison\Downloads\juniper-library-md` | The primary converted corpus and the manifests. |
+| `C:\Users\jmorrison\Downloads\juniper-harvest-md` | The compatibility corpus for documents not present in the primary corpus. |
 | `C:\Users\jmorrison\Downloads\juniper-doc-archives\markdown` | An earlier conversion pass. |
 | `C:\Users\jmorrison\Downloads\juniper-doc-archives\markdown2` | A second earlier conversion pass. |
 | `<repo>\data\juniper_corpus` | The source PDFs that the converter reads. |
