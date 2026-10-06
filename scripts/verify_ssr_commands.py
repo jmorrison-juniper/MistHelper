@@ -28,16 +28,21 @@ class CommandVerifier:
         """Store the runbook to check and the reference that defines every command."""
         self.runbook = runbook  # Document whose commands must be real
         self.reference = reference  # Local copy of the vendor command reference
+        self.checked_count = 0  # Store the count for the command-line summary
 
     def run(self) -> list[str]:
         """Return every command that the reference does not define."""
         commands = self._extract()  # Pull the candidate commands out of the runbook
+        self.checked_count = len(commands)  # Record the measured command count
+        if not commands:  # Reject an unreadable or unsupported runbook shape
+            raise ValueError(f"No PCLI commands found in {self.runbook}")  # Surface a false-pass condition
         catalog = self.reference.read_text(encoding="utf-8").lower()  # Search corpus
         return [command for command in sorted(commands) if not self._found(command, catalog)]
 
     def _extract(self) -> set[str]:
         """Return the normalized PCLI commands that the runbook names."""
         text = self.runbook.read_text(encoding="utf-8")
+        text = re.sub(r"```[\s\S]*?```", "", text)  # Remove fenced examples before pairing inline backticks
         found: set[str] = set()
         for snippet in re.findall(r"`([^`]+)`", text):  # Commands appear in inline code spans
             candidate = snippet.strip()
@@ -58,10 +63,12 @@ class CommandVerifier:
 
 
 if __name__ == "__main__":
-    UNVERIFIED = CommandVerifier(
+    verifier = CommandVerifier(  # Build the verifier for the shipped runbook and reference
         Path("documentation/noc-runbooks/SSR_CONSOLE_HEALTH_CHECK.md"),
         Path("documentation/references/ssr/cli_reference.md"),
-    ).run()
+    )  # Keep the input paths explicit for operator review
+    UNVERIFIED = verifier.run()  # Check every extracted command against the reference
+    print(f"Checked {verifier.checked_count} commands.")  # Report the measured input size
     print("UNVERIFIED COMMANDS:" if UNVERIFIED else "Every command matched the reference.")
     for entry in UNVERIFIED:
         print(f"  - {entry}")
