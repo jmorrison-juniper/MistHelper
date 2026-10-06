@@ -5,6 +5,7 @@ checks, pre/post capture fetching, delta calculation, and ArangoDB persistence.
 Uses pytest with AsyncMock for dependency injection and isolation.
 """
 
+from types import SimpleNamespace  # Hold one device settlement result.
 from unittest.mock import Mock, patch  # WHY: dependency mocking
 
 import pytest  # WHY: test framework
@@ -85,6 +86,7 @@ class TestComparisonServiceInit:
             settle_gate_service=settle_gate,
             db_router=db_router,
             audit_logger=audit_logger,
+            document_store=Mock(),
         )
 
         # WHY: verify dependencies stored
@@ -214,6 +216,7 @@ class TestComparisonServiceSettleGatePrerequisite:
             settle_gate_service=settle_gate,
             db_router=db_router,
             audit_logger=audit_logger,
+            document_store=Mock(),
         )
 
         # WHY: mock settle gate result (returns None from placeholder)
@@ -252,6 +255,7 @@ class TestComparisonServiceSettleGatePrerequisite:
             settle_gate_service=settle_gate,
             db_router=db_router,
             audit_logger=audit_logger,
+            document_store=Mock(),
         )
 
         # WHY: test failure path by mocking _check_settle_gate
@@ -280,33 +284,17 @@ class TestComparisonServiceSettleGatePrerequisite:
 class TestComparisonServicePrePostCaptureFetch:
     """Test pre/post capture fetching."""
 
-    def test_fetch_pre_capture_success(self):  # WHY: test successful fetch
-        """_fetch_pre_capture() must return capture document."""
-        # WHY: create service
+    def test_fetch_pre_capture_without_store_refuses(self):  # WHY: test missing durable capture
+        """_fetch_pre_capture() must refuse when no document store exists."""
         service = ComparisonService()
-
-        # WHY: call fetch
         result = service._fetch_pre_capture(run_id="run-1")
+        assert result is None  # A missing database record cannot become a dummy capture.
 
-        # WHY: verify result
-        assert result["run_id"] == "run-1"  # WHY: not None
-        assert result["run_id"] == "run-1"  # WHY: correct run_id
-        assert result["capture_type"] == "pre"  # WHY: correct type
-        assert "timestamp" in result  # WHY: has timestamp
-
-    def test_fetch_post_capture_success(self):  # WHY: test successful fetch
-        """_fetch_post_capture() must return capture document."""
-        # WHY: create service
+    def test_fetch_post_capture_without_store_refuses(self):  # WHY: test missing durable capture
+        """_fetch_post_capture() must refuse when no document store exists."""
         service = ComparisonService()
-
-        # WHY: call fetch
         result = service._fetch_post_capture(run_id="run-1")
-
-        # WHY: verify result
-        assert result["run_id"] == "run-1"  # WHY: not None
-        assert result["run_id"] == "run-1"  # WHY: correct run_id
-        assert result["capture_type"] == "post"  # WHY: correct type
-        assert "timestamp" in result  # WHY: has timestamp
+        assert result is None  # A missing database record cannot become a dummy capture.
 
 
 class TestComparisonServiceDeltaCalculation:
@@ -318,8 +306,8 @@ class TestComparisonServiceDeltaCalculation:
         service = ComparisonService()
 
         # WHY: create empty captures
-        pre_capture = {"device_captures": []}  # WHY: empty pre  # WHY: no devices
-        post_capture = {"device_captures": []}  # WHY: empty post  # WHY: no devices
+        pre_capture = {"device_index": {}}  # An empty canonical capture has no device index entries.
+        post_capture = {"device_index": {}}  # The post capture uses the same canonical index shape.
 
         # WHY: calculate deltas
         deltas, summary = service._calculate_deltas(
@@ -339,12 +327,8 @@ class TestComparisonServiceDeltaCalculation:
         service = ComparisonService()
 
         # WHY: create captures with captures
-        pre_capture = {  # WHY: pre-capture
-            "device_captures": [{"device_id": "dev-1", "firmware": "1.0"}]  # WHY: sample device
-        }
-        post_capture = {  # WHY: post-capture
-            "device_captures": [{"device_id": "dev-1", "firmware": "2.0"}]  # WHY: updated device
-        }
+        pre_capture = {"device_index": {"001122334455": {"version": "1.0", "model": "AP45", "type": "ap"}}}
+        post_capture = {"device_index": {"001122334455": {"version": "2.0", "model": "AP45", "type": "ap"}}}
 
         # WHY: calculate deltas
         deltas, summary = service._calculate_deltas(
@@ -355,6 +339,8 @@ class TestComparisonServiceDeltaCalculation:
         # WHY: verify results
         assert isinstance(deltas, list)  # WHY: is list
         assert isinstance(summary, dict)  # WHY: is dict
+        assert summary["total_devices_compared"] == 1
+        assert summary["firmware_changes"] == 1
 
 
 class TestComparisonServiceCompareFull:
@@ -400,6 +386,7 @@ class TestComparisonServiceCompareFull:
             settle_gate_service=settle_gate,
             db_router=db_router,
             audit_logger=audit_logger,
+            document_store=Mock(),
         )
 
         # WHY: call compare
@@ -420,22 +407,77 @@ class TestComparisonServiceCheckSettleGate:
     """Test settle gate check method."""
 
     def test_check_settle_gate_success(self):  # WHY: test success
-        """_check_settle_gate() must return success dict."""
-        # WHY: create service
-        service = ComparisonService()
+        """_check_settle_gate() trusts only the exact read-back settle record."""
+        settle_gate = Mock()
+        settle_gate.wait_for_settle.return_value = {
+            "device-1": SimpleNamespace(
+                passed=True,
+                failed_checks=[],
+                details={"api": {"status": "passed"}},
+                settle_run_id="settle-1",
+            )
+        }
+        stored = {
+            "run_id": "run-1",
+            "settle_run_id": "settle-1",
+            "device_results": {
+                "device-1": {
+                    "passed": True,
+                    "failed_checks": [],
+                    "details": {"api": {"status": "passed"}},
+                }
+            },
+        }
 
-        # WHY: call check
+        class Aql:
+            def execute(self, query, bind_vars):
+                assert "doc.run_id == @run_id" in query
+                assert "SORT doc.timestamp DESC LIMIT 1" in query
+                assert bind_vars == {"run_id": "run-1"}
+                return [stored]
+
+        service = ComparisonService(settle_gate_service=settle_gate, document_store=SimpleNamespace(aql=Aql()))
         result = service._check_settle_gate(
             run_id="run-1",
             site_id="site-1",
             org_id="org-1",
-            device_ids=["dev-1"],
+            device_ids=["device-1"],
         )
 
         # WHY: verify result
         assert result["passed"] is True  # WHY: not None
         assert "passed" in result  # WHY: has passed key
         assert "failed_checks" in result  # WHY: has failed_checks key
+        settle_gate.wait_for_settle.assert_called_once_with(
+            run_id="run-1",
+            device_ids=["device-1"],
+            site_id="site-1",
+            org_id="org-1",
+            user_id="",
+        )
+
+    def test_check_settle_gate_rejects_missing_readback(self):
+        """A successful-looking in-memory settle result cannot replace storage evidence."""
+        settle_gate = Mock()
+        settle_gate.wait_for_settle.return_value = {
+            "device-1": SimpleNamespace(
+                passed=True,
+                failed_checks=[],
+                details={},
+                settle_run_id="settle-1",
+            )
+        }
+        database = SimpleNamespace(aql=SimpleNamespace(execute=lambda *args, **kwargs: []))
+        service = ComparisonService(settle_gate_service=settle_gate, document_store=database)
+        result = service._check_settle_gate("run-1", "site-1", "org-1", ["device-1"])
+        assert result["passed"] is False
+        assert result["failed_checks"] == ["verified_settle_evidence_unavailable"]
+
+    def test_check_settle_gate_without_service_refuses(self) -> None:
+        """A missing settle service cannot authorize a comparison."""
+        service = ComparisonService()
+        result = service._check_settle_gate("run-1", "site-1", "org-1", ["dev-1"])
+        assert result["passed"] is False
 
 
 class TestComparisonServiceException:
@@ -878,3 +920,37 @@ class TestAnalyzeDeltasExceptionHandling:
             assert isinstance(result, DetailedComparisonResult)  # WHY: correct type
             # WHY: audit logger should have logged failure
             # Note: will be verified if audit_logger.log_operation was called
+
+
+def test_comparison_result_requires_matching_durable_readback() -> None:
+    """A comparison identifier is withheld when the stored summary differs."""
+    stored: dict[str, object] = {}
+
+    class Collection:
+        def insert(self, document: dict[str, object], overwrite: bool = False) -> None:
+            stored.update(document)
+
+        def get(self, key: str) -> dict[str, object]:
+            return {**stored, "summary": {"total_devices_compared": 0}}
+
+    audit = Mock()
+    service = ComparisonService(
+        document_store=SimpleNamespace(collection=lambda name: Collection()),
+        audit_logger=audit,
+    )
+
+    result = service._persist_comparison(
+        run_id="run-1",
+        org_id="org-1",
+        site_id="site-1",
+        user_id="operator@example.invalid",
+        timestamp="2026-10-06T00:00:00+00:00",
+        device_count=1,
+        pre_capture={"timestamp": "before"},
+        post_capture={"timestamp": "after"},
+        deltas=[],
+        summary={"total_devices_compared": 1},
+    )
+
+    assert result is None
+    audit.log_operation.assert_not_called()

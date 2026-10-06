@@ -111,6 +111,34 @@ The command validates `MIST_HOST`, but it does not require `MIST_APITOKEN` or
 `MIST_API_TOKEN` at startup. Without an environment token, the sign-in page
 offers the browser token mode.
 
+### Service dependencies
+
+Factory startup stores construction rules. It does not open ArangoDB, Redis, or
+Mist connections.
+
+Before a service request opens storage, the portal checks the signed browser
+session and its registry record. Each service request stores its dependency
+graph in Flask `g`. The request owns its database router and document client.
+It uses the operator session from the registry and never closes that session.
+
+Complete end-to-end overrides return before production dependency construction.
+If required ArangoDB storage is missing, invalid, standalone, or unavailable,
+the portal returns HTTP 503 before Mist work. If the operator session is absent
+or unusable, the portal returns HTTP 401.
+
+An upgrade worker receives the operator session and a separate ArangoDB client
+before its thread starts. The worker closes its client after its final write.
+Request teardown does not close worker storage or the registry session.
+
+Warning: a test against a production site can change firmware or capture private
+network data. Use fake Mist and storage clients. Keep every end-to-end override.
+
+The settle service cannot prove ICMP or neighbor reachability. It reports those
+checks as failures when the portal has no supported evidence. The comparison
+service then refuses to report success. The service-based cancel endpoint also
+refuses work when the request has no typed STOP confirmation or the run has no
+verified cloud operation identifier.
+
 ### Environment variables
 
 | Variable | Default | Purpose |

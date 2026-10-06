@@ -25,11 +25,13 @@ import logging  # The portal logs with the standard library only.
 import threading  # The run mirror below is read by the poll while the driver writes.
 import time  # The event window of the settle gate reads the wall clock.
 from collections.abc import Callable, Mapping, MutableMapping  # The shapes the driver and the store declare.
+from dataclasses import dataclass  # Hold request-owned dependency records.
+from functools import partial  # Bind worker capture resources without changing the test seam.
 from importlib import import_module  # Imports each collaborator late, at the first call.
 from types import ModuleType  # The return type of a late import.
 from typing import Any  # A late import answers with untyped objects.
 
-from flask import Flask, current_app  # The configuration and context carry every seam.
+from flask import Flask, current_app, g  # The configuration and context carry every seam.
 
 from src.interfaces.portals.upgrade_portal.api.run_controls import (
     E2EFactoryOverrides,
@@ -76,6 +78,268 @@ COMPARISON_SERVICE_MODULE = (
     f"{PACKAGE_NAME}.compare.service"  # Owns ComparisonService for pre/post-upgrade capture comparison.
 )
 
+
+class PortalDependencyError(RuntimeError):
+    """Report a safe refusal when the request cannot build its dependencies."""
+
+
+class PortalAuthenticationError(PortalDependencyError):
+    """Report a missing or unusable operator session before storage access."""
+
+
+@dataclass(frozen=True, slots=True)
+class PortalResources:
+    """Hold the request-owned database resources and audit service."""
+
+    database_client: Any
+    database: Any
+    database_router: Any
+    audit_logger: Any
+
+
+@dataclass(frozen=True, slots=True)
+class PortalServices:
+    """Hold the four request-local services and the action repository."""
+
+    capture: Any
+    upgrade: Any
+    settle: Any
+    comparison: Any
+    action_repository: Any
+
+
+@dataclass(frozen=True, slots=True)
+class PortalRequestDependencies:
+    """Bind one authenticated operator to one owned dependency graph."""
+
+    operator: Any
+    resources: PortalResources
+    services: PortalServices
+
+
+class PortalServiceProvider:
+    """Build one validated dependency graph inside each authenticated request."""
+
+    @dataclass(frozen=True, slots=True)
+    class WorkerResources:
+        """Hold the storage and capture reader owned by one background worker."""
+
+        client: Any
+        database: Any
+        capture: Any
+        cleanup: Callable[[], None]
+
+    def __init__(self, settings: Any) -> None:
+        """Keep immutable portal settings as construction input."""
+        self.settings = settings  # Store configuration only, never a live client.
+
+    def open_worker_resources(self, session: Any) -> Any:
+        """Open worker-owned storage before background work starts."""
+        if not callable(getattr(session, "get", None)) or not callable(getattr(session, "post", None)):
+            raise PortalAuthenticationError("The operator session is unavailable.")  # Refuse before storage access.
+        from arango.client import ArangoClient  # Open only after the signed operator session passed validation.
+
+        from src.interfaces.portals.upgrade_portal.capture import collector, store
+
+        config = _validated_database_config(self.settings)  # Use the same validated portal settings as requests.
+        client = ArangoClient(hosts=config.arango_host, request_timeout=10.0)  # The worker owns this client.
+        try:  # A worker must not start without its own verified document handle.
+            database = client.db(
+                config.arango_database,
+                username=config.arango_username,
+                password=config.arango_password,
+                verify=True,
+            )  # Keep the handle separate from the request graph and the process cache.
+            report = store.bootstrap_storage(database)  # Prepare the existing run and capture collections.
+            required = {store.CAPTURE_COLLECTION, store.RUN_COLLECTION}  # The worker writes only these records.
+            if not report.database_available or not required.issubset(set(report.collections)):
+                raise PortalDependencyError("The worker document store is unavailable.")
+        except PortalDependencyError:
+            _close_partial_resources(None, client)  # Release the worker client before refusal.
+            raise
+        except Exception as fault:
+            _close_partial_resources(None, client)  # Release partial storage after an open or bootstrap fault.
+            logger.error("The portal could not open worker storage (%s)", type(fault).__name__)
+            raise PortalDependencyError("The worker document store is unavailable.") from fault
+        closed = False  # Keep cleanup idempotent when thread startup and driver cleanup both refuse.
+
+        def close_worker() -> None:
+            """Close this worker client once, after the final worker write."""
+            nonlocal closed
+            if closed:  # A duplicate run may dispose of its unused worker scope.
+                return  # Do not close the same client twice.
+            closed = True  # Record ownership before the external close call.
+            _close_partial_resources(None, client)  # Use the shared safe close boundary.
+
+        def write_capture(document: Mapping[str, Any]) -> Any:
+            """Write a capture through this worker database."""
+            return store.write_capture(document, database=database)  # Do not use the process-cached handle.
+
+        def read_capture(capture_id: str) -> Any:
+            """Read a capture through this worker database."""
+            return store.load_capture(capture_id, database=database)  # Verify the same worker-owned store.
+
+        capture_store = collector.CaptureStore(write=write_capture, read_back=read_capture)
+        capture_resources = collector.CaptureResources(session=session, store=capture_store)
+        logger.debug("The portal opened storage for one background worker.")
+        return self.WorkerResources(client, database, capture_resources, close_worker)
+
+    def resolve(self) -> PortalRequestDependencies:
+        """Return the request graph after identity and storage checks."""
+        cached = getattr(g, "portal_dependencies", None)  # One request may reuse its graph.
+        if cached is not None:  # The graph cannot cross the Flask request boundary.
+            return cached  # Reuse the owned resources only in this request.
+        operator = _authenticated_operator()  # Resolve the registry record before opening storage.
+        config = _validated_database_config(self.settings)  # Reject mismatched or standalone storage settings.
+        resources = _open_portal_resources(config)  # Open one document handle and one router for this request.
+        try:  # Partial service construction must release every owned resource.
+            services = _build_portal_services(operator, resources)  # Use the operator session in every Mist service.
+        except Exception as fault:  # Report only the safe exception type at this boundary.
+            _close_portal_resources(resources)  # The request never owns a partial service graph.
+            logger.error("The portal could not build request services (%s)", type(fault).__name__)
+            raise PortalDependencyError("The portal services are unavailable.") from fault
+        dependencies = PortalRequestDependencies(operator, resources, services)  # Bind the complete request scope.
+        g.database_router = resources.database_router  # The teardown owns this request's router.
+        g.database_client = resources.database_client  # The teardown closes the separate document client.
+        g.portal_dependencies = dependencies  # Flask g is the only service-graph cache.
+        return dependencies  # The route now has one complete and authenticated graph.
+
+
+def _authenticated_operator() -> Any:
+    """Return a valid operator record with a usable Mist session."""
+    identity = load_module(IDENTITY_MODULE)  # Load the existing registry owner only after request entry.
+    operator = identity.current_session() if identity is not None else None  # Bind to this browser and registry entry.
+    session = getattr(operator, "cloud_session", None)  # The registry, not this provider, owns the session.
+    if operator is None or not callable(getattr(session, "get", None)) or not callable(getattr(session, "post", None)):
+        raise PortalAuthenticationError("The operator session is unavailable.")  # Refuse before storage or cloud work.
+    return operator  # The caller passes this record to every service constructor.
+
+
+def _validated_database_config(settings: Any) -> Any:
+    """Build database settings and reject values that differ from portal settings."""
+    from src.foundation.persistence.db import DatabaseConfig  # Read the environment through the shared config type.
+
+    try:  # Malformed or missing settings must produce a service refusal.
+        config = DatabaseConfig.from_env()  # The existing config reader owns credential and host validation.
+    except Exception as fault:  # Keep credential-bearing exception text out of logs and responses.
+        logger.error("The portal database settings are invalid (%s)", type(fault).__name__)
+        raise PortalDependencyError("The portal database settings are unavailable.") from fault
+    expected = (settings.arango.host, settings.arango.database, settings.arango.username, settings.redis.host)
+    actual = (config.arango_host, config.arango_database, config.arango_username, config.redis_host)
+    if config.standalone_mode or expected != actual or settings.redis.port != config.redis_port:
+        raise PortalDependencyError("The required portal database settings do not match.")
+    return config  # The router and the document connection use this same validated record.
+
+
+def _open_portal_resources(config: Any) -> PortalResources:
+    """Open and verify the request-owned document handle and router."""
+    from arango.client import ArangoClient  # Import the driver only after the operator passed authentication.
+
+    from src.foundation.persistence.db.router import DatabaseRouter  # Use the supported configured router.
+    from src.foundation.support.refactors.endpoint_primary_key_strategies import (
+        ENDPOINT_PRIMARY_KEY_STRATEGIES,
+    )  # Keep the registered natural-key strategies authoritative.
+
+    client = ArangoClient(hosts=config.arango_host, request_timeout=10.0)  # Give this request its own client.
+    router = None  # A partial failure closes the client even before router construction.
+    try:  # Verify both independent storage interfaces before service construction.
+        database = client.db(
+            config.arango_database,
+            username=config.arango_username,
+            password=config.arango_password,
+            verify=True,
+        )  # The document handle supports the existing collection and AQL calls.
+        strategies = dict(ENDPOINT_PRIMARY_KEY_STRATEGIES)  # Do not mutate the process-wide strategy registry.
+        strategies["audit_logs"] = {"type": "natural_pk", "primary_key": ["log_id"]}
+        router = DatabaseRouter(config, strategies)  # The supported router constructor requires explicit settings.
+        if not router.health_check().get("arangodb", False):
+            raise PortalDependencyError("The required ArangoDB router is unavailable.")
+        audit_module = load_module(f"{PACKAGE_NAME}.audit.logger")  # The real logger owns the masking contract.
+        if audit_module is None:
+            raise PortalDependencyError("The portal audit service is unavailable.")
+        audit_logger = audit_module.AuditLogger(
+            db_router=router,
+            document_store=database,
+        )  # Audit writes use the request store and prove their own read-back.
+    except PortalDependencyError:
+        _close_partial_resources(router, client)  # Release every handle before the safe refusal returns.
+        raise
+    except Exception as fault:
+        _close_partial_resources(router, client)  # Release every handle before the safe refusal returns.
+        logger.error("The portal could not open request storage (%s)", type(fault).__name__)
+        raise PortalDependencyError("The portal database is unavailable.") from fault
+    return PortalResources(client, database, router, audit_logger)  # Keep router and document handle distinct.
+
+
+def _close_partial_resources(router: Any, client: Any) -> None:
+    """Close resources when request graph construction fails."""
+    for name, handle in (("database_router", router), ("database_client", client)):
+        closer = getattr(handle, "close", None)  # Each owner exposes its own public close method.
+        if callable(closer):  # A missing handle needs no cleanup.
+            try:  # Cleanup must not hide the dependency failure.
+                closer()  # Release only resources created by this request.
+            except Exception as fault:  # Keep the exception body out of logs.
+                logger.warning("The portal could not close %s (%s)", name, type(fault).__name__)
+
+
+def _close_portal_resources(resources: PortalResources) -> None:
+    """Close both owned storage resources after service construction fails."""
+    _close_partial_resources(resources.database_router, resources.database_client)  # Never close the borrowed session.
+
+
+def _prepare_request_storage(database: Any) -> Any:
+    """Create the existing portal collections and refuse an incomplete bootstrap."""
+    store = load_module(CAPTURE_STORE_MODULE)  # The canonical store owns capture and run schemas.
+    if store is None:  # A missing module cannot provide durable evidence.
+        raise PortalDependencyError("The portal document store is unavailable.")
+    report = store.bootstrap_storage(database)  # Bootstrap uses this request-owned database, not a global handle.
+    required = {store.CAPTURE_COLLECTION, store.RUN_COLLECTION}  # These collections hold verified operation records.
+    if not report.database_available or not required.issubset(set(report.collections)):
+        raise PortalDependencyError("The portal document store is unavailable.")
+    for name in ("settle_gates", "comparisons"):  # The existing service records use these collections.
+        if not database.has_collection(name):  # Create only the collections that the current services already name.
+            database.create_collection(name)  # The driver call uses a fixed repository-owned collection name.
+    return store  # The caller uses the verified store functions with the same database handle.
+
+
+def _build_portal_services(operator: Any, resources: PortalResources) -> PortalServices:
+    """Build every service from the authenticated session and validated resources."""
+    _prepare_request_storage(resources.database)  # Required collections must exist before service work.
+    action_repository = ActionRepository(resources.database)  # The action repository shares the request handle.
+    if not action_repository.bootstrap():  # Its own bootstrap verifies the action collection and indexes.
+        raise PortalDependencyError("The portal action store is unavailable.")
+    capture_module = load_module(CAPTURE_SERVICE_MODULE)  # Keep service modules out of factory import.
+    upgrade_module = load_module(UPGRADE_SERVICE_MODULE)  # Each graph receives the same operator session.
+    settle_module = load_module(SETTLE_GATE_SERVICE_MODULE)  # No service is constructed with a missing dependency.
+    compare_module = load_module(COMPARISON_SERVICE_MODULE)  # The comparison shares the settle service below.
+    if any(module is None for module in (capture_module, upgrade_module, settle_module, compare_module)):
+        raise PortalDependencyError("The portal service modules are unavailable.")
+    audit = resources.audit_logger  # One real audit service owns every service event.
+    session = operator.cloud_session  # The registry owns this session, so teardown never closes it.
+    capture = capture_module.CaptureService(session, resources.database_router, audit, resources.database)
+    upgrade = upgrade_module.UpgradeService(session, resources.database_router, audit, resources.database)
+    settle = settle_module.SettleGateService(session, resources.database_router, audit, resources.database)
+    comparison = compare_module.ComparisonService(settle, resources.database_router, audit, resources.database)
+    return PortalServices(capture, upgrade, settle, comparison, action_repository)  # Keep five bounded service fields.
+
+
+def request_dependencies() -> PortalRequestDependencies:
+    """Return the request graph from Flask g or resolve it once."""
+    provider = current_app.config.get(PORTAL_SERVICE_PROVIDER_KEY)  # The app stores construction rules only.
+    if not isinstance(provider, PortalServiceProvider):  # E2E overrides bypass this production provider.
+        raise PortalDependencyError("The portal request services are unavailable.")
+    return provider.resolve()  # The provider binds one authenticated request to owned resources.
+
+
+def request_service(config_key: str, service_name: str) -> Any:
+    """Return an explicit route override or the named request-owned service."""
+    supplied = current_app.config.get(config_key)  # Preserve each existing test and route injection.
+    if supplied is not None:  # A supplied object wins without constructing a replacement.
+        return supplied  # The caller owns the injected service.
+    services = request_dependencies().services  # Resolve production services only inside the request.
+    return getattr(services, service_name)  # The name is a repository constant, never request input.
+
+
 # `upgrade/options.py` and `upgrade/stop.py` both import this module under the
 # same absolute name, so the portal already needs it on the import path.
 SERVICE_MODULE = "src.operations.execution.firmware.upgrade_service"  # Owns `plan_upgrade` and `invoke_upgrade`.
@@ -93,6 +357,7 @@ UPGRADE_SERVICE_KEY = "UPGRADE_SERVICE"  # The seam that holds the UpgradeServic
 # Phase 3 T-010/T-012: Phase 3 service seams for settle gate and comparison.
 SETTLE_GATE_SERVICE_KEY = "SETTLE_GATE_SERVICE"  # The seam that holds SettleGateService.
 COMPARISON_SERVICE_KEY = "COMPARISON_SERVICE"  # The seam that holds ComparisonService.
+PORTAL_SERVICE_PROVIDER_KEY = "PORTAL_SERVICE_PROVIDER"  # The factory stores construction rules, not live clients.
 
 POST_CHECK_ORDINAL = 2  # The second capture of a run. `driver.post_check_request` sends this value.
 
@@ -219,6 +484,10 @@ class DocumentRunStore:
         must never turn a poll into a 500 answer.
     """
 
+    def __init__(self, database: Any | None = None) -> None:
+        """Bind an optional worker-owned document handle."""
+        self.database = database  # None keeps the existing request route store boundary.
+
     def read_run(self, run_id: str) -> dict[str, Any] | None:
         """Return one run record, or None when no store and no mirror holds it.
 
@@ -238,7 +507,7 @@ class DocumentRunStore:
         if store is None:  # The store module is absent, so only this process can answer.
             return mirrored_run(run_id)  # The runs of this process still read back.
         try:  # The store sits on a network and may not answer.
-            handle: Any = store.connect_database()  # None in standalone mode, or when the server is silent.
+            handle: Any = self.database if self.database is not None else store.connect_database()
             found: Any = None if handle is None else handle.collection(store.RUN_COLLECTION).get(run_id)
         except Exception as fault:  # A poll must answer, whatever the store did.
             logger.warning("wiring: the read of the run %s failed with %s", run_id, type(fault).__name__)
@@ -265,7 +534,13 @@ class DocumentRunStore:
         if store is None:  # The store module is absent, so nothing holds the record.
             return False  # The caller answers the write failure to the operator.
         try:  # The store sits on a network and may not answer.
-            answer: Any = store.write_run(dict(run))  # A copy stops a later edit of the caller dictionary.
+            if self.database is None:
+                answer: Any = store.write_run(dict(run))  # Preserve the existing route store path.
+            else:
+                answer = store.write_run(
+                    dict(run),
+                    database=self.database,
+                )  # Keep every driver write inside its worker scope.
         except Exception as fault:  # A driver thread must never die on a store fault.
             logger.warning("wiring: the write of the run %s failed with %s", run_id, type(fault).__name__)
             return False  # The driver writes the reason into the record it still holds.
@@ -280,7 +555,10 @@ class DocumentRunStore:
         if store is None:  # A missing store cannot prove durable cleanup.
             return False  # Fail closed and retain the plan.
         try:  # The store owns the database delete operation.
-            deleted = bool(store.delete_run(run_id))  # Remove only the requested durable run.
+            if self.database is None:
+                deleted = bool(store.delete_run(run_id))  # Preserve the existing route store path.
+            else:
+                deleted = bool(store.delete_run(run_id, database=self.database))  # Delete through worker storage.
         except Exception as fault:  # A cleanup fault must remain visible to the caller.
             logger.warning("wiring: the delete of run %s failed with %s", run_id, type(fault).__name__)
             return False  # Do not remove the mirror after an unverified delete.
@@ -299,7 +577,7 @@ class DocumentRunStore:
         if store is None:  # A mirror cannot coordinate two workers.
             return False  # Fail closed when the production store is absent.
         try:  # The database action is one atomic AQL statement.
-            database: Any = store.connect_database()  # Open the same database that stores run documents.
+            database: Any = self.database if self.database is not None else store.connect_database()
             if database is None:  # A file fallback cannot provide compare-and-set.
                 return False  # Fail closed instead of claiming an atomic update.
             query = (
@@ -344,7 +622,11 @@ class DocumentRunStore:
             return mirrored_site_runs(site_id)  # The runs of this process still guard FR-037.
         try:  # The scan is one query on a network store.
             logger.info("wiring: scan stored runs for site %s", site_id)  # Log before the document store query.
-            page: Any = store.list_runs(store.RunQuery(site_id=site_id, limit=SITE_SCAN_LIMIT))
+            query = store.RunQuery(site_id=site_id, limit=SITE_SCAN_LIMIT)
+            if self.database is None:
+                page: Any = store.list_runs(query)  # Preserve the existing route store path.
+            else:
+                page = store.list_runs(query, database=self.database)  # Keep the worker scan in its own scope.
         except Exception as fault:  # A create call must survive an unreachable store.
             logger.warning("wiring: the site scan of %s failed with %s", site_id, type(fault).__name__)
             return mirrored_site_runs(site_id)  # The lock check of the route still guards a second operator.
@@ -478,6 +760,7 @@ class CaptureBridge:
         runner: Callable[..., Any] | None,
         context: Mapping[str, Any],
         app_context: Callable[[], Any] | None = None,
+        database: Any | None = None,
     ) -> None:
         """Hold the bound runner and the fields that every capture of one run shares.
 
@@ -485,10 +768,12 @@ class CaptureBridge:
             runner: The callable that reads the whole site. None when no runner bound.
             context: The seven job fields that the request thread already read.
             app_context: The factory for a fresh Flask application context.
+            database: The worker-owned document handle for stored capture status.
         """
         self._runner = runner  # Bound inside the request, so this object needs no application.
         self._context = dict(context)  # A copy, because the caller may edit its own record.
         self._app_context = app_context  # The stored-status fallback needs an application context.
+        self._database = database  # The worker owns this handle until the driver ends.
 
     def start(self, request: Mapping[str, Any]) -> str | None:
         """Take one capture and return its key.
@@ -533,6 +818,15 @@ class CaptureBridge:
         live = routes.read_progress(capture_id)  # The live record is the normal completion path.
         if live is not None:  # A live record answers without a database context.
             return live  # Keep the final state and its reason unchanged.
+        if self._database is not None:  # The worker can verify stored status without a process-global handle.
+            store = load_module(STORE_MODULE)  # Use the same store boundary as the capture writer.
+            if store is None:  # No reader means no stored proof.
+                return {}  # No proof means no capture key.
+            loaded = store.load_capture(capture_id, database=self._database)  # Read through worker-owned storage.
+            document = getattr(loaded, "capture", None)  # The reader may refuse or return no row.
+            if not isinstance(document, dict):  # Refusal is a missing proof, never success.
+                return {}  # The driver will fail the capture stage.
+            return routes.stored_status(document, bool(getattr(loaded, "comparable", False)))
         if self._app_context is None:  # Tests and detached callers may have no stored-status context.
             return {}  # No proof means no capture key.
         with self._app_context():  # The stored reader needs the Flask configuration.
@@ -802,15 +1096,34 @@ def request_bindings(record: Mapping[str, Any]) -> dict[str, Any]:
         The session, the operator address, the runner, the lock, the store, and the context factory.
     """
     operator: Any = current_operator()  # The one accessor of the signed session of the operator.
-    routes = load_module(CAPTURE_ROUTES)  # Owns the capture runner seam.
-    return {  # Five values that the driver thread cannot read for itself.
-        SESSION_FIELD: getattr(operator, "cloud_session", None),  # Holds an API token, so it never reaches a log.
-        EMAIL_FIELD: getattr(getattr(operator, "owner", None), "actor_email", ""),  # The operator address.
-        RUNNER_FIELD: None if routes is None else read_safely(routes.capture_runner, "the capture runner seam"),
-        LOCK_FIELD: read_lock_record(str(record.get("site_id", ""))),  # The lock that the heartbeat renews.
-        STORE_FIELD: bound_store(DocumentRunStore()),  # The same store that the poll route reads.
-        APP_CONTEXT_FIELD: current_app.app_context,  # The driver rebuilds this context for stored-status reads.
-    }
+    session = getattr(operator, "cloud_session", None)  # The registry owns this session for later requests.
+    if operator is None or not callable(getattr(session, "get", None)) or not callable(getattr(session, "post", None)):
+        raise PortalAuthenticationError("The operator session is unavailable.")  # Refuse before storage access.
+    provider = current_app.config.get(PORTAL_SERVICE_PROVIDER_KEY)  # The app stores settings, not live resources.
+    if not isinstance(provider, PortalServiceProvider):  # E2E launches use their complete RUN_LAUNCHER override.
+        raise PortalDependencyError("The worker storage provider is unavailable.")
+    worker = provider.open_worker_resources(session)  # Bind a separate client before the driver thread starts.
+    try:  # Release storage if any later worker binding fails.
+        routes = load_module(CAPTURE_ROUTES)  # Owns the capture runner seam.
+        runner = None if routes is None else read_safely(routes.capture_runner, "the capture runner seam")
+        if routes is not None and runner is routes.default_runner:
+            runner = partial(runner, resources=worker.capture)  # Bind store and session without changing test runners.
+        run_store = bound_store(DocumentRunStore(worker.database))  # Preserve an injected store when one exists.
+        if isinstance(run_store, DocumentRunStore) and run_store.database is None:
+            run_store = DocumentRunStore(worker.database)  # Bind the default driver store to this worker client.
+        return {  # The driver receives only values that outlive this request.
+            SESSION_FIELD: session,  # The worker borrows the registry-owned session.
+            EMAIL_FIELD: getattr(getattr(operator, "owner", None), "actor_email", ""),  # The operator address.
+            RUNNER_FIELD: runner,  # The worker owns its capture store through the bound resources.
+            LOCK_FIELD: read_lock_record(str(record.get("site_id", ""))),  # The lock that the heartbeat renews.
+            STORE_FIELD: run_store,  # The worker and the route read the same durable run collection.
+            APP_CONTEXT_FIELD: current_app.app_context,  # The worker can read stored status without request proxies.
+            "worker_database": worker.database,  # Capture status reads use the worker-owned handle.
+            "worker_cleanup": worker.cleanup,  # RunDriver closes this client after its final write.
+        }
+    except Exception:
+        worker.cleanup()  # Bind failures must not leak the newly opened worker client.
+        raise
 
 
 def capture_context(record: Mapping[str, Any], bindings: Mapping[str, Any]) -> dict[str, Any]:
@@ -994,10 +1307,12 @@ def build_driver_deps(driver: ModuleType, record: Mapping[str, Any], bindings: M
             bindings.get(RUNNER_FIELD),
             capture_context(record, bindings),
             bindings.get(APP_CONTEXT_FIELD),
+            bindings.get("worker_database"),
         ),
         submit=CloudUpgradeSubmitter(bindings.get(SESSION_FIELD)),  # Without this the run sends no firmware.
         heartbeat=heartbeat,  # The second seat of the same object. The first seat is the gate progress.
         post_check_mode=read_post_check_mode(),  # The default keeps the automatic second capture of today.
+        worker_cleanup=bindings.get("worker_cleanup"),  # The run closes its owned storage after the final write.
     )
 
 
@@ -1095,13 +1410,35 @@ def start_upgrade_run(record: dict[str, Any]) -> None:
         logger.error("wiring: no driver module, so the run %s sent nothing", run_id)  # Name the gap.
         abandon_run(record, "The portal found no upgrade driver, so it sent no firmware.")
         return  # The poll then reads a failed run, and the site accepts a new one.
-    deps = build_driver_deps(driver, record, request_bindings(record))  # Reads the request while it exists.
+    bindings: dict[str, Any] = {}
+    try:  # Bind the authenticated session and worker storage before thread creation.
+        bindings = request_bindings(record)
+        deps = build_driver_deps(driver, record, bindings)
+    except Exception as fault:
+        _cleanup_worker_binding(bindings)  # A partial driver build must release the owned worker client.
+        logger.error("wiring: the run %s could not bind its worker (%s)", run_id, type(fault).__name__)
+        abandon_run(record, "The portal could not prepare the upgrade worker, so it sent no firmware.")
+        return
     if deps is None:  # A collaborator is missing, and a half built driver would upgrade nothing.
+        _cleanup_worker_binding(bindings)  # No worker will run, so release its owned storage now.
         logger.error("wiring: the run %s could not build its driver, so it sent nothing", run_id)  # Name the gap.
         abandon_run(record, "The portal could not build the upgrade driver, so it sent no firmware.")
         return  # The poll then reads a failed run, and the site accepts a new one.
-    driver.RunDriver(deps).start(record)  # A second start of the same run finds the first thread.
+    try:  # The driver owns the worker client after it accepts the thread.
+        driver.RunDriver(deps).start(record)
+    except Exception as fault:
+        _cleanup_worker_binding(bindings)  # A failed thread start still releases the worker client.
+        logger.error("wiring: the run %s could not start its worker (%s)", run_id, type(fault).__name__)
+        abandon_run(record, "The portal could not start the upgrade worker, so it sent no firmware.")
+        return
     logger.info("wiring: the run %s owns a driver thread", run_id)  # The first line of a healthy run.
+
+
+def _cleanup_worker_binding(bindings: Mapping[str, Any]) -> None:
+    """Release one worker client when no driver thread owns it."""
+    cleanup = bindings.get("worker_cleanup")  # The binding contains no cleanup for an incomplete open.
+    if callable(cleanup):  # The worker provider created the client.
+        cleanup()  # Close only the resource that this request opened.
 
 
 def _install_capture_service(app: Flask) -> None:
@@ -1488,23 +1825,17 @@ def install_seams(  # Install production defaults or one complete isolated depen
             app.config[key] = value  # An explicit E2E value must replace every default.
         logger.debug("wiring: installed %s E2E dependency values", len(values))  # Report a safe count.
         return  # Do not construct production services or start production storage.
-    app.config.setdefault(RUN_STORE_KEY, DocumentRunStore())  # Replaces the memory store of the route module.
-    app.config.setdefault(LAUNCHER_KEY, start_upgrade_run)  # Without this the confirmed run sends nothing.
-    app.config.setdefault(STOP_RUNNER_KEY, cancel_run)  # Without this a stop cancels nothing at the cloud.
-    app.config.setdefault(PRECHECK_ADOPTER_KEY, StandalonePrecheckAdopter())  # The run create call adopts a pre-check.
-    _install_action_repository(app)  # Bind atomic run actions to ArangoDB with no fallback.
-    # Phase 2 T-006: Wire CaptureService for pre/post-upgrade device capture capture
-    _install_capture_service(app)  # Inject CaptureService into Flask config seam
-    # Phase 2 T-008/T-009: Wire UpgradeService for firmware upgrade orchestration
-    _install_upgrade_service(app)  # Inject UpgradeService into Flask config seam
-    # Phase 3 T-010: Wire SettleGateService for post-upgrade device validation
-    _install_settle_gate_service(app)  # Inject SettleGateService into Flask config seam
-    # Phase 3 T-012: Wire ComparisonService for pre/post-upgrade capture comparison
-    _install_comparison_service(app)  # Inject ComparisonService into Flask config seam
-    prepare_storage()  # Without this no capture can verify, so no upgrade can ever start.
+    app.config.setdefault(RUN_STORE_KEY, DocumentRunStore())  # Open this store only inside an authenticated request.
+    app.config.setdefault(LAUNCHER_KEY, start_upgrade_run)  # The confirmed run binds dependencies inside its request.
+    app.config.setdefault(STOP_RUNNER_KEY, cancel_run)  # The stop runner reads the signed operator in its request.
+    app.config.setdefault(PRECHECK_ADOPTER_KEY, StandalonePrecheckAdopter())  # The adopter opens storage when called.
+    app.config.setdefault(
+        PORTAL_SERVICE_PROVIDER_KEY,
+        PortalServiceProvider(app.config["PORTAL_SETTINGS"]),
+    )  # The app stores settings only, never request clients or services.
     logger.info(
-        "wiring: the portal holds the run store, the launcher, the stop runner, the adopter, and the Phase 2-3 services"
-    )  # Once.
+        "wiring: the portal holds request dependency construction rules and the run control seams"
+    )  # Confirm startup without opening external resources.
 
 
 def _install_action_repository(app: Flask) -> None:

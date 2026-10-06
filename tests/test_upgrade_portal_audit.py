@@ -224,8 +224,27 @@ class TestAuditLogger(unittest.TestCase):
         # WHY: create mock database router
         self.mock_db = MagicMock()  # WHY: mock database router
         self.mock_db.write = MagicMock()  # WHY: mock write method
+        self.audit_records = {}
+        self.mock_collection = MagicMock()
+        self.mock_collection.insert.side_effect = lambda entry: self.audit_records.update({entry["_key"]: dict(entry)})
+        self.mock_collection.get.side_effect = lambda key: self.audit_records.get(key)
+        self.mock_document_store = MagicMock()
+        self.mock_document_store.collection.return_value = self.mock_collection
+
+        from src.foundation.persistence.db.router import WriteResult
+
+        def routed_write(data, api_function_name):
+            self.assertEqual(api_function_name, "audit_logs")
+            self.mock_collection.insert(data[0])
+            return WriteResult(True, "arangodb", len(data), 0)
+
+        self.mock_db.write.side_effect = routed_write
         # WHY: create logger instance with mock
-        self.logger = AuditLogger(db_router=self.mock_db, enable_masking=True)  # WHY: audit logger with mock
+        self.logger = AuditLogger(
+            db_router=self.mock_db,
+            enable_masking=True,
+            document_store=self.mock_document_store,
+        )
 
     def test_log_operation_success(self):
         """Test successful operation logging.
@@ -249,12 +268,14 @@ class TestAuditLogger(unittest.TestCase):
         )  # WHY: execute logging
         # WHY: verify log ID returned
         self.assertIsNotNone(log_id)  # WHY: should return log ID
-        # WHY: verify database write called
-        self.mock_db.write.assert_called_once()  # WHY: assert write called
-        # WHY: verify write arguments
-        call_args = self.mock_db.write.call_args  # WHY: get call arguments
-        self.assertEqual(call_args.kwargs["collection"], "audit_logs")  # WHY: correct collection
-        self.assertIn("timestamp", call_args.kwargs["data"][0])  # WHY: timestamp present
+        self.mock_collection.insert.assert_called_once()
+        self.mock_db.write.assert_called_once_with(
+            data=[self.mock_collection.insert.call_args.args[0]],
+            api_function_name="audit_logs",
+        )
+        entry = self.mock_collection.insert.call_args.args[0]
+        self.assertIn("timestamp", entry)
+        self.mock_collection.get.assert_called_once_with(entry["log_id"])
 
     def test_log_operation_with_masking(self):
         """Test operation logging with secret masking.
@@ -281,8 +302,7 @@ class TestAuditLogger(unittest.TestCase):
             },  # WHY: details with sensitive data
         )  # WHY: execute logging
         # WHY: verify masking applied
-        call_args = self.mock_db.write.call_args  # WHY: get call arguments
-        entry = call_args.kwargs["data"][0]  # WHY: get entry
+        entry = self.mock_collection.insert.call_args.args[0]
         # WHY: verify sensitive fields are masked
         self.assertNotEqual(entry["details"]["password"], "supersecret")  # WHY: password masked
         self.assertNotEqual(entry["details"]["token"], "abc123xyz")  # WHY: token masked
@@ -312,8 +332,7 @@ class TestAuditLogger(unittest.TestCase):
         # WHY: verify log ID returned
         self.assertIsNotNone(log_id)  # WHY: should return log ID
         # WHY: verify operation type
-        call_args = self.mock_db.write.call_args  # WHY: get call arguments
-        entry = call_args.kwargs["data"][0]  # WHY: get entry
+        entry = self.mock_collection.insert.call_args.args[0]
         self.assertEqual(entry["operation"], "capture_start")  # WHY: correct operation
         self.assertEqual(entry["result"], "pending")  # WHY: status is pending
 
@@ -341,10 +360,20 @@ class TestAuditLogger(unittest.TestCase):
         # WHY: verify log ID returned
         self.assertIsNotNone(log_id)  # WHY: should return log ID
         # WHY: verify failure status
-        call_args = self.mock_db.write.call_args  # WHY: get call arguments
-        entry = call_args.kwargs["data"][0]  # WHY: get entry
+        entry = self.mock_collection.insert.call_args.args[0]
         self.assertEqual(entry["result"], "failure")  # WHY: status is failure
-        self.assertEqual(entry["error_message"], "site_id required")  # WHY: error message present
+        self.assertNotEqual(entry["error_message"], "site_id required")  # The audit masker redacts error details.
+
+    def test_log_operation_rejects_mismatched_document_readback(self):
+        """An acknowledged audit insert is insufficient if its key reads back differently."""
+        self.mock_collection.get.side_effect = None
+        self.mock_collection.get.return_value = {"log_id": "different-log"}
+        log_id = self.logger.log_operation(
+            operation="test_operation",
+            user_id="user123",
+            details={"run_id": "run-1"},
+        )
+        self.assertIsNone(log_id)
 
     def test_log_without_db_router(self):
         """Test logging without database router.
@@ -359,7 +388,7 @@ class TestAuditLogger(unittest.TestCase):
             user_id="user123",  # WHY: user identifier
         )  # WHY: execute logging
         # WHY: verify log ID still returned
-        self.assertIsNotNone(log_id)  # WHY: should return log ID even without db
+        self.assertIsNone(log_id)  # Missing verified storage cannot produce an audit success.
 
     def test_masking_disabled(self):
         """Test logging with masking disabled.
@@ -376,7 +405,11 @@ class TestAuditLogger(unittest.TestCase):
             records_failed=0,  # WHY: failure count
         )  # WHY: mock result
         # WHY: create logger with masking disabled
-        logger_no_mask = AuditLogger(db_router=self.mock_db, enable_masking=False)  # WHY: disable masking
+        logger_no_mask = AuditLogger(
+            db_router=self.mock_db,
+            enable_masking=False,
+            document_store=self.mock_document_store,
+        )
         # WHY: call log operation
         logger_no_mask.log_operation(  # WHY: log operation
             operation="test",  # WHY: operation type
@@ -384,8 +417,7 @@ class TestAuditLogger(unittest.TestCase):
             details={"password": "secret123"},  # WHY: sensitive data
         )  # WHY: execute logging
         # WHY: verify data not masked
-        call_args = self.mock_db.write.call_args  # WHY: get call arguments
-        entry = call_args.kwargs["data"][0]  # WHY: get entry
+        entry = self.mock_collection.insert.call_args.args[0]
         self.assertEqual(entry["details"]["password"], "secret123")  # WHY: password not masked
 
 

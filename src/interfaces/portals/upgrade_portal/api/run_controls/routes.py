@@ -244,6 +244,16 @@ def _actor() -> DurableActorScope | None:
 def _action_store() -> Any:
     """Return the configured durable action repository."""
     store = current_app.config.get(ACTION_STORE_KEY)
+    if store is None:
+        from src.interfaces.portals.upgrade_portal.app.wiring import (
+            PortalDependencyError,
+            request_dependencies,
+        )
+
+        try:
+            store = request_dependencies().services.action_repository
+        except PortalDependencyError as fault:
+            raise ActionStoreUnavailable("The ArangoDB action store is unavailable.") from fault
     required = ("initialize", "find_request", "read", "claim_item", "write_outcome", "commit_success", "finalize")
     if store is None or any(not callable(getattr(store, name, None)) for name in required):
         raise ActionStoreUnavailable("The ArangoDB action store is unavailable.")

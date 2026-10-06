@@ -4,6 +4,7 @@ Implement GET /api/runs/:run_id/comparison/results and
 POST /api/runs/:run_id/comparison/approve endpoints for delta review and approval.
 """
 
+from collections.abc import Mapping  # Read stored ArangoDB rows without assuming a concrete mapping type.
 from datetime import UTC, datetime  # WHY: timestamp for approval audit trail
 from typing import Any  # WHY: generic type annotation, Union type
 
@@ -16,7 +17,58 @@ from flask import (  # WHY: Flask routing and request handling.
     request,
 )
 
+from src.interfaces.portals.upgrade_portal.app.wiring import (
+    PortalAuthenticationError,
+    PortalDependencyError,
+    request_dependencies,
+)  # Resolve only after the signed-in route guard runs.
+from src.interfaces.portals.upgrade_portal.runtime import identity  # The operator record owns route authorization.
+
 logger = structlog.get_logger(__name__)  # WHY: module-scoped logger
+
+
+def _comparison_dependencies(
+    comparison_service: Any,
+    audit_logger: Any,
+    document_store: Any,
+) -> tuple[Any, Any, Any, Any]:
+    """Resolve explicit test values or the authenticated request graph."""
+    service = comparison_service or current_app.config.get("COMPARISON_SERVICE")
+    audit = audit_logger or current_app.config.get("AUDIT_LOGGER")
+    database = document_store or current_app.config.get("DOCUMENT_STORE")
+    if service is None or database is None:
+        dependencies = request_dependencies()
+        service = service or dependencies.services.comparison
+        audit = audit or dependencies.resources.audit_logger
+        database = database or dependencies.resources.database
+    operator = identity.current_session()
+    if operator is None:
+        from src.interfaces.portals.upgrade_portal.app.wiring import PortalDependencyError
+
+        raise PortalDependencyError("The operator session is unavailable.")
+    return service, audit, database, operator
+
+
+def _latest_comparison(database: Any, run_id: str) -> dict[str, Any] | None:
+    """Read the latest stored comparison with a bound run identifier."""
+    query = "FOR doc IN comparisons FILTER doc.run_id == @run_id " "SORT doc.timestamp DESC LIMIT 1 RETURN doc"
+    rows = list(database.aql.execute(query, bind_vars={"run_id": run_id}))
+    return dict(rows[0]) if rows and isinstance(rows[0], Mapping) else None
+
+
+def _owned_run(run_document: Mapping[str, Any], operator: Any) -> bool:
+    """Refuse a run that does not belong to the authenticated operator."""
+    owner = getattr(getattr(operator, "owner", None), "actor_email", "")
+    recorded = str(run_document.get("actor_email") or run_document.get("user_id") or "")
+    return bool(owner and recorded and owner.casefold() == recorded.casefold())
+
+
+def _update_and_verify(database: Any, collection_name: str, key: str, changes: dict[str, Any]) -> bool:
+    """Write one document patch and prove every changed field by read-back."""
+    collection = database.collection(collection_name)
+    collection.update({"_key": key, **changes}, merge=True)
+    stored = collection.get(key)
+    return isinstance(stored, Mapping) and all(stored.get(name) == value for name, value in changes.items())
 
 
 def create_comparison_routes(
@@ -39,6 +91,7 @@ def create_comparison_routes(
     comparison_bp = Blueprint("comparison", __name__, url_prefix="/api/runs")  # WHY: blueprint with prefix
 
     @comparison_bp.route("/<run_id>/comparison/results", methods=["GET"])  # WHY: get comparison results route
+    @identity.require_session  # A comparison result belongs to one signed-in operator.
     def get_comparison_results(run_id: str) -> Response | tuple[Response, int]:
         # WHY: docstring for endpoint
         """Get comparison results for upgrade run.
@@ -53,14 +106,13 @@ def create_comparison_routes(
         """
         # WHY: log request
         logger.info("get_comparison_results_request", run_id=run_id)  # WHY: request event
+        active_audit_logger = audit_logger  # A dependency fault can occur before a request graph exists.
+        operator = None  # A stable local prevents error handling from hiding the original fault.
 
         try:
-            active_comparison_service = comparison_service or current_app.config.get(
-                "COMPARISON_SERVICE"
-            )  # Use the configured service for the module-level blueprint.
-            active_db_router = db_router or current_app.config.get(
-                "DB_ROUTER"
-            )  # Use the configured database boundary for the registered route.
+            active_comparison_service, active_audit_logger, database, operator = _comparison_dependencies(
+                comparison_service, audit_logger, db_router
+            )  # Resolve the operator and request-owned document store.
             # WHY: validate run_id format
             if not run_id or not isinstance(run_id, str) or len(run_id) == 0:
                 # WHY: bad request
@@ -80,7 +132,7 @@ def create_comparison_routes(
                 )  # WHY: return error
 
             # WHY: check if database router available
-            if not active_db_router:  # WHY: no database access
+            if database is None:  # WHY: no database access
                 # WHY: database unavailable
                 logger.error("db_router_unavailable_get")  # WHY: database error
                 return (
@@ -89,8 +141,8 @@ def create_comparison_routes(
                 )  # WHY: return error
 
             # WHY: fetch run from database
-            logger.info("db_router_get_run_call", run_id=run_id)  # WHY: pre-call log
-            run_doc = active_db_router.get_run(run_id)  # WHY: database call to fetch run
+            logger.info("document_store_get_run", run_id=run_id)  # WHY: pre-call log
+            run_doc = database.collection("upgrade_runs").get(run_id)  # The natural run key owns this read.
             # WHY: check if run found
             if run_doc is None:  # WHY: if not found
                 # WHY: not found
@@ -99,10 +151,12 @@ def create_comparison_routes(
                     jsonify({"error": "Run not found"}),
                     404,
                 )  # WHY: return not found
+            if not _owned_run(run_doc, operator):  # A signed-in operator cannot read another operator's run.
+                return jsonify({"error": "Run not found"}), 404
 
             # WHY: check if comparison result already exists
-            logger.info("db_router_get_comparison_call", run_id=run_id)  # WHY: pre-call log
-            comparison_doc = active_db_router.get_comparison(run_id)  # WHY: database call to fetch comparison
+            logger.info("document_store_get_comparison", run_id=run_id)  # WHY: pre-call log
+            comparison_doc = _latest_comparison(database, run_id)  # The bound query reads only this run.
             # WHY: check if comparison exists
             if comparison_doc is None:  # WHY: if not found
                 # WHY: not found
@@ -137,6 +191,10 @@ def create_comparison_routes(
             logger.info("get_comparison_results_success", run_id=run_id)  # WHY: success log
             return jsonify(result_dict), 200  # WHY: return success
 
+        except PortalAuthenticationError:
+            return jsonify({"error": "Sign in to continue."}), 401
+        except PortalDependencyError:
+            return jsonify({"error": "Database service not available"}), 503
         except Exception as e:  # WHY: catch all exceptions
             # WHY: log exception
             logger.error(
@@ -145,14 +203,13 @@ def create_comparison_routes(
                 exception_type=type(e).__name__,
             )  # WHY: exception log
             # WHY: log to audit trail
-            if audit_logger:  # WHY: check audit logger available
+            if active_audit_logger:  # WHY: check audit logger available
                 # WHY: audit the failure
-                audit_logger.log_operation(
+                active_audit_logger.log_operation(
                     operation="get_comparison_results",
-                    user_id="system",
-                    run_id=run_id,
-                    success=False,
-                    details={"error": str(e)},
+                    user_id=str(getattr(getattr(operator, "owner", None), "actor_email", "")),
+                    details={"run_id": run_id, "error_type": type(e).__name__},
+                    result="failure",
                 )  # WHY: audit operation
             # WHY: return error
             return (
@@ -161,6 +218,7 @@ def create_comparison_routes(
             )  # WHY: return error
 
     @comparison_bp.route("/<run_id>/comparison/approve", methods=["POST"])  # WHY: approve comparison results route
+    @identity.require_session  # Approval changes a stored run for one signed-in operator.
     def approve_comparison(run_id: str) -> Response | tuple[Response, int]:
         # WHY: docstring for endpoint
         """Approve comparison results and mark run as complete.
@@ -183,14 +241,13 @@ def create_comparison_routes(
         """
         # WHY: log request
         logger.info("approve_comparison_request", run_id=run_id)  # WHY: request event
+        active_audit_logger = audit_logger  # A dependency fault can occur before a request graph exists.
+        operator = None  # A stable local prevents error handling from hiding the original fault.
 
         try:
-            active_comparison_service = comparison_service or current_app.config.get(
-                "COMPARISON_SERVICE"
-            )  # Use the configured service for the module-level blueprint.
-            active_db_router = db_router or current_app.config.get(
-                "DB_ROUTER"
-            )  # Use the configured database boundary for the registered route.
+            active_comparison_service, active_audit_logger, database, operator = _comparison_dependencies(
+                comparison_service, audit_logger, db_router
+            )  # Resolve the operator and request-owned document store.
             # WHY: validate run_id format
             if not run_id or not isinstance(run_id, str) or len(run_id) == 0:
                 # WHY: bad request
@@ -240,7 +297,7 @@ def create_comparison_routes(
                 )  # WHY: return error
 
             # WHY: check if database router available
-            if not active_db_router:  # WHY: no database access
+            if database is None:  # WHY: no database access
                 # WHY: database unavailable
                 logger.error("db_router_unavailable_approve")  # WHY: database error
                 return (
@@ -249,8 +306,11 @@ def create_comparison_routes(
                 )  # WHY: return error
 
             # WHY: fetch comparison from database
-            logger.info("db_router_get_comparison_for_approval", run_id=run_id)  # WHY: pre-call log
-            comparison_doc = active_db_router.get_comparison(run_id)  # WHY: database call to fetch comparison
+            logger.info("document_store_get_comparison_for_approval", run_id=run_id)  # WHY: pre-call log
+            run_doc = database.collection("upgrade_runs").get(run_id)  # The run must exist in the same store.
+            if run_doc is None or not _owned_run(run_doc, operator):  # Refuse absent and foreign runs alike.
+                return jsonify({"error": "Run not found"}), 404
+            comparison_doc = _latest_comparison(database, run_id)  # The bound query reads this run's result.
             # WHY: check if comparison exists
             if comparison_doc is None:  # WHY: if not found
                 # WHY: not found
@@ -269,8 +329,7 @@ def create_comparison_routes(
                     400,
                 )  # WHY: return error
 
-            # WHY: get current user from token (would be extracted from JWT middleware)
-            user_id = request.headers.get("X-User-ID", "anonymous")  # WHY: extract user from headers
+            user_id = str(getattr(operator.owner, "actor_email", ""))  # Trust the signed identity, not request text.
 
             # WHY: create approval record
             approval_record = {
@@ -292,41 +351,50 @@ def create_comparison_routes(
 
             # WHY: update comparison in database
             logger.info("db_router_update_comparison_approval", run_id=run_id)  # WHY: pre-call log
-            active_db_router.update_comparison(
-                run_id,
+            comparison_key = str(comparison_doc.get("_key", ""))  # The stored key identifies this exact result.
+            if not comparison_key or not _update_and_verify(
+                database,
+                "comparisons",
+                comparison_key,
                 {
                     "approved": True,
                     "approved_by": user_id,
                     "approved_at": approval_record["approved_at"],
                     "approval_record": approval_record,
                 },
-            )  # WHY: database call to update comparison
+            ):  # The portal reports no approval until the store returns every field.
+                return jsonify({"error": "Failed to approve comparison"}), 500
 
             # WHY: update run status to completed
             logger.info("db_router_update_run_status", run_id=run_id)  # WHY: pre-call log
-            active_db_router.update_run(
-                run_id,
+            if not _update_and_verify(
+                database,
+                "upgrade_runs",
+                str(run_doc.get("_key", run_id)),
                 {
                     "status": "completed",
                     "completed_at": datetime.now(UTC).isoformat(),
                 },
-            )  # WHY: database call to update run
+            ):  # A failed run write cannot produce a completion response.
+                return jsonify({"error": "Failed to approve comparison"}), 500
 
             # WHY: log approval to audit trail
             logger.debug("comparison_approval_stored", run_id=run_id, user_id=user_id)  # WHY: result summary
-            if audit_logger:  # WHY: check audit logger available
+            if active_audit_logger:  # WHY: check audit logger available
                 # WHY: audit the approval
-                audit_logger.log_operation(
+                audit_id = active_audit_logger.log_operation(
                     operation="approve_comparison",
                     user_id=user_id,
-                    run_id=run_id,
-                    success=True,
                     details={
+                        "run_id": run_id,
                         "approved_items_count": len(approved_items),
                         "rejected_items_count": len(rejected_items),
                         "approved_all": approve_all,
                     },
+                    result="success",
                 )  # WHY: audit operation
+                if audit_id is None:  # A missing durable audit entry must remain visible.
+                    return jsonify({"error": "Failed to approve comparison"}), 500
 
             # WHY: return approval confirmation
             logger.info("approve_comparison_success", run_id=run_id, user_id=user_id)  # WHY: success log
@@ -341,6 +409,10 @@ def create_comparison_routes(
                 200,
             )  # WHY: return success
 
+        except PortalAuthenticationError:
+            return jsonify({"error": "Sign in to continue."}), 401
+        except PortalDependencyError:
+            return jsonify({"error": "Database service not available"}), 503
         except Exception as e:  # WHY: catch all exceptions
             # WHY: log exception
             logger.error(
@@ -349,14 +421,13 @@ def create_comparison_routes(
                 exception_type=type(e).__name__,
             )  # WHY: exception log
             # WHY: log to audit trail
-            if audit_logger:  # WHY: check audit logger available
+            if active_audit_logger:  # WHY: check audit logger available
                 # WHY: audit the failure
-                audit_logger.log_operation(
+                active_audit_logger.log_operation(
                     operation="approve_comparison",
-                    user_id="system",
-                    run_id=run_id,
-                    success=False,
-                    details={"error": str(e)},
+                    user_id=str(getattr(getattr(operator, "owner", None), "actor_email", "")),
+                    details={"run_id": run_id, "error_type": type(e).__name__},
+                    result="failure",
                 )  # WHY: audit operation
             # WHY: return error
             return (

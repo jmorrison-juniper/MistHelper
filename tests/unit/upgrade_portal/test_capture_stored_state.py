@@ -135,3 +135,39 @@ def test_the_page_script_ends_the_poll_on_both_words_of_the_server() -> None:
     words = page_finished_words()  # The words that end the page poll.
     assert VERIFIED_WORD in words  # A stored capture that reads back.
     assert FAILED_WORD in words  # A stored capture that this release cannot compare.
+
+
+def test_capture_service_refuses_a_noncomparable_store_readback(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The capture service cannot return an ID when the canonical store refuses verification."""
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+
+    from src.interfaces.portals.upgrade_portal.capture import collector, store
+    from src.interfaces.portals.upgrade_portal.capture.service import CaptureService
+
+    session = object()
+    document_store = object()
+    audit_logger = Mock()
+    document = {
+        "capture_id": "capture-1",
+        "device_index": {"001122334455": {"mac": "001122334455"}},
+    }
+    store_capture = Mock()
+    read_back = Mock(return_value=SimpleNamespace(comparable=False))
+    monkeypatch.setattr(collector, "build_document", lambda job, active_session, resources: document)
+    monkeypatch.setattr(collector, "store_capture", store_capture)
+    monkeypatch.setattr(store, "load_capture_for_comparison", read_back)
+    service = CaptureService(session, object(), audit_logger, document_store)
+
+    result = service.capture_pre_upgrade(
+        run_id="run-0123456789abcdef0123456789abcdef",
+        org_id="org-1",
+        site_id="site-1",
+        device_ids=["00:11:22:33:44:55"],
+        user_id="operator@example.invalid",
+    )
+
+    assert result is None
+    store_capture.assert_called_once()
+    read_back.assert_called_once()
+    audit_logger.log_operation.assert_not_called()

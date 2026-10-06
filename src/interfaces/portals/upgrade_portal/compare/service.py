@@ -8,6 +8,7 @@ captures.
 
 import time  # WHY: retry backoff timing
 import uuid  # WHY: unique comparison IDs
+from collections.abc import Mapping
 from dataclasses import dataclass, field  # WHY: immutable result structures
 from datetime import UTC, datetime  # WHY: ISO 8601 timestamps
 from typing import Any, cast  # WHY: type hints for complex structures
@@ -75,6 +76,7 @@ class ComparisonService:
         settle_gate_service: Any = None,  # WHY: SettleGateService dependency
         db_router: Any = None,  # WHY: ArangoDB persistence dependency
         audit_logger: Any = None,  # WHY: audit trail dependency
+        document_store: Any = None,  # WHY: request-owned document reads and writes
     ) -> None:  # WHY: initialization returns nothing
         """Initialize ComparisonService with dependencies.
 
@@ -82,6 +84,7 @@ class ComparisonService:
             settle_gate_service: SettleGateService for prerequisite check (required).
             db_router: DatabaseRouter for ArangoDB reads (required).
             audit_logger: AuditLogger for operation trail (required).
+            document_store: Request-owned ArangoDB document handle.
 
         WHY: dependency injection pattern for testability and loose coupling.
         """
@@ -91,12 +94,14 @@ class ComparisonService:
         self.db_router = db_router  # WHY: persistent storage
         # WHY: store audit logger
         self.audit_logger = audit_logger  # WHY: operation trail
+        self.document_store = document_store  # WHY: direct, verified portal persistence.
         # WHY: log initialization
         logger.info(
             "comparison_service_initialized",
             settle_gate_available=settle_gate_service is not None,  # WHY: dependency status
             db_available=db_router is not None,  # WHY: dependency status
             audit_available=audit_logger is not None,  # WHY: dependency status
+            document_store_available=document_store is not None,  # WHY: dependency status
         )  # WHY: startup event
 
     def compare(
@@ -126,148 +131,130 @@ class ComparisonService:
         WHY: implements FR-013 (comparison) with settle gate prerequisite
         check per T-012 requirement and automatic retry on transient errors.
         """
-        # WHY: log comparison start
         logger.info(
-            "comparison_start",  # WHY: operation name
-            run_id=run_id,  # WHY: run context
-            device_count=len(device_ids),  # WHY: scope summary
-            user_id=user_id,  # WHY: audit context
-        )  # WHY: pre-operation event
+            "comparison_start",
+            run_id=run_id,
+            device_count=len(device_ids),
+            user_id=user_id,
+        )  # Record the request scope before the service work.
+        validation_error = self._validate_compare_inputs(
+            run_id,
+            device_ids,
+        )  # Check required input before dependencies.
+        if validation_error is not None:  # Refuse invalid comparison requests.
+            return validation_error  # Return the established refusal result.
+        if not self._comparison_dependencies_ready():  # Refuse before storage or cloud work.
+            logger.error("comparison_dependencies_unavailable")  # Name the missing request dependency.
+            return ComparisonResult(passed=False, run_id=run_id, settled=False)  # Do not report success.
+        try:  # Keep driver details out of the portal response.
+            return self._compare_after_settle(run_id, site_id, org_id, device_ids, user_id)  # Run verified steps.
+        except Exception as error:  # Convert unexpected dependencies into a safe failure.
+            logger.error("comparison_exception", error_type=type(error).__name__, run_id=run_id)  # Log safe context.
+            self._audit_comparison_failure(run_id, user_id)  # Preserve the failed operation in the audit trail.
+            return ComparisonResult(
+                passed=False,
+                run_id=run_id,
+                settled=False,
+            )  # Do not return a success-shaped result.
 
-        try:
-            # WHY: validate inputs via helper
-            validation_error = self._validate_compare_inputs(  # WHY: delegate validation
-                run_id=run_id,  # WHY: run identifier
-                device_ids=device_ids,  # WHY: device list
-            )  # WHY: validation result
-            if validation_error is not None:  # WHY: validation failed
-                return validation_error  # WHY: return error result
+    def _comparison_dependencies_ready(self) -> bool:
+        """Confirm that every dependency needed for comparison is available."""
+        return all(
+            dependency is not None
+            for dependency in (
+                self.settle_gate_service,
+                self.db_router,
+                self.document_store,
+                self.audit_logger,
+            )
+        )  # The request graph must own each service.
 
-            # WHY: check dependencies available
-            if not self.settle_gate_service or not self.db_router:  # WHY: dependency check
-                logger.error("comparison_dependencies_unavailable")  # WHY: missing dependencies
-                return ComparisonResult(  # WHY: error result
-                    passed=False,  # WHY: validation failed
-                    run_id=run_id,  # WHY: run identifier
-                    settled=False,  # WHY: not settled
-                )  # WHY: result
+    def _compare_after_settle(
+        self,
+        run_id: str,
+        site_id: str,
+        org_id: str,
+        device_ids: list[str],
+        user_id: str,
+    ) -> ComparisonResult:
+        """Require settle evidence before reading and comparing captures."""
+        timestamp = datetime.now(UTC).isoformat()  # Keep the comparison time in UTC.
+        logger.info("comparison_checking_settle_gate", run_id=run_id)  # Log before the settle request.
+        settle_results = self._check_settle_gate(run_id, site_id, org_id, device_ids, user_id)  # Verify each device.
+        if not settle_results or not settle_results.get("passed", False):  # Stop when settle evidence is incomplete.
+            return self._settle_gate_failure_result(
+                run_id,
+                user_id,
+                settle_results,
+                timestamp,
+            )  # Preserve failure detail.
+        logger.info("comparison_settle_gate_passed", run_id=run_id)  # Record verified settle evidence.
+        captures = self._fetch_both_captures(run_id, timestamp)  # Read the stored pre and post captures.
+        if captures is None:  # Both capture roles are required for comparison.
+            return self._capture_missing_result(run_id, timestamp)  # Return the established missing-data result.
+        return self._compare_captures(run_id, org_id, site_id, user_id, device_ids, timestamp, captures)
 
-            # WHY: get current timestamp
-            timestamp = datetime.now(UTC).isoformat()  # WHY: ISO 8601 format
+    def _compare_captures(
+        self,
+        run_id: str,
+        org_id: str,
+        site_id: str,
+        user_id: str,
+        device_ids: list[str],
+        timestamp: str,
+        captures: tuple[dict[str, Any], dict[str, Any]],
+    ) -> ComparisonResult:
+        """Compare two stored captures and persist only verified results."""
+        pre_capture, post_capture = captures  # Use the captures returned by the request-owned store.
+        logger.info("comparison_calculating_deltas", run_id=run_id)  # Log before the data transform.
+        deltas, summary = self._calculate_deltas(pre_capture, post_capture)  # Compare actual stored device rows.
+        if summary["total_devices_compared"] == 0:  # Empty evidence cannot prove a successful comparison.
+            return ComparisonResult(passed=False, run_id=run_id, settled=True, timestamp=timestamp)
+        logger.info(
+            "comparison_delta_summary",
+            run_id=run_id,
+            total_deltas=len(deltas),
+            summary=summary,
+        )  # Record the verified change count.
+        comparison_id = self._persist_comparison(
+            run_id=run_id,
+            org_id=org_id,
+            site_id=site_id,
+            user_id=user_id,
+            timestamp=timestamp,
+            device_count=len(device_ids),
+            pre_capture=pre_capture,
+            post_capture=post_capture,
+            deltas=deltas,
+            summary=summary,
+        )  # Require durable comparison and audit records.
+        if comparison_id is None:  # A failed write cannot produce a success response.
+            return ComparisonResult(passed=False, run_id=run_id, settled=True, timestamp=timestamp)
+        logger.info(
+            "comparison_complete",
+            run_id=run_id,
+            comparison_id=comparison_id,
+            delta_count=len(deltas),
+        )  # Record the verified result identifier.
+        return ComparisonResult(
+            passed=True,
+            run_id=run_id,
+            settled=True,
+            deltas=deltas,
+            summary=summary,
+            timestamp=timestamp,
+        )  # Return only the durable comparison.
 
-            # WHY: check settle gate prerequisite
-            logger.info(
-                "comparison_checking_settle_gate",  # WHY: operation name
-                run_id=run_id,  # WHY: run context
-            )  # WHY: settle gate check start
-
-            # WHY: call settle gate service to verify devices settled
-            settle_results = self._check_settle_gate(  # WHY: prerequisite check
-                run_id=run_id,  # WHY: run identifier
-                site_id=site_id,  # WHY: site context
-                org_id=org_id,  # WHY: org context
-                device_ids=device_ids,  # WHY: device list
-            )  # WHY: settle check result
-
-            # WHY: if settle gate failed, return error
-            if not settle_results or not settle_results.get("passed", False):  # WHY: check settle status
-                return self._settle_gate_failure_result(  # WHY: delegate failure handling
-                    run_id=run_id,  # WHY: run identifier
-                    user_id=user_id,  # WHY: audit context
-                    settle_results=settle_results,  # WHY: settle outcome
-                    timestamp=timestamp,  # WHY: result timestamp
-                )  # WHY: failure result
-
-            # WHY: settle gate passed, proceed to comparison
-            logger.info(
-                "comparison_settle_gate_passed",  # WHY: operation name
-                run_id=run_id,  # WHY: run context
-            )  # WHY: settle gate passed
-
-            # WHY: fetch both captures, failing fast when either is missing
-            captures = self._fetch_both_captures(  # WHY: fetch pair
-                run_id=run_id,  # WHY: run identifier
-                timestamp=timestamp,  # WHY: result timestamp
-            )  # WHY: capture pair
-            if captures is None:  # WHY: a capture was missing
-                return self._capture_missing_result(  # WHY: build error result
-                    run_id=run_id,  # WHY: run identifier
-                    timestamp=timestamp,  # WHY: result timestamp
-                )  # WHY: error result
-            pre_capture, post_capture = captures  # WHY: unpack pair
-
-            # WHY: calculate deltas between pre and post captures
-            logger.info("comparison_calculating_deltas", run_id=run_id)  # WHY: calculation phase start
-            deltas, summary = self._calculate_deltas(  # WHY: delta calculation
-                pre_capture=pre_capture,  # WHY: pre-capture capture
-                post_capture=post_capture,  # WHY: post-capture capture
-            )  # WHY: delta result
-
-            # WHY: log delta calculation completion
-            logger.info(
-                "comparison_delta_summary",  # WHY: operation name
-                run_id=run_id,  # WHY: run context
-                total_deltas=len(deltas),  # WHY: delta count
-                summary=summary,  # WHY: summary data
-            )  # WHY: delta complete
-
-            # WHY: persist comparison to ArangoDB and audit the completion
-            comparison_id = self._persist_comparison(  # WHY: persist and audit
-                run_id=run_id,  # WHY: run link
-                org_id=org_id,  # WHY: organization context
-                site_id=site_id,  # WHY: site context
-                user_id=user_id,  # WHY: audit context
-                timestamp=timestamp,  # WHY: comparison moment
-                device_count=len(device_ids),  # WHY: scope metric
-                pre_capture=pre_capture,  # WHY: pre-capture capture
-                post_capture=post_capture,  # WHY: post-capture capture
-                deltas=deltas,  # WHY: delta array
-                summary=summary,  # WHY: summary data
-            )  # WHY: comparison identifier
-
-            # WHY: log success
-            logger.info(
-                "comparison_complete",  # WHY: operation name
-                run_id=run_id,  # WHY: run context
-                comparison_id=comparison_id,  # WHY: result identifier
-                delta_count=len(deltas),  # WHY: result metric
-            )  # WHY: success event
-
-            # WHY: return successful comparison result
-            return ComparisonResult(  # WHY: success result
-                passed=True,  # WHY: comparison succeeded
-                run_id=run_id,  # WHY: run identifier
-                settled=True,  # WHY: devices settled
-                deltas=deltas,  # WHY: field changes
-                summary=summary,  # WHY: summary data
-                timestamp=timestamp,  # WHY: result timestamp
-            )  # WHY: result complete
-
-        except Exception as e:  # WHY: catch unexpected exceptions
-            # WHY: log exception
-            logger.error(
-                "comparison_exception",  # WHY: error event
-                error=str(e),  # WHY: exception detail
-                exception_type=type(e).__name__,  # WHY: exception class
-                run_id=run_id,  # WHY: context
-            )  # WHY: exception logged
-
-            # WHY: audit log failure
-            if self.audit_logger:  # WHY: audit logging conditional
-                self.audit_logger.log_operation(  # WHY: audit trail
-                    operation="comparison_complete",  # WHY: operation type
-                    user_id=user_id,  # WHY: user context
-                    details={"run_id": run_id},  # WHY: context details
-                    result="failure",  # WHY: result status
-                    error_message=str(e),  # WHY: error detail
-                )  # WHY: audit entry
-
-            # WHY: return failure result
-            return ComparisonResult(  # WHY: failure result
-                passed=False,  # WHY: comparison failed
-                run_id=run_id,  # WHY: run identifier
-                settled=False,  # WHY: unknown settle state
-            )  # WHY: result
+    def _audit_comparison_failure(self, run_id: str, user_id: str) -> None:
+        """Record an unexpected comparison failure without driver details."""
+        if self.audit_logger is not None:  # The request graph may have lost the audit dependency.
+            self.audit_logger.log_operation(
+                operation="comparison_complete",
+                user_id=user_id,
+                details={"run_id": run_id},
+                result="failure",
+                error_message="The comparison operation failed.",
+            )  # Keep the external exception private.
 
     def _validate_compare_inputs(
         self,
@@ -402,7 +389,7 @@ class ComparisonService:
         post_capture: dict[str, Any],  # WHY: post-capture capture
         deltas: list[dict[str, Any]],  # WHY: delta array
         summary: dict[str, Any],  # WHY: summary data
-    ) -> str:  # WHY: comparison identifier
+    ) -> str | None:  # WHY: verified comparison identifier or failure
         """Persist a completed comparison to ArangoDB and audit it.
 
         Args:
@@ -440,32 +427,40 @@ class ComparisonService:
             "user_id": user_id,  # WHY: audit context
         }  # WHY: document complete
 
-        # WHY: write to database
-        write_result = self.db_router.write(  # WHY: database write operation
-            collection="comparisons",  # WHY: collection name
-            document=comparison_doc,  # WHY: document to write
-        )  # WHY: write operation result
+        if self.document_store is None or self.audit_logger is None:
+            logger.error("comparison_persistence_dependencies_unavailable", run_id=run_id)
+            return None
+        try:  # The driver result must be read back before it can authorize success.
+            collection = self.document_store.collection("comparisons")  # Use the request-owned document handle.
+            collection.insert(comparison_doc, overwrite=True)  # Store the fixed comparison document shape.
+            stored = collection.get(comparison_doc["_key"])  # Read the same natural run key back.
+        except Exception as fault:  # A database fault remains a failed comparison.
+            logger.error("comparison_persist_failed", error_type=type(fault).__name__)
+            return None  # A missing durable record never yields a success identifier.
+        verified_fields = ("comparison_id", "run_id", "timestamp", "deltas", "summary")
+        if not isinstance(stored, dict) or any(stored.get(field) != comparison_doc[field] for field in verified_fields):
+            logger.error("comparison_readback_failed", comparison_id=comparison_id)
+            return None  # A different or absent record cannot verify this comparison.
 
-        # WHY: verify persistence succeeded
-        if not write_result:  # WHY: check write result
-            logger.error("comparison_persist_failed", comparison_id=comparison_id)  # WHY: persistence error
+        # A stored comparison is not a successful operation without its audit record.
+        if self.audit_logger is None:
+            return None
+        audit_id = self.audit_logger.log_operation(  # WHY: audit trail
+            operation="comparison_complete",  # WHY: operation type
+            user_id=user_id,  # WHY: user context
+            details={  # WHY: operation details
+                "comparison_id": comparison_id,  # WHY: identifier
+                "device_count": device_count,  # WHY: scope metric
+                "delta_count": len(deltas),  # WHY: delta count
+                "run_id": run_id,  # WHY: run link
+                "summary": summary,  # WHY: summary data
+            },  # WHY: detail dict
+            result="success",  # WHY: result status
+        )  # WHY: audit entry
+        if audit_id is None:
+            return None
 
-        # WHY: audit log comparison completion
-        if self.audit_logger:  # WHY: audit logging conditional
-            self.audit_logger.log_operation(  # WHY: audit trail
-                operation="comparison_complete",  # WHY: operation type
-                user_id=user_id,  # WHY: user context
-                details={  # WHY: operation details
-                    "comparison_id": comparison_id,  # WHY: identifier
-                    "device_count": device_count,  # WHY: scope metric
-                    "delta_count": len(deltas),  # WHY: delta count
-                    "run_id": run_id,  # WHY: run link
-                    "summary": summary,  # WHY: summary data
-                },  # WHY: detail dict
-                result="success",  # WHY: result status
-            )  # WHY: audit entry
-
-        return comparison_id  # WHY: return identifier
+        return comparison_id  # WHY: return only the read-back comparison identifier
 
     def _capture_missing_result(
         self,  # WHY: instance method
@@ -495,6 +490,7 @@ class ComparisonService:
         site_id: str,  # WHY: site context
         org_id: str,  # WHY: org context
         device_ids: list[str],  # WHY: devices to check
+        user_id: str = "",
     ) -> dict[str, Any] | None:  # WHY: return settle gate result
         """Check settle gate prerequisite.
 
@@ -509,13 +505,47 @@ class ComparisonService:
 
         WHY: verifies devices settled before proceeding to comparison.
         """
-        # WHY: placeholder for actual settle gate check
-        # In production: call settle_gate_service.wait_for_settle()
-        # For now, assume settle gate passed
-        return {  # WHY: result dict
-            "passed": True,  # WHY: assume success
-            "failed_checks": [],  # WHY: no failures
-        }  # WHY: result
+        if self.settle_gate_service is None or self.document_store is None:
+            return {"passed": False, "failed_checks": ["settle_service_unavailable"]}
+        results = self.settle_gate_service.wait_for_settle(
+            run_id=run_id,
+            device_ids=device_ids,
+            site_id=site_id,
+            org_id=org_id,
+            user_id=user_id,
+        )
+        if not isinstance(results, dict) or not results:
+            return {"passed": False, "failed_checks": ["verified_settle_evidence_unavailable"]}
+        stored = self._stored_settle_record(run_id)
+        if stored is None:
+            return {"passed": False, "failed_checks": ["verified_settle_evidence_unavailable"]}
+        if not self._settle_results_match(stored, results, device_ids):
+            return {"passed": False, "failed_checks": ["verified_settle_evidence_mismatch"]}
+        failed = [device_id for device_id, result in results.items() if not result.passed or result.failed_checks]
+        return {"passed": not failed, "failed_checks": failed}
+
+    def _stored_settle_record(self, run_id: str) -> dict[str, Any] | None:
+        """Read the latest settlement record with a bound run identifier."""
+        query = "FOR doc IN settle_gates " "FILTER doc.run_id == @run_id " "SORT doc.timestamp DESC LIMIT 1 RETURN doc"
+        rows = list(self.document_store.aql.execute(query, bind_vars={"run_id": run_id}))
+        return rows[0] if len(rows) == 1 and isinstance(rows[0], dict) else None
+
+    @staticmethod
+    def _settle_results_match(
+        stored: Mapping[str, Any],
+        results: Mapping[str, Any],
+        device_ids: list[str],
+    ) -> bool:
+        """Require the stored evidence to match every result from this request."""
+        expected_results = {
+            device_id: {
+                "passed": result.passed,
+                "failed_checks": result.failed_checks,
+                "details": result.details,
+            }
+            for device_id, result in results.items()
+        }
+        return stored.get("device_results") == expected_results and set(results) == set(device_ids)
 
     def _fetch_pre_capture(self, run_id: str) -> dict[str, Any] | None:  # WHY: return pre-capture or None
         """Fetch pre-upgrade capture from ArangoDB.
@@ -528,15 +558,7 @@ class ComparisonService:
 
         WHY: retrieves baseline capture for comparison.
         """
-        # WHY: placeholder for actual database fetch
-        # In production: query ArangoDB with filter (run_id, capture_type="pre")
-        # For now, return dummy document
-        return {  # WHY: dummy document
-            "run_id": run_id,  # WHY: run identifier
-            "capture_type": "pre",  # WHY: capture type
-            "timestamp": datetime.now(UTC).isoformat(),  # WHY: timestamp
-            "device_captures": [],  # WHY: captures array
-        }  # WHY: document
+        return self._fetch_capture_by_role(run_id, "pre")  # The store returns verified canonical captures only.
 
     def _fetch_post_capture(self, run_id: str) -> dict[str, Any] | None:  # WHY: return post-capture or None
         """Fetch post-upgrade capture from ArangoDB.
@@ -549,15 +571,22 @@ class ComparisonService:
 
         WHY: retrieves post-upgrade capture for comparison.
         """
-        # WHY: placeholder for actual database fetch
-        # In production: query ArangoDB with filter (run_id, capture_type="post")
-        # For now, return dummy document
-        return {  # WHY: dummy document
-            "run_id": run_id,  # WHY: run identifier
-            "capture_type": "post",  # WHY: capture type
-            "timestamp": datetime.now(UTC).isoformat(),  # WHY: timestamp
-            "device_captures": [],  # WHY: captures array
-        }  # WHY: document
+        return self._fetch_capture_by_role(run_id, "post")  # The store returns verified canonical captures only.
+
+    def _fetch_capture_by_role(self, run_id: str, role: str) -> dict[str, Any] | None:
+        """Read one verified capture by its run role."""
+        from src.interfaces.portals.upgrade_portal.capture import store
+
+        if self.document_store is None:
+            return None
+        page = store.list_captures(store.CaptureQuery(run_id=run_id), database=self.document_store)
+        if not page.database_available:
+            return None
+        row = next((capture for capture in page.captures if capture.get("role") == role), None)
+        if row is None:
+            return None
+        loaded = store.load_capture_for_comparison(str(row.get("capture_id", "")), database=self.document_store)
+        return loaded.capture if loaded.comparable else None
 
     def _calculate_deltas(
         self,
@@ -575,20 +604,89 @@ class ComparisonService:
 
         WHY: compares key fields to identify upgrade impact.
         """
-        # WHY: initialize results
-        deltas: list[dict[str, Any]] = []  # WHY: delta list with type annotation
-        summary = {  # WHY: summary dict
-            "firmware_changes": 0,  # WHY: count firmware changes
-            "config_changes": 0,  # WHY: count config changes
-            "policy_changes": 0,  # WHY: count policy changes
-            "neighbor_changes": 0,  # WHY: count neighbor changes
-            "total_devices_compared": 0,  # WHY: total compared
-        }  # WHY: summary complete
-
-        # WHY: placeholder for actual delta calculation
-        # In production: compare device captures field by field
-        # For now, return empty results
+        pre_index = pre_capture.get("device_index")  # The canonical capture stores a verified address index.
+        post_index = post_capture.get("device_index")  # Compare only actual device rows from both captures.
+        if not isinstance(pre_index, dict) or not isinstance(post_index, dict):
+            return [], self._empty_delta_summary()  # Missing indexes cannot prove a comparison.
+        summary = self._empty_delta_summary()  # Keep each result count in the established response shape.
+        summary["total_devices_compared"] = len(set(pre_index) & set(post_index))  # Count common device records.
+        deltas = self._compare_device_indexes(pre_index, post_index, summary)  # Compare each captured device once.
         return deltas, summary  # WHY: return results
+
+    @staticmethod
+    def _empty_delta_summary() -> dict[str, int]:
+        """Create an empty comparison summary with all response fields."""
+        return {
+            "firmware_changes": 0,  # Count firmware changes.
+            "config_changes": 0,  # Count inventory and configuration changes.
+            "policy_changes": 0,  # Preserve the established policy count.
+            "neighbor_changes": 0,  # Preserve the established neighbor count.
+            "total_devices_compared": 0,  # Count devices present in both captures.
+        }  # Return a stable response shape.
+
+    def _compare_device_indexes(
+        self,
+        pre_index: dict[str, Any],
+        post_index: dict[str, Any],
+        summary: dict[str, int],
+    ) -> list[dict[str, Any]]:
+        """Compare the device rows in two validated capture indexes."""
+        deltas: list[dict[str, Any]] = []  # Keep each change with its device identifier.
+        for device_id in sorted(set(pre_index) | set(post_index)):
+            before = pre_index.get(device_id)
+            after = post_index.get(device_id)
+            if before is None or after is None:
+                deltas.append(self._inventory_delta(device_id, before, after))  # Record added or removed devices.
+                summary["config_changes"] += 1  # Count inventory changes with other config changes.
+                continue
+            if isinstance(before, Mapping) and isinstance(after, Mapping):
+                deltas.extend(self._device_deltas(device_id, before, after, summary))  # Compare supported fields.
+        return deltas  # Return every verified change.
+
+    @staticmethod
+    def _inventory_delta(
+        device_id: str,
+        before: Any,
+        after: Any,
+    ) -> dict[str, Any]:
+        """Describe a device that appears in only one capture."""
+        removed = after is None  # A missing post-upgrade row means the device was removed.
+        return {
+            "device_id": device_id,  # Identify the affected device.
+            "field": "inventory",  # Name the source of the change.
+            "pre_value": "present" if before is not None else None,  # Record the prior presence.
+            "post_value": "present" if after is not None else None,  # Record the current presence.
+            "delta_type": "device_removed" if removed else "device_added",  # Classify the inventory change.
+            "severity": "high" if removed else "medium",  # Missing devices need stronger review.
+        }  # Return the complete inventory delta.
+
+    @staticmethod
+    def _device_deltas(
+        device_id: str,
+        before: Mapping[str, Any],
+        after: Mapping[str, Any],
+        summary: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        """Return the actual firmware and inventory changes of one device."""
+        deltas = []
+        for attribute in ("version", "firmware_version", "model", "type", "status"):
+            old_value = before.get(attribute)
+            new_value = after.get(attribute)
+            if old_value is None or new_value is None or old_value == new_value:
+                continue
+            firmware_change = attribute in ("version", "firmware_version")
+            deltas.append(
+                {
+                    "device_id": device_id,
+                    "field": attribute,
+                    "pre_value": old_value,
+                    "post_value": new_value,
+                    "delta_type": "firmware_upgrade" if firmware_change else "config_change",
+                    "severity": "high" if firmware_change else "medium",
+                }
+            )
+            summary["firmware_changes" if firmware_change else "config_changes"] += 1
+        return deltas
 
 
 @dataclass(frozen=True)  # WHY: immutable result prevents accidental modification
@@ -831,7 +929,7 @@ class ComparisonResultService:
             logger.error(
                 "delta_analysis_exception",  # WHY: error event
                 run_id=run_id,  # WHY: context
-                error=str(e),  # WHY: exception detail
+                error_type=type(e).__name__,
                 exception_type=type(e).__name__,  # WHY: exception class
             )  # WHY: exception logged
 
@@ -842,7 +940,7 @@ class ComparisonResultService:
                     user_id=user_id,  # WHY: user context
                     details={"run_id": run_id},  # WHY: context details
                     result="failure",  # WHY: result status
-                    error_message=str(e),  # WHY: error detail
+                    error_message="The comparison analysis failed.",  # WHY: keep dependency text private.
                 )  # WHY: audit entry
 
             # WHY: return empty result on error

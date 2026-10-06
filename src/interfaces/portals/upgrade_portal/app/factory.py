@@ -100,7 +100,12 @@ BLUEPRINT_NAMES = (
 # match wins, so a module needs no registration list of its own.
 BLUEPRINT_ATTRIBUTES = ("{name}_bp", "bp", "blueprint")  # Tried in this order.
 
-REQUEST_HANDLES = ("mist_session", "database_router", "redis_client")  # The teardown closes each one.
+REQUEST_HANDLES = (
+    "mist_session",
+    "database_router",
+    "redis_client",
+    "database_client",
+)  # Each request owns its handles.
 
 ERROR_CODES = {
     400: "bad_request",  # The portal could not read the request.
@@ -862,11 +867,10 @@ def close_handle(name: str, handle: object | None) -> None:
         logger.debug("The request handle %s closed.", name)  # Log after the close succeeds.
     except Exception as error:  # A close fault must not hide the fault that ended the request.
         logger.warning(
-            "The portal could not close the handle %s after %s: %s.",
+            "The portal could not close the handle %s after %s.",
             name,
             type(error).__name__,
-            error,
-        )  # Report the close fault and continue.
+        )  # Report the safe fault class and continue.
 
 
 def import_route_module(name: str) -> ModuleType:

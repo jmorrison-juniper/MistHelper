@@ -1,0 +1,14 @@
+{
+  "feature": "3834-portal-startup-dependencies",
+  "issue": 3834,
+  "branch": "jmorrison-juniper-startup-dependency-reassessment",
+  "currentStep": "specify",
+  "status": "specified",
+  "artifacts": [
+    "spec.md",
+    "checklists/requirements.md"
+  ],
+  "workflow": "speckit",
+  "specName": "",
+  "history": []
+}

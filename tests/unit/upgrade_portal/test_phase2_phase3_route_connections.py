@@ -75,7 +75,8 @@ def test_upgrade_start_route_passes_service_contract(monkeypatch) -> None:
             "device_ids": ["device-1"],
             "firmware_version": "1.2.3",
             "strategy": "serial",
-            "rollback_enabled": True,
+            "rollback_enabled": False,
+            "confirm": "CONFIRM",
         },
     ):
         response, status = unwrapped(upgrade.start_upgrade_via_service)("run-1")
@@ -89,8 +90,9 @@ def test_upgrade_start_route_passes_service_contract(monkeypatch) -> None:
         device_ids=["device-1"],
         firmware_version="1.2.3",
         strategy="serial",
-        rollback_enabled=True,
+        rollback_enabled=False,
         user_id="operator@example.com",
+        confirmation="CONFIRM",
     )
 
 
@@ -101,12 +103,20 @@ def test_upgrade_cancel_route_passes_operator_identity(monkeypatch) -> None:
     application.config["UPGRADE_SERVICE"] = service
     monkeypatch.setattr(upgrade, "actor_address", lambda: "operator@example.com")
 
-    with application.test_request_context("/api/runs/run-1/upgrade/cancel", method="POST"):
+    with application.test_request_context(
+        "/api/runs/run-1/upgrade/cancel",
+        method="POST",
+        json={"confirm": "STOP"},
+    ):
         response, status = unwrapped(upgrade.cancel_upgrade_via_service)("run-1")
 
     assert status == 200
     assert response.get_json()["status"] == "cancelled"
-    service.cancel_upgrade.assert_called_once_with("run-1", user_id="operator@example.com")
+    service.cancel_upgrade.assert_called_once_with(
+        "run-1",
+        user_id="operator@example.com",
+        confirmation="STOP",
+    )
 
 
 def test_phase_services_install_without_legacy_mistapi(monkeypatch) -> None:

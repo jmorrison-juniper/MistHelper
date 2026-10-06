@@ -48,35 +48,19 @@ class TestServiceWiring:
         app.config["TESTING"] = True  # Enable testing mode
         yield app
 
-    def test_install_seams_calls_service_installers(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """install_seams() should call _install_capture_service and _install_upgrade_service.
+    def test_install_seams_stores_only_request_construction_rules(self) -> None:
+        """Startup stores the provider but opens no request-owned dependency."""
+        application = Flask(__name__)  # One isolated application holds its own settings.
+        application.config["PORTAL_SETTINGS"] = factory.load_settings()  # The settings reader performs no connection.
 
-        Why:
-            The wiring module's install_seams function is the single place where
-            services are registered into Flask config. This test verifies that
-            the new Phase 2 service installers are called during setup.
-        """
-        # WHY: Create a mock app to track config setdefault calls
-        mock_app = MagicMock()  # Create a mock Flask application
+        wiring.install_seams(application)  # The factory must not build clients before authentication.
 
-        # WHY: Mock the helper functions to verify they're called
-        mock_capture_installer = MagicMock()  # Mock capture service installer
-        mock_upgrade_installer = MagicMock()  # Mock upgrade service installer
-
-        # WHY: Mock prepare_storage to avoid database calls in this test
-        mock_prepare_storage = MagicMock()  # Mock storage preparation function
-
-        # WHY: Patch the installer functions to use our mocks
-        monkeypatch.setattr(wiring, "_install_capture_service", mock_capture_installer)  # Replace capture installer
-        monkeypatch.setattr(wiring, "_install_upgrade_service", mock_upgrade_installer)  # Replace upgrade installer
-        monkeypatch.setattr(wiring, "prepare_storage", mock_prepare_storage)  # Replace storage prep
-
-        # WHY: Call install_seams to trigger service installation
-        wiring.install_seams(mock_app)  # This should call our mocked installers
-
-        # WHY: Verify both capture and upgrade service installers were called with the app
-        mock_capture_installer.assert_called_once_with(mock_app)  # Capture installer called
-        mock_upgrade_installer.assert_called_once_with(mock_app)  # Upgrade installer called
+        provider = application.config[wiring.PORTAL_SERVICE_PROVIDER_KEY]  # Read the construction-only dependency.
+        assert isinstance(provider, wiring.PortalServiceProvider)  # The app config holds no service graph.
+        assert wiring.CAPTURE_SERVICE_KEY not in application.config  # Capture resolves inside its request.
+        assert wiring.UPGRADE_SERVICE_KEY not in application.config  # Upgrade resolves inside its request.
+        assert wiring.SETTLE_GATE_SERVICE_KEY not in application.config  # Settle resolves inside its request.
+        assert wiring.COMPARISON_SERVICE_KEY not in application.config  # Comparison resolves inside its request.
 
     def test_capture_service_key_constant_matches_routes(self) -> None:
         """Verify CAPTURE_SERVICE_KEY constant matches the routes module.
@@ -181,3 +165,75 @@ class TestServiceWiring:
 
         # WHY: Verify the service was NOT added to Flask config (no substitute installed)
         assert app.config.get(UPGRADE_SERVICE_KEY) is None  # No service in config
+
+
+def test_upgrade_firmware_validation_uses_complete_sdk_reader_evidence(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The service checks per-model SDK options rather than an invented session method."""
+    from types import SimpleNamespace
+
+    from src.interfaces.portals.upgrade_portal.upgrade import options
+    from src.interfaces.portals.upgrade_portal.upgrade.service import UpgradeService
+
+    session = object()
+    inventory = SimpleNamespace(
+        records=[{"mac": "001122334455", "model": "EX4100"}],
+        partial_reasons=[],
+    )
+    inventory_reader = MagicMock(return_value=inventory)
+    versions_reader = MagicMock(return_value={"EX4100": ("23.4R2",)})
+    monkeypatch.setattr(options, "read_upgrade_inventory", inventory_reader)
+    monkeypatch.setattr(options, "read_model_versions", versions_reader)
+    service = UpgradeService(mist_client=session)
+
+    assert service._check_firmware_available(
+        org_id="org-safe",
+        site_id="site-safe",
+        device_ids=["00:11:22:33:44:55"],
+        firmware_version="23.4R2",
+        run_id="run-safe",
+        user_id="operator@example.invalid",
+    )
+    inventory_reader.assert_called_once_with(session, "org-safe", "site-safe")
+    versions_reader.assert_called_once_with(session, "site-safe", inventory.records, "org-safe")
+
+
+def test_upgrade_firmware_validation_refuses_partial_inventory(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Incomplete device evidence never authorizes an upgrade plan."""
+    from types import SimpleNamespace
+
+    from src.interfaces.portals.upgrade_portal.upgrade import options
+    from src.interfaces.portals.upgrade_portal.upgrade.service import UpgradeService
+
+    inventory_reader = MagicMock(
+        return_value=SimpleNamespace(records=[{"mac": "001122334455", "model": "EX4100"}], partial_reasons=[{}])
+    )
+    versions_reader = MagicMock()
+    monkeypatch.setattr(options, "read_upgrade_inventory", inventory_reader)
+    monkeypatch.setattr(options, "read_model_versions", versions_reader)
+    service = UpgradeService(mist_client=object())
+
+    assert not service._check_firmware_available(
+        org_id="org-safe",
+        site_id="site-safe",
+        device_ids=["001122334455"],
+        firmware_version="23.4R2",
+        run_id="run-safe",
+        user_id="operator@example.invalid",
+    )
+    versions_reader.assert_not_called()
+
+
+def test_upgrade_cancellation_refuses_without_typed_confirmation() -> None:
+    """An unconfirmed portal cancel cannot mutate or relabel an active run."""
+    from src.interfaces.portals.upgrade_portal.upgrade.service import UpgradeService
+
+    session = MagicMock()
+    database = MagicMock()
+    audit = MagicMock()
+    service = UpgradeService(session, MagicMock(), audit, database)
+
+    assert service.cancel_upgrade("run-active", "operator@example.invalid") is False
+    database.collection.assert_not_called()
+    session.post.assert_not_called()
+    audit.log_operation.assert_called_once()
+    assert audit.log_operation.call_args.kwargs["result"] == "failure"

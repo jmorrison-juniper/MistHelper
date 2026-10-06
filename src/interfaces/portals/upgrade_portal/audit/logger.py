@@ -26,18 +26,20 @@ class AuditLogger:
     SC-010 (zero secrets in logs).
     """
 
-    def __init__(self, db_router=None, enable_masking: bool = True):
+    def __init__(self, db_router=None, enable_masking: bool = True, document_store=None):
         """Initialize audit logger.
 
         Args:
             db_router: DatabaseRouter instance for ArangoDB writes.
             enable_masking: Enable automatic secret masking (default: True).
+            document_store: Request-owned ArangoDB handle for verified audit writes.
 
         WHY: dependency injection for database layer, configurable masking.
         """
         # WHY: store dependencies for write operations
         self.db_router = db_router  # WHY: database write interface
-        self.masker = SecretMasker() if enable_masking else None  # WHY: optional secret masking
+        self.document_store = document_store  # Read-back verifies that the audit record is durable.
+        self.masker = SecretMasker()  # Error text must be masked even when detail masking is disabled.
         self.enable_masking = enable_masking  # WHY: track if masking enabled
         # WHY: log initialization
         logger.info("audit_logger_initialized", masking_enabled=enable_masking)  # WHY: startup event
@@ -66,49 +68,66 @@ class AuditLogger:
         """
         # WHY: record operation start
         logger.info("audit_operation_starting", operation=operation, user=user_id)  # WHY: pre-operation log
+        if self.db_router is None or self.document_store is None:  # A durable audit needs both write and read access.
+            logger.error("audit_dependencies_unavailable", operation=operation)  # Name the missing service.
+            return None  # Do not report an audit record that was not stored.
         try:
-            # WHY: build audit entry with metadata
-            log_id = str(uuid.uuid4())  # WHY: unique log identifier
-            timestamp_ms = int(time.time() * 1000)  # WHY: millisecond precision
-            iso_timestamp = datetime.now(UTC).isoformat()  # WHY: ISO 8601 format
-            # WHY: prepare entry document
-            entry = {
-                "_key": log_id,  # WHY: primary key for ArangoDB
-                "log_id": log_id,  # WHY: duplicate for query convenience
-                "timestamp": iso_timestamp,  # WHY: ISO 8601 timestamp
-                "timestamp_ms": timestamp_ms,  # WHY: milliseconds since epoch
-                "operation": operation,  # WHY: operation name for filtering
-                "user_id": user_id,  # WHY: user identifier
-                "result": result,  # WHY: success/failure/pending
-                "error_message": error_message,  # WHY: error context if failed
-                "details": details or {},  # WHY: additional operation data
-            }  # WHY: audit entry structure
-            # WHY: apply secret masking if enabled
-            if self.enable_masking and self.masker:  # WHY: conditional masking
-                entry["details"] = self.masker.mask_dict(entry["details"])  # WHY: redact sensitive fields
-            # WHY: write to database
-            if self.db_router:  # WHY: optional database routing
-                write_result = self.db_router.write(  # WHY: database write
-                    data=[entry],  # WHY: single entry
-                    collection="audit_logs",  # WHY: target collection
-                    endpoint="audit_log",  # WHY: endpoint label
-                    strategy={"type": "natural_pk", "primary_key": ["log_id"]},  # WHY: PK strategy
-                )  # WHY: execute write
-                # WHY: log write result
-                if write_result.success:  # WHY: check success
-                    logger.debug(
-                        "audit_operation_logged", log_id=log_id, operation=operation, result=result
-                    )  # WHY: post-operation log
-                else:
-                    logger.error(
-                        "audit_write_failed", log_id=log_id, error=write_result.backend
-                    )  # WHY: write failure log
-            # WHY: return log ID for traceability
-            return log_id  # WHY: success return
-        except Exception as e:
-            # WHY: catch and log exceptions
-            logger.error("audit_logging_exception", operation=operation, error=str(e))  # WHY: exception handling
+            entry = self._build_audit_entry(
+                operation,
+                user_id,
+                details,
+                result,
+                error_message,
+            )  # Build safe audit data.
+            return self._write_verified_audit(entry, operation, result)  # Require durable read-back.
+        except Exception as error:
+            # Keep driver messages private; only the exception type is safe to log.
+            logger.error("audit_logging_exception", operation=operation, error_type=type(error).__name__)
             return None  # WHY: failure return
+
+    def _build_audit_entry(
+        self,
+        operation: str,
+        user_id: str,
+        details: dict[str, Any] | None,
+        result: str,
+        error_message: str | None,
+    ) -> dict[str, Any]:
+        """Create a time-stamped audit document with configured secret masking."""
+        log_id = str(uuid.uuid4())  # The random key prevents collisions between concurrent requests.
+        timestamp_ms = int(time.time() * 1000)  # Preserve millisecond ordering for existing readers.
+        iso_timestamp = datetime.now(UTC).isoformat()  # Store an aware UTC timestamp.
+        entry = {
+            "_key": log_id,  # Use the natural audit identifier as the Arango key.
+            "log_id": log_id,  # Keep the identifier available to portal readers.
+            "timestamp": iso_timestamp,  # Store the readable UTC time.
+            "timestamp_ms": timestamp_ms,  # Keep the established numeric timestamp.
+            "operation": operation,  # Record the operation category.
+            "user_id": user_id,  # Attribute the action to the authenticated operator.
+            "result": result,  # Record the operation outcome.
+            "error_message": self.masker.mask_string(error_message) if self.masker and error_message else error_message,
+            "details": details or {},  # Keep optional operation context in a stable shape.
+        }  # Finish the audit record.
+        if self.enable_masking and self.masker:  # Respect the configured detail-masking policy.
+            entry["details"] = self.masker.mask_dict(entry["details"])  # Hide secret values in the context.
+        return entry  # Give persistence one complete record.
+
+    def _write_verified_audit(self, entry: dict[str, Any], operation: str, result: str) -> str | None:
+        """Write one audit record and confirm every stored field."""
+        write_result = self.db_router.write(
+            data=[entry],
+            api_function_name="audit_logs",
+        )  # Use the supported router call.
+        if not write_result.success or write_result.backend == "csv_only" or write_result.records_written != 1:
+            logger.error("audit_write_failed", operation=operation, backend=write_result.backend)  # Report the refusal.
+            return None  # Do not report an unverified record.
+        log_id = str(entry["log_id"])  # Read the identifier from the record that was written.
+        stored = self.document_store.collection("audit_logs").get(log_id)  # Read the document through Arango.
+        if not isinstance(stored, dict) or any(stored.get(key) != value for key, value in entry.items()):
+            logger.error("audit_readback_failed", log_id=log_id, operation=operation)  # Report a failed verification.
+            return None  # A write acknowledgement does not prove durability.
+        logger.debug("audit_operation_logged", log_id=log_id, operation=operation, result=result)  # Record success.
+        return log_id  # Return only a verified audit identifier.
 
     def log_capture_start(
         self,
@@ -268,18 +287,15 @@ class AuditLogger:
             # WHY: add pagination parameters
             params["offset"] = offset  # WHY: offset parameter
             params["limit"] = limit  # WHY: limit parameter
-            # WHY: execute query via database router
-            if not self.db_router:  # WHY: check router available
-                logger.error("audit_query_failed_no_router")  # WHY: log missing router
+            if self.document_store is None:
+                logger.error("audit_query_failed_no_document_store")
                 return None  # WHY: no router
-            # WHY: execute AQL query
-            results = self.db_router.query(aql_query, params)  # WHY: execute query
+            results = list(self.document_store.aql.execute(aql_query, bind_vars=params))
             # WHY: log query result
             logger.debug("audit_query_complete", count=len(results) if results else 0)  # WHY: post-query log
             return results  # WHY: return results
-        except Exception as e:
-            # WHY: catch and log exceptions
-            logger.error("audit_query_exception", error=str(e))  # WHY: exception handling
+        except Exception as error:
+            logger.error("audit_query_exception", error_type=type(error).__name__)
             return None  # WHY: failure return
 
 

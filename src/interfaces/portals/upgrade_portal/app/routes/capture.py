@@ -37,6 +37,7 @@ import logging  # The portal logs with the standard library only.
 import threading  # One worker thread for each capture, and one guard for the progress store.
 import uuid  # Names a run that the operator started without one.
 from collections.abc import Callable, Mapping  # Types each injected seam and each read-only record.
+from functools import partial  # Bind only the production runner to its owned resources.
 from typing import Any  # A capture document and an injected seam are both free-form.
 
 from flask import Blueprint, Response, current_app, g, has_app_context, jsonify, request  # The framework.
@@ -497,7 +498,7 @@ def build_standalone_capture_id() -> str:
     return f"{KEY_PREFIX}{uuid.uuid4().hex}-{FIRST_ORDINAL:02d}"  # The same rule, spelled out.
 
 
-def default_runner(job: dict[str, Any]) -> None:
+def default_runner(job: dict[str, Any], resources: Any | None = None) -> None:
     """Read one whole site through the collection module.
 
     Why:
@@ -516,7 +517,10 @@ def default_runner(job: dict[str, Any]) -> None:
         return  # The page then shows the fault instead of a bar that never moves.
     record_status(capture_id, state=STATE_COLLECTING, message=COLLECTING_MESSAGE)  # The bar starts to move.
     try:  # The collection reads a network, so any fault must stay inside the worker.
-        collector(job)  # The whole read of one site runs here.
+        if resources is None:  # Existing test runners keep their one-argument contract.
+            collector(job)  # The whole read of one site runs here.
+        else:
+            collector(job, resources=resources)  # The worker uses its request-bound database and session.
     except Exception as error:  # Keep broad because a worker fault must not leave the page waiting.
         logger.exception(
             "capture: the capture %s stopped with %s: %s",
@@ -527,7 +531,12 @@ def default_runner(job: dict[str, Any]) -> None:
         record_status(capture_id, state=STATE_FAILED, message=FAILED_MESSAGE)  # The page shows the short text.
 
 
-def worker_body(context: Any, runner: Callable[..., Any], job: dict[str, Any]) -> None:
+def worker_body(
+    context: Any,
+    runner: Callable[..., Any],
+    job: dict[str, Any],
+    cleanup: Callable[[], None] | None = None,
+) -> None:
     """Read one site inside an application context.
 
     Why:
@@ -541,8 +550,12 @@ def worker_body(context: Any, runner: Callable[..., Any], job: dict[str, Any]) -
         runner: The capture runner that the request thread bound.
         job: The capture job that the start route built.
     """
-    with context:  # The worker then reads every seam that a route reads.
-        runner(job)  # The whole read of one site runs inside this context.
+    try:
+        with context:  # The worker reads application settings without a request proxy.
+            runner(job)  # The whole read of one site runs inside this context.
+    finally:
+        if cleanup is not None:  # Only production work opens a worker-owned client.
+            cleanup()  # Close the database after the final capture read-back.
 
 
 def start_worker(job: dict[str, Any]) -> None:
@@ -557,11 +570,33 @@ def start_worker(job: dict[str, Any]) -> None:
         job: The capture job that the start route built.
     """
     runner = capture_runner()  # Bound now, because the worker sees no request.
+    cleanup = None  # Test runners own their stand-ins and open no production storage.
+    if runner is default_runner:  # The production collector needs one worker-owned database.
+        from src.interfaces.portals.upgrade_portal.app.wiring import (
+            PORTAL_SERVICE_PROVIDER_KEY,
+            PortalDependencyError,
+            PortalServiceProvider,
+        )
+
+        provider = current_app.config.get(PORTAL_SERVICE_PROVIDER_KEY)  # The app stores settings, not live resources.
+        if not isinstance(provider, PortalServiceProvider):  # Do not start a worker without its provider.
+            raise PortalDependencyError("The portal worker storage is unavailable.")
+        worker_resources = provider.open_worker_resources(job.get("cloud_session"))
+        runner = partial(runner, resources=worker_resources.capture)  # Bind storage and the borrowed session.
+        cleanup = worker_resources.cleanup  # Keep the handle open until this worker ends.
     context = current_app.app_context()  # Built now, and pushed by the worker thread.
     worker = threading.Thread(  # A daemon thread never holds the portal open at shutdown.
-        target=worker_body, args=(context, runner, job), name=f"capture-{job['capture_id']}", daemon=True
+        target=worker_body,
+        args=(context, runner, job, cleanup),
+        name=f"capture-{job['capture_id']}",
+        daemon=True,
     )
-    worker.start()  # The route answers 202 on the next line of its own body.
+    try:
+        worker.start()  # The route answers 202 on the next line of its own body.
+    except Exception:
+        if cleanup is not None:  # The worker does not own storage if its thread never starts.
+            cleanup()  # Release the client before returning the failure.
+        raise
 
 
 # --------------------------------------------------------------------------
@@ -1146,11 +1181,21 @@ def capture_pre_upgrade_for_run(run_id: str) -> tuple[Response, int]:
     Returns:
         JSON response with capture_id and status, or error refusal.
     """
-    # WHY: Fetch the CaptureService from Flask config seam; returns None if not wired yet
-    capture_service = current_app.config.get(CAPTURE_SERVICE_KEY)
+    from src.interfaces.portals.upgrade_portal.app.wiring import (
+        PortalAuthenticationError,
+        PortalDependencyError,
+        request_service,
+    )  # Resolve the service after the request guard has validated the operator.
+
+    try:  # A missing store must stop before the capture starts.
+        capture_service = request_service(CAPTURE_SERVICE_KEY, "capture")
+    except PortalAuthenticationError:
+        return json_error(401, "not_authenticated", "Sign in to continue.")
+    except PortalDependencyError:
+        return json_error(503, "service_unavailable", "CaptureService not available")
     if capture_service is None:  # CaptureService not wired, cannot proceed with capture
         logger.error("capture: CaptureService not wired for run %s", run_id)  # Name the missing dependency
-        return json_error(SERVER_ERROR_STATUS, "service_unavailable", "CaptureService not available")
+        return json_error(503, "service_unavailable", "CaptureService not available")
 
     # WHY: Read the request body to extract device IDs and optional parameters (tier, etc)
     body = request_body()
@@ -1172,39 +1217,70 @@ def capture_pre_upgrade_for_run(run_id: str) -> tuple[Response, int]:
             BAD_REQUEST_STATUS, "invalid_parameters", "Missing required parameters: run_id, device_ids, org_id, site_id"
         )
 
-    try:  # CaptureService call may fail due to network, timeout, or Mist API errors
-        logger.info(
-            "capture: start pre-upgrade capture for run %s with %d devices", run_id, len(device_ids)
-        )  # BEFORE service call
+    def capture_and_respond() -> tuple[Response, int]:
+        """Capture the selected devices and return only verified status."""
+        try:  # The service can fail while it reads Mist or writes its record.
+            logger.info(
+                "capture: start pre-upgrade capture for run %s with %d devices", run_id, len(device_ids)
+            )  # Log before the cloud read.
+            capture_id = capture_service.capture_pre_upgrade(
+                run_id=run_id,
+                org_id=org_id,
+                site_id=site_id,
+                device_ids=device_ids,
+                user_id=actor_address(),
+            )  # Use the request-owned service and operator session.
+            logger.debug("capture: pre-upgrade capture for run %s completed with result", run_id)  # Log the result.
+            if not capture_id:  # A false result means durable capture storage failed.
+                return json_error(
+                    SERVER_ERROR_STATUS,
+                    "capture_failed",
+                    "CaptureService could not store the capture",
+                )  # Do not return an unverified capture identifier.
+            capture_status = "pending"  # Preserve the explicit E2E override contract.
+            devices_count = len(device_ids)  # Keep the injected service response contract.
+            if CAPTURE_SERVICE_KEY not in current_app.config:  # Production requests require a stored record.
+                from src.interfaces.portals.upgrade_portal.app.wiring import request_dependencies
+                from src.interfaces.portals.upgrade_portal.capture import store
 
-        # WHY: Invoke CaptureService.capture_pre_upgrade() to fetch device state from Mist API
-        # This returns capture result with capture data stored in ArangoDB
-        capture_id = capture_service.capture_pre_upgrade(
-            run_id=run_id,
-            org_id=org_id,
-            site_id=site_id,
-            device_ids=device_ids,
-            user_id=actor_address(),
-        )
+                dependencies = request_dependencies()  # Reuse this request's database handle.
+                loaded = store.load_capture_for_comparison(
+                    str(capture_id),
+                    database=dependencies.resources.database,
+                )  # Verify the stored capture through the canonical reader.
+                if not loaded.comparable or loaded.capture is None:  # Reject missing or incomplete read-back.
+                    return json_error(
+                        SERVER_ERROR_STATUS,
+                        "capture_failed",
+                        "The stored capture did not verify.",
+                    )  # Do not report a durable result without evidence.
+                counts = loaded.capture.get("counts")  # Read the verified record count.
+                devices_count = int(counts.get("devices_total", 0)) if isinstance(counts, Mapping) else 0
+                if devices_count < 1:  # A zero-record capture cannot prove the selected device state.
+                    return json_error(
+                        SERVER_ERROR_STATUS,
+                        "capture_failed",
+                        "The stored capture has no device evidence.",
+                    )  # Refuse a success-shaped response.
+                capture_status = "completed"  # The stored record passed every verification.
+            response_body = {
+                "capture_id": capture_id,
+                "status": capture_status,
+                "devices_count": devices_count,
+                "run_id": run_id,
+            }  # Preserve the existing response fields.
+            return jsonify(response_body), ACCEPTED_STATUS  # Keep the portal's accepted status code.
+        except Exception as fault:  # Keep external exception text out of the operator response.
+            logger.error(
+                "capture: pre-upgrade capture for run %s failed: %s", run_id, type(fault).__name__
+            )  # Log the exception type with the run identifier.
+            return json_error(
+                SERVER_ERROR_STATUS,
+                "capture_failed",
+                "CaptureService could not store the capture.",
+            )  # Return the established refusal envelope.
 
-        logger.debug("capture: pre-upgrade capture for run %s completed with result", run_id)  # AFTER service call
-        if not capture_id:  # A false result means the service did not persist a verified capture.
-            return json_error(SERVER_ERROR_STATUS, "capture_failed", "CaptureService could not store the capture")
-
-        # WHY: Build success response with capture ID and status for the browser to poll
-        response_body = {
-            "capture_id": capture_id,  # ID used for status polling
-            "status": "pending",  # Initial status while capture is being processed
-            "devices_count": len(device_ids),  # Number of devices in this capture
-            "run_id": run_id,  # Echo back the run ID for reference
-        }
-        return jsonify(response_body), ACCEPTED_STATUS  # 202 Accepted: async work started
-
-    except Exception as fault:  # CaptureService raised unexpected fault (network, database, API, etc)
-        logger.error(
-            "capture: pre-upgrade capture for run %s failed: %s", run_id, type(fault).__name__
-        )  # Name the fault type
-        return json_error(SERVER_ERROR_STATUS, "capture_failed", str(fault))  # Return error to browser
+    return capture_and_respond()  # Keep the route handler below the complexity limit.
 
 
 def launch_capture(site: dict[str, Any], org_id: str, tier: int, body: dict[str, Any]) -> tuple[Response, int]:

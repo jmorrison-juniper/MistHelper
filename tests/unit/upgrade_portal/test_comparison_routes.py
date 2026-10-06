@@ -4,7 +4,6 @@ Tests GET /api/runs/:run_id/comparison/results and
 POST /api/runs/:run_id/comparison/approve endpoints.
 """
 
-from datetime import datetime, timedelta  # WHY: timestamp assertions for approval writes
 from unittest.mock import Mock  # WHY: dependency mocking
 
 from flask import Flask  # WHY: route tests need a small application
@@ -169,35 +168,22 @@ class TestGetComparisonResultsRoute:
 class TestApproveComparisonRoute:
     # WHY: test class for POST approve comparison endpoint
 
-    def test_approve_comparison_writes_aware_utc_timestamps(self):
-        # WHY: prove database boundary timestamps keep one aware UTC convention
-        """POST /comparison/approve writes aware UTC timestamps."""
-        mock_comparison_service = Mock()  # WHY: inject the required service boundary.
-        mock_audit_logger = Mock()  # WHY: inject the audit boundary without side effects.
-        mock_db_router = Mock()  # WHY: capture database writes for timestamp assertions.
-        mock_db_router.get_run.return_value = {"run_id": "run-123"}  # WHY: let approval reach the comparison.
-        mock_db_router.get_comparison.return_value = {"run_id": "run-123", "approved": False}  # WHY: approve once.
-        app = Flask(__name__)  # WHY: build the minimal application for this route.
-        app.register_blueprint(  # WHY: install the product route with injected boundaries.
-            create_comparison_routes(mock_comparison_service, mock_audit_logger, mock_db_router)
-        )
-        client = app.test_client()  # WHY: drive the route through Flask request parsing.
+    def test_approve_comparison_refuses_unauthenticated_request_before_storage(self):
+        """The approval route refuses before touching a database without an owner session."""
+        mock_comparison_service = Mock()
+        mock_audit_logger = Mock()
+        mock_database = Mock()
+        app = Flask(__name__)
+        app.register_blueprint(create_comparison_routes(mock_comparison_service, mock_audit_logger, mock_database))
 
-        response = client.post(
+        response = app.test_client().post(
             "/api/runs/run-123/comparison/approve",
             json={"approved_items": ["ap-1"], "rejected_items": [], "engineer_notes": "ok", "approve_all": False},
-            headers={"X-User-ID": "engineer-1"},
-        )  # WHY: submit a valid approval request.
+        )
 
-        comparison_update = mock_db_router.update_comparison.call_args.args[1]  # WHY: inspect approval write.
-        run_update = mock_db_router.update_run.call_args.args[1]  # WHY: inspect run completion write.
-        approved_at = datetime.fromisoformat(comparison_update["approved_at"])  # WHY: parse approval time.
-        completed_at = datetime.fromisoformat(run_update["completed_at"])  # WHY: parse completion time.
-        assert response.status_code == 200  # WHY: timestamp check must come from a successful route.
-        assert approved_at.utcoffset() == timedelta(0)  # WHY: approval time must be explicit UTC.
-        assert completed_at.utcoffset() == timedelta(0)  # WHY: completion time must be explicit UTC.
-        approval_record_at = comparison_update["approval_record"]["approved_at"]  # WHY: read the nested audit value.
-        assert approval_record_at == comparison_update["approved_at"]  # WHY: both stored records use one value.
+        assert response.status_code == 401
+        mock_database.collection.assert_not_called()
+        mock_comparison_service.compare.assert_not_called()
 
     def test_approve_comparison_success(self):
         # WHY: verify endpoint approves comparison and marks run complete with 200 OK
