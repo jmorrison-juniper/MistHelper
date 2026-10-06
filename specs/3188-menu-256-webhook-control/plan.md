@@ -334,13 +334,17 @@ The current directive permits a local commit. It prohibits rebase, merge, and au
 
 ## Local Validation Result
 
-The focused unit tests passed with 25 tests.
+The focused portal and exporter unit tests passed with 27 tests.
 
 The browser test passed with one test. Its fixture stopped the owned server thread and closed the port.
 
 The Mist SDK compatibility tests passed with eight tests and 544 checked call signatures.
 
-Ruff, Black, Bandit, pydocstyle, mypy, complexity, and the test quality preflight passed.
+Ruff, Black, Bandit, pydocstyle, mypy, complexity, Pylint, and the test quality preflight passed.
+
+The committed changed-test gate checked four test files and reported zero new findings.
+
+The exporter symbol check found no module-level change. The settings symbol check found seven intentional additions and zero lost names.
 
 Each feature test mocked every Mist request. No feature test used a live Mist session.
 

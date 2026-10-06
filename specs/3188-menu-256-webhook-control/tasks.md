@@ -108,9 +108,9 @@
 - [X] T021 Run `python -m pytest tests/unit/web_portal/test_issue_3188_webhook_parameters.py`, `python -m pytest tests/unit/export/test_issue_3188_webhook_id_selection.py`, `python -m pytest tests/e2e/web_portal/test_issue_3188_webhook_control.py`, and `python -m pytest tests/integration/test_mistapi_sdk_compatibility.py`.
 - [X] T022 [P] Run focused Ruff and Black checks for `web_portal/routes/settings.py`, `src/operations/exporting/export/org_webhook_deliveries_exporter.py`, and the three issue-specific test files.
 - [X] T023 [P] Run `bandit -c pyproject.toml -r web_portal/routes/settings.py src/operations/exporting/export/org_webhook_deliveries_exporter.py -q`.
-- [ ] T024 Run the required test-quality preflight, create one local commit from the exact assigned manifest, and run the changed-test gate against `origin/main`.
-- [ ] T025 Compare the committed feature manifest with `specs/3188-menu-256-webhook-control/plan.md`, then verify every protected file is untouched and the worktree is clean.
-- [ ] T026 Post progress and final implementation evidence to coordination issue #3959.
+- [X] T024 Run the required test-quality preflight, create one local commit from the exact assigned manifest, and run the changed-test gate against `origin/main`.
+- [X] T025 Compare the committed feature manifest with `specs/3188-menu-256-webhook-control/plan.md`, then verify every protected file is untouched and the worktree is clean.
+- [X] T026 Post progress and final implementation evidence to coordination issue #3959.
 
 ---
 
