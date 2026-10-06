@@ -16,6 +16,8 @@ from typing import Any  # Portal records contain different JSON-compatible field
 
 logger = logging.getLogger(__name__)  # Keep record activity tied to this module.
 
+IGNORED_PRECHECK_HEADER = "X-MistHelper-E2E-Ignored-Precheck"  # Let one browser journey hide one inherited capture.
+
 
 @dataclass(frozen=True, slots=True)
 class CaptureLoad:  # Describe one capture result without a production store type.
@@ -268,11 +270,35 @@ class PortalRecordStore:  # Own portal records for one isolated server process.
             baseline of a finished run.
         """
         logger.info("Find the newest E2E standalone pre-check capture")  # Record the process-owned scan.
-        matches = [row for row in self._captures.values() if self._is_precheck(row, site_id)]  # Keep safe matches.
+        ignored = self._ignored_precheck(site_id)  # Issue #3537: hide only the inherited capture of this request.
+        matches = [  # Keep each safe capture except the exact inherited capture that the journey named.
+            row
+            for row in self._captures.values()
+            if self._is_precheck(row, site_id) and row.get("capture_id") != ignored
+        ]
         newest = max(reversed(matches), key=self._start_moment, default=None)  # The last stored capture wins a tie.
         result = str(newest.get("capture_id", "")) if newest is not None else ""  # Empty when no capture matches.
         logger.debug("The E2E pre-check search found a capture: %s", bool(result))  # Report no identifier.
         return result  # An empty value means that no reusable pre-check exists.
+
+    @staticmethod
+    def _ignored_precheck(site_id: str) -> str:  # Read one request-scoped isolation instruction.
+        """Return the exact inherited capture that one E2E request must ignore."""
+        from flask import (  # Keep the record store usable in direct tests with no Flask app.
+            has_request_context,
+            request,
+        )
+
+        if not has_request_context():  # A direct store call has no browser isolation instruction.
+            return ""  # Keep the default store behavior outside an HTTP request.
+        raw = request.headers.get(IGNORED_PRECHECK_HEADER, "")  # Read the E2E-only header from this request.
+        try:  # An invalid header must change no store result.
+            value = json.loads(raw)  # The JSON object keeps both identifiers unambiguous.
+        except (TypeError, ValueError):
+            return ""  # Ignore malformed test input instead of hiding a capture.
+        if not isinstance(value, dict) or value.get("site_id") != site_id:  # The instruction belongs to another site.
+            return ""  # Keep every capture of the requested site visible.
+        return str(value.get("capture_id") or "")  # Hide only the exact capture that the browser already observed.
 
     def newest_precheck_tier(self, site_id: str) -> tuple[str, int]:
         """Return the selected standalone pre-check identifier and its stored tier.
