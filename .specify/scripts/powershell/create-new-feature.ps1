@@ -54,7 +54,7 @@ function Get-HighestNumberFromSpecs {
 
     [long]$highest = 0
     if (Test-Path $SpecsDir) {
-        Get-ChildItem -Path $SpecsDir -Directory | ForEach-Object {
+        Get-ChildItem -Path $SpecsDir -Directory -Recurse | ForEach-Object {
             # Match sequential prefixes (>=3 digits), but skip timestamp dirs.
             if ($_.Name -match '^(\d{3,})-' -and $_.Name -notmatch '^\d{8}-\d{6}-') {
                 [long]$num = 0
@@ -74,6 +74,7 @@ function ConvertTo-CleanBranchName {
 }
 # Load common functions (includes Get-RepoRoot and Resolve-Template)
 . "$PSScriptRoot/common.ps1"
+. "$PSScriptRoot/spec-route.ps1"
 
 # Use common.ps1 functions which prioritize .specify
 $repoRoot = Get-RepoRoot
@@ -188,7 +189,7 @@ if ($branchName.Length -gt $maxBranchLength) {
     Write-Warning "[specify] Truncated to: $branchName ($($branchName.Length) bytes)"
 }
 
-$featureDir = Join-Path $specsDir $branchName
+$featureDir = Resolve-SpecFeaturePath -SpecsDir $specsDir -BranchName $branchName -Number $Number -Timestamp:$Timestamp
 $specFile = Join-Path $featureDir 'spec.md'
 
 if (-not $DryRun) {

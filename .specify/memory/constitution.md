@@ -1,16 +1,14 @@
 <!--
   Sync Impact Report
   ==================
-  Version change: 1.7.2 -> 1.8.0 (MINOR)
-  Bump rationale: MINOR, because the amendment adds a binding return condition
-    to the owned Mist WebSocket transport exception. The condition requires
-    reviewed SDK support and contract proof before MistHelper returns the
-    affected flows to mistapi.
-  Modified principles: None.
+  Version change: 1.8.0 -> 1.9.0 (MINOR)
+  Bump rationale: MINOR, because the amendment adds a binding intake route
+    for new specs records and names its migration guard.
+  Modified principles:
+    - Principle I: new specs records use bounded managed roots and a
+      migration baseline.
   Modified sections:
-    - Technology & Compatibility Constraints: narrowed the owned WebSocket
-      transport permission, named its temporary status, pinned its private
-      mistapi session seam, and added the objective return condition.
+    - Core Principles: added the bounded specs intake route and baseline guard.
   Added sections: None.
   Removed sections: None.
   Templates requiring updates:
@@ -55,6 +53,15 @@ new direct children in a noncompliant parent.
 A change MAY edit an existing child when the edit is narrow and necessary.
 The change MUST NOT increase the number of children at that hierarchy level.
 The change does not need to restructure unrelated existing children.
+
+New `specs/` records MUST use the managed roots `numbered/`, `live/`,
+`skills/`, or `indexes/`. Numeric records MUST use the fixed eight-level
+base-5 route under `specs/numbered/`. Timestamp records MUST use
+`specs/live/`. The guard MUST read
+`tests/guardrails/process_folder_baseline.json`, report examined counts, and
+reject each new direct child that is not a managed root or a grandfathered
+baseline entry. The baseline is a temporary migration record and MUST remain
+nonempty and readable.
 
 New functions, methods, classes, constants, and expressions remain subject to
 the limits below. The plan MUST record each touched existing violation. The
@@ -552,4 +559,4 @@ provide detailed implementation patterns and are the primary references for
 day-to-day coding decisions. The constitution provides the non-negotiable
 rules. The two guides provide the how-to.
 
-**Version**: 1.8.0 | **Ratified**: 2026-03-05 | **Last Amended**: 2026-10-06
+**Version**: 1.9.0 | **Ratified**: 2026-03-05 | **Last Amended**: 2026-10-06
