@@ -10,128 +10,198 @@ description: "Implementation tasks for the Juniper Docs classification reprocess
 
 **Prerequisites**: `spec.md`, `plan.md`
 
-**Authorized implementation boundary**: Move the two classification modules,
-update affected imports and tests, add the focused structure guard, add the
-issue release note, and validate the routed feature records. Do not edit
-shared registries, generated references, historical specifications,
-`AGENTS.md`, or `CLAUDE.md`.
+**Authorized file boundary**:
+
+- `src/mist/intelligence/juniper_docs/classify/reprocessing/__init__.py`
+- `src/mist/intelligence/juniper_docs/classify/reprocessing/manual_sorter.py`
+- `src/mist/intelligence/juniper_docs/classify/reprocessing/reclassifier.py`
+- Removal of `src/mist/intelligence/juniper_docs/classify/manual_sorter.py`
+- Removal of `src/mist/intelligence/juniper_docs/classify/reclassifier.py`
+- `tests/unit/juniper_docs/test_reclassifier.py`
+- `tests/guardrails/test_juniper_docs_classify_structure.py`
+- `tests/guardrails/test_src_domain_structure.py`
+- `tests/guardrails/test_src_public_symbol_preservation.py`
+- `changelog.d/issue-3991-juniper-docs-classify-reprocessing.md`
+- `specs/numbered/0/0/1/1/1/4/3/1/3991-juniper-docs-classify-reprocessing/spec.md`
+- `specs/numbered/0/0/1/1/1/4/3/1/3991-juniper-docs-classify-reprocessing/plan.md`
+- `specs/numbered/0/0/1/1/1/4/3/1/3991-juniper-docs-classify-reprocessing/tasks.md`
+
+Do not edit a shared registry, a generated reference, a historical specification,
+`AGENTS.md`, or `CLAUDE.md`. Do not move another source module.
 
 ## Phase 1: Setup
 
-**Purpose**: Establish the planned package path and the implementation boundary.
+**Purpose**: Confirm the file boundary before implementation work.
 
-- [ ] T001 Record the authorized file manifest in the implementation workspace, including `src/mist/intelligence/juniper_docs/classify/`, `tests/unit/juniper_docs/test_reclassifier.py`, `tests/guardrails/test_juniper_docs_classify_structure.py`, `changelog.d/issue-3991-juniper-docs-classify-reprocessing.md`, and the three routed feature records.
+- [X] T001 Record and verify the authorized manifest with `git status --short --untracked-files=all` and `git diff --name-status origin/main...HEAD` against the file list in `specs/numbered/0/0/1/1/1/4/3/1/3991-juniper-docs-classify-reprocessing/tasks.md`.
 
 ## Phase 2: Foundational
 
-**Purpose**: Create the package boundary before moving modules or updating imports.
+**Purpose**: Create the package and guard contracts that block all user stories.
 
-- [ ] T002 [P] Create `src/mist/intelligence/juniper_docs/classify/reprocessing/__init__.py` with the package metadata required by the project.
-- [ ] T003 [P] Add the focused structure guard test file at `tests/guardrails/test_juniper_docs_classify_structure.py` with valid-layout fixtures and examined-child reporting.
+- [X] T002 [P] Create `src/mist/intelligence/juniper_docs/classify/reprocessing/__init__.py` with the package documentation required by the project.
+- [X] T003 [P] Create `tests/guardrails/test_juniper_docs_classify_structure.py` with reusable checks for visible children, the five-child maximum, and the required reprocessing modules.
 
-## Phase 3: User Story 1 - Keep classification structure within the project limit (Priority: P1) 🎯 MVP
+**Checkpoint**: The canonical package exists, and the focused guard can measure its structure.
 
-**Goal**: Place both reprocessing modules in one package, remove the old paths, and prove the five-child structure rule.
+## Phase 3: User Story 1 - Keep classification structure within the project limit (Priority: P1)
 
-**Independent Test**: Run `python -m pytest tests/guardrails/test_juniper_docs_classify_structure.py` and verify that the classification package has five direct structural children, both reprocessing modules exist, and both old paths are absent.
+**Goal**: Move both reprocessing modules into one package and prove the required package shape.
+
+**Independent Test**: Run
+`python -m pytest tests/guardrails/test_juniper_docs_classify_structure.py`.
+The guard must report five direct structural children and both moved modules.
 
 ### Tests for User Story 1
 
-- [ ] T004 [US1] Add a focused guard case in `tests/guardrails/test_juniper_docs_classify_structure.py` that fails when `src/mist/intelligence/juniper_docs/classify/` contains a sixth direct structural child.
-- [ ] T005 [US1] Add a focused guard case in `tests/guardrails/test_juniper_docs_classify_structure.py` that fails when either `reprocessing/manual_sorter.py` or `reprocessing/reclassifier.py` is missing or misplaced.
+- [X] T004 [P] [US1] Add the valid-layout assertion and measured child count in `tests/guardrails/test_juniper_docs_classify_structure.py`.
+- [X] T005 [P] [US1] Add a direct failure test for a sixth structural child in `tests/guardrails/test_juniper_docs_classify_structure.py`.
+- [X] T006 [P] [US1] Add direct failure tests for a missing classification root and a missing reprocessing module in `tests/guardrails/test_juniper_docs_classify_structure.py`.
 
 ### Implementation for User Story 1
 
-- [ ] T006 [US1] Move `src/mist/intelligence/juniper_docs/classify/manual_sorter.py` to `src/mist/intelligence/juniper_docs/classify/reprocessing/manual_sorter.py` without changing its source symbols, behavior, logging, or path handling.
-- [ ] T007 [US1] Move `src/mist/intelligence/juniper_docs/classify/reclassifier.py` to `src/mist/intelligence/juniper_docs/classify/reprocessing/reclassifier.py` without changing its source symbols, behavior, logging, or processing defaults.
-- [ ] T008 [US1] Remove the old `src/mist/intelligence/juniper_docs/classify/manual_sorter.py` and `src/mist/intelligence/juniper_docs/classify/reclassifier.py` paths as part of the moves, with no wrappers, aliases, or fallback imports.
+- [X] T007 [US1] Move `src/mist/intelligence/juniper_docs/classify/manual_sorter.py` to `src/mist/intelligence/juniper_docs/classify/reprocessing/manual_sorter.py` without source changes.
+- [X] T008 [US1] Move `src/mist/intelligence/juniper_docs/classify/reclassifier.py` to `src/mist/intelligence/juniper_docs/classify/reprocessing/reclassifier.py` without source changes.
+- [X] T009 [US1] Verify the old `src/mist/intelligence/juniper_docs/classify/manual_sorter.py` and `src/mist/intelligence/juniper_docs/classify/reclassifier.py` paths are absent, with no wrappers, aliases, or fallback imports.
 
-**Checkpoint**: The classification package satisfies the direct-child limit and has one canonical location for each reprocessing module.
+**Checkpoint**: The classification package has five direct structural children and one location for each moved module.
 
 ## Phase 4: User Story 2 - Preserve classification behavior through canonical imports (Priority: P1)
 
-**Goal**: Update every affected caller and focused test to use canonical `classify.reprocessing` imports while preserving public symbols.
+**Goal**: Preserve behavior and public symbols through canonical reprocessing paths.
 
-**Independent Test**: Run the focused Juniper Docs tests and the symbol and source-structure guards. The tests pass with no old import path or duplicate module entry point.
+**Independent Test**: Run the focused unit test and both shared source guards.
+All tests must pass with no old import or duplicate module path.
 
 ### Tests for User Story 2
 
-- [ ] T009 [P] [US2] Update `tests/unit/juniper_docs/test_reclassifier.py` to import `CorpusReclassifier` from `src.mist.intelligence.juniper_docs.classify.reprocessing.reclassifier` and retain its behavior assertions.
-- [ ] T010 [P] [US2] Add canonical import and module-symbol checks in `tests/guardrails/test_juniper_docs_classify_structure.py` for `ManualDocumentSorter`, `CorpusReclassifier`, and the existing module-level public symbols.
+- [X] T010 [P] [US2] Update the `CorpusReclassifier` import in `tests/unit/juniper_docs/test_reclassifier.py` to use `classify.reprocessing.reclassifier`.
+- [X] T011 [P] [US2] Map both old module paths to their canonical reprocessing paths in `tests/guardrails/test_src_public_symbol_preservation.py`.
+- [X] T012 [P] [US2] Make the tracked-text scan ignore removed filesystem paths while retaining fail-closed Git input handling in `tests/guardrails/test_src_domain_structure.py`.
 
 ### Implementation for User Story 2
 
-- [ ] T011 [US2] Update every affected runtime import under `src/mist/intelligence/juniper_docs/` from the old module paths to `classify.reprocessing.manual_sorter` or `classify.reprocessing.reclassifier`.
-- [ ] T012 [US2] Update every affected test import under `tests/` from the old module paths to the matching canonical `classify.reprocessing` path, without adding compatibility aliases.
-- [ ] T013 [US2] Verify that `src/mist/intelligence/juniper_docs/classify/reprocessing/manual_sorter.py` and `src/mist/intelligence/juniper_docs/classify/reprocessing/reclassifier.py` retain their public module-level symbols and no tracked source or test file imports the old locations.
+- [X] T013 [US2] Preserve every module-level symbol and all executable source text in `src/mist/intelligence/juniper_docs/classify/reprocessing/manual_sorter.py`.
+- [X] T014 [US2] Preserve every module-level symbol and all executable source text in `src/mist/intelligence/juniper_docs/classify/reprocessing/reclassifier.py`.
+- [X] T015 [US2] Search `src/` and `tests/` for `classify.manual_sorter` and `classify.reclassifier`, then update only matches inside the authorized file boundary.
 
-**Checkpoint**: Focused classification behavior and canonical symbol checks pass without duplicate entry points.
+**Checkpoint**: The focused behavior tests and symbol guard resolve only the canonical reprocessing paths.
 
 ## Phase 5: User Story 3 - Record the bounded refactor for maintainers (Priority: P2)
 
-**Goal**: Record the package move and its exclusions in one issue-specific release note.
+**Goal**: Record the package move and prove that the implementation stays within the approved boundary.
 
-**Independent Test**: Review the release note and the final file manifest. The record names issue #3991 and the manifest contains no excluded shared or historical files.
+**Independent Test**: Run the changelog guard and compare the final manifest with the authorized file list.
 
 ### Implementation for User Story 3
 
-- [ ] T014 [US3] Create `changelog.d/issue-3991-juniper-docs-classify-reprocessing.md` with one `###` heading and one `Changed` bullet that names issue #3991, the reprocessing package move, canonical imports, and the focused structure guard.
-- [ ] T015 [US3] Verify `git status --short --untracked-files=all` contains only the moved modules, affected imports and tests, focused guard files, `changelog.d/issue-3991-juniper-docs-classify-reprocessing.md`, and the three routed feature records.
+- [X] T016 [US3] Create `changelog.d/issue-3991-juniper-docs-classify-reprocessing.md` with one `### Changed` heading and one bullet that names #3991.
+- [X] T017 [US3] Verify the only routed records for this feature are `spec.md`, `plan.md`, and `tasks.md` under `specs/numbered/0/0/1/1/1/4/3/1/3991-juniper-docs-classify-reprocessing/`.
+- [X] T018 [US3] Reject any file outside the authorized list through `git status --short --untracked-files=all` and `git diff --name-status origin/main...HEAD`.
 
-**Checkpoint**: The release record and implementation manifest show the bounded refactor without unauthorized file changes.
+**Checkpoint**: The release note and file manifest describe only the bounded refactor.
 
-## Phase 6: Polish and Validation
+## Phase 6: Focused Validation
 
-**Purpose**: Validate the complete implementation and preserve the authorized boundary.
+**Purpose**: Prove the requested behavior before repository-wide gates.
 
-- [ ] T016 [P] Run `python -m pytest tests/unit/juniper_docs/test_reclassifier.py` and record the result in the implementation handoff.
-- [ ] T017 [P] Run `python -m pytest tests/guardrails/test_juniper_docs_classify_structure.py` and record the result in the implementation handoff.
-- [ ] T018 [P] Run `python -m pytest tests/guardrails/test_src_domain_structure.py tests/guardrails/test_src_public_symbol_preservation.py` and record the result in the implementation handoff.
-- [ ] T019 [P] Run `python -m py_compile src/mist/intelligence/juniper_docs/classify/reprocessing/manual_sorter.py src/mist/intelligence/juniper_docs/classify/reprocessing/reclassifier.py` and record the result in the implementation handoff.
-- [ ] T020 [P] Run `python -m ruff check src/mist/intelligence/juniper_docs tests/unit/juniper_docs tests/guardrails` and record the result in the implementation handoff.
-- [ ] T021 [P] Run `python -m black --check src/mist/intelligence/juniper_docs tests/unit/juniper_docs tests/guardrails` and record the result in the implementation handoff.
-- [ ] T022 Verify `git diff --check`, `git status --short --untracked-files=all`, and `git diff --name-only` show no unauthorized file changes.
+- [X] T019 [P] Run `python -m pytest tests/unit/juniper_docs/test_reclassifier.py` and record the result.
+- [X] T020 [P] Run `python -m pytest tests/guardrails/test_juniper_docs_classify_structure.py` and record the examined child count.
+- [X] T021 [P] Run `python -m pytest tests/guardrails/test_src_domain_structure.py tests/guardrails/test_src_public_symbol_preservation.py` and record the results.
+- [X] T022 [P] Run `python -m pytest tests/guardrails/test_changelog_fragment_policy.py` and record the result.
+- [X] T023 [P] Run `python -m py_compile src/mist/intelligence/juniper_docs/classify/reprocessing/manual_sorter.py src/mist/intelligence/juniper_docs/classify/reprocessing/reclassifier.py` and record the result.
+- [X] T024 Run `git diff --check` and verify the authorized files contain no whitespace errors.
+
+## Phase 7: Applicable Repository Quality Gates
+
+**Purpose**: Run each local gate that reads the changed Python, test, specification, or release-note files.
+
+- [X] T025 Run `python -m ruff check .`; result: `All checks passed!`.
+- [X] T026 Run `python -m black --check --diff .`; result: 2,297 files unchanged.
+- [X] T027 Run `MYPY_PATHS='src/ MistHelper.py wsgi.py scripts/mist_ideas_analyzer_pkg/__init__.py scripts/mist_ideas_distiller_v2_pkg/__init__.py'; python -m mypy $MYPY_PATHS --config-file pyproject.toml`; result: no issues in 808 files.
+- [X] T028 Run `bandit -c pyproject.toml -r src/mist/intelligence/juniper_docs/classify tests/guardrails/test_juniper_docs_classify_structure.py -q`; result: no findings.
+- [X] T029 Run `pylint src/ --fail-under=9.5`; result: 9.93 out of 10.
+- [X] T030 Run `RADON_PATHS='src/ MistHelper.py wsgi.py scripts/analyze_marvis_pcap.py scripts/probe_zscaler_endpoints.py tests/unit/utils/test_zscaler_catalogue.py'; radon cc $RADON_PATHS -j | complexity-gate --max 10`; result: all functions within threshold.
+- [X] T031 Run `VULTURE_PATHS='src/ MistHelper.py wsgi.py web_portal'; vulture $VULTURE_PATHS --min-confidence 70`; result: no findings.
+- [X] T032 Run `PYDOCSTYLE_PATHS='src/ wsgi.py web_portal'; pydocstyle $PYDOCSTYLE_PATHS`; result: no violations.
+- [X] T033 Run `INTERROGATE_PATHS='src/ MistHelper.py wsgi.py wsgi_capture.py web_portal'; interrogate $INTERROGATE_PATHS --fail-under 90 -v`; result: 99.7 percent.
+- [X] T034 Run `python -m pytest -q tests/unit/juniper_docs`; result: 187 passed and 3 skipped.
+- [X] T035 Run `ste-linter --config .ste-linter.toml --min-score 80` on the three routed records and release note; result: all four files passed.
+- [X] T036 Run `speckit-task-audit --root . --verbose`; result: no issue #3991 finding, with exit 1 from unrelated historical missing citations.
+- [X] T037 Verify `origin/main` and the implementation parent resolve to `efd082892584f54099973449a5953cd1b8d9a181`.
+- [X] T038 Re-run `git diff --check` and the authorized manifest check before commit.
+
+## Phase 8: Required Post-Commit Test-Quality Checks
+
+**Purpose**: Run the required ratchet against committed test changes before push.
+
+- [ ] T039 After the final implementation commit, run `python -B -m pytest -p no:cacheprovider -s -q tests/guardrails/local_test_quality_loop/test_guidance.py::TestLiveGuides`.
+- [ ] T040 Verify `origin/main^{commit}` resolves to `efd082892584f54099973449a5953cd1b8d9a181`.
+- [ ] T041 Run `test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json --changed-from "origin/main" --full-gate-path .github/workflows/ci.yml --full-gate-path requirements-dev.txt` and require zero new findings.
+- [ ] T042 Run `git status --short --untracked-files=all` after all gates and verify a clean worktree.
 
 ## Dependencies and Execution Order
 
 ### Phase Dependencies
 
-- **Setup**: T001 starts immediately and defines the authorized manifest.
-- **Foundational**: T002 and T003 depend on T001 and must finish before story implementation.
-- **User Story 1**: T004 and T005 depend on T003. T006 through T008 depend on T002 and T003. T008 completes the move before import updates.
-- **User Story 2**: T009 and T010 depend on T006 through T008. T011 and T012 depend on the moved files. T013 depends on T009 through T012.
-- **User Story 3**: T014 depends on the completed implementation from User Stories 1 and 2. T015 depends on T014 and all implementation files.
-- **Polish**: T016 through T022 depend on T015 and the complete implementation.
+- **Setup**: T001 starts first.
+- **Foundational**: T002 and T003 depend on T001.
+- **User Story 1**: T004 through T006 depend on T003. T007 and T008 depend on T002. T009 depends on T007 and T008.
+- **User Story 2**: T010 through T012 depend on T007 through T009. T013 through T015 depend on T010 through T012.
+- **User Story 3**: T016 can run after T001. T017 and T018 depend on all selected implementation tasks.
+- **Focused Validation**: T019 through T024 depend on T018.
+- **Repository Gates**: T025 through T038 depend on focused validation.
+- **Post-Commit Checks**: T039 through T042 run in order after the final implementation commit.
 
 ### User Story Dependencies
 
-- **User Story 1 (P1)**: Depends on the Foundational phase and has no dependency on another user story.
-- **User Story 2 (P1)**: Depends on User Story 1 because imports target the moved modules.
-- **User Story 3 (P2)**: Depends on User Stories 1 and 2 because the release record describes the complete bounded change.
+- **User Story 1 (P1)**: Starts after the Foundational phase.
+- **User Story 2 (P1)**: Depends on the completed module moves from User Story 1.
+- **User Story 3 (P2)**: The release note can start independently, but its final boundary check depends on User Stories 1 and 2.
 
 ### Parallel Opportunities
 
-- T002 and T003 can run in parallel after T001.
-- T004 and T005 can run in parallel after T003.
-- T009 and T010 can run in parallel after the module moves.
-- T016 through T021 can run in parallel after implementation is complete.
+- T002 and T003 can run in parallel.
+- T004 through T006 can run in parallel.
+- T007 and T008 can run in parallel.
+- T010 through T012 can run in parallel after the moves.
+- T019 through T023 can run in parallel.
+- T025 through T036 can run in parallel when they do not write generated files.
+
+## Parallel Example: User Story 1
+
+```text
+Task: "Add the valid-layout assertion in tests/guardrails/test_juniper_docs_classify_structure.py."
+Task: "Move manual_sorter.py into src/mist/intelligence/juniper_docs/classify/reprocessing/."
+Task: "Move reclassifier.py into src/mist/intelligence/juniper_docs/classify/reprocessing/."
+```
+
+## Parallel Example: User Story 2
+
+```text
+Task: "Update the canonical import in tests/unit/juniper_docs/test_reclassifier.py."
+Task: "Update the move map in tests/guardrails/test_src_public_symbol_preservation.py."
+Task: "Harden removed-path handling in tests/guardrails/test_src_domain_structure.py."
+```
 
 ## Implementation Strategy
 
 ### MVP First
 
-1. Complete T001 through T008.
-2. Complete T009 through T013 to preserve canonical imports and symbols.
-3. Run the User Story 1 and User Story 2 independent tests.
+1. Complete T001 through T009.
+2. Run T020 and verify the five-child package shape.
+3. Stop if an old module path or wrapper remains.
 
 ### Incremental Delivery
 
-1. Deliver the package move and focused structure guard as User Story 1.
-2. Deliver canonical imports and symbol preservation as User Story 2.
-3. Deliver the release note and boundary review as User Story 3.
-4. Complete the focused validation commands in the Polish phase.
+1. Deliver the package move and focused structure guard for User Story 1.
+2. Deliver canonical imports and symbol preservation for User Story 2.
+3. Deliver the release note and boundary proof for User Story 3.
+4. Run focused validation, repository gates, and post-commit test-quality checks in sequence.
 
 ## Notes
 
-- Each task uses the required checkbox, sequential ID, optional `[P]` marker, story label where required, and an exact file path.
-- The task list does not authorize changes to shared registries, generated references, historical specifications, `AGENTS.md`, or `CLAUDE.md`.
+- Each task uses a checkbox, a sequential task ID, an optional `[P]` marker, a required story label, and an exact file path or command scope.
+- A `[P]` task changes a different file or runs an independent read-only gate.
+- A gate does not authorize a file outside the authorized boundary.
+- Stop at the first failed required command. Repair the cause before the next command.

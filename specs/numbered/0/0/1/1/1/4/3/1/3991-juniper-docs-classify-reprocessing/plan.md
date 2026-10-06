@@ -14,9 +14,8 @@ the two reprocessing modules exist. Preserve module-level symbols and behavior
 without wrappers, aliases, or fallback imports. Add one issue-specific release-note
 fragment during implementation.
 
-This planning request is limited to this `plan.md`. The implementation artifacts,
-release-note fragment, source move, import updates, tests, and guard changes are
-implementation-phase work and are not created by this plan.
+The implementation uses only the authorized source moves, import updates, tests,
+guards, release-note fragment, and three routed specification files.
 
 ## Technical Context
 
@@ -27,8 +26,10 @@ classification modules, `pytest`, and repository guardrail helpers
 
 **Storage**: SQLite state database and local PDF corpus remain unchanged
 
-**Testing**: `pytest`, focused Juniper Docs unit tests, focused structure guard
-tests, source symbol preservation guard, Ruff, Black, and Python compilation
+**Testing**: Focused and full `pytest` checks, coverage, structure and symbol
+guards, Python compilation, Ruff, Black, Mypy, Pylint, Radon, Vulture,
+pydocstyle, Interrogate, Bandit, pip-audit, test-quality analysis, citation and
+diagram checks, changelog validation, and generated-reference drift checks
 
 **Target Platform**: Windows 11, macOS, and Linux
 
@@ -58,9 +59,8 @@ structure guard, one release-note fragment, and no Mist Cloud transport change
   and `CorpusReclassifier`. The plan prohibits wrapper modules and aliases.
 - **Safety-First**: PASS. The move does not add input handling or destructive
   behavior. Existing dry-run and typed operational controls remain unchanged.
-- **Full Deployment Pipeline**: DEFERRED BY AUTHORIZED BOUNDARY. This request
-  creates only the plan. Implementation, tests, commit, rebase, push, pull
-  request, and deployment gates remain outside this planning change.
+- **Full Deployment Pipeline**: REQUIRED. Run each applicable local gate, commit
+  the bounded change, and run the post-commit test-quality checks.
 - **Observability and Logging**: PASS. The moved modules retain their existing
   logging. The implementation must not alter log content or add secret output.
 - **Inline Comments**: PASS FOR PLANNING. The implementation must preserve the
@@ -155,7 +155,7 @@ structure guard, one release-note fragment, and no Mist Cloud transport change
    runtime or test import to `classify.reprocessing`.
 2. Update `tests/unit/juniper_docs/test_reclassifier.py` to import
    `CorpusReclassifier` from the canonical reprocessing path.
-3. Add or update focused tests for the moved module paths and symbol availability.
+3. Use the reclassifier unit test and shared symbol guard to prove canonical paths.
 4. Confirm no tracked text file retains an old import or old module location,
    except an explicitly required historical record that is outside this feature.
 
@@ -182,29 +182,66 @@ structure guard, one release-note fragment, and no Mist Cloud transport change
 
 ### Phase 5: Validate the implementation
 
-Run the smallest applicable checks after implementation:
+Run the focused behavior and structure checks first:
 
 ```text
 python -m pytest tests/unit/juniper_docs/test_reclassifier.py
-python -m pytest tests/guardrails/<focused-juniper-docs-structure-guard>.py
+python -m pytest tests/guardrails/test_juniper_docs_classify_structure.py
 python -m pytest tests/guardrails/test_src_domain_structure.py tests/guardrails/test_src_public_symbol_preservation.py
+python -m pytest tests/guardrails/test_changelog_fragment_policy.py
 python -m py_compile src/mist/intelligence/juniper_docs/classify/reprocessing/manual_sorter.py src/mist/intelligence/juniper_docs/classify/reprocessing/reclassifier.py
-python -m ruff check src/mist/intelligence/juniper_docs tests/unit/juniper_docs tests/guardrails
-python -m black --check src/mist/intelligence/juniper_docs tests/unit/juniper_docs tests/guardrails
 git diff --check
 ```
 
-Verify the authorized file boundary with:
+Run the applicable repository quality gates. These path values are copied
+exactly from `.github/workflows/ci.yml`:
+
+```text
+python -m ruff check .
+python -m black --check --diff .
+
+MYPY_PATHS='src/ MistHelper.py wsgi.py scripts/mist_ideas_analyzer_pkg/__init__.py scripts/mist_ideas_distiller_v2_pkg/__init__.py'
+python -m mypy $MYPY_PATHS --config-file pyproject.toml
+
+bandit -c pyproject.toml -r src/mist/intelligence/juniper_docs/classify tests/guardrails/test_juniper_docs_classify_structure.py -q
+pylint src/ --fail-under=9.5
+
+RADON_PATHS='src/ MistHelper.py wsgi.py scripts/analyze_marvis_pcap.py scripts/probe_zscaler_endpoints.py tests/unit/utils/test_zscaler_catalogue.py'
+radon cc $RADON_PATHS -j | complexity-gate --max 10
+
+VULTURE_PATHS='src/ MistHelper.py wsgi.py web_portal'
+vulture $VULTURE_PATHS --min-confidence 70
+
+PYDOCSTYLE_PATHS='src/ wsgi.py web_portal'
+pydocstyle $PYDOCSTYLE_PATHS
+
+INTERROGATE_PATHS='src/ MistHelper.py wsgi.py wsgi_capture.py web_portal'
+interrogate $INTERROGATE_PATHS --fail-under 90 -v
+```
+
+Run the required test-quality preflight and changed-test gate after the
+implementation commit:
+
+```text
+python -B -m pytest -p no:cacheprovider -s -q tests/guardrails/local_test_quality_loop/test_guidance.py::TestLiveGuides
+git rev-parse --verify "origin/main^{commit}"
+test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json --changed-from "origin/main" --full-gate-path .github/workflows/ci.yml --full-gate-path requirements-dev.txt
+```
+
+The dependency, container, menu-reference, portal, safe-sweep, and full
+integration gates do not read this bounded package move.
+
+Verify the authorized file boundary after each generator and gate:
 
 ```text
 git status --short --untracked-files=all
-git diff --name-only
+git diff --name-only origin/main...HEAD
 ```
 
-The final implementation diff must contain only the moved modules, affected
-imports and tests, focused guard files, the issue-specific release-note fragment,
-and the three authorized routed specification files. This planning request must
-contain only the `plan.md` file in the routed directory.
+The final implementation diff must contain only the two moved modules, the new
+package metadata, affected canonical imports and focused tests, structure and
+symbol guards, the issue-specific release-note fragment, and the three
+authorized routed specification files. No gate can authorize an excluded file.
 
 ## Project Structure
 
@@ -212,11 +249,13 @@ contain only the `plan.md` file in the routed directory.
 
 ```text
 specs/numbered/0/0/1/1/1/4/3/1/3991-juniper-docs-classify-reprocessing/
-└── plan.md
+├── plan.md
+├── spec.md
+└── tasks.md
 ```
 
-No `research.md`, `data-model.md`, `quickstart.md`, `contracts/`, or `tasks.md`
-is created by this request.
+No `research.md`, `data-model.md`, `quickstart.md`, or `contracts/` record is
+created by this feature.
 
 ### Source Code
 
