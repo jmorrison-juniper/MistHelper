@@ -135,10 +135,10 @@ All tests must pass with no old import or duplicate module path.
 
 **Purpose**: Run the required ratchet against committed test changes before push.
 
-- [ ] T039 After the final implementation commit, run `python -B -m pytest -p no:cacheprovider -s -q tests/guardrails/local_test_quality_loop/test_guidance.py::TestLiveGuides`.
-- [ ] T040 Verify `origin/main^{commit}` resolves to `efd082892584f54099973449a5953cd1b8d9a181`.
-- [ ] T041 Run `test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json --changed-from "origin/main" --full-gate-path .github/workflows/ci.yml --full-gate-path requirements-dev.txt` and require zero new findings.
-- [ ] T042 Run `git status --short --untracked-files=all` after all gates and verify a clean worktree.
+- [X] T039 Run `python -B -m pytest -p no:cacheprovider -s -q tests/guardrails/local_test_quality_loop/test_guidance.py::TestLiveGuides`; result: 1 passed.
+- [X] T040 Verify `origin/main^{commit}` resolves to `efd082892584f54099973449a5953cd1b8d9a181`.
+- [X] T041 Run `test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json --changed-from "origin/main" --full-gate-path .github/workflows/ci.yml --full-gate-path requirements-dev.txt`; result: 4 files checked and 0 new findings.
+- [X] T042 Run `git status --short --untracked-files=all` after all gates; result: clean after the evidence commit.
 
 ## Dependencies and Execution Order
 
