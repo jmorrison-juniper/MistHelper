@@ -1326,7 +1326,7 @@ that step.
 | Schema | `MarvisActionsClient.read_schema` | `src/mist/intelligence/marvis/actions/client.py` |
 | Sites | `MarvisActionsClient.read_site_names` | `src/mist/intelligence/marvis/actions/client.py` |
 | Alarm search | `MarvisActionsClient.search_marvis_alarms` | `src/mist/intelligence/marvis/actions/client.py` |
-| Alarm join | `MarvisAlarmJoin.apply` | `src/mist/intelligence/marvis/actions/alarms.py` |
+| Alarm join | `MarvisAlarmJoin.apply` | `src/mist/intelligence/marvis/actions/alarm_handling/alarms.py` |
 | Resolve | `MarvisActionsClient.resolve_action` | `src/mist/intelligence/marvis/actions/client.py` |
 | Verify | `MarvisBulkResolver.verify` | `src/mist/intelligence/marvis/actions/operation.py` |
 

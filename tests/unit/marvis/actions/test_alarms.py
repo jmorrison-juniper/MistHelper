@@ -15,8 +15,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.mist.intelligence.marvis.actions import alarms as alarms_module
-from src.mist.intelligence.marvis.actions.alarms import (
+from src.mist.intelligence.marvis.actions.alarm_handling import alarms as alarms_module
+from src.mist.intelligence.marvis.actions.alarm_handling.alarms import (
     ALARM_COLUMNS,
     ALARM_MAX_WINDOW_SECONDS,
     ALARM_WINDOW_MARGIN_SECONDS,

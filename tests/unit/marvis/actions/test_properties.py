@@ -22,7 +22,7 @@ pytest.importorskip("hypothesis")
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from src.mist.intelligence.marvis.actions.alarms import (
+from src.mist.intelligence.marvis.actions.alarm_handling.alarms import (
     ALARM_COLUMNS,
     ALARM_MAX_WINDOW_SECONDS,
     ALARM_WINDOW_MARGIN_SECONDS,

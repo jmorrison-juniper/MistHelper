@@ -12,7 +12,7 @@ import uuid
 
 import pytest
 
-from src.mist.intelligence.marvis.actions.alarms import ALARM_COLUMNS
+from src.mist.intelligence.marvis.actions.alarm_handling.alarms import ALARM_COLUMNS
 from src.mist.intelligence.marvis.actions.model import (
     CATEGORY_NAMES,
     OPEN_STATUSES,

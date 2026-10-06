@@ -117,6 +117,24 @@ def test_new_domain_levels_follow_five_item_rule() -> None:
     assert not violations, message  # Fail with the checked level count and each violation.
 
 
+def test_marvis_actions_has_alarm_handling_package() -> None:
+    """Require the Marvis Actions package to hold five children and two alarm modules."""
+    actions_directory = SOURCE_ROOT / "mist" / "intelligence" / "marvis" / "actions"
+    alarm_handling_directory = actions_directory / "alarm_handling"
+    actions_children = visible_children(actions_directory)
+    alarm_handling_children = visible_children(alarm_handling_directory)
+    expected_actions = {"alarm_handling", "client.py", "model.py", "operation.py", "selection.py"}
+    expected_alarm_handling = {"acknowledgement.py", "alarms.py"}
+    assert {child.name for child in actions_children} == expected_actions, (
+        f"Checked {len(actions_children)} Marvis Actions children: "
+        f"{sorted(child.name for child in actions_children)}"
+    )
+    assert {child.name for child in alarm_handling_children} == expected_alarm_handling, (
+        f"Checked {len(alarm_handling_children)} alarm handling children: "
+        f"{sorted(child.name for child in alarm_handling_children)}"
+    )
+
+
 def test_tracked_text_uses_only_canonical_source_paths() -> None:
     """Reject each source path that existed before the move."""  # Preserve the existing behavior.
     separators = r"[./\\]"  # Accept import paths and both filesystem separator forms.
