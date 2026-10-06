@@ -45,6 +45,9 @@ MODULE_PATHS = {  # Map each old direct module to its new canonical module.
     "org_data_collector.py": "operations/wan/org_data_collector.py",
     "wan_hub_group_manager.py": "operations/wan/wan_hub_group_manager.py",
     "wan_vpn_builder.py": "operations/wan/wan_vpn_builder.py",
+    "mist/networking/network/_routing_utils_display.py": ("mist/networking/network/support/_routing_utils_display.py"),
+    "mist/networking/network/_routing_utils_parsing.py": ("mist/networking/network/support/_routing_utils_parsing.py"),
+    "mist/networking/network/_routing_utils_payload.py": ("mist/networking/network/support/_routing_utils_payload.py"),
 }  # Cover every moved direct source module.
 CANONICAL_ROOTS = {group.split("/")[0] for group in PACKAGE_GROUPS} | {
     Path(path).parts[0] for path in MODULE_PATHS.values()

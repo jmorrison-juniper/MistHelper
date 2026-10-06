@@ -13,7 +13,7 @@ from src.foundation.persistence.db import DatabaseConfig  # WHY: build the real 
 from src.foundation.support.utils.address_utils import (
     NominatimValidator,
 )  # WHY: drive the real geocode response parser.
-from src.mist.networking.network._routing_utils_payload import (
+from src.mist.networking.network.support._routing_utils_payload import (
     _RoutingUtilsPayload,
 )  # WHY: drive the real routing parser.
 from src.mist.realtime.websocket.commands import MacTableCommand  # WHY: drive the real WebSocket MAC parser.
@@ -79,7 +79,7 @@ def test_routing_payload_returns_error_tuple_for_unparseable_success_body(
 ) -> None:
     """The routing parser returns its `(None, error)` failure tuple for invalid JSON."""
     caplog.set_level(
-        logging.ERROR, logger="src.mist.networking.network._routing_utils_payload"
+        logging.ERROR, logger="src.mist.networking.network.support._routing_utils_payload"
     )  # WHY: capture guard log.
     parser = _RoutingUtilsPayload(MagicMock())  # WHY: the parser method does not need parent state.
     response = _response(body, "https://h/api/v1/sites/s/devices/d/cmd")  # WHY: identify the failing endpoint.
