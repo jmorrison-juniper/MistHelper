@@ -109,33 +109,61 @@ def establish_missing_precheck(page: Page) -> None:
 class TestMultiSitePrecheckGate:
     """Take each missing pre-check, start the operation, and read the stored captures."""
 
+    @staticmethod
+    def inherited_precheck_store() -> PortalRecordStore:
+        """Return a store that holds the pre-check from an earlier journey."""
+        store = PortalRecordStore("issue-3537")  # Own only the records of these direct regression tests.
+        store.write_capture(  # Reproduce the pre-check that an earlier browser journey left.
+            {
+                "capture_id": "inherited-precheck",
+                "site_id": SECOND_SITE_ID,
+                "role": "pre",
+                "run_id": "",
+                "state": "verified",
+                "started_at": "2026-10-06T01:00:00+00:00",
+            }
+        )
+        return store  # Each test gets an independent process-owned record graph.
+
     def test_the_store_replaces_the_ignored_inherited_precheck(self) -> None:
         """The request filter hides the inherited capture but keeps a new capture visible."""
         from flask import Flask  # Build one request context without the browser server.
 
-        store = PortalRecordStore("issue-3537")  # Own only the records of this direct regression test.
-        inherited = {  # Match every safe pre-check field that the store requires.
-            "capture_id": "inherited-precheck",
-            "site_id": SECOND_SITE_ID,
-            "role": "pre",
-            "run_id": "",
-            "state": "verified",
-            "started_at": "2026-10-06T01:00:00+00:00",
-        }
-        store.write_capture(inherited)  # Reproduce the pre-check that an earlier browser journey left.
+        store = self.inherited_precheck_store()  # Start with the state that the double-click journey leaves.
         instruction = json.dumps(  # Name the one inherited record that this journey must not adopt.
-            {"site_id": SECOND_SITE_ID, "capture_id": inherited["capture_id"]}
+            {"site_id": SECOND_SITE_ID, "capture_id": "inherited-precheck"}
         )
         app = Flask(__name__)  # Flask owns the request header that the process store reads.
         with app.test_request_context(headers={IGNORED_PRECHECK_HEADER: instruction}):
             assert store.newest_precheck(SECOND_SITE_ID) == ""  # The isolated journey starts with a missing row.
             replacement = {  # The new browser capture differs only in its identity and start time.
-                **inherited,
                 "capture_id": "journey-precheck",
+                "site_id": SECOND_SITE_ID,
+                "role": "pre",
+                "run_id": "",
+                "state": "verified",
                 "started_at": "2026-10-06T02:00:00+00:00",
             }
             store.write_capture(replacement)  # Simulate the capture that the missing button starts.
             assert store.newest_precheck(SECOND_SITE_ID) == "journey-precheck"  # The new capture unlocks the gate.
+
+    def test_the_store_keeps_the_precheck_for_an_empty_instruction(self) -> None:
+        """An empty isolation instruction hides no capture."""
+        from flask import Flask  # Build one request context without the browser server.
+
+        store = self.inherited_precheck_store()  # Start with one reusable inherited pre-check.
+        app = Flask(__name__)  # Flask owns the empty request body and header that the store reads.
+        with app.test_request_context(data="", headers={IGNORED_PRECHECK_HEADER: ""}):
+            assert store.newest_precheck(SECOND_SITE_ID) == "inherited-precheck"  # Empty input changes no result.
+
+    def test_the_store_keeps_the_precheck_for_malformed_json(self) -> None:
+        """A malformed isolation instruction hides no capture."""
+        from flask import Flask  # Build one request context without the browser server.
+
+        store = self.inherited_precheck_store()  # Start with one reusable inherited pre-check.
+        app = Flask(__name__)  # Flask owns the malformed header that the store reads.
+        with app.test_request_context(headers={IGNORED_PRECHECK_HEADER: "bad json"}):
+            assert store.newest_precheck(SECOND_SITE_ID) == "inherited-precheck"  # Invalid JSON changes no result.
 
     def test_the_gate_locks_the_start_until_each_site_holds_a_pre_check(
         self, firmware_operator_page: Page, tmp_path: Path
