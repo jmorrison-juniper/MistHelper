@@ -10,7 +10,6 @@
     "src/foundation/support/utils/zscaler_catalogue.py": 1,
     "src/foundation/support/utils/zscaler_probe.py": 1,
     "src/interfaces/portals/upgrade_portal/app/routes/upgrade.py": 6,
-    "src/interfaces/portals/upgrade_portal/upgrade/org_cascade/walk.py": 1,
     "src/interfaces/visualization/ui/execution/debug_saver.py": 1,
     "src/mist/intelligence/reports/certificate_expiry/client.py": 3,
     "src/mist/intelligence/reports/certificate_expiry/model.py": 1,
