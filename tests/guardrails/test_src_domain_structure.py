@@ -139,6 +139,7 @@ def test_tracked_text_uses_only_canonical_source_paths() -> None:
         REPOSITORY_ROOT / path
         for path in tracked_paths
         if path.suffix.lower() in TEXT_SUFFIXES
+        and (REPOSITORY_ROOT / path).is_file()
         and not excluded_roots.intersection(path.parts)
         and REPOSITORY_ROOT / path not in excluded_files
     ]  # Scan each tracked text input.
