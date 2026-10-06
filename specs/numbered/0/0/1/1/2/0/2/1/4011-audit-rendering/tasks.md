@@ -66,6 +66,12 @@ because a later task reads the result of an earlier task.
 - [X] **T016** Commit locally with a Conventional Commit message, `Closes #4011`,
   and the Copilot co-author trailer. Then run the required post-commit
   test-quality procedure. Check: the gate reports zero new findings.
+- [X] **T017** Keep the two `specs/2448` snapshot artifacts byte-identical to
+  `origin/main`, and map the six removed paths to the moved modules inside
+  `tests/guardrails/test_performance_hook_catalog.py`. Add tests that prove each
+  mapping, an unknown path, and a lost symbol. Check: the catalog guard passes,
+  and `git diff origin/main -- specs/2448-misthelper-performance-monitoring/artifacts/`
+  reports no change.
 
 ## Out of scope
 

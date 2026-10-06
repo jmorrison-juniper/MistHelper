@@ -20,6 +20,7 @@ OLD_RENDERER_PATH = re.compile(  # Match each removed dotted module path and eac
     r"src\.mist\.access\.audit\.(?:renderer|_renderer_(?:delta|format|html|mermaid|time))\b"
     r"|src/mist/access/audit/(?:renderer|_renderer_(?:delta|format|html|mermaid|time))\.py"
 )
+SNAPSHOT_MAP_OWNER = "tests/guardrails/test_performance_hook_catalog.py"  # Own the approved snapshot path map.
 
 
 class AuditRenderingStructureInspector:
@@ -70,7 +71,10 @@ class AuditRenderingStructureInspector:
         active_paths = [  # Keep maintained code, tests, scripts, utilities, and documentation.
             path
             for path in tracked_paths
-            if path.suffix.lower() in text_suffixes and path.parts and path.parts[0] in active_roots
+            if path.suffix.lower() in text_suffixes
+            and path.parts
+            and path.parts[0] in active_roots
+            and path.as_posix() != SNAPSHOT_MAP_OWNER
         ]
         return [  # Report every active tracked file that still holds a removed path.
             path.as_posix()
@@ -122,3 +126,11 @@ class TestAuditRenderingStructure:
         monkeypatch.setattr(subprocess, "run", lambda *_args, **_kwargs: completed)  # Keep the proof local.
         inspector = AuditRenderingStructureInspector(tmp_path, tmp_path)  # Inspect the controlled path set.
         assert inspector.active_path_violations() == ["src/sample.py"]  # Require the violating path in the result.
+
+    def test_snapshot_map_owner_still_holds_each_old_path(self) -> None:
+        """Prove that the one exempt guard still maps every removed renderer path."""
+        owner_path = REPOSITORY_ROOT / SNAPSHOT_MAP_OWNER  # Resolve the single exempt guard module.
+        assert owner_path.is_file(), f"The exempt snapshot map owner is absent: {owner_path}"  # Require the file.
+        owner_text = owner_path.read_text(encoding="utf-8")  # Read the guard that owns the approved map.
+        found = OLD_RENDERER_PATH.findall(owner_text)  # Count the removed paths that the map still names.
+        assert len(found) == 6, f"Checked {SNAPSHOT_MAP_OWNER} and found {len(found)} removed renderer paths"
