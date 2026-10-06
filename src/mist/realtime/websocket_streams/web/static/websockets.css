@@ -2,25 +2,9 @@
     min-height: 26rem;
 }
 
-/* Bootstrap paints .btn:hover and .btn:disabled from these variables. The
- * shared .btn-accent rule sets none of them, so the start button lost its fill
- * when the operator pointed at it or when the page disabled it. */
-.ws-page .btn-accent {
-    --bs-btn-color: #fff;
-    --bs-btn-bg: var(--portal-accent, #0077B6);
-    --bs-btn-border-color: var(--portal-accent, #0077B6);
-    --bs-btn-hover-color: #fff;
-    --bs-btn-hover-bg: var(--portal-accent, #0077B6);
-    --bs-btn-hover-border-color: var(--portal-accent, #0077B6);
-    --bs-btn-active-color: #fff;
-    --bs-btn-active-bg: var(--portal-accent, #0077B6);
-    --bs-btn-active-border-color: var(--portal-accent, #0077B6);
-    --bs-btn-disabled-color: #fff;
-    --bs-btn-disabled-bg: var(--portal-accent, #0077B6);
-    --bs-btn-disabled-border-color: var(--portal-accent, #0077B6);
-    --bs-btn-disabled-opacity: 0.45;
-    --bs-btn-focus-shadow-rgb: 0, 119, 182;
-}
+/* Issue #3658 moved the accent button state variables into the shared
+ * .btn-accent rule in web_portal/static/css/portal.css, so this page needs no
+ * scoped copy. */
 
 /* The catalog holds 72 entries. It scrolls inside its card, so the start
  * form stays in view next to it. */
