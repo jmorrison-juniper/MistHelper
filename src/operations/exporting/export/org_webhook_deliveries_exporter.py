@@ -32,18 +32,39 @@ class OrgWebhookDeliveriesExporter:
     """Export webhook deliveries for one organization webhook."""
 
     @staticmethod
+    def _match_webhook_id(raw: str, webhooks: list[dict[str, Any]]) -> tuple[str, str] | None:
+        """Return the webhook that has the exact stable identifier."""
+        for webhook in webhooks:  # Give stable identifiers priority over numeric positions.
+            webhook_id = str(webhook.get("id") or "").strip()  # Normalize the Mist identifier.
+            if webhook_id != raw:  # Continue until one exact current identifier matches.
+                continue
+            webhook_name = str(webhook.get("name") or webhook_id).strip()  # Use the identifier as label fallback.
+            return webhook_id, webhook_name or webhook_id  # Return the exact stable selection.
+        return None  # Let the caller try the existing one-based position.
+
+    @staticmethod
     def _resolve_webhook_choice(raw: str, webhooks: list[dict[str, Any]]) -> tuple[str, str] | None:
-        """Convert a one-based operator choice into a webhook identifier and name."""
-        if not raw.isdigit():  # Reject text before integer conversion can fail.
+        """Resolve a stable identifier first, then a one-based operator choice."""
+        normalized = raw.strip()  # Accept the same harmless surrounding space as other operator prompts.
+        if not normalized:  # Reject an empty browser or command-line answer.
             logger.info("! Invalid webhook selection")  # Tell the operator why the prompt stopped.
             return None
-        index = int(raw)  # Convert the validated one-based choice to an integer.
+        identifier_match = OrgWebhookDeliveriesExporter._match_webhook_id(normalized, webhooks)
+        if identifier_match is not None:  # Preserve the stable selection before positional parsing.
+            return identifier_match  # Return the exact identifier and display name.
+        if not normalized.isdigit():  # Reject unknown identifiers and other nonnumeric input.
+            logger.info("! Invalid webhook selection")  # Tell the operator why the prompt stopped.
+            return None
+        index = int(normalized)  # Convert the validated one-based choice to an integer.
         if not 1 <= index <= len(webhooks):  # Reject choices outside the displayed range.
             logger.info("! Webhook selection must be between 1 and %s", len(webhooks))  # Explain the range.
             return None
         webhook = webhooks[index - 1]  # Select the requested webhook row.
-        webhook_id = str(webhook.get("id", ""))  # Preserve the API identifier for the search call.
-        webhook_name = str(webhook.get("name") or webhook_id or "webhook")  # Build a safe display label.
+        webhook_id = str(webhook.get("id") or "").strip()  # Normalize the API identifier for the search call.
+        if not webhook_id:  # A position without a stable identifier cannot support a safe search.
+            logger.info("! The selected webhook has no identifier")  # Explain why the prompt stopped.
+            return None
+        webhook_name = str(webhook.get("name") or webhook_id).strip()  # Build a readable display label.
         return webhook_id, webhook_name  # Return the validated selection to the caller.
 
     @staticmethod
