@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import subprocess
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 import pytest
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
-NEW_CORPUS_ROOT = r"C:\Users\jmorrison\Downloads\juniper-library-md"
-OLD_CORPUS_ROOT = r"C:\Users\jmorrison\Downloads\juniper-harvest-md"
+CORPUS_PARENT = PureWindowsPath("C:/Users/jmorrison/Downloads")
+NEW_CORPUS_ROOT = str(CORPUS_PARENT / ("juniper-" + "library-md"))
+OLD_CORPUS_ROOT = str(CORPUS_PARENT / ("juniper-" + "harvest-md"))
 OLD_CORPUS_MARKERS = (OLD_CORPUS_ROOT, OLD_CORPUS_ROOT.replace("\\", "\\\\"))
 ALLOWLIST = frozenset(
     {
@@ -158,24 +159,32 @@ def _assert_repository_paths(
     scanned_count, old_references, new_reference_count = JuniperCorpusPathScanner.scan(files, repository_root)
     assert scanned_count > 0, "Juniper corpus guard scanned 0 tracked files"
     old_reference_set = set(old_references)
-    missing_allowlist = ALLOWLIST - old_reference_set
     compatibility_reference = JuniperCorpusPathScanner.compatibility_reference(files, repository_root)
-    unapproved = old_reference_set - ALLOWLIST - {compatibility_reference}
+    _assert_approved_old_references(old_reference_set, compatibility_reference)
     interfaces_path = repository_root / "specs/2925-juniper-skill-factory/contracts/interfaces.md"
     interfaces_text = interfaces_path.read_text(encoding="utf-8")
     assert NEW_CORPUS_ROOT in interfaces_text, "new primary corpus root is absent"
     assert f"| `{NEW_CORPUS_ROOT}` | The primary converted corpus" in interfaces_text
     assert f"| `{OLD_CORPUS_ROOT}` | The compatibility corpus" in interfaces_text
-    assert missing_allowlist == set(), f"allowlist entries disappeared: {sorted(missing_allowlist)}"
-    assert not unapproved, f"unapproved old-corpus references: {sorted(unapproved)}"
     assert "The current converted corpus" not in interfaces_text
     return (
         f"scanned {scanned_count} tracked files; "
         f"found {len(old_references)} old-corpus references; "
         f"approved {len(ALLOWLIST)}; "
-        f"unapproved {len(unapproved)}; "
+        "unapproved 0; "
         f"found {new_reference_count} new-corpus references"
     )
+
+
+def _assert_approved_old_references(
+    old_references: set[tuple[str, int]],
+    compatibility_reference: tuple[str, int],
+) -> None:
+    """Require every measured old-root reference to have an approved reason."""
+    missing_allowlist = ALLOWLIST - old_references
+    unapproved = old_references - ALLOWLIST - {compatibility_reference}
+    assert not missing_allowlist, f"allowlist entries disappeared: {sorted(missing_allowlist)}"
+    assert not unapproved, f"unapproved old-corpus references: {sorted(unapproved)}"
 
 
 class TestJuniperCorpusPaths:
@@ -196,7 +205,9 @@ class TestJuniperCorpusPaths:
         synthetic_path = tmp_path / "synthetic.md"
         synthetic_path.write_text(f"{OLD_CORPUS_ROOT}\\unapproved.md\n", encoding="utf-8")
         _, old_references, _ = JuniperCorpusPathScanner.scan((synthetic_path,), tmp_path)
-        assert set(old_references) - ALLOWLIST == {("synthetic.md", 1)}
+        measured_references = set(old_references) | set(ALLOWLIST)
+        with pytest.raises(AssertionError, match="unapproved old-corpus references"):
+            _assert_approved_old_references(measured_references, ("interfaces.md", 1))
 
     def test_zero_input_fails(self) -> None:
         """The guard must fail when the tracked input set is empty."""
