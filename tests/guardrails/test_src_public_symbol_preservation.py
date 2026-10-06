@@ -36,6 +36,12 @@ MODULE_PATHS = {  # Map each old direct module to its new canonical module.
     "constants.py": "foundation/constants.py",
     "foundation/persistence/db/arango_writer.py": "foundation/persistence/db/writers/arango_writer.py",
     "foundation/persistence/db/redis_writer.py": "foundation/persistence/db/writers/redis_writer.py",
+    "mist/intelligence/juniper_docs/classify/manual_sorter.py": (
+        "mist/intelligence/juniper_docs/classify/reprocessing/manual_sorter.py"
+    ),
+    "mist/intelligence/juniper_docs/classify/reclassifier.py": (
+        "mist/intelligence/juniper_docs/classify/reprocessing/reclassifier.py"
+    ),
     "org_data_collector.py": "operations/wan/org_data_collector.py",
     "wan_hub_group_manager.py": "operations/wan/wan_hub_group_manager.py",
     "wan_vpn_builder.py": "operations/wan/wan_vpn_builder.py",
