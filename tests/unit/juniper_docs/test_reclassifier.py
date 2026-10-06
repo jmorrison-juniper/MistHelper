@@ -23,7 +23,7 @@ import sqlite3
 from pathlib import Path
 
 from src.mist.intelligence.juniper_docs.classify.content_sampler import ContentSampler
-from src.mist.intelligence.juniper_docs.classify.reclassifier import CorpusReclassifier
+from src.mist.intelligence.juniper_docs.classify.reprocessing.reclassifier import CorpusReclassifier
 from src.mist.intelligence.juniper_docs.classify.signal_scorer import SignalScorer
 from src.mist.intelligence.juniper_docs.classify.slug_classifier import UNCATEGORIZED
 from src.mist.intelligence.juniper_docs.harvest.state_store import HarvestStateStore
