@@ -73,7 +73,8 @@ def validate_specs_structure(specs_root: Path, baseline_path: Path) -> str:
 
 def test_specs_structure_matches_baseline() -> None:
     """Keep current legacy entries while rejecting new flat intake."""
-    validate_specs_structure(SPECS_ROOT, BASELINE_PATH)
+    message = validate_specs_structure(SPECS_ROOT, BASELINE_PATH)
+    assert "792 legacy grandfathered" in message
 
 
 def test_no_new_root_level_feature(tmp_path: Path) -> None:
