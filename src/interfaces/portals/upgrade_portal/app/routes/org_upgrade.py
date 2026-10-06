@@ -52,13 +52,17 @@ from src.interfaces.portals.upgrade_portal.app.routes.select import (
     selected_site_ids,
 )
 from src.interfaces.portals.upgrade_portal.runtime import identity, lock
+from src.interfaces.portals.upgrade_portal.runtime.cloud_cache import CloudReadCache
 from src.interfaces.portals.upgrade_portal.upgrade.options import (
     ORG_OPTION_HELP,
     BadOptionError,
+    InventoryRead,
     PartialInventoryError,
     build_options,
     build_options_record,
     build_options_view,
+    inventory_reads_by_site,
+    read_upgrade_org_inventory,
 )
 from src.interfaces.portals.upgrade_portal.upgrade.org_advanced_options import (  # Import the moved dependency.
     OrgAdvancedOptions,
@@ -160,6 +164,14 @@ ANCHOR_READER_CONFIG_KEY = "ORG_SETTLE_ANCHOR_READER"  # Issue #3245: a test rep
 CASCADE_STARTER_CONFIG_KEY = "ORG_CASCADE_STARTER"  # Issue #3245: a test replaces the watch thread.
 SUBMISSION_CLOCK_CONFIG_KEY = "ORG_UPGRADE_SUBMISSION_CLOCK"  # Issue #3324: contract tests fix the submit clock.
 RETRY_CACHE_KEY = "org_retry_plan"  # Issue #3247: one request builds the retry plan one time.
+ORG_INVENTORY_REQUEST_KEY = "org_inventory_by_site"  # Issue #3210: one request partitions one organization read.
+ORG_INVENTORY_ENDPOINT = "getOrgInventory"  # The cache key names the exact Mist SDK read.
+ORG_INVENTORY_CACHE = CloudReadCache(  # Share a complete snapshot between the GET and its POST.
+    select_routes.CLOUD_READ_TTL_SECONDS,
+    select_routes.CLOUD_READ_CACHE_LIMIT,
+)
+DEFAULT_OPTIONS_VIEW_BUILDER = build_options_view  # Detect a test that replaces the imported builder directly.
+DEFAULT_OPTIONS_RECORD_BUILDER = build_options_record  # Keep direct monkeypatch seams backward compatible.
 PLAN_OPTION_DROPPED = frozenset({"operation_id", "target_count"})  # Issue #3247: values of the browser session only.
 
 MODE_REQUIRED = "multi_site_mode_required"
@@ -404,8 +416,13 @@ def aggregate_service() -> AggregateUpgradeService:
 
 def aggregate_options_view(cloud_session: Any, org_id: str, site_id: str) -> dict[str, Any]:
     """Return the injected multi-site device view or the production view."""
-    builder = current_app.config.get(OPTIONS_VIEW_CONFIG_KEY, build_options_view)  # Tests reach no cloud.
-    return dict(builder(cloud_session, org_id, site_id))  # Detach the view before template use.
+    builder = current_app.config.get(OPTIONS_VIEW_CONFIG_KEY)  # An injected per-site seam keeps its existing shape.
+    if builder is not None:  # Browser and contract tests provide all device rows through this seam.
+        return dict(builder(cloud_session, org_id, site_id))  # Detach the view before template use.
+    if build_options_view is not DEFAULT_OPTIONS_VIEW_BUILDER:  # A direct monkeypatch keeps the legacy call shape.
+        return dict(build_options_view(cloud_session, org_id, site_id))  # The replacement owns its inventory.
+    inventory = request_site_inventory(site_id)  # Production reuses the organization read of this request.
+    return dict(DEFAULT_OPTIONS_VIEW_BUILDER(cloud_session, org_id, site_id, inventory))  # No second read.
 
 
 def aggregate_options_record(
@@ -415,8 +432,46 @@ def aggregate_options_record(
     body: Mapping[str, Any],
 ) -> dict[str, Any]:
     """Return the injected multi-site option record or the production record."""
-    builder = current_app.config.get(OPTIONS_BUILDER_CONFIG_KEY, build_options_record)  # Tests reach no cloud.
-    return dict(builder(cloud_session, org_id, site_id, body))  # Detach the stored values.
+    builder = current_app.config.get(OPTIONS_BUILDER_CONFIG_KEY)  # An injected per-site seam keeps its existing shape.
+    if builder is not None:  # Tests provide the complete target record through this seam.
+        return dict(builder(cloud_session, org_id, site_id, body))  # Detach the stored values.
+    if build_options_record is not DEFAULT_OPTIONS_RECORD_BUILDER:  # Preserve a direct test replacement.
+        return dict(build_options_record(cloud_session, org_id, site_id, body))  # The replacement owns its read.
+    inventory = request_site_inventory(site_id)  # Production reuses the view read during the same save.
+    return dict(DEFAULT_OPTIONS_RECORD_BUILDER(cloud_session, org_id, site_id, body, inventory))  # No second read.
+
+
+def request_site_inventory(site_id: str) -> InventoryRead | None:
+    """Return the site slice that the current multi-site request prepared."""
+    if not has_request_context():  # Direct helper tests can still use the legacy site-filtered reader.
+        return None  # The default builder reads the site when no request owns a partition.
+    grouped = getattr(g, ORG_INVENTORY_REQUEST_KEY, None)  # None before the handler reads the organization.
+    return grouped.get(site_id) if isinstance(grouped, dict) else None  # The selected site slice, or no slice.
+
+
+def prepare_org_inventory(cloud_session: Any, org_id: str, site_ids: Sequence[str]) -> None:
+    """Read or reuse organization inventory, then partition it for this request."""
+    record = identity.current_session()  # The cache must stay inside one operator and credential.
+    key = (record.owner.key, ORG_INVENTORY_ENDPOINT, org_id, id(cloud_session)) if record is not None else None
+    kept = ORG_INVENTORY_CACHE.get(key) if key is not None else None  # A complete read can serve GET and POST.
+    if kept is not None:  # The same operator read this organization less than one minute ago.
+        inventory = InventoryRead(kept, [])  # The cache stores complete reads only.
+    else:
+        inventory = read_upgrade_org_inventory(cloud_session, org_id)  # One paged organization inventory read.
+        if key is not None and not inventory.partial_reasons:  # Never keep a partial, malformed, or failed answer.
+            ORG_INVENTORY_CACHE.put(key, inventory.records)  # The cache also refuses an empty answer.
+    grouped = inventory_reads_by_site(inventory, site_ids)  # One linear partition for every selected site.
+    setattr(g, ORG_INVENTORY_REQUEST_KEY, grouped)  # The per-site builders share this request-owned map.
+
+
+def uses_org_inventory_defaults() -> bool:
+    """Report whether production inventory builders own this request."""
+    return (  # Any injected or directly replaced builder keeps its earlier per-site behavior.
+        current_app.config.get(OPTIONS_VIEW_CONFIG_KEY) is None
+        and current_app.config.get(OPTIONS_BUILDER_CONFIG_KEY) is None
+        and build_options_view is DEFAULT_OPTIONS_VIEW_BUILDER
+        and build_options_record is DEFAULT_OPTIONS_RECORD_BUILDER
+    )
 
 
 def writes_enabled() -> bool:
@@ -585,6 +640,8 @@ def _aggregate_option_record(org_id: str, site_ids: list[str], options: Mapping[
     cloud_session = current_cloud_session()  # The inventory and version reads use the signed operator session.
     if cloud_session is None:  # No cloud scope can validate a target.
         raise ValueError("The organization upgrade context is incomplete.")
+    if uses_org_inventory_defaults():  # Injected per-site seams keep their existing read behavior.
+        prepare_org_inventory(cloud_session, org_id, site_ids)  # One org read serves every selected site.
     selected = _selected_families(options)  # Keep the checked family order.
     every_site_planned = current_retry_plan() is None  # Issue #3247: the request cache holds the retry plan.
     records = OrgSiteRecords(every_site_planned)  # Issue #3389: collect the targets and the options of each site.
@@ -1127,6 +1184,14 @@ def _option_device_views(org_id: str, rows: Sequence[Mapping[str, Any]]) -> list
     cloud_session = current_cloud_session()  # The options page reads the same inventory as the single-site page.
     if cloud_session is None:  # A signed session normally supplies the cloud connection.
         return []  # Show no device without a cloud connection.
+    if (  # The production view uses one organization read. An injected view owns its own records.
+        current_app.config.get(OPTIONS_VIEW_CONFIG_KEY) is None and build_options_view is DEFAULT_OPTIONS_VIEW_BUILDER
+    ):
+        prepare_org_inventory(
+            cloud_session,
+            org_id,
+            [str(row["site_id"]) for row in rows],
+        )
     logger.info("Read the option device views of %s site(s)", len(rows))  # Log before the inventory reads.
     device_views = []  # Keep one visible device list for each selected site.
     for row in rows:  # Each site keeps its identity beside its devices.
