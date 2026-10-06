@@ -7,10 +7,11 @@ Why:
     sites with no capture to compare against after the upgrade. This journey
     proves the same rule in a real browser for each selected site.
 
-    The file name sorts before each journey that submits a multi-site
-    operation. The second stand-in site therefore holds no pre-check when this
-    journey opens the confirmation page. The journey ends with a submit and a
-    cancel, so both stand-in sites go back for the later browser tests.
+    Issue #3537. Another journey can leave a verified pre-check on the second
+    stand-in site. This journey names that exact inherited capture in an
+    E2E-only request header. The process-owned store ignores that capture and
+    accepts the new capture that this journey takes. The initial state is
+    therefore independent from the browser test order.
 
     Issue #3360. The shipped adopter adopts only a pre-check that names no
     run. The first stand-in site holds one seeded pre-check of that kind and
@@ -34,6 +35,7 @@ import pytest
 from tests.e2e.upgrade_portal.org_cancel_steps import JOB_PATH, OrgCancelSteps
 from tests.e2e.upgrade_portal.org_precheck_steps import CAPTURE_PREFIX, OrgPrecheckSteps
 from tests.support.upgrade_portal_e2e.model_version_picker import ModelVersionPicker  # Select actual device versions.
+from tests.support.upgrade_portal_e2e.records.portal import IGNORED_PRECHECK_HEADER, PortalRecordStore
 
 if TYPE_CHECKING:
     from playwright.sync_api import Page, Request
@@ -92,8 +94,48 @@ def is_precheck_start(request: Request) -> bool:
     return request.method == "POST" and "/api/org-upgrades/prechecks/" in request.url  # The start of the card.
 
 
+def establish_missing_precheck(page: Page) -> None:
+    """Hide the exact inherited second-site capture, and then load the missing state."""
+    inherited = capture_of(page, SECOND_SITE_ID)  # A prior journey can leave one reusable capture.
+    if inherited == "None saved":  # A clean server already gives this journey the required state.
+        return  # Keep the normal request path when no inherited capture exists.
+    instruction = json.dumps(  # The store must hide only this capture and only for this site.
+        {"site_id": SECOND_SITE_ID, "capture_id": inherited}
+    )
+    page.set_extra_http_headers({IGNORED_PRECHECK_HEADER: instruction})  # Keep the instruction for each reload.
+    page.reload(wait_until="domcontentloaded")  # Read the confirmation card from the isolated store view.
+
+
 class TestMultiSitePrecheckGate:
     """Take each missing pre-check, start the operation, and read the stored captures."""
+
+    def test_the_store_replaces_the_ignored_inherited_precheck(self) -> None:
+        """The request filter hides the inherited capture but keeps a new capture visible."""
+        from flask import Flask  # Build one request context without the browser server.
+
+        store = PortalRecordStore("issue-3537")  # Own only the records of this direct regression test.
+        inherited = {  # Match every safe pre-check field that the store requires.
+            "capture_id": "inherited-precheck",
+            "site_id": SECOND_SITE_ID,
+            "role": "pre",
+            "run_id": "",
+            "state": "verified",
+            "started_at": "2026-10-06T01:00:00+00:00",
+        }
+        store.write_capture(inherited)  # Reproduce the pre-check that an earlier browser journey left.
+        instruction = json.dumps(  # Name the one inherited record that this journey must not adopt.
+            {"site_id": SECOND_SITE_ID, "capture_id": inherited["capture_id"]}
+        )
+        app = Flask(__name__)  # Flask owns the request header that the process store reads.
+        with app.test_request_context(headers={IGNORED_PRECHECK_HEADER: instruction}):
+            assert store.newest_precheck(SECOND_SITE_ID) == ""  # The isolated journey starts with a missing row.
+            replacement = {  # The new browser capture differs only in its identity and start time.
+                **inherited,
+                "capture_id": "journey-precheck",
+                "started_at": "2026-10-06T02:00:00+00:00",
+            }
+            store.write_capture(replacement)  # Simulate the capture that the missing button starts.
+            assert store.newest_precheck(SECOND_SITE_ID) == "journey-precheck"  # The new capture unlocks the gate.
 
     def test_the_gate_locks_the_start_until_each_site_holds_a_pre_check(
         self, firmware_operator_page: Page, tmp_path: Path
@@ -101,6 +143,7 @@ class TestMultiSitePrecheckGate:
         """The operator takes the missing pre-check, retakes both, and starts the upgrade."""
         page = firmware_operator_page  # This path starts firmware, so it needs a reachable operator address.
         open_confirmation(page)  # Both sites are selected and the plan is saved.
+        establish_missing_precheck(page)  # Issue #3537: establish the missing row without file-order assumptions.
         first_row = page.get_by_test_id(f"org-upgrade-precheck-row-{SITE_ID}")  # The first site row.
         sync_api.expect(first_row).to_have_attribute("data-ready", "true")  # Issue #3360: a standalone seed exists.
         first_capture = capture_of(page, SITE_ID)  # The capture that the card adopted for the first site.
