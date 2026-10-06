@@ -211,14 +211,14 @@ def _marker_keys(page: Any, prefix: str) -> list[str]:
     return [str(marker)[len(prefix) :] for marker in markers if marker]
 
 
-def _first_site_id(page: Any) -> str:
-    """Open the site picker and return the identifier of the first site row.
+def _listed_site_id(page: Any) -> str:
+    """Open the site picker and return the identifier of a listed site.
 
     Args:
         page: The Playwright page object.
 
     Returns:
-        The site identifier of the first row.
+        The site identifier of a listed row.
     """
     _require_built_route(_page_status(page, SITE_PAGE_PATH), SITE_PAGE_PATH)
     keys = _marker_keys(page, SITE_ROW_PREFIX)
@@ -275,7 +275,7 @@ def _post_the_run(page: Any, path: str) -> Any:
 
     Args:
         page: The browser page that points at the portal.
-        path: The create endpoint of the first site.
+        path: The create endpoint of the listed site.
 
     Returns:
         The answer of the create call.
@@ -329,7 +329,7 @@ def fixture_run_ledger() -> RunLedger:
 
     Why:
         Issue #3511. The teardown of `run_id` ends each run of this ledger, so
-        no stop test leaves a live run at the first site for a later module.
+        no stop test leaves a live run at the listed site for a later module.
 
     Returns:
         The ledger of this test.
@@ -367,7 +367,7 @@ def _end_the_stop_runs(page: Any, ledger: RunLedger) -> None:
 
 @pytest.fixture
 def run_id(portal_page: Any, run_ledger: RunLedger) -> Iterator[str]:
-    """Create one upgrade run for the first site, yield its key, and then end the run.
+    """Create one upgrade run for the listed site, yield its key, and then end the run.
 
     Why:
         The run page needs a run key, and the contract fixes no page that lists
@@ -389,7 +389,7 @@ def run_id(portal_page: Any, run_ledger: RunLedger) -> Iterator[str]:
         AssertionError: If the create call fails, or if a cancel of the
             teardown answers a refusal.
     """
-    path = RUNS_API_TEMPLATE.format(site_id=_first_site_id(portal_page))  # The create path of the first site.
+    path = RUNS_API_TEMPLATE.format(site_id=_listed_site_id(portal_page))  # The create path of the listed site.
     answer = _post_the_run(portal_page, path)  # A fault of the portal fails here.
     yield _run_key(answer, path, run_ledger)  # The test opens this run.
     _end_the_stop_runs(portal_page, run_ledger)  # Issue #3511: the next create call at this site then answers 201.
