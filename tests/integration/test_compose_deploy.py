@@ -55,7 +55,7 @@ class TestComposeDeployment:
 
     def test_router_health_check_all_green(self):
         from src.foundation.persistence.db import DatabaseConfig
-        from src.foundation.persistence.db.router import DatabaseRouter
+        from src.foundation.persistence.db.coordination.router import DatabaseRouter
 
         config = DatabaseConfig.from_env()
         router = DatabaseRouter(config)
@@ -69,7 +69,7 @@ class TestComposeDeployment:
     def test_csv_output_unchanged(self):
         """Verify CSV output is not affected by polyglot routing."""
         from src.foundation.persistence.db import DatabaseConfig, WriteResult
-        from src.foundation.persistence.db.router import DatabaseRouter
+        from src.foundation.persistence.db.coordination.router import DatabaseRouter
 
         config = DatabaseConfig.from_env()
         router = DatabaseRouter(config)

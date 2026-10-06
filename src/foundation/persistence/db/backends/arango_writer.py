@@ -18,8 +18,9 @@ import structlog  # WHY: structured logging for observability of writes and edge
 from arango import ArangoClient  # type: ignore[attr-defined]  # WHY: python-arango client entrypoint
 from arango.collection import StandardCollection
 
-from src.foundation.persistence.db import ARANGO_DEFAULT_HOSTNAME, DatabaseConfig, WriteResult, host_resolver
-from src.foundation.persistence.db.database_schema_utils import ArangoIndexManager, ArangoIndexState
+from src.foundation.persistence.db import ARANGO_DEFAULT_HOSTNAME, DatabaseConfig, WriteResult
+from src.foundation.persistence.db.support import host_resolver
+from src.foundation.persistence.db.support.database_schema_utils import ArangoIndexManager, ArangoIndexState
 
 logger = structlog.get_logger(__name__)  # WHY: module-scoped logger tags every event
 

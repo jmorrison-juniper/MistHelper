@@ -214,8 +214,8 @@ def _drop_cached_handle() -> Iterator[None]:
 @pytest.fixture(autouse=True)
 def _isolate_store_dns(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     """Keep store client tests independent of operating system DNS."""
-    from src.foundation.persistence.db import host_resolver
-    from src.foundation.persistence.db.host_resolver import BoundedHostResolver
+    from src.foundation.persistence.db.support import host_resolver
+    from src.foundation.persistence.db.support.host_resolver import BoundedHostResolver
     from tests.unit.db_discovery.fakes import ControlledResolver
 
     lookup = ControlledResolver()

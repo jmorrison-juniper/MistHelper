@@ -13,9 +13,10 @@ from arango.exceptions import ArangoServerError
 from arango.request import Request
 from arango.response import Response
 
-from src.foundation.persistence.db import DatabaseConfig, host_resolver
-from src.foundation.persistence.db.host_resolver import ResolutionResult
-from src.foundation.persistence.db.router import DatabaseRouter
+from src.foundation.persistence.db import DatabaseConfig
+from src.foundation.persistence.db.coordination.router import DatabaseRouter
+from src.foundation.persistence.db.support import host_resolver
+from src.foundation.persistence.db.support.host_resolver import ResolutionResult
 from tests.unit.db_discovery.fakes import ResolverHarness
 
 DISCOVERY_ENV = {
@@ -88,7 +89,7 @@ class TestPartialBackendBoundary:
 
     def test_redis_preflight_reuses_the_failed_configuration_lookup(self, discovery: ResolverHarness) -> None:
         """A resolved ArangoDB name must not leave repeated Redis DNS."""
-        from src.foundation.persistence.db.redis_writer import RedisTimeSeriesWriter
+        from src.foundation.persistence.db.backends.redis_writer import RedisTimeSeriesWriter
 
         resolver = discovery.lookup
         resolver.answers["missing-arango.invalid"] = resolver.addresses()
@@ -111,8 +112,8 @@ class TestPartialBackendBoundary:
         self, discovery: ResolverHarness, record_property
     ) -> None:
         """Refuse the unresolved backend before its driver while keeping Redis available."""
-        from src.foundation.persistence.db import arango_writer
-        from src.foundation.persistence.db import router as router_module
+        from src.foundation.persistence.db.backends import arango_writer
+        from src.foundation.persistence.db.coordination import router as router_module
 
         config = self._partial_config(discovery)
         discovery.lookup.blocked_hosts.add("missing-arango.invalid")
@@ -313,7 +314,7 @@ class TestPreflightCacheEdges:
         assert discovery.lookup.calls == []
 
     def test_redis_json_and_timeseries_share_one_preflight_result(self, discovery: ResolverHarness) -> None:
-        from src.foundation.persistence.db import redis_writer
+        from src.foundation.persistence.db.backends import redis_writer
 
         discovery.lookup.answers["missing-redis.invalid"] = discovery.lookup.addresses()
         with (
@@ -331,7 +332,7 @@ class TestPreflightCacheEdges:
     def test_redis_preflight_has_a_real_deadline_and_preserves_error_cause(
         self, discovery: ResolverHarness, record_property
     ) -> None:
-        from src.foundation.persistence.db.redis_writer import RedisTimeSeriesWriter
+        from src.foundation.persistence.db.backends.redis_writer import RedisTimeSeriesWriter
 
         discovery.lookup.blocked_hosts.add("blocked-redis.invalid")
         started = time.monotonic()

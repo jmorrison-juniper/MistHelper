@@ -29,7 +29,7 @@ import pytest
 import redis
 from flask.testing import FlaskClient
 
-from src.foundation.persistence.db import router as db_router
+from src.foundation.persistence.db.coordination import router as db_router
 from src.interfaces.portals.upgrade_portal.app import factory
 from src.interfaces.portals.upgrade_portal.capture import store
 

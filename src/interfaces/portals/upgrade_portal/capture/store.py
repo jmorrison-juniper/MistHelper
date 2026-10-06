@@ -31,7 +31,8 @@ from arango.client import ArangoClient
 from arango.exceptions import ArangoError  # WHY: narrow store handlers to python-arango driver failures
 
 from src.foundation.models.dataclasses.export_backend_options import ExportBackendOptions
-from src.foundation.persistence.db import ARANGO_DEFAULT_HOSTNAME, DatabaseConfig, host_resolver
+from src.foundation.persistence.db import ARANGO_DEFAULT_HOSTNAME, DatabaseConfig
+from src.foundation.persistence.db.support import host_resolver
 from src.operations.exporting.export.data_exporter import DataExporter
 
 logger = logging.getLogger(__name__)

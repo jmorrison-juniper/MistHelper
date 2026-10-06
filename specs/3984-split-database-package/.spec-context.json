@@ -1,0 +1,18 @@
+{
+  "feature": "3984-split-database-package",
+  "issue": 3984,
+  "branch": "jmorrison-juniper-refactor-3984-split-database-package",
+  "currentStep": "plan",
+  "status": "planned",
+  "artifacts": [
+    "spec.md",
+    "plan.md",
+    "research.md",
+    "data-model.md",
+    "quickstart.md",
+    "contracts/canonical-imports.md"
+  ],
+  "workflow": "speckit",
+  "specName": "Split Database Package",
+  "history": []
+}

@@ -10,7 +10,7 @@ import pytest  # The tests replace production constructors with refusal traps.
 from flask import Flask  # The direct seam test needs one application config.
 
 from src.foundation.persistence.db import DatabaseConfig  # The required real configuration boundary.
-from src.foundation.persistence.db.router import DatabaseRouter  # The required real lifecycle boundary.
+from src.foundation.persistence.db.coordination.router import DatabaseRouter  # The required real lifecycle boundary.
 from src.interfaces.portals.upgrade_portal.app import factory, wiring  # The two lifecycle owners under test.
 
 

@@ -15,7 +15,7 @@ from requests.exceptions import ConnectionError as RequestConnectionError
 from requests.exceptions import Timeout
 
 from src.foundation.persistence.db import WriteResult
-from src.foundation.persistence.db.arango_writer import ArangoDBWriter
+from src.foundation.persistence.db.backends.arango_writer import ArangoDBWriter
 from src.foundation.support.refactors.endpoint_primary_key_strategies import ENDPOINT_PRIMARY_KEY_STRATEGIES
 from tests.unit.arango_indexes.fakes import (
     ArangoIndexCollectionFake,
@@ -141,7 +141,7 @@ class TestIndexFailureAndRetry:
         writer_harness.database.create_collection(api_name)
         collection = writer_harness.database.collections[api_name]
         collection.state.failures[strategy["indexes"][1]] = collection.index_error(403)
-        with patch("src.foundation.persistence.db.database_schema_utils.index_logger") as log:
+        with patch("src.foundation.persistence.db.support.database_schema_utils.index_logger") as log:
             log.bind.return_value = log
             writer = writer_harness.writer()
             with pytest.raises(IndexCreateError, match="HTTP 403"):

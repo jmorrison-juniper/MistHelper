@@ -51,7 +51,9 @@ class SourceDependencyResolverService:
         ),
         "DataExporter": "src.operations.exporting.export.data_exporter",  # Resolve data exporter from src.
         "DataProcessingUtils": "src.foundation.models.data.data_processing_utils",  # Resolve data helper from src.
-        "DatabaseSchemaUtils": "src.foundation.persistence.db.database_schema_utils",  # Resolve schema helper from src.
+        "DatabaseSchemaUtils": (
+            "src.foundation.persistence.db.support.database_schema_utils"  # Resolve schema helper from src.
+        ),
         "DeviceDataFetcher": "src.foundation.support.refactors.device_data_fetcher",  # Resolve device fetcher from src.
         "DeviceUtils": "src.mist.resources.device.device_utils",  # Resolve device helper from src.
         "E911BSSIDReportGenerator": "src.mist.intelligence.reports.e911_bssid",  # Resolve E911 report helper from src.

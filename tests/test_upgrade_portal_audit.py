@@ -233,7 +233,7 @@ class TestAuditLogger(unittest.TestCase):
         WHY: verify log entry is written correctly.
         """
         # WHY: setup mock success response
-        from src.foundation.persistence.db.router import WriteResult  # WHY: import result type
+        from src.foundation.persistence.db.coordination.router import WriteResult  # WHY: import result type
 
         self.mock_db.write.return_value = WriteResult(  # WHY: mock success
             success=True,  # WHY: success flag
@@ -262,7 +262,7 @@ class TestAuditLogger(unittest.TestCase):
         WHY: verify sensitive details are masked before writing.
         """
         # WHY: setup mock success response
-        from src.foundation.persistence.db.router import WriteResult  # WHY: import result type
+        from src.foundation.persistence.db.coordination.router import WriteResult  # WHY: import result type
 
         self.mock_db.write.return_value = WriteResult(  # WHY: mock success
             success=True,  # WHY: success flag
@@ -294,7 +294,7 @@ class TestAuditLogger(unittest.TestCase):
         WHY: verify capture-specific logging works.
         """
         # WHY: setup mock success response
-        from src.foundation.persistence.db.router import WriteResult  # WHY: import result type
+        from src.foundation.persistence.db.coordination.router import WriteResult  # WHY: import result type
 
         self.mock_db.write.return_value = WriteResult(  # WHY: mock success
             success=True,  # WHY: success flag
@@ -323,7 +323,7 @@ class TestAuditLogger(unittest.TestCase):
         WHY: verify validation failures are logged correctly.
         """
         # WHY: setup mock success response
-        from src.foundation.persistence.db.router import WriteResult  # WHY: import result type
+        from src.foundation.persistence.db.coordination.router import WriteResult  # WHY: import result type
 
         self.mock_db.write.return_value = WriteResult(  # WHY: mock success
             success=True,  # WHY: success flag
@@ -367,7 +367,7 @@ class TestAuditLogger(unittest.TestCase):
         WHY: verify masking can be disabled for specific use cases.
         """
         # WHY: setup mock success response
-        from src.foundation.persistence.db.router import WriteResult  # WHY: import result type
+        from src.foundation.persistence.db.coordination.router import WriteResult  # WHY: import result type
 
         self.mock_db.write.return_value = WriteResult(  # WHY: mock success
             success=True,  # WHY: success flag

@@ -37,7 +37,7 @@ def config() -> DatabaseConfig:  # WHY: fixture / helper function
 def mock_arango_client():  # WHY: fixture / helper function
     """Patch ArangoClient and return mock objects."""
     with patch(
-        "src.foundation.persistence.db.arango_writer.ArangoClient"
+        "src.foundation.persistence.db.backends.arango_writer.ArangoClient"
     ) as mock_cls:  # WHY: isolate side effects via patch
         mock_client = MagicMock()  # WHY: create mock double for python-arango
         mock_cls.return_value = mock_client  # WHY: prime mock return value
@@ -62,7 +62,7 @@ class TestArangoDBWriterInit:  # WHY: pytest test class
     """Tests for ArangoDBWriter.__init__."""
 
     def test_connects_and_ensures_database(self, config, mock_arango_client):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ArangoDBWriter,
         )  # WHY: import ArangoDBWriter symbol under test
 
@@ -71,7 +71,7 @@ class TestArangoDBWriterInit:  # WHY: pytest test class
         assert writer._db is mock_arango_client["db"]  # WHY: prove the writer stored the selected application DB
 
     def test_creates_database_if_missing(self, config, mock_arango_client):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ArangoDBWriter,
         )  # WHY: import ArangoDBWriter symbol under test
 
@@ -84,7 +84,7 @@ class TestArangoDBWriterWrite:  # WHY: pytest test class
     """Tests for ArangoDBWriter.write."""
 
     def test_upsert_with_natural_pk(self, config, mock_arango_client):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ArangoDBWriter,
         )  # WHY: local import avoids side effects during test collection
 
@@ -107,7 +107,7 @@ class TestArangoDBWriterWrite:  # WHY: pytest test class
         assert doc_shape == ("uuid-1", True)  # WHY: one assertion covers both doc contracts
 
     def test_auto_creates_collection(self, config, mock_arango_client):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ArangoDBWriter,
         )  # WHY: import ArangoDBWriter symbol under test
 
@@ -127,7 +127,7 @@ class TestArangoDBWriterWrite:  # WHY: pytest test class
         assert result.success is True  # WHY: verify expected behavior
 
     def test_auto_increment_with_unique(self, config, mock_arango_client):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ArangoDBWriter,
         )  # WHY: import ArangoDBWriter symbol under test
 
@@ -150,7 +150,7 @@ class TestArangoDBWriterWrite:  # WHY: pytest test class
         assert "_key" in docs[0]  # WHY: verify expected behavior
 
     def test_handles_insert_error_gracefully(self, config, mock_arango_client):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ArangoDBWriter,
         )  # WHY: import ArangoDBWriter symbol under test
 
@@ -168,7 +168,7 @@ class TestArangoDBWriterWrite:  # WHY: pytest test class
         assert result.records_failed == 1  # WHY: verify expected behavior
 
     def test_updated_at_timestamp(self, config, mock_arango_client):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ArangoDBWriter,
         )  # WHY: import ArangoDBWriter symbol under test
 
@@ -191,7 +191,7 @@ class TestArangoDBWriterGraph:  # WHY: pytest test class
     """Tests for graph creation and edge management."""
 
     def test_creates_graph_on_init(self, config, mock_arango_client):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ArangoDBWriter,
         )  # WHY: import ArangoDBWriter symbol under test
 
@@ -205,7 +205,7 @@ class TestArangoDBWriterSoftDelete:  # WHY: pytest test class
     """Tests for soft-delete logic."""
 
     def test_marks_absent_entities_deleted(self, config, mock_arango_client):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ArangoDBWriter,
         )  # WHY: import ArangoDBWriter symbol under test
 
@@ -228,7 +228,7 @@ class TestArangoDBWriterSoftDelete:  # WHY: pytest test class
         assert isinstance(update_doc["_misthelper_deleted_at"], int)  # WHY: prove the writer stamped a delete time
 
     def test_clears_deleted_on_reappearance(self, config, mock_arango_client):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ArangoDBWriter,
         )  # WHY: import ArangoDBWriter symbol under test
 
@@ -251,7 +251,7 @@ class TestArangoDBWriterSnapshot:  # WHY: pytest test class
     """Tests for config snapshot deduplication and entity edges."""
 
     def test_skips_duplicate_snapshot(self, config, mock_arango_client):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ArangoDBWriter,
         )  # WHY: import ArangoDBWriter symbol under test
 
@@ -276,7 +276,7 @@ class TestArangoDBWriterSnapshot:  # WHY: pytest test class
         assert result is False  # WHY: verify expected behavior
 
     def test_snapshot_creates_entity_edge(self, config, mock_arango_client):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ArangoDBWriter,
         )  # WHY: import ArangoDBWriter symbol under test
 
@@ -304,7 +304,7 @@ class TestArangoDBWriterSnapshot:  # WHY: pytest test class
         assert edge_doc["entity_type"] == "listOrgSites"  # WHY: verify expected behavior
 
     def test_snapshot_skips_edge_for_unknown_entity_type(self, config, mock_arango_client):  # WHY: pytest discovers thi
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ArangoDBWriter,
         )  # WHY: import ArangoDBWriter symbol under test
 
@@ -396,7 +396,7 @@ class TestArangoDBWriterEdgeKey:  # WHY: pytest test class
     """Tests for _edge_key deterministic hash."""
 
     def test_edge_key_is_deterministic(self, config, mock_arango_client):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ArangoDBWriter,
         )  # WHY: import ArangoDBWriter symbol under test
 
@@ -406,7 +406,7 @@ class TestArangoDBWriterEdgeKey:  # WHY: pytest test class
         assert key1 == key2  # WHY: verify expected behavior
 
     def test_edge_key_differs_for_different_inputs(self, config, mock_arango_client):  # WHY: pytest discovers this by n
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ArangoDBWriter,
         )  # WHY: import ArangoDBWriter symbol under test
 
@@ -416,7 +416,7 @@ class TestArangoDBWriterEdgeKey:  # WHY: pytest test class
         assert key1 != key2  # WHY: verify expected behavior
 
     def test_edge_key_is_16_chars(self, config, mock_arango_client):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ArangoDBWriter,
         )  # WHY: import ArangoDBWriter symbol under test
 
@@ -429,7 +429,7 @@ class TestResolveNestedField:  # WHY: pytest test class
     """Tests for _resolve_nested_field dot-path FK resolution."""
 
     def test_simple_field(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ArangoDBWriter,
         )  # WHY: import ArangoDBWriter symbol under test
 
@@ -437,7 +437,7 @@ class TestResolveNestedField:  # WHY: pytest test class
         assert ArangoDBWriter._resolve_nested_field(record, "site_id") == "abc123"  # WHY: verify expected behavior
 
     def test_nested_field(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ArangoDBWriter,
         )  # WHY: import ArangoDBWriter symbol under test
 
@@ -446,7 +446,7 @@ class TestResolveNestedField:  # WHY: pytest test class
         assert result == ["s1", "s2"]  # WHY: verify expected behavior
 
     def test_missing_top_level(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ArangoDBWriter,
         )  # WHY: import ArangoDBWriter symbol under test
 
@@ -454,7 +454,7 @@ class TestResolveNestedField:  # WHY: pytest test class
         assert ArangoDBWriter._resolve_nested_field(record, "matching.site_ids") is None  # WHY: verify expected behavio
 
     def test_missing_nested(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ArangoDBWriter,
         )  # WHY: import ArangoDBWriter symbol under test
 
@@ -462,7 +462,7 @@ class TestResolveNestedField:  # WHY: pytest test class
         assert ArangoDBWriter._resolve_nested_field(record, "matching.site_ids") is None  # WHY: verify expected behavio
 
     def test_deeply_nested(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ArangoDBWriter,
         )  # WHY: import ArangoDBWriter symbol under test
 
@@ -470,7 +470,7 @@ class TestResolveNestedField:  # WHY: pytest test class
         assert ArangoDBWriter._resolve_nested_field(record, "a.b.c") == "deep"  # WHY: verify expected behavior
 
     def test_non_dict_intermediate(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ArangoDBWriter,
         )  # WHY: import ArangoDBWriter symbol under test
 
@@ -482,21 +482,21 @@ class TestArangoDBWriterSanitizeKey:  # WHY: pytest test class
     """Tests for _sanitize_key."""
 
     def test_sanitize_replaces_slash(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ArangoDBWriter,
         )  # WHY: import ArangoDBWriter symbol under test
 
         assert ArangoDBWriter._sanitize_key("a/b/c") == "a_b_c"  # WHY: verify expected behavior
 
     def test_sanitize_replaces_colon(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ArangoDBWriter,
         )  # WHY: import ArangoDBWriter symbol under test
 
         assert ArangoDBWriter._sanitize_key("a:b:c") == "a_b_c"  # WHY: verify expected behavior
 
     def test_sanitize_preserves_valid_key(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ArangoDBWriter,
         )  # WHY: import ArangoDBWriter symbol under test
 
@@ -507,7 +507,7 @@ class TestArangoDBWriterEnsureTargetVertices:  # WHY: pytest test class
     """Tests for _ensure_target_vertices runtime behavior."""
 
     def test_creates_stub_vertices_for_array_fk(self, config, mock_arango_client):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ArangoDBWriter,
         )  # WHY: import ArangoDBWriter symbol under test
 
@@ -531,7 +531,7 @@ class TestArangoDBWriterEnsureTargetVertices:  # WHY: pytest test class
         assert "sg-2" in stub_keys  # WHY: verify expected behavior
 
     def test_skips_empty_fk_values(self, config, mock_arango_client):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ArangoDBWriter,
         )  # WHY: import ArangoDBWriter symbol under test
 
@@ -548,7 +548,7 @@ class TestArangoDBWriterEnsureTargetVertices:  # WHY: pytest test class
         mock_collection.import_bulk.assert_not_called()  # WHY: test line
 
     def test_creates_stub_for_scalar_fk(self, config, mock_arango_client):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ArangoDBWriter,
         )  # WHY: import ArangoDBWriter symbol under test
 
@@ -571,7 +571,7 @@ class TestArangoDBWriterBuildEdges:  # WHY: pytest test class
     """Tests for _build_edges with array FK support."""
 
     def test_builds_edges_for_array_fk(self, config, mock_arango_client):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ArangoDBWriter,
         )  # WHY: import ArangoDBWriter symbol under test
 
@@ -595,7 +595,7 @@ class TestArangoDBWriterBuildEdges:  # WHY: pytest test class
         assert "sitegroups/sg-2" in to_ids  # WHY: verify expected behavior
 
     def test_builds_edges_for_scalar_fk(self, config, mock_arango_client):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ArangoDBWriter,
         )  # WHY: import ArangoDBWriter symbol under test
 
@@ -618,7 +618,7 @@ class TestArangoDBWriterBuildEdges:  # WHY: pytest test class
         assert edges[0]["_to"] == "templates/tmpl-1"  # WHY: verify expected behavior
 
     def test_skips_records_missing_to_field(self, config, mock_arango_client):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ArangoDBWriter,
         )  # WHY: import ArangoDBWriter symbol under test
 
@@ -643,7 +643,7 @@ class TestArangoDBWriterMarkAbsent:  # WHY: pytest test class
     """Tests for mark_absent_as_deleted edge cases."""
 
     def test_skips_nonexistent_collection(self, config, mock_arango_client):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ArangoDBWriter,
         )  # WHY: import ArangoDBWriter symbol under test
 
@@ -656,7 +656,7 @@ class TestArangoDBWriterMarkAbsent:  # WHY: pytest test class
         mock_db.collection.assert_not_called()  # WHY: test line
 
     def test_skips_already_deleted_docs(self, config, mock_arango_client):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ArangoDBWriter,
         )  # WHY: import ArangoDBWriter symbol under test
 
@@ -676,7 +676,7 @@ class TestArangoDBWriterMarkAbsent:  # WHY: pytest test class
         mock_collection.update.assert_not_called()  # WHY: test line
 
     def test_does_not_delete_present_keys(self, config, mock_arango_client):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ArangoDBWriter,
         )  # WHY: import ArangoDBWriter symbol under test
 
@@ -700,7 +700,7 @@ class TestArangoDBWriterBackfillEdges:  # WHY: pytest test class
     """Tests for _backfill_snapshot_edges."""
 
     def test_skips_when_no_config_snapshots(self, config, mock_arango_client):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ArangoDBWriter,
         )  # WHY: import ArangoDBWriter symbol under test
 
@@ -730,7 +730,7 @@ class TestArangoDBWriterBackfillEdges:  # WHY: pytest test class
         return edge_col  # WHY: caller may want to assert on edge_col writes
 
     def test_backfill_creates_missing_edges(self, config, mock_arango_client):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ArangoDBWriter,
         )  # WHY: local import keeps collection-time side effects out
 
@@ -770,7 +770,7 @@ class TestArangoDBWriterBuildVertices:  # WHY: pytest test class
     """Tests for _build_vertices."""
 
     def test_builds_vertex_with_metadata_fields(self, config, mock_arango_client):  # WHY: pytest discovers by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ArangoDBWriter,
         )  # WHY: local import defers side effects to test time
 
@@ -789,7 +789,7 @@ class TestArangoDBWriterBuildVertices:  # WHY: pytest test class
         assert got == expected, f"vertex build mismatch: expected {expected!r}, got {got!r}"  # WHY: single equality
 
     def test_skips_records_missing_key_field(self, config, mock_arango_client):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ArangoDBWriter,
         )  # WHY: import ArangoDBWriter symbol under test
 
@@ -800,7 +800,7 @@ class TestArangoDBWriterBuildVertices:  # WHY: pytest test class
 
     def test_preserves_all_api_fields(self, config, mock_arango_client):  # WHY: pytest discovers by name
         """Issue #182: vertex must contain ALL fields from API response."""
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ArangoDBWriter,  # WHY: local import keeps collection-time import side effects out
         )
 
@@ -821,7 +821,7 @@ class TestArangoDBWriterPopulateGraph:  # WHY: pytest test class
     """Tests for _populate_graph end-to-end with mocked collections."""
 
     def test_populate_graph_for_unmapped_collection(self, config, mock_arango_client):  # WHY: pytest discovers this by
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ArangoDBWriter,
         )  # WHY: import ArangoDBWriter symbol under test
 
@@ -834,7 +834,7 @@ class TestArangoDBWriterPopulateGraph:  # WHY: pytest test class
         # No vertex/edge creation attempted beyond init
 
     def test_populate_graph_creates_org_vertex(self, config, mock_arango_client):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ArangoDBWriter,
         )  # WHY: import ArangoDBWriter symbol under test
 
@@ -856,7 +856,7 @@ class TestArangoDBWriterSiteGuestGraph:  # WHY: pytest test class
     """Tests for site-level guest authorization graph storage (issue #179)."""
 
     def test_site_guest_list_mapping_exists(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -866,7 +866,7 @@ class TestArangoDBWriterSiteGuestGraph:  # WHY: pytest test class
         assert mapping["key_field"] == "id"  # WHY: verify expected behavior
 
     def test_site_guest_search_mapping_exists(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -876,7 +876,7 @@ class TestArangoDBWriterSiteGuestGraph:  # WHY: pytest test class
         assert mapping["key_field"] == "id"  # WHY: verify expected behavior
 
     def test_site_guest_edges_complete(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -1057,7 +1057,7 @@ class TestArangoDBWriterSiteAppsCallsGraph:  # WHY: pytest test class
     """Tests for site-level apps, calls, WAN usage, fingerprints graph storage (issue #183)."""
 
     def test_site_apps_mapping_exists(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: load schema constants for direct assertions
 
@@ -1065,7 +1065,7 @@ class TestArangoDBWriterSiteAppsCallsGraph:  # WHY: pytest test class
         assert_vertex_config("listSiteApps", "applications", "key")  # WHY: vertex+key pair check
 
     def test_site_calls_mapping_exists(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: load schema constants for direct assertions
 
@@ -1073,7 +1073,7 @@ class TestArangoDBWriterSiteAppsCallsGraph:  # WHY: pytest test class
         assert_vertex_config("searchSiteCalls", "calls", "mac")  # WHY: vertex+key pair check
 
     def test_site_wan_usage_mapping_exists(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: load schema constants for direct assertions
 
@@ -1081,7 +1081,7 @@ class TestArangoDBWriterSiteAppsCallsGraph:  # WHY: pytest test class
         assert_vertex_config("searchSiteWanUsage", "wan_usage", "mac")  # WHY: vertex+key pair check
 
     def test_fingerprints_mapping_exists(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: load schema constants for direct assertions
 
@@ -1091,7 +1091,7 @@ class TestArangoDBWriterSiteAppsCallsGraph:  # WHY: pytest test class
         assert_vertex_config("searchOrgClientFingerprints", "fingerprints", "mac")  # WHY: vertex+key pair check
 
     def test_ui_settings_mapping_exists(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: load schema constants for direct assertions
 
@@ -1099,7 +1099,7 @@ class TestArangoDBWriterSiteAppsCallsGraph:  # WHY: pytest test class
         assert_vertex_config("listSiteUiSettings", "ui_settings", "id")  # WHY: vertex+key pair check
 
     def test_troubleshoot_calls_mapping_exists(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: load schema constants for direct assertions
 
@@ -1109,7 +1109,7 @@ class TestArangoDBWriterSiteAppsCallsGraph:  # WHY: pytest test class
         assert_vertex_config("listSiteTroubleshootCalls", "troubleshoot_calls", "mac")  # WHY: vertex+key pair check
 
     def test_site_calls_edges_complete(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: load schema constants for direct assertions
 
@@ -1119,7 +1119,7 @@ class TestArangoDBWriterSiteAppsCallsGraph:  # WHY: pytest test class
         assert_edge_cols_include("searchSiteCalls", {"CallOnDevice"})  # WHY: subset check
 
     def test_wan_usage_edges_complete(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: load schema constants for direct assertions
 
@@ -1129,7 +1129,7 @@ class TestArangoDBWriterSiteAppsCallsGraph:  # WHY: pytest test class
         assert_edge_cols_include("searchSiteWanUsage", {"WanUsageOnDevice", "WanUsagePeerDevice"})  # WHY: subset
 
     def test_troubleshoot_calls_edges_complete(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: load schema constants for direct assertions
 
@@ -1139,7 +1139,7 @@ class TestArangoDBWriterSiteAppsCallsGraph:  # WHY: pytest test class
         assert_edge_cols_include("listSiteTroubleshootCalls", {"TroubleshootCallOnDevice"})  # WHY: subset
 
     def test_apps_calls_edge_definitions_registered(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             EDGE_DEFINITIONS,
         )  # WHY: load schema constants for direct assertions
 
@@ -1157,7 +1157,7 @@ class TestArangoDBWriterSiteAppsCallsGraph:  # WHY: pytest test class
         )
 
     def test_apps_calls_entity_types_mapped(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ENTITY_TYPE_TO_VERTEX,
         )  # WHY: load schema constants for direct assertions
 
@@ -1174,19 +1174,25 @@ class TestArangoDBWriterSiteAppsCallsGraph:  # WHY: pytest test class
         )
 
     def test_apps_no_edges(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import COLLECTION_VERTEX_MAP  # WHY: schema map under test
+        from src.foundation.persistence.db.backends.arango_writer import (
+            COLLECTION_VERTEX_MAP,
+        )  # WHY: schema map under test
 
         assert COLLECTION_VERTEX_MAP["listSiteApps"]["edges"] == []  # WHY: apps have no relational edges
 
     def test_fingerprints_no_edges(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import COLLECTION_VERTEX_MAP  # WHY: schema map under test
+        from src.foundation.persistence.db.backends.arango_writer import (
+            COLLECTION_VERTEX_MAP,
+        )  # WHY: schema map under test
 
         assert (
             COLLECTION_VERTEX_MAP["searchOrgClientFingerprints"]["edges"] == []
         )  # WHY: fingerprints are leaf vertices
 
     def test_ui_settings_no_edges(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import COLLECTION_VERTEX_MAP  # WHY: schema map under test
+        from src.foundation.persistence.db.backends.arango_writer import (
+            COLLECTION_VERTEX_MAP,
+        )  # WHY: schema map under test
 
         assert COLLECTION_VERTEX_MAP["listSiteUiSettings"]["edges"] == []  # WHY: UI settings are leaf vertices
 
@@ -1195,7 +1201,7 @@ class TestArangoDBWriterSLEImpactedGraph:  # WHY: pytest test class
     """Tests for SLE impacted entity graph storage (issue #185)."""
 
     def test_sle_impacted_aps_mapping_exists(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -1205,7 +1211,7 @@ class TestArangoDBWriterSLEImpactedGraph:  # WHY: pytest test class
         assert mapping["key_field"] == "ap_mac"  # WHY: verify expected behavior
 
     def test_sle_impacted_switches_mapping_exists(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -1215,7 +1221,7 @@ class TestArangoDBWriterSLEImpactedGraph:  # WHY: pytest test class
         assert mapping["key_field"] == "switch_mac"  # WHY: verify expected behavior
 
     def test_sle_impacted_gateways_mapping_exists(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -1225,7 +1231,7 @@ class TestArangoDBWriterSLEImpactedGraph:  # WHY: pytest test class
         assert mapping["key_field"] == "gateway_mac"  # WHY: verify expected behavior
 
     def test_sle_impacted_interfaces_mapping_exists(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -1235,7 +1241,7 @@ class TestArangoDBWriterSLEImpactedGraph:  # WHY: pytest test class
         assert mapping["key_field"] == "switch_mac"  # WHY: verify expected behavior
 
     def test_sle_impacted_chassis_mapping_exists(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -1245,7 +1251,7 @@ class TestArangoDBWriterSLEImpactedGraph:  # WHY: pytest test class
         assert mapping["key_field"] == "switch_mac"  # WHY: verify expected behavior
 
     def test_sle_impacted_wireless_clients_mapping_exists(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -1255,7 +1261,7 @@ class TestArangoDBWriterSLEImpactedGraph:  # WHY: pytest test class
         assert mapping["key_field"] == "mac"  # WHY: verify expected behavior
 
     def test_sle_impacted_wired_clients_mapping_exists(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -1265,7 +1271,7 @@ class TestArangoDBWriterSLEImpactedGraph:  # WHY: pytest test class
         assert mapping["key_field"] == "mac"  # WHY: verify expected behavior
 
     def test_sle_impacted_applications_mapping_exists(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -1275,7 +1281,7 @@ class TestArangoDBWriterSLEImpactedGraph:  # WHY: pytest test class
         assert mapping["key_field"] == "app"  # WHY: verify expected behavior
 
     def test_sle_impacted_device_edges(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -1291,7 +1297,7 @@ class TestArangoDBWriterSLEImpactedGraph:  # WHY: pytest test class
             assert "SLEImpactedDevice" in edge_cols, f"{endpoint} missing SLEImpactedDevice"  # WHY: verify expected beh
 
     def test_sle_impacted_client_edges(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -1304,7 +1310,7 @@ class TestArangoDBWriterSLEImpactedGraph:  # WHY: pytest test class
             assert "SLEImpactedClient" in edge_cols, f"{endpoint} missing SLEImpactedClient"  # WHY: verify expected beh
 
     def test_sle_impacted_application_edges(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -1313,7 +1319,7 @@ class TestArangoDBWriterSLEImpactedGraph:  # WHY: pytest test class
         assert "SLEImpactedApplication" in edge_cols  # WHY: verify expected behavior
 
     def test_sle_edge_definitions_registered(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             EDGE_DEFINITIONS,
         )  # WHY: load schema constants for direct assertions
 
@@ -1331,7 +1337,7 @@ class TestArangoDBWriterSLEImpactedGraph:  # WHY: pytest test class
         )
 
     def test_sle_entity_types_mapped(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ENTITY_TYPE_TO_VERTEX,
         )  # WHY: load schema constants for direct assertions
 
@@ -1356,7 +1362,7 @@ class TestArangoDBWriterSiteRoutingGraph:  # WHY: pytest test class
     """Tests for site-level routing / network topology graph storage (issue #177)."""
 
     def test_bgp_stats_mapping_exists(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -1366,7 +1372,7 @@ class TestArangoDBWriterSiteRoutingGraph:  # WHY: pytest test class
         assert mapping["key_field"] == "id"  # WHY: verify expected behavior
 
     def test_ospf_stats_mapping_exists(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -1376,7 +1382,7 @@ class TestArangoDBWriterSiteRoutingGraph:  # WHY: pytest test class
         assert mapping["key_field"] == "id"  # WHY: verify expected behavior
 
     def test_site_ports_mapping_exists(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -1386,7 +1392,7 @@ class TestArangoDBWriterSiteRoutingGraph:  # WHY: pytest test class
         assert mapping["key_field"] == "id"  # WHY: verify expected behavior
 
     def test_evpn_topologies_mapping_exists(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -1396,7 +1402,7 @@ class TestArangoDBWriterSiteRoutingGraph:  # WHY: pytest test class
         assert mapping["key_field"] == "id"  # WHY: verify expected behavior
 
     def test_discovered_switches_mapping_exists(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -1406,7 +1412,7 @@ class TestArangoDBWriterSiteRoutingGraph:  # WHY: pytest test class
         assert mapping["key_field"] == "system_name"  # WHY: verify expected behavior
 
     def test_discovered_switch_metrics_mapping_exists(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -1414,7 +1420,7 @@ class TestArangoDBWriterSiteRoutingGraph:  # WHY: pytest test class
         assert "searchSiteDiscoveredSwitchesMetrics" in COLLECTION_VERTEX_MAP  # WHY: verify expected behavior
 
     def test_rrm_neighbors_mapping_exists(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -1424,7 +1430,7 @@ class TestArangoDBWriterSiteRoutingGraph:  # WHY: pytest test class
         assert mapping["key_field"] == "mac"  # WHY: verify expected behavior
 
     def test_bgp_edges_complete(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -1434,7 +1440,7 @@ class TestArangoDBWriterSiteRoutingGraph:  # WHY: pytest test class
         assert "DeviceHasBGPPeer" in edge_cols  # WHY: verify expected behavior
 
     def test_ospf_edges_complete(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -1444,7 +1450,7 @@ class TestArangoDBWriterSiteRoutingGraph:  # WHY: pytest test class
         assert "DeviceHasOSPFNeighbor" in edge_cols  # WHY: verify expected behavior
 
     def test_site_ports_edges_include_lldp(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -1455,7 +1461,7 @@ class TestArangoDBWriterSiteRoutingGraph:  # WHY: pytest test class
         assert "PortBelongsToDevice" in edge_cols  # WHY: verify expected behavior
 
     def test_evpn_edges_complete(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -1464,7 +1470,7 @@ class TestArangoDBWriterSiteRoutingGraph:  # WHY: pytest test class
         assert "EvpnBelongsToSite" in edge_cols  # WHY: verify expected behavior
 
     def test_discovered_switches_edges_complete(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -1473,7 +1479,7 @@ class TestArangoDBWriterSiteRoutingGraph:  # WHY: pytest test class
         assert "DiscoveredSwitchBelongsToSite" in edge_cols  # WHY: verify expected behavior
 
     def test_rrm_neighbors_edges_complete(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -1482,7 +1488,7 @@ class TestArangoDBWriterSiteRoutingGraph:  # WHY: pytest test class
         assert "RrmNeighborBelongsToSite" in edge_cols  # WHY: verify expected behavior
 
     def test_routing_edge_definitions_registered(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             EDGE_DEFINITIONS,
         )  # WHY: load schema constants for direct assertions
 
@@ -1501,7 +1507,7 @@ class TestArangoDBWriterSiteRoutingGraph:  # WHY: pytest test class
         )
 
     def test_routing_entity_types_mapped(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ENTITY_TYPE_TO_VERTEX,
         )  # WHY: load schema constants for direct assertions
 
@@ -1524,7 +1530,7 @@ class TestArangoDBWriterSiteMapsZonesGraph:  # WHY: pytest test class
     """Tests for site maps, zones & location graph storage (issue #175)."""
 
     def test_maps_mapping_exists(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -1534,7 +1540,7 @@ class TestArangoDBWriterSiteMapsZonesGraph:  # WHY: pytest test class
         assert mapping["key_field"] == "id"  # WHY: verify expected behavior
 
     def test_get_site_map_mapping_exists(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -1544,7 +1550,7 @@ class TestArangoDBWriterSiteMapsZonesGraph:  # WHY: pytest test class
         assert mapping["key_field"] == "id"  # WHY: verify expected behavior
 
     def test_map_stacks_mapping_exists(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -1554,7 +1560,7 @@ class TestArangoDBWriterSiteMapsZonesGraph:  # WHY: pytest test class
         assert mapping["key_field"] == "id"  # WHY: verify expected behavior
 
     def test_zones_mapping_exists(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -1564,7 +1570,7 @@ class TestArangoDBWriterSiteMapsZonesGraph:  # WHY: pytest test class
         assert mapping["key_field"] == "id"  # WHY: verify expected behavior
 
     def test_zone_stats_mapping_exists(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -1574,7 +1580,7 @@ class TestArangoDBWriterSiteMapsZonesGraph:  # WHY: pytest test class
         assert mapping["key_field"] == "id"  # WHY: verify expected behavior
 
     def test_rssi_zones_mapping_exists(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -1584,7 +1590,7 @@ class TestArangoDBWriterSiteMapsZonesGraph:  # WHY: pytest test class
         assert mapping["key_field"] == "id"  # WHY: verify expected behavior
 
     def test_rssi_zone_stats_mapping_exists(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -1594,7 +1600,7 @@ class TestArangoDBWriterSiteMapsZonesGraph:  # WHY: pytest test class
         assert mapping["key_field"] == "id"  # WHY: verify expected behavior
 
     def test_beacons_mapping_exists(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -1604,7 +1610,7 @@ class TestArangoDBWriterSiteMapsZonesGraph:  # WHY: pytest test class
         assert mapping["key_field"] == "id"  # WHY: verify expected behavior
 
     def test_vbeacons_mapping_exists(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -1614,7 +1620,7 @@ class TestArangoDBWriterSiteMapsZonesGraph:  # WHY: pytest test class
         assert mapping["key_field"] == "id"  # WHY: verify expected behavior
 
     def test_zone_sessions_mapping_exists(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -1624,7 +1630,7 @@ class TestArangoDBWriterSiteMapsZonesGraph:  # WHY: pytest test class
         assert mapping["key_field"] == "zone_id"  # WHY: verify expected behavior
 
     def test_map_edges_include_site(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -1633,7 +1639,7 @@ class TestArangoDBWriterSiteMapsZonesGraph:  # WHY: pytest test class
         assert "MapBelongsToSite" in edge_cols  # WHY: verify expected behavior
 
     def test_zone_edges_include_map_and_site(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -1643,7 +1649,7 @@ class TestArangoDBWriterSiteMapsZonesGraph:  # WHY: pytest test class
         assert "ZoneBelongsToSite" in edge_cols  # WHY: verify expected behavior
 
     def test_beacon_edges_include_map_and_site(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -1653,7 +1659,7 @@ class TestArangoDBWriterSiteMapsZonesGraph:  # WHY: pytest test class
         assert "BeaconBelongsToSite" in edge_cols  # WHY: verify expected behavior
 
     def test_vbeacon_edges_include_map(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -1662,7 +1668,7 @@ class TestArangoDBWriterSiteMapsZonesGraph:  # WHY: pytest test class
         assert "VBeaconOnMap" in edge_cols  # WHY: verify expected behavior
 
     def test_zone_session_edges_include_zone_and_map(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -1672,7 +1678,7 @@ class TestArangoDBWriterSiteMapsZonesGraph:  # WHY: pytest test class
         assert "ZoneSessionOnMap" in edge_cols  # WHY: verify expected behavior
 
     def test_maps_zones_edge_definitions_registered(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             EDGE_DEFINITIONS,
         )  # WHY: load schema constants for direct assertions
 
@@ -1695,7 +1701,7 @@ class TestArangoDBWriterSiteMapsZonesGraph:  # WHY: pytest test class
         )
 
     def test_maps_zones_entity_types_mapped(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ENTITY_TYPE_TO_VERTEX,
         )  # WHY: load schema constants for direct assertions
 
@@ -1720,7 +1726,7 @@ class TestArangoDBWriterSiteEventsAlarmsGraph:  # WHY: pytest test class
     """Tests for site events & alarms graph storage (issue #174)."""
 
     def test_site_alarms_mapping_exists(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -1730,7 +1736,7 @@ class TestArangoDBWriterSiteEventsAlarmsGraph:  # WHY: pytest test class
         assert mapping["key_field"] == "id"  # WHY: verify expected behavior
 
     def test_site_alarms_edges(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -1740,7 +1746,7 @@ class TestArangoDBWriterSiteEventsAlarmsGraph:  # WHY: pytest test class
         assert "AlarmOnDevice" in edge_cols  # WHY: verify expected behavior
 
     def test_site_device_events_mapping_exists(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -1750,7 +1756,7 @@ class TestArangoDBWriterSiteEventsAlarmsGraph:  # WHY: pytest test class
         assert mapping["key_field"] == "id"  # WHY: verify expected behavior
 
     def test_site_device_events_edges(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -1760,7 +1766,7 @@ class TestArangoDBWriterSiteEventsAlarmsGraph:  # WHY: pytest test class
         assert "EventOccurredOnDevice" in edge_cols  # WHY: verify expected behavior
 
     def test_site_system_events_mapping_exists(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -1770,7 +1776,7 @@ class TestArangoDBWriterSiteEventsAlarmsGraph:  # WHY: pytest test class
         assert mapping["key_field"] == "id"  # WHY: verify expected behavior
 
     def test_site_system_events_edges(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -1779,7 +1785,7 @@ class TestArangoDBWriterSiteEventsAlarmsGraph:  # WHY: pytest test class
         assert "SystemEventBelongsToSite" in edge_cols  # WHY: verify expected behavior
 
     def test_site_other_device_events_mapping_exists(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -1789,7 +1795,7 @@ class TestArangoDBWriterSiteEventsAlarmsGraph:  # WHY: pytest test class
         assert mapping["key_field"] == "mac"  # WHY: verify expected behavior
 
     def test_site_skyatp_events_mapping_exists(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -1799,7 +1805,7 @@ class TestArangoDBWriterSiteEventsAlarmsGraph:  # WHY: pytest test class
         assert mapping["key_field"] == "mac"  # WHY: verify expected behavior
 
     def test_site_service_path_events_mapping_exists(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -1809,7 +1815,7 @@ class TestArangoDBWriterSiteEventsAlarmsGraph:  # WHY: pytest test class
         assert mapping["key_field"] == "mac"  # WHY: verify expected behavior
 
     def test_site_service_path_events_edges(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -1820,7 +1826,7 @@ class TestArangoDBWriterSiteEventsAlarmsGraph:  # WHY: pytest test class
         assert "ServicePathEventUsesVPN" in edge_cols  # WHY: verify expected behavior
 
     def test_site_roaming_events_mapping_exists(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -1830,7 +1836,7 @@ class TestArangoDBWriterSiteEventsAlarmsGraph:  # WHY: pytest test class
         assert mapping["key_field"] == "client_mac"  # WHY: verify expected behavior
 
     def test_site_roaming_events_edges(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -1840,7 +1846,7 @@ class TestArangoDBWriterSiteEventsAlarmsGraph:  # WHY: pytest test class
         assert "RoamingEventOnDevice" in edge_cols  # WHY: verify expected behavior
 
     def test_site_rrm_events_mapping_exists(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -1850,7 +1856,7 @@ class TestArangoDBWriterSiteEventsAlarmsGraph:  # WHY: pytest test class
         assert mapping["key_field"] == "ap_id"  # WHY: verify expected behavior
 
     def test_site_rrm_events_edges(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -1860,7 +1866,7 @@ class TestArangoDBWriterSiteEventsAlarmsGraph:  # WHY: pytest test class
         assert "RrmEventOnDevice" in edge_cols  # WHY: verify expected behavior
 
     def test_site_anomaly_events_mapping_exists(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -1870,7 +1876,7 @@ class TestArangoDBWriterSiteEventsAlarmsGraph:  # WHY: pytest test class
         assert mapping["key_field"] == "timestamp"  # WHY: verify expected behavior
 
     def test_site_anomaly_events_edges(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -1879,7 +1885,7 @@ class TestArangoDBWriterSiteEventsAlarmsGraph:  # WHY: pytest test class
         assert "AnomalyEventBelongsToSite" in edge_cols  # WHY: verify expected behavior
 
     def test_events_alarms_edge_definitions_registered(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             EDGE_DEFINITIONS,
         )  # WHY: load schema constants for direct assertions
 
@@ -1901,7 +1907,7 @@ class TestArangoDBWriterSiteEventsAlarmsGraph:  # WHY: pytest test class
         )
 
     def test_events_alarms_entity_types_mapped(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ENTITY_TYPE_TO_VERTEX,
         )  # WHY: load schema constants for direct assertions
 
@@ -1921,7 +1927,7 @@ class TestArangoDBWriterSiteEventsAlarmsGraph:  # WHY: pytest test class
         )
 
     def test_service_path_ensure_target_vertices(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -1934,42 +1940,42 @@ class TestConfigHistorySyntheticTestGraphStorage:  # WHY: pytest test class
     """Issue #181: Config history, synthetic tests, webhook deliveries."""
 
     def test_config_history_entity_type(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ENTITY_TYPE_TO_VERTEX,
         )  # WHY: import ENTITY_TYPE_TO_VERTEX symbol under test
 
         assert ENTITY_TYPE_TO_VERTEX["searchSiteDeviceConfigHistory"] == "config_history"  # WHY: verify expected behavi
 
     def test_last_configs_entity_type(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ENTITY_TYPE_TO_VERTEX,
         )  # WHY: import ENTITY_TYPE_TO_VERTEX symbol under test
 
         assert ENTITY_TYPE_TO_VERTEX["searchSiteDeviceLastConfigs"] == "config_history"  # WHY: verify expected behavior
 
     def test_synthetic_test_entity_type(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ENTITY_TYPE_TO_VERTEX,
         )  # WHY: import ENTITY_TYPE_TO_VERTEX symbol under test
 
         assert ENTITY_TYPE_TO_VERTEX["searchSiteSyntheticTest"] == "synthetic_tests"  # WHY: verify expected behavior
 
     def test_webhook_deliveries_entity_type(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ENTITY_TYPE_TO_VERTEX,
         )  # WHY: import ENTITY_TYPE_TO_VERTEX symbol under test
 
         assert ENTITY_TYPE_TO_VERTEX["searchSiteWebhooksDeliveries"] == "webhook_deliveries"  # WHY: verify expected beh
 
     def test_packet_captures_entity_type(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ENTITY_TYPE_TO_VERTEX,
         )  # WHY: import ENTITY_TYPE_TO_VERTEX symbol under test
 
         assert ENTITY_TYPE_TO_VERTEX["listSitePacketCaptures"] == "packet_captures"  # WHY: verify expected behavior
 
     def test_config_history_collection_vertex_map(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -1980,7 +1986,7 @@ class TestConfigHistorySyntheticTestGraphStorage:  # WHY: pytest test class
         assert "ConfigHistoryForDevice" in edge_cols  # WHY: verify expected behavior
 
     def test_last_configs_collection_vertex_map(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -1991,7 +1997,7 @@ class TestConfigHistorySyntheticTestGraphStorage:  # WHY: pytest test class
         assert "ConfigHistoryForDevice" in edge_cols  # WHY: verify expected behavior
 
     def test_synthetic_test_collection_vertex_map(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -2002,7 +2008,7 @@ class TestConfigHistorySyntheticTestGraphStorage:  # WHY: pytest test class
         assert "SyntheticTestOnDevice" in edge_cols  # WHY: verify expected behavior
 
     def test_webhook_deliveries_collection_vertex_map(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -2013,7 +2019,7 @@ class TestConfigHistorySyntheticTestGraphStorage:  # WHY: pytest test class
         assert "WebhookDeliveryFromWebhook" in edge_cols  # WHY: verify expected behavior
 
     def test_packet_captures_collection_vertex_map(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -2025,7 +2031,7 @@ class TestConfigHistorySyntheticTestGraphStorage:  # WHY: pytest test class
         assert "PacketCaptureBelongsToSite" in edge_cols  # WHY: verify expected behavior
 
     def test_edge_definitions_registered(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             EDGE_DEFINITIONS,
         )  # WHY: load schema constants for direct assertions
 
@@ -2046,49 +2052,49 @@ class TestSiteWlansPsksWebhooksGraphStorage:  # WHY: pytest test class
     """Issue #173: Site-level WLANs, PSKs, Webhooks, WxLAN policies."""
 
     def test_site_wlans_entity_type(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ENTITY_TYPE_TO_VERTEX,
         )  # WHY: import ENTITY_TYPE_TO_VERTEX symbol under test
 
         assert ENTITY_TYPE_TO_VERTEX["listSiteWlans"] == "wlans"  # WHY: verify expected behavior
 
     def test_site_psks_entity_type(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ENTITY_TYPE_TO_VERTEX,
         )  # WHY: import ENTITY_TYPE_TO_VERTEX symbol under test
 
         assert ENTITY_TYPE_TO_VERTEX["listSitePsks"] == "psks"  # WHY: verify expected behavior
 
     def test_site_webhooks_entity_type(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ENTITY_TYPE_TO_VERTEX,
         )  # WHY: import ENTITY_TYPE_TO_VERTEX symbol under test
 
         assert ENTITY_TYPE_TO_VERTEX["listSiteWebhooks"] == "webhooks"  # WHY: verify expected behavior
 
     def test_site_wxrules_entity_type(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ENTITY_TYPE_TO_VERTEX,
         )  # WHY: import ENTITY_TYPE_TO_VERTEX symbol under test
 
         assert ENTITY_TYPE_TO_VERTEX["listSiteWxRules"] == "wx_rules"  # WHY: verify expected behavior
 
     def test_site_wxtags_entity_type(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ENTITY_TYPE_TO_VERTEX,
         )  # WHY: import ENTITY_TYPE_TO_VERTEX symbol under test
 
         assert ENTITY_TYPE_TO_VERTEX["listSiteWxTags"] == "wx_tags"  # WHY: verify expected behavior
 
     def test_site_wxtunnels_entity_type(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ENTITY_TYPE_TO_VERTEX,
         )  # WHY: import ENTITY_TYPE_TO_VERTEX symbol under test
 
         assert ENTITY_TYPE_TO_VERTEX["listSiteWxTunnels"] == "mx_tunnels"  # WHY: verify expected behavior
 
     def test_site_wlans_collection_vertex_map(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -2099,7 +2105,7 @@ class TestSiteWlansPsksWebhooksGraphStorage:  # WHY: pytest test class
         assert "WlanUsesWxTunnel" in edge_cols  # WHY: verify expected behavior
 
     def test_site_psks_collection_vertex_map(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -2110,7 +2116,7 @@ class TestSiteWlansPsksWebhooksGraphStorage:  # WHY: pytest test class
         assert "PSKBelongsToWlan" in edge_cols  # WHY: verify expected behavior
 
     def test_site_webhooks_collection_vertex_map(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -2120,7 +2126,7 @@ class TestSiteWlansPsksWebhooksGraphStorage:  # WHY: pytest test class
         assert "WebhookBelongsToSite" in edge_cols  # WHY: verify expected behavior
 
     def test_site_wxrules_collection_vertex_map(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: load schema constants for direct assertions
 
@@ -2132,7 +2138,7 @@ class TestSiteWlansPsksWebhooksGraphStorage:  # WHY: pytest test class
         )
 
     def test_site_wxrules_ensure_target_vertices(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -2143,7 +2149,7 @@ class TestSiteWlansPsksWebhooksGraphStorage:  # WHY: pytest test class
         assert ("dst_deny_wxtags", "wx_tags") in targets  # WHY: verify expected behavior
 
     def test_site_wxtags_collection_vertex_map(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -2153,7 +2159,7 @@ class TestSiteWlansPsksWebhooksGraphStorage:  # WHY: pytest test class
         assert "WxTagBelongsToSite" in edge_cols  # WHY: verify expected behavior
 
     def test_site_wxtunnels_collection_vertex_map(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -2163,7 +2169,7 @@ class TestSiteWlansPsksWebhooksGraphStorage:  # WHY: pytest test class
         assert "WxTunnelBelongsToSite" in edge_cols  # WHY: verify expected behavior
 
     def test_edge_definitions_registered(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             EDGE_DEFINITIONS,
         )  # WHY: load schema constants for direct assertions
 
@@ -2184,77 +2190,77 @@ class TestSiteClientsGraphStorage:  # WHY: pytest test class
     """Issue #172: Site-level client search endpoints."""
 
     def test_wireless_clients_entity_type(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ENTITY_TYPE_TO_VERTEX,
         )  # WHY: import ENTITY_TYPE_TO_VERTEX symbol under test
 
         assert ENTITY_TYPE_TO_VERTEX["searchSiteWirelessClients"] == "clients"  # WHY: verify expected behavior
 
     def test_wired_clients_entity_type(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ENTITY_TYPE_TO_VERTEX,
         )  # WHY: import ENTITY_TYPE_TO_VERTEX symbol under test
 
         assert ENTITY_TYPE_TO_VERTEX["searchSiteWiredClients"] == "clients"  # WHY: verify expected behavior
 
     def test_wan_clients_entity_type(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ENTITY_TYPE_TO_VERTEX,
         )  # WHY: import ENTITY_TYPE_TO_VERTEX symbol under test
 
         assert ENTITY_TYPE_TO_VERTEX["searchSiteWanClients"] == "clients"  # WHY: verify expected behavior
 
     def test_nac_clients_entity_type(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ENTITY_TYPE_TO_VERTEX,
         )  # WHY: import ENTITY_TYPE_TO_VERTEX symbol under test
 
         assert ENTITY_TYPE_TO_VERTEX["searchSiteNacClients"] == "clients"  # WHY: verify expected behavior
 
     def test_nac_client_events_entity_type(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ENTITY_TYPE_TO_VERTEX,
         )  # WHY: import ENTITY_TYPE_TO_VERTEX symbol under test
 
         assert ENTITY_TYPE_TO_VERTEX["searchSiteNacClientEvents"] == "nac_events"  # WHY: verify expected behavior
 
     def test_wireless_client_events_entity_type(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ENTITY_TYPE_TO_VERTEX,
         )  # WHY: import ENTITY_TYPE_TO_VERTEX symbol under test
 
         assert ENTITY_TYPE_TO_VERTEX["searchSiteWirelessClientEvents"] == "client_events"  # WHY: verify expected behavi
 
     def test_wireless_client_sessions_entity_type(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ENTITY_TYPE_TO_VERTEX,
         )  # WHY: import ENTITY_TYPE_TO_VERTEX symbol under test
 
         assert ENTITY_TYPE_TO_VERTEX["searchSiteWirelessClientSessions"] == "client_sessions"  # WHY: verify expected be
 
     def test_wan_client_events_entity_type(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ENTITY_TYPE_TO_VERTEX,
         )  # WHY: import ENTITY_TYPE_TO_VERTEX symbol under test
 
         assert ENTITY_TYPE_TO_VERTEX["searchSiteWanClientEvents"] == "wan_events"  # WHY: verify expected behavior
 
     def test_wireless_clients_stats_entity_type(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ENTITY_TYPE_TO_VERTEX,
         )  # WHY: import ENTITY_TYPE_TO_VERTEX symbol under test
 
         assert ENTITY_TYPE_TO_VERTEX["listSiteWirelessClientsStats"] == "clients"  # WHY: verify expected behavior
 
     def test_unconnected_clients_entity_type(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ENTITY_TYPE_TO_VERTEX,
         )  # WHY: import ENTITY_TYPE_TO_VERTEX symbol under test
 
         assert ENTITY_TYPE_TO_VERTEX["listSiteUnconnectedClientStats"] == "unconnected_clients"  # WHY: verify expected
 
     def test_wireless_clients_edges(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: load schema constants for direct assertions
 
@@ -2266,7 +2272,7 @@ class TestSiteClientsGraphStorage:  # WHY: pytest test class
         )
 
     def test_wired_clients_edges(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: load schema constants for direct assertions
 
@@ -2275,7 +2281,7 @@ class TestSiteClientsGraphStorage:  # WHY: pytest test class
         assert_edge_cols_include("searchSiteWiredClients", {"ClientConnectedToDevice", "ClientBelongsToSite"})  # WHY: s
 
     def test_wan_clients_edges(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: load schema constants for direct assertions
 
@@ -2284,7 +2290,7 @@ class TestSiteClientsGraphStorage:  # WHY: pytest test class
         assert_edge_cols_include("searchSiteWanClients", {"ClientBelongsToSite"})  # WHY: single-edge subset check
 
     def test_nac_clients_edges(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: load schema constants for direct assertions
 
@@ -2296,7 +2302,7 @@ class TestSiteClientsGraphStorage:  # WHY: pytest test class
         )
 
     def test_nac_client_events_edges(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: load schema constants for direct assertions
 
@@ -2308,7 +2314,7 @@ class TestSiteClientsGraphStorage:  # WHY: pytest test class
         )
 
     def test_wireless_client_events_edges(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: load schema constants for direct assertions
 
@@ -2322,7 +2328,7 @@ class TestSiteClientsGraphStorage:  # WHY: pytest test class
         )
 
     def test_wireless_client_events_ensure_targets(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: load schema constants for direct assertions
 
@@ -2332,7 +2338,7 @@ class TestSiteClientsGraphStorage:  # WHY: pytest test class
         assert_ensure_target("searchSiteWirelessClientEvents", ("mac", "clients"))  # WHY: single membership check
 
     def test_wireless_client_sessions_edges(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: load schema constants for direct assertions
 
@@ -2346,7 +2352,7 @@ class TestSiteClientsGraphStorage:  # WHY: pytest test class
         )
 
     def test_wan_client_events_edges(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: load schema constants for direct assertions
 
@@ -2358,7 +2364,7 @@ class TestSiteClientsGraphStorage:  # WHY: pytest test class
         )
 
     def test_unconnected_clients_edges(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: load schema constants for direct assertions
 
@@ -2372,7 +2378,7 @@ class TestSiteClientsGraphStorage:  # WHY: pytest test class
         )
 
     def test_edge_definitions_registered(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             EDGE_DEFINITIONS,
         )  # WHY: load schema constants for direct assertions
 
@@ -2394,7 +2400,7 @@ class TestSiteDevicesGraphStorage:  # WHY: pytest test class
     """Tests for Issue #171: Site-level device graph storage."""
 
     def test_entity_type_mappings(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ENTITY_TYPE_TO_VERTEX,
         )  # WHY: import ENTITY_TYPE_TO_VERTEX symbol under test
 
@@ -2411,14 +2417,14 @@ class TestSiteDevicesGraphStorage:  # WHY: pytest test class
             assert ENTITY_TYPE_TO_VERTEX.get(operation_id) == vertex  # WHY: verify expected behavior
 
     def test_existing_device_mapping_preserved(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ENTITY_TYPE_TO_VERTEX,
         )  # WHY: import ENTITY_TYPE_TO_VERTEX symbol under test
 
         assert ENTITY_TYPE_TO_VERTEX.get("listSiteDevices") == "devices"  # WHY: verify expected behavior
 
     def test_collection_vertex_map_entries(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -2436,7 +2442,7 @@ class TestSiteDevicesGraphStorage:  # WHY: pytest test class
             assert op in COLLECTION_VERTEX_MAP  # WHY: verify expected behavior
 
     def test_list_site_devices_vertex(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -2445,7 +2451,7 @@ class TestSiteDevicesGraphStorage:  # WHY: pytest test class
         assert mapping["key_field"] == "id"  # WHY: verify expected behavior
 
     def test_list_site_devices_edges(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -2456,7 +2462,7 @@ class TestSiteDevicesGraphStorage:  # WHY: pytest test class
         assert "DeviceOnMap" in edge_cols  # WHY: verify expected behavior
 
     def test_list_site_devices_ensure_target_vertices(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -2468,7 +2474,7 @@ class TestSiteDevicesGraphStorage:  # WHY: pytest test class
         assert "map_id" in target_fields  # WHY: verify expected behavior
 
     def test_search_site_devices_vertex(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -2477,7 +2483,7 @@ class TestSiteDevicesGraphStorage:  # WHY: pytest test class
         assert mapping["key_field"] == "mac"  # WHY: verify expected behavior
 
     def test_search_site_devices_edges(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -2486,7 +2492,7 @@ class TestSiteDevicesGraphStorage:  # WHY: pytest test class
         assert "SiteContainsDevice" in edge_cols  # WHY: verify expected behavior
 
     def test_list_site_devices_stats_vertex(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -2495,7 +2501,7 @@ class TestSiteDevicesGraphStorage:  # WHY: pytest test class
         assert mapping["key_field"] == "id"  # WHY: verify expected behavior
 
     def test_list_site_devices_stats_edges(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -2505,7 +2511,7 @@ class TestSiteDevicesGraphStorage:  # WHY: pytest test class
         assert "DeviceUsesProfile" in edge_cols  # WHY: verify expected behavior
 
     def test_list_site_other_devices_vertex(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -2514,7 +2520,7 @@ class TestSiteDevicesGraphStorage:  # WHY: pytest test class
         assert mapping["key_field"] == "id"  # WHY: verify expected behavior
 
     def test_list_site_other_devices_edges(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -2523,7 +2529,7 @@ class TestSiteDevicesGraphStorage:  # WHY: pytest test class
         assert "OtherDeviceBelongsToSite" in edge_cols  # WHY: verify expected behavior
 
     def test_list_site_available_device_versions(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -2533,7 +2539,7 @@ class TestSiteDevicesGraphStorage:  # WHY: pytest test class
         assert "edges" not in mapping  # WHY: verify expected behavior
 
     def test_list_site_spectrum_analysis_vertex(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -2542,7 +2548,7 @@ class TestSiteDevicesGraphStorage:  # WHY: pytest test class
         assert mapping["key_field"] == "mac"  # WHY: verify expected behavior
 
     def test_list_site_spectrum_analysis_edges(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -2551,7 +2557,7 @@ class TestSiteDevicesGraphStorage:  # WHY: pytest test class
         assert "SpectrumAnalysisForDevice" in edge_cols  # WHY: verify expected behavior
 
     def test_spectrum_analysis_edge_uses_mac_lookup(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -2560,7 +2566,7 @@ class TestSiteDevicesGraphStorage:  # WHY: pytest test class
         assert spectrum_edge["to_key_lookup"] == "mac"  # WHY: verify expected behavior
 
     def test_list_site_device_radio_channels(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -2570,7 +2576,7 @@ class TestSiteDevicesGraphStorage:  # WHY: pytest test class
         assert "edges" not in mapping  # WHY: verify expected behavior
 
     def test_list_site_device_upgrades(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -2580,7 +2586,7 @@ class TestSiteDevicesGraphStorage:  # WHY: pytest test class
         assert "edges" not in mapping  # WHY: verify expected behavior
 
     def test_edge_definitions_registered(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             EDGE_DEFINITIONS,
         )  # WHY: import EDGE_DEFINITIONS symbol under test
 
@@ -2588,7 +2594,7 @@ class TestSiteDevicesGraphStorage:  # WHY: pytest test class
         assert "SpectrumAnalysisForDevice" in edge_names  # WHY: verify expected behavior
 
     def test_spectrum_analysis_edge_structure(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             EDGE_DEFINITIONS,
         )  # WHY: import EDGE_DEFINITIONS symbol under test
 
@@ -2597,7 +2603,7 @@ class TestSiteDevicesGraphStorage:  # WHY: pytest test class
         assert edge["to_vertex_collections"] == ["devices"]  # WHY: verify expected behavior
 
     def test_new_vertex_collections_referenced(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -2638,7 +2644,7 @@ class TestDerivedConfigGraphStorage:  # WHY: pytest test class
     ]
 
     def test_entity_type_mappings(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             ENTITY_TYPE_TO_VERTEX,
         )  # WHY: import ENTITY_TYPE_TO_VERTEX symbol under test
 
@@ -2665,7 +2671,7 @@ class TestDerivedConfigGraphStorage:  # WHY: pytest test class
             assert ENTITY_TYPE_TO_VERTEX.get(operation_id) == vertex  # WHY: verify expected behavior
 
     def test_all_ops_in_collection_vertex_map(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -2673,7 +2679,7 @@ class TestDerivedConfigGraphStorage:  # WHY: pytest test class
             assert op in COLLECTION_VERTEX_MAP, f"{op} missing from COLLECTION_VERTEX_MAP"  # WHY: verify expected behav
 
     def test_wlans_derived_vertex(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -2682,7 +2688,7 @@ class TestDerivedConfigGraphStorage:  # WHY: pytest test class
         assert mapping["key_field"] == "id"  # WHY: verify expected behavior
 
     def test_wlans_derived_edges(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -2692,7 +2698,7 @@ class TestDerivedConfigGraphStorage:  # WHY: pytest test class
         assert "DerivedFromTemplate" in edge_cols  # WHY: verify expected behavior
 
     def test_networks_derived_vertex(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -2701,7 +2707,7 @@ class TestDerivedConfigGraphStorage:  # WHY: pytest test class
         assert mapping["key_field"] == "id"  # WHY: verify expected behavior
 
     def test_service_policies_derived_uses_security_policies(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -2709,7 +2715,7 @@ class TestDerivedConfigGraphStorage:  # WHY: pytest test class
         assert mapping["vertex"] == "security_policies"  # WHY: verify expected behavior
 
     def test_guest_authorizations_derived_key(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -2718,7 +2724,7 @@ class TestDerivedConfigGraphStorage:  # WHY: pytest test class
         assert mapping["key_field"] == "mac"  # WHY: verify expected behavior
 
     def test_ui_setting_derived_no_edges(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -2728,7 +2734,7 @@ class TestDerivedConfigGraphStorage:  # WHY: pytest test class
         assert "edges" not in mapping  # WHY: verify expected behavior
 
     def test_template_derived_ops_share_vertex(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -2743,7 +2749,7 @@ class TestDerivedConfigGraphStorage:  # WHY: pytest test class
             assert COLLECTION_VERTEX_MAP[op]["vertex"] == "templates"  # WHY: verify expected behavior
 
     def test_security_profile_derived_vertices(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
@@ -2757,7 +2763,7 @@ class TestDerivedConfigGraphStorage:  # WHY: pytest test class
             assert COLLECTION_VERTEX_MAP[op]["vertex"] == vertex  # WHY: verify expected behavior
 
     def test_derived_config_for_site_edge_registered(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             EDGE_DEFINITIONS,
         )  # WHY: import EDGE_DEFINITIONS symbol under test
 
@@ -2765,7 +2771,7 @@ class TestDerivedConfigGraphStorage:  # WHY: pytest test class
         assert "DerivedConfigForSite" in edge_names  # WHY: verify expected behavior
 
     def test_derived_from_template_edge_registered(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             EDGE_DEFINITIONS,
         )  # WHY: import EDGE_DEFINITIONS symbol under test
 
@@ -2773,7 +2779,7 @@ class TestDerivedConfigGraphStorage:  # WHY: pytest test class
         assert "DerivedFromTemplate" in edge_names  # WHY: verify expected behavior
 
     def test_derived_config_for_site_structure(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             EDGE_DEFINITIONS,
         )  # WHY: schema source of truth for edge shapes
 
@@ -2785,7 +2791,7 @@ class TestDerivedConfigGraphStorage:  # WHY: pytest test class
         assert got == (True, True), f"DerivedConfigForSite endpoints wrong: got {got!r}"  # WHY: single-tuple assertion
 
     def test_derived_from_template_structure(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             EDGE_DEFINITIONS,
         )  # WHY: import EDGE_DEFINITIONS symbol under test
 
@@ -2799,7 +2805,7 @@ class TestDerivedConfigGraphStorage:  # WHY: pytest test class
         assert_all_edged_ops_include(self.DERIVED_OPS, "DerivedConfigForSite")  # WHY: single helper call keeps CC=1
 
     def test_only_wlans_has_derived_from_template(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             COLLECTION_VERTEX_MAP,
         )  # WHY: load schema constants for direct assertions
 
@@ -2807,7 +2813,7 @@ class TestDerivedConfigGraphStorage:  # WHY: pytest test class
         assert_ops_carrying_edge_include(self.DERIVED_OPS, "DerivedFromTemplate", "listSiteWlansDerived")  # WHY: single
 
     def test_new_vertex_collections_in_edge_defs(self):  # WHY: pytest discovers this by name
-        from src.foundation.persistence.db.arango_writer import (
+        from src.foundation.persistence.db.backends.arango_writer import (
             EDGE_DEFINITIONS,
         )  # WHY: import EDGE_DEFINITIONS symbol under test
 

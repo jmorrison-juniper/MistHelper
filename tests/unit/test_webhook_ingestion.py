@@ -37,7 +37,7 @@ class TestWebhookAuditDispatch:
     """Verify audit payloads dispatched to snapshot handler."""
 
     def test_audit_calls_handle_webhook_audit(self) -> None:
-        from src.foundation.persistence.db.router import DatabaseRouter
+        from src.foundation.persistence.db.coordination.router import DatabaseRouter
 
         router = MagicMock(spec=DatabaseRouter)
         payload = {
@@ -53,7 +53,7 @@ class TestRedisWebhookIngestion:
     """Verify stats payloads dispatch to Redis writer."""
 
     def test_ingest_webhook_called_for_stats(self) -> None:
-        from src.foundation.persistence.db.redis_writer import RedisTimeSeriesWriter
+        from src.foundation.persistence.db.backends.redis_writer import RedisTimeSeriesWriter
 
         writer = MagicMock(spec=RedisTimeSeriesWriter)
         records = [{"mac": "aa:bb:cc", "rssi": -65, "duration": 120}]

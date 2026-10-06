@@ -22,11 +22,8 @@ from typing import Any, cast  # WHY: cast around redis-py's Any-typed client for
 import redis  # WHY: sync redis client + ResponseError type for "already exists" detection.
 import structlog  # WHY: structured logging for connection/pipeline lifecycle events.
 
-from src.foundation.persistence.db import (
-    DatabaseConfig,
-    WriteResult,
-    host_resolver,
-)  # Keep Redis preflights on the shared finite DNS boundary.
+from src.foundation.persistence.db import DatabaseConfig, WriteResult
+from src.foundation.persistence.db.support import host_resolver
 
 RAW_RETENTION_MS = (
     int(os.environ.get("REDIS_RAW_RETENTION_DAYS", "7")) * 86_400_000

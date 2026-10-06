@@ -197,7 +197,7 @@ class MigrationRunner:
     def _export_arango(self, tables: list[str]) -> None:
         """Export document tables to ArangoDB."""
         from src.foundation.persistence.db import DatabaseConfig
-        from src.foundation.persistence.db.arango_writer import ArangoDBWriter
+        from src.foundation.persistence.db.backends.arango_writer import ArangoDBWriter
 
         config = DatabaseConfig.from_env()
         writer = ArangoDBWriter(config)
@@ -221,7 +221,7 @@ class MigrationRunner:
     def _export_redis(self, tables: list[str]) -> None:
         """Export time-series tables to Redis."""
         from src.foundation.persistence.db import DatabaseConfig
-        from src.foundation.persistence.db.redis_writer import RedisTimeSeriesWriter
+        from src.foundation.persistence.db.backends.redis_writer import RedisTimeSeriesWriter
 
         config = DatabaseConfig.from_env()
         writer = RedisTimeSeriesWriter(config)

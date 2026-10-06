@@ -189,7 +189,7 @@ def test_redis_writer_json_call_is_not_an_http_response_parse() -> None:
     """RedisJSON writer line 597 sends JSON.SET and does not parse an HTTP body."""
     config = DatabaseConfig(redis_host="localhost", redis_port=6379, redis_password="test")  # WHY: real config.
     with patch(
-        "src.foundation.persistence.db.redis_writer.redis.Redis"
+        "src.foundation.persistence.db.backends.redis_writer.redis.Redis"
     ) as redis_class:  # WHY: isolate Redis while driving product code.
         client = MagicMock()  # WHY: product writer receives this fake Redis client.
         redis_class.return_value = client  # WHY: constructor uses the patched Redis class.
@@ -197,7 +197,7 @@ def test_redis_writer_json_call_is_not_an_http_response_parse() -> None:
         pipeline = MagicMock()  # WHY: product writer sends JSON.SET commands through a pipeline.
         client.pipeline.return_value = pipeline  # WHY: write() uses this pipeline object.
         pipeline.execute.return_value = [True, True]  # WHY: one JSON.SET and one EXPIRE succeed.
-        from src.foundation.persistence.db.redis_writer import (
+        from src.foundation.persistence.db.backends.redis_writer import (
             RedisJSONWriter,
         )  # WHY: import after patch so no live Redis client is built.
 

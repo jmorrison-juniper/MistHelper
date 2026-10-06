@@ -32,7 +32,9 @@ from typing import Any  # A late import answers with untyped objects.
 from flask import Flask, current_app, g  # The configuration and request context carry every seam.
 
 from src.foundation.persistence.db import DatabaseConfig  # Build the real database settings.
-from src.foundation.persistence.db.router import DatabaseRouter  # Use the real database lifecycle boundary.
+from src.foundation.persistence.db.coordination.router import (
+    DatabaseRouter,  # Use the real database lifecycle boundary.
+)
 from src.interfaces.portals.upgrade_portal.api.run_controls import (
     E2EFactoryOverrides,
 )  # Type the complete test-only dependency set.

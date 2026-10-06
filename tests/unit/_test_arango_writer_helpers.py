@@ -337,7 +337,7 @@ def assert_edges_registered(expected_edges: set[str]) -> None:
     Collapses N assertions ("assert 'X' in edge_names") into one subset
     check so the enclosing test stays at CC=1.
     """
-    from src.foundation.persistence.db.arango_writer import (
+    from src.foundation.persistence.db.backends.arango_writer import (
         EDGE_DEFINITIONS,
     )  # WHY: local import avoids import cycles in helper collection
 
@@ -352,7 +352,7 @@ def assert_edges_equal(expected_edges: set[str]) -> None:
     Used by the comprehensive edge-definition audit test; catches both
     missing edges and unexpected new edges that were not added to the spec.
     """
-    from src.foundation.persistence.db.arango_writer import (
+    from src.foundation.persistence.db.backends.arango_writer import (
         EDGE_DEFINITIONS,
     )  # WHY: local import isolates test-only dependency
 
@@ -366,7 +366,7 @@ def assert_edges_equal(expected_edges: set[str]) -> None:
 
 def assert_edge_to_vertex(edge_collection: str, vertex: str) -> None:
     """Assert the named edge lists ``vertex`` among its to_vertex_collections."""
-    from src.foundation.persistence.db.arango_writer import EDGE_DEFINITIONS  # WHY: schema source of truth
+    from src.foundation.persistence.db.backends.arango_writer import EDGE_DEFINITIONS  # WHY: schema source of truth
 
     match = next(  # WHY: next() raises StopIteration if the edge does not exist — surfaces bad expectations
         d for d in EDGE_DEFINITIONS if d["edge_collection"] == edge_collection
@@ -387,7 +387,7 @@ def assert_entity_types_mapped(expected: dict[str, str]) -> None:
     Replaces long chains of ``assert ENTITY_TYPE_TO_VERTEX[key] == value``
     with a single dict-subset check.
     """
-    from src.foundation.persistence.db.arango_writer import ENTITY_TYPE_TO_VERTEX  # WHY: schema map under test
+    from src.foundation.persistence.db.backends.arango_writer import ENTITY_TYPE_TO_VERTEX  # WHY: schema map under test
 
     actual = {  # WHY: build a same-shape view so the diff-based failure below is precise
         key: ENTITY_TYPE_TO_VERTEX.get(key) for key in expected
@@ -406,7 +406,7 @@ def assert_entity_types_mapped(expected: dict[str, str]) -> None:
 
 def _get_mapping(entity_type: str) -> dict[str, Any]:
     """Return the COLLECTION_VERTEX_MAP entry for ``entity_type`` (raises KeyError)."""
-    from src.foundation.persistence.db.arango_writer import COLLECTION_VERTEX_MAP  # WHY: schema map under test
+    from src.foundation.persistence.db.backends.arango_writer import COLLECTION_VERTEX_MAP  # WHY: schema map under test
 
     return COLLECTION_VERTEX_MAP[entity_type]  # WHY: KeyError surfaces missing entries directly
 
@@ -478,7 +478,7 @@ class EdgeCase:
 
 def assert_edge_case(case: EdgeCase) -> None:
     """Assert one EdgeCase row is honored by EDGE_DEFINITIONS."""
-    from src.foundation.persistence.db.arango_writer import EDGE_DEFINITIONS  # WHY: schema under test
+    from src.foundation.persistence.db.backends.arango_writer import EDGE_DEFINITIONS  # WHY: schema under test
 
     match = next(  # WHY: StopIteration on missing edge is a clear failure signal
         d for d in EDGE_DEFINITIONS if d["edge_collection"] == case.name
@@ -500,7 +500,7 @@ def _ops_carrying_edge(ops: list[str], edge_col: str) -> list[str]:
     helper. Ops without ``edges`` in their mapping return an empty edge set
     via .get, so they naturally fall out of the result.
     """
-    from src.foundation.persistence.db.arango_writer import COLLECTION_VERTEX_MAP  # WHY: schema map under test
+    from src.foundation.persistence.db.backends.arango_writer import COLLECTION_VERTEX_MAP  # WHY: schema map under test
 
     return [  # WHY: list comprehension collects matching op names once
         op for op in ops if edge_col in {e["edge_col"] for e in COLLECTION_VERTEX_MAP.get(op, {}).get("edges", [])}
@@ -514,7 +514,7 @@ def _ops_missing_edge(ops: list[str], edge_col: str) -> list[str]:
     Used by "every edged op must include edge X" wholesale audit tests to
     collapse a Python for-loop into a single set-difference assertion.
     """
-    from src.foundation.persistence.db.arango_writer import COLLECTION_VERTEX_MAP  # WHY: schema map under test
+    from src.foundation.persistence.db.backends.arango_writer import COLLECTION_VERTEX_MAP  # WHY: schema map under test
 
     return [  # WHY: list comp keeps caller assertion at CC=1
         op

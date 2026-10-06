@@ -38,6 +38,16 @@ MODULE_PATHS = {  # Map each old direct module to its new canonical module.
     "wan_hub_group_manager.py": "operations/wan/wan_hub_group_manager.py",
     "wan_vpn_builder.py": "operations/wan/wan_vpn_builder.py",
 }  # Cover every moved direct source module.
+NESTED_MODULE_PATHS = {  # Map issue 3984 modules that moved within an existing canonical package.
+    "src/foundation/persistence/db/arango_writer.py": "src/foundation/persistence/db/backends/arango_writer.py",
+    "src/foundation/persistence/db/redis_writer.py": "src/foundation/persistence/db/backends/redis_writer.py",
+    "src/foundation/persistence/db/router.py": "src/foundation/persistence/db/coordination/router.py",
+    "src/foundation/persistence/db/retention.py": "src/foundation/persistence/db/coordination/retention.py",
+    "src/foundation/persistence/db/database_schema_utils.py": (
+        "src/foundation/persistence/db/support/database_schema_utils.py"
+    ),
+    "src/foundation/persistence/db/host_resolver.py": "src/foundation/persistence/db/support/host_resolver.py",
+}  # Compare each old path directly with its new canonical path.
 CANONICAL_ROOTS = {group.split("/")[0] for group in PACKAGE_GROUPS} | {
     Path(path).parts[0] for path in MODULE_PATHS.values()
 }  # Name every domain root that the move created, so a moved baseline maps to itself.
@@ -46,6 +56,9 @@ INTENTIONAL_SYMBOL_REMOVALS: dict[str, set[str]] = {
     # organization path. The site fallback import and its status constant are
     # removed on purpose, and the matching unit tests are removed in the same change.
     "src/mist/intelligence/reports/client_fingerprint_census/client.py": {"_HTTP_NOT_FOUND", "insights"},
+    # Issue #3984 requires each caller to use the canonical support module path.
+    # The database root must not re-export the moved host_resolver module.
+    "src/foundation/persistence/db/__init__.py": {"host_resolver"},
 }  # Record each reviewed module-level removal, so the guard reports only an unapproved loss.
 
 
@@ -165,6 +178,9 @@ def current_path(old_path: str) -> Path:
 
     Resolve the moved module without a compatibility wrapper.
     """
+    nested_path = NESTED_MODULE_PATHS.get(old_path)  # Resolve a move inside an existing canonical package first.
+    if nested_path is not None:  # An exact nested move does not use the direct-package mapping.
+        return REPOSITORY_ROOT / nested_path  # Compare the archived module with its issue 3984 destination.
     relative_path = Path(old_path).relative_to("src")  # Remove the common source root.
     first_part = relative_path.parts[0]  # Read the old direct package or module name.
     if first_part in CANONICAL_ROOTS:  # The baseline already holds the moved layout.

@@ -13,7 +13,7 @@ import logging
 
 import pytest
 
-from src.foundation.persistence.db.database_schema_utils import DatabaseSchemaUtils
+from src.foundation.persistence.db.support.database_schema_utils import DatabaseSchemaUtils
 from src.foundation.support.refactors.endpoint_primary_key_strategies import ENDPOINT_PRIMARY_KEY_STRATEGIES
 
 
@@ -54,7 +54,7 @@ class TestDetermineApiFunctionNameFromContext:
 
     def test_handles_stack_inspection_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """When frame introspection raises, the try/except returns the 'unknown' fallback."""
-        import src.foundation.persistence.db.database_schema_utils as module
+        import src.foundation.persistence.db.support.database_schema_utils as module
 
         class _ExplodingFrame:
             """Frame stand-in whose f_code access raises inside the walker loop."""

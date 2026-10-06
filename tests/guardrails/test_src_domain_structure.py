@@ -97,6 +97,13 @@ def test_new_domain_levels_follow_five_item_rule() -> None:
     checked_directories += [
         child for domain in checked_directories for child in visible_children(domain) if child.is_dir()
     ]  # Check each new group level.
+    database_root = SOURCE_ROOT / "foundation" / "persistence" / "db"  # Include the issue 3984 package boundary.
+    checked_directories += [  # Check the database root and its new focused package levels.
+        database_root,
+        database_root / "backends",
+        database_root / "coordination",
+        database_root / "support",
+    ]
     violations = {
         str(directory.relative_to(REPOSITORY_ROOT)): len(visible_children(directory))
         for directory in checked_directories

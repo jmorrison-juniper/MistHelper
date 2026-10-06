@@ -162,7 +162,7 @@ try:  # Try to import polyglot database layer for ArangoDB/Redis export backends
     from src.foundation.persistence.db import (
         configure_db_logging as _configure_db_logging_impl,
     )  # Preserve the existing behavior during the compliance refactor.
-    from src.foundation.persistence.db.router import (
+    from src.foundation.persistence.db.coordination.router import (
         DatabaseRouter as _DatabaseRouterImpl,
     )  # Preserve the existing behavior during the compliance refactor.
 
@@ -396,7 +396,7 @@ from src.foundation.models.dataclasses.websocket_stream_target import (
 from src.foundation.persistence.cache.cache_utils import (
     CacheUtils,
 )  # Cat E canonical (1014 P14) -- re-export for MistHelper.CacheUtils callers
-from src.foundation.persistence.db.database_schema_utils import (
+from src.foundation.persistence.db.support.database_schema_utils import (
     DatabaseSchemaUtils,  # Cat B (1013 SC-001 position 38) -- re-export for MistHelper.DatabaseSchemaUtils callers
 )
 from src.foundation.runtime.bootstrap.dependency_check import (

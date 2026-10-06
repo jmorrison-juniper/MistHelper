@@ -14,10 +14,12 @@ import structlog
 from arango.exceptions import ArangoError
 
 from src.foundation.persistence import db  # Import the moved database package from its canonical persistence group.
-from src.foundation.persistence.db import DatabaseConfig, arango_writer
-from src.foundation.persistence.db.arango_writer import ArangoDBWriter
-from src.foundation.persistence.db.host_resolver import ResolverLimits
-from src.foundation.persistence.db.redis_writer import RedisTimeSeriesWriter
+from src.foundation.persistence.db import DatabaseConfig
+from src.foundation.persistence.db.backends import arango_writer
+from src.foundation.persistence.db.backends.arango_writer import ArangoDBWriter
+from src.foundation.persistence.db.backends.redis_writer import RedisTimeSeriesWriter
+from src.foundation.persistence.db.support import host_resolver
+from src.foundation.persistence.db.support.host_resolver import ResolverLimits
 from src.foundation.support.refactors.endpoint_primary_key_strategies import ENDPOINT_PRIMARY_KEY_STRATEGIES
 from tests.unit.arango_indexes.fakes import ArangoIndexWriterHarness
 from tests.unit.db_discovery.fakes import ControlledPreflightCall, ControlledSockets, ResolverHarness
@@ -96,7 +98,7 @@ class TestTcpBudgets:
         record_property("probe_dns_elapsed_seconds", elapsed)
         assert 0.9 <= elapsed < 1.3, elapsed
         assert sockets.calls == []
-        discovery.drain(db.host_resolver.DEFAULT_RESOLVER)
+        discovery.drain(host_resolver.DEFAULT_RESOLVER)
 
     def test_first_socket_timeout_exhausts_the_aggregate_budget(self, discovery: ResolverHarness, monkeypatch) -> None:
         discovery.lookup.answers["db.invalid"] = discovery.lookup.addresses() + discovery.lookup.addresses("192.0.2.11")
@@ -253,7 +255,7 @@ class TestArangoDnsPreflight:
         discovery.lookup.answers["arango.invalid"] = discovery.lookup.addresses("192.0.2.11")
         ArangoDBWriter._preflight_dns("arango.invalid")
         assert len(discovery.lookup.calls) == 2
-        assert db.host_resolver.DEFAULT_RESOLVER.resolve("arango.invalid").addresses == tuple(
+        assert host_resolver.DEFAULT_RESOLVER.resolve("arango.invalid").addresses == tuple(
             discovery.lookup.addresses("192.0.2.11")
         )
 
@@ -268,7 +270,7 @@ class TestArangoDnsPreflight:
         discovery.clock.advance(0.001)
         ArangoDBWriter._preflight_dns("arango.invalid")
         assert len(discovery.lookup.calls) == 2
-        assert db.host_resolver.DEFAULT_RESOLVER.resolve("arango.invalid").error is None
+        assert host_resolver.DEFAULT_RESOLVER.resolve("arango.invalid").error is None
 
     def test_successful_preflight_and_numeric_tcp_share_the_same_addresses(
         self, discovery: ResolverHarness, monkeypatch
@@ -288,7 +290,7 @@ class TestArangoPreflightResources:
     def test_parallel_preflights_share_one_lookup_and_release_all_helpers(self, discovery: ResolverHarness) -> None:
         discovery.lookup.answers["arango.invalid"] = discovery.lookup.addresses()
         discovery.lookup.blocked_hosts.add("arango.invalid")
-        resolver = db.host_resolver.DEFAULT_RESOLVER
+        resolver = host_resolver.DEFAULT_RESOLVER
         with ThreadPoolExecutor(max_workers=12) as callers:
             futures = [callers.submit(ArangoDBWriter._preflight_dns, "arango.invalid") for _request in range(12)]
             assert discovery.lookup.wait_for_calls(1) is True
@@ -384,7 +386,7 @@ class TestRedisConstructorPreflight:
         error = socket.gaierror("Name or service not known")
         discovery.lookup.answers["localhost"] = error
         config = DatabaseConfig(redis_host="localhost", redis_port=6379)
-        with patch("src.foundation.persistence.db.redis_writer.redis.Redis") as client:
+        with patch("src.foundation.persistence.db.backends.redis_writer.redis.Redis") as client:
             with pytest.raises(ConnectionError, match="not resolvable") as failure:
                 RedisTimeSeriesWriter(config)
         assert failure.value.__cause__ is error

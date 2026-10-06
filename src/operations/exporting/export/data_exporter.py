@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)  # Name the logger for this module so a rea
 # still works when the optional dependency is missing.
 try:  # pragma: no cover - import guard mirrors MistHelper
     from src.foundation.persistence.db import DatabaseConfig, configure_db_logging, polyglot_hosts_unreachable
-    from src.foundation.persistence.db.router import DatabaseRouter
+    from src.foundation.persistence.db.coordination.router import DatabaseRouter
 
     DB_LAYER_AVAILABLE = True
 except ImportError as error:  # pragma: no cover - degrade only when the optional DB layer is missing.

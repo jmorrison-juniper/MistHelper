@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import pytest  # WHY: parameterize the required credential checks without duplicate tests.
 
-from src.foundation.persistence.db.host_resolver import ResolutionResult
+from src.foundation.persistence.db.support.host_resolver import ResolutionResult
 
 REQUIRED_DB_ENV = {  # WHY: tests need safe placeholders that never reach a live connection.
     "ARANGO_USERNAME": "unit-user",  # WHY: the value proves the field is present without naming a real account.
@@ -84,12 +84,12 @@ class TestStandaloneRouter:
 
     def test_router_skips_connections_standalone(self) -> None:
         from src.foundation.persistence.db import DatabaseConfig
-        from src.foundation.persistence.db.router import DatabaseRouter
+        from src.foundation.persistence.db.coordination.router import DatabaseRouter
 
         config = DatabaseConfig(standalone_mode=True)
         with (
-            patch("src.foundation.persistence.db.router.ArangoDBWriter") as mock_arango,
-            patch("src.foundation.persistence.db.router.RedisTimeSeriesWriter") as mock_redis,
+            patch("src.foundation.persistence.db.coordination.router.ArangoDBWriter") as mock_arango,
+            patch("src.foundation.persistence.db.coordination.router.RedisTimeSeriesWriter") as mock_redis,
         ):
             router = DatabaseRouter(config)
             mock_arango.assert_not_called()
@@ -99,12 +99,12 @@ class TestStandaloneRouter:
 
     def test_router_write_returns_csv_only_standalone(self) -> None:
         from src.foundation.persistence.db import DatabaseConfig
-        from src.foundation.persistence.db.router import DatabaseRouter
+        from src.foundation.persistence.db.coordination.router import DatabaseRouter
 
         config = DatabaseConfig(standalone_mode=True)
         with (
-            patch("src.foundation.persistence.db.router.ArangoDBWriter"),
-            patch("src.foundation.persistence.db.router.RedisTimeSeriesWriter"),
+            patch("src.foundation.persistence.db.coordination.router.ArangoDBWriter"),
+            patch("src.foundation.persistence.db.coordination.router.RedisTimeSeriesWriter"),
         ):
             router = DatabaseRouter(config, strategies={})
             result = router.write([{"id": "test"}], "listOrgSites")
@@ -112,12 +112,12 @@ class TestStandaloneRouter:
 
     def test_health_check_shows_standalone(self) -> None:
         from src.foundation.persistence.db import DatabaseConfig
-        from src.foundation.persistence.db.router import DatabaseRouter
+        from src.foundation.persistence.db.coordination.router import DatabaseRouter
 
         config = DatabaseConfig(standalone_mode=True)
         with (
-            patch("src.foundation.persistence.db.router.ArangoDBWriter"),
-            patch("src.foundation.persistence.db.router.RedisTimeSeriesWriter"),
+            patch("src.foundation.persistence.db.coordination.router.ArangoDBWriter"),
+            patch("src.foundation.persistence.db.coordination.router.RedisTimeSeriesWriter"),
         ):
             router = DatabaseRouter(config)
             health = router.health_check()
@@ -201,7 +201,9 @@ class TestPolyglotHostProbe:
 
         resolved = ResolutionResult(((socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("192.0.2.1", 0)),))
         with (
-            patch("src.foundation.persistence.db.host_resolver.DEFAULT_RESOLVER.resolve", return_value=resolved),
+            patch(
+                "src.foundation.persistence.db.support.host_resolver.DEFAULT_RESOLVER.resolve", return_value=resolved
+            ),
             patch("src.foundation.persistence.db.socket.socket", side_effect=OSError("refused")),
         ):
             assert _can_connect("db.example", 8529) is False  # nosec B101  # Pytest assertion in a unit test.
@@ -211,7 +213,9 @@ class TestPolyglotHostProbe:
 
         resolved = ResolutionResult(((socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("192.0.2.1", 0)),))
         with (
-            patch("src.foundation.persistence.db.host_resolver.DEFAULT_RESOLVER.resolve", return_value=resolved),
+            patch(
+                "src.foundation.persistence.db.support.host_resolver.DEFAULT_RESOLVER.resolve", return_value=resolved
+            ),
             patch("src.foundation.persistence.db.socket.socket") as create,
         ):
             assert _can_connect("db.example", 8529) is True  # nosec B101  # Pytest assertion in a unit test.

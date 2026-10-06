@@ -255,9 +255,13 @@ class FixtureDatabaseExport:
         with (
             patch("src.foundation.persistence.db._hosts_unreachable", return_value=False),
             patch("src.operations.exporting.export.data_exporter.polyglot_hosts_unreachable", return_value=False),
-            patch("src.foundation.persistence.db.router.ArangoDBWriter", autospec=True, side_effect=backend.connect),
-            patch("src.foundation.persistence.db.router.RedisTimeSeriesWriter", autospec=True),
-            patch("src.foundation.persistence.db.router.RedisJSONWriter", autospec=True),
+            patch(
+                "src.foundation.persistence.db.coordination.router.ArangoDBWriter",
+                autospec=True,
+                side_effect=backend.connect,
+            ),
+            patch("src.foundation.persistence.db.coordination.router.RedisTimeSeriesWriter", autospec=True),
+            patch("src.foundation.persistence.db.coordination.router.RedisJSONWriter", autospec=True),
         ):
             result = DataExporter.write_with_format_selection(
                 cls.RECORDS,

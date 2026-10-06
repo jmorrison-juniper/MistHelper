@@ -15,7 +15,7 @@ from urllib.parse import urlparse
 
 import structlog
 
-from src.foundation.persistence.db import host_resolver
+from src.foundation.persistence.db.support import host_resolver as _host_resolver
 
 ARANGO_DEFAULT_URL = "http://misthelper-arangodb:9529"  # Compose service URL used when ARANGO_HOST is unset.
 ARANGO_DEFAULT_HOSTNAME = "misthelper-arangodb"  # Host applied when a URL carries no host of its own.
@@ -110,8 +110,8 @@ def _hosts_unreachable(arango_url: str, redis_host: str) -> bool:
     log = structlog.get_logger(__name__)
     arango_hostname = urlparse(arango_url).hostname or ARANGO_DEFAULT_HOSTNAME
     log.info("database_host_discovery_started")
-    arango_ok = bool(host_resolver.DEFAULT_RESOLVER.resolve(arango_hostname).addresses)
-    redis_ok = bool(host_resolver.DEFAULT_RESOLVER.resolve(redis_host).addresses)
+    arango_ok = bool(_host_resolver.DEFAULT_RESOLVER.resolve(arango_hostname).addresses)
+    redis_ok = bool(_host_resolver.DEFAULT_RESOLVER.resolve(redis_host).addresses)
     log.debug("database_host_discovery_finished", arango_resolved=arango_ok, redis_resolved=redis_ok)
     if not arango_ok and not redis_ok:
         log.info(
@@ -155,7 +155,7 @@ def _can_connect(hostname: str, port: int) -> bool:
     """Probe resolved numeric addresses within one aggregate TCP budget."""
     log = structlog.get_logger(__name__)
     log.info("database_tcp_probe_started", hostname=hostname, port=port)
-    resolved = host_resolver.DEFAULT_RESOLVER.resolve(hostname)
+    resolved = _host_resolver.DEFAULT_RESOLVER.resolve(hostname)
     deadline = time.monotonic() + PROBE_TIMEOUT_SECONDS
     checked_count = 0
     for family, socket_type, protocol, _canonical_name, address in resolved.addresses:

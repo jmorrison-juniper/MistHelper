@@ -22,7 +22,7 @@ from unittest.mock import MagicMock  # WHY: FR-008 mandates MagicMock(spec=...) 
 
 import pytest  # WHY: monkeypatch, caplog, tmp_path fixtures
 
-from src.foundation.persistence.db.database_schema_utils import (
+from src.foundation.persistence.db.support.database_schema_utils import (
     DatabaseSchemaUtils,
 )  # WHY: the real DDL proves the ALTER names match CREATE.
 from src.foundation.support.refactors import sqlite_database_writer as swr_mod  # WHY: module handle for monkeypatching

@@ -16,7 +16,7 @@ from unittest.mock import patch
 import pytest
 import structlog
 
-from src.foundation.persistence.db.host_resolver import ResolutionResult, ResolverLimits
+from src.foundation.persistence.db.support.host_resolver import ResolutionResult, ResolverLimits
 from tests.unit.db_discovery.fakes import ResolverHarness
 
 
@@ -83,7 +83,7 @@ class TestLimitsAndErrors:
     def test_worker_start_failure_leaves_no_pending_job(self, discovery: ResolverHarness) -> None:
         resolver = discovery.create()
         with patch(
-            "src.foundation.persistence.db.host_resolver.Thread.start",
+            "src.foundation.persistence.db.support.host_resolver.Thread.start",
             side_effect=RuntimeError("Controlled worker capability."),
         ):
             with pytest.raises(RuntimeError, match="Controlled worker capability"):
@@ -374,7 +374,7 @@ class TestWorkerShutdown:
     def test_daemon_lookup_cannot_hold_process_shutdown(self) -> None:
         script = (
             "from threading import Event\n"
-            "from src.foundation.persistence.db.host_resolver import BoundedHostResolver, ResolverLimits\n"
+            "from src.foundation.persistence.db.support.host_resolver import BoundedHostResolver, ResolverLimits\n"
             "blocked = Event()\n"
             "def lookup(hostname, port, family, socket_type):\n"
             "    blocked.wait()\n"
