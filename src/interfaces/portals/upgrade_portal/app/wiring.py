@@ -8,10 +8,9 @@ Why:
     portal. This module builds the missing objects and writes them into the
     configuration, so the route finds the work it already asks for.
 
-    Every import here happens inside a function. Importing this module opens no
-    socket, reads no environment file, and connects to no store. A connection
-    opens at the first call and never before, so a test that imports the factory
-    reaches no network.
+    The database classes load with this module, but their constructors run only
+    through the request provider. Importing this module opens no socket, reads
+    no environment file, and connects to no store.
 
     Every value lands with `setdefault`. The wiring fills a gap and never
     replaces a choice, so a test that injects a stand-in keeps the stand-in.
@@ -25,12 +24,15 @@ import logging  # The portal logs with the standard library only.
 import threading  # The run mirror below is read by the poll while the driver writes.
 import time  # The event window of the settle gate reads the wall clock.
 from collections.abc import Callable, Mapping, MutableMapping  # The shapes the driver and the store declare.
+from dataclasses import dataclass  # Holds one request-owned resource graph.
 from importlib import import_module  # Imports each collaborator late, at the first call.
 from types import ModuleType  # The return type of a late import.
 from typing import Any  # A late import answers with untyped objects.
 
-from flask import Flask, current_app  # The configuration and context carry every seam.
+from flask import Flask, current_app, g  # The configuration and request context carry every seam.
 
+from src.foundation.persistence.db import DatabaseConfig  # Build the real database settings.
+from src.foundation.persistence.db.router import DatabaseRouter  # Use the real database lifecycle boundary.
 from src.interfaces.portals.upgrade_portal.api.run_controls import (
     E2EFactoryOverrides,
 )  # Type the complete test-only dependency set.
@@ -93,6 +95,7 @@ UPGRADE_SERVICE_KEY = "UPGRADE_SERVICE"  # The seam that holds the UpgradeServic
 # Phase 3 T-010/T-012: Phase 3 service seams for settle gate and comparison.
 SETTLE_GATE_SERVICE_KEY = "SETTLE_GATE_SERVICE"  # The seam that holds SettleGateService.
 COMPARISON_SERVICE_KEY = "COMPARISON_SERVICE"  # The seam that holds ComparisonService.
+PORTAL_DEPENDENCY_PROVIDER_KEY = "PORTAL_DEPENDENCY_PROVIDER"  # Holds lazy request resource construction.
 
 POST_CHECK_ORDINAL = 2  # The second capture of a run. `driver.post_check_request` sends this value.
 
@@ -114,6 +117,80 @@ RUNNER_FIELD = "runner"  # The bindings key that carries the bound capture runne
 LOCK_FIELD = "lock"  # The bindings key that carries the decoded site lock record.
 STORE_FIELD = "store"  # The bindings key that carries the run store of the seam.
 APP_CONTEXT_FIELD = "app_context"  # The bindings key that rebuilds a context in the driver thread.
+
+
+class PortalDependencyError(RuntimeError):
+    """Report that an authenticated request cannot construct its resources."""
+
+
+class PortalAuthenticationError(PortalDependencyError):
+    """Report that the request has no usable authenticated Mist session."""
+
+
+@dataclass(frozen=True, slots=True)
+class PortalRequestDependencies:
+    """Hold one authenticated operator and its request-owned database router."""
+
+    operator: Any  # Keep the validated operator record for future request integrations.
+    cloud_session: Any  # Borrow the registry-owned Mist session without taking ownership.
+    database_router: DatabaseRouter  # Own one real router until Flask request teardown.
+
+
+class PortalDependencyProvider:
+    """Construct one authenticated resource graph when a request first needs it."""
+
+    def resolve(self) -> PortalRequestDependencies:
+        """Return one cached resource graph for the active request."""
+        cached = getattr(g, "portal_dependencies", None)  # Reuse one graph within the request only.
+        if isinstance(cached, PortalRequestDependencies):  # A second integration must use the same router.
+            return cached  # Flask teardown owns the single cached router.
+        operator = current_operator()  # Validate the signed browser and registry record before storage access.
+        cloud_session = getattr(operator, "cloud_session", None)  # Read the borrowed session without copying it.
+        if operator is None or not self._session_is_usable(cloud_session):  # Refuse absent and stale identities.
+            logger.warning("wiring: request dependency authentication failed")  # Record no identity detail.
+            raise PortalAuthenticationError("The operator session is unavailable.")  # Storage stays unopened.
+        dependencies = self._construct(operator, cloud_session)  # Build the owned resource after authentication.
+        g.database_router = dependencies.database_router  # Existing factory teardown closes this owned router.
+        g.portal_dependencies = dependencies  # Keep repeated resolution inside this request stable.
+        return dependencies  # Future issue #3977 integrations read this explicit boundary.
+
+    @staticmethod
+    def _construct(operator: Any, cloud_session: Any) -> PortalRequestDependencies:
+        """Construct one real database router for an authenticated request."""
+        logger.info("wiring: construct the request database router")  # Record the external resource action.
+        try:
+            database_config = DatabaseConfig.from_env()  # Resolve the real database settings at request time.
+            database_router = DatabaseRouter(database_config)  # Open the real request-owned database boundary.
+        except Exception as fault:
+            logger.error(
+                "wiring: request database router construction failed (%s)",
+                type(fault).__name__,
+            )  # Report the safe fault type only.
+            raise PortalDependencyError("The portal database resources are unavailable.") from fault
+        dependencies = PortalRequestDependencies(
+            operator=operator,
+            cloud_session=cloud_session,
+            database_router=database_router,
+        )  # Bind the borrowed and owned resources in one immutable record.
+        logger.debug("wiring: constructed one request database router")  # Confirm one owned resource.
+        return dependencies  # The caller publishes ownership only after construction succeeds.
+
+    @staticmethod
+    def _session_is_usable(cloud_session: Any) -> bool:
+        """Return whether the borrowed Mist session still exposes request methods."""
+        return callable(getattr(cloud_session, "get", None)) and callable(
+            getattr(cloud_session, "post", None)
+        )  # Both methods exist on an active mistapi session.
+
+
+def request_dependencies() -> PortalRequestDependencies:
+    """Resolve the authenticated request resources for future route integration."""
+    provider = current_app.config.get(PORTAL_DEPENDENCY_PROVIDER_KEY)  # Read the installed construction rule.
+    if not isinstance(provider, PortalDependencyProvider):  # A missing provider is an application wiring fault.
+        logger.error("wiring: the request dependency provider is unavailable")  # Name the failed boundary.
+        raise PortalDependencyError("The portal request resources are unavailable.")  # Refuse an invalid setup.
+    return provider.resolve()  # Construction and caching stay inside one lifecycle owner.
+
 
 # WHY: `capture/store.connect_database` answers None whenever ArangoDB is
 # unreachable, and `capture/store.write_run` still reports success because it
@@ -1492,6 +1569,10 @@ def install_seams(  # Install production defaults or one complete isolated depen
     app.config.setdefault(LAUNCHER_KEY, start_upgrade_run)  # Without this the confirmed run sends nothing.
     app.config.setdefault(STOP_RUNNER_KEY, cancel_run)  # Without this a stop cancels nothing at the cloud.
     app.config.setdefault(PRECHECK_ADOPTER_KEY, StandalonePrecheckAdopter())  # The run create call adopts a pre-check.
+    app.config.setdefault(
+        PORTAL_DEPENDENCY_PROVIDER_KEY,
+        PortalDependencyProvider(),
+    )  # Store construction rules only, after the existing run seams.
     _install_action_repository(app)  # Bind atomic run actions to ArangoDB with no fallback.
     # Phase 2 T-006: Wire CaptureService for pre/post-upgrade device capture capture
     _install_capture_service(app)  # Inject CaptureService into Flask config seam

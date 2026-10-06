@@ -824,6 +824,10 @@ def register_teardown(app: Flask) -> None:
         client. Each one holds a socket. Without this handler the sockets pile
         up under load and the portal runs out of file handles.
 
+        The request dependency provider puts its owned router in
+        `g.database_router`. It keeps the borrowed Mist session outside
+        `g.mist_session`, so this handler does not close that borrowed session.
+
     Args:
         app: The application to add the handler to.
     """
