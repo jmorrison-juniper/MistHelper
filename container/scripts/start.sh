@@ -258,7 +258,7 @@ CAPTURE_PORT="${CAPTURE_PORT:-8056}"
 # Determine the unprivileged SNMP service port and community.
 SNMP_PORT="${SNMP_PORT:-1161}"
 SNMP_COMMUNITY="${SNMP_COMMUNITY:-misthelper}"
-SNMP_BASE_OID="${SNMP_BASE_OID:-${METRICS_SNMP_BASE_OID:-.1.3.6.1.4.1.11.2147483646}}"
+SNMP_BASE_OID="${SNMP_BASE_OID:-${METRICS_SNMP_BASE_OID:-.1.3.6.1.4.1.8072.9999.9999}}"
 SNMP_CONFIG="/etc/snmp/snmpd.conf"
 if ! [[ "$SNMP_PORT" =~ ^[0-9]+$ ]] || [ "$SNMP_PORT" -lt 1024 ] || [ "$SNMP_PORT" -gt 65535 ]; then
     log_container_event "[SNMP] ERROR: SNMP_PORT must be between 1024 and 65535."

@@ -124,7 +124,7 @@ An engineer replaces the hand-written MIB with the generated MIB. Every object t
 
 #### OID layout and stability
 
-- **FR-017**: The MIB root MUST be `.1.3.6.1.4.1.11.2147483646`. That value MUST match `DEFAULT_BASE_OID` in `src/interfaces/monitoring/metrics_gateway/snmp.py`. The module MUST stop with an error when the two differ.
+- **FR-017**: The MIB root MUST be `.1.3.6.1.4.1.8072.9999.9999`. That value MUST match `DEFAULT_BASE_OID` in `src/interfaces/monitoring/metrics_gateway/snmp.py`. The module MUST stop with an error when the two differ.
 - **FR-018**: A scalar MUST sit at `<base>.<subtree>.<column>.0`.
 - **FR-019**: A table cell MUST sit at `<base>.<subtree>.1.<column>.<row>`. The module MUST NOT add a level below the table entry.
 - **FR-020**: A subtree number MUST come from `SUBTREE_BY_SCOPE`. Column 99 MUST hold the row identity, as `ROW_IDENTITY_COLUMN` states.
