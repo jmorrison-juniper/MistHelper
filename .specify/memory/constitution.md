@@ -1,25 +1,14 @@
 <!--
   Sync Impact Report
   ==================
-  Version change: 1.7.1 -> 1.7.2 (PATCH)
-  Bump rationale: PATCH, because the amendment corrects stale references and
-    stale menu numbers. No principle is added, removed, or redefined. The
-    operation registry already enforced the corrected destructive set.
+  Version change: 1.7.2 -> 1.8.0 (MINOR)
+  Bump rationale: MINOR, because the amendment defines the narrow owned
+    WebSocket transport exception and its return condition.
   Modified principles:
-    - III. Safety-First: replaced the stale destructive range with the
-      destructive set of the operation registry.
+    - Technology Constraints: defined the owned WebSocket exception, its
+      mistapi session boundary, and the return condition.
   Modified sections:
-    - Development Workflow > Testing: replaced the stale skip list with the
-      registry categories.
-    - Development Workflow > Documentation: replaced the retired lowercase agent
-      guide entry with `AGENTS.md` and `.github/copilot-instructions.md`.
-    - Complexity-Driven SpecKit Escalation: corrected the destructive set.
-    - Multi-Agent Git Workflow: replaced the retired user-profile
-      standards file reference with `AGENTS.md`.
-    - Governance > Runtime guidance: replaced the retired lowercase agent guide
-      with `AGENTS.md` and `.github/copilot-instructions.md`.
-    - Header comment: replaced the user-profile standards file with
-      `AGENTS.md`.
+    - Header comment: recorded the WebSocket transport policy amendment.
   Added sections: None.
   Removed sections: None.
   Templates requiring updates:
@@ -279,16 +268,24 @@ The following technology choices are binding for all MistHelper code:
 - **mistapi**: 0.59+ (Thomas Munzer's Mist API SDK). This is the sole
   interface for Juniper Mist Cloud REST APIs. Code MUST NOT send direct
   HTTP requests to a Mist REST endpoint when a working mistapi method exists.
-- **Owned WebSocket Transport**: Code MAY own a Mist Cloud WebSocket transport.
-  This permission applies only when the matching mistapi WebSocket path is
-  broken, incomplete, or cannot preserve required output. The specification and plan
-  MUST name the SDK path and the failed contract. Contract tests MUST prove
-  that the SDK path is insufficient before implementation can pass review.
+- **Owned WebSocket Transport**: Code MAY own a Mist Cloud WebSocket transport
+  only for a WebSocket path that the matching mistapi release cannot support.
+  REST requests MUST continue to use mistapi.
+  The specification and plan MUST name the SDK path and the failed contract.
+  Contract tests MUST prove that the SDK path loses the first output or split
+  control sequences before implementation can pass review.
+  The owned client MAY read only the four required private APISession fields:
+  `_apitoken`, `_apitoken_index`, `_session`, and `_cloud_uri`.
+  The contract test `tests/contract/websocket_streams/test_ws_sdk_contract.py`
+  MUST guard those fields.
   The owned transport MUST preserve the SDK authentication and endpoint
   contracts. It MUST follow every safety rule and every secret-redaction rule
   in this constitution. Its tests MUST verify authentication, endpoint,
-  output, failure, and redaction contracts. This exception does not permit
-  direct HTTP requests to Mist REST endpoints.
+  output, failure, and redaction contracts.
+  The exception ends when a mistapi release preserves the first output and
+  split control sequences in the contract tests. The client MUST then return
+  to the mistapi WebSocket path.
+  This exception does not permit direct HTTP requests to Mist REST endpoints.
 - **Package Manager**: UV is preferred for speed; `requirements.txt`
   MUST be maintained for pip compatibility.
 - **Container Runtime**: Podman is the primary runtime. Docker is
