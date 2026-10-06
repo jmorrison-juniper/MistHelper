@@ -937,10 +937,12 @@ def firmware_summary(view: Mapping[str, Any], families: Sequence[str]) -> str:
     return ", ".join(parts) if parts else str(view.get("version") or "Not selected")  # Keep the AP fallback.
 
 
-def operation_firmware_summary(operation: Mapping[str, Any] | None) -> str:
+def operation_firmware_summary(
+    operation: Mapping[str, Any] | None, fallback: str = "", use_fallback: bool = False
+) -> str:
     """Return each model and target version from the durable plan."""
-    if operation is None:  # A legacy AP-only confirmation holds no aggregate operation.
-        return ""  # Let the caller use the family-wide fallback.
+    if operation is None or use_fallback:  # A legacy or stable-build confirmation uses the family-wide text.
+        return fallback  # Keep the caller fallback for a plan without explicit model versions.
     logger.info("Build the firmware summary from the durable aggregate plan")  # Log before the transformation.
     pairs = [  # Keep the child and target order that the operator confirmed.
         (str(target.get("model", "")).strip(), str(target.get("version_target", "")).strip())
@@ -950,7 +952,7 @@ def operation_firmware_summary(operation: Mapping[str, Any] | None) -> str:
     ]
     parts = list(dict.fromkeys(f"{model} {version}" for model, version in pairs if model and version))  # Unique models.
     logger.debug("The aggregate firmware summary names %s model version(s)", len(parts))  # Log after the build.
-    return ", ".join(parts)  # An older child with no target records uses the caller fallback.
+    return ", ".join(parts) or fallback  # An older child with no target records uses the caller fallback.
 
 
 def _summary_version(view: Mapping[str, Any], field: str) -> str:
@@ -1007,12 +1009,17 @@ def _owner_key() -> str:
     return "" if record is None else record.owner.key  # An empty key cannot own a persisted operation.
 
 
-def _write_operation(record: MutableMapping[str, Any]) -> None:
-    """Write one aggregate record or raise a visible persistence failure."""
+def _write_operation(record: MutableMapping[str, Any], options: dict[str, Any], target_count: int) -> str:
+    """Write one aggregate record and keep its small browser identity."""
+    _attach_plan_options(record, options)  # A later retry reads the confirmed choices from the durable record.
     logger.info("Write aggregate upgrade %s", record.get("operation_id", ""))  # Log before the action.
     if not upgrade_routes.run_store().write_run(dict(record)):  # The durable store must accept every state.
         raise RuntimeError("The portal could not persist the aggregate upgrade.")
     logger.debug("The aggregate upgrade %s is durable", record.get("operation_id", ""))  # Log after the action.
+    options.pop("targets", None)  # A large device list must not enter the signed browser cookie.
+    options["operation_id"] = record["operation_id"]  # Keep only the durable identity in the browser.
+    options["target_count"] = target_count  # Keep the small confirmation count in the browser.
+    return str(record["request_nonce"])  # Return the durable replay nonce.
 
 
 def _read_operation(operation_id: str) -> dict[str, Any] | None:
@@ -1232,38 +1239,30 @@ def _validated_saved_options(org_id: str, site_ids: list[str]) -> tuple[dict[str
     return _aggregate_saved_options(org_id, site_ids, options)  # Build the durable multi-device plan.
 
 
-def _aggregate_saved_options(
-    org_id: str,
-    site_ids: list[str],
-    options: dict[str, Any],
-) -> tuple[dict[str, Any], str]:
+def _aggregate_saved_options(org_id: str, site_ids: list[str], options: dict[str, Any]) -> tuple[dict[str, Any], str]:
     """Build and persist one confirmed aggregate operation."""
     aggregate = _aggregate_option_record(org_id, site_ids, options)  # Validate each explicit target.
     rows = selected_rows(org_id, site_ids)  # Preserve approved site names with the operation.
     if not rows:  # Issue #3441: a removed site must not produce an orphan plan.
         logger.warning("Refused the aggregate save because a selected site left organization %s", org_id)
         raise SelectedSitesChangedError(SITES_REQUIRED_MESSAGE)  # Return the existing 404 site selection contract.
+    retry = current_retry_plan()  # A retry can leave a selected site with no planned device after family filtering.
+    if retry is not None:  # Plain multi-site saves keep their existing selected-site scope.
+        logger.info("Derive the durable site scope from the filtered retry targets")  # Log before the transform.
+        target_site_ids = {str(target.get("site_id", "")) for target in aggregate["targets"]}  # Effective sites.
+        rows = [row for row in rows if str(row.get("site_id", "")) in target_site_ids]  # Preserve selected order.
+        logger.debug("The filtered retry plan holds %s durable site(s)", len(rows))  # Log the effective result.
     mapped = build_options(aggregate["options"], now=None)  # Reuse the proven option mapping.
     choices = OrgUpgradeScheduleReader.anchored_options(mapped)  # Count the reboot delay from the scheduled start.
     OrgAdvancedRules.refuse_stable_access_points(choices, aggregate["targets"])  # Issue #3383: no stable AP build.
     OrgAdvancedRules.refuse_large_failure_counts(choices)  # Issue #3383: each count fits the organization body.
-    request_data = AggregateBuildInput(  # Group the confirmed build values below the parameter limit.
-        owner=_owner_key(),  # Bind the operation to the signed operator.
-        org_id=org_id,  # Bind every child to the selected organization.
-        sites=rows,  # Keep only approved sites.
-        targets=_device_targets(aggregate["targets"]),  # Keep every selected device explicit.
-        options=choices,  # Keep the validated service options.
-        request_nonce=secrets.token_urlsafe(24),  # Prevent a repeated submission.
-    )
+    targets = _device_targets(aggregate["targets"])  # Keep every selected device explicit.
+    request_data = AggregateBuildInput(_owner_key(), org_id, rows, targets, choices, secrets.token_urlsafe(24))
     logger.info("Build the durable aggregate upgrade plan for organization %s", org_id)  # Log before the build.
     operation = aggregate_service().build(request_data)  # Build every child without a cloud write.
     logger.debug("The aggregate plan holds %s child job(s)", len(operation["children"]))  # Log after the build.
-    _attach_plan_options(operation, options)  # Issue #3247: a later retry reads the choices of this plan.
-    _write_operation(operation)  # Persist the complete plan before confirmation.
-    options.pop("targets", None)  # Issue #3204: a large device list must not enter the signed browser cookie.
-    options["operation_id"] = operation["operation_id"]  # Keep only the durable identity in the browser.
-    options["target_count"] = len(aggregate["targets"])  # Keep a small confirmation value.
-    return options, str(operation["request_nonce"])  # Return the durable replay nonce.
+    nonce = _write_operation(operation, options, len(aggregate["targets"]))  # Persist before confirmation.
+    return options, nonce  # Return the durable replay nonce.
 
 
 def _attach_plan_options(operation: MutableMapping[str, Any], options: Mapping[str, Any]) -> None:
@@ -1303,33 +1302,20 @@ def confirm_page() -> str | tuple[Response, int]:
     options = stored_options()  # Read options only for the selected organization.
     if context is None or not options:  # Require a complete confirmed context.
         return json_error(BAD_REQUEST_STATUS, OPTIONS_INVALID, "Save valid upgrade options before confirmation.")
-    org_id, site_ids = context  # Use only the validated active context.
+    org_id, selected_ids = context  # Keep the operator selection for the legacy access point path.
+    operation_id = str(options.get("operation_id", ""))  # An aggregate plan names its durable record.
+    operation = _owned_operation(options, org_id, selected_ids)  # Enforce owner, organization, and selected scope.
+    if operation == {}:  # An owned plan with a stale durable scope fails closed.
+        return json_error(CONFLICT_STATUS, ALREADY_SUBMITTED, "The confirmed aggregate plan no longer matches.")
+    if operation_id and operation is None:  # A missing or foreign aggregate plan fails before a site read.
+        return json_error(CONFLICT_STATUS, JOB_NOT_OWNED, "The confirmed aggregate plan is unavailable.")
+    site_ids = [str(value) for value in operation.get("site_ids", [])] if operation is not None else selected_ids
     rows = selected_rows(org_id, site_ids)  # Recheck site ownership before display.
     if not rows:  # Do not show an operation for missing or foreign sites.
         return json_error(NOT_FOUND_STATUS, SITES_REQUIRED, SITES_REQUIRED_MESSAGE)
-    operation = _saved_operation(options)  # Read the durable plan one time for every value of the page.
-    target_count, families = _confirmation_targets(operation)  # Read only the durable aggregate child summary.
-    view = options_view(options)  # Build the display values one time.
-    family_summary = firmware_summary(view, families)  # Keep the stable-build wording for that special choice.
-    model_summary = operation_firmware_summary(operation)  # Issue #3204: name each explicit model version.
-    firmware_line = family_summary if view.get("stable_version") is True else model_summary or family_summary  # Safe.
-    names = {str(row["site_id"]): str(row["name"]) for row in rows}  # The approved name of each site.
-    prechecks = precheck_gate().read(site_ids, names)  # Issue #3243: the pre-check capture of each site.
-    return render_page(  # Render the existing typed confirmation page.
-        CONFIRM_TEMPLATE,  # Keep the existing template.
-        org_name=org_display_name(org_id),  # Show the selected organization.
-        site_count=len(rows),  # Show the selected site count.
-        device_count=target_count or _site_device_count(rows),  # Keep the AP-only count fallback.
-        device_families=families,  # Show each planned family.
-        options=view,  # Show the confirmed choices.
-        strategy_children=_mapping_children(operation),  # Explain each child schema without changing its request.
-        firmware_summary=firmware_line,  # Name each model, unless the cloud selects the vendor stable build.
-        advanced_summary=OrgAdvancedSummary.lines(view, _mapping_children(operation)),  # Each stored child body.
-        reboot_moment=OrgUpgradeScheduleReader.reboot_moment_text(operation),  # Show the absolute or submit rule.
-        writes_enabled=writes_enabled(),  # Keep the deployment write gate visible.
-        schedule=OrgScheduleView.build(operation, view["start_time"]),  # Issue #3247: the start line and form.
-        prechecks=prechecks,  # Issue #3243: the card and the gate of the confirmation field.
-    )
+    scope = (operation, options, rows, site_ids, org_id)  # Group the validated confirmation values.
+    values = _confirmation_targets(scope)  # Build the durable display values.
+    return render_page(CONFIRM_TEMPLATE, **values)  # Render the existing typed confirmation page.
 
 
 def _saved_operation(options: Mapping[str, Any]) -> dict[str, Any] | None:
@@ -1381,10 +1367,31 @@ def _precheck_refusal(prechecks: OrgPrecheckState) -> tuple[Response, int] | Non
     return json_error(CONFLICT_STATUS, upgrade_routes.PRE_CAPTURE_MISSING_CODE, message)  # The single-site code.
 
 
-def _confirmation_targets(operation: Mapping[str, Any] | None) -> tuple[int, list[str]]:
-    """Return the aggregate target count and device families."""
+def _confirmation_targets(scope: tuple[Any, ...]) -> dict[str, Any]:
+    """Return the confirmation values for the durable effective site scope."""
+    operation, options, rows, site_ids, org_id = scope  # Unpack the validated confirmation scope.
     children = _mapping_children(operation)  # Ignore malformed child rows.
-    return _aggregate_target_count(children), _aggregate_families(children)  # Build the display values.
+    target_count, families = _aggregate_target_count(children), _aggregate_families(children)  # Durable targets.
+    view = options_view(options)  # Build the display values one time.
+    family_summary = firmware_summary(view, families)  # Keep stable-build wording for that special choice.
+    firmware_line = operation_firmware_summary(operation, family_summary, view.get("stable_version") is True)
+    row_names = {str(row["site_id"]): str(row["name"]) for row in rows}  # Validated current site names.
+    stored_names = operation.get("site_names") if operation is not None else None  # Durable aggregate names.
+    names = row_names if not isinstance(stored_names, Mapping) else {site: str(stored_names[site]) for site in site_ids}
+    return {
+        "org_name": org_display_name(org_id),
+        "site_count": len(rows),
+        "device_count": target_count or _site_device_count(rows),
+        "device_families": families,
+        "options": view,
+        "strategy_children": children,
+        "firmware_summary": firmware_line,
+        "advanced_summary": OrgAdvancedSummary.lines(view, children),
+        "reboot_moment": OrgUpgradeScheduleReader.reboot_moment_text(operation),
+        "writes_enabled": writes_enabled(),
+        "schedule": OrgScheduleView.build(operation, view["start_time"]),
+        "prechecks": precheck_gate().read(site_ids, names),
+    }
 
 
 def _mapping_children(record: Mapping[str, Any] | None) -> tuple[Mapping[str, Any], ...]:
@@ -1481,12 +1488,18 @@ def _finish_submission(
     return next_page_answer(f"/upgrade/org/jobs/{result.upgrade_id}")
 
 
-def _owned_operation(options: Mapping[str, Any], org_id: str) -> dict[str, Any] | None:
+def _owned_operation(
+    options: Mapping[str, Any], org_id: str, selected_ids: Sequence[str] | None = None
+) -> dict[str, Any] | None:
     """Return the durable operation only when this operator owns its scope."""
     operation_id = str(options.get("operation_id", ""))  # The saved options carry the durable identity.
     operation = _read_operation(operation_id) if operation_id else None  # Read no child from the browser session.
     if operation is None or operation.get("owner") != _owner_key() or operation.get("org_id") != org_id:
         return None  # Ownership and organization mismatches reveal no operation.
+    if selected_ids is not None:  # A confirmation or submission must keep the active authorization boundary.
+        site_ids = [str(value) for value in operation.get("site_ids", [])]  # Read the ordered durable scope.
+        if not site_ids or not set(site_ids).issubset(selected_ids):  # Refuse an empty or unauthorized site scope.
+            return {}  # Distinguish stale scope from a missing or foreign operation.
     return operation  # The caller can now read or change this operation.
 
 
@@ -2171,7 +2184,16 @@ def _load_submission_context(request_nonce: object) -> SubmissionContext | tuple
         return json_error(BAD_REQUEST_STATUS, OPTIONS_INVALID, "The organization upgrade context is incomplete.")
     if not options or cloud_session is None:  # Require confirmed options and an authenticated cloud session.
         return json_error(BAD_REQUEST_STATUS, OPTIONS_INVALID, "The organization upgrade context is incomplete.")
-    org_id, site_ids = context  # Use only the validated active scope.
+    org_id, selected_ids = context  # Keep the selected scope for a legacy access point submission.
+    operation_id = str(options.get("operation_id", ""))  # An aggregate submission names one durable plan.
+    operation = _owned_operation(options, org_id, selected_ids)  # Revalidate ownership, organization, and scope.
+    if operation == {}:  # An owned plan with a stale durable scope fails before prechecks or locks.
+        return json_error(CONFLICT_STATUS, ALREADY_SUBMITTED, "The confirmed aggregate plan no longer matches.")
+    if operation_id and operation is None:  # Never fall back when the aggregate plan is missing or foreign.
+        return json_error(CONFLICT_STATUS, JOB_NOT_OWNED, "The confirmed aggregate plan is unavailable.")
+    site_ids = (  # Use the durable effective scope for every aggregate submission safeguard.
+        [str(value) for value in operation.get("site_ids", [])] if operation is not None else selected_ids
+    )
     refusal = _site_lock_refusal(org_id, site_ids)  # Keep every existing site lock.
     if refusal is not None:  # One blocked site stops every destructive child.
         return refusal  # Preserve the existing lock response.

@@ -12,7 +12,8 @@ Why:
 from __future__ import annotations
 
 import re
-from collections.abc import Iterator, Mapping
+import socket
+from collections.abc import Callable, Iterator, Mapping
 from copy import deepcopy
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime, timedelta
@@ -67,6 +68,23 @@ PLAN_CHOICES = {  # The choices of a plan of the access points and the switches.
     "version_switch": JUNOS_TARGET,
     "strategy": "big_bang",
 }
+
+
+@pytest.fixture(autouse=True)
+def block_external_connections(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Fail each network connection before it can leave the contract process."""
+
+    def refuse_connection(*arguments: Any, **keywords: Any) -> None:
+        """Reject a socket connection because every external edge uses a fake."""
+        del arguments, keywords  # The refusal does not inspect network destinations.
+        raise AssertionError("The contract test attempted an external network connection.")
+
+    monkeypatch.setattr(socket.socket, "connect", refuse_connection)  # Block direct socket connections.
+    monkeypatch.setattr(socket.socket, "connect_ex", refuse_connection)  # Block error-code TCP connections.
+    monkeypatch.setattr(socket.socket, "sendto", refuse_connection)  # Block unconnected UDP transmission.
+    if hasattr(socket.socket, "sendmsg"):  # Some supported systems provide an alternate transmission method.
+        monkeypatch.setattr(socket.socket, "sendmsg", refuse_connection)  # Block alternate socket transmission.
+    monkeypatch.setattr(socket, "create_connection", refuse_connection)  # Block standard helper connections.
 
 
 class RecordStore:
@@ -140,6 +158,8 @@ class ControlsHarness:
     store: RecordStore  # The durable store of every operation.
     reader: SiteVersionReader  # The running version read of each site.
     locks: FakeLockStore  # The site lock store.
+    prechecks: PrecheckAdopterStandIn  # The pre-check reads and capture edges.
+    lock_reads: list[tuple[str, ...]]  # The site scope of each lock refusal read.
     operator: identity.OperatorSession  # The server-side record of the operator.
     org_id: str  # The selected organization.
     site_one: str  # The first selected site.
@@ -179,50 +199,85 @@ def option_builder(devices: Mapping[str, list[dict[str, str]]]) -> Any:
     return build  # The route calls the mapper one time for each site.
 
 
-@pytest.fixture
-def harness(portal_app: Flask, fake_mist_api: Any, fake_org_id: str, fake_site_id: str) -> Iterator[ControlsHarness]:
-    """Return a signed client with two selected sites and no live service."""
+def build_harness_edges(fake_site_id: str) -> tuple[Any, ...]:
+    """Build the in-memory service edges of one route harness."""
     store, reader, locks = RecordStore(), SiteVersionReader(), FakeLockStore()  # One fresh stand-in of each kind.
-    devices = {  # The inventory of both sites.
+    prechecks = PrecheckAdopterStandIn((fake_site_id, SITE_TWO))  # Each site has one verified fake capture.
+    lock_reads: list[tuple[str, ...]] = []  # Record each site scope before a destructive submission.
+
+    def read_site_locks(org_id: str, site_ids: list[str]) -> dict[str, None]:
+        """Record one lock refusal read and report each requested site as free."""
+        del org_id  # The stand-in has one organization and no external store.
+        lock_reads.append(tuple(site_ids))  # Keep the exact requested scope and order.
+        return {site_id: None for site_id in site_ids}  # Each requested site is free at this read boundary.
+
+    devices = {
         fake_site_id: [inventory_row(AP_ONE), inventory_row(SWITCH_ONE)],
         SITE_TWO: [inventory_row(AP_TWO), inventory_row(SWITCH_TWO)],
     }
-    fake_mist_api.payloads["listOrgSites"] = [  # The organization holds both selected sites.
-        {"id": fake_site_id, "name": "Test Site", "org_id": fake_org_id},
+    return store, reader, locks, prechecks, lock_reads, read_site_locks, devices
+
+
+def install_harness_edges(portal_app: Flask, fake_mist_api: Any, fake_org_id: str, edges: tuple[Any, ...]) -> None:
+    """Install each in-memory service edge on one portal application."""
+    store, reader, locks, prechecks, _, read_site_locks, devices = edges  # Unpack the isolated test edges.
+    fake_mist_api.payloads["listOrgSites"] = [
+        {"id": next(iter(devices)), "name": "Test Site", "org_id": fake_org_id},
         {"id": SITE_TWO, "name": "Site Two", "org_id": fake_org_id},
     ]
-    portal_app.config.update(  # Replace each cloud edge with a stand-in.
+    portal_app.config.update(
         {
-            "WTF_CSRF_ENABLED": False,  # The contract drives the routes, not the form tokens.
-            "MIST_READER": fake_mist_api.read,  # The site list reaches no cloud.
-            "SITE_LOCK_READER": lambda org_id, site_ids: {site_id: None for site_id in site_ids},  # No holder.
-            select.LOCK_CLIENT_KEY: locks,  # Every lock write stays in memory.
-            "RUN_STORE": store,  # Every operation stays in memory.
-            "AGGREGATE_UPGRADE_SERVICE": ControlsService(),  # The production writes with no cloud call.
-            org_upgrade.DEVICE_VERSION_READER_CONFIG_KEY: reader,  # No stats read reaches the cloud.
+            "WTF_CSRF_ENABLED": False,
+            "MIST_READER": fake_mist_api.read,
+            "SITE_LOCK_READER": read_site_locks,
+            select.LOCK_CLIENT_KEY: locks,
+            "RUN_STORE": store,
+            "AGGREGATE_UPGRADE_SERVICE": ControlsService(),
+            org_upgrade.DEVICE_VERSION_READER_CONFIG_KEY: reader,
             org_upgrade.OPTIONS_VIEW_CONFIG_KEY: lambda session, org, site: {"targets": deepcopy(devices[site])},
-            org_upgrade.OPTIONS_BUILDER_CONFIG_KEY: option_builder(devices),  # The save reaches no cloud.
-            "MIST_SELF_READER": lambda cloud_session: {"email": CLOUD_ACCOUNT},  # No self read.
+            org_upgrade.OPTIONS_BUILDER_CONFIG_KEY: option_builder(devices),
+            "MIST_SELF_READER": lambda cloud_session: {"email": CLOUD_ACCOUNT},
         }
     )
-    CascadeSeamStandIn().install(portal_app.config)  # Issue #3245: no anchor read and no watch thread.
-    PrecheckAdopterStandIn((fake_site_id, SITE_TWO)).install(portal_app.config)  # Issue #3243: each pre-check.
+    CascadeSeamStandIn().install(portal_app.config)  # No anchor read and no watch thread.
+    prechecks.install(portal_app.config)  # Each pre-check stays in memory.
+
+
+def register_harness_operator(fake_site_id: str) -> tuple[identity.SessionOwner, identity.OperatorSession]:
+    """Register the accountable operator of one signed route harness."""
     owner = identity.build_owner(OPERATOR_EMAIL, identity.issue_browser_id())  # The signed operator.
-    operator = identity.OperatorSession(  # The server-side record that the session guard reads.
+    operator = identity.OperatorSession(
         owner=owner,
         cloud_session=object(),
         credential_mode=identity.CredentialMode.ENVIRONMENT_TOKEN,
         selected_site_ids=(fake_site_id, SITE_TWO),
     )
     identity.SESSION_REGISTRY.register(operator)  # The session guard finds the operator record.
+    return owner, operator
+
+
+def sign_harness_scope(client: FlaskClient, owner: identity.SessionOwner, org_id: str) -> None:
+    """Sign one browser with the selected multi-site scope."""
+    client.set_cookie(identity.BROWSER_ID_COOKIE, owner.browser_id)  # The browser identity.
+    with client.session_transaction() as browser_session:
+        browser_session[identity.SESSION_OWNER_KEY] = owner.key  # The owner of each operation.
+        browser_session["selected_org_id"] = org_id  # The selected organization.
+        browser_session["selected_upgrade_mode"] = "multi_site"  # The multi-site mode.
+
+
+@pytest.fixture
+def harness(portal_app: Flask, fake_mist_api: Any, fake_org_id: str, fake_site_id: str) -> Iterator[ControlsHarness]:
+    """Return a signed client with two selected sites and no live service."""
+    edges = build_harness_edges(fake_site_id)  # Build each fake before the Flask client opens.
+    install_harness_edges(portal_app, fake_mist_api, fake_org_id, edges)  # Replace every external edge.
+    store, reader, locks, prechecks, lock_reads, _, _ = edges  # Keep the values that tests inspect.
+    owner, operator = register_harness_operator(fake_site_id)  # Register the signed accountable operator.
     try:  # Drop the operator record after the test, also after a failure.
         with portal_app.test_client() as client:  # Keep the signed session across the requests.
-            client.set_cookie(identity.BROWSER_ID_COOKIE, owner.browser_id)  # The browser identity.
-            with client.session_transaction() as browser_session:  # Sign the multi-site scope.
-                browser_session[identity.SESSION_OWNER_KEY] = owner.key  # The owner of each operation.
-                browser_session["selected_org_id"] = fake_org_id  # The selected organization.
-                browser_session["selected_upgrade_mode"] = "multi_site"  # The multi-site mode.
-            yield ControlsHarness(client, store, reader, locks, operator, fake_org_id, fake_site_id)
+            sign_harness_scope(client, owner, fake_org_id)  # Sign the selected multi-site scope.
+            yield ControlsHarness(
+                client, store, reader, locks, prechecks, lock_reads, operator, fake_org_id, fake_site_id
+            )
     finally:
         identity.SESSION_REGISTRY.drop(owner.key)  # No later test finds this operator.
 
@@ -420,6 +475,18 @@ def planned_macs(record: Mapping[str, Any]) -> set[str]:
     return {mac for child in record["children"] for mac in child["target_ids"]}  # Every child job of the plan.
 
 
+def child_site_ids(record: Mapping[str, Any]) -> set[str]:
+    """Return each site identifier that a durable child can change."""
+    return {
+        site_id
+        for child in record["children"]
+        for site_id in (
+            child["body"].get("site_ids", []) if child["route"] == "upgradeOrgDevices" else [child.get("site_id")]
+        )
+        if site_id
+    }
+
+
 def utc_field(offset: timedelta) -> str:
     """Return the value of a date and time field at an offset from now, in UTC."""
     return (datetime.now(UTC) + offset).strftime(FIELD_FORMAT)  # The browser sends minutes only.
@@ -464,9 +531,47 @@ def switch_reboots(record: Mapping[str, Any]) -> list[int]:
     return [int(child["body"]["reboot_at"]) for child in switches]  # The moment that the cloud receives.
 
 
+def save_filtered_retry(harness: ControlsHarness) -> dict[str, Any]:
+    """Save a retry that keeps only the failed access point at site B."""
+    harness.store.write_run(settled_record(harness))  # One access point and one switch failed.
+    post_json(harness, f"/api/org-upgrades/{RETRY_ID}/retry")  # Open the retry of both sites.
+    other_owner = identity.build_owner("other.operator@juniper.net", identity.issue_browser_id())  # Another operator.
+    other_request = lock.LockRequest(harness.org_id, harness.site_one, other_owner, "other-operation")  # Site A.
+    lock.acquire_site_lock(other_request, harness.locks)  # A removed site must not block the filtered retry.
+    saved = post_json(harness, OPTIONS_API, {**PLAN_CHOICES, "selected_types": ["ap"]})  # Clear the switch type.
+    assert saved.status_code == 200, saved.get_json()  # The Sites page would end the retry, so no refusal.
+    return harness.store.records[saved_operation_id(harness)]  # Return the new durable plan.
+
+
+def changed_scope_reader(harness: ControlsHarness) -> Callable[[str], dict[str, Any] | None]:
+    """Return a reader that changes the second durable scope snapshot."""
+    original_reader = harness.store.read_run  # Keep the durable read implementation.
+    read_count = 0  # Count the two owned-operation reads of submission.
+
+    def read(run_id: str) -> dict[str, Any] | None:
+        """Change the validation snapshot so exact-context validation fails."""
+        nonlocal read_count  # Keep one count across the two route reads.
+        record = original_reader(run_id)  # Read the real durable snapshot.
+        read_count += 1  # The first read builds context, and the second validates it.
+        if record is not None and read_count == 2:  # Change only the validation snapshot.
+            record["site_ids"] = [harness.site_one, SITE_TWO]  # Reintroduce the stale selected site.
+        return record  # The durable store itself remains unchanged.
+
+    return read
+
+
 # ---------------------------------------------------------------------------
 # The retry of the devices that did not reach the target version.
 # ---------------------------------------------------------------------------
+
+
+def test_a_plain_save_keeps_the_selected_site_scope(harness: ControlsHarness) -> None:
+    """A plain save keeps each selected site once and keeps each name aligned."""
+    operation_id = save_plan(harness)  # Save every selected device without a retry filter.
+    plan = harness.store.records[operation_id]  # Read the durable plain plan.
+    assert plan["site_ids"] == [harness.site_one, SITE_TWO]  # Keep the selected order after duplicate targets.
+    assert plan["site_names"] == {harness.site_one: "Test Site", SITE_TWO: "Site Two"}  # Keep aligned names.
+    assert harness.operator.selected_site_ids == (harness.site_one, SITE_TWO)  # Keep the operator selection.
 
 
 def test_the_retry_opens_a_plan_of_the_failed_devices_only(harness: ControlsHarness) -> None:
@@ -484,15 +589,26 @@ def test_the_retry_opens_a_plan_of_the_failed_devices_only(harness: ControlsHarn
     assert f'value="{AP_TARGET}"' in page  # The prefill keeps the earlier target version.
 
 
-def test_the_retry_save_plans_only_the_retry_devices(harness: ControlsHarness) -> None:
+def test_the_retry_save_plans_only_the_retry_devices(harness: ControlsHarness, monkeypatch: pytest.MonkeyPatch) -> None:
     """The saved retry plan holds each retry device and names the operation that it repeats."""
     harness.store.write_run(settled_record(harness))  # One access point and one switch failed.
     post_json(harness, f"/api/org-upgrades/{RETRY_ID}/retry")  # Open the retry.
     page = harness.client.get(OPTIONS_PAGE).get_data(as_text=True)  # The narrowed options page.
+    original_builder = org_upgrade._aggregate_option_record  # Keep the production target builder.
+
+    def reversed_targets(org_id: str, site_ids: list[str], options: Mapping[str, Any]) -> dict[str, Any]:
+        """Return the production aggregate record with target order reversed."""
+        aggregate = original_builder(org_id, site_ids, options)  # Build the real retry target set.
+        aggregate["targets"] = list(reversed(aggregate["targets"]))  # Make target order differ from site order.
+        return aggregate  # The save must still preserve the selected site order.
+
+    monkeypatch.setattr(org_upgrade, "_aggregate_option_record", reversed_targets)  # Control target order only.
     saved = post_json(harness, OPTIONS_API, PLAN_CHOICES)  # Save the prefilled choices.
     plan = harness.store.records[saved_operation_id(harness)]  # The new durable plan.
     assert saved.status_code == 200 and saved.get_json() == {"next": CONFIRM_PAGE}  # The confirmation opens.
     assert harness.operator.selected_site_ids == (harness.site_one, SITE_TWO)  # Each site holds a retry device.
+    assert plan["site_ids"] == [harness.site_one, SITE_TWO]  # A targeted retry keeps both selected sites.
+    assert plan["site_names"] == {harness.site_one: "Test Site", SITE_TWO: "Site Two"}  # Names stay aligned.
     assert table_names(page) == ["switch-one", "ap-two"]  # The healthy devices stay off the page.
     assert planned_macs(plan) == {AP_TWO, SWITCH_ONE}  # The healthy devices stay out of the plan.
     assert plan["retry_of_operation_id"] == RETRY_ID  # The audit link names the earlier operation.
@@ -500,15 +616,102 @@ def test_the_retry_save_plans_only_the_retry_devices(harness: ControlsHarness) -
 
 
 def test_a_retry_save_with_a_cleared_type_plans_the_other_retry_device(harness: ControlsHarness) -> None:
-    """Issue #3389: a cleared type leaves one retry site with no device, and the retry save still plans."""
-    harness.store.write_run(settled_record(harness))  # One access point and one switch failed.
-    post_json(harness, f"/api/org-upgrades/{RETRY_ID}/retry")  # Open the retry of both sites.
-    saved = post_json(harness, OPTIONS_API, {**PLAN_CHOICES, "selected_types": ["ap"]})  # Clear the switch type.
-    assert saved.status_code == 200, saved.get_json()  # The Sites page would end the retry, so no refusal.
-    plan = harness.store.records[saved_operation_id(harness)]  # The new durable plan.
+    """Issue #3396: a cleared type narrows the saved retry scope to the remaining site."""
+    plan = save_filtered_retry(harness)  # Save a plan that leaves site A with no retry device.
+    assert harness.operator.selected_site_ids == (harness.site_one, SITE_TWO)  # Keep the operator selection.
     assert planned_macs(plan) == {AP_TWO}  # The failed access point, and no healthy device.
+    assert plan["site_ids"] == [SITE_TWO]  # Store only the site that still holds a planned retry device.
+    assert plan["site_names"] == {SITE_TWO: "Site Two"}  # Keep the remaining name aligned with its identifier.
+    assert child_site_ids(plan) == {SITE_TWO}  # Every child can act only at the remaining retry site.
     assert plan["retry_of_operation_id"] == RETRY_ID  # The plan stays a retry of the earlier operation.
     assert browser_value(harness, RETRY_SESSION_KEY) == {"operation_id": RETRY_ID, "org_id": harness.org_id}
+
+
+def test_a_filtered_retry_uses_the_remaining_site_for_confirmation(harness: ControlsHarness) -> None:
+    """Issue #3396: confirmation and prechecks use only the remaining retry site."""
+    save_filtered_retry(harness)  # Save a plan that leaves site A with no retry device.
+    harness.prechecks.reads.clear()  # Isolate the confirmation pre-check scope.
+    confirmation = harness.client.get(CONFIRM_PAGE).get_data(as_text=True)  # Read the durable impact summary.
+    assert "<strong>Sites:</strong> 1" in confirmation  # The confirmed site count uses the durable scope.
+    assert "<strong>Devices:</strong> 1" in confirmation  # The confirmed device count matches the remaining target.
+    assert f'data-testid="org-upgrade-precheck-row-{SITE_TWO}"' in confirmation  # Site B has the only row.
+    assert f'data-testid="org-upgrade-precheck-row-{harness.site_one}"' not in confirmation  # Site A has no row.
+    assert "Site Two" in confirmation and "Test Site" not in confirmation  # The warning page excludes site A.
+    assert harness.prechecks.reads == [SITE_TWO]  # Confirmation reads one pre-check for the durable site.
+
+
+def test_a_filtered_retry_uses_the_remaining_site_for_submission_and_locks(harness: ControlsHarness) -> None:
+    """Issue #3396: submission prechecks and locks use only the remaining retry site."""
+    plan = save_filtered_retry(harness)  # Save a plan that leaves site A with no retry device.
+    harness.prechecks.reads.clear()  # Isolate the destructive submission reads.
+    harness.lock_reads.clear()  # Isolate the initial lock refusal scope.
+    started = post_json(harness, SUBMIT_API, {"confirmation": "CONFIRM"})  # Keep the typed confirmation gate.
+    assert started.status_code == 200, started.get_json()  # A lock at removed site A does not block site B.
+    assert harness.prechecks.reads == [SITE_TWO]  # Submission reads one pre-check for the durable site.
+    assert harness.lock_reads == [(SITE_TWO,)]  # The initial lock refusal check reads only the durable site.
+    stored = harness.store.records[str(plan["operation_id"])]  # Read the operation after the durable lock writes.
+    assert set(stored["site_locks"]) == {SITE_TWO}  # The parent stores only the effective site lock.
+    site_two_key = lock.build_key(harness.org_id, SITE_TWO)  # The acquired store key of the effective site.
+    assert site_two_key in harness.locks.values  # Lock acquisition reaches the effective site.
+
+
+def test_a_filtered_retry_refuses_a_lock_at_the_remaining_site(harness: ControlsHarness) -> None:
+    """A lock at the durable retry site stops submission before a firmware write."""
+    harness.store.write_run(settled_record(harness))  # One access point and one switch failed.
+    post_json(harness, f"/api/org-upgrades/{RETRY_ID}/retry")  # Open the retry of both selected sites.
+    post_json(harness, OPTIONS_API, {**PLAN_CHOICES, "selected_types": ["ap"]})  # Keep site B only.
+    operation_id = saved_operation_id(harness)  # Read the filtered retry identity.
+    other_owner = identity.build_owner("other.operator@juniper.net", identity.issue_browser_id())  # Another operator.
+    other_request = lock.LockRequest(harness.org_id, SITE_TWO, other_owner, "other-operation")  # Hold site B.
+    lock.acquire_site_lock(other_request, harness.locks)  # The effective site is unavailable.
+    started = post_json(harness, SUBMIT_API, {"confirmation": "CONFIRM"})  # Try the destructive submission.
+    stored = harness.store.records[operation_id]  # Read the operation after the refusal.
+    assert started.status_code == 409, started.get_json()  # The effective-site lock blocks the retry.
+    assert stored["state"] == "planned"  # No child reached the firmware service.
+    assert stored["site_locks"] == {}  # The operation stores no lock that it did not acquire.
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        pytest.param("owner", "another-owner", id="owner"),
+        pytest.param("org_id", "another-organization", id="organization"),
+        pytest.param("request_nonce", "another-nonce", id="nonce"),
+    ],
+)
+def test_a_changed_retry_identity_fails_before_lock_or_firmware_write(
+    harness: ControlsHarness, field: str, value: str
+) -> None:
+    """A changed durable identity stops submission before a destructive write."""
+    harness.store.write_run(settled_record(harness))  # One access point and one switch failed.
+    post_json(harness, f"/api/org-upgrades/{RETRY_ID}/retry")  # Open the retry of both selected sites.
+    post_json(harness, OPTIONS_API, {**PLAN_CHOICES, "selected_types": ["ap"]})  # Keep site B only.
+    operation_id = saved_operation_id(harness)  # Read the filtered retry identity.
+    harness.store.records[operation_id][field] = value  # Make one durable context field stale.
+    started = post_json(harness, SUBMIT_API, {"confirmation": "CONFIRM"})  # Try the destructive submission.
+    stored = harness.store.records[operation_id]  # Read the durable plan after the refusal.
+    assert started.status_code == 409, started.get_json()  # The context mismatch stops the submission.
+    assert stored["state"] == "planned"  # No child reached the firmware service.
+    assert stored["site_locks"] == {}  # No site lock was stored after the mismatch.
+    assert "pre_captures" not in stored  # No pre-check baseline was written after the mismatch.
+
+
+def test_a_changed_durable_retry_scope_fails_before_lock_or_firmware_write(
+    harness: ControlsHarness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A durable scope change between context reads fails the exact-context check."""
+    harness.store.write_run(settled_record(harness))  # One access point and one switch failed.
+    post_json(harness, f"/api/org-upgrades/{RETRY_ID}/retry")  # Open the retry of both selected sites.
+    post_json(harness, OPTIONS_API, {**PLAN_CHOICES, "selected_types": ["ap"]})  # Keep site B only.
+    operation_id = saved_operation_id(harness)  # Read the filtered retry identity.
+    reader = changed_scope_reader(harness)  # Change only the exact-context validation snapshot.
+    monkeypatch.setattr(harness.store, "read_run", reader)  # Simulate one concurrent durable change.
+    started = post_json(harness, SUBMIT_API, {"confirmation": "CONFIRM"})  # Try the destructive submission.
+    stored = harness.store.records[operation_id]  # Read the unchanged durable plan.
+    assert started.status_code == 409, started.get_json()  # Exact-context validation refuses the stale snapshot.
+    assert stored["state"] == "planned"  # No child reached the firmware service.
+    assert stored["site_locks"] == {}  # No lock write happened after the context mismatch.
+    assert "pre_captures" not in stored  # No pre-check baseline was written after the context mismatch.
 
 
 def test_a_retry_save_plans_the_other_device_when_a_retry_device_left_its_site(harness: ControlsHarness) -> None:
@@ -526,7 +729,29 @@ def test_a_retry_save_plans_the_other_device_when_a_retry_device_left_its_site(h
     assert saved.status_code == 200, saved.get_json()  # The first site holds no retry device, and the save goes on.
     plan = harness.store.records[saved_operation_id(harness)]  # The new durable plan.
     assert planned_macs(plan) == {AP_TWO}  # The retry device that stays, and no healthy device.
+    assert plan["site_ids"] == [SITE_TWO]  # The parent scope follows the retry device that remains.
+    assert plan["site_names"] == {SITE_TWO: "Site Two"}  # The remaining site name stays aligned.
+    confirmation = harness.client.get(CONFIRM_PAGE).get_data(as_text=True)  # Read the narrowed durable scope.
+    assert "<strong>Sites:</strong> 1" in confirmation  # The moved-device retry confirms one site.
+    assert f'data-testid="org-upgrade-precheck-row-{SITE_TWO}"' in confirmation  # Only site B needs a capture.
+    assert f'data-testid="org-upgrade-precheck-row-{harness.site_one}"' not in confirmation  # Site A stays out.
     assert plan["retry_of_operation_id"] == RETRY_ID  # The plan stays a retry of the earlier operation.
+
+
+def test_a_retry_save_refuses_when_filtering_leaves_no_planned_device(harness: ControlsHarness) -> None:
+    """A retry with no remaining target writes no new durable operation."""
+    harness.store.write_run(settled_record(harness))  # One access point and one switch failed.
+    post_json(harness, f"/api/org-upgrades/{RETRY_ID}/retry")  # Open the retry of both selected sites.
+    views = {  # Each failed retry device left, while each site still answers a complete inventory.
+        harness.site_one: [inventory_row(AP_ONE)],
+        SITE_TWO: [inventory_row(SWITCH_TWO)],
+    }
+    harness.client.application.config[org_upgrade.OPTIONS_VIEW_CONFIG_KEY] = lambda session, org, site: {
+        "targets": deepcopy(views[site])  # Each read returns a detached complete site view.
+    }
+    saved = post_json(harness, OPTIONS_API, PLAN_CHOICES)  # Save choices that now match no retry device.
+    assert saved.status_code == 400, saved.get_json()  # The existing empty-plan protection stops the save.
+    assert set(harness.store.records) == {RETRY_ID}  # The refusal writes no new durable operation.
 
 
 def test_a_retry_save_refuses_a_site_whose_view_read_failed(harness: ControlsHarness) -> None:
