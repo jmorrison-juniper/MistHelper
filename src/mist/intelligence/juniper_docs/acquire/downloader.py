@@ -9,14 +9,9 @@ one local path (issue #2738). It rejects a body that does not start with the
 
 from __future__ import annotations  # Enable modern union syntax on every annotation.
 
-import io  # Wrap downloaded bytes for the PDF parser.
 import logging  # Trace each download step for observability.
 import urllib.error  # Classify a URL error or an HTTP error during a read.
 from pathlib import Path  # Build every output path in a portable way.
-
-import pdfplumber  # Parse PDF structure before the corpus stores a document.
-from pdfminer.pdfexceptions import PDFException  # Catch parser failures from pdfplumber.
-from pdfplumber.utils.exceptions import PdfminerException  # Catch pdfplumber-wrapped parser failures.
 
 from src.mist.intelligence.juniper_docs.acquire.catalog_client import JvdCatalogClient, is_transient_error  # Client.
 from src.mist.intelligence.juniper_docs.acquire.pdf_paths import PdfPathAllocator  # Collision-safe path policy.
@@ -127,6 +122,12 @@ class CorpusDownloader(JvdDownloader):
         if not payload.startswith(b"%PDF"):  # Reject an HTML response before parser work.
             _LOGGER.error("The response for %s is not a PDF", source)  # Record the marker failure.
             return False  # A body without the PDF marker cannot be stored.
+        import io  # Wrap downloaded bytes for the PDF parser.
+
+        import pdfplumber  # Parse PDF structure before the corpus stores a document.
+        from pdfminer.pdfexceptions import PDFException  # Catch parser failures from pdfplumber.
+        from pdfplumber.utils.exceptions import PdfminerException  # Catch wrapped parser failures.
+
         try:
             with pdfplumber.open(io.BytesIO(payload)) as document:  # Parse the in-memory document.
                 len(document.pages)  # Force page and object validation before storage.

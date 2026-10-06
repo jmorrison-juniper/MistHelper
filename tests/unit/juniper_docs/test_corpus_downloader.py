@@ -85,7 +85,7 @@ def test_accepts_pdf_without_eof_when_parser_can_read_it(tmp_path: Path) -> None
     downloader = CorpusDownloader(client, tmp_path, _allocator())  # A fresh downloader.
     outcome, path, _size, reason = downloader.download_document(url, tmp_path / "cat")
     assert outcome == "downloaded"  # Parser-usable bytes are accepted.
-    assert path is not None  # The accepted file has a path.
+    assert path == str(tmp_path / "cat" / "no-eof.pdf")  # The accepted file has the expected path.
     assert reason is None  # A successful download has no reason.
 
 
