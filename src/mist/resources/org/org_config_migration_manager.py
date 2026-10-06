@@ -141,7 +141,7 @@ class OrgConfigMigrationManager:  # Org config migration manager.
         self._fetch_existing_objects()  # Cache destination org objects for conflict detection
         results = self._execute_import(bundle, dry_run)  # Run the dependency-ordered import
         self._display_import_report(results)  # Show final summary of what happened
-        logger.info("Menu 177: Import complete, %s objects processed", len(results))  # Log completion
+        self._report_import_completion(results)  # Report success or failure without a false success message.
 
     # ------------------------------------------------------------------
     # Export helpers
@@ -650,9 +650,19 @@ class OrgConfigMigrationManager:  # Org config migration manager.
 
     def _extract_created_id(self, response) -> str:  # Extract the created id.
         """Extract the new object ID from a create API response."""
-        if hasattr(response, "data") and isinstance(response.data, dict):  # Check response has data dict
-            return response.data.get("id", "")  # type: ignore[no-any-return] # Return the new ID
-        return ""  # Fallback when response format is unexpected
+        data = getattr(response, "data", None)  # Read the SDK payload without assuming its response shape.
+        if not isinstance(data, dict):  # A create response must hold one object dictionary.
+            raise ValueError(  # Refuse a response that cannot name the created object.
+                "The Mist create response omitted the required object identifier "
+                "at the organization config create-response boundary."
+            )
+        created_id = data.get("id")  # Read the required identifier without an empty default.
+        if not isinstance(created_id, str) or not created_id.strip():  # Reject absent and blank identifiers.
+            raise ValueError(  # Keep the refusal free of the response value.
+                "The Mist create response omitted the required object identifier "
+                "at the organization config create-response boundary."
+            )
+        return created_id.strip()  # Return the validated identifier for reference remapping.
 
     # ------------------------------------------------------------------
     # Import report
@@ -670,6 +680,22 @@ class OrgConfigMigrationManager:  # Org config migration manager.
         self._print_report_totals(
             buckets["imported"], buckets["skipped"], buckets["failed"], buckets["would_import"]
         )  # Render the grand totals row
+
+    def _report_import_completion(self, results: list) -> None:  # type: ignore[type-arg]
+        """Report an accurate final import state to the operator."""
+        imported_count = sum(result.get("status") == "imported" for result in results)  # Count successful writes.
+        failed_count = sum(result.get("status") == "failed" for result in results)  # Count refused or failed writes.
+        if failed_count and not imported_count:  # A run with no imported object is a total failure.
+            logger.error("Menu 177: Import failed. No objects were imported. Review the FAILED section.")
+            return  # Do not print a success-shaped completion message.
+        if failed_count:  # A mixed result must name both outcomes.
+            logger.warning(
+                "Menu 177: Import completed with failures: %s imported, %s failed.",
+                imported_count,
+                failed_count,
+            )
+            return  # The warning is the final completion state.
+        logger.info("Menu 177: Import complete, %s objects processed", len(results))  # Report clean completion.
 
     def _partition_import_results(self, results: list) -> dict:  # type: ignore[type-arg]
         """Group import results by status into a stable four-bucket dict."""

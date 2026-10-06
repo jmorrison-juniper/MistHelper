@@ -486,17 +486,25 @@ class TestExtractCreatedId:
         response.data = {"id": "dest-1", "name": "Corp-LAN"}  # WHY: the documented shape.
         assert manager._extract_created_id(response) == "dest-1"
 
-    def test_a_missing_identifier_returns_an_empty_string(self, manager: OrgConfigMigrationManager) -> None:
-        """A partial response must not raise inside the create loop."""
+    def test_a_missing_identifier_is_refused(self, manager: OrgConfigMigrationManager) -> None:
+        """A partial response must fail at the create-response boundary."""
         response = MagicMock()  # WHY: stand in for the SDK response wrapper.
         response.data = {"name": "Corp-LAN"}  # WHY: the identifier is absent.
-        assert manager._extract_created_id(response) == ""
+        with pytest.raises(
+            ValueError,
+            match="required object identifier at the organization config create-response boundary",
+        ):
+            manager._extract_created_id(response)
 
-    def test_a_list_payload_returns_an_empty_string(self, manager: OrgConfigMigrationManager) -> None:
-        """A list payload is the wrong shape, and indexing it would raise."""
+    def test_a_list_payload_is_refused(self, manager: OrgConfigMigrationManager) -> None:
+        """A wrong response shape must fail at the create-response boundary."""
         response = MagicMock()  # WHY: stand in for the SDK response wrapper.
         response.data = [{"id": "dest-1"}]  # WHY: reproduce the wrong shape.
-        assert manager._extract_created_id(response) == ""
+        with pytest.raises(
+            ValueError,
+            match="required object identifier at the organization config create-response boundary",
+        ):
+            manager._extract_created_id(response)
 
 
 class TestExtractResponseData:
@@ -717,14 +725,22 @@ class TestCreateAndRecord:
         assert manager._remap_table["src-1"] == "dest-1"  # WHY: the reference must be repairable.
         assert results[0]["status"] == "imported"  # WHY: the report must show the success.
 
-    def test_a_response_without_an_identifier_adds_no_mapping(self, manager: OrgConfigMigrationManager) -> None:
-        """An empty mapping is safer than one that points at nothing."""
+    def test_a_response_without_an_identifier_records_failure(
+        self,
+        manager: OrgConfigMigrationManager,
+        caplog: Any,
+    ) -> None:
+        """A missing identifier must become an operator-visible failed row."""
+        caplog.set_level("ERROR")  # WHY: the operator refusal uses the error channel.
         endpoint = MagicMock()  # WHY: stand in for the resolved SDK endpoint.
         endpoint.return_value.data = {"name": "Corp"}  # WHY: the identifier is absent.
         results: list[dict[str, Any]] = []  # WHY: the accumulator the report reads.
         with patch.object(manager, "_resolve_api_fn", return_value=endpoint):
             manager._create_and_record(self._network_type(), {"name": "Corp"}, "Corp", "src-1", results)
         assert manager._remap_table == {}  # WHY: an empty target would blank a later reference.
+        assert results[0]["status"] == "failed"  # WHY: the report must not claim an import.
+        assert "required object identifier" in results[0]["reason"]  # WHY: the row names the missing input.
+        assert "organization config create-response boundary" in caplog.text  # WHY: the operator sees the boundary.
 
     def test_a_failure_is_recorded_and_not_raised(self, manager: OrgConfigMigrationManager, caplog: Any) -> None:
         """One rejected object must not abandon the rest of the import batch."""
@@ -744,6 +760,18 @@ class TestCreateAndRecord:
         with patch.object(manager, "_resolve_api_fn", return_value=endpoint):
             manager._create_and_record(self._network_type(), {"name": "Corp"}, "Corp", "src-1", results)
         assert manager._remap_table == {}  # WHY: no object exists, so no mapping may exist.
+
+    def test_a_total_failure_has_no_success_completion(
+        self,
+        manager: OrgConfigMigrationManager,
+        caplog: Any,
+    ) -> None:
+        """A run that imports nothing must end with an operator-visible failure."""
+        caplog.set_level("INFO")  # WHY: capture both the error and any false success message.
+        results = [{"type": "networks", "name": "Corp", "status": "failed", "reason": "missing id"}]
+        manager._report_import_completion(results)
+        assert "No objects were imported" in caplog.text  # WHY: the operator sees the total failure.
+        assert "Import complete" not in caplog.text  # WHY: the run must not claim success.
 
 
 class TestImportTypeBatch:
