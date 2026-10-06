@@ -108,8 +108,8 @@ flowchart LR
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`APICoreFetchUtils.all_sites_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/access/api/api_core_fetch_utils.py) | Call |
-| GET | `/api/v1/sites/{site_id}/setting` | [`sites.setting.getSiteSetting`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/setting/get-site-setting) | [`_collect_one_setting`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/intelligence/analytics/zone_analyzer.py) | Call |
-| GET | `/api/v1/sites/{site_id}/zones` | [`sites.zones.listSiteZones`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/zones/list-site-zones) | [`_collect_one_zone`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/intelligence/analytics/zone_analyzer.py) | Call |
+| GET | `/api/v1/sites/{site_id}/setting` | [`sites.setting.getSiteSetting`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/setting/get-site-setting) | [`_collect_one_setting`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/intelligence/analytics/site/zone_analyzer.py) | Call |
+| GET | `/api/v1/sites/{site_id}/zones` | [`sites.zones.listSiteZones`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/zones/list-site-zones) | [`_collect_one_zone`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/intelligence/analytics/site/zone_analyzer.py) | Call |
 
 ## Menu 7
 
@@ -120,7 +120,7 @@ flowchart LR
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
-| GET | `/api/v1/orgs/{org_id}/inventory` | [`orgs.inventory.getOrgInventory`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/inventory/get-org-inventory) | [`SiteInventoryHealthAnalyzer._fetch_devices`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/intelligence/analytics/site_inventory_health_analyzer.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/inventory` | [`orgs.inventory.getOrgInventory`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/inventory/get-org-inventory) | [`SiteInventoryHealthAnalyzer._fetch_devices`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/intelligence/analytics/site/site_inventory_health_analyzer.py) | Call |
 | GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`APICoreFetchUtils.all_sites_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/access/api/api_core_fetch_utils.py) | Call |
 
 ## Menu 8

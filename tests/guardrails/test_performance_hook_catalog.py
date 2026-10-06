@@ -21,6 +21,15 @@ from tests.support.git_environment import (
 _LOGGER = logging.getLogger(__name__)  # Share one logger for this guard module.
 _REPO_ROOT = Path(__file__).resolve().parents[2]  # Locate the repository root from tests/guardrails.
 _ARTIFACT_ROOT = _REPO_ROOT / "specs" / "2448-misthelper-performance-monitoring" / "artifacts"  # Locate artifacts.
+_HISTORICAL_PATH_MOVES = {  # Resolve immutable catalog paths after approved source moves.
+    "src/mist/intelligence/analytics/site_analytics_configurator.py": (
+        "src/mist/intelligence/analytics/site/site_analytics_configurator.py"
+    ),
+    "src/mist/intelligence/analytics/site_inventory_health_analyzer.py": (
+        "src/mist/intelligence/analytics/site/site_inventory_health_analyzer.py"
+    ),
+    "src/mist/intelligence/analytics/zone_analyzer.py": "src/mist/intelligence/analytics/site/zone_analyzer.py",
+}
 
 
 @dataclass(frozen=True)
@@ -176,7 +185,9 @@ class TestPerformanceHookCatalog:
         scanner = CatalogSourceScanner(_REPO_ROOT)  # Create the source scanner for this repository.
         catalog = PerformanceHookCatalog(_ARTIFACT_ROOT)  # Create the artifact reader for this spec.
         tracked_paths = set(scanner.tracked_python_paths())  # Recreate the documented Git source set.
-        inventory_paths = sorted(row["file_path"] for row in catalog.inventory_rows())  # Read artifact paths.
+        inventory_paths = sorted(  # Resolve approved moves without changing the historical artifact.
+            self._current_path(row["file_path"]) for row in catalog.inventory_rows()
+        )
         stale = [path for path in inventory_paths if path not in tracked_paths]  # Find rows naming no file.
         assert not stale, "The catalog names files that no longer exist:\n" + "\n".join(stale)  # Report each one.
 
@@ -189,7 +200,9 @@ class TestPerformanceHookCatalog:
         # `test_hook_rows_resolve_to_current_ast_symbols` catches symbol rot exactly.
         scanner = CatalogSourceScanner(_REPO_ROOT)  # Create the source scanner for this repository.
         catalog = PerformanceHookCatalog(_ARTIFACT_ROOT)  # Create the artifact reader for this spec.
-        paths = sorted(row["file_path"] for row in catalog.inventory_rows())  # Read the snapshot set.
+        paths = sorted(  # Resolve approved moves before the live AST parse.
+            self._current_path(row["file_path"]) for row in catalog.inventory_rows()
+        )
         symbol_index = scanner.symbol_index(paths)  # Parse each recorded file, which raises on bad syntax.
         scan_summary = catalog.scan_summary()  # Read the generated scan summary.
         assert scan_summary["eligible_file_count"] == len(paths)  # The summary must match its own table.
@@ -224,11 +237,17 @@ class TestPerformanceHookCatalog:
 
     @staticmethod
     def _row_resolves(row: dict[str, str], symbol_index: dict[str, list[SymbolRecord]]) -> bool:
-        symbols = symbol_index.get(row["file_path"], [])  # Read symbols for the catalog path, if present.
+        current_path = TestPerformanceHookCatalog._current_path(row["file_path"])  # Resolve an approved move.
+        symbols = symbol_index.get(current_path, [])  # Read symbols for the current source path, if present.
         names = {symbol.name for symbol in symbols}  # Build a local-name lookup for class rows.
         qualified_names = {symbol.qualified_name for symbol in symbols}  # Build a qualified-name lookup.
         symbol_name = row["symbol_or_class"]  # Read the symbol that the hook row names.
         return symbol_name in names or symbol_name in qualified_names  # Accept exact AST names only.
+
+    @staticmethod
+    def _current_path(recorded_path: str) -> str:
+        """Return the current path for one immutable catalog path."""
+        return _HISTORICAL_PATH_MOVES.get(recorded_path, recorded_path)  # Preserve all paths without a move.
 
     @staticmethod
     def _count_by(rows: list[dict[str, str]], column: str) -> dict[str, int]:
