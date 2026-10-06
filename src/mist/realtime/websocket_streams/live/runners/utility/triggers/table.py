@@ -97,13 +97,14 @@ class UtilityTriggerTable:
         logger.emit(logging.DEBUG, "utility_trigger_built", {"action": request.key})
         return trigger
 
-    def shell_request(self, site_id: str, device_id: str) -> UtilityRequest:
+    def shell_request(self, site_id: str, device_id: str, node: str | None = None) -> UtilityRequest:
         """Return the shell REST trigger."""
         logger.emit(logging.INFO, "utility_shell_trigger_build")
         path = f"/api/v1/sites/{site_id}/devices/{device_id}/shell"
         listen = UtilityListen("url", "", self._definitions.shell_timing())
+        body: dict[str, object] = {"node": node} if node else {}
         logger.emit(logging.DEBUG, "utility_shell_trigger_built")
-        return UtilityRequest("shell", "POST", path, {}, listen)
+        return UtilityRequest("shell", "POST", path, body, listen)
 
     def _row(self, key: str) -> tuple[str, str, str, str, float]:
         """Return one supported trigger row."""

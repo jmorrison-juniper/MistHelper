@@ -93,7 +93,9 @@ class ShellRunner(DeviceTerminalRunner, ShellInput):
         """Return the checked shell trigger."""
         site_id = self._request.target("site_id")  # Read the checked site identifier.
         device_id = self._request.target("device_id")  # Read the checked device identifier.
-        return self._triggers.shell_request(site_id, device_id)  # Build the SDK-parity shell request.
+        node = self._request.parameters.get("node")
+        node_value = node if isinstance(node, str) and node else None
+        return self._triggers.shell_request(site_id, device_id, node_value)  # Build the SDK-parity shell request.
 
 
 class ScreenRunner(DeviceTerminalRunner):

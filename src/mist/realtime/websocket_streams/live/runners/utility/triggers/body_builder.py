@@ -41,7 +41,11 @@ class CommandBodyBuilder:
         builders: dict[str, Callable[[], dict[str, object]]] = {
             "bgp": lambda: {"protocol": "bgp"},
             "cable": lambda: {"port": params["port_id"]},
-            "junos_arp": lambda: {"duration": 1, "interval": 1, **self._copy(params, ("ip", "vrf", "port_id"))},
+            "junos_arp": lambda: {
+                "duration": 1,
+                "interval": 1,
+                **self._copy(params, ("ip", "vrf", "port_id", "node")),
+            },
             "monitor": lambda: {"duration": 60, **({"port": params["port_id"]} if "port_id" in params else {})},
             "ports": lambda: {"ports": params["port_ids"]},
         }

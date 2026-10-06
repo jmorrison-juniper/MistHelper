@@ -58,7 +58,18 @@ class TestUtilityTriggerTable:
         assert screen.listen.channel == "url"  # Screen commands listen through the returned URL.
         shell = table.shell_request(self.SITE_ID, self.DEVICE_ID)  # Build the shell trigger.
         assert shell.path == f"/api/v1/sites/{self.SITE_ID}/devices/{self.DEVICE_ID}/shell"  # Shell path matches SDK.
+        assert shell.body == {}  # Standalone devices use the documented empty shell body.
         assert shell.listen.channel_path == ""  # Shell sessions do not subscribe to a stream channel.
+
+    def test_switch_requests_forward_the_optional_ha_node(self) -> None:
+        """Keep the optional HA node in switch shell and ARP requests."""
+        table = UtilityTriggerTable()  # Build the trigger table.
+        arp = table.request_for(
+            self._request("ex.retrieveArpTable", {"node": "node1"})
+        )  # Build a node-scoped ARP request.
+        shell = table.shell_request(self.SITE_ID, self.DEVICE_ID, "node1")  # Build a node-scoped shell request.
+        assert arp.body == {"duration": 1, "interval": 1, "node": "node1"}  # Preserve the documented ARP node.
+        assert shell.body == {"node": "node1"}  # Preserve the documented shell node.
 
     def test_timing_uses_sdk_quiet_floor(self) -> None:
         """Keep SDK quiet values and enforce a five second floor."""
