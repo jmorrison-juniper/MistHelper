@@ -2,13 +2,15 @@
   Sync Impact Report
   ==================
   Version change: 1.7.2 -> 1.8.0 (MINOR)
-  Bump rationale: MINOR, because the amendment defines the narrow owned
-    WebSocket transport exception and its return condition.
-  Modified principles:
-    - Technology Constraints: defined the owned WebSocket exception, its
-      mistapi session boundary, and the return condition.
+  Bump rationale: MINOR, because the amendment adds a binding return condition
+    to the owned Mist WebSocket transport exception. The condition requires
+    reviewed SDK support and contract proof before MistHelper returns the
+    affected flows to mistapi.
+  Modified principles: None.
   Modified sections:
-    - Header comment: recorded the WebSocket transport policy amendment.
+    - Technology & Compatibility Constraints: narrowed the owned WebSocket
+      transport permission, named its temporary status, pinned its private
+      mistapi session seam, and added the objective return condition.
   Added sections: None.
   Removed sections: None.
   Templates requiring updates:
@@ -18,7 +20,9 @@
     - .specify/templates/checklist-template.md: no update required.
     - .specify/templates/agent-file-template.md: no update required.
     - .specify/templates/constitution-template.md: no update required.
-  Related files updated simultaneously: None.
+  Related files updated simultaneously:
+    - tests/guardrails/test_websocket_transport_constitution.py: guards the
+      exception, return condition, and existing private-session contract.
   Follow-up actions: None.
 -->
 
@@ -268,24 +272,22 @@ The following technology choices are binding for all MistHelper code:
 - **mistapi**: 0.59+ (Thomas Munzer's Mist API SDK). This is the sole
   interface for Juniper Mist Cloud REST APIs. Code MUST NOT send direct
   HTTP requests to a Mist REST endpoint when a working mistapi method exists.
-- **Owned WebSocket Transport**: Code MAY own a Mist Cloud WebSocket transport
-  only for a WebSocket path that the matching mistapi release cannot support.
-  REST requests MUST continue to use mistapi.
-  The specification and plan MUST name the SDK path and the failed contract.
-  Contract tests MUST prove that the SDK path loses the first output or split
-  control sequences before implementation can pass review.
-  The owned client MAY read only the four required private APISession fields:
-  `_apitoken`, `_apitoken_index`, `_session`, and `_cloud_uri`.
-  The contract test `tests/contract/websocket_streams/test_ws_sdk_contract.py`
-  MUST guard those fields.
+- **Temporary Owned WebSocket Transport**: Code MAY own a Mist Cloud WebSocket
+  transport only for an affected flow whose matching mistapi path loses the
+  first output or damages split control sequences. The specification and plan
+  MUST name the SDK path and the failed contract. Contract tests MUST prove
+  that the SDK path is insufficient before implementation can pass review.
   The owned transport MUST preserve the SDK authentication and endpoint
-  contracts. It MUST follow every safety rule and every secret-redaction rule
+  contracts. The existing SDK contract test MUST pin `_apitoken`,
+  `_apitoken_index`, `_session`, and `_cloud_uri` while this exception exists.
+  The transport MUST follow every safety rule and every secret-redaction rule
   in this constitution. Its tests MUST verify authentication, endpoint,
-  output, failure, and redaction contracts.
-  The exception ends when a mistapi release preserves the first output and
-  split control sequences in the contract tests. The client MUST then return
-  to the mistapi WebSocket path.
-  This exception does not permit direct HTTP requests to Mist REST endpoints.
+  output, failure, and redaction contracts. This exception does not permit
+  direct HTTP requests to Mist REST endpoints.
+  MistHelper MUST return the affected WebSocket flows to mistapi when a
+  reviewed supported mistapi release preserves the first output and split
+  control sequences. Contract tests MUST prove both output contracts before
+  the return can pass review.
 - **Package Manager**: UV is preferred for speed; `requirements.txt`
   MUST be maintained for pip compatibility.
 - **Container Runtime**: Podman is the primary runtime. Docker is
@@ -550,4 +552,4 @@ provide detailed implementation patterns and are the primary references for
 day-to-day coding decisions. The constitution provides the non-negotiable
 rules. The two guides provide the how-to.
 
-**Version**: 1.7.2 | **Ratified**: 2026-03-05 | **Last Amended**: 2026-10-05
+**Version**: 1.8.0 | **Ratified**: 2026-03-05 | **Last Amended**: 2026-10-06
