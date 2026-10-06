@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from src.mist.intelligence.marvis.actions.acknowledgement import (
+from src.mist.intelligence.marvis.actions.alarm_handling.acknowledgement import (
     ACK_OUTCOME_ACKNOWLEDGED,
     ACK_OUTCOME_NOT_SENT,
     MAX_ACKNOWLEDGE_BATCH_SIZE,
@@ -27,7 +27,7 @@ class TestMarvisAlarmAcknowledger:
         """The optional destructive step stays off when the operator does not confirm it."""
         client = MagicMock()
         with patch(
-            "src.mist.intelligence.marvis.actions.acknowledgement.MarvisResolvePrompts.ask_acknowledge_confirmation",
+            "src.mist.intelligence.marvis.actions.alarm_handling.acknowledgement.MarvisResolvePrompts.ask_acknowledge_confirmation",
             return_value=False,
         ):
             results = acknowledger(client).acknowledge(["alarm-1", "alarm-2"])
@@ -40,7 +40,7 @@ class TestMarvisAlarmAcknowledger:
         client.acknowledge_marvis_alarms.return_value = (200, "")
         alarm_ids = [f"alarm-{number}" for number in range(MAX_ACKNOWLEDGE_BATCH_SIZE + 1)]
         with patch(
-            "src.mist.intelligence.marvis.actions.acknowledgement.MarvisResolvePrompts.ask_acknowledge_confirmation",
+            "src.mist.intelligence.marvis.actions.alarm_handling.acknowledgement.MarvisResolvePrompts.ask_acknowledge_confirmation",
             return_value=True,
         ):
             results = acknowledger(client).acknowledge(alarm_ids)
@@ -55,7 +55,7 @@ class TestMarvisAlarmAcknowledger:
         client = MagicMock()
         client.acknowledge_marvis_alarms.return_value = (200, "")
         with patch(
-            "src.mist.intelligence.marvis.actions.acknowledgement.MarvisResolvePrompts.ask_acknowledge_confirmation",
+            "src.mist.intelligence.marvis.actions.alarm_handling.acknowledgement.MarvisResolvePrompts.ask_acknowledge_confirmation",
             return_value=True,
         ):
             acknowledger(client).acknowledge(["alarm-1"])

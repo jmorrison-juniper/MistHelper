@@ -16,7 +16,7 @@ import pytest
 
 from src.foundation.runtime.config import runtime_settings
 from src.foundation.support.utils.input_utils import InputUtils
-from src.mist.intelligence.marvis.actions.alarms import ALARM_COLUMNS, ALARM_MAX_WINDOW_SECONDS
+from src.mist.intelligence.marvis.actions.alarm_handling.alarms import ALARM_COLUMNS, ALARM_MAX_WINDOW_SECONDS
 from src.mist.intelligence.marvis.actions.model import MarvisActionRecord
 from src.mist.intelligence.marvis.actions.operation import (
     DEFAULT_MAX_ACTIONS,

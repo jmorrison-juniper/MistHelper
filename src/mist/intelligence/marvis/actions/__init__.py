@@ -3,8 +3,8 @@
 Why:
     The package splits the feature into five modules. ``model`` names the
     topics and builds the flat rows. ``client`` makes every Mist API call.
-    ``selection`` reads the filter answers and asks the prompts. ``alarms``
-    joins each exported action to its Marvis alarm. ``operation`` runs the
+    ``selection`` reads the filter answers and asks the prompts. ``alarm_handling``
+    joins and acknowledges Marvis alarms. ``operation`` runs the
     menu option for the SSH menu, the command line, and the web dashboard.
     The web dashboard reads its filter lists from the catalogs in ``model``,
     so the portal choices and the CLI tables use the same keys.

@@ -48,13 +48,13 @@ from src.foundation.runtime.config.source_dependency_resolver import (
 from src.foundation.support.utils.rate_limiting import (
     AdaptivePacer,
 )  # WHY: the quota-aware wait between two resolve requests.
-from src.mist.intelligence.marvis.actions.acknowledgement import (
+from src.mist.intelligence.marvis.actions.alarm_handling.acknowledgement import (
     ACK_OUTCOME_ACKNOWLEDGED,
     ACK_OUTCOME_ERROR,
     ACK_OUTCOME_NOT_SENT,
     MarvisAlarmAcknowledger,
 )  # WHY: guard and batch the optional alarm acknowledge step.
-from src.mist.intelligence.marvis.actions.alarms import (
+from src.mist.intelligence.marvis.actions.alarm_handling.alarms import (
     MarvisAlarmJoin,
 )  # WHY: add the Marvis alarm of each action to its row.
 from src.mist.intelligence.marvis.actions.client import (
