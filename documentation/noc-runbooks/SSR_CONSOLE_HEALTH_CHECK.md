@@ -112,7 +112,7 @@ instead.
 
 ### Check an optic without optics-statistics
 
-SSR 7.0.x does not have the `optics-statistics` value, so the console shows no light level. Do these steps instead of step C2.
+SSR 7.0.x does not have the `optics-statistics` value, so the console shows no light level. Do these steps instead of step C2. No engineer ran these steps on a lab SSR, so read [Verification status of the optic check and the cloud path check](#verification-status-of-the-optic-check-and-the-cloud-path-check) first.
 
 1. Run `show device-interface name <name>`. Record the admin status, the operational status, the speed, and the error counters.
 2. Run step C3 two times, 60 seconds apart. An error counter that grows proves a physical fault.
@@ -142,7 +142,7 @@ report a healthy router that carries no user traffic.
 
 ### Test the path to the Mist cloud
 
-The Mist agent on the router connects to the Mist cloud on TCP port 443. It finds each cloud host by name through DNS. Step D7 reads the state of that link from the agent itself. That state is the best proof of the path at the console.
+The Mist agent on the router connects to the Mist cloud on TCP port 443. It finds each cloud host by name through DNS. Step D7 reads the state of that link from the agent itself. That state is the best proof of the path at the console. Each statement in this section comes from a vendor source, so read [Verification status of the optic check and the cloud path check](#verification-status-of-the-optic-check-and-the-cloud-path-check) first.
 
 Do not use an ICMP `ping` as proof of the path, for these reasons:
 
@@ -343,6 +343,31 @@ The fetch script does not copy these pages. Open each page at its address.
 | SSR1300 quickstart. The MGMT port rule. | <https://docs.128technology.com/docs/wan_assurance_ssr1300_quickstart> |
 | Juniper Mist firewall ports. The SSR hosts and the DNS rule. | <https://www.juniper.net/documentation/us/en/software/mist/mist-management/topics/ref/firewall-ports-to-open.html> |
 | Fiber Optic Association, Guidelines For Testing And Troubleshooting Cable Plant Installations (2024). The cleaning rule and the power level rules. | <https://www.thefoa.org/tech/> |
+
+### Verification status of the optic check and the cloud path check
+
+A statement in this document comes from a vendor source, from a lab test, or
+from the two of them. The table below reports the status of six statements in
+the optic check and the cloud path check. Each one comes from a vendor source,
+and no engineer confirmed it against a lab SSR.
+
+Read the table before you give one of these statements in an escalation note.
+A statement with no lab test is correct for the release that its source names.
+It can be different from the output of the release on your router.
+
+| Statement | Source | Lab test |
+|---|---|---|
+| `show device-interface <name> optics-statistics` fails on SSR 7.0.x, because the `name` keyword is mandatory. See §11. | The command line reference. | Not run. The exact error text is not recorded. |
+| `show device-interface name <name> optics-statistics` fails on SSR 7.0.x, because that release does not have the `optics-statistics` value. See step C2. | The SSR 7.1 release notes, item I95-44742. | Not run. The exact error text is not recorded. |
+| `show device-interface name <name>` reports the admin status, the operational status, the speed, and the error counters. See step 1 of [Check an optic without optics-statistics](#check-an-optic-without-optics-statistics). | The command line reference. | Not run on SSR 7.0.x. The field list is not confirmed against a live output. |
+| `show device-interface name <name> optics-statistics` reports the power levels and the hardware thresholds of a fiber port. See step C2. | The SSR 7.1 release notes and the statistics reference. | Not run on SSR 7.1.0-50r1. The names of the power level fields and the threshold fields are not recorded. |
+| `show mist detail` reports an `Agent` field and a `Connection` field. See step D7. | The WAN telemetry troubleshooting page. That page describes the two names as columns of `show mist`. | Not run. The field names of the `detail` form are not confirmed. |
+| The portal `Testing Tools` do not run while the cloud link is down. See the last sentence of [Test the path to the Mist cloud](#test-the-path-to-the-mist-cloud). | The Mist WAN Assurance documentation. | Not run. No engineer has blocked TCP port 443 on a lab router and then used the portal tools. |
+
+Issue #3960 holds the six lab tests. When a lab SSR produces an output, record
+it in the step that the row names. Then change the `Lab test` cell to the
+release that produced the output. Remove each address, each serial number, and
+each customer name from the output first.
 
 ## 15. Escalation
 
