@@ -5,6 +5,7 @@ from unittest.mock import MagicMock
 from src.mist.resources.site.address_audit import audit_engine as eng_mod
 from src.mist.resources.site.address_audit.audit_engine import AddressAuditEngine
 from src.mist.resources.site.address_audit.business_authority_ingester import BusinessAuthorityRow
+from src.mist.resources.site.address_audit.comparison_display import ComparisonTableRenderer
 from src.mist.resources.site.address_audit.models import AddressRow, AuditResult, MatchedSite, ResolverResult
 
 _MIST_NO_SUITE = {"address": "100 Main St", "city": "Town", "state": "FL", "zip": "33000"}
@@ -147,6 +148,17 @@ class TestWriteBackWiring:
         engine._finish([], MagicMock())
         engine._reporter.save.assert_not_called()
         corrector.correctable.assert_not_called()
+
+    def test_empty_post_table_choice_skips_all_write_paths(self, monkeypatch):
+        """An empty post-table choice cannot reach a file or Mist write path."""
+        engine, corrector = self._engine_with_mocks()
+        engine._renderer = ComparisonTableRenderer()
+        api_session = MagicMock()
+        monkeypatch.setattr(eng_mod.InputUtils, "safe_input", staticmethod(lambda *a, **k: ""))
+        engine._finish([], api_session)
+        engine._reporter.save.assert_not_called()
+        corrector.correctable.assert_not_called()
+        assert api_session.mock_calls == []
 
     def test_save_then_offers_writeback(self):
         """Choosing save writes the report and then offers write-back."""
