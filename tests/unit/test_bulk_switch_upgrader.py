@@ -956,6 +956,16 @@ class TestExecution:
         upgrader._process_site(1, {"name": "Bad Site"})
         assert upgrader.upgrade_results["sites_failed"] == 1
 
+    def test_process_site_rejects_non_string_id(self, upgrader: BulkSwitchFirmwareUpgrader) -> None:
+        """Reject a site identifier with a type that the Mist API cannot use."""
+        upgrader._initialize_results()
+        upgrader.selected_sites = [{"id": 123, "name": "Bad Site"}]
+
+        upgrader._process_site(1, upgrader.selected_sites[0])
+
+        assert upgrader.upgrade_results["sites_failed"] == 1
+        assert upgrader.upgrade_results["sites_processed"] == 0
+
     def test_process_site_no_switches(self, upgrader: BulkSwitchFirmwareUpgrader) -> None:
         """Verify site with no switches is skipped."""
         upgrader._initialize_results()
