@@ -21,6 +21,42 @@ from tests.support.git_environment import (
 _LOGGER = logging.getLogger(__name__)  # Share one logger for this guard module.
 _REPO_ROOT = Path(__file__).resolve().parents[2]  # Locate the repository root from tests/guardrails.
 _ARTIFACT_ROOT = _REPO_ROOT / "specs" / "2448-misthelper-performance-monitoring" / "artifacts"  # Locate artifacts.
+MOVED_PATHS = {  # Map each snapshot path to the canonical path that holds the same module today.
+    # Issue #4007 moved the troubleshooting modules into the shared core package.
+    # The snapshot artifacts stay byte-identical, so the guard resolves the move here.
+    "src/mist/intelligence/troubleshooting/interactive_test_runner.py": (
+        "src/mist/intelligence/troubleshooting/core/interactive_test_runner.py"
+    ),
+    "src/mist/intelligence/troubleshooting/marvis_troubleshoot_utils.py": (
+        "src/mist/intelligence/troubleshooting/core/marvis_troubleshoot_utils.py"
+    ),
+    "src/mist/intelligence/troubleshooting/troubleshoot_utils.py": (
+        "src/mist/intelligence/troubleshooting/core/troubleshoot_utils.py"
+    ),
+}
+
+
+def current_catalog_path(snapshot_path: str) -> str:
+    """Return the current repository path for one snapshot path.
+
+    Why:
+        A reviewed move keeps the module, so the guard must follow it and still
+        fail for a path that no approved move explains.
+    """
+    return MOVED_PATHS.get(snapshot_path, snapshot_path)  # Follow an approved move, or keep the snapshot path.
+
+
+def row_resolves(row: dict[str, str], symbol_index: dict[str, list[SymbolRecord]]) -> bool:
+    """Return True when one hook row names a live AST symbol.
+
+    Why:
+        A moved file keeps its symbols, and a lost symbol must still fail the guard.
+    """
+    symbols = symbol_index.get(current_catalog_path(row["file_path"]), [])  # Read symbols at the current path.
+    names = {symbol.name for symbol in symbols}  # Build a local-name lookup for class rows.
+    qualified_names = {symbol.qualified_name for symbol in symbols}  # Build a qualified-name lookup.
+    symbol_name = row["symbol_or_class"]  # Read the symbol that the hook row names.
+    return symbol_name in names or symbol_name in qualified_names  # Accept exact AST names only.
 
 
 @dataclass(frozen=True)
@@ -176,7 +212,9 @@ class TestPerformanceHookCatalog:
         scanner = CatalogSourceScanner(_REPO_ROOT)  # Create the source scanner for this repository.
         catalog = PerformanceHookCatalog(_ARTIFACT_ROOT)  # Create the artifact reader for this spec.
         tracked_paths = set(scanner.tracked_python_paths())  # Recreate the documented Git source set.
-        inventory_paths = sorted(row["file_path"] for row in catalog.inventory_rows())  # Read artifact paths.
+        inventory_paths = sorted(
+            current_catalog_path(row["file_path"]) for row in catalog.inventory_rows()
+        )  # Read artifact paths through the approved move map.
         stale = [path for path in inventory_paths if path not in tracked_paths]  # Find rows naming no file.
         assert not stale, "The catalog names files that no longer exist:\n" + "\n".join(stale)  # Report each one.
 
@@ -189,7 +227,9 @@ class TestPerformanceHookCatalog:
         # `test_hook_rows_resolve_to_current_ast_symbols` catches symbol rot exactly.
         scanner = CatalogSourceScanner(_REPO_ROOT)  # Create the source scanner for this repository.
         catalog = PerformanceHookCatalog(_ARTIFACT_ROOT)  # Create the artifact reader for this spec.
-        paths = sorted(row["file_path"] for row in catalog.inventory_rows())  # Read the snapshot set.
+        paths = sorted(
+            current_catalog_path(row["file_path"]) for row in catalog.inventory_rows()
+        )  # Read the snapshot set through the approved move map.
         symbol_index = scanner.symbol_index(paths)  # Parse each recorded file, which raises on bad syntax.
         scan_summary = catalog.scan_summary()  # Read the generated scan summary.
         assert scan_summary["eligible_file_count"] == len(paths)  # The summary must match its own table.
@@ -203,7 +243,7 @@ class TestPerformanceHookCatalog:
         symbol_index = scanner.symbol_index(paths)  # Parse source with AST for exact symbol checks.
         failures = []  # Collect all stale hook rows for one complete assertion.
         for row in catalog.hook_rows():  # Check each catalog hook row against the source tree.
-            if not self._row_resolves(row, symbol_index):  # Detect a missing file or missing symbol.
+            if not row_resolves(row, symbol_index):  # Detect a missing file or missing symbol.
                 failures.append(f"{row['hook_id']} {row['file_path']} {row['symbol_or_class']}")  # Report the row.
         assert not failures, "\n".join(failures)  # Fail once with every stale hook row.
 
@@ -223,16 +263,54 @@ class TestPerformanceHookCatalog:
         ]  # Check strategies.
 
     @staticmethod
-    def _row_resolves(row: dict[str, str], symbol_index: dict[str, list[SymbolRecord]]) -> bool:
-        symbols = symbol_index.get(row["file_path"], [])  # Read symbols for the catalog path, if present.
-        names = {symbol.name for symbol in symbols}  # Build a local-name lookup for class rows.
-        qualified_names = {symbol.qualified_name for symbol in symbols}  # Build a qualified-name lookup.
-        symbol_name = row["symbol_or_class"]  # Read the symbol that the hook row names.
-        return symbol_name in names or symbol_name in qualified_names  # Accept exact AST names only.
-
-    @staticmethod
     def _count_by(rows: list[dict[str, str]], column: str) -> dict[str, int]:
         counts: dict[str, int] = {}  # Build a stable count map without an extra dependency.
         for row in rows:  # Count each row by the requested CSV column.
             counts[row[column]] = counts.get(row[column], 0) + 1  # Increment the matching bucket.
         return dict(sorted(counts.items()))  # Return a sorted map for deterministic JSON comparison.
+
+
+class TestCatalogMovedPaths:
+    """Verify the approved move map and the unknown-path failure.
+
+    Why:
+        The map must follow a reviewed move only, and it must not hide a lost file.
+    """
+
+    def test_each_moved_path_names_a_snapshot_row_and_a_tracked_file(self) -> None:
+        scanner = CatalogSourceScanner(_REPO_ROOT)  # Create the source scanner for this repository.
+        catalog = PerformanceHookCatalog(_ARTIFACT_ROOT)  # Create the artifact reader for this spec.
+        tracked_paths = set(scanner.tracked_python_paths())  # Read the live Git source set one time.
+        snapshot_paths = {row["file_path"] for row in catalog.inventory_rows()}  # Read the snapshot set.
+        checked = 0  # Count the mappings that this test proved.
+        for old_path, new_path in MOVED_PATHS.items():  # Prove each mapping against both sets.
+            assert old_path in snapshot_paths, f"{old_path} is not a snapshot row, so the mapping is dead"
+            assert old_path not in tracked_paths, f"{old_path} still exists, so the mapping is wrong"
+            assert new_path in tracked_paths, f"{new_path} is not tracked, so the mapping names no file"
+            assert current_catalog_path(old_path) == new_path  # The resolver must return the new path.
+            checked += 1  # Record this proved mapping.
+        _LOGGER.info("Checked %s moved catalog paths", checked)  # Report the examined count.
+        assert checked == len(MOVED_PATHS)  # The loop must prove every mapping.
+
+    def test_unknown_path_keeps_itself_and_fails_the_missing_file_check(self) -> None:
+        scanner = CatalogSourceScanner(_REPO_ROOT)  # Create the source scanner for this repository.
+        tracked_paths = set(scanner.tracked_python_paths())  # Read the live Git source set one time.
+        unknown_path = "src/mist/intelligence/troubleshooting/core/absent.py"  # Name an unexplained missing file.
+        resolved = current_catalog_path(unknown_path)  # Resolve the unknown path through the move map.
+        assert resolved == unknown_path  # The map must not invent a destination for an unknown path.
+        assert resolved not in tracked_paths  # The missing-file check still reports this path as stale.
+
+    def test_moved_path_keeps_the_symbol_check_exact(self) -> None:
+        scanner = CatalogSourceScanner(_REPO_ROOT)  # Create the source scanner for this repository.
+        catalog = PerformanceHookCatalog(_ARTIFACT_ROOT)  # Create the artifact reader for this spec.
+        new_paths = sorted(set(MOVED_PATHS.values()))  # Collect the canonical destinations only.
+        symbol_index = scanner.symbol_index(new_paths)  # Parse the moved modules for an exact symbol check.
+        moved_rows = [row for row in catalog.hook_rows() if row["file_path"] in MOVED_PATHS]  # Select rows.
+        moved_files = {row["file_path"] for row in moved_rows}  # Collect snapshot files that hold a hook row.
+        assert moved_files == set(MOVED_PATHS), f"Checked {len(moved_rows)} hook rows for {len(moved_files)} files"
+        checker = row_resolves  # Reuse the production row resolver of this guard.
+        for row in moved_rows:  # Each moved row must resolve to a real symbol at the new path.
+            assert checker(row, symbol_index), f"{row['hook_id']} names no live symbol"
+        absent_symbol_row = {**moved_rows[0], "symbol_or_class": "AbsentSymbolName"}  # Build a stale row.
+        assert not checker(absent_symbol_row, symbol_index)  # A lost symbol must still fail.
+        _LOGGER.info("Checked %s moved hook rows", len(moved_rows))  # Report the examined count.
