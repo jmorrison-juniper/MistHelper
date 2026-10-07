@@ -376,7 +376,7 @@ pie showData
 | [288](Menu-API-Endpoints-Interactive-Safe#menu-288) | Show the SSR registration commands | `interactive_safe` | 0 |
 | [289](Menu-API-Endpoints-Interactive-Safe#menu-289) | Export the client fingerprint census for a site | `interactive_safe` | 2 |
 | [290](Menu-API-Endpoints-Interactive#menu-290) | Run spectrum analysis and RF diagnostic recording | `interactive` | 4 |
-| [291](Menu-API-Endpoints-Destructive#menu-291) | DESTRUCTIVE: Optimize or reset site RRM with before and after plan capture (Requires typing 'OPTIMIZE' or 'RESET' to confirm, supports --dry-run) | `destructive` | 2 |
+| [291](Menu-API-Endpoints-Destructive#menu-291) | DESTRUCTIVE: Optimize or reset site RRM with before and after plan capture (Requires typing 'OPTIMIZE' or 'RESET' to confirm, dry-run unless --live-run is given) | `destructive` | 2 |
 | [292](Menu-API-Endpoints-Destructive#menu-292) | DESTRUCTIVE: Import PSKs, user MACs, and assets from CSV (Requires typing 'IMPORT <row_count>' to confirm, supports --dry-run) | `destructive` | 10 |
 | [293](Menu-API-Endpoints-Destructive#menu-293) | DESTRUCTIVE: Run the Mist Edge lifecycle operation (Requires typing 'CLAIM', 'ASSIGN', 'UNASSIGN', 'BOUNCE', or 'UPGRADE' to confirm, supports --dry-run) | `destructive` | 0 |
 | [294](Menu-API-Endpoints-Interactive-Safe#menu-294) | List Juniper service requests for a date window, every field (read-only, needs Juniper settings) | `interactive_safe` | 0 |

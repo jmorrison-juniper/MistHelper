@@ -22,6 +22,7 @@ With `-M` it runs one operation and exits, which suits a scheduled job.
 | `--skip-ssl-verify` | Skip SSL certificate verification for external API calls |
 | `--no-env` | Disable .env file loading for SSH operations |
 | `--dry-run` | Preview destructive operations without making changes |
+| `--live-run` | Explicitly permit a destructive operation after its typed confirmation |
 | `--tui` | Launch Terminal User Interface mode for visual API navigation |
 | `--login` | Use interactive login (email and password) instead of API token. This enables MSP-level API access. |
 | `--web-portal` | Launch the web portal interface on port 8055 (or WEB_PORT env var) |

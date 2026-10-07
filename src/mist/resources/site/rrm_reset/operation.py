@@ -3,7 +3,7 @@
 from __future__ import annotations  # WHY: support modern annotations without runtime cost.
 
 import logging  # WHY: log each operator step and result.
-import os  # WHY: read dry-run and settle-time environment settings.
+import os  # noqa: F401  # WHY: preserve the published module symbol while policy reads move to one resolver.
 import time  # WHY: wait for the site RRM settle period.
 from collections.abc import Callable  # WHY: tests inject a no-wait sleeper.
 from dataclasses import dataclass  # WHY: group operation dependencies under five parameters.
@@ -33,7 +33,12 @@ class RrmResetOperation:
 
     @staticmethod
     def run(dry_run: bool | None = None, dependencies: RrmResetDependencies | None = None) -> None:
-        """Prompt for site and action, then capture the before and after plans."""
+        """Prompt for site and action, then capture the before and after plans.
+
+        ``dry_run`` is tri-state. ``None`` means that no caller stated a mode,
+        and ``RrmDryRunPolicy`` then resolves it to a forced dry run unless an
+        explicit CLI flag or a truthy ``RRM_DRY_RUN`` value applies.
+        """
         logger.info("Menu #291: Starting site RRM optimize or reset plan capture")  # WHY: action log.
         deps = dependencies or RrmResetOperation._build_dependencies()  # WHY: production uses shared deps.
         site_id = RrmResetOperation._select_site(deps)  # WHY: every API call needs a site id.
@@ -42,7 +47,9 @@ class RrmResetOperation:
         action = RrmResetOperation._ask_action(deps)  # WHY: operator chooses the destructive request.
         if not action:  # WHY: invalid action stops before file or request.
             return  # WHY: no safe default exists for a destructive action.
-        settings = RrmRunSettings.build(action, RrmResetOperation._resolve_dry_run(dry_run))  # WHY: one config object.
+        from src.mist.resources.site.rrm_reset.dry_run_policy import RrmDryRunPolicy  # WHY: keep one policy owner.
+
+        settings = RrmRunSettings.build(action, RrmDryRunPolicy.resolve(dry_run))  # WHY: one config object.
         RrmResetOperation._execute(site_id, settings, deps)  # WHY: execute the ordered capture workflow.
 
     @staticmethod
@@ -78,26 +85,6 @@ class RrmResetOperation:
             return ""  # WHY: empty action signals abort.
         logger.debug("RRM action selected=%s", action)  # WHY: action word is not secret.
         return action  # WHY: downstream confirmation must match this value.
-
-    @staticmethod
-    def _resolve_dry_run(dry_run: bool | None) -> bool:
-        """Return whether the operation must avoid destructive Mist requests."""
-        if dry_run is not None:  # WHY: tests and integration can pass the value directly.
-            return dry_run  # WHY: explicit caller value wins.
-        env_value = os.environ.get("RRM_DRY_RUN", "")  # WHY: local dry-run support works before integration wiring.
-        if env_value.strip().lower() in {"1", "true", "yes", "dry-run"}:  # WHY: common truthy values are accepted.
-            return True  # WHY: environment asks for preview only.
-        return RrmResetOperation._root_dry_run()  # WHY: CLI --dry-run can live on the root args object.
-
-    @staticmethod
-    def _root_dry_run() -> bool:
-        """Return the root CLI dry-run value when the host module exposes it."""
-        try:
-            root_module = SourceDependencyResolver.root_module()  # WHY: root args live outside source packages.
-        except RuntimeError:
-            return False  # WHY: tests or imports can run without a bound root module.
-        args = getattr(root_module, "args", None)  # WHY: CLI parsing stores flags on args.
-        return bool(getattr(args, "dry_run", False))  # WHY: missing flag means normal mode.
 
     @staticmethod
     def _execute(site_id: str, settings: RrmRunSettings, deps: RrmResetDependencies) -> None:
