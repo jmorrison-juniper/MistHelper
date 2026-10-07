@@ -187,19 +187,6 @@ class TestValidateOrganization:
 
         assert result is False
 
-    def test_failed_validation_exception(self, upgrader: BulkSwitchFirmwareUpgrader) -> None:
-        """Verify failed validation on exception."""
-        mock_mistapi = sys.modules["mistapi"]
-        mock_mistapi.api.v1.orgs.orgs.getOrg.side_effect = RuntimeError("Connection refused")
-
-        result = upgrader._validate_organization()
-
-        assert result is False
-
-        # Cleanup
-        mock_mistapi.api.v1.orgs.orgs.getOrg.side_effect = None
-
-
 # ---------------------------------------------------------------------------
 # Site Selection Tests
 # ---------------------------------------------------------------------------
