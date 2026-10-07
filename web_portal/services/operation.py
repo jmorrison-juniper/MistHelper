@@ -460,7 +460,7 @@ def _build_registry() -> dict:
     }
 
     # --- Site + device (all types) ---
-    site_device_all_menus = ["72", "74", "78", "80", "81", "85"]
+    site_device_all_menus = ["72", "74", "78", "80", "81", "85", "94", "96"]
     for menu in site_device_all_menus:
         registry[menu] = {
             "category": "interactive",
@@ -469,6 +469,10 @@ def _build_registry() -> dict:
 
     # --- Site + gateway ---
     registry["73"] = {
+        "category": "interactive",
+        "parameters": [_site_param(), _device_param("gateway")],
+    }
+    registry["95"] = {
         "category": "interactive",
         "parameters": [_site_param(), _device_param("gateway")],
     }
