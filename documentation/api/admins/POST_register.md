@@ -118,7 +118,7 @@ Content-Type: `application/json`
     "last_name": {
       "type": "string",
       "examples": [
-        "Smith"
+        "<last-name>"
       ]
     },
     "org_name": {

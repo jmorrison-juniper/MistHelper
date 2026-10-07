@@ -110,7 +110,7 @@ OK
         "enabled": true,
         "expire_time": 1428954000,
         "id": "5034b980-b49e-501c-66e0-9de4c38f18a2",
-        "name": "Macy's",
+        "name": "ExampleOrg",
         "quota": -1
       }
     ]

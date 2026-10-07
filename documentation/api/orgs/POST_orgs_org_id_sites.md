@@ -124,7 +124,7 @@ Content-Type: `application/json`
     "name": {
       "type": "string",
       "examples": [
-        "Mist Office"
+        "Example Office"
       ]
     },
     "networktemplate_id": {
@@ -327,7 +327,7 @@ OK
     "name": {
       "type": "string",
       "examples": [
-        "Mist Office"
+        "Example Office"
       ]
     },
     "networktemplate_id": {

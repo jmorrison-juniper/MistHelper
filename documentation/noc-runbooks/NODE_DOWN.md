@@ -109,7 +109,7 @@ The response carries the two fields that decide ownership:
   "results": [
     {
       "type": "switch",
-      "name": "Morrison-Switch",
+      "name": "example-switch",
       "mac": "209339051780",
       "model": "EX4100-F-12P",
       "serial": "FJ3724AV0131",
