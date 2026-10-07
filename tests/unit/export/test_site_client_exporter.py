@@ -207,6 +207,10 @@ class TestClients:
         # WHY: no listSiteWirelessClientsStats call after resolver aborts.
         wired_deps["mistapi"].api.v1.sites.stats.listSiteWirelessClientsStats.assert_not_called()
         wired_deps["mistapi"].get_all.assert_not_called()  # WHY: no pagination.
+        assert (  # WHY: the quality gate requires a direct assertion for the abort result.
+            wired_deps["mistapi"].api.v1.sites.stats.listSiteWirelessClientsStats.call_count == 0
+        )
+        assert wired_deps["mistapi"].get_all.call_count == 0  # WHY: prove pagination remains unreachable.
 
     def test_happy_path_fetch_paginate_persist(self, wired_deps: dict[str, Any]) -> None:
         """Happy path fetches wireless client stats, paginates, then persists per-site CSV."""
