@@ -341,7 +341,9 @@ def test_a_run_with_no_target_sends_nothing_and_says_so() -> None:
     Why:
         An empty plan list and a sent upgrade must never read the same.
     """
-    submitter = wiring.CloudUpgradeSubmitter(object())  # The session is never reached, because no plan is built.
+    submitter = wiring.CloudUpgradeSubmitter(
+        object(), wiring.DocumentRunStore()
+    )  # The session and store are never reached, because no plan is built.
     record = sample_record()  # This record holds no target at all.
     reason = submitter.submit_phase(record, "gateways")  # Issue #4020 asks one phase at a time.
     assert reason == wiring.NO_PLAN_REASON  # The driver then fails the run and writes this reason.

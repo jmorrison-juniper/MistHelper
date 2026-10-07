@@ -11,3 +11,6 @@
   the operator no longer decides that order (issue #4020).
 - The portal now rejects an empty, unknown, or mixed-family firmware plan before
   one cloud write, and the run records the validation failure (issue #4020).
+- The portal now persists each accepted version group before it sends the next
+  group. A durable operator stop blocks the next firmware call and completes
+  through the normal stopped-run path (issue #4020).

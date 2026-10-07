@@ -243,6 +243,41 @@ class AcceptingSubmitter:
         return reason if refused else None  # A refusal must stay inside the controlled cascade path.
 
 
+class StopAfterAcceptedSubmitter:
+    """Persist one accepted row, then report the operator stop that followed."""
+
+    def __init__(self, store: FakeStore) -> None:
+        """Hold the durable store that the route and the driver share.
+
+        Args:
+            store: The run store of the driver.
+        """
+        self.store = store
+        self.phases: list[str] = []
+
+    def submit_phase(self, record: Any, phase: str) -> str:
+        """Persist one accepted row and inject a concurrent stop request.
+
+        Args:
+            record: The run record.
+            phase: The first firmware phase.
+
+        Returns:
+            The visible stop reason from the submitter.
+        """
+        self.phases.append(phase)
+        record["upgrades"] = [{"upgrade_id": "up-1", "accepted": ["aa0000000001"]}]
+        self.store.write_run(dict(record))  # The accepted identifier lands before the route asks to stop.
+        if self.store.record is not None:
+            self.store.record["stop_request"] = {
+                "requested_by": "sam@example.com",
+                "requested_at": "2026-10-07T07:00:00+00:00",
+                "confirmation_text": "STOP",
+                "scope": "run",
+            }
+        return "An operator asked to stop the run before the next firmware call."
+
+
 class RecordingReleaser:
     """Record every compare-and-delete the driver asks for.
 
@@ -1085,6 +1120,27 @@ class TestPhaseSubmission:
         final = parts["driver"].run(make_record())  # The controlled path still captures the unchanged site.
         assert final["state"] == RunState.FAILED.value  # An unroutable plan must never report complete.
         assert final["error"]["message"] == reason  # The operator sees the exact validation failure.
+
+    def test_a_stop_inside_one_phase_uses_the_normal_stopped_path(self, parts: dict[str, Any]) -> None:
+        """A stop after one accepted group is not an ordinary refusal.
+
+        Args:
+            parts: The doubles and the driver.
+        """
+        submitter = StopAfterAcceptedSubmitter(parts["store"])  # The first accepted row arrives before the stop.
+        deps = driver.RunDriverDeps(
+            store=parts["store"],
+            gate=parts["gate"],
+            capture=parts["capture"],
+            submit=submitter,
+            clock=FixedClock(),
+        )
+        final = driver.RunDriver(deps).run(make_record())  # The driver must select `_stop`, not `_refuse_phase`.
+        assert final["state"] == RunState.STOPPED.value  # The operator action owns the terminal state.
+        assert final["error"] is None  # A stopped run is not a cloud refusal failure.
+        assert parts["store"].phase_states()["gateways"] == PhaseState.PENDING.value  # No false refusal mark.
+        assert len(final["upgrades"]) == 1  # The accepted row remains available for cancellation and evidence.
+        assert parts["capture"].requests[0]["ordinal"] == 2  # The normal stop finalization takes a post-check.
 
 
 class TestDiscardedWrites:

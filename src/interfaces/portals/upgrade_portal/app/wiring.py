@@ -116,6 +116,10 @@ PHASE_REFUSED_REASON = "The cloud refused the {phase} upgrade call, so the run s
 UNROUTABLE_PLAN_REASON = (
     "The run built an upgrade plan with no single supported device family, so no firmware call left the portal."
 )
+STOP_REQUESTED_REASON = "An operator asked to stop the run before the next firmware call."
+ACCEPTED_ROW_STORE_REASON = (
+    "The portal could not persist an accepted upgrade call, so the run stops before the next firmware call."
+)
 
 # WHY: The storage bootstrap runs once for each process. Every step of it repeats
 # without harm, and a second run costs a database host probe that is not free.
@@ -661,9 +665,10 @@ class CloudUpgradeSubmitter:
         the portal. That silence is the exact defect this module repairs, so the
         wiring always builds this object.
 
-        The class holds the session alone. `upgrade_service.plan_upgrade` is pure
-        and groups the devices, and `upgrade_service.invoke_upgrade` performs one
-        call for each group and never retries.
+        The class holds the session and the durable run store.
+        `upgrade_service.plan_upgrade` is pure and groups the devices, and
+        `upgrade_service.invoke_upgrade` performs one call for each group and
+        never retries.
 
         Issue #4020: the driver now calls this class once for each phase, and a
         phase sends firmware only after the phase above it settled. One refused
@@ -674,13 +679,15 @@ class CloudUpgradeSubmitter:
         the stop path can still cancel them.
     """
 
-    def __init__(self, session: Any) -> None:
-        """Hold the cloud session of the operator who confirmed the run.
+    def __init__(self, session: Any, store: Any) -> None:
+        """Hold the cloud session and the durable run store.
 
         Args:
             session: The Mist API session. The request thread read it.
+            store: The store that carries accepted rows and stop requests.
         """
         self._session = session  # Bound inside the request, because the driver thread reads no session.
+        self._store = store  # The submitter persists each accepted row before another destructive write.
 
     def submit_phase(self, record: MutableMapping[str, Any], phase: str) -> str | None:
         """Send every upgrade call of one phase and report why the run must stop.
@@ -732,17 +739,55 @@ class CloudUpgradeSubmitter:
         Returns:
             None when every plan of the phase went out, or the stop reason.
         """
-        sent: list[dict[str, Any]] = []  # The rows of this phase that the cloud took.
         for plan in plans:  # The order is the order that `plan_upgrade` fixed.
+            stop_reason = self._stop_reason(record)  # A durable operator request blocks this next write.
+            if stop_reason is not None:
+                return stop_reason  # The driver then uses the normal stopped-run finalization path.
             row = self._send(run_id, plan)
             if row is None:  # The cloud refused or faulted, so this phase stops here.
-                self._keep(record, sent)  # The accepted rows of this phase still reach the stop path.
+                self._keep(record, ())  # Keep the stable empty-row shape when the first call was refused.
                 logger.error("wiring: the run %s stops, because the %s phase lost one upgrade call", run_id, phase)
                 return PHASE_REFUSED_REASON.format(phase=phase)  # The driver fails the run with this sentence.
-            sent.append(row)
-        self._keep(record, sent)  # Every group of this phase went out, so the record holds each row.
-        logger.info("wiring: the run %s sent %s upgrade call(s) for the %s phase", run_id, len(sent), phase)
+            store_reason = self._persist_row(record, row)  # The identifier lands before the next plan can leave.
+            if store_reason is not None:
+                return store_reason  # An unrecorded accepted call makes every later destructive write unsafe.
+        logger.info("wiring: the run %s sent %s upgrade call(s) for the %s phase", run_id, len(plans), phase)
         return None  # The driver now settles this phase before the next one sends anything.
+
+    def _stop_reason(self, record: MutableMapping[str, Any]) -> str | None:
+        """Copy a durable stop request into the driver record before a cloud write.
+
+        Args:
+            record: The run record that the driver owns.
+
+        Returns:
+            The visible stop reason, or None when no operator requested a stop.
+        """
+        run_id = str(record.get("run_id", ""))  # The store key and the safe log value are the run identifier.
+        stored = self._store.read_run(run_id)  # The route writes the stop request into this durable record.
+        request = stored.get("stop_request") if isinstance(stored, Mapping) else record.get("stop_request")
+        if request is None:
+            return None  # The next version group may leave only while no durable stop exists.
+        record["stop_request"] = request  # The driver then preserves the request through every later save.
+        logger.info("wiring: the run %s stops before its next firmware call", run_id)
+        return STOP_REQUESTED_REASON
+
+    def _persist_row(self, record: MutableMapping[str, Any], row: Mapping[str, Any]) -> str | None:
+        """Persist one accepted row before another destructive call can start.
+
+        Args:
+            record: The run record that collects accepted rows.
+            row: The accepted cloud response.
+
+        Returns:
+            None when the row is durable, or one reason when persistence failed.
+        """
+        self._keep(record, (row,))  # The in-memory record keeps every accepted family and version group.
+        stop_reason = self._stop_reason(record)  # Preserve a stop that arrived while the cloud call was in flight.
+        if self._store.write_run(dict(record)):
+            return stop_reason  # The caller reports the stop after the accepted row becomes durable.
+        logger.error("wiring: the run %s could not persist one accepted upgrade call", record.get("run_id", ""))
+        return ACCEPTED_ROW_STORE_REASON
 
     @staticmethod
     def _keep(record: MutableMapping[str, Any], rows: Sequence[Mapping[str, Any]]) -> None:
@@ -1182,7 +1227,10 @@ def build_driver_deps(driver: ModuleType, record: Mapping[str, Any], bindings: M
             capture_context(record, bindings),
             bindings.get(APP_CONTEXT_FIELD),
         ),
-        submit=CloudUpgradeSubmitter(bindings.get(SESSION_FIELD)),  # Without this the run sends no firmware.
+        submit=CloudUpgradeSubmitter(
+            bindings.get(SESSION_FIELD),
+            bindings.get(STORE_FIELD),
+        ),  # Accepted rows and stop requests share the durable run store.
         heartbeat=heartbeat,  # The second seat of the same object. The first seat is the gate progress.
         post_check_mode=read_post_check_mode(),  # The default keeps the automatic second capture of today.
     )

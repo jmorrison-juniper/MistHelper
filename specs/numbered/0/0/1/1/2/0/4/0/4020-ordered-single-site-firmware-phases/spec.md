@@ -64,6 +64,9 @@ The run also read as a success.
   capture before it becomes `failed`.
 - FR-4020-10: An empty, unknown, or mixed-family plan fails before the first
   cloud write. The terminal run record holds one plain validation sentence.
+- FR-4020-11: Each accepted upgrade row becomes durable before the next plan of
+  the phase leaves the portal. A durable stop request blocks the next plan and
+  uses the normal `stopped` finalization path.
 
 ## Owner decisions
 

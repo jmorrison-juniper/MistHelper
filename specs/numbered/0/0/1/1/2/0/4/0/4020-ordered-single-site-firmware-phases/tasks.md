@@ -26,6 +26,8 @@ Each task below is complete. The state column records the proof.
 | T010 | Make `_keep` append, so an accepted row survives a later failure | Done |
 | T011 | Add `PHASE_REFUSED_REASON` | Done |
 | T031 | Reject empty, unknown, and mixed-family plans before a cloud write | Done |
+| T035 | Persist each accepted row before the next plan of the phase | Done |
+| T036 | Check the durable stop request before every plan | Done |
 
 ## Interleaved cascade
 
@@ -50,6 +52,8 @@ Each task below is complete. The state column records the proof.
 | T022 | Update the submitter doubles of the other three modules | Done |
 | T033 | Prove refused later phases become terminal and keep post-check evidence | Done |
 | T034 | Prove unroutable plans fail with zero cloud writes | Done |
+| T037 | Prove a stop between two version groups blocks the second write | Done |
+| T038 | Prove the driver uses the normal `stopped` finalization path | Done |
 
 ### The replaced test
 
