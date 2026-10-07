@@ -258,6 +258,9 @@ class DeviceMetricOperation:
         """Fetch a single device insight metric, returning the enriched dict or None on miss / error."""
         try:
             logger.info("Requesting device insight metric %s for device %s", metric, context.device_id)  # WHY: Trace
+            request_uri = (  # WHY: Preserve the failed request location for the operator.
+                f"/api/v1/sites/{context.site_id}/insights/device/{context.device_mac}/{metric}"
+            )
             response = self.mistapi.api.v1.sites.insights.getSiteInsightMetricsForDevice(  # WHY: Device endpoint
                 self.apisession,
                 context.site_id,
@@ -270,8 +273,14 @@ class DeviceMetricOperation:
                 "Failed to get device insight data for metric %s: %s", metric, exception
             )
             return None
-        logger.debug("Received device insight metric %s", metric)  # WHY: Trace the answer before the status check
+        status_code = getattr(response, "status_code", None)  # WHY: Read the HTTP status before using response data.
+        logger.debug("Received device insight metric %s with HTTP %s", metric, status_code)  # WHY: Trace the answer
         if self._refusal_log.record(metric, response):  # WHY: mistapi returns an HTTP 400 as a response, not a raise
+            logger.info(  # WHY: The portal must classify a partial export as failed, not completed.
+                "! Error fetching getSiteInsightMetricsForDevice: HTTP %s from %s",
+                status_code,
+                getattr(response, "url", request_uri),
+            )
             return None  # WHY: An error body is not metric data, so it must not become an export row
         return self._annotate_row(raw, metric, context)  # WHY: Annotate + short-circuit empty payload
 

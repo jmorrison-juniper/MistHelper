@@ -185,6 +185,11 @@ class SiteMetricOperation:
         status_code = getattr(response, "status_code", None)  # WHY: Read the HTTP status for the trace line
         logger.debug("Received site insight metric %s with HTTP %s", metric, status_code)  # WHY: Trace the answer
         if self._refusal_log.record(metric, response):  # WHY: mistapi returns an HTTP 400 as a response, not a raise
+            logger.info(  # WHY: The portal must classify a partial export as failed, not completed.
+                "! Error fetching getSiteInsightMetrics: HTTP %s from %s",
+                status_code,
+                getattr(response, "url", uri),
+            )
             return None  # WHY: An error body is not metric data, so it must not become an export row
         return self._annotate_row(raw, metric, context)  # WHY: Annotate + short-circuit empty payload
 
