@@ -86,9 +86,9 @@ description: "Implementation tasks for issue #4026 executor initialization synch
 - [x] T013 [P] Run `python -m ruff check .` and verify the full repository reports `All checks passed`.
 - [x] T014 [P] Run `python -m black --check .` and verify that no repository file needs formatting.
 - [x] T015 Run `python -B -m pytest -p no:cacheprovider -s -q tests/guardrails/local_test_quality_loop/test_guidance.py::TestLiveGuides` and verify the required test-quality inputs.
-- [ ] T016 After the implementation commit, run `git fetch --no-tags origin "+refs/heads/main:refs/remotes/origin/main"` and `git rev-parse --verify "origin/main^{commit}"` for the test-quality base.
-- [ ] T017 Run `test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json --changed-from "origin/main" --full-gate-path .github/workflows/ci.yml --full-gate-path requirements-dev.txt` and verify `gate: 0 new findings vs baseline`.
-- [ ] T018 Run `git diff --name-only origin/main...HEAD` and `git status --short`, then verify that issue #4026 adds no implementation change outside `web_portal/routes/operations.py`, `tests/unit/web_portal/test_operation_executor_concurrency.py`, and `changelog.d/issue-4026-operation-executor-race.md`.
+- [x] T016 After the implementation commit, run `git fetch --no-tags origin "+refs/heads/main:refs/remotes/origin/main"` and `git rev-parse --verify "origin/main^{commit}"` for the test-quality base.
+- [x] T017 Run `test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json --changed-from "origin/main" --full-gate-path .github/workflows/ci.yml --full-gate-path requirements-dev.txt` and verify `gate: 0 new findings vs baseline`.
+- [x] T018 Run `git diff --name-only origin/main...HEAD` and `git status --short`, then verify that issue #4026 adds no implementation change outside `web_portal/routes/operations.py`, `tests/unit/web_portal/test_operation_executor_concurrency.py`, and `changelog.d/issue-4026-operation-executor-race.md`.
 
 **Checkpoint**: The focused tests, preservation test, syntax check, full Ruff check, full Black check, test-quality checks, and scope check pass.
 
