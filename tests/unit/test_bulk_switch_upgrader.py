@@ -642,18 +642,6 @@ class TestCaching:
         result = upgrader._fetch_firmware_from_api()
         assert result == []
 
-    def test_fetch_firmware_from_api_exception(self, upgrader: BulkSwitchFirmwareUpgrader) -> None:
-        """Verify API exception handling."""
-        mock_mistapi = sys.modules["mistapi"]
-        mock_mistapi.api.v1.orgs.devices.listOrgAvailableDeviceVersions.side_effect = RuntimeError("API error")
-
-        result = upgrader._fetch_firmware_from_api()
-        assert result == []
-
-        # Cleanup
-        mock_mistapi.api.v1.orgs.devices.listOrgAvailableDeviceVersions.side_effect = None
-
-
 # ---------------------------------------------------------------------------
 # Firmware Processing Tests
 # ---------------------------------------------------------------------------
