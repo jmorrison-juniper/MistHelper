@@ -72,7 +72,7 @@ def _run_with_response(operation: _SimpleEndpointOp, response: Any, identifier: 
 
 def test_run_logs_an_error_line_for_a_404_response(caplog: pytest.LogCaptureFixture) -> None:
     """A 404 answer must produce an operator-visible error line."""
-    response = _StubResponse(404, {"detail": "Not Found"}, "/api/v1/orgs/org-one/wxtags/apps")
+    response = _StubResponse(status_code=404, data={"detail": "Not Found"}, url="/api/v1/orgs/org-one/wxtags/apps")
     with caplog.at_level(logging.INFO):
         _run_with_response(ORG_APPLICATION_LIST, response, "org-one", "org-one")
     assert "Error fetching getOrgApplicationList" in caplog.text
@@ -80,7 +80,7 @@ def test_run_logs_an_error_line_for_a_404_response(caplog: pytest.LogCaptureFixt
 
 def test_run_names_the_status_code_for_a_404_response(caplog: pytest.LogCaptureFixture) -> None:
     """The error line must name the status, so the operator can act on it."""
-    response = _StubResponse(404, {"detail": "Not Found"}, "/api/v1/orgs/org-one/wxtags/apps")
+    response = _StubResponse(status_code=404, data={"detail": "Not Found"}, url="/api/v1/orgs/org-one/wxtags/apps")
     with caplog.at_level(logging.INFO):
         _run_with_response(ORG_APPLICATION_LIST, response, "org-one", "org-one")
     assert "HTTP 404" in caplog.text
@@ -88,7 +88,7 @@ def test_run_names_the_status_code_for_a_404_response(caplog: pytest.LogCaptureF
 
 def test_run_names_the_url_for_a_404_response(caplog: pytest.LogCaptureFixture) -> None:
     """The error line must name the failed path, so the operator can verify it."""
-    response = _StubResponse(404, {"detail": "Not Found"}, "/api/v1/orgs/org-one/wxtags/apps")
+    response = _StubResponse(status_code=404, data={"detail": "Not Found"}, url="/api/v1/orgs/org-one/wxtags/apps")
     with caplog.at_level(logging.INFO):
         _run_with_response(ORG_APPLICATION_LIST, response, "org-one", "org-one")
     assert "/api/v1/orgs/org-one/wxtags/apps" in caplog.text
@@ -96,7 +96,7 @@ def test_run_names_the_url_for_a_404_response(caplog: pytest.LogCaptureFixture) 
 
 def test_run_does_not_claim_no_data_for_a_404_response(caplog: pytest.LogCaptureFixture) -> None:
     """A 404 must never read as a genuine empty result."""
-    response = _StubResponse(404, {"detail": "Not Found"}, "/api/v1/orgs/org-one/wxtags/apps")
+    response = _StubResponse(status_code=404, data={"detail": "Not Found"}, url="/api/v1/orgs/org-one/wxtags/apps")
     with caplog.at_level(logging.INFO):
         _run_with_response(ORG_APPLICATION_LIST, response, "org-one", "org-one")
     assert "No getOrgApplicationList data found" not in caplog.text
@@ -104,14 +104,14 @@ def test_run_does_not_claim_no_data_for_a_404_response(caplog: pytest.LogCapture
 
 def test_run_writes_no_rows_for_a_404_response() -> None:
     """A 404 must not create an export file."""
-    response = _StubResponse(404, {"detail": "Not Found"}, "/api/v1/orgs/org-one/wxtags/apps")
+    response = _StubResponse(status_code=404, data={"detail": "Not Found"}, url="/api/v1/orgs/org-one/wxtags/apps")
     fake = _run_with_response(ORG_APPLICATION_LIST, response, "org-one", "org-one")
     assert fake.DataExporter.write_with_format_selection.call_count == 0
 
 
 def test_run_logs_an_error_line_for_a_site_404_response(caplog: pytest.LogCaptureFixture) -> None:
     """Menu 261 must report the site endpoint failure the same way."""
-    response = _StubResponse(404, {"detail": "Not Found"}, "/api/v1/sites/site-one/apps")
+    response = _StubResponse(status_code=404, data={"detail": "Not Found"}, url="/api/v1/sites/site-one/apps")
     with caplog.at_level(logging.INFO):
         _run_with_response(SITE_APPS, response, "site-one", "Site One")
     assert "Error fetching listSiteApps" in caplog.text
@@ -119,7 +119,7 @@ def test_run_logs_an_error_line_for_a_site_404_response(caplog: pytest.LogCaptur
 
 def test_run_does_not_claim_no_data_for_a_site_404_response(caplog: pytest.LogCaptureFixture) -> None:
     """Menu 261 must not present the site 404 as an empty site."""
-    response = _StubResponse(404, {"detail": "Not Found"}, "/api/v1/sites/site-one/apps")
+    response = _StubResponse(status_code=404, data={"detail": "Not Found"}, url="/api/v1/sites/site-one/apps")
     with caplog.at_level(logging.INFO):
         _run_with_response(SITE_APPS, response, "site-one", "Site One")
     assert "No listSiteApps data found" not in caplog.text
@@ -127,7 +127,9 @@ def test_run_does_not_claim_no_data_for_a_site_404_response(caplog: pytest.LogCa
 
 def test_run_logs_an_error_line_for_a_500_response(caplog: pytest.LogCaptureFixture) -> None:
     """A server failure must report as an error, not as an empty result."""
-    response = _StubResponse(500, {"detail": "Internal Server Error"}, "/api/v1/sites/site-one/apps")
+    response = _StubResponse(
+        status_code=500, data={"detail": "Internal Server Error"}, url="/api/v1/sites/site-one/apps"
+    )
     with caplog.at_level(logging.INFO):
         _run_with_response(SITE_APPS, response, "site-one", "Site One")
     assert "HTTP 500" in caplog.text
@@ -135,7 +137,7 @@ def test_run_logs_an_error_line_for_a_500_response(caplog: pytest.LogCaptureFixt
 
 def test_run_reports_no_data_for_an_empty_successful_response(caplog: pytest.LogCaptureFixture) -> None:
     """A real empty 200 answer must keep the established no-data wording."""
-    response = _StubResponse(200, [], "/api/v1/orgs/org-one/wxtags/apps")
+    response = _StubResponse(status_code=200, data=[], url="/api/v1/orgs/org-one/wxtags/apps")
     with caplog.at_level(logging.INFO):
         _run_with_response(ORG_APPLICATION_LIST, response, "org-one", "org-one")
     assert "No getOrgApplicationList data found" in caplog.text
@@ -143,7 +145,7 @@ def test_run_reports_no_data_for_an_empty_successful_response(caplog: pytest.Log
 
 def test_run_logs_no_error_line_for_an_empty_successful_response(caplog: pytest.LogCaptureFixture) -> None:
     """A real empty 200 answer must not report a failure."""
-    response = _StubResponse(200, [], "/api/v1/orgs/org-one/wxtags/apps")
+    response = _StubResponse(status_code=200, data=[], url="/api/v1/orgs/org-one/wxtags/apps")
     with caplog.at_level(logging.INFO):
         _run_with_response(ORG_APPLICATION_LIST, response, "org-one", "org-one")
     assert "Error fetching" not in caplog.text
@@ -151,14 +153,14 @@ def test_run_logs_no_error_line_for_an_empty_successful_response(caplog: pytest.
 
 def test_run_persists_rows_for_a_successful_response() -> None:
     """A 200 answer with rows must still reach the shared exporter."""
-    response = _StubResponse(200, [{"name": "zoom"}], "/api/v1/orgs/org-one/wxtags/apps")
+    response = _StubResponse(status_code=200, data=[{"name": "zoom"}], url="/api/v1/orgs/org-one/wxtags/apps")
     fake = _run_with_response(ORG_APPLICATION_LIST, response, "org-one", "org-one")
     assert fake.DataExporter.write_with_format_selection.call_count == 1
 
 
 def test_run_persists_rows_when_the_response_reports_no_status() -> None:
     """A response object without a usable status must not block the export."""
-    response = _StubResponse(None, [{"name": "zoom"}], "/api/v1/orgs/org-one/wxtags/apps")
+    response = _StubResponse(status_code=None, data=[{"name": "zoom"}], url="/api/v1/orgs/org-one/wxtags/apps")
     fake = _run_with_response(ORG_APPLICATION_LIST, response, "org-one", "org-one")
     assert fake.DataExporter.write_with_format_selection.call_count == 1
 
