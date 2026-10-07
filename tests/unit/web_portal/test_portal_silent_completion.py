@@ -2,12 +2,28 @@
 
 from __future__ import annotations  # WHY: keep annotations cheap and consistent with project style.
 
+from pathlib import Path  # WHY: create unrelated output inside the scanner root.
 from typing import NamedTuple  # WHY: carry the classifier answer in a typed record, not three loose booleans.
+from unittest.mock import MagicMock, patch  # WHY: isolate the prompt, Mist call, and output root.
 
 from src.foundation.support.utils.menu_entry import (
     MenuEntry,
 )  # WHY: OperationExecutor expects menu entries, not raw callables.
+from src.foundation.support.refactors import (
+    device_data_fetcher as fetcher_module,
+)  # WHY: patch the real fetcher's dependency resolver.
+from src.foundation.support.refactors.device_data_fetcher import (
+    DeviceDataFetcher,
+)  # WHY: keep the real fetcher in the Menu 95 path.
+from src.interfaces.visualization.ui import (
+    interactive_display_utils as display_module,
+)  # WHY: patch and execute the real Menu 95 display path.
+from src.interfaces.visualization.ui.interactive_display_utils import (
+    InteractiveDisplayUtils,
+)  # WHY: Menu 95 uses this real handler.
+from web_portal.services import operation as operation_module  # WHY: replace only the scanner root in the executor.
 from web_portal.services.operation import PARAMETER_REGISTRY, OperationExecutor  # WHY: test the portal run contract.
+from web_portal.services.output_scan import OutputFileScanner  # WHY: retain the real output scanner behavior.
 
 ISSUE_3144_MENUS = ("66", "75", "76", "209", "210", "213", "224", "233")  # WHY: exact issue scope.
 REQUIRED_CONTROL_NAMES = {  # WHY: each site or identifier row must offer these browser controls (issue #3320).
@@ -69,6 +85,21 @@ def _build_executor() -> OperationExecutor:
         for menu in ISSUE_3144_MENUS  # WHY: state the measured issue scope in one place.
     }
     return OperationExecutor(menu_actions, None, None, _EventBus())  # WHY: use a fake event bus for event assertions.
+
+
+def _build_menu_95_executor() -> OperationExecutor:
+    """Build an executor that runs the real Menu 95 display handler."""
+    menu_actions = {  # WHY: one menu keeps the regression isolated from the full registry.
+        "95": MenuEntry(  # WHY: match the production menu row shape.
+            menu_id="95",  # WHY: retain the affected menu number in the run.
+            handler=InteractiveDisplayUtils.device_tests,  # WHY: execute the real display and fetcher path.
+            title="View Gateway Synthetic Test Statistics",  # WHY: give the run a readable production title.
+            category="interactive_safe",  # WHY: match the registered operation category.
+            destructive=False,  # WHY: the operation reads synthetic test results.
+            supports_fast=False,  # WHY: this single-device path has no fast-mode contract.
+        )
+    }
+    return OperationExecutor(menu_actions, None, None, _EventBus())  # WHY: capture terminal events without a server.
 
 
 def test_issue_3144_controls_cover_site_and_identifier_prompts() -> None:
@@ -136,6 +167,47 @@ def test_handled_handler_error_does_not_complete() -> None:
         assert "Error fetching site beacon detail" in str(run["error_message"])  # WHY: preserve the real cause.
     finally:
         executor.shutdown(0)  # WHY: release the executor thread pool created for the test.
+
+
+def test_issue_4030_unresolved_site_reports_failed_with_unrelated_output(tmp_path: Path) -> None:
+    """Menu 95 must fail when site resolution stops before the Mist request."""
+    unrelated_name = "unrelated.csv"  # WHY: prove another file cannot convert failure into completion.
+    cloud_fetch = MagicMock(name="getSiteDeviceSyntheticTest")  # WHY: the failed path must not reach Mist.
+    resolver = MagicMock()  # WHY: isolate the real fetcher from live application state.
+    resolver.DeviceDataFetcher = DeviceDataFetcher  # WHY: retain the production fetcher contract.
+    resolver.apisession = MagicMock(name="apisession")  # WHY: block any accidental live authentication.
+    resolver.PromptUtils.select_site_id_from_csv.side_effect = lambda: _write_unrelated_output(tmp_path, unrelated_name)
+    executor = _build_menu_95_executor()  # WHY: use the production completion classifier.
+    run = executor._build_run_record("95")  # WHY: use the production run-record shape.
+    scanner_factory = lambda: OutputFileScanner(str(tmp_path))  # WHY: scan only the temporary evidence directory.
+    try:
+        with patch.object(display_module, "SourceDependencyResolver", resolver):  # WHY: route the real display path.
+            with patch.object(fetcher_module, "_MH", resolver):  # WHY: route the real fetcher path.
+                with patch.object(  # WHY: replace the Mist SDK function with an observed non-raising seam.
+                    display_module.mistapi.api.v1.sites.devices,
+                    "getSiteDeviceSyntheticTest",
+                    cloud_fetch,
+                ):
+                    with patch.object(operation_module, "OutputFileScanner", scanner_factory):  # WHY: real scanner.
+                        executor._execute_operation(run, {})  # WHY: drive capture, scanning, and verdict together.
+        assert run["status"] == "failed", "An unresolved Menu 95 site reported Complete."  # WHY: issue #4030.
+        assert run["error_message"] == "! Error fetching device data: site ID could not be resolved."  # WHY: exact.
+        assert unrelated_name in run["output_files"]  # WHY: retain concurrent evidence without trusting it.
+        assert "Completed device_tests execution." not in _run_messages(run)  # WHY: no false wrapper success.
+        cloud_fetch.assert_not_called()  # WHY: a missing site must stop before the Mist request.
+    finally:
+        executor.shutdown(0)  # WHY: release the executor thread pool created for the test.
+
+
+def _write_unrelated_output(root: Path, name: str) -> str:
+    """Write unrelated output and return an unresolved site identifier."""
+    (root / name).write_text("unrelated\n", encoding="utf-8")  # WHY: emulate concurrent output during selection.
+    return ""  # WHY: the real prompt seam reports that no site was resolved.
+
+
+def _run_messages(run: dict) -> list[str]:
+    """Return captured operator messages from one portal run."""
+    return [str(entry.get("message", "")) for entry in run["log_messages"]]  # WHY: inspect the captured text.
 
 
 def test_missing_org_identifier_classifies_as_missing_input() -> None:

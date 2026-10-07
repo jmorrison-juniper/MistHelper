@@ -1,4 +1,4 @@
-# MistHelper Development Guidelines
+﻿# MistHelper Development Guidelines
 
 Auto-generated from all feature plans. Last updated: 2026-07-14
 
@@ -82,6 +82,8 @@ Auto-generated from all feature plans. Last updated: 2026-07-14
 - ArangoDB is the primary store, through (1823-upgrade-capture-portal)
 - Python 3.13. + pytest, `mistapi` 0.63.3, and the shipped package (1992-upgrade-rehearsal)
 - None. The harness holds the run record in memory. (1992-upgrade-rehearsal)
+- Python 3.13 or newer + `mistapi>=0.64.0,<0.65`, Python logging, and the existing source dependency resolver (4030-fetcher-failure-contract)
+- No product storage change. The portal regression uses a temporary directory for output evidence. (4030-fetcher-failure-contract)
 
 - Python 3.13+ + mistapi>=0.59.0, python-dotenv>=1.0.0 (001-radius-wlan-config)
 - Python 3.13+ (per constitution and `pyproject.toml` py313 target). + mistapi>=0.64.0,<0.65, requests, pytest/pytest-cov, ruff/black/mypy (no new dependency added). (1020-safe-test-clean-run)
@@ -117,9 +119,9 @@ cd src; pytest; ruff check .
 Python 3.13+: Follow standard conventions
 
 ## Recent Changes
+- 4030-fetcher-failure-contract: Added Python 3.13 or newer + `mistapi>=0.64.0,<0.65`, Python logging, and the existing source dependency resolver
 - 1992-upgrade-rehearsal: Added Python 3.13. + pytest, `mistapi>=0.64.0,<0.65`, and the shipped package
 - 1823-upgrade-capture-portal: New package `src/interfaces/portals/upgrade_portal/` (outside `web_portal/`, which ruff and mypy exclude) on port 8056; new upgrade seam `src/operations/execution/firmware/upgrade_service.py`; menu 239; 30-second JSON poll instead of server-sent events; Redis site lock.
-- 671-mist-get-site-beacon: Added Python 3.13+ + `mistapi>=0.64.0,<0.65`, `python-dotenv`, `PyYAML`, `structlog`, existing MistHelper utility modules (`InputUtils`, `DataExporter`)
 
 <!-- MANUAL ADDITIONS START -->
 ## Where the rules live

@@ -79,8 +79,8 @@ class DeviceDataFetcher:
         """Orchestrate the device data fetch workflow (main entry point)."""
         logger.info("Starting device data fetch: %s", self.description)  # Announce fetch start for observability
         if not self._resolve_site_id():  # Bail out early if we cannot determine which site to query
-            logger.debug("Fetch aborted: site_id could not be resolved")  # Trace early exit
-            return None  # Nothing else to do without a site scope
+            logger.error("! Error fetching device data: site ID could not be resolved.")  # WHY: expose failure.
+            return False  # WHY: callers must suppress success after required site resolution fails.
         if not self._resolve_device_id():  # Bail out if we cannot determine which device to query
             logger.debug("Fetch aborted: device_id could not be resolved")  # Trace early exit
             return None  # Nothing else to do without a device scope

@@ -1,0 +1,19 @@
+{
+  "feature": "4030-fetcher-failure-contract",
+  "issue": 4030,
+  "branch": "jmorrison-juniper-fix-4030-fetcher-failure-contract",
+  "currentStep": "plan",
+  "status": "planned",
+  "artifacts": [
+    "spec.md",
+    "checklists/requirements.md",
+    "plan.md",
+    "research.md",
+    "data-model.md",
+    "contracts/fetcher-failure-contract.md",
+    "quickstart.md"
+  ],
+  "workflow": "speckit",
+  "specName": "Fetcher Failure Contract",
+  "history": []
+}
