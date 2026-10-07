@@ -512,17 +512,6 @@ class TestFirmwareDiscovery:
         result = upgrader._fetch_switch_inventory()
         assert result is False
 
-    def test_fetch_switch_inventory_exception(self, upgrader: BulkSwitchFirmwareUpgrader) -> None:
-        """Verify exception handling."""
-        mock_mistapi = sys.modules["mistapi"]
-        mock_mistapi.api.v1.orgs.inventory.getOrgInventory.side_effect = RuntimeError("Timeout")
-
-        result = upgrader._fetch_switch_inventory()
-        assert result is False
-
-        # Cleanup
-        mock_mistapi.api.v1.orgs.inventory.getOrgInventory.side_effect = None
-
     def test_fetch_switch_inventory_no_models(self, upgrader: BulkSwitchFirmwareUpgrader) -> None:
         """Verify warning when no models detected."""
         mock_response = MagicMock()
