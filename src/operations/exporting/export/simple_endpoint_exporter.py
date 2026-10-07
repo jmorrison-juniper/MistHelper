@@ -278,6 +278,27 @@ class SimpleEndpointExporter:
         logger.info("! %d %s records exported to %s", len(rows), operation, filename)  # Tell the operator.
 
     @staticmethod
+    def _http_failure(response: Any, operation: str) -> bool:
+        """Report whether one SDK answer carries a non-2xx HTTP status.
+
+        The Mist SDK stores an error body in ``data`` and does not raise for a
+        4xx or a 5xx answer, so an unread status becomes an empty row list and
+        the operator sees the same wording a genuinely empty organization
+        produces. Issue #4025 records that confusion.
+        """
+        status = getattr(response, "status_code", None)  # Read the status the SDK recorded without raising.
+        if not isinstance(status, int):
+            logger.debug("%s returned no integer status, so the normal path continues", operation)  # Unknown status.
+            return False  # An absent or non-integer status proves nothing, so do not fail the run.
+        if 200 <= status < 300:
+            logger.debug("%s returned HTTP %d, which is a success", operation, status)  # Record the good answer.
+            return False  # A success status keeps the existing empty-result wording for a real empty read.
+        url = getattr(response, "url", None) or "the requested path"  # Name the path the cloud rejected.
+        logger.error("%s returned HTTP %d from %s", operation, status, url)  # Record the failure with full context.
+        logger.info("! Error fetching %s: HTTP %s from %s", operation, status, url)  # Make the failure operator-vis.
+        return True  # Tell the caller to stop before it reports an empty result.
+
+    @staticmethod
     def _run(operation: _SimpleEndpointOp, identifier: str | None, label: str) -> None:
         """Call one endpoint and persist all returned rows."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
@@ -291,6 +312,8 @@ class SimpleEndpointExporter:
                 response = callable_obj(mh.apisession)  # No-scope endpoints take only the session.
             else:
                 response = callable_obj(mh.apisession, identifier)  # Scoped endpoints take the session and one ID.
+            if SimpleEndpointExporter._http_failure(response, operation.operation):
+                return  # A non-2xx answer is an upstream failure, not an empty result, so end the run here.
             rawdata = mistapi.get_all(response=response, mist_session=mh.apisession)  # Collect every page.
             filename = f"{operation.operation}_{label.replace(' ', '_')}.csv"  # Build a readable export name.
             SimpleEndpointExporter._persist(rawdata, filename, operation.operation)  # Write the selected output format.
