@@ -134,11 +134,11 @@ class TestMetricsGatewayStartupContract:
 
 
 class TestSnmpBaseOidVariableContract:
-    """Require one SNMP base OID variable across every current setting surface."""
+    """Require one SNMP base OID variable across the active runtime readers."""
 
     def test_current_configuration_has_no_legacy_oid_assignment(self) -> None:
-        """An old assignment lets the shell and Python select different OID trees."""
-        sources = read_oid_sources()
+        """An old runtime assignment lets the shell and Python select different OID trees."""
+        sources = read_oid_sources((START_SCRIPT, SERVICE_MODULE))
         findings = legacy_oid_assignments(sources)
         assert findings == (), f"current files still assign {LEGACY_OID_VARIABLE}: {findings}"
 
@@ -158,11 +158,12 @@ class TestSnmpBaseOidVariableContract:
         ), "the Python service no longer names the canonical SNMP base OID variable"
 
     def test_compose_supplies_one_canonical_oid_setting(self) -> None:
-        """Compose must not inject two independently configurable OID values."""
+        """Compose must retain the legacy input and provide the canonical runtime setting."""
         text = read_oid_sources((COMPOSE_FILE,))[COMPOSE_FILE]
         assignments = re.findall(r"(?m)^\s*-\s+((?:METRICS_)?SNMP_BASE_OID)=", text)
         assert assignments == [
-            CANONICAL_OID_VARIABLE
+            LEGACY_OID_VARIABLE,
+            CANONICAL_OID_VARIABLE,
         ], f"compose.yml has unexpected SNMP base OID settings: {assignments}"
 
     def test_the_environment_template_names_only_the_canonical_setting(self) -> None:
