@@ -1,9 +1,9 @@
 """Unit tests for AddressAuditEngine classification + assembly (1003-site-address-audit)."""
 
+from typing import Any
 from unittest.mock import MagicMock
 
 from src.mist.resources.site.address_audit import audit_engine as eng_mod
-from src.mist.resources.site.address_audit.audit_engine import AddressAuditEngine
 from src.mist.resources.site.address_audit.business_authority_ingester import BusinessAuthorityRow
 from src.mist.resources.site.address_audit.models import AddressRow, AuditResult, MatchedSite, ResolverResult
 
@@ -12,17 +12,26 @@ _MIST_WITH_SUITE = {"address": "100 Main St Suite 5", "city": "Town", "state": "
 _CSV = {"address": "100 Main St", "city": "Town", "state": "FL", "zip": "33000"}
 
 
+def _new_engine(*args: Any, **kwargs: Any) -> Any:
+    """Build an audit engine for local classification and assembly tests."""
+    from src.mist.resources.site.address_audit.audit_engine import (
+        AddressAuditEngine,
+    )  # WHY: every external collaborator is absent or replaced with a test double.
+
+    return AddressAuditEngine(*args, **kwargs)  # WHY: preserve constructor behavior with injected collaborators.
+
+
 def _rr(canonical, ambiguous=False, source="nominatim"):
     """Build a ResolverResult for classification tests."""
     return ResolverResult(query="q", canonical_address=canonical, source=source, ambiguous=ambiguous)
 
 
 class TestClassify:
-    """AddressAuditEngine._classify covers all eight states."""
+    """eng_mod.AddressAuditEngine._classify covers all eight states."""
 
     def setup_method(self):
         """Fresh engine per test."""
-        self.engine = AddressAuditEngine()
+        self.engine = _new_engine()
 
     def test_no_result(self):
         """No canonical address -> NO_RESULT."""
@@ -107,7 +116,7 @@ class TestSameStreet:
 
     def setup_method(self):
         """Fresh engine per test."""
-        self.engine = AddressAuditEngine()
+        self.engine = _new_engine()
 
     def test_opposite_directionals_differ(self):
         """East vs West on the same street name are different streets."""
@@ -135,7 +144,7 @@ class TestWriteBackWiring:
 
     def _engine_with_mocks(self):
         """Build an engine whose renderer/reporter/corrector are mocks."""
-        engine = AddressAuditEngine(renderer=MagicMock(), reporter=MagicMock())
+        engine = _new_engine(renderer=MagicMock(), reporter=MagicMock())
         corrector = MagicMock()
         engine._make_corrector = staticmethod(lambda _api: corrector)  # Inject the mock corrector.
         return engine, corrector
@@ -230,7 +239,7 @@ class TestConsoleLogSuppression:
         root.addHandler(console)
         root.addHandler(file_handler)
         try:
-            with AddressAuditEngine()._console_logs_to_file_only():
+            with _new_engine()._console_logs_to_file_only():
                 assert len(console.filters) == 1  # Console handler filtered.
                 assert len(file_handler.filters) == 0  # File handler untouched.
             assert len(console.filters) == 0  # Filter removed after the run.
@@ -246,7 +255,7 @@ class TestBuildAuditResult:
 
     def test_unmatched_row(self):
         """An unmatched site yields UNMATCHED and never calls the resolver."""
-        engine = AddressAuditEngine()
+        engine = _new_engine()
         row = AddressRow(serial="9999999999", model="SSR130", address="1 A St", city="T", state="FL", zip_code="1")
         site = MatchedSite(match_strategy="unmatched")
 
@@ -269,7 +278,7 @@ class TestBusinessAuthorityPrompt:
 
     def test_prompt_business_csv_skip(self, monkeypatch):
         """Entering 'q' skips authoritative CSV selection cleanly."""
-        engine = AddressAuditEngine()  # Real engine; prompt path is pure input logic.
+        engine = _new_engine()  # Real engine; prompt path is pure input logic.
         monkeypatch.setattr(
             eng_mod.InputUtils, "safe_input", staticmethod(lambda *a, **k: "q")
         )  # Simulate operator skip.
@@ -278,7 +287,7 @@ class TestBusinessAuthorityPrompt:
 
     def test_prompt_business_csv_selects_index(self, monkeypatch):
         """A valid index returns the selected business CSV path."""
-        engine = AddressAuditEngine()  # Real engine; prompt path is pure input logic.
+        engine = _new_engine()  # Real engine; prompt path is pure input logic.
         monkeypatch.setattr(
             eng_mod.InputUtils, "safe_input", staticmethod(lambda *a, **k: "2")
         )  # Simulate index selection.
@@ -291,7 +300,7 @@ class TestBusinessAuthorityIntegration:
 
     def test_build_audit_result_passes_authoritative_address(self):
         """A unique authoritative match is forwarded to the resolver candidates payload."""
-        engine = AddressAuditEngine()  # Real engine with injectable resolver stub below.
+        engine = _new_engine()  # Real engine with injectable resolver stub below.
         row = AddressRow(  # Primary row from the customer CSV.
             serial="1234567890",
             model="SSR130",
@@ -361,7 +370,7 @@ class TestResolveAndClassify:
 
     def test_zero_rows_yields_empty(self):
         """An empty input produces an empty result list (no exception)."""
-        engine = AddressAuditEngine()
+        engine = _new_engine()
         ctx = eng_mod._AuditContext(  # WHY: Bundle context for the refactored resolver helper.
             business="",  # WHY: Empty business string keeps prefix logic inert.
             ui_geocode=False,  # WHY: Tier-3 disabled so no external geocode occurs.
@@ -376,24 +385,24 @@ class TestEnvConfig:
     def test_env_float_default_when_unset(self, monkeypatch):
         """An unset env var returns the supplied default."""
         monkeypatch.delenv("UI_GEOCODE_MAX_LOOKUPS", raising=False)
-        assert AddressAuditEngine._env_float("UI_GEOCODE_MAX_LOOKUPS", 50.0) == 50.0
+        assert eng_mod.AddressAuditEngine._env_float("UI_GEOCODE_MAX_LOOKUPS", 50.0) == 50.0
 
     def test_env_float_parses_value(self, monkeypatch):
         """A valid env value is parsed as a float."""
         monkeypatch.setenv("FUZZY_MATCH_THRESHOLD", "92")
-        assert AddressAuditEngine._fuzzy_threshold() == 92.0
+        assert eng_mod.AddressAuditEngine._fuzzy_threshold() == 92.0
 
     def test_env_float_invalid_falls_back(self, monkeypatch):
         """A malformed env value falls back to the default without raising."""
         monkeypatch.setenv("FUZZY_MATCH_THRESHOLD", "not-a-number")
-        assert AddressAuditEngine._fuzzy_threshold() == 85.0
+        assert eng_mod.AddressAuditEngine._fuzzy_threshold() == 85.0
 
     def test_ui_config_reads_env(self, monkeypatch):
         """UI config merges dashboard URL and bounds from the environment."""
         monkeypatch.setenv("MIST_DASHBOARD_URL", "https://manage.eu.mist.com/")
         monkeypatch.setenv("UI_GEOCODE_TIMEOUT_SECONDS", "30")
         monkeypatch.setenv("UI_GEOCODE_MAX_LOOKUPS", "10")
-        config = AddressAuditEngine._ui_config()
+        config = eng_mod.AddressAuditEngine._ui_config()
         assert config.dashboard_url == "https://manage.eu.mist.com/"
         assert config.per_lookup_timeout_s == 30.0
         assert config.max_lookups == 10
@@ -401,53 +410,53 @@ class TestEnvConfig:
     def test_skip_ssl_verify_defaults_false(self, monkeypatch):
         """Certificate verification stays on by default. See issue #1914."""
         monkeypatch.delenv("MIST_SKIP_SSL_VERIFY", raising=False)
-        assert AddressAuditEngine._skip_ssl_verify() is False
+        assert eng_mod.AddressAuditEngine._skip_ssl_verify() is False
 
     def test_skip_ssl_verify_env_opt_out(self, monkeypatch):
         """Setting MIST_SKIP_SSL_VERIFY=true turns the check off, and only then."""
         monkeypatch.setenv("MIST_SKIP_SSL_VERIFY", "true")
-        assert AddressAuditEngine._skip_ssl_verify() is True
+        assert eng_mod.AddressAuditEngine._skip_ssl_verify() is True
 
     def test_skip_ssl_verify_unknown_value_stays_secure(self, monkeypatch):
         """An unrecognized value keeps the check on, so a typo fails secure."""
         monkeypatch.setenv("MIST_SKIP_SSL_VERIFY", "flase")
-        assert AddressAuditEngine._skip_ssl_verify() is False
+        assert eng_mod.AddressAuditEngine._skip_ssl_verify() is False
 
     def test_ui_geocode_enabled_defaults_true(self, monkeypatch):
         """Tier-3 web geocoding is permitted by default (no CLI flag required)."""
         monkeypatch.delenv("ADDRESS_AUDIT_GEOCODE", raising=False)
-        assert AddressAuditEngine._ui_geocode_enabled() is True
+        assert eng_mod.AddressAuditEngine._ui_geocode_enabled() is True
 
     def test_ui_geocode_enabled_env_off(self, monkeypatch):
         """Setting ADDRESS_AUDIT_GEOCODE=off disables the Tier-3 attempt."""
         monkeypatch.setenv("ADDRESS_AUDIT_GEOCODE", "off")
-        assert AddressAuditEngine._ui_geocode_enabled() is False
+        assert eng_mod.AddressAuditEngine._ui_geocode_enabled() is False
 
     def test_ui_geocode_enabled_env_auto(self, monkeypatch):
         """An explicit 'auto' value keeps Tier-3 enabled."""
         monkeypatch.setenv("ADDRESS_AUDIT_GEOCODE", "auto")
-        assert AddressAuditEngine._ui_geocode_enabled() is True
+        assert eng_mod.AddressAuditEngine._ui_geocode_enabled() is True
 
     def test_geocode_mode_default_auto(self, monkeypatch):
         """Unset ADDRESS_AUDIT_GEOCODE defaults to auto (take over else spawn)."""
         monkeypatch.delenv("ADDRESS_AUDIT_GEOCODE", raising=False)
-        assert AddressAuditEngine._geocode_mode() == "auto"
+        assert eng_mod.AddressAuditEngine._geocode_mode() == "auto"
 
     def test_geocode_mode_off(self, monkeypatch):
         """'off' disables Tier 3 entirely."""
         monkeypatch.setenv("ADDRESS_AUDIT_GEOCODE", "off")
-        assert AddressAuditEngine._geocode_mode() == "off"
-        assert AddressAuditEngine._ui_geocode_enabled() is False
+        assert eng_mod.AddressAuditEngine._geocode_mode() == "off"
+        assert eng_mod.AddressAuditEngine._ui_geocode_enabled() is False
 
     def test_geocode_mode_launch(self, monkeypatch):
         """'launch' selects the Playwright-launch strategy."""
         monkeypatch.setenv("ADDRESS_AUDIT_GEOCODE", "launch")
-        assert AddressAuditEngine._geocode_mode() == "launch"
+        assert eng_mod.AddressAuditEngine._geocode_mode() == "launch"
 
     def test_geocode_mode_unknown_falls_back_auto(self, monkeypatch):
         """An unrecognized value falls back to auto so a typo never disables Tier 3."""
         monkeypatch.setenv("ADDRESS_AUDIT_GEOCODE", "banana")
-        assert AddressAuditEngine._geocode_mode() == "auto"
+        assert eng_mod.AddressAuditEngine._geocode_mode() == "auto"
 
 
 class TestSourceLabel:
@@ -456,27 +465,29 @@ class TestSourceLabel:
     def test_internal_with_osm_confirmation(self):
         """An internal suite whose street OSM confirmed is labelled Internal+OSM."""
         rr = ResolverResult(query="q", canonical_address="X Suite 5", source="internal", street_validated=True)
-        assert AddressAuditEngine._source_label(rr) == "Internal+OSM"
+        assert eng_mod.AddressAuditEngine._source_label(rr) == "Internal+OSM"
 
     def test_internal_without_osm(self):
         """An internal suite OSM could not confirm is labelled plain Internal."""
         rr = ResolverResult(query="q", canonical_address="X Suite 5", source="internal", street_validated=False)
-        assert AddressAuditEngine._source_label(rr) == "Internal"
+        assert eng_mod.AddressAuditEngine._source_label(rr) == "Internal"
 
     def test_nominatim_label(self):
         """A Nominatim-sourced result is labelled Nominatim."""
         rr = ResolverResult(query="q", canonical_address="X", source="nominatim")
-        assert AddressAuditEngine._source_label(rr) == "Nominatim"
+        assert eng_mod.AddressAuditEngine._source_label(rr) == "Nominatim"
 
     def test_mist_ui_label_names_google(self):
         """A Tier-3 result is labelled to make the Google authority explicit."""
         rr = ResolverResult(query="q", canonical_address="X #5", source="mist_ui")  # Tier-3 (Google-via-Mist).
-        assert AddressAuditEngine._source_label(rr) == "Google (Mist UI)"  # Label must name Google, not just "Mist UI".
+        assert (
+            eng_mod.AddressAuditEngine._source_label(rr) == "Google (Mist UI)"
+        )  # Label must name Google, not just "Mist UI".
 
     def test_no_result_label(self):
         """A result with no canonical address is labelled '-'."""
         rr = ResolverResult(query="q", canonical_address=None, source="internal")
-        assert AddressAuditEngine._source_label(rr) == "-"
+        assert eng_mod.AddressAuditEngine._source_label(rr) == "-"
 
 
 class TestConflictingHints:
@@ -484,7 +495,7 @@ class TestConflictingHints:
 
     def test_conflicting_hints_short_circuits(self):
         """When the resolver reports conflicting hints, the row is review-only and resolve() never runs."""
-        engine = AddressAuditEngine()  # Real engine; resolver is a guard stub below.
+        engine = _new_engine()  # Real engine; resolver is a guard stub below.
         row = AddressRow(
             serial="111", model="SSR130", address="2825 Crossroads Blvd", city="Waterloo", state="IA", zip_code="50702"
         )  # CSV hint.
@@ -530,7 +541,7 @@ class TestFlagDuplicateAddresses:
         """Two different sites with the identical suggested address -> both DUPLICATE_ADDRESS."""
         a = self._result("s1", "A", suggested="100 Main St, Town, FL 33000")  # Site A.
         b = self._result("s2", "B", suggested="100 Main St, Town, FL 33000")  # Site B, same address.
-        AddressAuditEngine._flag_duplicate_addresses([a, b])  # Run the post-pass.
+        eng_mod.AddressAuditEngine._flag_duplicate_addresses([a, b])  # Run the post-pass.
         assert a.issue_type == "DUPLICATE_ADDRESS" and b.issue_type == "DUPLICATE_ADDRESS"  # Both flagged.
         assert a.suggested_address == "" and a.source == "-"  # No push, no credited source.
 
@@ -538,20 +549,20 @@ class TestFlagDuplicateAddresses:
         """Same street but different suites are distinct full addresses -> not a collision."""
         a = self._result("s1", "A", suggested="100 Main St Ste 100, Town, FL 33000")  # Unit 100.
         b = self._result("s2", "B", suggested="100 Main St Ste 200, Town, FL 33000")  # Unit 200.
-        AddressAuditEngine._flag_duplicate_addresses([a, b])  # Run the post-pass.
+        eng_mod.AddressAuditEngine._flag_duplicate_addresses([a, b])  # Run the post-pass.
         assert a.issue_type == "ADDRESS_MATCH" and b.issue_type == "ADDRESS_MATCH"  # Strip-mall case preserved.
 
     def test_single_site_not_flagged(self):
         """A lone site is never a collision."""
         a = self._result("s1", "A", suggested="100 Main St, Town, FL 33000")  # Only one site.
-        AddressAuditEngine._flag_duplicate_addresses([a])  # Run the post-pass.
+        eng_mod.AddressAuditEngine._flag_duplicate_addresses([a])  # Run the post-pass.
         assert a.issue_type == "ADDRESS_MATCH"  # Untouched.
 
     def test_same_site_twice_not_flagged(self):
         """Two rows for the SAME site (same id) are not a cross-site collision."""
         a = self._result("s1", "A", suggested="100 Main St, Town, FL 33000")  # Same site_id ...
         b = self._result("s1", "A", suggested="100 Main St, Town, FL 33000")  # ... appearing twice.
-        AddressAuditEngine._flag_duplicate_addresses([a, b])  # Run the post-pass.
+        eng_mod.AddressAuditEngine._flag_duplicate_addresses([a, b])  # Run the post-pass.
         assert a.issue_type == "ADDRESS_MATCH" and b.issue_type == "ADDRESS_MATCH"  # Not flagged.
 
     def test_conflicting_hints_row_is_preserved(self):
@@ -565,7 +576,7 @@ class TestFlagDuplicateAddresses:
             source="-",
         )  # Already review-only.
         b = self._result("s2", "B", suggested="100 Main St, Town, FL 33000")  # Different site, same address.
-        AddressAuditEngine._flag_duplicate_addresses([a, b])  # Run the post-pass.
+        eng_mod.AddressAuditEngine._flag_duplicate_addresses([a, b])  # Run the post-pass.
         assert a.issue_type == "CONFLICTING_HINTS"  # Preserved (skipped).
         assert b.issue_type == "ADDRESS_MATCH"  # Alone in its bucket -> not flagged.
 
@@ -577,5 +588,5 @@ class TestFlagDuplicateAddresses:
         b = self._result(
             "s2", "B", suggested="", mist_addr={"address": "100 Main St, Town, FL 33000"}, issue="ADDRESS_MATCH"
         )  # No suffix.
-        AddressAuditEngine._flag_duplicate_addresses([a, b])  # Run the post-pass.
+        eng_mod.AddressAuditEngine._flag_duplicate_addresses([a, b])  # Run the post-pass.
         assert a.issue_type == "DUPLICATE_ADDRESS" and b.issue_type == "DUPLICATE_ADDRESS"  # Normalized to one key.

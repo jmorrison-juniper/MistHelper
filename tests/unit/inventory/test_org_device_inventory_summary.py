@@ -205,6 +205,20 @@ def test_fetch_ap_inventory_returns_all_claimed() -> None:
     assert len(records) == 2  # no client-side filtering; assigned + unassigned both returned
 
 
+def test_org_name_http_401_returns_none() -> None:
+    """A rejected org-name read must use the existing missing-name failure signal."""
+    _configure_dependencies()  # WHY: hydrate every dependency before replacing the target call.
+    from src.mist.resources.inventory import org_device_inventory_summary as summary_module
+
+    response = SimpleNamespace(status_code=401, data={})  # WHY: model the APIResponse shape for a rejected token.
+    summary_module.mistapi.api.v1.orgs.orgs.getOrg.return_value = response  # WHY: direct Mist call returns a response.
+
+    result = OrgDeviceInventorySummaryCore._lookup_org_name_from_api("org-1")  # WHY: drive the source read.
+
+    assert result is None  # WHY: the rejected response must not create an organization name.
+    summary_module.mistapi.api.v1.orgs.orgs.getOrg.assert_called_once()  # WHY: prove the source reached Mist.
+
+
 def test_run_for_org_calls_all_export_steps(monkeypatch) -> None:
     """run_for_org should execute model, version, and pivot export flows."""
     _configure_dependencies()

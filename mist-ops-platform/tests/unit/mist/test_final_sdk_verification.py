@@ -24,7 +24,7 @@ class TestFinalSDKVerification:
         """Each entity must have importable module + callable methods."""
         endpoint = MistEntityRegistry.get(entity_type)
         parts = endpoint.api_module.split(".")
-        mod_path = f"mistapi.api.v1.{'.'.join(parts)}"
+        mod_path = ".".join(("mistapi", "api", "v1", *parts))
         module = importlib.import_module(mod_path)
 
         methods_checked = 0

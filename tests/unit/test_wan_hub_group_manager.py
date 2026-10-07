@@ -8,6 +8,7 @@ Tests cover all user stories:
 """
 
 import logging
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -108,6 +109,19 @@ class TestFetchProfiles:
         mock_list.side_effect = Exception("API error")
         result = manager._fetch_profiles()
         assert result == []
+
+    @patch("src.operations.wan.wan_hub_group_manager.mistapi.get_all")
+    @patch("src.operations.wan.wan_hub_group_manager.mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles")
+    def test_http_401_returns_empty(self, mock_list, mock_get_all, manager):
+        """A rejected profile response must produce the empty failure result."""
+        response = SimpleNamespace(status_code=401, data=[])  # WHY: the direct Mist call returns a response object.
+        mock_list.return_value = response  # WHY: do not raise for an HTTP rejection.
+        mock_get_all.return_value = []  # WHY: the paginator exposes no usable profile rows.
+
+        result = WanHubGroupNumberManager._fetch_profiles(manager)  # WHY: drive the source method directly.
+
+        assert result == []  # WHY: a rejected read must not create selectable profiles.
+        mock_get_all.assert_called_once_with(response=response, mist_session=manager.apisession)
 
 
 class TestFetchHubSpokeVpns:

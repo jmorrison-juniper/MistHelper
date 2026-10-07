@@ -628,6 +628,18 @@ def test_apply_site_settings_failed_marks_error() -> None:
     assert mocks["mistapi"].api.v1.sites.setting.updateSiteSettings.call_count == 1
 
 
+def test_apply_site_settings_http_401_marks_error() -> None:
+    """apply_site_settings records the rejected HTTP status for the operator."""
+    _, mocks = _wire(update_status_code=401)  # WHY: mistapi returns a response instead of raising for HTTP status.
+    result: dict[str, Any] = {"variable_set": False, "status": "", "error": ""}  # WHY: capture the source verdict.
+
+    WAN2MigrationManager._apply_site_settings("s1", "S1", {"vars": {}}, result)  # WHY: drive the source write.
+
+    assert result["status"] == "FAILED"  # WHY: a rejected write must not look successful.
+    assert result["error"] == "API returned status 401"  # WHY: the exact failure signal must remain visible.
+    assert mocks["mistapi"].api.v1.sites.setting.updateSiteSettings.call_count == 1  # WHY: prove Mist was called.
+
+
 def test_fetch_current_site_settings_normalises_non_dict() -> None:
     """fetch_current_site_settings returns {} when data attribute is missing or non-dict."""
     _, mocks = _wire()

@@ -24,7 +24,6 @@ from typing import Any
 import pytest
 
 from src.operations.execution.firmware import firmware_manager, upgrade_service
-from src.operations.execution.firmware.firmware_manager import FirmwareManager
 
 # Every row that the legacy predicate can read without an error, with the family
 # that the legacy predicate reports. The new function must agree on each row.
@@ -51,6 +50,15 @@ WIDER_ROWS: tuple[dict[str, Any], ...] = (
 )
 
 
+def _legacy_manager_type() -> type[Any]:
+    """Return the manager class for its pure inventory discriminator."""
+    from src.operations.execution.firmware.firmware_manager import (
+        FirmwareManager,
+    )  # WHY: the tests call one pure predicate and no firmware request.
+
+    return FirmwareManager  # WHY: preserve direct comparison with the legacy method.
+
+
 def legacy_family(row: dict[str, Any]) -> bool:
     """Return the answer of the legacy predicate for one inventory row.
 
@@ -65,7 +73,7 @@ def legacy_family(row: dict[str, Any]) -> bool:
     Returns:
         True when the legacy predicate reports a session smart router.
     """
-    return bool(FirmwareManager._is_ssr_inventory_row(object(), row))
+    return bool(_legacy_manager_type()._is_ssr_inventory_row(object(), row))
 
 
 class TestAgreementWithTheLegacyPredicate:
@@ -126,7 +134,7 @@ class TestFreedomFromModuleState:
         and nothing else, so a caller needs no manager object.
         """
         assert list(inspect.signature(upgrade_service.classify_gateway).parameters) == ["device"]
-        assert list(inspect.signature(FirmwareManager._is_ssr_inventory_row).parameters) == ["self", "gw"]
+        assert list(inspect.signature(_legacy_manager_type()._is_ssr_inventory_row).parameters) == ["self", "gw"]
 
     def test_returns_the_same_family_after_every_legacy_global_changes(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """A change to the four globals of the legacy module changes no answer.

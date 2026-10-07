@@ -884,11 +884,12 @@ class TestNominatimValidatorAPI:
         )
 
     def test_parse_geocode_response_not_200(self):
-        mock_resp = MagicMock()
-        mock_resp.status_code = 404
-        result = self.validator._parse_geocode_response(mock_resp, [])  # WHY: source left the signature
-        assert result["valid"] is False
-        assert "404" in result["error"]
+        validator = NominatimValidator()  # WHY: a direct source call keeps the HTTP status proof in analyzer scope.
+        mock_resp = MagicMock()  # WHY: the parser reads only the response status for this refusal path.
+        mock_resp.status_code = 404  # WHY: reproduce a client-error answer without a transport exception.
+        result = validator._parse_geocode_response(mock_resp, [])  # WHY: drive the real status parser directly.
+        assert result["valid"] is False  # WHY: a refused geocode answer cannot validate the address.
+        assert "404" in result["error"]  # WHY: the operator must see the cloud refusal status.
 
     def test_parse_geocode_response_empty(self):
         mock_resp = MagicMock()

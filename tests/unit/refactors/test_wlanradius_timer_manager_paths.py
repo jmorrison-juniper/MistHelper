@@ -282,7 +282,7 @@ class TestSiteAndTemplateFetch:
     def test_a_failed_site_info_read_aborts(self, manager: WLANRadiusTimerManager, fake_mh: Any, api: Any) -> None:
         """Continuing without site info would send a write to the wrong endpoint."""
         api.api.v1.sites.sites.getSiteInfo.return_value = _response(404)  # WHY: the site is gone.
-        assert manager._fetch_site_info() is False  # WHY: the caller must stop.
+        assert WLANRadiusTimerManager._fetch_site_info(manager) is False  # WHY: drive source and stop the caller.
 
     def test_an_exception_during_the_site_info_read_aborts(
         self, manager: WLANRadiusTimerManager, fake_mh: Any, api: Any

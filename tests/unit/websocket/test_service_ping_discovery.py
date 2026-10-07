@@ -312,6 +312,25 @@ def test_fetch_device_config_swallows_exception_and_prints_warning(capsys) -> No
     assert any("Config error" in msg for msg in harness.debug_messages)
 
 
+def test_fetch_device_config_http_401_exposes_empty_discovery(capsys) -> None:
+    """A rejected device response must not create tenant or service choices."""
+    response = SimpleNamespace(status_code=401, data={})  # WHY: mistapi returns status and data without raising.
+    _configure_discovery(
+        getSiteDevice=MagicMock(return_value=response),
+        getSiteDeviceStats=MagicMock(return_value=response),
+    )  # WHY: both direct Mist reads are rejected.
+    harness = _DiscoveryHarness()  # WHY: use the real mixin behavior with controlled dependencies.
+    harness.device_tenants = []  # WHY: make any invented tenant visible.
+    harness.device_services = []  # WHY: make any invented service visible.
+
+    ServicePingDiscoveryMixin._fetch_device_config(harness)  # WHY: drive the source method directly.
+
+    output = capsys.readouterr().out  # WHY: read the operator-facing failure-shaped result.
+    assert harness.device_tenants == []  # WHY: a rejected response cannot create tenant choices.
+    assert harness.device_services == []  # WHY: a rejected response cannot create service choices.
+    assert "No tenants found in device configuration" in output  # WHY: the empty result remains observable.
+
+
 def test_fetch_device_config_success_path_populates_device_lists(capsys) -> None:
     """_fetch_device_config: happy path pulls tenants/services from config and stats."""
     device_resp = SimpleNamespace(

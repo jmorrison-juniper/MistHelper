@@ -1049,6 +1049,16 @@ class TestSelectPortsFromDevice:
 class TestPromptDeviceFailureModes:
     """Cover connection failures for prompt device fetches."""
 
+    def test_fetch_and_sort_http_401_returns_none(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """A refused device list must return no selection data and name the status."""
+        utils = PromptNetworkDeviceUtils(MagicMock(), MagicMock(), MagicMock())  # WHY: isolate the prompt helper.
+        response = MagicMock(status_code=401, data={"detail": "Unauthorized"})  # WHY: model a normal SDK answer.
+        with patch("src.mist.resources.device.prompt_utils.mistapi") as mistapi_mock:  # WHY: isolate the cloud call.
+            mistapi_mock.api.v1.sites.devices.listSiteDevices.return_value = response  # WHY: status does not raise.
+            result = utils._fetch_and_sort_devices("site-1", "ap", "APs")  # WHY: drive the real status path.
+        assert result is None  # WHY: a refused list cannot provide device choices.
+        assert "Mist returned HTTP 401 while fetching APs" in capsys.readouterr().out  # WHY: name the refusal.
+
     @pytest.mark.parametrize(
         "exception",
         [

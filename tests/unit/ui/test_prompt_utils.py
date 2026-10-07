@@ -432,17 +432,19 @@ def test_fetch_site_wireless_clients_get_all_none_returns_empty() -> None:
         assert PromptUtils._fetch_site_wireless_clients("site-1") == []
 
 
-def test_fetch_site_wireless_clients_exception_returns_empty() -> None:
-    """Fetch exceptions are swallowed and yield an empty list."""
+def test_fetch_site_wireless_clients_http_401_returns_empty(caplog: pytest.LogCaptureFixture) -> None:
+    """A rejected wireless-client response logs the status and yields an empty list."""
     fake_mh = _make_mh()
     with (
         patch(
             "src.interfaces.visualization.ui.prompt_utils.mistapi.api.v1.sites.clients.searchSiteWirelessClients",
-            side_effect=RuntimeError("boom"),
+            return_value=SimpleNamespace(status_code=401, data={"results": []}),
         ),
         patch("src.interfaces.visualization.ui.prompt_utils.SourceDependencyResolver", fake_mh),
+        caplog.at_level(logging.ERROR),
     ):
-        assert PromptUtils._fetch_site_wireless_clients("site-1") == []
+        assert PromptUtils._fetch_site_wireless_clients("site-1") == []  # WHY: preserve the failure contract.
+    assert "HTTP 401" in caplog.text  # WHY: the operator must see the rejected cloud status.
 
 
 # ---------- _fetch_site_wired_clients ----------

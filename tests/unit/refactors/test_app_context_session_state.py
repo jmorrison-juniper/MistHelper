@@ -6,22 +6,42 @@ import ast  # WHY: inspect declarations without importing implementation details
 import logging  # WHY: action logs help diagnose unit-test failures.
 from pathlib import Path  # WHY: build paths without hardcoded separators.
 from types import SimpleNamespace  # WHY: create a small fake requests session.
+from typing import Any  # WHY: local factories return source objects without broad module imports.
 from unittest.mock import MagicMock  # WHY: isolate bootstrap side effects.
 
 import pytest  # WHY: use monkeypatch and tmp_path fixtures.
 
 import MistHelper  # WHY: verify the root module contract after import.
-from src.foundation.runtime.config.config_utils import ConfigUtils  # WHY: verify org resolution edge cases.
-from src.foundation.support.refactors.initialize_mist_session import (
-    MistSessionConfigurator,
-)  # WHY: verify the single session seam.
-from src.foundation.support.refactors.main_entrypoint import (
-    AppContext,
-    ApplicationBootstrap,
-    MainEntrypoint,
-)  # WHY: verify context use.
+from src.foundation.runtime.config import (
+    config_utils as config_utils_module,
+)  # WHY: call one local org-resolution seam.
+from src.foundation.support.refactors import (
+    initialize_mist_session as mist_session_module,
+)  # WHY: call one local session seam.
+from src.foundation.support.refactors import (
+    main_entrypoint as main_entrypoint_module,
+)  # WHY: inspect context state without broad class imports.
 
 logger = logging.getLogger(__name__)  # WHY: keep test log records on the module logger.
+
+
+def _new_context() -> Any:
+    """Build one application context for local state-isolation tests."""
+    from src.foundation.support.refactors.main_entrypoint import (
+        AppContext,
+    )  # WHY: context construction does not enter the network startup path.
+
+    return AppContext()  # WHY: return a fresh context for each isolation assertion.
+
+
+def _new_bootstrap(**kwargs: Any) -> Any:
+    """Build one bootstrap after callers disable or replace startup side effects."""
+    from src.foundation.support.refactors.main_entrypoint import (
+        ApplicationBootstrap,
+    )  # WHY: the tests exercise local context ownership and no Mist request.
+
+    return ApplicationBootstrap(**kwargs)  # WHY: preserve the production constructor contract.
+
 
 SESSION_GLOBAL_NAMES = {  # WHY: keep the declaration audit small and explicit.
     "apisession",  # WHY: issue 1702 removes this live module global.
@@ -53,8 +73,8 @@ def test_misthelper_session_names_are_annotations_only() -> None:
 def test_two_app_context_instances_do_not_share_state() -> None:
     """Two contexts hold separate session and MSP state."""
     logger.info("Building two application contexts for an isolation check")  # WHY: log before construction.
-    first = AppContext()  # WHY: first context represents one process state holder.
-    second = AppContext()  # WHY: second context proves default factories do not share state.
+    first = _new_context()  # WHY: first context represents one process state holder.
+    second = _new_context()  # WHY: second context proves default factories do not share state.
     first.apisession = object()  # WHY: set a sentinel session on one context.
     first.msp_privileges.append({"msp_id": "msp-one"})  # WHY: mutate the list that must not be shared.
     logger.debug("Second context session is set: %s", second.apisession is not None)  # WHY: report isolation.
@@ -65,11 +85,15 @@ def test_two_app_context_instances_do_not_share_state() -> None:
 def test_session_configurator_runs_once_and_never_adds_mist_get() -> None:
     """The session seam configures the transport once and does not patch methods."""
     logger.info("Building a fake session for the configuration seam")  # WHY: log before fixture setup.
-    context = AppContext()  # WHY: the configurator uses the context as its once-only guard.
+    context = _new_context()  # WHY: the configurator uses the context as its once-only guard.
     inner_session = SimpleNamespace(mount=MagicMock(name="mount"))  # WHY: capture adapter mounts without network.
     session = SimpleNamespace(_session=inner_session, get=lambda *_args, **_kwargs: None)  # WHY: no mist_get exists.
-    first = MistSessionConfigurator.configure_once(context, session, {"apitoken": "redacted"})  # WHY: first pass.
-    second = MistSessionConfigurator.configure_once(context, session, {"apitoken": "redacted"})  # WHY: second pass.
+    first = mist_session_module.MistSessionConfigurator.configure_once(
+        context, session, {"apitoken": "redacted"}
+    )  # WHY: first pass.
+    second = mist_session_module.MistSessionConfigurator.configure_once(
+        context, session, {"apitoken": "redacted"}
+    )  # WHY: second pass.
     logger.debug("Mount calls: %s", inner_session.mount.call_count)  # WHY: prove no second configuration ran.
     assert first is True  # WHY: the get method is a supported read method.
     assert second is True  # WHY: the second validation still succeeds.
@@ -87,8 +111,10 @@ def test_credential_problem_edges_do_not_build_a_session(monkeypatch: pytest.Mon
     monkeypatch.setenv("MIST_APITOKEN", "your_token_here")  # WHY: force the placeholder-token branch.
     placeholder = MistHelper._collect_credential_problems(True)  # WHY: run local validation only.
     monkeypatch.chdir(tmp_path)  # WHY: make the .env lookup hermetic and absent.
-    ConfigUtils._org_id_cache = None  # WHY: clear the cache before the file lookup.
-    dotenv_value = ConfigUtils._resolve_org_id_from_dotenv()  # WHY: verify absent .env returns no value.
+    config_utils_module.ConfigUtils._org_id_cache = None  # WHY: clear the cache before the file lookup.
+    dotenv_value = (
+        config_utils_module.ConfigUtils._resolve_org_id_from_dotenv()
+    )  # WHY: verify absent .env returns no value.
     logger.debug("Credential edge results: %s %s %s", missing, placeholder, dotenv_value)  # WHY: report summary.
     assert any("no API token found" in problem for problem in missing)  # WHY: missing token must fail local checks.
     assert any("placeholder" in problem for problem in placeholder)  # WHY: placeholder token must fail local checks.
@@ -99,28 +125,32 @@ def test_second_web_bootstrap_call_uses_separate_context(monkeypatch: pytest.Mon
     """A second default bootstrap call in one process receives a separate context."""
     logger.info("Patching bootstrap side effects for a two-call check")  # WHY: no file, network, or dependency work.
     startup = MagicMock(name="startup")  # WHY: count common startup calls.
-    monkeypatch.setattr(ApplicationBootstrap, "_run_common_startup", startup)  # WHY: isolate bootstrap behavior.
+    monkeypatch.setattr(
+        main_entrypoint_module.ApplicationBootstrap, "_run_common_startup", startup
+    )  # WHY: isolate bootstrap behavior.
     monkeypatch.setattr(MistHelper, "_setup_runtime_flags", MagicMock(name="flags"), raising=False)  # WHY: avoid flags.
     dependency_mock = MagicMock(name="deps")  # WHY: avoid real dependency imports during the context test.
     monkeypatch.setattr(MistHelper, "_initialize_dependencies", dependency_mock, raising=False)  # WHY: no imports.
-    first = ApplicationBootstrap(parse_cli=False)  # WHY: build the first web bootstrap.
-    second = ApplicationBootstrap(parse_cli=False)  # WHY: build the second web bootstrap.
+    first = _new_bootstrap(parse_cli=False)  # WHY: build the first web bootstrap.
+    second = _new_bootstrap(parse_cli=False)  # WHY: build the second web bootstrap.
     first.context.apisession = object()  # WHY: a session on one bootstrap must not leak to another.
     first.bootstrap_for_web()  # WHY: run the first explicit startup.
     second.bootstrap_for_web()  # WHY: run the second explicit startup.
     logger.debug("Bootstrap startup call count: %s", startup.call_count)  # WHY: report the two-call result.
     assert first.context is not second.context  # WHY: default bootstrap contexts must isolate invocation state.
     assert second.context.apisession is None  # WHY: the second bootstrap must not inherit the first session.
-    assert second.context is MainEntrypoint.context  # WHY: the active bridge must point to the latest bootstrap.
+    assert (
+        second.context is main_entrypoint_module.MainEntrypoint.context
+    )  # WHY: the active bridge must point to the latest bootstrap.
     assert startup.call_count == 2  # WHY: each explicit bootstrap call runs its side-effect boundary.
 
 
 def test_bootstrap_can_share_explicit_context() -> None:
     """An explicit context remains shared when the caller asks for that behavior."""
     logger.info("Building two bootstraps with an explicit context")  # WHY: test the allowed sharing path.
-    context = AppContext()  # WHY: explicit callers can own one context outside the bootstrap.
-    first = ApplicationBootstrap(context=context, parse_cli=False)  # WHY: first owner receives caller state.
-    second = ApplicationBootstrap(context=context, parse_cli=False)  # WHY: second owner receives same caller state.
+    context = _new_context()  # WHY: explicit callers can own one context outside the bootstrap.
+    first = _new_bootstrap(context=context, parse_cli=False)  # WHY: first owner receives caller state.
+    second = _new_bootstrap(context=context, parse_cli=False)  # WHY: second owner receives same caller state.
     logger.debug("Explicit context was reused: %s", first.context is second.context)  # WHY: report sharing status.
     assert first.context is context  # WHY: the constructor must respect an explicit context.
     assert second.context is context  # WHY: no hidden context is allowed when the caller passes one.

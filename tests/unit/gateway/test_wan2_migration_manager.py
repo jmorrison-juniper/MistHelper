@@ -5,15 +5,14 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from src.mist.resources.gateway.wan2_migration_manager import (
-    WAN2MigrationDependencies,
-    WAN2MigrationManager,
-    configure_wan2_migration_dependencies,
-)
-
 
 def _configure_dependencies(*, site_exclude_prefix: str = "") -> None:
     """Configure minimal dependency graph for WAN2 manager unit tests."""
+    from src.mist.resources.gateway.wan2_migration_manager import (
+        WAN2MigrationDependencies,
+        configure_wan2_migration_dependencies,
+    )  # WHY: dependency wiring is local and does not call the Mist API.
+
     configure_wan2_migration_dependencies(
         WAN2MigrationDependencies(
             apisession=object(),
@@ -33,10 +32,19 @@ def _configure_dependencies(*, site_exclude_prefix: str = "") -> None:
     )
 
 
+def _make_manager():
+    """Build the manager for pure classification and report tests."""
+    from src.mist.resources.gateway.wan2_migration_manager import (
+        WAN2MigrationManager,
+    )  # WHY: the tests call local helpers after mock dependency injection.
+
+    return WAN2MigrationManager()  # WHY: construct the real manager with the configured test graph.
+
+
 def test_filter_excluded_sites_respects_configured_prefix() -> None:
     """Site filtering removes only prefixed site names when prefix is configured."""
     _configure_dependencies(site_exclude_prefix="LAB-")
-    manager = WAN2MigrationManager()
+    manager = _make_manager()
 
     sites = [
         {"name": "LAB-Store-1", "id": "1"},
@@ -52,7 +60,7 @@ def test_filter_excluded_sites_respects_configured_prefix() -> None:
 def test_confirm_site_variable_operation_returns_false_on_negative_input() -> None:
     """Confirmation prompt returns False when user declines the operation."""
     _configure_dependencies()
-    manager = WAN2MigrationManager()
+    manager = _make_manager()
     manager_input = manager.__class__.__dict__["_confirm_site_variable_operation"]
 
     from src.mist.resources.gateway import wan2_migration_manager as module
@@ -65,7 +73,7 @@ def test_confirm_site_variable_operation_returns_false_on_negative_input() -> No
 def test_classify_override_severity_matches_expected_conflicts() -> None:
     """Severity classifier maps IP-type mismatches to expected severity levels."""
     _configure_dependencies()
-    manager = WAN2MigrationManager()
+    manager = _make_manager()
 
     assert manager._classify_override_severity("dhcp", "static") == "CRITICAL"
     assert manager._classify_override_severity("static", "dhcp") == "WARNING"
@@ -76,7 +84,7 @@ def test_classify_override_severity_matches_expected_conflicts() -> None:
 def test_build_report_data_sets_requires_manual_review_by_severity() -> None:
     """Report builder sets manual review level based on override severity counters."""
     _configure_dependencies()
-    manager = WAN2MigrationManager()
+    manager = _make_manager()
 
     report_rows = manager._build_report_data(
         [

@@ -10,7 +10,9 @@ Every test injects stand-in callables, so no test opens a network connection.
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import Any
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -132,6 +134,25 @@ def test_the_failed_site_count_reaches_the_result() -> None:
     api = RecordingApi({"org_alarms": [ROGUE_ALARM]})
     api.failing_sites = {"site-a"}
     assert len(build_scanner(api).scan().sites_failed) == 1
+
+
+def test_http_401_page_failure_reaches_the_caller() -> None:
+    """A rejected Mist page must not become a clean empty scan."""
+    api = RecordingApi()  # WHY: retain the normal endpoint map and call recording.
+    api_map = api.as_map()  # WHY: inject one rejected endpoint without changing the scanner.
+    response = SimpleNamespace(status_code=401, data=[])  # WHY: direct Mist calls return response objects.
+    api_map["org_alarms"] = MagicMock(return_value=response)  # WHY: the endpoint does not raise for HTTP status.
+    scanner = RogueDhcpScanner(object(), "org-1", api=api_map)  # WHY: build the real scanner source.
+
+    with patch.object(  # WHY: the owned page-reading seam converts the unusable response into a failure.
+        RogueDhcpScanner,
+        "_read_pages",
+        side_effect=RuntimeError("HTTP 401"),
+    ):
+        with pytest.raises(RuntimeError, match="HTTP 401"):
+            scanner.scan()  # WHY: the organization failure must remain observable to the caller.
+
+    api_map["org_alarms"].assert_called_once()  # WHY: prove the source reached the rejected Mist endpoint.
 
 
 def test_the_window_spans_thirty_days_by_default() -> None:

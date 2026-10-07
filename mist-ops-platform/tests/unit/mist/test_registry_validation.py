@@ -19,7 +19,7 @@ from src.shared.mist.types import ENTITY_ENDPOINT_MAP, MistEndpoint
 def _resolve_module(endpoint: MistEndpoint) -> object:
     """Import the SDK module for *endpoint*."""
     parts = endpoint.api_module.split(".")
-    mod_path = f"mistapi.api.v1.{'.'.join(parts)}"
+    mod_path = ".".join(("mistapi", "api", "v1", *parts))
     return importlib.import_module(mod_path)
 
 

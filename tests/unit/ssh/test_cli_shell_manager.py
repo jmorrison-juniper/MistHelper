@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import logging
 import sys
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -198,6 +198,15 @@ class TestCreateSession:
         m_mistapi.api.v1.sites.devices.createSiteDeviceShellSession.assert_called_once_with(
             fake_mh.apisession, "s-1", "d-1", body={}
         )
+
+    def test_http_401_returns_none_and_logs_status(self, fake_mh, caplog):
+        """A refused shell request returns no URL and names the HTTP status."""
+        response = SimpleNamespace(status_code=401, data={"detail": "Unauthorized"})  # WHY: model SDK behavior.
+        with patch("src.operations.execution.ssh.cli_shell_manager.mistapi") as mistapi_mock:  # WHY: isolate cloud.
+            mistapi_mock.api.v1.sites.devices.createSiteDeviceShellSession.return_value = response  # WHY: no raise.
+            result = CLIShellManager._create_session("s-1", "d-1")  # WHY: drive the real status guard.
+        assert result is None  # WHY: a refused shell request cannot return a trusted WebSocket URL.
+        assert "The cloud returned HTTP 401" in caplog.text  # WHY: the operator needs the refusal status.
 
     def test_signature_type_error_is_not_hidden(self, fake_mh):
         """A malformed SDK call must fail as a programming error."""

@@ -43,6 +43,13 @@ class _FailedResponse:
     data: list[Any] = []  # WHY: simulate the empty SDK payload that previously looked normal.
 
 
+class _UnauthorizedResponse:
+    """Response object for a 401 with an empty payload."""
+
+    status_code = 401  # WHY: simulate a rejected Mist token without an exception side effect.
+    data: list[Any] = []  # WHY: preserve the APIResponse data field that the exporter reads.
+
+
 def _has_status_at_problem_level(caplog: pytest.LogCaptureFixture) -> bool:
     """Return true when a warning or error log names the HTTP 503 status."""
     return any(  # WHY: operators act on WARNING or ERROR for this failure.
@@ -95,6 +102,28 @@ def test_guest_authorizations_503_suppresses_no_data_and_writes_no_file(
         "searchSiteGuestAuthorization",
         "! No guest authorization data found for this site",
     )  # WHY: share the real exporter assertion flow.
+
+
+def test_guest_authorizations_401_reports_failure_and_writes_no_file(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A guest authorization 401 must remain visible and must not write an empty export."""
+    writer = MagicMock()  # WHY: a rejected read must not create a valid export.
+    with patch.object(guest_module, "SourceDependencyResolver", _resolver(writer)):
+        with patch.object(guest_module.mistapi, "get_all", return_value=[]):
+            with patch.object(
+                guest_module.mistapi.api.v1.sites.guests,
+                "searchSiteGuestAuthorization",
+                return_value=_UnauthorizedResponse(),
+            ):
+                with caplog.at_level(logging.INFO, logger=guest_module.logger.name):
+                    result = SiteGuestAuthorizationExporter.guest_authorizations()
+    assert result is None  # WHY: the exporter failure contract stops downstream processing.
+    assert any(
+        record.levelno >= logging.WARNING and "401" in record.getMessage() for record in caplog.records
+    )  # WHY: the operator must see the rejected status.
+    assert "! No guest authorization data found for this site" not in caplog.text  # WHY: no false empty success.
+    writer.assert_not_called()  # WHY: the rejected read must not write a file.
 
 
 def test_mist_edge_events_503_suppresses_no_data_and_writes_no_file(caplog: pytest.LogCaptureFixture) -> None:

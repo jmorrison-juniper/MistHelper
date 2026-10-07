@@ -4,6 +4,7 @@ Test sites list, devices list, caching, and error handling.
 """
 
 import json  # WHY: JSON serialization for cache simulation
+from types import SimpleNamespace  # WHY: model Mist SDK responses with status and data fields.
 from unittest.mock import Mock  # WHY: mocking dependencies
 
 import pytest  # WHY: test framework
@@ -113,6 +114,19 @@ class TestMistAPIClient:
 
         # WHY: verify result is None
         assert result is None  # WHY: returns none on error
+
+    def test_list_sites_http_401_returns_none(self):
+        """Test a rejected Mist response produces an observable failure result."""
+        self.mock_mist_api.listOrgSites.return_value = SimpleNamespace(  # WHY: the SDK returns a response object.
+            status_code=401,  # WHY: model a rejected token without raising an exception.
+            data=[],  # WHY: a rejected response can carry an empty parsed payload.
+        )
+        self.mock_redis.get.return_value = None  # WHY: force the source to call the Mist dependency.
+
+        result = MistAPIClient.list_sites(self.client, "org-123")  # WHY: drive the source method directly.
+
+        assert result is None  # WHY: the 4xx response must not become a valid empty site list.
+        self.mock_redis.setex.assert_not_called()  # WHY: a failed response must not enter the cache.
 
     def test_list_sites_no_cache(self):
         """Test sites listing without cache.

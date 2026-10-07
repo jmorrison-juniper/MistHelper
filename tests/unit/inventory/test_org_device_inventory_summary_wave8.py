@@ -379,6 +379,26 @@ def test_fetch_gateway_physical_inventory_returns_records() -> None:
     assert OrgDeviceInventorySummaryCore._fetch_gateway_physical_inventory("org-1") == records  # WHY: records returned
 
 
+def test_fetch_gateway_physical_inventory_http_401_returns_empty() -> None:
+    """A rejected gateway inventory read must produce the empty failure result."""
+    response = SimpleNamespace(status_code=401, data=[])  # WHY: mistapi preserves HTTP status and parsed data.
+    get_all = MagicMock(return_value=[])  # WHY: the paginator returns no rows for the rejected first page.
+    mistapi_module = SimpleNamespace(
+        api=SimpleNamespace(
+            v1=SimpleNamespace(
+                orgs=SimpleNamespace(inventory=SimpleNamespace(getOrgInventory=MagicMock(return_value=response)))
+            )
+        ),
+        get_all=get_all,
+    )
+    _reset_dependencies(mistapi_module=mistapi_module)  # WHY: inject the rejected response into the source call.
+
+    result = OrgDeviceInventorySummaryCore._fetch_gateway_physical_inventory("org-1")  # WHY: drive the source read.
+
+    assert result == []  # WHY: a 4xx response must not create inventory records.
+    get_all.assert_called_once()  # WHY: prove the source passed the response to the SDK paginator.
+
+
 def test_fetch_gateway_physical_inventory_handles_exception() -> None:
     """_fetch_gateway_physical_inventory returns [] when the SDK raises."""
     mistapi_module = SimpleNamespace(

@@ -202,6 +202,11 @@ class PromptNetworkDeviceUtils:  # WHY: interactive Mist device and port selecti
             print(f"\n! Error fetching {plural_label}: {error}")  # WHY: surface failure to operator
             logging.exception("Exception fetching %s for site %s: %s", plural_label, site_id, error)  # WHY: audit
             return None  # WHY: signal fetch failure to caller
+        status_code = _response_status_code(response)  # WHY: the SDK returns HTTP failures as normal answers.
+        if status_code >= _HTTP_ERROR_MIN:  # WHY: a refused payload cannot supply device choices.
+            print(f"\n! Mist returned HTTP {status_code} while fetching {plural_label}.")  # WHY: name the refusal.
+            logger.warning("Mist returned HTTP %s for %s at site %s", status_code, plural_label, site_id)  # WHY: audit.
+            return None  # WHY: keep callers from sorting an error dictionary as a device list.
         rawdata = response.data  # WHY: unwrap to the list payload the API returned
         if not rawdata:  # WHY: guard against zero-length inventory before prompting
             print(f"\n! No {plural_label} found at the selected site.")  # WHY: nothing to offer the user

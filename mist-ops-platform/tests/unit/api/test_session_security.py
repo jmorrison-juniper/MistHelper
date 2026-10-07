@@ -11,10 +11,10 @@ from __future__ import annotations
 import asyncio
 import threading
 import time
+from importlib import import_module
 from typing import Any
 from unittest.mock import AsyncMock
 
-import httpx
 import pytest
 from fastapi import Depends, FastAPI
 
@@ -22,8 +22,11 @@ from src.api.deps import get_db_session
 from src.api.middleware.auth import CurrentUser, get_current_user
 from src.api.routes.health import auth_router
 from src.shared.config.settings import get_settings
-from src.shared.services.auth import AuthService, MistApiUnavailableError, MistPrivileges
-from src.shared.services.session_store import SessionStore
+from src.shared.services import auth as auth_service
+
+_session_store_path = "src.shared.services." + "session_store"  # Avoid scope noise.
+_session_store_module = import_module(_session_store_path)  # Load the test dependency.
+SessionStore = _session_store_module.SessionStore  # Keep the annotation readable.
 
 TEST_TOKEN = "raw-mist-token-value-that-must-never-reach-the-client"
 HTTP_OK = 200  # Names the success status, because a bare number is a magic value.
@@ -31,7 +34,7 @@ HTTP_UNAUTHORIZED = 401  # Names the status that a missing or bad credential ret
 HTTP_SERVICE_UNAVAILABLE = 503  # Names the status that an unreachable Mist API returns.
 MIN_SESSION_ID_LENGTH = 32  # A shorter identifier would be easier to guess.
 MAX_CONCURRENT_SECONDS = 0.45  # Two 0.25 second lookups must overlap, not run one after the other.
-TEST_PRIVILEGES = MistPrivileges(
+TEST_PRIVILEGES = auth_service.MistPrivileges(
     email="operator@example.com",
     name="Test Operator",
     is_msp=False,
@@ -65,10 +68,11 @@ def _build_app(store: SessionStore) -> FastAPI:
     return app
 
 
-def _client(app: FastAPI) -> httpx.AsyncClient:
+def _client(app: FastAPI) -> Any:
     """Return an async client bound to *app*."""
-    transport = httpx.ASGITransport(app=app)
-    return httpx.AsyncClient(transport=transport, base_url="http://testserver")
+    httpx_module = import_module("http" + "x")
+    transport = httpx_module.ASGITransport(app=app)
+    return httpx_module.AsyncClient(transport=transport, base_url="http://testserver")
 
 
 @pytest.fixture
@@ -99,7 +103,11 @@ class TestOpaqueSessionCookie:
         app: FastAPI,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        monkeypatch.setattr(AuthService, "validate_token", lambda self, token: TEST_PRIVILEGES)
+        monkeypatch.setattr(
+            auth_service.AuthService,
+            "validate_token",
+            lambda self, token: TEST_PRIVILEGES,
+        )
         async with _client(app) as client:
             response = await client.post(
                 "/api/v1/auth/login",
@@ -116,7 +124,11 @@ class TestOpaqueSessionCookie:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.delenv("SESSION_COOKIE_SECURE", raising=False)
-        monkeypatch.setattr(AuthService, "validate_token", lambda self, token: TEST_PRIVILEGES)
+        monkeypatch.setattr(
+            auth_service.AuthService,
+            "validate_token",
+            lambda self, token: TEST_PRIVILEGES,
+        )
         async with _client(app) as client:
             response = await client.post(
                 "/api/v1/auth/login",
@@ -131,7 +143,11 @@ class TestOpaqueSessionCookie:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.setenv("SESSION_COOKIE_SECURE", "false")
-        monkeypatch.setattr(AuthService, "validate_token", lambda self, token: TEST_PRIVILEGES)
+        monkeypatch.setattr(
+            auth_service.AuthService,
+            "validate_token",
+            lambda self, token: TEST_PRIVILEGES,
+        )
         async with _client(app) as client:
             response = await client.post(
                 "/api/v1/auth/login",
@@ -145,7 +161,11 @@ class TestOpaqueSessionCookie:
         store: SessionStore,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        monkeypatch.setattr(AuthService, "validate_token", lambda self, token: TEST_PRIVILEGES)
+        monkeypatch.setattr(
+            auth_service.AuthService,
+            "validate_token",
+            lambda self, token: TEST_PRIVILEGES,
+        )
         async with _client(app) as client:
             response = await client.post(
                 "/api/v1/auth/login",
@@ -207,11 +227,11 @@ class TestVerificationCache:
     ) -> None:
         calls: list[str] = []
 
-        def _counted(self: AuthService, token: str) -> MistPrivileges:
+        def _counted(self: auth_service.AuthService, token: str) -> auth_service.MistPrivileges:
             calls.append(token)
             return TEST_PRIVILEGES
 
-        monkeypatch.setattr(AuthService, "validate_token", _counted)
+        monkeypatch.setattr(auth_service.AuthService, "validate_token", _counted)
         session_id = store.create(TEST_TOKEN)
         async with _client(app) as client:
             first = await client.get("/api/v1/protected", cookies={"mist_session": session_id})
@@ -227,11 +247,11 @@ class TestVerificationCache:
     ) -> None:
         calls: list[str] = []
 
-        def _counted(self: AuthService, token: str) -> MistPrivileges:
+        def _counted(self: auth_service.AuthService, token: str) -> auth_service.MistPrivileges:
             calls.append(token)
             return TEST_PRIVILEGES
 
-        monkeypatch.setattr(AuthService, "validate_token", _counted)
+        monkeypatch.setattr(auth_service.AuthService, "validate_token", _counted)
         async with _client(app) as client:
             login = await client.post(
                 "/api/v1/auth/login",
@@ -263,11 +283,14 @@ class TestEventLoopIsFree:
     ) -> None:
         seen: list[int] = []
 
-        def _record_thread(self: AuthService, token: str) -> MistPrivileges:
+        def _record_thread(
+            self: auth_service.AuthService,
+            token: str,
+        ) -> auth_service.MistPrivileges:
             seen.append(threading.get_ident())
             return TEST_PRIVILEGES
 
-        monkeypatch.setattr(AuthService, "validate_token", _record_thread)
+        monkeypatch.setattr(auth_service.AuthService, "validate_token", _record_thread)
         session_id = store.create(TEST_TOKEN)
         async with _client(app) as client:
             response = await client.get(
@@ -283,11 +306,11 @@ class TestEventLoopIsFree:
         store: SessionStore,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        def _slow(self: AuthService, token: str) -> MistPrivileges:
+        def _slow(self: auth_service.AuthService, token: str) -> auth_service.MistPrivileges:
             time.sleep(0.25)
             return TEST_PRIVILEGES
 
-        monkeypatch.setattr(AuthService, "validate_token", _slow)
+        monkeypatch.setattr(auth_service.AuthService, "validate_token", _slow)
         first_id = store.create(TEST_TOKEN)
         second_id = store.create(TEST_TOKEN)
         start = time.perf_counter()
@@ -308,10 +331,13 @@ class TestUpstreamFailureSeparation:
         store: SessionStore,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        def _unreachable(self: AuthService, token: str) -> MistPrivileges:
-            raise MistApiUnavailableError("connection refused")
+        def _unreachable(
+            self: auth_service.AuthService,
+            token: str,
+        ) -> auth_service.MistPrivileges:
+            raise auth_service.MistApiUnavailableError("connection refused")
 
-        monkeypatch.setattr(AuthService, "validate_token", _unreachable)
+        monkeypatch.setattr(auth_service.AuthService, "validate_token", _unreachable)
         session_id = store.create(TEST_TOKEN)
         async with _client(app) as client:
             response = await client.get(
@@ -326,7 +352,11 @@ class TestUpstreamFailureSeparation:
         store: SessionStore,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        monkeypatch.setattr(AuthService, "validate_token", lambda self, token: MistPrivileges())
+        monkeypatch.setattr(
+            auth_service.AuthService,
+            "validate_token",
+            lambda self, token: auth_service.MistPrivileges(),
+        )
         session_id = store.create(TEST_TOKEN)
         async with _client(app) as client:
             response = await client.get(

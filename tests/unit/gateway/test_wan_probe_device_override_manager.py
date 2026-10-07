@@ -6,15 +6,14 @@ import logging  # WHY: caplog assertions compare INFO and WARNING levels.
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from src.mist.resources.gateway.wan_probe_device_override_manager import (
-    WANProbeDeviceOverrideDependencies,
-    WANProbeDeviceOverrideManager,
-    configure_wan_probe_device_override_dependencies,
-)
-
 
 def _configure_dependencies(*, site_exclude_prefix: str = "") -> None:
     """Configure minimal dependency graph for WAN probe override manager tests."""
+    from src.mist.resources.gateway.wan_probe_device_override_manager import (
+        WANProbeDeviceOverrideDependencies,
+        configure_wan_probe_device_override_dependencies,
+    )  # WHY: dependency wiring is local and does not call the Mist API.
+
     configure_wan_probe_device_override_dependencies(
         WANProbeDeviceOverrideDependencies(
             apisession=object(),
@@ -34,10 +33,19 @@ def _configure_dependencies(*, site_exclude_prefix: str = "") -> None:
     )
 
 
+def _make_manager():
+    """Build the manager for local selection and report behavior."""
+    from src.mist.resources.gateway.wan_probe_device_override_manager import (
+        WANProbeDeviceOverrideManager,
+    )  # WHY: the tests use mock dependencies and no cloud request.
+
+    return WANProbeDeviceOverrideManager()  # WHY: construct the real manager after dependency injection.
+
+
 def test_select_template_accepts_valid_numeric_selection() -> None:
     """Template selection resolves chosen template index from prompt input."""
     _configure_dependencies()
-    manager = WANProbeDeviceOverrideManager()
+    manager = _make_manager()
     manager.templates = [
         {"id": "tmpl-1", "name": "Template-A"},
         {"id": "tmpl-2", "name": "Template-B"},
@@ -52,7 +60,7 @@ def test_select_template_accepts_valid_numeric_selection() -> None:
 def test_find_template_sites_honors_exclusion_prefix() -> None:
     """Template site finder excludes sites with configured prefix from candidate set."""
     _configure_dependencies(site_exclude_prefix="LAB-")
-    manager = WANProbeDeviceOverrideManager()
+    manager = _make_manager()
     manager.selected_template = {"id": "tmpl-1", "name": "Template-A", "site_count": 0}
     manager.sites = [
         {"id": "site-1", "name": "LAB-Test", "gatewaytemplate_id": "tmpl-1"},
@@ -67,7 +75,7 @@ def test_find_template_sites_honors_exclusion_prefix() -> None:
 def test_confirm_operation_requires_apply_keyword() -> None:
     """Operation confirmation gate rejects non-APPLY values and accepts APPLY."""
     _configure_dependencies()
-    manager = WANProbeDeviceOverrideManager()
+    manager = _make_manager()
 
     from src.mist.resources.gateway import wan_probe_device_override_manager as module
 
@@ -81,7 +89,7 @@ def test_confirm_operation_requires_apply_keyword() -> None:
 def test_generate_report_calls_exporter_with_expected_output_filename(caplog) -> None:
     """Report generation writes audit output through injected exporter dependency."""
     _configure_dependencies()
-    manager = WANProbeDeviceOverrideManager()
+    manager = _make_manager()
     manager.selected_template = {"id": "tmpl-1", "name": "Template-A"}
 
     from src.mist.resources.gateway import wan_probe_device_override_manager as module

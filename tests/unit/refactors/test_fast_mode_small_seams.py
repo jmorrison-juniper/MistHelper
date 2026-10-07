@@ -31,12 +31,12 @@ from src.foundation.support.refactors import fast_mode_constants as fmc
 from src.foundation.support.refactors import fast_mode_devices_per_thread as fmdpt
 from src.foundation.support.refactors import fast_mode_sequential_max_retries as fmsmr
 from src.foundation.support.refactors import is_debug_mode as idm
+from src.foundation.support.refactors import (
+    main_entrypoint as main_entrypoint_module,
+)  # WHY: use only the local publish seam.
 from src.foundation.support.refactors import mist_site_exclude_prefix as msep
 from src.foundation.support.refactors import mist_wan_target_ports as mwtp
 from src.foundation.support.refactors import package_import_map as pim
-from src.foundation.support.refactors.main_entrypoint import (
-    ApplicationBootstrap,
-)  # WHY: bootstrap now publishes env-only constants.
 
 logger = logging.getLogger(__name__)  # WHY: keep test log records on the module logger.
 
@@ -282,7 +282,9 @@ class TestMistSiteExcludePrefix:
         logger.info("test_override_propagates_verbatim: begin")  # WHY: BEFORE action log.
         monkeypatch.setenv("MIST_SITE_EXCLUDE_PREFIX", "VRE")  # WHY: apply override.
         reloaded = importlib.reload(msep)  # WHY: re-import module.
-        ApplicationBootstrap(parse_cli=False)._publish_request_configuration()  # WHY: publish after import.
+        main_entrypoint_module.ApplicationBootstrap(
+            parse_cli=False
+        )._publish_request_configuration()  # WHY: publish after import.
         assert reloaded.MIST_SITE_EXCLUDE_PREFIX == "VRE"  # WHY: verbatim value preservation.
         assert isinstance(reloaded.MIST_SITE_EXCLUDE_PREFIX, str)  # WHY: type preservation.
         logger.debug("test_override_propagates_verbatim: passed")  # WHY: AFTER action log.
