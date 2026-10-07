@@ -90,18 +90,21 @@ class FakeRunStore:
         self.record["dispatch_failures"] = rows  # Change no stop, state, or accepted row field.
         return True  # The refusal survives a concurrent stop write.
 
-    def apply_state_transition(self, run_id: str, state: str, updated_at: str) -> bool:
-        """Write only the state fields of one run.
+    def apply_state_transition(self, run_id: str, state: str, updated_at: str, expected_state: str) -> bool:
+        """Write only the state fields of one run while the observed state holds.
 
         Args:
             run_id: The run key. This store holds one run only.
             state: The new run state value.
             updated_at: The fresh change time in ISO 8601 UTC.
+            expected_state: The state the caller read before it decided.
 
         Returns:
-            Always True, because this store holds one run only.
+            True when the observed state still held, otherwise False.
         """
         del run_id  # This store holds one run only.
+        if str(self.record.get("state", "")) != expected_state:  # The driver moved the run since the read.
+            return False  # Never move a run backward from a state the caller never saw.
         self.record["state"] = state  # Change only the state field.
         self.record["updated_at"] = updated_at  # The poll route reads the fresh change time.
         return True  # Every concurrent driver field survived the move.
@@ -650,7 +653,9 @@ class TestTheStoppingMove:
         }  # The copy the route read before the run finished.
         monkeypatch.setattr(upgrade_routes, "run_store", lambda: store)  # One store for the route and the driver.
         assert store.write_run(dict(stale))  # Seed the durable record of the live run.
-        assert store.apply_state_transition(run_id, "complete", "2026-10-07T00:01:00+00:00")  # The run finished.
+        assert store.apply_state_transition(
+            run_id, "complete", "2026-10-07T00:01:00+00:00", "upgrade_submitting"
+        )  # The run finished.
         assert store.append_accepted_upgrade(run_id, {"upgrade_id": "up-2"})  # The last phase holds evidence.
         record = dict(stale)  # The route carries its stale copy into the move.
         moved = upgrade_routes.move_to_stopping(record)  # The move must read the newest durable state.
@@ -660,3 +665,57 @@ class TestTheStoppingMove:
         assert record["state"] == "complete"  # The caller copy agrees with the durable record.
         assert stored["state"] == "complete"  # The move wrote no new state over the terminal one.
         assert stored["upgrades"] == [{"upgrade_id": "up-2"}]  # The terminal evidence survived the stop.
+
+    def test_the_stopping_move_never_pulls_a_run_back_from_a_terminal_state(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A driver that finishes inside the move interval keeps its terminal state.
+
+        Why:
+            Issue #4020: the move read the state, decided on `stopping`, and
+            wrote with no condition. A driver that committed `stopped` inside
+            that interval was pulled backward to `stopping`. The operator then
+            read a live run, and the portal could accept a second stop of a
+            finished destructive run.
+
+        Args:
+            monkeypatch: The pytest patch helper.
+        """
+        store = upgrade_routes.MemoryRunStore()  # The real in-process store of the portal.
+        run_id = "stopping-move-0003"  # Keep this record away from every other test of this process.
+        live = {
+            "run_id": run_id,
+            "state": "upgrade_submitting",
+            "updated_at": "2026-10-07T00:00:00+00:00",
+            "upgrades": [{"upgrade_id": "up-3"}],
+        }  # The record the route reads while the driver still runs.
+        monkeypatch.setattr(upgrade_routes, "run_store", lambda: store)  # One store for the route and the driver.
+        assert store.write_run(dict(live))  # Seed the durable record of the live run.
+        observed: list[str] = []  # Record the expectation the route sends to the store.
+        real_move = store.apply_state_transition  # Keep the real narrow mutation for the call below.
+
+        def driver_finishes_first(run: str, state: str, updated_at: str, expected_state: str) -> bool:
+            """Commit the terminal driver state inside the interval of the route.
+
+            Args:
+                run: The run key the route names.
+                state: The state the route decided on.
+                updated_at: The change time of the route.
+                expected_state: The state the route read before it decided.
+
+            Returns:
+                The answer of the real store mutation.
+            """
+            observed.append(expected_state)  # Prove the route names the state it read, not the moved copy.
+            real_move(run, "stopped", "2026-10-07T00:02:00+00:00", expected_state)  # The driver commits first.
+            return bool(real_move(run, state, updated_at, expected_state))  # Now let the route try its move.
+
+        monkeypatch.setattr(store, "apply_state_transition", driver_finishes_first)  # Order the two writers.
+        record = dict(live)  # The route carries the copy it read into the move.
+        moved = upgrade_routes.move_to_stopping(record)  # The driver wins the race inside this call.
+        stored = store.read_run(run_id) or {}  # Read the record the operator now sees.
+        assert observed == ["upgrade_submitting"]  # The route compared against the state it read.
+        assert moved == "stopped"  # The operator reads the true terminal state, not the refused move.
+        assert record["state"] == "stopped"  # The caller copy agrees with the durable record.
+        assert stored["state"] == "stopped"  # The refused move never pulled the run back to `stopping`.
+        assert stored["upgrades"] == [{"upgrade_id": "up-3"}]  # The accepted row of the run survived.

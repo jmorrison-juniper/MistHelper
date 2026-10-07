@@ -42,6 +42,13 @@ STOP_CONFIRMATION_TEXT: Final[str] = "STOP"
 #      run, never one device.
 STOP_SCOPE_RUN: Final[str] = "run"
 
+# WHAT: the sentence a run carries when it lost the evidence of a firmware call.
+# WHY: Issue #4020: an unproven refusal leaves the cloud state of the run
+#      unknown, so the portal blocks every later family and names the cause.
+DISPATCH_FENCED_REASON: Final[str] = (
+    "The portal could not record one firmware call, so the run sends no more firmware until an operator checks it."
+)
+
 
 class StopRequestError(Exception):
     """Base error for every stop request failure.
@@ -288,8 +295,8 @@ class RunRecordStore(Protocol):
         """
         ...  # A protocol declares the shape only
 
-    def apply_state_transition(self, run_id: str, state: str, updated_at: str) -> bool:
-        """Write only the state fields of one run and preserve every other field.
+    def apply_state_transition(self, run_id: str, state: str, updated_at: str, expected_state: str) -> bool:
+        """Write only the state fields of one run while the observed state still holds.
 
         Why:
             Issue #4020: the stop route read the whole record, moved it to
@@ -297,15 +304,42 @@ class RunRecordStore(Protocol):
             committed inside that interval disappeared, so the operator could
             lose a phase result, post-check evidence, or a terminal state.
 
+            The write also carried no condition, so a driver that reached a
+            terminal state between the read and the write was moved backward.
+            The caller now names the state it decided on, and the store refuses
+            the move when the durable record left that state.
+
         Args:
             run_id: The run key.
             state: The new run state value.
             updated_at: The fresh change time in ISO 8601 UTC.
+            expected_state: The state the caller read before it decided.
 
         Returns:
             True when the new state is durable.
         """
         ...  # A protocol declares the shape only
+
+
+class DispatchEvidenceError(RuntimeError):
+    """One firmware dispatch could not make its durable evidence.
+
+    Why:
+        Issue #4020: the submitter logged a failed refusal write and returned
+        the ordinary refusal reason. The run then read as a plain refused phase
+        while no durable record named the destructive call the cloud lost.
+        This error makes that case fail the run where an operator can see it.
+    """
+
+
+class DispatchFencedError(RuntimeError):
+    """A run may send no further firmware, because earlier evidence was lost.
+
+    Why:
+        Issue #4020: a run whose dispatch evidence never reached the store holds
+        an unknown cloud state. No later family of that run may receive a
+        destructive write until an operator recovers the run.
+    """
 
 
 class RunDispatchGate:
@@ -337,6 +371,7 @@ class RunDispatchGate:
     _REGISTRY_GUARD: ClassVar[threading.Condition] = threading.Condition()  # Guards the two tables below.
     _LOCKS: ClassVar[dict[str, threading.RLock]] = {}  # One reentrant lock for each live run.
     _STOPS_WAITING: ClassVar[dict[str, int]] = {}  # The count of stops that wait for each run.
+    _FENCED: ClassVar[set[str]] = set()  # Each run whose lost evidence blocks every later firmware call.
 
     @classmethod
     def _lock_for(cls, run_id: str) -> threading.RLock:
@@ -374,10 +409,15 @@ class RunDispatchGate:
 
         Yields:
             None, while this dispatch owns the gate of the run.
+
+        Raises:
+            DispatchFencedError: The run lost earlier dispatch evidence.
         """
         logger.debug("[GATE] Run %s asks for the dispatch gate", run_id)  # Record the wait before the action.
+        cls.raise_if_fenced(run_id)  # A run with lost evidence may never start another destructive call.
         gate = cls._claim_dispatch(run_id)  # Eligibility and acquisition form one linearizable claim.
         try:  # The claim must come back whatever the destructive caller does.
+            cls.raise_if_fenced(run_id)  # A fence set during the wait still blocks this call, inside the gate.
             logger.info("[GATE] Run %s holds the dispatch gate", run_id)  # The firmware call may now start.
             yield  # The caller checks the stop, sends one call, and persists its result.
         finally:  # A fault in the cloud call must never leave the gate of this run held.
@@ -467,6 +507,49 @@ class RunDispatchGate:
             return cls._STOPS_WAITING.get(run_id, 0)  # An absent run has no waiting stop.
 
     @classmethod
+    def fence(cls, run_id: str) -> None:
+        """Block every later firmware dispatch of one run.
+
+        Why:
+            Issue #4020: a refused dispatch whose evidence never reached the
+            store leaves the cloud state of that run unknown. The portal must
+            then send no further destructive write for the run until an
+            operator recovers it.
+
+        Args:
+            run_id: The run key.
+        """
+        with cls._REGISTRY_GUARD:  # The table is shared by every run of this process.
+            cls._FENCED.add(run_id)  # A later dispatch of this run now raises before it takes the gate.
+        logger.error("[GATE] Run %s may send no further firmware, because its evidence was lost", run_id)
+
+    @classmethod
+    def is_fenced(cls, run_id: str) -> bool:
+        """Report whether one run may still send firmware.
+
+        Args:
+            run_id: The run key.
+
+        Returns:
+            True when lost evidence blocks every later dispatch of the run.
+        """
+        with cls._REGISTRY_GUARD:  # The table is shared by every run of this process.
+            return run_id in cls._FENCED  # An absent run carries no fence.
+
+    @classmethod
+    def raise_if_fenced(cls, run_id: str) -> None:
+        """Stop one dispatch of a run that lost its earlier evidence.
+
+        Args:
+            run_id: The run key.
+
+        Raises:
+            DispatchFencedError: The run lost earlier dispatch evidence.
+        """
+        if cls.is_fenced(run_id):  # The fence outlives the dispatch that set it, for the life of the process.
+            raise DispatchFencedError(DISPATCH_FENCED_REASON)  # The driver fails the run with this sentence.
+
+    @classmethod
     def forget(cls, run_id: str) -> None:
         """Drop the gate lock of one finished run.
 
@@ -475,6 +558,7 @@ class RunDispatchGate:
         """
         with cls._REGISTRY_GUARD:  # The table is shared by every run of this process.
             cls._LOCKS.pop(run_id, None)  # An absent run is no fault, because a run may never dispatch.
+            cls._FENCED.discard(run_id)  # A finished run needs no fence, and a new run may reuse the key.
 
 
 class StopRequestStore:

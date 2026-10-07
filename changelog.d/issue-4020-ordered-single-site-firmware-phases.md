@@ -26,3 +26,8 @@
   `stopping` now writes the state alone, so it keeps every concurrent result.
   A stopped run that captured no post-check now names that lost evidence
   (issue #4020).
+- The move of a run into the state `stopping` now compares the state it read
+  with the durable state before it writes, so it never pulls a run back from a
+  final state. A refused firmware call whose evidence the store cannot hold now
+  fences the run. The portal then sends no further firmware for that run, and
+  the run ends in the state `failed` with a visible reason (issue #4020).

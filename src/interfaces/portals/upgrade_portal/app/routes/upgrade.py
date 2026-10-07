@@ -362,21 +362,24 @@ class MemoryRunStore:
             _RUNS[run_id] = current  # Publish the narrow mutation under the same guard.
         return True  # A later read sees the stop and every concurrent accepted row.
 
-    def apply_state_transition(self, run_id: str, state: str, updated_at: str) -> bool:
-        """Write only the state fields of one run and preserve every other field.
+    def apply_state_transition(self, run_id: str, state: str, updated_at: str, expected_state: str) -> bool:
+        """Write only the state fields of one run while the observed state still holds.
 
         Args:
             run_id: The run key.
             state: The new run state value.
             updated_at: The fresh change time in ISO 8601 UTC.
+            expected_state: The state the caller read before it decided.
 
         Returns:
             True when the store holds the new state.
         """
-        with _RUN_GUARD:  # Read and field mutation form one action with driver writes.
+        with _RUN_GUARD:  # Read, compare, and mutation form one action with driver writes.
             held = _RUNS.get(run_id)  # An absent run cannot hold a state.
             if held is None:
                 return False  # Fail closed, because an unproven move must never read as durable.
+            if str(held.get("state", "")) != expected_state:  # The driver moved the run since the caller read.
+                return False  # Never move a run backward from a state the caller never saw.
             current = dict(held)  # Detach the replacement from the stored record.
             current["state"] = state  # Change only the state field.
             current["updated_at"] = updated_at  # The poll route reads the fresh change time.
@@ -2523,6 +2526,34 @@ def cancel_outcome(run_id: str) -> StopOutcome:
     return answer if isinstance(answer, StopOutcome) else StopOutcome(message=STOP_RECORDED_MESSAGE)
 
 
+def _state_after_refused_move(store: Any, run_id: str, record: dict[str, Any]) -> str:
+    """Report the newest durable state after the store refused one stopping move.
+
+    Why:
+        Issue #4020: the earlier version answered the state the route had read
+        before the stop. A driver that reached `stopped` or `failed` inside the
+        same interval was therefore reported as still running, and an operator
+        could ask for a second stop of a finished destructive run.
+
+    Args:
+        store: The run record store of this request.
+        run_id: The run key.
+        record: The caller copy, which this function keeps in agreement.
+
+    Returns:
+        The state the durable record holds now.
+    """
+    logger.debug("upgrade: read the state of run %s again after the refused move", run_id)  # Before the read.
+    newer = store.read_run(run_id)  # The refusal means the durable state left the state the route read.
+    if not isinstance(newer, Mapping):  # A lost record cannot name a newer state.
+        return str(record.get("state", ""))  # Answer the only state the portal can still prove.
+    state = str(newer.get("state", ""))  # The driver wrote this value, so it is the true current state.
+    record["state"] = state  # Keep the caller copy and the durable record in agreement.
+    record["updated_at"] = str(newer.get("updated_at", record.get("updated_at", "")))  # Fresh change time.
+    logger.debug("upgrade: run %s holds the state %s after the refused move", run_id, state)  # After the read.
+    return state  # The operator reads the true state of the run.
+
+
 def move_to_stopping(record: dict[str, Any]) -> str:
     """Move one run into the state `stopping` through a narrow durable mutation.
 
@@ -2538,6 +2569,10 @@ def move_to_stopping(record: dict[str, Any]) -> str:
         now reads the current durable record, decides on that record, and writes
         two fields only.
 
+        The mutation also names the state it read. A driver that reached a
+        terminal state inside the same interval therefore keeps that state, and
+        the move never pulls a finished destructive run backward to `stopping`.
+
     Args:
         record: The run record that now holds the stop request.
 
@@ -2548,15 +2583,16 @@ def move_to_stopping(record: dict[str, Any]) -> str:
     run_id = str(record.get("run_id", ""))  # The narrow store mutation needs only the durable run key.
     current = store.read_run(run_id)  # A driver write may have landed since the route read the record.
     fresh = dict(current) if isinstance(current, Mapping) else dict(record)  # Decide on the newest state.
+    observed = str(fresh.get("state", ""))  # Hold the read state, because `advance` changes it in place.
     try:  # A run that reached a final state between the two reads must not raise a fault page.
         RunStateMachine().advance(fresh, RunState.STOPPING)
     except RunTransitionError:  # The run already stops, or it already finished.
         record["state"] = str(fresh.get("state", ""))  # The caller copy then names the true durable state.
         return str(fresh.get("state", ""))  # The operator reads the true state, whatever it is.
-    moved = bool(store.apply_state_transition(run_id, str(fresh["state"]), str(fresh["updated_at"])))
-    if not moved:  # A failed write leaves the request in place, and the driver still reads it.
+    moved = bool(store.apply_state_transition(run_id, str(fresh["state"]), str(fresh["updated_at"]), observed))
+    if not moved:  # The driver moved the run again, or the write failed. The request stays durable either way.
         logger.error("upgrade: the store refused the stopping move of the run %s", run_id)  # Names the run.
-        return str(record.get("state", ""))  # The operator reads the state the portal could still prove.
+        return _state_after_refused_move(store, run_id, record)  # Answer the newer durable state, not a stale one.
     record["state"] = str(fresh["state"])  # Keep the caller copy and the durable record in agreement.
     record["updated_at"] = str(fresh["updated_at"])  # The contract answer carries the fresh change time.
     return str(fresh["state"])  # The contract answers this value to the browser.

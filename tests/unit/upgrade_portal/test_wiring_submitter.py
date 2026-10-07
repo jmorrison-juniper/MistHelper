@@ -138,23 +138,21 @@ class RecordingRunStore:
         Returns:
             True after the refusal becomes durable.
         """
-        del run_id  # This store holds one run only.
-        if self.record is None:
-            return False  # An absent run cannot carry durable refusal evidence.
-        current = dict(self.record)  # Preserve every accepted row and every stop field.
+        current = dict(self.record) if self.record is not None else {"run_id": run_id}  # Keep the durable fields.
         rows = list(current.get("dispatch_failures", ()))  # Preserve every earlier refusal.
         rows.append(dict(failure))  # Add only the new refusal.
         current["dispatch_failures"] = rows  # Change no stop, state, or accepted row field.
         self.record = current  # Publish the narrow mutation.
         return True  # The refusal survives a concurrent stop write.
 
-    def apply_state_transition(self, run_id: str, state: str, updated_at: str) -> bool:
-        """Write only the state fields of one run.
+    def apply_state_transition(self, run_id: str, state: str, updated_at: str, expected_state: str) -> bool:
+        """Write only the state fields of one run while the observed state holds.
 
         Args:
             run_id: The run key. This store holds one run only.
             state: The new run state value.
             updated_at: The fresh change time in ISO 8601 UTC.
+            expected_state: The state the caller read before it decided.
 
         Returns:
             True after the move becomes durable.
@@ -162,6 +160,8 @@ class RecordingRunStore:
         del run_id  # This store holds one run only.
         if self.record is None:
             return False  # An absent run cannot hold a state.
+        if str(self.record.get("state", "")) != expected_state:  # The driver moved the run since the read.
+            return False  # Never move a run backward from a state the caller never saw.
         current = dict(self.record)  # Preserve every accepted row and every stop field.
         current["state"] = state  # Change only the state field.
         current["updated_at"] = updated_at  # The poll route reads the fresh change time.

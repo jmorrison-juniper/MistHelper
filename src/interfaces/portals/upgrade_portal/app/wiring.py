@@ -44,6 +44,7 @@ from src.interfaces.portals.upgrade_portal.persistence.actions import (
     ActionRepository,
 )  # Keep run actions in the authoritative document store.
 from src.interfaces.portals.upgrade_portal.runtime.signals import (
+    DispatchEvidenceError,
     RunDispatchGate,
 )  # The stop route and this destructive submitter share one gate for each run.
 
@@ -123,6 +124,15 @@ UNROUTABLE_PLAN_REASON = (
 STOP_REQUESTED_REASON = "An operator asked to stop the run before the next firmware call."
 ACCEPTED_ROW_STORE_REASON = (
     "The portal could not persist an accepted upgrade call, so the run stops before the next firmware call."
+)
+
+# WHAT: the bounded attempt count and the sentence of a lost refusal record.
+# WHY: Issue #4020: an unproven refusal leaves the cloud state of the run
+#      unknown. The portal retries a small, fixed number of times inside the
+#      dispatch gate, then blocks the run and names the loss.
+DISPATCH_EVIDENCE_ATTEMPTS = 3
+DISPATCH_EVIDENCE_LOST = (
+    "The portal could not record a refused firmware call of the run {run_id}, so the run stops for an operator."
 )
 
 # WHY: The storage bootstrap runs once for each process. Every step of it repeats
@@ -521,18 +531,21 @@ class DocumentRunStore:
         logger.debug("wiring: the stop write for run %s succeeded", run_id)  # Log after the mutation.
         return True  # The stop is durable without a whole-record replacement.
 
-    def apply_state_transition(self, run_id: str, state: str, updated_at: str) -> bool:
-        """Write only the state fields of one database run.
+    def apply_state_transition(self, run_id: str, state: str, updated_at: str, expected_state: str) -> bool:
+        """Write only the state fields of one database run while the observed state holds.
 
         Why:
             Issue #4020: the stop route replaced the whole record, so a driver
             update that committed between the read and the write disappeared.
-            This mutation patches two fields in one statement.
+            The write also carried no condition, so a run that reached a
+            terminal state inside that interval was moved backward. This
+            mutation patches two fields and only while the observed state holds.
 
         Args:
             run_id: The run key.
             state: The new run state value.
             updated_at: The fresh change time in ISO 8601 UTC.
+            expected_state: The state the caller read before it decided.
 
         Returns:
             True when the database holds the new state.
@@ -540,18 +553,19 @@ class DocumentRunStore:
         store = load_module(STORE_MODULE)  # Load the production database boundary only for the mutation.
         if store is None:  # A mirror cannot coordinate a move against the driver thread.
             return False  # Fail closed, because an unproven move must never read as durable.
-        try:  # The database action patches two fields in one atomic AQL statement.
+        try:  # The database action compares and patches two fields in one atomic AQL statement.
             database: Any = store.connect_database()  # Open the database that holds the run document.
             if database is None:  # A file fallback cannot preserve a concurrent driver write.
                 return False  # Never report an atomic mutation through a non-atomic fallback.
             query = (
                 "FOR run IN @@collection "
-                "FILTER run._key == @key "
+                "FILTER run._key == @key AND run.state == @expected "
                 "UPDATE run WITH { state: @state, updated_at: @now } IN @@collection RETURN NEW"
-            )  # UPDATE patches only the state fields and preserves upgrades, phases, and post-check evidence.
-            bind_vars = {  # Bind the collection, key, new state, and change time.
+            )  # The filter makes the comparison and the patch one action, so no move runs on a stale state.
+            bind_vars = {  # Bind the collection, key, observed state, new state, and change time.
                 "@collection": store.RUN_COLLECTION,
                 "key": run_id,
+                "expected": expected_state,
                 "state": state,
                 "now": updated_at,
             }
@@ -986,6 +1000,9 @@ class CloudUpgradeSubmitter:
 
         Returns:
             The refusal reason that the driver writes into the run.
+
+        Raises:
+            DispatchEvidenceError: The refusal could not become durable.
         """
         reason = PHASE_REFUSED_REASON.format(phase=phase)  # One sentence for the operator and the record.
         failure = {  # Plain values only, because the document store writes plain values.
@@ -1000,9 +1017,39 @@ class CloudUpgradeSubmitter:
         kept.append(dict(failure))  # The driver copy carries the same evidence as the durable record.
         record["dispatch_failures"] = kept  # A later save of the driver never drops this evidence.
         logger.error("wiring: the run %s stops, because the %s phase lost one upgrade call", run_id, phase)
-        if not self._store.append_dispatch_failure(run_id, dict(failure)):  # Durable before the gate reopens.
-            logger.error("wiring: the run %s could not persist one refused upgrade call", run_id)
+        self._store_failure(run_id, failure)  # A lost write fences the run and raises, inside the gate.
         return reason  # The driver fails the run with this sentence.
+
+    def _store_failure(self, run_id: str, failure: Mapping[str, Any]) -> None:
+        """Append one refusal record, and fence the run when no attempt succeeds.
+
+        Why:
+            Issue #4020: the submitter logged a failed append and returned the
+            ordinary refusal reason. The run then read as a plain refused phase
+            while no durable record named the destructive call the cloud lost,
+            and a later family of the same run could still send firmware. The
+            portal now retries the write a bounded number of times. When each
+            attempt fails, it blocks every later dispatch of the run and raises,
+            so the driver ends the run with a visible failure.
+
+        Args:
+            run_id: The run key, for the store mutation and the log line.
+            failure: The refusal evidence of one firmware call.
+
+        Raises:
+            DispatchEvidenceError: No attempt made the refusal durable.
+        """
+        for attempt in range(1, DISPATCH_EVIDENCE_ATTEMPTS + 1):  # A bounded loop can never hold the gate open.
+            logger.info("wiring: write the refusal of run %s, attempt %d", run_id, attempt)  # Before the write.
+            try:  # A store that raises must not leave the run unfenced and the refusal unproven.
+                if self._store.append_dispatch_failure(run_id, dict(failure)):  # The append is atomic.
+                    logger.debug("wiring: run %s holds its refusal after attempt %d", run_id, attempt)
+                    return  # The evidence is durable, so the ordinary refusal reason is now provable.
+                logger.error("wiring: the store refused the failure record of run %s", run_id)  # Names the run.
+            except Exception as fault:  # A database fault reads the same as a refusal for this decision.
+                logger.error("wiring: the failure record of run %s raised %s", run_id, fault)  # Full context.
+        RunDispatchGate.fence(run_id)  # No later family of this run may send firmware with the state unknown.
+        raise DispatchEvidenceError(DISPATCH_EVIDENCE_LOST.format(run_id=run_id))  # The driver fails the run.
 
     def _stop_reason(self, record: MutableMapping[str, Any]) -> str | None:
         """Copy a durable stop request into the driver record before a cloud write.

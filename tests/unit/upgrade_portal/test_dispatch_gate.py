@@ -34,6 +34,7 @@ import pytest
 from src.interfaces.portals.upgrade_portal.app import wiring
 from src.interfaces.portals.upgrade_portal.app.routes import upgrade
 from src.interfaces.portals.upgrade_portal.runtime.signals import (
+    DispatchFencedError,
     RunDispatchGate,
     StopRequestStore,
 )
@@ -165,19 +166,22 @@ class NarrowRunStore:
             self.record["dispatch_failures"] = rows  # Change no stop, state, or accepted row field.
         return True  # The refusal survives a concurrent stop write.
 
-    def apply_state_transition(self, run_id: str, state: str, updated_at: str) -> bool:
-        """Write only the state fields of one run.
+    def apply_state_transition(self, run_id: str, state: str, updated_at: str, expected_state: str) -> bool:
+        """Write only the state fields of one run while the observed state holds.
 
         Args:
             run_id: The run key. This store holds one run only.
             state: The new run state value.
             updated_at: The fresh change time in ISO 8601 UTC.
+            expected_state: The state the caller read before it decided.
 
         Returns:
             True after the move becomes durable.
         """
         del run_id  # This store holds one run only.
         with self.guard:  # The move and a concurrent append cannot interleave.
+            if str(self.record.get("state", "")) != expected_state:  # The driver moved the run since the read.
+                return False  # Never move a run backward from a state the caller never saw.
             self.record["state"] = state  # Change only the state field.
             self.record["updated_at"] = updated_at  # The poll route reads the fresh change time.
         return True  # Every concurrent driver field survived the move.
@@ -599,3 +603,125 @@ class TestTheDurableRefusal:
         assert len(calls) == 1  # The refused phase never repeated the destructive write.
         assert record["dispatch_failures"][0]["reason"] == reason  # The driver copy names the same loss.
         RunDispatchGate.forget(run_id)  # Leave no registry entry behind for another test.
+
+
+class TestTheLostRefusalFence:
+    """Tests that prove a refusal with no durable evidence stops the whole run."""
+
+    def _submitter(self, store: Any, monkeypatch: pytest.MonkeyPatch, calls: list[Any]) -> Any:
+        """Build one submitter whose single switch group the cloud refuses.
+
+        Args:
+            store: The durable run store the submitter writes through.
+            monkeypatch: The pytest patch helper.
+            calls: The list that records every attempted cloud call.
+
+        Returns:
+            One `CloudUpgradeSubmitter` that reaches no cloud.
+        """
+
+        def invoke(session: Any, plan: Any) -> Any:
+            """Stand in for one destructive cloud call that the cloud refuses."""
+            del session  # The stand-in reaches no cloud.
+            calls.append(plan)  # Record the one firmware request the portal attempted.
+            return None  # The cloud refused this group, so the submitter must record the loss.
+
+        monkeypatch.setattr(wiring, "build_plans", lambda record: (plan_for("switch"),))  # One switch group.
+        monkeypatch.setattr(
+            wiring,
+            "load_module",
+            {wiring.SERVICE_MODULE: service_that(invoke)}.get,
+        )  # Keep every call local to this process.
+        return wiring.CloudUpgradeSubmitter(object(), store)  # The seam under test.
+
+    def test_a_refusal_that_cannot_persist_fails_the_run_and_blocks_the_next_call(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """An unprovable refusal raises, fences the run, and sends no second call.
+
+        Why:
+            Issue #4020: the submitter logged a failed append and returned the
+            ordinary refusal reason. The run then read as a plain refused phase
+            while no durable record named the destructive call the cloud lost,
+            and a later family of the same run could still send firmware.
+        """
+        run_id = "fence-run-0001"  # Keep this gate registry entry away from every other test.
+        store = NarrowRunStore()  # Share one durable record with the submitter.
+        store.record["run_id"] = run_id  # The submitter reads the run key from the record.
+        calls: list[Any] = []  # Record every cloud call that the submitter attempted.
+        attempts: list[str] = []  # Count the bounded retries of the evidence write.
+        RunDispatchGate.forget(run_id)  # Start from a clean registry for this run.
+
+        def refuse_evidence(key: str, failure: dict[str, Any]) -> bool:
+            """Refuse every attempt to make the refusal evidence durable."""
+            del failure  # The content does not matter, because no attempt lands.
+            attempts.append(key)  # Prove the submitter retried a bounded number of times.
+            return False  # The store could not hold the evidence of the lost call.
+
+        monkeypatch.setattr(store, "append_dispatch_failure", refuse_evidence)  # Lose every evidence write.
+        submitter = self._submitter(store, monkeypatch, calls)  # One refused switch group.
+        record = store.read_run(run_id)  # The driver carries the durable record into the phase.
+        with pytest.raises(wiring.DispatchEvidenceError) as caught:  # The driver must see a visible failure.
+            submitter.submit_phase(record, "switches")
+        assert run_id in str(caught.value)  # The sentence names the run an operator must now check.
+        assert len(attempts) == wiring.DISPATCH_EVIDENCE_ATTEMPTS  # The retry loop is bounded, never endless.
+        assert len(calls) == 1  # The refused phase sent exactly one firmware request.
+        assert RunDispatchGate.is_fenced(run_id)  # No later family of this run may send firmware.
+        with pytest.raises(DispatchFencedError):  # A later plan of the same run must not dispatch.
+            submitter.submit_phase(store.read_run(run_id), "switches")
+        assert len(calls) == 1  # The fence stopped the second destructive write before it left the portal.
+        RunDispatchGate.forget(run_id)  # Leave no registry entry behind for another test.
+
+    def test_a_store_that_raises_fences_the_run_and_releases_the_gate(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A database fault reads the same as a refusal, and the lock still returns.
+
+        Why:
+            Issue #4020: a store that raises must not leave the refusal unproven
+            and the run unfenced. The gate must also come back, so a stop route
+            of the same run never waits forever on a held lock.
+        """
+        run_id = "fence-run-0002"  # Keep this gate registry entry away from every other test.
+        store = NarrowRunStore()  # Share one durable record with the submitter.
+        store.record["run_id"] = run_id  # The submitter reads the run key from the record.
+        calls: list[Any] = []  # Record every cloud call that the submitter attempted.
+        RunDispatchGate.forget(run_id)  # Start from a clean registry for this run.
+
+        def raise_on_evidence(key: str, failure: dict[str, Any]) -> bool:
+            """Fault on every attempt to make the refusal evidence durable."""
+            del key, failure  # The content does not matter, because no attempt lands.
+            raise RuntimeError("the database refused the write")  # Stand in for a store fault.
+
+        monkeypatch.setattr(store, "append_dispatch_failure", raise_on_evidence)  # Fault on every write.
+        submitter = self._submitter(store, monkeypatch, calls)  # One refused switch group.
+        with pytest.raises(wiring.DispatchEvidenceError):  # The run ends with a visible failure.
+            submitter.submit_phase(store.read_run(run_id), "switches")
+        assert len(calls) == 1  # The refused phase sent exactly one firmware request.
+        assert RunDispatchGate.is_fenced(run_id)  # The unproven refusal blocks every later dispatch.
+        released = Event()  # Set after a stop of the same run takes the gate.
+
+        def take_the_gate() -> None:
+            """Prove the dispatch gate of the run came back after the fault."""
+            with RunDispatchGate.stop(run_id):  # A held lock would block this call forever.
+                released.set()  # Report that the stop route reached the inside of the gate.
+
+        worker = Thread(target=take_the_gate)  # Run the stop like the route thread.
+        worker.start()  # Start the concurrent stop.
+        assert released.wait(timeout=WAIT_SECONDS)  # The raise released the lock on its way out.
+        worker.join(timeout=WAIT_SECONDS)  # The stop thread must finish, never hang.
+        RunDispatchGate.forget(run_id)  # Leave no registry entry behind for another test.
+
+    def test_forgetting_a_run_clears_its_dispatch_fence(self) -> None:
+        """A finished run leaves no fence, because a later run may reuse the key.
+
+        Why:
+            The fence lives in a process table that each run of the worker
+            shares. A fence that outlived its run would block an unrelated run
+            that received the same identifier.
+        """
+        run_id = "fence-run-0003"  # Keep this gate registry entry away from every other test.
+        RunDispatchGate.forget(run_id)  # Start from a clean registry for this run.
+        assert not RunDispatchGate.is_fenced(run_id)  # A new run carries no fence.
+        RunDispatchGate.fence(run_id)  # Block every later firmware call of this run.
+        assert RunDispatchGate.is_fenced(run_id)  # The fence holds while the run lives.
+        RunDispatchGate.forget(run_id)  # The driver drops the registry entry when the run ends.
+        assert not RunDispatchGate.is_fenced(run_id)  # The fence left with the run it belonged to.
