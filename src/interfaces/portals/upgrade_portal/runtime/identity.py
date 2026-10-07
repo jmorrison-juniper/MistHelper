@@ -961,8 +961,8 @@ def privilege_org_id(entry: Any) -> str:
         The cloud returns a list of dictionaries, and a stand-in session in a
         test returns whatever the test builds. `mistapi` 0.63 returns a third
         shape, which is an object that carries the field as an attribute. This
-        function accepts all three and never raises, so one malformed entry
-        cannot refuse a whole session.
+        function accepts all three and refuses a malformed entry, so an
+        incomplete scope cannot authorize the wrong organization.
 
         The name carries no leading underscore, because the organization picker
         in `app/routes/select.py` reads the same field. One reader keeps the
@@ -972,12 +972,19 @@ def privilege_org_id(entry: Any) -> str:
         entry: One privilege record from the cloud session.
 
     Returns:
-        The identifier, or an empty string when the record names none.
+        The organization identifier.
+
+    Raises:
+        ValueError: The record names no organization identifier.
     """
     if isinstance(entry, Mapping):  # A dictionary from the cloud, or a mapping a test built
-        return str(entry.get(ORG_PRIVILEGE_FIELD, "")).strip()  # One spelling for one identifier
-    found = getattr(entry, ORG_PRIVILEGE_FIELD, "")  # The `_Privilege` object of `mistapi` 0.63
-    return str(found).strip() if found else ""  # An empty string drops out of the set
+        found = entry.get(ORG_PRIVILEGE_FIELD)  # Read no fallback that can become an unsafe scope.
+    else:
+        found = getattr(entry, ORG_PRIVILEGE_FIELD, None)  # The `_Privilege` object of `mistapi` 0.63.
+    if not isinstance(found, str) or not found.strip():  # Refuse a missing, non-text, or blank organization.
+        _LOGGER.error("The required scope identifier is missing: field=%s", ORG_PRIVILEGE_FIELD)  # Safe field only.
+        raise ValueError("The required org_id organization identifier is missing.")  # Stop an unsafe scope check.
+    return found.strip()  # A stable identifier contains no surrounding whitespace.
 
 
 def privilege_name(entry: Any) -> str:

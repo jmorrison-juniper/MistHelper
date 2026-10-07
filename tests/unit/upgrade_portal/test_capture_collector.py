@@ -661,8 +661,37 @@ def test_the_job_may_carry_the_cloud_session() -> None:
 
 
 # ---------------------------------------------------------------------------
-# The two readable names
+# The required scope and two readable names
 # ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("field", ["org_id", "site_id"])
+def test_the_capture_identity_refuses_a_missing_scope_identifier(field: str) -> None:
+    """A capture must stop before a cloud read when one scope identifier is absent."""
+    job = build_job()  # Begin with one valid capture job.
+    del job[field]  # Remove the parameterized scope field to model damaged stored work.
+    with pytest.raises(ValueError, match=field):  # The identity builder must name the missing field.
+        collector.site_identity(job)  # No capture document can hold an incomplete scope.
+
+
+@pytest.mark.parametrize("field", ["org_id", "site_id"])
+def test_the_capture_reads_refuse_a_missing_scope_identifier(field: str) -> None:
+    """A capture must stop before its executor receives an incomplete scope."""
+    executor_calls: list[str] = []  # Any entry proves that unscoped work reached the executor.
+    resources = collector.CaptureResources(
+        reads=build_reads(),  # Valid read seams isolate the missing scope as the only fault.
+        store=FakeStore().holder(),  # The boundary must stop before storage becomes relevant.
+        report=Recorder(),  # The direct read call still needs a complete resource holder.
+        executor=lambda _items, _worker, description: executor_calls.append(description) or ([], []),  # Record work.
+    )
+    ledger = collector.ProgressLedger(  # The direct boundary call needs the normal progress contract.
+        CAPTURE_ID, Recorder(), collector.wave_names(assembly.TIER_EXTRA), 3
+    )
+    job = build_job()  # Begin with one valid capture job.
+    del job[field]  # Remove the parameterized scope field to model damaged stored work.
+    with pytest.raises(ValueError, match=field):  # The read boundary must name the missing field.
+        collector.run_reads(job, object(), resources, ledger)  # The refusal must occur before a cloud batch.
+    assert executor_calls == []  # No incomplete scope can reach the executor.
 
 
 def test_the_stored_document_carries_both_names_of_the_job() -> None:

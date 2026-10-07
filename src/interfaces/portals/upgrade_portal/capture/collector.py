@@ -678,7 +678,17 @@ def run_reads(job: Mapping[str, Any], session: Any, kit: CaptureResources, ledge
     Returns:
         One result for each call group, by name.
     """
-    scope = extras.SiteScope(org_id=str(job.get("org_id", "")), site_id=str(job.get("site_id", "")))
+    org_value = job.get("org_id")  # Read no fallback that can become an unsafe organization scope.
+    site_value = job.get("site_id")  # Read no fallback that can become an unsafe site scope.
+    if not isinstance(org_value, str) or not org_value.strip():  # Refuse an incomplete organization scope.
+        logger.error("The required capture scope identifier is missing: field=org_id")  # Log only the safe name.
+        raise ValueError("The required org_id organization identifier is missing.")  # Stop before a cloud read.
+    if not isinstance(site_value, str) or not site_value.strip():  # Refuse an incomplete site scope.
+        logger.error("The required capture scope identifier is missing: field=site_id")  # Log only the safe name.
+        raise ValueError("The required site_id site identifier is missing.")  # Stop before a cloud read.
+    org_id = org_value.strip()  # Normalize the checked organization identifier.
+    site_id = site_value.strip()  # Normalize the checked site identifier.
+    scope = extras.SiteScope(org_id=org_id, site_id=site_id)  # Each call group uses the checked scope.
     results = dict(assembly.run_call_groups(wave_one(session, scope, kit.reads, ledger), kit.executor))
     ledger.reconcile(results)  # A group that the pool lost settles here.
     if int(job.get("tier", TIER_STANDARD)) < TIER_EXTRA:  # Tier 2 reads no extra section.
@@ -1005,10 +1015,20 @@ def site_identity(job: Mapping[str, Any]) -> assembly.SiteIdentity:
     Returns:
         The organization and the site.
     """
+    org_value = job.get("org_id")  # Read no fallback that can become an unsafe organization scope.
+    site_value = job.get("site_id")  # Read no fallback that can become an unsafe site scope.
+    if not isinstance(org_value, str) or not org_value.strip():  # Refuse an incomplete organization scope.
+        logger.error("The required capture identity is missing: field=org_id")  # Log only the safe field name.
+        raise ValueError("The required org_id organization identifier is missing.")  # Stop an unscoped document.
+    if not isinstance(site_value, str) or not site_value.strip():  # Refuse an incomplete site scope.
+        logger.error("The required capture identity is missing: field=site_id")  # Log only the safe field name.
+        raise ValueError("The required site_id site identifier is missing.")  # Stop an unscoped document.
+    org_id = org_value.strip()  # Normalize the checked organization identifier.
+    site_id = site_value.strip()  # Normalize the checked site identifier.
     return assembly.SiteIdentity(
-        org_id=str(job.get("org_id", "")),
+        org_id=org_id,
         org_name=str(job.get("org_name", "")),
-        site_id=str(job.get("site_id", "")),
+        site_id=site_id,
         site_name=str(job.get("site_name", "")),
     )
 

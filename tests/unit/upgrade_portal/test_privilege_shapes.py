@@ -27,6 +27,8 @@ from __future__ import annotations
 from collections.abc import Iterator
 from typing import Any
 
+import pytest  # The refusal tests use the exception assertion context.
+
 from src.interfaces.portals.upgrade_portal.app import wiring
 from src.interfaces.portals.upgrade_portal.app.routes import auth, select
 from src.interfaces.portals.upgrade_portal.runtime import identity
@@ -142,10 +144,16 @@ def test_the_organization_key_reader_still_accepts_a_mapping_entry() -> None:
     assert identity.privilege_org_id({"org_id": ORG_ID}) == ORG_ID
 
 
-def test_the_organization_key_reader_answers_empty_for_a_nameless_entry() -> None:
-    """An entry that names no organization drops out, and never raises."""
-    assert identity.privilege_org_id(object()) == ""
-    assert identity.privilege_org_id({"site_id": "site-1"}) == ""
+def test_the_organization_key_reader_refuses_a_nameless_object_entry() -> None:
+    """An object privilege without an organization identifier must fail closed."""
+    with pytest.raises(ValueError, match="organization identifier"):  # The reader must refuse the invalid scope.
+        identity.privilege_org_id(object())  # A bare object models a malformed privilege record.
+
+
+def test_the_organization_key_reader_refuses_a_nameless_mapping_entry() -> None:
+    """A mapping privilege without an organization identifier must fail closed."""
+    with pytest.raises(ValueError, match="organization identifier"):  # The reader must refuse the invalid scope.
+        identity.privilege_org_id({"site_id": "site-1"})  # A site-only mapping names no organization.
 
 
 def test_the_organization_name_reader_accepts_both_entry_shapes() -> None:

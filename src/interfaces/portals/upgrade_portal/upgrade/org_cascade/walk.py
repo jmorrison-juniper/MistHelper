@@ -158,7 +158,12 @@ class OrgCascade:
                 "org cascade: the watch of %s has no work in state %s", self._operation_id, state
             )
             return state  # The caller logs the state and ends the thread.
-        gates = OrgPhaseGates(self._deps, str(record.get("org_id", "")), self._stop_signal)  # One event window.
+        org_value = record.get("org_id")  # Read no fallback that can become an unsafe organization scope.
+        if not isinstance(org_value, str) or not org_value.strip():  # Refuse an incomplete organization scope.
+            logger.error("The required cascade scope identifier is missing: field=org_id")  # Safe field only.
+            raise ValueError("The required org_id organization identifier is missing.")  # Stop before phase reads.
+        org_id = org_value.strip()  # Normalize the checked organization identifier.
+        gates = OrgPhaseGates(self._deps, org_id, self._stop_signal)  # One checked scope owns the event window.
         if not self._wait_for_start():  # FR-010: a scheduled upgrade starts later.
             return self._stop()  # The operator cancelled the schedule and the post-check stage ended.
         self._write_watch(WatchState.RUNNING, RUNNING_NOTE, None)  # The page shows the active watch.

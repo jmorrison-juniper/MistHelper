@@ -125,6 +125,17 @@ def test_the_anchor_read_stores_the_uptime_and_the_last_report(monkeypatch: pyte
     ]  # The scopes prove each family read.
 
 
+def test_the_anchor_read_refuses_a_missing_organization(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An anchor read must not query organization statistics without an organization identifier."""
+    recorder = StatisticsRecorder([])  # Any recorded scope proves that invalid work reached the cloud seam.
+    attach(monkeypatch, recorder)  # Replace each statistics call with the local recorder.
+    record = OrgRecordBuilder.build(FLEET)  # Begin with one valid organization operation.
+    del record["org_id"]  # Remove the organization that scopes every statistics read.
+    with pytest.raises(ValueError, match="org_id"):  # The reader must name the missing organization field.
+        OrgSettleAnchors.read(None, record)  # No anchor read can use the damaged operation.
+    assert recorder.scopes == []  # No incomplete scope can reach a cloud call.
+
+
 def test_a_device_with_no_reading_gets_a_null_anchor_and_a_note(monkeypatch: pytest.MonkeyPatch) -> None:
     """FR-002. The cloud does not report one switch, so the page names the gap."""
     rows = [

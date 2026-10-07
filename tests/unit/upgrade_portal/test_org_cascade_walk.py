@@ -168,6 +168,21 @@ def test_the_walk_settles_the_four_phases_in_the_cascade_order(monkeypatch: pyte
     assert watch(store)["reason"] is None  # No phase failed in this case.
 
 
+def test_the_walk_refuses_a_missing_organization_before_any_phase_read(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A cascade watch must not build organization phase readers with an empty identifier."""
+    clock = RehearsalClock()  # The deterministic clock keeps phase behavior stable.
+    fleet = cascade_fleet(clock.now())  # Begin with one valid cascade fleet.
+    log = attach(monkeypatch, clock, fleet)  # Record each cloud read without a network call.
+    record = OrgRecordBuilder.build(fleet)  # Build the durable operation that the walk reads.
+    del record["org_id"]  # Remove the organization that scopes every phase.
+    store = VersionedStore(record)  # The walk reads the damaged record through its normal store.
+    with pytest.raises(ValueError, match="org_id"):  # The walk must name the missing organization field.
+        run_walk(store, clock)  # No phase reader can use the damaged operation.
+    assert log.reads == []  # No incomplete scope can reach a cloud call.
+
+
 def test_each_read_names_one_family_and_narrows_to_one_site(monkeypatch: pytest.MonkeyPatch) -> None:
     """FR-015. Two gateways sit at two sites, and one switch sits at one site."""
     clock = RehearsalClock()  # The clock controls the test time.

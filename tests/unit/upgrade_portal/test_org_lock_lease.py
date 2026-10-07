@@ -55,6 +55,18 @@ def test_one_renewal_round_refreshes_every_stored_site(monkeypatch: pytest.Monke
     ]
 
 
+def test_a_renewal_round_refuses_a_missing_organization(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A lock renewal must not use an empty organization in a Redis key."""
+    monkeypatch.setattr(  # A local seam proves that the test reaches no Redis service.
+        lock, "refresh_site_lock", lambda *_args, **_kwargs: lock.LOCK_TTL_SECONDS
+    )
+    record = operation()  # Begin with one valid multi-site operation.
+    del record["org_id"]  # Remove the organization that forms each Redis key.
+    lease = OrgOperationLockLease(VersionedStore(record), OPERATION_ID, object())  # Bind the damaged operation.
+    with pytest.raises(ValueError, match="org_id"):  # The lease must name the missing organization field.
+        lease.renew()  # No lock refresh can use the damaged operation.
+
+
 def test_the_background_lease_renews_after_the_contract_interval(monkeypatch: pytest.MonkeyPatch) -> None:
     """The watch starts renewal without a browser status poll."""
     renewed = threading.Event()  # The test waits for the first background renewal round.
@@ -87,3 +99,15 @@ def test_release_deletes_every_lock_and_clears_the_durable_scope(monkeypatch: py
     lease.release()  # The watch calls this only after the post-check stage ends.
     assert released == [lock.build_key(ORG_ID, site_id) for site_id in SITE_IDS]  # Both sites returned.
     assert (store.read_run(OPERATION_ID) or {})["site_locks"] == {}  # A restart sees no held lock.
+
+
+def test_a_release_refuses_a_missing_organization(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A lock release must not use an empty organization in a Redis key."""
+    monkeypatch.setattr(  # A local seam proves that the test reaches no Redis service.
+        lock, "release_site_lock", lambda *_args, **_kwargs: lock.ReleaseOutcome.RELEASED
+    )
+    record = operation()  # Begin with one valid multi-site operation.
+    del record["org_id"]  # Remove the organization that forms each Redis key.
+    lease = OrgOperationLockLease(VersionedStore(record), OPERATION_ID, object())  # Bind the damaged operation.
+    with pytest.raises(ValueError, match="org_id"):  # The lease must name the missing organization field.
+        lease.release()  # No lock release can use the damaged operation.

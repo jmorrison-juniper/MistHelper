@@ -767,7 +767,17 @@ def lock_heartbeat(record: Mapping[str, Any], lock: LockRecord, progress: Progre
     Returns:
         A heartbeat that renews the site lock of this run.
     """
-    key = build_key(str(record.get("org_id", "")), str(record.get("site_id", "")))
+    org_value = record.get("org_id")  # Read no fallback that can become an unsafe organization scope.
+    site_value = record.get("site_id")  # Read no fallback that can become an unsafe site scope.
+    if not isinstance(org_value, str) or not org_value.strip():  # Refuse an incomplete organization scope.
+        logger.error("The required heartbeat scope identifier is missing: field=org_id")  # Safe field only.
+        raise ValueError("The required org_id organization identifier is missing.")  # Stop before a lock call.
+    if not isinstance(site_value, str) or not site_value.strip():  # Refuse an incomplete site scope.
+        logger.error("The required heartbeat scope identifier is missing: field=site_id")  # Safe field only.
+        raise ValueError("The required site_id site identifier is missing.")  # Stop before a lock call.
+    org_id = org_value.strip()  # Normalize the checked organization identifier.
+    site_id = site_value.strip()  # Normalize the checked site identifier.
+    key = build_key(org_id, site_id)  # Build the key only from checked identifiers.
     return LockHeartbeat(LockHeartbeatPlan(key=key, record=lock, progress=progress))
 
 
@@ -919,10 +929,20 @@ def _tracker_entry(record: Mapping[str, Any], now: str) -> dict[str, Any]:
     """
     targets = record.get("targets", [])
     upgrade_ids = sorted({str(entry.get("upgrade_id")) for entry in targets if entry.get("upgrade_id")})
+    org_value = record.get("org_id")  # Read no fallback that can become an unsafe organization scope.
+    site_value = record.get("site_id")  # Read no fallback that can become an unsafe site scope.
+    if not isinstance(org_value, str) or not org_value.strip():  # Refuse an incomplete organization scope.
+        logger.error("The required tracker scope identifier is missing: field=org_id")  # Safe field only.
+        raise ValueError("The required org_id organization identifier is missing.")  # Stop before persistence.
+    if not isinstance(site_value, str) or not site_value.strip():  # Refuse an incomplete site scope.
+        logger.error("The required tracker scope identifier is missing: field=site_id")  # Safe field only.
+        raise ValueError("The required site_id site identifier is missing.")  # Stop before persistence.
+    org_id = org_value.strip()  # Normalize the checked organization identifier.
+    site_id = site_value.strip()  # Normalize the checked site identifier.
     return {
         "run_id": str(record.get("run_id", "")),
-        "org_id": str(record.get("org_id", "")),
-        "site_id": str(record.get("site_id", "")),
+        "org_id": org_id,
+        "site_id": site_id,
         "upgrade_ids": upgrade_ids,
         "updated_at": now,
     }

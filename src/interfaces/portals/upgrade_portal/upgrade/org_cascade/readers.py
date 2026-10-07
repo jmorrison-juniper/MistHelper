@@ -126,7 +126,11 @@ class OrgSettleAnchors:
         Returns:
             The anchors and the note of any gap.
         """
-        org_id = str(record.get("org_id", ""))  # Every child job sits in one organization.
+        org_value = record.get("org_id")  # Read no fallback that can become an unsafe organization scope.
+        if not isinstance(org_value, str) or not org_value.strip():  # Refuse an incomplete organization scope.
+            logger.error("The required anchor scope identifier is missing: field=org_id")  # Log the safe name.
+            raise ValueError("The required org_id organization identifier is missing.")  # Stop before a Mist read.
+        org_id = org_value.strip()  # Normalize the checked organization identifier.
         anchors: dict[str, dict[str, Any]] = {}  # The anchors of each device.
         for family, (macs, sites) in OrgSettleAnchors._groups(record).items():  # One read for each family.
             readings = OrgSettleAnchors._readings(session, org_id, family, sites)  # Never raises.

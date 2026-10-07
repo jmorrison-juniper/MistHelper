@@ -63,12 +63,17 @@ class OrgOperationLockLease:
     def renew(self) -> int:
         """Renew each readable stored lock, and return the renewal count."""
         record = self._records.read() or {}  # Read the latest lock map before every renewal round.
+        org_value = record.get("org_id")  # Read no fallback that can become an unsafe organization scope.
+        if not isinstance(org_value, str) or not org_value.strip():  # Refuse an incomplete organization scope.
+            logger.error("The required lock scope identifier is missing: field=org_id")  # Log only the safe name.
+            raise ValueError("The required org_id organization identifier is missing.")  # Stop before Redis work.
+        org_id = org_value.strip()  # Normalize the checked organization identifier.
         stored = record.get("site_locks")  # The operation owns the durable lock copies.
         if not isinstance(stored, Mapping):  # A damaged record has no lock that this lease can renew.
             return 0  # The next status read still shows the damaged operation.
         renewed = 0  # Count the accepted renewal calls for the log and the tests.
         for site_id, value in stored.items():  # Renew every selected site during the same round.
-            renewed += int(self._renew_one(record, str(site_id), value))  # One failed site does not skip the others.
+            renewed += int(self._renew_one(org_id, str(site_id), value))  # One failed site does not skip the others.
         logger.debug("org cascade: renewed %d site lock(s) of %s", renewed, self._operation_id)  # After the round.
         return renewed  # The caller can verify that the round reached every valid lock.
 
@@ -76,12 +81,17 @@ class OrgOperationLockLease:
         """Stop renewal, release every stored lock, and clear the durable map."""
         self.stop()  # No renewal can race with the release calls below.
         record = self._records.read() or {}  # Read the newest tokens before the release.
+        org_value = record.get("org_id")  # Read no fallback that can become an unsafe organization scope.
+        if not isinstance(org_value, str) or not org_value.strip():  # Refuse an incomplete organization scope.
+            logger.error("The required lock scope identifier is missing: field=org_id")  # Log only the safe name.
+            raise ValueError("The required org_id organization identifier is missing.")  # Stop before Redis work.
+        org_id = org_value.strip()  # Normalize the checked organization identifier.
         stored = record.get("site_locks")  # The durable map is the release scope.
         if not isinstance(stored, Mapping) or not stored:  # An empty map means another path already released.
             return  # No lock store call or record write is necessary.
         logger.info("org cascade: release %d site lock(s) of %s", len(stored), self._operation_id)  # Before.
         for site_id, value in stored.items():  # Give back every selected site after the post-check stage.
-            self._release_one(record, str(site_id), value)  # One failed release does not skip the other sites.
+            self._release_one(org_id, str(site_id), value)  # One failed release does not skip the other sites.
         self._records.update(OrgOperationLockLease._clear)  # A restart then sees no lock left to release.
         logger.debug("org cascade: released the site lock scope of %s", self._operation_id)  # After the release.
 
@@ -92,13 +102,13 @@ class OrgOperationLockLease:
             if self.renew() == 0:  # No readable lock means this thread has no useful work.
                 logger.warning("org cascade: the operation %s has no readable site lock", self._operation_id)
 
-    def _renew_one(self, operation: Mapping[str, Any], site_id: str, value: object) -> bool:
+    def _renew_one(self, org_id: str, site_id: str, value: object) -> bool:
         """Renew one stored site lock, and keep a fault inside this site."""
         saved = OrgOperationLockLease._saved(value)  # Rebuild the lock record without exposing its token.
         if saved is None or saved.run_id != self._operation_id:  # Refuse a damaged or foreign run binding.
             logger.warning("org cascade: site %s has no matching lock for %s", site_id, self._operation_id)
             return False  # The other site locks still receive this renewal round.
-        key = lock.build_key(str(operation.get("org_id", "")), site_id)  # Build the existing organization key.
+        key = lock.build_key(org_id, site_id)  # Build the key only from the checked organization scope.
         try:  # A lock store fault on one site must not stop renewal of another site.
             lock.refresh_site_lock(key, saved, self._client)  # Compare the token and extend the lock life.
         except lock.SiteLockError as error:  # A lost lock or quiet store stays visible in the log.
@@ -110,13 +120,13 @@ class OrgOperationLockLease:
         logger.info("org cascade: renewed site %s for %s", site_id, self._operation_id)  # After the renewal.
         return True  # The round renewed this site.
 
-    def _release_one(self, operation: Mapping[str, Any], site_id: str, value: object) -> None:
+    def _release_one(self, org_id: str, site_id: str, value: object) -> None:
         """Release one stored site lock, and keep a fault inside this site."""
         saved = OrgOperationLockLease._saved(value)  # Rebuild the lock record without exposing its token.
         if saved is None or saved.run_id != self._operation_id:  # Never release a foreign lock record.
             logger.warning("org cascade: site %s has no releasable lock for %s", site_id, self._operation_id)
             return  # The lease clears the damaged stored copy after the other releases.
-        key = lock.build_key(str(operation.get("org_id", "")), site_id)  # Build the existing organization key.
+        key = lock.build_key(org_id, site_id)  # Build the key only from the checked organization scope.
         try:  # A failed release must not stop the release of another selected site.
             lock.release_site_lock(key, saved, self._client)  # Compare the token before the delete.
         except lock.SiteLockError as error:  # A takeover or quiet store leaves no safe retry in this close.

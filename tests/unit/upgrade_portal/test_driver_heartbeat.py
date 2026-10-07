@@ -888,6 +888,22 @@ class TestSeams:
         beat = driver.lock_heartbeat(make_record(), make_lock())
         assert beat._plan.key == "misthelper:lock:site:org-1:site-1"  # WHY: The plan is the only seam.
 
+    @pytest.mark.parametrize("field", ["org_id", "site_id"])
+    def test_the_heartbeat_refuses_a_missing_scope_identifier(self, field: str) -> None:
+        """A heartbeat must not build a distributed lock key with an empty scope."""
+        record = make_record()  # Begin with one valid run record.
+        del record[field]  # Remove the parameterized key part to model damaged stored work.
+        with pytest.raises(ValueError, match=field):  # The heartbeat must name the missing field.
+            driver.lock_heartbeat(record, make_lock())  # No lock plan can hold an incomplete key.
+
+    @pytest.mark.parametrize("field", ["org_id", "site_id"])
+    def test_the_tracker_refuses_a_missing_scope_identifier(self, field: str) -> None:
+        """A tracker row must not persist a run with an empty scope."""
+        record = make_record()  # Begin with one valid run record.
+        del record[field]  # Remove the parameterized scope part to model damaged stored work.
+        with pytest.raises(ValueError, match=field):  # The tracker must name the missing field.
+            driver._tracker_entry(record, "2026-10-06T00:00:00+00:00")  # No unsafe row can reach its file.
+
     def test_the_key_reaches_every_refresh_call(self) -> None:
         """The key of the plan is the key the compare-and-extend call reads."""
         ticker = FakeTicker()
