@@ -74,17 +74,9 @@ class TestGetOrgName:
 
     def test_an_http_401_response_falls_back(self, manager: OrgConfigMigrationManager) -> None:
         """A refused org request must not abandon an export that would otherwise work."""
-        import requests  # WHY: keep the transport dependency local to the native SDK boundary test.
-        from mistapi.__api_response import APIResponse  # WHY: construct the exact response type production receives.
-
-        transport = requests.Response()  # WHY: use the transport type that the SDK receives from the cloud.
-        transport.status_code = 401  # WHY: reproduce the refused request that the fallback must handle.
-        transport.url = "https://api.mist.com/api/v1/orgs/src-org"  # WHY: give the SDK a valid request address.
-        transport._content = json.dumps({"detail": "Unauthorized"}).encode()  # WHY: preserve the real error body.
-        response = APIResponse(transport, transport.url)  # WHY: let the SDK parse the error without raising.
-        assert response.status_code == 401  # WHY: prove the SDK retained the refused HTTP result.
-        assert response.data == {"detail": "Unauthorized"}  # WHY: prove the SDK returned the error body normally.
-        with patch.object(ocm.mistapi.api.v1.orgs.orgs, "getOrg", return_value=response):
+        sdk_pages = __import__("tests.support.sdk_pages", fromlist=["build_sdk_answer"])  # WHY: load the SDK builder.
+        answer = sdk_pages.build_sdk_answer(401, b'{"error":1}', sdk_pages.JSON_TYPE, "x")  # WHY: model HTTP 401.
+        with patch.object(ocm.mistapi.api.v1.orgs.orgs, "getOrg", return_value=answer):
             assert manager._get_org_name() == "Unknown"
 
 
