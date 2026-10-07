@@ -3,8 +3,11 @@
 from __future__ import annotations  # WHY: keep annotations cheap and consistent with project style.
 
 from pathlib import Path  # WHY: create unrelated output inside the scanner root.
+from types import SimpleNamespace  # WHY: model a non-raising Mist API response with a real status integer.
 from typing import NamedTuple  # WHY: carry the classifier answer in a typed record, not three loose booleans.
 from unittest.mock import MagicMock, patch  # WHY: isolate the prompt, Mist call, and output root.
+
+import pytest  # WHY: exercise both HTTP error status families without duplicate setup.
 
 from src.foundation.support.utils.menu_entry import (
     MenuEntry,
@@ -14,6 +17,7 @@ from src.foundation.support.refactors import (
 )  # WHY: patch the real fetcher's dependency resolver.
 from src.foundation.support.refactors.device_data_fetcher import (
     DeviceDataFetcher,
+    DeviceFetchConfig,
 )  # WHY: keep the real fetcher in the Menu 95 path.
 from src.interfaces.visualization.ui import (
     interactive_display_utils as display_module,
@@ -192,6 +196,28 @@ def test_issue_4030_unresolved_site_reports_failed_with_unrelated_output(tmp_pat
         fetch_data.assert_not_called()  # WHY: a missing site must stop before the Mist request.
     finally:
         executor.shutdown(0)  # WHY: release the executor thread pool created for the test.
+
+
+@pytest.mark.parametrize("status_code", [404, 503])
+def test_device_fetcher_http_error_response_returns_false(status_code: int) -> None:
+    """A non-raising Mist 4xx or 5xx response must remain an explicit failure."""
+    fetch_function = MagicMock(name="fetch_function")  # WHY: model the mistapi callable without a live request.
+    fetch_function.__name__ = "getSiteDeviceSyntheticTest"  # WHY: satisfy fetcher log and export metadata access.
+    fetch_function.return_value = SimpleNamespace(status_code=status_code, data={})  # WHY: real integer status.
+    resolver = MagicMock()  # WHY: isolate authentication and output collaborators.
+    resolver.apisession = MagicMock(name="apisession")  # WHY: satisfy the mistapi call signature safely.
+    config = DeviceFetchConfig(  # WHY: pre-resolved identifiers drive the response-status branch directly.
+        fetch_function=fetch_function,
+        filename="DeviceTestResults.csv",
+        description="Fetching synthetic test stats",
+        site_id="site-1",
+        device_id="device-1",
+    )
+    with patch.object(fetcher_module, "_MH", resolver):  # WHY: route the real fetcher through controlled seams.
+        result = DeviceDataFetcher(config).fetch()  # WHY: exercise the SDK response contract without an exception.
+    assert result is False  # WHY: both HTTP error families must suppress successful completion.
+    fetch_function.assert_called_once_with(resolver.apisession, "site-1", "device-1")  # WHY: prove the real call shape.
+    resolver.DataExporter.write_with_format_selection.assert_not_called()  # WHY: an HTTP error cannot create output.
 
 
 def _write_unrelated_output(root: Path, name: str) -> str:
