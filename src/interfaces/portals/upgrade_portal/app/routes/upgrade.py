@@ -1591,8 +1591,10 @@ def options_view(record: dict[str, Any]) -> dict[str, Any]:
     logger.info("upgrade: read the options view of the site %s", site_id)  # Log before the cloud read.
     try:  # The builder reaches the cloud, and the cloud refuses and times out.
         answer = dict(builder(session, str(record.get("org_id", "")), site_id))  # The fresh view of the site.
-    except Exception:  # A page with no row beats a page that shows a fault to the operator.
-        logger.warning("upgrade: the inventory read of the site %s did not answer", site_id)  # No stack trace.
+    except Exception as error:  # A page with no row beats a page that shows a fault to the operator.
+        logger.warning(  # Issue #2926: the same severity, and now the class, the message, and the trail.
+            "upgrade: the inventory read of the site %s did not answer", site_id, exc_info=error
+        )
         return kept_options_view(record, stored, ready)  # The earlier answer, with no partial reason.
     reasons = view_partial_reasons(answer)  # Issue #3424: the gaps of the fresh read.
     logger.debug("upgrade: the options view of the site %s holds %s partial reason(s)", site_id, len(reasons))
@@ -1750,8 +1752,10 @@ def bind_session_lock_to_run(record: Mapping[str, Any]) -> None:
         logger.info("upgrade: bind the session site lock of site %s to the run %s", site_id, run_id)  # BEFORE.
         store_lock_record(site_id, held.bound_to_run(run_id))  # The frozen record answers a bound copy.
         logger.debug("upgrade: the session site lock of site %s now names its run", site_id)  # AFTER. No token.
-    except Exception:  # A damaged session field must not stop a run that the operator already confirmed.
-        logger.warning("upgrade: the session site lock of site %s took no run name", site_id)  # Name the gap.
+    except Exception as error:  # A damaged session field must not stop a run that the operator already confirmed.
+        logger.warning(  # Issue #2926: name the gap and the cause, so the support path starts with a fact.
+            "upgrade: the session site lock of site %s took no run name", site_id, exc_info=error
+        )
 
 
 @upgrade_bp.post(START_PATH)
@@ -2522,8 +2526,12 @@ def run_not_started(record: Mapping[str, Any]) -> bool:
     """
     try:  # A damaged record names a state outside the model.
         state = RunStateMachine.read_state(record)
-    except Exception:  # An unknown state reads as a run that nobody may reschedule.
-        logger.warning("upgrade: the run %s names a state outside the model", record.get("run_id", ""))
+    except Exception as error:  # An unknown state reads as a run that nobody may reschedule.
+        logger.warning(  # Issue #2926: the refused state name arrives with the fault, not from a guess.
+            "upgrade: the run %s names a state outside the model",
+            record.get("run_id", ""),
+            exc_info=error,
+        )
         return False
     return state in RunStateMachine.PRE_CHECK_OPEN
 
