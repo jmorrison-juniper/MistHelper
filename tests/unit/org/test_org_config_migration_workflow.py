@@ -16,6 +16,8 @@ from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
+import requests
+from mistapi.__api_response import APIResponse
 
 from src.mist.resources.org import org_config_migration_manager as ocm
 from src.mist.resources.org.org_config_migration_manager import OrgConfigMigrationManager
@@ -72,12 +74,17 @@ class TestGetOrgName:
         with patch.object(ocm.mistapi.api.v1.orgs.orgs, "getOrg", return_value=response):
             assert manager._get_org_name() == "Unknown"
 
-    def test_an_api_failure_falls_back(self, manager: OrgConfigMigrationManager, caplog: Any) -> None:
+    def test_an_api_failure_falls_back(self, manager: OrgConfigMigrationManager) -> None:
         """A dead org endpoint must not abandon an export that would otherwise work."""
-        caplog.set_level("WARNING")  # WHY: the handler reports the failure at WARNING level.
-        with patch.object(ocm.mistapi.api.v1.orgs.orgs, "getOrg", side_effect=RuntimeError("401 denied")):
+        response = requests.Response()  # WHY: build the real HTTP response passed to mistapi.
+        response.status_code = 401  # WHY: reproduce the authentication failure from the cloud.
+        response.url = "https://api.mist.com/api/v1/orgs/dest-org"  # WHY: provide the SDK response URL.
+        response._content = b'{"error": "401 denied"}'  # WHY: preserve the error payload returned by Mist.
+        api_response = APIResponse(response=response, url=response.url)  # WHY: exercise the native SDK boundary.
+        with patch.object(ocm.mistapi.api.v1.orgs.orgs, "getOrg", return_value=api_response):
             assert manager._get_org_name() == "Unknown"
-        assert "401 denied" in caplog.text  # WHY: the operator needs the cause to triage.
+        assert api_response.status_code == 401  # WHY: prove that the fallback consumed an HTTP 401 response.
+        assert api_response.data == {"error": "401 denied"}  # WHY: verify the logged HTTP error body.
 
 
 class TestBuildExportBundle:
