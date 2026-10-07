@@ -3,10 +3,10 @@
 from misthelper_devtools.diagram_refs import DiagramReferenceValidator  # Use the pinned shared implementation.
 
 
-def test_pinned_lint_keeps_the_complete_suffix_bearing_name() -> None:
-    """Keep characters that follow a recognized class-name suffix."""
+def test_pinned_lint_extracts_complete_suffix_bearing_names() -> None:
+    """Extract complete long and suffix-ending identifiers."""
     validator = DiagramReferenceValidator()  # Exercise the dependency that the repository pins.
-    block = "flowchart TD\n    A[SiteAnalyticsConfigurator.configure]"  # Reproduce issue 3416.
+    block = "flowchart TD\n    A[SiteAnalyticsConfigurator.configure]\n    B[FooConfig.run]"  # Check both forms.
 
     identifiers = validator.extract_identifiers(block)  # Read names through the production extraction path.
     checked_count = len(identifiers)  # Measure the references that the contract examined.
@@ -14,6 +14,7 @@ def test_pinned_lint_keeps_the_complete_suffix_bearing_name() -> None:
 
     assert checked_count > 0  # Fail when the contract input no longer exercises the parser.
     assert "SiteAnalyticsConfigurator" in identifiers  # Require the complete class name.
+    assert "FooConfig" in identifiers  # Require an ordinary suffix-ending class name.
     assert "SiteAnalyticsConfig" not in identifiers  # Reject the former truncated prefix.
 
 
