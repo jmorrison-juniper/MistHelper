@@ -1656,13 +1656,23 @@ class TestFinalization:
         assert "- bad: 2" in capsys.readouterr().out
 
     def test_print_processing_rate(self, capsys: object) -> None:
-        """Print processing rate."""
-        comp = _make_comparator()
-        comp.counters.total_devices = 100
-        comp.counters.start_timing()
-        comp.counters.end_timing()
-        comp._print_processing_rate()
-        assert "Processing rate:" in capsys.readouterr().out
+        """Print the exact processing rate for a controlled duration."""
+        comp = _make_comparator()  # WHY: isolate the display method from API and file dependencies.
+        comp.counters.total_devices = 100  # WHY: two seconds must produce exactly 50 devices each second.
+        comp.counters.start_time = 1000.0  # WHY: a fixed start removes clock-resolution dependence.
+        comp.counters.end_time = 1002.0  # WHY: a fixed two-second interval makes the expected rate exact.
+        comp._print_processing_rate()  # WHY: exercise the production rate calculation and formatting.
+        output = capsys.readouterr().out.strip()  # WHY: ignore only the display indentation and line ending.
+        assert output == "Processing rate: 50.0 devices/second"  # WHY: detect arithmetic or format regressions.
+
+    def test_print_processing_rate_zero_duration(self, capsys: object) -> None:
+        """Print no processing rate when the measured duration is zero."""
+        comp = _make_comparator()  # WHY: isolate the zero-duration display path.
+        comp.counters.total_devices = 100  # WHY: a nonzero count proves duration alone suppresses the rate.
+        comp.counters.start_time = 1000.0  # WHY: equal timestamps reproduce the reported clock-resolution case.
+        comp.counters.end_time = 1000.0  # WHY: zero elapsed time must not reach division.
+        comp._print_processing_rate()  # WHY: removing the guard would raise or produce unwanted output.
+        assert capsys.readouterr().out == ""  # WHY: a zero-duration run must produce no rate line.
 
     def test_print_header_fast(self, capsys: object) -> None:
         """Print header in fast mode."""
