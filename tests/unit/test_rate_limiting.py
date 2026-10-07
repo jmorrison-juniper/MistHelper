@@ -5,6 +5,7 @@ import logging
 import math
 import os
 import sys
+import threading
 import time
 from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
@@ -332,6 +333,68 @@ class TestReadExistingEntries:
 class TestAppendDelayMetricsLog:
     """Tests for _append_delay_metrics_log static method."""
 
+    def test_concurrent_writer_preserves_rows_after_partial_write(self, caplog, monkeypatch):
+        """Concurrent writers preserve rows when one writer exposes partial JSON."""
+        metrics_path = "data/delay_metrics.json"  # Preserve the container-style path in the warning evidence.
+        first_write_started = threading.Event()  # Coordinate the second writer after partial JSON becomes visible.
+        release_first_write = threading.Event()  # Hold the first writer until the second writer completes its read.
+        second_read_started = threading.Event()  # Detect whether the second writer reached the unprotected read.
+        write_count_lock = threading.Lock()  # Protect the controlled write-call counter across both threads.
+        original_read = RateLimitingUtils._read_existing_entries  # Keep the production reader for warning evidence.
+        original_write = RateLimitingUtils._write_entries  # Keep the production writer for each final write.
+        write_count = 0  # Identify the first writer without depending on thread scheduling.
+
+        def observed_read(filepath):
+            """Record when the second writer reaches the destination read."""
+            if threading.current_thread().name == "metrics-writer-2":  # Identify the concurrent reader by stable name.
+                second_read_started.set()  # Let the test release the first writer after the corrupt read starts.
+            return original_read(filepath)  # Use production decoding and warning behavior.
+
+        def controlled_write(filepath, entries):
+            """Expose one partial row before the first writer completes."""
+            nonlocal write_count  # Update the shared call count under the test lock.
+            with write_count_lock:  # Select exactly one writer for the controlled pause.
+                write_count += 1  # Count each production write request.
+                pause_this_write = write_count == 1  # Only the first writer exposes the corrupt intermediate file.
+            if pause_this_write:  # Reproduce the current truncate-before-complete-write race.
+                with open(filepath, "w", encoding="utf-8") as file_handle:  # Create visible partial JSON.
+                    file_handle.write("{")  # Make the concurrent reader raise JSONDecodeError.
+                    file_handle.flush()  # Publish the partial byte before the second writer reads.
+                first_write_started.set()  # Tell the test that the corrupt intermediate file is visible.
+                if not release_first_write.wait(5):  # Bound the pause so a failed test cannot hang.
+                    raise TimeoutError("The concurrent metrics writer did not receive its release signal.")
+            original_write(filepath, entries)  # Complete the same write request through production code.
+
+        monkeypatch.setattr(RateLimitingUtils, "_read_existing_entries", observed_read)  # Observe the race read.
+        monkeypatch.setattr(RateLimitingUtils, "_write_entries", controlled_write)  # Install the deterministic race.
+        first_writer = threading.Thread(  # Run the first append while the main test thread controls the second.
+            target=RateLimitingUtils._append_delay_metrics_log,
+            args=({"writer": 1}, {}, {}),
+            kwargs={"filename": metrics_path},
+            name="metrics-writer-1",
+        )
+        second_writer = threading.Thread(  # Run the competing append without blocking the controlling test thread.
+            target=RateLimitingUtils._append_delay_metrics_log,
+            args=({"writer": 2}, {}, {}),
+            kwargs={"filename": metrics_path},
+            name="metrics-writer-2",
+        )
+        with caplog.at_level(logging.WARNING):  # Capture the exact warning that caused the portal failure.
+            first_writer.start()  # Start the writer that exposes partial JSON.
+            assert first_write_started.wait(5), "The first writer did not expose partial JSON."
+            second_writer.start()  # Attempt the competing read while the first writer holds partial content.
+            second_read_started.wait(0.2)  # The old code reaches the corrupt read; the lock keeps new code waiting.
+            release_first_write.set()  # Let the first writer finish before the protected second writer can read.
+            first_writer.join(5)  # Wait for the first bounded background append to finish.
+            second_writer.join(5)  # Wait for the competing append to finish.
+
+        assert not first_writer.is_alive(), "The first metrics writer did not finish."
+        assert not second_writer.is_alive(), "The second metrics writer did not finish."
+        assert "File I/O: Failed to read data/delay_metrics.json" not in caplog.text
+        with open(metrics_path, encoding="utf-8") as file_handle:  # Read the final production JSONL file.
+            rows = [json.loads(line) for line in file_handle if line.strip()]  # Decode each complete retained row.
+        assert {row["delay_metrics"]["writer"] for row in rows} == {1, 2}
+
     def test_creates_file_and_appends(self):
         """Creates metrics file and appends entry."""
         RateLimitingUtils._append_delay_metrics_log({"delay": 0.5}, {"used": 100}, {"k_p": 0.1})
@@ -343,6 +406,7 @@ class TestAppendDelayMetricsLog:
         entry = json.loads(lines[0])
         assert "timestamp" in entry
         assert entry["delay_metrics"]["delay"] == 0.5
+        assert [name for name in os.listdir("data") if name.endswith(".tmp")] == []
 
     def test_respects_max_entries(self):
         """Trims to max_entries when limit exceeded."""
@@ -352,6 +416,57 @@ class TestAppendDelayMetricsLog:
         with open(filepath, encoding="utf-8") as fh:
             lines = [line.strip() for line in fh if line.strip()]
         assert len(lines) == 3
+
+    def test_empty_metrics_file_is_valid_history(self, caplog):
+        """A zero-byte metrics file becomes one valid row without a warning."""
+        metrics_path = "data/delay_metrics.json"  # Use the production default path with stable separators.
+        with open(metrics_path, "w", encoding="utf-8"):  # Create the transient empty-file state from issue 4033.
+            pass  # Leave the destination at zero bytes before the append.
+        with caplog.at_level(logging.WARNING):  # Detect any false corruption warning.
+            RateLimitingUtils._append_delay_metrics_log(  # Append one row through the production persistence path.
+                {"writer": 1}, {}, {}, filename=metrics_path
+            )
+        assert "File I/O: Failed to read data/delay_metrics.json" not in caplog.text
+        with open(metrics_path, encoding="utf-8") as file_handle:  # Read the repaired JSONL history.
+            rows = [json.loads(line) for line in file_handle if line.strip()]  # Decode each complete row.
+        assert len(rows) == 1
+        assert rows[0]["delay_metrics"]["writer"] == 1
+
+    def test_replace_failure_preserves_destination_and_removes_temp(self, caplog, monkeypatch):
+        """A failed atomic replacement keeps prior bytes and removes the temporary file."""
+        metrics_path = "data/delay_metrics.json"  # Use the production filename for temporary-file matching.
+        original_bytes = b'{"existing": true}\n'  # Preserve a valid prior history byte for byte.
+        with open(metrics_path, "wb") as file_handle:  # Seed the destination that replacement must not damage.
+            file_handle.write(original_bytes)  # Store the exact bytes used by the integrity assertion.
+        monkeypatch.setattr(os, "replace", MagicMock(side_effect=PermissionError("replacement blocked")))  # Fail swap.
+        with caplog.at_level(logging.ERROR):  # Capture the expected persistence failure.
+            RateLimitingUtils._append_delay_metrics_log(  # Exercise the real temporary-write and replace path.
+                {"writer": 2}, {}, {}, filename=metrics_path
+            )
+        with open(metrics_path, "rb") as file_handle:  # Read the destination after the failed replacement.
+            retained_bytes = file_handle.read()  # Keep the exact bytes for a direct integrity comparison.
+        assert retained_bytes == original_bytes
+        assert [name for name in os.listdir("data") if name.startswith(".delay_metrics.json.")] == []
+        assert "File I/O: Failed to write delay metrics to data/delay_metrics.json: replacement blocked" in caplog.text
+
+    def test_serialization_failure_preserves_destination_and_removes_temp(self, caplog, monkeypatch):
+        """A failed JSON write keeps prior bytes and removes the temporary file."""
+        metrics_path = "data/delay_metrics.json"  # Use the production filename for temporary-file matching.
+        original_bytes = b'{"existing": true}\n'  # Preserve a valid prior history byte for byte.
+        with open(metrics_path, "wb") as file_handle:  # Seed the destination before temporary serialization.
+            file_handle.write(original_bytes)  # Store the exact bytes used by the integrity assertion.
+        monkeypatch.setattr(json, "dump", MagicMock(side_effect=TypeError("serialization blocked")))  # Fail JSON write.
+        with caplog.at_level(logging.ERROR):  # Capture the expected persistence failure.
+            RateLimitingUtils._append_delay_metrics_log(  # Exercise cleanup before the replacement call.
+                {"writer": 2}, {}, {}, filename=metrics_path
+            )
+        with open(metrics_path, "rb") as file_handle:  # Read the destination after the failed temporary write.
+            retained_bytes = file_handle.read()  # Keep the exact bytes for a direct integrity comparison.
+        assert retained_bytes == original_bytes
+        assert [name for name in os.listdir("data") if name.startswith(".delay_metrics.json.")] == []
+        assert (
+            "File I/O: Failed to write delay metrics to data/delay_metrics.json: serialization blocked" in caplog.text
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -711,7 +826,10 @@ class TestEdgeCases:
     def test_append_metrics_write_error(self, caplog):
         """A disk failure must be reported in the log instead of reaching the caller."""
         with caplog.at_level(logging.ERROR):
-            with patch("builtins.open", side_effect=OSError("disk full")):
+            with patch(
+                "tempfile.NamedTemporaryFile",
+                side_effect=OSError("disk full"),
+            ):
                 RateLimitingUtils._append_delay_metrics_log(
                     {"d": 1}, {"c": 2}, {"t": 3}, filename="custom_nondefault.json"
                 )

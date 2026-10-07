@@ -120,6 +120,11 @@ class RateLimitingUtils:  # WHY: static-method facade groups rate-limit helpers 
     instantiation.
     """
 
+    import threading as _threading  # WHY: keep the lock dependency inside the class namespace.
+
+    _metrics_file_lock = _threading.Lock()  # WHY: serialize metrics read-modify-write cycles within one process.
+    del _threading  # WHY: expose only the lock as class state.
+
     @staticmethod
     def _clean_error_values(error_list: list[Any]) -> list[float]:  # WHY: reused sanitiser across load + smooth paths.
         """Remove non-finite or non-numeric entries from an error list."""
@@ -251,11 +256,43 @@ class RateLimitingUtils:  # WHY: static-method facade groups rate-limit helpers 
     @staticmethod
     def _write_entries(filepath: str, entries: list[dict[str, Any]]) -> None:  # WHY: JSONL writer keeps rows atomic.
         """Overwrite the metrics log file with the provided entries."""
-        with open(filepath, "w", encoding="utf-8") as file_handle:  # WHY: full rewrite keeps size-cap enforceable.
-            for entry in entries:  # WHY: JSONL — one JSON object per line.
-                json.dump(entry, file_handle)  # WHY: serialise the row.
-                file_handle.write("\n")  # WHY: newline delimiter defines JSONL format.
+        import tempfile  # WHY: local use preserves the module-level symbol table.
+
+        directory = os.path.dirname(filepath) or "."  # WHY: the temporary file must share the destination filesystem.
+        prefix = f".{os.path.basename(filepath)}."  # WHY: a unique hidden name identifies interrupted metrics writes.
+        temporary_path = ""  # WHY: cleanup needs a safe sentinel when temporary creation itself fails.
+        try:  # WHY: each failure must remove the incomplete temporary file.
+            with tempfile.NamedTemporaryFile(  # WHY: exclusive creation avoids collisions and closes before replace.
+                mode="w", encoding="utf-8", prefix=prefix, suffix=".tmp", dir=directory, delete=False
+            ) as file_handle:
+                temporary_path = file_handle.name  # WHY: preserve the exact path for replacement and cleanup.
+                logger.info(  # WHY: record the temporary write before it changes the filesystem.
+                    "File I/O: Writing delay metrics to temporary file %s", temporary_path
+                )
+                for entry in entries:  # WHY: JSONL keeps each retained metrics sample on one line.
+                    json.dump(entry, file_handle)  # WHY: serialise the complete metrics row.
+                    file_handle.write("\n")  # WHY: delimit each complete JSON object.
+            os.replace(temporary_path, filepath)  # WHY: readers observe either the old file or the complete new file.
+        except (OSError, TypeError, ValueError):  # WHY: filesystem and JSON value failures require cleanup.
+            if temporary_path:  # WHY: creation can fail before a cleanup path exists.
+                RateLimitingUtils._remove_metrics_temp_file(temporary_path)  # WHY: remove incomplete bytes.
+            raise  # WHY: the caller logs the bound persistence failure with destination context.
         logger.debug("File I/O: Successfully updated delay metrics in %s", filepath)  # WHY: success trace.
+
+    @staticmethod
+    def _remove_metrics_temp_file(temporary_path: str) -> None:  # WHY: centralize failed-write cleanup reporting.
+        """Remove an incomplete delay-metrics temporary file."""
+        try:  # WHY: cleanup can fail independently from the original persistence error.
+            os.unlink(temporary_path)  # WHY: remove bytes that never became the destination.
+            logger.debug("File I/O: Removed incomplete delay metrics file %s", temporary_path)  # WHY: trace cleanup.
+        except FileNotFoundError:  # WHY: replacement can remove the temporary path before another failure surfaces.
+            logger.debug("File I/O: Delay metrics temporary file already absent: %s", temporary_path)  # WHY: trace.
+        except OSError as cleanup_error:  # WHY: preserve cleanup context without hiding the original failure.
+            logging.error(  # WHY: an orphaned temporary file needs an explicit diagnostic.
+                "File I/O: Failed to remove delay metrics temporary file %s: %s",
+                temporary_path,
+                cleanup_error,
+            )
 
     @staticmethod
     def _append_delay_metrics_log(
@@ -272,11 +309,12 @@ class RateLimitingUtils:  # WHY: static-method facade groups rate-limit helpers 
         """
         filepath = RateLimitingUtils._resolve_metrics_filepath(filename)  # WHY: relocate default log to data/.
         log_entry = RateLimitingUtils._build_log_entry(delay_metrics, api_cache, tuning_data)  # WHY: standardised row.
-        try:  # WHY: any write failure is logged but must not crash the caller.
-            entries = RateLimitingUtils._read_existing_entries(filepath)  # WHY: preserve prior history.
-            entries.append(log_entry)  # WHY: new row appended after history.
-            RateLimitingUtils._write_entries(filepath, entries[-max_entries:])  # WHY: cap retention in one slice.
-        except OSError as write_error:  # WHY: narrow to filesystem errors.
+        try:  # WHY: persistence failures are logged but must not crash the API operation.
+            with RateLimitingUtils._metrics_file_lock:  # WHY: no thread reads during replacement content creation.
+                entries = RateLimitingUtils._read_existing_entries(filepath)  # WHY: preserve prior complete history.
+                entries.append(log_entry)  # WHY: append the new sample inside the serialized transaction.
+                RateLimitingUtils._write_entries(filepath, entries[-max_entries:])  # WHY: replace with capped history.
+        except (OSError, TypeError, ValueError) as write_error:  # WHY: report expected filesystem or JSON failures.
             logging.error("File I/O: Failed to write delay metrics to %s: %s", filepath, write_error)  # WHY: log.
 
     @staticmethod
