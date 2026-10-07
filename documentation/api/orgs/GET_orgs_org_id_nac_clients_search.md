@@ -128,7 +128,7 @@ Example response
             "readOnly": true,
             "examples": [
               [
-                "john@mycorp.net"
+                "operator@example.invalid"
               ]
             ]
           },
@@ -141,7 +141,7 @@ Example response
             "readOnly": true,
             "examples": [
               [
-                "/C=US/ST=CA/CN=MyCorp"
+                "/C=US/ST=CA/CN=ExampleOrg"
               ]
             ]
           },
@@ -167,7 +167,7 @@ Example response
             "readOnly": true,
             "examples": [
               [
-                "/C=US/O=MyCorp/CN=john@mycorp.net/emailAddress=john@mycorp.net"
+                "/C=US/O=ExampleOrg/CN=operator@example.invalid/emailAddress=operator@example.invalid"
               ]
             ]
           },
@@ -228,7 +228,7 @@ Example response
             "type": "string",
             "description": "When certificate based authentication is used, the CN from the latest certificate used",
             "examples": [
-              "john@mycorp.net"
+              "operator@example.invalid"
             ]
           },
           "last_cert_expiry": {
@@ -242,7 +242,7 @@ Example response
             "type": "string",
             "description": "When certificate based authentication is used, the Issuer from the latest certificate used",
             "examples": [
-              "/C=US/ST=CA/CN=MyCorp"
+              "/C=US/ST=CA/CN=ExampleOrg"
             ]
           },
           "last_cert_serial": {
@@ -256,7 +256,7 @@ Example response
             "type": "string",
             "description": "When certificate based authentication is used, the Subject from the latest certificate used",
             "examples": [
-              "/C=US/O=MyCorp/CN=john@mycorp.net/emailAddress=john@mycorp.net"
+              "/C=US/O=ExampleOrg/CN=operator@example.invalid/emailAddress=operator@example.invalid"
             ]
           },
           "last_client_ip": {
@@ -298,7 +298,7 @@ Example response
             "type": "string",
             "description": "If Wireless authentication, the latest SSID the client was connected to",
             "examples": [
-              "MyCorp-NAC"
+              "ExampleOrg-NAC"
             ]
           },
           "last_status": {
@@ -309,7 +309,7 @@ Example response
             "type": "string",
             "description": "If dot1x authentication, the username used during the latest authentication. Otherwise, the MAC address of the client",
             "examples": [
-              "john@mycorp.net"
+              "operator@example.invalid"
             ]
           },
           "last_vlan": {
@@ -430,7 +430,7 @@ Example response
             "description": "SSIDs the client was connected to  for the specified duration",
             "examples": [
               [
-                "MyCorp-NAC"
+                "ExampleOrg-NAC"
               ]
             ]
           },

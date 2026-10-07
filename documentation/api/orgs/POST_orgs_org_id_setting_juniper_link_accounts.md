@@ -41,7 +41,7 @@ Content-Type: `application/json`
       "type": "string",
       "description": "Customer account user name",
       "examples": [
-        "john@nmo.com"
+        "operator@example.invalid"
       ]
     }
   },
@@ -72,7 +72,7 @@ Account linked
             "type": "string",
             "readOnly": true,
             "examples": [
-              "John Smith (john@abccorp.com)"
+              "<user-name> (operator@example.invalid)"
             ]
           },
           "name": {

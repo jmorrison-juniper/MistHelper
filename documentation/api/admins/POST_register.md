@@ -99,13 +99,13 @@ Content-Type: `application/json`
       "maxLength": 64,
       "type": "string",
       "examples": [
-        "test@mistsys.com"
+        "operator@example.invalid"
       ]
     },
     "first_name": {
       "type": "string",
       "examples": [
-        "John"
+        "<first-name>"
       ]
     },
     "invite_code": {
@@ -118,13 +118,13 @@ Content-Type: `application/json`
     "last_name": {
       "type": "string",
       "examples": [
-        "Smith"
+        "<last-name>"
       ]
     },
     "org_name": {
       "type": "string",
       "examples": [
-        "Smith LLC"
+        "<company-name>"
       ]
     },
     "password": {

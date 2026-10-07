@@ -266,7 +266,7 @@ OK
                 "type": "string",
                 "description": "URL pointed by Eddystone-URL beacon",
                 "examples": [
-                  "https://www.abc.com"
+                  "https://www.example.invalid"
                 ]
               },
               "ibeacon_adv_power": {
@@ -1363,7 +1363,7 @@ OK
                       "type": "string",
                       "description": "Name of the server to verify (against the cacerts in Org Setting). Only if not Mist Edge.",
                       "examples": [
-                        "radsec.abc.com"
+                        "radsec.example.invalid"
                       ]
                     },
                     "servers": {
@@ -4415,7 +4415,7 @@ OK
               "contact": {
                 "type": "string",
                 "examples": [
-                  "cns@juniper.net"
+                  "operator@example.invalid"
                 ]
               },
               "description": {
@@ -5803,7 +5803,7 @@ OK
                     {
                       "5684dae9ac8b": {
                         "ip": "192.168.70.35",
-                        "name": "John"
+                        "name": "<user-name>"
                       }
                     }
                   ]

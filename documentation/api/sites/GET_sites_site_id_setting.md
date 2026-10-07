@@ -569,7 +569,7 @@ OK
                           "type": "string",
                           "description": "Name of the server to verify (against the cacerts in Org Setting). Only if not Mist Edge.",
                           "examples": [
-                            "radsec.abc.com"
+                            "radsec.example.invalid"
                           ]
                         },
                         "servers": {
@@ -1015,7 +1015,7 @@ OK
                     "type": "string",
                     "description": "Name of the server to verify (against the cacerts in Org Setting). Only if not Mist Edge.",
                     "examples": [
-                      "radsec.abc.com"
+                      "radsec.example.invalid"
                     ]
                   },
                   "servers": {
@@ -1383,7 +1383,7 @@ OK
           "type": "string",
           "description": "URL pointed by Eddystone-URL beacon",
           "examples": [
-            "https://www.abc.com"
+            "https://www.example.invalid"
           ]
         },
         "ibeacon_adv_power": {
@@ -2358,7 +2358,7 @@ OK
                   {
                     "5684dae9ac8b": {
                       "ip": "192.168.70.35",
-                      "name": "John"
+                      "name": "<user-name>"
                     }
                   }
                 ]
@@ -5260,7 +5260,7 @@ OK
           "description": "For SSR only, as direct root access is not allowed",
           "examples": [
             [
-              "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAA...Wxa6p6UW0ZbcP john@host"
+              "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAA...Wxa6p6UW0ZbcP operator@example.invalid"
             ]
           ]
         },
@@ -5304,7 +5304,7 @@ OK
                     "description": "If `protocol`==`http`",
                     "examples": [
                       [
-                        "https://www.abc.com"
+                        "https://www.example.invalid"
                       ]
                     ]
                   },
@@ -5338,7 +5338,7 @@ OK
                     "type": "string",
                     "description": "If `protocol`==`http`",
                     "examples": [
-                      "www.abc.com"
+                      "www.example.invalid"
                     ]
                   },
                   "vrf": {
@@ -8331,7 +8331,7 @@ OK
         "contact": {
           "type": "string",
           "examples": [
-            "cns@juniper.net"
+            "operator@example.invalid"
           ]
         },
         "description": {
@@ -10466,7 +10466,7 @@ OK
             "contact": {
               "type": "string",
               "examples": [
-                "cns@juniper.net"
+                "operator@example.invalid"
               ]
             },
             "description": {
@@ -13277,7 +13277,7 @@ OK
                 "description": "",
                 "examples": [
                   [
-                    "https://www.abc.com/",
+                    "https://www.example.invalid/",
                     "https://10.3.5.1:8080/about"
                   ]
                 ],
@@ -13926,8 +13926,8 @@ OK
           "description": "List of email addresses to send email notifications when the alert threshold is reached",
           "examples": [
             [
-              "foo@juniper.net",
-              "bar@juniper.net"
+              "operator@example.invalid",
+              "operator@example.invalid"
             ]
           ]
         },

@@ -165,7 +165,7 @@ NAC Client Events
             "description": "If IDP is used, the username presented to the Identity Provider",
             "readOnly": true,
             "examples": [
-              "user@deaflyz.net"
+              "operator@example.invalid"
             ]
           },
           "mac": {
@@ -255,7 +255,7 @@ NAC Client Events
             "description": "SSIDs the client was connecting to",
             "readOnly": true,
             "examples": [
-              "MyCorp-NAC"
+              "ExampleOrg-NAC"
             ]
           },
           "timestamp": {

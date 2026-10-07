@@ -77,7 +77,7 @@ Content-Type: `application/json`
     "name": {
       "type": "string",
       "examples": [
-        "Mist Office"
+        "Example Office"
       ]
     },
     "rftemplate_name": {

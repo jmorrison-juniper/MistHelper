@@ -22,7 +22,7 @@ The output will be available through websocket. As there can be multiple command
 ```
 ##### Example output from ws stream
 ```
-admin@labsystem1.fiedler# show bgp neighbors
+operator@example.invalid# show bgp neighbors
 BGP neighbor is 192.168.4.1, remote AS 4200000001, local AS 4200000128, external
 link
   BGP version 4, remote router ID 1.1.1.1

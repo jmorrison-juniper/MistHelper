@@ -143,7 +143,7 @@ OK
       "name": {
         "type": "string",
         "examples": [
-          "Mist Office"
+          "Example Office"
         ]
       },
       "networktemplate_id": {
@@ -253,7 +253,7 @@ OK
           "lng": -122.032946
         },
         "modified_time": 0,
-        "name": "Mist Office",
+        "name": "Example Office",
         "networktemplate_id": "12ae9bd2-e0ab-107b-72e8-a7a005565ec2",
         "notes": "string",
         "org_id": "a40f5d1f-d889-42e9-94ea-b9b33585fc6b",

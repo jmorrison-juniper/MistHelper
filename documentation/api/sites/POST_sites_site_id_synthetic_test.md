@@ -33,7 +33,7 @@ Content-Type: `application/json`
     "email": {
       "type": "string",
       "examples": [
-        "test@mist.com"
+        "operator@example.invalid"
       ]
     }
   }

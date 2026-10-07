@@ -10,7 +10,7 @@
 
 In JSE UI: 
 1. Create custom role with Read access to service_location and RW access to site and IPSec profile APIs. 
-2. Create a user with the above custom role. - email: john@abc.com 
+2. Create a user with the above custom role. - email: operator@example.invalid 
 3. Activate the user in the JSE account. 
 4. Create the service locations on the JSE account.
 
@@ -49,7 +49,7 @@ Content-Type: `application/json`
     "username": {
       "type": "string",
       "examples": [
-        "john@abc.com"
+        "operator@example.invalid"
       ]
     }
   },
@@ -88,7 +88,7 @@ OK
     "username": {
       "type": "string",
       "examples": [
-        "john@abc.com"
+        "operator@example.invalid"
       ]
     }
   }

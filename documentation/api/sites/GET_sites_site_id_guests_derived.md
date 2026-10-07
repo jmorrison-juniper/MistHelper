@@ -93,7 +93,7 @@ OK
         "type": "string",
         "description": "Optional, the info provided by user",
         "examples": [
-          "john@abc.com"
+          "operator@example.invalid"
         ]
       },
       "field1": {
@@ -127,7 +127,7 @@ OK
         "description": "Optional, the info provided by user",
         "readOnly": true,
         "examples": [
-          "John Smith"
+          "<user-name>"
         ]
       },
       "random_mac": {
@@ -157,8 +157,8 @@ OK
   },
   "description": "",
   "examples": [
-    "[{\"authorized\":true,\"authorized_expiring_time\":0,\"authorized_time\":0,\"company\":\"string\",\"email\":\"user@example.com\",\"field1\":\"string\",\"field2\":\"string\",\"field3\":\"string\",\"field4\":\"string\",\"mac\":\"string\",\"minutes\":0,\"name\":\"string\"}]",
-    "[{\"authorized\":true,\"authorized_expiring_time\":1480704955,\"authorized_time\":1480704355,\"company\":\"abc\",\"email\":\"john@abc.com\",\"field1\":\"xxx\",\"mac\":\"5684dae9ac8b\",\"name\":\"John Smith\"}]"
+    "[{\"authorized\":true,\"authorized_expiring_time\":0,\"authorized_time\":0,\"company\":\"string\",\"email\":\"operator@example.invalid\",\"field1\":\"string\",\"field2\":\"string\",\"field3\":\"string\",\"field4\":\"string\",\"mac\":\"string\",\"minutes\":0,\"name\":\"string\"}]",
+    "[{\"authorized\":true,\"authorized_expiring_time\":1480704955,\"authorized_time\":1480704355,\"company\":\"<company-name>\",\"email\":\"operator@example.invalid\",\"field1\":\"xxx\",\"mac\":\"5684dae9ac8b\",\"name\":\"<user-name>\"}]"
   ]
 }
 ```

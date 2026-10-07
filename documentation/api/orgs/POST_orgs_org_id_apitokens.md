@@ -43,7 +43,7 @@ Content-Type: `application/json`
       "description": "email of the token creator / null if creator is deleted",
       "readOnly": true,
       "examples": [
-        "user@mycorp.com"
+        "operator@example.invalid"
       ]
     },
     "created_time": {
@@ -201,7 +201,7 @@ OK
       "description": "email of the token creator / null if creator is deleted",
       "readOnly": true,
       "examples": [
-        "user@mycorp.com"
+        "operator@example.invalid"
       ]
     },
     "created_time": {

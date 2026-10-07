@@ -91,7 +91,7 @@ List of Sites
       "name": {
         "type": "string",
         "examples": [
-          "Mist Office"
+          "Example Office"
         ]
       },
       "rftemplate_name": {
@@ -132,7 +132,7 @@ List of Sites
           "lat": 37.295833,
           "lng": -122.032946
         },
-        "name": "Mist Office",
+        "name": "Example Office",
         "rftemplate_name": "rftemplate1",
         "sitegroup_names": [
           "sg1",

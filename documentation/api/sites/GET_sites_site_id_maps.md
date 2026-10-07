@@ -184,7 +184,7 @@ OK
         "type": "string",
         "description": "The name of the map",
         "examples": [
-          "Mist Office"
+          "Example Office"
         ]
       },
       "occupancy_limit": {

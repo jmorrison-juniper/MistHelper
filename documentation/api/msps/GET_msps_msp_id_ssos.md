@@ -297,7 +297,7 @@ OK
             "description": "Public hostname/IPs",
             "examples": [
               [
-                "mxedge1.corp.com",
+                "mxedge1.example.invalid",
                 "63.1.3.5"
               ]
             ]

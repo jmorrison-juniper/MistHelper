@@ -114,7 +114,7 @@ OK
             "type": "string",
             "description": "Optional, the info provided by user",
             "examples": [
-              "john@abc.com"
+              "operator@example.invalid"
             ]
           },
           "field1": {
@@ -148,7 +148,7 @@ OK
             "description": "Optional, the info provided by user",
             "readOnly": true,
             "examples": [
-              "John Smith"
+              "<user-name>"
             ]
           },
           "random_mac": {

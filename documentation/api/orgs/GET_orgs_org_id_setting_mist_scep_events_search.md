@@ -80,7 +80,7 @@ OK
           "common_name": {
             "description": "Common name presented in the SCEP certificate request",
             "examples": [
-              "name@company.net bb08e3c5-a1d9-5f21-a3b7-cd0821eab8f6"
+              "operator@example.invalid bb08e3c5-a1d9-5f21-a3b7-cd0821eab8f6"
             ],
             "type": "string"
           },

@@ -88,7 +88,7 @@ Content-Type: `application/json`
       "type": "string",
       "description": "Optional, the info provided by user",
       "examples": [
-        "john@abc.com"
+        "operator@example.invalid"
       ]
     },
     "field1": {
@@ -120,7 +120,7 @@ Content-Type: `application/json`
       "type": "string",
       "description": "Optional, the info provided by user",
       "examples": [
-        "John Smith"
+        "<user-name>"
       ]
     },
     "random_mac": {
@@ -209,7 +209,7 @@ OK
       "type": "string",
       "description": "Optional, the info provided by user",
       "examples": [
-        "john@abc.com"
+        "operator@example.invalid"
       ]
     },
     "field1": {
@@ -243,7 +243,7 @@ OK
       "description": "Optional, the info provided by user",
       "readOnly": true,
       "examples": [
-        "John Smith"
+        "<user-name>"
       ]
     },
     "random_mac": {

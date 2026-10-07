@@ -81,13 +81,13 @@ Example response
           "message": {
             "type": "string",
             "examples": [
-              "Rotate PSK test@mist.com"
+              "Rotate PSK operator@example.invalid"
             ]
           },
           "name_id": {
             "type": "string",
             "examples": [
-              "test@mist.com"
+              "operator@example.invalid"
             ]
           },
           "org_id": {
@@ -108,7 +108,7 @@ Example response
           "psk_name": {
             "type": "string",
             "examples": [
-              "test@mist.com"
+              "operator@example.invalid"
             ]
           },
           "pskportal_id": {

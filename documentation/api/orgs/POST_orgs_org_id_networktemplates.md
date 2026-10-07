@@ -1638,7 +1638,7 @@ Content-Type: `application/json`
         "contact": {
           "type": "string",
           "examples": [
-            "cns@juniper.net"
+            "operator@example.invalid"
           ]
         },
         "description": {
@@ -4905,7 +4905,7 @@ OK
         "contact": {
           "type": "string",
           "examples": [
-            "cns@juniper.net"
+            "operator@example.invalid"
           ]
         },
         "description": {

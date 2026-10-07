@@ -54,7 +54,7 @@ OK
     "username": {
       "type": "string",
       "examples": [
-        "john@abc.com"
+        "operator@example.invalid"
       ]
     }
   }

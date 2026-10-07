@@ -50,7 +50,7 @@ OK
         "description": "email of the token creator / null if creator is deleted",
         "readOnly": true,
         "examples": [
-          "user@mycorp.com"
+          "operator@example.invalid"
         ]
       },
       "created_time": {
@@ -192,7 +192,7 @@ OK
   "examples": [
     [
       {
-        "created_by": "user@mycorp.com",
+        "created_by": "operator@example.invalid",
         "created_time": 1626875902,
         "id": "497f6eca-6276-4993-bfeb-53f0bbba6f08",
         "key": "1qkb...QQCL",

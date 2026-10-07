@@ -80,7 +80,7 @@ OK
         "type": "string",
         "description": "Name of the sdk client (if provided)",
         "examples": [
-          "John's iPhone"
+          "example phone"
         ]
       },
       "network_connection": {

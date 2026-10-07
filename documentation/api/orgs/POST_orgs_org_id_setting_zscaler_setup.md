@@ -53,7 +53,7 @@ Content-Type: `application/json`
       "type": "string",
       "description": "Customer account user name",
       "examples": [
-        "john@nmo.com"
+        "operator@example.invalid"
       ]
     }
   },

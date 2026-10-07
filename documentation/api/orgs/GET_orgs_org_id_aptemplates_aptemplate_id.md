@@ -418,7 +418,7 @@ AP Template
                           "type": "string",
                           "description": "Name of the server to verify (against the cacerts in Org Setting). Only if not Mist Edge.",
                           "examples": [
-                            "radsec.abc.com"
+                            "radsec.example.invalid"
                           ]
                         },
                         "servers": {

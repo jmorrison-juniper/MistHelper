@@ -36,7 +36,7 @@ OK
       "type": "string",
       "description": "Email address of the user",
       "examples": [
-        "admin@test.com"
+        "operator@example.invalid"
       ]
     },
     "last_failure_at": {
