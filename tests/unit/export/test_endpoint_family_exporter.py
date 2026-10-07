@@ -87,12 +87,9 @@ def test_group_counts_match_discovery() -> None:
 
 def test_proven_object_counts_match_openapi_measurement() -> None:
     """The allowlist must retain the measured OpenAPI object counts."""
-    actual = {
-        name: sum(entry.operation in EndpointFamilyExporter._PROVEN_OBJECT_OPERATIONS for entry in entries)
-        for name, entries in GROUPS.items()
-    }
+    actual = {name: sum(entry.object_response for entry in entries) for name, entries in GROUPS.items()}
     assert actual == EXPECTED_OBJECT_COUNTS
-    assert len(EndpointFamilyExporter._PROVEN_OBJECT_OPERATIONS) == 97
+    assert sum(actual.values()) == 97
 
 
 def test_operation_table_has_no_duplicate_operation() -> None:
@@ -201,7 +198,8 @@ def test_persist_reports_failed_write_count(caplog: pytest.LogCaptureFixture) ->
 def test_recover_logs_a_discarded_non_object_payload(caplog: pytest.LogCaptureFixture) -> None:
     """A non-empty payload that the SDK cannot collect must produce a loud error."""
     response = MagicMock(data="unexpected", status_code=200)
-    assert EndpointFamilyExporter._recover_unpaginated_object(response, [], "getOrgSso") == []
+    operation = next(entry for entry in _ORG_DETAIL_OPS if entry.operation == "getOrgSso")
+    assert EndpointFamilyExporter._recover_unpaginated_object(response, [], operation) == []
     assert "Discarded 1 non-empty getOrgSso payload" in caplog.text
     assert "status 200" in caplog.text
     assert "shape str" in caplog.text
@@ -210,7 +208,8 @@ def test_recover_logs_a_discarded_non_object_payload(caplog: pytest.LogCaptureFi
 def test_recover_rejects_an_unproven_object_payload(caplog: pytest.LogCaptureFixture) -> None:
     """An object without a declared OpenAPI shape must not become export success."""
     response = MagicMock(data={"A1": 1, "DO": 0}, status_code=200)
-    result = EndpointFamilyExporter._recover_unpaginated_object(response, [], "getSiteDeviceIotPort")
+    operation = next(entry for entry in _SITE_DETAIL_OPS if entry.operation == "getSiteDeviceIotPort")
+    result = EndpointFamilyExporter._recover_unpaginated_object(response, [], operation)
     assert result == []
     assert "Discarded 1 non-empty getSiteDeviceIotPort payload" in caplog.text
     assert "status 200" in caplog.text
@@ -305,12 +304,12 @@ RETAINED_FAMILY_DIGESTS = {
     "260": "3c27ae201bab31537d2acb7557342b618fac200f9f3547ac3820febd7c3f948e",
     "261": "b02389a933165409e9222ef638b4130db38ff0e280bc6649864fb23afaa44719",
     "262": "0844ab9840694c88c8f8a1e654dbbb7a7d19fd8fb18c21dd58aba057f2502d60",
-    "263": "3973a4a0594e0c0a8cb307329a58bcf010da2155b37b4cf7571abe6c1fc514f4",
-    "264": "a5777f2fa6075431cbd4fedd08b4c076a1c72f0c99efde3b551314bfd8b9d7d0",
-    "265": "18f6a4cb356dbcec3409a0fcb065ab438d581ea9e2b62a10fc4b04e64029549c",
-    "266": "dfd2267bb67cfa939cb8470d8b51501db556bac79a7a2d70a8bdb0f7aa9285db",
-    "267": "5ffbc2173183f78936aa421091c6a5df75c293dab567e11a59c6503845051e58",
-    "268": "e418a0eea52f1b8d2f1f3e7488ba3fb5715907efd504c338d80e22f6dd58d4d8",
+    "263": "25bc8a35ed2657126eb1e60431f52390095119eceef741a9eb3cb86b0a825076",
+    "264": "0aa5b8c10bfb6cb85904a066f263a0058cb4a4a034b1505631aeb5534fde9287",
+    "265": "03fe9b2d7cb55a4221c899798cfb96fa7656fe85f17b02c8b721546154b9b3aa",
+    "266": "24b93c36f27d12f782255c568e9c6be9bc70335c75d68e1bfe5f345b8d45f073",
+    "267": "fa032775451d6daa2d1a273772aa903029fe6c80ab2dc7dfc708a06944825340",
+    "268": "b184f605f1f05006c811574b53b88de01b7a2c5b84d60ea22fc2b84347139293",
 }
 TREND_DEFINITIONS = (
     (
