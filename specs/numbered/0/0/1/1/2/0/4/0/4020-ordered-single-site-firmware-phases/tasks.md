@@ -33,6 +33,10 @@ Each task below is complete. The state column records the proof.
 | T043 | Add the narrow `apply_stop_request` store operation | Done |
 | T044 | Add the run-scoped `RunDispatchGate` with stop precedence | Done |
 | T045 | Hold the gate across the stop check, the call, and the row | Done |
+| T049 | Close the gap between the stop check and the gate acquisition | Done |
+| T050 | Write each dispatch refusal inside the gate through a narrow mutation | Done |
+| T051 | Move a run to `stopping` through a narrow state transition | Done |
+| T052 | Record the lost post-check of a stopped run | Done |
 
 ## Interleaved cascade
 
@@ -64,6 +68,10 @@ Each task below is complete. The state column records the proof.
 | T046 | Prove the inverse stop order keeps the stop and the accepted row | Done |
 | T047 | Prove a stop that wins the gate causes zero cloud calls | Done |
 | T048 | Prove a dispatch that wins the gate completes before the stop | Done |
+| T053 | Prove a stop inside the gate acquisition gap sends no firmware | Done |
+| T054 | Prove a refusal written inside the gate survives a stop | Done |
+| T055 | Prove the stopping move keeps a concurrent driver write | Done |
+| T056 | Prove a stopped run records a lost post-check capture | Done |
 
 ### The replaced test
 

@@ -148,6 +148,44 @@ class RunStoreDouble:
             self.writes.append(str(run.get("state", "")))  # The state order proves the cascade order.
         return True  # The driver fails the run when a write reports False.
 
+    def append_dispatch_failure(self, run_id: str, failure: dict[str, Any]) -> bool:
+        """Append one refusal record and change no other field.
+
+        Args:
+            run_id: The run key.
+            failure: The refusal evidence of one plan.
+
+        Returns:
+            True after the refusal becomes durable.
+        """
+        with self._guard:  # The driver thread may write at this moment.
+            record = self.records.get(run_id)  # An absent run cannot carry refusal evidence.
+            if record is None:
+                return False  # Fail closed, exactly as the production stores do.
+            rows = list(record.get("dispatch_failures", ()))  # Preserve every earlier refusal.
+            rows.append(dict(failure))  # Add only the new refusal.
+            record["dispatch_failures"] = rows  # Change no stop, state, or accepted row field.
+        return True  # The refusal survives a concurrent stop write.
+
+    def apply_state_transition(self, run_id: str, state: str, updated_at: str) -> bool:
+        """Write only the state fields of one run.
+
+        Args:
+            run_id: The run key.
+            state: The new run state value.
+            updated_at: The fresh change time in ISO 8601 UTC.
+
+        Returns:
+            True after the move becomes durable.
+        """
+        with self._guard:  # The driver thread may write at this moment.
+            record = self.records.get(run_id)  # An absent run cannot hold a state.
+            if record is None:
+                return False  # Fail closed, exactly as the production stores do.
+            record["state"] = state  # Change only the state field.
+            record["updated_at"] = updated_at  # The poll route reads the fresh change time.
+        return True  # Every concurrent driver field survived the move.
+
     def apply_stop_request(self, run_id: str, stop_request: dict[str, Any], updated_at: str) -> bool:
         """Write only the stop fields and preserve every other field.
 

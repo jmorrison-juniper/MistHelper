@@ -75,6 +75,18 @@ The run also read as a success.
   and the accepted-row write. A stop that claims the gate blocks each later
   firmware call of that run. A firmware call that holds the gate completes and
   records its evidence before the stop becomes durable.
+- FR-4020-14: A stop that registers while a firmware dispatch asks for the run
+  gate still wins. The dispatch takes the gate, reads the waiting-stop count
+  again, gives the gate back, and sends no firmware call.
+- FR-4020-15: A refused dispatch writes its refusal evidence inside the run
+  gate through a narrow durable mutation, so a stop that commits at the same
+  time cannot erase the refusal reason.
+- FR-4020-16: The move of a run into the state `stopping` writes the state and
+  the change time only. It reads the newest durable record first, and it
+  reports the true state of a run that already reached a final state.
+- FR-4020-17: A stopped run that captured no post-check writes the failure
+  reason and the flag `post_check_captured` as `false` before it reaches the
+  state `stopped`.
 
 ## Owner decisions
 

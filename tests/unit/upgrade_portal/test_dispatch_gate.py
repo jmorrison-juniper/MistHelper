@@ -24,9 +24,10 @@ Warning:
 
 from __future__ import annotations
 
-from threading import Event, Lock, Thread
+from threading import Event, Lock, RLock, Thread
+from time import sleep
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -146,6 +147,40 @@ class NarrowRunStore:
             rows.append(dict(row))  # Add only the new cloud identifier.
             self.record["upgrades"] = rows  # Change no stop, state, or post-check field.
         return True  # The accepted identifier is durable before another cloud write.
+
+    def append_dispatch_failure(self, run_id: str, failure: dict[str, Any]) -> bool:
+        """Append one refusal record and change no other field.
+
+        Args:
+            run_id: The run key. This store holds one run only.
+            failure: The refusal evidence of one plan.
+
+        Returns:
+            True after the refusal becomes durable.
+        """
+        del run_id  # This store holds one run only.
+        with self.guard:  # The append and a concurrent stop mutation cannot interleave.
+            rows = list(self.record.get("dispatch_failures", ()))  # Preserve every earlier refusal.
+            rows.append(dict(failure))  # Add only the new refusal.
+            self.record["dispatch_failures"] = rows  # Change no stop, state, or accepted row field.
+        return True  # The refusal survives a concurrent stop write.
+
+    def apply_state_transition(self, run_id: str, state: str, updated_at: str) -> bool:
+        """Write only the state fields of one run.
+
+        Args:
+            run_id: The run key. This store holds one run only.
+            state: The new run state value.
+            updated_at: The fresh change time in ISO 8601 UTC.
+
+        Returns:
+            True after the move becomes durable.
+        """
+        del run_id  # This store holds one run only.
+        with self.guard:  # The move and a concurrent append cannot interleave.
+            self.record["state"] = state  # Change only the state field.
+            self.record["updated_at"] = updated_at  # The poll route reads the fresh change time.
+        return True  # Every concurrent driver field survived the move.
 
     def apply_stop_request(self, run_id: str, stop_request: dict[str, Any], updated_at: str) -> bool:
         """Write only the stop fields of one run.
@@ -386,3 +421,181 @@ class TestTheDispatchGate:
         assert len(stored["upgrades"]) == 1  # The stop write preserved the accepted row.
         assert stored["upgrades"][0]["upgrade_id"] == accepted_row()["upgrade_id"]  # No evidence was lost.
         assert reason is None or reason == wiring.STOP_REQUESTED_REASON  # Either outcome stops the next phase.
+
+
+class BarrierLock:
+    """Signal the first lock acquisition, then behave as one reentrant lock.
+
+    Why:
+        Issue #4020: the dispatch path read the waiting-stop count, dropped the
+        table guard, and only then asked for the run lock. This proxy stops the
+        very first acquisition inside that gap, so a test can register a stop
+        there and prove that the stop still wins the gate.
+    """
+
+    def __init__(self) -> None:
+        """Start with one real reentrant lock and two deterministic signals."""
+        self.inner = RLock()  # The real lock that the gate registry would have created.
+        self.reached = Event()  # Set when the first dispatch entered the acquisition gap.
+        self.release_gap = Event()  # The test sets this after it registered the stop.
+        self.first = True  # Only the first acquisition pauses inside the gap.
+
+    def acquire(self, *args: Any, **kwargs: Any) -> bool:
+        """Pause the first acquisition inside the gap, then take the real lock.
+
+        Args:
+            *args: The arguments of ``threading.RLock.acquire``.
+            **kwargs: The keyword arguments of ``threading.RLock.acquire``.
+
+        Returns:
+            The result of the real reentrant lock acquisition.
+        """
+        taken = bool(self.inner.acquire(*args, **kwargs))  # Take the real lock from this point.
+        if self.first:  # Only the first dispatch pauses, so the retry loop can finish.
+            self.first = False  # Every later acquisition runs at full speed.
+            self.reached.set()  # Report that the dispatch sits inside the acquisition gap.
+            assert self.release_gap.wait(timeout=WAIT_SECONDS)  # Wait until the stop registered.
+        return taken  # Report the real acquisition result to the gate.
+
+    def release(self) -> None:
+        """Give the real reentrant lock back."""
+        self.inner.release()  # The waiting stop may now take the gate.
+
+    def __enter__(self) -> BarrierLock:
+        """Take the lock for a ``with`` block.
+
+        Returns:
+            This proxy, so the stop path may nest the same gate.
+        """
+        self.acquire()  # Reuse the one acquisition path of this proxy.
+        return self  # The stop path uses ``with gate:`` and needs an object back.
+
+    def __exit__(self, *details: Any) -> None:
+        """Give the lock back at the end of a ``with`` block.
+
+        Args:
+            *details: The exception details Python supplies. This proxy ignores them.
+        """
+        del details  # A fault inside the block still releases the gate.
+        self.release()  # The next caller of this run may take the gate.
+
+
+class TestTheDispatchAcquisitionGap:
+    """Tests for the gap between the stop check and the run lock acquisition."""
+
+    def test_a_stop_that_registers_in_the_acquisition_gap_still_wins(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A stop announced inside the acquisition gap blocks the firmware call.
+
+        Why:
+            The first version of the gate read the waiting-stop count, released
+            the table guard, and only then asked for the run lock. A stop that
+            registered inside that gap raced the free lock and could lose, so a
+            destructive call could start after the operator sent the stop.
+        """
+        run_id = "gap-run-0001"  # Keep this gate registry entry away from every other test.
+        store = NarrowRunStore()  # Share one durable record between the stop and the submitter.
+        store.record["run_id"] = run_id  # The submitter reads the run key from the record.
+        stops = StopRequestStore(store)  # Use the production stop path.
+        calls: list[Any] = []  # Record every cloud call that the submitter attempted.
+        barrier = BarrierLock()  # Pause the first acquisition inside the gap.
+        RunDispatchGate.forget(run_id)  # Start from a clean registry for this run.
+        with RunDispatchGate._REGISTRY_GUARD:  # Seed the proxy as the lock of this run.
+            RunDispatchGate._LOCKS[run_id] = cast(Any, barrier)  # `_lock_for` keeps it.
+        monkeypatch.setattr(wiring, "build_plans", lambda record: (plan_for("switch"),))  # One switch group.
+        monkeypatch.setattr(
+            wiring,
+            "load_module",
+            {wiring.SERVICE_MODULE: service_that(lambda session, plan: calls.append(plan) or answer())}.get,
+        )  # Keep every call local to this process.
+        committed = Event()  # Set after the durable stop landed.
+        outcome: list[Any] = []  # Hold the reason that the phase reported.
+
+        def commit_stop() -> None:
+            """Register and commit one stop while the dispatch sits in the gap."""
+            with RunDispatchGate.stop(run_id):  # The announcement must make the dispatch give way.
+                stops.request(run_id, OPERATOR, "STOP")  # Commit the durable stop.
+            committed.set()  # Report the durable stop to the test thread.
+
+        def send_phase() -> None:
+            """Send one switch phase, which pauses inside the acquisition gap."""
+            record = store.read_run(run_id)  # The driver carries the durable record into the phase.
+            outcome.append(wiring.CloudUpgradeSubmitter(object(), store).submit_phase(record, "switches"))
+
+        sender = Thread(target=send_phase)  # The dispatch runs like the driver thread.
+        sender.start()  # Start the phase, which stops inside the acquisition gap.
+        assert barrier.reached.wait(timeout=WAIT_SECONDS)  # Wait until the dispatch sits in the gap.
+        worker = Thread(target=commit_stop)  # Run the stop like the route thread.
+        worker.start()  # Announce the stop inside the gap the dispatch already entered.
+        while RunDispatchGate.stops_waiting(run_id) == 0:  # Wait until the stop announced itself.
+            sleep(0.01)  # A short pause keeps this loop cheap and deterministic.
+        barrier.release_gap.set()  # Let the paused dispatch take the lock and recheck the count.
+        assert committed.wait(timeout=WAIT_SECONDS)  # The stop committed, so it won the gate.
+        worker.join(timeout=WAIT_SECONDS)  # The stop thread must finish, never hang.
+        sender.join(timeout=WAIT_SECONDS)  # The dispatch thread must finish, never hang.
+        assert calls == []  # No destructive firmware request left the portal after the stop.
+        assert outcome == [wiring.STOP_REQUESTED_REASON]  # The phase reports the visible stop reason.
+        assert store.read_run(run_id)["upgrades"] == []  # The stopped phase accepted nothing.
+        RunDispatchGate.forget(run_id)  # Leave no proxy lock behind for another test.
+
+
+class TestTheDurableRefusal:
+    """Tests that prove a refused firmware call survives a concurrent stop."""
+
+    def test_a_refusal_is_durable_before_a_waiting_stop_may_commit(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A refused call writes its evidence inside the gate, ahead of a stop.
+
+        Why:
+            The submitter returned the refusal and the driver wrote it after the
+            gate reopened. A stop that committed in that interval sent the driver
+            down the stopped path, and the operator then read a stopped run that
+            never named the destructive call the cloud lost.
+        """
+        run_id = "refusal-run-0001"  # Keep this gate registry entry away from every other test.
+        store = NarrowRunStore()  # Share one durable record between the stop and the submitter.
+        store.record["run_id"] = run_id  # The submitter reads the run key from the record.
+        stops = StopRequestStore(store)  # Use the production stop path.
+        calls: list[Any] = []  # Record every cloud call that the submitter attempted.
+        refused = Event()  # Set while the refused call is still inside the gate.
+        stop_waiting = Event()  # Set after the stop announced itself to the gate.
+        RunDispatchGate.forget(run_id)  # Start from a clean registry for this run.
+
+        def invoke(session: Any, plan: Any) -> Any:
+            """Stand in for one destructive cloud call that the cloud refuses."""
+            del session  # The stand-in reaches no cloud.
+            calls.append(plan)  # Record the one firmware request the portal attempted.
+            refused.set()  # Let the test start the concurrent stop.
+            assert stop_waiting.wait(timeout=WAIT_SECONDS)  # Hold the gate while the stop waits.
+            return None  # The cloud refused this group, so the submitter must record the loss.
+
+        monkeypatch.setattr(wiring, "build_plans", lambda record: (plan_for("switch"),))  # One switch group.
+        monkeypatch.setattr(
+            wiring,
+            "load_module",
+            {wiring.SERVICE_MODULE: service_that(invoke)}.get,
+        )  # Keep every call local to this process.
+        committed = Event()  # Set after the durable stop landed.
+
+        def request_stop() -> None:
+            """Request one stop while the refused dispatch holds the run gate."""
+            assert refused.wait(timeout=WAIT_SECONDS)  # Start only while the refused call runs.
+            stop_waiting.set()  # Report that the stop now waits for the gate.
+            with RunDispatchGate.stop(run_id):  # The stop must wait for the refusal evidence.
+                stops.request(run_id, OPERATOR, "STOP")  # Commit the durable stop after the refusal.
+            committed.set()  # Report the durable stop to the test thread.
+
+        worker = Thread(target=request_stop)  # Run the stop like the route thread.
+        worker.start()  # Start the concurrent stop.
+        record = store.read_run(run_id)  # The driver carries the durable record into the phase.
+        reason = wiring.CloudUpgradeSubmitter(object(), store).submit_phase(record, "switches")
+        assert reason == wiring.PHASE_REFUSED_REASON.format(phase="switches")  # The refusal ends the phase.
+        failures = store.read_run(run_id)["dispatch_failures"]  # The evidence must already be durable.
+        assert len(failures) == 1  # Exactly one refusal reached the store before the stop could commit.
+        assert failures[0]["phase"] == "switches"  # The evidence names the phase that lost the call.
+        assert committed.wait(timeout=WAIT_SECONDS)  # The stop commits only after the refusal is durable.
+        worker.join(timeout=WAIT_SECONDS)  # The stop thread must finish, never hang.
+        stored = store.read_run(run_id)  # Read the record after both actions completed.
+        assert stored["stop_request"]["requested_by"] == OPERATOR  # The stop became durable.
+        assert len(stored["dispatch_failures"]) == 1  # The stop write preserved the refusal evidence.
+        assert len(calls) == 1  # The refused phase never repeated the destructive write.
+        assert record["dispatch_failures"][0]["reason"] == reason  # The driver copy names the same loss.
+        RunDispatchGate.forget(run_id)  # Leave no registry entry behind for another test.
