@@ -7,11 +7,10 @@ Why:
     record back before each write. It keeps the `stop_request` field, which
     the route thread owns. So the two threads never fight over one field.
 
-    The cascade order is fixed: gateways, then switches, then access points,
-    then wireless clients. Everything sits downstream of the gateways. The
-    access points and the wired clients sit downstream of the switches. Only
-    the wireless clients sit downstream of the access points. A phase starts
-    only after the phase before it reports settled.
+    The phase watch starts after the portal sends the upgrade requests.
+    It observes the submitted work and sends no firmware request.
+    It does not prove that the cloud accepted each request or that the portal
+    sent device types in this order.
 
     The settle gate, the event reader, and the option builder live in sibling
     modules that other lanes write at the same time. This module names the

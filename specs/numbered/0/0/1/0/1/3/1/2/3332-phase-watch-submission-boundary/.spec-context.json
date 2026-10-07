@@ -1,0 +1,39 @@
+{
+  "workflow": "speckit",
+  "specName": "Clarify the Phase-Watch Submission Boundary",
+  "branch": "jmorrison-juniper-docs-3332-phase-watch-boundary",
+  "currentStep": "implement",
+  "status": "implemented",
+  "artifacts": [
+    "spec.md",
+    "plan.md",
+    "research.md",
+    "data-model.md",
+    "quickstart.md",
+    "contracts/phase-watch-wording.md",
+    "tasks.md"
+  ],
+  "history": [
+    {
+      "step": "plan",
+      "substep": null,
+      "kind": "complete",
+      "by": "agent",
+      "at": "2026-10-06T23:25:14.660Z"
+    },
+    {
+      "step": "tasks",
+      "substep": null,
+      "kind": "complete",
+      "by": "agent",
+      "at": "2026-10-07T00:51:14.8707752Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "kind": "complete",
+      "by": "agent",
+      "at": "2026-10-07T00:51:14.8707752Z"
+    }
+  ]
+}

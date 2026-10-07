@@ -8,7 +8,8 @@ Why:
     the two pages must also carry the same data attributes.
 
     These tests render the real single-site page and the real partial with the
-    strict undefined type. A change to one page without the other fails here.
+    strict undefined type. The phase cells stay equal. The phase notes can
+    describe different boundaries.
 """
 
 from __future__ import annotations
@@ -130,12 +131,24 @@ def test_the_card_cells_match_the_single_site_cells(environment: Environment, ph
     assert multi_site == single_site  # WHY: The same words and the same paint attributes, in the same order.
 
 
-def test_the_card_cadence_sentence_matches_the_single_site_sentence(environment: Environment) -> None:
-    """The two pages explain the count cadence with the same sentence."""
-    phases = RunRecordBuilder.initial_phases()  # WHY: Any phase set renders the sentence.
-    single_site = _cadence(_single_site_page(environment, phases), "upgrade-phase-cadence")  # WHY: The reference.
-    multi_site = _cadence(_multi_site_card(environment, phases), "org-upgrade-phase-cadence")  # WHY: Under test.
-    assert multi_site == single_site  # WHY: One cadence rule gets one sentence.
+def test_the_multi_site_card_explains_the_post_submit_boundary(environment: Environment) -> None:
+    """The multi-site card explains its post-submit watch boundary instead of the single-site count cadence."""
+    phases = RunRecordBuilder.initial_phases()  # WHY: Any phase set renders both notes.
+    single_site = _cadence(_single_site_page(environment, phases), "upgrade-phase-cadence")  # WHY: The old note.
+    multi_site = _cadence(_multi_site_card(environment, phases), "org-upgrade-phase-cadence")  # WHY: The new note.
+    expected_single = (  # WHY: The single-site page still explains count movement.
+        "Each phase count moves once, when that phase ends. "
+        "A count that does not change means the portal is still waiting for the devices of that phase."
+    )
+    expected_multi = (  # WHY: The multi-site page must not imply cloud acceptance or ordered submission.
+        "The phase watch starts after the portal sends the upgrade requests. "
+        "It observes the submitted work and sends no firmware request. "
+        "It does not prove that the cloud accepted each request or that the portal sent device types in this order. "
+        "Warning: If a submission result is uncertain, do not start another upgrade. "
+        "A second upgrade can target the same devices."
+    )
+    assert single_site == expected_single  # WHY: The existing single-site contract stays unchanged.
+    assert multi_site == expected_multi  # WHY: The multi-site contract states the post-submit boundary.
 
 
 def test_the_card_hides_an_empty_reason_and_shows_a_failure_reason(environment: Environment) -> None:
