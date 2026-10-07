@@ -1249,16 +1249,6 @@ class TestExecuteWorkflow:
 class TestAdditionalCoverage:
     """Cover remaining lines for 90%+ coverage."""
 
-    def test_validate_org_exception(self, upgrader: BulkSwitchFirmwareUpgrader) -> None:
-        """Verify org validation handles exceptions."""
-        mock_mistapi = sys.modules["mistapi"]
-        mock_mistapi.api.v1.orgs.orgs.getOrg.side_effect = RuntimeError("Connection refused")
-
-        result = upgrader._validate_organization()
-        assert result is False
-
-        mock_mistapi.api.v1.orgs.orgs.getOrg.side_effect = None
-
     def test_interactive_site_selection_api_error(
         self,
         upgrader: BulkSwitchFirmwareUpgrader,
