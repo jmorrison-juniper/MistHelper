@@ -1,0 +1,36 @@
+{
+  "feature": "4028-menu-209-http-errors",
+  "issue": 4028,
+  "branch": "jmorrison-juniper-false-success-family-4028",
+  "currentStep": "tasks",
+  "status": "ready-to-implement",
+  "artifacts": [
+    "spec.md",
+    "checklists/requirements.md"
+  ],
+  "workflow": "speckit",
+  "specName": "Menu 209 HTTP Error Handling",
+  "history": [
+    {
+      "step": "specify",
+      "substep": null,
+      "kind": "complete",
+      "by": "harness",
+      "at": "2026-10-07T00:12:05.454Z"
+    },
+    {
+      "step": "plan",
+      "substep": null,
+      "kind": "complete",
+      "by": "extension",
+      "at": "2026-10-07T00:51:02.754Z"
+    },
+    {
+      "step": "tasks",
+      "substep": null,
+      "kind": "complete",
+      "by": "extension",
+      "at": "2026-10-07T01:10:26.041Z"
+    }
+  ]
+}

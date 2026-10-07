@@ -251,113 +251,164 @@ class SiteClientExporter:
         return filename  # WHY: caller persists output using this stable filename.
 
     @staticmethod
-    def _fetch_site_beacon_with_retry(site_id: str, beacon_id: str) -> list[dict[str, Any]]:
-        """Fetch one site beacon with adaptive delay retries on 429-style failures."""
-        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        retry_limit = getattr(  # WHY: resolve configured retry cap while preserving behavior when setting is absent.
-            getattr(mh, "FastModeSequentialMaxRetries", None),  # WHY: tolerate missing retry config.
-            "VALUE",  # WHY: project standard stores retry count on VALUE class attribute.
-            _GET_SITE_BEACON_FALLBACK_RETRIES,  # WHY: fallback keeps retries bounded when config object is missing.
-        )
-        smoothed_delay = None  # WHY: seed RateLimitingUtils smoothing state for adaptive-delay retries.
-        first_error: RuntimeError | None = None  # WHY: preserve the first failure across rate-limit retries.
-        for attempt in range(retry_limit + 1):  # WHY: include initial attempt plus configured retry attempts.
-            logger.info(
-                "Calling getSiteBeacon for site_id=%s beacon_id=%s (attempt %d/%d)",
-                site_id,
-                beacon_id,
-                attempt + 1,
-                retry_limit + 1,
-            )  # WHY: pre-call log.
-            try:  # WHY: isolate request failures so 429 can trigger adaptive retry path.
-                response = mistapi.api.v1.sites.beacons.getSiteBeacon(  # WHY: SDK get-by-id call.
-                    mh.apisession,  # WHY: authenticated API session required by mistapi endpoint functions.
-                    site_id=site_id,  # WHY: endpoint path parameter selecting the site container.
-                    beacon_id=beacon_id,  # WHY: endpoint path parameter selecting the specific beacon resource.
-                )
-                payload = getattr(response, "data", response)  # WHY: support object and dict responses.
-                rows = SiteClientExporter._normalize_site_beacon_payload(payload)  # WHY: normalize to list rows.
-                logger.debug(
-                    "getSiteBeacon call succeeded with %d normalized rows",
-                    len(rows),
-                )  # WHY: post-call summary.
-                return rows  # WHY: successful fetch ends retry loop immediately.
-            except RuntimeError as exception:  # WHY: capture runtime API failures for retry/abort decisioning.
-                if first_error is None:  # WHY: the first rate-limit failure can hold the root cause.
-                    first_error = exception  # WHY: later attempts can carry follow-on transport symptoms.
-                logging.error(
-                    "getSiteBeacon API call failed on attempt %d/%d: %s",
-                    attempt + 1,
-                    retry_limit + 1,
-                    exception,
-                )  # WHY: failure details.
-                if "429" not in str(exception):  # WHY: only rate-limit errors should enter adaptive retry delay path.
-                    if first_error is not exception:  # WHY: a prior retry failure must remain visible to the caller.
-                        raise first_error from None  # WHY: preserve the first cause without chaining later symptoms.
-                    raise  # WHY: first-attempt non-rate-limit exceptions still bubble unchanged.
-                if attempt >= retry_limit:  # WHY: avoid sleeping when no retries remain.
-                    raise first_error from None  # WHY: propagate the original rate-limit failure after exhaustion.
-                logging.info(  # WHY: pre-delay log.
-                    "Rate-limit signal detected; calculating adaptive delay before retry"
-                )
-                delay_helper = mh.RateLimitingUtils.get_rate_limited_delay  # WHY: adaptive delay helper reference.
-                (
-                    smoothed_delay,
-                    delay_seconds,
-                ) = delay_helper(  # type: ignore[no-untyped-call]
-                    smoothed_delay,  # WHY: keep smoothing state across retries.
-                    mh.apisession,  # WHY: RateLimitingUtils inspects API usage counters through live session object.
-                    mh._api_usage_cache,  # WHY: shared mutable cache stores usage snapshots across calls.
-                )
-                logging.debug(
-                    "Adaptive retry delay resolved to %.3f seconds for getSiteBeacon",
-                    delay_seconds,
-                )  # WHY: delay summary.
-                time.sleep(delay_seconds)  # WHY: enforce adaptive backoff interval before retrying the API call.
-        return []  # WHY: unreachable safety fallback keeps static analyzers aware of list return type.
-
-    @staticmethod
     def get_site_beacon() -> None:
         """Run getSiteBeacon prompt -> fetch -> export workflow."""
-        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logger.info("Export Site Beacon Detail:")  # WHY: operator-facing header for new menu operation.
-        logger.info("Starting getSiteBeacon workflow...")  # WHY: start boundary log for observability timelines.
-        identifiers = SiteClientExporter._prompt_site_beacon_identifiers()  # WHY: gather validated identifiers.
-        if identifiers is None:  # WHY: prompt helper already logged cancellation/EOF details.
-            return  # WHY: stop cleanly when required identifiers were not provided.
-        site_id, beacon_id = identifiers  # WHY: unpack validated identifiers for API request and filename construction.
-        try:  # WHY: top-level guard keeps menu operation from crashing on API/runtime failures.
-            rows = SiteClientExporter._fetch_site_beacon_with_retry(  # WHY: fetch with 429 retry path.
-                site_id,
-                beacon_id,
+        _SiteBeaconExportWorkflow.execute()  # WHY: keep the menu facade stable while focused types own the workflow.
+
+
+class _SiteBeaconFetcher:
+    """Fetch one site beacon and preserve the bounded rate-limit retry contract."""
+
+    def __init__(self, site_id: str, beacon_id: str) -> None:
+        """Store request identifiers and initialize one retry state."""
+        self.site_id = site_id  # WHY: each attempt must use the same validated site identifier.
+        self.beacon_id = beacon_id  # WHY: each attempt must use the same validated beacon identifier.
+        self.mh = SourceDependencyResolver  # WHY: resolve runtime dependencies without importing the root module.
+        retry_config = getattr(self.mh, "FastModeSequentialMaxRetries", None)  # WHY: tolerate missing configuration.
+        self.retry_limit = getattr(retry_config, "VALUE", _GET_SITE_BEACON_FALLBACK_RETRIES)  # WHY: bound retries.
+        self.smoothed_delay = None  # WHY: adaptive delay smoothing must persist across retry attempts.
+        self.first_error: RuntimeError | None = None  # WHY: retry exhaustion must preserve the first failure.
+
+    def fetch(self) -> list[dict[str, Any]] | None:
+        """Return normalized rows, or None after a returned HTTP failure."""
+        for attempt in range(self.retry_limit + 1):  # WHY: run the initial request and each configured retry.
+            finished, rows = self._attempt(attempt)  # WHY: isolate one request and its retry decision.
+            if finished:  # WHY: a response or terminal failure ends the retry loop.
+                return rows  # WHY: preserve the distinction between failure None and successful row lists.
+        return []  # WHY: the loop always returns, but the explicit fallback keeps the return type complete.
+
+    def _attempt(self, attempt: int) -> tuple[bool, list[dict[str, Any]] | None]:
+        """Run one SDK request and classify its response or exception."""
+        logger.info(  # WHY: record each external request before it starts.
+            "Calling getSiteBeacon for site_id=%s beacon_id=%s (attempt %d/%d)",
+            self.site_id,
+            self.beacon_id,
+            attempt + 1,
+            self.retry_limit + 1,
+        )
+        try:  # WHY: only raised runtime failures can enter the adaptive retry path.
+            response = mistapi.api.v1.sites.beacons.getSiteBeacon(  # WHY: call the supported SDK endpoint.
+                self.mh.apisession, site_id=self.site_id, beacon_id=self.beacon_id
             )
-        except Exception as exception:  # WHY: error path should surface clear logs and exit gracefully.
-            logging.error(
+            if _SiteBeaconHttpGate.failed(response, "site beacon detail"):  # WHY: classify before response body access.
+                return True, None  # WHY: a returned HTTP failure is terminal and produces no rows.
+            payload = getattr(response, "data", response)  # WHY: preserve response-object and dictionary support.
+            rows = SiteClientExporter._normalize_site_beacon_payload(payload)  # WHY: normalize successful data only.
+            logger.debug("getSiteBeacon call succeeded with %d normalized rows", len(rows))  # WHY: summarize result.
+            return True, rows  # WHY: a successful response ends the retry loop.
+        except RuntimeError as exception:  # WHY: preserve the established exception-based retry behavior.
+            self._handle_runtime_error(exception, attempt)  # WHY: raise terminal errors or prepare one retry.
+            return False, None  # WHY: the caller continues only after a retryable raised 429.
+
+    def _handle_runtime_error(self, exception: RuntimeError, attempt: int) -> None:
+        """Raise a terminal error or prepare the next raised-429 retry."""
+        if self.first_error is None:  # WHY: the first failure is the root cause after retry exhaustion.
+            self.first_error = exception  # WHY: later transport failures must not replace the first cause.
+        logging.error(  # WHY: record the failed external request with its bounded attempt count.
+            "getSiteBeacon API call failed on attempt %d/%d: %s",
+            attempt + 1,
+            self.retry_limit + 1,
+            exception,
+        )
+        if "429" not in str(exception):  # WHY: only a raised rate-limit error can retry.
+            if self.first_error is not exception:  # WHY: preserve an earlier rate-limit root cause.
+                raise self.first_error from None  # WHY: do not chain a later transport symptom.
+            raise exception  # WHY: surface the first non-rate-limit runtime failure unchanged.
+        if attempt >= self.retry_limit:  # WHY: no delay is useful after the final permitted attempt.
+            raise self.first_error from None  # WHY: retry exhaustion reports the original rate-limit failure.
+        self._delay()  # WHY: calculate and apply the required adaptive wait before the next request.
+
+    def _delay(self) -> None:
+        """Apply one adaptive delay before a raised-429 retry."""
+        logging.info("Rate-limit signal detected; calculating adaptive delay before retry")  # WHY: pre-delay action.
+        delay_helper = self.mh.RateLimitingUtils.get_rate_limited_delay  # WHY: use the shared adaptive algorithm.
+        self.smoothed_delay, delay_seconds = delay_helper(  # type: ignore[no-untyped-call]
+            self.smoothed_delay, self.mh.apisession, self.mh._api_usage_cache
+        )
+        logging.debug(  # WHY: record the bounded delay without exposing request data.
+            "Adaptive retry delay resolved to %.3f seconds for getSiteBeacon", delay_seconds
+        )
+        time.sleep(delay_seconds)  # WHY: enforce the rate-limit delay before the next external request.
+
+
+class _SiteBeaconHttpGate:
+    """Classify one native SDK response without reading its body."""
+
+    @staticmethod
+    def failed(response: Any, operation: str) -> bool:
+        """Report whether one SDK answer carries a non-2xx HTTP status."""
+        status = getattr(response, "status_code", None)  # WHY: inspect status before response body access.
+        if not isinstance(status, int):  # WHY: loose response doubles must keep compatibility behavior.
+            logger.debug("%s returned no integer status, so the normal path continues", operation)  # WHY: trace.
+            return False  # WHY: only an integer status can prove an HTTP failure.
+        if 200 <= status < 300:  # WHY: HTTP 2xx is the complete successful status range.
+            logger.debug("%s returned HTTP %d, which is a success", operation, status)  # WHY: trace classification.
+            return False  # WHY: successful responses continue to payload normalization.
+        url = getattr(response, "url", None) or "the requested path"  # WHY: name the route without body data.
+        logger.error("%s returned HTTP %d from %s", operation, status, url)  # WHY: record bounded failure context.
+        logger.info("! Error fetching %s: HTTP %s from %s", operation, status, url)  # WHY: trigger portal failure.
+        return True  # WHY: stop before response data access or export.
+
+
+class _SiteBeaconExportWorkflow:
+    """Run the menu 209 prompt, fetch, and export sequence."""
+
+    @staticmethod
+    def execute() -> None:
+        """Run menu 209 with explicit failure and no-data boundaries."""
+        logger.info("Export Site Beacon Detail:")  # WHY: show the operation header before the first action.
+        logger.info("Starting getSiteBeacon workflow...")  # WHY: record the workflow start.
+        identifiers = SiteClientExporter._prompt_site_beacon_identifiers()  # WHY: obtain validated path identifiers.
+        if identifiers is None:  # WHY: the prompt helper already reported the cancellation cause.
+            return  # WHY: no external request can run without both identifiers.
+        rows = _SiteBeaconExportWorkflow._fetch(identifiers)  # WHY: isolate request error reporting.
+        if rows is None:  # WHY: a native or raised HTTP failure already has a terminal user message.
+            return  # WHY: failure must not become no-data or export success.
+        _SiteBeaconExportWorkflow._finish(rows, identifiers)  # WHY: handle empty and populated success results.
+
+    @staticmethod
+    def _fetch(identifiers: tuple[str, str]) -> list[dict[str, Any]] | None:
+        """Fetch rows and convert raised failures into the portal error shape."""
+        site_id, beacon_id = identifiers  # WHY: preserve the validated request context in failure logs.
+        try:  # WHY: menu operations report SDK failures without crashing the dispatcher.
+            return _SiteBeaconFetcher(site_id, beacon_id).fetch()  # WHY: use the focused retry and status gate.
+        except Exception as exception:  # WHY: keep the established broad menu boundary.
+            logging.error(  # WHY: retain identifiers and the exception in the diagnostic log.
                 "! Error fetching site beacon detail for site_id=%s beacon_id=%s: %s",
                 site_id,
                 beacon_id,
                 exception,
-            )  # WHY: structured failure context.
-            logging.info("! Error fetching site beacon detail: %s", exception)  # WHY: user-facing error line.
-            return  # WHY: do not attempt export after fetch failure.
-        if not rows:  # WHY: empty payload should end cleanly without writing empty artifacts.
-            logger.warning(
-                "! getSiteBeacon returned no data for site_id=%s beacon_id=%s",
-                site_id,
-                beacon_id,
-            )  # WHY: no-data warning.
-            logger.info("! No beacon data found for the specified identifiers.")  # WHY: user-facing no-data line.
-            return  # WHY: skip export when endpoint returns no rows.
-        filename = SiteClientExporter._build_site_beacon_filename(site_id, beacon_id)  # WHY: deterministic filename.
-        logger.info("Persisting %d getSiteBeacon row(s) to %s", len(rows), filename)  # WHY: pre-write log.
-        mh.DataExporter.write_with_format_selection(  # WHY: canonical multi-backend write path.
-            rows,  # WHY: normalized row payload from endpoint response.
-            filename,  # WHY: deterministic export filename derived from site+beacon identifiers.
-            api_function_name=_GET_SITE_BEACON_API_FUNCTION_NAME,  # WHY: explicit operation id for PK strategy.
+            )
+            logging.info("! Error fetching site beacon detail: %s", exception)  # WHY: trigger portal failure.
+            return None  # WHY: failed requests cannot reach no-data or export handling.
+
+    @staticmethod
+    def _finish(rows: list[dict[str, Any]], identifiers: tuple[str, str]) -> None:
+        """Report empty success or write populated rows."""
+        if not rows:  # WHY: an HTTP success can still contain no beacon data.
+            _SiteBeaconExportWorkflow._report_no_data(identifiers)  # WHY: keep no-data messages in one helper.
+            return  # WHY: an empty success creates no artifact.
+        _SiteBeaconExportWorkflow._write(rows, identifiers)  # WHY: persist only populated successful data.
+
+    @staticmethod
+    def _report_no_data(identifiers: tuple[str, str]) -> None:
+        """Report a successful response that contains no beacon data."""
+        site_id, beacon_id = identifiers  # WHY: include the exact requested identifiers in the diagnostic log.
+        logger.warning(  # WHY: record the empty result with its request context.
+            "! getSiteBeacon returned no data for site_id=%s beacon_id=%s", site_id, beacon_id
         )
-        logger.debug(
-            "Persisted getSiteBeacon payload with row_count=%d filename=%s",
-            len(rows),
-            filename,
-        )  # WHY: post-write summary.
-        logger.info("! Exported site beacon detail to %s", filename)  # WHY: user-facing success message.
+        logger.info("! No beacon data found for the specified identifiers.")  # WHY: show the no-data result.
+
+    @staticmethod
+    def _write(rows: list[dict[str, Any]], identifiers: tuple[str, str]) -> None:
+        """Write populated beacon rows through the canonical exporter."""
+        site_id, beacon_id = identifiers  # WHY: build the stable request-specific artifact name.
+        filename = SiteClientExporter._build_site_beacon_filename(site_id, beacon_id)  # WHY: preserve filename shape.
+        logger.info("Persisting %d getSiteBeacon row(s) to %s", len(rows), filename)  # WHY: pre-write action log.
+        SourceDependencyResolver.DataExporter.write_with_format_selection(  # WHY: use the canonical writer.
+            rows, filename, api_function_name=_GET_SITE_BEACON_API_FUNCTION_NAME
+        )
+        logger.debug(  # WHY: summarize the completed write with no response body data.
+            "Persisted getSiteBeacon payload with row_count=%d filename=%s", len(rows), filename
+        )
+        logger.info("! Exported site beacon detail to %s", filename)  # WHY: show the successful artifact.

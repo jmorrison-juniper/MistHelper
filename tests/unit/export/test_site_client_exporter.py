@@ -36,7 +36,10 @@ from unittest.mock import MagicMock, call  # WHY: FR-008 collaborator doubles + 
 import pytest  # WHY: monkeypatch + caplog fixtures.
 
 import MistHelper as _mh_module  # WHY: module-object monkeypatch avoids legacy-facade substring guard.
-from src.operations.exporting.export.site_client_exporter import SiteClientExporter  # WHY: direct SUT import.
+from src.operations.exporting.export.site_client_exporter import (  # WHY: import facade and focused fetcher under test.
+    SiteClientExporter,
+    _SiteBeaconFetcher,
+)
 
 
 @pytest.fixture
@@ -411,6 +414,40 @@ class TestBeacons:
         ]
 
 
+class _BeaconResponse:
+    """Provide the status, URL, and payload fields used by getSiteBeacon tests."""
+
+    def __init__(self, status_code: Any, data: Any, url: str | None = None) -> None:
+        """Store one controlled SDK response without network access."""
+        self.status_code = status_code  # WHY: response classification must inspect the native status first.
+        self.data = data  # WHY: successful and compatibility paths still need a controlled payload.
+        self.url = url  # WHY: failed status output must name the response URL when one exists.
+
+
+class _StatuslessBeaconResponse:
+    """Provide payload compatibility without a native status field."""
+
+    def __init__(self, data: Any) -> None:
+        """Store the payload while deliberately omitting status_code."""
+        self.data = data  # WHY: compatibility behavior must continue when older response doubles omit status.
+
+
+class _UnreadableBeaconResponse:
+    """Fail a test if HTTP classification reads the response payload."""
+
+    def __init__(self, status_code: int, url: str | None) -> None:
+        """Store only the fields that the status-only failure gate can read."""
+        self.status_code = status_code  # WHY: the gate must reject this integer before payload access.
+        self.url = url  # WHY: the error line must use this URL or the canonical fallback.
+        self.data_reads = 0  # WHY: the test proves that the failed response body remains unread.
+
+    @property
+    def data(self) -> Any:
+        """Reject any response-body access during HTTP failure classification."""
+        self.data_reads += 1  # WHY: retain evidence if production code reaches the forbidden body.
+        raise AssertionError("HTTP failure classification read the response body")  # WHY: fail at the first access.
+
+
 class TestGetSiteBeacon:
     """Cover prompt, success, empty-response, and retry/error branches of get_site_beacon."""
 
@@ -456,6 +493,140 @@ class TestGetSiteBeacon:
             "SiteBeacon_site_123_beacon_456.csv",
             api_function_name="getSiteBeacon",
         )
+
+    def test_http_404_reports_exact_failure_without_normalizing_or_exporting(
+        self, wired_deps: dict[str, Any], monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """A missing beacon must emit the exact HTTP failure and stop before payload processing."""
+        wired_deps["InputUtils"].safe_input.side_effect = ["site-123", "missing-beacon"]  # WHY: satisfy prompts.
+        response = _UnreadableBeaconResponse(  # WHY: body access must fail this regression immediately.
+            status_code=404,
+            url="https://api.mist.com/api/v1/sites/site-123/beacons/missing-beacon",
+        )
+        wired_deps["mistapi"].api.v1.sites.beacons.getSiteBeacon.return_value = response  # WHY: return native 404.
+        normalizer = MagicMock(name="site_beacon_normalizer")  # WHY: prove failed status never reaches normalization.
+        monkeypatch.setattr(SiteClientExporter, "_normalize_site_beacon_payload", normalizer)  # WHY: observe boundary.
+
+        with caplog.at_level(logging.INFO):  # WHY: capture the operator-facing failure line.
+            SiteClientExporter.get_site_beacon()  # WHY: execute the complete menu 209 failure path.
+
+        assert (  # WHY: the portal classifier requires this exact operator line.
+            "! Error fetching site beacon detail: HTTP 404 from "
+            "https://api.mist.com/api/v1/sites/site-123/beacons/missing-beacon"
+        ) in caplog.messages
+        assert response.data_reads == 0  # WHY: the response body must remain unread on HTTP failure.
+        normalizer.assert_not_called()  # WHY: failed response data is not a beacon payload.
+        wired_deps["DataExporter"].write_with_format_selection.assert_not_called()  # WHY: failure creates no artifact.
+
+    def test_http_500_with_no_url_uses_fallback_without_reading_payload(
+        self, wired_deps: dict[str, Any], monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """A server failure without a URL must use the canonical path fallback."""
+        wired_deps["InputUtils"].safe_input.side_effect = ["site-123", "beacon-456"]  # WHY: satisfy prompts.
+        response = _UnreadableBeaconResponse(status_code=500, url=None)  # WHY: prove body and URL fallback behavior.
+        wired_deps["mistapi"].api.v1.sites.beacons.getSiteBeacon.return_value = response  # WHY: return native 500.
+        normalizer = MagicMock(name="site_beacon_normalizer")  # WHY: prove failed status bypasses normalization.
+        monkeypatch.setattr(SiteClientExporter, "_normalize_site_beacon_payload", normalizer)  # WHY: observe boundary.
+
+        with caplog.at_level(logging.INFO):  # WHY: capture the fallback error line.
+            SiteClientExporter.get_site_beacon()  # WHY: execute native server-failure handling.
+
+        assert (  # WHY: absent URLs must use the stable classifier fallback.
+            "! Error fetching site beacon detail: HTTP 500 from the requested path"
+        ) in caplog.messages
+        assert response.data_reads == 0  # WHY: server error bodies must remain unread.
+        normalizer.assert_not_called()  # WHY: HTTP 500 data cannot enter the beacon normalizer.
+        wired_deps["DataExporter"].write_with_format_selection.assert_not_called()  # WHY: failure creates no artifact.
+
+    def test_native_http_429_is_terminal_without_retry(
+        self, wired_deps: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A returned HTTP 429 must fail once without entering the exception retry path."""
+        wired_deps["InputUtils"].safe_input.side_effect = ["site-123", "beacon-456"]  # WHY: satisfy prompts.
+        response = _UnreadableBeaconResponse(status_code=429, url="/api/v1/sites/site-123/beacons/beacon-456")
+        endpoint = wired_deps["mistapi"].api.v1.sites.beacons.getSiteBeacon  # WHY: keep retry assertions readable.
+        endpoint.return_value = response  # WHY: native status differs from a raised RuntimeError.
+        sleep_spy = MagicMock(name="sleep_spy")  # WHY: prove native status does not invoke backoff.
+        normalizer = MagicMock(name="site_beacon_normalizer")  # WHY: prove rate-limit body is not normalized.
+        monkeypatch.setattr("src.operations.exporting.export.site_client_exporter.time.sleep", sleep_spy)  # WHY: spy.
+        monkeypatch.setattr(SiteClientExporter, "_normalize_site_beacon_payload", normalizer)  # WHY: observe boundary.
+
+        SiteClientExporter.get_site_beacon()  # WHY: execute returned rate-limit handling.
+
+        endpoint.assert_called_once()  # WHY: native HTTP 429 is terminal and must not retry.
+        wired_deps["RateLimitingUtils"].get_rate_limited_delay.assert_not_called()  # WHY: no adaptive delay.
+        sleep_spy.assert_not_called()  # WHY: no delay occurs for a completed native response.
+        assert response.data_reads == 0  # WHY: the rate-limit body remains unread.
+        normalizer.assert_not_called()  # WHY: returned HTTP 429 data is not beacon data.
+        wired_deps["DataExporter"].write_with_format_selection.assert_not_called()  # WHY: failure creates no artifact.
+
+    def test_non_integer_status_preserves_payload_export(self, wired_deps: dict[str, Any]) -> None:
+        """A non-integer status must keep the compatibility payload path."""
+        wired_deps["InputUtils"].safe_input.side_effect = ["site-123", "beacon-456"]  # WHY: satisfy prompts.
+        response = MagicMock(name="non_integer_status_response")  # WHY: model the existing loose SDK double.
+        response.status_code = MagicMock(name="status_code")  # WHY: only integers can prove HTTP success or failure.
+        response.data = {"id": "beacon-456", "site_id": "site-123"}  # WHY: compatibility path still exports data.
+        wired_deps["mistapi"].api.v1.sites.beacons.getSiteBeacon.return_value = response  # WHY: return loose response.
+
+        SiteClientExporter.get_site_beacon()  # WHY: execute compatibility response handling.
+
+        wired_deps["DataExporter"].write_with_format_selection.assert_called_once_with(  # WHY: preserve export.
+            [{"id": "beacon-456", "site_id": "site-123"}],
+            "SiteBeacon_site_123_beacon_456.csv",
+            api_function_name="getSiteBeacon",
+        )
+
+    def test_statusless_response_preserves_payload_export(self, wired_deps: dict[str, Any]) -> None:
+        """A response without status_code must keep the compatibility payload path."""
+        wired_deps["InputUtils"].safe_input.side_effect = ["site-123", "beacon-456"]  # WHY: satisfy prompts.
+        response = _StatuslessBeaconResponse(  # WHY: model an older response double with payload only.
+            data={"id": "beacon-456", "site_id": "site-123"}
+        )
+        wired_deps["mistapi"].api.v1.sites.beacons.getSiteBeacon.return_value = (
+            response  # WHY: return statusless object.
+        )
+
+        SiteClientExporter.get_site_beacon()  # WHY: execute compatibility response handling.
+
+        wired_deps["DataExporter"].write_with_format_selection.assert_called_once_with(  # WHY: preserve export.
+            [{"id": "beacon-456", "site_id": "site-123"}],
+            "SiteBeacon_site_123_beacon_456.csv",
+            api_function_name="getSiteBeacon",
+        )
+
+    def test_http_200_dictionary_preserves_export_identity(self, wired_deps: dict[str, Any]) -> None:
+        """An HTTP 200 dictionary must retain the current row, filename, and API identity."""
+        wired_deps["InputUtils"].safe_input.side_effect = ["site-123", "beacon-456"]  # WHY: satisfy prompts.
+        response = _BeaconResponse(  # WHY: exercise explicit successful status classification.
+            status_code=200,
+            data={"id": "beacon-456", "site_id": "site-123"},
+            url="/api/v1/sites/site-123/beacons/beacon-456",
+        )
+        wired_deps["mistapi"].api.v1.sites.beacons.getSiteBeacon.return_value = response  # WHY: return native success.
+
+        SiteClientExporter.get_site_beacon()  # WHY: execute successful response handling.
+
+        wired_deps["DataExporter"].write_with_format_selection.assert_called_once_with(  # WHY: preserve identity.
+            [{"id": "beacon-456", "site_id": "site-123"}],
+            "SiteBeacon_site_123_beacon_456.csv",
+            api_function_name="getSiteBeacon",
+        )
+
+    def test_empty_http_200_preserves_no_data_path(
+        self, wired_deps: dict[str, Any], caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """An empty HTTP 200 must keep the existing no-data result without export."""
+        wired_deps["InputUtils"].safe_input.side_effect = ["site-123", "beacon-456"]  # WHY: satisfy prompts.
+        response = _BeaconResponse(status_code=200, data=None)  # WHY: explicit success can still contain no data.
+        wired_deps["mistapi"].api.v1.sites.beacons.getSiteBeacon.return_value = response  # WHY: return empty success.
+
+        with caplog.at_level(logging.INFO):  # WHY: capture the existing successful no-data line.
+            SiteClientExporter.get_site_beacon()  # WHY: execute empty successful response handling.
+
+        assert "! No beacon data found for the specified identifiers." in caplog.messages  # WHY: preserve wording.
+        wired_deps[
+            "DataExporter"
+        ].write_with_format_selection.assert_not_called()  # WHY: empty success has no artifact.
 
     def test_eof_or_blank_site_id_aborts_without_api_call(
         self, wired_deps: dict[str, Any], caplog: pytest.LogCaptureFixture
@@ -543,10 +714,7 @@ class TestGetSiteBeacon:
         endpoint = wired_deps["mistapi"].api.v1.sites.beacons.getSiteBeacon  # WHY: keep the mock path readable.
         endpoint.side_effect = TypeError("bad signature")  # WHY: simulate SDK misuse.
         with pytest.raises(TypeError, match="bad signature"):  # WHY: prove the caller learns about the defect.
-            SiteClientExporter._fetch_site_beacon_with_retry(  # WHY: exercise the narrowed handler directly.
-                "site-123",
-                "beacon-456",
-            )
+            _SiteBeaconFetcher("site-123", "beacon-456").fetch()  # WHY: exercise the focused retry type directly.
 
     def test_retry_helper_raises_first_failure_after_distinct_retry_errors(
         self, wired_deps: dict[str, Any], monkeypatch: pytest.MonkeyPatch
@@ -563,7 +731,4 @@ class TestGetSiteBeacon:
         )  # WHY: no wait.
 
         with pytest.raises(RuntimeError, match="auth failed"):  # WHY: assert the first failure reaches the caller.
-            SiteClientExporter._fetch_site_beacon_with_retry(  # WHY: drive retry exhaustion directly.
-                "site-123",
-                "beacon-456",
-            )
+            _SiteBeaconFetcher("site-123", "beacon-456").fetch()  # WHY: drive retry exhaustion directly.
