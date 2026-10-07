@@ -170,11 +170,31 @@ def test_run_uses_identifier_for_scoped_operation() -> None:
     callable_obj.assert_called_once_with(fake.apisession, "org-one")
 
 
+class _NonRaisingErrorResponse:
+    """Stand in for a mistapi APIResponse that carries a non-2xx status.
+
+    The real SDK stores the parsed error body in ``data`` and records the
+    status code. It does not raise for a 4xx or a 5xx answer, so a test that
+    drives failure with ``side_effect`` exercises a path the SDK never takes
+    (issue #4025).
+    """
+
+    def __init__(self, status_code: int) -> None:
+        """Record the fields the exporter reads from one SDK answer."""
+        self.status_code = status_code  # The HTTP status the exporter must inspect.
+        self.data = {"detail": "error"}  # The parsed error body the SDK stores for a failed call.
+        self.url = "/api/v1/const/applications"  # The request URL, so an error line can name the path.
+        self.next: str | None = None  # No further page exists for a failed answer.
+        self.raw_data = ""  # The SDK keeps the unparsed body, which this test does not read.
+        self.headers: dict[str, str] = {}  # The SDK records response headers.
+        self.proxy_error = False  # A proxy failure is a separate SDK condition.
+
+
 @pytest.mark.parametrize("status_code", [404, 503])
 def test_run_logs_http_errors_without_writing(status_code: int, caplog: pytest.LogCaptureFixture) -> None:
     """An HTTP failure from the SDK must be logged and must not write rows."""
     fake = _fake_mist_helper()
-    callable_obj = MagicMock(side_effect=RuntimeError(f"HTTP {status_code}"))
+    callable_obj = MagicMock(return_value=_NonRaisingErrorResponse(status_code))  # The SDK returns, it never raises.
     with (
         caplog.at_level(logging.ERROR),
         patch("src.operations.exporting.export.simple_endpoint_exporter.SourceDependencyResolver", fake),
