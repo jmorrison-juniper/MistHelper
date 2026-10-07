@@ -15,7 +15,7 @@
 
 ## Baseline and validation
 
-- Prune only stale baseline entries.
+- Prune 36 stale entries and retain the two measured deferred entries.
 - Add one changelog fragment.
 - Run targeted tests.
 - Run compile, Ruff, Black, mypy, and symbol checks.

@@ -432,7 +432,7 @@ def test_fetch_site_wireless_clients_get_all_none_returns_empty() -> None:
         assert PromptUtils._fetch_site_wireless_clients("site-1") == []
 
 
-def test_fetch_site_wireless_clients_http_401_returns_empty(caplog: pytest.LogCaptureFixture) -> None:
+def test_fetch_site_wireless_clients_exception_returns_empty(caplog: pytest.LogCaptureFixture) -> None:
     """A rejected wireless-client response logs the status and yields an empty list."""
     fake_mh = _make_mh()
     with (

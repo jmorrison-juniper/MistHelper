@@ -78,17 +78,6 @@
   },
   {
     "category": "missing_failure_mode",
-    "explanation": "No malformed-JSON failure mode is exercised.",
-    "file_path": "mist-ops-platform/tests/unit/api/test_health.py",
-    "heuristic": false,
-    "line_number": 1,
-    "related_source": "mist-ops-platform/tests/unit/api/test_health.py",
-    "remediation": "Add a test where `.json()` raises `json.JSONDecodeError`.",
-    "rule_id": "missing_fm_malformed_json",
-    "severity": "medium"
-  },
-  {
-    "category": "missing_failure_mode",
     "explanation": "No empty-body failure mode is exercised.",
     "file_path": "mist-ops-platform/tests/unit/api/test_health.py",
     "heuristic": false,
@@ -100,13 +89,13 @@
   },
   {
     "category": "missing_failure_mode",
-    "explanation": "No connection-timeout failure mode is exercised.",
-    "file_path": "mist-ops-platform/tests/unit/api/test_session_security.py",
+    "explanation": "No malformed-JSON failure mode is exercised.",
+    "file_path": "mist-ops-platform/tests/unit/api/test_health.py",
     "heuristic": false,
     "line_number": 1,
-    "related_source": "mist-ops-platform/tests/unit/api/test_session_security.py",
-    "remediation": "Add a test that raises `requests.exceptions.Timeout` (or equivalent).",
-    "rule_id": "missing_fm_connection_timeout",
+    "related_source": "mist-ops-platform/tests/unit/api/test_health.py",
+    "remediation": "Add a test where `.json()` raises `json.JSONDecodeError`.",
+    "rule_id": "missing_fm_malformed_json",
     "severity": "medium"
   },
   {
@@ -122,13 +111,24 @@
   },
   {
     "category": "missing_failure_mode",
-    "explanation": "No HTTP 4xx failure mode is exercised.",
+    "explanation": "No connection-timeout failure mode is exercised.",
     "file_path": "mist-ops-platform/tests/unit/api/test_session_security.py",
     "heuristic": false,
     "line_number": 1,
     "related_source": "mist-ops-platform/tests/unit/api/test_session_security.py",
-    "remediation": "Add a test whose fake response has a 4xx status_code (e.g. 400, 404).",
-    "rule_id": "missing_fm_http_4xx",
+    "remediation": "Add a test that raises `requests.exceptions.Timeout` (or equivalent).",
+    "rule_id": "missing_fm_connection_timeout",
+    "severity": "medium"
+  },
+  {
+    "category": "missing_failure_mode",
+    "explanation": "No empty-body failure mode is exercised.",
+    "file_path": "mist-ops-platform/tests/unit/api/test_session_security.py",
+    "heuristic": false,
+    "line_number": 1,
+    "related_source": "mist-ops-platform/tests/unit/api/test_session_security.py",
+    "remediation": "Add a test whose fake response body is empty (e.g. b\"\").",
+    "rule_id": "missing_fm_empty_body",
     "severity": "medium"
   },
   {
@@ -154,22 +154,11 @@
     "severity": "medium"
   },
   {
-    "category": "missing_failure_mode",
-    "explanation": "No empty-body failure mode is exercised.",
-    "file_path": "mist-ops-platform/tests/unit/api/test_session_security.py",
-    "heuristic": false,
-    "line_number": 1,
-    "related_source": "mist-ops-platform/tests/unit/api/test_session_security.py",
-    "remediation": "Add a test whose fake response body is empty (e.g. b\"\").",
-    "rule_id": "missing_fm_empty_body",
-    "severity": "medium"
-  },
-  {
     "category": "weak_assertion",
     "explanation": "assert x is not None only verifies non-None state.",
     "file_path": "mist-ops-platform/tests/unit/api/test_session_security.py",
     "heuristic": false,
-    "line_number": 155,
+    "line_number": 176,
     "related_source": "mist-ops-platform/tests/unit/api/test_session_security.py",
     "remediation": "Assert on the actual value / type / structure you expect.",
     "rule_id": "weak_is_not_none",
@@ -180,7 +169,7 @@
     "explanation": "assert x is not None only verifies non-None state.",
     "file_path": "mist-ops-platform/tests/unit/api/test_session_security.py",
     "heuristic": false,
-    "line_number": 366,
+    "line_number": 401,
     "related_source": "mist-ops-platform/tests/unit/api/test_session_security.py",
     "remediation": "Assert on the actual value / type / structure you expect.",
     "rule_id": "weak_is_not_none",
@@ -221,17 +210,6 @@
   },
   {
     "category": "missing_failure_mode",
-    "explanation": "No HTTP 4xx failure mode is exercised.",
-    "file_path": "mist-ops-platform/tests/unit/mist/test_final_sdk_verification.py",
-    "heuristic": false,
-    "line_number": 1,
-    "related_source": "mist-ops-platform/tests/unit/mist/test_final_sdk_verification.py",
-    "remediation": "Add a test whose fake response has a 4xx status_code (e.g. 400, 404).",
-    "rule_id": "missing_fm_http_4xx",
-    "severity": "medium"
-  },
-  {
-    "category": "missing_failure_mode",
     "explanation": "No HTTP 5xx failure mode is exercised.",
     "file_path": "mist-ops-platform/tests/unit/mist/test_final_sdk_verification.py",
     "heuristic": false,
@@ -261,17 +239,6 @@
     "related_source": "mist-ops-platform/tests/unit/mist/test_firmware.py",
     "remediation": "Assert on the actual value / type / structure you expect.",
     "rule_id": "weak_is_not_none",
-    "severity": "medium"
-  },
-  {
-    "category": "missing_failure_mode",
-    "explanation": "No HTTP 4xx failure mode is exercised.",
-    "file_path": "mist-ops-platform/tests/unit/mist/test_registry_validation.py",
-    "heuristic": false,
-    "line_number": 1,
-    "related_source": "mist-ops-platform/tests/unit/mist/test_registry_validation.py",
-    "remediation": "Add a test whose fake response has a 4xx status_code (e.g. 400, 404).",
-    "rule_id": "missing_fm_http_4xx",
     "severity": "medium"
   },
   {
@@ -408,6 +375,28 @@
   },
   {
     "category": "weak_assertion",
+    "explanation": "assert x is not None only verifies non-None state.",
+    "file_path": "tests/contract/upgrade_portal/test_no_credential_leak.py",
+    "heuristic": false,
+    "line_number": 633,
+    "related_source": "tests/contract/upgrade_portal/test_no_credential_leak.py",
+    "remediation": "Assert on the actual value / type / structure you expect.",
+    "rule_id": "weak_is_not_none",
+    "severity": "medium"
+  },
+  {
+    "category": "weak_assertion",
+    "explanation": "assert x is not None only verifies non-None state.",
+    "file_path": "tests/contract/upgrade_portal/test_no_credential_leak.py",
+    "heuristic": false,
+    "line_number": 657,
+    "related_source": "tests/contract/upgrade_portal/test_no_credential_leak.py",
+    "remediation": "Assert on the actual value / type / structure you expect.",
+    "rule_id": "weak_is_not_none",
+    "severity": "medium"
+  },
+  {
+    "category": "weak_assertion",
     "explanation": "Test function 'test_a_refused_signin_answers_no_credential' contains no assertions.",
     "file_path": "tests/contract/upgrade_portal/test_no_credential_leak.py",
     "heuristic": false,
@@ -503,28 +492,6 @@
     "related_source": "tests/contract/upgrade_portal/test_no_credential_leak.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
-    "severity": "medium"
-  },
-  {
-    "category": "weak_assertion",
-    "explanation": "assert x is not None only verifies non-None state.",
-    "file_path": "tests/contract/upgrade_portal/test_no_credential_leak.py",
-    "heuristic": false,
-    "line_number": 633,
-    "related_source": "tests/contract/upgrade_portal/test_no_credential_leak.py",
-    "remediation": "Assert on the actual value / type / structure you expect.",
-    "rule_id": "weak_is_not_none",
-    "severity": "medium"
-  },
-  {
-    "category": "weak_assertion",
-    "explanation": "assert x is not None only verifies non-None state.",
-    "file_path": "tests/contract/upgrade_portal/test_no_credential_leak.py",
-    "heuristic": false,
-    "line_number": 657,
-    "related_source": "tests/contract/upgrade_portal/test_no_credential_leak.py",
-    "remediation": "Assert on the actual value / type / structure you expect.",
-    "rule_id": "weak_is_not_none",
     "severity": "medium"
   },
   {
@@ -1156,13 +1123,13 @@
   },
   {
     "category": "missing_failure_mode",
-    "explanation": "No HTTP 4xx failure mode is exercised.",
+    "explanation": "No empty-body failure mode is exercised.",
     "file_path": "tests/test_upgrade_portal_mist.py",
     "heuristic": false,
     "line_number": 1,
     "related_source": "tests/test_upgrade_portal_mist.py",
-    "remediation": "Add a test whose fake response has a 4xx status_code (e.g. 400, 404).",
-    "rule_id": "missing_fm_http_4xx",
+    "remediation": "Add a test whose fake response body is empty (e.g. b\"\").",
+    "rule_id": "missing_fm_empty_body",
     "severity": "medium"
   },
   {
@@ -1185,17 +1152,6 @@
     "related_source": "tests/test_upgrade_portal_mist.py",
     "remediation": "Add a test where `.json()` raises `json.JSONDecodeError`.",
     "rule_id": "missing_fm_malformed_json",
-    "severity": "medium"
-  },
-  {
-    "category": "missing_failure_mode",
-    "explanation": "No empty-body failure mode is exercised.",
-    "file_path": "tests/test_upgrade_portal_mist.py",
-    "heuristic": false,
-    "line_number": 1,
-    "related_source": "tests/test_upgrade_portal_mist.py",
-    "remediation": "Add a test whose fake response body is empty (e.g. b\"\").",
-    "rule_id": "missing_fm_empty_body",
     "severity": "medium"
   },
   {
@@ -2333,17 +2289,6 @@
   },
   {
     "category": "missing_failure_mode",
-    "explanation": "No HTTP 4xx failure mode is exercised.",
-    "file_path": "tests/unit/firmware/test_bulk_ap_running_version.py",
-    "heuristic": false,
-    "line_number": 1,
-    "related_source": "tests/unit/firmware/test_bulk_ap_running_version.py",
-    "remediation": "Add a test whose fake response has a 4xx status_code (e.g. 400, 404).",
-    "rule_id": "missing_fm_http_4xx",
-    "severity": "medium"
-  },
-  {
-    "category": "missing_failure_mode",
     "explanation": "No HTTP 5xx failure mode is exercised.",
     "file_path": "tests/unit/firmware/test_bulk_ap_running_version.py",
     "heuristic": false,
@@ -2351,17 +2296,6 @@
     "related_source": "tests/unit/firmware/test_bulk_ap_running_version.py",
     "remediation": "Add a test whose fake response has a 5xx status_code (e.g. 500, 503).",
     "rule_id": "missing_fm_http_5xx",
-    "severity": "medium"
-  },
-  {
-    "category": "missing_failure_mode",
-    "explanation": "No HTTP 4xx failure mode is exercised.",
-    "file_path": "tests/unit/firmware/test_firmware_manager_config.py",
-    "heuristic": false,
-    "line_number": 1,
-    "related_source": "tests/unit/firmware/test_firmware_manager_config.py",
-    "remediation": "Add a test whose fake response has a 4xx status_code (e.g. 400, 404).",
-    "rule_id": "missing_fm_http_4xx",
     "severity": "medium"
   },
   {
@@ -2487,17 +2421,6 @@
   },
   {
     "category": "missing_failure_mode",
-    "explanation": "No HTTP 4xx failure mode is exercised.",
-    "file_path": "tests/unit/gateway/test_device_template_cloner_extended.py",
-    "heuristic": false,
-    "line_number": 1,
-    "related_source": "tests/unit/gateway/test_device_template_cloner_extended.py",
-    "remediation": "Add a test whose fake response has a 4xx status_code (e.g. 400, 404).",
-    "rule_id": "missing_fm_http_4xx",
-    "severity": "medium"
-  },
-  {
-    "category": "missing_failure_mode",
     "explanation": "No HTTP 5xx failure mode is exercised.",
     "file_path": "tests/unit/gateway/test_device_template_cloner_extended.py",
     "heuristic": false,
@@ -2575,17 +2498,6 @@
   },
   {
     "category": "missing_failure_mode",
-    "explanation": "No HTTP 4xx failure mode is exercised.",
-    "file_path": "tests/unit/gateway/test_wan2_migration_manager.py",
-    "heuristic": false,
-    "line_number": 1,
-    "related_source": "tests/unit/gateway/test_wan2_migration_manager.py",
-    "remediation": "Add a test whose fake response has a 4xx status_code (e.g. 400, 404).",
-    "rule_id": "missing_fm_http_4xx",
-    "severity": "medium"
-  },
-  {
-    "category": "missing_failure_mode",
     "explanation": "No HTTP 5xx failure mode is exercised.",
     "file_path": "tests/unit/gateway/test_wan2_migration_manager.py",
     "heuristic": false,
@@ -2593,17 +2505,6 @@
     "related_source": "tests/unit/gateway/test_wan2_migration_manager.py",
     "remediation": "Add a test whose fake response has a 5xx status_code (e.g. 500, 503).",
     "rule_id": "missing_fm_http_5xx",
-    "severity": "medium"
-  },
-  {
-    "category": "missing_failure_mode",
-    "explanation": "No HTTP 4xx failure mode is exercised.",
-    "file_path": "tests/unit/gateway/test_wan2_migration_manager_extended.py",
-    "heuristic": false,
-    "line_number": 1,
-    "related_source": "tests/unit/gateway/test_wan2_migration_manager_extended.py",
-    "remediation": "Add a test whose fake response has a 4xx status_code (e.g. 400, 404).",
-    "rule_id": "missing_fm_http_4xx",
     "severity": "medium"
   },
   {
@@ -2626,17 +2527,6 @@
     "related_source": "tests/unit/gateway/test_wan_override_walker_extended.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
-    "severity": "medium"
-  },
-  {
-    "category": "missing_failure_mode",
-    "explanation": "No HTTP 4xx failure mode is exercised.",
-    "file_path": "tests/unit/gateway/test_wan_probe_device_override_manager.py",
-    "heuristic": false,
-    "line_number": 1,
-    "related_source": "tests/unit/gateway/test_wan_probe_device_override_manager.py",
-    "remediation": "Add a test whose fake response has a 4xx status_code (e.g. 400, 404).",
-    "rule_id": "missing_fm_http_4xx",
     "severity": "medium"
   },
   {
@@ -2692,6 +2582,17 @@
     "related_source": "tests/unit/input/test_prompt_client_utils.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
+    "severity": "medium"
+  },
+  {
+    "category": "weak_assertion",
+    "explanation": "assert x is not None only verifies non-None state.",
+    "file_path": "tests/unit/inventory/test_org_device_inventory_msp.py",
+    "heuristic": false,
+    "line_number": 342,
+    "related_source": "tests/unit/inventory/test_org_device_inventory_msp.py",
+    "remediation": "Assert on the actual value / type / structure you expect.",
+    "rule_id": "weak_is_not_none",
     "severity": "medium"
   },
   {
@@ -2784,17 +2685,6 @@
   },
   {
     "category": "weak_assertion",
-    "explanation": "assert x is not None only verifies non-None state.",
-    "file_path": "tests/unit/inventory/test_org_device_inventory_msp.py",
-    "heuristic": false,
-    "line_number": 342,
-    "related_source": "tests/unit/inventory/test_org_device_inventory_msp.py",
-    "remediation": "Assert on the actual value / type / structure you expect.",
-    "rule_id": "weak_is_not_none",
-    "severity": "medium"
-  },
-  {
-    "category": "weak_assertion",
     "explanation": "Test function 'test_display_combined_pivot_empty_short_circuits' contains no assertions.",
     "file_path": "tests/unit/inventory/test_org_device_inventory_msp.py",
     "heuristic": false,
@@ -2861,17 +2751,6 @@
   },
   {
     "category": "missing_failure_mode",
-    "explanation": "No HTTP 4xx failure mode is exercised.",
-    "file_path": "tests/unit/inventory/test_org_device_inventory_summary.py",
-    "heuristic": false,
-    "line_number": 1,
-    "related_source": "tests/unit/inventory/test_org_device_inventory_summary.py",
-    "remediation": "Add a test whose fake response has a 4xx status_code (e.g. 400, 404).",
-    "rule_id": "missing_fm_http_4xx",
-    "severity": "medium"
-  },
-  {
-    "category": "missing_failure_mode",
     "explanation": "No HTTP 5xx failure mode is exercised.",
     "file_path": "tests/unit/inventory/test_org_device_inventory_summary.py",
     "heuristic": false,
@@ -2883,17 +2762,6 @@
   },
   {
     "category": "missing_failure_mode",
-    "explanation": "No HTTP 4xx failure mode is exercised.",
-    "file_path": "tests/unit/inventory/test_org_device_inventory_summary_wave8.py",
-    "heuristic": false,
-    "line_number": 1,
-    "related_source": "tests/unit/inventory/test_org_device_inventory_summary_wave8.py",
-    "remediation": "Add a test whose fake response has a 4xx status_code (e.g. 400, 404).",
-    "rule_id": "missing_fm_http_4xx",
-    "severity": "medium"
-  },
-  {
-    "category": "missing_failure_mode",
     "explanation": "No HTTP 5xx failure mode is exercised.",
     "file_path": "tests/unit/inventory/test_org_device_inventory_summary_wave8.py",
     "heuristic": false,
@@ -2901,17 +2769,6 @@
     "related_source": "tests/unit/inventory/test_org_device_inventory_summary_wave8.py",
     "remediation": "Add a test whose fake response has a 5xx status_code (e.g. 500, 503).",
     "rule_id": "missing_fm_http_5xx",
-    "severity": "medium"
-  },
-  {
-    "category": "missing_failure_mode",
-    "explanation": "No HTTP 4xx failure mode is exercised.",
-    "file_path": "tests/unit/org/test_org_config_migration_conflicts.py",
-    "heuristic": false,
-    "line_number": 1,
-    "related_source": "tests/unit/org/test_org_config_migration_conflicts.py",
-    "remediation": "Add a test whose fake response has a 4xx status_code (e.g. 400, 404).",
-    "rule_id": "missing_fm_http_4xx",
     "severity": "medium"
   },
   {
@@ -2930,7 +2787,7 @@
     "explanation": "Test function 'test_a_clean_object_reaches_the_create_call' contains no assertions.",
     "file_path": "tests/unit/org/test_org_config_migration_conflicts.py",
     "heuristic": false,
-    "line_number": 631,
+    "line_number": 638,
     "related_source": "tests/unit/org/test_org_config_migration_conflicts.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
@@ -2941,7 +2798,7 @@
     "explanation": "Test function 'test_an_empty_batch_processes_nothing' contains no assertions.",
     "file_path": "tests/unit/org/test_org_config_migration_conflicts.py",
     "heuristic": false,
-    "line_number": 761,
+    "line_number": 770,
     "related_source": "tests/unit/org/test_org_config_migration_conflicts.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
@@ -3059,17 +2916,6 @@
   },
   {
     "category": "missing_failure_mode",
-    "explanation": "No HTTP 4xx failure mode is exercised.",
-    "file_path": "tests/unit/refactors/test_app_context_session_state.py",
-    "heuristic": false,
-    "line_number": 1,
-    "related_source": "tests/unit/refactors/test_app_context_session_state.py",
-    "remediation": "Add a test whose fake response has a 4xx status_code (e.g. 400, 404).",
-    "rule_id": "missing_fm_http_4xx",
-    "severity": "medium"
-  },
-  {
-    "category": "missing_failure_mode",
     "explanation": "No HTTP 5xx failure mode is exercised.",
     "file_path": "tests/unit/refactors/test_app_context_session_state.py",
     "heuristic": false,
@@ -3125,17 +2971,6 @@
   },
   {
     "category": "missing_failure_mode",
-    "explanation": "No HTTP 4xx failure mode is exercised.",
-    "file_path": "tests/unit/refactors/test_fast_mode_small_seams.py",
-    "heuristic": false,
-    "line_number": 1,
-    "related_source": "tests/unit/refactors/test_fast_mode_small_seams.py",
-    "remediation": "Add a test whose fake response has a 4xx status_code (e.g. 400, 404).",
-    "rule_id": "missing_fm_http_4xx",
-    "severity": "medium"
-  },
-  {
-    "category": "missing_failure_mode",
     "explanation": "No HTTP 5xx failure mode is exercised.",
     "file_path": "tests/unit/refactors/test_fast_mode_small_seams.py",
     "heuristic": false,
@@ -3143,17 +2978,6 @@
     "related_source": "tests/unit/refactors/test_fast_mode_small_seams.py",
     "remediation": "Add a test whose fake response has a 5xx status_code (e.g. 500, 503).",
     "rule_id": "missing_fm_http_5xx",
-    "severity": "medium"
-  },
-  {
-    "category": "missing_failure_mode",
-    "explanation": "No HTTP 4xx failure mode is exercised.",
-    "file_path": "tests/unit/refactors/test_main_entrypoint.py",
-    "heuristic": false,
-    "line_number": 1,
-    "related_source": "tests/unit/refactors/test_main_entrypoint.py",
-    "remediation": "Add a test whose fake response has a 4xx status_code (e.g. 400, 404).",
-    "rule_id": "missing_fm_http_4xx",
     "severity": "medium"
   },
   {
@@ -3176,17 +3000,6 @@
     "related_source": "tests/unit/refactors/test_maps_manager_launcher.py",
     "remediation": "Assert on the actual value / type / structure you expect.",
     "rule_id": "weak_is_not_none",
-    "severity": "medium"
-  },
-  {
-    "category": "missing_failure_mode",
-    "explanation": "No HTTP 4xx failure mode is exercised.",
-    "file_path": "tests/unit/refactors/test_reject_unsupported_flag_variants.py",
-    "heuristic": false,
-    "line_number": 1,
-    "related_source": "tests/unit/refactors/test_reject_unsupported_flag_variants.py",
-    "remediation": "Add a test whose fake response has a 4xx status_code (e.g. 400, 404).",
-    "rule_id": "missing_fm_http_4xx",
     "severity": "medium"
   },
   {
@@ -3231,17 +3044,6 @@
     "related_source": "tests/unit/refactors/test_wan2_migration_launcher.py",
     "remediation": "Assert on the actual value / type / structure you expect.",
     "rule_id": "weak_is_not_none",
-    "severity": "medium"
-  },
-  {
-    "category": "missing_failure_mode",
-    "explanation": "No HTTP 4xx failure mode is exercised.",
-    "file_path": "tests/unit/refactors/test_wlanradius_timer_manager_paths.py",
-    "heuristic": false,
-    "line_number": 1,
-    "related_source": "tests/unit/refactors/test_wlanradius_timer_manager_paths.py",
-    "remediation": "Add a test whose fake response has a 4xx status_code (e.g. 400, 404).",
-    "rule_id": "missing_fm_http_4xx",
     "severity": "medium"
   },
   {
@@ -3374,17 +3176,6 @@
     "related_source": "tests/unit/security/rogue_dhcp/test_operation.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
-    "severity": "medium"
-  },
-  {
-    "category": "missing_failure_mode",
-    "explanation": "No HTTP 4xx failure mode is exercised.",
-    "file_path": "tests/unit/security/rogue_dhcp/test_scanner.py",
-    "heuristic": false,
-    "line_number": 1,
-    "related_source": "tests/unit/security/rogue_dhcp/test_scanner.py",
-    "remediation": "Add a test whose fake response has a 4xx status_code (e.g. 400, 404).",
-    "rule_id": "missing_fm_http_4xx",
     "severity": "medium"
   },
   {
@@ -3587,17 +3378,6 @@
   },
   {
     "category": "missing_failure_mode",
-    "explanation": "No HTTP 4xx failure mode is exercised.",
-    "file_path": "tests/unit/site/address_audit/test_audit_engine.py",
-    "heuristic": false,
-    "line_number": 1,
-    "related_source": "tests/unit/site/address_audit/test_audit_engine.py",
-    "remediation": "Add a test whose fake response has a 4xx status_code (e.g. 400, 404).",
-    "rule_id": "missing_fm_http_4xx",
-    "severity": "medium"
-  },
-  {
-    "category": "missing_failure_mode",
     "explanation": "No HTTP 5xx failure mode is exercised.",
     "file_path": "tests/unit/site/address_audit/test_audit_engine.py",
     "heuristic": false,
@@ -3609,10 +3389,21 @@
   },
   {
     "category": "weak_assertion",
+    "explanation": "assert x is not None only verifies non-None state.",
+    "file_path": "tests/unit/site/address_audit/test_audit_engine.py",
+    "heuristic": false,
+    "line_number": 356,
+    "related_source": "tests/unit/site/address_audit/test_audit_engine.py",
+    "remediation": "Assert on the actual value / type / structure you expect.",
+    "rule_id": "weak_is_not_none",
+    "severity": "medium"
+  },
+  {
+    "category": "weak_assertion",
     "explanation": "Test function 'test_quit_skips_save_and_writeback' contains no assertions.",
     "file_path": "tests/unit/site/address_audit/test_audit_engine.py",
     "heuristic": false,
-    "line_number": 143,
+    "line_number": 146,
     "related_source": "tests/unit/site/address_audit/test_audit_engine.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
@@ -3623,7 +3414,7 @@
     "explanation": "Test function 'test_save_then_offers_writeback' contains no assertions.",
     "file_path": "tests/unit/site/address_audit/test_audit_engine.py",
     "heuristic": false,
-    "line_number": 151,
+    "line_number": 154,
     "related_source": "tests/unit/site/address_audit/test_audit_engine.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
@@ -3634,7 +3425,7 @@
     "explanation": "Test function 'test_gate_no_skips_review' contains no assertions.",
     "file_path": "tests/unit/site/address_audit/test_audit_engine.py",
     "heuristic": false,
-    "line_number": 161,
+    "line_number": 164,
     "related_source": "tests/unit/site/address_audit/test_audit_engine.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
@@ -3645,21 +3436,10 @@
     "explanation": "Test function 'test_gate_yes_runs_review_and_report' contains no assertions.",
     "file_path": "tests/unit/site/address_audit/test_audit_engine.py",
     "heuristic": false,
-    "line_number": 169,
+    "line_number": 172,
     "related_source": "tests/unit/site/address_audit/test_audit_engine.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
-    "severity": "medium"
-  },
-  {
-    "category": "weak_assertion",
-    "explanation": "assert x is not None only verifies non-None state.",
-    "file_path": "tests/unit/site/address_audit/test_audit_engine.py",
-    "heuristic": false,
-    "line_number": 353,
-    "related_source": "tests/unit/site/address_audit/test_audit_engine.py",
-    "remediation": "Assert on the actual value / type / structure you expect.",
-    "rule_id": "weak_is_not_none",
     "severity": "medium"
   },
   {
@@ -3818,17 +3598,6 @@
   },
   {
     "category": "missing_failure_mode",
-    "explanation": "No HTTP 4xx failure mode is exercised.",
-    "file_path": "tests/unit/ssh/test_cli_shell_manager.py",
-    "heuristic": false,
-    "line_number": 1,
-    "related_source": "tests/unit/ssh/test_cli_shell_manager.py",
-    "remediation": "Add a test whose fake response has a 4xx status_code (e.g. 400, 404).",
-    "rule_id": "missing_fm_http_4xx",
-    "severity": "medium"
-  },
-  {
-    "category": "missing_failure_mode",
     "explanation": "No HTTP 5xx failure mode is exercised.",
     "file_path": "tests/unit/ssh/test_cli_shell_manager.py",
     "heuristic": false,
@@ -3865,7 +3634,7 @@
     "explanation": "Test function 'test_skips_render_when_decode_returns_none' contains no assertions.",
     "file_path": "tests/unit/ssh/test_cli_shell_manager.py",
     "heuristic": false,
-    "line_number": 334,
+    "line_number": 345,
     "related_source": "tests/unit/ssh/test_cli_shell_manager.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
@@ -3876,7 +3645,7 @@
     "explanation": "Test function 'test_drops_when_not_connected' contains no assertions.",
     "file_path": "tests/unit/ssh/test_cli_shell_manager.py",
     "heuristic": false,
-    "line_number": 384,
+    "line_number": 395,
     "related_source": "tests/unit/ssh/test_cli_shell_manager.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
@@ -3887,10 +3656,21 @@
     "explanation": "Test function 'test_starts_background_thread' contains no assertions.",
     "file_path": "tests/unit/ssh/test_cli_shell_manager.py",
     "heuristic": false,
-    "line_number": 439,
+    "line_number": 450,
     "related_source": "tests/unit/ssh/test_cli_shell_manager.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
+    "severity": "medium"
+  },
+  {
+    "category": "weak_assertion",
+    "explanation": "assert x is not None only verifies non-None state.",
+    "file_path": "tests/unit/ssh/test_ssh_runner_manager_extended.py",
+    "heuristic": false,
+    "line_number": 215,
+    "related_source": "tests/unit/ssh/test_ssh_runner_manager_extended.py",
+    "remediation": "Assert on the actual value / type / structure you expect.",
+    "rule_id": "weak_is_not_none",
     "severity": "medium"
   },
   {
@@ -3913,17 +3693,6 @@
     "related_source": "tests/unit/ssh/test_ssh_runner_manager_extended.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
-    "severity": "medium"
-  },
-  {
-    "category": "weak_assertion",
-    "explanation": "assert x is not None only verifies non-None state.",
-    "file_path": "tests/unit/ssh/test_ssh_runner_manager_extended.py",
-    "heuristic": false,
-    "line_number": 215,
-    "related_source": "tests/unit/ssh/test_ssh_runner_manager_extended.py",
-    "remediation": "Assert on the actual value / type / structure you expect.",
-    "rule_id": "weak_is_not_none",
     "severity": "medium"
   },
   {
@@ -3983,13 +3752,13 @@
   },
   {
     "category": "missing_failure_mode",
-    "explanation": "No HTTP 4xx failure mode is exercised.",
+    "explanation": "No empty-body failure mode is exercised.",
     "file_path": "tests/unit/test_address_utils.py",
     "heuristic": false,
     "line_number": 1,
     "related_source": "tests/unit/test_address_utils.py",
-    "remediation": "Add a test whose fake response has a 4xx status_code (e.g. 400, 404).",
-    "rule_id": "missing_fm_http_4xx",
+    "remediation": "Add a test whose fake response body is empty (e.g. b\"\").",
+    "rule_id": "missing_fm_empty_body",
     "severity": "medium"
   },
   {
@@ -4012,17 +3781,6 @@
     "related_source": "tests/unit/test_address_utils.py",
     "remediation": "Add a test where `.json()` raises `json.JSONDecodeError`.",
     "rule_id": "missing_fm_malformed_json",
-    "severity": "medium"
-  },
-  {
-    "category": "missing_failure_mode",
-    "explanation": "No empty-body failure mode is exercised.",
-    "file_path": "tests/unit/test_address_utils.py",
-    "heuristic": false,
-    "line_number": 1,
-    "related_source": "tests/unit/test_address_utils.py",
-    "remediation": "Add a test whose fake response body is empty (e.g. b\"\").",
-    "rule_id": "missing_fm_empty_body",
     "severity": "medium"
   },
   {
@@ -4566,6 +4324,28 @@
   },
   {
     "category": "weak_assertion",
+    "explanation": "assert x is not None only verifies non-None state.",
+    "file_path": "tests/unit/test_bulk_ap_upgrader.py",
+    "heuristic": false,
+    "line_number": 1389,
+    "related_source": "tests/unit/test_bulk_ap_upgrader.py",
+    "remediation": "Assert on the actual value / type / structure you expect.",
+    "rule_id": "weak_is_not_none",
+    "severity": "medium"
+  },
+  {
+    "category": "weak_assertion",
+    "explanation": "assert x is not None only verifies non-None state.",
+    "file_path": "tests/unit/test_bulk_ap_upgrader.py",
+    "heuristic": false,
+    "line_number": 1398,
+    "related_source": "tests/unit/test_bulk_ap_upgrader.py",
+    "remediation": "Assert on the actual value / type / structure you expect.",
+    "rule_id": "weak_is_not_none",
+    "severity": "medium"
+  },
+  {
+    "category": "weak_assertion",
     "explanation": "Test function 'test_display_ap_discovery_summary' contains no assertions.",
     "file_path": "tests/unit/test_bulk_ap_upgrader.py",
     "heuristic": false,
@@ -4617,28 +4397,6 @@
     "related_source": "tests/unit/test_bulk_ap_upgrader.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
-    "severity": "medium"
-  },
-  {
-    "category": "weak_assertion",
-    "explanation": "assert x is not None only verifies non-None state.",
-    "file_path": "tests/unit/test_bulk_ap_upgrader.py",
-    "heuristic": false,
-    "line_number": 1389,
-    "related_source": "tests/unit/test_bulk_ap_upgrader.py",
-    "remediation": "Assert on the actual value / type / structure you expect.",
-    "rule_id": "weak_is_not_none",
-    "severity": "medium"
-  },
-  {
-    "category": "weak_assertion",
-    "explanation": "assert x is not None only verifies non-None state.",
-    "file_path": "tests/unit/test_bulk_ap_upgrader.py",
-    "heuristic": false,
-    "line_number": 1398,
-    "related_source": "tests/unit/test_bulk_ap_upgrader.py",
-    "remediation": "Assert on the actual value / type / structure you expect.",
-    "rule_id": "weak_is_not_none",
     "severity": "medium"
   },
   {
@@ -4907,17 +4665,6 @@
   },
   {
     "category": "missing_failure_mode",
-    "explanation": "No HTTP 4xx failure mode is exercised.",
-    "file_path": "tests/unit/test_config_utils_wave3.py",
-    "heuristic": false,
-    "line_number": 1,
-    "related_source": "tests/unit/test_config_utils_wave3.py",
-    "remediation": "Add a test whose fake response has a 4xx status_code (e.g. 400, 404).",
-    "rule_id": "missing_fm_http_4xx",
-    "severity": "medium"
-  },
-  {
-    "category": "missing_failure_mode",
     "explanation": "No HTTP 5xx failure mode is exercised.",
     "file_path": "tests/unit/test_config_utils_wave3.py",
     "heuristic": false,
@@ -5127,17 +4874,6 @@
   },
   {
     "category": "weak_assertion",
-    "explanation": "Test function 'test_clear_nonexistent' contains no assertions.",
-    "file_path": "tests/unit/test_e911_bssid.py",
-    "heuristic": false,
-    "line_number": 512,
-    "related_source": "tests/unit/test_e911_bssid.py",
-    "remediation": "Add at least one assertion verifying observable behavior.",
-    "rule_id": "weak_zero_assertions",
-    "severity": "medium"
-  },
-  {
-    "category": "weak_assertion",
     "explanation": "assert x is not None only verifies non-None state.",
     "file_path": "tests/unit/test_e911_bssid.py",
     "heuristic": false,
@@ -5145,6 +4881,17 @@
     "related_source": "tests/unit/test_e911_bssid.py",
     "remediation": "Assert on the actual value / type / structure you expect.",
     "rule_id": "weak_is_not_none",
+    "severity": "medium"
+  },
+  {
+    "category": "weak_assertion",
+    "explanation": "Test function 'test_clear_nonexistent' contains no assertions.",
+    "file_path": "tests/unit/test_e911_bssid.py",
+    "heuristic": false,
+    "line_number": 512,
+    "related_source": "tests/unit/test_e911_bssid.py",
+    "remediation": "Add at least one assertion verifying observable behavior.",
+    "rule_id": "weak_zero_assertions",
     "severity": "medium"
   },
   {
@@ -5258,22 +5005,11 @@
     "severity": "medium"
   },
   {
-    "category": "missing_failure_mode",
-    "explanation": "No HTTP 4xx failure mode is exercised.",
-    "file_path": "tests/unit/test_issue_2971_census_repairs.py",
-    "heuristic": false,
-    "line_number": 1,
-    "related_source": "tests/unit/test_issue_2971_census_repairs.py",
-    "remediation": "Add a test whose fake response has a 4xx status_code (e.g. 400, 404).",
-    "rule_id": "missing_fm_http_4xx",
-    "severity": "medium"
-  },
-  {
     "category": "weak_assertion",
     "explanation": "Test function 'test_guest_authorizations_503_suppresses_no_data_and_writes_no_file' contains no assertions.",
     "file_path": "tests/unit/test_issue_2971_census_repairs.py",
     "heuristic": false,
-    "line_number": 85,
+    "line_number": 92,
     "related_source": "tests/unit/test_issue_2971_census_repairs.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
@@ -5284,7 +5020,7 @@
     "explanation": "Test function 'test_mist_edge_events_503_suppresses_no_data_and_writes_no_file' contains no assertions.",
     "file_path": "tests/unit/test_issue_2971_census_repairs.py",
     "heuristic": false,
-    "line_number": 100,
+    "line_number": 124,
     "related_source": "tests/unit/test_issue_2971_census_repairs.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
@@ -5295,7 +5031,7 @@
     "explanation": "Test function 'test_nac_client_events_503_suppresses_no_data_and_writes_no_file' contains no assertions.",
     "file_path": "tests/unit/test_issue_2971_census_repairs.py",
     "heuristic": false,
-    "line_number": 113,
+    "line_number": 137,
     "related_source": "tests/unit/test_issue_2971_census_repairs.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
@@ -5306,7 +5042,7 @@
     "explanation": "Test function 'test_wan_usages_503_suppresses_no_data_and_writes_no_file' contains no assertions.",
     "file_path": "tests/unit/test_issue_2971_census_repairs.py",
     "heuristic": false,
-    "line_number": 126,
+    "line_number": 150,
     "related_source": "tests/unit/test_issue_2971_census_repairs.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
@@ -5376,17 +5112,6 @@
     "related_source": "tests/unit/test_issue_2971_status_slice5.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
-    "severity": "medium"
-  },
-  {
-    "category": "missing_failure_mode",
-    "explanation": "No HTTP 4xx failure mode is exercised.",
-    "file_path": "tests/unit/test_log_rotation.py",
-    "heuristic": false,
-    "line_number": 1,
-    "related_source": "tests/unit/test_log_rotation.py",
-    "remediation": "Add a test whose fake response has a 4xx status_code (e.g. 400, 404).",
-    "rule_id": "missing_fm_http_4xx",
     "severity": "medium"
   },
   {
@@ -5838,17 +5563,6 @@
     "related_source": "tests/unit/test_packet_capture.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
-    "severity": "medium"
-  },
-  {
-    "category": "missing_failure_mode",
-    "explanation": "No HTTP 4xx failure mode is exercised.",
-    "file_path": "tests/unit/test_prompt_network_device_utils.py",
-    "heuristic": false,
-    "line_number": 1,
-    "related_source": "tests/unit/test_prompt_network_device_utils.py",
-    "remediation": "Add a test whose fake response has a 4xx status_code (e.g. 400, 404).",
-    "rule_id": "missing_fm_http_4xx",
     "severity": "medium"
   },
   {
@@ -6678,17 +6392,6 @@
   },
   {
     "category": "missing_failure_mode",
-    "explanation": "No HTTP 4xx failure mode is exercised.",
-    "file_path": "tests/unit/test_wan_hub_group_manager.py",
-    "heuristic": false,
-    "line_number": 1,
-    "related_source": "tests/unit/test_wan_hub_group_manager.py",
-    "remediation": "Add a test whose fake response has a 4xx status_code (e.g. 400, 404).",
-    "rule_id": "missing_fm_http_4xx",
-    "severity": "medium"
-  },
-  {
-    "category": "missing_failure_mode",
     "explanation": "No HTTP 5xx failure mode is exercised.",
     "file_path": "tests/unit/test_wan_hub_group_manager.py",
     "heuristic": false,
@@ -6700,10 +6403,21 @@
   },
   {
     "category": "weak_assertion",
+    "explanation": "assert x is not None only verifies non-None state.",
+    "file_path": "tests/unit/test_wan_hub_group_manager.py",
+    "heuristic": false,
+    "line_number": 388,
+    "related_source": "tests/unit/test_wan_hub_group_manager.py",
+    "remediation": "Assert on the actual value / type / structure you expect.",
+    "rule_id": "weak_is_not_none",
+    "severity": "medium"
+  },
+  {
+    "category": "weak_assertion",
     "explanation": "Test function 'test_no_matching_paths' contains no assertions.",
     "file_path": "tests/unit/test_wan_hub_group_manager.py",
     "heuristic": false,
-    "line_number": 273,
+    "line_number": 288,
     "related_source": "tests/unit/test_wan_hub_group_manager.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
@@ -6714,7 +6428,7 @@
     "explanation": "Test function 'test_pod_value_range_validation' contains no assertions.",
     "file_path": "tests/unit/test_wan_hub_group_manager.py",
     "heuristic": false,
-    "line_number": 281,
+    "line_number": 296,
     "related_source": "tests/unit/test_wan_hub_group_manager.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
@@ -6725,7 +6439,7 @@
     "explanation": "Test function 'test_cancelled_by_user' contains no assertions.",
     "file_path": "tests/unit/test_wan_hub_group_manager.py",
     "heuristic": false,
-    "line_number": 353,
+    "line_number": 368,
     "related_source": "tests/unit/test_wan_hub_group_manager.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
@@ -6733,21 +6447,10 @@
   },
   {
     "category": "weak_assertion",
-    "explanation": "assert x is not None only verifies non-None state.",
-    "file_path": "tests/unit/test_wan_hub_group_manager.py",
-    "heuristic": false,
-    "line_number": 373,
-    "related_source": "tests/unit/test_wan_hub_group_manager.py",
-    "remediation": "Assert on the actual value / type / structure you expect.",
-    "rule_id": "weak_is_not_none",
-    "severity": "medium"
-  },
-  {
-    "category": "weak_assertion",
     "explanation": "Test function 'test_execute_calls_run' contains no assertions.",
     "file_path": "tests/unit/test_wan_hub_group_manager.py",
     "heuristic": false,
-    "line_number": 380,
+    "line_number": 395,
     "related_source": "tests/unit/test_wan_hub_group_manager.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
@@ -6758,7 +6461,7 @@
     "explanation": "Test function 'test_no_hub_spoke_vpns_exits' contains no assertions.",
     "file_path": "tests/unit/test_wan_hub_group_manager.py",
     "heuristic": false,
-    "line_number": 438,
+    "line_number": 453,
     "related_source": "tests/unit/test_wan_hub_group_manager.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
@@ -6769,7 +6472,7 @@
     "explanation": "Test function 'test_full_workflow_calls_action' contains no assertions.",
     "file_path": "tests/unit/test_wan_hub_group_manager.py",
     "heuristic": false,
-    "line_number": 472,
+    "line_number": 487,
     "related_source": "tests/unit/test_wan_hub_group_manager.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
@@ -6780,7 +6483,7 @@
     "explanation": "Test function 'test_action_1_calls_set_pod' contains no assertions.",
     "file_path": "tests/unit/test_wan_hub_group_manager.py",
     "heuristic": false,
-    "line_number": 540,
+    "line_number": 555,
     "related_source": "tests/unit/test_wan_hub_group_manager.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
@@ -6791,21 +6494,10 @@
     "explanation": "Test function 'test_action_2_calls_clear' contains no assertions.",
     "file_path": "tests/unit/test_wan_hub_group_manager.py",
     "heuristic": false,
-    "line_number": 548,
+    "line_number": 563,
     "related_source": "tests/unit/test_wan_hub_group_manager.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
-    "severity": "medium"
-  },
-  {
-    "category": "missing_failure_mode",
-    "explanation": "No HTTP 4xx failure mode is exercised.",
-    "file_path": "tests/unit/test_wan_vpn_builder.py",
-    "heuristic": false,
-    "line_number": 1,
-    "related_source": "tests/unit/test_wan_vpn_builder.py",
-    "remediation": "Add a test whose fake response has a 4xx status_code (e.g. 400, 404).",
-    "rule_id": "missing_fm_http_4xx",
     "severity": "medium"
   },
   {
@@ -6824,7 +6516,7 @@
     "explanation": "assert x is not None only verifies non-None state.",
     "file_path": "tests/unit/test_wan_vpn_builder.py",
     "heuristic": false,
-    "line_number": 373,
+    "line_number": 388,
     "related_source": "tests/unit/test_wan_vpn_builder.py",
     "remediation": "Assert on the actual value / type / structure you expect.",
     "rule_id": "weak_is_not_none",
@@ -6835,7 +6527,7 @@
     "explanation": "assert x is not None only verifies non-None state.",
     "file_path": "tests/unit/test_wan_vpn_builder.py",
     "heuristic": false,
-    "line_number": 387,
+    "line_number": 402,
     "related_source": "tests/unit/test_wan_vpn_builder.py",
     "remediation": "Assert on the actual value / type / structure you expect.",
     "rule_id": "weak_is_not_none",
@@ -6846,7 +6538,7 @@
     "explanation": "Test function 'test_no_profiles_exits' contains no assertions.",
     "file_path": "tests/unit/test_wan_vpn_builder.py",
     "heuristic": false,
-    "line_number": 420,
+    "line_number": 435,
     "related_source": "tests/unit/test_wan_vpn_builder.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
@@ -6857,7 +6549,7 @@
     "explanation": "Test function 'test_no_org_id_exits' contains no assertions.",
     "file_path": "tests/unit/test_wan_vpn_builder.py",
     "heuristic": false,
-    "line_number": 443,
+    "line_number": 458,
     "related_source": "tests/unit/test_wan_vpn_builder.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
@@ -6868,7 +6560,7 @@
     "explanation": "Test function 'test_decline_skips_updates' contains no assertions.",
     "file_path": "tests/unit/test_wan_vpn_builder.py",
     "heuristic": false,
-    "line_number": 516,
+    "line_number": 531,
     "related_source": "tests/unit/test_wan_vpn_builder.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
@@ -7250,17 +6942,6 @@
   },
   {
     "category": "missing_failure_mode",
-    "explanation": "No HTTP 4xx failure mode is exercised.",
-    "file_path": "tests/unit/ui/test_device_prompt_rename_guard.py",
-    "heuristic": false,
-    "line_number": 1,
-    "related_source": "tests/unit/ui/test_device_prompt_rename_guard.py",
-    "remediation": "Add a test whose fake response has a 4xx status_code (e.g. 400, 404).",
-    "rule_id": "missing_fm_http_4xx",
-    "severity": "medium"
-  },
-  {
-    "category": "missing_failure_mode",
     "explanation": "No HTTP 5xx failure mode is exercised.",
     "file_path": "tests/unit/ui/test_device_prompt_rename_guard.py",
     "heuristic": false,
@@ -7279,17 +6960,6 @@
     "related_source": "tests/unit/ui/test_function_executor.py",
     "remediation": "Assert on the actual value / type / structure you expect.",
     "rule_id": "weak_is_not_none",
-    "severity": "medium"
-  },
-  {
-    "category": "missing_failure_mode",
-    "explanation": "No HTTP 4xx failure mode is exercised.",
-    "file_path": "tests/unit/ui/test_interactive_display_utils.py",
-    "heuristic": false,
-    "line_number": 1,
-    "related_source": "tests/unit/ui/test_interactive_display_utils.py",
-    "remediation": "Add a test whose fake response has a 4xx status_code (e.g. 400, 404).",
-    "rule_id": "missing_fm_http_4xx",
     "severity": "medium"
   },
   {
@@ -7349,17 +7019,6 @@
   },
   {
     "category": "missing_failure_mode",
-    "explanation": "No HTTP 4xx failure mode is exercised.",
-    "file_path": "tests/unit/ui/test_level_discoverer.py",
-    "heuristic": false,
-    "line_number": 1,
-    "related_source": "tests/unit/ui/test_level_discoverer.py",
-    "remediation": "Add a test whose fake response has a 4xx status_code (e.g. 400, 404).",
-    "rule_id": "missing_fm_http_4xx",
-    "severity": "medium"
-  },
-  {
-    "category": "missing_failure_mode",
     "explanation": "No HTTP 5xx failure mode is exercised.",
     "file_path": "tests/unit/ui/test_level_discoverer.py",
     "heuristic": false,
@@ -7389,17 +7048,6 @@
     "related_source": "tests/unit/ui/test_parameter_collector.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
-    "severity": "medium"
-  },
-  {
-    "category": "missing_failure_mode",
-    "explanation": "No HTTP 4xx failure mode is exercised.",
-    "file_path": "tests/unit/ui/test_prompt_utils.py",
-    "heuristic": false,
-    "line_number": 1,
-    "related_source": "tests/unit/ui/test_prompt_utils.py",
-    "remediation": "Add a test whose fake response has a 4xx status_code (e.g. 400, 404).",
-    "rule_id": "missing_fm_http_4xx",
     "severity": "medium"
   },
   {
@@ -7591,17 +7239,6 @@
   },
   {
     "category": "missing_failure_mode",
-    "explanation": "No HTTP 4xx failure mode is exercised.",
-    "file_path": "tests/unit/upgrade_portal/test_upgrade_service_classify.py",
-    "heuristic": false,
-    "line_number": 1,
-    "related_source": "tests/unit/upgrade_portal/test_upgrade_service_classify.py",
-    "remediation": "Add a test whose fake response has a 4xx status_code (e.g. 400, 404).",
-    "rule_id": "missing_fm_http_4xx",
-    "severity": "medium"
-  },
-  {
-    "category": "missing_failure_mode",
     "explanation": "No HTTP 5xx failure mode is exercised.",
     "file_path": "tests/unit/upgrade_portal/test_upgrade_service_classify.py",
     "heuristic": false,
@@ -7609,17 +7246,6 @@
     "related_source": "tests/unit/upgrade_portal/test_upgrade_service_classify.py",
     "remediation": "Add a test whose fake response has a 5xx status_code (e.g. 500, 503).",
     "rule_id": "missing_fm_http_5xx",
-    "severity": "medium"
-  },
-  {
-    "category": "missing_failure_mode",
-    "explanation": "No HTTP 4xx failure mode is exercised.",
-    "file_path": "tests/unit/utils/test_tls_policy.py",
-    "heuristic": false,
-    "line_number": 1,
-    "related_source": "tests/unit/utils/test_tls_policy.py",
-    "remediation": "Add a test whose fake response has a 4xx status_code (e.g. 400, 404).",
-    "rule_id": "missing_fm_http_4xx",
     "severity": "medium"
   },
   {
@@ -7800,17 +7426,6 @@
   },
   {
     "category": "missing_failure_mode",
-    "explanation": "No malformed-JSON failure mode is exercised.",
-    "file_path": "tests/unit/web_portal/test_data_browser_pagination_bounds.py",
-    "heuristic": false,
-    "line_number": 1,
-    "related_source": "tests/unit/web_portal/test_data_browser_pagination_bounds.py",
-    "remediation": "Add a test where `.json()` raises `json.JSONDecodeError`.",
-    "rule_id": "missing_fm_malformed_json",
-    "severity": "medium"
-  },
-  {
-    "category": "missing_failure_mode",
     "explanation": "No empty-body failure mode is exercised.",
     "file_path": "tests/unit/web_portal/test_data_browser_pagination_bounds.py",
     "heuristic": false,
@@ -7822,13 +7437,13 @@
   },
   {
     "category": "missing_failure_mode",
-    "explanation": "No HTTP 4xx failure mode is exercised.",
-    "file_path": "tests/unit/web_portal/test_operations_silent_failure.py",
+    "explanation": "No malformed-JSON failure mode is exercised.",
+    "file_path": "tests/unit/web_portal/test_data_browser_pagination_bounds.py",
     "heuristic": false,
     "line_number": 1,
-    "related_source": "tests/unit/web_portal/test_operations_silent_failure.py",
-    "remediation": "Add a test whose fake response has a 4xx status_code (e.g. 400, 404).",
-    "rule_id": "missing_fm_http_4xx",
+    "related_source": "tests/unit/web_portal/test_data_browser_pagination_bounds.py",
+    "remediation": "Add a test where `.json()` raises `json.JSONDecodeError`.",
+    "rule_id": "missing_fm_malformed_json",
     "severity": "medium"
   },
   {
@@ -7972,17 +7587,6 @@
     "related_source": "tests/unit/websocket/test_manager_thread_join.py",
     "remediation": "Assert on the actual value / type / structure you expect.",
     "rule_id": "weak_is_not_none",
-    "severity": "medium"
-  },
-  {
-    "category": "missing_failure_mode",
-    "explanation": "No HTTP 4xx failure mode is exercised.",
-    "file_path": "tests/unit/websocket/test_service_ping_discovery.py",
-    "heuristic": false,
-    "line_number": 1,
-    "related_source": "tests/unit/websocket/test_service_ping_discovery.py",
-    "remediation": "Add a test whose fake response has a 4xx status_code (e.g. 400, 404).",
-    "rule_id": "missing_fm_http_4xx",
     "severity": "medium"
   },
   {

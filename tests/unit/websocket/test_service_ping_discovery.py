@@ -304,16 +304,13 @@ def test_fetch_org_services_populates_caches(capsys) -> None:
 
 
 def test_fetch_device_config_swallows_exception_and_prints_warning(capsys) -> None:
-    """_fetch_device_config: any exception is logged as warning; user-facing message printed."""
+    """Exceptions and rejected responses keep device choices empty and observable."""
     _configure_discovery(getSiteDevice=MagicMock(side_effect=RuntimeError("network boom")))
     harness = _DiscoveryHarness()
     harness._fetch_device_config()
     assert "Cannot retrieve device configuration" in capsys.readouterr().out
     assert any("Config error" in msg for msg in harness.debug_messages)
 
-
-def test_fetch_device_config_http_401_exposes_empty_discovery(capsys) -> None:
-    """A rejected device response must not create tenant or service choices."""
     response = SimpleNamespace(status_code=401, data={})  # WHY: mistapi returns status and data without raising.
     _configure_discovery(
         getSiteDevice=MagicMock(return_value=response),

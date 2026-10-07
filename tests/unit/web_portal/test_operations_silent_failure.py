@@ -17,12 +17,10 @@ from __future__ import annotations
 
 import logging
 import sys
-from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 # Import the helpers directly so the tests do not need a running Flask app.
 from web_portal.routes.operations import (
-    API_ERROR_REASON,
     _fetch_org_sites,
     _fetch_site_devices,
     _fetch_wired_clients,
@@ -153,6 +151,8 @@ class TestFetchWirelessClientsSilentFailure:
 
     def test_http_401_returns_explicit_failure_reason(self, caplog):
         """A rejected wireless response must not look like a valid empty site."""
+        from types import SimpleNamespace  # WHY: keep the response helper local to this status proof.
+
         mistapi_mock = MagicMock()  # WHY: inject the response at the direct SDK boundary.
         mistapi_mock.api.v1.sites.clients.searchSiteWirelessClients.return_value = SimpleNamespace(
             status_code=401,
@@ -161,7 +161,7 @@ class TestFetchWirelessClientsSilentFailure:
         with caplog.at_level(logging.ERROR, logger="web_portal.routes.operations"):
             result = _fetch_wireless_clients(mistapi_mock, _fake_apisession(), "site-xyz")
         assert result == []  # WHY: the pick list remains compatible with existing list callers.
-        assert result.reason == API_ERROR_REASON  # WHY: the caller can distinguish rejection from zero clients.
+        assert result.reason == "The portal could not reach the Mist API. Try again."
         assert "401" in caplog.text  # WHY: the operator log keeps the exact cloud status.
 
     def test_logs_exception_on_api_failure(self, caplog):

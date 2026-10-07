@@ -49,14 +49,9 @@ WIDER_ROWS: tuple[dict[str, Any], ...] = (
     {"type": "gateway", "model": "128t-1000"},
 )
 
-
-def _legacy_manager_type() -> type[Any]:
-    """Return the manager class for its pure inventory discriminator."""
-    from src.operations.execution.firmware.firmware_manager import (
-        FirmwareManager,
-    )  # WHY: the tests call one pure predicate and no firmware request.
-
-    return FirmwareManager  # WHY: preserve direct comparison with the legacy method.
+FirmwareManager = __import__(
+    "src.operations.execution.firmware.firmware_manager", fromlist=["FirmwareManager"]
+).FirmwareManager
 
 
 def legacy_family(row: dict[str, Any]) -> bool:
@@ -73,7 +68,7 @@ def legacy_family(row: dict[str, Any]) -> bool:
     Returns:
         True when the legacy predicate reports a session smart router.
     """
-    return bool(_legacy_manager_type()._is_ssr_inventory_row(object(), row))
+    return bool(FirmwareManager._is_ssr_inventory_row(object(), row))
 
 
 class TestAgreementWithTheLegacyPredicate:
@@ -134,7 +129,7 @@ class TestFreedomFromModuleState:
         and nothing else, so a caller needs no manager object.
         """
         assert list(inspect.signature(upgrade_service.classify_gateway).parameters) == ["device"]
-        assert list(inspect.signature(_legacy_manager_type()._is_ssr_inventory_row).parameters) == ["self", "gw"]
+        assert list(inspect.signature(FirmwareManager._is_ssr_inventory_row).parameters) == ["self", "gw"]
 
     def test_returns_the_same_family_after_every_legacy_global_changes(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """A change to the four globals of the legacy module changes no answer.

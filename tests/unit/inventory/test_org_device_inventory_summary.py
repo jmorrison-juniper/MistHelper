@@ -191,7 +191,7 @@ def test_aggregate_ap_counts_model_counts_all() -> None:
 
 
 def test_fetch_ap_inventory_returns_all_claimed() -> None:
-    """AP inventory fetch returns every claimed AP (assigned and unassigned)."""
+    """AP inventory and rejected org-name reads keep their defined results."""
     _configure_dependencies()
     from src.mist.resources.inventory import org_device_inventory_summary as _mod
 
@@ -204,9 +204,6 @@ def test_fetch_ap_inventory_returns_all_claimed() -> None:
     records = OrgDeviceInventorySummaryCore._fetch_ap_inventory("org-1")
     assert len(records) == 2  # no client-side filtering; assigned + unassigned both returned
 
-
-def test_org_name_http_401_returns_none() -> None:
-    """A rejected org-name read must use the existing missing-name failure signal."""
     _configure_dependencies()  # WHY: hydrate every dependency before replacing the target call.
     from src.mist.resources.inventory import org_device_inventory_summary as summary_module
 

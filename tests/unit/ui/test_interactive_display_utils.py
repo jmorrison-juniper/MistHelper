@@ -12,14 +12,9 @@ import sys  # WHY: patch.dict on sys.modules to inject a fake MistHelper module 
 from types import SimpleNamespace  # WHY: build lightweight stub for the MistHelper attribute surface
 from unittest.mock import MagicMock, patch  # WHY: MagicMock for exporter/fetcher; patch for module swap
 
-
-def _display_utils():
-    """Return the display helper after the fake module boundary is ready."""
-    from src.interfaces.visualization.ui.interactive_display_utils import (
-        InteractiveDisplayUtils,
-    )  # WHY: tests isolate every lazy MistHelper dependency.
-
-    return InteractiveDisplayUtils  # WHY: expose the real static helper methods.
+InteractiveDisplayUtils = __import__(
+    "src.interfaces.visualization.ui.interactive_display_utils", fromlist=["InteractiveDisplayUtils"]
+).InteractiveDisplayUtils
 
 
 def _install_fake_misthelper(**attrs: object) -> MagicMock:
@@ -37,7 +32,7 @@ def test_site_inventory_dispatches_when_site_selected(caplog) -> None:
     fake = _install_fake_misthelper(PromptUtils=prompt_utils, SiteDeviceExporter=exporter)  # WHY: attach both
     with patch.dict(sys.modules, {"MistHelper": fake}):  # WHY: force importlib.import_module to return our fake
         with caplog.at_level("INFO"):  # WHY: capture the info-level trace for assertion
-            _display_utils().site_inventory()  # WHY: execute the happy path
+            InteractiveDisplayUtils.site_inventory()  # WHY: execute the happy path
     exporter.device_inventory.assert_called_once_with("site-abc")  # WHY: exporter routed with selected site id
     assert any("selected site_id" in rec.message for rec in caplog.records)  # WHY: log trail preserved
 
@@ -49,7 +44,7 @@ def test_site_inventory_warns_when_no_site_selected(caplog) -> None:
     fake = _install_fake_misthelper(PromptUtils=prompt_utils, SiteDeviceExporter=exporter)
     with patch.dict(sys.modules, {"MistHelper": fake}):
         with caplog.at_level("WARNING"):
-            _display_utils().site_inventory()
+            InteractiveDisplayUtils.site_inventory()
     exporter.device_inventory.assert_not_called()  # WHY: no site -> no exporter call
     assert any("No site selected" in rec.message for rec in caplog.records)  # WHY: warning path executed
 
@@ -60,7 +55,7 @@ def test_device_stats_uses_device_data_fetcher() -> None:
     device_data_fetcher = MagicMock(return_value=fetcher_instance)  # WHY: constructor returns our mock
     fake = _install_fake_misthelper(DeviceDataFetcher=device_data_fetcher)  # WHY: MistHelper.DeviceDataFetcher
     with patch.dict(sys.modules, {"MistHelper": fake}):
-        _display_utils().device_stats(site_id="site-x", device_id="dev-y")  # WHY: exercise stats path
+        InteractiveDisplayUtils.device_stats(site_id="site-x", device_id="dev-y")  # WHY: exercise stats path
     device_data_fetcher.assert_called_once()  # WHY: fetcher must be constructed exactly once
     fetcher_instance.fetch.assert_called_once_with()  # WHY: fetch() is dispatched on the built instance
     config_arg = device_data_fetcher.call_args.args[0]  # WHY: sole positional arg is the DeviceFetchConfig
@@ -75,7 +70,7 @@ def test_device_tests_targets_gateway_devices() -> None:
     device_data_fetcher = MagicMock(return_value=fetcher_instance)
     fake = _install_fake_misthelper(DeviceDataFetcher=device_data_fetcher)
     with patch.dict(sys.modules, {"MistHelper": fake}):
-        _display_utils().device_tests()  # WHY: exercise synthetic-test fetch
+        InteractiveDisplayUtils.device_tests()  # WHY: exercise synthetic-test fetch
     fetcher_instance.fetch.assert_called_once_with()  # WHY: fetch() must be invoked
     config_arg = device_data_fetcher.call_args.args[0]
     assert config_arg.device_type == "gateway"  # WHY: only gateway devices support synthetic tests
@@ -88,7 +83,7 @@ def test_device_config_dispatches_default_config_fetch() -> None:
     device_data_fetcher = MagicMock(return_value=fetcher_instance)
     fake = _install_fake_misthelper(DeviceDataFetcher=device_data_fetcher)
     with patch.dict(sys.modules, {"MistHelper": fake}):
-        _display_utils().device_config()  # WHY: exercise config fetch
+        InteractiveDisplayUtils.device_config()  # WHY: exercise config fetch
     fetcher_instance.fetch.assert_called_once_with()
     config_arg = device_data_fetcher.call_args.args[0]
     assert config_arg.filename == "DeviceConfig.csv"  # WHY: legacy output filename preserved

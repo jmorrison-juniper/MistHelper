@@ -1,6 +1,5 @@
 """Unit tests for AddressAuditEngine classification + assembly (1003-site-address-audit)."""
 
-from typing import Any
 from unittest.mock import MagicMock
 
 from src.mist.resources.site.address_audit import audit_engine as eng_mod
@@ -11,14 +10,9 @@ _MIST_NO_SUITE = {"address": "100 Main St", "city": "Town", "state": "FL", "zip"
 _MIST_WITH_SUITE = {"address": "100 Main St Suite 5", "city": "Town", "state": "FL", "zip": "33000"}
 _CSV = {"address": "100 Main St", "city": "Town", "state": "FL", "zip": "33000"}
 
-
-def _new_engine(*args: Any, **kwargs: Any) -> Any:
-    """Build an audit engine for local classification and assembly tests."""
-    from src.mist.resources.site.address_audit.audit_engine import (
-        AddressAuditEngine,
-    )  # WHY: every external collaborator is absent or replaced with a test double.
-
-    return AddressAuditEngine(*args, **kwargs)  # WHY: preserve constructor behavior with injected collaborators.
+AddressAuditEngine = __import__(
+    "src.mist.resources.site.address_audit.audit_engine", fromlist=["AddressAuditEngine"]
+).AddressAuditEngine
 
 
 def _rr(canonical, ambiguous=False, source="nominatim"):
@@ -31,7 +25,7 @@ class TestClassify:
 
     def setup_method(self):
         """Fresh engine per test."""
-        self.engine = _new_engine()
+        self.engine = AddressAuditEngine()
 
     def test_no_result(self):
         """No canonical address -> NO_RESULT."""
@@ -116,7 +110,7 @@ class TestSameStreet:
 
     def setup_method(self):
         """Fresh engine per test."""
-        self.engine = _new_engine()
+        self.engine = AddressAuditEngine()
 
     def test_opposite_directionals_differ(self):
         """East vs West on the same street name are different streets."""
@@ -144,7 +138,7 @@ class TestWriteBackWiring:
 
     def _engine_with_mocks(self):
         """Build an engine whose renderer/reporter/corrector are mocks."""
-        engine = _new_engine(renderer=MagicMock(), reporter=MagicMock())
+        engine = AddressAuditEngine(renderer=MagicMock(), reporter=MagicMock())
         corrector = MagicMock()
         engine._make_corrector = staticmethod(lambda _api: corrector)  # Inject the mock corrector.
         return engine, corrector
@@ -239,7 +233,7 @@ class TestConsoleLogSuppression:
         root.addHandler(console)
         root.addHandler(file_handler)
         try:
-            with _new_engine()._console_logs_to_file_only():
+            with AddressAuditEngine()._console_logs_to_file_only():
                 assert len(console.filters) == 1  # Console handler filtered.
                 assert len(file_handler.filters) == 0  # File handler untouched.
             assert len(console.filters) == 0  # Filter removed after the run.
@@ -255,7 +249,7 @@ class TestBuildAuditResult:
 
     def test_unmatched_row(self):
         """An unmatched site yields UNMATCHED and never calls the resolver."""
-        engine = _new_engine()
+        engine = AddressAuditEngine()
         row = AddressRow(serial="9999999999", model="SSR130", address="1 A St", city="T", state="FL", zip_code="1")
         site = MatchedSite(match_strategy="unmatched")
 
@@ -278,7 +272,7 @@ class TestBusinessAuthorityPrompt:
 
     def test_prompt_business_csv_skip(self, monkeypatch):
         """Entering 'q' skips authoritative CSV selection cleanly."""
-        engine = _new_engine()  # Real engine; prompt path is pure input logic.
+        engine = AddressAuditEngine()  # Real engine; prompt path is pure input logic.
         monkeypatch.setattr(
             eng_mod.InputUtils, "safe_input", staticmethod(lambda *a, **k: "q")
         )  # Simulate operator skip.
@@ -287,7 +281,7 @@ class TestBusinessAuthorityPrompt:
 
     def test_prompt_business_csv_selects_index(self, monkeypatch):
         """A valid index returns the selected business CSV path."""
-        engine = _new_engine()  # Real engine; prompt path is pure input logic.
+        engine = AddressAuditEngine()  # Real engine; prompt path is pure input logic.
         monkeypatch.setattr(
             eng_mod.InputUtils, "safe_input", staticmethod(lambda *a, **k: "2")
         )  # Simulate index selection.
@@ -300,7 +294,7 @@ class TestBusinessAuthorityIntegration:
 
     def test_build_audit_result_passes_authoritative_address(self):
         """A unique authoritative match is forwarded to the resolver candidates payload."""
-        engine = _new_engine()  # Real engine with injectable resolver stub below.
+        engine = AddressAuditEngine()  # Real engine with injectable resolver stub below.
         row = AddressRow(  # Primary row from the customer CSV.
             serial="1234567890",
             model="SSR130",
@@ -370,7 +364,7 @@ class TestResolveAndClassify:
 
     def test_zero_rows_yields_empty(self):
         """An empty input produces an empty result list (no exception)."""
-        engine = _new_engine()
+        engine = AddressAuditEngine()
         ctx = eng_mod._AuditContext(  # WHY: Bundle context for the refactored resolver helper.
             business="",  # WHY: Empty business string keeps prefix logic inert.
             ui_geocode=False,  # WHY: Tier-3 disabled so no external geocode occurs.
@@ -495,7 +489,7 @@ class TestConflictingHints:
 
     def test_conflicting_hints_short_circuits(self):
         """When the resolver reports conflicting hints, the row is review-only and resolve() never runs."""
-        engine = _new_engine()  # Real engine; resolver is a guard stub below.
+        engine = AddressAuditEngine()  # Real engine; resolver is a guard stub below.
         row = AddressRow(
             serial="111", model="SSR130", address="2825 Crossroads Blvd", city="Waterloo", state="IA", zip_code="50702"
         )  # CSV hint.

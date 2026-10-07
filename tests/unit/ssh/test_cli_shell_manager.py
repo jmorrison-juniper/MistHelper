@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import logging
 import sys
-from types import ModuleType, SimpleNamespace
+from types import ModuleType
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -201,6 +201,8 @@ class TestCreateSession:
 
     def test_http_401_returns_none_and_logs_status(self, fake_mh, caplog):
         """A refused shell request returns no URL and names the HTTP status."""
+        from types import SimpleNamespace  # WHY: keep the response helper local to this status proof.
+
         response = SimpleNamespace(status_code=401, data={"detail": "Unauthorized"})  # WHY: model SDK behavior.
         with patch("src.operations.execution.ssh.cli_shell_manager.mistapi") as mistapi_mock:  # WHY: isolate cloud.
             mistapi_mock.api.v1.sites.devices.createSiteDeviceShellSession.return_value = response  # WHY: no raise.

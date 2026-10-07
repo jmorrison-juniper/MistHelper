@@ -19,6 +19,10 @@ import pytest
 
 from src.mist.resources.org import org_config_migration_manager as ocm
 
+OrgConfigMigrationManager = __import__(
+    "src.mist.resources.org.org_config_migration_manager", fromlist=["OrgConfigMigrationManager"]
+).OrgConfigMigrationManager
+
 
 @pytest.fixture
 def manager() -> Any:

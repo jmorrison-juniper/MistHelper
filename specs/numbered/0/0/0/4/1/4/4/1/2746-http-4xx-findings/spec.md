@@ -5,13 +5,13 @@
 Issue #2746 reports 71 `missing_fm_http_4xx` findings. Commit `799a0c2cf`
 reports 38 findings. The baseline contains the same 38 finding identities.
 
-PR #4067 owned `tests/unit/test_rate_limiting.py` during the repair. PR #4076
-owns `tests/unit/org/test_org_config_migration_workflow.py`. This change does
-not edit either file while its ownership restriction applies.
+PR #4067 owned `tests/unit/test_rate_limiting.py` during the repair and closed
+without merging. The remaining test exposes a status guard gap in the protected
+`src/foundation/support/utils/rate_limiting.py` file, so this change defers it.
 
-PR #4076 repairs the false Mist SDK exception behavior. Its positional status
-helper call can remain a separate analyzer finding until the call names the
-status argument.
+PR #4076 owns `tests/unit/org/test_org_config_migration_workflow.py`. It repairs
+the false Mist SDK exception behavior. Its positional status helper call leaves
+the analyzer finding live until the call names the status argument.
 
 ## Requirements
 

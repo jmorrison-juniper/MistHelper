@@ -14,7 +14,10 @@ import pytest
 
 from src.foundation.support.utils.tls_policy import SKIP_VERIFY_ENV_VAR, TLSVerificationPolicy
 from src.mist.resources.inventory.csv_comparator import ComparatorFlags
-from src.mist.resources.site.address_audit import audit_engine as audit_engine_module
+
+AddressAuditEngine = __import__(
+    "src.mist.resources.site.address_audit.audit_engine", fromlist=["AddressAuditEngine"]
+).AddressAuditEngine
 
 REPO_ROOT = Path(__file__).resolve().parents[3]  # Repository root, for the source sweep test.
 
@@ -84,7 +87,7 @@ class TestCallSiteDefaults:
 
     def test_audit_engine_defaults_secure(self) -> None:
         """The address audit verifies certificates when nothing is set."""
-        assert audit_engine_module.AddressAuditEngine._skip_ssl_verify() is False  # Was True before issue #1914.
+        assert AddressAuditEngine._skip_ssl_verify() is False  # Was True before issue #1914.
 
     def test_comparator_flags_default_secure(self) -> None:
         """The inventory comparator verifies certificates by default."""

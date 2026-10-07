@@ -10,14 +10,9 @@ import pytest
 
 from src.interfaces.visualization.ui.runtime.level_discoverer import DOC_SHORT_LIMIT
 
-
-def _discoverer_type():
-    """Return the discoverer class for local import and inspection tests."""
-    from src.interfaces.visualization.ui.runtime.level_discoverer import (
-        LevelDiscoverer,
-    )  # WHY: the tests use fake modules and no Mist API request.
-
-    return LevelDiscoverer  # WHY: expose the real class to each focused test.
+LevelDiscoverer = __import__(
+    "src.interfaces.visualization.ui.runtime.level_discoverer", fromlist=["LevelDiscoverer"]
+).LevelDiscoverer
 
 
 def _install_fake_module(monkeypatch: pytest.MonkeyPatch, dotted: str, contents: dict[str, Any]) -> types.ModuleType:
@@ -33,19 +28,19 @@ def _install_fake_module(monkeypatch: pytest.MonkeyPatch, dotted: str, contents:
 def test_compose_module_path_root(tui_stub) -> None:
     """Empty current_path -> base mistapi.api.v1 module path."""
     tui_stub.current_path = []  # Root level
-    assert _discoverer_type()(tui_stub)._compose_module_path() == "mistapi.api.v1"
+    assert LevelDiscoverer(tui_stub)._compose_module_path() == "mistapi.api.v1"
 
 
 def test_compose_module_path_nested(tui_stub) -> None:
     """Nested current_path -> dotted suffix."""
     tui_stub.current_path = ["orgs", "sites"]  # Two-level deep nav
-    assert _discoverer_type()(tui_stub)._compose_module_path() == "mistapi.api.v1.orgs.sites"
+    assert LevelDiscoverer(tui_stub)._compose_module_path() == "mistapi.api.v1.orgs.sites"
 
 
 def test_import_failure_sets_error_item(tui_stub) -> None:
     """An ImportError populates a single 'error' item and returns None."""
     tui_stub.current_path = ["doesnotexist"]  # Force ImportError
-    _discoverer_type()(tui_stub).discover()  # Run discovery
+    LevelDiscoverer(tui_stub).discover()  # Run discovery
     assert tui_stub.current_items[0]["type"] == "error"  # Error sentinel set
     assert "Module not found" in tui_stub.current_items[0]["description"]
 
@@ -69,7 +64,7 @@ def test_discover_populates_modules_and_functions(tui_stub, monkeypatch: pytest.
     }
     _install_fake_module(monkeypatch, "mistapi.api.v1.fake", parent_contents)  # Parent of those
     tui_stub.current_path = ["fake"]  # Point discovery at fake parent
-    _discoverer_type()(tui_stub).discover()  # Trigger walk
+    LevelDiscoverer(tui_stub).discover()  # Trigger walk
     names = [item["name"] for item in tui_stub.current_items]  # Extract names
     assert "sub" in names and "some_func" in names  # Both expected entries present
     assert "SomeClass" not in names and "_private" not in names  # Class + private excluded
@@ -93,7 +88,7 @@ def test_discover_sorts_modules_before_functions(tui_stub, monkeypatch: pytest.M
         {"zebra": zebra, "alpha_func": alpha, "alpha": mod_a},
     )
     tui_stub.current_path = ["sortme"]  # Point at sortme
-    _discoverer_type()(tui_stub).discover()  # Run discovery
+    LevelDiscoverer(tui_stub).discover()  # Run discovery
     ordered = [(item["type"], item["name"]) for item in tui_stub.current_items]
     assert ordered[0][0] == "module"  # First entry is a module
     assert ordered[-1][0] == "function"  # Last entry is a function
@@ -107,7 +102,7 @@ def test_empty_module_produces_empty_sentinel(tui_stub, monkeypatch: pytest.Monk
     """A module with no eligible names produces the (empty) sentinel record."""
     _install_fake_module(monkeypatch, "mistapi.api.v1.blank", {})  # No usable attributes
     tui_stub.current_path = ["blank"]  # Point at blank module
-    _discoverer_type()(tui_stub).discover()  # Trigger discovery
+    LevelDiscoverer(tui_stub).discover()  # Trigger discovery
     assert tui_stub.current_items == [
         {"type": "empty", "name": "(empty)", "description": "No items found at this level"}
     ]
@@ -116,18 +111,18 @@ def test_empty_module_produces_empty_sentinel(tui_stub, monkeypatch: pytest.Monk
 def test_short_doc_truncation_first_line_only() -> None:
     """``_short_doc`` truncates long first lines and discards subsequent lines."""
     long_doc = "x" * (DOC_SHORT_LIMIT + 50) + "\nignored second line"  # Long first line
-    short = _discoverer_type()._short_doc(long_doc)  # Static helper call
+    short = LevelDiscoverer._short_doc(long_doc)  # Static helper call
     assert short.endswith("...")  # Ellipsis appended
     assert len(short) == DOC_SHORT_LIMIT  # Capped at limit
-    assert _discoverer_type()._short_doc(None) == "No description"  # None branch
-    assert _discoverer_type()._short_doc("single line") == "single line"
+    assert LevelDiscoverer._short_doc(None) == "No description"  # None branch
+    assert LevelDiscoverer._short_doc("single line") == "single line"
 
 
 def test_append_module_record_ignores_non_mistapi(tui_stub) -> None:
     """Non-mistapi sub-modules are skipped."""
     foreign = types.ModuleType("os")  # Foreign module name (not mistapi)
     foreign.__package__ = "os"  # Marks it as os package
-    _discoverer_type()(tui_stub)._append_module_record(foreign, "os")  # Should be a no-op
+    LevelDiscoverer(tui_stub)._append_module_record(foreign, "os")  # Should be a no-op
     assert tui_stub.current_items == []  # Nothing was appended
 
 
@@ -137,7 +132,7 @@ def test_append_function_record_uses_signature_when_available(tui_stub) -> None:
     def example(a, b="x"):  # bare to avoid PEP 563 stringification
         """Example docstring."""
 
-    _discoverer_type()(tui_stub)._append_function_record(example, "example")  # Append record
+    LevelDiscoverer(tui_stub)._append_function_record(example, "example")  # Append record
     record = tui_stub.current_items[0]  # Pulled record
     assert record["signature"] == "(a, b='x')"  # Signature captured verbatim
     assert record["full_doc"] == "Example docstring."  # Full doc preserved
@@ -152,7 +147,7 @@ def test_append_function_record_falls_back_when_signature_fails(tui_stub, monkey
         raise ValueError("no signature")  # Force the except branch in append_function_record
 
     monkeypatch.setattr(_inspect, "signature", _raise)  # Patch the module symbol
-    _discoverer_type()(tui_stub)._append_function_record(lambda: None, "fn")  # Trigger fallback
+    LevelDiscoverer(tui_stub)._append_function_record(lambda: None, "fn")  # Trigger fallback
     assert tui_stub.current_items[0]["signature"] == "(...)"  # Placeholder used
 
 
@@ -165,7 +160,7 @@ def test_classify_item_swallows_attribute_errors(tui_stub, monkeypatch: pytest.M
             raise AttributeError("nope")
 
     module = _Bad()  # Object with a raising attribute
-    _discoverer_type()(tui_stub)._classify_item(module, "boom")  # Should not raise
+    LevelDiscoverer(tui_stub)._classify_item(module, "boom")  # Should not raise
     assert tui_stub.current_items == []  # Nothing appended
 
 
@@ -179,4 +174,4 @@ def test_classify_item_propagates_unexpected_descriptor_errors(tui_stub) -> None
 
     module = _Bad()  # Build the object with the failing descriptor.
     with pytest.raises(RuntimeError, match="nope"):  # The narrowed handler lets unexpected faults surface.
-        _discoverer_type()(tui_stub)._classify_item(module, "boom")  # Read the descriptor through the classifier.
+        LevelDiscoverer(tui_stub)._classify_item(module, "boom")  # Read the descriptor through the classifier.

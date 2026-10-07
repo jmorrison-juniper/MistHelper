@@ -17,7 +17,8 @@ The fixed-width base-5 value of 2746 is `00041441`.
 7. Prune stale baseline entries.
 8. Run the repository gates.
 9. Rebase and measure again.
-10. Push one time.
+10. Retain the two measured deferred baseline entries.
+11. Push one time.
 
 ## Constraints
 

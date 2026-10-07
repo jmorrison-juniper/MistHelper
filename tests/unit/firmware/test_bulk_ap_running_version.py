@@ -1,6 +1,6 @@
 """Test the running-version rule that the bulk access point upgrader applies.
 
-Issue #2253 found the rule in three places. `running_version_module.RunningFirmwareVersionResolver`
+Issue #2253 found the rule in three places. `RunningFirmwareVersionResolver`
 holds it, and two upgraders repeated it with their own code. Every copy was
 correct at the time, and the risk was drift: a correction would reach the
 resolver and miss the copies.
@@ -22,8 +22,17 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.operations.execution.firmware import running_version as running_version_module
 from src.operations.execution.firmware.bulk_ap_upgrader import UNKNOWN_VERSION
+
+BulkAPFirmwareUpgrader = __import__(
+    "src.operations.execution.firmware.bulk_ap_upgrader", fromlist=["BulkAPFirmwareUpgrader"]
+).BulkAPFirmwareUpgrader
+BulkAPUpgraderConfig = __import__(
+    "src.operations.execution.firmware.bulk_ap_upgrader", fromlist=["BulkAPUpgraderConfig"]
+).BulkAPUpgraderConfig
+RunningFirmwareVersionResolver = __import__(
+    "src.operations.execution.firmware.running_version", fromlist=["RunningFirmwareVersionResolver"]
+).RunningFirmwareVersionResolver
 
 logger = logging.getLogger(__name__)  # WHY: keep test log records on the module logger.
 
@@ -42,11 +51,6 @@ _STALE_VERSION = "0.10.17000"
 def fixture_upgrader() -> Any:
     """Build one upgrader with a stand-in session and no network reach."""
     logger.info("Building a bulk access point upgrader for the version rule tests")  # Report the build.
-    from src.operations.execution.firmware.bulk_ap_upgrader import (
-        BulkAPFirmwareUpgrader,
-        BulkAPUpgraderConfig,
-    )  # WHY: keep the network-capable upgrader local to the fixture that constructs it.
-
     config = BulkAPUpgraderConfig(org_id="org-0001", apisession=MagicMock())
     built = BulkAPFirmwareUpgrader(config)  # The constructor builds the resolver.
     logger.debug("The upgrader holds a resolver of type %s", type(built._version_resolver).__name__)
@@ -60,7 +64,7 @@ class TestTheUpgraderReadsTheSharedRule:
         """The upgrader MUST hold the shared resolver, and not a copy of its rule."""
         logger.info("Checking that the upgrader holds the shared resolver")  # Report the plan.
 
-        assert isinstance(upgrader._version_resolver, running_version_module.RunningFirmwareVersionResolver)
+        assert isinstance(upgrader._version_resolver, RunningFirmwareVersionResolver)
 
     def test_the_index_answers_the_shared_join_map(self, upgrader: Any) -> None:
         """The index MUST answer the same map that the resolver builds."""
@@ -68,7 +72,7 @@ class TestTheUpgraderReadsTheSharedRule:
         rows = [{"id": _DEVICE_ID, "mac": _DEVICE_MAC, "version": _RUNNING_VERSION}]
 
         built = upgrader._index_stats_by_device_id(rows)  # The upgrader path.
-        shared = running_version_module.RunningFirmwareVersionResolver.index_stats_rows(rows)  # The shared reader.
+        shared = RunningFirmwareVersionResolver.index_stats_rows(rows)  # The shared reader.
         logger.debug("The index answered %d keys", len(built))  # Record the size.
 
         assert built == shared, "the upgrader must answer the map that the shared reader builds"

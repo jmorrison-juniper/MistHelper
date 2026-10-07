@@ -9,7 +9,6 @@ Task coverage: T006, T011, T022, T027, T029
 """
 
 import logging
-from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -304,6 +303,8 @@ class TestFetchProfiles:
     @patch("src.operations.wan.wan_vpn_builder.mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles")
     def test_http_401_returns_empty(self, mock_list, mock_get_all, builder):
         """A rejected profile response must produce the empty failure result."""
+        from types import SimpleNamespace  # WHY: keep the response helper local to this status proof.
+
         response = SimpleNamespace(status_code=401, data=[])  # WHY: the SDK returns HTTP status in its response.
         mock_list.return_value = response  # WHY: direct Mist calls do not raise for a 4xx status.
         mock_get_all.return_value = []  # WHY: the rejected response has no usable profiles.

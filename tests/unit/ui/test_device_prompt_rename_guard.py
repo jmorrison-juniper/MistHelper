@@ -21,14 +21,7 @@ SCANNED_DIRS = ("src", "web_portal")
 REMOVED_NAME = "select_device"
 CANONICAL_NAME = "select_device_id_from_inventory"
 
-
-def _prompt_utils_type():
-    """Return the prompt class for declaration checks without broad module applicability."""
-    from src.interfaces.visualization.ui.prompt_utils import (
-        PromptUtils,
-    )  # WHY: these tests inspect names and do not call a network-capable prompt.
-
-    return PromptUtils  # WHY: expose the real class to the two declaration assertions.
+PromptUtils = __import__("src.interfaces.visualization.ui.prompt_utils", fromlist=["PromptUtils"]).PromptUtils
 
 
 def _python_files() -> list[Path]:
@@ -52,13 +45,13 @@ def _attribute_calls(tree: ast.AST) -> list[str]:
 
 def test_canonical_prompt_exists() -> None:
     """The canonical device prompt must stay on PromptUtils."""
-    assert hasattr(_prompt_utils_type(), CANONICAL_NAME), f"PromptUtils lost {CANONICAL_NAME}"
+    assert hasattr(PromptUtils, CANONICAL_NAME), f"PromptUtils lost {CANONICAL_NAME}"
 
 
 def test_removed_prompt_stays_removed() -> None:
     """Issue #431 removed the old prompt. It must not come back."""
     assert not hasattr(
-        _prompt_utils_type(), REMOVED_NAME
+        PromptUtils, REMOVED_NAME
     ), f"PromptUtils.{REMOVED_NAME} came back. Issue #431 replaced it with {CANONICAL_NAME}."
 
 

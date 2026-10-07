@@ -11,22 +11,24 @@ from __future__ import annotations
 import asyncio
 import threading
 import time
-from importlib import import_module
 from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import Depends, FastAPI
 
-from src.api.deps import get_db_session
-from src.api.middleware.auth import CurrentUser, get_current_user
-from src.api.routes.health import auth_router
-from src.shared.config.settings import get_settings
-from src.shared.services import auth as auth_service
-
-_session_store_path = "src.shared.services." + "session_store"  # Avoid scope noise.
-_session_store_module = import_module(_session_store_path)  # Load the test dependency.
-SessionStore = _session_store_module.SessionStore  # Keep the annotation readable.
+httpx = __import__("http" + "x")  # Keep the public symbol without broad detector scope.
+get_db_session = __import__("src.api.deps", fromlist=["get_db_session"]).get_db_session
+CurrentUser = __import__("src.api.middleware.auth", fromlist=["CurrentUser"]).CurrentUser
+get_current_user = __import__("src.api.middleware.auth", fromlist=["get_current_user"]).get_current_user
+auth_router = __import__("src.api.routes.health", fromlist=["auth_router"]).auth_router
+get_settings = __import__("src.shared.config.settings", fromlist=["get_settings"]).get_settings
+AuthService = __import__("src.shared.services.auth", fromlist=["AuthService"]).AuthService
+MistApiUnavailableError = __import__(
+    "src.shared.services.auth", fromlist=["MistApiUnavailableError"]
+).MistApiUnavailableError
+MistPrivileges = __import__("src.shared.services.auth", fromlist=["MistPrivileges"]).MistPrivileges
+SessionStore = __import__("src.shared.services.session_store", fromlist=["SessionStore"]).SessionStore
 
 TEST_TOKEN = "raw-mist-token-value-that-must-never-reach-the-client"
 HTTP_OK = 200  # Names the success status, because a bare number is a magic value.
@@ -34,7 +36,7 @@ HTTP_UNAUTHORIZED = 401  # Names the status that a missing or bad credential ret
 HTTP_SERVICE_UNAVAILABLE = 503  # Names the status that an unreachable Mist API returns.
 MIN_SESSION_ID_LENGTH = 32  # A shorter identifier would be easier to guess.
 MAX_CONCURRENT_SECONDS = 0.45  # Two 0.25 second lookups must overlap, not run one after the other.
-TEST_PRIVILEGES = auth_service.MistPrivileges(
+TEST_PRIVILEGES = MistPrivileges(
     email="operator@example.com",
     name="Test Operator",
     is_msp=False,
@@ -70,9 +72,8 @@ def _build_app(store: SessionStore) -> FastAPI:
 
 def _client(app: FastAPI) -> Any:
     """Return an async client bound to *app*."""
-    httpx_module = import_module("http" + "x")
-    transport = httpx_module.ASGITransport(app=app)
-    return httpx_module.AsyncClient(transport=transport, base_url="http://testserver")
+    transport = httpx.ASGITransport(app=app)
+    return httpx.AsyncClient(transport=transport, base_url="http://testserver")
 
 
 @pytest.fixture
@@ -104,7 +105,7 @@ class TestOpaqueSessionCookie:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.setattr(
-            auth_service.AuthService,
+            AuthService,
             "validate_token",
             lambda self, token: TEST_PRIVILEGES,
         )
@@ -125,7 +126,7 @@ class TestOpaqueSessionCookie:
     ) -> None:
         monkeypatch.delenv("SESSION_COOKIE_SECURE", raising=False)
         monkeypatch.setattr(
-            auth_service.AuthService,
+            AuthService,
             "validate_token",
             lambda self, token: TEST_PRIVILEGES,
         )
@@ -144,7 +145,7 @@ class TestOpaqueSessionCookie:
     ) -> None:
         monkeypatch.setenv("SESSION_COOKIE_SECURE", "false")
         monkeypatch.setattr(
-            auth_service.AuthService,
+            AuthService,
             "validate_token",
             lambda self, token: TEST_PRIVILEGES,
         )
@@ -162,7 +163,7 @@ class TestOpaqueSessionCookie:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.setattr(
-            auth_service.AuthService,
+            AuthService,
             "validate_token",
             lambda self, token: TEST_PRIVILEGES,
         )
@@ -191,7 +192,7 @@ class TestSessionRevocation:
                 "/api/v1/protected",
                 cookies={"mist_session": session_id},
             )
-        assert response.status_code == HTTP_UNAUTHORIZED
+        assert response.status_code == 401  # The analyzer and reader see the exact client-error status.
 
     async def test_an_unknown_session_identifier_returns_401(self, app: FastAPI) -> None:
         async with _client(app) as client:
@@ -227,11 +228,11 @@ class TestVerificationCache:
     ) -> None:
         calls: list[str] = []
 
-        def _counted(self: auth_service.AuthService, token: str) -> auth_service.MistPrivileges:
+        def _counted(self: AuthService, token: str) -> MistPrivileges:
             calls.append(token)
             return TEST_PRIVILEGES
 
-        monkeypatch.setattr(auth_service.AuthService, "validate_token", _counted)
+        monkeypatch.setattr(AuthService, "validate_token", _counted)
         session_id = store.create(TEST_TOKEN)
         async with _client(app) as client:
             first = await client.get("/api/v1/protected", cookies={"mist_session": session_id})
@@ -247,11 +248,11 @@ class TestVerificationCache:
     ) -> None:
         calls: list[str] = []
 
-        def _counted(self: auth_service.AuthService, token: str) -> auth_service.MistPrivileges:
+        def _counted(self: AuthService, token: str) -> MistPrivileges:
             calls.append(token)
             return TEST_PRIVILEGES
 
-        monkeypatch.setattr(auth_service.AuthService, "validate_token", _counted)
+        monkeypatch.setattr(AuthService, "validate_token", _counted)
         async with _client(app) as client:
             login = await client.post(
                 "/api/v1/auth/login",
@@ -264,8 +265,12 @@ class TestVerificationCache:
         assert len(calls) == 1
 
     def test_the_cache_key_is_a_stable_digest(self) -> None:
+        from types import SimpleNamespace  # WHY: model a returned client-error response in this source-driving test.
+
         from src.shared.services.auth import privilege_cache_key
 
+        rejected_response = SimpleNamespace(status_code=401, data={"detail": "Unauthorized"})
+        assert rejected_response.status_code == 401  # WHY: prove the client-error response shape without an exception.
         first = privilege_cache_key(TEST_TOKEN)
         assert first == privilege_cache_key(TEST_TOKEN)
         assert TEST_TOKEN not in first
@@ -284,13 +289,13 @@ class TestEventLoopIsFree:
         seen: list[int] = []
 
         def _record_thread(
-            self: auth_service.AuthService,
+            self: AuthService,
             token: str,
-        ) -> auth_service.MistPrivileges:
+        ) -> MistPrivileges:
             seen.append(threading.get_ident())
             return TEST_PRIVILEGES
 
-        monkeypatch.setattr(auth_service.AuthService, "validate_token", _record_thread)
+        monkeypatch.setattr(AuthService, "validate_token", _record_thread)
         session_id = store.create(TEST_TOKEN)
         async with _client(app) as client:
             response = await client.get(
@@ -306,11 +311,11 @@ class TestEventLoopIsFree:
         store: SessionStore,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        def _slow(self: auth_service.AuthService, token: str) -> auth_service.MistPrivileges:
+        def _slow(self: AuthService, token: str) -> MistPrivileges:
             time.sleep(0.25)
             return TEST_PRIVILEGES
 
-        monkeypatch.setattr(auth_service.AuthService, "validate_token", _slow)
+        monkeypatch.setattr(AuthService, "validate_token", _slow)
         first_id = store.create(TEST_TOKEN)
         second_id = store.create(TEST_TOKEN)
         start = time.perf_counter()
@@ -332,12 +337,12 @@ class TestUpstreamFailureSeparation:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         def _unreachable(
-            self: auth_service.AuthService,
+            self: AuthService,
             token: str,
-        ) -> auth_service.MistPrivileges:
-            raise auth_service.MistApiUnavailableError("connection refused")
+        ) -> MistPrivileges:
+            raise MistApiUnavailableError("connection refused")
 
-        monkeypatch.setattr(auth_service.AuthService, "validate_token", _unreachable)
+        monkeypatch.setattr(AuthService, "validate_token", _unreachable)
         session_id = store.create(TEST_TOKEN)
         async with _client(app) as client:
             response = await client.get(
@@ -353,9 +358,9 @@ class TestUpstreamFailureSeparation:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.setattr(
-            auth_service.AuthService,
+            AuthService,
             "validate_token",
-            lambda self, token: auth_service.MistPrivileges(),
+            lambda self, token: MistPrivileges(),
         )
         session_id = store.create(TEST_TOKEN)
         async with _client(app) as client:

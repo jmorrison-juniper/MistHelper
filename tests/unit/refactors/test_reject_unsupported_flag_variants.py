@@ -11,9 +11,9 @@ from typing import Any  # WHY: Type the mixed parser arguments in the test doubl
 
 import pytest  # WHY: Use pytest fixtures and SystemExit assertions.
 
-from src.foundation.support.refactors import (
-    main_entrypoint as main_entrypoint_module,
-)  # WHY: exercise only parser bootstrap behavior.
+ApplicationBootstrap = __import__(
+    "src.foundation.support.refactors.main_entrypoint", fromlist=["ApplicationBootstrap"]
+).ApplicationBootstrap
 
 _REPOSITORY_ROOT = Path(__file__).resolve().parents[3]  # WHY: Locate the worktree root from this nested test file.
 
@@ -107,9 +107,7 @@ def test_application_bootstrap_parses_command_line_once(monkeypatch: pytest.Monk
     monkeypatch.setattr(  # WHY: Route bootstrap to the parser double.
         "MistHelper._build_argument_parser", lambda: parser
     )
-    bootstrap = main_entrypoint_module.ApplicationBootstrap(
-        argv=["--skip-deps"]
-    )  # WHY: Constructing bootstrap is the only parse location.
+    bootstrap = ApplicationBootstrap(argv=["--skip-deps"])  # WHY: Constructing bootstrap is the only parse location.
     assert parser.parse_count == 1  # WHY: The command line must be parsed exactly one time.
     assert bootstrap.parsed_args is parsed_args  # WHY: Later startup must reuse the stored Namespace object.
 
@@ -117,9 +115,7 @@ def test_application_bootstrap_parses_command_line_once(monkeypatch: pytest.Monk
 def test_hyphenated_test_flag_uses_standard_argparse_error(capsys: pytest.CaptureFixture[str]) -> None:
     """A misspelled flag must fail through argparse with status code 2."""
     with pytest.raises(SystemExit) as excinfo:  # WHY: argparse exits on an unsupported option.
-        main_entrypoint_module.ApplicationBootstrap(
-            argv=["--test-interactive"]
-        )  # WHY: The removed raw variant guard no longer runs.
+        ApplicationBootstrap(argv=["--test-interactive"])  # WHY: The removed raw variant guard no longer runs.
     captured = capsys.readouterr()  # WHY: Inspect the user-facing parser error.
     assert excinfo.value.code == 2  # WHY: argparse uses exit code 2 for usage errors.
     assert "unrecognized arguments" in captured.err  # WHY: The standard parser error must own this failure.

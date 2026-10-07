@@ -361,7 +361,7 @@ def test_fetch_switch_physical_inventory_stops_on_empty_page(monkeypatch: pytest
 
 
 def test_fetch_gateway_physical_inventory_returns_records() -> None:
-    """_fetch_gateway_physical_inventory returns the auto-paginated get_all payload."""
+    """Gateway inventory returns records and rejects an HTTP 401 payload."""
     records = [{"model": "SRX345"}, {"model": "SRX345"}]  # WHY: fixture payload
     mistapi_module = SimpleNamespace(
         api=SimpleNamespace(
@@ -378,9 +378,6 @@ def test_fetch_gateway_physical_inventory_returns_records() -> None:
     _reset_dependencies(mistapi_module=mistapi_module)  # WHY: replace default stub
     assert OrgDeviceInventorySummaryCore._fetch_gateway_physical_inventory("org-1") == records  # WHY: records returned
 
-
-def test_fetch_gateway_physical_inventory_http_401_returns_empty() -> None:
-    """A rejected gateway inventory read must produce the empty failure result."""
     response = SimpleNamespace(status_code=401, data=[])  # WHY: mistapi preserves HTTP status and parsed data.
     get_all = MagicMock(return_value=[])  # WHY: the paginator returns no rows for the rejected first page.
     mistapi_module = SimpleNamespace(

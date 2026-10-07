@@ -19,8 +19,18 @@ import pytest
 
 import src.operations.execution.firmware.firmware_manager as fm_mod
 
+FirmwareManager = __import__(
+    "src.operations.execution.firmware.firmware_manager", fromlist=["FirmwareManager"]
+).FirmwareManager
+FirmwareManagerConfig = __import__(
+    "src.operations.execution.firmware.firmware_manager", fromlist=["FirmwareManagerConfig"]
+).FirmwareManagerConfig
+_bind_module_globals = __import__(
+    "src.operations.execution.firmware.firmware_manager", fromlist=["_bind_module_globals"]
+)._bind_module_globals
 
-def _make_config(**overrides: Any) -> Any:
+
+def _make_config(**overrides: Any) -> FirmwareManagerConfig:
     """Build a valid ``FirmwareManagerConfig`` with test defaults.
 
     Why:
@@ -34,34 +44,12 @@ def _make_config(**overrides: Any) -> Any:
     Returns:
         Fully populated ``FirmwareManagerConfig`` ready for use.
     """
-    from src.operations.execution.firmware.firmware_manager import (
-        FirmwareManagerConfig,
-    )  # WHY: config validation is local behavior despite the manager module's network methods.
-
     defaults: dict[str, Any] = {
         "apisession": object(),
         "org_id": "org-test",
     }
     defaults.update(overrides)
     return FirmwareManagerConfig(**defaults)
-
-
-def _bind_globals(config: Any) -> None:
-    """Bind module state without making the network-capable manager a module contract."""
-    from src.operations.execution.firmware.firmware_manager import (
-        _bind_module_globals,
-    )  # WHY: the tests exercise only local module-state binding.
-
-    _bind_module_globals(config)  # WHY: preserve the production binding call under test.
-
-
-def _make_manager(config: Any) -> Any:
-    """Build a manager for constructor wiring tests without broad source applicability."""
-    from src.operations.execution.firmware.firmware_manager import (
-        FirmwareManager,
-    )  # WHY: the tests exercise constructor wiring and no HTTP path.
-
-    return FirmwareManager(config)  # WHY: return the real manager with injected local collaborators.
 
 
 class TestFirmwareManagerConfigValidation:
@@ -81,15 +69,15 @@ class TestFirmwareManagerConfigValidation:
 
     def test_none_apisession_raises_value_error(self) -> None:
         with pytest.raises(ValueError, match="apisession is required"):
-            _make_config(apisession=None, org_id="org-x")
+            FirmwareManagerConfig(apisession=None, org_id="org-x")
 
     def test_empty_org_id_raises_value_error(self) -> None:
         with pytest.raises(ValueError, match="org_id must be a non-empty string"):
-            _make_config(apisession=object(), org_id="")
+            FirmwareManagerConfig(apisession=object(), org_id="")
 
     def test_non_string_org_id_raises_value_error(self) -> None:
         with pytest.raises(ValueError, match="org_id must be a non-empty string"):
-            _make_config(apisession=object(), org_id=123)  # type: ignore[arg-type]
+            FirmwareManagerConfig(apisession=object(), org_id=123)  # type: ignore[arg-type]
 
     @pytest.mark.parametrize(
         "hook_name",
@@ -172,7 +160,7 @@ class TestBindModuleGlobals:
         try:
             session_marker = object()
             cfg = _make_config(apisession=session_marker, org_id="ORG-42")
-            _bind_globals(cfg)
+            _bind_module_globals(cfg)
             assert fm_mod.apisession is session_marker
             assert fm_mod.org_id == "ORG-42"
         finally:
@@ -186,7 +174,7 @@ class TestBindModuleGlobals:
                 type(fm_mod.SourceDependencyResolver), "active_dependency_host", lambda _self: fake_host
             )
             cfg = _make_config()
-            _bind_globals(cfg)
+            _bind_module_globals(cfg)
             assert fm_mod.msp_privileges == ["priv-a"]
             assert fm_mod.PROGRESS_EMITTER == "emit-sentinel"
         finally:
@@ -202,7 +190,7 @@ class TestBindModuleGlobals:
             fm_mod.msp_privileges = ["untouched"]
             fm_mod.PROGRESS_EMITTER = "untouched"
             cfg = _make_config()
-            _bind_globals(cfg)
+            _bind_module_globals(cfg)
             assert fm_mod.msp_privileges == []
             assert fm_mod.PROGRESS_EMITTER is None
         finally:
@@ -213,7 +201,7 @@ class TestBindModuleGlobals:
         try:
             caplog.set_level(logging.DEBUG, logger="root")
             cfg = _make_config(org_id="ORG-LOG")
-            _bind_globals(cfg)
+            _bind_module_globals(cfg)
             messages = [r.message for r in caplog.records]
             assert any("Rebinding firmware_manager module globals for org ORG-LOG" in m for m in messages)
             assert any("firmware_manager module globals rebound for org ORG-LOG" in m for m in messages)
@@ -234,14 +222,14 @@ class TestFirmwareManagerInit:
     def test_stores_config_and_backcompat_attrs(self) -> None:
         session = object()
         cfg = _make_config(apisession=session, org_id="ORG-BC")
-        mgr = _make_manager(cfg)
+        mgr = FirmwareManager(cfg)
         assert mgr._config is cfg
         assert mgr.apisession is session
         assert mgr.org_id == "ORG-BC"
 
     def test_defaults_safe_input_to_builtin(self) -> None:
         cfg = _make_config(safe_input_fn=None)
-        mgr = _make_manager(cfg)
+        mgr = FirmwareManager(cfg)
         assert mgr._safe_input_fn is input
 
     def test_preserves_all_optional_hooks(self) -> None:
@@ -259,7 +247,7 @@ class TestFirmwareManagerInit:
             gateway_templates_fn=gateway_templates,
             sites_fn=sites,
         )
-        mgr = _make_manager(cfg)
+        mgr = FirmwareManager(cfg)
         assert mgr._safe_input_fn is safe_input
         assert mgr._select_site_fn is select_site
         assert mgr._check_cache_fn is check_cache
@@ -270,7 +258,7 @@ class TestFirmwareManagerInit:
     def test_emits_init_logs(self, caplog: pytest.LogCaptureFixture) -> None:
         caplog.set_level(logging.DEBUG, logger="root")
         cfg = _make_config(org_id="ORG-INIT")
-        _make_manager(cfg)
+        FirmwareManager(cfg)
         messages = [r.message for r in caplog.records]
         assert any("Initializing FirmwareManager for org ORG-INIT" in m for m in messages)
         assert any("FirmwareManager init complete for org ORG-INIT" in m for m in messages)

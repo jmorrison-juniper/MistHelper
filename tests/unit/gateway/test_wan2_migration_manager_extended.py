@@ -619,7 +619,7 @@ def test_apply_site_settings_success_marks_variable_set() -> None:
 
 
 def test_apply_site_settings_failed_marks_error() -> None:
-    """apply_site_settings records FAILED status when API returns non-200."""
+    """apply_site_settings records server and client HTTP failures."""
     _, mocks = _wire(update_status_code=500)
     result: dict[str, Any] = {"variable_set": False, "status": "", "error": ""}
     WAN2MigrationManager._apply_site_settings("s1", "S1", {"vars": {}}, result)
@@ -627,9 +627,6 @@ def test_apply_site_settings_failed_marks_error() -> None:
     assert "500" in result["error"]
     assert mocks["mistapi"].api.v1.sites.setting.updateSiteSettings.call_count == 1
 
-
-def test_apply_site_settings_http_401_marks_error() -> None:
-    """apply_site_settings records the rejected HTTP status for the operator."""
     _, mocks = _wire(update_status_code=401)  # WHY: mistapi returns a response instead of raising for HTTP status.
     result: dict[str, Any] = {"variable_set": False, "status": "", "error": ""}  # WHY: capture the source verdict.
 

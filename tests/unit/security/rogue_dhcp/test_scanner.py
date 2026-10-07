@@ -10,9 +10,7 @@ Every test injects stand-in callables, so no test opens a network connection.
 
 from __future__ import annotations
 
-from types import SimpleNamespace
 from typing import Any
-from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -135,9 +133,9 @@ def test_the_failed_site_count_reaches_the_result() -> None:
     api.failing_sites = {"site-a"}
     assert len(build_scanner(api).scan().sites_failed) == 1
 
+    from types import SimpleNamespace  # WHY: keep the response helper local to this status proof.
+    from unittest.mock import MagicMock, patch  # WHY: isolate the direct API and owned page seam.
 
-def test_http_401_page_failure_reaches_the_caller() -> None:
-    """A rejected Mist page must not become a clean empty scan."""
     api = RecordingApi()  # WHY: retain the normal endpoint map and call recording.
     api_map = api.as_map()  # WHY: inject one rejected endpoint without changing the scanner.
     response = SimpleNamespace(status_code=401, data=[])  # WHY: direct Mist calls return response objects.

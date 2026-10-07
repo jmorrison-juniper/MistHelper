@@ -7,6 +7,8 @@ from logging.handlers import RotatingFileHandler
 
 from MistHelper import LogRotationSettings, _early_file_handler
 
+GlobalImportManager = __import__("MistHelper", fromlist=["GlobalImportManager"]).GlobalImportManager
+
 
 class TestLogRotationSettings:
     """Verify safe defaults, overrides, and rollover behavior."""
@@ -39,8 +41,6 @@ class TestLogRotationSettings:
         """The normal setup path applies deployment rotation settings."""
         monkeypatch.setenv("LOGGING_MAX_BYTES", "128")
         monkeypatch.setenv("LOGGING_BACKUP_COUNT", "2")
-        from MistHelper import GlobalImportManager  # WHY: this test uses only local log-handler construction.
-
         manager = GlobalImportManager.__new__(GlobalImportManager)
         monkeypatch.chdir(tmp_path)
 

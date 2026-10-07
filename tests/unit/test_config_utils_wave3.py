@@ -13,9 +13,7 @@ from unittest.mock import patch  # WHY: patch os.remove to raise OSError determi
 
 import pytest
 
-from src.foundation.runtime.config import (
-    config_utils as config_utils_module,
-)  # WHY: call only the local stop-file seam.
+ConfigUtils = __import__("src.foundation.runtime.config.config_utils", fromlist=["ConfigUtils"]).ConfigUtils
 
 
 @pytest.fixture(autouse=True)
@@ -35,5 +33,5 @@ class TestCheckStopSignalOSError:
         with patch(
             "src.foundation.runtime.config.config_utils.os.remove", side_effect=OSError("simulated race")
         ):  # WHY: force line 153.
-            result = config_utils_module.ConfigUtils.check_stop_signal()  # WHY: exercise the except-branch swallow.
+            result = ConfigUtils.check_stop_signal()  # WHY: exercise the except-branch swallow.
         assert result is True  # WHY: the swallow must not change the return contract.

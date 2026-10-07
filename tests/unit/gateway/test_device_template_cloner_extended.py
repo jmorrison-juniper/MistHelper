@@ -208,7 +208,7 @@ def test_fetch_device_config_returns_dict_on_success() -> None:
 
 
 def test_fetch_device_config_returns_none_on_empty_response() -> None:
-    """_fetch_device_config must return None when the API response is empty."""
+    """_fetch_device_config returns None for empty and rejected responses."""
     manager = _build_manager()  # Build cloner with default mocks
     with patch(  # Patch getSiteDevice to return an empty-data response
         "src.mist.resources.gateway.device_template_cloner.mistapi.api.v1.sites.devices.getSiteDevice",
@@ -217,9 +217,6 @@ def test_fetch_device_config_returns_none_on_empty_response() -> None:
         result = manager._fetch_device_config("site-1", "dev-1")  # Invoke helper under test
     assert result is None  # Empty dict must trigger None return for downstream abort
 
-
-def test_fetch_device_config_returns_none_on_http_401() -> None:
-    """_fetch_device_config must expose a rejected read as a missing configuration."""
     manager = _build_manager()  # Build the cloner with an isolated API session.
     rejected = SimpleNamespace(status_code=401, data={})  # Model the response object that mistapi returns.
     with patch(  # Replace the direct Mist SDK call with the rejected response.

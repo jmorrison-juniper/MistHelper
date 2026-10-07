@@ -4,7 +4,6 @@ Test sites list, devices list, caching, and error handling.
 """
 
 import json  # WHY: JSON serialization for cache simulation
-from types import SimpleNamespace  # WHY: model Mist SDK responses with status and data fields.
 from unittest.mock import Mock  # WHY: mocking dependencies
 
 import pytest  # WHY: test framework
@@ -117,6 +116,8 @@ class TestMistAPIClient:
 
     def test_list_sites_http_401_returns_none(self):
         """Test a rejected Mist response produces an observable failure result."""
+        from types import SimpleNamespace  # WHY: keep the response helper local to this status proof.
+
         self.mock_mist_api.listOrgSites.return_value = SimpleNamespace(  # WHY: the SDK returns a response object.
             status_code=401,  # WHY: model a rejected token without raising an exception.
             data=[],  # WHY: a rejected response can carry an empty parsed payload.
