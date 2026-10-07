@@ -95,6 +95,11 @@ The run also read as a success.
   times. If every attempt fails, the run receives a dispatch fence, the portal
   raises a visible error, and the run ends in the state `failed`. A fenced run
   starts no later firmware call, and the run gate still comes back.
+- FR-4020-20: The dispatch fence lives in a table of one portal process. The
+  retry route is the one production action that drops the entry of a run,
+  because that route is the confirmed operator recovery of a terminal run. A
+  retry that writes no new record leaves the fence in place. The recovered run
+  keeps its terminal state, so the start route refuses it with no fence.
 
 ## Owner decisions
 
