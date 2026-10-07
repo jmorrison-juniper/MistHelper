@@ -66,7 +66,8 @@ The run also read as a success.
   cloud write. The terminal run record holds one plain validation sentence.
 - FR-4020-11: Each accepted upgrade row becomes durable before the next plan of
   the phase leaves the portal. A durable stop request blocks the next plan and
-  uses the normal `stopped` finalization path.
+  uses the normal `stopped` finalization path. The accepted-row write changes
+  only the upgrade rows, so it cannot erase a stop that another worker stores.
 
 ## Owner decisions
 

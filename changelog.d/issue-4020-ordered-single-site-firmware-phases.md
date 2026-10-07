@@ -13,4 +13,5 @@
   one cloud write, and the run records the validation failure (issue #4020).
 - The portal now persists each accepted version group before it sends the next
   group. A durable operator stop blocks the next firmware call and completes
-  through the normal stopped-run path (issue #4020).
+  through the normal stopped-run path. The accepted-row write now preserves a
+  stop that another portal worker stores at the same time (issue #4020).

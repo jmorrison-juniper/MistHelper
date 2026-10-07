@@ -37,9 +37,10 @@ Seams:
 Where a run record lives:
     The record lives in the injected store when the configuration holds one. It
     lives in one guarded dictionary in this process when it does not. The module
-    `capture/store.py` publishes `write_run` and publishes no run reader. So it
-    does not satisfy the two method shape that `runtime/signals.RunRecordStore`
-    asks for. The memory store keeps every route working until that reader lands.
+    `capture/store.py` publishes `write_run` and publishes no run reader or
+    accepted-row mutation. So it does not satisfy the required shape that
+    `runtime/signals.RunRecordStore` asks for. The memory store keeps every
+    route working until those operations land.
 """
 
 from __future__ import annotations  # Postponed annotations keep every hint a plain string.
@@ -290,6 +291,28 @@ class MemoryRunStore:
             _RUNS[key] = dict(run)  # A copy stops a later edit of the caller dictionary.
         return True  # The record is readable from this moment.
 
+    def append_accepted_upgrade(self, run_id: str, row: dict[str, Any]) -> bool:
+        """Append one accepted row and preserve every concurrent run field.
+
+        Args:
+            run_id: The run key.
+            row: The accepted cloud response.
+
+        Returns:
+            True when the store holds the appended row.
+        """
+        with _RUN_GUARD:  # Read and field mutation form one action with stop writes.
+            held = _RUNS.get(run_id)  # An absent run cannot hold cancellation evidence.
+            if held is None:
+                return False  # Fail closed before another destructive call can start.
+            current = dict(held)  # Detach the replacement from the stored record.
+            rows = current.get("upgrades")  # Earlier phases can already hold accepted identifiers.
+            accepted = list(rows) if isinstance(rows, list) else []  # Ignore a damaged non-list field safely.
+            accepted.append(dict(row))  # Store plain values that no caller can later change.
+            current["upgrades"] = accepted  # Change only the accepted-row field.
+            _RUNS[run_id] = current  # Publish the narrow mutation under the same guard.
+        return True  # A later read now sees the row and every concurrent stop field.
+
     def compare_and_set_run(
         self,
         run_id: str,
@@ -309,11 +332,10 @@ class MemoryRunStore:
 
         Why:
             FR-037 asks the portal to find a run that already acts on the site.
-            The two method shape of `runtime/signals.RunRecordStore` answers one
-            run at a time. So it cannot answer that question. This third method
-            is optional. The helper `site_run_records` reads it through the same
-            seam. So the store that lands later publishes the same name. No
-            handler changes.
+            The required shape of `runtime/signals.RunRecordStore` answers one
+            run at a time. So it cannot answer that question. The helper
+            `site_run_records` reads this optional method through the same seam.
+            A later store can publish the same name with no handler change.
 
         Args:
             site_id: The site that the new run wants to act on.
@@ -339,8 +361,9 @@ def injected_object(config_key: str) -> Any | None:
 
     Why:
         `select.injected_seam` accepts a callable only, and the run store is an
-        object with two methods. This function keeps the same rule for a seam of
-        that shape, so a contract test injects a stand-in and reaches no server.
+        object with several methods. This function keeps the same rule for a
+        seam of that shape, so a contract test injects a stand-in and reaches no
+        server.
 
     Args:
         config_key: The configuration key of the seam.
@@ -801,10 +824,9 @@ def site_run_records(site_id: str) -> list[dict[str, Any]]:
     """Return every run record that the store holds for one site.
 
     Why:
-        `runtime/signals.RunRecordStore` asks for a reader and a writer only, so
-        a store of that shape can hold no site scan. FR-037 must not break such
-        a store and must not guess, so an absent scan answers an empty list and
-        the create call continues.
+        `runtime/signals.RunRecordStore` has no site scan operation. FR-037 must
+        not break a store with only the required shape and must not guess. An
+        absent scan answers an empty list, and the create call continues.
 
     Args:
         site_id: The site that the new run wants to act on.
@@ -813,7 +835,7 @@ def site_run_records(site_id: str) -> list[dict[str, Any]]:
         One record for each run of that site, or an empty list.
     """
     scan = getattr(run_store(), STORE_SITE_RUNS, None)  # An absent method reads as None, never a fault.
-    if not callable(scan):  # The store holds the two method shape and nothing more.
+    if not callable(scan):  # The store holds the required shape and no optional site scan.
         logger.info("upgrade: the run store publishes no %s, so no site scan runs", STORE_SITE_RUNS)  # The gap.
         return []  # No scan means no refusal, because a guess would stop honest work.
     try:  # The store sits on a network and may not answer.

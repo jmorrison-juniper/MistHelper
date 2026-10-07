@@ -27,12 +27,14 @@ Warning:
 
 from __future__ import annotations
 
+from threading import Event, Lock, Thread
 from types import SimpleNamespace
 from typing import Any
 
 import pytest
 
 from src.interfaces.portals.upgrade_portal.app import wiring
+from src.interfaces.portals.upgrade_portal.runtime.signals import StopRequestStore
 from src.interfaces.portals.upgrade_portal.upgrade.driver import PHASE_ORDER
 
 RUN_ID = "11111111-1111-1111-1111-111111111111"
@@ -102,6 +104,69 @@ class RecordingRunStore:
         if self.stop_after_first_row and len(record.get("upgrades", ())) == 1:
             self.record["stop_request"] = dict(STOP_REQUEST)  # The route wins immediately after persistence.
         return True
+
+    def append_accepted_upgrade(self, run_id: str, row: dict[str, Any]) -> bool:
+        """Append one accepted row without changing another durable field.
+
+        Args:
+            run_id: The run key. This store holds one run only.
+            row: The accepted cloud response.
+
+        Returns:
+            False for a scripted store fault, or True after persistence.
+        """
+        if self.fail_writes:
+            return False  # A destructive call with no durable row must stop the phase.
+        current = dict(self.record) if self.record is not None else {"run_id": run_id}  # Keep the durable fields.
+        rows = list(current.get("upgrades", ()))  # Preserve the accepted groups of earlier phases.
+        rows.append(dict(row))  # Add only the new cloud identifier.
+        current["upgrades"] = rows  # Change no stop or state field.
+        self.record = current  # Publish the narrow mutation.
+        self.writes.append(dict(current))  # The test reads the exact sequence of durable rows.
+        if self.stop_after_first_row and len(rows) == 1:
+            self.record["stop_request"] = dict(STOP_REQUEST)  # The route wins immediately after persistence.
+        return True
+
+
+class PausingAcceptedRowStore(RecordingRunStore):
+    """Pause one accepted-row mutation while the real stop path writes."""
+
+    def __init__(self) -> None:
+        """Start with one running record and two deterministic race signals."""
+        super().__init__({"run_id": RUN_ID, "state": "upgrade_submitting", "upgrades": []})
+        self.accepted_row_observed = Event()  # The test waits until persistence observed the old run.
+        self.accepted_row_release = Event()  # The test releases persistence after the stop becomes durable.
+        self.guard = Lock()  # The stop write and the accepted-row mutation share one store guard.
+
+    def read_run(self, run_id: str) -> dict[str, Any] | None:
+        """Return one guarded copy of the durable run."""
+        del run_id  # This store holds one run only.
+        with self.guard:  # A stop route can read while accepted-row persistence waits.
+            return dict(self.record) if self.record is not None else None  # Return a detached record.
+
+    def write_run(self, record: dict[str, Any]) -> bool:
+        """Persist the whole record through the same guarded stop path."""
+        with self.guard:  # The real stop store writes one complete record under this guard.
+            self.record = dict(record)  # Detach the durable record from the stop route.
+        return True  # The in-memory durable path accepted the stop request.
+
+    def append_accepted_upgrade(self, run_id: str, row: dict[str, Any]) -> bool:
+        """Append one row after a concurrent stop commits."""
+        del run_id  # This store holds one run only.
+        with self.guard:  # Observe the old record before the stop route writes.
+            observed = dict(self.record) if self.record is not None else None  # Preserve the stale snapshot.
+        self.accepted_row_observed.set()  # Let the test write the stop in the vulnerable interval.
+        if not self.accepted_row_release.wait(timeout=2):  # A missing release must fail the test quickly.
+            return False  # Do not claim that the accepted row became durable.
+        with self.guard:  # Mutate the current record, not the stale observed snapshot.
+            current = dict(self.record) if self.record is not None else observed  # Keep the concurrent stop.
+            if current is None:
+                return False  # An absent run cannot hold the accepted identifier.
+            rows = list(current.get("upgrades", ()))  # Preserve each earlier accepted group.
+            rows.append(dict(row))  # Add only the new accepted group.
+            current["upgrades"] = rows  # Change no other durable field.
+            self.record = current  # Publish the narrow mutation after the stop write.
+        return True  # Both the stop and the accepted row are now durable.
 
 
 def submitter(store: RecordingRunStore | None = None) -> wiring.CloudUpgradeSubmitter:
@@ -478,6 +543,41 @@ class TestTheSubmitterSends:
         assert len(calls) == 1  # The second version group receives no firmware write.
         assert len(store.record["upgrades"]) == 1  # The accepted row is durable for cancellation and evidence.
         assert store.record["stop_request"] == STOP_REQUEST  # The concurrent route request survives persistence.
+
+    def test_a_stop_during_accepted_row_persistence_survives_the_narrow_mutation(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A stop committed after the old record was observed remains durable.
+
+        Args:
+            monkeypatch: The pytest patch helper.
+        """
+        plans = (plan_for("switch"), plan_for("switch"))  # The second version exposes a lost-stop defect.
+        calls: list[Any] = []  # A preserved stop must block the second destructive call.
+        store = PausingAcceptedRowStore()  # The store pauses in the exact stale-write interval.
+        monkeypatch.setattr(wiring, "build_plans", lambda record: plans)
+        install_modules(
+            monkeypatch,
+            {wiring.SERVICE_MODULE: service_that(lambda session, plan: calls.append(plan) or answer())},
+        )
+        record: dict[str, Any] = {"run_id": RUN_ID}
+        result: dict[str, str | None] = {}  # The worker publishes the visible stop reason.
+
+        def send_phase() -> None:
+            """Run the destructive phase while the store controls the race."""
+            result["reason"] = submitter(store).submit_phase(record, SWITCH_PHASE)  # Use the production submitter.
+
+        worker = Thread(target=send_phase, name="accepted-row-worker")  # Keep the phase off the test thread.
+        worker.start()  # The first cloud response reaches accepted-row persistence.
+        assert store.accepted_row_observed.wait(timeout=2)  # Persistence observed the record without a stop.
+        StopRequestStore(store).request(RUN_ID, "sam@example.com", "STOP")  # Use the real durable stop path.
+        store.accepted_row_release.set()  # Let accepted-row persistence continue after the stop commit.
+        worker.join(timeout=2)  # The preserved stop must end the phase without a wait.
+        assert worker.is_alive() is False  # The deterministic race completed.
+        assert result["reason"] == wiring.STOP_REQUESTED_REASON  # The driver selects stopped finalization.
+        assert len(calls) == 1  # The second version group receives no firmware write.
+        assert len(store.record["upgrades"]) == 1  # The accepted row remains durable for cancellation.
+        assert store.record["stop_request"]["requested_by"] == "sam@example.com"  # The stop was not erased.
 
     def test_a_stop_before_the_first_version_group_sends_nothing(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """A durable stop before the phase blocks its first cloud write.
