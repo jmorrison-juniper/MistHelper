@@ -1,8 +1,11 @@
 """Unit tests for ComparisonTableRenderer (1003-site-address-audit)."""
 
+import builtins
+
 from src.mist.resources.site.address_audit import comparison_display as display_mod
 from src.mist.resources.site.address_audit.comparison_display import ComparisonTableRenderer
 from src.mist.resources.site.address_audit.models import AddressRow, AuditResult, MatchedSite
+from web_portal.services.input_hook import InputInterceptor, web_input_context
 
 _ROW = AddressRow(
     serial="2012233588", model="SSR130", address="100 Main St Suite 5", city="Town", state="FL", zip_code="33000"
@@ -48,6 +51,22 @@ class TestRender:
 
 class TestPrompt:
     """ComparisonTableRenderer.prompt_post_table choices."""
+
+    def test_exhausted_portal_queue_quits(self, monkeypatch):
+        """An exhausted portal queue returns quit after one prompt."""
+        prompt_count = 0
+
+        def counted_input(prompt=""):
+            """Count each portal prompt before the queue supplies its answer."""
+            nonlocal prompt_count
+            prompt_count += 1
+            return InputInterceptor._patched_input(prompt)
+
+        monkeypatch.setattr(builtins, "input", counted_input)
+        with web_input_context([]):
+            action = ComparisonTableRenderer().prompt_post_table([_result()])
+        assert action == "quit"
+        assert prompt_count == 1
 
     def test_save_choice(self, monkeypatch):
         """Entering 1 returns 'save'."""
