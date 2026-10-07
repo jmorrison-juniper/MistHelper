@@ -52,6 +52,22 @@ def _install_browser_stubs(page: Any, preview_rows: list[list[str]]) -> None:
             headers: { 'Content-Type': 'application/json' }
           });
           window.fetch = async (url, options = {}) => {
+            if (String(url).includes('/api/operations/parameters/262')
+                || String(url).includes('/api/operations/parameters/267')) {
+              return jsonResponse({
+                category: 'interactive_safe',
+                parameters: [{ name: 'msp_id', label: 'MSP', param_type: 'text', required: true }]
+              });
+            }
+            if (String(url).includes('/api/operations/msps')) {
+              return jsonResponse({
+                msps: [
+                  { id: 'msp-alpha', name: 'Alpha MSP' },
+                  { id: 'msp-bravo', name: 'Bravo MSP' }
+                ],
+                total_count: 2
+              });
+            }
             if (String(url).includes('/api/operations/parameters/31')) {
               return jsonResponse({
                 category: 'interactive',
@@ -116,6 +132,31 @@ def test_quickstart_menu31_posts_selected_site(page: Any) -> None:
     logger.debug("Menu 31 submitted body: %s", run_body)  # Record the submitted body.
 
 
+@pytest.mark.parametrize("menu_number", [262, 267])
+def test_msp_menus_submit_account_selected_identifier(page: Any, menu_number: int) -> None:
+    """Menus 262 and 267 use one account-aware MSP selector."""
+    _load_operations_shell(page)  # Build the production Operations controller.
+    _install_browser_stubs(page, [])  # Serve two permitted MSP grants without a live account.
+    page.evaluate(
+        "(menuNumber) => renderAccordion([{name:'MSP Operations',operations:["
+        "{menu_number:menuNumber,description:'MSP export',category:'interactive_safe'}]}])",
+        menu_number,
+    )
+    page.locator(f'[data-menu="{menu_number}"]').click()  # Select the MSP operation.
+    selector = page.get_by_test_id("msp-selector")  # Use the stable interactive control identifier.
+    selector.wait_for(state="visible")  # Wait until the asynchronous control exists.
+    assert page.get_by_test_id("run-btn").is_disabled()  # Require a valid choice before a run.
+    selector.select_option("msp-bravo")  # Select one identifier that the account permits.
+    assert selector.input_value() == "msp-bravo"  # Preserve the backend `msp_id` value.
+    assert page.get_by_test_id("run-btn").is_enabled()  # Permit the run after a valid choice.
+    page.evaluate("runSelectedOperation()")  # Submit through the production controller.
+    page.wait_for_function("window.__runBody !== null")  # Wait for the mocked endpoint body.
+    assert page.evaluate("window.__runBody") == {
+        "menu_number": str(menu_number),
+        "parameters": {"input_answers": ["msp-bravo"]},
+    }
+
+
 def test_quickstart_data_browser_modal_opens_csv(page: Any) -> None:
     """The shared preview modal opens a CSV table from the Data Browser path."""
     _load_operations_shell(page)  # Reuse the same modal markup that both pages render.
@@ -153,7 +194,7 @@ OPERATIONS_HTML = """
   <div id="parameterLoading"></div>
   <div id="parameterError"><span id="parameterErrorMsg"></span></div>
 </div>
-<button id="runBtn"></button><button id="stopBtn"></button>
+<button id="runBtn" data-testid="run-btn"></button><button id="stopBtn"></button>
 <div id="activeOpsPanel"><div id="activeOpsList"></div></div>
 <div id="executionPanel">
   <div id="logViewer"></div>
