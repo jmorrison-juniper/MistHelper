@@ -41,3 +41,14 @@ def test_selection_clears_execution_state_without_revealing_panel() -> None:
     assert (
         "clearExecutionPanel();" in reset_body
     ), "resetExecutionPanel() must reuse the shared clear helper."  # Keep one clear path.
+
+
+def test_msp_identifier_uses_account_aware_selector() -> None:
+    """Menu 262 and 267 MSP identifiers use the permitted-account selector."""
+    source = OPERATIONS_SCRIPT.read_text(encoding="utf-8")
+
+    assert "if (param.name === 'msp_id') return createMspDropdown(param);" in source
+    assert "select.setAttribute('data-testid', 'msp-selector');" in source
+    assert "fetch('/api/operations/msps')" in source
+    assert "data.reason || 'No MSPs are available.'" in source
+    assert "option.value = msp.id;" in source
