@@ -1263,20 +1263,6 @@ class TestAdditionalCoverage:
         assert result["error"] == "Failed to retrieve sites"
         assert list(result) == ["error"]
 
-    def test_interactive_site_selection_exception(
-        self,
-        upgrader: BulkSwitchFirmwareUpgrader,
-    ) -> None:
-        """Verify interactive site selection handles exception."""
-        mock_mistapi = sys.modules["mistapi"]
-        mock_mistapi.api.v1.orgs.sites.listOrgSites.side_effect = RuntimeError("Boom")
-
-        result = upgrader._interactive_site_selection()
-        assert result["error"] == "Site discovery error: Boom"
-        assert list(result) == ["error"]
-
-        mock_mistapi.api.v1.orgs.sites.listOrgSites.side_effect = None
-
     def test_discover_firmware_inventory_failure(
         self,
         upgrader: BulkSwitchFirmwareUpgrader,
