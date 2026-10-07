@@ -232,11 +232,6 @@ stage A takes under one minute and it names the fault in many cases.
 
 ## 11. Commands that do not exist on a Mist-managed router
 
-A reviewer reported that several commands in the current runbooks do not run.
-That report is correct. This section names each one, and gives the command that
-works. Every replacement comes from the Session Smart Networking command line
-reference. See §14.
-
 ### Commands that no SSR release accepts
 
 | Command in the old text | What happens | Use this instead |
