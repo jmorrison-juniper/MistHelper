@@ -15,7 +15,7 @@ from unittest.mock import patch
 import pytest
 
 from src.operations.execution.ssh.runtime.app_runner import AppRunner
-from src.operations.execution.ssh.shell_execution.shell_executor import ShellExecutor, _CollectState
+from src.operations.execution.ssh.runtime.shell_execution.shell_executor import ShellExecutor, _CollectState
 from src.operations.execution.ssh.ssh_runner_manager import SSHRunnerManager
 
 _ECHO_PREFIX = "!?"  # WHY: the marker that identifies a legacy console echo line.

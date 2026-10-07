@@ -33,6 +33,14 @@ MOVED_PATHS = {  # Map each snapshot path to the canonical path that holds the s
     "src/mist/intelligence/troubleshooting/troubleshoot_utils.py": (
         "src/mist/intelligence/troubleshooting/core/troubleshoot_utils.py"
     ),
+    # Issue #4002 moved shell execution into the SSH runtime package.
+    # The snapshot artifacts stay byte-identical, so the guard resolves the move here.
+    "src/operations/execution/ssh/shell_execution/__init__.py": (
+        "src/operations/execution/ssh/runtime/shell_execution/__init__.py"
+    ),
+    "src/operations/execution/ssh/shell_execution/shell_executor.py": (
+        "src/operations/execution/ssh/runtime/shell_execution/shell_executor.py"
+    ),
 }
 
 
@@ -300,6 +308,20 @@ class TestCatalogMovedPaths:
         assert resolved == unknown_path  # The map must not invent a destination for an unknown path.
         assert resolved not in tracked_paths  # The missing-file check still reports this path as stale.
 
+    def test_ssh_shell_execution_paths_follow_the_reviewed_move(self) -> None:
+        expected_paths = {  # Name both snapshot paths and their exact current destinations.
+            "src/operations/execution/ssh/shell_execution/__init__.py": (
+                "src/operations/execution/ssh/runtime/shell_execution/__init__.py"
+            ),
+            "src/operations/execution/ssh/shell_execution/shell_executor.py": (
+                "src/operations/execution/ssh/runtime/shell_execution/shell_executor.py"
+            ),
+        }
+        actual_paths = {  # Read the approved map so a missing or incorrect entry fails closed.
+            old_path: MOVED_PATHS.get(old_path) for old_path in expected_paths
+        }
+        assert actual_paths == expected_paths  # Both old SSH paths must resolve to the reviewed destinations.
+
     def test_moved_path_keeps_the_symbol_check_exact(self) -> None:
         scanner = CatalogSourceScanner(_REPO_ROOT)  # Create the source scanner for this repository.
         catalog = PerformanceHookCatalog(_ARTIFACT_ROOT)  # Create the artifact reader for this spec.
@@ -307,7 +329,11 @@ class TestCatalogMovedPaths:
         symbol_index = scanner.symbol_index(new_paths)  # Parse the moved modules for an exact symbol check.
         moved_rows = [row for row in catalog.hook_rows() if row["file_path"] in MOVED_PATHS]  # Select rows.
         moved_files = {row["file_path"] for row in moved_rows}  # Collect snapshot files that hold a hook row.
-        assert moved_files == set(MOVED_PATHS), f"Checked {len(moved_rows)} hook rows for {len(moved_files)} files"
+        inventory_only_paths = {  # Exclude the package marker, which has an inventory row but no hook row.
+            "src/operations/execution/ssh/shell_execution/__init__.py"
+        }
+        expected_hook_paths = set(MOVED_PATHS) - inventory_only_paths  # Require each other move to hold a hook row.
+        assert moved_files == expected_hook_paths, f"Checked {len(moved_rows)} hook rows for {len(moved_files)} files"
         checker = row_resolves  # Reuse the production row resolver of this guard.
         for row in moved_rows:  # Each moved row must resolve to a real symbol at the new path.
             assert checker(row, symbol_index), f"{row['hook_id']} names no live symbol"

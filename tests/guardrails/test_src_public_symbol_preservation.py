@@ -52,6 +52,12 @@ MODULE_PATHS = {  # Map each old direct module to its new canonical module.
     "mist/intelligence/juniper_docs/classify/reclassifier.py": (
         "mist/intelligence/juniper_docs/classify/reprocessing/reclassifier.py"
     ),
+    "operations/execution/ssh/shell_execution/__init__.py": (
+        "operations/execution/ssh/runtime/shell_execution/__init__.py"
+    ),
+    "operations/execution/ssh/shell_execution/shell_executor.py": (
+        "operations/execution/ssh/runtime/shell_execution/shell_executor.py"
+    ),
     "org_data_collector.py": "operations/wan/org_data_collector.py",
     "wan_hub_group_manager.py": "operations/wan/wan_hub_group_manager.py",
     "wan_vpn_builder.py": "operations/wan/wan_vpn_builder.py",
