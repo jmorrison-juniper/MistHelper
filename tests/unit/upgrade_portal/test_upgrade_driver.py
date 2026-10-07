@@ -25,7 +25,7 @@ from src.interfaces.portals.upgrade_portal.app import config
 from src.interfaces.portals.upgrade_portal.runtime.identity import SessionOwner
 from src.interfaces.portals.upgrade_portal.runtime.lock import LockRecord, ReleaseOutcome
 from src.interfaces.portals.upgrade_portal.runtime.runs import PHASE_ORDER, PhaseState, RunRecordBuilder, RunState
-from src.interfaces.portals.upgrade_portal.runtime.signals import StopRequestStore
+from src.interfaces.portals.upgrade_portal.runtime.signals import DispatchEvidenceError, StopRequestStore
 from src.interfaces.portals.upgrade_portal.upgrade import driver, phase_gate
 
 RUN_ID = "run-" + "a" * 32
@@ -147,19 +147,22 @@ class FakeStore:
         self.record = current  # Publish the narrow mutation.
         return True  # The refusal survives a concurrent stop write.
 
-    def apply_state_transition(self, run_id: str, state: str, updated_at: str) -> bool:
-        """Write only the state fields of one run.
+    def apply_state_transition(self, run_id: str, state: str, updated_at: str, expected_state: str) -> bool:
+        """Write only the state fields of one run while the observed state holds.
 
         Args:
             run_id: The run key.
             state: The new run state value.
             updated_at: The fresh change time in ISO 8601 UTC.
+            expected_state: The state the caller read before it decided.
 
         Returns:
             True after the move becomes durable.
         """
         if self.record is None or self.record.get("run_id") != run_id:
             return False  # An absent or different run cannot hold a state.
+        if str(self.record.get("state", "")) != expected_state:  # The driver moved the run since the read.
+            return False  # Never move a run backward from a state the caller never saw.
         current = dict(self.record)  # Preserve the current upgrades, phases, and stop fields.
         current["state"] = state  # Change only the state field.
         current["updated_at"] = updated_at  # The poll route reads the fresh change time.
@@ -1202,6 +1205,35 @@ class TestPhaseSubmission:
         final = parts["driver"].run(make_record())  # The controlled path still captures the unchanged site.
         assert final["state"] == RunState.FAILED.value  # An unroutable plan must never report complete.
         assert final["error"]["message"] == reason  # The operator sees the exact validation failure.
+
+    def test_lost_refusal_evidence_ends_the_run_in_a_failed_state(self, parts: dict[str, Any]) -> None:
+        """An unprovable refusal fails the run and sends no later firmware.
+
+        Why:
+            Issue #4020: the submitter now raises when it cannot make the
+            evidence of a refused destructive call durable. The driver must turn
+            that error into one terminal failed run, because an operator cannot
+            trust a run whose cloud calls have no durable record.
+
+        Args:
+            parts: The doubles and the driver.
+        """
+        lost = "The portal could not record a refused firmware call of the run."  # The evidence sentence.
+
+        def raise_on_switches(record: Any, phase: str) -> str | None:
+            """Accept the gateways and lose the evidence of the switch call."""
+            parts["submitter"].phases.append(phase)  # Record the family that asked for firmware.
+            if phase == "switches":
+                raise DispatchEvidenceError(lost)  # The store refused every attempt to hold the evidence.
+            for target in record.get("targets", []):
+                target["upgrade_id"] = "up-1"  # The accepted gateway keeps its cloud identifier.
+            return None  # The gateway phase may settle.
+
+        parts["submitter"].submit_phase = raise_on_switches  # Replace only the cloud seam of this run.
+        final = parts["driver"].run(make_record())  # The driver must treat the error as a terminal fault.
+        assert final["state"] == RunState.FAILED.value  # A run with no durable evidence is never success.
+        assert lost in final["error"]["message"]  # The operator reads the exact cause of the stop.
+        assert parts["submitter"].phases == ["gateways", "switches"]  # No access point received firmware.
 
     def test_a_stop_inside_one_phase_uses_the_normal_stopped_path(self, parts: dict[str, Any]) -> None:
         """A stop after one accepted group is not an ordinary refusal.

@@ -167,13 +167,14 @@ class RunStoreDouble:
             record["dispatch_failures"] = rows  # Change no stop, state, or accepted row field.
         return True  # The refusal survives a concurrent stop write.
 
-    def apply_state_transition(self, run_id: str, state: str, updated_at: str) -> bool:
-        """Write only the state fields of one run.
+    def apply_state_transition(self, run_id: str, state: str, updated_at: str, expected_state: str) -> bool:
+        """Write only the state fields of one run while the observed state holds.
 
         Args:
             run_id: The run key.
             state: The new run state value.
             updated_at: The fresh change time in ISO 8601 UTC.
+            expected_state: The state the caller read before it decided.
 
         Returns:
             True after the move becomes durable.
@@ -182,6 +183,8 @@ class RunStoreDouble:
             record = self.records.get(run_id)  # An absent run cannot hold a state.
             if record is None:
                 return False  # Fail closed, exactly as the production stores do.
+            if str(record.get("state", "")) != expected_state:  # The driver moved the run since the read.
+                return False  # Never move a run backward from a state the caller never saw.
             record["state"] = state  # Change only the state field.
             record["updated_at"] = updated_at  # The poll route reads the fresh change time.
         return True  # Every concurrent driver field survived the move.

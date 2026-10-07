@@ -87,6 +87,14 @@ The run also read as a success.
 - FR-4020-17: A stopped run that captured no post-check writes the failure
   reason and the flag `post_check_captured` as `false` before it reaches the
   state `stopped`.
+- FR-4020-18: The move of a run into the state `stopping` compares the state it
+  read with the durable state before it writes. A driver that reached a final
+  state at the same time keeps that state, and the route reports the newer
+  state to the operator.
+- FR-4020-19: A refused dispatch retries its evidence write a bounded number of
+  times. If every attempt fails, the run receives a dispatch fence, the portal
+  raises a visible error, and the run ends in the state `failed`. A fenced run
+  starts no later firmware call, and the run gate still comes back.
 
 ## Owner decisions
 
