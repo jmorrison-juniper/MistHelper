@@ -241,6 +241,35 @@ def test_run_uses_identifiers_in_order() -> None:
     callable_obj.assert_called_once_with(fake.apisession, "site-one", "map-one")
 
 
+def test_run_rejects_an_http_error_body_before_empty_result_handling(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A real SDK error response must not become a successful empty export."""
+    fake = _fake_mist_helper()
+    response = MagicMock(
+        status_code=401,
+        url="/api/v1/sites/site-one/devices",
+        data={"detail": "unauthorized"},
+    )
+    callable_obj = MagicMock(return_value=response)
+    with (
+        patch.object(EndpointFamilyExporter, "_mist_helper", return_value=fake),
+        patch.object(EndpointFamilyExporter, "_resolve", return_value=callable_obj),
+        patch.object(
+            EndpointFamilyExporter,
+            "_collect_arguments",
+            return_value=MagicMock(values=("site-one",), label="site-one"),
+        ),
+        patch("src.operations.exporting.export.endpoint_family_exporter.mistapi.get_all") as get_all,
+        caplog.at_level("INFO"),
+    ):
+        get_all.return_value = response.data
+        EndpointFamilyExporter._run(_SITE_DETAIL_OPS[0])
+    get_all.assert_not_called()
+    fake.DataExporter.write_with_format_selection.assert_not_called()
+    assert "Error fetching exportSiteDevices: HTTP 401" in caplog.text
+
+
 def test_run_reports_sdk_errors_without_raising() -> None:
     """The menu must survive an SDK exception."""
     fake = _fake_mist_helper()
