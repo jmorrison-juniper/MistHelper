@@ -122,6 +122,17 @@ class TestPersist:
         mist_helper.DataExporter.write_with_format_selection.assert_not_called()
         assert not mist_helper.DataExporter.write_with_format_selection.called  # Empty rows must not trigger a write.
 
+    def test_strategy_uses_exported_org_id_as_natural_key(self) -> None:
+        """The catalog must prevent repeated organization status exports from using artificial IDs."""
+        from src.foundation.support.refactors.endpoint_primary_key_strategies import (
+            ENDPOINT_PRIMARY_KEY_STRATEGIES,
+        )
+
+        strategy = ENDPOINT_PRIMARY_KEY_STRATEGIES["testOrgCradlepointConnection"]
+
+        assert strategy["type"] == "natural_pk"
+        assert strategy["primary_key"] == ["org_id"]
+
 
 class TestStatusMenu:
     """The menu entry point must keep every failure inside the menu."""
