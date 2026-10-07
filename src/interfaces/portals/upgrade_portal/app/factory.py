@@ -265,10 +265,13 @@ def build_log_handler() -> logging.Handler:
     Returns:
         The handler, named and ready to attach.
     """
+    from src.foundation.support.utils.logger_utils import SensitiveFilter  # Keep the module symbol table stable.
+
     handler: logging.Handler = logging.StreamHandler()  # The container reads the standard error stream.
     handler.set_name(HANDLER_NAME)  # The name lets a second build find this handler.
     handler.setFormatter(logging.Formatter(LOG_FORMAT))  # The format names both context fields.
     handler.addFilter(RunContextFilter())  # The filter supplies a value for a record without them.
+    handler.addFilter(SensitiveFilter())  # The package does not propagate to an ancestor redaction filter.
     return handler  # The caller attaches it to the package logger.
 
 
