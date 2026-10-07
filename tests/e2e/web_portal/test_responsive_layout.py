@@ -20,6 +20,7 @@ import logging
 import socket
 import threading
 from collections.abc import Iterator
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -35,6 +36,8 @@ MIN_TOUCH_PX = 44  # The widely used minimum for a touch target.
 PHONE = {"width": 390, "height": 844}
 TABLET_PORTRAIT = {"width": 768, "height": 1024}
 DESKTOP = {"width": 1440, "height": 900}
+LONG_OUTPUT_FILE = ("x" * 95) + ".csv"
+OVERFLOW_ARTIFACT = Path(__file__).resolve().parents[3] / "test-artifacts" / "issue-4034-mobile-overflow.png"
 
 
 def free_port() -> int:
@@ -126,6 +129,30 @@ class TestNoViewportOverflows:
     def test_page_never_scrolls_sideways(self, page: Any, responsive_portal: str, viewport: dict) -> None:
         """Every supported width must render without horizontal overflow."""
         open_operations(page, responsive_portal, viewport)
+        assert horizontal_overflow(page) == 0
+
+    def test_completed_result_stays_inside_the_phone_viewport(self, page: Any, responsive_portal: str) -> None:
+        """A long output file name must not expand the mobile document."""
+        open_operations(page, responsive_portal, {"width": 402, "height": 874})
+        page.evaluate(
+            "(name) => { resetExecutionPanel(); showOutputFiles([name]); }",
+            LONG_OUTPUT_FILE,
+        )
+        page.wait_for_timeout(300)
+        overflow = horizontal_overflow(page)
+        if overflow > 0:
+            OVERFLOW_ARTIFACT.parent.mkdir(parents=True, exist_ok=True)
+            page.screenshot(path=str(OVERFLOW_ARTIFACT), full_page=True)
+        assert overflow == 0, f"The completed result expands the mobile document by {overflow} pixels."
+
+    def test_completed_result_stays_inside_the_desktop_viewport(self, page: Any, responsive_portal: str) -> None:
+        """The mobile repair must preserve the desktop document width."""
+        open_operations(page, responsive_portal, DESKTOP)
+        page.evaluate(
+            "(name) => { resetExecutionPanel(); showOutputFiles([name]); }",
+            LONG_OUTPUT_FILE,
+        )
+        page.wait_for_timeout(300)
         assert horizontal_overflow(page) == 0
 
 

@@ -193,6 +193,13 @@
     opacity: 0.8;
 }
 
+/* A completed run places each file link beside its Preview button in a flex
+   row. Let the link shrink and wrap, so a long name cannot widen the page. */
+#outputFileList a {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
 /* Progress Bar */
 .portal-progress {
     height: 1.5rem;
