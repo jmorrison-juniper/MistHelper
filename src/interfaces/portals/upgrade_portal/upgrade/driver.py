@@ -1649,6 +1649,42 @@ class RunDriver:
         outcome = PhaseOutcome(name, PhaseState.FAILED.value, total=len(targets), note=reason)
         self._write_phase(record, outcome)  # The refusal is durable before the cascade blocks later families.
 
+    def _cascade_phase(
+        self,
+        record: MutableMapping[str, Any],
+        name: str,
+        reason: str | None,
+    ) -> tuple[str | None, bool]:
+        """Run one ordered phase and report its first loss and stop state.
+
+        Args:
+            record: The run record.
+            name: The phase name.
+            reason: The first upstream failure, or None.
+
+        Returns:
+            The first failure reason and whether the run reached `stopped`.
+        """
+        self._beat()  # A phase never starts on a lock that is nearly dead.
+        if self._stop_pending(record):
+            self._stop(record)  # The normal stop path takes the post-check and writes stopped.
+            return reason, True
+        if reason is not None and name != CLIENT_PHASE:
+            self._block_phase(record, name)  # A lost upstream family holds this firmware.
+            return reason, False
+        if name != CLIENT_PHASE:
+            refused = self._submit_phase(record, name)  # The store can reveal a stop inside this call.
+            if self._stop_pending(record):
+                self._stop(record)  # An operator stop is not an ordinary submission refusal.
+                return reason, True
+            if refused is not None:
+                self._refuse_phase(record, name, refused)  # The refused family becomes terminal.
+                return reason or refused, False
+        self._advance(record, settling_state(name))
+        lost = self._run_phase(record, name)  # None means this phase completed without a new loss.
+        stopped = str(record.get("state", "")) == RunState.STOPPED.value
+        return reason or lost, stopped
+
     def _cascade(self, record: MutableMapping[str, Any]) -> None:
         """Run each settle gate in the fixed order and then finish the run.
 
@@ -1675,24 +1711,9 @@ class RunDriver:
         self._advance(record, RunState.UPGRADE_SUBMITTING)  # One submitting state covers the whole cascade
         reason: str | None = None  # Names why the run must end failed, and stays None while the run is healthy
         for name in PHASE_ORDER:
-            self._beat()  # A phase runs up to half an hour, so it never starts on a lock that is nearly dead
-            if self._stop_pending(record):
-                self._stop(record)
-                return
-            if reason is not None and name != CLIENT_PHASE:
-                self._block_phase(record, name)  # A lost family above this one holds the firmware of this one
-                continue  # The client phase carries no firmware, so it still runs and still counts the site
-            if name != CLIENT_PHASE:
-                refused = self._submit_phase(record, name)  # A reason keeps the failure inside this cascade.
-                if refused is not None:
-                    self._refuse_phase(record, name, refused)  # The refused family becomes terminal at once.
-                    reason = reason or refused  # The first refusal remains the terminal run reason.
-                    continue  # No settle gate observes firmware that the cloud refused.
-            self._advance(record, settling_state(name))
-            lost = self._run_phase(record, name)  # Text when the phase could not run, and None when it ran
-            if str(record.get("state", "")) == RunState.STOPPED.value:
-                return  # The interrupted gate already completed the stop and the post-check.
-            reason = reason or lost  # Keep the first failure, which is the root cause of downstream skips.
+            reason, stopped = self._cascade_phase(record, name, reason)  # One helper owns every branch of a phase.
+            if stopped:
+                return  # The stop path already took the post-check and wrote the terminal state.
         self._finish(record, reason)
 
     def _run_phase(self, record: MutableMapping[str, Any], name: str) -> str | None:

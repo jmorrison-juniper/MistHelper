@@ -45,6 +45,75 @@ REFUSED_STATUS = 400
 GATEWAY_PHASE = "gateways"
 SWITCH_PHASE = "switches"
 UNSUPPORTED_FAMILY = "camera"
+STOP_REQUEST = {
+    "requested_by": "sam@example.com",
+    "requested_at": "2026-10-07T07:00:00+00:00",
+    "confirmation_text": "STOP",
+    "scope": "run",
+}
+
+
+class RecordingRunStore:
+    """Persist submitter writes and optionally inject one durable stop request."""
+
+    def __init__(
+        self,
+        record: dict[str, Any] | None = None,
+        *,
+        stop_after_first_row: bool = False,
+        fail_writes: bool = False,
+    ) -> None:
+        """Hold the initial record and the scripted store behavior.
+
+        Args:
+            record: The durable run before the submitter starts.
+            stop_after_first_row: Add a stop after the first accepted row lands.
+            fail_writes: Refuse every persistence attempt.
+        """
+        self.record = dict(record) if record is not None else None
+        self.stop_after_first_row = stop_after_first_row
+        self.fail_writes = fail_writes
+        self.writes: list[dict[str, Any]] = []
+
+    def read_run(self, run_id: str) -> dict[str, Any] | None:
+        """Return one copy of the durable run.
+
+        Args:
+            run_id: The run key. This store holds one run only.
+
+        Returns:
+            A copy of the record, or None before the first write.
+        """
+        return dict(self.record) if self.record is not None else None
+
+    def write_run(self, record: dict[str, Any]) -> bool:
+        """Persist one record and inject the scripted concurrent stop.
+
+        Args:
+            record: The run record with one newly accepted row.
+
+        Returns:
+            False for a scripted store fault, or True after persistence.
+        """
+        if self.fail_writes:
+            return False  # A destructive call with no durable row must stop the phase.
+        self.record = dict(record)  # The accepted identifier becomes durable before another call.
+        self.writes.append(dict(record))  # The test reads the exact sequence of durable rows.
+        if self.stop_after_first_row and len(record.get("upgrades", ())) == 1:
+            self.record["stop_request"] = dict(STOP_REQUEST)  # The route wins immediately after persistence.
+        return True
+
+
+def submitter(store: RecordingRunStore | None = None) -> wiring.CloudUpgradeSubmitter:
+    """Return the cloud submitter with a durable run store.
+
+    Args:
+        store: The scripted store, or None for a healthy empty store.
+
+    Returns:
+        The submitter under test.
+    """
+    return wiring.CloudUpgradeSubmitter(object(), store or RecordingRunStore())
 
 
 def answer(status: int = 200, upgrade_id: str = UPGRADE_ID) -> Any:
@@ -133,7 +202,7 @@ class TestTheSubmitterRefuses:
         """
         monkeypatch.setattr(wiring, "build_plans", lambda record: ())
         record: dict[str, Any] = {"run_id": RUN_ID}
-        assert wiring.CloudUpgradeSubmitter(object()).submit_phase(record, GATEWAY_PHASE) == wiring.NO_PLAN_REASON
+        assert submitter().submit_phase(record, GATEWAY_PHASE) == wiring.NO_PLAN_REASON
 
     def test_reports_a_reason_when_the_upgrade_seam_is_absent(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """A host with no upgrade seam sends nothing and says so.
@@ -144,7 +213,7 @@ class TestTheSubmitterRefuses:
         monkeypatch.setattr(wiring, "build_plans", lambda record: (plan_for("gateway"),))
         install_modules(monkeypatch, {})
         record: dict[str, Any] = {"run_id": RUN_ID}
-        reason = wiring.CloudUpgradeSubmitter(object()).submit_phase(record, GATEWAY_PHASE)
+        reason = submitter().submit_phase(record, GATEWAY_PHASE)
         assert reason == wiring.PHASE_REFUSED_REASON.format(phase=GATEWAY_PHASE)
         assert record["upgrades"] == []
 
@@ -170,7 +239,7 @@ class TestTheSubmitterRefuses:
         monkeypatch.setattr(wiring, "build_plans", lambda record: (plan_for("gateway"),))
         install_modules(monkeypatch, {wiring.SERVICE_MODULE: service_that(explode)})
         record: dict[str, Any] = {"run_id": RUN_ID}
-        reason = wiring.CloudUpgradeSubmitter(object()).submit_phase(record, GATEWAY_PHASE)
+        reason = submitter().submit_phase(record, GATEWAY_PHASE)
         assert reason == wiring.PHASE_REFUSED_REASON.format(phase=GATEWAY_PHASE)
         assert record["upgrades"] == []
 
@@ -191,7 +260,7 @@ class TestTheSubmitterRefuses:
             {wiring.SERVICE_MODULE: service_that(lambda session, plan: answer(REFUSED_STATUS))},
         )
         record: dict[str, Any] = {"run_id": RUN_ID}
-        reason = wiring.CloudUpgradeSubmitter(object()).submit_phase(record, GATEWAY_PHASE)
+        reason = submitter().submit_phase(record, GATEWAY_PHASE)
         assert reason == wiring.PHASE_REFUSED_REASON.format(phase=GATEWAY_PHASE)
         assert record["upgrades"] == []
 
@@ -210,7 +279,7 @@ class TestTheSubmitterRefuses:
             {wiring.SERVICE_MODULE: service_that(lambda session, plan: sent.append(plan) or answer())},
         )
         record: dict[str, Any] = {"run_id": RUN_ID}
-        reason = wiring.CloudUpgradeSubmitter(object()).submit_phase(record, GATEWAY_PHASE)
+        reason = submitter().submit_phase(record, GATEWAY_PHASE)
         assert reason == wiring.UNROUTABLE_PLAN_REASON  # The operator gets one visible validation reason.
         assert sent == []  # No plan reaches the cloud when any plan has no supported phase.
 
@@ -228,7 +297,7 @@ class TestTheSubmitterRefuses:
             {wiring.SERVICE_MODULE: service_that(lambda session, plan: sent.append(plan) or answer())},
         )
         record: dict[str, Any] = {"run_id": RUN_ID}
-        reason = wiring.CloudUpgradeSubmitter(object()).submit_phase(record, GATEWAY_PHASE)
+        reason = submitter().submit_phase(record, GATEWAY_PHASE)
         assert reason == wiring.UNROUTABLE_PLAN_REASON  # Empty plans fail visibly instead of disappearing.
         assert sent == []  # Validation happens before the upgrade seam loads.
 
@@ -249,7 +318,7 @@ class TestTheSubmitterRefuses:
             {wiring.SERVICE_MODULE: service_that(lambda session, plan: sent.append(plan) or answer())},
         )
         record: dict[str, Any] = {"run_id": RUN_ID}
-        reason = wiring.CloudUpgradeSubmitter(object()).submit_phase(record, GATEWAY_PHASE)
+        reason = submitter().submit_phase(record, GATEWAY_PHASE)
         assert reason == wiring.UNROUTABLE_PLAN_REASON  # Mixed families have no single safe cascade phase.
         assert sent == []  # The invalid group is never silently omitted and never sent.
 
@@ -269,7 +338,7 @@ class TestTheSubmitterSends:
             {wiring.SERVICE_MODULE: service_that(lambda session, plan: answer())},
         )
         record: dict[str, Any] = {"run_id": RUN_ID}
-        assert wiring.CloudUpgradeSubmitter(object()).submit_phase(record, GATEWAY_PHASE) is None
+        assert submitter().submit_phase(record, GATEWAY_PHASE) is None
         assert record["upgrades"] == [
             {"upgrade_id": UPGRADE_ID, "scope": "site", "accepted": [MAC_SWITCH], "raw_status": 200}
         ]
@@ -292,7 +361,7 @@ class TestTheSubmitterSends:
             {wiring.SERVICE_MODULE: service_that(lambda session, plan: sent.append(plan) or answer())},
         )
         record: dict[str, Any] = {"run_id": RUN_ID}
-        assert wiring.CloudUpgradeSubmitter(object()).submit_phase(record, GATEWAY_PHASE) is None
+        assert submitter().submit_phase(record, GATEWAY_PHASE) is None
         assert sent == []
 
     def test_a_refused_gateway_group_sends_no_switch_firmware(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -335,7 +404,7 @@ class TestTheSubmitterSends:
         monkeypatch.setattr(wiring, "build_plans", lambda record: plans)
         install_modules(monkeypatch, {wiring.SERVICE_MODULE: service_that(send)})
         record: dict[str, Any] = {"run_id": RUN_ID}
-        seen = walk_phases(wiring.CloudUpgradeSubmitter(object()), record)
+        seen = walk_phases(submitter(), record)
         assert calls == ["gateways"]  # The switch firmware never left the portal.
         assert seen == ["gateways"]  # The cascade stopped before the switch phase.
         assert record["upgrades"] == []  # A refused group leaves no identifier for the stop path.
@@ -370,7 +439,7 @@ class TestTheSubmitterSends:
         monkeypatch.setattr(wiring, "build_plans", lambda record: plans)
         install_modules(monkeypatch, {wiring.SERVICE_MODULE: service_that(send)})
         record: dict[str, Any] = {"run_id": RUN_ID}
-        seen = walk_phases(wiring.CloudUpgradeSubmitter(object()), record)
+        seen = walk_phases(submitter(), record)
         assert seen == ["gateways", "switches"]  # The gateways settled, so the switches tried.
         assert len(record["upgrades"]) == 1  # The accepted gateway row survived the switch refusal.
 
@@ -385,7 +454,68 @@ class TestTheSubmitterSends:
             monkeypatch,
             {wiring.SERVICE_MODULE: service_that(lambda session, plan: answer(202))},
         )
-        assert wiring.CloudUpgradeSubmitter(object()).submit_phase({"run_id": RUN_ID}, SWITCH_PHASE) is None
+        assert submitter().submit_phase({"run_id": RUN_ID}, SWITCH_PHASE) is None
+
+    def test_a_stop_after_the_first_version_group_blocks_the_second_group(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A durable stop between version groups blocks the second cloud write.
+
+        Args:
+            monkeypatch: The pytest patch helper.
+        """
+        plans = (plan_for("switch"), plan_for("switch"))  # Two versions of one family share one phase.
+        calls: list[Any] = []  # Only the first plan may reach the destructive seam.
+        store = RecordingRunStore(stop_after_first_row=True)  # The route stops after row one becomes durable.
+        monkeypatch.setattr(wiring, "build_plans", lambda record: plans)
+        install_modules(
+            monkeypatch,
+            {wiring.SERVICE_MODULE: service_that(lambda session, plan: calls.append(plan) or answer())},
+        )
+        record: dict[str, Any] = {"run_id": RUN_ID}
+        reason = submitter(store).submit_phase(record, SWITCH_PHASE)
+        assert reason == wiring.STOP_REQUESTED_REASON  # A stop is not an ordinary cloud refusal.
+        assert len(calls) == 1  # The second version group receives no firmware write.
+        assert len(store.record["upgrades"]) == 1  # The accepted row is durable for cancellation and evidence.
+        assert store.record["stop_request"] == STOP_REQUEST  # The concurrent route request survives persistence.
+
+    def test_a_stop_before_the_first_version_group_sends_nothing(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A durable stop before the phase blocks its first cloud write.
+
+        Args:
+            monkeypatch: The pytest patch helper.
+        """
+        calls: list[Any] = []  # A preexisting stop must keep this collection empty.
+        store = RecordingRunStore({"run_id": RUN_ID, "stop_request": dict(STOP_REQUEST)})
+        monkeypatch.setattr(wiring, "build_plans", lambda record: (plan_for("switch"), plan_for("switch")))
+        install_modules(
+            monkeypatch,
+            {wiring.SERVICE_MODULE: service_that(lambda session, plan: calls.append(plan) or answer())},
+        )
+        record: dict[str, Any] = {"run_id": RUN_ID}
+        reason = submitter(store).submit_phase(record, SWITCH_PHASE)
+        assert reason == wiring.STOP_REQUESTED_REASON  # The direct caller can distinguish a stop from refusal.
+        assert calls == []  # No firmware leaves after an operator already asked to stop.
+        assert record["stop_request"] == STOP_REQUEST  # The driver receives the durable request in its copy.
+
+    def test_a_lost_accepted_row_stops_before_the_second_version_group(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A store fault after one accepted call blocks every later call.
+
+        Args:
+            monkeypatch: The pytest patch helper.
+        """
+        calls: list[Any] = []  # Only the accepted call whose row failed to persist may leave.
+        store = RecordingRunStore(fail_writes=True)  # Cancellation cannot find a row this store refused.
+        monkeypatch.setattr(wiring, "build_plans", lambda record: (plan_for("switch"), plan_for("switch")))
+        install_modules(
+            monkeypatch,
+            {wiring.SERVICE_MODULE: service_that(lambda session, plan: calls.append(plan) or answer())},
+        )
+        record: dict[str, Any] = {"run_id": RUN_ID}
+        reason = submitter(store).submit_phase(record, SWITCH_PHASE)
+        assert reason == wiring.ACCEPTED_ROW_STORE_REASON  # The persistence loss is visible and terminal.
+        assert len(calls) == 1  # No second destructive write starts without a durable first identifier.
+        assert len(record["upgrades"]) == 1  # The driver still holds the row for evidence in this process.
 
 
 class TestBoundStore:

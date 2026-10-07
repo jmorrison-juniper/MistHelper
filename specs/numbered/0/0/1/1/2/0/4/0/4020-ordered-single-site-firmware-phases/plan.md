@@ -39,8 +39,11 @@ compatibility shim stays, because `AGENTS.md` forbids one.
 - No plan at all gives `NO_PLAN_REASON`.
 - No plan for this phase gives `None` with no cloud call.
 - `_send_phase` walks the plans of that phase in the canonical order. It keeps
-  each accepted row through `_keep`, which appends to `record["upgrades"]`. It
-  stops at the first refused row and gives `PHASE_REFUSED_REASON`.
+  each accepted row through `_persist_row`, which appends to
+  `record["upgrades"]` and writes the run store before another plan can leave.
+  It checks the durable stop request before every plan. A stop gives
+  `STOP_REQUESTED_REASON`, and a lost row write gives
+  `ACCEPTED_ROW_STORE_REASON`.
 - `plan_phase(plan)` reads every target. An empty plan, an unknown family, or a
   plan that mixes families has no route. `submit_phase` validates every plan
   before the first cloud write and gives `UNROUTABLE_PLAN_REASON` on a gap.
@@ -55,6 +58,7 @@ compatibility shim stays, because `AGENTS.md` forbids one.
    the client phase, which carries no firmware and still counts the clients.
 3. Otherwise `_submit_phase(record, name)` sends the firmware of this family.
    A refusal marks this phase failed and keeps the refusal inside the cascade.
+   A durable stop request goes to `_stop` before the refusal branch.
 4. Advance to the settle state of this family, and open the gate.
 5. Record the first loss, and continue to the next family.
 
