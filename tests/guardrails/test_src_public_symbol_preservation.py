@@ -14,6 +14,7 @@ import pytest  # Prove that the guard still refuses an unknown package name.
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]  # Resolve the active worktree from this guard file.
 SOURCE_ROOT = REPOSITORY_ROOT / "src"  # Read current modules from the refactored source tree.
 MERGE_BASE_DEEPEN = "100"  # Fetch bounded history beyond the shallow checkout boundary.
+MERGE_BASE_DEEPEN_ROUNDS = 3  # Repeat the bounded fetch, then read the complete history, before failing.
 PACKAGE_GROUPS = {  # Map every old direct package to its new domain and group.
     "foundation/runtime": {"bootstrap", "config", "input", "time", "validation"},
     "foundation/models": {"data", "dataclasses"},
@@ -64,12 +65,28 @@ def ensure_origin_main() -> None:
         cwd=REPOSITORY_ROOT,
         check=False,
     )  # Check whether the workflow checkout fetched the required baseline ref.
-    if result.returncode != 0:
-        subprocess.run(
-            ["git", "fetch", "origin", "main", "--depth=1"],
-            cwd=REPOSITORY_ROOT,
-            check=True,
-        )  # Fetch the baseline when a manual workflow checkout omitted it.
+    if result.returncode == 0:  # The baseline ref is already present.
+        return  # Add no fetch, because the required input exists.
+    depth_arguments = (
+        ["--depth=1"] if repository_is_shallow() else []
+    )  # Keep a complete clone complete, because a shallow fetch would hide its shared commit.
+    subprocess.run(
+        ["git", "fetch", "origin", "main", *depth_arguments],
+        cwd=REPOSITORY_ROOT,
+        check=True,
+    )  # Fetch the baseline when a manual workflow checkout omitted it.
+
+
+def repository_is_shallow() -> bool:
+    """Return whether Git still holds a shallow boundary that can hide the shared commit."""
+    result = subprocess.run(
+        ["git", "rev-parse", "--is-shallow-repository"],
+        cwd=REPOSITORY_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )  # Read the boundary state without failing on an old Git build.
+    return result.stdout.strip() == "true"  # Report a boundary only on an explicit positive answer.
 
 
 def baseline_ref() -> str:
@@ -80,12 +97,59 @@ def baseline_ref() -> str:
     """
     ensure_origin_main()  # Make the baseline ref available before the merge-base read.
     result = merge_base_result()  # Read the common ancestor before changing the shallow checkout.
-    if result.returncode != 0:  # A shallow checkout may hide the shared ancestor.
-        deepen_origin_history()  # Fetch only the current commit and main ancestry.
-        result = merge_base_result()  # Retry after Git adds the missing history.
-    if result.returncode != 0:  # A failed retry means these histories have no readable common ancestor.
-        raise RuntimeError("No merge base exists between HEAD and origin/main after targeted history deepening.")
+    if result.returncode == 0:  # An ordinary checkout already holds the shared commit.
+        return result.stdout.strip()  # Supply the exact commit that both branches share.
+    result, rounds_used, shallow = deepen_until_merge_base(result)  # Grow history until the base is readable.
+    if result.returncode != 0:  # The guard cannot compare symbols without the shared commit.
+        raise RuntimeError(merge_base_failure_message(rounds_used, shallow))  # Name the real condition.
     return result.stdout.strip()  # Supply the exact commit that both branches share.
+
+
+def deepen_until_merge_base(
+    result: subprocess.CompletedProcess[str],
+) -> tuple[subprocess.CompletedProcess[str], int, bool]:
+    """Deepen a shallow checkout repeatedly until the shared commit is readable.
+
+    Repeat the fetch, because one fixed step cannot reach a merge base at an arbitrary distance.
+    A rebased branch moves its merge base behind the shallow boundary, so a single step fails.
+    """
+    shallow = repository_is_shallow()  # Read whether more history can still arrive.
+    rounds_used = 0  # Count the completed deepen rounds for the operator message.
+    while shallow and rounds_used < MERGE_BASE_DEEPEN_ROUNDS:  # Continue while history can still grow.
+        rounds_used += 1  # Record the round that is about to run.
+        deepen_origin_history(rounds_used == MERGE_BASE_DEEPEN_ROUNDS)  # Read all history on the final round.
+        result = merge_base_result()  # Retry after Git adds the missing history.
+        if result.returncode == 0:  # The deepened history now holds the shared commit.
+            break  # Stop fetching, because the required input has arrived.
+        shallow = repository_is_shallow()  # Decide whether another round can add anything.
+    return result, rounds_used, shallow  # Report the outcome, the work done, and the boundary state.
+
+
+def merge_base_failure_message(rounds_used: int, shallow: bool) -> str:
+    """Return a failure message that separates unreachable history from a lost symbol.
+
+    Keep the two outcomes distinct, because an operator reads a lost module-level symbol as a
+    stop-everything event, and a short checkout is only a missing input.
+    """
+    scope = (
+        " The guard compared 0 modules and 0 package-data files, because it reads the merge base first."
+        " This is a Git history condition, not a lost module-level symbol."
+    )  # Report the measured scope and refuse the symbol-loss reading.
+    if shallow:  # Git still holds a boundary, so the history is incomplete.
+        return (
+            "Cannot reach a merge base between HEAD and origin/main."
+            f" The guard deepened the shallow checkout {rounds_used} time(s),"
+            " and the shared commit stays outside the fetched history."
+            f"{scope}"
+            " Check out the complete history, for example with fetch-depth: 0, and run the guard again."
+        )  # Name the checkout-depth condition and its remedy.
+    return (
+        "No merge base exists between HEAD and origin/main."
+        f" The guard read the complete history after {rounds_used} deepening round(s),"
+        " so these two refs hold no shared commit."
+        f"{scope}"
+        " Fetch origin/main from this same repository and run the guard again."
+    )  # Name the unrelated-history condition and its remedy.
 
 
 def merge_base_result() -> subprocess.CompletedProcess[str]:
@@ -99,8 +163,12 @@ def merge_base_result() -> subprocess.CompletedProcess[str]:
     )  # Preserve the return code so a shallow history can be deepened.
 
 
-def deepen_origin_history() -> None:
-    """Deepen the current commit and main ref so a shallow checkout can find its merge base."""
+def deepen_origin_history(unshallow: bool = False) -> None:
+    """Deepen the current commit and main ref so a shallow checkout can find its merge base.
+
+    Read the complete history on the final round, because a bounded step cannot reach a merge
+    base at an arbitrary distance.
+    """
     head_commit = subprocess.run(
         ["git", "rev-parse", "HEAD"],
         cwd=REPOSITORY_ROOT,
@@ -108,11 +176,14 @@ def deepen_origin_history() -> None:
         capture_output=True,
         text=True,
     ).stdout.strip()  # Identify the checked-out commit without relying on a local branch name.
+    depth_argument = (
+        "--unshallow" if unshallow else f"--deepen={MERGE_BASE_DEEPEN}"
+    )  # Escalate to the complete history only after the bounded steps fail.
     result = subprocess.run(
         [
             "git",
             "fetch",
-            f"--deepen={MERGE_BASE_DEEPEN}",
+            depth_argument,
             "origin",
             head_commit,
             "+refs/heads/main:refs/remotes/origin/main",
@@ -125,6 +196,7 @@ def deepen_origin_history() -> None:
     if result.returncode != 0:  # A failed fetch cannot support a safe symbol comparison.
         raise RuntimeError(
             f"Cannot deepen required Git history. Fetch exited with code {result.returncode}."
+            " This is a Git history condition, not a lost module-level symbol."
         )  # Stop with an explicit required-input failure.
 
 
@@ -382,49 +454,75 @@ def test_trailing_notice_names_the_count_and_the_remedy() -> None:
     assert "Rebase onto origin/main" in notice, f"Checked 1 notice. The remedy is absent from {notice!r}."
 
 
+class FakeGit:
+    """Answer the guard's Git calls, so a shallow checkout becomes a deterministic test input.
+
+    Reveal the merge base only after a chosen number of deepen rounds, because the defect under
+    test is a guard that gives up after one fixed round.
+    """
+
+    def __init__(self, rounds_to_reveal: int, stays_shallow: bool = True) -> None:
+        """Record how many deepen rounds reveal the base and whether the checkout stays shallow."""
+        self.rounds_to_reveal = rounds_to_reveal  # Hold the round that first exposes the shared commit.
+        self.stays_shallow = stays_shallow  # Hold whether Git still reports a shallow boundary.
+        self.fetch_commands: list[list[str]] = []  # Record each deepening fetch for assertion.
+        self.rounds_done = 0  # Count the deepen rounds that the guard has already run.
+
+    def __call__(self, command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        """Return the Git result that matches one guard command."""
+        if command[1] == "show-ref":  # The guard checks for the baseline ref first.
+            return subprocess.CompletedProcess(command, 0, "", "")  # Report that origin/main exists.
+        if command[1] == "rev-parse" and "--is-shallow-repository" in command:  # The guard reads the boundary.
+            shallow_text = "true\n" if self.stays_shallow else "false\n"  # Report the modeled boundary state.
+            return subprocess.CompletedProcess(command, 0, shallow_text, "")  # Supply the boundary answer.
+        if command[1] == "rev-parse":  # The guard reads the checked-out commit before fetching.
+            return subprocess.CompletedProcess(command, 0, "head-sha\n", "")  # Supply a stable head commit.
+        if command[1] == "fetch":  # The guard deepens the shallow history.
+            self.fetch_commands.append(command)  # Keep the exact fetch argv for assertion.
+            self.rounds_done += 1  # Record that one deepen round completed.
+            return subprocess.CompletedProcess(command, 0, "", "")  # Report a successful fetch.
+        if command[1] == "merge-base":  # The guard reads the shared commit.
+            if self.rounds_done >= self.rounds_to_reveal:  # Enough history is now present.
+                return subprocess.CompletedProcess(command, 0, "base-sha\n", "")  # Supply the shared commit.
+            return subprocess.CompletedProcess(command, 1, "", "")  # Report that the base stays out of reach.
+        raise AssertionError(f"Unexpected Git command {command}")  # Fail on an unmodeled guard call.
+
+
 def test_baseline_ref_deepens_shallow_history(monkeypatch: pytest.MonkeyPatch) -> None:
     """Require a targeted history fetch when a shallow checkout hides the merge base."""
-    mocked_run = Mock(  # Model the initial shallow failure and the successful retry.
-        side_effect=[
-            subprocess.CompletedProcess([], 0),  # The origin main ref already exists.
-            subprocess.CompletedProcess([], 1, "", ""),  # The shallow history has no visible merge base.
-            subprocess.CompletedProcess([], 0, "head-sha\n", ""),  # Read the checked-out commit.
-            subprocess.CompletedProcess([], 0, "", ""),  # Deepen only the required history.
-            subprocess.CompletedProcess([], 0, "base-sha\n", ""),  # Find the shared commit after deepening.
-        ]
-    )
-    monkeypatch.setattr(subprocess, "run", mocked_run)  # Replace Git so the shallow path stays deterministic.
+    fake_git = FakeGit(rounds_to_reveal=1)  # Model a base that the first deepen round reveals.
+    monkeypatch.setattr(subprocess, "run", Mock(side_effect=fake_git))  # Replace Git with the modeled checkout.
 
     baseline = baseline_ref()  # Exercise the same retry path used by the guard.
 
     assert baseline == "base-sha", f"Checked 1 merge base. Read {baseline!r}."
-    assert mocked_run.call_args_list[3].args[0] == [  # Inspect the required targeted fetch.
+    assert fake_git.fetch_commands[0] == [  # Inspect the required targeted fetch.
         "git",
         "fetch",
         f"--deepen={MERGE_BASE_DEEPEN}",
         "origin",
         "head-sha",
         "+refs/heads/main:refs/remotes/origin/main",
-    ], f"Checked 1 history fetch. Read {mocked_run.call_args_list[3].args[0]!r}."
+    ], f"Checked 1 history fetch. Read {fake_git.fetch_commands[0]!r}."
 
 
 def test_baseline_ref_rejects_histories_without_a_common_ancestor(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Require an explicit failure when targeted deepening finds no common ancestor."""
-    mocked_run = Mock(  # Model a successful fetch between unrelated repository histories.
+    """Require an explicit failure when a complete history holds no common ancestor."""
+    mocked_run = Mock(  # Model the exact Git call order for unrelated repository histories.
         side_effect=[
             subprocess.CompletedProcess([], 0),  # The origin main ref exists.
-            subprocess.CompletedProcess([], 1, "", ""),  # The shallow graph has no visible merge base.
-            subprocess.CompletedProcess([], 0, "head-sha\n", ""),  # Read the checked-out commit.
-            subprocess.CompletedProcess([], 0, "", ""),  # Fetch the requested history successfully.
-            subprocess.CompletedProcess([], 1, "", ""),  # The full targeted graph still has no merge base.
+            subprocess.CompletedProcess([], 1, "", ""),  # Git finds no merge base.
+            subprocess.CompletedProcess([], 0, "false\n", ""),  # The checkout already holds all history.
         ]
     )
     monkeypatch.setattr(subprocess, "run", mocked_run)  # Isolate the fail-closed decision from Git state.
 
     with pytest.raises(RuntimeError, match="No merge base exists"):
         baseline_ref()  # Refuse to compare symbols when the required ancestor is absent.
+
+    assert mocked_run.call_count == 3, f"Checked 3 Git calls. Read {mocked_run.call_count}."
 
 
 def test_baseline_ref_returns_an_existing_merge_base_without_fetching(
@@ -443,6 +541,99 @@ def test_baseline_ref_returns_an_existing_merge_base_without_fetching(
 
     assert baseline == "base-sha", f"Checked 1 merge base. Read {baseline!r}."
     assert mocked_run.call_count == 2, f"Checked 2 Git calls. Read {mocked_run.call_count}."
+
+
+def test_baseline_ref_keeps_deepening_until_the_merge_base_is_readable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Require more than one deepen round when the shared commit sits beyond the first step."""
+    fake_git = FakeGit(rounds_to_reveal=2)  # Model a base that one fixed deepen round cannot reach.
+    monkeypatch.setattr(subprocess, "run", Mock(side_effect=fake_git))  # Replace Git with the modeled checkout.
+
+    baseline = baseline_ref()  # Exercise the deepening path that must not stop after one round.
+
+    assert baseline == "base-sha", f"Checked 1 merge base. Read {baseline!r}."
+    assert len(fake_git.fetch_commands) == 2, f"Checked {len(fake_git.fetch_commands)} deepening fetches."
+
+
+def test_baseline_ref_names_the_checkout_depth_when_history_stays_unreachable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Require an unreachable base to read as a checkout-depth fault, not a lost symbol."""
+    fake_git = FakeGit(rounds_to_reveal=99)  # Model history that no bounded deepening can reach.
+    monkeypatch.setattr(subprocess, "run", Mock(side_effect=fake_git))  # Replace Git with the modeled checkout.
+
+    with pytest.raises(RuntimeError) as failure:
+        baseline_ref()  # Refuse to compare symbols without the shared commit.
+
+    message = str(failure.value)  # Read the operator message for the unreachable condition.
+    assert "Cannot reach a merge base" in message, f"Checked 1 message. Read {message!r}."
+    assert "not a lost module-level symbol" in message, f"Checked 1 message. Read {message!r}."
+    assert "compared 0 modules" in message, f"Checked 1 message. Read {message!r}."
+    assert (
+        len(fake_git.fetch_commands) == MERGE_BASE_DEEPEN_ROUNDS
+    ), f"Checked {len(fake_git.fetch_commands)} deepening fetches."
+    assert (
+        fake_git.fetch_commands[-1][2] == "--unshallow"
+    ), f"Checked the final fetch. Read {fake_git.fetch_commands[-1]!r}."
+
+
+def test_baseline_ref_separates_unrelated_history_from_a_lost_symbol(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Require a complete history with no shared commit to read differently from a lost symbol."""
+    fake_git = FakeGit(rounds_to_reveal=99, stays_shallow=False)  # Model a complete, unrelated history.
+    monkeypatch.setattr(subprocess, "run", Mock(side_effect=fake_git))  # Replace Git with the modeled checkout.
+
+    with pytest.raises(RuntimeError) as failure:
+        baseline_ref()  # Refuse to compare symbols between unrelated histories.
+
+    message = str(failure.value)  # Read the operator message for the unrelated-history condition.
+    assert "No merge base exists" in message, f"Checked 1 message. Read {message!r}."
+    assert "not a lost module-level symbol" in message, f"Checked 1 message. Read {message!r}."
+    assert not fake_git.fetch_commands, f"Checked {len(fake_git.fetch_commands)} fetches on a complete history."
+
+
+def test_ensure_origin_main_keeps_a_complete_clone_complete(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Require a complete clone to fetch the baseline without a shallow boundary.
+
+    A depth-limited fetch into a complete clone would hide the shared commit that the guard reads.
+    """
+    mocked_run = Mock(  # Model a complete clone whose baseline ref is absent.
+        side_effect=[
+            subprocess.CompletedProcess([], 1),  # The origin main ref is absent.
+            subprocess.CompletedProcess([], 0, "false\n", ""),  # The clone holds all history.
+            subprocess.CompletedProcess([], 0, "", ""),  # The baseline fetch succeeds.
+        ]
+    )
+    monkeypatch.setattr(subprocess, "run", mocked_run)  # Replace Git so the fetch argv stays readable.
+
+    ensure_origin_main()  # Exercise the baseline fetch on a complete clone.
+
+    fetch_command = mocked_run.call_args_list[2].args[0]  # Read the exact baseline fetch argv.
+    assert fetch_command == [
+        "git",
+        "fetch",
+        "origin",
+        "main",
+    ], f"Checked 1 baseline fetch. Read {fetch_command!r}."
+
+
+def test_ensure_origin_main_keeps_a_shallow_checkout_shallow(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Require a shallow checkout to fetch the baseline cheaply, because deepening follows later."""
+    mocked_run = Mock(  # Model a shallow checkout whose baseline ref is absent.
+        side_effect=[
+            subprocess.CompletedProcess([], 1),  # The origin main ref is absent.
+            subprocess.CompletedProcess([], 0, "true\n", ""),  # The checkout holds a shallow boundary.
+            subprocess.CompletedProcess([], 0, "", ""),  # The baseline fetch succeeds.
+        ]
+    )
+    monkeypatch.setattr(subprocess, "run", mocked_run)  # Replace Git so the fetch argv stays readable.
+
+    ensure_origin_main()  # Exercise the baseline fetch on a shallow checkout.
+
+    fetch_command = mocked_run.call_args_list[2].args[0]  # Read the exact baseline fetch argv.
+    assert "--depth=1" in fetch_command, f"Checked 1 baseline fetch. Read {fetch_command!r}."
 
 
 def test_read_archived_module_rejects_unreadable_required_input() -> None:
