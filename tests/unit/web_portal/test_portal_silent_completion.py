@@ -172,7 +172,6 @@ def test_handled_handler_error_does_not_complete() -> None:
 def test_issue_4030_unresolved_site_reports_failed_with_unrelated_output(tmp_path: Path) -> None:
     """Menu 95 must fail when site resolution stops before the Mist request."""
     unrelated_name = "unrelated.csv"  # WHY: prove another file cannot convert failure into completion.
-    cloud_fetch = MagicMock(name="getSiteDeviceSyntheticTest")  # WHY: the failed path must not reach Mist.
     resolver = MagicMock()  # WHY: isolate the real fetcher from live application state.
     resolver.DeviceDataFetcher = DeviceDataFetcher  # WHY: retain the production fetcher contract.
     resolver.apisession = MagicMock(name="apisession")  # WHY: block any accidental live authentication.
@@ -183,18 +182,14 @@ def test_issue_4030_unresolved_site_reports_failed_with_unrelated_output(tmp_pat
     try:
         with patch.object(display_module, "SourceDependencyResolver", resolver):  # WHY: route the real display path.
             with patch.object(fetcher_module, "_MH", resolver):  # WHY: route the real fetcher path.
-                with patch.object(  # WHY: replace the Mist SDK function with an observed non-raising seam.
-                    display_module.mistapi.api.v1.sites.devices,
-                    "getSiteDeviceSyntheticTest",
-                    cloud_fetch,
-                ):
+                with patch.object(DeviceDataFetcher, "_fetch_data") as fetch_data:  # WHY: observe an owned seam.
                     with patch.object(operation_module, "OutputFileScanner", scanner_factory):  # WHY: real scanner.
                         executor._execute_operation(run, {})  # WHY: drive capture, scanning, and verdict together.
         assert run["status"] == "failed", "An unresolved Menu 95 site reported Complete."  # WHY: issue #4030.
         assert run["error_message"] == "! Error fetching device data: site ID could not be resolved."  # WHY: exact.
         assert unrelated_name in run["output_files"]  # WHY: retain concurrent evidence without trusting it.
         assert "Completed device_tests execution." not in _run_messages(run)  # WHY: no false wrapper success.
-        cloud_fetch.assert_not_called()  # WHY: a missing site must stop before the Mist request.
+        fetch_data.assert_not_called()  # WHY: a missing site must stop before the Mist request.
     finally:
         executor.shutdown(0)  # WHY: release the executor thread pool created for the test.
 
