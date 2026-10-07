@@ -72,12 +72,15 @@ class TestGetOrgName:
         with patch.object(ocm.mistapi.api.v1.orgs.orgs, "getOrg", return_value=response):
             assert manager._get_org_name() == "Unknown"
 
-    def test_an_api_failure_falls_back(self, manager: OrgConfigMigrationManager, caplog: Any) -> None:
-        """A dead org endpoint must not abandon an export that would otherwise work."""
-        caplog.set_level("WARNING")  # WHY: the handler reports the failure at WARNING level.
-        with patch.object(ocm.mistapi.api.v1.orgs.orgs, "getOrg", side_effect=RuntimeError("401 denied")):
+    def test_a_http_401_response_falls_back(self, manager: OrgConfigMigrationManager, caplog: Any) -> None:
+        """A 401 from the Mist API must not crash the export flow."""
+        caplog.set_level("WARNING")  # WHY: the handler reports the refusal at WARNING level.
+        response = MagicMock()  # WHY: the SDK returns a real response object, never a raised exception.
+        response.status_code = 401  # WHY: a real HTTP 401 is the rejected state.
+        response.data = {"error": "401 denied"}  # WHY: the SDK records the error body here.
+        with patch.object(ocm.mistapi.api.v1.orgs.orgs, "getOrg", return_value=response):
             assert manager._get_org_name() == "Unknown"
-        assert "401 denied" in caplog.text  # WHY: the operator needs the cause to triage.
+        assert "401 denied" in caplog.text  # WHY: the operator needs the real error body to triage.
 
 
 class TestBuildExportBundle:

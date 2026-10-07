@@ -152,7 +152,20 @@ class OrgConfigMigrationManager:  # Org config migration manager.
         logger.info("Fetching org name for org %s", self.org_id)  # Log before API call
         try:
             response = mistapi.api.v1.orgs.orgs.getOrg(self.session, self.org_id)  # Query Mist API for org details
+            status_code = getattr(response, "status_code", None)
+            if isinstance(status_code, int) and status_code >= 400:
+                error_text = None
+                if hasattr(response, "data") and isinstance(response.data, dict):
+                    error_text = response.data.get("error")
+                if error_text:
+                    logging.warning("Could not fetch org name: %s", error_text)
+                else:
+                    logging.warning("Could not fetch org name: HTTP %s", status_code)
+                return "Unknown"  # Fallback when the API refuses the request.
             if hasattr(response, "data") and response.data:  # Verify response has data attribute
+                if isinstance(response.data, dict) and response.data.get("error"):
+                    logging.warning("Could not fetch org name: %s", response.data.get("error"))
+                    return "Unknown"  # Fallback when the API returns an error payload.
                 name = response.data.get("name", "Unknown")  # Extract org name from response
                 logger.debug("Org name resolved: %s", name)  # Log resolved name
                 return name  # type: ignore[no-any-return] # Return org name string
