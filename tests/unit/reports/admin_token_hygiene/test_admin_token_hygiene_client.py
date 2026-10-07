@@ -95,7 +95,7 @@ def test_client_raises_on_admin_4xx_response(monkeypatch: Any, mistapi_module: A
     monkeypatch.setattr(
         mistapi_module.api.v1.orgs.admins,
         "listOrgAdmins",
-        lambda session, org_id: FakeResponse([], 403),
+        lambda session, org_id: FakeResponse([], status_code=403),
     )
     client = AdminTokenHygieneClient(object(), "org-1")
     with pytest.raises(RuntimeError, match="listOrgAdmins failed with HTTP 403"):
@@ -108,7 +108,7 @@ def test_client_raises_on_token_5xx_response(monkeypatch: Any, mistapi_module: A
     monkeypatch.setattr(
         mistapi_module.api.v1.orgs.apitokens,
         "listOrgApiTokens",
-        lambda session, org_id: FakeResponse([], 503),
+        lambda session, org_id: FakeResponse([], status_code=503),
     )
     client = AdminTokenHygieneClient(object(), "org-1")
     with pytest.raises(RuntimeError, match="listOrgApiTokens failed with HTTP 503"):
@@ -120,7 +120,7 @@ def test_client_returns_empty_settings_on_4xx_response(monkeypatch: Any, mistapi
     monkeypatch.setattr(
         mistapi_module.api.v1.orgs.setting,
         "getOrgSettings",
-        lambda session, org_id: FakeResponse({"error": "denied"}, 404),
+        lambda session, org_id: FakeResponse({"error": "denied"}, status_code=404),
     )
     client = AdminTokenHygieneClient(object(), "org-1")
     assert client.get_settings() == {}
@@ -131,7 +131,7 @@ def test_client_returns_empty_settings_on_5xx_response(monkeypatch: Any, mistapi
     monkeypatch.setattr(
         mistapi_module.api.v1.orgs.setting,
         "getOrgSettings",
-        lambda session, org_id: FakeResponse({"error": "down"}, 500),
+        lambda session, org_id: FakeResponse({"error": "down"}, status_code=500),
     )
     client = AdminTokenHygieneClient(object(), "org-1")
     assert client.get_settings() == {}
