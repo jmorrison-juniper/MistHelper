@@ -96,28 +96,30 @@ class TestMetricsGatewayStartupContract:
     def test_supervision_watches_the_metrics_gateway(self) -> None:
         """A gateway exit must stop the container with a failure status."""
         text = read_start_script()
-        wait_command = re.search(r"^wait -n (?P<pids>.+) 2>/dev/null$", text, re.MULTILINE)
-        assert wait_command is not None, "the startup script has no service supervision wait"
-        assert '"$METRICS_PID"' in wait_command.group("pids"), "service supervision omits the metrics gateway"
+        wait_commands = re.findall(r"^wait -n (.+) 2>/dev/null$", text, re.MULTILINE)
+        expected = '"$GUNICORN_PID" "$CAPTURE_PID" "$METRICS_PID" "$SSHD_PID" "$SNMPD_PID"'
+        assert wait_commands == [expected], f"service supervision has unexpected process identifiers: {wait_commands}"
 
     def test_a_metrics_gateway_crash_has_its_own_name(self) -> None:
         """The container log must identify the gateway instead of an unknown service."""
         text = read_start_script()
-        crash_branch = re.search(
-            r'elif ! kill -0 "\$METRICS_PID" 2>/dev/null; then\s+' r'CRASHED_SERVICE="the metrics gateway"',
+        crash_branches = re.findall(
+            r'elif ! kill -0 "\$METRICS_PID" 2>/dev/null; then\s+' r'CRASHED_SERVICE="(the metrics gateway)"',
             text,
         )
-        assert crash_branch is not None, "the crash classifier does not name the metrics gateway"
+        assert crash_branches == [
+            "the metrics gateway"
+        ], f"the crash classifier has unexpected metrics gateway branches: {crash_branches}"
 
     def test_the_metrics_port_is_validated_before_start(self) -> None:
         """An invalid published port must stop startup with a named error."""
         text = read_start_script()
-        validation = re.search(
+        validations = re.findall(
             r'if ! \[\[ "\$METRICS_PORT" =~ \^\[0-9\]\+\$ \]\] '
             r'\|\| \[ "\$METRICS_PORT" -lt 1024 \] \|\| \[ "\$METRICS_PORT" -gt 65535 \]; then',
             text,
         )
-        assert validation is not None, "the startup script does not validate METRICS_PORT"
+        assert len(validations) == 1, f"expected 1 METRICS_PORT validation, found {len(validations)}"
 
     @pytest.mark.parametrize("source", [None, ""], ids=["missing", "empty"])
     def test_the_guard_rejects_missing_or_empty_input(self, tmp_path: Path, source: str | None) -> None:
