@@ -458,8 +458,19 @@ def test_the_page_shows_the_phase_card_with_every_test_identifier(harness: Watch
     operation_id = save_plan(harness)  # The planned operation.
     confirm(harness, operation_id)  # The operator types CONFIRM.
     page = job_page(harness, operation_id)  # The progress page.
+    rendered_text = " ".join(page.split())  # Normalize template whitespace for exact operator-text checks.
     assert 'data-testid="org-upgrade-phases"' in page  # The phase card.
     assert all(testid in page for testid in PHASE_TESTIDS)  # Three cells for each of the four phases.
+    assert "The phase watch starts after the portal sends the upgrade requests." in rendered_text  # Start boundary.
+    assert "It observes the submitted work and sends no firmware request." in rendered_text  # Read-only boundary.
+    assert (
+        "It does not prove that the cloud accepted each request or that the portal sent device types in this order."
+        in rendered_text
+    )  # The watch cannot prove acceptance or request order.
+    assert (
+        "Warning: If a submission result is uncertain, do not start another upgrade. "
+        "A second upgrade can target the same devices." in rendered_text
+    )  # The warning names the duplicate-upgrade consequence.
     watch_state = re.search(r'data-testid="org-upgrade-phase-watch-state"[^>]*>([^<]*)<', page)  # The label.
     assert watch_state is not None and watch_state.group(1) == "Not started"  # The first watch label.
     assert phase_active_attribute(page) == "true"  # FR-018: the poll starts the watch.

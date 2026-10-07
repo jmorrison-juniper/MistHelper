@@ -70,8 +70,12 @@
        {% if not org_anchor_note %}hidden{% endif %}>{{- org_anchor_note -}}</p>
 
     <p class="portal-card-note" data-testid="org-upgrade-phase-cadence">
-      Each phase count moves once, when that phase ends. A count that does not
-      change means the portal is still waiting for the devices of that phase.
+      The phase watch starts after the portal sends the upgrade requests.
+      It observes the submitted work and sends no firmware request.
+      It does not prove that the cloud accepted each request or that the portal
+      sent device types in this order. Warning: If a submission result is
+      uncertain, do not start another upgrade. A second upgrade can target the
+      same devices.
     </p>
 
     <div class="status-phase-list">

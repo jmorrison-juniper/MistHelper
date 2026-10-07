@@ -6,9 +6,10 @@ Why:
     switches, access points, and wireless clients. This module gives a
     multi-site operation the same watch.
 
-    The watch reads the cloud, and it writes the operation record only. It
-    sends no firmware write. A watch that starts again after a restart
-    therefore cannot upgrade a device a second time.
+    The phase watch starts after the portal sends the upgrade requests.
+    It observes the submitted work and sends no firmware request.
+    It does not prove that the cloud accepted each request or that the portal
+    sent device types in this order.
 
     The capture portal runs one Gunicorn worker process. The single-site driver
     keeps its run threads in that process, and the registry below keeps one
