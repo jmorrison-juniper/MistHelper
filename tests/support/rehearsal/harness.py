@@ -148,6 +148,25 @@ class RunStoreDouble:
             self.writes.append(str(run.get("state", "")))  # The state order proves the cascade order.
         return True  # The driver fails the run when a write reports False.
 
+    def apply_stop_request(self, run_id: str, stop_request: dict[str, Any], updated_at: str) -> bool:
+        """Write only the stop fields and preserve every other field.
+
+        Args:
+            run_id: The run key of the stop.
+            stop_request: The whole stop document.
+            updated_at: The UTC change time in ISO 8601 form.
+
+        Returns:
+            True, or False when the store holds no such run.
+        """
+        with self._guard:  # The driver thread may write at this moment.
+            record = self.records.get(run_id)  # The narrow mutation changes the stored record in place.
+            if record is None:  # Fail closed for an absent run, as the database store does.
+                return False  # The stop store then raises instead of claiming a write.
+            record["stop_request"] = stop_request  # Change the one field that the stop owns.
+            record["updated_at"] = updated_at  # Record the change time beside the stop.
+        return True  # The driver fails the run when a write reports False.
+
 
 class CaptureDouble:
     """The post-check capture path of the rehearsal.

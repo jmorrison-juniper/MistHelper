@@ -76,6 +76,24 @@ class MemoryRunStore:
         self.writes += 1  # A test reads this count to prove that the outcome landed.
         return True  # The stop store raises when a write reports False.
 
+    def apply_stop_request(self, run_id: str, stop_request: dict[str, Any], updated_at: str) -> bool:
+        """Write only the stop fields and preserve every other field.
+
+        Args:
+            run_id: The run key of the stop.
+            stop_request: The whole stop document.
+            updated_at: The UTC change time in ISO 8601 form.
+
+        Returns:
+            True when the held record carries the run key, otherwise False.
+        """
+        if self.record.get("run_id") != run_id:  # Fail closed for an absent run, as the store does.
+            return False  # The stop store then raises instead of claiming a write.
+        self.record["stop_request"] = stop_request  # Change the one field that the stop owns.
+        self.record["updated_at"] = updated_at  # Record the change time beside the stop.
+        self.writes += 1  # A test reads this count to prove that the stop landed.
+        return True  # The stop store raises when a write reports False.
+
 
 class CancelRecorder:
     """Record each cancel call and report every device of the plan as stopped.

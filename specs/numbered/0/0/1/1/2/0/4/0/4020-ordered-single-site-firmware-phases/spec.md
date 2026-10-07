@@ -68,6 +68,13 @@ The run also read as a success.
   the phase leaves the portal. A durable stop request blocks the next plan and
   uses the normal `stopped` finalization path. The accepted-row write changes
   only the upgrade rows, so it cannot erase a stop that another worker stores.
+- FR-4020-12: The stop write changes only the stop fields of the run record, so
+  it cannot erase an accepted upgrade row, a state, a phase, or a post-check
+  field that the driver stores at the same time.
+- FR-4020-13: One run-scoped gate covers the stop check, the one firmware call,
+  and the accepted-row write. A stop that claims the gate blocks each later
+  firmware call of that run. A firmware call that holds the gate completes and
+  records its evidence before the stop becomes durable.
 
 ## Owner decisions
 

@@ -99,6 +99,24 @@ class FakeRunRecordStore:
         self.records[str(run["run_id"])] = deepcopy(run)  # A copy, so a later edit cannot reach the store
         return True
 
+    def apply_stop_request(self, run_id: str, stop_request: dict[str, Any], updated_at: str) -> bool:
+        """Write only the stop fields of one record and preserve every other field.
+
+        Args:
+            run_id: The run key.
+            stop_request: The stop request record.
+            updated_at: The fresh change time in ISO 8601 UTC.
+
+        Returns:
+            False when this double holds no such run, or True after the narrow write.
+        """
+        held = self.records.get(run_id)  # An absent run cannot carry a durable stop request.
+        if held is None:
+            return False  # Fail closed, exactly as the production stores do.
+        held["stop_request"] = deepcopy(stop_request)  # Change only the stop request field.
+        held["updated_at"] = updated_at  # The poll route reads the fresh change time.
+        return True  # The stop is durable beside every concurrent accepted row.
+
 
 def _run_record(state: str = RUNNING_STATE) -> dict[str, Any]:
     """Return one run record in the state a test needs.
@@ -428,7 +446,7 @@ def test_read_returns_the_stored_request() -> None:
     """
     records = _records()
     stored = _store_with_request(records).read(RUN_ID)
-    assert stored is not None
+    assert isinstance(stored, StopRequest)  # The read rebuilds the stored dictionary into the value type.
     assert stored.requested_by == FIRST_ACTOR
     assert stored.scope == STOP_SCOPE_RUN
 
