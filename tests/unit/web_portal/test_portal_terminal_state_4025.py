@@ -104,15 +104,16 @@ def _run_record_from(executor: OperationExecutor, lines: list[str]) -> dict:
 
 def test_a_404_run_classifies_as_a_handled_error(caplog: pytest.LogCaptureFixture) -> None:
     """An upstream HTTP 404 must end the portal run as a handled error."""
-    response = _StubResponse(404, {"detail": "Not Found"}, ORG_APPLICATIONS_URL)
+    response = _StubResponse(status_code=404, data={"detail": "Not Found"}, url=ORG_APPLICATIONS_URL)
     lines = _capture_exporter_lines(response, caplog)
     executor = _build_executor()
-    assert executor._handled_error_reason(_run_record_from(executor, lines)) is not None
+    reason = executor._handled_error_reason(_run_record_from(executor, lines))  # Read the production classifier.
+    assert "Error fetching getOrgApplicationList" in str(reason)
 
 
 def test_a_404_run_does_not_classify_as_an_empty_result(caplog: pytest.LogCaptureFixture) -> None:
     """An upstream HTTP 404 must not read as an honest empty organization."""
-    response = _StubResponse(404, {"detail": "Not Found"}, ORG_APPLICATIONS_URL)
+    response = _StubResponse(status_code=404, data={"detail": "Not Found"}, url=ORG_APPLICATIONS_URL)
     lines = _capture_exporter_lines(response, caplog)
     executor = _build_executor()
     assert executor._no_output_reason(_run_record_from(executor, lines)) is None
@@ -120,7 +121,7 @@ def test_a_404_run_does_not_classify_as_an_empty_result(caplog: pytest.LogCaptur
 
 def test_a_404_reason_names_the_status_code(caplog: pytest.LogCaptureFixture) -> None:
     """The portal failure reason must carry the HTTP status for the operator."""
-    response = _StubResponse(404, {"detail": "Not Found"}, ORG_APPLICATIONS_URL)
+    response = _StubResponse(status_code=404, data={"detail": "Not Found"}, url=ORG_APPLICATIONS_URL)
     lines = _capture_exporter_lines(response, caplog)
     executor = _build_executor()
     assert "404" in str(executor._handled_error_reason(_run_record_from(executor, lines)))
@@ -128,23 +129,25 @@ def test_a_404_reason_names_the_status_code(caplog: pytest.LogCaptureFixture) ->
 
 def test_a_500_run_classifies_as_a_handled_error(caplog: pytest.LogCaptureFixture) -> None:
     """An upstream server failure must also end the run as a handled error."""
-    response = _StubResponse(500, {"detail": "Internal Server Error"}, ORG_APPLICATIONS_URL)
+    response = _StubResponse(status_code=500, data={"detail": "Internal Server Error"}, url=ORG_APPLICATIONS_URL)
     lines = _capture_exporter_lines(response, caplog)
     executor = _build_executor()
-    assert executor._handled_error_reason(_run_record_from(executor, lines)) is not None
+    reason = executor._handled_error_reason(_run_record_from(executor, lines))  # Read the production classifier.
+    assert "HTTP 500" in str(reason)
 
 
 def test_an_empty_success_still_classifies_as_an_empty_result(caplog: pytest.LogCaptureFixture) -> None:
     """A genuine empty organization must keep the honest empty-result answer."""
-    response = _StubResponse(200, {"results": []}, ORG_APPLICATIONS_URL)
+    response = _StubResponse(status_code=200, data={"results": []}, url=ORG_APPLICATIONS_URL)
     lines = _capture_exporter_lines(response, caplog)
     executor = _build_executor()
-    assert executor._no_output_reason(_run_record_from(executor, lines)) is not None
+    reason = executor._no_output_reason(_run_record_from(executor, lines))  # Read the production classifier.
+    assert "No getOrgApplicationList data found" in str(reason)
 
 
 def test_an_empty_success_does_not_classify_as_a_handled_error(caplog: pytest.LogCaptureFixture) -> None:
     """A genuine empty organization must not be reported as a failure."""
-    response = _StubResponse(200, {"results": []}, ORG_APPLICATIONS_URL)
+    response = _StubResponse(status_code=200, data={"results": []}, url=ORG_APPLICATIONS_URL)
     lines = _capture_exporter_lines(response, caplog)
     executor = _build_executor()
     assert executor._handled_error_reason(_run_record_from(executor, lines)) is None
