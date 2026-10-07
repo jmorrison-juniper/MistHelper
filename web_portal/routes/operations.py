@@ -61,6 +61,7 @@ NO_SITE_REASON = "No site was chosen, so the portal cannot list this data."
 NO_ROWS_REASON = "The Mist API answered with no rows for this request."
 API_ERROR_REASON = "The portal could not reach the Mist API. Try again."
 ALL_SITES_EMPTY_REASON = "Every site holds no hardware. Add show_empty=1 to list them."
+NO_MSP_SCOPE_REASON = "This account has no MSP scope."
 
 
 class PickList(list):
@@ -269,6 +270,17 @@ def list_site_clients(site_id):
     clients = _fetch_site_clients(apisession, site_id)
     payload = _pick_list_payload("clients", clients)
     payload["site_id"] = site_id  # Echo the site, so the page can prove which request answered.
+    return jsonify(payload)
+
+
+@operations_bp.route("/api/operations/msps")
+def list_msps():
+    """Return MSP grants from the authenticated Mist session."""
+    apisession = current_app.config.get("APISESSION")  # The portal holds one Mist session.
+    logger.info("Listing permitted MSP grants")  # Log before the external read.
+    msps = _fetch_msp_grants(apisession)  # Read only the grants the session permits.
+    payload = _pick_list_payload("msps", msps)  # Match the existing selector response shape.
+    logger.debug("Listed %d permitted MSP grants", len(msps))  # Log after the transform.
     return jsonify(payload)
 
 
@@ -485,6 +497,37 @@ def _fetch_org_sites(apisession, org_id: str, show_empty: bool = False) -> PickL
         )  # Log the exception class and text for issue triage.
         # Return an empty list because the route reads len() directly and cannot
         # handle a non-list. The log record above makes the failure visible.
+        return PickList(reason=API_ERROR_REASON)
+
+
+def _fetch_msp_grants(apisession) -> PickList:
+    """Fetch permitted MSP grants from the authenticated user's self response."""
+    if not apisession:
+        logger.warning("Cannot list MSP grants, because the portal holds no Mist API session.")
+        return PickList(reason=NO_SESSION_REASON)
+    try:
+        import mistapi
+
+        response = mistapi.api.v1.self.self.getSelf(apisession)
+        status = getattr(response, "status_code", None)
+        if type(status) is not int or not 200 <= status < 300:
+            logger.error("Failed Mist API MSP grant read with status %r", status)
+            return PickList(reason=f"The Mist API returned status {status} while reading MSP access.")
+        user_data = getattr(response, "data", None)
+        privileges = user_data.get("privileges", []) if isinstance(user_data, dict) else []
+        rows = [
+            {
+                "id": privilege["msp_id"],
+                "name": privilege.get("msp_name") or privilege.get("name") or privilege["msp_id"],
+            }
+            for privilege in privileges
+            if isinstance(privilege, dict) and isinstance(privilege.get("msp_id"), str) and privilege["msp_id"]
+        ]
+        picks = PickList(sort_by_name(rows), reason=NO_MSP_SCOPE_REASON if not rows else None)
+        logger.debug("Prepared %d permitted MSP rows", len(picks))
+        return picks
+    except Exception as error:
+        logger.exception("Failed to list permitted MSP grants with %s: %s", type(error).__name__, error)
         return PickList(reason=API_ERROR_REASON)
 
 

@@ -314,6 +314,7 @@ function buildParameterLabel(param) {
 }
 
 function createParameterControl(param) {
+    if (param.name === 'msp_id') return createMspDropdown(param);
     switch (param.param_type) {
         case 'site':    return createSiteDropdown(param);
         case 'device':  return createDeviceDropdown(param);
@@ -323,6 +324,42 @@ function createParameterControl(param) {
         case 'text':
         default:        return createTextInput(param);
     }
+}
+
+function createMspDropdown(param) {
+    var select = buildSelect(param);
+    select.dataset.testid = 'msp-selector';
+    select.setAttribute('data-testid', 'msp-selector');
+    select.innerHTML = '<option value="">Loading MSPs...</option>';
+    select.disabled = true;
+
+    select.addEventListener('change', function() { validateForm(); });
+    fetch('/api/operations/msps')
+        .then(readJsonAnswer)
+        .then(function(data) {
+            if (data.error) {
+                showSelectError(select, 'Cannot load the MSPs. ' + data.error);
+                return;
+            }
+            if (!data.msps || data.msps.length === 0) {
+                showSelectError(select, data.reason || 'No MSPs are available.');
+                return;
+            }
+            select.innerHTML = '<option value="">-- Select MSP --</option>';
+            data.msps.forEach(function(msp) {
+                var option = document.createElement('option');
+                option.value = msp.id;
+                option.textContent = msp.name + ' (' + msp.id + ')';
+                select.appendChild(option);
+            });
+            select.disabled = false;
+            select.title = '';
+            validateForm();
+        })
+        .catch(function(err) {
+            showSelectError(select, 'Cannot load the MSPs. ' + err.message);
+        });
+    return select;
 }
 
 // ---------------------------------------------------------------------------
