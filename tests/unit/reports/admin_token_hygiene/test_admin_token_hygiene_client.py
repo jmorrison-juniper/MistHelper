@@ -17,6 +17,21 @@ class FakeResponse:
 
     data: Any
     status_code: int = 200
+    next: str | None = None
+
+
+class FakePagedSession:
+    """Return one planned later page and record the requested link."""
+
+    def __init__(self, later_page: FakeResponse) -> None:
+        """Store the page that follows the endpoint response."""
+        self._later_page = later_page  # WHY: the fake must return the exact planned second page.
+        self.links: list[str] = []  # WHY: the assertion must prove that pagination used this session.
+
+    def mist_get(self, uri: str) -> FakeResponse:
+        """Return the planned page for one SDK pagination request."""
+        self.links.append(uri)  # WHY: record the SDK request before returning its response.
+        return self._later_page  # WHY: complete the two-page response without network access.
 
 
 def test_client_reads_admins_without_logging_payload(monkeypatch: Any) -> None:
@@ -37,6 +52,22 @@ def test_client_reads_tokens_without_filtering_metadata(monkeypatch: Any) -> Non
     )
     client = AdminTokenHygieneClient(object(), "org-1")
     assert client.list_tokens() == [{"id": "t"}]
+
+
+def test_client_uses_active_session_for_paginated_admins(monkeypatch: Any) -> None:
+    """The admin read must traverse a later page through the active session."""
+    second_page = FakeResponse([{"email": "b"}])  # WHY: the second page proves pagination did not stop early.
+    session = FakePagedSession(second_page)  # WHY: the client must pass this object to the real SDK paginator.
+    first_page = FakeResponse([{"email": "a"}], next="/admins?page=2")  # WHY: a next link triggers get_next.
+    monkeypatch.setattr(  # WHY: keep the endpoint deterministic while the real paginator runs.
+        mistapi.api.v1.orgs.admins,
+        "listOrgAdmins",
+        lambda active_session, org_id: first_page,
+    )
+    client = AdminTokenHygieneClient(session, "org-1")  # WHY: bind the session that owns the later-page fetch.
+
+    assert client.list_admins() == [{"email": "a"}, {"email": "b"}]  # WHY: prove both pages reached the caller.
+    assert session.links == ["/admins?page=2"]  # WHY: prove self._apisession traversed the next link.
 
 
 def test_client_reads_settings(monkeypatch: Any) -> None:

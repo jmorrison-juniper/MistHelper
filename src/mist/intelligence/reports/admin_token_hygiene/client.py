@@ -31,10 +31,12 @@ class AdminTokenHygieneClient:
         if status_code >= 400:  # WHY: a partial or refused list cannot produce a trustworthy report.
             raise RuntimeError(f"{endpoint_name} failed with HTTP {status_code}")
 
-    @staticmethod
-    def _rows_from_response(response: Any) -> list[dict[str, Any]]:
+    def _rows_from_response(self, response: Any) -> list[dict[str, Any]]:
         """Return response rows without logging the response body."""
-        rows = mistapi.get_all(response=response, mist_session=None)  # WHY: unwrap simple and paged SDK responses.
+        rows = mistapi.get_all(  # WHY: later pages need the same authenticated session as the first page.
+            response=response,
+            mist_session=self._apisession,
+        )
         if isinstance(rows, list):  # WHY: the expected list shape can pass through unchanged.
             return [row for row in rows if isinstance(row, dict)]  # WHY: report rows must be mapping objects.
         data = getattr(response, "data", rows)  # WHY: some test doubles expose only a data attribute.
