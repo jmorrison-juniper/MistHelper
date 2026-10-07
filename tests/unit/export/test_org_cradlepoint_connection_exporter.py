@@ -8,6 +8,8 @@ The suite proves four behaviors that the menu depends on:
 3. The write reaches ``write_with_format_selection`` with the exact
    operationId, and an empty result writes nothing.
 4. The menu entry point keeps every failure inside the menu.
+5. The transport status gate of issue #3819 refuses every HTTP result that it
+   cannot trust, and it never invents a success value.
 
 Every Mist call is mocked, so no test reaches the live cloud.
 """
@@ -67,7 +69,7 @@ class TestFetch:
         body = {"last_status": "active", "error": ""}
         with patch(
             f"{MODULE}.mistapi.api.v1.orgs.setting.testOrgCradlepointConnection",
-            return_value=SimpleNamespace(data=body),
+            return_value=SimpleNamespace(status_code=200, data=body),
         ) as call:
             assert OrgCradlepointConnectionExporter._fetch(ORG_ID) == body
 
@@ -78,7 +80,7 @@ class TestFetch:
         """Only a dict body can hold the status, so any other shape is empty."""
         with patch(
             f"{MODULE}.mistapi.api.v1.orgs.setting.testOrgCradlepointConnection",
-            return_value=SimpleNamespace(data=body),
+            return_value=SimpleNamespace(status_code=200, data=body),
         ):
             assert OrgCradlepointConnectionExporter._fetch(ORG_ID) == {}
 
@@ -129,7 +131,7 @@ class TestStatusMenu:
         mist_helper.ConfigUtils.get_cached_or_prompted_org_id.return_value = ORG_ID
         with patch(
             f"{MODULE}.mistapi.api.v1.orgs.setting.testOrgCradlepointConnection",
-            return_value=SimpleNamespace(data={"last_status": "active", "error": ""}),
+            return_value=SimpleNamespace(status_code=200, data={"last_status": "active", "error": ""}),
         ):
             OrgCradlepointConnectionExporter.status()
 
@@ -173,7 +175,7 @@ class TestStatusMenu:
         mist_helper.ConfigUtils.get_cached_or_prompted_org_id.return_value = ORG_ID
         with patch(
             f"{MODULE}.mistapi.api.v1.orgs.setting.testOrgCradlepointConnection",
-            return_value=SimpleNamespace(data=None),
+            return_value=SimpleNamespace(status_code=200, data=None),
         ):
             OrgCradlepointConnectionExporter.status()
 
@@ -210,6 +212,7 @@ class TestStatusMenu:
                 FailureModeOrgCradlepointConnectionExporter.status()
 
         assert f"HTTP {status_code}" in caplog.text
+        assert "outcome=http-error" in caplog.text
         assert "controlled HTTP" not in caplog.text
         mist_helper.DataExporter.write_with_format_selection.assert_not_called()
 
@@ -230,3 +233,114 @@ class TestStatusMenu:
         assert f"HTTP {status_code}" in caplog.text  # Prove the operator can see the status.
         assert "Error fetching the Cradlepoint status" in caplog.text  # Prove the product logged the failure.
         mist_helper.DataExporter.write_with_format_selection.assert_not_called()  # Failed calls must not write.
+
+
+class TestTransportStatusGate:
+    """Issue #3819: an untrustworthy HTTP transport status must never write a row.
+
+    Before the repair the exporter changed an absent ``status_code`` to ``200``
+    and accepted ``None``, a string, a float, ``True``, ``False``, ``1xx``, and
+    ``3xx``. A payload of ``last_status: active`` then reached CSV and SQLite
+    although the HTTP result was unknown. Each test here proves that the
+    exporter now binds the condition, names it in the log, and writes nothing.
+    """
+
+    ACTIVE_BODY = {"last_status": "active", "error": ""}  # The payload that must never escape a blind gate.
+
+    @staticmethod
+    def _run_status(mist_helper: MagicMock, response: object) -> None:
+        """Drive the menu entry point against one controlled SDK response double.
+
+        Args:
+            mist_helper: The MistHelper stub that owns the org prompt and the writer.
+            response: The SDK response double that carries the transport status under test.
+        """
+        mist_helper.ConfigUtils.get_cached_or_prompted_org_id.return_value = ORG_ID  # Reach the API call.
+        with patch(  # Replace the SDK call so no test reaches the live cloud.
+            f"{MODULE}.mistapi.api.v1.orgs.setting.testOrgCradlepointConnection",
+            return_value=response,
+        ):
+            FailureModeOrgCradlepointConnectionExporter.status()  # Call the real exporter entry point from src.
+
+    def _writer_of(self, mist_helper: MagicMock) -> MagicMock:
+        """Return the export writer so each test can prove that no row escaped.
+
+        Args:
+            mist_helper: The MistHelper stub whose writer must stay untouched.
+
+        Returns:
+            The writer mock, so each caller can add its own explicit assertions.
+        """
+        return mist_helper.DataExporter.write_with_format_selection  # Bind the writer for the caller checks.
+
+    def test_an_absent_transport_status_is_refused(
+        self, mist_helper: MagicMock, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """A response with no ``status_code`` must not be read as HTTP 200."""
+        response = SimpleNamespace(data=dict(self.ACTIVE_BODY))  # No status_code attribute at all.
+        with caplog.at_level("ERROR"):  # Capture the product refusal signal.
+            self._run_status(mist_helper, response)
+        assert "outcome=absent" in caplog.text  # The refusal must carry an explicit, named outcome.
+        assert "no HTTP transport status" in caplog.text  # The log must state the condition in plain words.
+        assert not self._writer_of(mist_helper).called  # An untrustworthy status must never reach persistence.
+        assert "active" not in str(self._writer_of(mist_helper).call_args_list)  # No false active row was written.
+
+    @pytest.mark.parametrize("status_code", [None, "200", "", 200.0, [200]])
+    def test_a_malformed_transport_status_is_refused(
+        self, mist_helper: MagicMock, caplog: pytest.LogCaptureFixture, status_code: Any
+    ) -> None:
+        """A ``None`` or non-integer ``status_code`` carries no usable HTTP result."""
+        response = SimpleNamespace(status_code=status_code, data=dict(self.ACTIVE_BODY))  # Malformed transport value.
+        with caplog.at_level("ERROR"):  # Capture the product refusal signal.
+            self._run_status(mist_helper, response)
+        assert "outcome=malformed" in caplog.text  # The refusal must carry an explicit, named outcome.
+        assert type(status_code).__name__ in caplog.text  # The log must name the type it refused.
+        assert not self._writer_of(mist_helper).called  # An untrustworthy status must never reach persistence.
+        assert "active" not in str(self._writer_of(mist_helper).call_args_list)  # No false active row was written.
+
+    @pytest.mark.parametrize("status_code", [True, False])
+    def test_a_boolean_transport_status_is_refused(
+        self, mist_helper: MagicMock, caplog: pytest.LogCaptureFixture, status_code: bool
+    ) -> None:
+        """``bool`` is an ``int`` subclass, so a plain integer test accepts it by accident."""
+        response = SimpleNamespace(status_code=status_code, data=dict(self.ACTIVE_BODY))  # Boolean transport value.
+        with caplog.at_level("ERROR"):  # Capture the product refusal signal.
+            self._run_status(mist_helper, response)
+        assert "outcome=malformed" in caplog.text  # A boolean is not an HTTP status.
+        assert "of type bool" in caplog.text  # The log must name bool, not treat it as an integer status.
+        assert not self._writer_of(mist_helper).called  # An untrustworthy status must never reach persistence.
+        assert "active" not in str(self._writer_of(mist_helper).call_args_list)  # No false active row was written.
+
+    @pytest.mark.parametrize("status_code", [100, 199, 300, 302, 399])
+    def test_a_non_success_transport_status_is_refused(
+        self, mist_helper: MagicMock, caplog: pytest.LogCaptureFixture, status_code: int
+    ) -> None:
+        """A 1xx or 3xx result is not a completed success, so no row may be written."""
+        response = SimpleNamespace(status_code=status_code, data=dict(self.ACTIVE_BODY))  # Non-success transport value.
+        with caplog.at_level("ERROR"):  # Capture the product refusal signal.
+            self._run_status(mist_helper, response)
+        assert "outcome=out-of-range" in caplog.text  # The refusal must carry an explicit, named outcome.
+        assert f"HTTP {status_code}" in caplog.text  # The operator must read the exact status.
+        assert not self._writer_of(mist_helper).called  # An untrustworthy status must never reach persistence.
+        assert "active" not in str(self._writer_of(mist_helper).call_args_list)  # No false active row was written.
+
+    @pytest.mark.parametrize("status_code", [200, 204, 299])
+    def test_a_success_transport_status_reaches_the_writer(self, mist_helper: MagicMock, status_code: int) -> None:
+        """A trustworthy 2xx result keeps the existing export behavior unchanged."""
+        response = SimpleNamespace(status_code=status_code, data=dict(self.ACTIVE_BODY))  # Trustworthy transport value.
+        self._run_status(mist_helper, response)
+        writer = mist_helper.DataExporter.write_with_format_selection  # Bind the writer for the two checks below.
+        writer.assert_called_once()  # A valid 2xx status must still export exactly one row.
+        assert writer.call_args.args[0][0]["last_status"] == "active"  # The payload must pass through unchanged.
+
+    def test_a_refusal_never_logs_the_response_body(
+        self, mist_helper: MagicMock, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """A refusal reports the condition only, so a controlled body never reaches the log."""
+        secret_body = {"last_status": "active", "error": "controlled-body-marker"}  # A marker that must not be logged.
+        response = SimpleNamespace(status_code="unusable-status-marker", data=secret_body)  # Malformed value and body.
+        with caplog.at_level("DEBUG"):  # Capture every record, so a leak at any level fails this test.
+            self._run_status(mist_helper, response)
+        assert "controlled-body-marker" not in caplog.text  # The response body must never reach the log.
+        assert "unusable-status-marker" not in caplog.text  # The unusable value itself must never reach the log.
+        assert "outcome=malformed" in caplog.text  # The refusal must still name its outcome.
