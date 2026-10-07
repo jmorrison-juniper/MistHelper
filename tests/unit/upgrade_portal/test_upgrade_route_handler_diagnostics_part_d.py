@@ -51,7 +51,7 @@ def test_site_run_records_attaches_the_store_failure(
         answer = upgrade.site_run_records("site-part-d")  # Exercise the first requested handler.
     record = _exception_record(caplog, "did not answer the site scan")  # Select the handler warning.
     assert answer == []  # The repair must preserve the deliberate empty-list fallback.
-    assert record.exc_info is not None  # The warning must attach the caught exception.
+    assert isinstance(record.exc_info, tuple)  # The warning must attach a standard exception tuple.
     assert record.exc_info[0] is ConnectionError  # The attached cause must keep its exact class.
 
 
@@ -69,7 +69,7 @@ def test_readable_site_name_attaches_the_site_failure(
         answer = upgrade.readable_site_name("org-part-d", "site-part-d", "")  # Exercise the second handler.
     record = _exception_record(caplog, "did not answer, so the run keeps the identifier")  # Select the warning.
     assert answer == "site-part-d"  # The repair must preserve the identifier fallback.
-    assert record.exc_info is not None  # The warning must attach the caught exception.
+    assert isinstance(record.exc_info, tuple)  # The warning must attach a standard exception tuple.
     assert record.exc_info[0] is LookupError  # The attached cause must keep its exact class.
 
 
@@ -99,5 +99,5 @@ def test_read_versions_attaches_the_reader_failure(
         answer = upgrade.read_versions(record_data)  # Exercise the third requested handler.
     record = _exception_record(caplog, "version read of the site")  # Select the handler warning.
     assert answer == {}  # The repair must preserve the deliberate empty-map fallback.
-    assert record.exc_info is not None  # The warning must attach the caught exception.
+    assert isinstance(record.exc_info, tuple)  # The warning must attach a standard exception tuple.
     assert record.exc_info[0] is TimeoutError  # The attached cause must keep its exact class.
