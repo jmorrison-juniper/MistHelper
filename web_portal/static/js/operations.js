@@ -14,6 +14,9 @@ var currentRunId = null;
 var currentSSE = null;
 var currentParameters = [];
 var baseParameters = [];  // Keep the server-sent controls so dynamic controls can be rebuilt after a choice changes.
+var RUN_STATUS_RECONCILE_MS = 5000;  // Match the server stream poll cadence without aggressive REST traffic.
+var runStatusTimer = null;  // Hold the one scheduled authoritative state check for the active run.
+var runStatusRequestRunId = null;  // Prevent overlapping status requests while one server answer is pending.
 
 // ---------------------------------------------------------------------------
 // Visibility
@@ -840,6 +843,7 @@ function startSSEStream(runId) {
     var url = '/api/operations/stream?run_id=' + encodeURIComponent(runId);
     var source = new EventSource(url);
     currentSSE = source;
+    startRunStatusReconciliation(runId);  // Recover terminal state when the stream stays open but loses one event.
 
     source.addEventListener('log', function(event) {
         var data = JSON.parse(event.data);
@@ -865,19 +869,19 @@ function startSSEStream(runId) {
 
     source.addEventListener('complete', function(event) {
         var data = JSON.parse(event.data);
+        if (currentRunId !== runId) return;  // Ignore a late terminal event from a replaced run.
         updateProgress(100, 'Done');  // Finish the bar before setting the final status message.
         setStatus('complete', data.message || 'Operation completed');  // Keep a no-output reason visible.
         showOutputFiles(data.output_files || []);
         finishRun();
-        source.close();
     });
 
     source.addEventListener('error_event', function(event) {
         var data = JSON.parse(event.data);
+        if (currentRunId !== runId) return;  // Ignore a late failure from a replaced run.
         setStatus('error', data.message || 'Operation failed');
         appendLog('ERROR: ' + (data.message || 'Unknown error'), 'ERROR');
         finishRun();
-        source.close();
     });
 
     source.addEventListener('heartbeat', function() {
@@ -886,17 +890,18 @@ function startSSEStream(runId) {
 
     source.onerror = function() {
         // Connection lost - check status via REST fallback
-        if (currentRunId) {
-            checkRunStatus(currentRunId);
+        if (currentRunId === runId) {
+            checkRunStatus(runId);
         }
         source.close();
     };
 }
 
 function checkRunStatus(runId) {
-    fetch('/api/operations/status/' + encodeURIComponent(runId))
+    return fetch('/api/operations/status/' + encodeURIComponent(runId))
         .then(readJsonAnswer)
         .then(function(data) {
+            if (currentRunId !== runId) return;  // A stale answer must not finish a newer operation.
             if (data.status === 'completed') {
                 updateProgress(100, 'Done');  // Finish the bar before setting the final status message.
                 setStatus('complete', data.completion_message || 'Operation completed');  // Show the no-output reason when the run has no file.
@@ -907,12 +912,43 @@ function checkRunStatus(runId) {
                 appendLog('ERROR: ' + (data.error_message || 'Unknown error'), 'ERROR');
                 finishRun();
             }
-            // If still running, SSE reconnect will handle it
         })
-        .catch(function() {
-            setStatus('error', 'Lost connection to server');
-            finishRun();
+        .catch(function(err) {
+            if (currentRunId === runId) {  // Keep a live run eligible for the next bounded reconciliation attempt.
+                appendLog('Could not check operation status: ' + err.message, 'WARNING');  // State the recoverable read failure.
+            }
         });
+}
+
+function startRunStatusReconciliation(runId) {
+    stopRunStatusReconciliation();  // Replace the prior run timer before this run owns the browser state.
+    scheduleRunStatusReconciliation(runId);  // Wait one bounded interval before the first authoritative read.
+}
+
+function scheduleRunStatusReconciliation(runId) {
+    if (currentRunId !== runId) return;  // A finished or replaced run needs no later request.
+    runStatusTimer = setTimeout(function() {  // Use a timeout chain so slow requests never accumulate.
+        runStatusTimer = null;  // Clear the consumed handle before the request starts.
+        reconcileRunStatus(runId);  // Ask the existing endpoint for the authoritative state.
+    }, RUN_STATUS_RECONCILE_MS);
+}
+
+function reconcileRunStatus(runId) {
+    if (currentRunId !== runId) return;  // Stop when another run replaced this one.
+    if (runStatusRequestRunId !== null) {  // One pending request is the maximum allowed.
+        scheduleRunStatusReconciliation(runId);  // Try again after the same bounded interval.
+        return;
+    }
+    runStatusRequestRunId = runId;  // Mark this run as the owner of the pending request.
+    checkRunStatus(runId).finally(function() {  // Release the request slot after success or failure.
+        if (runStatusRequestRunId === runId) runStatusRequestRunId = null;  // Do not clear a newer owner.
+        scheduleRunStatusReconciliation(runId);  // Continue only while this run remains active.
+    });
+}
+
+function stopRunStatusReconciliation() {
+    if (runStatusTimer !== null) clearTimeout(runStatusTimer);  // Cancel the one scheduled status read.
+    runStatusTimer = null;  // Remove the consumed handle from browser state.
 }
 
 // ---------------------------------------------------------------------------
@@ -1060,8 +1096,10 @@ function isPreviewable(filename) {
 }
 
 function finishRun() {
-    currentRunId = null;
-    currentSSE = null;
+    stopRunStatusReconciliation();  // A terminal state needs no further authoritative checks.
+    currentRunId = null;  // Clear the run identity before a late async response can apply.
+    if (currentSSE) currentSSE.close();  // Release an open stream when REST reconciliation finishes the run.
+    currentSSE = null;  // Remove the closed source from browser state.
     var btn = document.getElementById('runBtn');
     btn.disabled = false;
     btn.textContent = 'Run Operation';
