@@ -212,6 +212,7 @@ class TestStatusMenu:
                 FailureModeOrgCradlepointConnectionExporter.status()
 
         assert f"HTTP {status_code}" in caplog.text
+        assert "outcome=http-error" in caplog.text
         assert "controlled HTTP" not in caplog.text
         mist_helper.DataExporter.write_with_format_selection.assert_not_called()
 

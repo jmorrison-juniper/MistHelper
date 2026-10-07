@@ -42,12 +42,14 @@ logger = logging.getLogger(__name__)  # Name the logger for this module so a rea
 
 # The operationId that selects the primary-key strategy for the written row.
 _OPERATION = "testOrgCradlepointConnection"
-_HTTP_SUCCESS_MIN = 200  # Only a completed 2xx result proves that the cloud answered the status question.
-_HTTP_SUCCESS_MAX = 299  # A 3xx redirect is an unfinished exchange, so it ends the success band here.
+_HTTP_OK = 200  # Only a completed 2xx result proves that the cloud answered the status question.
+_HTTP_REDIRECT_MIN = 300  # A redirect is an unfinished exchange, so it ends the exclusive success band.
+_HTTP_ERROR_MIN = 400  # A client or server error gets its own diagnostic classification.
 _ABSENT_STATUS = object()  # A unique sentinel keeps an absent attribute distinct from every real value.
 _OUTCOME_ABSENT = "absent"  # Name the case where the SDK response carries no transport status at all.
 _OUTCOME_MALFORMED = "malformed"  # Name the case where the transport status is not a usable integer.
 _OUTCOME_OUT_OF_RANGE = "out-of-range"  # Name the case where the integer status is not a completed success.
+_OUTCOME_HTTP_ERROR = "http-error"  # Name the case where the cloud returned a client or server error.
 
 
 class OrgCradlepointConnectionExporter:
@@ -103,12 +105,15 @@ class OrgCradlepointConnectionExporter:
                 f"Cradlepoint status request returned a {_OUTCOME_MALFORMED} HTTP transport status "
                 f"of type {type(raw_status).__name__}"
             )
-        if not _HTTP_SUCCESS_MIN <= raw_status <= _HTTP_SUCCESS_MAX:  # A 1xx, 3xx, 4xx, or 5xx result is not a success.
+        if not _HTTP_OK <= raw_status < _HTTP_REDIRECT_MIN:  # Only an integer 2xx status proves success.
+            outcome = (  # Separate cloud errors from other unfinished or invalid HTTP exchanges.
+                _OUTCOME_HTTP_ERROR if raw_status >= _HTTP_ERROR_MIN else _OUTCOME_OUT_OF_RANGE
+            )
             logger.error(  # Report only the operation and status, never the response body.
                 "The cloud returned HTTP %s for the Cradlepoint status at org %s, outcome=%s",
                 raw_status,
                 org_id,
-                _OUTCOME_OUT_OF_RANGE,
+                outcome,
             )
             raise RuntimeError(f"Cradlepoint status request returned HTTP {raw_status}")
         logger.debug("The Cradlepoint status for org %s carried a trusted HTTP %s", org_id, raw_status)  # Proved.
