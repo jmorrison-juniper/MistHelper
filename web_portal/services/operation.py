@@ -1578,11 +1578,10 @@ class _RunLogHandler(logging.Handler):
     # Regex to extract output filenames from log messages.
     # Issue #3089: the phrase list and the extension list were both too short,
     # so a Markdown report announced as "Mermaid report: data/X.md" never
-    # matched. The second branch now accepts any data-directory path, whatever
-    # sentence carries it.
+    # matched. Require a write phrase, so an input path cannot become a result.
     _OUTPUT_FILE_RE = re.compile(
         r"(?:(?:wrote \d+ rows to|written to|wrote results to|saved to|report:|exported to)"
-        r"\s+(?:data[/\\])?|data[/\\])"
+        r"\s+(?:data[/\\])?)"
         r"(\S+\.(?:csv|db|json|sqlite|md|html|htm|txt|xlsx|xls|pcap|yaml|yml|xml|png|pdf))",
         re.IGNORECASE,
     )
