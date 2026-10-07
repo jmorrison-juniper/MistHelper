@@ -17,7 +17,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 import requests
-from mistapi.__api_response import APIResponse
 
 from src.mist.resources.org import org_config_migration_manager as ocm
 from src.mist.resources.org.org_config_migration_manager import OrgConfigMigrationManager
@@ -74,8 +73,10 @@ class TestGetOrgName:
         with patch.object(ocm.mistapi.api.v1.orgs.orgs, "getOrg", return_value=response):
             assert manager._get_org_name() == "Unknown"
 
-    def test_an_api_failure_falls_back(self, manager: OrgConfigMigrationManager) -> None:
-        """A dead org endpoint must not abandon an export that would otherwise work."""
+    def test_an_http_401_response_falls_back(self, manager: OrgConfigMigrationManager) -> None:
+        """An HTTP 401 response must not abandon an export that would otherwise work."""
+        from mistapi.__api_response import APIResponse  # WHY: drive the installed SDK response boundary.
+
         response = requests.Response()  # WHY: build the real HTTP response passed to mistapi.
         response.status_code = 401  # WHY: reproduce the authentication failure from the cloud.
         response.url = "https://api.mist.com/api/v1/orgs/dest-org"  # WHY: provide the SDK response URL.
@@ -481,7 +482,7 @@ class TestImportConfig:
             patch.object(manager, "_load_and_validate_bundle") as load_spy,
         ):
             manager.import_config()  # WHY: drive the menu 177 flow.
-        load_spy.assert_not_called()  # WHY: nothing to load means nothing to read.
+        assert load_spy.call_count == 0  # WHY: nothing to load means nothing to read.
 
     def test_an_invalid_bundle_stops_the_flow(self, manager: OrgConfigMigrationManager) -> None:
         """A bundle that fails the guard must never reach the confirmation prompt."""
@@ -491,7 +492,7 @@ class TestImportConfig:
             patch.object(manager, "_prompt_dry_run") as dry_run_spy,
         ):
             manager.import_config()  # WHY: drive the menu 177 flow.
-        dry_run_spy.assert_not_called()  # WHY: an unusable bundle ends the flow.
+        assert dry_run_spy.call_count == 0  # WHY: an unusable bundle ends the flow.
 
     def test_a_cancelled_confirmation_stops_the_flow(self, manager: OrgConfigMigrationManager) -> None:
         """A cancelled confirmation must leave the destination org unchanged."""
@@ -506,8 +507,8 @@ class TestImportConfig:
             handles["execute"] as execute_spy,
         ):
             manager.import_config()  # WHY: drive the menu 177 flow.
-        fetch_spy.assert_not_called()  # WHY: a cancel must stop before any read.
-        execute_spy.assert_not_called()  # WHY: a cancel must stop before any write.
+        assert fetch_spy.call_count == 0  # WHY: a cancel must stop before any read.
+        assert execute_spy.call_count == 0  # WHY: a cancel must stop before any write.
 
     def test_a_dry_run_skips_the_confirmation(self, manager: OrgConfigMigrationManager) -> None:
         """A preview writes nothing, so a typed word would only slow the operator."""
