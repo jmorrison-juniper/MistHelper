@@ -274,6 +274,39 @@ class TestFullWalkFallback:
 class TestConcurrentOwnerTracking:
     """Concurrent scanners accept only unambiguous writes from their owner."""
 
+    def test_overlapping_inventory_run_keeps_only_its_output(self, tmp_path):
+        """Issue 4092: a later run must not add its output to the inventory result."""
+        inventory_written = threading.Event()  # Start the second run after the inventory file exists.
+        second_completed = threading.Event()  # Complete the second run before the inventory run.
+        results: dict[str, list[str]] = {}  # Store both ordered overlap results for exact assertions.
+
+        def inventory_worker() -> None:
+            scanner = OutputFileScanner(str(tmp_path))  # Bind the inventory scanner to this worker.
+            scanner.snapshot()  # Activate the first run before it writes its report.
+            (tmp_path / "SiteInventory.csv").write_text("inventory", encoding="utf-8")  # Write owned evidence.
+            inventory_written.set()  # Permit the overlapping run to start after this write.
+            second_completed.wait(timeout=10)  # Keep the first scanner active until the second completes.
+            results["inventory"] = scanner.changed_files()  # Collect the first result after the overlap ends.
+
+        def other_worker() -> None:
+            scanner = OutputFileScanner(str(tmp_path))  # Bind the overlapping scanner to its worker.
+            scanner.snapshot()  # Activate the second run while the first scanner remains active.
+            (tmp_path / "Other.csv").write_text("other", encoding="utf-8")  # Write only the second run output.
+            results["other"] = scanner.changed_files()  # Complete the second scanner before the first.
+            second_completed.set()  # Release the inventory scanner after the second result is final.
+
+        inventory_thread = threading.Thread(target=inventory_worker)  # Build the first operation worker.
+        inventory_thread.start()  # Start and snapshot the inventory scanner.
+        assert inventory_written.wait(timeout=10), "the inventory worker did not write its report"
+        other_thread = threading.Thread(target=other_worker)  # Build the later overlapping operation worker.
+        other_thread.start()  # Start the second scanner before the first completes.
+        other_thread.join(timeout=10)  # Require the second scanner to complete first.
+        inventory_thread.join(timeout=10)  # Complete the inventory scanner after the second scanner.
+        assert not other_thread.is_alive(), "the overlapping worker did not complete"
+        assert not inventory_thread.is_alive(), "the inventory worker did not complete"
+        assert results["inventory"] == ["SiteInventory.csv"]  # Reject the foreign Other.csv result.
+        assert results["other"] == ["Other.csv"]  # Confirm the second run also keeps only its output.
+
     def test_distinct_owner_threads_keep_distinct_tracked_files(self, tmp_path):
         """Each scanner must report only the file its owner thread opened."""
         barrier = threading.Barrier(3)  # Hold both scanners active while each owner writes.

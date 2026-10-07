@@ -19,6 +19,11 @@ Isolation:
     timestamp-only fallbacks stay disabled because they cannot prove which run
     wrote a file.
 
+    An external process cannot inherit the Python run-owner context. During an
+    overlap, the scanner omits its files instead of assigning them to either
+    run. A sole active run can still find those files through directory
+    discovery.
+
     The scanner does skip the runtime bookkeeping files that every run touches.
     Issue #3126 records the noise they created. A file that a log line names
     explicitly still reaches the panel, because the executor merges the scanned
@@ -240,6 +245,8 @@ class OutputFileScanner:
         self.last_scanned_files = 0  # Reset the stat count so tests can prove the scan scope.
         found = self._changed_tracked_files()  # First read only files that Python opened for writing.
         if not self._fallback_is_ambiguous():  # Timestamp evidence is safe only without any overlapping start.
+            # An external process has no Python owner context. Reject its fallback
+            # evidence during overlap instead of assigning it to the wrong run.
             fallback = self._changed_files_by_directory_marks()  # Preserve single-run new-file fallback behavior.
             if not fallback and not found:  # Use the costly walk only when both fast paths found no evidence.
                 fallback.update(self._changed_files_by_full_walk())  # Preserve single-run in-place rewrites.
