@@ -144,23 +144,35 @@ class TestDeviceDataFetcherFetchOrchestration:
             "site-42", device_type="all"
         )  # WHY: device prompt uses resolved site + default filter.
 
-    def test_aborts_when_site_prompt_returns_empty(self, wired_misthelper: dict[str, Any]) -> None:
-        """Empty site prompt short-circuits before any fetch or device prompt occurs."""
+    def test_aborts_when_site_prompt_returns_empty(
+        self,
+        wired_misthelper: dict[str, Any],
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Empty site prompt reports an explicit failure before downstream work."""
         wired_misthelper["PromptUtils"].select_site_id_from_csv.return_value = ""  # WHY: user cancelled.
         fetch_function = _make_fetch_function({"k": "v"})  # WHY: proves callable is never invoked.
         config = DeviceFetchConfig(fetch_function=fetch_function, filename="f.csv", description="d")
-        DeviceDataFetcher(config).fetch()  # WHY: exercise site-cancel branch.
+        with caplog.at_level(logging.ERROR):  # WHY: capture the operator-visible failure evidence.
+            result = DeviceDataFetcher(config).fetch()  # WHY: exercise site-cancel branch.
 
+        assert result is False  # WHY: the display must suppress its completion line.
+        assert "! Error fetching device data: site ID could not be resolved." in caplog.messages  # WHY: portal marker.
         wired_misthelper["PromptUtils"].select_device_id_from_inventory.assert_not_called()  # WHY: no device prompt.
         fetch_function.assert_not_called()  # WHY: fetch skipped after site cancel.
+        wired_misthelper["DataProcessingUtils"].flatten_nested_fields.assert_not_called()  # WHY: no transform.
+        wired_misthelper["DataProcessingUtils"].escape_multiline.assert_not_called()  # WHY: no transform.
+        wired_misthelper["DataExporter"].write_with_format_selection.assert_not_called()  # WHY: no result file.
+        wired_misthelper["DisplayUtils"].dict_list_as_pretty_table.assert_not_called()  # WHY: no false result.
 
     def test_aborts_when_device_prompt_returns_empty(self, wired_misthelper: dict[str, Any]) -> None:
         """Empty device prompt short-circuits before any fetch or CSV write occurs."""
         wired_misthelper["PromptUtils"].select_device_id_from_inventory.return_value = ""  # WHY: user cancelled.
         fetch_function = _make_fetch_function({"k": "v"})  # WHY: prove fetch is skipped.
         config = DeviceFetchConfig(fetch_function=fetch_function, filename="f.csv", description="d")
-        DeviceDataFetcher(config).fetch()  # WHY: exercise device-cancel branch.
+        result = DeviceDataFetcher(config).fetch()  # WHY: exercise device-cancel branch.
 
+        assert result is None  # WHY: preserve the existing device-cancel return contract.
         fetch_function.assert_not_called()  # WHY: fetch skipped after device cancel.
         wired_misthelper["DataExporter"].write_with_format_selection.assert_not_called()  # WHY: no CSV write.
 
@@ -189,8 +201,9 @@ class TestDeviceDataFetcherFetchOrchestration:
             site_id="s",
             device_id="d",
         )
-        DeviceDataFetcher(config).fetch()  # WHY: exercise empty-response branch.
+        result = DeviceDataFetcher(config).fetch()  # WHY: exercise empty-response branch.
 
+        assert result is None  # WHY: preserve the existing honest-empty return contract.
         fetch_function.assert_called_once()  # WHY: fetch attempted.
         wired_misthelper["DataProcessingUtils"].flatten_nested_fields.assert_not_called()  # WHY: skip processing.
         wired_misthelper["DataExporter"].write_with_format_selection.assert_not_called()  # WHY: no CSV write.
@@ -207,8 +220,9 @@ class TestDeviceDataFetcherFetchOrchestration:
             site_id="s",
             device_id="d",
         )
-        DeviceDataFetcher(config).fetch()  # WHY: exercise exception branch.
+        result = DeviceDataFetcher(config).fetch()  # WHY: exercise exception branch.
 
+        assert result is None  # WHY: preserve the existing caught-exception return contract.
         wired_misthelper["DataExporter"].write_with_format_selection.assert_not_called()  # WHY: no CSV write.
         wired_misthelper["DisplayUtils"].dict_list_as_pretty_table.assert_not_called()  # WHY: no render.
 
