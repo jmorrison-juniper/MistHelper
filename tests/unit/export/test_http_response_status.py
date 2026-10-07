@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import logging
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
+from src.operations.exporting.export.endpoint_family_exporter import (
+    _SITE_DETAIL_OPS,
+    EndpointFamilyExporter,
+)
 from src.operations.exporting.export.http_response_status import http_failure
 
 
@@ -52,4 +56,34 @@ def test_error_body_without_results_is_not_an_empty_success(caplog: pytest.LogCa
     with caplog.at_level(logging.INFO):
         assert http_failure(response, "exportSiteDevices") is True
     assert "no exportSiteDevices data" not in caplog.text.lower()
+    assert "Error fetching exportSiteDevices: HTTP 401" in caplog.text
+
+
+def test_endpoint_family_run_rejects_an_http_error_body_before_empty_result_handling(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A real SDK error response must not become a successful empty export."""
+    fake = MagicMock()
+    fake.apisession = MagicMock()
+    response = MagicMock(
+        status_code=401,
+        url="/api/v1/sites/site-one/devices",
+        data={"detail": "unauthorized"},
+    )
+    callable_obj = MagicMock(return_value=response)
+    with (
+        patch.object(EndpointFamilyExporter, "_mist_helper", return_value=fake),
+        patch.object(EndpointFamilyExporter, "_resolve", return_value=callable_obj),
+        patch.object(
+            EndpointFamilyExporter,
+            "_collect_arguments",
+            return_value=MagicMock(values=("site-one",), label="site-one"),
+        ),
+        patch("src.operations.exporting.export.endpoint_family_exporter.mistapi.get_all") as get_all,
+        caplog.at_level(logging.INFO),
+    ):
+        get_all.return_value = response.data
+        EndpointFamilyExporter._run(_SITE_DETAIL_OPS[0])
+    get_all.assert_not_called()
+    fake.DataExporter.write_with_format_selection.assert_not_called()
     assert "Error fetching exportSiteDevices: HTTP 401" in caplog.text
