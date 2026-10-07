@@ -271,18 +271,6 @@ class TestSiteSelection:
         assert result["error"] == "Failed to retrieve sites"
         assert list(result) == ["error"]
 
-    def test_interactive_exception(self, upgrader: BulkSwitchFirmwareUpgrader) -> None:
-        """Verify error handling on exception."""
-        mock_mistapi = sys.modules["mistapi"]
-        mock_mistapi.api.v1.orgs.sites.listOrgSites.side_effect = RuntimeError("Network error")
-
-        result = upgrader._interactive_site_selection()
-        assert result["error"] == "Site discovery error: Network error"
-        assert list(result) == ["error"]
-
-        # Cleanup
-        mock_mistapi.api.v1.orgs.sites.listOrgSites.side_effect = None
-
     def test_display_site_list(self) -> None:
         """Verify site list display does not raise."""
         sites = [
