@@ -40,8 +40,10 @@ compatibility shim stays, because `AGENTS.md` forbids one.
 - No plan for this phase gives `None` with no cloud call.
 - `_send_phase` walks the plans of that phase in the canonical order. It keeps
   each accepted row through `_persist_row`, which appends to
-  `record["upgrades"]` and writes the run store before another plan can leave.
-  It checks the durable stop request before every plan. A stop gives
+  `record["upgrades"]` and calls the store field mutation
+  `append_accepted_upgrade` before another plan can leave. The mutation changes
+  no stop field, so a concurrent stop cannot be lost. It checks the durable
+  stop request before every plan. A stop gives
   `STOP_REQUESTED_REASON`, and a lost row write gives
   `ACCEPTED_ROW_STORE_REASON`.
 - `plan_phase(plan)` reads every target. An empty plan, an unknown family, or a

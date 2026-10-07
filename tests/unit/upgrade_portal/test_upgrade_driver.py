@@ -25,6 +25,7 @@ from src.interfaces.portals.upgrade_portal.app import config
 from src.interfaces.portals.upgrade_portal.runtime.identity import SessionOwner
 from src.interfaces.portals.upgrade_portal.runtime.lock import LockRecord, ReleaseOutcome
 from src.interfaces.portals.upgrade_portal.runtime.runs import PHASE_ORDER, PhaseState, RunRecordBuilder, RunState
+from src.interfaces.portals.upgrade_portal.runtime.signals import StopRequestStore
 from src.interfaces.portals.upgrade_portal.upgrade import driver, phase_gate
 
 RUN_ID = "run-" + "a" * 32
@@ -115,6 +116,17 @@ class FakeStore:
         self.writers.append(threading.current_thread().name)
         self.states.append(str(run.get("state", "")))
         return True
+
+    def append_accepted_upgrade(self, run_id: str, row: dict[str, Any]) -> bool:
+        """Append one accepted row without replacing another durable field."""
+        if self.record is None or self.record.get("run_id") != run_id:
+            return False  # An absent or different run cannot hold the accepted identifier.
+        current = dict(self.record)  # Preserve the current stop, state, and phase fields.
+        rows = list(current.get("upgrades", ()))  # Keep identifiers from earlier phases.
+        rows.append(dict(row))  # Add the new cloud response only.
+        current["upgrades"] = rows  # Change no other durable field.
+        self.record = current  # Publish the narrow mutation.
+        return True  # The accepted row is now readable.
 
     def phase_states(self) -> dict[str, str]:
         """Return the state of each phase of the stored record.
@@ -244,7 +256,7 @@ class AcceptingSubmitter:
 
 
 class StopAfterAcceptedSubmitter:
-    """Persist one accepted row, then report the operator stop that followed."""
+    """Persist one accepted row, then use the real stop store path."""
 
     def __init__(self, store: FakeStore) -> None:
         """Hold the durable store that the route and the driver share.
@@ -266,15 +278,13 @@ class StopAfterAcceptedSubmitter:
             The visible stop reason from the submitter.
         """
         self.phases.append(phase)
-        record["upgrades"] = [{"upgrade_id": "up-1", "accepted": ["aa0000000001"]}]
-        self.store.write_run(dict(record))  # The accepted identifier lands before the route asks to stop.
-        if self.store.record is not None:
-            self.store.record["stop_request"] = {
-                "requested_by": "sam@example.com",
-                "requested_at": "2026-10-07T07:00:00+00:00",
-                "confirmation_text": "STOP",
-                "scope": "run",
-            }
+        row = {"upgrade_id": "up-1", "accepted": ["aa0000000001"]}  # One cloud call became durable.
+        record["upgrades"] = [dict(row)]  # The driver process keeps the same cancellation evidence.
+        self.store.append_accepted_upgrade(str(record["run_id"]), row)  # Persist only the accepted-row field.
+        StopRequestStore(self.store).request(str(record["run_id"]), ACTOR_EMAIL, "STOP")  # Use the real stop path.
+        stored = self.store.read_run(str(record["run_id"]))  # Copy the durable request into the driver record.
+        if stored is not None:
+            record["stop_request"] = stored["stop_request"]  # The driver then selects stopped finalization.
         return "An operator asked to stop the run before the next firmware call."
 
 

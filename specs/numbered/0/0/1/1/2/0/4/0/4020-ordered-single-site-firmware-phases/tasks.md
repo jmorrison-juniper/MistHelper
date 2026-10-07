@@ -28,6 +28,8 @@ Each task below is complete. The state column records the proof.
 | T031 | Reject empty, unknown, and mixed-family plans before a cloud write | Done |
 | T035 | Persist each accepted row before the next plan of the phase | Done |
 | T036 | Check the durable stop request before every plan | Done |
+| T039 | Add the narrow `append_accepted_upgrade` store operation | Done |
+| T040 | Preserve every concurrent stop during accepted-row persistence | Done |
 
 ## Interleaved cascade
 
@@ -54,6 +56,8 @@ Each task below is complete. The state column records the proof.
 | T034 | Prove unroutable plans fail with zero cloud writes | Done |
 | T037 | Prove a stop between two version groups blocks the second write | Done |
 | T038 | Prove the driver uses the normal `stopped` finalization path | Done |
+| T041 | Pause accepted-row persistence while the real stop path writes | Done |
+| T042 | Prove memory and document stores mutate only accepted rows | Done |
 
 ### The replaced test
 

@@ -207,13 +207,14 @@ class StopRequest:
 
 
 class RunRecordStore(Protocol):
-    """The two run record operations the stop store needs.
+    """The run record operations that preserve stop and upgrade evidence.
 
     Why:
         The stop store must not depend on one storage class. A narrow shape
         keeps the module testable with a plain double. It also lets the run
         record module own the ArangoDB write and the CSV fallback under
-        ``data/``.
+        ``data/``. Accepted upgrade rows need one field-level mutation, because
+        a stale whole-record write can erase a stop that another worker stored.
     """
 
     def read_run(self, run_id: str) -> dict[str, Any] | None:
@@ -235,6 +236,18 @@ class RunRecordStore(Protocol):
 
         Returns:
             True when the store holds the record.
+        """
+        ...  # A protocol declares the shape only
+
+    def append_accepted_upgrade(self, run_id: str, row: dict[str, Any]) -> bool:
+        """Append one accepted upgrade row without replacing another field.
+
+        Args:
+            run_id: The run key.
+            row: The accepted cloud response.
+
+        Returns:
+            True when the row is durable.
         """
         ...  # A protocol declares the shape only
 

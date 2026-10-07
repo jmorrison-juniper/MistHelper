@@ -311,7 +311,8 @@ class DocumentRunStore:
         calls, and `capture/store.py` publishes the write alone. Without a read
         the portal keeps every run in the memory of one process, so a second
         worker answers that the run does not exist. This class adds the read and
-        holds the two calls together, which is the shape both callers declare.
+        the narrow accepted-row mutation to the full write. These operations
+        form the shape that the callers declare.
 
         Every call catches every fault. A store that does not answer must leave
         the run readable as far as the memory of the driver reaches. The store
@@ -373,6 +374,45 @@ class DocumentRunStore:
             mirror_run(run)  # The poll then reads the run back with no database at all.
         return landed
 
+    def append_accepted_upgrade(self, run_id: str, row: dict[str, Any]) -> bool:
+        """Append one accepted row without replacing a concurrent stop request.
+
+        Args:
+            run_id: The run key.
+            row: The accepted cloud response.
+
+        Returns:
+            True when the database holds the appended row.
+        """
+        store = load_module(STORE_MODULE)  # Load the production database boundary only for the mutation.
+        if store is None:  # A mirror cannot coordinate a stop from another worker.
+            return False  # Fail closed before another destructive cloud call.
+        try:  # The database action patches one field in one atomic AQL statement.
+            database: Any = store.connect_database()  # Open the database that holds the run document.
+            if database is None:  # A file fallback cannot preserve a concurrent database stop.
+                return False  # Never report an atomic mutation through a non-atomic fallback.
+            query = (
+                "FOR run IN @@collection "
+                "FILTER run._key == @key "
+                "LET accepted = APPEND(IS_ARRAY(run.upgrades) ? run.upgrades : [], [@row]) "
+                "UPDATE run WITH { upgrades: accepted } IN @@collection RETURN NEW"
+            )  # UPDATE patches only upgrades and therefore preserves every current stop field.
+            bind_vars = {  # Bind the collection, key, and detached accepted row.
+                "@collection": store.RUN_COLLECTION,
+                "key": run_id,
+                "row": dict(row),
+            }
+            logger.info("wiring: append one accepted upgrade row to run %s", run_id)  # Log before the mutation.
+            rows = list(database.aql.execute(query, bind_vars=bind_vars))  # Run one atomic field update.
+        except Exception as fault:  # A persistence fault must block every later destructive write.
+            logger.warning("wiring: the accepted-row append for run %s failed with %s", run_id, type(fault).__name__)
+            return False  # The submitter reports the durable evidence failure.
+        if not rows or not isinstance(rows[0], Mapping):  # An absent run changed no durable record.
+            return False  # Fail closed when the database returns no updated document.
+        mirror_run(dict(rows[0]))  # Cache the complete database-confirmed record with its stop fields.
+        logger.debug("wiring: the accepted-row append for run %s succeeded", run_id)  # Log after the mutation.
+        return True  # The accepted identifier is durable without a whole-record replacement.
+
     def delete_run(self, run_id: str) -> bool:
         """Delete one planned run and remove its process mirror."""
         store = load_module(STORE_MODULE)  # Load the production database boundary only when cleanup runs.
@@ -428,9 +468,9 @@ class DocumentRunStore:
 
         Why:
             FR-037 asks the portal to find a run that already acts on the site.
-            The two call shape answers one run at a time. This third call is
-            optional, and `routes/upgrade.site_run_records` reads it by name, so
-            a store that publishes none still works.
+            The required store shape answers one run at a time. This site scan
+            is optional, and `routes/upgrade.site_run_records` reads it by name.
+            A store that publishes none still works.
 
         Args:
             site_id: The site that the new run wants to act on.
@@ -438,7 +478,7 @@ class DocumentRunStore:
         Returns:
             One row for each run of that site, or an empty list.
         """
-        store = load_module(STORE_MODULE)  # Late, for the same reason as the two calls above.
+        store = load_module(STORE_MODULE)  # Late, for the same reason as the required calls above.
         if store is None:  # No store module means no scan, and the route continues without one.
             return mirrored_site_runs(site_id)  # The runs of this process still guard FR-037.
         try:  # The scan is one query on a network store.
@@ -783,11 +823,11 @@ class CloudUpgradeSubmitter:
             None when the row is durable, or one reason when persistence failed.
         """
         self._keep(record, (row,))  # The in-memory record keeps every accepted family and version group.
-        stop_reason = self._stop_reason(record)  # Preserve a stop that arrived while the cloud call was in flight.
-        if self._store.write_run(dict(record)):
-            return stop_reason  # The caller reports the stop after the accepted row becomes durable.
-        logger.error("wiring: the run %s could not persist one accepted upgrade call", record.get("run_id", ""))
-        return ACCEPTED_ROW_STORE_REASON
+        run_id = str(record.get("run_id", ""))  # The narrow store mutation needs only the durable run key.
+        if not self._store.append_accepted_upgrade(run_id, dict(row)):
+            logger.error("wiring: the run %s could not persist one accepted upgrade call", run_id)
+            return ACCEPTED_ROW_STORE_REASON  # No later destructive call may start without durable evidence.
+        return self._stop_reason(record)  # Copy a stop that committed before or during the atomic append.
 
     @staticmethod
     def _keep(record: MutableMapping[str, Any], rows: Sequence[Mapping[str, Any]]) -> None:
