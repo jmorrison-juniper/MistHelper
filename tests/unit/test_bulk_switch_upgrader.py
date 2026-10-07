@@ -187,6 +187,7 @@ class TestValidateOrganization:
 
         assert result is False
 
+
 # ---------------------------------------------------------------------------
 # Site Selection Tests
 # ---------------------------------------------------------------------------
@@ -641,6 +642,7 @@ class TestCaching:
 
         result = upgrader._fetch_firmware_from_api()
         assert result == []
+
 
 # ---------------------------------------------------------------------------
 # Firmware Processing Tests
