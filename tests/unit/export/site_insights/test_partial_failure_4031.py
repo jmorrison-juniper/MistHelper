@@ -86,7 +86,16 @@ def test_site_partial_failure_emits_load_bearing_error(status_code: int, caplog:
     """Menu 74 keeps valid data and emits the portal failure marker for HTTP errors."""
     operation = _site_operation([_response(200, {"results": [1]}), _response(status_code, {"detail": "bad"})])
     with caplog.at_level(logging.INFO):
-        operation._collect_metrics(SiteRunContext("site-1", "HQ"), ["metric-ok", "metric-failed"])
+        rows, retrieved = operation._collect_metrics(SiteRunContext("site-1", "HQ"), ["metric-ok", "metric-failed"])
+    assert retrieved == 1
+    assert rows == [
+        {
+            "results": [1],
+            "metric_type": "metric-ok",
+            "site_id": "site-1",
+            "site_name": "HQ",
+        }
+    ]
     assert operation._refusal_log.refusals[0].status_code == status_code
     assert any(
         record.getMessage() == f"! Error fetching getSiteInsightMetrics: HTTP {status_code} from "
@@ -101,7 +110,19 @@ def test_device_partial_failure_emits_load_bearing_error(status_code: int, caplo
     operation = _device_operation([_response(200, {"results": [1]}), _response(status_code, {"detail": "bad"})])
     context = DeviceRunContext("site-1", "HQ", "device-1", "Switch", "aa:bb:cc:dd:ee:ff", "EX")
     with caplog.at_level(logging.INFO):
-        operation._collect_metrics(context, ["metric-ok", "metric-failed"])
+        rows, retrieved = operation._collect_metrics(context, ["metric-ok", "metric-failed"])
+    assert retrieved == 1
+    assert rows == [
+        {
+            "results": [1],
+            "metric_type": "metric-ok",
+            "site_id": "site-1",
+            "site_name": "HQ",
+            "device_id": "device-1",
+            "device_name": "Switch",
+            "device_mac": "aa:bb:cc:dd:ee:ff",
+        }
+    ]
     assert operation._refusal_log.refusals[0].status_code == status_code
     assert any(
         record.getMessage() == f"! Error fetching getSiteInsightMetricsForDevice: HTTP {status_code} from "
