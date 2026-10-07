@@ -146,8 +146,8 @@ class TestWriteBackWiring:
         engine, corrector = self._engine_with_mocks()
         engine._renderer.prompt_post_table.return_value = "quit"
         engine._finish([], MagicMock())
-        engine._reporter.save.assert_not_called()
-        corrector.correctable.assert_not_called()
+        assert engine._reporter.save.call_count == 0
+        assert corrector.correctable.call_count == 0
 
     def test_empty_post_table_choice_skips_all_write_paths(self, monkeypatch):
         """An empty post-table choice cannot reach a file or Mist write path."""
@@ -156,8 +156,8 @@ class TestWriteBackWiring:
         api_session = MagicMock()
         monkeypatch.setattr(eng_mod.InputUtils, "safe_input", staticmethod(lambda *a, **k: ""))
         engine._finish([], api_session)
-        engine._reporter.save.assert_not_called()
-        corrector.correctable.assert_not_called()
+        assert engine._reporter.save.call_count == 0
+        assert corrector.correctable.call_count == 0
         assert api_session.mock_calls == []
 
     def test_save_then_offers_writeback(self):
@@ -167,8 +167,8 @@ class TestWriteBackWiring:
         engine._reporter.save.return_value = "data/x.csv"
         corrector.correctable.return_value = []  # No targets -> offer ends quietly.
         engine._finish([], MagicMock())
-        engine._reporter.save.assert_called_once()
-        corrector.correctable.assert_called_once()
+        assert engine._reporter.save.call_count == 1
+        assert corrector.correctable.call_count == 1
 
     def test_gate_no_skips_review(self, monkeypatch):
         """Declining the batch gate means review_and_apply is never called."""
@@ -176,7 +176,7 @@ class TestWriteBackWiring:
         corrector.correctable.return_value = [object()]  # One target exists.
         monkeypatch.setattr(eng_mod.InputUtils, "safe_input", staticmethod(lambda *a, **k: "n"))
         engine._offer_write_back([], MagicMock())
-        corrector.review_and_apply.assert_not_called()
+        assert corrector.review_and_apply.call_count == 0
 
     def test_gate_yes_runs_review_and_report(self, monkeypatch):
         """Accepting the batch gate runs review_and_apply and then offers the report."""
@@ -186,8 +186,8 @@ class TestWriteBackWiring:
         answers = iter(["y", "y"])  # Gate yes, then save-report yes.
         monkeypatch.setattr(eng_mod.InputUtils, "safe_input", staticmethod(lambda *a, **k: next(answers)))
         engine._offer_write_back([], MagicMock())
-        corrector.review_and_apply.assert_called_once()
-        engine._reporter.save_corrections.assert_called_once()
+        assert corrector.review_and_apply.call_count == 1
+        assert engine._reporter.save_corrections.call_count == 1
 
 
 class TestConsoleLogSuppression:
@@ -362,7 +362,6 @@ class TestBusinessAuthorityIntegration:
             "NO_RESULT",
             "WRONG_STREET",
         }  # Flow completed.
-        assert _ResolverStub.captured is not None  # Resolver was invoked.
         assert (
             _ResolverStub.captured.authoritative_address.get("address") == "100 Main St Suite 9"
         )  # Authority address wired in.
