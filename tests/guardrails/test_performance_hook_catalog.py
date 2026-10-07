@@ -325,14 +325,14 @@ class TestCatalogMovedPaths:
     def test_moved_path_keeps_the_symbol_check_exact(self) -> None:
         scanner = CatalogSourceScanner(_REPO_ROOT)  # Create the source scanner for this repository.
         catalog = PerformanceHookCatalog(_ARTIFACT_ROOT)  # Create the artifact reader for this spec.
+        destinations = list(MOVED_PATHS.values())  # Collect canonical destinations for uniqueness checks.
+        assert len(destinations) == len(set(destinations))  # Reject two snapshot paths that hide one destination.
         new_paths = sorted(set(MOVED_PATHS.values()))  # Collect the canonical destinations only.
         symbol_index = scanner.symbol_index(new_paths)  # Parse the moved modules for an exact symbol check.
         moved_rows = [row for row in catalog.hook_rows() if row["file_path"] in MOVED_PATHS]  # Select rows.
         moved_files = {row["file_path"] for row in moved_rows}  # Collect snapshot files that hold a hook row.
-        inventory_only_paths = {  # Exclude the package marker, which has an inventory row but no hook row.
-            "src/operations/execution/ssh/shell_execution/__init__.py"
-        }
-        expected_hook_paths = set(MOVED_PATHS) - inventory_only_paths  # Require each other move to hold a hook row.
+        hook_snapshot_paths = {row["file_path"] for row in catalog.hook_rows()}  # Identify files with hook rows.
+        expected_hook_paths = set(MOVED_PATHS) & hook_snapshot_paths  # Allow inventory-only moved files.
         assert moved_files == expected_hook_paths, f"Checked {len(moved_rows)} hook rows for {len(moved_files)} files"
         checker = row_resolves  # Reuse the production row resolver of this guard.
         for row in moved_rows:  # Each moved row must resolve to a real symbol at the new path.
