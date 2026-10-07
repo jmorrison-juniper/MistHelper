@@ -128,6 +128,16 @@ class FakeStore:
         self.record = current  # Publish the narrow mutation.
         return True  # The accepted row is now readable.
 
+    def apply_stop_request(self, run_id: str, stop_request: dict[str, Any], updated_at: str) -> bool:
+        """Write only the stop fields and preserve every accepted row."""
+        if self.record is None or self.record.get("run_id") != run_id:
+            return False  # An absent or different run cannot carry a durable stop request.
+        current = dict(self.record)  # Preserve the current upgrades, state, and phase fields.
+        current["stop_request"] = dict(stop_request)  # Change only the stop request field.
+        current["updated_at"] = updated_at  # The poll route reads the fresh change time.
+        self.record = current  # Publish the narrow mutation.
+        return True  # The stop is durable beside every concurrent accepted row.
+
     def phase_states(self) -> dict[str, str]:
         """Return the state of each phase of the stored record.
 

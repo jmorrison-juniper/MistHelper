@@ -73,6 +73,22 @@ class FakeRunStore:
         self.writes += 1
         return True
 
+    def apply_stop_request(self, run_id: str, stop_request: dict[str, Any], updated_at: str) -> bool:
+        """Write only the stop fields and preserve every other field.
+
+        Args:
+            run_id: The run key of the stop.
+            stop_request: The whole stop document.
+            updated_at: The UTC change time in ISO 8601 form.
+
+        Returns:
+            Always True, because this store holds one run only.
+        """
+        self.record["stop_request"] = stop_request  # Change the one field that the stop owns.
+        self.record["updated_at"] = updated_at  # Record the change time beside the stop.
+        self.writes += 1  # A test reads this count to prove that the stop landed.
+        return True  # The stop store raises when a write reports False.
+
 
 def make_target(mac: str) -> DeviceTarget:
     """Return one device target for a plan.

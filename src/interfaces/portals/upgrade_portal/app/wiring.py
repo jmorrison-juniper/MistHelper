@@ -42,6 +42,9 @@ from src.interfaces.portals.upgrade_portal.app.config import (
 from src.interfaces.portals.upgrade_portal.persistence.actions import (
     ActionRepository,
 )  # Keep run actions in the authoritative document store.
+from src.interfaces.portals.upgrade_portal.runtime.signals import (
+    RunDispatchGate,
+)  # The stop route and this destructive submitter share one gate for each run.
 
 logger = logging.getLogger(__name__)  # One logger for each module keeps the source visible in the log.
 
@@ -427,6 +430,52 @@ class DocumentRunStore:
             forget_run(run_id)  # Prevent a database outage from resurrecting the deleted plan.
         return deleted  # Report the verified cleanup result.
 
+    def apply_stop_request(self, run_id: str, stop_request: dict[str, Any], updated_at: str) -> bool:
+        """Write only the stop fields of one database run.
+
+        Why:
+            Issue #4020: the stop route read the whole record and wrote the
+            whole record back. An accepted firmware row that committed inside
+            that interval disappeared, so the operator held a stop that could
+            cancel nothing. This mutation patches two fields in one statement.
+
+        Args:
+            run_id: The run key.
+            stop_request: The stop request record.
+            updated_at: The fresh change time in ISO 8601 UTC.
+
+        Returns:
+            True when the database holds the stop request.
+        """
+        store = load_module(STORE_MODULE)  # Load the production database boundary only for the mutation.
+        if store is None:  # A mirror cannot coordinate a stop against another worker.
+            return False  # Fail closed, because an unproven stop must never read as durable.
+        try:  # The database action patches two fields in one atomic AQL statement.
+            database: Any = store.connect_database()  # Open the database that holds the run document.
+            if database is None:  # A file fallback cannot preserve a concurrent accepted row.
+                return False  # Never report an atomic mutation through a non-atomic fallback.
+            query = (
+                "FOR run IN @@collection "
+                "FILTER run._key == @key "
+                "UPDATE run WITH { stop_request: @stop, updated_at: @now } IN @@collection RETURN NEW"
+            )  # UPDATE patches only the stop fields and preserves upgrades, state, phase, and outcome.
+            bind_vars = {  # Bind the collection, key, detached stop record, and change time.
+                "@collection": store.RUN_COLLECTION,
+                "key": run_id,
+                "stop": dict(stop_request),
+                "now": updated_at,
+            }
+            logger.info("wiring: write the stop request of run %s", run_id)  # Log before the mutation.
+            rows = list(database.aql.execute(query, bind_vars=bind_vars))  # Run one atomic field update.
+        except Exception as fault:  # A stop that cannot commit must remain visible as a failure.
+            logger.warning("wiring: the stop write for run %s failed with %s", run_id, type(fault).__name__)
+            return False  # The stop route reports the durable write failure to the operator.
+        if not rows or not isinstance(rows[0], Mapping):  # An absent run changed no durable record.
+            return False  # Fail closed when the database returns no updated document.
+        mirror_run(dict(rows[0]))  # Cache the complete database-confirmed record with its accepted rows.
+        logger.debug("wiring: the stop write for run %s succeeded", run_id)  # Log after the mutation.
+        return True  # The stop is durable without a whole-record replacement.
+
     def compare_and_set_run(
         self,
         run_id: str,
@@ -780,6 +829,41 @@ class CloudUpgradeSubmitter:
             None when every plan of the phase went out, or the stop reason.
         """
         for plan in plans:  # The order is the order that `plan_upgrade` fixed.
+            reason = self._dispatch_plan(run_id, record, phase, plan)  # One gated check, call, and evidence write.
+            if reason is not None:
+                return reason  # A stop, a refusal, or a lost accepted row ends the phase here.
+        logger.info("wiring: the run %s sent %s upgrade call(s) for the %s phase", run_id, len(plans), phase)
+        return None  # The driver now settles this phase before the next one sends anything.
+
+    def _dispatch_plan(
+        self,
+        run_id: str,
+        record: MutableMapping[str, Any],
+        phase: str,
+        plan: Any,
+    ) -> str | None:
+        """Check the stop, send one firmware call, and store its evidence as one action.
+
+        Why:
+            Issue #4020: the durable stop check and the cloud call were two
+            separate actions. A stop that committed between them could not hold
+            back a destructive write that had already passed the check, so the
+            operator saw a committed stop while firmware was still in flight.
+
+            ``RunDispatchGate`` makes the three steps one action for each run. A
+            stop of the same run either commits before this block and stops the
+            call, or waits until the accepted row or the refusal is durable.
+
+        Args:
+            run_id: The run key, for the log line.
+            record: The run record, which collects the accepted rows.
+            phase: The phase name, for the reason sentence.
+            plan: The one version group this dispatch may send.
+
+        Returns:
+            None when the call went out and its row is durable, or one reason.
+        """
+        with RunDispatchGate.dispatch(run_id):  # No stop of this run may commit inside this block.
             stop_reason = self._stop_reason(record)  # A durable operator request blocks this next write.
             if stop_reason is not None:
                 return stop_reason  # The driver then uses the normal stopped-run finalization path.
@@ -788,11 +872,7 @@ class CloudUpgradeSubmitter:
                 self._keep(record, ())  # Keep the stable empty-row shape when the first call was refused.
                 logger.error("wiring: the run %s stops, because the %s phase lost one upgrade call", run_id, phase)
                 return PHASE_REFUSED_REASON.format(phase=phase)  # The driver fails the run with this sentence.
-            store_reason = self._persist_row(record, row)  # The identifier lands before the next plan can leave.
-            if store_reason is not None:
-                return store_reason  # An unrecorded accepted call makes every later destructive write unsafe.
-        logger.info("wiring: the run %s sent %s upgrade call(s) for the %s phase", run_id, len(plans), phase)
-        return None  # The driver now settles this phase before the next one sends anything.
+            return self._persist_row(record, row)  # The identifier lands before the gate lets a stop commit.
 
     def _stop_reason(self, record: MutableMapping[str, Any]) -> str | None:
         """Copy a durable stop request into the driver record before a cloud write.

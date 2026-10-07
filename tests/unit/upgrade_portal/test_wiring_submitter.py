@@ -28,13 +28,14 @@ Warning:
 from __future__ import annotations
 
 from threading import Event, Lock, Thread
+from time import monotonic, sleep
 from types import SimpleNamespace
 from typing import Any
 
 import pytest
 
 from src.interfaces.portals.upgrade_portal.app import wiring
-from src.interfaces.portals.upgrade_portal.runtime.signals import StopRequestStore
+from src.interfaces.portals.upgrade_portal.runtime.signals import RunDispatchGate, StopRequestStore
 from src.interfaces.portals.upgrade_portal.upgrade.driver import PHASE_ORDER
 
 RUN_ID = "11111111-1111-1111-1111-111111111111"
@@ -126,6 +127,25 @@ class RecordingRunStore:
         if self.stop_after_first_row and len(rows) == 1:
             self.record["stop_request"] = dict(STOP_REQUEST)  # The route wins immediately after persistence.
         return True
+
+    def apply_stop_request(self, run_id: str, stop_request: dict[str, Any], updated_at: str) -> bool:
+        """Write only the stop fields and preserve every accepted row.
+
+        Args:
+            run_id: The run key. This store holds one run only.
+            stop_request: The stop request record.
+            updated_at: The fresh change time in ISO 8601 UTC.
+
+        Returns:
+            False when this store holds no run, or True after the narrow write.
+        """
+        if self.record is None:
+            return False  # An absent run cannot carry a durable stop request.
+        current = dict(self.record)  # Preserve the accepted rows of every earlier phase.
+        current["stop_request"] = dict(stop_request)  # Change only the stop request field.
+        current["updated_at"] = updated_at  # The poll route reads the fresh change time.
+        self.record = current  # Publish the narrow mutation.
+        return True  # The stop is durable beside every concurrent accepted row.
 
 
 class PausingAcceptedRowStore(RecordingRunStore):
@@ -547,14 +567,21 @@ class TestTheSubmitterSends:
     def test_a_stop_during_accepted_row_persistence_survives_the_narrow_mutation(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """A stop committed after the old record was observed remains durable.
+        """A stop raised during accepted-row persistence waits and then blocks the next call.
+
+        Why:
+            Issue #4020: the stop write and the accepted-row write once raced in
+            the store. ``RunDispatchGate`` now makes the stop check, the cloud
+            call, and the durable row one action. The stop therefore cannot
+            commit inside persistence at all. It waits for the gate, and it
+            takes the gate before the second version group may dispatch.
 
         Args:
             monkeypatch: The pytest patch helper.
         """
         plans = (plan_for("switch"), plan_for("switch"))  # The second version exposes a lost-stop defect.
         calls: list[Any] = []  # A preserved stop must block the second destructive call.
-        store = PausingAcceptedRowStore()  # The store pauses in the exact stale-write interval.
+        store = PausingAcceptedRowStore()  # The store pauses in the former stale-write interval.
         monkeypatch.setattr(wiring, "build_plans", lambda record: plans)
         install_modules(
             monkeypatch,
@@ -567,13 +594,25 @@ class TestTheSubmitterSends:
             """Run the destructive phase while the store controls the race."""
             result["reason"] = submitter(store).submit_phase(record, SWITCH_PHASE)  # Use the production submitter.
 
+        def request_stop() -> None:
+            """Ask for the durable stop through the real route path."""
+            StopRequestStore(store).request(RUN_ID, "sam@example.com", "STOP")  # The gate holds this call.
+
         worker = Thread(target=send_phase, name="accepted-row-worker")  # Keep the phase off the test thread.
         worker.start()  # The first cloud response reaches accepted-row persistence.
         assert store.accepted_row_observed.wait(timeout=2)  # Persistence observed the record without a stop.
-        StopRequestStore(store).request(RUN_ID, "sam@example.com", "STOP")  # Use the real durable stop path.
-        store.accepted_row_release.set()  # Let accepted-row persistence continue after the stop commit.
+        stopper = Thread(target=request_stop, name="stop-route")  # The route thread now asks for the stop.
+        stopper.start()  # The stop blocks on the gate that the first dispatch holds.
+        deadline = monotonic() + 2  # Bound the wait, so a defect fails the test instead of hanging it.
+        while RunDispatchGate.stops_waiting(RUN_ID) == 0 and monotonic() < deadline:  # Wait for the claim.
+            sleep(0.01)  # Yield to the stop route thread, which registers its claim on the gate.
+        assert RunDispatchGate.stops_waiting(RUN_ID) == 1  # The stop claimed the gate before the release.
+        assert store.record.get("stop_request") is None  # The gate held the stop out of persistence.
+        store.accepted_row_release.set()  # Let accepted-row persistence continue and release the gate.
+        stopper.join(timeout=2)  # The stop commits as soon as the first dispatch finished.
         worker.join(timeout=2)  # The preserved stop must end the phase without a wait.
         assert worker.is_alive() is False  # The deterministic race completed.
+        assert stopper.is_alive() is False  # The stop route never hangs on the gate.
         assert result["reason"] == wiring.STOP_REQUESTED_REASON  # The driver selects stopped finalization.
         assert len(calls) == 1  # The second version group receives no firmware write.
         assert len(store.record["upgrades"]) == 1  # The accepted row remains durable for cancellation.

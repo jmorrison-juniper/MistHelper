@@ -30,6 +30,9 @@ Each task below is complete. The state column records the proof.
 | T036 | Check the durable stop request before every plan | Done |
 | T039 | Add the narrow `append_accepted_upgrade` store operation | Done |
 | T040 | Preserve every concurrent stop during accepted-row persistence | Done |
+| T043 | Add the narrow `apply_stop_request` store operation | Done |
+| T044 | Add the run-scoped `RunDispatchGate` with stop precedence | Done |
+| T045 | Hold the gate across the stop check, the call, and the row | Done |
 
 ## Interleaved cascade
 
@@ -58,6 +61,9 @@ Each task below is complete. The state column records the proof.
 | T038 | Prove the driver uses the normal `stopped` finalization path | Done |
 | T041 | Pause accepted-row persistence while the real stop path writes | Done |
 | T042 | Prove memory and document stores mutate only accepted rows | Done |
+| T046 | Prove the inverse stop order keeps the stop and the accepted row | Done |
+| T047 | Prove a stop that wins the gate causes zero cloud calls | Done |
+| T048 | Prove a dispatch that wins the gate completes before the stop | Done |
 
 ### The replaced test
 

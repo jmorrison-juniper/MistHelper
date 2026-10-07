@@ -131,6 +131,26 @@ class RecordingRunStore:
         self.runs[str(run["run_id"])] = dict(run)  # A copy stops a later edit of the caller dictionary.
         return True  # The record is readable from this moment.
 
+    def apply_stop_request(self, run_id: str, stop_request: dict[str, Any], updated_at: str) -> bool:
+        """Write only the stop fields and preserve every other field.
+
+        Args:
+            run_id: The run key of the stop.
+            stop_request: The whole stop document.
+            updated_at: The UTC change time in ISO 8601 form.
+
+        Returns:
+            True, or False for an absent run or while the test refuses writes.
+        """
+        if self.refuse_writes:  # The store is unreachable, so the record keeps its earlier content.
+            return False  # The caller answers the write failure to the operator.
+        held = self.runs.get(run_id)  # The narrow mutation changes the stored record in place.
+        if held is None:  # Fail closed for an absent run, as the database store does.
+            return False  # The stop store then raises instead of claiming a write.
+        held["stop_request"] = stop_request  # Change the one field that the stop owns.
+        held["updated_at"] = updated_at  # Record the change time beside the stop.
+        return True  # The record is readable from this moment.
+
 
 class RecordingStopRunner:
     """Answers one fixed result for the cancel work of a stop.

@@ -15,3 +15,8 @@
   group. A durable operator stop blocks the next firmware call and completes
   through the normal stopped-run path. The accepted-row write now preserves a
   stop that another portal worker stores at the same time (issue #4020).
+- The operator stop now writes only the stop fields of the run record, so it
+  preserves an accepted upgrade identifier that the submitter stores at the same
+  time. One run-scoped gate now covers the stop check, the firmware call, and
+  the accepted-row write, so no firmware call starts after the operator asks for
+  the stop (issue #4020).

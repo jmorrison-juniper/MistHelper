@@ -313,6 +313,33 @@ class MemoryRunStore:
             _RUNS[run_id] = current  # Publish the narrow mutation under the same guard.
         return True  # A later read now sees the row and every concurrent stop field.
 
+    def apply_stop_request(self, run_id: str, stop_request: dict[str, Any], updated_at: str) -> bool:
+        """Write only the stop fields of one run and preserve every other field.
+
+        Why:
+            Issue #4020: the stop route read the whole record and wrote the
+            whole record back. An accepted firmware row that committed inside
+            that interval disappeared, so the operator held a stop that could
+            cancel nothing.
+
+        Args:
+            run_id: The run key.
+            stop_request: The stop request record.
+            updated_at: The fresh change time in ISO 8601 UTC.
+
+        Returns:
+            True when the store holds the stop request.
+        """
+        with _RUN_GUARD:  # Read and field mutation form one action with accepted-row writes.
+            held = _RUNS.get(run_id)  # An absent run cannot carry a stop request.
+            if held is None:
+                return False  # Fail closed, because an unproven stop must never read as durable.
+            current = dict(held)  # Detach the replacement from the stored record.
+            current["stop_request"] = dict(stop_request)  # Change only the stop request field.
+            current["updated_at"] = updated_at  # The poll route reads the fresh change time.
+            _RUNS[run_id] = current  # Publish the narrow mutation under the same guard.
+        return True  # A later read sees the stop and every concurrent accepted row.
+
     def compare_and_set_run(
         self,
         run_id: str,
