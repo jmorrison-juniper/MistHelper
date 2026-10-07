@@ -13,7 +13,7 @@
     <!-- Left: Operation List -->
     <div class="col-md-5">
         <input type="text" class="form-control portal-search mb-3" id="opSearch"
-               placeholder="Search operations..." data-testid="op-search">
+               placeholder="Search operations..." aria-label="Search operations" data-testid="op-search">
 
         <div class="accordion portal-accordion" id="operationAccordion" data-testid="operation-accordion">
             <!-- Populated by operations.js -->
@@ -118,9 +118,11 @@
                 <h6 class="mb-0">Results</h6>
                 <div class="d-flex align-items-center gap-2 flex-wrap">
                     <select class="form-select form-select-sm w-auto d-none" id="resultsFileSelect"
+                            aria-label="Select a result file"
                             data-testid="results-file-select"
                             onchange="OperationResults.selectFile(this.value)"></select>
                     <input type="search" class="form-control form-control-sm w-auto" id="resultsSearch"
+                           aria-label="Filter result rows"
                            data-testid="results-search" placeholder="Filter rows..."
                            oninput="OperationResults.onSearchInput(this.value)">
                     <button type="button" class="btn btn-sm btn-outline-secondary"
@@ -164,7 +166,7 @@
             <div class="modal-body">
                 <div id="dataPreviewSearchRow" class="mb-2 d-none">
                     <input type="text" class="form-control form-control-sm preview-search-input" id="dataPreviewSearch"
-                           placeholder="Search rows...">
+                           placeholder="Search rows..." aria-label="Search preview rows">
                 </div>
                 <div id="dataPreviewLoading" class="modal-loading d-none">
                     <div class="spinner-border text-primary" role="status">
