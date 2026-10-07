@@ -1,0 +1,10 @@
+### Changed
+
+- The upgrade capture portal now sends the firmware of one device family inside
+  the phase of that family. A gateway that fails to settle holds the firmware of
+  the switches and the access points below it, so the site keeps its path to the
+  cloud. A refused cloud call ends the run with no retry, and each accepted
+  upgrade identifier survives (issue #4020).
+- The firmware plans of one site now leave the service in one order: the
+  gateways, then the switches, then the access points. The selection order of
+  the operator no longer decides that order (issue #4020).

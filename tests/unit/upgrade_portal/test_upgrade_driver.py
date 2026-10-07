@@ -204,7 +204,13 @@ class RecordingCapture:
 
 
 class AcceptingSubmitter:
-    """Accept every submission and write one upgrade identifier."""
+    """Accept every phase submission and write one upgrade identifier.
+
+    Why:
+        Issue #4020 moved the firmware call into the phase loop, so this double
+        answers one phase at a time. It records the phase of every call, which
+        proves the canonical family order without one cloud socket.
+    """
 
     def __init__(self, accept: bool = True) -> None:
         """Hold the answer this submitter returns.
@@ -214,20 +220,23 @@ class AcceptingSubmitter:
         """
         self.accept = accept
         self.calls = 0
+        self.phases: list[str] = []  # The family of every phase that asked for firmware.
 
-    def submit(self, record: Any) -> bool:
-        """Write one upgrade identifier on each target.
+    def submit_phase(self, record: Any, phase: str) -> str | None:
+        """Write one upgrade identifier on each target of this phase.
 
         Args:
             record: The run record.
+            phase: The phase that asks for firmware.
 
         Returns:
-            The answer this double holds.
+            None when this double accepts, and a reason when it refuses.
         """
         self.calls += 1
+        self.phases.append(phase)
         for target in record.get("targets", []):
             target["upgrade_id"] = "up-1"
-        return self.accept
+        return None if self.accept else f"The cloud refused the {phase} upgrade call."
 
 
 class RecordingReleaser:
@@ -939,6 +948,89 @@ class TestStopAndFailure:
         final = parts["driver"].run(make_record())
         assert final["state"] == RunState.FAILED.value
         assert parts["gate"].calls == []
+
+
+class TestPhaseSubmission:
+    """Issue #4020: the firmware of one family leaves inside its own phase.
+
+    Why:
+        The driver used to send every family of the site in one call before the
+        first gate opened. A gateway that was lost therefore could not hold the
+        firmware of the switches below it, and the site went dark. These tests
+        read the family of each cloud call, and they reach no cloud.
+    """
+
+    def test_the_firmware_leaves_in_the_canonical_family_order(self, parts: dict[str, Any]) -> None:
+        """Each family takes firmware in the order the physical site allows.
+
+        Args:
+            parts: The doubles and the driver.
+        """
+        parts["driver"].run(make_record())
+        assert parts["submitter"].phases == ["gateways", "switches", "aps"]
+
+    def test_the_client_phase_asks_for_no_firmware(self, parts: dict[str, Any]) -> None:
+        """A client is no device of this portal, so it takes no firmware.
+
+        Args:
+            parts: The doubles and the driver.
+        """
+        parts["driver"].run(make_record())
+        assert "clients" not in parts["submitter"].phases
+
+    def test_an_absent_family_reaches_the_submitter_as_a_skip(self, parts: dict[str, Any]) -> None:
+        """A site with no gateway still asks, and the answer is a quiet skip.
+
+        Why:
+            The submitter owns the decision, because it alone holds the plans.
+            It answers None with no cloud call, and the phase then reads
+            skipped through the same path that FR-058 already uses.
+
+        Args:
+            parts: The doubles and the driver.
+        """
+        targets = [target for target in make_targets() if target["device_type"] != "gateway"]
+        parts["driver"].run(make_record(targets))
+        assert parts["store"].phase_states()["gateways"] == PhaseState.SKIPPED.value
+
+    def test_a_lost_gateway_phase_sends_no_switch_firmware(self, parts: dict[str, Any]) -> None:
+        """The defect of issue #4020, read from the driver itself.
+
+        Why:
+            The gateways failed to settle, so the switches below them must keep
+            their firmware. The old driver had already written that firmware
+            before the first gate opened.
+
+        Args:
+            parts: The doubles and the driver.
+        """
+        parts["gate"].state_for = {"gateways": PhaseState.FAILED.value}
+        final = parts["driver"].run(make_record())
+        assert parts["submitter"].phases == ["gateways"]  # No later family reached the cloud.
+        assert final["state"] == RunState.FAILED.value
+
+    def test_a_blocked_family_says_why_it_kept_its_firmware(self, parts: dict[str, Any]) -> None:
+        """The operator reads one sentence for each family that was held.
+
+        Args:
+            parts: The doubles and the driver.
+        """
+        parts["gate"].state_for = {"gateways": PhaseState.FAILED.value}
+        final = parts["driver"].run(make_record())
+        notes = {phase["name"]: phase.get("note", "") for phase in final.get("phases", [])}
+        assert notes["switches"] == driver.PHASE_BLOCKED_NOTE
+        assert notes["aps"] == driver.PHASE_BLOCKED_NOTE
+
+    def test_a_refused_phase_sends_no_firmware_to_the_family_below_it(self, parts: dict[str, Any]) -> None:
+        """A refused cloud call stops the run before the next family.
+
+        Args:
+            parts: The doubles and the driver.
+        """
+        parts["submitter"].accept = False
+        final = parts["driver"].run(make_record())
+        assert parts["submitter"].phases == ["gateways"]  # The run stopped at the first refusal.
+        assert final["state"] == RunState.FAILED.value
 
 
 class TestDiscardedWrites:

@@ -23,7 +23,7 @@ Why:
 import logging  # The portal logs with the standard library only.
 import threading  # The run mirror below is read by the poll while the driver writes.
 import time  # The event window of the settle gate reads the wall clock.
-from collections.abc import Callable, Mapping, MutableMapping  # The shapes the driver and the store declare.
+from collections.abc import Callable, Mapping, MutableMapping, Sequence  # The shapes the driver and the store declare.
 from dataclasses import dataclass  # Holds one request-owned resource graph.
 from importlib import import_module  # Imports each collaborator late, at the first call.
 from types import ModuleType  # The return type of a late import.
@@ -98,6 +98,21 @@ COMPARISON_SERVICE_KEY = "COMPARISON_SERVICE"  # The seam that holds ComparisonS
 PORTAL_DEPENDENCY_PROVIDER_KEY = "PORTAL_DEPENDENCY_PROVIDER"  # Holds lazy request resource construction.
 
 POST_CHECK_ORDINAL = 2  # The second capture of a run. `driver.post_check_request` sends this value.
+
+# Issue #4020: the driver names a cascade phase, and an upgrade plan names a
+# device family. This map is the one join between the two words, so the phase
+# loop and the submitter never disagree about which firmware write belongs to
+# which gate. The client phase holds no device, so it takes no entry.
+PLAN_PHASE_BY_DEVICE_TYPE: Mapping[str, str] = {
+    "gateway": "gateways",  # Every other family of the site sits downstream of this one.
+    "switch": "switches",  # The access points and the wired clients sit downstream of this one.
+    "ap": "aps",  # Only the wireless clients sit downstream of this one.
+}
+
+# Issue #4020: these two sentences reach the run page, so they name the loss in
+# plain words and hold no host, no token, and no cloud body.
+NO_PLAN_REASON = "The run built no upgrade plan, so no firmware call left the portal."
+PHASE_REFUSED_REASON = "The cloud refused the {phase} upgrade call, so the run stops before the next phase."
 
 # WHY: The storage bootstrap runs once for each process. Every step of it repeats
 # without harm, and a second run costs a database host probe that is not free.
@@ -635,7 +650,7 @@ class CaptureBridge:
 
 
 class CloudUpgradeSubmitter:
-    """Send the upgrade of one run to the cloud.
+    """Send the upgrade of one phase of one run to the cloud.
 
     Why:
         `RunDriverDeps.submit` accepts None, and a driver built that way walks
@@ -646,6 +661,14 @@ class CloudUpgradeSubmitter:
         The class holds the session alone. `upgrade_service.plan_upgrade` is pure
         and groups the devices, and `upgrade_service.invoke_upgrade` performs one
         call for each group and never retries.
+
+        Issue #4020: the driver now calls this class once for each phase, and a
+        phase sends firmware only after the phase above it settled. One refused
+        group inside a phase stops that phase at once and leaves every later
+        group of the phase unsent, because the operator cannot tell a refused
+        write from a write that the cloud took and lost. Nothing retries, and
+        the rows of the groups the cloud already accepted stay in the record so
+        the stop path can still cancel them.
     """
 
     def __init__(self, session: Any) -> None:
@@ -656,24 +679,82 @@ class CloudUpgradeSubmitter:
         """
         self._session = session  # Bound inside the request, because the driver thread reads no session.
 
-    def submit(self, record: MutableMapping[str, Any]) -> bool:
-        """Send every upgrade call of one run and report whether the cloud took one.
+    def submit_phase(self, record: MutableMapping[str, Any], phase: str) -> str | None:
+        """Send every upgrade call of one phase and report why the run must stop.
 
         Args:
             record: The run record. The call writes the cloud identifiers into it.
+            phase: The phase name, one of the members of the driver phase order.
 
         Returns:
-            True when the cloud accepted at least one call.
+            None when the run may carry on, or one plain sentence that names why
+            the run must stop before the next phase.
         """
         run_id = str(record.get("run_id", ""))  # The log lines name the run and never the record.
         plans = build_plans(record)  # Pure, so this grouping reaches no cloud.
         if not plans:  # A run with no plan must never read as a sent upgrade.
             logger.error("wiring: the run %s built no upgrade plan, so nothing went to the cloud", run_id)
-            return False  # The driver fails the run and writes the reason.
-        sent = [entry for entry in (self._send(run_id, plan) for plan in plans) if entry is not None]
-        record["upgrades"] = sent  # The stop path needs the cloud identifier of each accepted call.
-        logger.info("wiring: the run %s sent %s of %s upgrade call(s)", run_id, len(sent), len(plans))
-        return bool(sent)  # One accepted call is enough to carry the run into the settle phases.
+            return NO_PLAN_REASON  # The driver fails the run and writes this reason.
+        mine = tuple(plan for plan in plans if plan_phase(plan) == phase)  # One phase holds one family.
+        if not mine:  # The site holds no device of this family, so this phase sends nothing.
+            logger.info("wiring: the run %s holds no upgrade plan for the %s phase", run_id, phase)
+            return None  # An empty family is no failure, and the driver marks the phase skipped.
+        return self._send_phase(run_id, record, phase, mine)  # The ordered, fail-closed send of one phase.
+
+    def _send_phase(
+        self,
+        run_id: str,
+        record: MutableMapping[str, Any],
+        phase: str,
+        plans: tuple[Any, ...],
+    ) -> str | None:
+        """Send the plans of one phase and stop at the first refusal.
+
+        Why:
+            A refused group of a phase means the cloud would not take that
+            firmware write. Sending the rest of the phase afterwards would start
+            a partial upgrade of a family that the operator believes refused, so
+            this loop ends at the first refusal and writes nothing more.
+
+        Args:
+            run_id: The run key, for the log line.
+            record: The run record, which collects the accepted rows.
+            phase: The phase name, for the reason sentence.
+            plans: The plans of this phase, in the canonical order.
+
+        Returns:
+            None when every plan of the phase went out, or the stop reason.
+        """
+        sent: list[dict[str, Any]] = []  # The rows of this phase that the cloud took.
+        for plan in plans:  # The order is the order that `plan_upgrade` fixed.
+            row = self._send(run_id, plan)
+            if row is None:  # The cloud refused or faulted, so this phase stops here.
+                self._keep(record, sent)  # The accepted rows of this phase still reach the stop path.
+                logger.error("wiring: the run %s stops, because the %s phase lost one upgrade call", run_id, phase)
+                return PHASE_REFUSED_REASON.format(phase=phase)  # The driver fails the run with this sentence.
+            sent.append(row)
+        self._keep(record, sent)  # Every group of this phase went out, so the record holds each row.
+        logger.info("wiring: the run %s sent %s upgrade call(s) for the %s phase", run_id, len(sent), phase)
+        return None  # The driver now settles this phase before the next one sends anything.
+
+    @staticmethod
+    def _keep(record: MutableMapping[str, Any], rows: Sequence[Mapping[str, Any]]) -> None:
+        """Add the accepted rows of one phase to the record.
+
+        Why:
+            Issue #4020 sends one phase at a time, so a later phase must never
+            drop the identifiers of the phase above it. The stop path cancels
+            every accepted call, and a replaced list would hide the gateways
+            that are already writing firmware.
+
+        Args:
+            record: The run record.
+            rows: The rows of this phase that the cloud accepted.
+        """
+        held = record.get("upgrades")  # A first phase finds nothing, and a later phase finds the earlier rows.
+        kept = list(held) if isinstance(held, Sequence) and not isinstance(held, str | bytes) else []
+        kept.extend(dict(row) for row in rows)  # Plain values only, because the document store writes plain values.
+        record["upgrades"] = kept  # The stop path needs the cloud identifier of every accepted call.
 
     def _send(self, run_id: str, plan: Any) -> dict[str, Any] | None:
         """Send one upgrade call and return what the cloud answered.
@@ -697,6 +778,27 @@ class CloudUpgradeSubmitter:
             logger.warning("wiring: the cloud refused one upgrade call of the run %s", run_id)  # No body, no host.
             return None  # A refused group carries no identifier that the stop path could use.
         return _submission_row(answer)  # The record now holds what the stop path needs.
+
+
+def plan_phase(plan: Any) -> str:
+    """Return the cascade phase that one upgrade plan belongs to.
+
+    Why:
+        The driver names a phase, and a plan names a device family. Issue #4020
+        joins the two here, so the submitter and the phase loop never disagree
+        about which firmware write belongs to which gate.
+
+    Args:
+        plan: One `UpgradePlan` of the upgrade seam.
+
+    Returns:
+        The phase name, or an empty string when the plan names no known family.
+    """
+    targets = getattr(plan, "targets", ())  # A plan always groups one family, so the first target names it.
+    first = next(iter(targets), None)  # An empty plan can reach no phase and must never block one.
+    if first is None:
+        return ""  # The caller then sends this plan in no phase at all.
+    return PLAN_PHASE_BY_DEVICE_TYPE.get(str(getattr(first, "device_type", "")), "")
 
 
 def _submission_row(answer: Any) -> dict[str, Any]:
