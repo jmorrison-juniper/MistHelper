@@ -11,6 +11,12 @@ from pathlib import Path
 class MoveModuleGuideGuard:
     """Read the module-move table and compare supported rows with live jobs."""
 
+    nested_package_guidance = (
+        "The guard counts direct Python modules except `__init__.py` and immediate child "
+        "directories with tracked Python descendants. It uses the baseline ratchet and "
+        "requires total excess to decrease or remain fixed."
+    )
+
     expected = (
         (
             "Guardrails",
@@ -63,6 +69,8 @@ class MoveModuleGuideGuard:
         workflow = self._read(".github/workflows/ci.yml")
         if guide is None or workflow is None:
             return False
+        if self.nested_package_guidance not in guide:
+            self.errors.append("The nested source package ratchet guidance is missing")
         rows = self._table_rows(guide)
         if rows != self.expected:
             self.errors.append("The Move a module table does not match the required rows")
@@ -152,6 +160,21 @@ class TestMoveModuleGuide:
         assert guard.run() is False
         assert "Import smoke" in guard.result.unchecked
         assert guard.errors == ["The Import smoke live job is missing"]
+
+    def test_nested_package_guidance_drift_fails(self, tmp_path: Path) -> None:
+        """Reject missing nested-package ratchet wording before it can drift."""
+        self._copy_inputs(tmp_path)
+        guide = tmp_path / ".github/copilot-instructions.md"
+        guide.write_text(
+            guide.read_text(encoding="utf-8").replace(
+                MoveModuleGuideGuard.nested_package_guidance,
+                "The nested package guidance changed.",
+            ),
+            encoding="utf-8",
+        )
+        guard = MoveModuleGuideGuard(tmp_path)
+        assert guard.run() is False
+        assert "The nested source package ratchet guidance is missing" in guard.errors
 
     @staticmethod
     def _copy_inputs(root: Path) -> None:

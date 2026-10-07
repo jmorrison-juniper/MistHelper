@@ -245,6 +245,7 @@ pull requests. Run each check before you push.
 | Bandit | An `assert` in production code, a hardcoded credential string, or a bare `try/except/pass`. | `bandit -c pyproject.toml -r <package> -q` |
 | Portal registry | A regenerated `web_portal/menu_registry.py` that holds a row the portal cannot run. Feed the generator only the `safe` and `interactive_safe` titles. | `python -m pytest tests/guardrails/test_portal_operation_coverage.py` |
 | Destructive marker | A `destructive` registry entry with a `skip_reason` that lacks the word `DESTRUCTIVE`. | `python -m pytest tests/guardrails/test_operation_registry_menu_coverage.py` |
+| Nested source package | The guard misses a direct module or child directory, or total excess increases. The guard counts direct Python modules except `__init__.py` and immediate child directories with tracked Python descendants. It uses the baseline ratchet and requires total excess to decrease or remain fixed. | `python -m pytest tests/guardrails/test_move_module_guidance.py` |
 
 ### Move a module
 
