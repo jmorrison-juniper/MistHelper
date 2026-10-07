@@ -232,6 +232,7 @@ su misthelper -c "cd /app && gunicorn wsgi:app \
 GUNICORN_PID=$!
 SSHD_PID=""  # Clear the sshd PID, because a signal can start the cleanup before the daemon starts.
 SNMPD_PID=""  # Clear the snmpd PID, because a signal can start the cleanup before the daemon starts.
+METRICS_PID=""  # Clear the metrics PID, because a signal can start cleanup before the gateway starts.
 log_container_event "[PORTAL] Started the web portal with PID $GUNICORN_PID."  # Name the PID, so the operator can match a later crash line to this service.
 
 # Wait for one PID to exit on its own, then force it, so cleanup never hangs forever.
@@ -254,6 +255,13 @@ _wait_for_pid_or_kill() {
 
 # Determine upgrade capture portal port (default 8056)
 CAPTURE_PORT="${CAPTURE_PORT:-8056}"
+
+# Determine the metrics gateway port (default 8057).
+METRICS_PORT="${METRICS_PORT:-8057}"
+if ! [[ "$METRICS_PORT" =~ ^[0-9]+$ ]] || [ "$METRICS_PORT" -lt 1024 ] || [ "$METRICS_PORT" -gt 65535 ]; then
+    log_container_event "[METRICS] ERROR: METRICS_PORT must be between 1024 and 65535."
+    exit 1
+fi
 
 # Determine the unprivileged SNMP service port and community.
 SNMP_PORT="${SNMP_PORT:-1161}"
@@ -322,6 +330,12 @@ su misthelper -c "cd /app && gunicorn wsgi_capture:app \
 CAPTURE_PID=$!
 log_container_event "[CAPTURE] Started the upgrade capture portal with PID $CAPTURE_PID."  # Name the PID, so the operator can match a later crash line to this service.
 
+# Start the metrics gateway as the unprivileged application account.
+log_container_event "[METRICS] Starting the metrics gateway on port $METRICS_PORT."
+su misthelper -c "cd /app && exec /usr/local/bin/python3 /app/MistHelper.py --metrics-gateway >> /app/data/metrics_gateway.log 2>&1" &
+METRICS_PID=$!
+log_container_event "[METRICS] Started the metrics gateway with PID $METRICS_PID."  # Name the PID for service supervision.
+
 # Trap signals to stop every process
 cleanup() {
     local final_status="${1:-0}"  # Default to 0, because an operator stop is a success and needs no restart.
@@ -331,11 +345,13 @@ cleanup() {
     kill_wait=$((SHUTDOWN_GRACE_SECONDS + CONTAINER_KILL_MARGIN_SECONDS))
     kill "$GUNICORN_PID" 2>/dev/null || true
     kill "$CAPTURE_PID" 2>/dev/null || true
+    kill "$METRICS_PID" 2>/dev/null || true
     kill "$SSHD_PID" 2>/dev/null || true
     kill "$SNMPD_PID" 2>/dev/null || true
     # Wait for a clean exit within the bound, so an in-flight operation can finish first.
     _wait_for_pid_or_kill "$GUNICORN_PID" "$kill_wait"
     _wait_for_pid_or_kill "$CAPTURE_PID" "$kill_wait"
+    _wait_for_pid_or_kill "$METRICS_PID" "$kill_wait"
     _wait_for_pid_or_kill "$SSHD_PID" "$kill_wait"
     _wait_for_pid_or_kill "$SNMPD_PID" "$kill_wait"
     log_container_event "[CONTAINER] Shutdown complete. The container exits with status $final_status."  # Report the result after the shutdown, so the operator can match the status to the cause.
@@ -359,9 +375,9 @@ log_container_event "[SNMP] Started snmpd with PID $SNMPD_PID."  # Name the PID 
 # Warning: "wait -n" returns the status of the service that ended. A discarded
 # status makes a crash look like a clean stop, and no restart policy fires.
 # See issue #1925.
-log_container_event "[CONTAINER] Supervising the web portal (PID $GUNICORN_PID), the capture portal (PID $CAPTURE_PID), sshd (PID $SSHD_PID), and snmpd (PID $SNMPD_PID)."  # Record the start of the supervision, so a later crash line has a start point.
+log_container_event "[CONTAINER] Supervising the web portal (PID $GUNICORN_PID), the capture portal (PID $CAPTURE_PID), the metrics gateway (PID $METRICS_PID), sshd (PID $SSHD_PID), and snmpd (PID $SNMPD_PID)."  # Record each supervised service, so a later crash line has a start point.
 set +e  # Turn off the exit-on-error option, so a crash reaches the report below instead of ending the script in silence.
-wait -n "$GUNICORN_PID" "$CAPTURE_PID" "$SSHD_PID" "$SNMPD_PID" 2>/dev/null
+wait -n "$GUNICORN_PID" "$CAPTURE_PID" "$METRICS_PID" "$SSHD_PID" "$SNMPD_PID" 2>/dev/null
 SERVICE_EXIT_STATUS=$?  # Keep the status of the service that ended, because the container must report that status.
 set -e  # Restore the exit-on-error option for the rest of the script.
 
@@ -373,6 +389,8 @@ if ! kill -0 "$GUNICORN_PID" 2>/dev/null; then
     CRASHED_SERVICE="the gunicorn web portal"  # The portal no longer answers, so the portal ended first.
 elif ! kill -0 "$CAPTURE_PID" 2>/dev/null; then
     CRASHED_SERVICE="the upgrade capture portal"  # The capture portal no longer answers, so it ended first.
+elif ! kill -0 "$METRICS_PID" 2>/dev/null; then
+    CRASHED_SERVICE="the metrics gateway"  # The gateway no longer answers, so the gateway ended first.
 elif ! kill -0 "$SSHD_PID" 2>/dev/null; then
     CRASHED_SERVICE="the sshd daemon"  # The daemon no longer answers, so the daemon ended first.
 elif ! kill -0 "$SNMPD_PID" 2>/dev/null; then
