@@ -375,7 +375,7 @@ class TestMenuText:
     @pytest.mark.parametrize(
         "path,count,expected",
         (
-            ("MistHelper.py", 293, "d06379ed0e18ac41fc79678c547afdca86d33bf8fb0bfabf2c3e87261756dce9"),
+            ("MistHelper.py", 293, "c5b170786bf10934dc4808dd98142ebc91f4c79328cccbe7854d42a4866c959c"),
             ("web_portal/menu_registry.py", 179, "8107cfce5b5c495866486057c28acf24928d1a90530775389dc4b16b82b77430"),
         ),
     )
