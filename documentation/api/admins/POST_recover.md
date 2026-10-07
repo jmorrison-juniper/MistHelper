@@ -31,7 +31,7 @@ Content-Type: `application/json`
       "maxLength": 64,
       "type": "string",
       "examples": [
-        "test@mistsys.com"
+        "operator@example.invalid"
       ]
     },
     "recaptcha": {

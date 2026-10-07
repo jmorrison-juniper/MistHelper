@@ -53,7 +53,7 @@ Example response
     "username": {
       "type": "string",
       "examples": [
-        "john@abc.com"
+        "operator@example.invalid"
       ]
     }
   }

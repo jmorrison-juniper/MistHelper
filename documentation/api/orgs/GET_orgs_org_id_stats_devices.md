@@ -273,7 +273,7 @@ OK
                 ],
                 "readOnly": true,
                 "examples": [
-                  "https://www.abc.com"
+                  "https://www.example.invalid"
                 ]
               },
               "ibeacon_enabled": {

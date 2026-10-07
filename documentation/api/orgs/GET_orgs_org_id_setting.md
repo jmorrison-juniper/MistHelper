@@ -682,7 +682,7 @@ OK
                 "type": "string",
                 "readOnly": true,
                 "examples": [
-                  "John Smith (john@abccorp.com)"
+                  "<user-name> (operator@example.invalid)"
                 ]
               },
               "name": {
@@ -919,7 +919,7 @@ OK
                 "items": {
                   "type": "string"
                 },
-                "description": "Which realm should trigger this IDP. User Realm is extracted from:\n  * Username-AVP (`mist.com` from john@mist.com)\n  * Cert CN"
+                "description": "Which realm should trigger this IDP. User Realm is extracted from:\n  * Username-AVP (`mist.com` from operator@example.invalid)\n  * Cert CN"
               }
             }
           },
@@ -1428,7 +1428,7 @@ OK
                 "description": "",
                 "examples": [
                   [
-                    "https://www.abc.com/",
+                    "https://www.example.invalid/",
                     "https://10.3.5.1:8080/about"
                   ]
                 ],

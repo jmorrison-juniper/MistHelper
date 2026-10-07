@@ -57,7 +57,7 @@ OK
         "type": "string",
         "description": "If admin account is not an Org API Token",
         "examples": [
-          "jsnow@abc.com"
+          "operator@example.invalid"
         ]
       },
       "enable_two_factor": {
@@ -73,7 +73,7 @@ OK
         "type": "string",
         "description": "If admin account is not an Org API Token. For an invite, this is the original first name used",
         "examples": [
-          "John"
+          "<first-name>"
         ]
       },
       "hours": {
@@ -262,8 +262,8 @@ OK
   },
   "description": "",
   "examples": [
-    "[{\"admin_id\":\"456b7016-a916-a4b1-78dd-72b947c152b7\",\"email\":\"jsmith@mycorp.org\",\"first_name\":\"Joe\",\"last_name\":\"Smith\",\"privileges\":[{\"role\":\"admin\",\"scope\":\"msp\"},{\"org_id\":\"b069b358-4c97-5319-1f8c-7c5ca64d6ab1\",\"role\":\"admin\",\"scope\":\"org\"},{\"orggroup_ids\":[\"507f1bab-13ba-73e2-f291-2bcb8d1362b0\"],\"role\":\"read\",\"scope\":\"orggroup\"}]}]",
-    "[{\"admin_id\":\"b069b358-4c97-5319-1f8c-7c5ca64d6ab1\",\"email\":\"user@example.com\",\"first_name\":\"string\",\"last_name\":\"string\",\"privileges\":[{\"msp_id\":\"b069b358-4c97-5319-1f8c-7c5ca64d6ab1\",\"msp_name\":\"string\",\"name\":\"string\",\"org_id\":\"b069b358-4c97-5319-1f8c-7c5ca64d6ab1\",\"org_name\":\"string\",\"orggroup_ids\":[\"b069b358-4c97-5319-1f8c-7c5ca64d6ab1\"],\"role\":\"admin\",\"scope\":\"org\",\"site_id\":\"b069b358-4c97-5319-1f8c-7c5ca64d6ab1\",\"sitegroup_ids\":[\"6f4bf402-45f9-2a56-6c8b-7f83d3bc98e9\"]}]}]"
+    "[{\"admin_id\":\"456b7016-a916-a4b1-78dd-72b947c152b7\",\"email\":\"operator@example.invalid\",\"first_name\":\"<first-name>\",\"last_name\":\"<last-name>\",\"privileges\":[{\"role\":\"admin\",\"scope\":\"msp\"},{\"org_id\":\"b069b358-4c97-5319-1f8c-7c5ca64d6ab1\",\"role\":\"admin\",\"scope\":\"org\"},{\"orggroup_ids\":[\"507f1bab-13ba-73e2-f291-2bcb8d1362b0\"],\"role\":\"read\",\"scope\":\"orggroup\"}]}]",
+    "[{\"admin_id\":\"b069b358-4c97-5319-1f8c-7c5ca64d6ab1\",\"email\":\"operator@example.invalid\",\"first_name\":\"string\",\"last_name\":\"string\",\"privileges\":[{\"msp_id\":\"b069b358-4c97-5319-1f8c-7c5ca64d6ab1\",\"msp_name\":\"string\",\"name\":\"string\",\"org_id\":\"b069b358-4c97-5319-1f8c-7c5ca64d6ab1\",\"org_name\":\"string\",\"orggroup_ids\":[\"b069b358-4c97-5319-1f8c-7c5ca64d6ab1\"],\"role\":\"admin\",\"scope\":\"org\",\"site_id\":\"b069b358-4c97-5319-1f8c-7c5ca64d6ab1\",\"sitegroup_ids\":[\"6f4bf402-45f9-2a56-6c8b-7f83d3bc98e9\"]}]}]"
   ]
 }
 ```

@@ -1645,7 +1645,7 @@ OK
         "contact": {
           "type": "string",
           "examples": [
-            "cns@juniper.net"
+            "operator@example.invalid"
           ]
         },
         "description": {

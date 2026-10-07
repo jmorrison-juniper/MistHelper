@@ -231,7 +231,7 @@ OK
             "type": "string",
             "description": "If dot1x authentication, the username used during the latest authentication. Otherwise, the MAC address of the client",
             "examples": [
-              "john@mycorp.net"
+              "operator@example.invalid"
             ]
           },
           "last_username": {
@@ -400,7 +400,7 @@ OK
             "description": "Only for 802.1X authentication. List of usernames used by the client",
             "examples": [
               [
-                "user@corp.com"
+                "operator@example.invalid"
               ]
             ]
           },

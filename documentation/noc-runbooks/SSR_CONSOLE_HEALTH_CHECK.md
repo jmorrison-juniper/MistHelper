@@ -41,10 +41,10 @@ names. Do not run all seven stages when stage A already found the fault.
 The PCLI prompt states the user, the node, and the router.
 
 ```text
-admin@node0.branch-router#
+admin@node.router#
 ```
 
-Read the prompt as `user@node.router`. A `#` character means that you hold
+Read the prompt as `operator@example.invalid`. A `#` character means that you hold
 administrator rights. A `>` character means that you hold read-only rights, and
 several commands in this document will fail.
 
@@ -122,7 +122,7 @@ SSR 7.0.x does not have the `optics-statistics` value, so the console shows no l
 
 Do not try `ethtool -m` from the Linux shell. The `ethtool` command needs access as the root user. The SSR documentation states that the command is not available on a Mist-managed router. Ask Juniper TAC for a diagnostic at the operating system level.
 
-Caution: one vendor variant of the Juniper 10G LR SFP+ optic `740-021309` can keep a port out of service. This fault occurs in ports `xe-0-0` through `xe-0-3` of an SSR1300 or an SSR1400. The port reports `Admin Status: down`, `Operational Status: unknown`, `Speed: 0 Mb/s`, and `Plugin Info: unavailable`, and it carries no traffic. No software workaround exists. Open a case with HPE technical support for an RMA of the optic only. Knowledge base article I95-65908 gives the detail.
+Caution: one vendor variant of the Juniper 10G LR SFP+ optic `740-021309` can keep a port out of service. This fault occurs in ports `xe-0-0` through `xe-0-3` of an SSR1300 or an SSR1400. The port reports `Admin Status: down`, `Operational Status: unknown`, `Speed: 0 Mb/s`, and `Plugin Info: unavailable`, and it carries no traffic. No software workaround exists. Open a case with vendor technical support for an RMA of the optic only. Knowledge base article I95-65908 gives the detail.
 
 ## 6. Stage D. Can the router reach anything?
 
@@ -232,7 +232,7 @@ stage A takes under one minute and it names the fault in many cases.
 
 ## 11. Commands that do not exist on a Mist-managed router
 
-Jacob Skidmore reported that several commands in the current runbooks do not run.
+A reviewer reported that several commands in the current runbooks do not run.
 That report is correct. This section names each one, and gives the command that
 works. Every replacement comes from the Session Smart Networking command line
 reference. See §14.

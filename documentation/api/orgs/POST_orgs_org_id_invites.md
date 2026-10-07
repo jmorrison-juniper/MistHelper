@@ -47,7 +47,7 @@ Content-Type: `application/json`
       "type": "string",
       "description": "If admin account is not an Org API Token",
       "examples": [
-        "jsnow@abc.com"
+        "operator@example.invalid"
       ]
     },
     "enable_two_factor": {
@@ -63,7 +63,7 @@ Content-Type: `application/json`
       "type": "string",
       "description": "If admin account is not an Org API Token. For an invite, this is the original first name used",
       "examples": [
-        "John"
+        "<first-name>"
       ]
     },
     "hours": {

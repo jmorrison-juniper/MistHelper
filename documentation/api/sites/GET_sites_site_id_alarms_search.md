@@ -119,7 +119,7 @@ OK
             "type": "string",
             "description": "Name & Email ID of the admin who acked the alarm",
             "examples": [
-              "Joe"
+              "<first-name>"
             ]
           },
           "acked": {

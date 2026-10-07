@@ -16,7 +16,7 @@ PSK Import CSV File Format:
 name,ssid,passphrase,usage,vlan_id,mac,max_usage,role,expire_time,notify_expiry,expiry_notification_time,notify_on_create_or_edit,email
 Common,warehouse,foryoureyesonly,single,35,a31425f31278,0,student,1618594236
 Justin,reception,visible,multi,1002,200,teacher,1618594236
-Common2,ssid,1245678-xx,single,35,a31425f31278,0,student,1618594236,true,7,true,admin@test.com
+Common2,ssid,1245678-xx,single,35,a31425f31278,0,student,1618594236,true,7,true,operator@example.invalid
 ```
 
 ## Authentication

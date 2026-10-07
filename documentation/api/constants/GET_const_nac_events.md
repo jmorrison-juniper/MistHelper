@@ -50,7 +50,7 @@ Example response
       "cert_cn": {
         "type": "string",
         "examples": [
-          "suriyas"
+          "<user-name>"
         ]
       },
       "cert_expiry": {
@@ -74,7 +74,7 @@ Example response
         "description": "",
         "examples": [
           [
-            "suriyas@juniper.net"
+            "operator@example.invalid"
           ]
         ]
       },
@@ -87,7 +87,7 @@ Example response
       "cert_subject": {
         "type": "string",
         "examples": [
-          "/CN=suriyas/emailAddress=suriyas@juniper.net"
+          "/CN=<user-name>/emailAddress=operator@example.invalid"
         ]
       },
       "eap_type": {
@@ -144,7 +144,7 @@ Example response
       "username": {
         "type": "string",
         "examples": [
-          "suriyas@juniper.net"
+          "operator@example.invalid"
         ]
       },
       "wcid": {
@@ -162,14 +162,14 @@ Example response
       {
         "ap": "5c5b355008c0",
         "bssid": "5c5b35548892",
-        "cert_cn": "suriyas",
+        "cert_cn": "<user-name>",
         "cert_expiry": 1711557441,
         "cert_issuer": "/DC=net/DC=jnpr/CN=Juniper Networks Issuing AWS1 CA",
         "cert_san_upn": [
-          "suriyas@juniper.net"
+          "operator@example.invalid"
         ],
         "cert_serial": "1300103d29e56ef083797bedc2000100103d29",
-        "cert_subject": "/CN=suriyas/emailAddress=suriyas@juniper.net",
+        "cert_subject": "/CN=<user-name>/emailAddress=operator@example.invalid",
         "eap_type": "EAP-TLS",
         "nas_vendor": "Mist",
         "org_id": "94de66e8-556a-4d56-8780-a114620a5c42",
@@ -178,7 +178,7 @@ Example response
         "ssid": "Test_Suriya-SSID",
         "timestamp": 1685658478.438995,
         "type": "NAC_CLIENT_CERT_CHECK_SUCCESS",
-        "username": "suriyas@juniper.net",
+        "username": "operator@example.invalid",
         "wcid": "b43637b0-f0d9-0a1d-1ec2-73c394a9f679"
       }
     ]

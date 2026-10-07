@@ -32,7 +32,7 @@ Content-Type: `application/json`
     "email": {
       "type": "string",
       "examples": [
-        "test@mistsys.com"
+        "operator@example.invalid"
       ]
     },
     "password": {

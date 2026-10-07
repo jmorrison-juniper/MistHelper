@@ -1271,7 +1271,7 @@ OK
             ],
             "description": "URL to forward the user to",
             "examples": [
-              "https://abc.com/promotions"
+              "https://example.invalid/promotions"
             ]
           },
           "google_client_id": {
@@ -1680,7 +1680,7 @@ OK
             "type": "string",
             "description": "Name of the server to verify (against the cacerts in Org Setting). Only if not Mist Edge.",
             "examples": [
-              "radsec.abc.com"
+              "radsec.example.invalid"
             ]
           },
           "servers": {

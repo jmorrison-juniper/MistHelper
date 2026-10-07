@@ -294,7 +294,7 @@ OK
                 {
                   "5684dae9ac8b": {
                     "ip": "192.168.70.35",
-                    "name": "John"
+                    "name": "<user-name>"
                   }
                 }
               ]

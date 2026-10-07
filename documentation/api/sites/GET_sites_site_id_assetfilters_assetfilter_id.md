@@ -65,7 +65,7 @@ OK
       "type": "string",
       "description": "Eddystone url used to filter assets",
       "examples": [
-        "https://www.abc.com"
+        "https://www.example.invalid"
       ]
     },
     "for_site": {

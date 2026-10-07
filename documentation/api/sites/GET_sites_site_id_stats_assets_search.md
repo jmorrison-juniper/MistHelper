@@ -123,7 +123,7 @@ OK
           "eddystone_url_url": {
             "type": "string",
             "examples": [
-              "https://www.abc.com"
+              "https://www.example.invalid"
             ]
           },
           "ibeacon_major": {

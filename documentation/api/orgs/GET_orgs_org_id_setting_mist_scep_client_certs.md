@@ -59,7 +59,7 @@ OK
           "common_name": {
             "type": "string",
             "examples": [
-              "john@corp.com"
+              "operator@example.invalid"
             ]
           },
           "created_time": {
