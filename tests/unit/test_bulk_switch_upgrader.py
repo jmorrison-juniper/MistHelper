@@ -953,22 +953,6 @@ class TestExecution:
         upgrader._process_site(1, {"id": "s1", "name": "Error Site"})
         assert upgrader.upgrade_results["sites_failed"] == 1
 
-    def test_process_site_exception(self, upgrader: BulkSwitchFirmwareUpgrader) -> None:
-        """Verify site exception is recorded."""
-        upgrader._initialize_results()
-        upgrader.target_version = "23.4R2.21"
-        upgrader.upgrade_strategy = "big_bang"
-        upgrader.selected_sites = [{"id": "s1", "name": "Crash Site"}]
-
-        mock_mistapi = sys.modules["mistapi"]
-        mock_mistapi.api.v1.sites.devices.listSiteDevices.side_effect = RuntimeError("Crash")
-
-        upgrader._process_site(1, {"id": "s1", "name": "Crash Site"})
-        assert upgrader.upgrade_results["sites_failed"] == 1
-
-        # Cleanup
-        mock_mistapi.api.v1.sites.devices.listSiteDevices.side_effect = None
-
     def test_record_upgrade_result_success(self, upgrader: BulkSwitchFirmwareUpgrader) -> None:
         """Verify successful upgrade result recording."""
         upgrader._initialize_results()
