@@ -97,6 +97,7 @@ from src.interfaces.portals.upgrade_portal.runtime.runs import (  # Import the m
 )
 from src.interfaces.portals.upgrade_portal.runtime.signals import (  # Import the moved dependency.
     ConfirmationRequiredError,
+    RunDispatchGate,
     RunNotFoundError,
     RunNotStoppableError,
     StopOutcome,
@@ -2798,6 +2799,11 @@ def retry_run(run_id: str) -> tuple[Response, int]:
         no longer describes the site. The operator therefore reaches the capture
         page, and the confirmation stays locked until a fresh capture verifies.
 
+        Issue #4020: this route is the one operator action that recovers a
+        terminal unsuccessful run, so it also drops the dispatch registry entry
+        of the source run. The source run keeps its terminal state, and the
+        start route refuses that state, so the source key sends no firmware.
+
     Args:
         run_id: The key of the unsuccessful terminal run.
 
@@ -2820,6 +2826,7 @@ def retry_run(run_id: str) -> tuple[Response, int]:
     if reservation_refusal is not None:
         return reservation_refusal
     record = cast(dict[str, Any], record)  # A reservation with no refusal always returns its persisted record.
+    RunDispatchGate.forget(run_id)  # Issue #4020: the operator recovered the source run, so its fence may leave.
     logger.info("upgrade: the retry %s came from the unsuccessful run %s", record["run_id"], run_id)  # AFTER write.
     return (
         jsonify(

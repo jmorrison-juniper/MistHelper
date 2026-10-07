@@ -711,17 +711,18 @@ class TestTheLostRefusalFence:
         RunDispatchGate.forget(run_id)  # Leave no registry entry behind for another test.
 
     def test_forgetting_a_run_clears_its_dispatch_fence(self) -> None:
-        """A finished run leaves no fence, because a later run may reuse the key.
+        """A recovered run leaves no fence, because a later run may reuse the key.
 
         Why:
             The fence lives in a process table that each run of the worker
             shares. A fence that outlived its run would block an unrelated run
-            that received the same identifier.
+            that received the same identifier. The retry route is the one
+            production caller, and `test_retry_failed_run.py` proves that path.
         """
         run_id = "fence-run-0003"  # Keep this gate registry entry away from every other test.
         RunDispatchGate.forget(run_id)  # Start from a clean registry for this run.
         assert not RunDispatchGate.is_fenced(run_id)  # A new run carries no fence.
         RunDispatchGate.fence(run_id)  # Block every later firmware call of this run.
         assert RunDispatchGate.is_fenced(run_id)  # The fence holds while the run lives.
-        RunDispatchGate.forget(run_id)  # The driver drops the registry entry when the run ends.
+        RunDispatchGate.forget(run_id)  # The operator recovery of the run drops the registry entry.
         assert not RunDispatchGate.is_fenced(run_id)  # The fence left with the run it belonged to.

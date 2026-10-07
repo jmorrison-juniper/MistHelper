@@ -514,7 +514,11 @@ class RunDispatchGate:
             Issue #4020: a refused dispatch whose evidence never reached the
             store leaves the cloud state of that run unknown. The portal must
             then send no further destructive write for the run until an
-            operator recovers it.
+            operator recovers the run through the retry route.
+
+            Caution: the fence lives in a table of this process alone. A restart
+            drops it, so it is defense in depth beside the terminal state of the
+            record, which already stops a new start of the same run.
 
         Args:
             run_id: The run key.
@@ -551,14 +555,24 @@ class RunDispatchGate:
 
     @classmethod
     def forget(cls, run_id: str) -> None:
-        """Drop the gate lock of one finished run.
+        """Drop the gate lock and the fence of one recovered run.
+
+        Why:
+            Issue #4020: the fence lives in a table of this process alone, so it
+            is defense in depth and not a durable record. The retry route is the
+            one production caller, because it runs only after the operator
+            confirms the recovery of a terminal unsuccessful run and the store
+            holds the new record. The source run keeps its terminal state, and
+            the start route refuses every state except the confirmation state,
+            so the recovered key sends no further firmware.
 
         Args:
             run_id: The run key.
         """
         with cls._REGISTRY_GUARD:  # The table is shared by every run of this process.
             cls._LOCKS.pop(run_id, None)  # An absent run is no fault, because a run may never dispatch.
-            cls._FENCED.discard(run_id)  # A finished run needs no fence, and a new run may reuse the key.
+            cls._FENCED.discard(run_id)  # A recovered run needs no fence, and a new run may reuse the key.
+        logger.info("[GATE] Run %s left the dispatch registry after an operator recovery", run_id)
 
 
 class StopRequestStore:

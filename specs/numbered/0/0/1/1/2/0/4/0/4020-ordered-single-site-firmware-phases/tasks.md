@@ -39,6 +39,7 @@ Each task below is complete. The state column records the proof.
 | T052 | Record the lost post-check of a stopped run | Done |
 | T057 | Compare the state before the stopping move writes it | Done |
 | T058 | Fence a run whose refusal evidence the store refused | Done |
+| T061 | Drop the dispatch fence inside the operator retry route | Done |
 
 ## Interleaved cascade
 
@@ -75,6 +76,7 @@ Each task below is complete. The state column records the proof.
 | T055 | Prove the stopping move keeps a concurrent driver write | Done |
 | T056 | Prove a stopped run records a lost post-check capture | Done |
 | T059 | Prove the stopping move never pulls a run back from a final state | Done |
+| T062 | Prove the retry route clears the fence and the run still refuses a start | Done |
 | T060 | Prove a lost refusal record fences the run and fails it | Done |
 
 ### The replaced test

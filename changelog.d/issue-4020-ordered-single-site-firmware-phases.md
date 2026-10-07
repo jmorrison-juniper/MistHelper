@@ -31,3 +31,7 @@
   final state. A refused firmware call whose evidence the store cannot hold now
   fences the run. The portal then sends no further firmware for that run, and
   the run ends in the state `failed` with a visible reason (issue #4020).
+- A fenced run now loses that fence when an operator recovers it through the
+  retry route. The fence is a guard of one portal process, and the terminal
+  state of the recovered run keeps it from a new firmware call by itself
+  (issue #4020).
