@@ -58,7 +58,7 @@ class SourceDependencyResolverService:
         "EnhancedSSHRunner": "src.operations.execution.ssh.ssh_runner",  # Resolve SSH runner from src.
         "EnvironmentUtils": "src.foundation.support.utils.environment_utils",  # Resolve environment helper from src.
         "ExtractedMarvisTroubleshootUtils": (
-            "src.mist.intelligence.troubleshooting.marvis_troubleshoot_utils"  # Resolve the moved class.
+            "src.mist.intelligence.troubleshooting.core.marvis_troubleshoot_utils"  # Resolve the moved class.
         ),
         "FastModeBackoffMultiplier": (
             "src.foundation.support.refactors.fast_mode_backoff_multiplier"  # Resolve the moved backoff helper.
@@ -82,7 +82,7 @@ class SourceDependencyResolverService:
             "src.foundation.support.refactors.marvis_data_utils"  # Resolve the moved Marvis helper.
         ),
         "MarvisTroubleshootDeps": (
-            "src.mist.intelligence.troubleshooting.marvis_troubleshoot_utils"  # Resolve the moved dependencies.
+            "src.mist.intelligence.troubleshooting.core.marvis_troubleshoot_utils"  # Resolve the moved dependencies.
         ),
         "OrgAlarmEventExporter": (
             "src.operations.exporting.export.org_alarm_event_exporter"  # Resolve the moved exporter.

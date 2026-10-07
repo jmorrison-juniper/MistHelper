@@ -37,6 +37,15 @@ MODULE_PATHS = {  # Map each old direct module to its new canonical module.
     "constants.py": "foundation/constants.py",
     "foundation/persistence/db/arango_writer.py": "foundation/persistence/db/writers/arango_writer.py",
     "foundation/persistence/db/redis_writer.py": "foundation/persistence/db/writers/redis_writer.py",
+    "mist/intelligence/troubleshooting/interactive_test_runner.py": (
+        "mist/intelligence/troubleshooting/core/interactive_test_runner.py"
+    ),
+    "mist/intelligence/troubleshooting/marvis_troubleshoot_utils.py": (
+        "mist/intelligence/troubleshooting/core/marvis_troubleshoot_utils.py"
+    ),
+    "mist/intelligence/troubleshooting/troubleshoot_utils.py": (
+        "mist/intelligence/troubleshooting/core/troubleshoot_utils.py"
+    ),
     "mist/intelligence/juniper_docs/classify/manual_sorter.py": (
         "mist/intelligence/juniper_docs/classify/reprocessing/manual_sorter.py"
     ),
