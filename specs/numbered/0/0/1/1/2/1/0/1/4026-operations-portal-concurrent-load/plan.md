@@ -1,139 +1,142 @@
-# Implementation Plan: [FEATURE]
+# Implementation Plan: Operations Portal Concurrent Load
 
-**Branch**: `[###-feature-name]` | **Date**: [DATE] | **Spec**: [link]
+**Branch**: `jmorrison-juniper-assessment-4026` | **Date**: 2026-10-06 | **Spec**: [spec.md](spec.md)
 
-**Input**: Numeric feature specification from `/specs/numbered/[base-5-route]/[###-feature-name]/spec.md`, or timestamp feature specification from `/specs/live/[timestamp-feature-name]/spec.md`
-
-**Note**: This template is filled in by the `/speckit.plan` command. See `.specify/templates/plan-template.md` for the execution workflow.
+**Input**: Feature specification at `specs/numbered/0/0/1/1/2/1/0/1/4026-operations-portal-concurrent-load/spec.md`
 
 ## Summary
 
-[Extract from feature spec: primary requirement + technical approach from research]
+Protect lazy `OperationExecutor` construction with one module-level `threading.Lock`.
+Keep the existing unlocked fast read, then repeat the read while the lock is held.
+Construct and store the executor only when the protected read still finds no value.
+Add one forced-race unit test that controls the first configuration read for each caller.
+Preserve the `list_msps` route from PR #4065 and all unrelated route behavior.
 
 ## Technical Context
 
-<!--
-  ACTION REQUIRED: Replace the content in this section with the technical details
-  for the project. The structure here is presented in advisory capacity to guide
-  the iteration process.
--->
+**Language/Version**: Python 3.13
 
-**Language/Version**: [e.g., Python 3.11, Swift 5.9, Rust 1.75 or NEEDS CLARIFICATION]
+**Primary Dependencies**: Flask 3.1, Python `threading`, pytest 9
 
-**Primary Dependencies**: [e.g., FastAPI, UIKit, LLVM or NEEDS CLARIFICATION]
+**Storage**: Flask application configuration for the process-local executor reference
 
-**Storage**: [if applicable, e.g., PostgreSQL, CoreData, files or N/A]
+**Testing**: pytest unit test with controlled configuration, a barrier, and concurrent callers
 
-**Testing**: [e.g., pytest, XCTest, cargo test or NEEDS CLARIFICATION]
+**Target Platform**: Windows development and Linux Gunicorn deployment
 
-**Target Platform**: [e.g., Linux server, iOS 15+, WASM or NEEDS CLARIFICATION]
+**Project Type**: Flask web service in the existing MistHelper repository
 
-**Project Type**: [e.g., library/cli/web-service/mobile-app/compiler/desktop-app or NEEDS CLARIFICATION]
+**Performance Goals**: Keep the initialized fast path to one configuration read with no lock acquisition
 
-**Performance Goals**: [domain-specific, e.g., 1000 req/s, 10k lines/sec, 60 fps or NEEDS CLARIFICATION]
+**Constraints**: Use one module-level lock. Keep one accessor. Do not change `web_portal/services/operation.py`.
 
-**Constraints**: [domain-specific, e.g., <200ms p95, <100MB memory, offline-capable or NEEDS CLARIFICATION]
-
-**Scale/Scope**: [domain-specific, e.g., 10k users, 1M LOC, 50 screens or NEEDS CLARIFICATION]
+**Scale/Scope**: One route helper, one deterministic unit test, and one changelog fragment during implementation
 
 ## Constitution Check
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-[Gates determined based on constitution file]
+### Pre-design gate
 
-For repository structure and generated files:
-
-- Confirm that the commit subject and pull request title use a Conventional
-  Commit form that the pull request title guard accepts.
-- If repository workflow requires a direct child in an established process
-  folder, confirm that the change adds only its own unique record.
-- Record existing process-folder debt and a separate incremental remediation
-  action.
-- Confirm that product outputs remain under `data/`.
-- Generated test evidence MAY use the established, git-ignored
-  `test-artifacts/` folder.
-
-For a feature that uses Juniper Mist Cloud:
-
-- Confirm that every REST request uses a working mistapi method.
-- If the feature proposes an owned WebSocket transport, name the matching
-  mistapi WebSocket path and the contract that it cannot meet.
-- Name the contract tests that prove the SDK path is broken, incomplete, or
-  cannot preserve required output.
-- Confirm that the owned transport preserves SDK authentication and endpoint
-  contracts.
-- Confirm tests cover output, failure handling, safety, and secret redaction.
-- Treat a missing proof or contract test as a failed gate.
+- **Five-item rule**: PASS. The specification uses the managed eight-level base-5 route.
+- **Existing hierarchy debt**: PASS WITH RECORDED DEBT. `web_portal/routes/` and `tests/unit/web_portal/` exceed five children.
+- **Incremental remediation**: Record a separate future issue to reorganize portal route and test modules. Do not include that work in issue #4026.
+- **Class architecture**: PASS. This repair changes an existing Flask route helper and does not add a wrapper.
+- **Safety**: PASS. The change adds no input, destructive action, external request, or secret handling.
+- **Deployment pipeline**: PASS FOR PLANNING. Implementation must use a valid Conventional Commit and complete the applicable pipeline.
+- **Observability**: PASS. Lock acquisition is internal synchronization, not a separate operator action. No new log is required.
+- **Inline comments**: PASS. Implementation must comment each changed executable line with its synchronization purpose.
+- **Action logging**: PASS. The constructor behavior and existing logging contract remain unchanged.
+- **Testing**: PASS. The plan requires one deterministic test that fails without synchronization.
+- **Release note**: PASS. Implementation will add `changelog.d/issue-4026-operation-executor-race.md`.
+- **Mist Cloud contract**: NOT APPLICABLE. The change adds no Mist API request or transport.
+- **Product output location**: NOT APPLICABLE. The change writes no product output.
 
 ## Project Structure
 
 ### Documentation (this feature)
 
 ```text
-specs/numbered/[base-5-route]/[###-feature]/
-or
-specs/live/[timestamp-feature]/
-├── plan.md              # This file (/speckit.plan command output)
-├── research.md          # Phase 0 output (/speckit.plan command)
-├── data-model.md        # Phase 1 output (/speckit.plan command)
-├── quickstart.md        # Phase 1 output (/speckit.plan command)
-├── contracts/           # Phase 1 output (/speckit.plan command)
-└── tasks.md             # Phase 2 output (/speckit.tasks command - NOT created by /speckit.plan)
+specs/numbered/0/0/1/1/2/1/0/1/4026-operations-portal-concurrent-load/
+├── contracts/
+│   └── executor-initialization.md
+├── data-model.md
+├── plan.md
+├── quickstart.md
+├── research.md
+└── spec.md
 ```
 
 ### Source Code (repository root)
-<!--
-  ACTION REQUIRED: Replace the placeholder tree below with the concrete layout
-  for this feature. Delete unused options and expand the chosen structure with
-  real paths (e.g., apps/admin, packages/something). The delivered plan must
-  not include Option labels.
--->
 
 ```text
-# [REMOVE IF UNUSED] Option 1: Single project (DEFAULT)
-src/
-├── models/
-├── services/
-├── cli/
-└── lib/
+web_portal/
+└── routes/
+    └── operations.py
 
 tests/
-├── contract/
-├── integration/
 └── unit/
+    └── web_portal/
+        └── test_operation_executor_concurrency.py
 
-# [REMOVE IF UNUSED] Option 2: Web application (when "frontend" + "backend" detected)
-backend/
-├── src/
-│   ├── models/
-│   ├── services/
-│   └── api/
-└── tests/
-
-frontend/
-├── src/
-│   ├── components/
-│   ├── pages/
-│   └── services/
-└── tests/
-
-# [REMOVE IF UNUSED] Option 3: Mobile + API (when "iOS/Android" detected)
-api/
-└── [same as backend above]
-
-ios/ or android/
-└── [platform-specific structure: feature modules, UI flows, platform tests]
+changelog.d/
+└── issue-4026-operation-executor-race.md
 ```
 
-**Structure Decision**: [Document the selected structure and reference the real
-directories captured above]
+**Structure Decision**: Keep the repair in the existing route module.
+Place the race regression in the existing portal concurrency test module.
+Create the changelog fragment only during implementation.
+Do not create `tasks.md` during this workflow.
+
+## Phase 0: Research
+
+Use [research.md](research.md) as the decision record.
+The research resolves the lock type, lock location, double-check sequence, test forcing method, and preservation boundary.
+
+## Phase 1: Design and Contracts
+
+Use [data-model.md](data-model.md) for the logical initialization state.
+Use [contracts/executor-initialization.md](contracts/executor-initialization.md) for the accessor contract.
+Use [quickstart.md](quickstart.md) for implementation validation.
+
+### Implementation sequence
+
+1. Import `threading` in `web_portal/routes/operations.py`.
+2. Create one private module-level lock near the logger and existing module constants.
+3. Keep the first `OPERATION_EXECUTOR` configuration read outside the lock.
+4. Acquire the lock only when the first read returns `None`.
+5. Repeat the configuration read while the lock is held.
+6. Keep the existing lazy import and constructor call behind the second empty check.
+7. Store the constructed executor before the lock is released.
+8. Return the stored executor for every path.
+9. Add one forced-race unit test in `tests/unit/web_portal/test_operation_executor_concurrency.py`.
+10. Preserve `list_msps` and all unrelated route lines.
+11. Add `changelog.d/issue-4026-operation-executor-race.md`.
+12. Do not modify `web_portal/services/operation.py`.
+
+### Deterministic test design
+
+The test must replace the route module `current_app` proxy with a controlled application object.
+Its configuration mapping must block the first executor read from each caller on one barrier.
+Later reads must return the stored value without using the barrier.
+The test must replace `OperationExecutor` with a constructor that records each call and returns a unique marker.
+Concurrent callers must start together and complete within a fixed timeout.
+The assertions must prove one constructor call, one stored marker, and identity equality for all results.
+The uncontrolled implementation constructs one marker per caller after the forced empty reads.
 
 ## Complexity Tracking
 
-> **Fill ONLY if Constitution Check has violations that must be justified**
+No new structural violation is planned.
+The touched route and test directories contain grandfathered hierarchy debt.
+Issue #4026 must not reorganize those directories because that work is unrelated to the concurrency defect.
 
-| Violation | Why Needed | Simpler Alternative Rejected Because |
-|-----------|------------|-------------------------------------|
-| [e.g., 4th project] | [current need] | [why 3 projects insufficient] |
-| [e.g., Repository pattern] | [specific problem] | [why direct DB access insufficient] |
+## Post-design Constitution Check
+
+- **Scope**: PASS. The design touches one route module, one existing unit-test module, and one implementation-time changelog fragment.
+- **Five-item rule**: PASS WITH EXISTING DEBT. The plan adds no new child to the overfull route or test directories.
+- **Function limits**: PASS. `_get_executor()` remains under 25 lines and uses at most two conditional blocks.
+- **Synchronization**: PASS. One module lock and one protected second read meet the concurrency requirement.
+- **Testing**: PASS. The controlled configuration read makes the race deterministic without production timing assumptions.
+- **Preservation**: PASS. The contract forbids changes to `list_msps`, unrelated routes, and `web_portal/services/operation.py`.
+- **Release process**: PASS. The design defers the unique changelog fragment to implementation as requested.
+- **Unresolved clarifications**: NONE.

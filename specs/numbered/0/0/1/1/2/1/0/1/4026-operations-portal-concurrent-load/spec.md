@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-06
 
-**Status**: Draft
+**Status**: Planned
 
 **Input**: Issue #4026 reports an unsynchronized lazy singleton race in `web_portal/routes/operations.py::_get_executor()`. Concurrent first requests can create multiple operation executors and worker pools.
 
@@ -67,13 +67,19 @@ As a network operator, I retain the existing Operations portal routes and the ac
 - **FR-014**: The regression test MUST prove that every caller receives the same executor instance.
 - **FR-015**: The regression test MUST fail against the unsynchronized implementation.
 - **FR-016**: The repair MUST preserve current behavior when application configuration already contains an executor.
+- **FR-017**: The implementation MUST add one module-level `threading.Lock` and MUST NOT add another synchronization primitive.
+- **FR-018**: The deterministic regression test MUST replace the executor constructor and application configuration with controlled test doubles.
+- **FR-019**: The deterministic regression test MUST coordinate the first configuration read for each caller before any caller can construct an executor.
+- **FR-020**: The implementation MUST add one issue-specific changelog fragment under `changelog.d/`.
+- **FR-021**: Planning MUST NOT create the changelog fragment. Implementation MUST create it after the code and test changes.
 
 ### Scope Boundaries
 
 **In scope**:
 
 - Synchronization of lazy executor initialization in `web_portal/routes/operations.py`.
-- A deterministic regression test for concurrent first access.
+- One deterministic regression test for concurrent first access.
+- One issue-specific changelog fragment during implementation.
 - Preservation of existing route behavior and PR #4065 route lines.
 
 **Out of scope**:
@@ -83,6 +89,8 @@ As a network operator, I retain the existing Operations portal routes and the ac
 - New executor accessors, aliases, wrappers, or compatibility paths.
 - General portal load testing or changes to server worker configuration.
 - Changes to event streaming, Mist API access, or browser controls.
+- Product code changes during the planning workflow.
+- Changelog fragment creation during the planning workflow.
 
 ### Key Entities
 

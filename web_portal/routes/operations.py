@@ -7,6 +7,7 @@ and SSE event streaming for real-time progress updates.
 import json
 import logging
 import os
+import threading
 import time
 
 from flask import (
@@ -22,6 +23,7 @@ from web_portal.routes.site_filtering import EmptySiteFilter  # Issue #3915: one
 
 # Module-level logger so every helper identifies its source file in log output.
 logger = logging.getLogger(__name__)
+_EXECUTOR_INITIALIZATION_LOCK = threading.Lock()  # Serialize only the first application executor construction.
 
 # Seconds one event stream may hold a worker thread before it closes itself.
 # Gunicorn runs a fixed thread pool, and one open stream holds one thread for
@@ -286,18 +288,22 @@ def list_msps():
 
 def _get_executor():
     """Retrieve or create the OperationExecutor singleton."""
-    executor = current_app.config.get("OPERATION_EXECUTOR")
-    if executor is None:
-        from web_portal.services.operation import OperationExecutor
+    executor = current_app.config.get("OPERATION_EXECUTOR")  # Keep initialized requests on the unlocked fast path.
+    if executor is not None:  # A stored executor needs no synchronization or replacement.
+        return executor  # Return the application-scoped executor that another request already created.
+    with _EXECUTOR_INITIALIZATION_LOCK:  # Permit one request to inspect and fill the empty slot at a time.
+        executor = current_app.config.get("OPERATION_EXECUTOR")  # Recheck after a competing request can initialize it.
+        if executor is None:  # Construct only when the protected read still finds no executor.
+            from web_portal.services.operation import OperationExecutor
 
-        executor = OperationExecutor(
-            menu_actions=current_app.config.get("MENU_ACTIONS", {}),
-            apisession=current_app.config.get("APISESSION"),
-            org_id=current_app.config.get("ORG_ID"),
-            event_bus=current_app.config.get("EVENT_BUS"),
-        )
-        current_app.config["OPERATION_EXECUTOR"] = executor
-    return executor
+            executor = OperationExecutor(
+                menu_actions=current_app.config.get("MENU_ACTIONS", {}),  # Preserve the configured menu rows.
+                apisession=current_app.config.get("APISESSION"),  # Preserve the authenticated Mist session.
+                org_id=current_app.config.get("ORG_ID"),  # Preserve the application organization context.
+                event_bus=current_app.config.get("EVENT_BUS"),  # Preserve the shared event publication path.
+            )
+            current_app.config["OPERATION_EXECUTOR"] = executor  # Publish the complete executor before unlocking.
+    return executor  # Give every competing request the one stored executor.
 
 
 def _build_replay(executor, run_id: str):
