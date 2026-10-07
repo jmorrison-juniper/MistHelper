@@ -17,6 +17,7 @@ var baseParameters = [];  // Keep the server-sent controls so dynamic controls c
 var RUN_STATUS_RECONCILE_MS = 5000;  // Match the server stream poll cadence without aggressive REST traffic.
 var runStatusTimer = null;  // Hold the one scheduled authoritative state check for the active run.
 var runStatusRequestRunId = null;  // Prevent overlapping status requests while one server answer is pending.
+var renderedOutputIdentity = null;  // Prevent REST replay and terminal SSE from rendering the same run files twice.
 
 // ---------------------------------------------------------------------------
 // Visibility
@@ -891,7 +892,7 @@ function startSSEStream(runId) {
     source.onerror = function() {
         // Connection lost - check status via REST fallback
         if (currentRunId === runId) {
-            checkRunStatus(runId);
+            reconcileRunStatus(runId);  // Reuse the one-request guard instead of starting a parallel read.
         }
         source.close();
     };
@@ -963,6 +964,7 @@ function clearExecutionPanel() {
     document.getElementById('debugLogCount').textContent = '0';  // Reset the count to match the cleared debug log.
     setElementVisible('outputFiles', false);  // Hide the old file list until a new run reports files.
     document.getElementById('outputFileList').innerHTML = '';  // Remove old file links that can belong to another operation.
+    renderedOutputIdentity = null;  // Let the next run render a file path that the prior run also used.
     if (typeof OperationResults !== 'undefined') OperationResults.reset();  // Clear the table of the previous run.
     updateProgress(0, '');  // Reset the bar so the next run starts from a neutral state.
     setStatus('pending', 'Waiting...');  // Reset the badge so a prior Complete state does not carry forward.
@@ -1055,31 +1057,45 @@ function showError(msg) {
 }
 
 function showOutputFiles(files) {
-    if (!files || files.length === 0) return;
-
-    var panel = document.getElementById('outputFiles');
-    var list = document.getElementById('outputFileList');
-    setElementVisible(panel, true);  // Issue #3030: the class hides the result list, not the inline style.
+    var outputFiles = Array.isArray(files) ? files.filter(function(file, index, values) {
+        return values.indexOf(file) === index;  // Keep one row for each exact server path in this delivery.
+    }) : [];  // Normalize an absent server list to one empty set.
+    var identity = JSON.stringify([currentRunId, outputFiles]);  // Key the set by run identity and exact file paths.
+    if (renderedOutputIdentity === identity) return;  // REST replay and terminal SSE can carry the same set.
+    renderedOutputIdentity = identity;  // Store the complete ordered set before any asynchronous preview starts.
     // Issue #3048: a log cannot be sorted, filtered, or opened, so the rows of
     // the run also land in the results table under this list.
-    if (typeof OperationResults !== 'undefined') OperationResults.showForRun(files);
+    if (typeof OperationResults !== 'undefined') OperationResults.showForRun(outputFiles);  // Apply empty sets too.
 
-    files.forEach(function(file) {
-        var li = document.createElement('li');
-        li.className = 'd-flex gap-2 align-items-center mb-1';
-
-        var link = document.createElement('a');
-        link.href = '/api/data/download/' + encodeURIComponent(file);
-        link.textContent = file;
-        link.className = 'text-accent';
-        li.appendChild(link);
-
-        if (typeof DataPreviewModal !== 'undefined' && isPreviewable(file)) {
-            li.appendChild(buildPreviewButton(file));
-        }
-
-        list.appendChild(li);
+    var panel = document.getElementById('outputFiles');  // Read the file panel after the result helper updates.
+    var list = document.getElementById('outputFileList');  // Replace the full set instead of appending a replay.
+    list.innerHTML = '';  // Remove files that are not part of the current authoritative set.
+    if (outputFiles.length === 0) {  // A no-output terminal state must close a stale file panel.
+        setElementVisible(panel, false);  // Hide the panel because it holds no current run file.
+        return;
+    }
+    setElementVisible(panel, true);  // Issue #3030: the class hides the result list, not the inline style.
+    outputFiles.forEach(function(file) {  // Render each distinct server path one time.
+        appendOutputFile(list, file);  // Keep link construction separate from set reconciliation.
     });
+}
+
+function appendOutputFile(list, file) {
+    var li = document.createElement('li');  // Build one row for one stable server file path.
+    li.className = 'd-flex gap-2 align-items-center mb-1';  // Keep the existing compact output layout.
+    li.dataset.runId = currentRunId || '';  // Record the run portion of the stable browser identity.
+    li.dataset.outputPath = file;  // Record the exact server path without using display text as identity.
+
+    var link = document.createElement('a');  // Build the download action for this exact file.
+    link.href = '/api/data/download/' + encodeURIComponent(file);  // Keep the server path inside one URL segment.
+    link.textContent = file;  // Show the exact path that identifies the output.
+    link.className = 'text-accent';  // Preserve the existing portal link treatment.
+    li.appendChild(link);  // Put the download action first in the output row.
+
+    if (typeof DataPreviewModal !== 'undefined' && isPreviewable(file)) {  // Add preview only for supported files.
+        li.appendChild(buildPreviewButton(file));  // Reuse the existing preview button behavior.
+    }
+    list.appendChild(li);  // Add the complete file row to the authoritative set.
 }
 
 function buildPreviewButton(filepath) {
@@ -1201,9 +1217,7 @@ function replayExistingLogs(runId) {
                     appendDebugLog(entry.message, entry.level || 'DEBUG');
                 });
             }
-            if (data.output_files && data.output_files.length > 0) {
-                showOutputFiles(data.output_files);
-            }
+            showOutputFiles(data.output_files || []);  // Apply empty sets so a stale loading preview closes.
             if (data.status === 'completed') {
                 updateProgress(100, 'Done');  // Finish the bar before setting the final status message.
                 setStatus('complete', data.completion_message || 'Operation completed');  // Preserve the no-output reason during a reconnect.
