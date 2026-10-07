@@ -14,6 +14,7 @@ source still matches a prefix, so a reworded message cannot slip back.
 
 import ast
 import logging
+import threading
 from pathlib import Path
 
 import pytest
@@ -202,3 +203,22 @@ def test_the_store_start_line_goes_to_the_debug_panel():
     handler = _handler()
     handler.emit(_record("Polyglot DatabaseRouter initialized", name="src.operations.exporting.export.data_exporter"))
     assert handler._run["log_messages"] == [], "the store start line reached the Execution Log"
+
+
+def test_handler_rejects_a_foreign_worker_record_before_any_run_mutation():
+    """A root handler must ignore a record from another operation worker."""
+    run = {  # Build every evidence store that a foreign record could mutate.
+        "run_id": "owner-run",  # Keep the run identifier stable for an event assertion.
+        "log_messages": [],  # Detect a foreign user-facing record.
+        "debug_messages": [],  # Detect a foreign debug record.
+        "output_files": [],  # Detect a filename scraped from foreign log prose.
+        "dropped_log_count": 0,  # Detect a foreign bounded-store discard.
+    }
+    handler = _RunLogHandler(run, None)  # Bind direct capture to the current worker thread.
+    record = _record("Wrote 5 rows to data/Foreign.csv")  # Build a record that would change two evidence stores.
+    record.thread = threading.get_ident() + 1  # Give the record a different worker owner.
+    handler.emit(record)  # Exercise the earliest ownership gate.
+    assert run["log_messages"] == []  # Reject the foreign user-facing line.
+    assert run["debug_messages"] == []  # Reject any foreign debug routing.
+    assert run["output_files"] == []  # Reject foreign filename extraction.
+    assert run["dropped_log_count"] == 0  # Reject foreign discard accounting.

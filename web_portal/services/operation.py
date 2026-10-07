@@ -1244,17 +1244,27 @@ class OperationExecutor:
         A scanner watches the data directory around the call, because the log
         prose names only some of the files an operation writes (issue #3089).
         """
-        handler = _RunLogHandler(run, self._event_bus)
-        root_logger = logging.getLogger()
-        root_logger.addHandler(handler)
-        scanner = OutputFileScanner()  # Read the data directory the portal writes into.
-        scanner.snapshot()  # Record the pre-run state, so a new file is visible later.
+        owner_token = OutputFileScanner.bind_owner(run["run_id"])  # Bind nested worker evidence to this run.
+        handler = _RunLogHandler(run, self._event_bus, run["run_id"])  # Reject records from other runs.
+        root_logger = logging.getLogger()  # Attach capture to the process logger used by legacy operations.
+        root_logger.addHandler(handler)  # Start owner-filtered log and SSE evidence capture.
+        handler.activate()  # Permit ownerless helper-thread records only while this run is active.
+        scanner = OutputFileScanner(owner_id=run["run_id"])  # Attribute writable opens to this run context.
+        scanner_started = False  # Avoid a scan when snapshot setup failed before registration.
         try:
-            func()
+            scanner.snapshot()  # Record the pre-run state, so a new file is visible later.
+            scanner_started = True  # Permit final evidence collection after successful setup.
+            func()  # Run the legacy operation without a global serialization lock.
         finally:
-            root_logger.removeHandler(handler)
-            self._record_scanned_files(run, scanner)  # Report a file even when no log line named it.
-            self._finalize_output_files(run, scanner.root)  # Remove phantom names and put real results first.
+            root_logger.removeHandler(handler)  # Stop this run's log capture on return or exception.
+            handler.deactivate()  # Remove this run from the ownerless helper-thread fallback.
+            try:
+                if scanner_started:  # Collect and finalize only after snapshot registration succeeded.
+                    self._record_scanned_files(run, scanner)  # Report a file even when no log line named it.
+                    self._finalize_output_files(run, scanner.root)  # Remove phantom names and order results.
+            finally:
+                scanner.close()  # Remove partial or completed scanner registration without a leak.
+                OutputFileScanner.reset_owner(owner_token)  # Clear ownership before this worker accepts another run.
 
     def _finish_successful_operation(self, run: dict) -> None:
         """Mark a returned handler as complete only when the result is honest."""
@@ -1515,6 +1525,9 @@ class _RunLogHandler(logging.Handler):
     Output Files section populates without changes to legacy menu code.
     """
 
+    _active_lock = threading.RLock()  # Guard the ownerless helper-thread fallback registry.
+    _active_handlers: set["_RunLogHandler"] = set()  # Track run-bound handlers during operation execution.
+
     # Logger name prefixes whose output always goes to debug panel
     _DEBUG_LOGGERS = frozenset(
         (
@@ -1586,24 +1599,40 @@ class _RunLogHandler(logging.Handler):
         re.IGNORECASE,
     )
 
-    def __init__(self, run: dict, event_bus):
+    def __init__(self, run: dict, event_bus, owner_id: str | None = None):
         """Initialize with the run record and event bus."""
-        super().__init__()
-        self._run = run
-        self._event_bus = event_bus
+        super().__init__()  # Initialize the logging framework lock and handler state.
+        self._run = run  # Mutate only this operation run after owner validation.
+        self._event_bus = event_bus  # Publish existing run-scoped SSE payloads.
+        self._owner_id = owner_id  # Bind production records to one propagated run context.
+        self._owner_thread_id = threading.get_ident()  # Preserve direct single-thread handler tests.
+
+    def activate(self) -> None:
+        """Register this run handler for ownerless helper-thread fallback."""
+        if self._owner_id is None:  # Direct unit handlers do not represent an active portal run.
+            return  # Keep direct tests outside the process-wide fallback registry.
+        with self._active_lock:  # Serialize activation with emit() and deactivation.
+            self._active_handlers.add(self)  # Make a sole active run the ownerless fallback.
+
+    def deactivate(self) -> None:
+        """Remove this run handler from ownerless helper-thread fallback."""
+        with self._active_lock:  # Serialize removal with an ownerless record decision.
+            self._active_handlers.discard(self)  # A repeated cleanup remains a safe no-op.
 
     def emit(self, record: logging.LogRecord) -> None:
         """Capture a log record and route to appropriate SSE channel."""
-        message = self.format(record)
-        level = record.levelname.lower()
-        timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(record.created))
-        is_main = self._is_user_facing(record, message)
-        event_type = "log" if is_main else "debug_log"
-        storage = "log_messages" if is_main else "debug_messages"
+        if not self._accepts_record(record):  # Decide ownership before formatting or mutating run evidence.
+            return  # Reject a foreign direct record with no bound run context.
+        message = self.format(record)  # Format only a record that belongs to this run.
+        level = record.levelname.lower()  # Preserve the established lowercase event level.
+        timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(record.created))  # Keep the SSE timestamp shape.
+        is_main = self._is_user_facing(record, message)  # Preserve existing main versus debug classification.
+        event_type = "log" if is_main else "debug_log"  # Keep the established SSE event names.
+        storage = "log_messages" if is_main else "debug_messages"  # Keep the established bounded stores.
         self._store_message(storage, message, level)  # The bounded store counts an entry the cap drops.
-        if is_main:
-            self._check_output_file(message)
-        if self._event_bus:
+        if is_main:  # Only operator-facing prose can announce an output file.
+            self._check_output_file(message)  # Preserve existing filename extraction after ownership succeeds.
+        if self._event_bus:  # Publish accepted evidence only to the existing run-filtered bus.
             self._event_bus.publish(
                 event_type,
                 {
@@ -1613,6 +1642,16 @@ class _RunLogHandler(logging.Handler):
                     "timestamp": timestamp,
                 },
             )
+
+    def _accepts_record(self, record: logging.LogRecord) -> bool:
+        """Return true when this handler owns the record."""
+        context_owner = OutputFileScanner.current_owner()  # Read propagated ownership for this logging call.
+        if self._owner_id is None:
+            return record.thread == self._owner_thread_id  # Direct tests use the creating thread.
+        if context_owner is not None:
+            return context_owner == self._owner_id  # Propagated work names one exact run.
+        with self._active_lock:  # Freeze the active set for one ownerless helper-thread decision.
+            return len(self._active_handlers) == 1 and self in self._active_handlers
 
     def _store_message(self, storage: str, message: str, level: str) -> None:
         """Append one entry to a bounded run log and count a discarded entry.

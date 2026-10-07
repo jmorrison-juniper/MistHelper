@@ -13,11 +13,11 @@ Method:
     appeared while the operation ran. A file name therefore needs no log
     sentence to reach the portal.
 
-Limit:
-    Two operations that run at the same time share one data directory, so each
-    run can report a file the other run wrote. The portal shows a superset
-    rather than an empty list, because a missing report costs an engineer more
-    than an extra name.
+Isolation:
+    Concurrent operations share one data directory, but each scanner accepts
+    tracked writes from its owner thread only. If scanner lifetimes overlap,
+    timestamp-only fallbacks stay disabled because they cannot prove which run
+    wrote a file.
 
     The scanner does skip the runtime bookkeeping files that every run touches.
     Issue #3126 records the noise they created. A file that a log line names
@@ -40,6 +40,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_SCAN_LIMIT = 200  # One run must not flood the result panel with names.
 _SKIPPED_SUFFIXES = (".tmp", ".part", ".swp", ".lock")  # A partial write is not a report.
 _SKIPPED_PREFIXES = (".", "~")  # A hidden file and an editor backup are not reports.
+
 
 # Issue #3140: the run-start mark dates each file the later walk finds. The
 # comparison is exact, because a file an operation writes carries a
@@ -104,7 +105,8 @@ _EXTRA_EXCLUDES_ENV = "PORTAL_SCAN_EXCLUDE_DIRS"
 RUNTIME_FILE_NAMES = (
     "script.log",  # The application log. src/foundation/support/refactors/main_entrypoint.py opens it.
     "portal_access.log",  # The Gunicorn access log. container/scripts/start.sh names it.
-    "delay_metrics.json",  # The rate-limiter metric store. src/foundation/support/utils/rate_limiting._METRICS_FILENAME.
+    # The rate-limiter metric store. src/foundation/support/utils/rate_limiting._METRICS_FILENAME owns this name.
+    "delay_metrics.json",
     "tuning_data.json",  # The rate-limiter tuning store. src/foundation/support/utils/rate_limiting._TUNING_FILENAME.
 )
 
@@ -113,20 +115,49 @@ class OutputFileScanner:
     """Report the data-directory files that one operation created or changed."""
 
     _tracking_lock = threading.RLock()  # Guard hook installation and each scanner's candidate set.
-    _active_scanners: list[OutputFileScanner] = []  # Track runs that are between snapshot() and changed_files().
+    _active_scanners: dict[str, OutputFileScanner] = {}  # Map each active run owner to its scanner.
     _original_open = builtins.open  # Save the process default before the scanner installs a write hook.
     _original_path_open = Path.open  # Save pathlib writes, because many exporters use Path helpers.
+    _original_submit: Any = None  # Save nested worker submission for context propagation.
     _hooks_installed = False  # Record whether the process-wide hooks are active.
+    _scan_generation = 0  # Detect a new scanner that starts during another scanner's fallback walk.
+    _run_owner = __import__("contextvars").ContextVar("portal_run_evidence_owner", default=None)
 
-    def __init__(self, data_dir: str | None = None, limit: int = DEFAULT_SCAN_LIMIT) -> None:
+    @classmethod
+    def bind_owner(cls, run_id: str) -> Any:
+        """Bind one run identifier until the caller resets the returned token."""
+        return cls._run_owner.set(run_id)  # Make nested evidence attributable to this run.
+
+    @classmethod
+    def reset_owner(cls, token: Any) -> None:
+        """Restore the execution context that existed before bind_owner()."""
+        cls._run_owner.reset(token)  # Prevent a reused pool worker from keeping stale ownership.
+
+    @classmethod
+    def current_owner(cls) -> str | None:
+        """Return the run identifier that owns the current execution context."""
+        return cls._run_owner.get()  # Read without mutation so handlers and hooks share one verdict.
+
+    def __init__(
+        self,
+        data_dir: str | None = None,
+        limit: int = DEFAULT_SCAN_LIMIT,
+        owner_id: str | None = None,
+    ) -> None:
         """Resolve the data directory the operation writes into."""
         chosen = data_dir or os.environ.get("DATA_DIR", "data")  # The portal writes every output file here.
         self._root = Path(chosen).resolve()  # An absolute root keeps the relative names stable.
         self._limit = max(1, limit)  # One name must always fit, so a zero cap cannot hide a report.
+        current_owner = self.current_owner()  # Reuse the executor binding when one exists.
+        self._owner_id = owner_id or current_owner or f"thread-{threading.get_ident()}"  # Bind one scan owner.
+        self._owner_thread_id = threading.get_ident()  # Preserve direct scanner use without a run context.
         self._before: dict[str, float] = {}  # Kept for callers that read the pre-run picture.
         self._directory_marks: dict[str, int] = {}  # Store directory mtimes for the untracked-writer fallback.
         self._directory_entries: dict[str, set[str]] = {}  # Store reportable names without paying file stats.
         self._write_candidates: set[Path] = set()  # Store paths opened for writing while this run executes.
+        self._ambiguous_write_candidates: set[Path] = set()  # Reject paths that more than one active owner tracked.
+        self._overlap_detected = False  # Disable timestamp-only evidence after any scanner lifetime overlap.
+        self._start_generation = 0  # Record the scanner generation assigned during snapshot registration.
         self._started_at: float = 0.0  # The run-start mark that dates each file found later.
         self._excluded = self._resolve_excludes()  # Name the trees the walk refuses to enter.
         # Issue #3201: the cost of a walk is the count of directories it lists,
@@ -185,7 +216,7 @@ class OutputFileScanner:
         The probe carries the process id, so two runs against one root never
         pick the same name.
         """
-        probe = self._root / f".portal-scan-mark-{os.getpid()}"  # A unique name per process.
+        probe = self._root / f".portal-scan-mark-{os.getpid()}-{self._owner_id}"  # Isolate concurrent owners.
         try:
             probe.write_bytes(b"")  # Create the probe, so the filesystem dates it.
             stamp = probe.stat().st_mtime_ns  # Read the mark in the clock that dates every report.
@@ -208,19 +239,37 @@ class OutputFileScanner:
         self._stop_write_tracking()  # Stop recording before this method opens no report files.
         self.last_scanned_files = 0  # Reset the stat count so tests can prove the scan scope.
         found = self._changed_tracked_files()  # First read only files that Python opened for writing.
-        found.update(self._changed_files_by_directory_marks())  # Add files from untracked directory changes.
-        if not found:  # Use the costly fallback only when the fast paths found no output evidence.
-            found.update(self._changed_files_by_full_walk())  # Preserve untracked in-place rewrites.
+        if not self._fallback_is_ambiguous():  # Timestamp evidence is safe only without any overlapping start.
+            fallback = self._changed_files_by_directory_marks()  # Preserve single-run new-file fallback behavior.
+            if not fallback and not found:  # Use the costly walk only when both fast paths found no evidence.
+                fallback.update(self._changed_files_by_full_walk())  # Preserve single-run in-place rewrites.
+            if self._fallback_is_ambiguous():  # A new run can start while the directory walk is in progress.
+                fallback.clear()  # Reject names that the new run could have written during this scan.
+            found.update(fallback)  # Merge only fallback evidence that stayed single-run throughout the walk.
         names = list(found)  # Convert to a list because the result panel expects ordered names.
         names.sort()  # A stable order keeps the result panel readable between runs.
         logger.debug("Output scan found %d changed files", len(names))  # Log the measured count.
         return names[: self._limit]  # Cap the list, so one run cannot flood the panel.
 
+    def close(self) -> None:
+        """Stop write tracking without collecting file evidence."""
+        self._stop_write_tracking()  # Keep cleanup safe after partial setup or an earlier changed_files call.
+
+    def _fallback_is_ambiguous(self) -> bool:
+        """Return true when another scanner overlapped or started after this scanner."""
+        with self._tracking_lock:  # Read overlap state and generation as one synchronized decision.
+            generation_changed = self._scan_generation != self._start_generation
+        if generation_changed:  # A later scanner can write a file during this scanner's fallback walk.
+            self._overlap_detected = True  # Keep timestamp fallbacks disabled for the rest of this lifetime.
+        return self._overlap_detected  # Reject timestamp evidence whenever ownership is not provable.
+
     def _changed_tracked_files(self) -> set[str]:
         """Return changed files from the write tracker."""
         changed: set[str] = set()  # Use a set because one file can be opened more than once.
         with self._tracking_lock:  # Copy under lock so another run cannot mutate the set during iteration.
-            candidates = tuple(self._write_candidates)  # Freeze the candidate list for this check.
+            candidates = tuple(  # Freeze only unambiguous owner paths for this check.
+                path for path in self._write_candidates if path not in self._ambiguous_write_candidates
+            )
         for path in candidates:  # Check only files that were opened for writing during this run.
             name = self._changed_reportable_path(path, allow_equal=True)  # A tracked write can share the probe tick.
             if name is not None:  # A qualifying name is an operation output candidate.
@@ -307,15 +356,24 @@ class OutputFileScanner:
         """Register this scanner for process-wide Python file write tracking."""
         with self._tracking_lock:  # Serialize hook installation with any concurrent run.
             self._write_candidates.clear()  # Remove stale paths if a caller reuses this scanner.
-            if self not in self._active_scanners:  # Avoid duplicate records for one scanner.
-                self._active_scanners.append(self)  # Activate this scanner for future writable opens.
+            self._ambiguous_write_candidates.clear()  # Remove ambiguity from a completed prior scan.
+            if self._owner_id in self._active_scanners:  # One run cannot own two active scan scopes.
+                raise RuntimeError(f"Output scan owner {self._owner_id} is already active")
+            if self._active_scanners:  # Every scanner in this lifetime now has ambiguous timestamp evidence.
+                self._overlap_detected = True  # Keep this scanner fallback-ineligible after the overlap ends.
+                for scanner in self._active_scanners.values():  # Mark each scanner that was already active.
+                    scanner._overlap_detected = True  # Keep existing scanners fallback-ineligible too.
+            type(self)._scan_generation += 1  # Give this scanner a monotonic start generation.
+            self._start_generation = self._scan_generation  # Record the generation for later fallback checks.
+            self._active_scanners[self._owner_id] = self  # Activate direct owner lookup for writable opens.
             self._install_hooks_locked()  # Ensure writes go through the tracking wrappers.
 
     def _stop_write_tracking(self) -> None:
         """Unregister this scanner and remove hooks when no scan is active."""
         with self._tracking_lock:  # Serialize hook removal with concurrent open calls.
-            if self in self._active_scanners:  # The scanner can be stopped more than once safely.
-                self._active_scanners.remove(self)  # Stop recording candidates for this run.
+            active = self._active_scanners.get(self._owner_id)  # Read the scanner registered for this owner.
+            if active is self:  # A repeated stop must not remove a newer scanner that reused the owner thread.
+                del self._active_scanners[self._owner_id]  # Stop recording candidates for this run.
             if not self._active_scanners:  # The process needs no hook when no run is active.
                 self._remove_hooks_locked()  # Restore the original file open functions.
 
@@ -324,10 +382,14 @@ class OutputFileScanner:
         """Install process-wide file open hooks while the caller holds the lock."""
         if cls._hooks_installed:  # A prior active scanner already installed the hooks.
             return
+        from concurrent.futures import ThreadPoolExecutor  # Keep this dependency out of the module symbol table.
+
         cls._original_open = builtins.open  # Save the current function so removal restores it exactly.
         cls._original_path_open = Path.open  # Save pathlib's current open method for restoration.
+        cls._original_submit = ThreadPoolExecutor.submit  # Save the current submit method for exact restoration.
         builtins.open = cls._tracked_open  # type: ignore[assignment]
         Path.open = cls._tracked_path_open  # type: ignore[method-assign]
+        ThreadPoolExecutor.submit = cls._tracked_submit  # type: ignore[method-assign]
         cls._hooks_installed = True  # Mark the process as hooked.
         logger.debug("Output scan write tracking hooks installed")  # State that tracking is active.
 
@@ -336,8 +398,11 @@ class OutputFileScanner:
         """Remove process-wide file open hooks while the caller holds the lock."""
         if not cls._hooks_installed:  # Nothing is installed, so removal has no work.
             return
+        from concurrent.futures import ThreadPoolExecutor  # Keep this dependency out of the module symbol table.
+
         builtins.open = cls._original_open  # type: ignore[assignment]
         Path.open = cls._original_path_open  # type: ignore[method-assign]
+        ThreadPoolExecutor.submit = cls._original_submit  # type: ignore[method-assign]
         cls._hooks_installed = False  # Mark the process as restored.
         logger.debug("Output scan write tracking hooks removed")  # State that tracking is inactive.
 
@@ -362,6 +427,21 @@ class OutputFileScanner:
         OutputFileScanner._record_write_candidate(path, mode)  # Record only after open succeeds.
         return handle  # Return the real file object to the caller.
 
+    @staticmethod
+    def _tracked_submit(
+        executor: Any,
+        function: Any,
+        /,
+        *args: Any,
+        **kwargs: Any,
+    ) -> Any:
+        """Submit nested work with a copy of the current run evidence context."""
+        owner_id = OutputFileScanner.current_owner()  # Read the run that submitted this nested task.
+        if owner_id is None:  # Work outside an operation needs no portal evidence context.
+            return OutputFileScanner._original_submit(executor, function, *args, **kwargs)
+        context = __import__("contextvars").copy_context()  # Give this task an independent context entry.
+        return OutputFileScanner._original_submit(executor, context.run, function, *args, **kwargs)
+
     @classmethod
     def _record_write_candidate(cls, file: Any, mode: str) -> None:
         """Record file when mode can modify it and it lives under an active root."""
@@ -371,10 +451,35 @@ class OutputFileScanner:
             resolved = cls._resolve_candidate_path(file)  # Convert strings and Path objects to an absolute path.
         except TypeError:
             return  # File descriptors and unsupported objects have no path to report.
-        with cls._tracking_lock:  # Protect active scanner iteration and candidate mutation.
-            for scanner in cls._active_scanners:  # A concurrent run can report a superset, as before.
-                if scanner._path_is_reportable_candidate(resolved):  # Record only paths this scanner may report.
-                    scanner._write_candidates.add(resolved)  # Add the path without duplicates.
+        with cls._tracking_lock:  # Protect owner lookup, candidate mutation, and ambiguity marking.
+            scanner = cls._scanner_for_write_locked()  # Resolve exact, direct-thread, or sole-run ownership.
+            if scanner is None or not scanner._path_is_reportable_candidate(resolved):
+                return  # Reject ambiguous, excluded, and unrelated evidence.
+            scanner._write_candidates.add(resolved)  # Record the path for the resolved owner only.
+            cls._mark_ambiguous_path_locked(scanner, resolved)  # Reject a path that a second owner also wrote.
+
+    @classmethod
+    def _scanner_for_write_locked(cls) -> OutputFileScanner | None:
+        """Return the scanner that owns the current write while the caller holds the lock."""
+        owner_id = cls.current_owner()  # Prefer a propagated operation owner.
+        if owner_id is not None:
+            return cls._active_scanners.get(owner_id)  # A stale owner returns no scanner and cannot fall back.
+        current_thread_id = threading.get_ident()  # Direct scanner callers use their creating thread.
+        for scanner in cls._active_scanners.values():
+            if scanner._owner_thread_id == current_thread_id:
+                return scanner  # The direct caller owns this active scanner.
+        if len(cls._active_scanners) == 1:
+            return next(iter(cls._active_scanners.values()))  # Preserve sole-run helper-thread evidence.
+        return None  # Multiple active runs make ownerless evidence ambiguous.
+
+    @classmethod
+    def _mark_ambiguous_path_locked(cls, scanner: OutputFileScanner, path: Path) -> None:
+        """Mark a path that more than one active scanner tracked."""
+        for other in cls._active_scanners.values():
+            if other is scanner or path not in other._write_candidates:
+                continue  # Only a second active owner makes the path ambiguous.
+            scanner._ambiguous_write_candidates.add(path)  # Reject the shared path for the current owner.
+            other._ambiguous_write_candidates.add(path)  # Reject the shared path for the prior owner.
 
     @staticmethod
     def _mode_can_write(mode: str) -> bool:

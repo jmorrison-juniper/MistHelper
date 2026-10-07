@@ -1,0 +1,27 @@
+{
+  "feature": "4024-portal-run-isolation",
+  "issue": 4024,
+  "branch": "jmorrison-juniper-fix-4024-portal-run-isolation",
+  "currentStep": "tasks",
+  "status": "ready-to-implement",
+  "artifacts": [
+    "spec.md",
+    "checklists/requirements.md",
+    "plan.md",
+    "research.md",
+    "data-model.md",
+    "quickstart.md",
+    "contracts/run-evidence-isolation.md"
+  ],
+  "workflow": "speckit",
+  "specName": "Portal Run Evidence Isolation",
+  "history": [
+    {
+      "step": "tasks",
+      "substep": null,
+      "kind": "complete",
+      "by": "extension",
+      "at": "2026-10-07T00:31:00.207Z"
+    }
+  ]
+}
