@@ -1,4 +1,4 @@
-"""Unit tests for src.mist.intelligence.troubleshooting.interactive_test_runner.
+"""Unit tests for src.mist.intelligence.troubleshooting.core.interactive_test_runner.
 
 Wave 13 P2 coverage lift — extended coverage for the selector path,
 fallback path, skip emission, org_id resolution, site-resolution
@@ -15,7 +15,7 @@ import pytest  # WHY: pytest monkeypatch fixture for os.environ selector control
 
 from src.foundation.models.dataclasses.progress_event import TestSummary  # WHY: assert summary payload without ceremony
 from src.foundation.support.utils.menu_entry import MenuEntry  # WHY: test fixtures must use the production row model.
-from src.mist.intelligence.troubleshooting.interactive_test_runner import (
+from src.mist.intelligence.troubleshooting.core.interactive_test_runner import (
     InteractiveTestRunner,
     PromptResolutionError,
     SuiteContext,

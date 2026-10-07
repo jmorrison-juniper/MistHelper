@@ -9,7 +9,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.mist.intelligence.troubleshooting.marvis_troubleshoot_utils import (
+from src.mist.intelligence.troubleshooting.core.marvis_troubleshoot_utils import (
     MarvisTroubleshootDeps,
     MarvisTroubleshootUtils,
 )

@@ -20,7 +20,7 @@ import logging
 
 import pytest
 
-from src.mist.intelligence.troubleshooting.interactive_test_runner import _LoggedErrorObserver
+from src.mist.intelligence.troubleshooting.core.interactive_test_runner import _LoggedErrorObserver
 
 
 def _record(logger_name: str, level: int = logging.ERROR) -> logging.LogRecord:

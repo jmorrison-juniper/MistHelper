@@ -39,7 +39,7 @@ from src.mist.intelligence.marvis.actions.selection import (
     MarvisTopicCount,
     MarvisTopicSelector,
 )
-from src.mist.intelligence.troubleshooting.interactive_test_runner import UnattendedInteractiveInputProvider
+from src.mist.intelligence.troubleshooting.core.interactive_test_runner import UnattendedInteractiveInputProvider
 from tests.unit.marvis.actions.conftest import make_raw
 
 CODES = {code.key: code for code in RESOLUTION_CODES}

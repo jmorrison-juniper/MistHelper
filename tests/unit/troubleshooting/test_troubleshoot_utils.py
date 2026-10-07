@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.mist.intelligence.troubleshooting.troubleshoot_utils import TroubleshootUtils
+from src.mist.intelligence.troubleshooting.core.troubleshoot_utils import TroubleshootUtils
 
 
 @pytest.fixture(autouse=True)

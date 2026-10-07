@@ -30,7 +30,7 @@ from src.mist.intelligence.marvis.actions.operation import (
     MarvisResolveResult,
     MarvisResolveWorkflow,
 )
-from src.mist.intelligence.troubleshooting.interactive_test_runner import UnattendedInteractiveInputProvider
+from src.mist.intelligence.troubleshooting.core.interactive_test_runner import UnattendedInteractiveInputProvider
 from tests.unit.marvis.actions.conftest import (
     ORG_ID,
     SITE_NAME,
