@@ -4,12 +4,15 @@ from __future__ import annotations  # WHY: keep annotations cheap and consistent
 
 from typing import NamedTuple  # WHY: carry the classifier answer in a typed record, not three loose booleans.
 
+import pytest  # WHY: keep the regression red until the approved production repair lands.
+
 from src.foundation.support.utils.menu_entry import (
     MenuEntry,
 )  # WHY: OperationExecutor expects menu entries, not raw callables.
 from web_portal.services.operation import PARAMETER_REGISTRY, OperationExecutor  # WHY: test the portal run contract.
 
 ISSUE_3144_MENUS = ("66", "75", "76", "209", "210", "213", "224", "233")  # WHY: exact issue scope.
+MENU_92 = "92"  # WHY: menu 92 needs a real run record for the successful-selection regression.
 REQUIRED_CONTROL_NAMES = {  # WHY: each site or identifier row must offer these browser controls (issue #3320).
     "66": ("site_id",),  # WHY: menu 66 prompts for a site only.
     "75": ("site_id", "client_mac"),  # WHY: menu 75 prompts for a site and a client MAC address.
@@ -66,7 +69,7 @@ def _build_executor() -> OperationExecutor:
             destructive=False,  # WHY: these issue rows are read-only.
             supports_fast=False,  # WHY: fast-mode metadata is irrelevant here.
         )
-        for menu in ISSUE_3144_MENUS  # WHY: state the measured issue scope in one place.
+        for menu in (*ISSUE_3144_MENUS, MENU_92)  # WHY: include the menu 92 regression run record.
     }
     return OperationExecutor(menu_actions, None, None, _EventBus())  # WHY: use a fake event bus for event assertions.
 
@@ -169,5 +172,35 @@ def test_empty_result_line_still_classifies_as_no_output() -> None:
         result = _classify(executor, NO_DATA_LINE)  # WHY: read the typed answer for an honest empty result.
         assert result.no_output is True, f"{NO_DATA_LINE!r} classified as {result!r}."  # WHY: keep the empty result.
         assert result.missing_input is False, f"{NO_DATA_LINE!r} classified as {result!r}."  # WHY: no wider marker.
+    finally:
+        executor.shutdown(0)  # WHY: release the executor thread pool created for the test.
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="Issue #4035: successful site selection is classified as a failed no-output run.",
+)
+def test_menu_92_successful_selection_completes_without_file() -> None:
+    """Issue #4035: a valid menu 92 selection completes without an output file."""
+    executor = _build_executor()  # WHY: drive the production completion decision.
+    try:
+        run = executor._build_run_record("92")  # WHY: menu 92 returns a selected site instead of a file.
+        selected_site_id = "site-92"  # WHY: use a stable site identifier for the measured selection result.
+        run["log_messages"].append(  # WHY: emulate the successful site-selection log from production.
+            {"message": f"! Selected site ID: {selected_site_id}", "level": "info"}
+        )
+        executor._finish_successful_operation(run)  # WHY: use the same decision path as the portal executor.
+        print(  # WHY: expose the measured failed state while this test is an expected failure.
+            f"status={run['status']}\n"
+            f"completion_message={run.get('completion_message')!r}\n"
+            f"error_message={run.get('error_message')!r}"
+        )
+        assert run["status"] == "completed", (  # WHY: the future repair must preserve successful selection.
+            f"Measured status={run['status']}; "
+            f"completion_message={run.get('completion_message')!r}; "
+            f"error_message={run.get('error_message')!r}"
+        )
+        completion_message = str(run.get("completion_message"))  # WHY: inspect the future selection message.
+        assert "selected site" in completion_message.lower()  # WHY: the operator needs confirmation of selection.
     finally:
         executor.shutdown(0)  # WHY: release the executor thread pool created for the test.
