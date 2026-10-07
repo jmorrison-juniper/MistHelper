@@ -1,0 +1,30 @@
+{
+  "workflow": "speckit",
+  "specName": "Metric Refusals Must Fail Menus 74 and 76",
+  "branch": "jmorrison-jnpr-fix/4031-partial-metric-failure",
+  "currentStep": "tasks",
+  "status": "ready-to-implement",
+  "history": [
+    {
+      "step": "specify",
+      "substep": null,
+      "kind": "start",
+      "by": "extension",
+      "at": "2026-10-07T12:24:49.045Z"
+    },
+    {
+      "step": "plan",
+      "substep": null,
+      "kind": "complete",
+      "by": "extension",
+      "at": "2026-10-07T12:28:09.309Z"
+    },
+    {
+      "step": "tasks",
+      "substep": null,
+      "kind": "complete",
+      "by": "extension",
+      "at": "2026-10-07T12:31:02.578Z"
+    }
+  ]
+}

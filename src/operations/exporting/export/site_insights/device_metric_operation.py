@@ -125,6 +125,11 @@ class DeviceMetricOperation:
         all_data, retrieved = self._collect_metrics(context, device_metrics)  # WHY: Per-metric loop
         self._finalize(all_data, retrieved, filename, context)  # WHY: Flatten + save + summary
         self._refusal_log.report(context.device_name)  # WHY: Tell the operator which metrics the API refused
+        if self._refusal_log.refusals:  # WHY: The portal must classify a partial refusal as a failed terminal result.
+            logger.error(  # WHY: Existing portal handling consumes the "Failed to" marker.
+                "Failed to retrieve %s device insight metrics because the Mist API refused requests",
+                len(self._refusal_log.refusals),
+            )
 
     def _emit_empty_metric_list(self, filename: str) -> None:  # WHY: Defensive branch used when const file is empty
         """Emit the empty-file + error trio when scope filter yields zero metrics."""

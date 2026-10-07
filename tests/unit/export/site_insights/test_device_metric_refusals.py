@@ -181,6 +181,18 @@ def test_the_export_file_holds_no_error_body(caplog: pytest.LogCaptureFixture) -
     assert f"! 39 device insight metrics exported to {EXPORT_FILE}" in operator_lines(caplog)  # WHY: Count.
 
 
+def test_partial_refusals_emit_one_failed_terminal_marker_after_export(caplog: pytest.LogCaptureFixture) -> None:
+    """Partial device output stays available, and the portal receives one failure marker after the report."""
+    operation = build_operation()  # WHY: Replay the mixed successful and refused answers.
+    with caplog.at_level(logging.INFO):  # WHY: Capture the success, refusal, and terminal messages.
+        operation._run_export(gateway_context())  # WHY: Run menu 76 through its export pipeline.
+    messages = [record.getMessage() for record in caplog.records]  # WHY: Preserve log order for the contract check.
+    marker = "Failed to retrieve 5 device insight metrics because the Mist API refused requests"
+    assert messages.count(marker) == 1  # WHY: One marker must classify one partial run.
+    assert messages.index(marker) > messages.index("! The Mist API refused 5 device insight metrics for Branch-SSR:")
+    assert len(written_rows(operation)) == 39  # WHY: Successful rows remain available to the operator.
+
+
 def test_the_operator_reads_each_refused_metric(caplog: pytest.LogCaptureFixture) -> None:
     """FR-003: the operator reads the name, the HTTP status, and the reason of each refused metric."""
     operation = build_operation()  # WHY: Replay the recorded answers.
@@ -212,6 +224,7 @@ def test_each_run_starts_with_no_refusal(caplog: pytest.LogCaptureFixture) -> No
     with caplog.at_level(logging.INFO):  # WHY: Capture the operator lines of the second run.
         operation._run_export(gateway_context())  # WHY: Run the second export.
     assert not [line for line in operator_lines(caplog) if "refused" in line]  # WHY: No refusal remains.
+    assert "Failed to retrieve" not in caplog.text  # WHY: A later successful run keeps its prior terminal behavior.
 
 
 @pytest.mark.parametrize("status_code", [MagicMock(name="status"), None, "400"])  # WHY: No integer status.

@@ -86,6 +86,11 @@ class SiteMetricOperation:
         all_data, retrieved = self._collect_metrics(context, site_metrics)  # WHY: Per-metric API loop
         self._finalize(all_data, retrieved, filename, context)  # WHY: Flatten + save + summary print
         self._refusal_log.report(context.site_name)  # WHY: Tell the operator which metrics the API refused
+        if self._refusal_log.refusals:  # WHY: The portal must classify a partial refusal as a failed terminal result.
+            logger.error(  # WHY: Existing portal handling consumes the "Failed to" marker.
+                "Failed to retrieve %s site insight metrics because the Mist API refused requests",
+                len(self._refusal_log.refusals),
+            )
 
     def _refresh_const_metrics(self) -> None:  # WHY: Isolated call keeps execute() short and testable
         """Refresh ConstInsightMetrics.csv so metric lists reflect the latest API surface."""

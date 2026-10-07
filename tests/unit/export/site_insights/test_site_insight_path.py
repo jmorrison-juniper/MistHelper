@@ -227,6 +227,19 @@ def test_the_probe_replay_exports_every_metric_with_data(caplog: pytest.LogCaptu
     assert f"! 55 site insight metrics exported to {EXPORT_FILE}" in lines  # WHY: The count is 55.
 
 
+def test_partial_refusals_emit_one_failed_terminal_marker_after_export(caplog: pytest.LogCaptureFixture) -> None:
+    """Partial site output stays available, and the portal receives one failure marker after the report."""
+    operation, deps = build_operation()  # WHY: Replay the mixed successful and refused answers.
+    caplog.clear()  # WHY: Read the complete operation sequence.
+    with caplog.at_level(logging.INFO):  # WHY: Capture the success, refusal, and terminal messages.
+        operation.execute()  # WHY: Run menu 74 through its normal entry point.
+    messages = [record.getMessage() for record in caplog.records]  # WHY: Preserve log order for the contract check.
+    marker = "Failed to retrieve 9 site insight metrics because the Mist API refused requests"
+    assert messages.count(marker) == 1  # WHY: One marker must classify one partial run.
+    assert messages.index(marker) > messages.index(f"! The Mist API refused 9 site insight metrics for {SITE_NAME}:")
+    assert len(written_rows(deps)) == len(DATA_METRICS)  # WHY: Successful rows remain available to the operator.
+
+
 def test_the_probe_replay_reports_each_refusal(caplog: pytest.LogCaptureFixture) -> None:
     """SC-002 and FR-008: the operator reads the 9 refusals of the probe, each with its recorded reason."""
     operation, _deps = build_operation()  # WHY: Replay the live answers.
@@ -274,6 +287,7 @@ def test_a_run_without_refusals_adds_no_refusal_line(caplog: pytest.LogCaptureFi
     operation, _deps = build_operation(same_answer_on_both_routes({}))  # WHY: Every metric holds data.
     lines = run_menu(operation, caplog)  # WHY: Run menu 74.
     assert [line for line in lines if "refused" in line] == []  # WHY: No refusal line.
+    assert "Failed to retrieve" not in caplog.text  # WHY: A fully successful run keeps its prior terminal behavior.
 
 
 def test_each_run_starts_with_no_refusal(caplog: pytest.LogCaptureFixture) -> None:
