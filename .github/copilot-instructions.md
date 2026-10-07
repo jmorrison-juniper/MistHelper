@@ -246,6 +246,23 @@ pull requests. Run each check before you push.
 | Portal registry | A regenerated `web_portal/menu_registry.py` that holds a row the portal cannot run. Feed the generator only the `safe` and `interactive_safe` titles. | `python -m pytest tests/guardrails/test_portal_operation_coverage.py` |
 | Destructive marker | A `destructive` registry entry with a `skip_reason` that lacks the word `DESTRUCTIVE`. | `python -m pytest tests/guardrails/test_operation_registry_menu_coverage.py` |
 
+### Move a module
+
+Run each applicable gate when you move a module. A move changes logger names and class
+`__module__` values. Record this change in the specification.
+
+| Gate | What fails | Local command |
+| - | - | - |
+| Guardrails | A path-keyed guard still names the old path. | `python -m pytest tests/guardrails` |
+| Import smoke | The new path does not import, or the old path still imports. | `python -c "import <new module>"` and a failing import of the old module |
+| Resolver | A wrong module string exists in `source_dependency_resolver.py`. | A direct, unmocked resolution of each changed entry |
+| Old paths | A tracked text file names the old dotted or slash path. | `git grep -n "<old dotted path>\|<old slash path>"` |
+| Menu reference | A generated page is stale. | `python scripts/generate_menu_wiki.py` and `python -m scripts.menu_api_map` |
+| Symbols | A module-level name is lost. | `symbol-diff --base origin/main <file>` for each changed file |
+
+For a content-identical move, document Bandit and pip-audit as `Not applicable` in the pull
+request body because the move changes no executable content.
+
 When several agents add menu operations at the same time, give each feature branch its own
 package under `src/` and its own test directory. Each branch writes a
 `specs/<issue>-<slug>/wiring.md` manifest with the menu row, the registry entry, the primary key
