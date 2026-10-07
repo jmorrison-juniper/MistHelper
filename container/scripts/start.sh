@@ -266,7 +266,7 @@ fi
 # Determine the unprivileged SNMP service port and community.
 SNMP_PORT="${SNMP_PORT:-1161}"
 SNMP_COMMUNITY="${SNMP_COMMUNITY:-misthelper}"
-SNMP_BASE_OID="${SNMP_BASE_OID:-${METRICS_SNMP_BASE_OID:-.1.3.6.1.4.1.11.2147483646}}"
+METRICS_SNMP_BASE_OID="${METRICS_SNMP_BASE_OID:-.1.3.6.1.4.1.8072.9999.9999}"
 SNMP_CONFIG="/etc/snmp/snmpd.conf"
 if ! [[ "$SNMP_PORT" =~ ^[0-9]+$ ]] || [ "$SNMP_PORT" -lt 1024 ] || [ "$SNMP_PORT" -gt 65535 ]; then
     log_container_event "[SNMP] ERROR: SNMP_PORT must be between 1024 and 65535."
@@ -280,7 +280,7 @@ mkdir -p /etc/snmp  # Create the SNMP config directory if it does not exist
 printf '%s\n' \
     "agentAddress udp:${SNMP_PORT}" \
     "rocommunity ${SNMP_COMMUNITY} 0.0.0.0/0" \
-    "pass_persist ${SNMP_BASE_OID} /usr/local/bin/python3 /app/MistHelper.py --metrics-snmp" \
+    "pass_persist ${METRICS_SNMP_BASE_OID} /usr/local/bin/python3 /app/MistHelper.py --metrics-snmp" \
     > "$SNMP_CONFIG"
 
 # Stop Net-SNMP from loading a MIB file at startup.
