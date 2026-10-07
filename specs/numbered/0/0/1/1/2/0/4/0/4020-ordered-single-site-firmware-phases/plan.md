@@ -41,7 +41,9 @@ compatibility shim stays, because `AGENTS.md` forbids one.
 - `_send_phase` walks the plans of that phase in the canonical order. It keeps
   each accepted row through `_keep`, which appends to `record["upgrades"]`. It
   stops at the first refused row and gives `PHASE_REFUSED_REASON`.
-- `plan_phase(plan)` maps the device type of the first target to the phase name.
+- `plan_phase(plan)` reads every target. An empty plan, an unknown family, or a
+  plan that mixes families has no route. `submit_phase` validates every plan
+  before the first cloud write and gives `UNROUTABLE_PLAN_REASON` on a gap.
 
 ## Layer 3: the interleaved cascade
 
@@ -52,6 +54,7 @@ compatibility shim stays, because `AGENTS.md` forbids one.
 2. A lost upstream family blocks this family through `_block_phase`, except for
    the client phase, which carries no firmware and still counts the clients.
 3. Otherwise `_submit_phase(record, name)` sends the firmware of this family.
+   A refusal marks this phase failed and keeps the refusal inside the cascade.
 4. Advance to the settle state of this family, and open the gate.
 5. Record the first loss, and continue to the next family.
 
@@ -60,9 +63,11 @@ linear and no run can step over a family. It then marks the family `failed` with
 `PHASE_BLOCKED_NOTE` when the site holds such a device, or `skipped` when it
 does not.
 
-`_submit_phase` raises `RunDriverError` on a reason, so a refused call ends the
-run with no retry. `_keep` appends before the raise, so each accepted identifier
-survives.
+`_submit_phase` returns a reason after it writes the accepted rows and the
+tracker. `_refuse_phase` makes the refused family terminal. The cascade then
+blocks later firmware families, runs the client observation path, and calls
+`_finish(record, reason)`. The post-check evidence therefore survives a partial
+upgrade. Nothing retries the refused write.
 
 `_enter_running` advances to `UPGRADE_RUNNING` only from `UPGRADE_SUBMITTING`,
 because the state machine refuses a repeated advance.

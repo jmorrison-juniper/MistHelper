@@ -59,6 +59,11 @@ The run also read as a success.
   answers with no reason, and the existing skip path marks the phase skipped.
 - FR-4020-08: The client phase asks for no firmware, because a client is no
   device of this portal.
+- FR-4020-09: A refused phase becomes `failed`, each later firmware family
+  becomes terminal without a cloud call, and the run takes its post-check
+  capture before it becomes `failed`.
+- FR-4020-10: An empty, unknown, or mixed-family plan fails before the first
+  cloud write. The terminal run record holds one plain validation sentence.
 
 ## Owner decisions
 

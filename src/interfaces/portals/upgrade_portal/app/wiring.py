@@ -113,6 +113,9 @@ PLAN_PHASE_BY_DEVICE_TYPE: Mapping[str, str] = {
 # plain words and hold no host, no token, and no cloud body.
 NO_PLAN_REASON = "The run built no upgrade plan, so no firmware call left the portal."
 PHASE_REFUSED_REASON = "The cloud refused the {phase} upgrade call, so the run stops before the next phase."
+UNROUTABLE_PLAN_REASON = (
+    "The run built an upgrade plan with no single supported device family, so no firmware call left the portal."
+)
 
 # WHY: The storage bootstrap runs once for each process. Every step of it repeats
 # without harm, and a second run costs a database host probe that is not free.
@@ -695,7 +698,11 @@ class CloudUpgradeSubmitter:
         if not plans:  # A run with no plan must never read as a sent upgrade.
             logger.error("wiring: the run %s built no upgrade plan, so nothing went to the cloud", run_id)
             return NO_PLAN_REASON  # The driver fails the run and writes this reason.
-        mine = tuple(plan for plan in plans if plan_phase(plan) == phase)  # One phase holds one family.
+        routes = tuple(plan_phase(plan) for plan in plans)  # Validate every plan before the first cloud write.
+        if any(not route for route in routes):  # An unknown or mixed family has no safe cascade position.
+            logger.error("wiring: the run %s built an upgrade plan with no supported phase", run_id)
+            return UNROUTABLE_PLAN_REASON  # The driver records the failure and sends no plan.
+        mine = tuple(plan for plan, route in zip(plans, routes, strict=True) if route == phase)
         if not mine:  # The site holds no device of this family, so this phase sends nothing.
             logger.info("wiring: the run %s holds no upgrade plan for the %s phase", run_id, phase)
             return None  # An empty family is no failure, and the driver marks the phase skipped.
@@ -792,13 +799,14 @@ def plan_phase(plan: Any) -> str:
         plan: One `UpgradePlan` of the upgrade seam.
 
     Returns:
-        The phase name, or an empty string when the plan names no known family.
+        The phase name, or an empty string when the plan has no single supported
+        family.
     """
-    targets = getattr(plan, "targets", ())  # A plan always groups one family, so the first target names it.
-    first = next(iter(targets), None)  # An empty plan can reach no phase and must never block one.
-    if first is None:
-        return ""  # The caller then sends this plan in no phase at all.
-    return PLAN_PHASE_BY_DEVICE_TYPE.get(str(getattr(first, "device_type", "")), "")
+    targets = tuple(getattr(plan, "targets", ()) or ())  # Treat a missing target collection as an empty plan.
+    families = {str(getattr(target, "device_type", "")) for target in targets}  # One plan must hold one family.
+    if len(families) != 1:
+        return ""  # Empty and mixed plans have no safe place in the destructive cascade.
+    return PLAN_PHASE_BY_DEVICE_TYPE.get(next(iter(families)), "")  # Unknown families also fail closed.
 
 
 def _submission_row(answer: Any) -> dict[str, Any]:
@@ -1640,7 +1648,7 @@ def install_seams(  # Install production defaults or one complete isolated depen
         injected object always wins over the object this function writes.
 
         The `STOP_RUNNER` seam stayed empty while no run record held a cloud
-        identifier. The `CloudUpgradeSubmitter.submit` call now writes one row
+        identifier. The `CloudUpgradeSubmitter._keep` helper now writes one row
         for each accepted call, so the seam holds `cancel_run`. FR-038f still
         holds, because a run with no accepted call builds no cancel target and
         `cancel_run` then answers None.

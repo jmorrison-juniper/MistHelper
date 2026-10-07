@@ -25,6 +25,7 @@ Each task below is complete. The state column records the proof.
 | T009 | Add `_send_phase`, which stops at the first refused row | Done |
 | T010 | Make `_keep` append, so an accepted row survives a later failure | Done |
 | T011 | Add `PHASE_REFUSED_REASON` | Done |
+| T031 | Reject empty, unknown, and mixed-family plans before a cloud write | Done |
 
 ## Interleaved cascade
 
@@ -36,6 +37,7 @@ Each task below is complete. The state column records the proof.
 | T015 | Add `_block_phase` and `PHASE_BLOCKED_NOTE` | Done |
 | T016 | Rewrite `_cascade` to send inside each phase | Done |
 | T017 | Call `_cascade` only from `run` | Done |
+| T032 | Keep submission refusal inside the cascade and reach `_finish` | Done |
 
 ## Tests
 
@@ -46,6 +48,8 @@ Each task below is complete. The state column records the proof.
 | T020 | Record the deliberate replacement of the defect-asserting test | Done |
 | T021 | Add `TestPhaseSubmission` to `test_upgrade_driver.py` | Done, 99 passed |
 | T022 | Update the submitter doubles of the other three modules | Done |
+| T033 | Prove refused later phases become terminal and keep post-check evidence | Done |
+| T034 | Prove unroutable plans fail with zero cloud writes | Done |
 
 ### The replaced test
 

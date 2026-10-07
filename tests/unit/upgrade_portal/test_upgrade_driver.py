@@ -221,6 +221,8 @@ class AcceptingSubmitter:
         self.accept = accept
         self.calls = 0
         self.phases: list[str] = []  # The family of every phase that asked for firmware.
+        self.refuse_on: str | None = None  # A later-phase refusal proves that accepted upstream work survives.
+        self.refusal_reason = ""  # An explicit validation reason must reach the terminal run record unchanged.
 
     def submit_phase(self, record: Any, phase: str) -> str | None:
         """Write one upgrade identifier on each target of this phase.
@@ -236,7 +238,9 @@ class AcceptingSubmitter:
         self.phases.append(phase)
         for target in record.get("targets", []):
             target["upgrade_id"] = "up-1"
-        return None if self.accept else f"The cloud refused the {phase} upgrade call."
+        refused = not self.accept or self.refuse_on == phase  # A test can refuse the first or a later family.
+        reason = self.refusal_reason or f"The cloud refused the {phase} upgrade call."  # Keep the exact safe reason.
+        return reason if refused else None  # A refusal must stay inside the controlled cascade path.
 
 
 class RecordingReleaser:
@@ -1031,6 +1035,56 @@ class TestPhaseSubmission:
         final = parts["driver"].run(make_record())
         assert parts["submitter"].phases == ["gateways"]  # The run stopped at the first refusal.
         assert final["state"] == RunState.FAILED.value
+
+    def test_a_later_refusal_still_runs_the_post_check(self, parts: dict[str, Any]) -> None:
+        """An accepted gateway keeps its failure evidence after switches refuse.
+
+        Args:
+            parts: The doubles and the driver.
+        """
+        parts["submitter"].refuse_on = "switches"  # The gateway submits and settles before the refusal.
+        final = parts["driver"].run(make_record())  # The controlled cascade must reach its finish step.
+        assert final["state"] == RunState.FAILED.value  # A refused destructive write is never success.
+        assert parts["capture"].requests[0]["ordinal"] == 2  # The changed gateway keeps post-check evidence.
+
+    def test_a_later_refusal_makes_every_remaining_phase_terminal(self, parts: dict[str, Any]) -> None:
+        """A refusal never leaves a downstream phase pending.
+
+        Args:
+            parts: The doubles and the driver.
+        """
+        parts["submitter"].refuse_on = "switches"  # The switch submission is the first failed action.
+        parts["driver"].run(make_record())  # The cascade must walk through each durable phase state.
+        assert parts["store"].phase_states() == {  # Each family now has one terminal result.
+            "gateways": PhaseState.SETTLED.value,
+            "switches": PhaseState.FAILED.value,
+            "aps": PhaseState.FAILED.value,
+            "clients": PhaseState.FAILED.value,
+        }
+
+    def test_a_later_refusal_sends_no_downstream_firmware(self, parts: dict[str, Any]) -> None:
+        """No access point firmware leaves after the switch call was refused.
+
+        Args:
+            parts: The doubles and the driver.
+        """
+        parts["submitter"].refuse_on = "switches"  # The accepted gateway is the only upstream write.
+        parts["driver"].run(make_record())  # The client observation remains non-destructive.
+        assert parts["submitter"].phases == ["gateways", "switches"]  # Access points receive no cloud call.
+        assert parts["gate"].calls == ["gateways"]  # No settle gate observes firmware that never left.
+
+    def test_an_unroutable_plan_reason_fails_after_the_post_check(self, parts: dict[str, Any]) -> None:
+        """A plan validation refusal is visible and terminal.
+
+        Args:
+            parts: The doubles and the driver.
+        """
+        reason = "The run built an upgrade plan with no supported device family."
+        parts["submitter"].accept = False  # The submitter rejects the plan before one destructive write.
+        parts["submitter"].refusal_reason = reason  # The safe validation sentence must survive the driver.
+        final = parts["driver"].run(make_record())  # The controlled path still captures the unchanged site.
+        assert final["state"] == RunState.FAILED.value  # An unroutable plan must never report complete.
+        assert final["error"]["message"] == reason  # The operator sees the exact validation failure.
 
 
 class TestDiscardedWrites:
