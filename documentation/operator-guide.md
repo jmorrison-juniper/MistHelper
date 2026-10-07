@@ -349,14 +349,12 @@ snmpwalk -v2c -c <community> -On 127.0.0.1:1161 .1.3.6.1.4.1.8072.9999.9999
 | `METRICS_HOST` | `127.0.0.1` | The bind address. A container takes every address |
 | `METRICS_REFRESH_SECONDS` | `900` | The age at which a reading becomes stale. The floor is 60 |
 | `METRICS_SITE_IDS` | unset | A comma list of sites. Unset reports every site |
-| `METRICS_SNMP_BASE_OID` | `.1.3.6.1.4.1.8072.9999.9999` | The base OID that the responder serves |
-| `SNMP_BASE_OID` | `.1.3.6.1.4.1.8072.9999.9999` | The base OID that `snmpd.conf` names |
+| `METRICS_SNMP_BASE_OID` | `.1.3.6.1.4.1.8072.9999.9999` | The base OID for `snmpd.conf` and the responder |
 | `SNMP_PORT` | `1161` | The UDP listen port |
 | `SNMP_COMMUNITY` | `misthelper` | The read-only SNMP community |
 
-Warning: `SNMP_BASE_OID` and `METRICS_SNMP_BASE_OID` must hold the same value.
-`snmpd` routes a request by the first value, and the responder answers by the
-second. Two different values make every read return `No Such Instance`.
+Set `METRICS_SNMP_BASE_OID` to change the SNMP route and the responder tree
+together.
 
 Warning: The gateway asks for no password. Keep the default loopback bind unless
 a reverse proxy holds the access control.
