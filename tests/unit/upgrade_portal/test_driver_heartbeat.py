@@ -274,33 +274,35 @@ class RecordingCapture:
 
 
 class AcceptingSubmitter:
-    """Accept every submission."""
+    """Accept the submission of every phase."""
 
-    def submit(self, record: Any) -> bool:
-        """Accept the upgrade.
+    def submit_phase(self, record: Any, phase: str) -> str | None:
+        """Accept the upgrade of one phase.
 
         Args:
             record: The run record.
+            phase: The phase that asks for firmware.
 
         Returns:
-            Always True.
+            Always None, which names an accepted call.
         """
-        return True
+        return None
 
 
 class RefusingSubmitter:
-    """Refuse every submission, so the run fails at the first step."""
+    """Refuse every submission, so the run fails at the first phase."""
 
-    def submit(self, record: Any) -> bool:
-        """Refuse the upgrade.
+    def submit_phase(self, record: Any, phase: str) -> str | None:
+        """Refuse the upgrade of one phase.
 
         Args:
             record: The run record.
+            phase: The phase that asks for firmware.
 
         Returns:
-            Always False.
+            Always a reason, which names a refused call.
         """
-        return False
+        return f"The cloud refused the {phase} upgrade call."
 
 
 class RecordingSink:

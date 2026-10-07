@@ -10,8 +10,15 @@ Why:
     ``CloudUpgradeSubmitter`` is the sharpest example. `RunDriverDeps.submit`
     accepts None, and a driver built that way walks every phase and takes both
     captures while no firmware call ever leaves. Every refusal path of this class
-    must therefore report a plain False rather than an exception, and no path may
-    report True after the cloud refused.
+    must therefore report one plain sentence rather than an exception, and no
+    path may report success after the cloud refused.
+
+    Issue #4020 changed the shape of this class. ``submit(record) -> bool`` sent
+    every family of the site in one call, so a refused gateway group could not
+    hold back the switch group that followed it. The class now answers
+    ``submit_phase(record, phase) -> str | None``, which the driver calls once
+    for each cascade phase, and a phase sends firmware only after the phase above
+    it settled.
 
 Warning:
     No test in this file reaches a cloud. Every test replaces ``load_module``,
@@ -26,6 +33,7 @@ from typing import Any
 import pytest
 
 from src.interfaces.portals.upgrade_portal.app import wiring
+from src.interfaces.portals.upgrade_portal.upgrade.driver import PHASE_ORDER
 
 RUN_ID = "11111111-1111-1111-1111-111111111111"
 UPGRADE_ID = "22222222-2222-2222-2222-222222222222"
@@ -33,6 +41,9 @@ MAC_SWITCH = "209339051780"
 
 ACCEPTED_STATUS = (200, 202)
 REFUSED_STATUS = 400
+
+GATEWAY_PHASE = "gateways"
+SWITCH_PHASE = "switches"
 
 
 def answer(status: int = 200, upgrade_id: str = UPGRADE_ID) -> Any:
@@ -46,6 +57,41 @@ def answer(status: int = 200, upgrade_id: str = UPGRADE_ID) -> Any:
         One record with the four fields that `_submission_row` reads.
     """
     return SimpleNamespace(upgrade_id=upgrade_id, scope="site", accepted=(MAC_SWITCH,), raw_status=status)
+
+
+def plan_for(device_type: str) -> Any:
+    """Return one stand-in upgrade plan of one device family.
+
+    Args:
+        device_type: The family the plan holds, for example ``gateway``.
+
+    Returns:
+        One object with the ``targets`` attribute that `plan_phase` reads.
+    """
+    return SimpleNamespace(targets=(SimpleNamespace(device_type=device_type),))
+
+
+def walk_phases(submitter: Any, record: dict[str, Any]) -> list[str]:
+    """Drive one submitter the way the cascade drives it and name each phase.
+
+    Why:
+        The driver sends one phase, settles it, and only then sends the next
+        phase. This helper repeats that loop with no gate and no cloud, so a
+        test can read which phases reached the submitter before the run stopped.
+
+    Args:
+        submitter: The submitter under test.
+        record: The run record.
+
+    Returns:
+        The phase names that reached the submitter, in the order of the cascade.
+    """
+    seen: list[str] = []  # The phases the cascade handed to the submitter.
+    for phase in PHASE_ORDER:  # The driver walks this same fixed order.
+        seen.append(phase)
+        if submitter.submit_phase(record, phase) is not None:  # A sentence stops the run at once.
+            break  # Issue #4020: no later family may receive a destructive write.
+    return seen
 
 
 def service_that(invoke: Any) -> Any:
@@ -73,35 +119,36 @@ def install_modules(monkeypatch: pytest.MonkeyPatch, table: dict[str, Any]) -> N
 class TestTheSubmitterRefuses:
     """Tests for every path where no firmware call may leave the portal."""
 
-    def test_reports_false_when_the_run_builds_no_plan(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_reports_a_reason_when_the_run_builds_no_plan(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """A run with no plan never reads as a sent upgrade.
 
         Why:
-            A True here would carry the run into the settle phases and both
-            captures while no firmware call ever left. The driver must fail the
-            run instead.
+            A silent success here would carry the run into the settle phases and
+            both captures while no firmware call ever left. The driver must fail
+            the run instead.
 
         Args:
             monkeypatch: The pytest patch helper.
         """
         monkeypatch.setattr(wiring, "build_plans", lambda record: ())
         record: dict[str, Any] = {"run_id": RUN_ID}
-        assert wiring.CloudUpgradeSubmitter(object()).submit(record) is False
+        assert wiring.CloudUpgradeSubmitter(object()).submit_phase(record, GATEWAY_PHASE) == wiring.NO_PLAN_REASON
 
-    def test_reports_false_when_the_upgrade_seam_is_absent(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_reports_a_reason_when_the_upgrade_seam_is_absent(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """A host with no upgrade seam sends nothing and says so.
 
         Args:
             monkeypatch: The pytest patch helper.
         """
-        monkeypatch.setattr(wiring, "build_plans", lambda record: ("plan",))
+        monkeypatch.setattr(wiring, "build_plans", lambda record: (plan_for("gateway"),))
         install_modules(monkeypatch, {})
         record: dict[str, Any] = {"run_id": RUN_ID}
-        assert wiring.CloudUpgradeSubmitter(object()).submit(record) is False
+        reason = wiring.CloudUpgradeSubmitter(object()).submit_phase(record, GATEWAY_PHASE)
+        assert reason == wiring.PHASE_REFUSED_REASON.format(phase=GATEWAY_PHASE)
         assert record["upgrades"] == []
 
-    def test_reports_false_when_the_cloud_call_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """A cloud fault ends one call and never the whole submit.
+    def test_reports_a_reason_when_the_cloud_call_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A cloud fault ends the phase and never reads as an accepted write.
 
         Args:
             monkeypatch: The pytest patch helper.
@@ -119,12 +166,14 @@ class TestTheSubmitterRefuses:
             """
             raise RuntimeError("the cloud did not answer")
 
-        monkeypatch.setattr(wiring, "build_plans", lambda record: ("plan",))
+        monkeypatch.setattr(wiring, "build_plans", lambda record: (plan_for("gateway"),))
         install_modules(monkeypatch, {wiring.SERVICE_MODULE: service_that(explode)})
         record: dict[str, Any] = {"run_id": RUN_ID}
-        assert wiring.CloudUpgradeSubmitter(object()).submit(record) is False
+        reason = wiring.CloudUpgradeSubmitter(object()).submit_phase(record, GATEWAY_PHASE)
+        assert reason == wiring.PHASE_REFUSED_REASON.format(phase=GATEWAY_PHASE)
+        assert record["upgrades"] == []
 
-    def test_reports_false_when_the_cloud_refuses(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_reports_a_reason_when_the_cloud_refuses(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """A refused status never reads as an accepted call.
 
         Why:
@@ -135,56 +184,136 @@ class TestTheSubmitterRefuses:
         Args:
             monkeypatch: The pytest patch helper.
         """
-        monkeypatch.setattr(wiring, "build_plans", lambda record: ("plan",))
+        monkeypatch.setattr(wiring, "build_plans", lambda record: (plan_for("gateway"),))
         install_modules(
             monkeypatch,
             {wiring.SERVICE_MODULE: service_that(lambda session, plan: answer(REFUSED_STATUS))},
         )
         record: dict[str, Any] = {"run_id": RUN_ID}
-        assert wiring.CloudUpgradeSubmitter(object()).submit(record) is False
+        reason = wiring.CloudUpgradeSubmitter(object()).submit_phase(record, GATEWAY_PHASE)
+        assert reason == wiring.PHASE_REFUSED_REASON.format(phase=GATEWAY_PHASE)
         assert record["upgrades"] == []
 
 
 class TestTheSubmitterSends:
     """Tests for the paths where the cloud accepted at least one call."""
 
-    def test_reports_true_and_keeps_the_cloud_identifier(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_reports_none_and_keeps_the_cloud_identifier(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """An accepted call writes the row that the stop path reads.
 
         Args:
             monkeypatch: The pytest patch helper.
         """
-        monkeypatch.setattr(wiring, "build_plans", lambda record: ("plan",))
+        monkeypatch.setattr(wiring, "build_plans", lambda record: (plan_for("gateway"),))
         install_modules(
             monkeypatch,
             {wiring.SERVICE_MODULE: service_that(lambda session, plan: answer())},
         )
         record: dict[str, Any] = {"run_id": RUN_ID}
-        assert wiring.CloudUpgradeSubmitter(object()).submit(record) is True
+        assert wiring.CloudUpgradeSubmitter(object()).submit_phase(record, GATEWAY_PHASE) is None
         assert record["upgrades"] == [
             {"upgrade_id": UPGRADE_ID, "scope": "site", "accepted": [MAC_SWITCH], "raw_status": 200}
         ]
 
-    def test_keeps_the_group_that_worked_when_another_group_fails(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """One refused group never hides the group that the cloud took.
+    def test_a_phase_with_no_plan_sends_nothing_and_stops_no_run(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A site that holds no gateway reaches the cloud for no gateway.
 
         Why:
-            A selection that mixes two families sends one call for each. A run
-            that reported False here would leave the operator believing that
-            nothing started, while firmware was already moving on half the site.
+            FR-058 skips an absent family. The submitter must therefore answer
+            None without one cloud call, so the driver marks the phase skipped
+            and opens the next gate.
 
         Args:
             monkeypatch: The pytest patch helper.
         """
-        answers = iter((answer(REFUSED_STATUS), answer()))
-        monkeypatch.setattr(wiring, "build_plans", lambda record: ("first", "second"))
+        sent: list[Any] = []  # Any entry here would be a firmware call for a family the site does not hold.
+        monkeypatch.setattr(wiring, "build_plans", lambda record: (plan_for("switch"),))
         install_modules(
             monkeypatch,
-            {wiring.SERVICE_MODULE: service_that(lambda session, plan: next(answers))},
+            {wiring.SERVICE_MODULE: service_that(lambda session, plan: sent.append(plan) or answer())},
         )
         record: dict[str, Any] = {"run_id": RUN_ID}
-        assert wiring.CloudUpgradeSubmitter(object()).submit(record) is True
-        assert len(record["upgrades"]) == 1  # The refused group left no row.
+        assert wiring.CloudUpgradeSubmitter(object()).submit_phase(record, GATEWAY_PHASE) is None
+        assert sent == []
+
+    def test_a_refused_gateway_group_sends_no_switch_firmware(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Issue #4020: a refused family holds the firmware of every later family.
+
+        Why:
+            This test replaces ``test_keeps_the_group_that_worked_when_another
+            _group_fails``, which asserted the defect. That test accepted one
+            refused group followed by one accepted group and reported success,
+            because the old ``submit`` sent every family of the site in one
+            comprehension. Measured against that code, this same selection
+            produced ``calls == ["gateways", "switches"]`` with a true result.
+            The switch firmware therefore left the portal while the gateways of
+            the site had taken none, which is the outage this issue repairs.
+
+            The replacement is deliberate. The old assertion cannot hold beside
+            the new one, because the two describe opposite behavior.
+
+        Args:
+            monkeypatch: The pytest patch helper.
+        """
+        plans = (plan_for("gateway"), plan_for("switch"))  # One family for each of the first two phases.
+        calls: list[str] = []  # Records the family of every plan that reached the cloud seam.
+
+        def send(session: Any, plan: Any) -> Any:
+            """Answer one cloud call and record the family it carried.
+
+            Args:
+                session: The cloud session.
+                plan: The plan the submitter sent.
+
+            Returns:
+                A refused answer for the gateways, and an accepted answer for
+                every other family.
+            """
+            phase = wiring.plan_phase(plan)
+            calls.append(phase)
+            return answer(REFUSED_STATUS) if phase == GATEWAY_PHASE else answer()
+
+        monkeypatch.setattr(wiring, "build_plans", lambda record: plans)
+        install_modules(monkeypatch, {wiring.SERVICE_MODULE: service_that(send)})
+        record: dict[str, Any] = {"run_id": RUN_ID}
+        seen = walk_phases(wiring.CloudUpgradeSubmitter(object()), record)
+        assert calls == ["gateways"]  # The switch firmware never left the portal.
+        assert seen == ["gateways"]  # The cascade stopped before the switch phase.
+        assert record["upgrades"] == []  # A refused group leaves no identifier for the stop path.
+
+    def test_an_accepted_gateway_phase_keeps_its_rows_when_the_switches_fail(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A later refusal never drops the identifiers of the family above it.
+
+        Why:
+            The gateways are already writing firmware when the switch call is
+            refused. The stop path needs the gateway upgrade identifier to
+            cancel that work, so the record must keep it.
+
+        Args:
+            monkeypatch: The pytest patch helper.
+        """
+        plans = (plan_for("gateway"), plan_for("switch"))
+
+        def send(session: Any, plan: Any) -> Any:
+            """Accept the gateway call and refuse the switch call.
+
+            Args:
+                session: The cloud session.
+                plan: The plan the submitter sent.
+
+            Returns:
+                The cloud answer for this family.
+            """
+            return answer() if wiring.plan_phase(plan) == GATEWAY_PHASE else answer(REFUSED_STATUS)
+
+        monkeypatch.setattr(wiring, "build_plans", lambda record: plans)
+        install_modules(monkeypatch, {wiring.SERVICE_MODULE: service_that(send)})
+        record: dict[str, Any] = {"run_id": RUN_ID}
+        seen = walk_phases(wiring.CloudUpgradeSubmitter(object()), record)
+        assert seen == ["gateways", "switches"]  # The gateways settled, so the switches tried.
+        assert len(record["upgrades"]) == 1  # The accepted gateway row survived the switch refusal.
 
     def test_accepts_the_second_accepted_status(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """The cloud may answer 202, and the seam names both codes.
@@ -192,12 +321,12 @@ class TestTheSubmitterSends:
         Args:
             monkeypatch: The pytest patch helper.
         """
-        monkeypatch.setattr(wiring, "build_plans", lambda record: ("plan",))
+        monkeypatch.setattr(wiring, "build_plans", lambda record: (plan_for("switch"),))
         install_modules(
             monkeypatch,
             {wiring.SERVICE_MODULE: service_that(lambda session, plan: answer(202))},
         )
-        assert wiring.CloudUpgradeSubmitter(object()).submit({"run_id": RUN_ID}) is True
+        assert wiring.CloudUpgradeSubmitter(object()).submit_phase({"run_id": RUN_ID}, SWITCH_PHASE) is None
 
 
 class TestBoundStore:
