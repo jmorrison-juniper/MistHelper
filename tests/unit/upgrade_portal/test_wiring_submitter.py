@@ -44,6 +44,7 @@ REFUSED_STATUS = 400
 
 GATEWAY_PHASE = "gateways"
 SWITCH_PHASE = "switches"
+UNSUPPORTED_FAMILY = "camera"
 
 
 def answer(status: int = 200, upgrade_id: str = UPGRADE_ID) -> Any:
@@ -193,6 +194,64 @@ class TestTheSubmitterRefuses:
         reason = wiring.CloudUpgradeSubmitter(object()).submit_phase(record, GATEWAY_PHASE)
         assert reason == wiring.PHASE_REFUSED_REASON.format(phase=GATEWAY_PHASE)
         assert record["upgrades"] == []
+
+    def test_reports_a_reason_for_an_unroutable_plan_without_a_cloud_write(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """An unknown device family fails before one destructive write.
+
+        Args:
+            monkeypatch: The pytest patch helper.
+        """
+        sent: list[Any] = []  # An entry would prove that validation happened after a cloud write.
+        monkeypatch.setattr(wiring, "build_plans", lambda record: (plan_for(UNSUPPORTED_FAMILY),))
+        install_modules(
+            monkeypatch,
+            {wiring.SERVICE_MODULE: service_that(lambda session, plan: sent.append(plan) or answer())},
+        )
+        record: dict[str, Any] = {"run_id": RUN_ID}
+        reason = wiring.CloudUpgradeSubmitter(object()).submit_phase(record, GATEWAY_PHASE)
+        assert reason == wiring.UNROUTABLE_PLAN_REASON  # The operator gets one visible validation reason.
+        assert sent == []  # No plan reaches the cloud when any plan has no supported phase.
+
+    def test_reports_a_reason_for_an_empty_plan_without_a_cloud_write(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A plan with no target fails before one destructive write.
+
+        Args:
+            monkeypatch: The pytest patch helper.
+        """
+        sent: list[Any] = []  # An empty group has no safe cascade phase.
+        empty = SimpleNamespace(targets=())  # This is a plan object, not the separate no-plan case.
+        monkeypatch.setattr(wiring, "build_plans", lambda record: (empty,))
+        install_modules(
+            monkeypatch,
+            {wiring.SERVICE_MODULE: service_that(lambda session, plan: sent.append(plan) or answer())},
+        )
+        record: dict[str, Any] = {"run_id": RUN_ID}
+        reason = wiring.CloudUpgradeSubmitter(object()).submit_phase(record, GATEWAY_PHASE)
+        assert reason == wiring.UNROUTABLE_PLAN_REASON  # Empty plans fail visibly instead of disappearing.
+        assert sent == []  # Validation happens before the upgrade seam loads.
+
+    def test_reports_a_reason_for_a_mixed_family_plan_without_a_cloud_write(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """One plan that mixes two families fails before one destructive write.
+
+        Args:
+            monkeypatch: The pytest patch helper.
+        """
+        sent: list[Any] = []  # A mixed plan must not borrow the phase of its first target.
+        targets = (SimpleNamespace(device_type="gateway"), SimpleNamespace(device_type="switch"))
+        mixed = SimpleNamespace(targets=targets)  # The upgrade seam must never build this shape.
+        monkeypatch.setattr(wiring, "build_plans", lambda record: (mixed,))
+        install_modules(
+            monkeypatch,
+            {wiring.SERVICE_MODULE: service_that(lambda session, plan: sent.append(plan) or answer())},
+        )
+        record: dict[str, Any] = {"run_id": RUN_ID}
+        reason = wiring.CloudUpgradeSubmitter(object()).submit_phase(record, GATEWAY_PHASE)
+        assert reason == wiring.UNROUTABLE_PLAN_REASON  # Mixed families have no single safe cascade phase.
+        assert sent == []  # The invalid group is never silently omitted and never sent.
 
 
 class TestTheSubmitterSends:

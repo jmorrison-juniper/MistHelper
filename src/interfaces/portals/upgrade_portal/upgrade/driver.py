@@ -1559,8 +1559,8 @@ class RunDriver:
         logger.warning("Run stopped before a site action because the site lock was lost")  # No token reaches the log.
         raise RunDriverError(reason)  # The run record then fails with the lock reason.
 
-    def _submit_phase(self, record: MutableMapping[str, Any], name: str) -> None:
-        """Send the firmware of one family and write the tracker.
+    def _submit_phase(self, record: MutableMapping[str, Any], name: str) -> str | None:
+        """Send the firmware of one family, write the tracker, and report refusal.
 
         Why:
             Issue #4020: a family must hold its firmware until the family above
@@ -1577,20 +1577,21 @@ class RunDriver:
             record: The run record.
             name: The phase name.
 
-        Raises:
-            RunDriverError: When the cloud refused the firmware of this family.
+        Returns:
+            The refusal reason, or None when the phase may settle.
         """
         self._beat()  # The cloud submission takes minutes for a large site, so the lock beats before it
+        refused: str | None = None  # A refusal stays in the cascade, so later phases become terminal.
         if self._deps.submit is not None:
             refused = self._deps.submit.submit_phase(record, name)  # None when the run may carry on
             if refused is not None:
                 logger.warning("Run %s sent no firmware for the %s phase", record.get("run_id", ""), name)
-                raise RunDriverError(refused)  # Fail closed, and never retry a destructive write by itself
         self._beat()  # The submission returned, so the lock beats again before the run moves on
         if write_tracker(record, self._deps.clock.now_text()) is None:
             run_id = record.get("run_id", "")
             logger.error("Run %s reached the cloud, but the upgrade tracker did not record it.", run_id)
         self._enter_running(record)
+        return refused  # The caller records the failed phase and still reaches the post-check.
 
     def _enter_running(self, record: MutableMapping[str, Any]) -> None:
         """Move the run from the submitting state to the running state one time.
@@ -1635,6 +1636,19 @@ class RunDriver:
         )
         self._write_phase(record, PhaseOutcome(name, state, note=note))
 
+    def _refuse_phase(self, record: MutableMapping[str, Any], name: str, reason: str) -> None:
+        """Record the family whose destructive submission was refused.
+
+        Args:
+            record: The run record.
+            name: The phase name.
+            reason: The safe sentence that the submitter returned.
+        """
+        self._advance(record, settling_state(name))  # The state chain must reach every later terminal phase.
+        targets = phase_targets(record, name)  # The total tells the operator how much work did not start.
+        outcome = PhaseOutcome(name, PhaseState.FAILED.value, total=len(targets), note=reason)
+        self._write_phase(record, outcome)  # The refusal is durable before the cascade blocks later families.
+
     def _cascade(self, record: MutableMapping[str, Any]) -> None:
         """Run each settle gate in the fixed order and then finish the run.
 
@@ -1669,7 +1683,11 @@ class RunDriver:
                 self._block_phase(record, name)  # A lost family above this one holds the firmware of this one
                 continue  # The client phase carries no firmware, so it still runs and still counts the site
             if name != CLIENT_PHASE:
-                self._submit_phase(record, name)  # Raises when the cloud refused, so no later family is written
+                refused = self._submit_phase(record, name)  # A reason keeps the failure inside this cascade.
+                if refused is not None:
+                    self._refuse_phase(record, name, refused)  # The refused family becomes terminal at once.
+                    reason = reason or refused  # The first refusal remains the terminal run reason.
+                    continue  # No settle gate observes firmware that the cloud refused.
             self._advance(record, settling_state(name))
             lost = self._run_phase(record, name)  # Text when the phase could not run, and None when it ran
             if str(record.get("state", "")) == RunState.STOPPED.value:
