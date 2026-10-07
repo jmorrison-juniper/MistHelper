@@ -113,7 +113,7 @@ request.
 | - | - | - | - | - |
 | 286 | Forces a client to reauthenticate (wireless or wired CoA), disconnects a client, deauthorizes a guest, or drops the clients of a rogue AP | The target MAC or BSSID, typed again | `ClientSessionControlLog.csv` | The MAC normalizes to the lowercase form with no separators. |
 | 287 | Replaces a device for an RMA. The new device keeps the site, the name, and the configuration of the old one | `REPLACE` | `DeviceReplaceLog.csv`, a configuration backup under `data/rma_backups/` | The operation refuses a new device of another type. The backup exists before the request is sent. |
-| 291 | Runs an RRM optimization, or resets every AP of a site to RRM | `OPTIMIZE` or `RESET` | `RrmPlanBefore.csv`, `RrmPlanAfter.csv`, `RrmPlanDiff.csv` | The before plan is on disk before the request. The after plan follows a settle time. The diff lists each radio whose channel, width, or power changed. |
+| 291 | Runs an RRM optimization, or resets every AP of a site to RRM | `OPTIMIZE` or `RESET` | `RrmPlanBefore.csv`, `RrmPlanAfter.csv`, `RrmPlanDiff.csv` | The operation defaults to a dry run. Use `--live-run` for a live request. The before plan is on disk before the request. |
 | 292 | Imports PSKs, user MAC entries, or assets from a CSV file under `data/` | `IMPORT` followed by the exact row count | `CsvImportLog.csv` | The input file is `data/import_<type>.csv`. A missing required column stops the import before any request. A passphrase column never reaches the log. |
 | 293 | Claims a Mist Edge, assigns it to a site, unassigns it, bounces its data ports, or upgrades it | `CLAIM`, `ASSIGN`, `UNASSIGN`, `BOUNCE`, or `UPGRADE` | `MxEdgeLifecycleLog.csv` | The upgrade step polls the status until it completes or the timeout passes. The claim code never reaches the log. |
 
@@ -121,6 +121,7 @@ Environment variables for this family.
 
 | Variable | Default | Menu | Meaning |
 | - | - | - | - |
+| `RRM_DRY_RUN` | Forced dry run when unset | 291 | A value of `true`, `1`, `yes`, or `dry-run` forces a dry run. A false or invalid value does not permit a live request. |
 | `RRM_SETTLE_SECONDS` | `300` | 291 | The wait between the request and the after capture. |
 
 ## How to run one operation
@@ -132,10 +133,11 @@ line.
 podman exec misthelper-app python MistHelper.py -M 277
 ```
 
-Add `--dry-run` for a destructive operation when you want the preview only.
+Menu 291 uses a dry run when no mode is present. Add `--live-run` to permit its
+request after the exact typed confirmation.
 
 ```powershell
-podman exec misthelper-app python MistHelper.py -M 291 --dry-run
+podman exec misthelper-app python MistHelper.py -M 291 --live-run
 ```
 
 Read [the operator guide](operator-guide.md) for the output location and the

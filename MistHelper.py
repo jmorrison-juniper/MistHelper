@@ -1164,12 +1164,12 @@ DEFAULT_API_PAGE_LIMIT = 1000  # Bootstrap clamps and publishes the configured p
 
 
 def _apply_dotenv_line(line: str) -> None:  # Set one KEY=VALUE pair from a .env line into the environment
-    """Parse one .env line and set it into os.environ, skipping blanks/comments/malformed entries."""
+    """Parse one .env line and set it into os.environ without overwriting an existing process value."""
     stripped = line.strip()  # Remove surrounding whitespace and the trailing newline
     if not stripped or stripped.startswith("#") or "=" not in stripped:  # Skip blanks, comments, malformed entries
         return  # Nothing assignable on this line
     key, value = stripped.split("=", 1)  # Split on the first '=' (values may themselves contain '=')
-    os.environ[key.strip()] = value.strip()  # Set the env var (overwrites, unlike setdefault)
+    os.environ.setdefault(key.strip(), value.strip())  # Issue #4051: match load_dotenv(override=False) precedence
 
     # Early dotenv import for configuration loading
 
@@ -4800,10 +4800,10 @@ menu_actions: dict[str, Any] = {
     ),
     "291": GlobalImportManager.MenuEntry(  # Use named fields for menu 291.
         menu_id="291",  # Store key for drift checks.
-        handler=lambda dry_run=False: RrmResetOperation.run(dry_run=dry_run),
+        handler=lambda dry_run=None: RrmResetOperation.run(dry_run=dry_run),
         title=(
             " DESTRUCTIVE: Optimize or reset site RRM with before and after plan capture "
-            "(Requires typing 'OPTIMIZE' or 'RESET' to confirm, supports --dry-run)"
+            "(Requires typing 'OPTIMIZE' or 'RESET' to confirm, dry-run unless --live-run is given)"
         ),
         category=OperationRegistry.skip_category("291"),  # Read the safety class.
         destructive=True,  # RRM optimize and reset change AP channel or power state.
@@ -7458,12 +7458,22 @@ def _add_destructive_safety_flags(
     parser: argparse.ArgumentParser,
 ) -> None:  # Preserve the existing behavior during the compliance refactor.
     """Register the flags that govern destructive and address-checking behavior."""
-    parser.add_argument(  # Preserve the existing behavior during the compliance refactor.
+    dry_run_mode = parser.add_mutually_exclusive_group()  # Keep the destructive execution mode unambiguous.
+    dry_run_mode.add_argument(  # Preserve the existing dry-run flag while making absence explicit.
         "--dry-run",
-        action="store_true",
+        action="store_const",
+        const=True,
+        default=None,
         help=(
             "Enable dry-run mode for destructive operations (show what would be changed without making actual changes)"
         ),
+    )
+    dry_run_mode.add_argument(
+        "--live-run",
+        action="store_const",
+        const=False,
+        dest="dry_run",
+        help="Explicitly permit a destructive operation after its required typed confirmation",
     )
     parser.add_argument(
         "--address-check",
@@ -8067,7 +8077,7 @@ def _build_cli_func_kwargs(
         "debug": args.debug,  # Pass debug mode flag to enable verbose logging.
         "delay": args.delay,  # Pass custom delay override (or None for dynamic).
         "fast": args.fast,  # Pass fast mode flag to enable concurrency.
-        "dry_run": args.dry_run,  # Pass dry-run flag to skip destructive actions.
+        "dry_run": args.dry_run,  # Pass the explicit tri-state destructive mode, or None when absent.
         "address_check": args.address_check,  # Pass address validation toggle.
         "skip_ssl_verify": args.skip_ssl_verify,  # Pass SSL verification bypass flag.
     }
