@@ -266,7 +266,7 @@ def _open_site_picker(page: Any) -> str:
     _require_built_route(_page_status(page, SITE_PAGE_PATH), SITE_PAGE_PATH)
     keys = _marker_keys(page, SITE_ROW_PREFIX)
     if not keys:  # The portal reached no site, so no lock path can be built.
-        pytest.skip("The site picker shows no site row, so no site key exists to lock.")
+        pytest.fail("The site picker shows no site row, so no site key exists to lock.")
     return keys[0]
 
 

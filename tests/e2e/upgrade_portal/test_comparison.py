@@ -265,7 +265,7 @@ def _assert_row_keys_are_addresses(page: Any, prefix: str, table_name: str) -> N
     """
     keys = _row_keys(page, prefix)
     if not keys:  # A digest match and a quiet site both leave the table empty, which breaks no rule.
-        pytest.skip(f"The {table_name} shows no row, so no key exists to read.")
+        pytest.fail(f"The {table_name} shows no row, so no key exists to read.")
     wrong = [key for key in keys if not MAC_PATTERN.match(key)]
     assert not wrong, f"These rows of the {table_name} hold an address in the wrong spelling: {wrong}."
     assert len(set(keys)) == len(keys), f"Two rows of the {table_name} share one address in their test identifiers."
@@ -334,7 +334,7 @@ def _skip_without_comparison(page: Any) -> None:
     notice = page.get_by_test_id(REFUSAL_ID)  # One element only carries this identifier (#3908).
     spoken = [text.strip() for text in notice.all_inner_texts() if text.strip()]  # An absent region reads as empty.
     reason = spoken[0] if spoken else "The portal named no reason."
-    pytest.skip(f"The portal showed the picker again rather than a comparison. Reason: {reason}")
+    pytest.fail(f"The portal showed the picker again rather than a comparison. Reason: {reason}")
 
 
 @pytest.fixture
@@ -355,7 +355,7 @@ def comparison_page(picker_page: Any) -> Any:
     """
     keys = _capture_keys(picker_page)
     if not keys:  # The portal holds no stored capture, so no comparison can run.
-        pytest.skip("The picker offers no stored capture, so no comparison can run.")
+        pytest.fail("The picker offers no stored capture, so no comparison can run.")
     picker_page.get_by_test_id(BEFORE_SELECT_ID).select_option(keys[0])
     picker_page.get_by_test_id(AFTER_SELECT_ID).select_option(keys[-1])
     _require_built_route(_click_and_wait(picker_page, RUN_BUTTON_ID), COMPARE_PAGE_PATH)

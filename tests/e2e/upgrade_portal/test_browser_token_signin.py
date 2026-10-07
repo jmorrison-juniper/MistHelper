@@ -152,7 +152,7 @@ def _first_key(page: Any, prefix: str) -> str:
     """
     keys = _row_keys(page, prefix)  # Read keys that the current page published.
     if not keys:  # The page holds no row to drive.
-        pytest.skip(f"The page shows no element with the identifier prefix {prefix}.")
+        pytest.fail(f"The page shows no element with the identifier prefix {prefix}.")
     return keys[0]  # The first row is a sample of one stable row shape.
 
 

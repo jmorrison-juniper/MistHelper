@@ -220,7 +220,7 @@ def _first_row_key(page: Any, prefix: str) -> str:
     """
     keys = _row_keys(page, prefix)
     if not keys:  # The portal reached no site, so no key exists to drive.
-        pytest.skip(f"The page shows no element with the identifier prefix {prefix}, so no key exists to drive.")
+        pytest.fail(f"The page shows no element with the identifier prefix {prefix}, so no key exists to drive.")
     return keys[0]
 
 
@@ -357,7 +357,7 @@ class TestSiteInventory:
         """
         keys = _row_keys(inventory_page, INVENTORY_ROW_PREFIX)
         if not keys:  # A site with no device publishes no row, which breaks no rule.
-            pytest.skip("The site holds no device, so the page shows no inventory row to read.")
+            pytest.fail("The site holds no device, so the page shows no inventory row to read.")
         wrong = [key for key in keys if not MAC_PATTERN.match(key)]
         assert not wrong, f"These inventory rows hold a MAC address in the wrong spelling: {wrong}."
         assert len(set(keys)) == len(keys), "Two inventory rows share one MAC address in their test identifiers."

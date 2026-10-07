@@ -223,7 +223,7 @@ def _listed_site_id(page: Any) -> str:
     _require_built_route(_page_status(page, SITE_PAGE_PATH), SITE_PAGE_PATH)
     keys = _marker_keys(page, SITE_ROW_PREFIX)
     if not keys:  # The portal reached no site, so no run can open.
-        pytest.skip("The site picker shows no site row, so no site identifier exists to stop.")
+        pytest.fail("The site picker shows no site row, so no site identifier exists to stop.")
     return keys[0]
 
 
