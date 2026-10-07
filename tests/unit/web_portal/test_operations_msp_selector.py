@@ -3,17 +3,29 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from unittest.mock import patch
 
 from flask import Flask
 
 from web_portal.routes.operations import operations_bp
 
 
-def _client(session: object) -> object:
-    """Build a client with one authenticated session."""
+class FakeMistSession:
+    """Return one controlled self response through the SDK session contract."""
+
+    def __init__(self, response: SimpleNamespace) -> None:
+        self.response = response
+
+    def mist_get(self, *, uri: str, query: dict[str, str]) -> SimpleNamespace:
+        """Return the response that the SDK self endpoint requests."""
+        assert uri == "/api/v1/self"
+        assert query == {}
+        return self.response
+
+
+def _client(response: SimpleNamespace) -> object:
+    """Build a client with one authenticated fake Mist session."""
     app = Flask(__name__)
-    app.config["APISESSION"] = session
+    app.config["APISESSION"] = FakeMistSession(response)
     app.register_blueprint(operations_bp)
     return app.test_client()
 
@@ -24,8 +36,7 @@ def test_msp_route_returns_permitted_msp_rows() -> None:
         status_code=200,
         data={"privileges": [{"msp_id": "msp-1", "msp_name": "MSP One"}]},
     )
-    with patch("mistapi.api.v1.self.self.getSelf", return_value=response_data):
-        response = _client(object()).get("/api/operations/msps")
+    response = _client(response_data).get("/api/operations/msps")
 
     assert response.status_code == 200
     assert response.get_json() == {
@@ -45,8 +56,7 @@ def test_msp_route_returns_multiple_permitted_msp_rows() -> None:
             ]
         },
     )
-    with patch("mistapi.api.v1.self.self.getSelf", return_value=response_data):
-        response = _client(object()).get("/api/operations/msps")
+    response = _client(response_data).get("/api/operations/msps")
 
     assert response.status_code == 200
     assert response.get_json() == {
@@ -61,8 +71,7 @@ def test_msp_route_returns_multiple_permitted_msp_rows() -> None:
 def test_msp_route_explains_missing_msp_scope() -> None:
     """The portal explains that an organization-only account has no MSP scope."""
     response_data = SimpleNamespace(status_code=200, data={"privileges": []})
-    with patch("mistapi.api.v1.self.self.getSelf", return_value=response_data):
-        response = _client(object()).get("/api/operations/msps")
+    response = _client(response_data).get("/api/operations/msps")
 
     assert response.status_code == 200
     assert response.get_json() == {
@@ -75,8 +84,7 @@ def test_msp_route_explains_missing_msp_scope() -> None:
 def test_msp_route_names_http_failure_status() -> None:
     """The portal distinguishes a failed MSP lookup from an empty MSP result."""
     response_data = SimpleNamespace(status_code=404, data={"error": "not found"})
-    with patch("mistapi.api.v1.self.self.getSelf", return_value=response_data):
-        response = _client(object()).get("/api/operations/msps")
+    response = _client(response_data).get("/api/operations/msps")
 
     assert response.status_code == 200
     assert response.get_json() == {
@@ -89,8 +97,7 @@ def test_msp_route_names_http_failure_status() -> None:
 def test_msp_route_names_server_failure_status() -> None:
     """The portal preserves a server error status in the picker reason."""
     response_data = SimpleNamespace(status_code=500, data={"error": "server error"})
-    with patch("mistapi.api.v1.self.self.getSelf", return_value=response_data):
-        response = _client(object()).get("/api/operations/msps")
+    response = _client(response_data).get("/api/operations/msps")
 
     assert response.status_code == 200
     assert response.get_json() == {
