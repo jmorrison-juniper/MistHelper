@@ -20,3 +20,9 @@
   time. One run-scoped gate now covers the stop check, the firmware call, and
   the accepted-row write, so no firmware call starts after the operator asks for
   the stop (issue #4020).
+- A stop that an operator sends while the portal asks for the run gate now wins
+  that gate, so no firmware call starts after it. A refused cloud call now
+  writes its reason inside the same gate. The move of a run into the state
+  `stopping` now writes the state alone, so it keeps every concurrent result.
+  A stopped run that captured no post-check now names that lost evidence
+  (issue #4020).

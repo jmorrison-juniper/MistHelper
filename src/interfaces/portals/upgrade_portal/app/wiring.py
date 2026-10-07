@@ -25,6 +25,7 @@ import threading  # The run mirror below is read by the poll while the driver wr
 import time  # The event window of the settle gate reads the wall clock.
 from collections.abc import Callable, Mapping, MutableMapping, Sequence  # The shapes the driver and the store declare.
 from dataclasses import dataclass  # Holds one request-owned resource graph.
+from datetime import UTC, datetime  # The refusal evidence carries an ISO 8601 UTC change time.
 from importlib import import_module  # Imports each collaborator late, at the first call.
 from types import ModuleType  # The return type of a late import.
 from typing import Any  # A late import answers with untyped objects.
@@ -416,6 +417,50 @@ class DocumentRunStore:
         logger.debug("wiring: the accepted-row append for run %s succeeded", run_id)  # Log after the mutation.
         return True  # The accepted identifier is durable without a whole-record replacement.
 
+    def append_dispatch_failure(self, run_id: str, failure: dict[str, Any]) -> bool:
+        """Append one refusal record without replacing a concurrent stop request.
+
+        Why:
+            Issue #4020: a refusal that the driver persisted after the dispatch
+            gate reopened could be erased by a stop that committed first, so a
+            destructive partial run lost the evidence of the write it lost.
+
+        Args:
+            run_id: The run key.
+            failure: The refusal evidence of one dispatch.
+
+        Returns:
+            True when the database holds the appended refusal.
+        """
+        store = load_module(STORE_MODULE)  # Load the production database boundary only for the mutation.
+        if store is None:  # A mirror cannot coordinate a stop from another worker.
+            return False  # Fail closed, because unproven refusal evidence must never read as durable.
+        try:  # The database action patches one field in one atomic AQL statement.
+            database: Any = store.connect_database()  # Open the database that holds the run document.
+            if database is None:  # A file fallback cannot preserve a concurrent database stop.
+                return False  # Never report an atomic mutation through a non-atomic fallback.
+            query = (
+                "FOR run IN @@collection "
+                "FILTER run._key == @key "
+                "LET failures = APPEND(IS_ARRAY(run.dispatch_failures) ? run.dispatch_failures : [], [@row]) "
+                "UPDATE run WITH { dispatch_failures: failures } IN @@collection RETURN NEW"
+            )  # UPDATE patches only the refusal field and therefore preserves every current stop field.
+            bind_vars = {  # Bind the collection, key, and detached refusal record.
+                "@collection": store.RUN_COLLECTION,
+                "key": run_id,
+                "row": dict(failure),
+            }
+            logger.info("wiring: append one dispatch refusal to run %s", run_id)  # Log before the mutation.
+            rows = list(database.aql.execute(query, bind_vars=bind_vars))  # Run one atomic field update.
+        except Exception as fault:  # A persistence fault must stay visible to the submitter.
+            logger.warning("wiring: the refusal append for run %s failed with %s", run_id, type(fault).__name__)
+            return False  # The submitter reports the durable evidence failure.
+        if not rows or not isinstance(rows[0], Mapping):  # An absent run changed no durable record.
+            return False  # Fail closed when the database returns no updated document.
+        mirror_run(dict(rows[0]))  # Cache the complete database-confirmed record with its stop fields.
+        logger.debug("wiring: the refusal append for run %s succeeded", run_id)  # Log after the mutation.
+        return True  # The refusal evidence is durable without a whole-record replacement.
+
     def delete_run(self, run_id: str) -> bool:
         """Delete one planned run and remove its process mirror."""
         store = load_module(STORE_MODULE)  # Load the production database boundary only when cleanup runs.
@@ -475,6 +520,51 @@ class DocumentRunStore:
         mirror_run(dict(rows[0]))  # Cache the complete database-confirmed record with its accepted rows.
         logger.debug("wiring: the stop write for run %s succeeded", run_id)  # Log after the mutation.
         return True  # The stop is durable without a whole-record replacement.
+
+    def apply_state_transition(self, run_id: str, state: str, updated_at: str) -> bool:
+        """Write only the state fields of one database run.
+
+        Why:
+            Issue #4020: the stop route replaced the whole record, so a driver
+            update that committed between the read and the write disappeared.
+            This mutation patches two fields in one statement.
+
+        Args:
+            run_id: The run key.
+            state: The new run state value.
+            updated_at: The fresh change time in ISO 8601 UTC.
+
+        Returns:
+            True when the database holds the new state.
+        """
+        store = load_module(STORE_MODULE)  # Load the production database boundary only for the mutation.
+        if store is None:  # A mirror cannot coordinate a move against the driver thread.
+            return False  # Fail closed, because an unproven move must never read as durable.
+        try:  # The database action patches two fields in one atomic AQL statement.
+            database: Any = store.connect_database()  # Open the database that holds the run document.
+            if database is None:  # A file fallback cannot preserve a concurrent driver write.
+                return False  # Never report an atomic mutation through a non-atomic fallback.
+            query = (
+                "FOR run IN @@collection "
+                "FILTER run._key == @key "
+                "UPDATE run WITH { state: @state, updated_at: @now } IN @@collection RETURN NEW"
+            )  # UPDATE patches only the state fields and preserves upgrades, phases, and post-check evidence.
+            bind_vars = {  # Bind the collection, key, new state, and change time.
+                "@collection": store.RUN_COLLECTION,
+                "key": run_id,
+                "state": state,
+                "now": updated_at,
+            }
+            logger.info("wiring: write the state %s of run %s", state, run_id)  # Log before the mutation.
+            rows = list(database.aql.execute(query, bind_vars=bind_vars))  # Run one atomic field update.
+        except Exception as fault:  # A move that cannot commit must remain visible as a failure.
+            logger.warning("wiring: the state write for run %s failed with %s", run_id, type(fault).__name__)
+            return False  # The stop route reports the durable write failure to the operator.
+        if not rows or not isinstance(rows[0], Mapping):  # An absent run changed no durable record.
+            return False  # Fail closed when the database returns no updated document.
+        mirror_run(dict(rows[0]))  # Cache the complete database-confirmed record with every driver field.
+        logger.debug("wiring: the state write for run %s succeeded", run_id)  # Log after the mutation.
+        return True  # The move is durable without a whole-record replacement.
 
     def compare_and_set_run(
         self,
@@ -870,9 +960,49 @@ class CloudUpgradeSubmitter:
             row = self._send(run_id, plan)
             if row is None:  # The cloud refused or faulted, so this phase stops here.
                 self._keep(record, ())  # Keep the stable empty-row shape when the first call was refused.
-                logger.error("wiring: the run %s stops, because the %s phase lost one upgrade call", run_id, phase)
-                return PHASE_REFUSED_REASON.format(phase=phase)  # The driver fails the run with this sentence.
+                return self._persist_refusal(record, run_id, phase, plan)  # Durable before a stop may commit.
             return self._persist_row(record, row)  # The identifier lands before the gate lets a stop commit.
+
+    def _persist_refusal(
+        self,
+        record: MutableMapping[str, Any],
+        run_id: str,
+        phase: str,
+        plan: Any,
+    ) -> str:
+        """Make the evidence of one refused firmware call durable inside the gate.
+
+        Why:
+            Issue #4020: the submitter returned the refusal and the driver wrote
+            it after the gate reopened. A stop that committed in that interval
+            sent the driver down the stopped path, and the operator then read a
+            stopped run that never named the destructive write the cloud lost.
+
+        Args:
+            record: The run record that the driver owns.
+            run_id: The run key, for the log line and the store mutation.
+            phase: The phase name, for the reason sentence.
+            plan: The version group the cloud would not take.
+
+        Returns:
+            The refusal reason that the driver writes into the run.
+        """
+        reason = PHASE_REFUSED_REASON.format(phase=phase)  # One sentence for the operator and the record.
+        failure = {  # Plain values only, because the document store writes plain values.
+            "phase": phase,  # The phase that lost the call, so a reader sees the cascade position.
+            "family": str(getattr(plan, "family", "")),  # The device family of the group the cloud refused.
+            "version": str(getattr(plan, "version", "")),  # The firmware version the operator asked for.
+            "reason": reason,  # The same sentence the run record carries, so the two never disagree.
+            "recorded_at": datetime.now(UTC).isoformat(),  # The change time in ISO 8601 UTC, for the trail.
+        }
+        held = record.get("dispatch_failures")  # An earlier phase can already hold refusal evidence.
+        kept = list(held) if isinstance(held, list) else []  # Ignore a damaged non-list field safely.
+        kept.append(dict(failure))  # The driver copy carries the same evidence as the durable record.
+        record["dispatch_failures"] = kept  # A later save of the driver never drops this evidence.
+        logger.error("wiring: the run %s stops, because the %s phase lost one upgrade call", run_id, phase)
+        if not self._store.append_dispatch_failure(run_id, dict(failure)):  # Durable before the gate reopens.
+            logger.error("wiring: the run %s could not persist one refused upgrade call", run_id)
+        return reason  # The driver fails the run with this sentence.
 
     def _stop_reason(self, record: MutableMapping[str, Any]) -> str | None:
         """Copy a durable stop request into the driver record before a cloud write.

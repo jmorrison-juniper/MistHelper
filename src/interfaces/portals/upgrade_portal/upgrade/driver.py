@@ -1940,11 +1940,32 @@ class RunDriver:
         """
         logger.info("Run %s stops at the request of an operator", record.get("run_id", ""))
         self._advance(record, RunState.STOPPING)
-        try:
+        try:  # A stopped destructive run must never read as clean when the evidence capture failed.
             self._start_post_check(record)
-        except RunDriverError:
-            logger.warning("Run %s stopped without a post-check capture", record.get("run_id", ""))
+        except RunDriverError as fault:  # Issue #4020: the earlier version logged and wrote no evidence.
+            self._record_post_check_failure(record, fault)
         self._advance(record, RunState.STOPPED)
+
+    def _record_post_check_failure(self, record: MutableMapping[str, Any], fault: BaseException) -> None:
+        """Write durable evidence that a stopped run captured no post-check.
+
+        Why:
+            Issue #4020: a stop can follow a firmware write that already
+            changed a device. If the post-check capture then fails and the
+            driver only logs it, the record reads as an ordinary stop. The
+            operator cannot see that the portal holds no proof of the state of
+            the changed device.
+
+        Args:
+            record: The run record.
+            fault: The error the post-check start met.
+        """
+        message = operator_reason(fault)  # Safe by construction, so the record may hold it.
+        run_id = record.get("run_id", "")  # The log line names the run the operator reads.
+        logger.error("Run %s stopped without a post-check capture: %s", run_id, message)  # Visible failure.
+        record["post_check_error"] = message  # The poll answer and the record now name the lost evidence.
+        record["post_check_captured"] = False  # One plain flag that a junior engineer can read.
+        self._save(record)  # Make the evidence durable before the run reaches its final state.
 
     def _advance(self, record: MutableMapping[str, Any], target: RunState) -> None:
         """Move the run to one state and save it.

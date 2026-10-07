@@ -256,6 +256,25 @@ class RunRecordStore(Protocol):
         """
         ...  # A protocol declares the shape only
 
+    def append_dispatch_failure(self, run_id: str, failure: dict[str, Any]) -> bool:
+        """Append one refused or faulted firmware dispatch without replacing another field.
+
+        Why:
+            Issue #4020: the submitter returned a refusal, released the dispatch
+            gate, and left the driver to persist the refused phase afterwards. A
+            stop that committed between those two steps sent the driver down the
+            stopped path, and the refusal evidence of a destructive partial run
+            disappeared. This mutation makes the refusal durable inside the gate.
+
+        Args:
+            run_id: The run key.
+            failure: The refusal evidence of one dispatch.
+
+        Returns:
+            True when the refusal evidence is durable.
+        """
+        ...  # A protocol declares the shape only
+
     def apply_stop_request(self, run_id: str, stop_request: dict[str, Any], updated_at: str) -> bool:
         """Write only the stop fields of one run and preserve every other field.
 
@@ -266,6 +285,25 @@ class RunRecordStore(Protocol):
 
         Returns:
             True when the stop is durable.
+        """
+        ...  # A protocol declares the shape only
+
+    def apply_state_transition(self, run_id: str, state: str, updated_at: str) -> bool:
+        """Write only the state fields of one run and preserve every other field.
+
+        Why:
+            Issue #4020: the stop route read the whole record, moved it to
+            ``stopping``, and wrote the whole record back. A driver update that
+            committed inside that interval disappeared, so the operator could
+            lose a phase result, post-check evidence, or a terminal state.
+
+        Args:
+            run_id: The run key.
+            state: The new run state value.
+            updated_at: The fresh change time in ISO 8601 UTC.
+
+        Returns:
+            True when the new state is durable.
         """
         ...  # A protocol declares the shape only
 
@@ -338,15 +376,48 @@ class RunDispatchGate:
             None, while this dispatch owns the gate of the run.
         """
         logger.debug("[GATE] Run %s asks for the dispatch gate", run_id)  # Record the wait before the action.
-        with cls._REGISTRY_GUARD:  # Read the waiting-stop count under the table guard.
-            while cls._STOPS_WAITING.get(run_id, 0) > 0:  # An operator stop of this run comes first.
-                logger.info("[GATE] Run %s holds a firmware call, because a stop waits", run_id)
-                cls._REGISTRY_GUARD.wait()  # Release the guard until the stop finishes.
-            gate = cls._lock_for(run_id)  # Claim the lock of this run while no stop waits.
-        with gate:  # A concurrent stop waits for this whole dispatch.
+        gate = cls._claim_dispatch(run_id)  # Eligibility and acquisition form one linearizable claim.
+        try:  # The claim must come back whatever the destructive caller does.
             logger.info("[GATE] Run %s holds the dispatch gate", run_id)  # The firmware call may now start.
             yield  # The caller checks the stop, sends one call, and persists its result.
+        finally:  # A fault in the cloud call must never leave the gate of this run held.
+            gate.release()  # A waiting stop may now take the gate and commit.
         logger.debug("[GATE] Run %s released the dispatch gate", run_id)  # A waiting stop may now commit.
+
+    @classmethod
+    def _claim_dispatch(cls, run_id: str) -> threading.RLock:
+        """Take the gate of one run only while no stop of that run waits.
+
+        Why:
+            Issue #4020: the first version read the waiting-stop count, dropped
+            the table guard, and only then asked for the run lock. A stop that
+            registered inside that gap still lost the race for the free lock, so
+            a destructive call could start after the operator sent the stop.
+
+            This loop rechecks the count after it holds the run lock. A stop
+            that registered in the gap makes this dispatch give the lock back
+            and wait again, so the stop always wins. The recheck never waits
+            while it holds the run lock, so the stop path cannot deadlock
+            against it.
+
+        Args:
+            run_id: The run key.
+
+        Returns:
+            The held run lock. The caller owns it and must release it.
+        """
+        while True:  # One pass for each stop that registers inside the acquisition gap.
+            with cls._REGISTRY_GUARD:  # Read the waiting-stop count under the table guard.
+                while cls._STOPS_WAITING.get(run_id, 0) > 0:  # An operator stop of this run comes first.
+                    logger.info("[GATE] Run %s holds a firmware call, because a stop waits", run_id)
+                    cls._REGISTRY_GUARD.wait()  # Release the guard until the stop finishes.
+                gate = cls._lock_for(run_id)  # Read the lock of this run while no stop waits.
+            gate.acquire()  # Block here only for a dispatch of the same run, never for the table guard.
+            with cls._REGISTRY_GUARD:  # The recheck holds the run lock, so it must never wait here.
+                if cls._STOPS_WAITING.get(run_id, 0) == 0:  # No stop registered inside the acquisition gap.
+                    return gate  # The caller owns the gate, and every later stop waits for it.
+            logger.info("[GATE] Run %s gives the dispatch gate back to a stop that registered", run_id)
+            gate.release()  # A stop won the gap, so this dispatch waits for it and tries again.
 
     @classmethod
     @contextmanager

@@ -313,6 +313,28 @@ class MemoryRunStore:
             _RUNS[run_id] = current  # Publish the narrow mutation under the same guard.
         return True  # A later read now sees the row and every concurrent stop field.
 
+    def append_dispatch_failure(self, run_id: str, failure: dict[str, Any]) -> bool:
+        """Append one refusal record and preserve every concurrent run field.
+
+        Args:
+            run_id: The run key.
+            failure: The refusal evidence of one dispatch.
+
+        Returns:
+            True when the store holds the appended refusal.
+        """
+        with _RUN_GUARD:  # Read and field mutation form one action with stop writes.
+            held = _RUNS.get(run_id)  # An absent run cannot hold refusal evidence.
+            if held is None:
+                return False  # Fail closed, because an unproven refusal must never read as durable.
+            current = dict(held)  # Detach the replacement from the stored record.
+            rows = current.get("dispatch_failures")  # An earlier phase can already hold refusal evidence.
+            failures = list(rows) if isinstance(rows, list) else []  # Ignore a damaged non-list field safely.
+            failures.append(dict(failure))  # Store plain values that no caller can later change.
+            current["dispatch_failures"] = failures  # Change only the refusal evidence field.
+            _RUNS[run_id] = current  # Publish the narrow mutation under the same guard.
+        return True  # A later read now sees the refusal and every concurrent stop field.
+
     def apply_stop_request(self, run_id: str, stop_request: dict[str, Any], updated_at: str) -> bool:
         """Write only the stop fields of one run and preserve every other field.
 
@@ -339,6 +361,27 @@ class MemoryRunStore:
             current["updated_at"] = updated_at  # The poll route reads the fresh change time.
             _RUNS[run_id] = current  # Publish the narrow mutation under the same guard.
         return True  # A later read sees the stop and every concurrent accepted row.
+
+    def apply_state_transition(self, run_id: str, state: str, updated_at: str) -> bool:
+        """Write only the state fields of one run and preserve every other field.
+
+        Args:
+            run_id: The run key.
+            state: The new run state value.
+            updated_at: The fresh change time in ISO 8601 UTC.
+
+        Returns:
+            True when the store holds the new state.
+        """
+        with _RUN_GUARD:  # Read and field mutation form one action with driver writes.
+            held = _RUNS.get(run_id)  # An absent run cannot hold a state.
+            if held is None:
+                return False  # Fail closed, because an unproven move must never read as durable.
+            current = dict(held)  # Detach the replacement from the stored record.
+            current["state"] = state  # Change only the state field.
+            current["updated_at"] = updated_at  # The poll route reads the fresh change time.
+            _RUNS[run_id] = current  # Publish the narrow mutation under the same guard.
+        return True  # A later read sees the move and every concurrent driver field.
 
     def compare_and_set_run(
         self,
@@ -2481,12 +2524,19 @@ def cancel_outcome(run_id: str) -> StopOutcome:
 
 
 def move_to_stopping(record: dict[str, Any]) -> str:
-    """Move one run into the state `stopping` and write the record.
+    """Move one run into the state `stopping` through a narrow durable mutation.
 
     Why:
         `StopRequestStore.request` writes the request and the change time only,
         and it leaves `state` to the state machine on purpose. The contract
         answers `{"state": "stopping"}`, so this function performs that move.
+
+        Issue #4020: the earlier version saved the whole record that the route
+        read before the stop. A driver update that committed inside that
+        interval disappeared, so the operator could lose a phase result, the
+        post-check evidence, or a terminal state of a destructive run. The move
+        now reads the current durable record, decides on that record, and writes
+        two fields only.
 
     Args:
         record: The run record that now holds the stop request.
@@ -2494,12 +2544,22 @@ def move_to_stopping(record: dict[str, Any]) -> str:
     Returns:
         The state the run holds after the move.
     """
+    store = run_store()  # The one seam that both the route and the driver write through.
+    run_id = str(record.get("run_id", ""))  # The narrow store mutation needs only the durable run key.
+    current = store.read_run(run_id)  # A driver write may have landed since the route read the record.
+    fresh = dict(current) if isinstance(current, Mapping) else dict(record)  # Decide on the newest state.
     try:  # A run that reached a final state between the two reads must not raise a fault page.
-        RunStateMachine().advance(record, RunState.STOPPING)
+        RunStateMachine().advance(fresh, RunState.STOPPING)
     except RunTransitionError:  # The run already stops, or it already finished.
-        return str(record.get("state", ""))  # The operator reads the true state, whatever it is.
-    save_run(record)  # A failed write leaves the request in place, and the driver still reads it.
-    return str(record.get("state", ""))  # The contract answers this value to the browser.
+        record["state"] = str(fresh.get("state", ""))  # The caller copy then names the true durable state.
+        return str(fresh.get("state", ""))  # The operator reads the true state, whatever it is.
+    moved = bool(store.apply_state_transition(run_id, str(fresh["state"]), str(fresh["updated_at"])))
+    if not moved:  # A failed write leaves the request in place, and the driver still reads it.
+        logger.error("upgrade: the store refused the stopping move of the run %s", run_id)  # Names the run.
+        return str(record.get("state", ""))  # The operator reads the state the portal could still prove.
+    record["state"] = str(fresh["state"])  # Keep the caller copy and the durable record in agreement.
+    record["updated_at"] = str(fresh["updated_at"])  # The contract answer carries the fresh change time.
+    return str(fresh["state"])  # The contract answers this value to the browser.
 
 
 def outcome_is_recorded(record: Mapping[str, Any]) -> bool:

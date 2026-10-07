@@ -128,6 +128,44 @@ class FakeStore:
         self.record = current  # Publish the narrow mutation.
         return True  # The accepted row is now readable.
 
+    def append_dispatch_failure(self, run_id: str, failure: dict[str, Any]) -> bool:
+        """Append one refusal record and change no other field.
+
+        Args:
+            run_id: The run key.
+            failure: The refusal evidence of one plan.
+
+        Returns:
+            True after the refusal becomes durable.
+        """
+        if self.record is None or self.record.get("run_id") != run_id:
+            return False  # An absent or different run cannot carry refusal evidence.
+        current = dict(self.record)  # Preserve the current upgrades, state, and phase fields.
+        rows = list(current.get("dispatch_failures", ()))  # Preserve every earlier refusal.
+        rows.append(dict(failure))  # Add only the new refusal.
+        current["dispatch_failures"] = rows  # Change no stop, state, or accepted row field.
+        self.record = current  # Publish the narrow mutation.
+        return True  # The refusal survives a concurrent stop write.
+
+    def apply_state_transition(self, run_id: str, state: str, updated_at: str) -> bool:
+        """Write only the state fields of one run.
+
+        Args:
+            run_id: The run key.
+            state: The new run state value.
+            updated_at: The fresh change time in ISO 8601 UTC.
+
+        Returns:
+            True after the move becomes durable.
+        """
+        if self.record is None or self.record.get("run_id") != run_id:
+            return False  # An absent or different run cannot hold a state.
+        current = dict(self.record)  # Preserve the current upgrades, phases, and stop fields.
+        current["state"] = state  # Change only the state field.
+        current["updated_at"] = updated_at  # The poll route reads the fresh change time.
+        self.record = current  # Publish the narrow mutation.
+        return True  # Every concurrent driver field survived the move.
+
     def apply_stop_request(self, run_id: str, stop_request: dict[str, Any], updated_at: str) -> bool:
         """Write only the stop fields and preserve every accepted row."""
         if self.record is None or self.record.get("run_id") != run_id:
@@ -223,6 +261,30 @@ class RecordingCapture:
         """
         self.requests.append(dict(request))
         return self.key
+
+
+class LatePostCheckFailureCapture(RecordingCapture):
+    """Start the pre-check capture and refuse the post-check capture.
+
+    Why:
+        Issue #4020: a stopped run must prove whether it captured the site
+        after the firmware write. This double lets the first capture work and
+        fails the second, which is the one case the operator must see.
+    """
+
+    def start(self, request: Any) -> str | None:
+        """Record the request and refuse the second capture only.
+
+        Args:
+            request: The run key, the ordinal, and the role.
+
+        Returns:
+            The capture key for the pre-check, and None for the post-check.
+        """
+        self.requests.append(dict(request))  # Keep the same evidence trail as the parent double.
+        if int(dict(request).get("ordinal", 0)) == driver.POST_CHECK_ORDINAL:  # The post-check call fails.
+            return None  # The driver must treat this as a lost post-check, not as a clean stop.
+        return self.key  # The pre-check capture works, so the run can reach its firmware phases.
 
 
 class AcceptingSubmitter:
@@ -1161,6 +1223,36 @@ class TestPhaseSubmission:
         assert parts["store"].phase_states()["gateways"] == PhaseState.PENDING.value  # No false refusal mark.
         assert len(final["upgrades"]) == 1  # The accepted row remains available for cancellation and evidence.
         assert parts["capture"].requests[0]["ordinal"] == 2  # The normal stop finalization takes a post-check.
+
+    def test_a_stopped_run_records_a_lost_post_check(self, parts: dict[str, Any]) -> None:
+        """A stop whose post-check capture failed carries visible evidence.
+
+        Why:
+            Issue #4020: the stop path swallowed the post-check failure, so a
+            destructive partial run read as an ordinary stop. The operator then
+            held no proof of the state of the device the portal already changed.
+
+        Args:
+            parts: The doubles and the driver.
+        """
+        submitter = StopAfterAcceptedSubmitter(parts["store"])  # One accepted row lands before the stop.
+        capture = LatePostCheckFailureCapture()  # The pre-check works and the post-check start fails.
+        deps = driver.RunDriverDeps(
+            store=parts["store"],
+            gate=parts["gate"],
+            capture=capture,
+            submit=submitter,
+            clock=FixedClock(),
+        )
+        final = driver.RunDriver(deps).run(make_record())  # The stop must still reach its terminal state.
+        assert final["state"] == RunState.STOPPED.value  # The operator action still owns the terminal state.
+        assert final["post_check_captured"] is False  # One plain flag names the lost evidence.
+        assert "post-check" in final["post_check_error"]  # The record names the capture that failed.
+        assert len(final["upgrades"]) == 1  # The accepted row stays available for cancellation.
+        assert capture.requests[-1]["ordinal"] == 2  # The driver did try the post-check capture.
+        stored = parts["store"].read_run(str(final["run_id"])) or {}  # Read the durable record of the stopped run.
+        assert stored.get("run_id") == final["run_id"]  # The stop kept the same run, so it removed nothing.
+        assert stored["post_check_captured"] is False  # The evidence is durable, not only in memory.
 
 
 class TestDiscardedWrites:

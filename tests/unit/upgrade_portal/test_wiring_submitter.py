@@ -128,6 +128,46 @@ class RecordingRunStore:
             self.record["stop_request"] = dict(STOP_REQUEST)  # The route wins immediately after persistence.
         return True
 
+    def append_dispatch_failure(self, run_id: str, failure: dict[str, Any]) -> bool:
+        """Append one refusal record and change no other field.
+
+        Args:
+            run_id: The run key. This store holds one run only.
+            failure: The refusal evidence of one plan.
+
+        Returns:
+            True after the refusal becomes durable.
+        """
+        del run_id  # This store holds one run only.
+        if self.record is None:
+            return False  # An absent run cannot carry durable refusal evidence.
+        current = dict(self.record)  # Preserve every accepted row and every stop field.
+        rows = list(current.get("dispatch_failures", ()))  # Preserve every earlier refusal.
+        rows.append(dict(failure))  # Add only the new refusal.
+        current["dispatch_failures"] = rows  # Change no stop, state, or accepted row field.
+        self.record = current  # Publish the narrow mutation.
+        return True  # The refusal survives a concurrent stop write.
+
+    def apply_state_transition(self, run_id: str, state: str, updated_at: str) -> bool:
+        """Write only the state fields of one run.
+
+        Args:
+            run_id: The run key. This store holds one run only.
+            state: The new run state value.
+            updated_at: The fresh change time in ISO 8601 UTC.
+
+        Returns:
+            True after the move becomes durable.
+        """
+        del run_id  # This store holds one run only.
+        if self.record is None:
+            return False  # An absent run cannot hold a state.
+        current = dict(self.record)  # Preserve every accepted row and every stop field.
+        current["state"] = state  # Change only the state field.
+        current["updated_at"] = updated_at  # The poll route reads the fresh change time.
+        self.record = current  # Publish the narrow mutation.
+        return True  # Every concurrent driver field survived the move.
+
     def apply_stop_request(self, run_id: str, stop_request: dict[str, Any], updated_at: str) -> bool:
         """Write only the stop fields and preserve every accepted row.
 
