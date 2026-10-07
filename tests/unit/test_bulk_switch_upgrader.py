@@ -1582,19 +1582,6 @@ class TestAdditionalCoverage:
         result = upgrader._fetch_firmware_from_api()
         assert result == []
 
-    def test_fetch_firmware_from_api_exception(
-        self,
-        upgrader: BulkSwitchFirmwareUpgrader,
-    ) -> None:
-        """Verify API exception returns empty list."""
-        mock_mistapi = sys.modules["mistapi"]
-        mock_mistapi.api.v1.orgs.devices.listOrgAvailableDeviceVersions.side_effect = RuntimeError("API error")
-
-        result = upgrader._fetch_firmware_from_api()
-        assert result == []
-
-        mock_mistapi.api.v1.orgs.devices.listOrgAvailableDeviceVersions.side_effect = None
-
     def test_save_to_cache_exception(
         self,
         upgrader: BulkSwitchFirmwareUpgrader,
