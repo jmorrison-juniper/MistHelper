@@ -1,0 +1,88 @@
+{
+  "workflow": "speckit",
+  "specName": "Operation stream recovery",
+  "feature": "4027-operation-stream-recovery",
+  "issues": [
+    4027,
+    4032
+  ],
+  "repository": "jmorrison-juniper/MistHelper",
+  "feature_directory": "specs/numbered/0/0/1/1/2/1/0/2/4027-operation-stream-recovery",
+  "spec_file": "specs/numbered/0/0/1/1/2/1/0/2/4027-operation-stream-recovery/spec.md",
+  "branch": "jmorrison-juniper-sse-run-state-4027",
+  "currentStep": "tasks",
+  "status": "ready-to-implement",
+  "artifacts": [
+    "spec.md",
+    "checklists/requirements.md",
+    "plan.md",
+    "research.md",
+    "data-model.md",
+    "contracts/browser-operation-run-state.md",
+    "quickstart.md",
+    "tasks.md"
+  ],
+  "history": [
+    {
+      "step": "specify",
+      "substep": null,
+      "kind": "complete",
+      "by": "agent",
+      "at": "2026-10-06T23:47:54Z"
+    },
+    {
+      "step": "plan",
+      "substep": null,
+      "kind": "complete",
+      "by": "agent",
+      "at": "2026-10-07T00:20:58Z"
+    },
+    {
+      "step": "tasks",
+      "substep": null,
+      "kind": "complete",
+      "by": "agent",
+      "at": "2026-10-07T00:39:03Z"
+    }
+  ],
+  "specificationTemplate": ".specify/templates/spec-template.md",
+  "constitution": ".specify/memory/constitution.md",
+  "directoryResolution": "explicit-managed-route",
+  "hooks": {
+    "beforeSpecify": {
+      "command": "speckit.git.feature",
+      "status": "satisfied-by-existing-app-branch",
+      "reason": "The user required the current branch, and the branch hook preserved it."
+    },
+    "afterSpecify": {
+      "command": "speckit.companion.after-specify",
+      "attemptResult": "unavailable",
+      "status": "completed-by-manual-equivalent",
+      "reason": "The extension command files are absent, and the Spec Kit event runner failed internally."
+    },
+    "afterPlan": {
+      "command": "speckit.companion.after-plan",
+      "attemptResult": "failed-in-event-runner",
+      "status": "completed-by-manual-equivalent",
+      "reason": "The installed event runner raised AttributeError while it read stdin, so the agent recorded the planned state directly."
+    },
+    "afterTasks": {
+      "command": "speckit.companion.after-tasks",
+      "attemptResult": "unavailable",
+      "status": "completed-by-manual-equivalent",
+      "reason": "No extension was discovered, so the agent recorded the ready-to-implement state directly."
+    },
+    "optionalCommit": {
+      "command": "speckit.git.commit",
+      "status": "skipped",
+      "reason": "The user requested plan artifacts only."
+    }
+  },
+  "userConstraints": {
+    "specificationOnly": false,
+    "planningOnly": true,
+    "branchChangesAllowed": false,
+    "productCodeChangesAllowed": false,
+    "serverServiceChangesAllowed": false
+  }
+}

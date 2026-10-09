@@ -14,6 +14,10 @@ var currentRunId = null;
 var currentSSE = null;
 var currentParameters = [];
 var baseParameters = [];  // Keep the server-sent controls so dynamic controls can be rebuilt after a choice changes.
+var RUN_STATUS_RECONCILE_MS = 5000;  // Match the server stream poll cadence without aggressive REST traffic.
+var runStatusTimer = null;  // Hold the one scheduled authoritative state check for the active run.
+var runStatusRequestRunId = null;  // Prevent overlapping status requests while one server answer is pending.
+var renderedOutputIdentity = null;  // Prevent REST replay and terminal SSE from rendering the same run files twice.
 
 // ---------------------------------------------------------------------------
 // Visibility
@@ -840,6 +844,7 @@ function startSSEStream(runId) {
     var url = '/api/operations/stream?run_id=' + encodeURIComponent(runId);
     var source = new EventSource(url);
     currentSSE = source;
+    startRunStatusReconciliation(runId);  // Recover terminal state when the stream stays open but loses one event.
 
     source.addEventListener('log', function(event) {
         var data = JSON.parse(event.data);
@@ -865,19 +870,19 @@ function startSSEStream(runId) {
 
     source.addEventListener('complete', function(event) {
         var data = JSON.parse(event.data);
+        if (currentRunId !== runId) return;  // Ignore a late terminal event from a replaced run.
         updateProgress(100, 'Done');  // Finish the bar before setting the final status message.
         setStatus('complete', data.message || 'Operation completed');  // Keep a no-output reason visible.
         showOutputFiles(data.output_files || []);
         finishRun();
-        source.close();
     });
 
     source.addEventListener('error_event', function(event) {
         var data = JSON.parse(event.data);
+        if (currentRunId !== runId) return;  // Ignore a late failure from a replaced run.
         setStatus('error', data.message || 'Operation failed');
         appendLog('ERROR: ' + (data.message || 'Unknown error'), 'ERROR');
         finishRun();
-        source.close();
     });
 
     source.addEventListener('heartbeat', function() {
@@ -886,17 +891,18 @@ function startSSEStream(runId) {
 
     source.onerror = function() {
         // Connection lost - check status via REST fallback
-        if (currentRunId) {
-            checkRunStatus(currentRunId);
+        if (currentRunId === runId) {
+            reconcileRunStatus(runId);  // Reuse the one-request guard instead of starting a parallel read.
         }
         source.close();
     };
 }
 
 function checkRunStatus(runId) {
-    fetch('/api/operations/status/' + encodeURIComponent(runId))
+    return fetch('/api/operations/status/' + encodeURIComponent(runId))
         .then(readJsonAnswer)
         .then(function(data) {
+            if (currentRunId !== runId) return;  // A stale answer must not finish a newer operation.
             if (data.status === 'completed') {
                 updateProgress(100, 'Done');  // Finish the bar before setting the final status message.
                 setStatus('complete', data.completion_message || 'Operation completed');  // Show the no-output reason when the run has no file.
@@ -907,12 +913,43 @@ function checkRunStatus(runId) {
                 appendLog('ERROR: ' + (data.error_message || 'Unknown error'), 'ERROR');
                 finishRun();
             }
-            // If still running, SSE reconnect will handle it
         })
-        .catch(function() {
-            setStatus('error', 'Lost connection to server');
-            finishRun();
+        .catch(function(err) {
+            if (currentRunId === runId) {  // Keep a live run eligible for the next bounded reconciliation attempt.
+                appendLog('Could not check operation status: ' + err.message, 'WARNING');  // State the recoverable read failure.
+            }
         });
+}
+
+function startRunStatusReconciliation(runId) {
+    stopRunStatusReconciliation();  // Replace the prior run timer before this run owns the browser state.
+    scheduleRunStatusReconciliation(runId);  // Wait one bounded interval before the first authoritative read.
+}
+
+function scheduleRunStatusReconciliation(runId) {
+    if (currentRunId !== runId) return;  // A finished or replaced run needs no later request.
+    runStatusTimer = setTimeout(function() {  // Use a timeout chain so slow requests never accumulate.
+        runStatusTimer = null;  // Clear the consumed handle before the request starts.
+        reconcileRunStatus(runId);  // Ask the existing endpoint for the authoritative state.
+    }, RUN_STATUS_RECONCILE_MS);
+}
+
+function reconcileRunStatus(runId) {
+    if (currentRunId !== runId) return;  // Stop when another run replaced this one.
+    if (runStatusRequestRunId !== null) {  // One pending request is the maximum allowed.
+        scheduleRunStatusReconciliation(runId);  // Try again after the same bounded interval.
+        return;
+    }
+    runStatusRequestRunId = runId;  // Mark this run as the owner of the pending request.
+    checkRunStatus(runId).finally(function() {  // Release the request slot after success or failure.
+        if (runStatusRequestRunId === runId) runStatusRequestRunId = null;  // Do not clear a newer owner.
+        scheduleRunStatusReconciliation(runId);  // Continue only while this run remains active.
+    });
+}
+
+function stopRunStatusReconciliation() {
+    if (runStatusTimer !== null) clearTimeout(runStatusTimer);  // Cancel the one scheduled status read.
+    runStatusTimer = null;  // Remove the consumed handle from browser state.
 }
 
 // ---------------------------------------------------------------------------
@@ -927,6 +964,7 @@ function clearExecutionPanel() {
     document.getElementById('debugLogCount').textContent = '0';  // Reset the count to match the cleared debug log.
     setElementVisible('outputFiles', false);  // Hide the old file list until a new run reports files.
     document.getElementById('outputFileList').innerHTML = '';  // Remove old file links that can belong to another operation.
+    renderedOutputIdentity = null;  // Let the next run render a file path that the prior run also used.
     if (typeof OperationResults !== 'undefined') OperationResults.reset();  // Clear the table of the previous run.
     updateProgress(0, '');  // Reset the bar so the next run starts from a neutral state.
     setStatus('pending', 'Waiting...');  // Reset the badge so a prior Complete state does not carry forward.
@@ -1019,31 +1057,45 @@ function showError(msg) {
 }
 
 function showOutputFiles(files) {
-    if (!files || files.length === 0) return;
-
-    var panel = document.getElementById('outputFiles');
-    var list = document.getElementById('outputFileList');
-    setElementVisible(panel, true);  // Issue #3030: the class hides the result list, not the inline style.
+    var outputFiles = Array.isArray(files) ? files.filter(function(file, index, values) {
+        return values.indexOf(file) === index;  // Keep one row for each exact server path in this delivery.
+    }) : [];  // Normalize an absent server list to one empty set.
+    var identity = JSON.stringify([currentRunId, outputFiles]);  // Key the set by run identity and exact file paths.
+    if (renderedOutputIdentity === identity) return;  // REST replay and terminal SSE can carry the same set.
+    renderedOutputIdentity = identity;  // Store the complete ordered set before any asynchronous preview starts.
     // Issue #3048: a log cannot be sorted, filtered, or opened, so the rows of
     // the run also land in the results table under this list.
-    if (typeof OperationResults !== 'undefined') OperationResults.showForRun(files);
+    if (typeof OperationResults !== 'undefined') OperationResults.showForRun(outputFiles);  // Apply empty sets too.
 
-    files.forEach(function(file) {
-        var li = document.createElement('li');
-        li.className = 'd-flex gap-2 align-items-center mb-1';
-
-        var link = document.createElement('a');
-        link.href = '/api/data/download/' + encodeURIComponent(file);
-        link.textContent = file;
-        link.className = 'text-accent';
-        li.appendChild(link);
-
-        if (typeof DataPreviewModal !== 'undefined' && isPreviewable(file)) {
-            li.appendChild(buildPreviewButton(file));
-        }
-
-        list.appendChild(li);
+    var panel = document.getElementById('outputFiles');  // Read the file panel after the result helper updates.
+    var list = document.getElementById('outputFileList');  // Replace the full set instead of appending a replay.
+    list.innerHTML = '';  // Remove files that are not part of the current authoritative set.
+    if (outputFiles.length === 0) {  // A no-output terminal state must close a stale file panel.
+        setElementVisible(panel, false);  // Hide the panel because it holds no current run file.
+        return;
+    }
+    setElementVisible(panel, true);  // Issue #3030: the class hides the result list, not the inline style.
+    outputFiles.forEach(function(file) {  // Render each distinct server path one time.
+        appendOutputFile(list, file);  // Keep link construction separate from set reconciliation.
     });
+}
+
+function appendOutputFile(list, file) {
+    var li = document.createElement('li');  // Build one row for one stable server file path.
+    li.className = 'd-flex gap-2 align-items-center mb-1';  // Keep the existing compact output layout.
+    li.dataset.runId = currentRunId || '';  // Record the run portion of the stable browser identity.
+    li.dataset.outputPath = file;  // Record the exact server path without using display text as identity.
+
+    var link = document.createElement('a');  // Build the download action for this exact file.
+    link.href = '/api/data/download/' + encodeURIComponent(file);  // Keep the server path inside one URL segment.
+    link.textContent = file;  // Show the exact path that identifies the output.
+    link.className = 'text-accent';  // Preserve the existing portal link treatment.
+    li.appendChild(link);  // Put the download action first in the output row.
+
+    if (typeof DataPreviewModal !== 'undefined' && isPreviewable(file)) {  // Add preview only for supported files.
+        li.appendChild(buildPreviewButton(file));  // Reuse the existing preview button behavior.
+    }
+    list.appendChild(li);  // Add the complete file row to the authoritative set.
 }
 
 function buildPreviewButton(filepath) {
@@ -1060,8 +1112,10 @@ function isPreviewable(filename) {
 }
 
 function finishRun() {
-    currentRunId = null;
-    currentSSE = null;
+    stopRunStatusReconciliation();  // A terminal state needs no further authoritative checks.
+    currentRunId = null;  // Clear the run identity before a late async response can apply.
+    if (currentSSE) currentSSE.close();  // Release an open stream when REST reconciliation finishes the run.
+    currentSSE = null;  // Remove the closed source from browser state.
     var btn = document.getElementById('runBtn');
     btn.disabled = false;
     btn.textContent = 'Run Operation';
@@ -1163,9 +1217,7 @@ function replayExistingLogs(runId) {
                     appendDebugLog(entry.message, entry.level || 'DEBUG');
                 });
             }
-            if (data.output_files && data.output_files.length > 0) {
-                showOutputFiles(data.output_files);
-            }
+            showOutputFiles(data.output_files || []);  // Apply empty sets so a stale loading preview closes.
             if (data.status === 'completed') {
                 updateProgress(100, 'Done');  // Finish the bar before setting the final status message.
                 setStatus('complete', data.completion_message || 'Operation completed');  // Preserve the no-output reason during a reconnect.
