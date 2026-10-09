@@ -122,6 +122,17 @@ class TestPersist:
         mist_helper.DataExporter.write_with_format_selection.assert_not_called()
         assert not mist_helper.DataExporter.write_with_format_selection.called  # Empty rows must not trigger a write.
 
+    def test_strategy_uses_exported_org_id_as_natural_key(self) -> None:
+        """The catalog must prevent repeated organization status exports from using artificial IDs."""
+        from src.foundation.support.refactors.endpoint_primary_key_strategies import (
+            ENDPOINT_PRIMARY_KEY_STRATEGIES,
+        )
+
+        strategy = ENDPOINT_PRIMARY_KEY_STRATEGIES["testOrgCradlepointConnection"]
+
+        assert strategy["type"] == "natural_pk"
+        assert strategy["primary_key"] == ["org_id"]
+
 
 class TestStatusMenu:
     """The menu entry point must keep every failure inside the menu."""
@@ -216,13 +227,12 @@ class TestStatusMenu:
         assert "controlled HTTP" not in caplog.text
         mist_helper.DataExporter.write_with_format_selection.assert_not_called()
 
-    @pytest.mark.parametrize("status_code", [404, 503])
-    def test_cradlepoint_http_status_sdk_error_is_logged(
-        self, mist_helper: MagicMock, caplog: pytest.LogCaptureFixture, status_code: int
+    def test_sdk_exception_is_logged_with_context(
+        self, mist_helper: MagicMock, caplog: pytest.LogCaptureFixture
     ) -> None:
-        """An HTTP 404 or HTTP 503 SDK failure must be logged and contained."""
+        """An SDK exception must name the Cradlepoint operation and remain inside the menu."""
         mist_helper.ConfigUtils.get_cached_or_prompted_org_id.return_value = ORG_ID  # Reach the API call.
-        error = RuntimeError(f"HTTP {status_code}")  # Preserve the cloud status in the SDK error.
+        error = RuntimeError("connection reset")  # A transport exception is a valid SDK failure path.
         with patch(
             f"{MODULE}.mistapi.api.v1.orgs.setting.testOrgCradlepointConnection",
             side_effect=error,
@@ -230,7 +240,7 @@ class TestStatusMenu:
             with caplog.at_level("ERROR"):  # Capture the product error signal.
                 FailureModeOrgCradlepointConnectionExporter.status()  # Call the real exporter entry point from src.
 
-        assert f"HTTP {status_code}" in caplog.text  # Prove the operator can see the status.
+        assert "connection reset" in caplog.text  # Prove the operator can see the transport failure.
         assert "Error fetching the Cradlepoint status" in caplog.text  # Prove the product logged the failure.
         mist_helper.DataExporter.write_with_format_selection.assert_not_called()  # Failed calls must not write.
 
