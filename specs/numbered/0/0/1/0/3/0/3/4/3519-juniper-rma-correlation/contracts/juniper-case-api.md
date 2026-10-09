@@ -19,7 +19,7 @@
 | List of values | `/getlov` (GET, query `appid`) | None | Lists of values (menu 298) |
 | Software releases | `/getSoftwareEosLov` (GET, query `appid`) | None | Software release list (menu 299) |
 
-Out of scope: `/createsr`, `/updatesr`, `/escalatesr`, `/closesr`, `/attachfile`, `/getfileuploadtoken`. The two list-of-values reads take the query name `appid` in lowercase. The name `appId` returns an empty object. Warning: A call to a write operation changes a customer's service request. The client must not call or reference any write operation.
+Out of scope: `/createsr`, `/updatesr`, `/escalatesr`, `/closesr`, `/attachfile`, `/getfileuploadtoken`. The reads of a list of values take the query name `appid` in lowercase. The name `appId` returns an empty object. Warning: A call to a write operation changes a customer's service request, which can cause damage to the customer. The client must not call or reference any write operation.
 
 ## Request Envelope
 
@@ -85,13 +85,15 @@ Live evidence (2026-10-08): the top-level placement, which the export schema and
 }
 ```
 
-Live evidence (2026-10-08, read only): a lookup by request number returned body status 200 with no fault. The reply sets `customerCaseNumber` to null. The list returned the same value as `serviceRequestNumber` for each of the 15 cases of September 2026. The customer case number therefore cannot come from the detail reply in this account.
+Live evidence (2026-10-08, read only): a lookup by request number returned body status 200 with no fault. The reply sets `customerCaseNumber` to null. The list returned the same value as `serviceRequestNumber` for each of the 15 cases of September 2026. The detail reply therefore cannot supply the customer case number in this account.
 
-Fault 956 requires one of `customerCaseNumber` or `serviceRequestNumber`. Fault 763 means the case number matches more than one request. The export says to call the detail operation with `serviceRequestNumber`. The client takes candidate request numbers from the 90-day list. The engine marks the ticket as ambiguous and does not choose a request (R-05).
+Fault 956 requires one of `customerCaseNumber` or `serviceRequestNumber`. Fault 763 means the case number appears on several requests. The export says to call the detail operation with `serviceRequestNumber`. From the 90-day list, the client gets the candidate numbers for requests. The engine marks the ticket as ambiguous and does not choose a request (R-05).
 
 ### RMA Request
 
-The RMA request uses the same `caseInformation` and `contact` blocks as the detail request. It also adds `rmaNumber` beside them, inside the wrapper. The export has no request example for this operation. The other eleven request examples each wrap their body under `<operation>Request`. The client therefore uses `queryRMARequest` (O-5). The export example for the response uses `queryRMAResponse`. Live check on 2026-10-08: `queryRMARequest` with an empty `customerCaseNumber` returned body status 200 for one RMA with two items.
+The RMA request uses the same `caseInformation` and `contact` blocks as the detail request. It also adds `rmaNumber` beside them, inside the wrapper.
+
+The export has no request example for this operation. The other eleven examples of requests each wrap their body under `<operation>Request`. The client therefore uses `queryRMARequest` (O-5). The export example for the response uses `queryRMAResponse`. Live check on 2026-10-08: `queryRMARequest` with an empty `customerCaseNumber` returned body status 200 for one RMA with two items.
 
 ## Response Envelope
 
@@ -106,7 +108,7 @@ The RMA request uses the same `caseInformation` and `contact` blocks as the deta
 Rules:
 
 - The body `statusCode` decides the outcome (R-07). The HTTP status decides only the transport outcome.
-- HTTP `3xx` is never followed. It is reported as an unexpected result.
+- The client never follows an HTTP `3xx` reply. It reports that reply as an unexpected result.
 - The detail and RMA responses may arrive with or without their wrapper keys (`querySRResponse`, `queryRMAResponse`). The parser accepts both.
 
 ## Result Fields Used
@@ -123,7 +125,7 @@ Item fields:
 - `replacementItems[]`: `itemNumber`, `defectiveItemNumber`, `productID`, `serialNumber`, `carrierDescription`, `shipDate`, `shipmentServiceLevel`, `trackingNumber`, `replacementStatus`, `deliveredDate`, `receivedBy`.
 - `ceItems[]`: `defectiveItemNumber`, `productID`, `engineerStatus`, `vendorName`, `vendorPhone`, `serviceRequestedDate`, `actualServicedDate`, `contactedDate`, `estimatedArrivalDate`.
 
-Warning: A strict date parser stops on these values and fails the run. The export contains `deliveredDate` = `2017-09-05-T12:57:00.000Z`. It also contains `receivedDate` = `2017:09:12T17:37:30.000Z`. Both values are malformed. Keep the raw text when parsing fails (R-09).
+Warning: A date parser that is strict can cause the run to fail on these values. The export contains `deliveredDate` = `2017-09-05-T12:57:00.000Z`. It also contains `receivedDate` = `2017:09:12T17:37:30.000Z`. Both values have an invalid date format. Keep the raw text when parsing fails (R-09).
 
 Fields that the client ignores: `notes`, `recentNotes`, `attachments`, `linkedReferences`, `escalate`, `problemDescription`.
 

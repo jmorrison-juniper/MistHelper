@@ -6,7 +6,9 @@
 
 ## Summary
 
-Add a read-only client for two Juniper service APIs. The Service Case API returns service requests and RMA details. The Service Asset API returns warranty and contract data. The feature links each Mist support ticket to its Juniper service requests by customer case number. It writes the result through `DataExporter`. It adds four operator menus (301 to 304). No write call reaches Juniper.
+Add a read-only client for the two service APIs of Juniper. The service request list and the RMA details come from the Service Case API. Warranty and contract data come from the Service Asset API.
+
+The feature links each Mist support ticket to its Juniper service requests by customer case number. It writes the result through `DataExporter`. It adds menus 301 to 304 for operators. The feature sends no write call to Juniper.
 
 ## Technical Context
 
@@ -16,7 +18,7 @@ Add a read-only client for two Juniper service APIs. The Service Case API return
 
 **Storage**: `DataExporter` outputs. CSV and SQLite (`data/mist_data.db`) are always written. ArangoDB mirror through `DatabaseRouter` when configured. Keys come from `ENDPOINT_PRIMARY_KEY_STRATEGIES`.
 
-**Testing**: pytest with recorded JSON fixtures. Automated tests make no network calls. One live smoke test runs only when `JUNIPER_LIVE_TESTS=1` is set.
+**Testing**: pytest with recorded JSON fixtures. Automated tests make no network calls. Only an explicit setting enables the live smoke test: `JUNIPER_LIVE_TESTS=1`.
 
 **Target Platform**: Windows 11 (local venv) and Linux container (Podman, UID 1000).
 
@@ -24,9 +26,11 @@ Add a read-only client for two Juniper service APIs. The Service Case API return
 
 **Performance Goals**: Default rate of 2 requests per second. 500 Mist tickets in under 30 minutes (SC-006). Asset requests in batches of 300 or fewer.
 
-**Constraints**: Read-only. HTTPS only. Approved hosts only. No redirects. ASCII logs. No secrets in logs. Personal fields kept in the exports and masked in logs. Responses up to about 8 MB. Corporate TLS inspection may apply.
+**Constraints**: Read-only. HTTPS only. Approved hosts only. No redirects.
 
-**Scale/Scope**: Up to 500 Mist support tickets per run (assumed). Service request list window of 90 days. Four new menus.
+ASCII logs. No secrets in logs. Personal fields kept in the exports and masked in logs. Responses up to about 8 MB. Corporate TLS inspection may apply.
+
+**Scale/Scope**: Up to 500 Mist support tickets in each run (assumed). The list window for service requests is 90 days. Four new menus.
 
 ## Constitution Check
 
@@ -44,12 +48,18 @@ Add a read-only client for two Juniper service APIs. The Service Case API return
 
 Technology and workflow constraints:
 
-- **mistapi**: Mist ticket listing uses `mistapi.api.v1.orgs.tickets.listOrgTickets`. The Juniper service APIs are not Mist Cloud APIs. mistapi has no method for them. The Juniper client uses `requests`, the same pattern as `src/operations/execution/capture/client_pcap_downloader.py`. This is not a violation.
+- **mistapi**: Mist ticket listing uses `mistapi.api.v1.orgs.tickets.listOrgTickets`. The Juniper service APIs are not part of the Mist Cloud. mistapi has no method for them. The Juniper client uses `requests`, the same pattern as `src/operations/execution/capture/client_pcap_downloader.py`. This is not a violation.
+
 - **Output Backends**: Every export calls `DataExporter.write_with_format_selection()`.
+
 - **Database Keys**: Six strategies enter `ENDPOINT_PRIMARY_KEY_STRATEGIES` before any operation code (task T005).
+
 - **Data Directory**: Outputs go through `DataExporter`, which writes under `data/`.
+
 - **Container Security**: No new mount, user, or port. Outbound HTTPS to the Juniper gateway is the only new network path.
+
 - **Escalation**: This feature adds an API integration. The specification, plan, and tasks come before code.
+
 - **Menu Sequence**: Each new menu follows the seven steps of the constitution. Step 1 (API discovery) uses `contracts/` instead of mistapi.
 
 ## Project Structure
@@ -132,10 +142,15 @@ tests/unit/juniper_rma/
 ## Design Overview
 
 1. **Settings** (`JuniperSettingsLoader`) reads the environment and the `.env` file. It validates required names, HTTPS base addresses, the host allowlist, and numeric limits. It reports only the names of missing settings.
+
 2. **Gateway** (`JuniperGatewayClient`) sends every request. It enforces HTTPS, the host allowlist, no redirects, timeouts, a response size cap, the rate limit, and bounded retries. Each attempt gets a new transaction identifier. It is the only code that reads the client secret or holds the bearer token (`JuniperTokenProvider`, same module, amendment A-2).
+
 3. **Messages** (`RequestMessageBuilder`, `ResponseStatusReader`) build the request envelope. They read the body status code and the fault list. They map fault codes to plain text.
+
 4. **Services** (`JuniperCaseService`, `JuniperAssetService`) expose the read operations. They call the gateway and parse results with the model parsers.
-5. **Model** parsers accept the documented variants. Row builders keep personal fields in full, and `PersonalDataMasker.for_log` masks them in log lines. `RunRecord` tracks counts and the final status.
+
+5. **Model** parsers accept the documented variants. The row builders keep the personal fields in full, and `PersonalDataMasker.for_log` masks them in log lines. `RunRecord` tracks counts and the final status.
+
 6. **Workflows** implement the four menus. `CorrelationEngine` applies the join rule. `CorrelationWorkflow` writes the exports through `DataExporter`.
 
 Data flow for menu 302:
@@ -166,7 +181,7 @@ DataExporter: CSV, SQLite, optional ArangoDB mirror, personal fields in full
 
 ## Open Items to Confirm at Onboarding
 
-The Juniper exports and the Mist API reference were checked on 2026-10-08. The status column records what those sources settle. Each open item needs the live key or an onboarding answer.
+The review of 2026-10-08 covered the Juniper exports and the Mist API reference. The status column records what those sources settle. Each open item needs the live key or an onboarding answer.
 
 | ID | Item | Status | Evidence | Needed at onboarding |
 | - | - | - | - | - |
@@ -193,7 +208,7 @@ The Juniper exports and the Mist API reference were checked on 2026-10-08. The s
 | - | - |
 | The join rule (O-1) does not match Mist data. | Unmatched rows show the reason. Confirm the rule during onboarding before a production run. |
 | Personal data reaches a log. | One log masking boundary (`PersonalDataMasker.for_log`). A scan test (SC-004). The exports keep personal fields in full by operator decision (2026-10-08). |
-| Free-text ticket subjects carry personal data. | Subjects are not masked. Operators must not place personal data in subjects. Recorded here as a known gap. |
+| Free-text ticket subjects carry personal data. | The engine does not mask subjects. Operators must not place personal data in subjects. Recorded here as a known gap. |
 | A write call reaches Juniper. | The client has no write method. A read-only boundary test fails on any write operation name. |
 | Corporate TLS inspection breaks calls. | `JUNIPER_CA_BUNDLE` setting. The access check names the TLS fault. See R-13. |
 | Documentation variants break parsing. | Lenient parsers. Fixtures from the exports. Onboarding checks (O-5 to O-7). |
@@ -228,12 +243,19 @@ Regenerate the menu reference pages. The `menu_reference_drift` job must pass.
 These amendments record each decision that changed the plan during implementation. Each amendment gives the reason.
 
 - **A-1 Logging**: The modules use the standard `logging` module, not `structlog`. Unconfigured `structlog` writes to stdout and bypasses the log file. The log lines keep the key=value form of `contracts/gateway-and-settings.md`.
-- **A-2 Token provider**: `JuniperTokenProvider` lives in `api/gateway.py`. A separate module would give `api/` six children and break the five-item rule. The token request follows the endpoints document: a Basic header and the form fields `grant_type`, `client_id`, and `client_secret`.
-- **A-3 Personal data**: Personal fields are stored in full in the exports, by operator decision (2026-10-08). The log lines mask them. `DataExporter` writes one format for each call. `PersonalDataRetention` removes the export files that hold personal fields when they pass `JUNIPER_PII_RETENTION_DAYS`.
-- **A-4 Strategy names**: The asset coverage export uses `juniperQueryAssetCoverage`, a seventh strategy. Sharing the asset strategy would overwrite coverage rows in the database mirror, because the two files have different keys.
-- **A-5 Fixtures**: The fixtures are synthetic values that follow the documented shapes. The Case export holds 21 e-mail-like strings, so a copy would publish contact data into the repository.
-- **A-6 Failed list**: A failed request list gives the run record the status `failed`. No ticket is classified in that case.
-- **A-7 Live check**: The one live check reads `MISTHELPER_ENV_FILE`, or `.env` in the working folder. It runs only with `JUNIPER_LIVE_TESTS=1`. It sends one read-only list request for a one-day window.
-- **A-8 Portal**: Menus 301 to 304 join `web_portal/menu_registry.py` and a new `Juniper RMA` range in `web_portal/services/operation.py`.
-- **A-9 Onboarding items**: Live confirmation of O-1, O-3, O-4, O-5, O-7, and O-9 remains open. The first live run closes them.
 
+- **A-2 Token provider**: `JuniperTokenProvider` lives in `api/gateway.py`. A separate module would give `api/` six children and break the five-item rule. The token request follows the endpoints document: a Basic header and the form fields `grant_type`, `client_id`, and `client_secret`.
+
+- **A-3 Personal data**: The exports store the personal fields in full, by operator decision (2026-10-08). The log lines mask them. `DataExporter` writes one format for each call. `PersonalDataRetention` removes the export files that hold personal fields when they pass `JUNIPER_PII_RETENTION_DAYS`.
+
+- **A-4 Strategy names**: The coverage export of assets uses `juniperQueryAssetCoverage`, a seventh strategy. Sharing the asset strategy would overwrite coverage rows in the database mirror, because the two files have different keys.
+
+- **A-5 Fixtures**: The fixtures are synthetic values that follow the documented shapes. The Case export holds 21 e-mail-like strings, so a copy would publish contact data into the repository.
+
+- **A-6 Failed list**: A failed request list gives the run record the status `failed`. In that case, the run classifies no ticket.
+
+- **A-7 Live check**: The one live check reads `MISTHELPER_ENV_FILE`, or `.env` in the working folder. It runs only with `JUNIPER_LIVE_TESTS=1`. It sends one read-only list request for a one-day window.
+
+- **A-8 Portal**: Menus 301 to 304 join `web_portal/menu_registry.py` and a new `Juniper RMA` range in `web_portal/services/operation.py`.
+
+- **A-9 Onboarding items**: Live confirmation of O-1, O-3, O-4, O-5, O-7, and O-9 remains open. The first live run closes them.

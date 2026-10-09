@@ -39,12 +39,12 @@ Out of scope: `/queryAssetsBulkData`. It returns links to AWS S3 files. Those ho
 
 ## Response
 
-The export shows two shapes (O-6):
+Two response shapes are in the export (O-6):
 
 - The example wraps the response in `queryAssetsDetailsResponse`. It nests the result keys under a `data` object.
 - The schema puts the same keys at the top level.
 
-The parser accepts both shapes. The result keys are:
+The parser can read either shape. The result keys are:
 
 - `invalidSerialNumbersOrSSRNs[]`: objects with `serialNumberOrSSRN` and `message`. These numbers are not found.
 - `notProcessedSerialNumbersOrSSRNs[]`: objects with the same keys. These numbers need another request.
@@ -67,14 +67,18 @@ Top-level keys that always appear: `responseDateTime`, `customerSourceID`, `stat
 
 `contractDetails[]` fields: `index`, `contractLineItemNumber`, `contractStartDate`, `contractEndDate`, `contractStatus`, `serviceSKU`, `serviceSKUDescription`, `serviceType`, `serviceSKUShipmentServiceLevel`, `serviceSKUEosDate`, `serviceSKUIsPlaceHolder`, `serviceSKUProvidesJTACsupport`.
 
-The client stores the `endCustomer*` and `reseller*` business names and skips their address fields. It does not store contact fields.
+The client stores the `endCustomer*` and `reseller*` business names and skips their address fields. It does not store the contact fields.
 
 ## Batching and Retry Rules
 
 1. Split the serial numbers into batches of 300 or fewer. Keep the input order.
+
 2. Send one request for each batch.
+
 3. Collect the assets. Collect the invalid numbers as not found. Queue the not-processed numbers.
+
 4. Send the queued numbers again. Stop after three passes. List the numbers that remain as not processed.
+
 5. Keep the partial results when a later pass fails. Mark the run as incomplete.
 
 Documented size limits: about 4 MB for the processed part of a response, about 6 MB for the full payload, and about 8 MB for one serial number. The response cap in R-12 covers these sizes.

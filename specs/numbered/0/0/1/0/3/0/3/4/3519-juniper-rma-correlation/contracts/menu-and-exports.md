@@ -18,7 +18,7 @@
 
 Each menu uses the skip reason "Requires Juniper settings" in `OperationRegistry`.
 
-Test-mode rule: Under `--test` and `--testinteractive`, each menu refuses live calls unless `JUNIPER_LIVE_TESTS=1` is set. The refusal names that setting. This rule applies even when the registry category allows the menu.
+Test-mode rule: Under `--test` and `--testinteractive`, a menu makes no live call unless the operator sets `JUNIPER_LIVE_TESTS=1`. The refusal names that setting. This rule applies even when the registry category allows the menu.
 
 ## Input Validation
 
@@ -90,7 +90,7 @@ Every export uses `DataExporter.write_with_format_selection()`. The file goes un
 | `shipToCountry` | Country |
 | `runId` | Run that produced the row |
 
-The CSV writer quotes values that contain commas.
+The CSV writer quotes each value that contains a comma.
 
 ## Run Completion Message
 
