@@ -3,9 +3,9 @@
 This page is generated. Run `python scripts/generate_menu_wiki.py` after any
 change to `menu_actions` in `MistHelper.py` or to `src/foundation/support/utils/operation_registry.py`.
 
-MistHelper defines **292 actionable menu entries**, numbered
-1 to 293 with gaps at 152.
-Menu 0 is Exit, so the registry holds 293 entries in total.
+MistHelper defines **303 actionable menu entries**, numbered
+1 to 304 with gaps at 152.
+Menu 0 is Exit, so the registry holds 304 entries in total.
 
 The Safety column reads from `src/foundation/support/utils/operation_registry.py`, which is the
 single source of truth. The classifier fails closed, so an unregistered option
@@ -22,7 +22,7 @@ never runs in an automated test pass.
 
 | Menu numbers | Category | Summary |
 |---|---|---|
-| 60-96, 195-203, 209-229, 235-238, 240-242, 244-247, 254, 256-268, 270, 288-289 | Interactive safe | 95 operations. They prompt for a choice, such as a site, a device, or a mode. Most of them only read data. An operation that can change Mist data first asks for a typed value, such as a token or a count. The --testinteractive run includes them. |
+| 60-96, 195-203, 209-229, 235-238, 240-242, 244-247, 254, 256-268, 270, 288-289, 294-304 | Interactive safe | 106 operations. They prompt for a choice, such as a site, a device, or a mode. Most of them only read data. An operation that can change Mist data first asks for a typed value, such as a token or a count. The --testinteractive run includes them. |
 | 1-13, 15-17, 20-58, 188, 193, 204-205, 230-234, 243, 248-253, 255, 269, 271-280, 282 | Safe org exports | 84 operations. Read-only org exports. The --test run includes them. |
 | 154-187, 189-191, 194, 206-208, 239, 281, 286-287, 291-293 | Destructive | 48 operations. They change the Mist cloud configuration. Each one needs a typed confirmation. |
 | 0, 124-150, 192, 283-285, 290 | Interactive | 33 operations. They prompt the operator, so no automated run includes them. |
@@ -327,6 +327,17 @@ never runs in an automated test pass.
 | 291 | DESTRUCTIVE: Optimize or reset site RRM with before and after plan capture (Requires typing 'OPTIMIZE' or 'RESET' to confirm, supports --dry-run) | Destructive | `lambda dry_run=False: RrmResetOperation.run(dry_run=dry_run)` |
 | 292 | DESTRUCTIVE: Import PSKs, user MACs, and assets from CSV (Requires typing 'IMPORT <row_count>' to confirm, supports --dry-run) | Destructive | `lambda dry_run=False: CsvImportOperation.run(dry_run=dry_run)` |
 | 293 | DESTRUCTIVE: Run the Mist Edge lifecycle operation (Requires typing 'CLAIM', 'ASSIGN', 'UNASSIGN', 'BOUNCE', or 'UPGRADE' to confirm, supports --dry-run) | Destructive | `lambda dry_run=False: MxEdgeLifecycleOperation.run(dry_run=dry_run)` |
+| 294 | List Juniper service requests for a date window, every field (read-only, needs Juniper settings) | Interactive safe | `RequestListWorkflow.run` |
+| 295 | Read one Juniper service request in full, by request or case number (read-only) | Interactive safe | `RequestDetailWorkflow.run` |
+| 296 | Read one Juniper RMA in full, with its items (read-only) | Interactive safe | `RmaDetailWorkflow.run` |
+| 297 | Read every note of one Juniper service request, or one note (read-only) | Interactive safe | `RequestNotesWorkflow.run` |
+| 298 | Read the Juniper list of values, every value and path (read-only, needs Juniper settings) | Interactive safe | `LovWorkflow.run` |
+| 299 | Read the Juniper software versions by product series and platform (read-only) | Interactive safe | `SoftwareVersionWorkflow.run` |
+| 300 | Read the Juniper asset bulk snapshot file links for a date window (read-only) | Interactive safe | `AssetBulkWorkflow.run` |
+| 301 | Check Juniper service API access (read-only, needs Juniper settings) | Interactive safe | `AccessCheckWorkflow.run` |
+| 302 | Correlate Mist support tickets with Juniper service requests and RMAs (read-only) | Interactive safe | `CorrelationWorkflow.run` |
+| 303 | Look up one Juniper service request or RMA (read-only) | Interactive safe | `LookupWorkflow.run` |
+| 304 | Look up Juniper warranty, contract, and status data for serial numbers (read-only) | Interactive safe | `AssetLookupWorkflow.run` |
 
 ### Endpoint family sub-menus (259-268)
 

@@ -375,8 +375,16 @@ class TestMenuText:
     @pytest.mark.parametrize(
         "path,count,expected",
         (
-            ("MistHelper.py", 293, "d06379ed0e18ac41fc79678c547afdca86d33bf8fb0bfabf2c3e87261756dce9"),
-            ("web_portal/menu_registry.py", 179, "8107cfce5b5c495866486057c28acf24928d1a90530775389dc4b16b82b77430"),
+            (
+                "MistHelper.py",
+                304,
+                "bb5f6875bc618861359413f8ccf42b2919455c8ac7925daba53f0de867ddca49",
+            ),  # WHY: menus 294 to 304 (Juniper RMA) raised the count from 293.
+            (
+                "web_portal/menu_registry.py",
+                190,
+                "d2fb2aac76023a48c7b13f0a7aaee32b47001dcb2ec9ba65139f404618d25248",
+            ),  # WHY: the same eleven Juniper RMA rows.
         ),
     )
     def test_menu_263_complete_identity(self, path: str, count: int, expected: str) -> None:

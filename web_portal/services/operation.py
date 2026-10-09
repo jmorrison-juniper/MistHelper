@@ -48,6 +48,7 @@ CATEGORY_RANGES = [
     (271, 276, "Hygiene Reports"),  # Issue #3616 groups Tier 1 read-only hygiene reports.
     (277, 282, "Health Scorecards"),  # Issue #3617 groups Tier 2 read-only scorecard reports.
     (283, 290, "Diagnostic Utilities"),  # Issue #3618 groups Tier 3 diagnostics and safe reports.
+    (294, 304, "Juniper RMA"),  # Juniper access, correlation, lookups, request reads, and asset reads (read-only).
 ]
 
 # Menu numbers whose range gives the wrong category name. Issue #3153.
@@ -319,6 +320,90 @@ def _site_scoped_chooser_options() -> tuple:
     count_options = _indexed_options([entry.operation for entry in site_count_ops])  # Menu 236 offers these.
     endpoint_options = _indexed_options([entry.operation for entry in site_endpoint_ops])  # Menu 261 offers these.
     return count_options, endpoint_options
+
+
+# --- Juniper RMA menus (294 to 304) -------------------------------------------
+# Each control below answers one input() prompt of a Juniper workflow, in the
+# order that the workflow asks it. The browser sends one answer for every control
+# in the form, so a missing or misplaced control moves each later answer to the
+# wrong prompt. A workflow reads a blank answer as Enter, so an optional control
+# sends an empty string when the operator leaves it blank.
+JUNIPER_KEY_KIND_OPTIONS = [  # The two key kinds that the Juniper case reads and the lookup accept.
+    {"value": "1", "label": "Request number"},  # Answer 1 selects a request number.
+    {"value": "2", "label": "Customer case number"},  # Answer 2 selects a customer case number.
+]
+
+
+def _juniper_key_value_controls() -> dict[str, list[dict[str, object]]]:
+    """Return the identifier control that follows each Juniper key kind.
+
+    Why:
+        The key kind decides which identifier the workflow asks for next. The form
+        shows only the control that matches the chosen kind, so an operator never
+        types a case number where a request number belongs.
+
+    Returns:
+        One list of controls for each key kind, keyed by the choice value.
+    """
+    return {  # The keys match JUNIPER_KEY_KIND_OPTIONS, so the chooser finds the right control.
+        "1": [_required_text_param("request_number", "Request number", placeholder="Service request number")],
+        "2": [_required_text_param("case_number", "Customer case number", placeholder="Customer case number")],
+    }
+
+
+def _juniper_key_kind_param() -> dict[str, object]:
+    """Build the chooser that asks for a request number or a customer case number."""
+    return _choice_param(  # Required, so Run stays off until the operator picks a key kind.
+        "key_kind",  # The control name that the answer is sent under.
+        "Key type",  # The label that the operator reads.
+        [dict(option) for option in JUNIPER_KEY_KIND_OPTIONS],  # Copy each option so no row shares one list.
+        dynamic_parameters=_juniper_key_value_controls(),  # Insert the matching identifier after the chooser.
+    )
+
+
+def _juniper_row(*parameters: dict[str, object]) -> dict[str, object]:
+    """Return one interactive registry row whose controls keep the workflow prompt order."""
+    return {"category": "interactive", "parameters": list(parameters)}  # The portal sends these answers in order.
+
+
+def _juniper_rows() -> dict[str, dict[str, object]]:
+    """Return the registry rows for the Juniper RMA menus that ask at least one question.
+
+    Why:
+        Menus 298, 299, 301, and 302 ask no question, so they keep no row. The portal
+        then treats each of them as a menu with no controls, the same as every other
+        read-only menu.
+
+    Returns:
+        The rows keyed by menu number. Each row lists its controls in prompt order.
+    """
+    return {  # One row for each menu that prompts, with its controls in prompt order.
+        "294": _juniper_row(  # Menu 294 asks for the start date, and then for the end date.
+            _text_param("start_date", "Start date (YYYY-MM-DD)", placeholder="Blank for 90 days ago"),
+            _text_param("end_date", "End date (YYYY-MM-DD)", placeholder="Blank for today"),
+        ),
+        "295": _juniper_row(_juniper_key_kind_param()),  # Menu 295 asks the key kind, and then the key value.
+        "296": _juniper_row(  # Menu 296 asks the RMA number, the request number, and an optional case number.
+            _required_text_param("rma_number", "RMA number", placeholder="RMA number"),
+            _required_text_param("request_number", "Service request number", placeholder="Request of the RMA"),
+            _text_param("case_number", "Customer case number (optional)", placeholder="Blank to skip"),
+        ),
+        "297": _juniper_row(  # Menu 297 asks the key, and then an optional note identifier.
+            _juniper_key_kind_param(),
+            _text_param("note_id", "Note identifier (optional)", placeholder="Blank for every note"),
+        ),
+        "300": _juniper_row(  # Menu 300 asks the snapshot start and end dates, and both are optional.
+            _text_param("start_date", "Snapshot start date (YYYY-MM-DD)", placeholder="Blank for 7 days ago"),
+            _text_param("end_date", "Snapshot end date (YYYY-MM-DD)", placeholder="Blank for yesterday"),
+        ),
+        "303": _juniper_row(  # Menu 303 asks the key, and then an optional RMA number.
+            _juniper_key_kind_param(),
+            _text_param("rma_number", "RMA number (optional)", placeholder="Blank to skip"),
+        ),
+        "304": _juniper_row(  # Menu 304 asks for one line of serial numbers, and the line is required.
+            _required_text_param("serial_numbers", "Serial numbers", placeholder="Separate with commas or spaces"),
+        ),
+    }
 
 
 def _build_registry() -> dict:
@@ -808,6 +893,7 @@ def _build_registry() -> dict:
             ],
         }
 
+    registry.update(_juniper_rows())  # Add the Juniper RMA rows for menus 294 to 304.
     return registry
 
 

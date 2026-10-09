@@ -1,0 +1,16 @@
+{
+  "queryAssetsDetailsResponse": {
+    "statusCode": "400",
+    "status": "Error",
+    "message": "Error in processing the request",
+    "responseDateTime": "2026-10-08T12:00:00.000Z",
+    "fault": [
+      {
+        "errorClass": "Error",
+        "errorType": "Validation",
+        "errorCode": "991",
+        "errorMessage": "Too many serial numbers in one request"
+      }
+    ]
+  }
+}

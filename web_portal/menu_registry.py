@@ -195,6 +195,17 @@ MENU_DESCRIPTIONS = {
     "282": "Export the rogue and PCI evidence pack",
     "288": "Show the SSR registration commands",
     "289": "Export the client fingerprint census for a site",
+    "294": "List Juniper service requests for a date window, every field (read-only, needs Juniper settings)",
+    "295": "Read one Juniper service request in full, by request or case number (read-only)",
+    "296": "Read one Juniper RMA in full, with its items (read-only)",
+    "297": "Read every note of one Juniper service request, or one note (read-only)",
+    "298": "Read the Juniper list of values, every value and path (read-only, needs Juniper settings)",
+    "299": "Read the Juniper software versions by product series and platform (read-only)",
+    "300": "Read the Juniper asset bulk snapshot file links for a date window (read-only)",
+    "301": "Check Juniper service API access (read-only, needs Juniper settings)",
+    "302": "Correlate Mist support tickets with Juniper service requests and RMAs (read-only)",
+    "303": "Look up one Juniper service request or RMA (read-only)",
+    "304": "Look up Juniper warranty, contract, and status data for serial numbers (read-only)",
 }
 
 

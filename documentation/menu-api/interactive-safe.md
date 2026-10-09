@@ -2,7 +2,7 @@
 
 # Menu API endpoints: interactive_safe
 
-This page lists the Mist API endpoints of the 95 menu options in the `interactive_safe` category.
+This page lists the Mist API endpoints of the 106 menu options in the `interactive_safe` category.
 A menu option in this category asks the operator for input, and it reads data only.
 
 The index page explains how to read the map: [Menu API endpoint map](README.md).
@@ -16,7 +16,7 @@ That diagram links the menu option to the classes that send the requests, and ea
 
 ```mermaid
 flowchart LR
-    root["interactive_safe: 95<br/>menu options"]
+    root["interactive_safe:<br/>106 menu options"]
     root --> f_orgs_sites["orgs/sites<br/>61 menu options"]
     root --> f_sites_stats["sites/stats<br/>27 menu options"]
     root --> f_sites_devices["sites/devices<br/>14 menu options"]
@@ -1866,3 +1866,99 @@ The map finds no Mist API request for this menu option.
 | - | - | - | - | - |
 | GET | `/api/v1/orgs/{_org_id}/insights/fingerprints/count` | None (raw request) | [`ClientFingerprintCensusClient._count_org_path`](../../src/mist/intelligence/reports/client_fingerprint_census/client.py) | Path |
 | GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`APICoreFetchUtils.all_sites_with_limit`](../../src/mist/access/api/api_core_fetch_utils.py) | Call |
+
+## Menu 294
+
+- Title: List Juniper service requests for a date window, every field (read-only, needs Juniper settings)
+- Handler: `RequestListWorkflow.run`
+- Shared helpers: [`InputUtils`](README.md#inpututils)
+- Endpoints: 0
+
+The map finds no Mist API request for this menu option.
+
+## Menu 295
+
+- Title: Read one Juniper service request in full, by request or case number (read-only)
+- Handler: `RequestDetailWorkflow.run`
+- Shared helpers: [`InputUtils`](README.md#inpututils)
+- Endpoints: 0
+
+The map finds no Mist API request for this menu option.
+
+## Menu 296
+
+- Title: Read one Juniper RMA in full, with its items (read-only)
+- Handler: `RmaDetailWorkflow.run`
+- Shared helpers: [`InputUtils`](README.md#inpututils)
+- Endpoints: 0
+
+The map finds no Mist API request for this menu option.
+
+## Menu 297
+
+- Title: Read every note of one Juniper service request, or one note (read-only)
+- Handler: `RequestNotesWorkflow.run`
+- Shared helpers: [`InputUtils`](README.md#inpututils)
+- Endpoints: 0
+
+The map finds no Mist API request for this menu option.
+
+## Menu 298
+
+- Title: Read the Juniper list of values, every value and path (read-only, needs Juniper settings)
+- Handler: `LovWorkflow.run`
+- Endpoints: 0
+
+The map finds no Mist API request for this menu option.
+
+## Menu 299
+
+- Title: Read the Juniper software versions by product series and platform (read-only)
+- Handler: `SoftwareVersionWorkflow.run`
+- Endpoints: 0
+
+The map finds no Mist API request for this menu option.
+
+## Menu 300
+
+- Title: Read the Juniper asset bulk snapshot file links for a date window (read-only)
+- Handler: `AssetBulkWorkflow.run`
+- Shared helpers: [`InputUtils`](README.md#inpututils)
+- Endpoints: 0
+
+The map finds no Mist API request for this menu option.
+
+## Menu 301
+
+- Title: Check Juniper service API access (read-only, needs Juniper settings)
+- Handler: `AccessCheckWorkflow.run`
+- Endpoints: 0
+
+The map finds no Mist API request for this menu option.
+
+## Menu 302
+
+- Title: Correlate Mist support tickets with Juniper service requests and RMAs (read-only)
+- Handler: `CorrelationWorkflow.run`
+- Shared helpers: [`DataExporter`](README.md#dataexporter)
+- Endpoints: 0
+
+The map finds no Mist API request for this menu option.
+
+## Menu 303
+
+- Title: Look up one Juniper service request or RMA (read-only)
+- Handler: `LookupWorkflow.run`
+- Shared helpers: [`DataExporter`](README.md#dataexporter), [`InputUtils`](README.md#inpututils), [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
+- Endpoints: 0
+
+The map finds no Mist API request for this menu option.
+
+## Menu 304
+
+- Title: Look up Juniper warranty, contract, and status data for serial numbers (read-only)
+- Handler: `AssetLookupWorkflow.run`
+- Shared helpers: [`DataExporter`](README.md#dataexporter), [`InputUtils`](README.md#inpututils), [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
+- Endpoints: 0
+
+The map finds no Mist API request for this menu option.

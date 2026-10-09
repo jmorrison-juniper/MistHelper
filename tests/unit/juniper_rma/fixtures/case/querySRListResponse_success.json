@@ -1,0 +1,20 @@
+{
+  "querySRListResponse": {
+    "statusCode": "200",
+    "status": "Success",
+    "message": "Successfully processed the request",
+    "responseDateTime": "2026-10-08T12:00:00.000Z",
+    "cases": [
+      {
+        "serviceRequestNumber": "2026-0001-000001",
+        "customerCaseNumber": "CASE-TEST-100",
+        "srStatus": "Open"
+      },
+      {
+        "serviceRequestNumber": "2026-0001-000002",
+        "customerCaseNumber": "CASE-TEST-200",
+        "srStatus": "Closed"
+      }
+    ]
+  }
+}

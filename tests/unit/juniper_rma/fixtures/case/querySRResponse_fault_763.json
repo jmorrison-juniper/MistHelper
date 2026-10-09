@@ -1,0 +1,16 @@
+{
+  "querySRResponse": {
+    "statusCode": "400",
+    "status": "Error",
+    "message": "Error in processing the request",
+    "responseDateTime": "2026-10-08T12:00:00.000Z",
+    "fault": [
+      {
+        "errorClass": "Error",
+        "errorType": "Processing",
+        "errorCode": "763",
+        "errorMessage": "customerCaseNumber has more than one request with the same value"
+      }
+    ]
+  }
+}

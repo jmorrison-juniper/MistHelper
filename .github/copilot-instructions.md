@@ -199,12 +199,12 @@ updates a row and does not duplicate it. Define the strategy before you write th
 ### Menu categories
 
 `src/foundation/support/utils/operation_registry.py` is the single source of truth for the
-category of each menu. The measurement date of the counts below is 2026-10-04. The guard
+category of each menu. The measurement date of the counts below is 2026-10-09. The guard
 `tests/guardrails/test_destructive_menu_docs.py` fails when this table drifts from the registry.
 
 | Category | Count | Menu numbers |
 | - | - | - |
-| `interactive_safe` | 95 | 60-96, 195-203, 209-229, 235-238, 240-242, 244-247, 254, 256-268, 270, 288-289 |
+| `interactive_safe` | 106 | 60-96, 195-203, 209-229, 235-238, 240-242, 244-247, 254, 256-268, 270, 288-289, 294-304 |
 | `safe` | 84 | 1-13, 15-17, 20-58, 188, 193, 204-205, 230-234, 243, 248-253, 255, 269, 271-280, 282 |
 | `destructive` | 48 | 154-187, 189-191, 194, 206-208, 239, 281, 286-287, 291-293 |
 | `interactive` | 33 | 0, 124-150, 192, 283-285, 290 |
@@ -251,7 +251,8 @@ package under `src/` and its own test directory. Each branch writes a
 strategies, and the import line. One integration pull request for each batch applies every
 manifest to `MistHelper.py`, to `operation_registry.py`, to the category table above, and to the
 generated references. Pull requests #3643, #3644, #3645, and #3679 show the shape, and
-`documentation/menu-operations-271-293.md` describes the result.
+`documentation/menu-operations-271-293.md` describes the result. The Juniper RMA menus 294 to 304
+are described in `documentation/menu-operations-294-304.md`.
 
 ### Hot files
 

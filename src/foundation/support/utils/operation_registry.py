@@ -503,6 +503,21 @@ class OperationRegistry:
                 "and firmware state; requires typed confirmation and a live Mist tenant."
             ),
         },
+        # WHY: Juniper RMA correlation (menus 294 to 304). The menus read Juniper
+        # service APIs over HTTPS with OAuth 2.0, and they write local exports only. They never
+        # write to Juniper. They need settings from .env, so each row is interactive_safe. A runtime
+        # guard refuses live calls under --test and --testinteractive unless JUNIPER_LIVE_TESTS=1 is set.
+        "294": {"category": "interactive_safe", "skip_reason": "Requires Juniper settings and a date window"},
+        "295": {"category": "interactive_safe", "skip_reason": "Requires Juniper settings and an identifier"},
+        "296": {"category": "interactive_safe", "skip_reason": "Requires Juniper settings and an RMA number"},
+        "297": {"category": "interactive_safe", "skip_reason": "Requires Juniper settings and a request key"},
+        "298": {"category": "interactive_safe", "skip_reason": "Requires Juniper settings"},
+        "299": {"category": "interactive_safe", "skip_reason": "Requires Juniper settings"},
+        "300": {"category": "interactive_safe", "skip_reason": "Requires Juniper settings and a date window"},
+        "301": {"category": "interactive_safe", "skip_reason": "Requires Juniper settings in .env"},
+        "302": {"category": "interactive_safe", "skip_reason": "Requires Juniper settings and Mist tickets"},
+        "303": {"category": "interactive_safe", "skip_reason": "Requires Juniper settings and an identifier"},
+        "304": {"category": "interactive_safe", "skip_reason": "Requires Juniper settings and serial numbers"},
         "238": {"category": "interactive_safe", "skip_reason": "Requires an MSP ID"},
         "240": {
             "category": "interactive_safe",
