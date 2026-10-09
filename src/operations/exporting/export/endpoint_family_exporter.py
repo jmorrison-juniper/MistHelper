@@ -36,6 +36,7 @@ class _EndpointFamilyOp:
     module: str  # The dotted SDK module lets the resolver import the function lazily.
     required: tuple[str, ...]  # The tuple preserves the SDK signature order.
     issues: tuple[int, ...]  # The issue tuple states which endpoint issues this row closes.
+    object_response: bool = True  # OpenAPI evidence permits one top-level object when pagination returns no rows.
 
 
 @dataclass(frozen=True)
@@ -96,7 +97,11 @@ _SITE_SLE_OPS: tuple[_EndpointFamilyOp, ...] = (
         (1347,),
     ),  # Issue #1347.
     _EndpointFamilyOp(
-        "listSiteSleMetricClassifiers", "mistapi.api.v1.sites.sle", ("site_id", "scope", "scope_id", "metric"), (1348,)
+        "listSiteSleMetricClassifiers",
+        "mistapi.api.v1.sites.sle",
+        ("site_id", "scope", "scope_id", "metric"),
+        (1348,),
+        object_response=False,
     ),  # Issue #1348.
     _EndpointFamilyOp(
         "getSiteSleClassifierSummaryTrend",
@@ -117,47 +122,93 @@ _SITE_MAP_OPS: tuple[_EndpointFamilyOp, ...] = (
         "getSiteApAutoPlacement", "mistapi.api.v1.sites.maps", ("site_id", "map_id"), (1178,)
     ),  # Issue #1178.
     _EndpointFamilyOp(
-        "getSiteDiscoveredAssetByMap", "mistapi.api.v1.sites.stats", ("site_id", "map_id"), (1188,)
+        "getSiteDiscoveredAssetByMap",
+        "mistapi.api.v1.sites.stats",
+        ("site_id", "map_id"),
+        (1188,),
+        object_response=False,
     ),  # Issue #1188.
     _EndpointFamilyOp(
-        "getSiteSdkStatsByMap", "mistapi.api.v1.sites.stats", ("site_id", "map_id"), (1209,)
+        "getSiteSdkStatsByMap",
+        "mistapi.api.v1.sites.stats",
+        ("site_id", "map_id"),
+        (1209,),
+        object_response=False,
     ),  # Issue #1209.
     _EndpointFamilyOp(
-        "getSiteWirelessClientsStatsByMap", "mistapi.api.v1.sites.stats", ("site_id", "map_id"), (1226,)
+        "getSiteWirelessClientsStatsByMap",
+        "mistapi.api.v1.sites.stats",
+        ("site_id", "map_id"),
+        (1226,),
+        object_response=False,
     ),  # Issue #1226.
     _EndpointFamilyOp(
-        "listSiteUnconnectedClientStats", "mistapi.api.v1.sites.stats", ("site_id", "map_id"), (1354,)
+        "listSiteUnconnectedClientStats",
+        "mistapi.api.v1.sites.stats",
+        ("site_id", "map_id"),
+        (1354,),
+        object_response=False,
     ),  # Issue #1354.
 )
 
 _SITE_DETAIL_OPS: tuple[_EndpointFamilyOp, ...] = (
-    _EndpointFamilyOp("exportSiteDevices", "mistapi.api.v1.sites.devices", ("site_id",), (1088,)),  # Issue #1088.
+    _EndpointFamilyOp(
+        "exportSiteDevices", "mistapi.api.v1.sites.devices", ("site_id",), (1088,), object_response=False
+    ),  # Issue #1088.
     _EndpointFamilyOp(
         "getSiteAssetStats", "mistapi.api.v1.sites.stats", ("site_id", "asset_id"), (1179,)
     ),  # Issue #1179.
     _EndpointFamilyOp(
-        "listSiteCurrentRrmNeighbors", "mistapi.api.v1.sites.rrm", ("site_id", "band"), (1318,)
+        "listSiteCurrentRrmNeighbors",
+        "mistapi.api.v1.sites.rrm",
+        ("site_id", "band"),
+        (1318,),
+        object_response=False,
     ),  # Issue #1318.
     _EndpointFamilyOp(
-        "getSiteEventsForClient", "mistapi.api.v1.sites.clients", ("site_id", "client_mac"), (1189,)
+        "getSiteEventsForClient",
+        "mistapi.api.v1.sites.clients",
+        ("site_id", "client_mac"),
+        (1189,),
+        object_response=False,
     ),  # Issue #1189.
     _EndpointFamilyOp(
-        "getSiteWirelessClientStats", "mistapi.api.v1.sites.stats", ("site_id", "client_mac"), (1225,)
+        "getSiteWirelessClientStats",
+        "mistapi.api.v1.sites.stats",
+        ("site_id", "client_mac"),
+        (1225,),
+        object_response=False,
     ),  # Issue #1225.
     _EndpointFamilyOp(
-        "getSiteAllClientsStatsByDevice", "mistapi.api.v1.sites.stats", ("site_id", "device_id"), (1176,)
+        "getSiteAllClientsStatsByDevice",
+        "mistapi.api.v1.sites.stats",
+        ("site_id", "device_id"),
+        (1176,),
+        object_response=False,
     ),  # Issue #1176.
     _EndpointFamilyOp(
         "getSiteDeviceConfigCmd", "mistapi.api.v1.sites.devices", ("site_id", "device_id"), (1186,)
     ),  # Issue #1186.
     _EndpointFamilyOp(
-        "getSiteDeviceIotPort", "mistapi.api.v1.sites.devices", ("site_id", "device_id"), (1187,)
+        "getSiteDeviceIotPort",
+        "mistapi.api.v1.sites.devices",
+        ("site_id", "device_id"),
+        (1187,),
+        object_response=False,
     ),  # Issue #1187.
     _EndpointFamilyOp(
-        "getSiteCurrentRrmConsiderations", "mistapi.api.v1.sites.rrm", ("site_id", "device_id", "band"), (1184,)
+        "getSiteCurrentRrmConsiderations",
+        "mistapi.api.v1.sites.rrm",
+        ("site_id", "device_id", "band"),
+        (1184,),
+        object_response=False,
     ),  # Issue #1184.
     _EndpointFamilyOp(
-        "getSiteInsightMetricsForGateway", "mistapi.api.v1.sites.insights", ("site_id", "device_id", "metrics"), (1193,)
+        "getSiteInsightMetricsForGateway",
+        "mistapi.api.v1.sites.insights",
+        ("site_id", "device_id", "metrics"),
+        (1193,),
+        object_response=False,
     ),  # Issue #1193.
     _EndpointFamilyOp(
         "getSiteEvpnTopology", "mistapi.api.v1.sites.evpn_topologies", ("site_id", "evpn_topology_id"), (1190,)
@@ -166,29 +217,53 @@ _SITE_DETAIL_OPS: tuple[_EndpointFamilyOp, ...] = (
         "getSiteGuestAuthorization", "mistapi.api.v1.sites.guests", ("site_id", "guest_mac"), (1192,)
     ),  # Issue #1192.
     _EndpointFamilyOp(
-        "getSiteInsightMetricsForMxEdge", "mistapi.api.v1.sites.insights", ("site_id", "metric", "device_mac"), (1194,)
+        "getSiteInsightMetricsForMxEdge",
+        "mistapi.api.v1.sites.insights",
+        ("site_id", "metric", "device_mac"),
+        (1194,),
+        object_response=False,
     ),  # Issue #1194.
     _EndpointFamilyOp(
-        "getSiteInsightMetricsForSwitch", "mistapi.api.v1.sites.insights", ("site_id", "metric", "device_mac"), (1195,)
+        "getSiteInsightMetricsForSwitch",
+        "mistapi.api.v1.sites.insights",
+        ("site_id", "metric", "device_mac"),
+        (1195,),
+        object_response=False,
     ),  # Issue #1195.
     _EndpointFamilyOp(
-        "getSiteMxEdge", "mistapi.api.v1.sites.mxedges", ("site_id", "mxedge_id"), (1200,)
+        "getSiteMxEdge",
+        "mistapi.api.v1.sites.mxedges",
+        ("site_id", "mxedge_id"),
+        (1200,),
+        object_response=False,
     ),  # Issue #1200.
     _EndpointFamilyOp(
         "getSiteMxEdgeStats", "mistapi.api.v1.sites.stats", ("site_id", "mxedge_id"), (1201,)
     ),  # Issue #1201.
     _EndpointFamilyOp("getSitePsk", "mistapi.api.v1.sites.psks", ("site_id", "psk_id"), (1202,)),  # Issue #1202.
     _EndpointFamilyOp(
-        "downloadSiteRfdiagRecording", "mistapi.api.v1.sites.rfdiags", ("site_id", "rfdiag_id"), (1087,)
+        "downloadSiteRfdiagRecording",
+        "mistapi.api.v1.sites.rfdiags",
+        ("site_id", "rfdiag_id"),
+        (1087,),
+        object_response=False,
     ),  # Issue #1087.
     _EndpointFamilyOp(
-        "getSiteRfdiagRecording", "mistapi.api.v1.sites.rfdiags", ("site_id", "rfdiag_id"), (1203,)
+        "getSiteRfdiagRecording",
+        "mistapi.api.v1.sites.rfdiags",
+        ("site_id", "rfdiag_id"),
+        (1203,),
+        object_response=False,
     ),  # Issue #1203.
     _EndpointFamilyOp(
         "getSiteRogueAP", "mistapi.api.v1.sites.rogues", ("site_id", "rogue_bssid"), (1204,)
     ),  # Issue #1204.
     _EndpointFamilyOp(
-        "getSiteRssiZone", "mistapi.api.v1.sites.rssizones", ("site_id", "rssizone_id"), (1205,)
+        "getSiteRssiZone",
+        "mistapi.api.v1.sites.rssizones",
+        ("site_id", "rssizone_id"),
+        (1205,),
+        object_response=False,
     ),  # Issue #1205.
     _EndpointFamilyOp(
         "getSiteSdkStats", "mistapi.api.v1.sites.stats", ("site_id", "sdkclient_id"), (1208,)
@@ -226,7 +301,11 @@ _ORG_DETAIL_OPS: tuple[_EndpointFamilyOp, ...] = (
     _EndpointFamilyOp("getMspOrg", "mistapi.api.v1.msps.orgs", ("msp_id", "org_id"), (1097,)),  # Issue #1097.
     _EndpointFamilyOp("adoptOrgJsiDevice", "mistapi.api.v1.orgs.jsi", ("org_id",), (1016,)),  # Issue #1016.
     _EndpointFamilyOp(
-        "searchOrgDeviceLastConfigs", "mistapi.api.v1.orgs.devices", ("org_id",), (1370,)
+        "searchOrgDeviceLastConfigs",
+        "mistapi.api.v1.orgs.devices",
+        ("org_id",),
+        (1370,),
+        object_response=False,
     ),  # Issue #1370.
     _EndpointFamilyOp(
         "getOrgAAMWProfile", "mistapi.api.v1.orgs.aamwprofiles", ("org_id", "aamwprofile_id"), (1105,)
@@ -257,7 +336,11 @@ _ORG_DETAIL_OPS: tuple[_EndpointFamilyOp, ...] = (
         "getOrgOtherDeviceStats", "mistapi.api.v1.orgs.stats", ("org_id", "device_mac"), (1143,)
     ),  # Issue #1143.
     _EndpointFamilyOp(
-        "getOrgDeviceProfile", "mistapi.api.v1.orgs.deviceprofiles", ("org_id", "deviceprofile_id"), (1117,)
+        "getOrgDeviceProfile",
+        "mistapi.api.v1.orgs.deviceprofiles",
+        ("org_id", "deviceprofile_id"),
+        (1117,),
+        object_response=False,
     ),  # Issue #1117.
     _EndpointFamilyOp(
         "getOrgEvpnTopology", "mistapi.api.v1.orgs.evpn_topologies", ("org_id", "evpn_topology_id"), (1119,)
@@ -285,7 +368,11 @@ _ORG_DETAIL_OPS: tuple[_EndpointFamilyOp, ...] = (
         "getOrgMxTunnel", "mistapi.api.v1.orgs.mxtunnels", ("org_id", "mxtunnel_id"), (1133,)
     ),  # Issue #1133.
     _EndpointFamilyOp(
-        "downloadOrgNacPortalSamlMetadata", "mistapi.api.v1.orgs.nacportals", ("org_id", "nacportal_id"), (1085,)
+        "downloadOrgNacPortalSamlMetadata",
+        "mistapi.api.v1.orgs.nacportals",
+        ("org_id", "nacportal_id"),
+        (1085,),
+        object_response=False,
     ),  # Issue #1085.
     _EndpointFamilyOp(
         "getOrgNacPortal", "mistapi.api.v1.orgs.nacportals", ("org_id", "nacportal_id"), (1135,)
@@ -294,7 +381,11 @@ _ORG_DETAIL_OPS: tuple[_EndpointFamilyOp, ...] = (
         "getOrgNacPortalSamlMetadata", "mistapi.api.v1.orgs.nacportals", ("org_id", "nacportal_id"), (1136,)
     ),  # Issue #1136.
     _EndpointFamilyOp(
-        "listOrgNacPortalSsoLatestFailures", "mistapi.api.v1.orgs.nacportals", ("org_id", "nacportal_id"), (1291,)
+        "listOrgNacPortalSsoLatestFailures",
+        "mistapi.api.v1.orgs.nacportals",
+        ("org_id", "nacportal_id"),
+        (1291,),
+        object_response=False,
     ),  # Issue #1291.
     _EndpointFamilyOp(
         "getOrgNacRule", "mistapi.api.v1.orgs.nacrules", ("org_id", "nacrule_id"), (1137,)
@@ -317,7 +408,11 @@ _ORG_DETAIL_OPS: tuple[_EndpointFamilyOp, ...] = (
         "getSdkInvite", "mistapi.api.v1.orgs.sdkinvites", ("org_id", "sdkinvite_id"), (1171,)
     ),  # Issue #1171.
     _EndpointFamilyOp(
-        "getSdkInviteQrCode", "mistapi.api.v1.orgs.sdkinvites", ("org_id", "sdkinvite_id"), (1172,)
+        "getSdkInviteQrCode",
+        "mistapi.api.v1.orgs.sdkinvites",
+        ("org_id", "sdkinvite_id"),
+        (1172,),
+        object_response=False,
     ),  # Issue #1172.
     _EndpointFamilyOp(
         "getSdkTemplate", "mistapi.api.v1.orgs.sdktemplates", ("org_id", "sdktemplate_id"), (1173,)
@@ -332,18 +427,30 @@ _ORG_DETAIL_OPS: tuple[_EndpointFamilyOp, ...] = (
         "getOrgServicePolicy", "mistapi.api.v1.orgs.servicepolicies", ("org_id", "servicepolicy_id"), (1151,)
     ),  # Issue #1151.
     _EndpointFamilyOp(
-        "listInstallerMaps", "mistapi.api.v1.installer.orgs.sites", ("org_id", "site_name"), (1252,)
+        "listInstallerMaps",
+        "mistapi.api.v1.installer.orgs.sites",
+        ("org_id", "site_name"),
+        (1252,),
+        object_response=False,
     ),  # Issue #1252.
     _EndpointFamilyOp(
         "getOrgSiteGroup", "mistapi.api.v1.orgs.sitegroups", ("org_id", "sitegroup_id"), (1153,)
     ),  # Issue #1153.
     _EndpointFamilyOp(
-        "downloadOrgSamlMetadata", "mistapi.api.v1.orgs.ssos", ("org_id", "sso_id"), (1086,)
+        "downloadOrgSamlMetadata",
+        "mistapi.api.v1.orgs.ssos",
+        ("org_id", "sso_id"),
+        (1086,),
+        object_response=False,
     ),  # Issue #1086.
     _EndpointFamilyOp("getOrgSamlMetadata", "mistapi.api.v1.orgs.ssos", ("org_id", "sso_id"), (1147,)),  # Issue #1147.
     _EndpointFamilyOp("getOrgSso", "mistapi.api.v1.orgs.ssos", ("org_id", "sso_id"), (1156,)),  # Issue #1156.
     _EndpointFamilyOp(
-        "listOrgSsoLatestFailures", "mistapi.api.v1.orgs.ssos", ("org_id", "sso_id"), (1297,)
+        "listOrgSsoLatestFailures",
+        "mistapi.api.v1.orgs.ssos",
+        ("org_id", "sso_id"),
+        (1297,),
+        object_response=False,
     ),  # Issue #1297.
     _EndpointFamilyOp(
         "getOrgSsoRole", "mistapi.api.v1.orgs.ssoroles", ("org_id", "ssorole_id"), (1157,)
@@ -374,7 +481,11 @@ _ORG_DETAIL_OPS: tuple[_EndpointFamilyOp, ...] = (
     _EndpointFamilyOp("getOrgWLAN", "mistapi.api.v1.orgs.wlans", ("org_id", "wlan_id"), (1165,)),  # Issue #1165.
     _EndpointFamilyOp("getOrgWxRule", "mistapi.api.v1.orgs.wxrules", ("org_id", "wxrule_id"), (1167,)),  # Issue #1167.
     _EndpointFamilyOp(
-        "getOrgCurrentMatchingClientsOfAWxTag", "mistapi.api.v1.orgs.wxtags", ("org_id", "wxtag_id"), (1116,)
+        "getOrgCurrentMatchingClientsOfAWxTag",
+        "mistapi.api.v1.orgs.wxtags",
+        ("org_id", "wxtag_id"),
+        (1116,),
+        object_response=False,
     ),  # Issue #1116.
     _EndpointFamilyOp("getOrgWxTag", "mistapi.api.v1.orgs.wxtags", ("org_id", "wxtag_id"), (1168,)),  # Issue #1168.
     _EndpointFamilyOp(
@@ -383,9 +494,13 @@ _ORG_DETAIL_OPS: tuple[_EndpointFamilyOp, ...] = (
 )
 
 _MSP_DETAIL_OPS: tuple[_EndpointFamilyOp, ...] = (
-    _EndpointFamilyOp("searchMspOrgs", "mistapi.api.v1.msps.orgs", ("msp_id",), (1368,)),  # Issue #1368.
+    _EndpointFamilyOp(
+        "searchMspOrgs", "mistapi.api.v1.msps.orgs", ("msp_id",), (1368,), object_response=False
+    ),  # Issue #1368.
     _EndpointFamilyOp("getMspAdmin", "mistapi.api.v1.msps.admins", ("msp_id", "admin_id"), (1094,)),  # Issue #1094.
-    _EndpointFamilyOp("getMspSle", "mistapi.api.v1.msps.insights", ("msp_id", "metric"), (1100,)),  # Issue #1100.
+    _EndpointFamilyOp(
+        "getMspSle", "mistapi.api.v1.msps.insights", ("msp_id", "metric"), (1100,), object_response=False
+    ),  # Issue #1100.
     _EndpointFamilyOp(
         "getMspInventoryByMac", "mistapi.api.v1.msps.inventory", ("msp_id", "device_mac"), (1096,)
     ),  # Issue #1096.
@@ -393,15 +508,27 @@ _MSP_DETAIL_OPS: tuple[_EndpointFamilyOp, ...] = (
         "getMspOrgGroup", "mistapi.api.v1.msps.orggroups", ("msp_id", "orggroup_id"), (1098,)
     ),  # Issue #1098.
     _EndpointFamilyOp(
-        "downloadMspSamlMetadata", "mistapi.api.v1.msps.ssos", ("msp_id", "sso_id"), (1084,)
+        "downloadMspSamlMetadata",
+        "mistapi.api.v1.msps.ssos",
+        ("msp_id", "sso_id"),
+        (1084,),
+        object_response=False,
     ),  # Issue #1084.
     _EndpointFamilyOp("getMspSamlMetadata", "mistapi.api.v1.msps.ssos", ("msp_id", "sso_id"), (1099,)),  # Issue #1099.
     _EndpointFamilyOp("getMspSso", "mistapi.api.v1.msps.ssos", ("msp_id", "sso_id"), (1101,)),  # Issue #1101.
     _EndpointFamilyOp(
-        "listMspSsoLatestFailures", "mistapi.api.v1.msps.ssos", ("msp_id", "sso_id"), (1265,)
+        "listMspSsoLatestFailures",
+        "mistapi.api.v1.msps.ssos",
+        ("msp_id", "sso_id"),
+        (1265,),
+        object_response=False,
     ),  # Issue #1265.
     _EndpointFamilyOp(
-        "searchMspOrgGroup", "mistapi.api.v1.msps.search", ("msp_id", "type", "q"), (1367,)
+        "searchMspOrgGroup",
+        "mistapi.api.v1.msps.search",
+        ("msp_id", "type", "q"),
+        (1367,),
+        object_response=False,
     ),  # Issue #1367.
 )
 
@@ -410,9 +537,15 @@ _OTHER_DETAIL_OPS: tuple[_EndpointFamilyOp, ...] = (
         "generateSecretFor2faVerification", "mistapi.api.v1.self.two_factor", (), (1089,)
     ),  # Issue #1089.
     _EndpointFamilyOp("getApiToken", "mistapi.api.v1.self.apitokens", ("apitoken_id",), (1091,)),  # Issue #1091.
-    _EndpointFamilyOp("listStates", "mistapi.api.v1.const.states", ("country_code",), (1361,)),  # Issue #1361.
     _EndpointFamilyOp(
-        "getGatewayDefaultConfig", "mistapi.api.v1.const.default_gateway_config", ("model",), (1092,)
+        "listStates", "mistapi.api.v1.const.states", ("country_code",), (1361,), object_response=False
+    ),  # Issue #1361.
+    _EndpointFamilyOp(
+        "getGatewayDefaultConfig",
+        "mistapi.api.v1.const.default_gateway_config",
+        ("model",),
+        (1092,),
+        object_response=False,
     ),  # Issue #1092.
     _EndpointFamilyOp(
         "getOauth2AuthorizationUrlForLogin", "mistapi.api.v1.login.oauth", ("provider",), (1102,)
@@ -529,21 +662,53 @@ class EndpointFamilyExporter:
         return [{"value": rawdata}]
 
     @staticmethod
-    def _persist(rawdata: Any, filename: str, operation: str) -> None:
+    def _persist(rawdata: Any, filename: str, operation: str) -> int:
         """Flatten and persist endpoint rows through the shared exporter."""
         mh = EndpointFamilyExporter._mist_helper()  # Load the shared DataExporter only when needed.
         rows = EndpointFamilyExporter._normalize(rawdata)  # Convert single-object responses to one row.
         logger.debug("%s returned %d normalized rows", operation, len(rows))  # Record the normalized size.
         if not rows:
             logger.info("! No %s data found", operation)  # Empty read results are valid.
-            return
+            return 0
         flattened_data = DataProcessingUtils.flatten_nested_fields(rows)  # Flatten nested JSON for tabular output.
         sanitized_data = DataProcessingUtils.escape_multiline(flattened_data)  # Keep line breaks safe in CSV cells.
-        mh.DataExporter.write_with_format_selection(
+        write_succeeded = mh.DataExporter.write_with_format_selection(
             sanitized_data, filename, api_function_name=operation
         )  # Persist data.
-        logger.info("! %d %s records exported to %s", len(rows), operation, filename)  # Tell the operator.
-        logger.debug("%s persisted %d rows to %s", operation, len(rows), filename)  # Record the write result.
+        written_count = len(sanitized_data) if write_succeeded else 0  # Count rows after confirmed success.
+        if write_succeeded:
+            logger.info("! %d %s records exported to %s", written_count, operation, filename)  # Tell the operator.
+        else:
+            logger.error("! %s write failed after receiving %d records", operation, len(rows))  # Expose a write loss.
+        logger.debug("%s persisted %d rows to %s", operation, written_count, filename)  # Record the write result.
+        return written_count
+
+    @staticmethod
+    def _recover_unpaginated_object(response: Any, rawdata: Any, operation: _EndpointFamilyOp) -> Any:
+        """Recover a non-empty object that the SDK pagination helper cannot collect."""
+        if rawdata:
+            return rawdata
+        payload = getattr(response, "data", None)
+        status = getattr(response, "status_code", "unknown")  # Report the response boundary without payload content.
+        if isinstance(payload, dict) and payload:
+            if payload.get("results") == []:
+                return rawdata
+            if operation.object_response:
+                logger.warning(
+                    "! %s returned 1 proven object with status %s that the SDK pagination helper skipped",
+                    operation.operation,
+                    status,
+                )  # Expose the SDK shape mismatch.
+                return payload
+        if payload not in (None, [], {}):
+            shape = type(payload).__name__
+            logger.error(
+                "! Discarded 1 non-empty %s payload with status %s and shape %s",
+                operation.operation,
+                status,
+                shape,
+            )  # Expose data loss.
+        return rawdata
 
     @staticmethod
     def _run(operation: _EndpointFamilyOp) -> None:
@@ -560,8 +725,21 @@ class EndpointFamilyExporter:
             logger.info("Calling %s for %s", operation.operation, arguments.label)  # Log before the SDK call.
             response = callable_obj(mh.apisession, *arguments.values)  # Call the SDK with identifiers in order.
             rawdata = mistapi.get_all(response=response, mist_session=mh.apisession)  # Collect every page.
+            rawdata = EndpointFamilyExporter._recover_unpaginated_object(
+                response, rawdata, operation
+            )  # Recover documented objects that the SDK helper drops.
             filename = f"{operation.operation}_{arguments.label.replace(' ', '_')}.csv"  # Build a readable export name.
-            EndpointFamilyExporter._persist(rawdata, filename, operation.operation)  # Write the selected output format.
+            received_count = len(EndpointFamilyExporter._normalize(rawdata))  # Count records before persistence.
+            written_count = EndpointFamilyExporter._persist(
+                rawdata, filename, operation.operation
+            )  # Write the selected output format.
+            if received_count != written_count:
+                logger.error(
+                    "! Incomplete %s export: received %d records, wrote %d",
+                    operation.operation,
+                    received_count,
+                    written_count,
+                )  # Expose a received-to-written count mismatch.
         except Exception as exc:
             logging.exception(
                 "Error running %s for %s", operation.operation, arguments.label

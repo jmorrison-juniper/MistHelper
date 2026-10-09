@@ -36,6 +36,14 @@ EXPECTED_BUCKET_COUNTS = {
     "MSP_DETAIL": 10,
     "OTHER_DETAIL": 6,
 }
+EXPECTED_OBJECT_COUNTS = {
+    "SITE_SLE": 14,
+    "SITE_MAP": 3,
+    "SITE_DETAIL": 19,
+    "ORG_DETAIL": 52,
+    "MSP_DETAIL": 5,
+    "OTHER_DETAIL": 4,
+}
 GROUPS = {
     "SITE_SLE": _SITE_SLE_OPS,
     "SITE_MAP": _SITE_MAP_OPS,
@@ -75,6 +83,13 @@ def test_group_counts_match_discovery() -> None:
     """The shipped tables must match the measured stage-two groups."""
     assert {name: len(entries) for name, entries in GROUPS.items()} == EXPECTED_BUCKET_COUNTS
     assert len(ALL_STAGE_TWO_ENDPOINT_OPS) == 132
+
+
+def test_proven_object_counts_match_openapi_measurement() -> None:
+    """The allowlist must retain the measured OpenAPI object counts."""
+    actual = {name: sum(entry.object_response for entry in entries) for name, entries in GROUPS.items()}
+    assert actual == EXPECTED_OBJECT_COUNTS
+    assert sum(actual.values()) == 97
 
 
 def test_operation_table_has_no_duplicate_operation() -> None:
@@ -170,6 +185,37 @@ def test_persist_wraps_single_object_response() -> None:
     assert kwargs["api_function_name"] == "getOrgSso"
 
 
+def test_persist_reports_failed_write_count(caplog: pytest.LogCaptureFixture) -> None:
+    """A failed writer must report zero written rows."""
+    fake = _fake_mist_helper()
+    fake.DataExporter.write_with_format_selection.return_value = False
+    with patch.object(EndpointFamilyExporter, "_mist_helper", return_value=fake):
+        written_count = EndpointFamilyExporter._persist([{"id": "one"}], "one.csv", "getOrgSso")
+    assert written_count == 0
+    assert "write failed after receiving 1 records" in caplog.text
+
+
+def test_recover_logs_a_discarded_non_object_payload(caplog: pytest.LogCaptureFixture) -> None:
+    """A non-empty payload that the SDK cannot collect must produce a loud error."""
+    response = MagicMock(data="unexpected", status_code=200)
+    operation = next(entry for entry in _ORG_DETAIL_OPS if entry.operation == "getOrgSso")
+    assert EndpointFamilyExporter._recover_unpaginated_object(response, [], operation) == []
+    assert "Discarded 1 non-empty getOrgSso payload" in caplog.text
+    assert "status 200" in caplog.text
+    assert "shape str" in caplog.text
+
+
+def test_recover_rejects_an_unproven_object_payload(caplog: pytest.LogCaptureFixture) -> None:
+    """An object without a declared OpenAPI shape must not become export success."""
+    response = MagicMock(data={"A1": 1, "DO": 0}, status_code=200)
+    operation = next(entry for entry in _SITE_DETAIL_OPS if entry.operation == "getSiteDeviceIotPort")
+    result = EndpointFamilyExporter._recover_unpaginated_object(response, [], operation)
+    assert result == []
+    assert "Discarded 1 non-empty getSiteDeviceIotPort payload" in caplog.text
+    assert "status 200" in caplog.text
+    assert "shape dict" in caplog.text
+
+
 def test_resolve_returns_none_for_a_missing_module() -> None:
     """A bad SDK module path must not crash the menu."""
     bad = _EndpointFamilyOp("listNothing", "mistapi.api.v1.not_a_module", ("org_id", "item_id"), (1,))
@@ -258,12 +304,12 @@ RETAINED_FAMILY_DIGESTS = {
     "260": "3c27ae201bab31537d2acb7557342b618fac200f9f3547ac3820febd7c3f948e",
     "261": "b02389a933165409e9222ef638b4130db38ff0e280bc6649864fb23afaa44719",
     "262": "0844ab9840694c88c8f8a1e654dbbb7a7d19fd8fb18c21dd58aba057f2502d60",
-    "263": "3973a4a0594e0c0a8cb307329a58bcf010da2155b37b4cf7571abe6c1fc514f4",
-    "264": "a5777f2fa6075431cbd4fedd08b4c076a1c72f0c99efde3b551314bfd8b9d7d0",
-    "265": "18f6a4cb356dbcec3409a0fcb065ab438d581ea9e2b62a10fc4b04e64029549c",
-    "266": "dfd2267bb67cfa939cb8470d8b51501db556bac79a7a2d70a8bdb0f7aa9285db",
-    "267": "5ffbc2173183f78936aa421091c6a5df75c293dab567e11a59c6503845051e58",
-    "268": "e418a0eea52f1b8d2f1f3e7488ba3fb5715907efd504c338d80e22f6dd58d4d8",
+    "263": "25bc8a35ed2657126eb1e60431f52390095119eceef741a9eb3cb86b0a825076",
+    "264": "0aa5b8c10bfb6cb85904a066f263a0058cb4a4a034b1505631aeb5534fde9287",
+    "265": "03fe9b2d7cb55a4221c899798cfb96fa7656fe85f17b02c8b721546154b9b3aa",
+    "266": "24b93c36f27d12f782255c568e9c6be9bc70335c75d68e1bfe5f345b8d45f073",
+    "267": "fa032775451d6daa2d1a273772aa903029fe6c80ab2dc7dfc708a06944825340",
+    "268": "b184f605f1f05006c811574b53b88de01b7a2c5b84d60ea22fc2b84347139293",
 }
 TREND_DEFINITIONS = (
     (
@@ -544,6 +590,70 @@ def test_real_trend_generic_payloads_repeat_exact_dispatch(
     assert writer.call_args_list == [call(expected, filename, api_function_name=operation)] * 2
 
 
+@pytest.fixture
+def documented_trend_body(trend_case: tuple[str, str, str]) -> dict[str, object]:
+    """Return the documented object shape for the selected trend operation."""
+    operation, _uri, _filename = trend_case
+    if operation == "getSiteSleSummaryTrend":
+        return {
+            "start": 1_728_144_000,
+            "end": 1_728_147_600,
+            "sle": {
+                "interval": 300,
+                "name": "coverage",
+                "x_label": "time",
+                "y_label": "value",
+                "samples": {"degraded": [0], "total": [1], "value": [42]},
+            },
+            "classifiers": [],
+        }
+    return {
+        "start": 1_728_144_000,
+        "end": 1_728_147_600,
+        "metric": "coverage",
+        "classifier": {
+            "interval": 300,
+            "name": "low-rssi",
+            "x_label": "time",
+            "y_label": "duration",
+            "samples": {"degraded": [0], "duration": [42], "total": [1]},
+        },
+    }
+
+
+@pytest.mark.parametrize("trend_case", TREND_ROUTES, indirect=True, ids=[row[0] for row in TREND_ROUTES])
+def test_real_trend_documented_object_exports_one_record(
+    trend_case: tuple[str, str, str],
+    trend_answers: list[str],
+    documented_trend_body: dict[str, object],
+    local_trend_boundaries: tuple[APISession, MagicMock, MagicMock],
+) -> None:
+    """Documented non-empty trend objects must reach the existing writer."""
+    from unittest.mock import call
+
+    _operation, uri, filename = trend_case
+    _session, transport, writer = local_trend_boundaries
+    url = LOCAL_TREND_HOST + uri
+    transport.side_effect = {
+        LOCAL_SITE_URL: _trend_response(LOCAL_SITE_URL, [{"id": "site-3335", "name": "Local Site"}]),
+        url: _trend_response(url, documented_trend_body),
+    }.__getitem__
+    with patch("builtins.input", side_effect=trend_answers):
+        EndpointFamilyExporter.site_sle_endpoints()
+    assert transport.call_args_list == [call(LOCAL_SITE_URL), call(url)]
+    assert writer.call_count == 1
+    assert writer.call_args.kwargs["api_function_name"] == _operation
+    assert writer.call_args.args[1] == filename
+    row = writer.call_args.args[0][0]
+    assert row["start"] == documented_trend_body["start"]
+    assert row["end"] == documented_trend_body["end"]
+    if _operation == "getSiteSleSummaryTrend":
+        assert row["sle_samples_value"] == "42"
+    else:
+        assert row["metric"] == "coverage"
+        assert row["classifier_samples_duration"] == "42"
+
+
 @pytest.mark.parametrize("trend_case", TREND_ROUTES, indirect=True, ids=[row[0] for row in TREND_ROUTES])
 @pytest.mark.parametrize(
     "query,query_suffix",
@@ -578,7 +688,7 @@ def test_real_trend_optional_queries(
 
 @pytest.fixture
 def trend_empty_payload(trend_case: tuple[str, str, str], empty_body: object) -> tuple[dict[str, Response], list[str]]:
-    """Preserve empty SDK results and dictionaries without a results list."""
+    """Preserve empty SDK results without treating documented objects as empty."""
     _operation, uri, _filename = trend_case
     url = LOCAL_TREND_HOST + uri
     return {
@@ -588,13 +698,13 @@ def trend_empty_payload(trend_case: tuple[str, str, str], empty_body: object) ->
 
 
 @pytest.mark.parametrize("trend_case", TREND_ROUTES, indirect=True, ids=[row[0] for row in TREND_ROUTES])
-@pytest.mark.parametrize("empty_body", ([], {"results": []}, {"summary": {"value": 42}}))
+@pytest.mark.parametrize("empty_body", ([], {"results": []}))
 def test_real_trend_empty_results_skip_output(
     trend_answers: list[str],
     trend_empty_payload: tuple[dict[str, Response], list[str]],
     local_trend_boundaries: tuple[APISession, MagicMock, MagicMock],
 ) -> None:
-    """Preserve current SDK collection behavior, not the separate object-response repair."""
+    """True empty results must not create an export file."""
     from unittest.mock import call
 
     _session, transport, writer = local_trend_boundaries
