@@ -53,6 +53,17 @@ class TestOutputFileRegex:
         """A progress line must not add a phantom name to the result panel."""
         assert _extract("Audit complete. 12 sites reviewed.") == []
 
+    @pytest.mark.parametrize(
+        "message",
+        [
+            "MIB_GENERATOR: Reading the allow list at data/mib_generator/allowlist.json",
+            "MIB_GENERATOR: Reading the OID ledger at data/mib_generator/oid_assignments.json",
+        ],
+    )
+    def test_ignores_mib_input_paths(self, message):
+        """A MIB input path must not appear as an operation result."""
+        assert _extract(message) == []
+
 
 class TestOutputFileScanner:
     """The scanner must find a report that no log sentence names."""
