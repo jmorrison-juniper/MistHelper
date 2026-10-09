@@ -724,6 +724,12 @@ class EndpointFamilyExporter:
         try:
             logger.info("Calling %s for %s", operation.operation, arguments.label)  # Log before the SDK call.
             response = callable_obj(mh.apisession, *arguments.values)  # Call the SDK with identifiers in order.
+            from src.operations.exporting.export.http_response_status import (
+                http_failure,
+            )  # WHY: load the shared status gate without changing this module's public symbols.
+
+            if http_failure(response, operation.operation):
+                return  # A non-2xx answer is an upstream failure, not an empty result.
             rawdata = mistapi.get_all(response=response, mist_session=mh.apisession)  # Collect every page.
             rawdata = EndpointFamilyExporter._recover_unpaginated_object(
                 response, rawdata, operation
