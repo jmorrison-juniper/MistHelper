@@ -487,10 +487,6 @@ class TestTheJuniperMenusAreReadableInTheBrowser:
         assert "No file is written by this check" in message  # The completed run states why it wrote no file.
         capture(page, "13-menu-301-result")  # The result of the access check.
 
-    @pytest.mark.xfail(
-        strict=False,  # The race depends on timing, so a run may pass this check or miss it.
-        reason="Known defect: a run that ends before its SSE stream opens leaves the Execution Log empty.",
-    )
     def test_a_fast_run_keeps_its_log_lines_in_the_execution_log(self, page: Page, portal_url: str) -> None:
         """The Execution Log shows the PASS line of a check that ends almost at once."""
         open_portal(page, portal_url)  # Load the operations page.
