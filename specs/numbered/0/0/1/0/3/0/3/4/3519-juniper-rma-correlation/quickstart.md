@@ -22,7 +22,7 @@ These tests use recorded fixtures and a fake gateway. They make no network call.
 pytest tests/unit/juniper_rma -q
 ```
 
-Expected result: all tests pass. The read-only boundary test passes. It proves that no write operation name appears in the client.
+Expected result: all tests pass. The read-only boundary test passes. It proves that the client holds no name of a write operation.
 
 ## 3. Check Access (Menu 301)
 
@@ -54,7 +54,7 @@ Check the outputs under `data/`:
 - `JuniperServiceRequests.csv` and `JuniperRmaItems.csv` hold the Juniper records.
 - `JuniperRunRecords.csv` holds the run summary.
 
-Expected result: the summary line shows `status=complete`. Personal fields in the CSV files are kept in full. The run log masks them.
+Expected result: the summary line shows `status=complete`. The CSV files keep the personal fields in full. The run log masks them.
 
 If the match count is zero, check the join field (O-1) before any other step. Set `JUNIPER_TICKET_KEY_FIELD` to `id` and run again. Or confirm with Juniper which Mist field holds the customer case number.
 
@@ -65,7 +65,7 @@ python MistHelper.py --menu 303
 python MistHelper.py --menu 304
 ```
 
-- Menu 303 needs a request number or a customer case number. An RMA lookup also needs one of those two values.
+- Menu 303 needs a request number or a customer case number. For an RMA, the operator must enter one of those two values as well.
 - Menu 304 takes serial numbers. It sends them in batches of 300 or fewer.
 
 ## 6. Run the Live Smoke Test (Optional)

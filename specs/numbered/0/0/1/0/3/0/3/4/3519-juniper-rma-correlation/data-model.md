@@ -2,7 +2,7 @@
 
 **Feature**: `3519-juniper-rma-correlation` | **Date**: 2026-10-08
 
-The model uses natural business keys from the source systems. Key strategies go in `ENDPOINT_PRIMARY_KEY_STRATEGIES` (R-15). Personal fields follow R-14: the exports keep them in full, and the log lines mask them.
+Each entity has a natural key. That key is a business key from the source systems. Key strategies go in `ENDPOINT_PRIMARY_KEY_STRATEGIES` (R-15). R-14 governs the personal fields. The exports keep them in full. The log lines mask them.
 
 ## Entities
 
@@ -40,7 +40,7 @@ Natural key: `serviceRequestNumber`. Upserted by `juniperQuerySrList` and `junip
 | `linkToCase` | list | No | Portal link |
 | `retrievedAt` | MistHelper | No | Run time (UTC) |
 
-Excluded: `problemDescription`, notes, attachments, linked references, and contact fields other than the account name.
+Excluded: `problemDescription`, notes, attachments, and linked references. Also excluded: contact fields, except the account name.
 
 Validation rules:
 
@@ -187,6 +187,6 @@ any --> stale            the case number is no longer on the request (kept, not 
 
 ## Retention
 
-- Personal fields are stored in full. The export files that hold them (`JuniperCorrelation.csv` and `JuniperRmaItems.csv`) are deleted when their age passes `JUNIPER_PII_RETENTION_DAYS` (default 180).
+- In full, MistHelper keeps the personal fields. The purge deletes each export file that holds them (`JuniperCorrelation.csv` and `JuniperRmaItems.csv`) when its age passes `JUNIPER_PII_RETENTION_DAYS` (default 180).
 - The purge runs once at the start of each run. It writes its count to the `purgedCount` column of the run record.
-- Log lines never show an unmasked personal field. The exports keep the full values, by operator decision (2026-10-08).
+- The log lines mask every personal field. The exports keep the full values, by operator decision (2026-10-08).

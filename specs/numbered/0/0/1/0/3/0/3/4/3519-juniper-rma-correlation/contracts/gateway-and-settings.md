@@ -2,7 +2,7 @@
 
 ## Settings
 
-Values come from the environment or from the `.env` file. The `.env` file is git-ignored. `deploy/.env.example` lists the names with comments and no values.
+Values come from the environment or from the `.env` file. Git ignores the `.env` file. `deploy/.env.example` lists the names with comments and no values.
 
 | Name | Required | Secret | Default | Purpose |
 | - | - | - | - | - |
@@ -27,10 +27,15 @@ Values come from the environment or from the `.env` file. The `.env` file is git
 Settings rules:
 
 - A missing required name stops the action. The message lists the names only.
-- The loader never prints a value. A secret value never reaches a log line or an export.
+
+- The loader never prints a value. A log line or an export never receives a secret value.
+
 - An invalid number, such as a rate of zero, stops the action and names the setting.
-- A ticket key field other than `case_number` or `id` stops the action and names the setting.
+
+- The ticket key field must hold `case_number` or `id`. Any other value stops the action and names the setting.
+
 - A base address that is not HTTPS stops the action.
+
 - An empty value counts as unset.
 
 ## Gateway Rules
@@ -38,13 +43,21 @@ Settings rules:
 `JuniperGatewayClient` enforces these rules for every request.
 
 1. Use only HTTPS base addresses. The host must appear in `JUNIPER_ALLOWED_HOSTS`.
+
 2. Send the bearer token only to an allowed host. Request tokens only from the token endpoint. Never log a token or a secret.
+
 3. Disable redirects. A `3xx` reply is an unexpected result. It is never followed.
+
 4. Use a connect timeout of 10 seconds and a read timeout of 60 seconds.
+
 5. Limit each response to 16 MB. Enforce the limit while the body streams.
+
 6. Limit the request rate with a token bucket. The default is 2 requests per second.
+
 7. Retry connection errors, timeouts, and HTTP 429, 502, 503, and 504. Allow `JUNIPER_MAX_RETRY_ATTEMPTS` attempts. Wait 2 seconds, then 4 seconds. Use a new transaction identifier for each attempt.
-8. Verify TLS. When `JUNIPER_CA_BUNDLE` is set, pass it as the `verify` value.
+
+8. Verify TLS. When the operator sets `JUNIPER_CA_BUNDLE`, pass it as the `verify` value.
+
 9. Never log a body. Log keys, counts, and status codes only.
 
 ## Log Line Format
