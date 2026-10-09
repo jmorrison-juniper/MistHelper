@@ -16,7 +16,7 @@ organizations, your sites, your devices, and your clients, and it writes what it
 finds to a file or to a database. It also runs a small set of change operations,
 such as a firmware upgrade.
 
-The tool holds **292 operations**, numbered 1 to 293 with one gap at 152.
+The tool holds **303 operations**, numbered 1 to 304 with one gap at 152.
 It also serves a web portal, an upgrade capture portal, and a metrics gateway.
 Read [the operator guide](documentation/operator-guide.md) for what each part
 does.
@@ -43,6 +43,12 @@ Menu 292 imports PSKs, user MACs, and assets from CSV. It requires typing
 Menu 293 runs Mist Edge lifecycle actions. It requires typing `CLAIM`, `ASSIGN`,
 `UNASSIGN`, `BOUNCE`, or `UPGRADE` to confirm, and `--dry-run` previews the
 lifecycle request.
+
+Menus 294 to 304 read Juniper service data, such as service requests, RMAs,
+and warranty records. Each menu is read-only, and it writes local exports only.
+Set the `JUNIPER_*` values in your `.env` file before you run one. The file
+`deploy/.env.example` lists each value. Read [the Juniper RMA guide](documentation/menu-operations-294-304.md)
+for the output files and the troubleshooting steps of each menu.
 
 ## Why
 
@@ -89,6 +95,17 @@ Use MistHelper when you need one of these.
 | A record of a site before a firmware upgrade and after it | [Upgrade capture portal](documentation/upgrade_capture_portal.md) |
 | A feed for Prometheus, Grafana, or an SNMP poller | [Operator guide](documentation/operator-guide.md) |
 | A command run across many devices over SSH | [SSH guide](documentation/SSH_GUIDE.md) |
+| Read the Juniper service requests of a date window (menu 294) | [Menu reference](documentation/menu_reference.md) |
+| Read one Juniper service request with every field (menu 295) | [Menu reference](documentation/menu_reference.md) |
+| Read one Juniper RMA with its items (menu 296) | [Menu reference](documentation/menu_reference.md) |
+| Read the notes of one Juniper service request (menu 297) | [Menu reference](documentation/menu_reference.md) |
+| Read the Juniper list of values (menu 298) | [Menu reference](documentation/menu_reference.md) |
+| Read the Juniper software release list (menu 299) | [Menu reference](documentation/menu_reference.md) |
+| Read the asset bulk links of a date window (menu 300, blocked until Juniper enables the asset API) | [Menu reference](documentation/menu_reference.md) |
+| Confirm your Juniper service API access (menu 301) | [Menu reference](documentation/menu_reference.md) |
+| Match Mist support tickets to Juniper RMAs (menu 302) | [Menu reference](documentation/menu_reference.md) |
+| Look up one Juniper service request or RMA (menu 303) | [Menu reference](documentation/menu_reference.md) |
+| Look up warranty and contract data for serial numbers (menu 304) | [Menu reference](documentation/menu_reference.md) |
 
 ## How to set it up as a container
 

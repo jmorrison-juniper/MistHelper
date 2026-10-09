@@ -1,0 +1,29 @@
+{
+  "queryRMAResponse": {
+    "statusCode": "200",
+    "status": "Success",
+    "message": "Successfully processed the request",
+    "responseDateTime": "2026-10-08T12:00:00.000Z",
+    "rmaNumber": "RMA-TEST-1",
+    "rmaContact": {
+      "companyName": "Test Company",
+      "contactName": "Test Contact",
+      "contactEmail": "test.contact@example.com",
+      "telephoneNumber": "5555550100",
+      "address": {
+        "address1": "1 Test Way",
+        "city": "Testville",
+        "state": "TX",
+        "country": "United States"
+      }
+    },
+    "defectiveItems": [
+      {
+        "itemNumber": "ITEM-TEST-1",
+        "serialNumber": "SN-TEST-0001",
+        "trackingNumber": "TRACK-TEST-1",
+        "defectiveItemStatus": "Received"
+      }
+    ]
+  }
+}

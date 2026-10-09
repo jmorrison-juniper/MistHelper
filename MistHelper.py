@@ -871,6 +871,25 @@ from src.operations.execution.ssh.ssh_runner_manager import (
     SSHRunnerManager,
     SSHRunnerManagerDeps,
 )  # Cat A canonical (1014 P15)
+from src.operations.exporting.juniper_rma.workflows.access_check import AccessCheckWorkflow  # Menu 301 -- access check.
+from src.operations.exporting.juniper_rma.workflows.asset_lookup import AssetLookupWorkflow  # Menu 304 -- asset lookup.
+from src.operations.exporting.juniper_rma.workflows.case_reads import (  # Menus 294 to 297 -- Juniper Case reads, full fields.  # noqa: E501
+    RequestDetailWorkflow,
+    RequestListWorkflow,
+    RequestNotesWorkflow,
+    RmaDetailWorkflow,
+)
+from src.operations.exporting.juniper_rma.workflows.correlation import (
+    CorrelationWorkflow,  # Menu 302 -- Mist tickets to Juniper RMAs.
+)
+from src.operations.exporting.juniper_rma.workflows.lookup import (
+    LookupWorkflow,  # Menu 303 -- Juniper service request and RMA lookup.
+)
+from src.operations.exporting.juniper_rma.workflows.reference_reads import (  # Menus 298 to 300 -- Juniper reference and bulk reads.  # noqa: E501
+    AssetBulkWorkflow,
+    LovWorkflow,
+    SoftwareVersionWorkflow,
+)
 from src.operations.protection.security.rogue_dhcp import (
     RogueDhcpScanOperation,  # Menu 269 (issue #2985) -- org-wide rogue DHCP server scan.
 )
@@ -4811,6 +4830,94 @@ menu_actions: dict[str, Any] = {
         category=OperationRegistry.skip_category("293"),  # Read the safety class.
         destructive=True,  # Mist Edge lifecycle actions change inventory, site, port, or firmware state.
         supports_fast=False,  # Keep destructive pacing under the handler.
+    ),
+    "294": GlobalImportManager.MenuEntry(  # Use named fields for menu 294.
+        menu_id="294",  # Store key for drift checks.
+        handler=RequestListWorkflow.run,
+        title="List Juniper service requests for a date window, every field (read-only, needs Juniper settings)",
+        category=OperationRegistry.skip_category("294"),  # Read the safety class.
+        destructive=False,  # The list reads only and writes local exports.
+        supports_fast=False,  # One request per run.
+    ),
+    "295": GlobalImportManager.MenuEntry(  # Use named fields for menu 295.
+        menu_id="295",  # Store key for drift checks.
+        handler=RequestDetailWorkflow.run,
+        title="Read one Juniper service request in full, by request or case number (read-only)",
+        category=OperationRegistry.skip_category("295"),  # Read the safety class.
+        destructive=False,  # The detail reads only and writes local exports.
+        supports_fast=False,  # One request per run.
+    ),
+    "296": GlobalImportManager.MenuEntry(  # Use named fields for menu 296.
+        menu_id="296",  # Store key for drift checks.
+        handler=RmaDetailWorkflow.run,
+        title="Read one Juniper RMA in full, with its items (read-only)",
+        category=OperationRegistry.skip_category("296"),  # Read the safety class.
+        destructive=False,  # The RMA read writes local exports only.
+        supports_fast=False,  # One request per run.
+    ),
+    "297": GlobalImportManager.MenuEntry(  # Use named fields for menu 297.
+        menu_id="297",  # Store key for drift checks.
+        handler=RequestNotesWorkflow.run,
+        title="Read every note of one Juniper service request, or one note (read-only)",
+        category=OperationRegistry.skip_category("297"),  # Read the safety class.
+        destructive=False,  # The notes read writes local exports only.
+        supports_fast=False,  # The workflow paces its own note reads.
+    ),
+    "298": GlobalImportManager.MenuEntry(  # Use named fields for menu 298.
+        menu_id="298",  # Store key for drift checks.
+        handler=LovWorkflow.run,
+        title="Read the Juniper list of values, every value and path (read-only, needs Juniper settings)",
+        category=OperationRegistry.skip_category("298"),  # Read the safety class.
+        destructive=False,  # The list of values reads only.
+        supports_fast=False,  # One request per run.
+    ),
+    "299": GlobalImportManager.MenuEntry(  # Use named fields for menu 299.
+        menu_id="299",  # Store key for drift checks.
+        handler=SoftwareVersionWorkflow.run,
+        title="Read the Juniper software versions by product series and platform (read-only)",
+        category=OperationRegistry.skip_category("299"),  # Read the safety class.
+        destructive=False,  # The software list reads only.
+        supports_fast=False,  # One request per run.
+    ),
+    "300": GlobalImportManager.MenuEntry(  # Use named fields for menu 300.
+        menu_id="300",  # Store key for drift checks.
+        handler=AssetBulkWorkflow.run,
+        title="Read the Juniper asset bulk snapshot file links for a date window (read-only)",
+        category=OperationRegistry.skip_category("300"),  # Read the safety class.
+        destructive=False,  # The bulk read lists links and downloads no file.
+        supports_fast=False,  # One request per run.
+    ),
+    "301": GlobalImportManager.MenuEntry(  # Use named fields for menu 301.
+        menu_id="301",  # Store key for drift checks.
+        handler=AccessCheckWorkflow.run,
+        title="Check Juniper service API access (read-only, needs Juniper settings)",
+        category=OperationRegistry.skip_category("301"),  # Read the safety class.
+        destructive=False,  # The check reads only and writes nothing to Juniper.
+        supports_fast=False,  # One request per run.
+    ),
+    "302": GlobalImportManager.MenuEntry(  # Use named fields for menu 302.
+        menu_id="302",  # Store key for drift checks.
+        handler=CorrelationWorkflow.run,
+        title="Correlate Mist support tickets with Juniper service requests and RMAs (read-only)",
+        category=OperationRegistry.skip_category("302"),  # Read the safety class.
+        destructive=False,  # The run reads Juniper and Mist and writes local exports only.
+        supports_fast=False,  # The workflow paces its own requests.
+    ),
+    "303": GlobalImportManager.MenuEntry(  # Use named fields for menu 303.
+        menu_id="303",  # Store key for drift checks.
+        handler=LookupWorkflow.run,
+        title="Look up one Juniper service request or RMA (read-only)",
+        category=OperationRegistry.skip_category("303"),  # Read the safety class.
+        destructive=False,  # The lookup reads only.
+        supports_fast=False,  # One request per run.
+    ),
+    "304": GlobalImportManager.MenuEntry(  # Use named fields for menu 304.
+        menu_id="304",  # Store key for drift checks.
+        handler=AssetLookupWorkflow.run,
+        title="Look up Juniper warranty, contract, and status data for serial numbers (read-only)",
+        category=OperationRegistry.skip_category("304"),  # Read the safety class.
+        destructive=False,  # The lookup reads only.
+        supports_fast=False,  # The workflow paces its own batches.
     ),
     "238": GlobalImportManager.MenuEntry(  # Use named fields for menu 238.
         menu_id="238",  # Store key for drift checks.

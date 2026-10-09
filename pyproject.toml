@@ -486,6 +486,7 @@ python_functions = ["test_*"]
 addopts = "-v --tb=short"
 markers = [
     "integration: tests that call the real Mist API (require .env credentials)",
+    "live: tests that call a real Juniper service API. They run only with JUNIPER_LIVE_TESTS=1.",
 ]
 
 [tool.coverage.run]

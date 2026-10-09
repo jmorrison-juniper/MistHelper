@@ -183,7 +183,7 @@
     max-height: 400px;
     overflow-y: auto;
     white-space: pre-wrap;
-    word-break: break-all;
+    overflow-wrap: anywhere;
 }
 
 /* Debug Log Viewer (collapsible, smaller) */
@@ -384,7 +384,7 @@
 
 .log-preview {
     white-space: pre-wrap;
-    word-break: break-all;
+    overflow-wrap: anywhere;
 }
 
 /* Plot area minimum height */

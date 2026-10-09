@@ -111,6 +111,10 @@ Read [Menu operations 271 to 293](menu-operations-271-293.md) for the output
 files, the thresholds, the environment variables, and the typed confirmation
 of each operation in that range.
 
+Menus 294 to 304 read the Juniper service APIs. Read
+[Menu operations 294 to 304](menu-operations-294-304.md) for the Juniper settings,
+the output files, the ticket matching rule, and the troubleshooting steps.
+
 ## What MistHelper does
 
 | Area | What you get |

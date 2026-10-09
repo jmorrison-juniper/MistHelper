@@ -2,7 +2,7 @@
 
 # Menu API endpoint map
 
-This map shows the Mist API endpoints that each of the 293 MistHelper menu options can call.
+This map shows the Mist API endpoints that each of the 304 MistHelper menu options can call.
 The count includes menu 0, which closes MistHelper.
 The menu reference does not count menu 0 as an actionable entry.
 Use the map to find the endpoint that does a task, and to find the code that sends the request.
@@ -62,7 +62,7 @@ flowchart TB
 pie showData
     title Menu options in each category
     "safe" : 84
-    "interactive_safe" : 95
+    "interactive_safe" : 106
     "destructive" : 48
     "interactive" : 33
     "websocket" : 22
@@ -75,7 +75,7 @@ pie showData
 | Category | Menu options | With an endpoint | Page |
 | - | - | - | - |
 | `safe` | 84 | 82 | [safe](Menu-API-Endpoints-Safe) |
-| `interactive_safe` | 95 | 94 | [interactive_safe](Menu-API-Endpoints-Interactive-Safe) |
+| `interactive_safe` | 106 | 94 | [interactive_safe](Menu-API-Endpoints-Interactive-Safe) |
 | `destructive` | 48 | 45 | [destructive](Menu-API-Endpoints-Destructive) |
 | `interactive` | 33 | 31 | [interactive](Menu-API-Endpoints-Interactive) |
 | `websocket` | 22 | 22 | [websocket](Menu-API-Endpoints-Websocket) |
@@ -379,10 +379,21 @@ pie showData
 | [291](Menu-API-Endpoints-Destructive#menu-291) | DESTRUCTIVE: Optimize or reset site RRM with before and after plan capture (Requires typing 'OPTIMIZE' or 'RESET' to confirm, supports --dry-run) | `destructive` | 2 |
 | [292](Menu-API-Endpoints-Destructive#menu-292) | DESTRUCTIVE: Import PSKs, user MACs, and assets from CSV (Requires typing 'IMPORT <row_count>' to confirm, supports --dry-run) | `destructive` | 10 |
 | [293](Menu-API-Endpoints-Destructive#menu-293) | DESTRUCTIVE: Run the Mist Edge lifecycle operation (Requires typing 'CLAIM', 'ASSIGN', 'UNASSIGN', 'BOUNCE', or 'UPGRADE' to confirm, supports --dry-run) | `destructive` | 0 |
+| [294](Menu-API-Endpoints-Interactive-Safe#menu-294) | List Juniper service requests for a date window, every field (read-only, needs Juniper settings) | `interactive_safe` | 0 |
+| [295](Menu-API-Endpoints-Interactive-Safe#menu-295) | Read one Juniper service request in full, by request or case number (read-only) | `interactive_safe` | 0 |
+| [296](Menu-API-Endpoints-Interactive-Safe#menu-296) | Read one Juniper RMA in full, with its items (read-only) | `interactive_safe` | 0 |
+| [297](Menu-API-Endpoints-Interactive-Safe#menu-297) | Read every note of one Juniper service request, or one note (read-only) | `interactive_safe` | 0 |
+| [298](Menu-API-Endpoints-Interactive-Safe#menu-298) | Read the Juniper list of values, every value and path (read-only, needs Juniper settings) | `interactive_safe` | 0 |
+| [299](Menu-API-Endpoints-Interactive-Safe#menu-299) | Read the Juniper software versions by product series and platform (read-only) | `interactive_safe` | 0 |
+| [300](Menu-API-Endpoints-Interactive-Safe#menu-300) | Read the Juniper asset bulk snapshot file links for a date window (read-only) | `interactive_safe` | 0 |
+| [301](Menu-API-Endpoints-Interactive-Safe#menu-301) | Check Juniper service API access (read-only, needs Juniper settings) | `interactive_safe` | 0 |
+| [302](Menu-API-Endpoints-Interactive-Safe#menu-302) | Correlate Mist support tickets with Juniper service requests and RMAs (read-only) | `interactive_safe` | 0 |
+| [303](Menu-API-Endpoints-Interactive-Safe#menu-303) | Look up one Juniper service request or RMA (read-only) | `interactive_safe` | 0 |
+| [304](Menu-API-Endpoints-Interactive-Safe#menu-304) | Look up Juniper warranty, contract, and status data for serial numbers (read-only) | `interactive_safe` | 0 |
 
 ## Menu options with no endpoint
 
-The map finds no Mist API request for 8 menu options.
+The map finds no Mist API request for 19 menu options.
 
 - Menu 0: Menu 0 closes MistHelper. It sends no API request.
 - Menu 141: Menu 141 opens a browser for the mistapi library. The operator selects the SDK function at run time, so the map cannot name one endpoint.
@@ -392,6 +403,17 @@ The map finds no Mist API request for 8 menu options.
 - Menu 274: No curated reason exists yet.
 - Menu 288: No curated reason exists yet.
 - Menu 293: No curated reason exists yet.
+- Menu 294: No curated reason exists yet.
+- Menu 295: No curated reason exists yet.
+- Menu 296: No curated reason exists yet.
+- Menu 297: No curated reason exists yet.
+- Menu 298: No curated reason exists yet.
+- Menu 299: No curated reason exists yet.
+- Menu 300: No curated reason exists yet.
+- Menu 301: No curated reason exists yet.
+- Menu 302: No curated reason exists yet.
+- Menu 303: No curated reason exists yet.
+- Menu 304: No curated reason exists yet.
 
 ## Most used endpoints
 

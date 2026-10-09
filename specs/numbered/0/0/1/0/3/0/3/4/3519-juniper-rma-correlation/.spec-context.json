@@ -1,0 +1,16 @@
+{
+  "workflow": "speckit",
+  "specName": "Juniper RMA Correlation for Mist Support Tickets",
+  "branch": "3519-juniper-rma-correlation",
+  "currentStep": "specify",
+  "status": "specified",
+  "history": [
+    {
+      "step": "specify",
+      "substep": null,
+      "kind": "start",
+      "by": "extension",
+      "at": "2026-10-08T20:20:03.391Z"
+    }
+  ]
+}
