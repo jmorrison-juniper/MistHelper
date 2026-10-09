@@ -8,8 +8,9 @@ file adds to it, and it does not hold a copy of a rule from it. Where the two fi
 ## What this repository is
 
 MistHelper is a Python tool for the operation of a network on the Juniper Mist cloud. It gives a
-network operations center 293 registered menu operations, numbered 0 through 293, for data
-export, device management, and firmware upgrades. Each export writes to CSV, to SQLite, or to
+network operations center 303 registered menu operations, numbered 1 through 304 with one gap at
+152. Menu 0 exits the tool. The tool exports data, manages devices, and upgrades firmware.
+Each export writes to CSV, to SQLite, or to
 ArangoDB and Redis. The audience is a junior engineer in a network operations center, so each
 message uses plain words. The tool runs on Windows 11, on macOS, and on Linux, and it ships as a
 Podman container.

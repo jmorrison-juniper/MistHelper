@@ -10,7 +10,7 @@ does not start.
 
 ## The menu
 
-The tool holds **292 operations**, numbered 1 to 293 with one gap at 152.
+The tool holds **303 operations**, numbered 1 to 304 with one gap at 152.
 Menu 0 is Exit. Read [the menu reference](menu_reference.md) for the full list,
 which is generated from the code.
 
