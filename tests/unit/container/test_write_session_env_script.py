@@ -27,13 +27,17 @@ import getpass  # The test must request a valid owner on this host.
 import logging  # Record action counts without configuration values.
 import os  # The writer reads its values from the environment.
 import secrets  # Create fixture credentials that never name a real account.
-import stat  # One test reads the permission bits of the finished file.
 import subprocess  # The test runs a shell script.
 from pathlib import Path  # Every path in this module is a Path.
 
 import pytest  # The test framework of the project.
 
-from tests.unit.container.bash_support import BASH_PATH, BASH_SKIP_REASON  # The bash that can open the script.
+from tests.unit.container.bash_support import (  # The bash that can open the script.
+    BASH_PATH,
+    BASH_SKIP_REASON,
+    windows_system_variables,
+)
+from tests.unit.container.owner_only import assert_owner_only
 
 # Find the repository root, because pytest moves the working directory.
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -62,6 +66,7 @@ def _run_writer(target: Path, values: dict[str, str]) -> subprocess.CompletedPro
         The finished process, which carries the status and the output.
     """
     env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin")}  # Start clean, so no real token reaches the file.
+    env.update(windows_system_variables())  # Windows children need the folder names to start Winsock.
     env.update(values)  # Apply the values that this test states.
     logging.info("Writing one fixture session file with %d configuration names", len(values))
     result = subprocess.run(
@@ -102,8 +107,8 @@ def test_the_finished_file_is_readable_by_its_owner_alone(tmp_path: Path) -> Non
     target = tmp_path / "session.env"
     _run_writer(target, {"MIST_APITOKEN": "a-token"})
 
-    mode = stat.S_IMODE(target.stat().st_mode)  # Read the permission bits alone.
-    assert mode == 0o400, oct(mode)  # A wider mode would expose the token.
+    assert target.is_file(), "The writer must create the session file before its protection is checked."
+    assert_owner_only(target)  # Owner alone on POSIX, read-only on Windows, so no other account writes the token.
 
 
 def test_a_variable_outside_the_allowlist_never_reaches_the_file(tmp_path: Path) -> None:

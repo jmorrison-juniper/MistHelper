@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import os
 import secrets
-import stat
 import subprocess
 import sys
 from pathlib import Path
 
 import pytest
+
+from tests.unit.container.bash_support import windows_system_variables
+from tests.unit.container.owner_only import assert_owner_only
 
 from .harness import DatabaseSettingsFixture, SessionEnvironmentHarness
 
@@ -30,7 +32,7 @@ class TestSessionDatabaseEnvironment:
         assert sourced.returncode == 0, "The fresh-shell comparison checked 7 configuration names."
         assert sourced.stdout == "Checked 7 configuration names.\n"
         assert sourced.stderr == ""
-        assert stat.S_IMODE(harness.target.stat().st_mode) == 0o400
+        assert_owner_only(harness.target)  # Owner alone on POSIX; read-only on Windows.
 
     def test_actual_database_configuration_reads_all_seven_names(self, tmp_path: Path) -> None:
         """The actual builder must not lose a required setting in a fresh session."""
@@ -78,7 +80,7 @@ class TestSessionDatabaseEnvironment:
         cleared = harness.source("environment", dict.fromkeys(earlier, ""))
         assert third.returncode == cleared.returncode == 0
         assert harness.target.read_text(encoding="utf-8") == ""
-        assert stat.S_IMODE(harness.target.stat().st_mode) == 0o400
+        assert_owner_only(harness.target)  # Owner alone on POSIX; read-only on Windows.
         assert harness.target.with_suffix(".env.new").exists() is False
 
     @pytest.mark.parametrize("failure", ("missing", "directory"))
@@ -86,6 +88,7 @@ class TestSessionDatabaseEnvironment:
         """The probe must fail before it compares an environment from no readable file."""
         harness = SessionEnvironmentHarness(tmp_path)
         written = harness.write({})
+        harness.target.chmod(0o600)  # Clear the read-only flag, because Windows refuses to delete it.
         harness.target.unlink()
         if failure == "directory":
             harness.target.mkdir()
@@ -100,13 +103,27 @@ class TestSessionDatabaseEnvironment:
 class TestSessionFileProtection:
     """Keep the file and its reports limited to the explicit configuration."""
 
+    @staticmethod
+    def _declared_names(harness: SessionEnvironmentHarness) -> list[str]:
+        """Return the names that the writer declares, in declaration order."""
+        script = harness.WRITER.read_text(encoding="utf-8")  # Read the writer source that declares the allowlist.
+        declaration = script.split("SESSION_ENV_NAMES=(\n", 1)[1].split("\n)", 1)[0]  # Take only the declared block.
+        return [line.strip().split()[0] for line in declaration.splitlines() if line.strip()]  # Keep one name per line.
+
+    def test_exact_allowlist_declares_eighteen_names(self, tmp_path: Path) -> None:
+        """The writer declares exactly the allowed names on every platform."""
+        harness = SessionEnvironmentHarness(tmp_path)  # Locate the writer that the test reads.
+        declared = self._declared_names(harness)  # Read the declaration block of the writer.
+        assert declared == list(DatabaseSettingsFixture.ALLOWED_NAMES)  # The declaration matches the contract.
+        assert len(declared) == 18  # The contract names exactly eighteen session settings.
+
+    @pytest.mark.skipif(
+        os.name == "nt", reason="Windows environment names are case-insensitive, so ORG_ID and org_id collide."
+    )
     def test_exact_allowlist_and_report_have_eighteen_names(self, tmp_path: Path) -> None:
         """Both the declaration and report must exclude unrelated configuration."""
         harness = SessionEnvironmentHarness(tmp_path)
-        script = harness.WRITER.read_text(encoding="utf-8")
-        declaration = script.split("SESSION_ENV_NAMES=(\n", 1)[1].split("\n)", 1)[0]
-        declared = [line.strip().split()[0] for line in declaration.splitlines() if line.strip()]
-        assert declared == list(DatabaseSettingsFixture.ALLOWED_NAMES)
+        declared = self._declared_names(harness)
         values = {name: secrets.token_hex(24) for name in declared}
         written = harness.write(values)
         expected = "[SSH] Carried 18 configuration name(s) into the session file: " + " ".join(declared) + "\n"
@@ -139,8 +156,9 @@ class TestSessionFileProtection:
         harness = SessionEnvironmentHarness(tmp_path)
         written = harness.write(DatabaseSettingsFixture.values())
         assert written.returncode == 0
-        assert stat.S_IMODE(harness.target.stat().st_mode) == 0o400
-        assert harness.target.stat().st_uid == os.getuid()
+        assert_owner_only(harness.target)  # Owner alone on POSIX; read-only on Windows.
+        if os.name != "nt":  # Windows files carry no POSIX user identifier to compare.
+            assert harness.target.stat().st_uid == os.getuid()  # The writer account must own the file.
         assert harness.target.with_suffix(".env.new").exists() is False
 
     def test_shell_characters_remain_data_and_execute_no_command(self, tmp_path: Path) -> None:
@@ -164,7 +182,7 @@ class TestSessionFileProtection:
         result = subprocess.run(
             [sys.executable, "-m", "tests.unit.container.session_database.harness", "environment", str(tmp_path)],
             input=input_text,
-            env={"PATH": "/usr/bin:/bin", "PYTHONNOUSERSITE": "1"},
+            env={"PATH": "/usr/bin:/bin", "PYTHONNOUSERSITE": "1", **windows_system_variables()},
             cwd=harness.ROOT,
             capture_output=True,
             text=True,

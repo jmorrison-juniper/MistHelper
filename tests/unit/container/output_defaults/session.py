@@ -17,7 +17,11 @@ from pathlib import Path  # Confine every operational path to tmp_path.
 from types import TracebackType  # Type cleanup of an owned process lifetime.
 from typing import Any, BinaryIO, cast  # Type JSON records and the captured output handle.
 
-from tests.unit.container.bash_support import BASH_PATH, BASH_SKIP_REASON  # Reuse the read-only capability result.
+from tests.unit.container.bash_support import (  # Reuse the read-only capability result.
+    BASH_PATH,
+    BASH_SKIP_REASON,
+    windows_system_variables,
+)
 
 from .contract import ContractCopies, SourceContract  # Compare the unchanged local base without another checkout.
 
@@ -105,6 +109,7 @@ class SessionSandbox:
         logging.info("Build the allowlisted synthetic session environment")  # Mark the environment transformation.
         environment = {  # Every operational path is explicit and below this test root.
             "PATH": os.defpath,
+            **windows_system_variables(),  # Windows children need the folder names to start Winsock.
             "HOME": str(root / "home"),  # Use only the system shell tools and owned home.
             "TMPDIR": str(root / "tmp"),
             "LANG": "C",

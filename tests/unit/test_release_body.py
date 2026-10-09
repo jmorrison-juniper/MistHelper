@@ -153,6 +153,8 @@ class TestCompleteBodies(ReleaseFixtures):
         assert "/pull/" not in actual
         assert ReleaseBody.measure(actual)[1] < 125000
 
+    # The 50000-character tag becomes GITHUB_REF, and Windows caps one variable at 32767 characters.
+    @pytest.mark.skipif(sys.platform == "win32", reason="Windows caps an environment variable at 32767 characters.")
     def test_oversized_summary_fails_without_cutting_links(
         self, release: ReleaseFixtures.Files, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -375,7 +377,10 @@ class TestOutputFailures(ReleaseFixtures):
         if kind == "directory":
             release.output.mkdir()
         elif kind == "symlink":
-            release.output.symlink_to(release.source)
+            try:  # Linking needs the symlink privilege, which Windows grants only to some accounts.
+                release.output.symlink_to(release.source)  # Point the output at the source.
+            except OSError as error:  # Without the privilege, this case cannot be built.
+                pytest.skip(f"this account cannot create a symbolic link: {error}")  # Name the cause in the skip.
         arguments = list(release.arguments)
         arguments[arguments.index("--output") + 1] = str(paths.get(kind, release.output))
         assert ReleaseBodyCommand.run(arguments) == 2
