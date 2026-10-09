@@ -152,7 +152,7 @@ class LookupWorkflow:
         self._exporter.write_with_format_selection(  # WHY: the shared export path.
             ExportRowBuilder.ascii_rows(rows),  # WHY: FR-029 ASCII-only output before the write.
             "JuniperLookup.csv",
-            "juniperQuerySrDetails",
+            api_function_name="juniperQuerySrDetails",  # WHY: picks the key strategy.
             fieldnames=ExportRowBuilder.REQUEST_FIELDS,
         )
 
@@ -169,7 +169,7 @@ class LookupWorkflow:
         self._exporter.write_with_format_selection(  # WHY: the shared export path.
             ExportRowBuilder.ascii_rows(rows),  # WHY: FR-029 ASCII-only output before the write.
             "JuniperLookupRmaItems.csv",
-            "juniperQueryRmaDetails",
+            api_function_name="juniperQueryRmaDetails",  # WHY: picks the key strategy.
             fieldnames=ExportRowBuilder.RMA_ITEM_FIELDS,
         )
 

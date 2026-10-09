@@ -117,7 +117,12 @@ class AssetLookupWorkflow:
             return  # WHY: nothing to write.
         logger.info("Writing %d row(s) to %s", len(rows), filename)  # WHY: action log before the write.
         cleaned = ExportRowBuilder.ascii_rows(rows)  # WHY: FR-029 ASCII-only output before the write.
-        self._exporter.write_with_format_selection(cleaned, filename, api_name, fieldnames=fieldnames)  # WHY: write.
+        self._exporter.write_with_format_selection(  # WHY: write the rows through the shared export path.
+            cleaned,
+            filename,
+            api_function_name=api_name,  # WHY: the operation name picks the primary key strategy.
+            fieldnames=fieldnames,
+        )
 
     @staticmethod
     def _report(result: Any, requested: int) -> None:

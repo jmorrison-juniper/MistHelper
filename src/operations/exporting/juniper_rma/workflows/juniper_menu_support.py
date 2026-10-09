@@ -164,7 +164,7 @@ class JuniperExportSink:
         written = self._exporter.write_with_format_selection(  # WHY: the shared export path.
             cleaned,
             filename,
-            api_name,
+            api_function_name=api_name,  # WHY: the operation name picks the primary key strategy.
             fieldnames=list(columns),  # WHY: the header is the full column list, in order.
         )
         logger.debug("Export of %s finished, written=%s", filename, bool(written))  # WHY: the result, not the data.
