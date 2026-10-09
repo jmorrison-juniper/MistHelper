@@ -39,6 +39,7 @@ from __future__ import annotations
 import ast
 import logging
 import re
+from io import StringIO  # Captures the real handler output without writing the synthetic marker to the console.
 from pathlib import Path
 from typing import NamedTuple
 
@@ -118,6 +119,17 @@ PLAIN_MESSAGE = "portal: a probe record for the log format"
 # WHY: The logger name plays no part in the two context fields. A fixed name
 # keeps a failure message readable.
 PROBE_LOGGER = "upgrade_portal.probe"
+
+# WHY: The value names itself as synthetic, so it cannot be mistaken for an
+# operational credential in the source, the test output, or a failure report.
+SYNTHETIC_MARKER = "ISSUE_4050_SYNTHETIC_MARKER"
+
+# WHY: The ordinary line proves that redaction does not destroy useful output.
+ORDINARY_MESSAGE = "portal: the ordinary diagnostic remains visible"
+
+# WHY: Fixed context values prove that the existing context filter contract remains intact.
+PROBE_RUN_ID = "run-4050"
+PROBE_SITE_ID = "site-4050"
 
 
 class LogCall(NamedTuple):
@@ -575,3 +587,53 @@ def test_a_record_that_names_no_run_still_formats() -> None:
     record = plain_log_record()  # The common shape, which names neither field.
     rendered = rendered_by_the_portal_handler(record)  # Raises when the filter supplies nothing.
     assert PLAIN_MESSAGE in rendered, f"The portal handler dropped the message from {rendered!r}."
+
+
+def test_the_installed_portal_handler_redacts_exception_text_and_keeps_context() -> None:
+    """The package logger redacts exception text and preserves useful output.
+
+    Why:
+        The defect is a missing filter installation. The proof must emit through
+        the configured package logger instead of calling a filter directly.
+    """
+    package_logger = logging.getLogger(factory.PACKAGE_NAME)  # Use the logger that owns the production handler.
+    original_handlers = list(package_logger.handlers)  # Restore process state after this global logging test.
+    original_level = package_logger.level  # Preserve the level that another test or plugin selected.
+    original_propagate = package_logger.propagate  # Preserve the ancestor-routing choice after the proof.
+    output = StringIO()  # Keep the synthetic marker inside the test process.
+    try:  # Logging state must be restored even when the red proof fails.
+        package_logger.handlers = []  # Force `configure_logging` to install the real portal handler.
+        factory.configure_logging()  # Exercise the same installation path as application startup.
+        portal_handlers = [  # Select the named production handler and reject an empty installation.
+            handler for handler in package_logger.handlers if handler.get_name() == factory.HANDLER_NAME
+        ]
+        assert len(portal_handlers) == 1, f"The package logger installed {len(portal_handlers)} portal handlers."
+        portal_handler = portal_handlers[0]  # The count assertion makes this indexed read safe.
+        assert isinstance(portal_handler, logging.StreamHandler), "The portal handler is not a stream handler."
+        portal_handler.setStream(output)  # Capture exactly what the installed production handler writes.
+        try:  # Build exception text through a real exception object.
+            raise RuntimeError(f"token={SYNTHETIC_MARKER}")  # The obvious marker must never reach output.
+        except RuntimeError as error:  # The measured live path logs exception text from caught faults.
+            package_logger.error(  # Send the exception text through the real package logger.
+                "portal: dependency failure: %s",  # Keep the production `%s` logging shape.
+                error,  # The filter must sanitize the rendered exception text.
+                extra={factory.RUN_FIELD: PROBE_RUN_ID, factory.SITE_FIELD: PROBE_SITE_ID},  # Keep context.
+            )
+        package_logger.info(  # Send a normal record through the same logger and handler.
+            ORDINARY_MESSAGE,  # Useful diagnostics must remain readable.
+            extra={factory.RUN_FIELD: PROBE_RUN_ID, factory.SITE_FIELD: PROBE_SITE_ID},  # Keep context.
+        )
+        assert output.readable(), "The portal handler output stream is not readable."
+        rendered_lines = output.getvalue().splitlines()  # Read each emitted record once for the assertions.
+        examined_count = len(rendered_lines)  # A nonzero measured count prevents an empty green result.
+        assert examined_count == 2, f"The proof examined {examined_count} lines instead of 2."
+        redacted_line, ordinary_line = rendered_lines  # The count assertion proves both records exist.
+        assert SYNTHETIC_MARKER not in redacted_line, "The portal handler wrote the synthetic marker."
+        assert "***REDACTED***" in redacted_line, "The portal handler wrote no redaction placeholder."
+        assert ORDINARY_MESSAGE in ordinary_line, "The portal handler removed the ordinary diagnostic."
+        assert f"run={PROBE_RUN_ID}" in ordinary_line, "The portal handler removed the run context."
+        assert f"site={PROBE_SITE_ID}" in ordinary_line, "The portal handler removed the site context."
+    finally:  # Restore the shared logger for every later test.
+        package_logger.handlers = original_handlers  # Return the original handler chain.
+        package_logger.setLevel(original_level)  # Return the original threshold.
+        package_logger.propagate = original_propagate  # Return the original ancestor-routing choice.

@@ -238,7 +238,7 @@ def csrf_error_response(error: Exception) -> tuple[Response, int] | tuple[str, i
     )
 
     logger.warning(
-        "The portal refused a request with no valid token: %s.",  # The class name only, never the token.
+        "The portal refused a request because of %s and logged no token.",  # Name the class before the safe token fact.
         type(error).__name__,
     )
     if not wants_browser_page():  # The portal script and a JSON client read the envelope.
