@@ -70,10 +70,17 @@ class FakeConnection:
         self._send_frame(0xA, data)  # Pong replies to client ping frames.
 
     def send_close(self, code: int | None = 1000) -> None:
-        """Send a close control frame and close the TCP socket."""
+        """Send a close control frame, then half-close the TCP write side."""
         payload = b"" if code is None else struct.pack("!H", code)  # None sends an empty close payload.
         self._send_frame(0x8, payload)  # RFC 6455 close frame.
-        self.drop()  # End the underlying socket after the close frame.
+        self._half_close()  # Send FIN instead of RST, so the client still reads the close frame.
+
+    def _half_close(self) -> None:
+        """Send FIN after the queued frames and keep reading until the client closes."""
+        try:  # Shut only the write side, so unread client bytes cannot turn the close into a reset.
+            self._sock.shutdown(socket.SHUT_WR)  # The client reads the close frame, then sees EOF.
+        except OSError:  # The peer already reset the connection, so no write side remains.
+            self._sock.close()  # Fall back to a full close, which releases the socket.
 
     def drop(self) -> None:
         """Drop the TCP connection without a WebSocket close."""

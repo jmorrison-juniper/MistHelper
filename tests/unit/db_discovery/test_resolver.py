@@ -97,7 +97,8 @@ class TestLimitsAndErrors:
         resolver = discovery.create()
         with structlog.testing.capture_logs() as records:
             empty = ResolutionResult.from_records([])
-            non_ip = ResolutionResult.from_records([(socket.AF_UNIX, socket.SOCK_STREAM, 0, "", (1, b"controlled"))])
+            non_ip_family = socket.AF_UNSPEC  # Not an IP family on any OS; AF_UNIX does not exist on Windows.
+            non_ip = ResolutionResult.from_records([(non_ip_family, socket.SOCK_STREAM, 0, "", (1, b"controlled"))])
             worker_empty = resolver.resolve("empty.invalid")
         assert empty.addresses == ()
         assert isinstance(empty.error, socket.gaierror)

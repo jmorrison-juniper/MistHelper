@@ -15,7 +15,7 @@ from typing import Any
 from unittest.mock import patch
 
 from src.foundation.persistence.db import DatabaseConfig, WriteResult
-from tests.unit.container.bash_support import BASH_PATH, BASH_SKIP_REASON
+from tests.unit.container.bash_support import BASH_PATH, BASH_SKIP_REASON, windows_system_variables
 
 
 class DatabaseSettingsFixture:
@@ -96,7 +96,7 @@ class SessionEnvironmentHarness:
         logging.info("Writing one fixture session file with %d configuration names", len(values))
         result = subprocess.run(
             [str(BASH_PATH), str(self.WRITER), self.owner, str(self.target)],
-            env={"PATH": "/usr/bin:/bin", **values},
+            env={"PATH": "/usr/bin:/bin", **windows_system_variables(), **values},
             capture_output=True,
             text=True,
             encoding="utf-8",
@@ -121,7 +121,7 @@ class SessionEnvironmentHarness:
                 mode,
                 str(self.directory),
             ],
-            env={"PATH": "/usr/bin:/bin", "PYTHONNOUSERSITE": "1", "PYTHONUTF8": "1"},
+            env={"PATH": "/usr/bin:/bin", **windows_system_variables(), "PYTHONNOUSERSITE": "1", "PYTHONUTF8": "1"},
             input=json.dumps(expected),
             cwd=self.ROOT,
             capture_output=True,

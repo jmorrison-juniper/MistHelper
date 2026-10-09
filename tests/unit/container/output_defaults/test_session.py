@@ -3,6 +3,7 @@
 from __future__ import annotations  # Keep test annotations import-safe.
 
 import logging  # Report temporary mutations and measured outcomes.
+import os  # The skip markers ask the platform whether POSIX signals exist.
 import signal  # Compare the script's existing signal behavior.
 import subprocess  # Prove owned cleanup after a bounded wait fails.
 from pathlib import Path  # Keep every test write under tmp_path.
@@ -64,6 +65,9 @@ class TestBashSyntax:
         owned.__exit__(None, None, None)  # Unstarted cleanup must leave every unrelated process alone.
         assert owned.process is None and owned.handle is None  # No resource may leak after the refusal.
 
+    @pytest.mark.skipif(  # Windows has no POSIX process group to release.
+        os.name == "nt", reason="Windows has no POSIX process group, so owned descendant cleanup is POSIX-only."
+    )
     def test_owned_cleanup_after_timeout(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """A failed 30-second wait must release only its owned process group."""
         sandbox = SessionSandbox.create(tmp_path, ((0, 2.0),))  # Keep the actual child alive for the refusal decision.
@@ -78,7 +82,16 @@ class TestBashSyntax:
         assert owned.process.returncode == -signal.SIGKILL
         assert owned.handle.closed is True
 
-    @pytest.mark.parametrize("mode", ["missing-token", "launch-timeout"])
+    @pytest.mark.parametrize(
+        "mode",
+        [
+            "missing-token",
+            pytest.param(  # The timeout path releases its child with a POSIX process group.
+                "launch-timeout",
+                marks=pytest.mark.skipif(os.name == "nt", reason="Windows has no POSIX process group to release."),
+            ),
+        ],
+    )
     def test_signal_without_launch_fails(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mode: str) -> None:
         """A missing recorder must refuse a signal instead of passing an unmeasured case."""
         sandbox = SessionSandbox.create(tmp_path)  # Keep the refusal session fully owned.
@@ -169,6 +182,8 @@ class TestSessionIsolation:
     @pytest.mark.parametrize("interruption", [None, signal.SIGINT, signal.SIGTERM])
     def test_signal_and_normal_cleanup(self, tmp_path: Path, interruption: signal.Signals | None) -> None:
         """Keep original return codes and cleanup without inventing signal codes."""
+        if interruption is not None and os.name == "nt":  # Windows cannot deliver these POSIX signals to a child.
+            pytest.skip("Windows cannot deliver SIGINT or SIGTERM to a POSIX process group; normal cleanup still runs.")
         outcomes: list[tuple[int, int]] = []  # Compare actual baseline and live outcomes.
         for version in ("base", "live"):  # Use separate owned paths for each actual execution.
             sandbox = SessionSandbox.create(tmp_path / version, ((0, 0.4),))  # Leave time for a controlled signal.

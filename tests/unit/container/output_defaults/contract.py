@@ -203,7 +203,8 @@ class ContractCopies:
         """Copy all six sources and repair only temporary copies when requested."""
         for index, relative in enumerate(SourceContract.PATHS):  # Keep temporary guard inputs complete.
             logging.info("Prepare owned contract copy %s", relative)  # Mark the source read and local transformation.
-            text = (SourceContract.REPOSITORY / relative).read_bytes().decode("utf-8")
+            raw = (SourceContract.REPOSITORY / relative).read_bytes().decode("utf-8")  # Read the checked-out bytes.
+            text = raw.replace("\r\n", "\n")  # Git on Windows writes CRLF, but the measured hashes use LF.
             text = cls.original(index, text) if original else cls.repair(index, text)
             logging.debug("Prepared %s characters for %s", len(text), relative)  # Report the prepared copy size.
             cls(destination).write(index, text)  # Store the copy below the test's own root.
