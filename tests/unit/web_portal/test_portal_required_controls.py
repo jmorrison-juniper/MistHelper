@@ -86,6 +86,19 @@ AUDIT_SEES_FEWER_PROMPTS = frozenset(
         "95",  # DeviceDataFetcher resolves the site and gateway-device prompts through injected PromptUtils.
         "96",  # DeviceDataFetcher resolves the site and all-device prompts through injected PromptUtils.
         "203",
+        # Issue #4139: the Juniper RMA menus read operator answers through an injected resolver,
+        # SourceDependencyResolver.InputUtils (juniper_menu_support.py), or through the mh.InputUtils
+        # module alias (lookup.py and asset_lookup.py). The static walk cannot resolve either path.
+        # Menus 295, 297, and 303 also add a dependent identifier control through dynamic_parameters,
+        # which this test does not count. The browser tests in tests/e2e/web_portal/test_juniper_menus_browser.py
+        # drive each of these menus through the portal and check the result, so the prompt order is proven there.
+        "294",
+        "295",
+        "296",
+        "297",
+        "300",
+        "303",
+        "304",
     }
 )
 
