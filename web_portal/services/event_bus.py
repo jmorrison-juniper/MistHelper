@@ -9,7 +9,9 @@ import logging
 import threading
 import time
 import uuid
+from collections import OrderedDict, deque
 from queue import Empty, Full, Queue
+from typing import Any
 
 logger = logging.getLogger(__name__)  # Use a module logger so records include this module name.
 
@@ -43,6 +45,14 @@ class PortalEventBus:
     # WHY: how long stop() waits for the heartbeat thread to leave the loop.
     # The wait is interruptible, so the thread normally returns at once.
     STOP_JOIN_TIMEOUT_S = 5.0
+    # WHY: a replay keeps the newest events of one run, up to the queue bound.
+    # A replay never holds more events than a subscriber queue, so the replay
+    # always fits the queue of the subscriber that receives it.
+    REPLAY_EVENTS_PER_RUN = QUEUE_MAX_SIZE
+    # WHY: the bus remembers the replay of the newest runs only. An operator
+    # reconnects to a recent run, so twenty runs bound the memory and keep every
+    # run that someone watches.
+    REPLAY_RUN_LIMIT = 20
 
     def __init__(self):
         """Initialize the event bus with empty subscriber registry."""
@@ -67,6 +77,9 @@ class PortalEventBus:
         # there, so publish() reports these numbers after it unlocks.
         # Issue #3177 recorded the deadlock that a log record caused.
         self._pending_drop_report: tuple | None = None
+        # WHY: the replay of each run, in the order the run published its events.
+        # The least recently used run comes first, so it leaves first. Every access holds self._lock.
+        self._replay: OrderedDict[str, deque[dict[str, Any]]] = OrderedDict()
 
     def start(self) -> None:
         """Start the heartbeat timer thread.
@@ -111,20 +124,30 @@ class PortalEventBus:
         with self._lock:
             subscriber_count = len(self._subscribers)
             self._subscribers.clear()
+            self._replay.clear()  # A stopped bus keeps no run, so a restart replays no old event.
         logger.debug("Event bus stopped and dropped %d subscriber(s)", subscriber_count)
         self._log_drop_summary()  # Report the final loss total, because the rate limit can hide it.
 
     def subscribe(self, run_id: str = None) -> str:
-        """Create a new subscriber and return its unique ID."""
+        """Create a new subscriber and return its unique ID.
+
+        A subscriber with a run filter first receives the events that the bus
+        kept for that run, in the order the run published them. The replay and
+        the live path share the subscriber queue, so no event arrives twice.
+        """
         with self._lock:
             if len(self._subscribers) >= self.MAX_SUBSCRIBERS:
                 raise ConnectionError("Maximum SSE connections reached")
             subscriber_id = str(uuid.uuid4())
+            queue: Queue[dict[str, Any]] = Queue(maxsize=self.QUEUE_MAX_SIZE)
             self._subscribers[subscriber_id] = {
-                "queue": Queue(maxsize=self.QUEUE_MAX_SIZE),
+                "queue": queue,
                 "run_id": run_id,
                 "created_at": time.time(),
             }
+            if run_id is not None:  # A global subscriber has no run, so it receives no replay.
+                for event in self._replay.get(run_id, ()):  # Replay the kept events, oldest first.
+                    self._enqueue_event(queue, event)  # The queue is empty, and the replay fits it.
             return subscriber_id
 
     def unsubscribe(self, subscriber_id: str) -> None:
@@ -137,6 +160,8 @@ class PortalEventBus:
         event = {"type": event_type, "data": data}
         run_id = data.get("run_id")
         with self._lock:
+            if run_id is not None:  # Keep the event for a subscriber that connects after it.
+                self._remember(run_id, event)
             for sub_info in self._subscribers.values():
                 if not self._matches_filter(sub_info, run_id):
                     continue
@@ -164,6 +189,21 @@ class PortalEventBus:
         except Empty:
             return None
 
+    def _remember(self, run_id: str, event: dict[str, Any]) -> None:
+        """Keep an event in the replay of its run, and forget the least recently used run past the limit.
+
+        The only caller, publish, already holds self._lock. This method must
+        not acquire that lock again, because threading.Lock is not reentrant.
+        """
+        replay: deque[dict[str, Any]] | None = self._replay.get(run_id)  # The kept events of this run.
+        if replay is None:
+            replay = deque(maxlen=self.REPLAY_EVENTS_PER_RUN)  # Bounded, so one long run cannot grow the bus.
+            self._replay[run_id] = replay  # A new run starts as the most recently used.
+        replay.append(event)  # The deque drops the oldest kept event when it is full.
+        self._replay.move_to_end(run_id)  # This run is now the most recently used.
+        while len(self._replay) > self.REPLAY_RUN_LIMIT:
+            self._replay.popitem(last=False)  # Drop the least recently used run.
+
     def _matches_filter(self, sub_info: dict, run_id: str) -> bool:
         """Check if a subscriber's filter matches the event."""
         filter_id = sub_info.get("run_id")
@@ -177,9 +217,9 @@ class PortalEventBus:
         Both loss paths increment a counter. The bus reports the total on a
         rate-limited schedule and again when it stops. See issue #1924.
 
-        The only caller, ``publish``, already holds ``self._lock``.
+        Both callers, ``publish`` and ``subscribe``, already hold ``self._lock``.
         ``threading.Lock`` is not reentrant, so this method must not acquire
-        that lock again. A second acquire would deadlock the publisher.
+        that lock again. A second acquire would deadlock the caller.
         """
         try:
             queue.put_nowait(event)  # The normal path stores the event and loses nothing.

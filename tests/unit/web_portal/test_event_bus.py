@@ -307,3 +307,109 @@ def test_stop_reports_the_final_drop_total(bus: PortalEventBus, caplog: pytest.L
     lines = [line for line in _drop_warnings(caplog) if "in total" in line]
     assert len(lines) == 1, f"stop() MUST log exactly one summary, got {lines!r}"
     assert "3 server-sent event(s) in total" in lines[0], f"the summary MUST name the total, got {lines[0]!r}"
+
+
+# WHY: issue #4144 recorded a run whose first log lines never reached the
+# Execution Log, because the browser subscribed after those lines were published.
+def _published_run_events(instance: PortalEventBus, run_id: str, count: int) -> None:
+    """Publish ``count`` numbered log events for one run, before any subscriber reads them.
+
+    Why:
+        The run id names the events of one run, so a run filter can select them.
+    """
+    for sequence in range(count):
+        instance.publish("log", {"run_id": run_id, "seq": sequence})  # Each event carries its run and its order.
+
+
+def test_a_late_subscriber_receives_the_events_its_run_published_before_it_subscribed(bus: PortalEventBus) -> None:
+    """The events of a run published before the subscription reach that subscriber, in order.
+
+    Why:
+        A browser opens its event stream after the run has started. The bus
+        published the first log lines before the stream existed, so the
+        subscriber missed them. The replay sends each kept event to the new
+        subscriber first.
+    """
+    _published_run_events(bus, "run-1", 3)  # Three events before anyone subscribes.
+    subscriber_id = bus.subscribe("run-1")  # The late subscriber connects now.
+    assert _drain_subscriber(bus, subscriber_id) == [0, 1, 2], "the late subscriber MUST receive the earlier events"
+
+
+def test_a_late_subscriber_gets_only_the_events_of_its_own_run(bus: PortalEventBus) -> None:
+    """An event of another run never reaches a subscriber that filters on a different run.
+
+    Why:
+        The replay follows the same run filter as the live path. Without the
+        filter, a subscriber would read the log of an unrelated operation.
+    """
+    _published_run_events(bus, "run-2", 2)  # Events of a different run.
+    subscriber_id = bus.subscribe("run-1")  # This subscriber filters on run-1.
+    assert _drain_subscriber(bus, subscriber_id) == [], "a foreign run MUST NOT reach the subscriber"
+
+
+def test_a_subscriber_without_a_run_filter_gets_no_replay(bus: PortalEventBus) -> None:
+    """A subscriber with no run filter starts from the live stream, as before.
+
+    Why:
+        The replay belongs to a run. A global subscriber would otherwise read
+        the events of every run the bus still remembers.
+    """
+    _published_run_events(bus, "run-1", 2)  # Events that the bus remembers for run-1.
+    subscriber_id = bus.subscribe()  # No run filter.
+    assert _drain_subscriber(bus, subscriber_id) == [], "a global subscriber MUST NOT receive a replay"
+
+
+def test_the_replay_keeps_only_the_newest_events_of_a_run(bus: PortalEventBus) -> None:
+    """The replay keeps the newest events up to the queue bound, so it always fits the new queue.
+
+    Why:
+        A replay larger than one subscriber queue would overflow the queue at
+        subscribe time. The bound keeps the replay inside the queue, and the
+        newest events matter most to an operator who connects late.
+    """
+    _published_run_events(bus, "run-1", bus.QUEUE_MAX_SIZE + 20)  # More events than the bound.
+    subscriber_id = bus.subscribe("run-1")
+    survivors = _drain_subscriber(bus, subscriber_id)
+    assert len(survivors) == bus.QUEUE_MAX_SIZE, "the replay MUST hold no more than the queue bound"
+    assert survivors[-1] == bus.QUEUE_MAX_SIZE + 19, "the replay MUST keep the newest event last"
+
+
+def test_the_replay_forgets_the_least_recently_used_runs(bus: PortalEventBus) -> None:
+    """Only the newest runs keep a replay, so the bus memory stays bounded.
+
+    Why:
+        The bus remembers a limited number of runs. The oldest run loses its
+        replay first, and a subscriber to that run then receives no replay.
+    """
+    for index in range(bus.REPLAY_RUN_LIMIT + 1):
+        _published_run_events(bus, f"run-{index}", 1)  # One more run than the limit keeps.
+    forgotten = bus.subscribe("run-0")  # The oldest run has been forgotten.
+    remembered = bus.subscribe(f"run-{bus.REPLAY_RUN_LIMIT}")  # The newest run is still remembered.
+    assert _drain_subscriber(bus, forgotten) == [], "the forgotten run MUST NOT replay"
+    assert _drain_subscriber(bus, remembered) == [0], "the remembered run MUST replay its event"
+
+
+def test_replayed_and_live_events_arrive_in_order_without_duplicates(bus: PortalEventBus) -> None:
+    """A subscriber reads each event once: the replayed events first, then the live ones.
+
+    Why:
+        A duplicate log line would mislead an operator. The replay and the
+        live path share one queue, so the order and the count stay exact.
+    """
+    _published_run_events(bus, "run-1", 2)  # Two events before the subscription.
+    subscriber_id = bus.subscribe("run-1")
+    bus.publish("log", {"run_id": "run-1", "seq": 2})  # One live event after the subscription.
+    assert _drain_subscriber(bus, subscriber_id) == [0, 1, 2], "each event MUST arrive once, in order"
+
+
+def test_stop_clears_the_replay(bus: PortalEventBus) -> None:
+    """After ``stop``, the bus remembers no run, so a new subscriber gets no old event.
+
+    Why:
+        A stopped bus is discarded at shutdown. A restart must not replay the
+        events of a previous lifetime.
+    """
+    _published_run_events(bus, "run-1", 2)  # Events that the bus remembers for run-1.
+    bus.stop()  # Shutdown clears the subscribers and the replay together.
+    subscriber_id = bus.subscribe("run-1")
+    assert _drain_subscriber(bus, subscriber_id) == [], "a stopped bus MUST NOT replay old events"
