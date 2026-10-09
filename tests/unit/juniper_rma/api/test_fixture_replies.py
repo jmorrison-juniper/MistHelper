@@ -134,6 +134,20 @@ def test_saved_fault_991_reply_is_not_usable() -> None:
     assert outcome.has_fault("991")  # WHY: the batch limit fault is listed.
 
 
+@pytest.mark.parametrize("http_status", [400, 500])  # WHY: a client and a server error status.
+def test_asset_batch_refuses_an_http_error_even_with_a_success_body(http_status: int) -> None:
+    """An HTTP 4xx or 5xx status never passes, even when the body status says 200."""
+    reply = load_fixture("asset", "queryAssetsDetailsResponse_success")  # WHY: a body that says 200.
+    gateway = FakeGateway(  # WHY: the same body arrives with an HTTP error status.
+        bodies={"queryAssetsDetails": [reply]},
+        statuses={"queryAssetsDetails": [http_status]},
+    )
+    outcome = _asset_service(gateway).query_batch(["SN-TEST-0001"])  # WHY: one batch read.
+    assert outcome.is_usable is False  # WHY: the HTTP error status refuses the reply.
+    assert outcome.status_code == str(http_status)  # WHY: the refusal names the HTTP status.
+    assert outcome.result == {}  # WHY: no serial field from the refused body reaches the caller.
+
+
 def test_empty_reply_body_is_not_usable() -> None:
     """An empty body carries no result, so the list read is not usable."""
     body = JuniperTransportReply.parse_object(b"")  # WHY: an empty reply parses to no body.

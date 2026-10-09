@@ -67,7 +67,7 @@ class JuniperAssetService:
         )
         if reply.http_status in ResponseStatusReader.GATEWAY_MEANINGS:  # WHY: a gateway rejection has no body status.
             return ResponseStatusReader.gateway_rejection(self.PATH, reply.http_status)  # WHY: name the rejection.
-        return self._reader.read(self.PATH, reply.body)  # WHY: the body status decides the outcome.
+        return self._reader.read_checked(self.PATH, reply)  # WHY: an HTTP error status never passes.
 
     def query_bulk(self, from_date: str, to_date: str) -> ResponseOutcome:
         """Return the bulk snapshot file links for one date window. The dates are YYYY-MM-DD text."""
