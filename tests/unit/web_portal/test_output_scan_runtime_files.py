@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import os
 import re
+import threading
 from collections import deque
 from pathlib import Path
 
@@ -268,6 +269,163 @@ class TestFullWalkFallback:
         (tmp_path / "Tracked.csv").write_text("after\n", encoding="utf-8")  # Add fast-path evidence.
         assert scanner.changed_files() == ["Tracked.csv"]
         assert scanner.last_scanned_files <= 3
+
+
+class TestConcurrentOwnerTracking:
+    """Concurrent scanners accept only unambiguous writes from their owner."""
+
+    def test_overlapping_inventory_run_keeps_only_its_output(self, tmp_path):
+        """Issue 4092: a later run must not add its output to the inventory result."""
+        inventory_written = threading.Event()  # Start the second run after the inventory file exists.
+        second_completed = threading.Event()  # Complete the second run before the inventory run.
+        results: dict[str, list[str]] = {}  # Store both ordered overlap results for exact assertions.
+
+        def inventory_worker() -> None:
+            scanner = OutputFileScanner(str(tmp_path))  # Bind the inventory scanner to this worker.
+            scanner.snapshot()  # Activate the first run before it writes its report.
+            (tmp_path / "SiteInventory.csv").write_text("inventory", encoding="utf-8")  # Write owned evidence.
+            inventory_written.set()  # Permit the overlapping run to start after this write.
+            second_completed.wait(timeout=10)  # Keep the first scanner active until the second completes.
+            results["inventory"] = scanner.changed_files()  # Collect the first result after the overlap ends.
+
+        def other_worker() -> None:
+            scanner = OutputFileScanner(str(tmp_path))  # Bind the overlapping scanner to its worker.
+            scanner.snapshot()  # Activate the second run while the first scanner remains active.
+            (tmp_path / "Other.csv").write_text("other", encoding="utf-8")  # Write only the second run output.
+            results["other"] = scanner.changed_files()  # Complete the second scanner before the first.
+            second_completed.set()  # Release the inventory scanner after the second result is final.
+
+        inventory_thread = threading.Thread(target=inventory_worker)  # Build the first operation worker.
+        inventory_thread.start()  # Start and snapshot the inventory scanner.
+        assert inventory_written.wait(timeout=10), "the inventory worker did not write its report"
+        other_thread = threading.Thread(target=other_worker)  # Build the later overlapping operation worker.
+        other_thread.start()  # Start the second scanner before the first completes.
+        other_thread.join(timeout=10)  # Require the second scanner to complete first.
+        inventory_thread.join(timeout=10)  # Complete the inventory scanner after the second scanner.
+        assert not other_thread.is_alive(), "the overlapping worker did not complete"
+        assert not inventory_thread.is_alive(), "the inventory worker did not complete"
+        assert results["inventory"] == ["SiteInventory.csv"]  # Reject the foreign Other.csv result.
+        assert results["other"] == ["Other.csv"]  # Confirm the second run also keeps only its output.
+
+    def test_distinct_owner_threads_keep_distinct_tracked_files(self, tmp_path):
+        """Each scanner must report only the file its owner thread opened."""
+        barrier = threading.Barrier(3)  # Hold both scanners active while each owner writes.
+        release = threading.Event()  # Keep both registrations alive until both writes finish.
+        results: dict[str, list[str]] = {}  # Store each owner scanner result for assertions.
+
+        def worker(name: str) -> None:
+            scanner = OutputFileScanner(str(tmp_path))  # Bind this scanner to its current worker owner.
+            scanner.snapshot()  # Activate this scanner before synchronized writes.
+            barrier.wait(timeout=10)  # Prove both scanners overlap.
+            (tmp_path / f"{name}.csv").write_text(name, encoding="utf-8")  # Track one owner-specific file.
+            release.wait(timeout=10)  # Keep the scanner active while the other owner writes.
+            results[name] = scanner.changed_files()  # Stop tracking and collect approved evidence.
+
+        threads = [threading.Thread(target=worker, args=(name,)) for name in ("alpha", "beta")]  # Build owners.
+        for thread in threads:  # Start both owner threads before joining the barrier.
+            thread.start()  # Activate one scanner in each thread.
+        barrier.wait(timeout=10)  # Confirm both owner registrations are active.
+        release.set()  # Let both scanners collect their tracked evidence.
+        for thread in threads:  # Wait for deterministic cleanup.
+            thread.join(timeout=10)  # Bound the test if hook cleanup fails.
+        assert results == {"alpha": ["alpha.csv"], "beta": ["beta.csv"]}  # Reject cross-run paths.
+
+    def test_shared_path_is_ambiguous_for_both_active_owners(self, tmp_path):
+        """A path opened by both active owners must appear in neither result."""
+        first_written = threading.Event()  # Order the two opens while both scanners remain active.
+        second_written = threading.Event()  # Keep the first scanner active until ambiguity is recorded.
+        results: dict[str, list[str]] = {}  # Store both scanner decisions.
+
+        def first_worker() -> None:
+            scanner = OutputFileScanner(str(tmp_path))  # Bind owner one from the current worker.
+            scanner.snapshot()  # Register owner one before the shared write.
+            (tmp_path / "Shared.csv").write_text("first", encoding="utf-8")  # Track the shared path first.
+            first_written.set()  # Allow owner two to open the same path.
+            second_written.wait(timeout=10)  # Keep owner one active through the second open.
+            results["first"] = scanner.changed_files()  # Exclude the now-ambiguous path.
+
+        def second_worker() -> None:
+            first_written.wait(timeout=10)  # Wait until owner one tracks the path.
+            scanner = OutputFileScanner(str(tmp_path))  # Bind owner two from the current worker.
+            scanner.snapshot()  # Register owner two while owner one remains active.
+            (tmp_path / "Shared.csv").write_text("second", encoding="utf-8")  # Make both owners possible.
+            second_written.set()  # Release owner one after ambiguity is recorded.
+            results["second"] = scanner.changed_files()  # Exclude the shared path for owner two.
+
+        threads = [threading.Thread(target=first_worker), threading.Thread(target=second_worker)]  # Build owners.
+        for thread in threads:  # Start the ordered overlap.
+            thread.start()  # Run each scanner in its owner thread.
+        for thread in threads:  # Wait for both ambiguity decisions.
+            thread.join(timeout=10)  # Bound the test if ownership tracking deadlocks.
+        assert results == {"first": [], "second": []}  # Reject the shared path from both runs.
+
+    def test_overlap_disables_ownerless_timestamp_fallback(self, tmp_path):
+        """A child-thread write during overlap must not become either run's evidence."""
+        barrier = threading.Barrier(3)  # Hold two scanner owners in one overlap.
+        child_done = threading.Event()  # Release scanners after the ownerless write completes.
+        results: list[list[str]] = []  # Store both scanner results without assigning an owner.
+
+        def worker() -> None:
+            scanner = OutputFileScanner(str(tmp_path))  # Bind one owner from the current worker.
+            scanner.snapshot()  # Register before the ownerless child starts.
+            barrier.wait(timeout=10)  # Confirm both scanners are active.
+            child_done.wait(timeout=10)  # Keep overlap active through the unowned write.
+            results.append(scanner.changed_files())  # Timestamp fallback must remain disabled.
+
+        threads = [threading.Thread(target=worker) for _ in range(2)]  # Build two independent owners.
+        for thread in threads:  # Activate both scanners.
+            thread.start()  # Start one scanner per owner thread.
+        barrier.wait(timeout=10)  # Prove the scanner lifetimes overlap.
+        child = threading.Thread(  # Use a thread with no active scanner registration.
+            target=lambda: (tmp_path / "Ownerless.csv").write_text("foreign", encoding="utf-8")
+        )
+        child.start()  # Create an ownerless write while both scanners overlap.
+        child.join(timeout=10)  # Ensure the file exists before either scanner stops.
+        child_done.set()  # Release both scanners after the ownerless evidence exists.
+        for thread in threads:  # Wait for both fallback decisions.
+            thread.join(timeout=10)  # Bound the test if hook cleanup fails.
+        assert results == [[], []]  # Reject ownerless timestamp evidence for both overlapping runs.
+
+    def test_stale_owner_context_cannot_claim_the_surviving_run(self, tmp_path):
+        """A late write from a finished run must not enter the sole surviving scanner."""
+        first = OutputFileScanner(str(tmp_path), owner_id="first-run")  # Build the run that finishes first.
+        second = OutputFileScanner(str(tmp_path), owner_id="second-run")  # Build the surviving run.
+        first.snapshot()  # Activate the first owner before the overlap begins.
+        second.snapshot()  # Mark both scanners as overlap-sensitive.
+        first_token = OutputFileScanner.bind_owner("first-run")  # Attribute the first owned write.
+        (tmp_path / "First.csv").write_text("first", encoding="utf-8")  # Track evidence for the first run.
+        OutputFileScanner.reset_owner(first_token)  # Restore the test context before collection.
+        assert first.changed_files() == ["First.csv"]  # Finish and unregister the first owner.
+        stale_token = OutputFileScanner.bind_owner("first-run")  # Simulate late work from the finished run.
+        (tmp_path / "FirstLate.csv").write_text("late", encoding="utf-8")  # Try to steal the surviving scanner.
+        OutputFileScanner.reset_owner(stale_token)  # Remove the stale context after the write.
+        second_token = OutputFileScanner.bind_owner("second-run")  # Attribute the surviving run's real result.
+        (tmp_path / "Second.csv").write_text("second", encoding="utf-8")  # Track the surviving owner evidence.
+        OutputFileScanner.reset_owner(second_token)  # Restore the test context before collection.
+        assert second.changed_files() == ["Second.csv"]  # Reject the stale owner's late file.
+
+    def test_new_run_start_during_fallback_discards_foreign_names(self, tmp_path, monkeypatch):
+        """A scanner that starts during a fallback walk must not leak its file into the earlier run."""
+        first = OutputFileScanner(str(tmp_path), owner_id="first-run")  # Build the scanner that finishes first.
+        first.snapshot()  # Register before the later run exists.
+        second: OutputFileScanner | None = None  # Hold the later scanner for cleanup and evidence collection.
+
+        def start_second_during_walk() -> set[str]:
+            """Start a second run and return the foreign name that the slow walk observed."""
+            nonlocal second  # Publish the new scanner to the outer cleanup path.
+            second = OutputFileScanner(str(tmp_path), owner_id="second-run")  # Start after first deregistration.
+            second.snapshot()  # Increment the generation while the first fallback is still active.
+            token = OutputFileScanner.bind_owner("second-run")  # Attribute the later run's file correctly.
+            (tmp_path / "SecondOnly.csv").write_text("second", encoding="utf-8")  # Create foreign fallback evidence.
+            OutputFileScanner.reset_owner(token)  # Restore the direct test context.
+            return {"SecondOnly.csv"}  # Simulate the first directory walk observing the new file.
+
+        monkeypatch.setattr(first, "_changed_files_by_directory_marks", start_second_during_walk)
+        assert first.changed_files() == []  # Discard the foreign name after the generation changes.
+        if second is None:  # A missing scanner means the injected race did not execute.
+            pytest.fail("the later scanner did not start during the fallback walk")
+        assert second._owner_id == "second-run"  # Prove the injected later run owns the scanner.
+        assert second.changed_files() == ["SecondOnly.csv"]  # Keep the later run's owned file.
 
 
 # Issue #3201: the test suites write their artifacts into the data folder, and

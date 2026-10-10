@@ -91,6 +91,7 @@ def test_the_mark_is_an_integer_count_of_nanoseconds(tmp_path):
     # A nanosecond count of the current era is a 19 digit number. A second
     # count is 10 digits, so this comparison catches a unit mistake.
     assert scanner._started_at > 1_000_000_000_000_000_000
+    assert scanner.changed_files() == []  # Stop tracking so the next same-thread scanner can register.
 
 
 def test_every_recorded_time_is_an_integer_count_of_nanoseconds(tmp_path):
@@ -133,6 +134,7 @@ def test_the_probe_file_is_removed_from_the_data_root(tmp_path):
     scanner.snapshot()  # Run the code under test.
     leftovers = [path.name for path in tmp_path.iterdir()]  # Read what the mark left on disk.
     assert leftovers == []  # A leftover probe would grow the data directory on every run.
+    assert scanner.changed_files() == []  # Stop tracking after the probe-only lifecycle check.
 
 
 def test_a_missing_root_falls_back_without_raising(tmp_path):
