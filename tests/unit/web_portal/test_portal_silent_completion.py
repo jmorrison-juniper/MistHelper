@@ -9,9 +9,6 @@ from unittest.mock import MagicMock, patch  # WHY: isolate the prompt, Mist call
 
 import pytest  # WHY: exercise both HTTP error status families without duplicate setup.
 
-from src.foundation.support.utils.menu_entry import (
-    MenuEntry,
-)  # WHY: OperationExecutor expects menu entries, not raw callables.
 from src.foundation.support.refactors import (
     device_data_fetcher as fetcher_module,
 )  # WHY: patch the real fetcher's dependency resolver.
@@ -19,6 +16,9 @@ from src.foundation.support.refactors.device_data_fetcher import (
     DeviceDataFetcher,
     DeviceFetchConfig,
 )  # WHY: keep the real fetcher in the Menu 95 path.
+from src.foundation.support.utils.menu_entry import (
+    MenuEntry,
+)  # WHY: OperationExecutor expects menu entries, not raw callables.
 from src.interfaces.visualization.ui import (
     interactive_display_utils as display_module,
 )  # WHY: patch and execute the real Menu 95 display path.
@@ -182,12 +182,16 @@ def test_issue_4030_unresolved_site_reports_failed_with_unrelated_output(tmp_pat
     resolver.PromptUtils.select_site_id_from_csv.side_effect = lambda: _write_unrelated_output(tmp_path, unrelated_name)
     executor = _build_menu_95_executor()  # WHY: use the production completion classifier.
     run = executor._build_run_record("95")  # WHY: use the production run-record shape.
-    scanner_factory = lambda: OutputFileScanner(str(tmp_path))  # WHY: scan only the temporary evidence directory.
+
+    class _TmpDirScanner(OutputFileScanner):  # WHY: keep the real owner API and confine scans to tmp_path.
+        def __init__(self, data_dir: str | None = None, owner_id: str | None = None) -> None:  # WHY: match production.
+            super().__init__(str(tmp_path), owner_id=owner_id)  # WHY: scan only the temporary evidence directory.
+
     try:
         with patch.object(display_module, "SourceDependencyResolver", resolver):  # WHY: route the real display path.
             with patch.object(fetcher_module, "_MH", resolver):  # WHY: route the real fetcher path.
                 with patch.object(DeviceDataFetcher, "_fetch_data") as fetch_data:  # WHY: observe an owned seam.
-                    with patch.object(operation_module, "OutputFileScanner", scanner_factory):  # WHY: real scanner.
+                    with patch.object(operation_module, "OutputFileScanner", _TmpDirScanner):  # WHY: real scanner.
                         executor._execute_operation(run, {})  # WHY: drive capture, scanning, and verdict together.
         assert run["status"] == "failed", "An unresolved Menu 95 site reported Complete."  # WHY: issue #4030.
         assert run["error_message"] == "! Error fetching device data: site ID could not be resolved."  # WHY: exact.
