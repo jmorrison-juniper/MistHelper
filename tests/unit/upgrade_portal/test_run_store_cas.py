@@ -40,6 +40,20 @@ def test_memory_run_store_allows_one_concurrent_child_claim() -> None:
     assert store.read_run(run_id)["record_version"] == 1  # The store advanced one version only.
 
 
+def test_memory_run_store_appends_one_upgrade_without_replacing_a_stop() -> None:
+    """The guarded memory mutation preserves every field outside upgrades."""
+    store = upgrade.MemoryRunStore()  # Use the production in-memory lock.
+    run_id = "accepted-memory-row"  # Keep this test record separate from route records.
+    stop = {"requested_by": "sam@example.com", "confirmation_text": "STOP"}  # Model the durable route write.
+    initial = {"run_id": run_id, "stop_request": stop, "upgrades": []}  # Hold the concurrent stop first.
+    row = {"upgrade_id": "upgrade-1", "accepted": ["209339051780"]}  # Build one accepted cloud result.
+    assert store.write_run(initial) is True  # Seed the current durable record.
+    assert store.append_accepted_upgrade(run_id, row) is True  # Change the accepted rows only.
+    stored = store.read_run(run_id)  # Read the complete record after the narrow mutation.
+    assert stored["stop_request"] == stop  # The accepted-row update cannot erase the stop.
+    assert stored["upgrades"] == [row]  # The new identifier is durable before another cloud write.
+
+
 class AqlStandIn:
     """Record one atomic AQL replacement and return its result rows."""
 
@@ -71,3 +85,22 @@ def test_document_run_store_uses_atomic_aql_and_no_fallback(monkeypatch: Any) ->
     assert bind_vars["expected"] == 1  # Bind the caller's expected version.
     module.connect_database = lambda: None  # Model an unavailable production database.
     assert store.compare_and_set_run("run-a", 2, replacement) is False  # Never claim mirror success.
+
+
+def test_document_run_store_appends_with_one_field_update(monkeypatch: Any) -> None:
+    """The document mutation updates upgrades without replacing a concurrent stop."""
+    row = {"upgrade_id": "upgrade-1", "accepted": ["209339051780"]}  # Build one accepted cloud result.
+    stored = {"run_id": "run-a", "_key": "run-a", "stop_request": {"confirmation_text": "STOP"}, "upgrades": [row]}
+    aql = AqlStandIn([stored])  # Make the database return the atomically updated document.
+    module = SimpleNamespace(  # Supply the production module fields used by the store.
+        RUN_COLLECTION="upgrade_runs",  # Bind the real collection name.
+        connect_database=lambda: SimpleNamespace(aql=aql),  # Return an online database.
+    )
+    monkeypatch.setattr(wiring, "load_module", lambda name: module)  # Keep the test offline.
+    store = wiring.DocumentRunStore()  # Use the production document mutation.
+    assert store.append_accepted_upgrade("run-a", row) is True  # Persist the accepted identifier.
+    query, bind_vars = aql.calls[0]  # Inspect the one database action.
+    assert "UPDATE run WITH" in query  # Patch the stored document instead of replacing it.
+    assert "upgrades:" in query  # Change only the accepted-row field.
+    assert "REPLACE run" not in query  # A stale complete record must never erase a stop.
+    assert bind_vars["row"] == row  # Bind the detached accepted row.

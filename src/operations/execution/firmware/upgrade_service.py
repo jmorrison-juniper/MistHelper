@@ -28,7 +28,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from enum import StrEnum
 from importlib import import_module
-from typing import Any
+from typing import Any, Final
 
 SCOPE_SITE = "site"
 SCOPE_ORG = "org"
@@ -92,6 +92,18 @@ _JUNOS_DEVICE_TYPES = ("switch", "gateway")
 # device type with these words in every device record.
 DEVICE_TYPE_AP = "ap"
 DEVICE_TYPE_SWITCH = "switch"
+DEVICE_TYPE_GATEWAY = "gateway"
+
+# Issue #4020: a single site upgrades its families in one order, because every
+# family sits downstream of the gateways and the access points sit downstream of
+# the switches. The insertion order of the operator selection must never decide
+# which firmware write leaves first, so this rank orders every plan instead.
+PLAN_FAMILY_ORDER: Final[tuple[str, ...]] = (DEVICE_TYPE_GATEWAY, DEVICE_TYPE_SWITCH, DEVICE_TYPE_AP)
+
+# A device type that this module does not rank sorts after every ranked family.
+# A new cloud family then still reaches the cloud, and it never jumps ahead of
+# the gateways that carry it.
+_UNRANKED_FAMILY_RANK: Final[int] = len(PLAN_FAMILY_ORDER)
 
 # The cloud default list, from the request body schema at
 # documentation/api/utilities/POST_sites_site_id_devices_upgrade.md.
@@ -944,6 +956,55 @@ def _group_targets(
     return {key: tuple(members) for key, members in groups.items()}
 
 
+def _family_rank(device_type: str) -> int:
+    """Return the canonical position of one device family.
+
+    Why:
+        The module binds no mutable value, so this function reads the tuple
+        instead of a rank dictionary. An unranked family answers with the
+        position after every ranked family, so a new cloud family still reaches
+        the cloud and never jumps ahead of the gateways that carry it.
+
+    Args:
+        device_type: The device type of the group.
+
+    Returns:
+        The index of the family in `PLAN_FAMILY_ORDER`, or the unranked rank.
+    """
+    if device_type not in PLAN_FAMILY_ORDER:  # An unknown family must never sort first.
+        return _UNRANKED_FAMILY_RANK
+    return PLAN_FAMILY_ORDER.index(device_type)
+
+
+def _ordered_groups(
+    groups: Mapping[tuple[str, GatewayFamily, str], tuple[DeviceTarget, ...]],
+) -> tuple[tuple[tuple[str, GatewayFamily, str], tuple[DeviceTarget, ...]], ...]:
+    """Return the groups in the one order that a single site upgrades.
+
+    Why:
+        Issue #4020 reports that the plan order followed the insertion order of
+        the operator selection. An operator who picked the access points first
+        then sent the access point firmware before the gateway firmware, and
+        every access point of the site sits downstream of that gateway. This
+        function fixes the order at gateways, then switches, then access points,
+        whatever order the selection arrived in.
+
+        The sort is stable, so two groups of one family keep the order that
+        `_group_targets` built. A family and version split inside one family
+        therefore still reads the same way for the operator.
+
+    Args:
+        groups: The group map that `_group_targets` built.
+
+    Returns:
+        The group items in the canonical family order.
+    """
+    items = tuple(groups.items())  # One pass, because a mapping view would re-read the dictionary.
+    ordered = sorted(items, key=lambda item: _family_rank(item[0][0]))  # A stable sort keeps the family internals
+    _logger().debug("the plan families run in the order %s", [item[0][0] for item in ordered])
+    return tuple(ordered)
+
+
 def _drops_the_strategy(
     keys: tuple[tuple[str, GatewayFamily, str], ...],
     options: UpgradeOptions,
@@ -1156,6 +1217,12 @@ def plan_upgrade(
         needs several calls. The function is pure and performs no cloud call, so
         the portal shows the whole plan to the operator before anything starts.
 
+        Issue #4020: the plans leave in the fixed family order of
+        `PLAN_FAMILY_ORDER`, which is the gateways, then the switches, then the
+        access points. The order of the selection never decides which family
+        takes firmware first, because every other family sits downstream of the
+        gateways.
+
     Args:
         targets: Every device that the operator selected.
         options: The choices of the operator.
@@ -1163,7 +1230,7 @@ def plan_upgrade(
         site_id: The site identifier for a device call.
 
     Returns:
-        One plan for each group.
+        One plan for each group, in the canonical family order.
     """
     _logger().info("plan an upgrade for %s target(s)", len(targets))
     groups = _group_targets(targets)
@@ -1171,7 +1238,8 @@ def plan_upgrade(
     routers = sum(len(members) for key, members in groups.items() if key[1] is GatewayFamily.SSR)
     warnings = _plan_warnings(groups, options, access_points, routers)
     identifiers = (org_id, site_id)
-    plans = tuple(_build_plan(key, members, options, identifiers, warnings) for key, members in groups.items())
+    ordered = _ordered_groups(groups)  # Issue #4020: the gateways lead, and the selection order never decides.
+    plans = tuple(_build_plan(key, members, options, identifiers, warnings) for key, members in ordered)
     _logger().debug("the plan holds %s cloud call(s)", len(plans))
     return plans
 

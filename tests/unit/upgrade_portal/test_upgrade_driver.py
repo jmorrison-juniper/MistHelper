@@ -25,6 +25,7 @@ from src.interfaces.portals.upgrade_portal.app import config
 from src.interfaces.portals.upgrade_portal.runtime.identity import SessionOwner
 from src.interfaces.portals.upgrade_portal.runtime.lock import LockRecord, ReleaseOutcome
 from src.interfaces.portals.upgrade_portal.runtime.runs import PHASE_ORDER, PhaseState, RunRecordBuilder, RunState
+from src.interfaces.portals.upgrade_portal.runtime.signals import DispatchEvidenceError, StopRequestStore
 from src.interfaces.portals.upgrade_portal.upgrade import driver, phase_gate
 
 RUN_ID = "run-" + "a" * 32
@@ -116,6 +117,68 @@ class FakeStore:
         self.states.append(str(run.get("state", "")))
         return True
 
+    def append_accepted_upgrade(self, run_id: str, row: dict[str, Any]) -> bool:
+        """Append one accepted row without replacing another durable field."""
+        if self.record is None or self.record.get("run_id") != run_id:
+            return False  # An absent or different run cannot hold the accepted identifier.
+        current = dict(self.record)  # Preserve the current stop, state, and phase fields.
+        rows = list(current.get("upgrades", ()))  # Keep identifiers from earlier phases.
+        rows.append(dict(row))  # Add the new cloud response only.
+        current["upgrades"] = rows  # Change no other durable field.
+        self.record = current  # Publish the narrow mutation.
+        return True  # The accepted row is now readable.
+
+    def append_dispatch_failure(self, run_id: str, failure: dict[str, Any]) -> bool:
+        """Append one refusal record and change no other field.
+
+        Args:
+            run_id: The run key.
+            failure: The refusal evidence of one plan.
+
+        Returns:
+            True after the refusal becomes durable.
+        """
+        if self.record is None or self.record.get("run_id") != run_id:
+            return False  # An absent or different run cannot carry refusal evidence.
+        current = dict(self.record)  # Preserve the current upgrades, state, and phase fields.
+        rows = list(current.get("dispatch_failures", ()))  # Preserve every earlier refusal.
+        rows.append(dict(failure))  # Add only the new refusal.
+        current["dispatch_failures"] = rows  # Change no stop, state, or accepted row field.
+        self.record = current  # Publish the narrow mutation.
+        return True  # The refusal survives a concurrent stop write.
+
+    def apply_state_transition(self, run_id: str, state: str, updated_at: str, expected_state: str) -> bool:
+        """Write only the state fields of one run while the observed state holds.
+
+        Args:
+            run_id: The run key.
+            state: The new run state value.
+            updated_at: The fresh change time in ISO 8601 UTC.
+            expected_state: The state the caller read before it decided.
+
+        Returns:
+            True after the move becomes durable.
+        """
+        if self.record is None or self.record.get("run_id") != run_id:
+            return False  # An absent or different run cannot hold a state.
+        if str(self.record.get("state", "")) != expected_state:  # The driver moved the run since the read.
+            return False  # Never move a run backward from a state the caller never saw.
+        current = dict(self.record)  # Preserve the current upgrades, phases, and stop fields.
+        current["state"] = state  # Change only the state field.
+        current["updated_at"] = updated_at  # The poll route reads the fresh change time.
+        self.record = current  # Publish the narrow mutation.
+        return True  # Every concurrent driver field survived the move.
+
+    def apply_stop_request(self, run_id: str, stop_request: dict[str, Any], updated_at: str) -> bool:
+        """Write only the stop fields and preserve every accepted row."""
+        if self.record is None or self.record.get("run_id") != run_id:
+            return False  # An absent or different run cannot carry a durable stop request.
+        current = dict(self.record)  # Preserve the current upgrades, state, and phase fields.
+        current["stop_request"] = dict(stop_request)  # Change only the stop request field.
+        current["updated_at"] = updated_at  # The poll route reads the fresh change time.
+        self.record = current  # Publish the narrow mutation.
+        return True  # The stop is durable beside every concurrent accepted row.
+
     def phase_states(self) -> dict[str, str]:
         """Return the state of each phase of the stored record.
 
@@ -203,8 +266,38 @@ class RecordingCapture:
         return self.key
 
 
+class LatePostCheckFailureCapture(RecordingCapture):
+    """Start the pre-check capture and refuse the post-check capture.
+
+    Why:
+        Issue #4020: a stopped run must prove whether it captured the site
+        after the firmware write. This double lets the first capture work and
+        fails the second, which is the one case the operator must see.
+    """
+
+    def start(self, request: Any) -> str | None:
+        """Record the request and refuse the second capture only.
+
+        Args:
+            request: The run key, the ordinal, and the role.
+
+        Returns:
+            The capture key for the pre-check, and None for the post-check.
+        """
+        self.requests.append(dict(request))  # Keep the same evidence trail as the parent double.
+        if int(dict(request).get("ordinal", 0)) == driver.POST_CHECK_ORDINAL:  # The post-check call fails.
+            return None  # The driver must treat this as a lost post-check, not as a clean stop.
+        return self.key  # The pre-check capture works, so the run can reach its firmware phases.
+
+
 class AcceptingSubmitter:
-    """Accept every submission and write one upgrade identifier."""
+    """Accept every phase submission and write one upgrade identifier.
+
+    Why:
+        Issue #4020 moved the firmware call into the phase loop, so this double
+        answers one phase at a time. It records the phase of every call, which
+        proves the canonical family order without one cloud socket.
+    """
 
     def __init__(self, accept: bool = True) -> None:
         """Hold the answer this submitter returns.
@@ -214,20 +307,60 @@ class AcceptingSubmitter:
         """
         self.accept = accept
         self.calls = 0
+        self.phases: list[str] = []  # The family of every phase that asked for firmware.
+        self.refuse_on: str | None = None  # A later-phase refusal proves that accepted upstream work survives.
+        self.refusal_reason = ""  # An explicit validation reason must reach the terminal run record unchanged.
 
-    def submit(self, record: Any) -> bool:
-        """Write one upgrade identifier on each target.
+    def submit_phase(self, record: Any, phase: str) -> str | None:
+        """Write one upgrade identifier on each target of this phase.
 
         Args:
             record: The run record.
+            phase: The phase that asks for firmware.
 
         Returns:
-            The answer this double holds.
+            None when this double accepts, and a reason when it refuses.
         """
         self.calls += 1
+        self.phases.append(phase)
         for target in record.get("targets", []):
             target["upgrade_id"] = "up-1"
-        return self.accept
+        refused = not self.accept or self.refuse_on == phase  # A test can refuse the first or a later family.
+        reason = self.refusal_reason or f"The cloud refused the {phase} upgrade call."  # Keep the exact safe reason.
+        return reason if refused else None  # A refusal must stay inside the controlled cascade path.
+
+
+class StopAfterAcceptedSubmitter:
+    """Persist one accepted row, then use the real stop store path."""
+
+    def __init__(self, store: FakeStore) -> None:
+        """Hold the durable store that the route and the driver share.
+
+        Args:
+            store: The run store of the driver.
+        """
+        self.store = store
+        self.phases: list[str] = []
+
+    def submit_phase(self, record: Any, phase: str) -> str:
+        """Persist one accepted row and inject a concurrent stop request.
+
+        Args:
+            record: The run record.
+            phase: The first firmware phase.
+
+        Returns:
+            The visible stop reason from the submitter.
+        """
+        self.phases.append(phase)
+        row = {"upgrade_id": "up-1", "accepted": ["aa0000000001"]}  # One cloud call became durable.
+        record["upgrades"] = [dict(row)]  # The driver process keeps the same cancellation evidence.
+        self.store.append_accepted_upgrade(str(record["run_id"]), row)  # Persist only the accepted-row field.
+        StopRequestStore(self.store).request(str(record["run_id"]), ACTOR_EMAIL, "STOP")  # Use the real stop path.
+        stored = self.store.read_run(str(record["run_id"]))  # Copy the durable request into the driver record.
+        if stored is not None:
+            record["stop_request"] = stored["stop_request"]  # The driver then selects stopped finalization.
+        return "An operator asked to stop the run before the next firmware call."
 
 
 class RecordingReleaser:
@@ -939,6 +1072,219 @@ class TestStopAndFailure:
         final = parts["driver"].run(make_record())
         assert final["state"] == RunState.FAILED.value
         assert parts["gate"].calls == []
+
+
+class TestPhaseSubmission:
+    """Issue #4020: the firmware of one family leaves inside its own phase.
+
+    Why:
+        The driver used to send every family of the site in one call before the
+        first gate opened. A gateway that was lost therefore could not hold the
+        firmware of the switches below it, and the site went dark. These tests
+        read the family of each cloud call, and they reach no cloud.
+    """
+
+    def test_the_firmware_leaves_in_the_canonical_family_order(self, parts: dict[str, Any]) -> None:
+        """Each family takes firmware in the order the physical site allows.
+
+        Args:
+            parts: The doubles and the driver.
+        """
+        parts["driver"].run(make_record())
+        assert parts["submitter"].phases == ["gateways", "switches", "aps"]
+
+    def test_the_client_phase_asks_for_no_firmware(self, parts: dict[str, Any]) -> None:
+        """A client is no device of this portal, so it takes no firmware.
+
+        Args:
+            parts: The doubles and the driver.
+        """
+        parts["driver"].run(make_record())
+        assert "clients" not in parts["submitter"].phases
+
+    def test_an_absent_family_reaches_the_submitter_as_a_skip(self, parts: dict[str, Any]) -> None:
+        """A site with no gateway still asks, and the answer is a quiet skip.
+
+        Why:
+            The submitter owns the decision, because it alone holds the plans.
+            It answers None with no cloud call, and the phase then reads
+            skipped through the same path that FR-058 already uses.
+
+        Args:
+            parts: The doubles and the driver.
+        """
+        targets = [target for target in make_targets() if target["device_type"] != "gateway"]
+        parts["driver"].run(make_record(targets))
+        assert parts["store"].phase_states()["gateways"] == PhaseState.SKIPPED.value
+
+    def test_a_lost_gateway_phase_sends_no_switch_firmware(self, parts: dict[str, Any]) -> None:
+        """The defect of issue #4020, read from the driver itself.
+
+        Why:
+            The gateways failed to settle, so the switches below them must keep
+            their firmware. The old driver had already written that firmware
+            before the first gate opened.
+
+        Args:
+            parts: The doubles and the driver.
+        """
+        parts["gate"].state_for = {"gateways": PhaseState.FAILED.value}
+        final = parts["driver"].run(make_record())
+        assert parts["submitter"].phases == ["gateways"]  # No later family reached the cloud.
+        assert final["state"] == RunState.FAILED.value
+
+    def test_a_blocked_family_says_why_it_kept_its_firmware(self, parts: dict[str, Any]) -> None:
+        """The operator reads one sentence for each family that was held.
+
+        Args:
+            parts: The doubles and the driver.
+        """
+        parts["gate"].state_for = {"gateways": PhaseState.FAILED.value}
+        final = parts["driver"].run(make_record())
+        notes = {phase["name"]: phase.get("note", "") for phase in final.get("phases", [])}
+        assert notes["switches"] == driver.PHASE_BLOCKED_NOTE
+        assert notes["aps"] == driver.PHASE_BLOCKED_NOTE
+
+    def test_a_refused_phase_sends_no_firmware_to_the_family_below_it(self, parts: dict[str, Any]) -> None:
+        """A refused cloud call stops the run before the next family.
+
+        Args:
+            parts: The doubles and the driver.
+        """
+        parts["submitter"].accept = False
+        final = parts["driver"].run(make_record())
+        assert parts["submitter"].phases == ["gateways"]  # The run stopped at the first refusal.
+        assert final["state"] == RunState.FAILED.value
+
+    def test_a_later_refusal_still_runs_the_post_check(self, parts: dict[str, Any]) -> None:
+        """An accepted gateway keeps its failure evidence after switches refuse.
+
+        Args:
+            parts: The doubles and the driver.
+        """
+        parts["submitter"].refuse_on = "switches"  # The gateway submits and settles before the refusal.
+        final = parts["driver"].run(make_record())  # The controlled cascade must reach its finish step.
+        assert final["state"] == RunState.FAILED.value  # A refused destructive write is never success.
+        assert parts["capture"].requests[0]["ordinal"] == 2  # The changed gateway keeps post-check evidence.
+
+    def test_a_later_refusal_makes_every_remaining_phase_terminal(self, parts: dict[str, Any]) -> None:
+        """A refusal never leaves a downstream phase pending.
+
+        Args:
+            parts: The doubles and the driver.
+        """
+        parts["submitter"].refuse_on = "switches"  # The switch submission is the first failed action.
+        parts["driver"].run(make_record())  # The cascade must walk through each durable phase state.
+        assert parts["store"].phase_states() == {  # Each family now has one terminal result.
+            "gateways": PhaseState.SETTLED.value,
+            "switches": PhaseState.FAILED.value,
+            "aps": PhaseState.FAILED.value,
+            "clients": PhaseState.FAILED.value,
+        }
+
+    def test_a_later_refusal_sends_no_downstream_firmware(self, parts: dict[str, Any]) -> None:
+        """No access point firmware leaves after the switch call was refused.
+
+        Args:
+            parts: The doubles and the driver.
+        """
+        parts["submitter"].refuse_on = "switches"  # The accepted gateway is the only upstream write.
+        parts["driver"].run(make_record())  # The client observation remains non-destructive.
+        assert parts["submitter"].phases == ["gateways", "switches"]  # Access points receive no cloud call.
+        assert parts["gate"].calls == ["gateways"]  # No settle gate observes firmware that never left.
+
+    def test_an_unroutable_plan_reason_fails_after_the_post_check(self, parts: dict[str, Any]) -> None:
+        """A plan validation refusal is visible and terminal.
+
+        Args:
+            parts: The doubles and the driver.
+        """
+        reason = "The run built an upgrade plan with no supported device family."
+        parts["submitter"].accept = False  # The submitter rejects the plan before one destructive write.
+        parts["submitter"].refusal_reason = reason  # The safe validation sentence must survive the driver.
+        final = parts["driver"].run(make_record())  # The controlled path still captures the unchanged site.
+        assert final["state"] == RunState.FAILED.value  # An unroutable plan must never report complete.
+        assert final["error"]["message"] == reason  # The operator sees the exact validation failure.
+
+    def test_lost_refusal_evidence_ends_the_run_in_a_failed_state(self, parts: dict[str, Any]) -> None:
+        """An unprovable refusal fails the run and sends no later firmware.
+
+        Why:
+            Issue #4020: the submitter now raises when it cannot make the
+            evidence of a refused destructive call durable. The driver must turn
+            that error into one terminal failed run, because an operator cannot
+            trust a run whose cloud calls have no durable record.
+
+        Args:
+            parts: The doubles and the driver.
+        """
+        lost = "The portal could not record a refused firmware call of the run."  # The evidence sentence.
+
+        def raise_on_switches(record: Any, phase: str) -> str | None:
+            """Accept the gateways and lose the evidence of the switch call."""
+            parts["submitter"].phases.append(phase)  # Record the family that asked for firmware.
+            if phase == "switches":
+                raise DispatchEvidenceError(lost)  # The store refused every attempt to hold the evidence.
+            for target in record.get("targets", []):
+                target["upgrade_id"] = "up-1"  # The accepted gateway keeps its cloud identifier.
+            return None  # The gateway phase may settle.
+
+        parts["submitter"].submit_phase = raise_on_switches  # Replace only the cloud seam of this run.
+        final = parts["driver"].run(make_record())  # The driver must treat the error as a terminal fault.
+        assert final["state"] == RunState.FAILED.value  # A run with no durable evidence is never success.
+        assert lost in final["error"]["message"]  # The operator reads the exact cause of the stop.
+        assert parts["submitter"].phases == ["gateways", "switches"]  # No access point received firmware.
+
+    def test_a_stop_inside_one_phase_uses_the_normal_stopped_path(self, parts: dict[str, Any]) -> None:
+        """A stop after one accepted group is not an ordinary refusal.
+
+        Args:
+            parts: The doubles and the driver.
+        """
+        submitter = StopAfterAcceptedSubmitter(parts["store"])  # The first accepted row arrives before the stop.
+        deps = driver.RunDriverDeps(
+            store=parts["store"],
+            gate=parts["gate"],
+            capture=parts["capture"],
+            submit=submitter,
+            clock=FixedClock(),
+        )
+        final = driver.RunDriver(deps).run(make_record())  # The driver must select `_stop`, not `_refuse_phase`.
+        assert final["state"] == RunState.STOPPED.value  # The operator action owns the terminal state.
+        assert final["error"] is None  # A stopped run is not a cloud refusal failure.
+        assert parts["store"].phase_states()["gateways"] == PhaseState.PENDING.value  # No false refusal mark.
+        assert len(final["upgrades"]) == 1  # The accepted row remains available for cancellation and evidence.
+        assert parts["capture"].requests[0]["ordinal"] == 2  # The normal stop finalization takes a post-check.
+
+    def test_a_stopped_run_records_a_lost_post_check(self, parts: dict[str, Any]) -> None:
+        """A stop whose post-check capture failed carries visible evidence.
+
+        Why:
+            Issue #4020: the stop path swallowed the post-check failure, so a
+            destructive partial run read as an ordinary stop. The operator then
+            held no proof of the state of the device the portal already changed.
+
+        Args:
+            parts: The doubles and the driver.
+        """
+        submitter = StopAfterAcceptedSubmitter(parts["store"])  # One accepted row lands before the stop.
+        capture = LatePostCheckFailureCapture()  # The pre-check works and the post-check start fails.
+        deps = driver.RunDriverDeps(
+            store=parts["store"],
+            gate=parts["gate"],
+            capture=capture,
+            submit=submitter,
+            clock=FixedClock(),
+        )
+        final = driver.RunDriver(deps).run(make_record())  # The stop must still reach its terminal state.
+        assert final["state"] == RunState.STOPPED.value  # The operator action still owns the terminal state.
+        assert final["post_check_captured"] is False  # One plain flag names the lost evidence.
+        assert "post-check" in final["post_check_error"]  # The record names the capture that failed.
+        assert len(final["upgrades"]) == 1  # The accepted row stays available for cancellation.
+        assert capture.requests[-1]["ordinal"] == 2  # The driver did try the post-check capture.
+        stored = parts["store"].read_run(str(final["run_id"])) or {}  # Read the durable record of the stopped run.
+        assert stored.get("run_id") == final["run_id"]  # The stop kept the same run, so it removed nothing.
+        assert stored["post_check_captured"] is False  # The evidence is durable, not only in memory.
 
 
 class TestDiscardedWrites:

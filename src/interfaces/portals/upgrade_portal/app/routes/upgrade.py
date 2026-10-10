@@ -37,9 +37,10 @@ Seams:
 Where a run record lives:
     The record lives in the injected store when the configuration holds one. It
     lives in one guarded dictionary in this process when it does not. The module
-    `capture/store.py` publishes `write_run` and publishes no run reader. So it
-    does not satisfy the two method shape that `runtime/signals.RunRecordStore`
-    asks for. The memory store keeps every route working until that reader lands.
+    `capture/store.py` publishes `write_run` and publishes no run reader or
+    accepted-row mutation. So it does not satisfy the required shape that
+    `runtime/signals.RunRecordStore` asks for. The memory store keeps every
+    route working until those operations land.
 """
 
 from __future__ import annotations  # Postponed annotations keep every hint a plain string.
@@ -96,6 +97,7 @@ from src.interfaces.portals.upgrade_portal.runtime.runs import (  # Import the m
 )
 from src.interfaces.portals.upgrade_portal.runtime.signals import (  # Import the moved dependency.
     ConfirmationRequiredError,
+    RunDispatchGate,
     RunNotFoundError,
     RunNotStoppableError,
     StopOutcome,
@@ -290,6 +292,101 @@ class MemoryRunStore:
             _RUNS[key] = dict(run)  # A copy stops a later edit of the caller dictionary.
         return True  # The record is readable from this moment.
 
+    def append_accepted_upgrade(self, run_id: str, row: dict[str, Any]) -> bool:
+        """Append one accepted row and preserve every concurrent run field.
+
+        Args:
+            run_id: The run key.
+            row: The accepted cloud response.
+
+        Returns:
+            True when the store holds the appended row.
+        """
+        with _RUN_GUARD:  # Read and field mutation form one action with stop writes.
+            held = _RUNS.get(run_id)  # An absent run cannot hold cancellation evidence.
+            if held is None:
+                return False  # Fail closed before another destructive call can start.
+            current = dict(held)  # Detach the replacement from the stored record.
+            rows = current.get("upgrades")  # Earlier phases can already hold accepted identifiers.
+            accepted = list(rows) if isinstance(rows, list) else []  # Ignore a damaged non-list field safely.
+            accepted.append(dict(row))  # Store plain values that no caller can later change.
+            current["upgrades"] = accepted  # Change only the accepted-row field.
+            _RUNS[run_id] = current  # Publish the narrow mutation under the same guard.
+        return True  # A later read now sees the row and every concurrent stop field.
+
+    def append_dispatch_failure(self, run_id: str, failure: dict[str, Any]) -> bool:
+        """Append one refusal record and preserve every concurrent run field.
+
+        Args:
+            run_id: The run key.
+            failure: The refusal evidence of one dispatch.
+
+        Returns:
+            True when the store holds the appended refusal.
+        """
+        with _RUN_GUARD:  # Read and field mutation form one action with stop writes.
+            held = _RUNS.get(run_id)  # An absent run cannot hold refusal evidence.
+            if held is None:
+                return False  # Fail closed, because an unproven refusal must never read as durable.
+            current = dict(held)  # Detach the replacement from the stored record.
+            rows = current.get("dispatch_failures")  # An earlier phase can already hold refusal evidence.
+            failures = list(rows) if isinstance(rows, list) else []  # Ignore a damaged non-list field safely.
+            failures.append(dict(failure))  # Store plain values that no caller can later change.
+            current["dispatch_failures"] = failures  # Change only the refusal evidence field.
+            _RUNS[run_id] = current  # Publish the narrow mutation under the same guard.
+        return True  # A later read now sees the refusal and every concurrent stop field.
+
+    def apply_stop_request(self, run_id: str, stop_request: dict[str, Any], updated_at: str) -> bool:
+        """Write only the stop fields of one run and preserve every other field.
+
+        Why:
+            Issue #4020: the stop route read the whole record and wrote the
+            whole record back. An accepted firmware row that committed inside
+            that interval disappeared, so the operator held a stop that could
+            cancel nothing.
+
+        Args:
+            run_id: The run key.
+            stop_request: The stop request record.
+            updated_at: The fresh change time in ISO 8601 UTC.
+
+        Returns:
+            True when the store holds the stop request.
+        """
+        with _RUN_GUARD:  # Read and field mutation form one action with accepted-row writes.
+            held = _RUNS.get(run_id)  # An absent run cannot carry a stop request.
+            if held is None:
+                return False  # Fail closed, because an unproven stop must never read as durable.
+            current = dict(held)  # Detach the replacement from the stored record.
+            current["stop_request"] = dict(stop_request)  # Change only the stop request field.
+            current["updated_at"] = updated_at  # The poll route reads the fresh change time.
+            _RUNS[run_id] = current  # Publish the narrow mutation under the same guard.
+        return True  # A later read sees the stop and every concurrent accepted row.
+
+    def apply_state_transition(self, run_id: str, state: str, updated_at: str, expected_state: str) -> bool:
+        """Write only the state fields of one run while the observed state still holds.
+
+        Args:
+            run_id: The run key.
+            state: The new run state value.
+            updated_at: The fresh change time in ISO 8601 UTC.
+            expected_state: The state the caller read before it decided.
+
+        Returns:
+            True when the store holds the new state.
+        """
+        with _RUN_GUARD:  # Read, compare, and mutation form one action with driver writes.
+            held = _RUNS.get(run_id)  # An absent run cannot hold a state.
+            if held is None:
+                return False  # Fail closed, because an unproven move must never read as durable.
+            if str(held.get("state", "")) != expected_state:  # The driver moved the run since the caller read.
+                return False  # Never move a run backward from a state the caller never saw.
+            current = dict(held)  # Detach the replacement from the stored record.
+            current["state"] = state  # Change only the state field.
+            current["updated_at"] = updated_at  # The poll route reads the fresh change time.
+            _RUNS[run_id] = current  # Publish the narrow mutation under the same guard.
+        return True  # A later read sees the move and every concurrent driver field.
+
     def compare_and_set_run(
         self,
         run_id: str,
@@ -309,11 +406,10 @@ class MemoryRunStore:
 
         Why:
             FR-037 asks the portal to find a run that already acts on the site.
-            The two method shape of `runtime/signals.RunRecordStore` answers one
-            run at a time. So it cannot answer that question. This third method
-            is optional. The helper `site_run_records` reads it through the same
-            seam. So the store that lands later publishes the same name. No
-            handler changes.
+            The required shape of `runtime/signals.RunRecordStore` answers one
+            run at a time. So it cannot answer that question. The helper
+            `site_run_records` reads this optional method through the same seam.
+            A later store can publish the same name with no handler change.
 
         Args:
             site_id: The site that the new run wants to act on.
@@ -339,8 +435,9 @@ def injected_object(config_key: str) -> Any | None:
 
     Why:
         `select.injected_seam` accepts a callable only, and the run store is an
-        object with two methods. This function keeps the same rule for a seam of
-        that shape, so a contract test injects a stand-in and reaches no server.
+        object with several methods. This function keeps the same rule for a
+        seam of that shape, so a contract test injects a stand-in and reaches no
+        server.
 
     Args:
         config_key: The configuration key of the seam.
@@ -801,10 +898,9 @@ def site_run_records(site_id: str) -> list[dict[str, Any]]:
     """Return every run record that the store holds for one site.
 
     Why:
-        `runtime/signals.RunRecordStore` asks for a reader and a writer only, so
-        a store of that shape can hold no site scan. FR-037 must not break such
-        a store and must not guess, so an absent scan answers an empty list and
-        the create call continues.
+        `runtime/signals.RunRecordStore` has no site scan operation. FR-037 must
+        not break a store with only the required shape and must not guess. An
+        absent scan answers an empty list, and the create call continues.
 
     Args:
         site_id: The site that the new run wants to act on.
@@ -813,7 +909,7 @@ def site_run_records(site_id: str) -> list[dict[str, Any]]:
         One record for each run of that site, or an empty list.
     """
     scan = getattr(run_store(), STORE_SITE_RUNS, None)  # An absent method reads as None, never a fault.
-    if not callable(scan):  # The store holds the two method shape and nothing more.
+    if not callable(scan):  # The store holds the required shape and no optional site scan.
         logger.info("upgrade: the run store publishes no %s, so no site scan runs", STORE_SITE_RUNS)  # The gap.
         return []  # No scan means no refusal, because a guess would stop honest work.
     try:  # The store sits on a network and may not answer.
@@ -2431,13 +2527,52 @@ def cancel_outcome(run_id: str) -> StopOutcome:
     return answer if isinstance(answer, StopOutcome) else StopOutcome(message=STOP_RECORDED_MESSAGE)
 
 
+def _state_after_refused_move(store: Any, run_id: str, record: dict[str, Any]) -> str:
+    """Report the newest durable state after the store refused one stopping move.
+
+    Why:
+        Issue #4020: the earlier version answered the state the route had read
+        before the stop. A driver that reached `stopped` or `failed` inside the
+        same interval was therefore reported as still running, and an operator
+        could ask for a second stop of a finished destructive run.
+
+    Args:
+        store: The run record store of this request.
+        run_id: The run key.
+        record: The caller copy, which this function keeps in agreement.
+
+    Returns:
+        The state the durable record holds now.
+    """
+    logger.debug("upgrade: read the state of run %s again after the refused move", run_id)  # Before the read.
+    newer = store.read_run(run_id)  # The refusal means the durable state left the state the route read.
+    if not isinstance(newer, Mapping):  # A lost record cannot name a newer state.
+        return str(record.get("state", ""))  # Answer the only state the portal can still prove.
+    state = str(newer.get("state", ""))  # The driver wrote this value, so it is the true current state.
+    record["state"] = state  # Keep the caller copy and the durable record in agreement.
+    record["updated_at"] = str(newer.get("updated_at", record.get("updated_at", "")))  # Fresh change time.
+    logger.debug("upgrade: run %s holds the state %s after the refused move", run_id, state)  # After the read.
+    return state  # The operator reads the true state of the run.
+
+
 def move_to_stopping(record: dict[str, Any]) -> str:
-    """Move one run into the state `stopping` and write the record.
+    """Move one run into the state `stopping` through a narrow durable mutation.
 
     Why:
         `StopRequestStore.request` writes the request and the change time only,
         and it leaves `state` to the state machine on purpose. The contract
         answers `{"state": "stopping"}`, so this function performs that move.
+
+        Issue #4020: the earlier version saved the whole record that the route
+        read before the stop. A driver update that committed inside that
+        interval disappeared, so the operator could lose a phase result, the
+        post-check evidence, or a terminal state of a destructive run. The move
+        now reads the current durable record, decides on that record, and writes
+        two fields only.
+
+        The mutation also names the state it read. A driver that reached a
+        terminal state inside the same interval therefore keeps that state, and
+        the move never pulls a finished destructive run backward to `stopping`.
 
     Args:
         record: The run record that now holds the stop request.
@@ -2445,12 +2580,23 @@ def move_to_stopping(record: dict[str, Any]) -> str:
     Returns:
         The state the run holds after the move.
     """
+    store = run_store()  # The one seam that both the route and the driver write through.
+    run_id = str(record.get("run_id", ""))  # The narrow store mutation needs only the durable run key.
+    current = store.read_run(run_id)  # A driver write may have landed since the route read the record.
+    fresh = dict(current) if isinstance(current, Mapping) else dict(record)  # Decide on the newest state.
+    observed = str(fresh.get("state", ""))  # Hold the read state, because `advance` changes it in place.
     try:  # A run that reached a final state between the two reads must not raise a fault page.
-        RunStateMachine().advance(record, RunState.STOPPING)
+        RunStateMachine().advance(fresh, RunState.STOPPING)
     except RunTransitionError:  # The run already stops, or it already finished.
-        return str(record.get("state", ""))  # The operator reads the true state, whatever it is.
-    save_run(record)  # A failed write leaves the request in place, and the driver still reads it.
-    return str(record.get("state", ""))  # The contract answers this value to the browser.
+        record["state"] = str(fresh.get("state", ""))  # The caller copy then names the true durable state.
+        return str(fresh.get("state", ""))  # The operator reads the true state, whatever it is.
+    moved = bool(store.apply_state_transition(run_id, str(fresh["state"]), str(fresh["updated_at"]), observed))
+    if not moved:  # The driver moved the run again, or the write failed. The request stays durable either way.
+        logger.error("upgrade: the store refused the stopping move of the run %s", run_id)  # Names the run.
+        return _state_after_refused_move(store, run_id, record)  # Answer the newer durable state, not a stale one.
+    record["state"] = str(fresh["state"])  # Keep the caller copy and the durable record in agreement.
+    record["updated_at"] = str(fresh["updated_at"])  # The contract answer carries the fresh change time.
+    return str(fresh["state"])  # The contract answers this value to the browser.
 
 
 def outcome_is_recorded(record: Mapping[str, Any]) -> bool:
@@ -2653,6 +2799,11 @@ def retry_run(run_id: str) -> tuple[Response, int]:
         no longer describes the site. The operator therefore reaches the capture
         page, and the confirmation stays locked until a fresh capture verifies.
 
+        Issue #4020: this route is the one operator action that recovers a
+        terminal unsuccessful run, so it also drops the dispatch registry entry
+        of the source run. The source run keeps its terminal state, and the
+        start route refuses that state, so the source key sends no firmware.
+
     Args:
         run_id: The key of the unsuccessful terminal run.
 
@@ -2675,6 +2826,7 @@ def retry_run(run_id: str) -> tuple[Response, int]:
     if reservation_refusal is not None:
         return reservation_refusal
     record = cast(dict[str, Any], record)  # A reservation with no refusal always returns its persisted record.
+    RunDispatchGate.forget(run_id)  # Issue #4020: the operator recovered the source run, so its fence may leave.
     logger.info("upgrade: the retry %s came from the unsuccessful run %s", record["run_id"], run_id)  # AFTER write.
     return (
         jsonify(

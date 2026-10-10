@@ -26,6 +26,7 @@ from flask.testing import FlaskClient
 
 from src.interfaces.portals.upgrade_portal.app.routes import upgrade
 from src.interfaces.portals.upgrade_portal.runtime import identity
+from src.interfaces.portals.upgrade_portal.runtime.signals import RunDispatchGate
 
 RUN_STORE_KEY = "RUN_STORE"
 LOCK_READER_KEY = "SITE_LOCK_READER"
@@ -39,12 +40,17 @@ SELECTED_ORG_SESSION_KEY = "selected_org_id"
 SELECTED_SITE_SESSION_KEY = "selected_site_id"
 
 RETRY_TEMPLATE = "/api/runs/{run_id}/retry"
+START_TEMPLATE = "/api/runs/{run_id}/start"
 UNKNOWN_RUN_ID = "run-00000000000000000000000000000000"
 
 CREATED_STATUS = 201
 NOT_AUTHENTICATED_STATUS = 401
 NOT_FOUND_STATUS = 404
 CONFLICT_STATUS = 409
+
+# Issue #4020: the start route refuses a terminal run with one of these answers.
+# The accepted answer of a fresh start is 202, which must never appear here.
+REFUSED_START_STATUSES = (400, 403, CONFLICT_STATUS)
 
 RUN_NOT_FOUND_CODE = "run_not_found"
 SITE_LOCKED_CODE = "site_locked"
@@ -461,3 +467,73 @@ def test_the_failed_run_keeps_every_value(client: FlaskClient, run_store: Record
     assert failed["state"] == "failed"
     assert failed["options"] == FAILED_OPTIONS
     assert failed["pre_capture_id"] == "cap-before-the-failure"
+
+
+def test_the_retry_clears_the_dispatch_fence_of_the_source_run(
+    client: FlaskClient, run_store: RecordingRunStore
+) -> None:
+    """The one operator recovery action drops the dispatch registry entry.
+
+    Why:
+        Issue #4020: a run whose refusal evidence never reached the store carries
+        a fence, so no later firmware call of that run may start. The fence lives
+        in a table of this process, and the retry route is the one production
+        action that ends the life of that entry. Without this call the entry
+        would hold until a restart, and a later run with the same key would
+        refuse a firmware call that it is allowed to send.
+
+    Args:
+        client: The signed-in client.
+        run_store: The recording store.
+    """
+    run_id = seed_failed(run_store)
+    RunDispatchGate.fence(run_id)  # The source run lost its refusal evidence.
+    assert RunDispatchGate.is_fenced(run_id)  # The fence holds before the operator recovers the run.
+    answer = client.post(RETRY_TEMPLATE.format(run_id=run_id), json={})
+    assert answer.status_code == CREATED_STATUS
+    assert not RunDispatchGate.is_fenced(run_id)  # The confirmed recovery dropped the entry of the source run.
+    assert not RunDispatchGate.is_fenced(str(new_record(run_store, answer.get_json())["run_id"]))
+
+
+def test_a_recovered_source_run_still_cannot_send_firmware(client: FlaskClient, run_store: RecordingRunStore) -> None:
+    """The terminal state of the source run refuses a new start after the recovery.
+
+    Why:
+        Issue #4020: the fence is defense in depth, not the durable guard. The
+        stored state is the durable guard, and it must refuse a new submission of
+        the recovered run by itself. This test proves that the source run sends
+        no firmware after its fence has left, so a restart that drops every fence
+        changes no destructive result.
+
+    Args:
+        client: The signed-in client.
+        run_store: The recording store.
+    """
+    run_id = seed_failed(run_store)
+    RunDispatchGate.fence(run_id)  # The source run lost its refusal evidence.
+    client.post(RETRY_TEMPLATE.format(run_id=run_id), json={})  # The operator recovery clears the fence.
+    assert not RunDispatchGate.is_fenced(run_id)  # Prove the start below runs with no fence in place.
+    answer = client.post(START_TEMPLATE.format(run_id=run_id), json={})
+    assert answer.status_code in REFUSED_START_STATUSES  # The route never accepts a fresh start of this run.
+    assert run_store.runs[run_id]["state"] == "failed"  # The terminal state stands, so no phase could submit.
+
+
+def test_a_failed_retry_keeps_the_fence_of_the_source_run(client: FlaskClient, run_store: RecordingRunStore) -> None:
+    """A retry that writes no record leaves the source run fenced.
+
+    Why:
+        Issue #4020: only a confirmed recovery may end the fence. A retry that
+        the store refused built no new run, so the operator has recovered
+        nothing, and the source run must keep every guard that it holds.
+
+    Args:
+        client: The signed-in client.
+        run_store: The recording store.
+    """
+    run_id = seed_failed(run_store)
+    RunDispatchGate.fence(run_id)  # The source run lost its refusal evidence.
+    run_store.refuse_writes = True  # The store refuses the new record of the retry.
+    answer = client.post(RETRY_TEMPLATE.format(run_id=run_id), json={})
+    assert answer.status_code != CREATED_STATUS  # The retry built no run.
+    assert RunDispatchGate.is_fenced(run_id)  # The fence stands, because no operator recovery completed.
+    RunDispatchGate.forget(run_id)  # Leave no registry entry behind for another test.

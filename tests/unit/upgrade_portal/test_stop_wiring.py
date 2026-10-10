@@ -76,6 +76,61 @@ class MemoryRunStore:
         self.writes += 1  # A test reads this count to prove that the outcome landed.
         return True  # The stop store raises when a write reports False.
 
+    def append_dispatch_failure(self, run_id: str, failure: dict[str, Any]) -> bool:
+        """Append one refusal record and change no other field.
+
+        Args:
+            run_id: The run key.
+            failure: The refusal evidence of one plan.
+
+        Returns:
+            True after the refusal becomes durable.
+        """
+        if self.record.get("run_id") != run_id:  # Fail closed for an absent run, as the store does.
+            return False  # The submitter then reports the durable write failure.
+        rows = list(self.record.get("dispatch_failures", ()))  # Preserve every earlier refusal.
+        rows.append(dict(failure))  # Add only the new refusal.
+        self.record["dispatch_failures"] = rows  # Change no stop, state, or accepted row field.
+        return True  # The refusal survives a concurrent stop write.
+
+    def apply_state_transition(self, run_id: str, state: str, updated_at: str, expected_state: str) -> bool:
+        """Write only the state fields of one run while the observed state holds.
+
+        Args:
+            run_id: The run key.
+            state: The new run state value.
+            updated_at: The fresh change time in ISO 8601 UTC.
+            expected_state: The state the caller read before it decided.
+
+        Returns:
+            True after the move becomes durable.
+        """
+        if self.record.get("run_id") != run_id:  # Fail closed for an absent run, as the store does.
+            return False  # The route then reports the durable write failure.
+        if str(self.record.get("state", "")) != expected_state:  # The driver moved the run since the read.
+            return False  # Never move a run backward from a state the caller never saw.
+        self.record["state"] = state  # Change only the state field.
+        self.record["updated_at"] = updated_at  # The poll route reads the fresh change time.
+        return True  # Every concurrent driver field survived the move.
+
+    def apply_stop_request(self, run_id: str, stop_request: dict[str, Any], updated_at: str) -> bool:
+        """Write only the stop fields and preserve every other field.
+
+        Args:
+            run_id: The run key of the stop.
+            stop_request: The whole stop document.
+            updated_at: The UTC change time in ISO 8601 form.
+
+        Returns:
+            True when the held record carries the run key, otherwise False.
+        """
+        if self.record.get("run_id") != run_id:  # Fail closed for an absent run, as the store does.
+            return False  # The stop store then raises instead of claiming a write.
+        self.record["stop_request"] = stop_request  # Change the one field that the stop owns.
+        self.record["updated_at"] = updated_at  # Record the change time beside the stop.
+        self.writes += 1  # A test reads this count to prove that the stop landed.
+        return True  # The stop store raises when a write reports False.
+
 
 class CancelRecorder:
     """Record each cancel call and report every device of the plan as stopped.
