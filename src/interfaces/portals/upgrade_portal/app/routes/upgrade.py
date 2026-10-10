@@ -818,8 +818,10 @@ def site_run_records(site_id: str) -> list[dict[str, Any]]:
         return []  # No scan means no refusal, because a guess would stop honest work.
     try:  # The store sits on a network and may not answer.
         found: Any = scan(site_id)  # The store owns the query and the order of the rows.
-    except Exception:  # A create call must survive an unreachable store.
-        logger.warning("upgrade: the run store did not answer the site scan of %s", site_id)  # No trace.
+    except Exception as error:  # A create call must survive an unreachable store.
+        logger.warning(  # Keep the fallback outcome and attach the failure cause for support.
+            "upgrade: the run store did not answer the site scan of %s", site_id, exc_info=error
+        )
         return []  # Continue, because the lock check below still guards a second operator.
     return [record for record in found if isinstance(record, dict)]  # A damaged row reads as no row.
 
@@ -944,8 +946,10 @@ def readable_site_name(org_id: str, site_id: str, given: str) -> str:
     logger.info("upgrade: read the name of the site %s for a new run", site_id)  # BEFORE the cloud read.
     try:
         site = find_site(site_id, org_id)  # The sibling module owns every rule of this read.
-    except Exception:  # A named site beats a fault, so any failure keeps the identifier.
-        logger.warning("upgrade: the site %s did not answer, so the run keeps the identifier", site_id)
+    except Exception as error:  # A named site beats a fault, so any failure keeps the identifier.
+        logger.warning(  # Keep the fallback outcome and attach the failure cause for support.
+            "upgrade: the site %s did not answer, so the run keeps the identifier", site_id, exc_info=error
+        )
         return site_id  # The page still shows a value that an operator can quote.
     name = str(site.get("name", "")).strip() if site else ""  # An unknown site answers None.
     logger.debug("upgrade: the site %s answered the name %s", site_id, name or site_id)  # AFTER the cloud read.
@@ -1328,8 +1332,10 @@ def read_versions(record: dict[str, Any]) -> dict[str, list[str]]:
     targets = record.get(TARGETS_FIELD, [])  # Each row names the model that the reader groups the answer by.
     try:  # The reader reaches the cloud, and the cloud refuses and times out.
         return version_index(seam(cloud_session(), site_id, targets))  # The module owns every call parameter.
-    except Exception:  # A picker with no version beats a page that shows a fault to the operator.
-        logger.warning("upgrade: the version read of the site %s did not answer", site_id)  # No stack trace.
+    except Exception as error:  # A picker with no version beats a page that shows a fault to the operator.
+        logger.warning(  # Keep the fallback outcome and attach the failure cause for support.
+            "upgrade: the version read of the site %s did not answer", site_id, exc_info=error
+        )
         return {}  # The operator retries the page, and the run record keeps every earlier choice.
 
 
