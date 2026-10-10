@@ -862,7 +862,8 @@ class BulkSwitchFirmwareUpgrader:  # pylint: disable=too-few-public-methods,too-
 
     def _process_site(self, site_index: int, site_info: dict[str, Any]) -> None:
         """Process firmware upgrade for a single site."""
-        site_id = site_info.get("id", "")  # WHY: falsy id blocks processing.
+        raw_site_id = site_info.get("id")  # WHY: a missing identifier must remain distinguishable from valid text.
+        site_id = raw_site_id.strip() if isinstance(raw_site_id, str) else ""  # WHY: only text IDs can reach Mist.
         site_name = site_info.get("name", "Unknown Site")  # WHY: display-friendly fallback.
         if not site_id:  # WHY: cannot upgrade without an ID.
             self.logger.error("Site has no ID: %s", site_name)  # WHY: audit skip.
