@@ -1214,6 +1214,14 @@ class OperationExecutor:
 
     def _execute_operation(self, run: dict, parameters: dict) -> None:
         """Execute the operation function in a background thread."""
+        owner_token = OutputFileScanner.bind_owner(run["run_id"])  # Name this run on every record this worker emits.
+        try:  # Keep the name through the capture and the terminal assessment alike.
+            self._run_operation_for_owner(run, parameters)  # Run the operation flow under this run name.
+        finally:
+            OutputFileScanner.reset_owner(owner_token)  # Clear the name before this worker accepts another run.
+
+    def _run_operation_for_owner(self, run: dict, parameters: dict) -> None:
+        """Run the operation and assess its result while this run owns the worker."""
         from web_portal.services.input_hook import web_input_context
 
         self._update_status(run, "running", 0)
@@ -1549,6 +1557,9 @@ class _RunLogHandler(logging.Handler):
     # INFO only, because the WARNING check runs first and keeps a failure visible.
     _DEBUG_LOGGER_PREFIXES = ("src.foundation.persistence.db.",)
 
+    # Scanner marks name the shared data root, so no run store keeps them. The process log keeps each mark.
+    _EVIDENCE_EXCLUDED_LOGGERS = ("web_portal.services.output_scan",)
+
     # Message prefixes that indicate internal plumbing (even at INFO)
     _INTERNAL_PREFIXES = (
         "apiresponse:",
@@ -1623,6 +1634,9 @@ class _RunLogHandler(logging.Handler):
         """Capture a log record and route to appropriate SSE channel."""
         if not self._accepts_record(record):  # Decide ownership before formatting or mutating run evidence.
             return  # Reject a foreign direct record with no bound run context.
+        scanner_mark = record.name.startswith(self._EVIDENCE_EXCLUDED_LOGGERS)  # Scanner marks name the shared root.
+        if scanner_mark and record.levelno < logging.WARNING:  # A scanner warning still reaches the operator.
+            return  # Leave the mark to the process log that the timing harness reads.
         message = self.format(record)  # Format only a record that belongs to this run.
         level = record.levelname.lower()  # Preserve the established lowercase event level.
         timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(record.created))  # Keep the SSE timestamp shape.
