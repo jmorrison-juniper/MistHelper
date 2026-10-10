@@ -158,12 +158,11 @@ class TestSnmpBaseOidVariableContract:
         ), "the Python service no longer names the canonical SNMP base OID variable"
 
     def test_compose_supplies_one_canonical_oid_setting(self) -> None:
-        """Compose must retain the legacy input and provide the canonical runtime setting."""
+        """Compose must provide only the canonical runtime setting after issue #4077 removes the legacy input."""
         text = read_oid_sources((COMPOSE_FILE,))[COMPOSE_FILE]
         assignments = re.findall(r"(?m)^\s*-\s+((?:METRICS_)?SNMP_BASE_OID)=", text)
         assert assignments == [
-            LEGACY_OID_VARIABLE,
-            CANONICAL_OID_VARIABLE,
+            CANONICAL_OID_VARIABLE
         ], f"compose.yml has unexpected SNMP base OID settings: {assignments}"
 
     def test_the_environment_template_names_only_the_canonical_setting(self) -> None:
