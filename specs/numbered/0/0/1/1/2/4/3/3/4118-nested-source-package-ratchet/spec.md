@@ -44,13 +44,17 @@ As a maintainer, I need each violation to name a remediation issue.
 - **FR-012**: The guard MUST reject a stale entry when a path reaches five children.
 - **FR-013**: The guard MUST fail when the baseline is missing or malformed.
 - **FR-014**: The guard MUST report directories examined, violations, and total excess.
-- **FR-015**: The baseline MUST preserve 166 directories, 34 violations, and 239 total excess on the measured main commit.
+- **FR-015**: The baseline MUST preserve 170 directories, 36 violations, and 243 total excess on the measured main commit eee43c248. The Decisions section records the accepted Juniper RMA debt.
 - **FR-016**: The implementation MUST not edit `.github/copilot-instructions.md` while PR #4124 owns that file.
 
 ## Data Contract
 
 The baseline is a JSON object with version `1`, source root `src`, maximum child count `5`, and a sorted `violations` list.
 Each violation has `path`, `child_count`, and `remediation_issue`.
+
+## Decisions
+
+- **2026-10-10**: The Juniper RMA packages and the export increase are accepted debt. Issue #4168 tracks the RMA packages, and issue #3824 tracks export. Any further increase needs a new decision and a baseline update.
 
 ## Out of Scope
 

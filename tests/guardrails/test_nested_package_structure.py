@@ -172,7 +172,7 @@ def test_nested_package_ratchet_matches_main() -> None:
     baseline = load_baseline(BASELINE_PATH, examined_count=len(actual))
     message = report_measurement(actual)
     validate_ratchet(actual, baseline)
-    assert message == "nested_package_scope: 166 directories examined, 34 violations, 239 total excess"
+    assert message == "nested_package_scope: 170 directories examined, 36 violations, 243 total excess"
 
 
 def test_new_sixth_child_fails() -> None:

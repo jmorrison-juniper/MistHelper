@@ -2,7 +2,7 @@
 
 ## Ordered Tasks
 
-- [ ] Add the baseline with all 34 current violations and remediation issue `3824`.
+- [ ] Add the baseline with all 36 current violations. Remediation issue `3824` covers export, and remediation issue `4168` covers the RMA packages.
 - [ ] Add the tracked-path measurement and exact ratchet guard.
 - [ ] Add failure proofs for new, increased, unknown, missing, malformed, stale, and excess cases.
 - [ ] Run focused pytest, Ruff, Black, and the test-quality gate.
@@ -11,7 +11,7 @@
 
 ## Acceptance Checks
 
-- [ ] The guard reports 166 directories, 34 violations, and 239 total excess.
+- [ ] The guard reports 170 directories, 36 violations, and 243 total excess.
 - [ ] The guard does not use `__init__.py` to discover directories.
 - [ ] The active baseline path set matches the measured violation set.
 - [ ] Every baseline entry has a positive remediation issue number.

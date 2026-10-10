@@ -170,8 +170,18 @@
     },
     {
       "path": "src/operations/exporting/export",
-      "child_count": 47,
+      "child_count": 48,
       "remediation_issue": 3824
+    },
+    {
+      "path": "src/operations/exporting/juniper_rma/model",
+      "child_count": 6,
+      "remediation_issue": 4168
+    },
+    {
+      "path": "src/operations/exporting/juniper_rma/workflows",
+      "child_count": 7,
+      "remediation_issue": 4168
     }
   ]
 }
