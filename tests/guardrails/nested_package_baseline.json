@@ -1,0 +1,187 @@
+{
+  "version": 1,
+  "source_root": "src",
+  "max_children": 5,
+  "violations": [
+    {
+      "path": "src/foundation/models/dataclasses",
+      "child_count": 15,
+      "remediation_issue": 3824
+    },
+    {
+      "path": "src/foundation/support/refactors",
+      "child_count": 33,
+      "remediation_issue": 3824
+    },
+    {
+      "path": "src/foundation/support/refactors/serial_cc",
+      "child_count": 9,
+      "remediation_issue": 3824
+    },
+    {
+      "path": "src/foundation/support/utils",
+      "child_count": 18,
+      "remediation_issue": 3824
+    },
+    {
+      "path": "src/interfaces/monitoring/metrics_gateway",
+      "child_count": 8,
+      "remediation_issue": 3824
+    },
+    {
+      "path": "src/interfaces/portals/upgrade_portal",
+      "child_count": 11,
+      "remediation_issue": 3824
+    },
+    {
+      "path": "src/interfaces/portals/upgrade_portal/app",
+      "child_count": 7,
+      "remediation_issue": 3824
+    },
+    {
+      "path": "src/interfaces/portals/upgrade_portal/app/routes",
+      "child_count": 12,
+      "remediation_issue": 3824
+    },
+    {
+      "path": "src/interfaces/portals/upgrade_portal/capture",
+      "child_count": 9,
+      "remediation_issue": 3824
+    },
+    {
+      "path": "src/interfaces/portals/upgrade_portal/compare",
+      "child_count": 7,
+      "remediation_issue": 3824
+    },
+    {
+      "path": "src/interfaces/portals/upgrade_portal/runtime",
+      "child_count": 9,
+      "remediation_issue": 3824
+    },
+    {
+      "path": "src/interfaces/portals/upgrade_portal/upgrade",
+      "child_count": 21,
+      "remediation_issue": 3824
+    },
+    {
+      "path": "src/interfaces/portals/upgrade_portal/upgrade/org_cascade",
+      "child_count": 6,
+      "remediation_issue": 3824
+    },
+    {
+      "path": "src/interfaces/visualization/maps",
+      "child_count": 19,
+      "remediation_issue": 3824
+    },
+    {
+      "path": "src/interfaces/visualization/maps/launcher",
+      "child_count": 8,
+      "remediation_issue": 3824
+    },
+    {
+      "path": "src/interfaces/visualization/ui",
+      "child_count": 8,
+      "remediation_issue": 3824
+    },
+    {
+      "path": "src/mist/access/api",
+      "child_count": 7,
+      "remediation_issue": 3824
+    },
+    {
+      "path": "src/mist/access/audit",
+      "child_count": 10,
+      "remediation_issue": 3824
+    },
+    {
+      "path": "src/mist/intelligence/analytics",
+      "child_count": 6,
+      "remediation_issue": 3824
+    },
+    {
+      "path": "src/mist/intelligence/marvis/actions",
+      "child_count": 6,
+      "remediation_issue": 3824
+    },
+    {
+      "path": "src/mist/intelligence/reports",
+      "child_count": 18,
+      "remediation_issue": 3824
+    },
+    {
+      "path": "src/mist/intelligence/troubleshooting/rf_diagnostics",
+      "child_count": 7,
+      "remediation_issue": 3824
+    },
+    {
+      "path": "src/mist/networking/network",
+      "child_count": 7,
+      "remediation_issue": 3824
+    },
+    {
+      "path": "src/mist/realtime/websocket",
+      "child_count": 7,
+      "remediation_issue": 3824
+    },
+    {
+      "path": "src/mist/realtime/websocket_streams/catalog",
+      "child_count": 6,
+      "remediation_issue": 3824
+    },
+    {
+      "path": "src/mist/resources/device",
+      "child_count": 14,
+      "remediation_issue": 3824
+    },
+    {
+      "path": "src/mist/resources/gateway",
+      "child_count": 16,
+      "remediation_issue": 3824
+    },
+    {
+      "path": "src/mist/resources/inventory",
+      "child_count": 7,
+      "remediation_issue": 3824
+    },
+    {
+      "path": "src/mist/resources/site/address_audit",
+      "child_count": 13,
+      "remediation_issue": 3824
+    },
+    {
+      "path": "src/operations/execution/capture",
+      "child_count": 12,
+      "remediation_issue": 3824
+    },
+    {
+      "path": "src/operations/execution/firmware",
+      "child_count": 11,
+      "remediation_issue": 3824
+    },
+    {
+      "path": "src/operations/execution/ssh",
+      "child_count": 8,
+      "remediation_issue": 3824
+    },
+    {
+      "path": "src/operations/execution/ssid_consolidation",
+      "child_count": 7,
+      "remediation_issue": 3824
+    },
+    {
+      "path": "src/operations/exporting/export",
+      "child_count": 48,
+      "remediation_issue": 3824
+    },
+    {
+      "path": "src/operations/exporting/juniper_rma/model",
+      "child_count": 6,
+      "remediation_issue": 4168
+    },
+    {
+      "path": "src/operations/exporting/juniper_rma/workflows",
+      "child_count": 7,
+      "remediation_issue": 4168
+    }
+  ]
+}
