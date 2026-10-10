@@ -84,6 +84,9 @@ class ComparisonTableRenderer:
         logger.info("[q] Quit without saving")
         while True:  # Re-prompt until a valid choice is entered.
             choice = InputUtils.safe_input("Choice: ", context="address_audit_post_table").strip().lower()
+            if not choice:  # EOF, interruption, and an empty portal queue must stop safely.
+                logger.debug("No post-table choice supplied; defaulting to quit")  # Trace the safe decline.
+                return "quit"  # Keep later file and Mist write gates unreachable.
             if choice == "1":  # Operator chose to save.
                 logger.debug("Operator selected save")  # Trace the choice.
                 return "save"  # Engine will invoke the reporter.
