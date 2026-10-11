@@ -187,18 +187,6 @@ class TestValidateOrganization:
 
         assert result is False
 
-    def test_failed_validation_exception(self, upgrader: BulkSwitchFirmwareUpgrader) -> None:
-        """Verify failed validation on exception."""
-        mock_mistapi = sys.modules["mistapi"]
-        mock_mistapi.api.v1.orgs.orgs.getOrg.side_effect = RuntimeError("Connection refused")
-
-        result = upgrader._validate_organization()
-
-        assert result is False
-
-        # Cleanup
-        mock_mistapi.api.v1.orgs.orgs.getOrg.side_effect = None
-
 
 # ---------------------------------------------------------------------------
 # Site Selection Tests
@@ -284,25 +272,16 @@ class TestSiteSelection:
         assert result["error"] == "Failed to retrieve sites"
         assert list(result) == ["error"]
 
-    def test_interactive_exception(self, upgrader: BulkSwitchFirmwareUpgrader) -> None:
-        """Verify error handling on exception."""
-        mock_mistapi = sys.modules["mistapi"]
-        mock_mistapi.api.v1.orgs.sites.listOrgSites.side_effect = RuntimeError("Network error")
-
-        result = upgrader._interactive_site_selection()
-        assert result["error"] == "Site discovery error: Network error"
-        assert list(result) == ["error"]
-
-        # Cleanup
-        mock_mistapi.api.v1.orgs.sites.listOrgSites.side_effect = None
-
-    def test_display_site_list(self) -> None:
-        """Verify site list display does not raise."""
+    def test_display_site_list(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """Verify site list display includes site names."""
         sites = [
             {"id": "s1", "name": "Site A"},
             {"id": "s2", "name": "Site B"},
         ]
         BulkSwitchFirmwareUpgrader._display_site_list(sites)
+        output = capsys.readouterr().out
+        assert "Site A" in output
+        assert "Site B" in output
 
     @patch("builtins.input", return_value="1,3")
     def test_parse_specific_sites(
@@ -537,17 +516,6 @@ class TestFirmwareDiscovery:
         result = upgrader._fetch_switch_inventory()
         assert result is False
 
-    def test_fetch_switch_inventory_exception(self, upgrader: BulkSwitchFirmwareUpgrader) -> None:
-        """Verify exception handling."""
-        mock_mistapi = sys.modules["mistapi"]
-        mock_mistapi.api.v1.orgs.inventory.getOrgInventory.side_effect = RuntimeError("Timeout")
-
-        result = upgrader._fetch_switch_inventory()
-        assert result is False
-
-        # Cleanup
-        mock_mistapi.api.v1.orgs.inventory.getOrgInventory.side_effect = None
-
     def test_fetch_switch_inventory_no_models(self, upgrader: BulkSwitchFirmwareUpgrader) -> None:
         """Verify warning when no models detected."""
         mock_response = MagicMock()
@@ -645,13 +613,18 @@ class TestCaching:
             finally:
                 upgrader.CACHE_FILE = original_cache
 
-    def test_save_to_cache_error(self, upgrader: BulkSwitchFirmwareUpgrader) -> None:
+    def test_save_to_cache_error(
+        self,
+        capsys: pytest.CaptureFixture[str],
+        upgrader: BulkSwitchFirmwareUpgrader,
+    ) -> None:
         """Verify cache save error handling."""
         original_cache = upgrader.CACHE_FILE
         upgrader.CACHE_FILE = "/nonexistent/path/cache.csv"
 
         try:
             upgrader._save_to_cache([{"version": "1.0"}])
+            assert "Could not cache firmware data" in capsys.readouterr().out
         finally:
             upgrader.CACHE_FILE = original_cache
 
@@ -677,17 +650,6 @@ class TestCaching:
 
         result = upgrader._fetch_firmware_from_api()
         assert result == []
-
-    def test_fetch_firmware_from_api_exception(self, upgrader: BulkSwitchFirmwareUpgrader) -> None:
-        """Verify API exception handling."""
-        mock_mistapi = sys.modules["mistapi"]
-        mock_mistapi.api.v1.orgs.devices.listOrgAvailableDeviceVersions.side_effect = RuntimeError("API error")
-
-        result = upgrader._fetch_firmware_from_api()
-        assert result == []
-
-        # Cleanup
-        mock_mistapi.api.v1.orgs.devices.listOrgAvailableDeviceVersions.side_effect = None
 
 
 # ---------------------------------------------------------------------------
@@ -844,11 +806,16 @@ class TestVersionSelection:
         result = upgrader._format_compatible_models("23.4R2.21")
         assert result == "Unknown"
 
-    def test_display_version_table(self, upgrader: BulkSwitchFirmwareUpgrader) -> None:
-        """Verify version table display does not raise."""
+    def test_display_version_table(
+        self,
+        capsys: pytest.CaptureFixture[str],
+        upgrader: BulkSwitchFirmwareUpgrader,
+    ) -> None:
+        """Verify version table display includes the version."""
         upgrader.available_versions = ["23.4R2.21"]
         upgrader.compatible_versions = {"23.4R2.21": {"EX4100-48P"}}
         upgrader._display_version_table()
+        assert "23.4R2.21" in capsys.readouterr().out
 
 
 # ---------------------------------------------------------------------------
@@ -956,6 +923,16 @@ class TestExecution:
         upgrader._process_site(1, {"name": "Bad Site"})
         assert upgrader.upgrade_results["sites_failed"] == 1
 
+    def test_process_site_rejects_non_string_id(self, upgrader: BulkSwitchFirmwareUpgrader) -> None:
+        """Reject a site identifier with a type that the Mist API cannot use."""
+        upgrader._initialize_results()
+        upgrader.selected_sites = [{"id": 123, "name": "Bad Site"}]
+
+        upgrader._process_site(1, upgrader.selected_sites[0])
+
+        assert upgrader.upgrade_results["sites_failed"] == 1
+        assert upgrader.upgrade_results["sites_processed"] == 0
+
     def test_process_site_no_switches(self, upgrader: BulkSwitchFirmwareUpgrader) -> None:
         """Verify site with no switches is skipped."""
         upgrader._initialize_results()
@@ -990,22 +967,6 @@ class TestExecution:
 
         upgrader._process_site(1, {"id": "s1", "name": "Error Site"})
         assert upgrader.upgrade_results["sites_failed"] == 1
-
-    def test_process_site_exception(self, upgrader: BulkSwitchFirmwareUpgrader) -> None:
-        """Verify site exception is recorded."""
-        upgrader._initialize_results()
-        upgrader.target_version = "23.4R2.21"
-        upgrader.upgrade_strategy = "big_bang"
-        upgrader.selected_sites = [{"id": "s1", "name": "Crash Site"}]
-
-        mock_mistapi = sys.modules["mistapi"]
-        mock_mistapi.api.v1.sites.devices.listSiteDevices.side_effect = RuntimeError("Crash")
-
-        upgrader._process_site(1, {"id": "s1", "name": "Crash Site"})
-        assert upgrader.upgrade_results["sites_failed"] == 1
-
-        # Cleanup
-        mock_mistapi.api.v1.sites.devices.listSiteDevices.side_effect = None
 
     def test_record_upgrade_result_success(self, upgrader: BulkSwitchFirmwareUpgrader) -> None:
         """Verify successful upgrade result recording."""
@@ -1089,14 +1050,23 @@ class TestExecution:
 
         assert "T" in upgrader.upgrade_results["end_time"]
 
-    def test_display_results_summary(self, upgrader: BulkSwitchFirmwareUpgrader) -> None:
-        """Verify summary display does not raise."""
+    def test_display_results_summary(
+        self,
+        capsys: pytest.CaptureFixture[str],
+        upgrader: BulkSwitchFirmwareUpgrader,
+    ) -> None:
+        """Verify summary display includes the result heading."""
         upgrader._initialize_results()
         upgrader.target_version = "23.4R2.21"
         upgrader.upgrade_strategy = "big_bang"
         upgrader._display_results_summary()
+        assert "SWITCH FIRMWARE UPGRADE SUMMARY" in capsys.readouterr().out
 
-    def test_display_failure_details_with_failures(self, upgrader: BulkSwitchFirmwareUpgrader) -> None:
+    def test_display_failure_details_with_failures(
+        self,
+        capsys: pytest.CaptureFixture[str],
+        upgrader: BulkSwitchFirmwareUpgrader,
+    ) -> None:
         """Verify failure details display."""
         upgrader._initialize_results()
         upgrader.target_version = "23.4R2.21"
@@ -1116,13 +1086,21 @@ class TestExecution:
         ]
 
         upgrader._display_failure_details()
+        output = capsys.readouterr().out
+        assert "Site A: Timeout" in output
+        assert "Site B: Connection refused" in output
 
-    def test_display_failure_details_no_failures(self, upgrader: BulkSwitchFirmwareUpgrader) -> None:
+    def test_display_failure_details_no_failures(
+        self,
+        capsys: pytest.CaptureFixture[str],
+        upgrader: BulkSwitchFirmwareUpgrader,
+    ) -> None:
         """Verify no output when no failures."""
         upgrader._initialize_results()
         upgrader.target_version = "23.4R2.21"
         upgrader.upgrade_strategy = "big_bang"
         upgrader._display_failure_details()
+        assert capsys.readouterr().out == ""
 
     def test_handle_critical_error(self, upgrader: BulkSwitchFirmwareUpgrader) -> None:
         """Verify critical error handling."""
@@ -1135,17 +1113,23 @@ class TestExecution:
         assert result["error"] == "Fatal error"
         assert "T" in result["end_time"]
 
-    def test_display_config_summary(self, upgrader: BulkSwitchFirmwareUpgrader) -> None:
-        """Verify config summary display does not raise."""
+    def test_display_config_summary(
+        self,
+        capsys: pytest.CaptureFixture[str],
+        upgrader: BulkSwitchFirmwareUpgrader,
+    ) -> None:
+        """Verify config summary display includes the organization."""
         upgrader.org_name = "Test Org"
         upgrader.selected_sites = [{"id": "s1"}]
         upgrader.target_version = "23.4R2.21"
         upgrader.upgrade_strategy = "big_bang"
         upgrader._display_config_summary()
+        assert "Organization: Test Org" in capsys.readouterr().out
 
-    def test_display_warnings(self) -> None:
-        """Verify warnings display does not raise."""
+    def test_display_warnings(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """Verify warnings display includes the disruption warning."""
         BulkSwitchFirmwareUpgrader._display_warnings()
+        assert "network disruption" in capsys.readouterr().out
 
     def test_execute_site_upgrade_no_device_ids(self, upgrader: BulkSwitchFirmwareUpgrader) -> None:
         """Verify handling when no device IDs found."""
@@ -1303,16 +1287,6 @@ class TestExecuteWorkflow:
 class TestAdditionalCoverage:
     """Cover remaining lines for 90%+ coverage."""
 
-    def test_validate_org_exception(self, upgrader: BulkSwitchFirmwareUpgrader) -> None:
-        """Verify org validation handles exceptions."""
-        mock_mistapi = sys.modules["mistapi"]
-        mock_mistapi.api.v1.orgs.orgs.getOrg.side_effect = RuntimeError("Connection refused")
-
-        result = upgrader._validate_organization()
-        assert result is False
-
-        mock_mistapi.api.v1.orgs.orgs.getOrg.side_effect = None
-
     def test_interactive_site_selection_api_error(
         self,
         upgrader: BulkSwitchFirmwareUpgrader,
@@ -1326,20 +1300,6 @@ class TestAdditionalCoverage:
         result = upgrader._interactive_site_selection()
         assert result["error"] == "Failed to retrieve sites"
         assert list(result) == ["error"]
-
-    def test_interactive_site_selection_exception(
-        self,
-        upgrader: BulkSwitchFirmwareUpgrader,
-    ) -> None:
-        """Verify interactive site selection handles exception."""
-        mock_mistapi = sys.modules["mistapi"]
-        mock_mistapi.api.v1.orgs.sites.listOrgSites.side_effect = RuntimeError("Boom")
-
-        result = upgrader._interactive_site_selection()
-        assert result["error"] == "Site discovery error: Boom"
-        assert list(result) == ["error"]
-
-        mock_mistapi.api.v1.orgs.sites.listOrgSites.side_effect = None
 
     def test_discover_firmware_inventory_failure(
         self,
@@ -1431,6 +1391,7 @@ class TestAdditionalCoverage:
 
     def test_display_version_table(
         self,
+        capsys: pytest.CaptureFixture[str],
         upgrader: BulkSwitchFirmwareUpgrader,
     ) -> None:
         """Verify version table display runs without error."""
@@ -1442,6 +1403,9 @@ class TestAdditionalCoverage:
         upgrader.current_firmware_versions = {"22.4R3.25"}
 
         upgrader._display_version_table()
+        output = capsys.readouterr().out
+        assert "23.4R2.21" in output
+        assert "22.4R3.25" in output
 
     @patch("builtins.input", side_effect=["", "1"])
     def test_prompt_version_selection_empty_then_valid(
@@ -1660,21 +1624,9 @@ class TestAdditionalCoverage:
         result = upgrader._fetch_firmware_from_api()
         assert result == []
 
-    def test_fetch_firmware_from_api_exception(
-        self,
-        upgrader: BulkSwitchFirmwareUpgrader,
-    ) -> None:
-        """Verify API exception returns empty list."""
-        mock_mistapi = sys.modules["mistapi"]
-        mock_mistapi.api.v1.orgs.devices.listOrgAvailableDeviceVersions.side_effect = RuntimeError("API error")
-
-        result = upgrader._fetch_firmware_from_api()
-        assert result == []
-
-        mock_mistapi.api.v1.orgs.devices.listOrgAvailableDeviceVersions.side_effect = None
-
     def test_save_to_cache_exception(
         self,
+        capsys: pytest.CaptureFixture[str],
         upgrader: BulkSwitchFirmwareUpgrader,
     ) -> None:
         """Verify cache save handles write error gracefully."""
@@ -1682,16 +1634,20 @@ class TestAdditionalCoverage:
         upgrader.CACHE_FILE = "/nonexistent/path/cache.csv"
 
         upgrader._save_to_cache([{"version": "23.4R2.21", "model": "EX4100"}])
+        assert "Could not cache firmware data" in capsys.readouterr().out
 
         upgrader.CACHE_FILE = original
 
-    def test_display_site_list(self) -> None:
-        """Verify site list display."""
+    def test_display_site_list(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """Verify site list display includes site names."""
         sites = [
             {"name": "Office A", "id": "s1"},
             {"name": "Office B", "id": "s2"},
         ]
         BulkSwitchFirmwareUpgrader._display_site_list(sites)
+        output = capsys.readouterr().out
+        assert "Office A" in output
+        assert "Office B" in output
 
 
 class TestBlindHandlerNarrowing:
@@ -1778,11 +1734,13 @@ class TestBlindHandlerNarrowing:
     def test_cache_save_keeps_io_failure_nonfatal(
         self,
         monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
         upgrader: BulkSwitchFirmwareUpgrader,
     ) -> None:
         """A firmware cache write failure must not abort the upgrade plan."""
         monkeypatch.setattr(os, "makedirs", MagicMock(side_effect=OSError("denied")))  # WHY: fail before file write.
         upgrader._save_to_cache([{"version": "23.4R2.21", "model": "EX4100"}])  # WHY: prove the handler returns.
+        assert "Could not cache firmware data" in capsys.readouterr().out
 
     def test_cache_save_surfaces_programming_error(
         self,
