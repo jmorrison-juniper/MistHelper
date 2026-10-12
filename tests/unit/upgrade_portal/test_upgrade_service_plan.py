@@ -198,7 +198,9 @@ class TestGroupingRules:
         """An access point, a switch, and a Junos gateway need three calls.
 
         The three share the site scope, the Junos family, and the version, so
-        the device type alone causes the split.
+        the device type alone causes the split. Issue #4020 fixes the order of
+        the three plans at `PLAN_FAMILY_ORDER`, so the selection order below no
+        longer decides which family takes firmware first.
         """
         plans = plan_for(
             access_point(version_target="23.4R2-S3"),
@@ -206,7 +208,7 @@ class TestGroupingRules:
             junos_gateway(version_target="23.4R2-S3"),
         )
         assert len(plans) == 3
-        assert [plan.targets[0].device_type for plan in plans] == ["ap", "switch", "gateway"]
+        assert [plan.targets[0].device_type for plan in plans] == ["gateway", "switch", "ap"]
         assert {plan.scope for plan in plans} == {upgrade_service.SCOPE_SITE}
         assert all(plan.warnings == () for plan in plans)
 
@@ -253,6 +255,85 @@ class TestGroupingRules:
             device_ids = plan.body["device_ids"]
             assert isinstance(device_ids, list)
             assert len(device_ids) == len(plan.targets)
+
+
+class TestCanonicalPlanOrder:
+    """Issue #4020: the plans always leave this module in one family order."""
+
+    def test_names_the_three_families_in_the_one_order(self) -> None:
+        """The constant tells the reader the order that the whole portal obeys.
+
+        Why:
+            The driver and the submitter both read this order. A silent edit of
+            the tuple would reorder a destructive firmware write across a whole
+            site, so the order is pinned here in one literal.
+        """
+        assert upgrade_service.PLAN_FAMILY_ORDER == ("gateway", "switch", "ap")
+
+    def test_puts_the_gateways_first_whatever_the_selection_order(self) -> None:
+        """An operator who picks the access points first still upgrades last.
+
+        Why:
+            This is the defect of issue #4020. The access points of a site sit
+            downstream of the gateway of that site. An access point that takes
+            firmware before its gateway loses the cloud, and the operator then
+            has no path back to it.
+        """
+        plans = plan_for(
+            access_point(version_target="23.4R2-S3"),
+            make_target(),
+            junos_gateway(version_target="23.4R2-S3"),
+        )
+        assert [plan.targets[0].device_type for plan in plans] == list(upgrade_service.PLAN_FAMILY_ORDER)
+
+    def test_gives_the_same_order_for_the_reversed_selection(self) -> None:
+        """Two opposite selections of one site build one identical order."""
+        forward = plan_for(junos_gateway(version_target="23.4R2-S3"), make_target(), access_point())
+        backward = plan_for(access_point(), make_target(), junos_gateway(version_target="23.4R2-S3"))
+        assert [plan.targets[0].device_type for plan in forward] == ["gateway", "switch", "ap"]
+        assert [plan.targets[0].device_type for plan in backward] == ["gateway", "switch", "ap"]
+
+    def test_puts_the_switches_before_the_access_points(self) -> None:
+        """An access point that was picked first still waits for the switches."""
+        plans = plan_for(access_point(), make_target())
+        assert [plan.targets[0].device_type for plan in plans] == ["switch", "ap"]
+
+    def test_keeps_the_order_inside_one_family(self) -> None:
+        """Two version groups of one family keep the order they were built in.
+
+        Why:
+            The sort is stable, so it reorders the families and nothing else.
+            An operator who reads two switch groups sees the same two rows after
+            this change as before it.
+        """
+        plans = plan_for(
+            make_target(mac=MAC_SWITCH, version_target="23.4R2-S3"),
+            make_target(mac=MAC_SECOND_SWITCH, version_target="21.4R3-S5"),
+        )
+        assert [plan.targets[0].version_target for plan in plans] == ["23.4R2-S3", "21.4R3-S5"]
+
+    def test_puts_the_gateways_ahead_of_a_second_switch_group(self) -> None:
+        """One gateway group outranks every switch group of the selection."""
+        plans = plan_for(
+            make_target(mac=MAC_SWITCH, version_target="23.4R2-S3"),
+            make_target(mac=MAC_SECOND_SWITCH, version_target="21.4R3-S5"),
+            junos_gateway(version_target="23.4R2-S3"),
+        )
+        assert [plan.targets[0].device_type for plan in plans] == ["gateway", "switch", "switch"]
+
+    def test_keeps_both_gateway_families_ahead_of_the_access_points(self) -> None:
+        """A session smart router is a gateway, so it also outranks the radios.
+
+        Why:
+            The group key reads the device type, and a session smart router
+            carries the gateway device type with its own family. The two gateway
+            groups therefore share one rank, keep the selection order between
+            them, and both still sort ahead of the access points.
+        """
+        plans = plan_for(access_point(), session_router(), junos_gateway())
+        assert [plan.targets[0].device_type for plan in plans] == ["gateway", "gateway", "ap"]
+        assert plans[0].scope == upgrade_service.SCOPE_ORG  # The router was picked first and kept that place.
+        assert plans[1].scope == upgrade_service.SCOPE_SITE  # The Junos gateway followed it, as selected.
 
 
 class TestMixedSelectionWarnings:

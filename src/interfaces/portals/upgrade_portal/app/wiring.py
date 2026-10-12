@@ -23,8 +23,9 @@ Why:
 import logging  # The portal logs with the standard library only.
 import threading  # The run mirror below is read by the poll while the driver writes.
 import time  # The event window of the settle gate reads the wall clock.
-from collections.abc import Callable, Mapping, MutableMapping  # The shapes the driver and the store declare.
+from collections.abc import Callable, Mapping, MutableMapping, Sequence  # The shapes the driver and the store declare.
 from dataclasses import dataclass  # Holds one request-owned resource graph.
+from datetime import UTC, datetime  # The refusal evidence carries an ISO 8601 UTC change time.
 from importlib import import_module  # Imports each collaborator late, at the first call.
 from types import ModuleType  # The return type of a late import.
 from typing import Any  # A late import answers with untyped objects.
@@ -42,6 +43,10 @@ from src.interfaces.portals.upgrade_portal.app.config import (
 from src.interfaces.portals.upgrade_portal.persistence.actions import (
     ActionRepository,
 )  # Keep run actions in the authoritative document store.
+from src.interfaces.portals.upgrade_portal.runtime.signals import (
+    DispatchEvidenceError,
+    RunDispatchGate,
+)  # The stop route and this destructive submitter share one gate for each run.
 
 logger = logging.getLogger(__name__)  # One logger for each module keeps the source visible in the log.
 
@@ -98,6 +103,37 @@ COMPARISON_SERVICE_KEY = "COMPARISON_SERVICE"  # The seam that holds ComparisonS
 PORTAL_DEPENDENCY_PROVIDER_KEY = "PORTAL_DEPENDENCY_PROVIDER"  # Holds lazy request resource construction.
 
 POST_CHECK_ORDINAL = 2  # The second capture of a run. `driver.post_check_request` sends this value.
+
+# Issue #4020: the driver names a cascade phase, and an upgrade plan names a
+# device family. This map is the one join between the two words, so the phase
+# loop and the submitter never disagree about which firmware write belongs to
+# which gate. The client phase holds no device, so it takes no entry.
+PLAN_PHASE_BY_DEVICE_TYPE: Mapping[str, str] = {
+    "gateway": "gateways",  # Every other family of the site sits downstream of this one.
+    "switch": "switches",  # The access points and the wired clients sit downstream of this one.
+    "ap": "aps",  # Only the wireless clients sit downstream of this one.
+}
+
+# Issue #4020: these two sentences reach the run page, so they name the loss in
+# plain words and hold no host, no token, and no cloud body.
+NO_PLAN_REASON = "The run built no upgrade plan, so no firmware call left the portal."
+PHASE_REFUSED_REASON = "The cloud refused the {phase} upgrade call, so the run stops before the next phase."
+UNROUTABLE_PLAN_REASON = (
+    "The run built an upgrade plan with no single supported device family, so no firmware call left the portal."
+)
+STOP_REQUESTED_REASON = "An operator asked to stop the run before the next firmware call."
+ACCEPTED_ROW_STORE_REASON = (
+    "The portal could not persist an accepted upgrade call, so the run stops before the next firmware call."
+)
+
+# WHAT: the bounded attempt count and the sentence of a lost refusal record.
+# WHY: Issue #4020: an unproven refusal leaves the cloud state of the run
+#      unknown. The portal retries a small, fixed number of times inside the
+#      dispatch gate, then blocks the run and names the loss.
+DISPATCH_EVIDENCE_ATTEMPTS = 3
+DISPATCH_EVIDENCE_LOST = (
+    "The portal could not record a refused firmware call of the run {run_id}, so the run stops for an operator."
+)
 
 # WHY: The storage bootstrap runs once for each process. Every step of it repeats
 # without harm, and a second run costs a database host probe that is not free.
@@ -289,7 +325,8 @@ class DocumentRunStore:
         calls, and `capture/store.py` publishes the write alone. Without a read
         the portal keeps every run in the memory of one process, so a second
         worker answers that the run does not exist. This class adds the read and
-        holds the two calls together, which is the shape both callers declare.
+        the narrow accepted-row mutation to the full write. These operations
+        form the shape that the callers declare.
 
         Every call catches every fault. A store that does not answer must leave
         the run readable as far as the memory of the driver reaches. The store
@@ -351,6 +388,89 @@ class DocumentRunStore:
             mirror_run(run)  # The poll then reads the run back with no database at all.
         return landed
 
+    def append_accepted_upgrade(self, run_id: str, row: dict[str, Any]) -> bool:
+        """Append one accepted row without replacing a concurrent stop request.
+
+        Args:
+            run_id: The run key.
+            row: The accepted cloud response.
+
+        Returns:
+            True when the database holds the appended row.
+        """
+        store = load_module(STORE_MODULE)  # Load the production database boundary only for the mutation.
+        if store is None:  # A mirror cannot coordinate a stop from another worker.
+            return False  # Fail closed before another destructive cloud call.
+        try:  # The database action patches one field in one atomic AQL statement.
+            database: Any = store.connect_database()  # Open the database that holds the run document.
+            if database is None:  # A file fallback cannot preserve a concurrent database stop.
+                return False  # Never report an atomic mutation through a non-atomic fallback.
+            query = (
+                "FOR run IN @@collection "
+                "FILTER run._key == @key "
+                "LET accepted = APPEND(IS_ARRAY(run.upgrades) ? run.upgrades : [], [@row]) "
+                "UPDATE run WITH { upgrades: accepted } IN @@collection RETURN NEW"
+            )  # UPDATE patches only upgrades and therefore preserves every current stop field.
+            bind_vars = {  # Bind the collection, key, and detached accepted row.
+                "@collection": store.RUN_COLLECTION,
+                "key": run_id,
+                "row": dict(row),
+            }
+            logger.info("wiring: append one accepted upgrade row to run %s", run_id)  # Log before the mutation.
+            rows = list(database.aql.execute(query, bind_vars=bind_vars))  # Run one atomic field update.
+        except Exception as fault:  # A persistence fault must block every later destructive write.
+            logger.warning("wiring: the accepted-row append for run %s failed with %s", run_id, type(fault).__name__)
+            return False  # The submitter reports the durable evidence failure.
+        if not rows or not isinstance(rows[0], Mapping):  # An absent run changed no durable record.
+            return False  # Fail closed when the database returns no updated document.
+        mirror_run(dict(rows[0]))  # Cache the complete database-confirmed record with its stop fields.
+        logger.debug("wiring: the accepted-row append for run %s succeeded", run_id)  # Log after the mutation.
+        return True  # The accepted identifier is durable without a whole-record replacement.
+
+    def append_dispatch_failure(self, run_id: str, failure: dict[str, Any]) -> bool:
+        """Append one refusal record without replacing a concurrent stop request.
+
+        Why:
+            Issue #4020: a refusal that the driver persisted after the dispatch
+            gate reopened could be erased by a stop that committed first, so a
+            destructive partial run lost the evidence of the write it lost.
+
+        Args:
+            run_id: The run key.
+            failure: The refusal evidence of one dispatch.
+
+        Returns:
+            True when the database holds the appended refusal.
+        """
+        store = load_module(STORE_MODULE)  # Load the production database boundary only for the mutation.
+        if store is None:  # A mirror cannot coordinate a stop from another worker.
+            return False  # Fail closed, because unproven refusal evidence must never read as durable.
+        try:  # The database action patches one field in one atomic AQL statement.
+            database: Any = store.connect_database()  # Open the database that holds the run document.
+            if database is None:  # A file fallback cannot preserve a concurrent database stop.
+                return False  # Never report an atomic mutation through a non-atomic fallback.
+            query = (
+                "FOR run IN @@collection "
+                "FILTER run._key == @key "
+                "LET failures = APPEND(IS_ARRAY(run.dispatch_failures) ? run.dispatch_failures : [], [@row]) "
+                "UPDATE run WITH { dispatch_failures: failures } IN @@collection RETURN NEW"
+            )  # UPDATE patches only the refusal field and therefore preserves every current stop field.
+            bind_vars = {  # Bind the collection, key, and detached refusal record.
+                "@collection": store.RUN_COLLECTION,
+                "key": run_id,
+                "row": dict(failure),
+            }
+            logger.info("wiring: append one dispatch refusal to run %s", run_id)  # Log before the mutation.
+            rows = list(database.aql.execute(query, bind_vars=bind_vars))  # Run one atomic field update.
+        except Exception as fault:  # A persistence fault must stay visible to the submitter.
+            logger.warning("wiring: the refusal append for run %s failed with %s", run_id, type(fault).__name__)
+            return False  # The submitter reports the durable evidence failure.
+        if not rows or not isinstance(rows[0], Mapping):  # An absent run changed no durable record.
+            return False  # Fail closed when the database returns no updated document.
+        mirror_run(dict(rows[0]))  # Cache the complete database-confirmed record with its stop fields.
+        logger.debug("wiring: the refusal append for run %s succeeded", run_id)  # Log after the mutation.
+        return True  # The refusal evidence is durable without a whole-record replacement.
+
     def delete_run(self, run_id: str) -> bool:
         """Delete one planned run and remove its process mirror."""
         store = load_module(STORE_MODULE)  # Load the production database boundary only when cleanup runs.
@@ -364,6 +484,101 @@ class DocumentRunStore:
         if deleted:  # The durable record no longer exists.
             forget_run(run_id)  # Prevent a database outage from resurrecting the deleted plan.
         return deleted  # Report the verified cleanup result.
+
+    def apply_stop_request(self, run_id: str, stop_request: dict[str, Any], updated_at: str) -> bool:
+        """Write only the stop fields of one database run.
+
+        Why:
+            Issue #4020: the stop route read the whole record and wrote the
+            whole record back. An accepted firmware row that committed inside
+            that interval disappeared, so the operator held a stop that could
+            cancel nothing. This mutation patches two fields in one statement.
+
+        Args:
+            run_id: The run key.
+            stop_request: The stop request record.
+            updated_at: The fresh change time in ISO 8601 UTC.
+
+        Returns:
+            True when the database holds the stop request.
+        """
+        store = load_module(STORE_MODULE)  # Load the production database boundary only for the mutation.
+        if store is None:  # A mirror cannot coordinate a stop against another worker.
+            return False  # Fail closed, because an unproven stop must never read as durable.
+        try:  # The database action patches two fields in one atomic AQL statement.
+            database: Any = store.connect_database()  # Open the database that holds the run document.
+            if database is None:  # A file fallback cannot preserve a concurrent accepted row.
+                return False  # Never report an atomic mutation through a non-atomic fallback.
+            query = (
+                "FOR run IN @@collection "
+                "FILTER run._key == @key "
+                "UPDATE run WITH { stop_request: @stop, updated_at: @now } IN @@collection RETURN NEW"
+            )  # UPDATE patches only the stop fields and preserves upgrades, state, phase, and outcome.
+            bind_vars = {  # Bind the collection, key, detached stop record, and change time.
+                "@collection": store.RUN_COLLECTION,
+                "key": run_id,
+                "stop": dict(stop_request),
+                "now": updated_at,
+            }
+            logger.info("wiring: write the stop request of run %s", run_id)  # Log before the mutation.
+            rows = list(database.aql.execute(query, bind_vars=bind_vars))  # Run one atomic field update.
+        except Exception as fault:  # A stop that cannot commit must remain visible as a failure.
+            logger.warning("wiring: the stop write for run %s failed with %s", run_id, type(fault).__name__)
+            return False  # The stop route reports the durable write failure to the operator.
+        if not rows or not isinstance(rows[0], Mapping):  # An absent run changed no durable record.
+            return False  # Fail closed when the database returns no updated document.
+        mirror_run(dict(rows[0]))  # Cache the complete database-confirmed record with its accepted rows.
+        logger.debug("wiring: the stop write for run %s succeeded", run_id)  # Log after the mutation.
+        return True  # The stop is durable without a whole-record replacement.
+
+    def apply_state_transition(self, run_id: str, state: str, updated_at: str, expected_state: str) -> bool:
+        """Write only the state fields of one database run while the observed state holds.
+
+        Why:
+            Issue #4020: the stop route replaced the whole record, so a driver
+            update that committed between the read and the write disappeared.
+            The write also carried no condition, so a run that reached a
+            terminal state inside that interval was moved backward. This
+            mutation patches two fields and only while the observed state holds.
+
+        Args:
+            run_id: The run key.
+            state: The new run state value.
+            updated_at: The fresh change time in ISO 8601 UTC.
+            expected_state: The state the caller read before it decided.
+
+        Returns:
+            True when the database holds the new state.
+        """
+        store = load_module(STORE_MODULE)  # Load the production database boundary only for the mutation.
+        if store is None:  # A mirror cannot coordinate a move against the driver thread.
+            return False  # Fail closed, because an unproven move must never read as durable.
+        try:  # The database action compares and patches two fields in one atomic AQL statement.
+            database: Any = store.connect_database()  # Open the database that holds the run document.
+            if database is None:  # A file fallback cannot preserve a concurrent driver write.
+                return False  # Never report an atomic mutation through a non-atomic fallback.
+            query = (
+                "FOR run IN @@collection "
+                "FILTER run._key == @key AND run.state == @expected "
+                "UPDATE run WITH { state: @state, updated_at: @now } IN @@collection RETURN NEW"
+            )  # The filter makes the comparison and the patch one action, so no move runs on a stale state.
+            bind_vars = {  # Bind the collection, key, observed state, new state, and change time.
+                "@collection": store.RUN_COLLECTION,
+                "key": run_id,
+                "expected": expected_state,
+                "state": state,
+                "now": updated_at,
+            }
+            logger.info("wiring: write the state %s of run %s", state, run_id)  # Log before the mutation.
+            rows = list(database.aql.execute(query, bind_vars=bind_vars))  # Run one atomic field update.
+        except Exception as fault:  # A move that cannot commit must remain visible as a failure.
+            logger.warning("wiring: the state write for run %s failed with %s", run_id, type(fault).__name__)
+            return False  # The stop route reports the durable write failure to the operator.
+        if not rows or not isinstance(rows[0], Mapping):  # An absent run changed no durable record.
+            return False  # Fail closed when the database returns no updated document.
+        mirror_run(dict(rows[0]))  # Cache the complete database-confirmed record with every driver field.
+        logger.debug("wiring: the state write for run %s succeeded", run_id)  # Log after the mutation.
+        return True  # The move is durable without a whole-record replacement.
 
     def compare_and_set_run(
         self,
@@ -406,9 +621,9 @@ class DocumentRunStore:
 
         Why:
             FR-037 asks the portal to find a run that already acts on the site.
-            The two call shape answers one run at a time. This third call is
-            optional, and `routes/upgrade.site_run_records` reads it by name, so
-            a store that publishes none still works.
+            The required store shape answers one run at a time. This site scan
+            is optional, and `routes/upgrade.site_run_records` reads it by name.
+            A store that publishes none still works.
 
         Args:
             site_id: The site that the new run wants to act on.
@@ -416,7 +631,7 @@ class DocumentRunStore:
         Returns:
             One row for each run of that site, or an empty list.
         """
-        store = load_module(STORE_MODULE)  # Late, for the same reason as the two calls above.
+        store = load_module(STORE_MODULE)  # Late, for the same reason as the required calls above.
         if store is None:  # No store module means no scan, and the route continues without one.
             return mirrored_site_runs(site_id)  # The runs of this process still guard FR-037.
         try:  # The scan is one query on a network store.
@@ -635,7 +850,7 @@ class CaptureBridge:
 
 
 class CloudUpgradeSubmitter:
-    """Send the upgrade of one run to the cloud.
+    """Send the upgrade of one phase of one run to the cloud.
 
     Why:
         `RunDriverDeps.submit` accepts None, and a driver built that way walks
@@ -643,37 +858,252 @@ class CloudUpgradeSubmitter:
         the portal. That silence is the exact defect this module repairs, so the
         wiring always builds this object.
 
-        The class holds the session alone. `upgrade_service.plan_upgrade` is pure
-        and groups the devices, and `upgrade_service.invoke_upgrade` performs one
-        call for each group and never retries.
+        The class holds the session and the durable run store.
+        `upgrade_service.plan_upgrade` is pure and groups the devices, and
+        `upgrade_service.invoke_upgrade` performs one call for each group and
+        never retries.
+
+        Issue #4020: the driver now calls this class once for each phase, and a
+        phase sends firmware only after the phase above it settled. One refused
+        group inside a phase stops that phase at once and leaves every later
+        group of the phase unsent, because the operator cannot tell a refused
+        write from a write that the cloud took and lost. Nothing retries, and
+        the rows of the groups the cloud already accepted stay in the record so
+        the stop path can still cancel them.
     """
 
-    def __init__(self, session: Any) -> None:
-        """Hold the cloud session of the operator who confirmed the run.
+    def __init__(self, session: Any, store: Any) -> None:
+        """Hold the cloud session and the durable run store.
 
         Args:
             session: The Mist API session. The request thread read it.
+            store: The store that carries accepted rows and stop requests.
         """
         self._session = session  # Bound inside the request, because the driver thread reads no session.
+        self._store = store  # The submitter persists each accepted row before another destructive write.
 
-    def submit(self, record: MutableMapping[str, Any]) -> bool:
-        """Send every upgrade call of one run and report whether the cloud took one.
+    def submit_phase(self, record: MutableMapping[str, Any], phase: str) -> str | None:
+        """Send every upgrade call of one phase and report why the run must stop.
 
         Args:
             record: The run record. The call writes the cloud identifiers into it.
+            phase: The phase name, one of the members of the driver phase order.
 
         Returns:
-            True when the cloud accepted at least one call.
+            None when the run may carry on, or one plain sentence that names why
+            the run must stop before the next phase.
         """
         run_id = str(record.get("run_id", ""))  # The log lines name the run and never the record.
         plans = build_plans(record)  # Pure, so this grouping reaches no cloud.
         if not plans:  # A run with no plan must never read as a sent upgrade.
             logger.error("wiring: the run %s built no upgrade plan, so nothing went to the cloud", run_id)
-            return False  # The driver fails the run and writes the reason.
-        sent = [entry for entry in (self._send(run_id, plan) for plan in plans) if entry is not None]
-        record["upgrades"] = sent  # The stop path needs the cloud identifier of each accepted call.
-        logger.info("wiring: the run %s sent %s of %s upgrade call(s)", run_id, len(sent), len(plans))
-        return bool(sent)  # One accepted call is enough to carry the run into the settle phases.
+            return NO_PLAN_REASON  # The driver fails the run and writes this reason.
+        routes = tuple(plan_phase(plan) for plan in plans)  # Validate every plan before the first cloud write.
+        if any(not route for route in routes):  # An unknown or mixed family has no safe cascade position.
+            logger.error("wiring: the run %s built an upgrade plan with no supported phase", run_id)
+            return UNROUTABLE_PLAN_REASON  # The driver records the failure and sends no plan.
+        mine = tuple(plan for plan, route in zip(plans, routes, strict=True) if route == phase)
+        if not mine:  # The site holds no device of this family, so this phase sends nothing.
+            logger.info("wiring: the run %s holds no upgrade plan for the %s phase", run_id, phase)
+            return None  # An empty family is no failure, and the driver marks the phase skipped.
+        return self._send_phase(run_id, record, phase, mine)  # The ordered, fail-closed send of one phase.
+
+    def _send_phase(
+        self,
+        run_id: str,
+        record: MutableMapping[str, Any],
+        phase: str,
+        plans: tuple[Any, ...],
+    ) -> str | None:
+        """Send the plans of one phase and stop at the first refusal.
+
+        Why:
+            A refused group of a phase means the cloud would not take that
+            firmware write. Sending the rest of the phase afterwards would start
+            a partial upgrade of a family that the operator believes refused, so
+            this loop ends at the first refusal and writes nothing more.
+
+        Args:
+            run_id: The run key, for the log line.
+            record: The run record, which collects the accepted rows.
+            phase: The phase name, for the reason sentence.
+            plans: The plans of this phase, in the canonical order.
+
+        Returns:
+            None when every plan of the phase went out, or the stop reason.
+        """
+        for plan in plans:  # The order is the order that `plan_upgrade` fixed.
+            reason = self._dispatch_plan(run_id, record, phase, plan)  # One gated check, call, and evidence write.
+            if reason is not None:
+                return reason  # A stop, a refusal, or a lost accepted row ends the phase here.
+        logger.info("wiring: the run %s sent %s upgrade call(s) for the %s phase", run_id, len(plans), phase)
+        return None  # The driver now settles this phase before the next one sends anything.
+
+    def _dispatch_plan(
+        self,
+        run_id: str,
+        record: MutableMapping[str, Any],
+        phase: str,
+        plan: Any,
+    ) -> str | None:
+        """Check the stop, send one firmware call, and store its evidence as one action.
+
+        Why:
+            Issue #4020: the durable stop check and the cloud call were two
+            separate actions. A stop that committed between them could not hold
+            back a destructive write that had already passed the check, so the
+            operator saw a committed stop while firmware was still in flight.
+
+            ``RunDispatchGate`` makes the three steps one action for each run. A
+            stop of the same run either commits before this block and stops the
+            call, or waits until the accepted row or the refusal is durable.
+
+        Args:
+            run_id: The run key, for the log line.
+            record: The run record, which collects the accepted rows.
+            phase: The phase name, for the reason sentence.
+            plan: The one version group this dispatch may send.
+
+        Returns:
+            None when the call went out and its row is durable, or one reason.
+        """
+        with RunDispatchGate.dispatch(run_id):  # No stop of this run may commit inside this block.
+            stop_reason = self._stop_reason(record)  # A durable operator request blocks this next write.
+            if stop_reason is not None:
+                return stop_reason  # The driver then uses the normal stopped-run finalization path.
+            row = self._send(run_id, plan)
+            if row is None:  # The cloud refused or faulted, so this phase stops here.
+                self._keep(record, ())  # Keep the stable empty-row shape when the first call was refused.
+                return self._persist_refusal(record, run_id, phase, plan)  # Durable before a stop may commit.
+            return self._persist_row(record, row)  # The identifier lands before the gate lets a stop commit.
+
+    def _persist_refusal(
+        self,
+        record: MutableMapping[str, Any],
+        run_id: str,
+        phase: str,
+        plan: Any,
+    ) -> str:
+        """Make the evidence of one refused firmware call durable inside the gate.
+
+        Why:
+            Issue #4020: the submitter returned the refusal and the driver wrote
+            it after the gate reopened. A stop that committed in that interval
+            sent the driver down the stopped path, and the operator then read a
+            stopped run that never named the destructive write the cloud lost.
+
+        Args:
+            record: The run record that the driver owns.
+            run_id: The run key, for the log line and the store mutation.
+            phase: The phase name, for the reason sentence.
+            plan: The version group the cloud would not take.
+
+        Returns:
+            The refusal reason that the driver writes into the run.
+
+        Raises:
+            DispatchEvidenceError: The refusal could not become durable.
+        """
+        reason = PHASE_REFUSED_REASON.format(phase=phase)  # One sentence for the operator and the record.
+        failure = {  # Plain values only, because the document store writes plain values.
+            "phase": phase,  # The phase that lost the call, so a reader sees the cascade position.
+            "family": str(getattr(plan, "family", "")),  # The device family of the group the cloud refused.
+            "version": str(getattr(plan, "version", "")),  # The firmware version the operator asked for.
+            "reason": reason,  # The same sentence the run record carries, so the two never disagree.
+            "recorded_at": datetime.now(UTC).isoformat(),  # The change time in ISO 8601 UTC, for the trail.
+        }
+        held = record.get("dispatch_failures")  # An earlier phase can already hold refusal evidence.
+        kept = list(held) if isinstance(held, list) else []  # Ignore a damaged non-list field safely.
+        kept.append(dict(failure))  # The driver copy carries the same evidence as the durable record.
+        record["dispatch_failures"] = kept  # A later save of the driver never drops this evidence.
+        logger.error("wiring: the run %s stops, because the %s phase lost one upgrade call", run_id, phase)
+        self._store_failure(run_id, failure)  # A lost write fences the run and raises, inside the gate.
+        return reason  # The driver fails the run with this sentence.
+
+    def _store_failure(self, run_id: str, failure: Mapping[str, Any]) -> None:
+        """Append one refusal record, and fence the run when no attempt succeeds.
+
+        Why:
+            Issue #4020: the submitter logged a failed append and returned the
+            ordinary refusal reason. The run then read as a plain refused phase
+            while no durable record named the destructive call the cloud lost,
+            and a later family of the same run could still send firmware. The
+            portal now retries the write a bounded number of times. When each
+            attempt fails, it blocks every later dispatch of the run and raises,
+            so the driver ends the run with a visible failure.
+
+        Args:
+            run_id: The run key, for the store mutation and the log line.
+            failure: The refusal evidence of one firmware call.
+
+        Raises:
+            DispatchEvidenceError: No attempt made the refusal durable.
+        """
+        for attempt in range(1, DISPATCH_EVIDENCE_ATTEMPTS + 1):  # A bounded loop can never hold the gate open.
+            logger.info("wiring: write the refusal of run %s, attempt %d", run_id, attempt)  # Before the write.
+            try:  # A store that raises must not leave the run unfenced and the refusal unproven.
+                if self._store.append_dispatch_failure(run_id, dict(failure)):  # The append is atomic.
+                    logger.debug("wiring: run %s holds its refusal after attempt %d", run_id, attempt)
+                    return  # The evidence is durable, so the ordinary refusal reason is now provable.
+                logger.error("wiring: the store refused the failure record of run %s", run_id)  # Names the run.
+            except Exception as fault:  # A database fault reads the same as a refusal for this decision.
+                logger.error("wiring: the failure record of run %s raised %s", run_id, fault)  # Full context.
+        RunDispatchGate.fence(run_id)  # No later family of this run may send firmware with the state unknown.
+        raise DispatchEvidenceError(DISPATCH_EVIDENCE_LOST.format(run_id=run_id))  # The driver fails the run.
+
+    def _stop_reason(self, record: MutableMapping[str, Any]) -> str | None:
+        """Copy a durable stop request into the driver record before a cloud write.
+
+        Args:
+            record: The run record that the driver owns.
+
+        Returns:
+            The visible stop reason, or None when no operator requested a stop.
+        """
+        run_id = str(record.get("run_id", ""))  # The store key and the safe log value are the run identifier.
+        stored = self._store.read_run(run_id)  # The route writes the stop request into this durable record.
+        request = stored.get("stop_request") if isinstance(stored, Mapping) else record.get("stop_request")
+        if request is None:
+            return None  # The next version group may leave only while no durable stop exists.
+        record["stop_request"] = request  # The driver then preserves the request through every later save.
+        logger.info("wiring: the run %s stops before its next firmware call", run_id)
+        return STOP_REQUESTED_REASON
+
+    def _persist_row(self, record: MutableMapping[str, Any], row: Mapping[str, Any]) -> str | None:
+        """Persist one accepted row before another destructive call can start.
+
+        Args:
+            record: The run record that collects accepted rows.
+            row: The accepted cloud response.
+
+        Returns:
+            None when the row is durable, or one reason when persistence failed.
+        """
+        self._keep(record, (row,))  # The in-memory record keeps every accepted family and version group.
+        run_id = str(record.get("run_id", ""))  # The narrow store mutation needs only the durable run key.
+        if not self._store.append_accepted_upgrade(run_id, dict(row)):
+            logger.error("wiring: the run %s could not persist one accepted upgrade call", run_id)
+            return ACCEPTED_ROW_STORE_REASON  # No later destructive call may start without durable evidence.
+        return self._stop_reason(record)  # Copy a stop that committed before or during the atomic append.
+
+    @staticmethod
+    def _keep(record: MutableMapping[str, Any], rows: Sequence[Mapping[str, Any]]) -> None:
+        """Add the accepted rows of one phase to the record.
+
+        Why:
+            Issue #4020 sends one phase at a time, so a later phase must never
+            drop the identifiers of the phase above it. The stop path cancels
+            every accepted call, and a replaced list would hide the gateways
+            that are already writing firmware.
+
+        Args:
+            record: The run record.
+            rows: The rows of this phase that the cloud accepted.
+        """
+        held = record.get("upgrades")  # A first phase finds nothing, and a later phase finds the earlier rows.
+        kept = list(held) if isinstance(held, Sequence) and not isinstance(held, str | bytes) else []
+        kept.extend(dict(row) for row in rows)  # Plain values only, because the document store writes plain values.
+        record["upgrades"] = kept  # The stop path needs the cloud identifier of every accepted call.
 
     def _send(self, run_id: str, plan: Any) -> dict[str, Any] | None:
         """Send one upgrade call and return what the cloud answered.
@@ -697,6 +1127,28 @@ class CloudUpgradeSubmitter:
             logger.warning("wiring: the cloud refused one upgrade call of the run %s", run_id)  # No body, no host.
             return None  # A refused group carries no identifier that the stop path could use.
         return _submission_row(answer)  # The record now holds what the stop path needs.
+
+
+def plan_phase(plan: Any) -> str:
+    """Return the cascade phase that one upgrade plan belongs to.
+
+    Why:
+        The driver names a phase, and a plan names a device family. Issue #4020
+        joins the two here, so the submitter and the phase loop never disagree
+        about which firmware write belongs to which gate.
+
+    Args:
+        plan: One `UpgradePlan` of the upgrade seam.
+
+    Returns:
+        The phase name, or an empty string when the plan has no single supported
+        family.
+    """
+    targets = tuple(getattr(plan, "targets", ()) or ())  # Treat a missing target collection as an empty plan.
+    families = {str(getattr(target, "device_type", "")) for target in targets}  # One plan must hold one family.
+    if len(families) != 1:
+        return ""  # Empty and mixed plans have no safe place in the destructive cascade.
+    return PLAN_PHASE_BY_DEVICE_TYPE.get(next(iter(families)), "")  # Unknown families also fail closed.
 
 
 def _submission_row(answer: Any) -> dict[str, Any]:
@@ -1072,7 +1524,10 @@ def build_driver_deps(driver: ModuleType, record: Mapping[str, Any], bindings: M
             capture_context(record, bindings),
             bindings.get(APP_CONTEXT_FIELD),
         ),
-        submit=CloudUpgradeSubmitter(bindings.get(SESSION_FIELD)),  # Without this the run sends no firmware.
+        submit=CloudUpgradeSubmitter(
+            bindings.get(SESSION_FIELD),
+            bindings.get(STORE_FIELD),
+        ),  # Accepted rows and stop requests share the durable run store.
         heartbeat=heartbeat,  # The second seat of the same object. The first seat is the gate progress.
         post_check_mode=read_post_check_mode(),  # The default keeps the automatic second capture of today.
     )
@@ -1538,7 +1993,7 @@ def install_seams(  # Install production defaults or one complete isolated depen
         injected object always wins over the object this function writes.
 
         The `STOP_RUNNER` seam stayed empty while no run record held a cloud
-        identifier. The `CloudUpgradeSubmitter.submit` call now writes one row
+        identifier. The `CloudUpgradeSubmitter._keep` helper now writes one row
         for each accepted call, so the seam holds `cancel_run`. FR-038f still
         holds, because a run with no accepted call builds no cancel target and
         `cancel_run` then answers None.

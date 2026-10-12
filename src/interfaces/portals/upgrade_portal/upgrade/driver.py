@@ -71,6 +71,7 @@ __all__ = [
     "LOCK_RETRY_WINDOW_SECONDS",
     "LOCK_STATE_LOST",
     "LOCK_STORE_QUIET_REASON",
+    "PHASE_BLOCKED_NOTE",
     "POST_CHECK_AUTOMATIC",
     "POST_CHECK_MANUAL",
     "POST_CHECK_ORDINAL",
@@ -189,6 +190,12 @@ POST_CHECK_MARK: Final[str] = "post-check"
 # `_fail` names the upgrade stage. The upgrade lost the access points, and the
 # capture itself ran well, so the operator must not chase the capture path.
 CLIENT_GATE_SHUT_REASON: Final[str] = "No access point returned, so the portal did not count the wireless clients."
+
+# WHY: Issue #4020. A family whose upstream family was lost keeps its firmware,
+# because a destructive write must never go out on a site that is already in an
+# unknown state. The note tells the operator that this family is untouched, so
+# the operator decides what the site does next. The portal retries nothing.
+PHASE_BLOCKED_NOTE: Final[str] = "The portal sent no firmware to this family, because a family above it was lost."
 
 # WHY: A skipped phase counts as complete for the gate that follows it. FR-058
 # asks the portal to pass over an empty family and open the next gate.
@@ -382,22 +389,29 @@ class CaptureStarter(Protocol):
 
 
 class UpgradeSubmitter(Protocol):
-    """The cloud submission the driver calls once for each run.
+    """The cloud submission the driver calls once for each cascade phase.
 
     Why:
         The submission needs a Mist session and the upgrade plans, which the
         route lane owns. The driver keeps the session out of this module and
-        asks only whether the cloud accepted the work.
+        asks only whether the phase may carry on.
+
+        Issue #4020: the driver sends one phase at a time, so the firmware of a
+        downstream family leaves only after the family above it settled. The
+        method therefore names a phase, and it answers with the reason the run
+        must stop rather than with a flag that hides which family was lost.
     """
 
-    def submit(self, record: MutableMapping[str, Any]) -> bool:
-        """Send the upgrade to the cloud and record each upgrade identifier.
+    def submit_phase(self, record: MutableMapping[str, Any], phase: str) -> str | None:
+        """Send the upgrade of one phase and record each upgrade identifier.
 
         Args:
             record: The run record. The method may write the target entries.
+            phase: The phase name, one of the members of PHASE_ORDER.
 
         Returns:
-            True when the cloud accepted the upgrade.
+            None when the run may carry on, or one plain sentence that names why
+            the run must stop before the next phase.
         """
         ...  # A protocol declares the shape only
 
@@ -783,8 +797,8 @@ class RunDriverDeps:
         store: Reads and writes the run record.
         gate: Waits for one cascade phase to settle.
         capture: Starts the post-check capture.
-        submit: Sends the upgrade to the cloud. None when the caller already
-            sent it.
+        submit: Sends the upgrade of one phase to the cloud. None when the
+            caller already sent it.
         clock: Reads the present time.
         heartbeat: Renews the site lock of this run. None when the caller
             holds no lock, and the browser then renews the lock alone.
@@ -1414,8 +1428,7 @@ class RunDriver:
         logger.info("Run %s starts the driver thread", run_id)
         self._watch_lock(record)  # The run thread now renews the site lock, so a closed page keeps the site
         try:
-            self._submit(record)
-            self._cascade(record)
+            self._cascade(record)  # Issue #4020: the cascade now sends the firmware of one family at a time
         except Exception as error:  # WHY: The thread must write the reason, never die silently.
             self._fail(record, error)
         finally:
@@ -1546,30 +1559,131 @@ class RunDriver:
         logger.warning("Run stopped before a site action because the site lock was lost")  # No token reaches the log.
         raise RunDriverError(reason)  # The run record then fails with the lock reason.
 
-    def _submit(self, record: MutableMapping[str, Any]) -> None:
-        """Send the upgrade to the cloud and write the tracker.
+    def _submit_phase(self, record: MutableMapping[str, Any], name: str) -> str | None:
+        """Send the firmware of one family, write the tracker, and report refusal.
 
         Why:
-            The tracker is a convenience for restart recovery, and the upgrade
+            Issue #4020: a family must hold its firmware until the family above
+            it settles. The cascade therefore calls this method once for each
+            phase, immediately before that phase settles, instead of sending
+            every family of the site in one call.
+
+            The tracker is a convenience for restart recovery, and the firmware
             already reached the cloud by this point in the method. A lost
-            tracker write must never fail a run whose firmware write is
-            already underway on real hardware, so this step only logs.
+            tracker write must never fail a run whose firmware write is already
+            underway on real hardware, so this step only logs.
 
         Args:
             record: The run record.
+            name: The phase name.
 
-        Raises:
-            RunDriverError: When the cloud refused the upgrade.
+        Returns:
+            The refusal reason, or None when the phase may settle.
         """
-        self._advance(record, RunState.UPGRADE_SUBMITTING)
         self._beat()  # The cloud submission takes minutes for a large site, so the lock beats before it
-        if self._deps.submit is not None and not self._deps.submit.submit(record):
-            raise RunDriverError("The cloud refused the upgrade, so the run stops here.")
+        refused: str | None = None  # A refusal stays in the cascade, so later phases become terminal.
+        if self._deps.submit is not None:
+            refused = self._deps.submit.submit_phase(record, name)  # None when the run may carry on
+            if refused is not None:
+                logger.warning("Run %s sent no firmware for the %s phase", record.get("run_id", ""), name)
         self._beat()  # The submission returned, so the lock beats again before the run moves on
         if write_tracker(record, self._deps.clock.now_text()) is None:
             run_id = record.get("run_id", "")
             logger.error("Run %s reached the cloud, but the upgrade tracker did not record it.", run_id)
+        self._enter_running(record)
+        return refused  # The caller records the failed phase and still reaches the post-check.
+
+    def _enter_running(self, record: MutableMapping[str, Any]) -> None:
+        """Move the run from the submitting state to the running state one time.
+
+        Why:
+            The state chain holds one submitting state and one running state
+            for the whole run, and it forbids a move back to an earlier state.
+            The cascade submits once for each phase, so only the first phase may
+            make this move.
+
+        Args:
+            record: The run record.
+        """
+        if RunStateMachine.read_state(record) is not RunState.UPGRADE_SUBMITTING:
+            return  # A later phase already carried the run past the submitting state
         self._advance(record, RunState.UPGRADE_RUNNING)
+
+    def _block_phase(self, record: MutableMapping[str, Any], name: str) -> None:
+        """Record one family that must never receive firmware after a loss.
+
+        Why:
+            Issue #4020: the run already lost a family above this one, so the
+            portal must not send a destructive write to this family. A site that
+            holds no member of this family is no loss, so it reads skipped.
+
+            The run state still walks through the settle state of this family,
+            because the state chain is linear. A skipped state would make every
+            later move illegal and would hide the true failure of the run.
+
+        Args:
+            record: The run record.
+            name: The phase name.
+        """
+        self._advance(record, settling_state(name))  # The linear chain allows no family to be stepped over
+        targets = phase_targets(record, name)  # An absent family is no failure, only an empty one
+        state = PhaseState.FAILED.value if targets else PhaseState.SKIPPED.value
+        note = PHASE_BLOCKED_NOTE if targets else ""  # The operator reads why this family kept its firmware
+        logger.warning(
+            "Run %s sent no firmware for the %s phase, because a family above it was lost",
+            record.get("run_id", ""),
+            name,
+        )
+        self._write_phase(record, PhaseOutcome(name, state, note=note))
+
+    def _refuse_phase(self, record: MutableMapping[str, Any], name: str, reason: str) -> None:
+        """Record the family whose destructive submission was refused.
+
+        Args:
+            record: The run record.
+            name: The phase name.
+            reason: The safe sentence that the submitter returned.
+        """
+        self._advance(record, settling_state(name))  # The state chain must reach every later terminal phase.
+        targets = phase_targets(record, name)  # The total tells the operator how much work did not start.
+        outcome = PhaseOutcome(name, PhaseState.FAILED.value, total=len(targets), note=reason)
+        self._write_phase(record, outcome)  # The refusal is durable before the cascade blocks later families.
+
+    def _cascade_phase(
+        self,
+        record: MutableMapping[str, Any],
+        name: str,
+        reason: str | None,
+    ) -> tuple[str | None, bool]:
+        """Run one ordered phase and report its first loss and stop state.
+
+        Args:
+            record: The run record.
+            name: The phase name.
+            reason: The first upstream failure, or None.
+
+        Returns:
+            The first failure reason and whether the run reached `stopped`.
+        """
+        self._beat()  # A phase never starts on a lock that is nearly dead.
+        if self._stop_pending(record):
+            self._stop(record)  # The normal stop path takes the post-check and writes stopped.
+            return reason, True
+        if reason is not None and name != CLIENT_PHASE:
+            self._block_phase(record, name)  # A lost upstream family holds this firmware.
+            return reason, False
+        if name != CLIENT_PHASE:
+            refused = self._submit_phase(record, name)  # The store can reveal a stop inside this call.
+            if self._stop_pending(record):
+                self._stop(record)  # An operator stop is not an ordinary submission refusal.
+                return reason, True
+            if refused is not None:
+                self._refuse_phase(record, name, refused)  # The refused family becomes terminal.
+                return reason or refused, False
+        self._advance(record, settling_state(name))
+        lost = self._run_phase(record, name)  # None means this phase completed without a new loss.
+        stopped = str(record.get("state", "")) == RunState.STOPPED.value
+        return reason or lost, stopped
 
     def _cascade(self, record: MutableMapping[str, Any]) -> None:
         """Run each settle gate in the fixed order and then finish the run.
@@ -1580,6 +1694,12 @@ class RunDriver:
             wireless clients sit downstream of the access points. A phase
             starts only after the phase before it reports settled.
 
+            Issue #4020: the firmware of one family leaves the portal inside
+            this loop, immediately before that family settles. A family whose
+            upstream family was lost therefore keeps its firmware, because the
+            write never happened. The driver never retries that write by
+            itself, so an operator decides what the site does next.
+
             The loop always reaches the finish step, even when one phase could
             not run. A phase that left the loop early would take the post-check
             capture away. That capture is the one record the operator needs
@@ -1588,17 +1708,12 @@ class RunDriver:
         Args:
             record: The run record.
         """
+        self._advance(record, RunState.UPGRADE_SUBMITTING)  # One submitting state covers the whole cascade
         reason: str | None = None  # Names why the run must end failed, and stays None while the run is healthy
         for name in PHASE_ORDER:
-            self._beat()  # A phase runs up to half an hour, so it never starts on a lock that is nearly dead
-            if self._stop_pending(record):
-                self._stop(record)
-                return
-            self._advance(record, settling_state(name))
-            lost = self._run_phase(record, name)  # Text when the phase could not run, and None when it ran
-            if str(record.get("state", "")) == RunState.STOPPED.value:
-                return  # The interrupted gate already completed the stop and the post-check.
-            reason = reason or lost  # Keep the first failure, which is the root cause of downstream skips.
+            reason, stopped = self._cascade_phase(record, name, reason)  # One helper owns every branch of a phase.
+            if stopped:
+                return  # The stop path already took the post-check and wrote the terminal state.
         self._finish(record, reason)
 
     def _run_phase(self, record: MutableMapping[str, Any], name: str) -> str | None:
@@ -1825,11 +1940,32 @@ class RunDriver:
         """
         logger.info("Run %s stops at the request of an operator", record.get("run_id", ""))
         self._advance(record, RunState.STOPPING)
-        try:
+        try:  # A stopped destructive run must never read as clean when the evidence capture failed.
             self._start_post_check(record)
-        except RunDriverError:
-            logger.warning("Run %s stopped without a post-check capture", record.get("run_id", ""))
+        except RunDriverError as fault:  # Issue #4020: the earlier version logged and wrote no evidence.
+            self._record_post_check_failure(record, fault)
         self._advance(record, RunState.STOPPED)
+
+    def _record_post_check_failure(self, record: MutableMapping[str, Any], fault: BaseException) -> None:
+        """Write durable evidence that a stopped run captured no post-check.
+
+        Why:
+            Issue #4020: a stop can follow a firmware write that already
+            changed a device. If the post-check capture then fails and the
+            driver only logs it, the record reads as an ordinary stop. The
+            operator cannot see that the portal holds no proof of the state of
+            the changed device.
+
+        Args:
+            record: The run record.
+            fault: The error the post-check start met.
+        """
+        message = operator_reason(fault)  # Safe by construction, so the record may hold it.
+        run_id = record.get("run_id", "")  # The log line names the run the operator reads.
+        logger.error("Run %s stopped without a post-check capture: %s", run_id, message)  # Visible failure.
+        record["post_check_error"] = message  # The poll answer and the record now name the lost evidence.
+        record["post_check_captured"] = False  # One plain flag that a junior engineer can read.
+        self._save(record)  # Make the evidence durable before the run reaches its final state.
 
     def _advance(self, record: MutableMapping[str, Any], target: RunState) -> None:
         """Move the run to one state and save it.
