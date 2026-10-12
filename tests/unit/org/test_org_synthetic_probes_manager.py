@@ -2993,14 +2993,10 @@ class TestUs1CenrDedupWarning:
         # missing set. A run-2 count of zero means the dedup state
         # persisted across invocations (silent second run), which is the
         # regression this test traps.
-        assert (
-            run1_count >= 1
-        ), (  # run-1 must emit -- otherwise the fixture is malformed
+        assert run1_count >= 1, (  # run-1 must emit -- otherwise the fixture is malformed
             f"Run 1 emitted {run1_count} CENR WARNINGs; expected >= 1 for {len(EXPECTED_MISSING_HOSTS)} missing hosts"
         )
-        assert (
-            run2_count >= 1
-        ), (  # run-2 must ALSO emit; silence means state leaked
+        assert run2_count >= 1, (  # run-2 must ALSO emit; silence means state leaked
             f"Run 2 emitted {run2_count} CENR WARNINGs; expected >= 1 -- dedup state leaked across runs"
         )
 
@@ -3407,14 +3403,10 @@ class TestUs2CountryCodeDedupWarning:
         # unmapped set. A run-2 count of zero means the dedup state
         # persisted across invocations (silent second run), which is the
         # regression this test traps.
-        assert (
-            run1_count >= 1
-        ), (  # run-1 must emit -- otherwise the fixture is malformed
+        assert run1_count >= 1, (  # run-1 must emit -- otherwise the fixture is malformed
             f"Run 1 emitted {run1_count} country_code WARNINGs; expected >= 1 for unmapped set {sorted(unmapped)}"
         )
-        assert (
-            run2_count >= 1
-        ), (  # run-2 must ALSO emit; silence means state leaked
+        assert run2_count >= 1, (  # run-2 must ALSO emit; silence means state leaked
             f"Run 2 emitted {run2_count} country_code WARNINGs; expected >= 1 -- dedup state leaked across runs"
         )
 

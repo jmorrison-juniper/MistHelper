@@ -392,9 +392,7 @@ def assert_entity_types_mapped(expected: dict[str, str]) -> None:
     actual = {  # WHY: build a same-shape view so the diff-based failure below is precise
         key: ENTITY_TYPE_TO_VERTEX.get(key) for key in expected
     }
-    assert (
-        actual == expected
-    ), (  # WHY: single equality assertion diagnoses all mismatches at once
+    assert actual == expected, (  # WHY: single equality assertion diagnoses all mismatches at once
         f"ENTITY_TYPE_TO_VERTEX mismatch: expected {expected!r}, got {actual!r}"
     )
 
@@ -428,9 +426,7 @@ def assert_edge_cols_include(entity_type: str, expected_cols: set[str]) -> None:
     mapping = _get_mapping(entity_type)  # WHY: retrieve schema entry
     actual = {e["edge_col"] for e in mapping["edges"]}  # WHY: set for subset check
     missing = expected_cols - actual  # WHY: named diff makes failure message actionable
-    assert (
-        not missing
-    ), (  # WHY: single assert keeps caller CC low
+    assert not missing, (  # WHY: single assert keeps caller CC low
         f"Mapping {entity_type!r} missing edge cols: {sorted(missing)}; present: {sorted(actual)}"
     )
 
@@ -451,9 +447,7 @@ def assert_ensure_target(entity_type: str, target: tuple[str, str]) -> None:
     """Assert ``target`` tuple is registered in the mapping's ensure_target_vertices."""
     mapping = _get_mapping(entity_type)  # WHY: retrieve schema entry
     targets = mapping.get("ensure_target_vertices", [])  # WHY: field is optional per schema
-    assert (
-        target in targets
-    ), (  # WHY: single membership check keeps CC=1
+    assert target in targets, (  # WHY: single membership check keeps CC=1
         f"ensure_target_vertices on {entity_type!r} missing {target!r}: got {targets!r}"
     )
 
@@ -485,9 +479,7 @@ def assert_edge_case(case: EdgeCase) -> None:
     )
     got = (match["from_vertex_collections"], match["to_vertex_collections"])  # WHY: normalized tuple for compare
     expected = ([case.from_vertex], [case.to_vertex])  # WHY: EDGE_DEFINITIONS stores lists per side
-    assert (
-        got == expected
-    ), (  # WHY: single tuple-equality assertion covers both sides at once
+    assert got == expected, (  # WHY: single tuple-equality assertion covers both sides at once
         f"Edge {case.name!r} vertex config: expected {expected!r}, got {got!r}"
     )
 
@@ -535,8 +527,6 @@ def assert_all_edged_ops_include(ops: list[str], edge_col: str) -> None:
 def assert_ops_carrying_edge_include(ops: list[str], edge_col: str, expected_op: str) -> None:
     """Assert ``expected_op`` is among the ops whose mapping registers ``edge_col``."""
     carrying = _ops_carrying_edge(ops, edge_col)  # WHY: helper pushes the loop out of the caller
-    assert (
-        expected_op in carrying
-    ), (  # WHY: single membership assertion keeps CC=1
+    assert expected_op in carrying, (  # WHY: single membership assertion keeps CC=1
         f"{expected_op!r} must carry {edge_col!r} edge; ops with edge: {carrying!r}"
     )

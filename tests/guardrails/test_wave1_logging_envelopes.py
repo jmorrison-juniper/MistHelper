@@ -349,9 +349,7 @@ class TestNoSecretExposureInLogs:
                 ["show version"],  # Commands pre-supplied
             )
         all_log_text = " ".join(r.getMessage() for r in caplog.records)  # Concat all log messages
-        assert (
-            self._CANARY_PASSWORD not in all_log_text
-        ), (  # Canary must not leak into logs
+        assert self._CANARY_PASSWORD not in all_log_text, (  # Canary must not leak into logs
             f"Password '{self._CANARY_PASSWORD}' found in log output — credential leakage detected"
         )
 

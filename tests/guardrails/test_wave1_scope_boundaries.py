@@ -55,26 +55,20 @@ class TestWave1ScopeBoundaries:
     def test_menu_actions_key_count_not_reduced(self) -> None:
         """menu_actions must retain at least the Wave-1 baseline key count."""
         actual_count = len(MistHelper.menu_actions)  # Get current count of all registered menu keys
-        assert (
-            actual_count >= _MENU_ACTIONS_BASELINE_COUNT
-        ), (  # Reduction signals unintended routing removal
+        assert actual_count >= _MENU_ACTIONS_BASELINE_COUNT, (  # Reduction signals unintended routing removal
             f"menu_actions shrank: expected >= {_MENU_ACTIONS_BASELINE_COUNT}, got {actual_count}"
         )
 
     def test_destructive_boundary_keys_all_present(self) -> None:
         """All destructive boundary keys 90-100 must exist in menu_actions."""
         for option in [str(i) for i in range(90, 101)]:  # Destructive range fixed by Wave 1 safety baseline
-            assert (
-                option in MistHelper.menu_actions
-            ), (  # Missing key breaks destructive-safety routing
+            assert option in MistHelper.menu_actions, (  # Missing key breaks destructive-safety routing
                 f"Destructive boundary key '{option}' missing from menu_actions"
             )
 
     def test_packet_capture_manager_still_in_misthelper(self) -> None:
         """PacketCaptureManager must remain as a class in MistHelper (Wave 1 exclusion: no extraction)."""
-        assert hasattr(
-            MistHelper, "PacketCaptureManager"
-        ), (  # Wave 1 must not extract this class
+        assert hasattr(MistHelper, "PacketCaptureManager"), (  # Wave 1 must not extract this class
             "PacketCaptureManager class removed or moved out of MistHelper.py — Wave 1 exclusion violated"
         )
 
@@ -86,18 +80,14 @@ class TestWave1ScopeBoundaries:
             f.name for f in _SRC_CAPTURE_PATH.iterdir() if not f.name.startswith("__pycache__")
         }
         new_files = actual_files - _CAPTURE_MODULE_BASELINE  # Files beyond baseline are violations
-        assert (
-            new_files == set()
-        ), (  # Any new files indicate unauthorized packet-capture decomposition
+        assert new_files == set(), (  # Any new files indicate unauthorized packet-capture decomposition
             f"New packet-capture decomposition files found in src/operations/execution/capture/: {new_files}"
         )
 
     def test_wave1_in_scope_classes_still_accessible(self) -> None:
         """All Wave-1-touched in-scope classes must remain accessible in MistHelper."""
         for class_name in _WAVE1_IN_SCOPE_CLASSES:  # Each touched class must be importable from MistHelper
-            assert hasattr(
-                MistHelper, class_name
-            ), (  # Missing class means it was extracted or renamed
+            assert hasattr(MistHelper, class_name), (  # Missing class means it was extracted or renamed
                 f"Wave-1 in-scope class '{class_name}' is missing from MistHelper module"
             )
 
@@ -109,8 +99,6 @@ class TestWave1ScopeBoundaries:
             / "192-compliance-decomposition-wave1"
             / "bounded-decomposition-checklist.md"
         )
-        assert (
-            checklist_path.exists()
-        ), (  # Document must exist for auditors to verify wave-1 boundaries
+        assert checklist_path.exists(), (  # Document must exist for auditors to verify wave-1 boundaries
             f"bounded-decomposition-checklist.md not found at: {checklist_path}"
         )
