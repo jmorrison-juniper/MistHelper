@@ -35,7 +35,7 @@ black==26.10.0
 
 # Type checking
 mypy==2.4.0
-types-requests==2.33.0.20260906
+types-requests==2.33.0.20261006
 types-paramiko==5.0.0.20260724
 types-tqdm==4.70.0.20260906
 
