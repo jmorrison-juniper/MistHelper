@@ -236,7 +236,7 @@ def test_install_seams_fills_the_stop_runner() -> None:
     Why:
         The stop route reads `STOP_RUNNER`. An empty seam makes that route
         record the request and then claim a stop that cancelled no device.
-        `CloudUpgradeSubmitter.submit` now writes the cloud identifier of each
+        `CloudUpgradeSubmitter.submit_phase` writes the cloud identifier of each
         accepted call onto the run record, so the worker has a true answer.
     """
     app = factory.create_app()  # The armed application, with the seams in place.
@@ -341,9 +341,12 @@ def test_a_run_with_no_target_sends_nothing_and_says_so() -> None:
     Why:
         An empty plan list and a sent upgrade must never read the same.
     """
-    submitter = wiring.CloudUpgradeSubmitter(object())  # The session is never reached, because no plan is built.
+    submitter = wiring.CloudUpgradeSubmitter(
+        object(), wiring.DocumentRunStore()
+    )  # The session and store are never reached, because no plan is built.
     record = sample_record()  # This record holds no target at all.
-    assert submitter.submit(record) is False  # The driver then fails the run and writes the reason.
+    reason = submitter.submit_phase(record, "gateways")  # Issue #4020 asks one phase at a time.
+    assert reason == wiring.NO_PLAN_REASON  # The driver then fails the run and writes this reason.
 
 
 def test_the_capture_bridge_calls_the_runner_on_this_thread() -> None:
