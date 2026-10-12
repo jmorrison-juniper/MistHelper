@@ -138,8 +138,6 @@ class TestHelpSubprocessInvocation:
         assert result.returncode == 0, (  # WHY: argparse exits 0 for --help by convention.
             f"--help exited {result.returncode}; " f"stdout={result.stdout[:400]!r}; stderr={result.stderr[:400]!r}"
         )
-        assert (
-            "usage" in result.stdout.lower()
-        ), (  # WHY: usage line MUST reach stdout (argparse default).
+        assert "usage" in result.stdout.lower(), (  # WHY: usage line MUST reach stdout (argparse default).
             f"expected 'usage' in stdout; got {result.stdout[:400]!r}"
         )
