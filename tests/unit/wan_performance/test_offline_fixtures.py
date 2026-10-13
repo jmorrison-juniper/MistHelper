@@ -24,7 +24,7 @@ def test_offline_dashboard_contains_only_historical_synthetic_records() -> None:
     assert dashboard.site.site_id == "11111111-1111-1111-1111-111111111111"  # Preserve the documented route ID.
     assert dashboard.circuit.port_name == "ge-0/0/1"  # Keep the slash-bearing port identity intact.
     assert dashboard.peer_path.peer_mac == "11:22:33:44:55:66"  # Keep the peer route identity intact.
-    assert dashboard.measurements  # Require preview content for the journeys.
+    assert len(dashboard.measurements) == 2  # Require one circuit record and one peer record.
     assert all(record.provenance == "synthetic" for record in dashboard.measurements)  # Block live fixture records.
     assert all(record.hour_start_utc.year < 2026 for record in dashboard.measurements)  # Keep fixture times historical.
 
@@ -32,7 +32,7 @@ def test_offline_dashboard_contains_only_historical_synthetic_records() -> None:
 def test_offline_fixture_module_has_no_live_service_imports_or_start_calls() -> None:
     """Block fixture code from importing service clients or starting workers."""
     fixture_source = getsourcefile(OfflineDashboardFactory)  # Locate the module that defines the fixture factory.
-    assert fixture_source is not None  # Require the source file so the isolation contract can run.
+    assert isinstance(fixture_source, str)  # Require the source file so the isolation contract can run.
     fixture_path = Path(fixture_source)  # Resolve the fixture source file.
     syntax_tree = ast.parse(fixture_path.read_text(encoding="utf-8"))  # Inspect only the fixture module.
     imported_roots = {  # Collect each imported package root.
