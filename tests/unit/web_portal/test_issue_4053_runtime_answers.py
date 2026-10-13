@@ -196,7 +196,7 @@ def test_none_context_map_preserves_cli_input(monkeypatch) -> None:
     """An absent context map keeps the existing positional input path."""
     monkeypatch.setattr(builtins, "input", lambda prompt: "cli answer")
 
-    with InputUtils.use_context_answers(None):
+    with web_input_context([], context_answers=None):
         answer = InputUtils.safe_input("Prompt: ", context="manufacturer_report_selection")
 
     assert answer == "cli answer"
