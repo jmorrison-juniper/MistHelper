@@ -5,10 +5,13 @@ from __future__ import annotations
 import builtins
 from dataclasses import replace
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 
 from src.foundation.support.utils.input_utils import InputUtils
+from src.mist.resources.site.address_audit.address_corrector import AddressCorrector
+from src.mist.resources.site.address_audit.models import AddressRow, AuditResult, MatchedSite
 from web_portal.menu_registry import build_static_menu_actions
 from web_portal.services.input_hook import InputInterceptor, web_input_context
 from web_portal.services.operation import OperationExecutor
@@ -44,6 +47,7 @@ def test_menu_195_controls_follow_current_files_and_prompt_contexts(monkeypatch,
     assert controls["business_name"]["answer_context"] == "address_audit_business_name"
     assert controls["post_table_action"]["answer_context"] == "address_audit_post_table"
     assert controls["write_back"]["default"] == "n"
+    assert controls["write_back"]["options"] == [{"value": "n", "label": "No (use the CLI to write corrections)"}]
 
 
 def test_menu_195_single_file_omits_primary_prompt_and_honors_environment(monkeypatch, tmp_path: Path) -> None:
@@ -171,6 +175,56 @@ def test_menu_195_defaults_an_omitted_writeback_answer_to_no(monkeypatch, tmp_pa
 
     assert error is None
     assert normalized["address_audit_writeback_gate"] == "n"
+
+
+@pytest.mark.parametrize("answer", ["y", "yes", "Y", "YES", " y "])
+def test_menu_195_rejects_affirmative_writeback_before_start(monkeypatch, tmp_path: Path, answer: str) -> None:
+    """A stale or modified portal form cannot authorize a site write."""
+    data_directory = tmp_path / "data"
+    data_directory.mkdir()
+    (data_directory / "primary.csv").write_text("serial,address\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    executor = _build_executor()
+    submit = Mock(side_effect=AssertionError("An affirmative request must not start a worker."))
+    monkeypatch.setattr(executor._pool, "submit", submit)
+
+    try:
+        result = executor.start_operation("195", {"input_context_answers": {"address_audit_writeback_gate": answer}})
+    finally:
+        executor.shutdown(0)
+
+    assert result == {"error": "Invalid answer for address_audit_writeback_gate"}
+    assert executor._runs == {}
+    submit.assert_not_called()
+
+
+def test_unconfirmed_site_write_fails_even_if_portal_validation_is_bypassed(monkeypatch, tmp_path: Path) -> None:
+    """The real per-site prompt aborts a worker without a write or a success result."""
+    monkeypatch.chdir(tmp_path)
+    corrector = AddressCorrector(None)
+    push = Mock(side_effect=AssertionError("A site write requires per-site confirmation."))
+    monkeypatch.setattr(corrector, "_push", push)
+    result = AuditResult(
+        address_row=AddressRow("1", "SSR130", "100 Main St Suite 5", "Town", "FL", "33000"),
+        matched_site=MatchedSite(site_id="s1", site_name="Store 181", mist_address={"address": "100 Main St"}),
+        issue_type="MISSING_SUITE",
+        suggested_address="100 Main St Suite 5",
+    )
+    executor = _build_executor()
+    executor._menu_actions["195"] = replace(
+        executor._menu_actions["195"], handler=lambda: corrector.review_and_apply([result])
+    )
+    run = executor._create_run("195")
+
+    try:
+        executor._execute_operation(run, {"input_context_answers": {"address_audit_writeback_gate": "y"}})
+    finally:
+        executor.shutdown(0)
+
+    assert run["status"] == "failed"
+    assert run["error_message"] == "Operation requires interactive input (not available in web portal)"
+    assert not run.get("completion_message")
+    push.assert_not_called()
 
 
 def test_context_answers_do_not_shift_when_a_prompt_is_skipped(monkeypatch) -> None:

@@ -4,10 +4,14 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import socket
 import threading
 from collections.abc import Iterator
+from dataclasses import replace
+from pathlib import Path
 from typing import Any
+from unittest.mock import Mock
 
 import pytest
 
@@ -15,6 +19,43 @@ pytest.importorskip("playwright", reason="playwright is absent, so no browser te
 
 logger = logging.getLogger(__name__)
 READY_TIMEOUT_MS = 15000
+
+
+def test_menu_195_real_routes_refuse_affirmative_writeback(client: Any, monkeypatch: Any, tmp_path: Path) -> None:
+    """The parameter and run endpoints keep portal address corrections read-only."""
+    from web_portal.menu_registry import build_static_menu_actions
+    from web_portal.services.operation import OperationExecutor
+
+    data_directory = tmp_path / "data"
+    data_directory.mkdir()
+    (data_directory / "primary.csv").write_text("serial,address\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    handler = Mock(side_effect=AssertionError("An affirmative request must not run menu 195."))
+    menu_actions = build_static_menu_actions()
+    menu_actions["195"] = replace(menu_actions["195"], handler=handler)
+    executor = OperationExecutor(menu_actions, None, None, None)
+    monkeypatch.setitem(client.application.config, "OPERATION_EXECUTOR", executor)
+
+    try:
+        parameters = client.get("/api/operations/parameters/195").get_json()["parameters"]
+        control = next(parameter for parameter in parameters if parameter["name"] == "write_back")
+        csrf_token = re.findall(
+            r'<meta name="csrf-token" content="([^"]+)">', client.get("/operations").get_data(as_text=True)
+        )[0]
+        response = client.post(
+            "/api/operations/run",
+            json={"menu_number": "195", "parameters": {"input_context_answers": {control["answer_context"]: "y"}}},
+            headers={"X-CSRFToken": csrf_token},
+        )
+    finally:
+        executor.shutdown(0)
+
+    assert control["default"] == "n"
+    assert control["options"] == [{"value": "n", "label": "No (use the CLI to write corrections)"}]
+    assert response.status_code == 400
+    assert response.get_json() == {"error": "Invalid answer for address_audit_writeback_gate"}
+    assert executor._runs == {}
+    handler.assert_not_called()
 
 
 @pytest.fixture(scope="module")
@@ -69,6 +110,7 @@ def test_runtime_controls_have_stable_ids_and_context_answers(page: Any, issue_4
         else:
             assert answers["address_audit_post_table"] == "q"
             assert answers["address_audit_writeback_gate"] == "n"
+            assert page.locator('[data-testid="param-write_back"] option[value="y"]').count() == 0
         with page.expect_request("**/api/operations/run") as request_info:
             page.locator("#runBtn").click()
         payload = json.loads(request_info.value.post_data or "{}")
@@ -133,8 +175,7 @@ def _menu_parameters() -> dict[str, list[dict[str, Any]]]:
                 "required": True,
                 "default": "n",
                 "options": [
-                    {"value": "n", "label": "No"},
-                    {"value": "y", "label": "Yes"},
+                    {"value": "n", "label": "No (use the CLI to write corrections)"},
                 ],
                 "answer_context": "address_audit_writeback_gate",
             },

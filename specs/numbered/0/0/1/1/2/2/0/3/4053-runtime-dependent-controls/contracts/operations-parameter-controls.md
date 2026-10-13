@@ -21,7 +21,8 @@ The existing positional answer format remains unchanged for other menus. A skipp
 ## Safe Choices
 
 - Quit is the initial post-table choice. Save requires an explicit selection.
-- The batch write-back gate defaults to no and requires an explicit yes answer.
-- Each site still requires its existing approval. An unanswered browser prompt keeps the no default.
+- The portal batch write-back gate accepts only no. The CLI provides the per-site confirmation required for writes.
+- The service rejects affirmative portal answers before a worker starts. It does not convert them into successful read-only runs.
+- Each site still requires its existing approval. A missing browser context raises `EOFError` and fails the operation.
 - Correction-report saving keeps its existing no default.
 - Empty or exhausted answers do not authorize a write.
