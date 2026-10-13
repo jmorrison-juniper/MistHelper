@@ -3,7 +3,7 @@
 import logging
 from typing import Protocol, runtime_checkable
 
-from flask import Blueprint, abort, current_app, render_template, request
+from flask import Blueprint, abort, render_template, request
 
 from src.interfaces.portals.wan_performance.domain.identity import (
     CircuitIdentity,
@@ -13,6 +13,7 @@ from src.interfaces.portals.wan_performance.domain.identity import (
     SiteIdentity,
 )
 from src.interfaces.portals.wan_performance.domain.measurement import HourlyMeasurement
+from src.interfaces.portals.wan_performance.presentation.offline_preview import OfflinePreviewFactory
 
 logger = logging.getLogger(__name__)  # Keep portal records on the feature logger.
 wan_performance_bp = Blueprint(
@@ -21,7 +22,6 @@ wan_performance_bp = Blueprint(
     url_prefix="/wan-performance",
     template_folder="templates",
 )
-PREVIEW_FACTORY_CONFIG_KEY = "WAN_PERFORMANCE_PREVIEW_FACTORY"
 
 
 @runtime_checkable
@@ -38,18 +38,14 @@ class RouteSupport:
 
     @staticmethod
     def load_preview() -> OfflineDashboardData:
-        """Load a synthetic fixture only inside an explicitly testing app."""
-        provider = current_app.config.get(PREVIEW_FACTORY_CONFIG_KEY)  # Read only the injected test provider.
-        if not current_app.testing or not callable(provider):  # Keep synthetic records out of live requests.
-            logger.warning("WAN Performance has no verified data provider")
-            abort(503, description="WAN Performance requires a verified data provider.")
-        logger.info("Loading the isolated synthetic WAN dashboard")  # Log before the fixture transform.
-        dashboard = provider()  # Build only the fixture supplied by the test.
+        """Load the labeled offline preview without live service clients."""
+        logger.info("Loading the isolated synthetic WAN dashboard")  # Log before the sample-data transform.
+        dashboard = OfflinePreviewFactory.build()  # Use only the built-in offline preview factory.
         if not isinstance(dashboard, OfflineDashboardData):  # Reject a provider with an unknown record shape.
-            logger.error("The WAN preview provider returned an unsupported dashboard shape")
+            logger.error("The WAN preview factory returned an unsupported dashboard shape")
             abort(500, description="WAN Performance preview data has an invalid shape.")
         if any(record.provenance != "synthetic" for record in dashboard.measurements):
-            logger.error("The WAN preview provider returned a non-synthetic measurement")
+            logger.error("The WAN preview factory returned a non-synthetic measurement")
             abort(500, description="WAN Performance preview data must be synthetic.")
         logger.debug("Loaded %d synthetic WAN records", len(dashboard.measurements))
         return dashboard
