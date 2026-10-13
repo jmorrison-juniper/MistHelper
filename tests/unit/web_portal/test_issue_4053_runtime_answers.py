@@ -190,3 +190,13 @@ def test_context_answers_do_not_shift_when_a_prompt_is_skipped(monkeypatch) -> N
     assert authority_file == ""
     assert business_name == "Northwind"
     assert post_table == "q"
+
+
+def test_none_context_map_preserves_cli_input(monkeypatch) -> None:
+    """An absent context map keeps the existing positional input path."""
+    monkeypatch.setattr(builtins, "input", lambda prompt: "cli answer")
+
+    with InputUtils.use_context_answers(None):
+        answer = InputUtils.safe_input("Prompt: ", context="manufacturer_report_selection")
+
+    assert answer == "cli answer"
