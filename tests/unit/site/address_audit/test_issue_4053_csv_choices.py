@@ -2,7 +2,14 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+from unittest.mock import MagicMock
+
+import pytest
+
+from src.mist.resources.site.address_audit import address_corrector as corrector_module
 from src.mist.resources.site.address_audit import audit_engine as audit_module
+from src.mist.resources.site.address_audit.address_corrector import AddressCorrector
 from src.mist.resources.site.address_audit.audit_engine import AddressAuditEngine
 
 
@@ -60,3 +67,16 @@ def test_address_writeback_stays_off_without_explicit_selection(monkeypatch) -> 
     engine._offer_write_back([], None)
 
     assert corrector.review_called is False
+
+
+@pytest.mark.parametrize("status_code", [403, 503], ids=["client-error", "server-error"])
+def test_address_writeback_rejects_http_errors(monkeypatch, status_code: int) -> None:
+    """Mocked HTTP failures cannot report a successful address update."""
+    fake_mistapi = MagicMock(name="mistapi")
+    fake_mistapi.api.v1.sites.sites.getSiteInfo.return_value = SimpleNamespace(data={"address": "Old"})
+    fake_mistapi.api.v1.sites.sites.updateSiteInfo.return_value = SimpleNamespace(status_code=status_code)
+    monkeypatch.setattr(corrector_module, "mistapi", fake_mistapi)
+
+    result = AddressCorrector(object())._update_site_address("site-id", "New")
+
+    assert result is False

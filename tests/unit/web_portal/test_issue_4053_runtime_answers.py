@@ -6,6 +6,8 @@ import builtins
 from dataclasses import replace
 from pathlib import Path
 
+import pytest
+
 from src.foundation.support.utils.input_utils import InputUtils
 from web_portal.menu_registry import build_static_menu_actions
 from web_portal.services.input_hook import InputInterceptor, web_input_context
@@ -35,7 +37,6 @@ def test_menu_195_controls_follow_current_files_and_prompt_contexts(monkeypatch,
     finally:
         executor.shutdown(0)
 
-    assert parameters is not None
     controls = {parameter["name"]: parameter for parameter in parameters["parameters"]}
     assert set(controls) == {"primary_csv", "authority_csv", "business_name", "post_table_action", "write_back"}
     assert controls["primary_csv"]["answer_context"] == "address_audit_csv_pick"
@@ -59,7 +60,6 @@ def test_menu_195_single_file_omits_primary_prompt_and_honors_environment(monkey
     finally:
         executor.shutdown(0)
 
-    assert parameters is not None
     controls = {parameter["name"] for parameter in parameters["parameters"]}
     assert controls == {"authority_csv", "post_table_action", "write_back"}
 
@@ -75,7 +75,6 @@ def test_menu_195_has_no_controls_when_no_file_exists(monkeypatch, tmp_path: Pat
     finally:
         executor.shutdown(0)
 
-    assert parameters is not None
     assert parameters["parameters"] == []
 
 
@@ -96,6 +95,23 @@ def test_menu_195_rejects_missing_required_context_before_start(monkeypatch, tmp
         executor.shutdown(0)
 
     assert result == {"error": "Required answer missing: address_audit_csv_pick"}
+
+
+def test_menu_195_rejects_none_context_answers_before_start(monkeypatch, tmp_path: Path) -> None:
+    """A null answer object cannot start an operation."""
+    data_directory = tmp_path / "data"
+    data_directory.mkdir()
+    (data_directory / "primary.csv").write_text("serial,address\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    executor = _build_executor()
+    executor._execute_operation = lambda *args: pytest.fail("The operation must not start.")
+
+    try:
+        result = executor.start_operation("195", {"input_context_answers": None})
+    finally:
+        executor.shutdown(0)
+
+    assert result == {"error": "Prompt answers must be an object"}
 
 
 def test_menu_195_rejects_a_stale_file_choice_before_start(monkeypatch, tmp_path: Path) -> None:
@@ -154,7 +170,6 @@ def test_menu_195_defaults_an_omitted_writeback_answer_to_no(monkeypatch, tmp_pa
         executor.shutdown(0)
 
     assert error is None
-    assert normalized is not None
     assert normalized["address_audit_writeback_gate"] == "n"
 
 
