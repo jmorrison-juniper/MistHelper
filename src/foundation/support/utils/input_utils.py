@@ -19,12 +19,16 @@ Issue: https://github.com/jmorrison-juniper/MistHelper/issues/433 (Phase C).
 from __future__ import annotations  # Enable PEP 604 union syntax on Python 3.13.
 
 import logging  # Used by every action-log line below per the project's NON-NEGOTIABLE rule.
+from collections.abc import Generator  # Type the scoped prompt-answer context.
+from contextlib import contextmanager  # Keep browser answers scoped to one operation.
+from contextvars import ContextVar  # Keep concurrent operation answers isolated.
 
 from src.foundation.support.utils.tqdm_wrapper import (
     tqdm as _tqdm,
 )  # Canonical tqdm handle (T-14) for the availability probe.
 
 logger = logging.getLogger(__name__)  # WHY: keep log records tied to this module.
+_CONTEXT_ANSWERS: ContextVar[dict[str, str] | None] = ContextVar("misthelper_input_context_answers", default=None)
 
 
 class InputUtils:
@@ -62,9 +66,14 @@ class InputUtils:
     ) -> str:
         """Return trimmed user input, degrading to ``default_value`` on EOF/empty."""
         logger.debug("safe_input entered (context=%s)", context)  # Action-log entry per project rule.
+        context_answers = _CONTEXT_ANSWERS.get()  # Read only the answers scoped to this operation.
+        if context_answers is not None and context not in context_answers:
+            raise EOFError(f"No browser answer supplied for prompt context: {context}")
         try:
-            # A bare input() is correct here, because this method IS the safe wrapper.
-            user_input = input(prompt).strip()
+            if context_answers is not None:  # Match answers by prompt identity.
+                user_input = context_answers[context].strip()  # Keep skipped prompts from shifting later answers.
+            else:
+                user_input = input(prompt).strip()  # Preserve the ordinary CLI and queued-input path.
         except EOFError:  # Stream closed (Ctrl+D, broken pipe, SSH disconnect).
             return InputUtils._handle_eof(context, default_value)  # Degrade gracefully to the default.
         except KeyboardInterrupt:  # Operator pressed Ctrl+C to abort the prompt.
@@ -73,6 +82,16 @@ class InputUtils:
             return InputUtils._handle_empty(default_value, allow_empty, context)  # Return default/empty per policy.
         logger.debug("safe_input returned non-empty value (context=%s)", context)  # Action-log normal path.
         return user_input  # Normal path: return the trimmed user response.
+
+    @staticmethod
+    @contextmanager
+    def use_context_answers(answers: dict[str, str] | None) -> Generator[None]:
+        """Scope browser answers by prompt context so optional prompts cannot shift them."""
+        token = _CONTEXT_ANSWERS.set(answers)  # Isolate this operation from other worker threads.
+        try:
+            yield  # Keep the named answers active while the operation prompts.
+        finally:
+            _CONTEXT_ANSWERS.reset(token)  # Restore the prior answer map after every exit path.
 
     @staticmethod
     def prompt_msp_id() -> str | None:

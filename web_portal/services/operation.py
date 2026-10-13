@@ -872,6 +872,20 @@ def _build_registry() -> dict:
             _choice_param("endpoint_operation", "Endpoint", org_endpoint_options),  # Answer the required chooser.
         ],
     }
+    registry["91"] = {  # Menu 91 accepts a table index in the CLI and a manufacturer name in the portal.
+        "category": "interactive",  # The portal can run this row after it collects the optional filter.
+        "parameters": [
+            _text_param(  # An empty answer keeps the complete manufacturer report.
+                "manufacturer",
+                "Manufacturer (optional)",
+                answer_context="manufacturer_report_selection",
+            ),
+        ],
+    }
+    registry["195"] = {  # Menu 195 needs controls built from the current data directory.
+        "category": "interactive",  # The portal can run the audit after it validates current choices.
+        "parameters": [],
+    }
     registry["262"] = {  # Menu 262 asks which MSP endpoint to export and then asks for an MSP identifier.
         "category": "interactive",  # The portal can run this row after both required answers exist.
         "parameters": [
@@ -957,6 +971,11 @@ class OperationExecutor:
         error = self._validate_operation(menu_number)
         if error:
             return error
+        context_answers, error = self._prepare_context_answers(menu_number, parameters)
+        if error:
+            return error
+        if context_answers is not None:
+            parameters = {**parameters, "input_context_answers": context_answers}
         conflict = self._check_conflict(menu_number)
         if conflict:
             return conflict
@@ -1075,11 +1094,14 @@ class OperationExecutor:
         desc = value.title  # Use the named menu row instead of legacy tuple positions.
         entry = PARAMETER_REGISTRY.get(menu_number)
         if entry is not None:
+            parameter_list = entry.get("parameters", [])
+            if menu_number == "195":
+                parameter_list = self._address_audit_parameters()
             result = {
                 "menu_number": menu_number,
                 "description": desc,
                 "category": entry.get("category", "interactive"),
-                "parameters": entry.get("parameters", []),
+                "parameters": parameter_list,
             }
             if "cli_only_message" in entry:
                 result["cli_only_message"] = entry["cli_only_message"]
@@ -1090,6 +1112,132 @@ class OperationExecutor:
             "category": "non_interactive",
             "parameters": [],
         }
+
+    @staticmethod
+    def _address_audit_files() -> list[Path]:
+        """Return current CSV and TSV files that menu 195 can select."""
+        data_directory = Path.cwd() / "data"  # Match the audit operation's data directory.
+        return sorted(  # Keep option order stable between the form and its validation.
+            path for pattern in ("*.csv", "*.tsv") for path in data_directory.glob(pattern) if path.is_file()
+        )
+
+    @staticmethod
+    def _address_audit_file_options(files: list[Path], include_skip: bool = False) -> list[dict]:
+        """Build safe browser options from file basenames, never from submitted paths."""
+        options = [{"value": f"file:{path.name}", "label": path.name} for path in files]
+        if include_skip:
+            options.insert(0, {"value": "", "label": "Skip"})
+        return options
+
+    def _address_audit_parameters(self) -> list[dict]:
+        """Build menu 195 controls from the current file and prompt state."""
+        files = self._address_audit_files()
+        if not files:
+            return []
+        options = self._address_audit_file_options(files)
+        parameters = []
+        if len(files) > 1:
+            parameters.append(
+                _choice_param(
+                    "primary_csv",
+                    "Primary CSV",
+                    options,
+                    answer_context="address_audit_csv_pick",
+                )
+            )
+        parameters.append(
+            _choice_param(
+                "authority_csv",
+                "Authority CSV (optional)",
+                self._address_audit_file_options(files, include_skip=True),
+                required=False,
+                answer_context="address_audit_business_csv_pick",
+            )
+        )
+        parameters.extend(self._address_audit_followup_parameters())
+        return parameters
+
+    @staticmethod
+    def _address_audit_followup_parameters() -> list[dict]:
+        """Describe the prompts that follow the optional authority file."""
+        parameters = []
+        if not os.environ.get("BUSINESS_NAME", "").strip():
+            parameters.append(
+                _text_param(
+                    "business_name",
+                    "Business name (optional)",
+                    answer_context="address_audit_business_name",
+                )
+            )
+        parameters.extend(
+            [
+                _choice_param(
+                    "post_table_action",
+                    "After the audit",
+                    [
+                        {"value": "1", "label": "Save report"},
+                        {"value": "q", "label": "Quit"},
+                    ],
+                    default="q",
+                    answer_context="address_audit_post_table",
+                ),
+                _choice_param(
+                    "write_back",
+                    "Write corrections to Mist",
+                    [
+                        {"value": "n", "label": "No"},
+                        {"value": "y", "label": "Yes"},
+                    ],
+                    default="n",
+                    answer_context="address_audit_writeback_gate",
+                ),
+            ]
+        )
+        return parameters
+
+    def _prepare_context_answers(self, menu_number: str, parameters: dict) -> tuple[dict | None, dict | None]:
+        """Validate browser answers for menus whose prompt order can change."""
+        if menu_number not in {"91", "195"}:
+            return None, None
+        if "input_answers" in parameters:
+            return None, {"error": f"Menu {menu_number} requires prompt-context answers"}
+        controls = self._context_answer_controls(menu_number)
+        received = parameters.get("input_context_answers", {})
+        if not isinstance(received, dict):
+            return None, {"error": "Prompt answers must be an object"}
+        unknown = set(received) - set(controls)
+        if unknown:
+            return None, {"error": f"Unknown prompt answer: {sorted(unknown)[0]}"}
+        return self._normalize_context_answers(controls, received)
+
+    def _context_answer_controls(self, menu_number: str) -> dict[str, dict]:
+        """Index live portal controls by the prompt context they answer."""
+        details = self.get_operation_parameters(menu_number) or {}
+        return {
+            parameter["answer_context"]: parameter
+            for parameter in details.get("parameters", [])
+            if parameter.get("answer_context")
+        }
+
+    @staticmethod
+    def _normalize_context_answers(
+        controls: dict[str, dict],
+        received: dict[str, str],
+    ) -> tuple[dict[str, str] | None, dict | None]:
+        """Fill optional defaults and reject missing or invalid prompt values."""
+        normalized = {}
+        for context, parameter in controls.items():
+            value = received.get(context, parameter.get("default", ""))
+            if not isinstance(value, str):
+                return None, {"error": f"Invalid answer for {context}"}
+            if parameter.get("required") and not value:
+                return None, {"error": f"Required answer missing: {context}"}
+            if parameter.get("param_type") == "choice":
+                choices = {option["value"] for option in parameter.get("options", [])}
+                if value not in choices:
+                    return None, {"error": f"Invalid answer for {context}"}
+            normalized[context] = value
+        return normalized, None
 
     def _validate_operation(self, menu_number: str) -> dict | None:
         """Check that the operation exists and that the portal may run it."""
@@ -1226,10 +1374,11 @@ class OperationExecutor:
 
         self._update_status(run, "running", 0)
         input_answers = parameters.get("input_answers", [])
+        context_answers = parameters.get("input_context_answers")
         try:
             func = self._menu_actions[run["menu_number"]].handler  # Use the named menu row for execution.
-            if input_answers:
-                with web_input_context(input_answers):
+            if input_answers or context_answers is not None:
+                with web_input_context(input_answers, context_answers):
                     self._capture_and_run(run, func)
             else:
                 self._capture_and_run(run, func)
