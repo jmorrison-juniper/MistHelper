@@ -53,12 +53,19 @@ The command starts the application, the document store, and the site lock store 
 
 ### Build from the working tree
 
+Use the compose helper for each local image build. It fetches `origin/main` and
+stops when the checkout is behind.
+
 ```powershell
-podman compose -f compose.yml -f compose.build.yml build
-podman compose up -d --no-deps misthelper
+.\scripts\compose.ps1 build
 ```
 
-Caution: use a local build only when you need the code in your checkout. A checkout that is behind `main` can start old code.
+Use the stale override only for a local test. The image uses the local-only tag
+`misthelper:local` and cannot replace the published image.
+
+```powershell
+.\scripts\compose.ps1 build --allow-stale
+```
 
 ## Container with SSH + Web Portal
 

@@ -147,19 +147,40 @@ def test_the_build_file_holds_the_build_section(compose_build_text: str) -> None
 
     assert "context: ." in compose_build_text, "the build file must name the build context"
     assert "dockerfile: Containerfile" in compose_build_text, "the build file must name the build file"
+    assert "image: ${MISTHELPER_BUILD_IMAGE:-ghcr.io/jmorrison-juniper/misthelper:latest}" in compose_build_text
 
 
 def test_the_script_builds_only_through_the_build_file(script_text: str) -> None:
     """The script MUST build through the build file, and it MUST offer the revision check."""
     logger.info("Checking the build and revision paths of the helper script")  # Report the plan.
+    fetch_command = 'fetch --no-tags origin "+refs/heads/main:refs/remotes/origin/main"'  # Pin the remote destination.
+    count_command = 'rev-list --count "HEAD..origin/main"'  # Count commits present only on main.
+    refusal = "if ($BehindCommitCount -gt 0 -and -not $AllowStaleBuild)"  # Find the default stale refusal.
+    provider_call = "& $Interpreter -m podman_compose -f $ComposeFile -f $BuildFile build"  # Find the image build.
+    required_contract = (  # Keep related build and revision checks together.
+        "compose.build.yml",
+        "check-revision",
+        "org.opencontainers.image.revision",
+        "git -C $RepositoryRoot diff --name-only",
+        "none changes an image input",
+        "Changed image inputs:",
+        fetch_command,
+        'Write-Verbose "Fetched origin/main successfully."',
+        count_command,
+        'throw "Could not fetch origin/main',
+        "Could not compare HEAD with origin/main",
+        "commit(s) behind origin/main",
+        refusal,
+        '$ComposeArguments -contains "--allow-stale"',
+        '$BuildImageTag = "misthelper:local"',
+        "finally {",
+        provider_call,
+    )
 
-    assert "compose.build.yml" in script_text, "the build subcommand must load the build file"
-    assert "check-revision" in script_text, "the script must offer the revision check"
-    revision_message = "the revision check must read the label that names the commit"  # Explain the required label.
-    assert "org.opencontainers.image.revision" in script_text, revision_message  # Hold the revision check in place.
-    assert "git -C $RepositoryRoot diff --name-only" in script_text  # Require input-aware revision comparison.
-    assert "none changes an image input" in script_text  # Require a current result for unrelated commits.
-    assert "Changed image inputs:" in script_text  # Require changed input names in the stale result.
+    assert all(contract in script_text for contract in required_contract), "the script must keep all build contracts"
+    assert script_text.index(fetch_command) < script_text.index(count_command) < script_text.index(refusal)
+    assert script_text.index(refusal) < script_text.index(provider_call), "the refusal must precede the provider"
+    assert f"{provider_call} @ComposeArguments" not in script_text, "the override must not reach the provider"
 
 
 def _git(repository: Path, *arguments: str) -> str:
@@ -190,11 +211,15 @@ def _make_revision_repository(tmp_path: Path) -> tuple[Path, str, str]:
     _git(repository, "add", ".")  # Stage the documentation change.
     _git(repository, "commit", "-m", "documentation")  # Record the unrelated revision.
     documentation_head = _git(repository, "rev-parse", "HEAD")  # Save the current revision.
+    remote = tmp_path / "origin.git"  # Keep the bare remote beside the checkout.
+    _git(tmp_path, "init", "--bare", str(remote))  # Create a remote without network access.
+    _git(repository, "remote", "add", "origin", str(remote))  # Connect the temporary checkout.
+    _git(repository, "push", "-u", "origin", "main")  # Publish the newer commit.
     return repository, base, documentation_head  # Return both revisions for the test.
 
 
 def test_revision_check_ignores_commits_outside_image_inputs(tmp_path: Path) -> None:
-    """A later documentation-only commit must not make the image stale."""
+    """Documentation does not stale the image, but a remote-only commit counts as behind."""
     repository, base, documentation_head = _make_revision_repository(tmp_path)
 
     changed_inputs = _git(
@@ -208,6 +233,11 @@ def test_revision_check_ignores_commits_outside_image_inputs(tmp_path: Path) -> 
     )
 
     assert changed_inputs == ""
+    _git(repository, "update-ref", "refs/heads/main", base)  # Move the local branch behind the test remote.
+    _git(repository, "fetch", "--no-tags", "origin", "+refs/heads/main:refs/remotes/origin/main")  # Refresh main.
+    behind_count = _git(repository, "rev-list", "--count", "HEAD..origin/main")  # Count commits missing locally.
+
+    assert behind_count == "1", "the count must include the one remote-only commit"
 
 
 def test_revision_check_finds_changed_image_inputs(tmp_path: Path) -> None:
@@ -234,11 +264,19 @@ def test_revision_check_finds_changed_image_inputs(tmp_path: Path) -> None:
 def test_the_guide_names_the_build_separation(guide_text: str) -> None:
     """The guide MUST state that a plain `up` cannot build the application image."""
     logger.info("Checking the build separation in the guide")  # Report the plan.
+    wiki_guide = _GUIDE.parent / "wiki" / "Container-Setup.md"  # Locate the operator wiki beside the source guide.
+    logger.info("Reading the wiki guide at %s", wiki_guide)  # Report the read before the work.
+    wiki_guide_text = wiki_guide.read_text(encoding="utf-8")  # Load the second operator guide.
+    logger.debug("The wiki guide holds %d characters", len(wiki_guide_text))  # Record the read result.
 
     assert "A plain `up`" in guide_text, "the guide must name the default command"
     assert "cannot build the application image" in guide_text, "the guide must state the safe result"
     assert "Warning: a plain `up` rebuilds." not in guide_text, "the guide must not repeat the old behavior"
     assert "#2272" in guide_text, "the guide must cite the measurement"
+    assert r".\scripts\compose.ps1 build" in wiki_guide_text, "the wiki must use the guarded build helper"
+    assert "build --allow-stale" in wiki_guide_text, "the wiki must document the explicit stale override"
+    assert "misthelper:local" in wiki_guide_text, "the wiki must name the local-only image"
+    assert "podman compose -f compose.yml -f compose.build.yml build" not in wiki_guide_text
 
 
 def test_the_guide_names_the_revision_check(guide_text: str) -> None:

@@ -8,14 +8,16 @@
 # The helper script merges this file only when the operator asks for a build:
 #   .\scripts\compose.ps1 build
 #
-# A build from a checkout that is behind `main` still downgrades the running
-# container and clears the labels that name the commit. Update the checkout
-# first, and read the revision after the run:
+# The helper checks `origin/main` before a build. It stops stale checkouts
+# unless the operator passes `--allow-stale`. An allowed stale build uses
+# `misthelper:local`, so it cannot replace the published image name.
+# Read the revision after the run:
 #   .\scripts\compose.ps1 check-revision
 # ==============================================================================
 
 services:
   misthelper:
+    image: ${MISTHELPER_BUILD_IMAGE:-ghcr.io/jmorrison-juniper/misthelper:latest}  # Keep normal builds on the published name.
     build:
       context: .
       dockerfile: Containerfile  # Use Containerfile for Podman, Dockerfile for Docker
