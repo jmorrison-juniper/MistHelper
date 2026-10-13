@@ -1,10 +1,15 @@
 """Verify the WAN Performance pages with isolated synthetic fixtures."""
 
 import logging
+import threading
+from collections.abc import Iterator
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
 from flask.testing import FlaskClient
+from playwright.sync_api import Page, expect
+from werkzeug.serving import make_server
 
 from src.interfaces.portals.wan_performance.presentation.offline_preview import OfflinePreviewFactory
 
@@ -19,6 +24,50 @@ def preview_client(
 ) -> FlaskClient:
     """Return the portal client for its labeled offline preview."""
     return client
+
+
+@pytest.fixture
+def wan_browser_portal(client: FlaskClient) -> Iterator[str]:
+    """Serve the existing test portal without a Mist session or another service."""
+    server = make_server("127.0.0.1", 0, client.application, threaded=True)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    logger.info("Starting the offline WAN browser server on port %d", server.server_port)
+    thread.start()
+    try:
+        yield f"http://127.0.0.1:{server.server_port}"
+    finally:
+        logger.info("Stopping the offline WAN browser server on port %d", server.server_port)
+        server.shutdown()
+        thread.join(timeout=10)
+        server.server_close()
+        if thread.is_alive():
+            raise RuntimeError("The offline WAN browser server did not stop.")
+        logger.debug("The offline WAN browser server stopped")
+
+
+@pytest.mark.parametrize(("detail", "selector"), [("port", "wan-port"), ("peer", "wan-peer")])
+def test_browser_follows_the_offline_wan_journeys(
+    page: Page, wan_browser_portal: str, detail: str, selector: str, pytestconfig: pytest.Config
+) -> None:
+    """Follow real portal links through each synthetic detail view and back."""
+    logger.info("Starting the offline WAN browser journey for %s", detail)
+    page.set_default_timeout(15_000)
+    page.goto(f"{wan_browser_portal}/", wait_until="domcontentloaded", timeout=15_000)
+    page.get_by_test_id("nav-wan-performance").click()
+    for link, view in (("wan-gateway-link", "wan-overview"), (f"wan-{detail}-link", "wan-gateway")):
+        expect(page.get_by_test_id(view)).to_be_visible()
+        expect(page.get_by_test_id("wan-data-state")).to_contain_text("Synthetic offline preview")
+        page.get_by_test_id(link).click()
+    expect(page.get_by_test_id(selector)).to_be_visible()
+    expect(page.get_by_test_id("wan-data-state")).to_contain_text("Live data is not connected")
+    evidence = Path(pytestconfig.rootpath) / "test-artifacts" / "wan-performance"
+    evidence.mkdir(parents=True, exist_ok=True)
+    page.screenshot(path=str(evidence / f"{detail}-journey.png"), full_page=True)
+    page.get_by_test_id("wan-back-link").click()
+    expect(page.get_by_test_id("wan-gateway")).to_be_visible()
+    page.get_by_test_id("wan-back-link").click()
+    expect(page.get_by_test_id("wan-overview")).to_be_visible()
+    logger.debug("The offline WAN browser journey for %s returned to the overview", detail)
 
 
 def test_portal_navigation_links_to_the_labeled_wan_preview(client: FlaskClient) -> None:
