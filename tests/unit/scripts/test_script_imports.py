@@ -20,9 +20,7 @@ def test_openai_exposes_openai_class() -> None:
     renames or removes the class would break the scripts before any operator
     notices.
     """
-    assert hasattr(
-        openai, "OpenAI"
-    ), (  # Both scripts import OpenAI from openai.
+    assert hasattr(openai, "OpenAI"), (  # Both scripts import OpenAI from openai.
         "openai.OpenAI is missing. The scripts/mist_ideas_* packages cannot import it."
     )
     assert isinstance(  # Confirm the attribute is a class, not a non-callable.
