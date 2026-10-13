@@ -63,6 +63,8 @@ def test_browser_follows_the_offline_wan_journeys(
         page.get_by_test_id(link).click()
     expect(page.get_by_test_id(selector)).to_be_visible()
     expect(page.get_by_test_id("wan-data-state")).to_contain_text("Live data is not connected")
+    if detail == "port":
+        expect(page.get_by_test_id("wan-calendar-summaries")).to_contain_text("1 of 744")
     evidence = Path(pytestconfig.rootpath) / "test-artifacts" / "wan-performance"
     evidence.mkdir(parents=True, exist_ok=True)
     page.screenshot(path=str(evidence / f"{detail}-journey.png"), full_page=True)
@@ -168,6 +170,34 @@ def test_port_route_preserves_an_encoded_slash_and_bandwidth_units(
     assert "80.0" in page, "The port page omitted its synthetic receive value."
     assert "megabits per second" in page, "The port page omitted the bandwidth unit."
     logger.debug("The encoded WAN port route returned %d", response.status_code)
+
+
+def test_port_calendar_summaries_report_observations_and_missing_hours(
+    preview_client: FlaskClient,
+) -> None:
+    """Show synthetic summaries without claiming complete elapsed-time coverage."""
+    response = preview_client.get(f"/wan-performance/port/{SITE_ID}/ge-0%2F0%2F1?gateway_id={GATEWAY_ID}")
+    page = response.get_data(as_text=True)
+    assert response.status_code == 200, "The synthetic calendar view failed."
+    assert 'data-testid="wan-calendar-summaries"' in page, "The port omitted calendar summaries."
+    assert "1 of 24" in page, "The daily view did not expose missing hours."
+    assert "1 of 168" in page, "The weekly view did not expose missing hours."
+    assert "1 of 744" in page, "The monthly view did not expose missing hours."
+    assert "Equal daily weights" in page, "The calendar view did not disclose source weighting."
+    assert "not a duration-coverage estimate" in page, "The calendar view mislabeled observation coverage."
+
+
+def test_port_calendar_view_handles_missing_synthetic_records(
+    client: FlaskClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Keep an empty preview explicit instead of presenting zero-valued summaries."""
+    dashboard = replace(OfflinePreviewFactory.build(), measurements=())
+    monkeypatch.setattr(OfflinePreviewFactory, "build", staticmethod(lambda: dashboard))
+    response = client.get(f"/wan-performance/port/{SITE_ID}/ge-0%2F0%2F1?gateway_id={GATEWAY_ID}")
+    page = response.get_data(as_text=True)
+    assert response.status_code == 200, "The port view failed when synthetic measurements were absent."
+    assert "No synthetic circuit history is available." in page, "The view omitted its missing history state."
+    assert "1 of 24" not in page, "The view invented an observed hour."
 
 
 def test_peer_route_shows_each_quality_metric_and_tunnel_identity(
