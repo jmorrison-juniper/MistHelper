@@ -52,7 +52,9 @@ def test_browser_follows_the_offline_wan_journeys(
     """Follow real portal links through each synthetic detail view and back."""
     logger.info("Starting the offline WAN browser journey for %s", detail)
     page.set_default_timeout(15_000)
-    page.goto(f"{wan_browser_portal}/", wait_until="domcontentloaded", timeout=15_000)
+    response = page.goto(f"{wan_browser_portal}/", wait_until="domcontentloaded", timeout=15_000)
+    assert response is not None, "The portal dashboard returned no browser response."
+    assert response.status == 200, f"The portal dashboard returned HTTP {response.status}."
     page.get_by_test_id("nav-wan-performance").click()
     for link, view in (("wan-gateway-link", "wan-overview"), (f"wan-{detail}-link", "wan-gateway")):
         expect(page.get_by_test_id(view)).to_be_visible()
