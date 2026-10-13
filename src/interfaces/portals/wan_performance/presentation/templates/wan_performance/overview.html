@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}WAN Performance Preview - {{ config.PORTAL.title }}{% endblock %}
+
+{% block content %}
+<section class="container-fluid" data-testid="wan-overview">
+    {% include "wan_performance/_data_state.html" %}
+    <h1>WAN Performance</h1>
+    <p>Offline example for site {{ dashboard.circuit.gateway.site.site_id }}.</p>
+
+    <div class="row g-3">
+        <div class="col-sm-6 col-xl-3">
+            <article class="portal-card" data-testid="wan-utilization">
+                <h2 class="h6">Utilization</h2>
+                {% if circuit_measurement and "utilization" in circuit_measurement.metrics %}
+                <p>{{ circuit_measurement.metrics["utilization"].value }} percent</p>
+                {% else %}
+                <p>Not established in offline data</p>
+                {% endif %}
+            </article>
+        </div>
+        <div class="col-sm-6 col-xl-3">
+            <article class="portal-card" data-testid="wan-congestion">
+                <h2 class="h6">Congestion</h2>
+                <p>Not established in offline data</p>
+            </article>
+        </div>
+        <div class="col-sm-6 col-xl-3">
+            <article class="portal-card" data-testid="wan-availability">
+                <h2 class="h6">Availability</h2>
+                <p>Not established in offline data</p>
+            </article>
+        </div>
+        <div class="col-sm-6 col-xl-3">
+            <article class="portal-card" data-testid="wan-path-quality">
+                <h2 class="h6">Path quality</h2>
+                <p>Not established in offline data</p>
+            </article>
+        </div>
+    </div>
+
+    <section class="mt-4" aria-labelledby="wan-overview-circuits">
+        <h2 id="wan-overview-circuits">Circuit example</h2>
+        <p>Gateway {{ dashboard.circuit.gateway.gateway_id }}</p>
+        <a class="quick-link" data-testid="wan-gateway-link"
+           href="{{ url_for('wan_performance.gateway', gateway_id=dashboard.circuit.gateway.gateway_id, site_id=dashboard.circuit.gateway.site.site_id) }}">
+            Open gateway
+        </a>
+    </section>
+</section>
+{% endblock %}
