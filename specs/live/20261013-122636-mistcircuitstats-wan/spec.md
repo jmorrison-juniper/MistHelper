@@ -1,6 +1,6 @@
 # Feature Specification: MistCircuitStats WAN Dashboard
 
-**Feature Branch**: `3992-mistcircuitstats-integration`
+**Feature Branch**: `feat/4195-mistcircuitstats-wan-dashboard`
 
 **Created**: 2026-10-13
 
