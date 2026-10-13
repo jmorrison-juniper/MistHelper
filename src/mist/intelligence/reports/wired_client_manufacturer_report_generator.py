@@ -112,20 +112,33 @@ class WiredClientManufacturerReportGenerator:
 
     @staticmethod
     def _parse_manufacturer_choice(choice: str, summary: list[tuple[str, int]]) -> str | None:
-        """Map user input to a manufacturer name, returning None for empty/invalid/out-of-range."""
-        if not choice:  # User skipped the selection prompt.
+        """Map a numeric index or exact manufacturer name to a report filter."""
+        normalized_choice = choice.strip()  # Trim direct callers as safe_input already trims CLI input.
+        if not normalized_choice:  # User skipped the selection prompt.
             return None  # Caller treats None as "no filter".
         try:
-            selection_index = int(choice)  # Parse the numeric selection.
-        except ValueError:  # Non-numeric input.
-            echo("  Invalid selection.")
-            return None  # Abort.
-        if 1 <= selection_index <= len(summary):  # In valid range.
-            selected_manufacturer = summary[selection_index - 1][0]  # Pick the manufacturer name.
+            selection_index = int(normalized_choice)  # Preserve numeric CLI meaning before checking names.
+        except ValueError:
+            return WiredClientManufacturerReportGenerator._manufacturer_by_name(normalized_choice, summary)
+        if 1 <= selection_index <= len(summary):  # Keep valid numeric indices authoritative.
+            selected_manufacturer = summary[selection_index - 1][0]  # Pick the manufacturer row by its index.
             logger.info("User selected manufacturer: %s", selected_manufacturer)  # Log the choice.
-            return selected_manufacturer  # Return chosen manufacturer.
+            return selected_manufacturer  # Return the selected filter.
         echo("  Selection out of range.")
         return None  # Abort.
+
+    @staticmethod
+    def _manufacturer_by_name(choice: str, summary: list[tuple[str, int]]) -> str | None:
+        """Resolve a non-numeric browser answer to its exact displayed manufacturer."""
+        selected_manufacturer = next(
+            (name for name, _ in summary if name.casefold() == choice.casefold()),
+            None,
+        )
+        if selected_manufacturer is None:
+            echo("  Invalid selection.")
+            return None
+        logger.info("User selected manufacturer: %s", selected_manufacturer)
+        return selected_manufacturer
 
     @staticmethod
     def _prompt_selection(summary: list[tuple[str, int]]) -> str | None:  # Prompt manufacturer selection.

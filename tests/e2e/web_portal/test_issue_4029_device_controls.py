@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 
 def _parameters(client, menu: str) -> list[dict]:
     """Return the parameter contract that the portal sends to the browser."""
@@ -55,9 +53,3 @@ def test_menu_96_requires_site_and_all_device_controls(client) -> None:
             "required": True,
         },
     ]
-
-
-@pytest.mark.parametrize("menu", ["91", "195"])
-def test_follow_up_menus_remain_unchanged(client, menu: str) -> None:
-    """Menus 91 and 195 stay outside this repair until their control designs are complete."""
-    assert _parameters(client, menu) == []

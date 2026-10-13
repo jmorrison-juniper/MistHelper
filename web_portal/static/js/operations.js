@@ -301,6 +301,9 @@ function buildParameterGroup(param) {
     div.appendChild(label);
 
     var control = createParameterControl(param);
+    if (param.answer_context && !control.hasAttribute('data-testid')) {
+        control.setAttribute('data-testid', 'param-' + param.name);
+    }
     div.appendChild(control);
 
     if (param.depends_on) div.style.display = 'none';
@@ -763,7 +766,12 @@ function runSelectedOperation() {
     resetExecutionPanel();
 
     var body = { menu_number: selectedMenuNumber };
-    if (inputAnswers.length > 0) {
+    var contextAnswers = collectInputContextAnswers();
+    var contextOnly = currentParameters.length > 0 &&
+        currentParameters.every(function(param) { return Boolean(param.answer_context); });
+    if (contextOnly) {
+        body.parameters = { input_context_answers: contextAnswers };
+    } else if (inputAnswers.length > 0) {
         body.parameters = { input_answers: inputAnswers };
     }
 
@@ -800,6 +808,16 @@ function collectInputAnswers() {
     currentParameters.forEach(function(param) {
         var control = document.getElementById('param-' + param.name);
         answers.push(control ? (control.value || '') : '');
+    });
+    return answers;
+}
+
+function collectInputContextAnswers() {
+    var answers = {};
+    currentParameters.forEach(function(param) {
+        if (!param.answer_context) return;
+        var control = document.getElementById('param-' + param.name);
+        answers[param.answer_context] = control ? (control.value || '') : '';
     });
     return answers;
 }

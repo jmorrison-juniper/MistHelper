@@ -9,8 +9,10 @@ import builtins
 import logging
 import threading
 from collections import deque
+from collections.abc import Generator
 from contextlib import contextmanager
-from typing import Generator
+
+from src.foundation.support.utils.input_utils import InputUtils
 
 logger = logging.getLogger(__name__)  # Use a module logger so records include this module name.
 
@@ -60,15 +62,19 @@ class InputInterceptor:
 
 
 @contextmanager
-def web_input_context(answers: list) -> Generator[None, None, None]:
-    """Context manager that sets and clears the input queue.
+def web_input_context(
+    answers: list,
+    context_answers: dict[str, str] | None = None,
+) -> Generator[None]:
+    """Scope positional and prompt-named answers to one portal operation.
 
     Usage:
         with web_input_context(["site-id-123", "device-mac"]):
             run_operation()  # input() calls read from the queue
     """
-    InputInterceptor.set_queue(answers)
-    try:
-        yield
-    finally:
-        InputInterceptor.clear_queue()
+    with InputUtils.use_context_answers(context_answers):  # Keep conditional prompts tied to their context.
+        InputInterceptor.set_queue(answers)  # Preserve positional answers for existing portal operations.
+        try:
+            yield  # Run one operation with only its submitted answers.
+        finally:
+            InputInterceptor.clear_queue()  # Do not leak answers into the next operation on this worker.

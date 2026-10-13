@@ -260,10 +260,30 @@ class AddressAuditEngine:
                     "No CSV selected. Skipping address audit."
                 )  # Inform the operator (also covers non-TTY --test).
                 return None  # Caller treats None as "nothing to audit".
-            if raw.isdigit() and 1 <= int(raw) <= len(candidates):  # Valid in-range integer.
-                return candidates[int(raw) - 1]  # Return the chosen path.
+            selected = self._parse_csv_choice(raw, candidates)  # Resolve a current numeric or exact-name choice.
+            if selected is not None:  # Only an existing listed candidate can proceed.
+                return selected  # Return the selected path.
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("Invalid selection. Please enter a number between 1 and %s: ", len(candidates))  # Re-prompt.
+
+    @staticmethod
+    def _parse_csv_choice(raw: str, candidates: list[str]) -> str | None:
+        """Resolve a one-based index or an exact ``file:<name>`` candidate."""
+        if raw.isdigit() and 1 <= int(raw) <= len(candidates):  # Keep the existing CLI choice contract.
+            return candidates[int(raw) - 1]  # Map the numbered row to its candidate.
+        return AddressAuditEngine._csv_file_from_name(raw, candidates)  # Resolve a browser value by exact name.
+
+    @staticmethod
+    def _csv_file_from_name(raw: str, candidates: list[str]) -> str | None:
+        """Return only the listed candidate whose basename matches the browser value."""
+        prefix = "file:"  # Separate file names from numeric CLI indices.
+        if not raw.startswith(prefix):  # Reject arbitrary paths and untagged values.
+            return None  # The caller reports an invalid choice.
+        file_name = raw[len(prefix) :]  # Keep the browser answer to one path component.
+        return next(  # Match only a current candidate and never trust a submitted path.
+            (path for path in candidates if os.path.basename(path) == file_name),
+            None,
+        )
 
     def _select_business_csv_file(self, primary_csv_path: str) -> str | None:
         """Prompt for an optional business-authoritative CSV from data/ (second selector)."""
@@ -293,13 +313,9 @@ class AddressAuditEngine:
     def _read_business_csv_selection(self, candidates: list[str]) -> str | None:
         """Loop reading operator input until a valid index or explicit 'q' skip is entered."""
         while True:  # Re-prompt until valid selection or explicit skip.
-            raw = (
-                InputUtils.safe_input(
-                    "Select business file number (or q to skip): ", context="address_audit_business_csv_pick"
-                )
-                .strip()
-                .lower()
-            )  # Normalize once for downstream comparisons.
+            raw = InputUtils.safe_input(
+                "Select business file number (or q to skip): ", context="address_audit_business_csv_pick"
+            ).strip()  # Normalize once for downstream comparisons.
             if (
                 not raw
             ):  # Empty response (blank Enter or EOF sentinel) is treated as explicit skip to avoid infinite loops under non-interactive stdin (for example --test).  # noqa: E501
@@ -318,10 +334,12 @@ class AddressAuditEngine:
     @staticmethod
     def _parse_business_csv_choice(raw: str, candidates: list[str]) -> Any:
         """Return the picked path, ``None`` for skip, or ``_INVALID_CHOICE`` when unrecognized."""
-        if raw == "q":  # Operator explicitly skips the authority dataset for this run.
+        if raw.lower() == "q":  # Operator explicitly skips the authority dataset for this run.
             logger.info("Business-authoritative CSV selection skipped by operator")  # Action-log skip.
             return None  # Proceed without authority data.
         picked = AddressAuditEngine._business_csv_from_index(raw, candidates)  # Try to resolve raw as a menu index.
+        if picked is None:  # Browser values name the file, not its row number.
+            picked = AddressAuditEngine._csv_file_from_name(raw, candidates)  # Match only the listed basename.
         if picked is None:  # Not a valid numeric index -> report as invalid so the loop re-prompts.
             return _INVALID_CHOICE  # Sentinel prompts the outer loop to ask again.
         logger.info("Selected business-authoritative CSV: %s", picked)  # Action-log selected file.
