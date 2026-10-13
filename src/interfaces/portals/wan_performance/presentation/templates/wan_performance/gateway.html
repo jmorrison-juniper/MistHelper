@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Gateway Preview - {{ config.PORTAL.title }}{% endblock %}
+
+{% block content %}
+<section class="container-fluid" data-testid="wan-gateway">
+    {% include "wan_performance/_data_state.html" %}
+    <h1>Gateway</h1>
+    <p>Gateway {{ dashboard.circuit.gateway.gateway_id }}</p>
+    <p>Site {{ dashboard.circuit.gateway.site.site_id }}</p>
+    <article class="portal-card" data-testid="wan-gateway-health">
+        <h2 class="h6">Health</h2>
+        <p>Not established in offline data</p>
+    </article>
+
+    <section class="mt-4" aria-labelledby="wan-gateway-ports">
+        <h2 id="wan-gateway-ports">WAN ports</h2>
+        <table class="table table-sm portal-table" data-testid="wan-port-table">
+            <thead><tr><th>Port</th><th>Utilization</th></tr></thead>
+            <tbody>
+                <tr>
+                    <td>
+                        <a data-testid="wan-port-link"
+                           href="{{ url_for('wan_performance.port', site_id=dashboard.circuit.gateway.site.site_id, port_name=dashboard.circuit.port_name, gateway_id=dashboard.circuit.gateway.gateway_id) }}">
+                            {{ dashboard.circuit.port_name }}
+                        </a>
+                    </td>
+                    <td>
+                        {% if circuit_measurement and "utilization" in circuit_measurement.metrics %}
+                        {{ circuit_measurement.metrics["utilization"].value }} percent
+                        {% else %}
+                        Not established in offline data
+                        {% endif %}
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <a class="quick-link mt-3" data-testid="wan-peer-link"
+       href="{{ url_for('wan_performance.vpn_peer', site_id=dashboard.peer_path.gateway.site.site_id, peer_mac=dashboard.peer_path.peer_mac) }}">
+        Open VPN peer {{ dashboard.peer_path.peer_mac }}
+    </a>
+    <p class="mt-3"><a data-testid="wan-back-link" href="{{ url_for('wan_performance.overview') }}">Back to overview</a></p>
+</section>
+{% endblock %}
