@@ -163,29 +163,43 @@ class TestCacheAndRateLimits:
         assert result["data"] == [{"id": "site-a"}]  # The matching organization uses its own cached rows.
         assert cache.writes == []  # A cache hit does not rewrite the entry.
 
-    def test_timeout_returns_explicit_error_instead_of_empty_success(
-        self, monkeypatch: pytest.MonkeyPatch, service: tuple[WanDashboardService, FakeCache]
+    @pytest.mark.parametrize(
+        "request_error",
+        [requests.Timeout("synthetic timeout"), requests.ConnectionError("synthetic connection failure")],
+        ids=["timeout", "connection-error"],
+    )
+    def test_transport_errors_return_explicit_error_instead_of_empty_success(
+        self, request_error: requests.RequestException, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """A transport timeout is not converted into a valid empty site list."""
-        dashboard_service, _cache = service  # Read the local service.
-        list_sites = MagicMock(side_effect=requests.Timeout("synthetic timeout"))  # Model an offline Mist call.
-        monkeypatch.setattr(services.mistapi.api.v1.orgs.sites, "listOrgSites", list_sites)
+        """A timeout or connection failure is not converted into a valid empty site list."""
+        dashboard_service = WanDashboardService(  # Exercise the production request path.
+            FakeMistSession(),  # Keep authentication local to the test.
+            "org-local",  # Use the synthetic organization.
+            cache=FakeCache(),  # Avoid a Redis service dependency.
+        )
+        list_sites = MagicMock(side_effect=request_error)  # Model an offline Mist call.
+        monkeypatch.setattr(
+            services.mistapi.api.v1.orgs.sites, "listOrgSites", list_sites
+        )  # Replace the cloud call with a local failure.
 
         result = dashboard_service.get_sites()  # Exercise the collector error boundary.
 
-        assert result["status"] == "error"  # The timeout remains a failed read.
+        assert result["status"] == "error"  # Keep transport errors distinct from success.
         assert result["data"] == []  # The empty list does not imply successful collection.
-        assert "timeout" in result["notice"].lower()  # The status names the failure type.
+        assert type(request_error).__name__.lower() in result["notice"].lower()  # Name the transport failure.
 
     @pytest.mark.parametrize("status_code", [403, 500])
     def test_http_failures_keep_the_status_without_returning_body(
         self,
         status_code: int,
         monkeypatch: pytest.MonkeyPatch,
-        service: tuple[WanDashboardService, FakeCache],
     ) -> None:
         """Mist client and server errors stay explicit and do not expose response bodies."""
-        dashboard_service, _cache = service  # Read the local service.
+        dashboard_service = WanDashboardService(  # Exercise the production request path.
+            FakeMistSession(),  # Keep authentication local to the test.
+            "org-local",  # Use the synthetic organization.
+            cache=FakeCache(),  # Avoid a Redis service dependency.
+        )
         response = FakeResponse(status_code, {"error": "private Mist response body"})  # Model a failed API call.
         list_sites = MagicMock(return_value=response)  # Keep the SDK call local.
         monkeypatch.setattr(services.mistapi.api.v1.orgs.sites, "listOrgSites", list_sites)
@@ -195,6 +209,25 @@ class TestCacheAndRateLimits:
         assert result["status"] == "error"  # Do not convert a failed request to an empty success.
         assert str(status_code) in result["notice"]  # Keep the HTTP status available to the operator.
         assert "private Mist response body" not in result["notice"]  # Do not disclose source error bodies.
+
+    def test_empty_sdk_body_is_not_reported_as_empty_success(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """An empty SDK body remains malformed, not a valid empty site list."""
+        dashboard_service = WanDashboardService(  # Exercise the production request path.
+            FakeMistSession(),  # Keep authentication local to the test.
+            "org-local",  # Use the synthetic organization.
+            cache=FakeCache(),  # Avoid a Redis service dependency.
+        )
+        response = FakeResponse(200, b"")  # Model an empty successful HTTP response.
+        list_sites = MagicMock(return_value=response)  # Keep the SDK call local.
+        monkeypatch.setattr(
+            services.mistapi.api.v1.orgs.sites, "listOrgSites", list_sites
+        )  # Replace the cloud call with an empty response.
+
+        result = dashboard_service.get_sites()  # Validate the empty response body.
+
+        assert result["status"] == "error"  # Reject an empty response body.
+        assert result["data"] == []  # Do not present it as a successful empty organization.
+        assert "malformed_response" in result["notice"]  # Name the invalid response shape.
 
     def test_stale_sites_remain_visible_after_a_rate_limit(
         self,
@@ -417,7 +450,7 @@ class TestRedisDashboardCache:
         """An absent or malformed cache entry falls through to Mist reads."""
         absent_cache = RedisDashboardCache(None)  # Model the shared Redis service as unavailable.
         client = MagicMock()  # Supply a local Redis client double.
-        client.get.return_value = b"not-json"  # Model a corrupted optional cache entry.
+        client.get.return_value = b"bad json"  # Model a corrupted optional cache entry.
         invalid_cache = RedisDashboardCache(client)  # Use the production cache adapter.
 
         assert absent_cache.get("key") is None  # Preserve the no-cache path.
@@ -620,7 +653,7 @@ class TestGatewayAndInsightFlows:
 
         assert result["status"] == "partial"  # Expose the unavailable sources.
         assert result["data"]["ports"][0]["port_id"] == "wan0"  # Retain the overview port row.
-        assert result["notice"] is not None  # Explain that some detail values are unavailable.
+        assert result["notice"] == "Some gateway details are unavailable."  # Name the unavailable data sources.
 
     def test_traffic_uses_ten_minute_buckets_and_retains_stale_samples(
         self,

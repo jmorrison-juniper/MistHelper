@@ -120,5 +120,5 @@ class TestHourlyExport:
         )  # Request the selected hourly output.
 
         assert response.status_code == 200  # The partial-state JSON remains an API response.
-        assert response.is_json  # The route does not disguise a failed export as a CSV attachment.
+        assert response.mimetype == "application/json"  # Keep a failed export as a JSON response.
         assert response.get_json()["status"] == "partial"  # Preserve the service failure state.
