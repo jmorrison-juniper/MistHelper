@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-13
 
-**Status**: Ready for planning
+**Status**: Implemented
 
 **Input**: Issue #4040: Menu 241 SSH-only warning remains visible after another operation is selected.
 
