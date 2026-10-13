@@ -92,9 +92,48 @@ if ($ComposeArguments.Count -gt 0 -and $ComposeArguments[0] -eq "build") {
     if (-not (Test-Path $BuildFile)) {
         throw "No compose.build.yml exists at $BuildFile. Run this script from the MistHelper repository."
     }
-    Write-Host "Building the image from the working tree. Update the checkout first if it is behind main." -ForegroundColor Yellow
-    & $Interpreter -m podman_compose -f $ComposeFile -f $BuildFile build
-    exit $LASTEXITCODE  # Report the status of the provider, so a script that calls this one sees a failure.
+    $AllowStaleBuild = $ComposeArguments -contains "--allow-stale"  # Keep the override limited to this build command.
+    Write-Host "Refreshing origin/main before the image build." -ForegroundColor Cyan  # Tell the operator why Git runs.
+    & git -C $RepositoryRoot fetch --no-tags origin "+refs/heads/main:refs/remotes/origin/main"  # Refresh the exact comparison reference.
+    $FetchExitCode = $LASTEXITCODE  # Preserve the fetch result before another native command runs.
+    if ($FetchExitCode -ne 0) {  # Stop when the current main revision cannot be verified.
+        throw "Could not fetch origin/main, so the image build stopped."  # Fail closed when remote state is unknown.
+    }
+    Write-Verbose "Fetched origin/main successfully."  # Confirm that the freshness check used an updated reference.
+    Write-Host "Checking whether the checkout is behind origin/main." -ForegroundColor Cyan  # Mark the revision check.
+    $BehindCountOutput = & git -C $RepositoryRoot rev-list --count "HEAD..origin/main"  # Count commits missing from the checkout.
+    $CountExitCode = $LASTEXITCODE  # Preserve the revision-count command status.
+    if ($CountExitCode -ne 0) {  # Stop when Git cannot compare the revisions.
+        throw "Could not compare HEAD with origin/main, so the image build stopped."  # Fail closed on an invalid comparison.
+    }
+    $BehindCommitCount = [int]$BehindCountOutput  # Convert the verified count for the stale-build decision.
+    Write-Verbose "The checkout is $BehindCommitCount commit(s) behind origin/main."  # Record the decision input for diagnostics.
+    if ($BehindCommitCount -gt 0 -and -not $AllowStaleBuild) {  # Reject stale builds unless the operator opts in.
+        Write-Host "Build stopped: checkout is $BehindCommitCount commit(s) behind origin/main. Update the checkout or pass --allow-stale." -ForegroundColor Red  # Give the count and safe next step.
+        exit 1  # Prevent a stale build from replacing the published image.
+    }
+    $BuildImageTag = "ghcr.io/jmorrison-juniper/misthelper:latest"  # Preserve the published destination for current checkouts.
+    if ($BehindCommitCount -gt 0) {  # Isolate a stale build only after explicit operator approval.
+        $BuildImageTag = "misthelper:local"  # Keep the stale image separate from the published name.
+        Write-Host "Stale build approved. The image will use the local-only tag misthelper:local." -ForegroundColor Yellow  # Confirm the safe image name.
+    }
+    $HadBuildImage = Test-Path Env:MISTHELPER_BUILD_IMAGE  # Record whether the caller already set the build image.
+    $PreviousBuildImage = $env:MISTHELPER_BUILD_IMAGE  # Preserve the caller value for later restoration.
+    $env:MISTHELPER_BUILD_IMAGE = $BuildImageTag  # Pass the selected image name to the compose overlay.
+    $BuildExitCode = 1  # Keep a failure result if the provider cannot return normally.
+    try {  # Ensure the caller environment is restored after provider success or failure.
+        Write-Host "Building the image as $BuildImageTag." -ForegroundColor Green  # Name the image before the provider starts.
+        & $Interpreter -m podman_compose -f $ComposeFile -f $BuildFile build  # Build only after the revision safety check.
+        $BuildExitCode = $LASTEXITCODE  # Preserve the provider result before cleanup.
+        Write-Verbose "The compose build exited with status $BuildExitCode."  # Report the provider result for diagnostics.
+    } finally {  # Restore process state so later compose commands keep their prior environment.
+        if ($HadBuildImage) {  # Keep an environment value that the caller supplied.
+            $env:MISTHELPER_BUILD_IMAGE = $PreviousBuildImage  # Restore the caller's original image selection.
+        } else {  # Remove the temporary value when the caller had none.
+            Remove-Item Env:MISTHELPER_BUILD_IMAGE -ErrorAction SilentlyContinue  # Prevent the build choice from leaking to later commands.
+        }
+    }
+    exit $BuildExitCode  # Report the provider status to the caller.
 }
 
 if ($ComposeArguments.Count -gt 0 -and $ComposeArguments[0] -eq "up-corporate-ca") {

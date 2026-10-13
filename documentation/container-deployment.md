@@ -245,12 +245,19 @@ podman compose up -d --no-deps misthelper
 request, so a normal `up` never rebuilds.
 
 ```powershell
-podman compose -f compose.yml -f compose.build.yml build
+.\scripts\compose.ps1 build
 ```
 
-Warning: a build from a checkout that is behind `main` overwrites the published
-tag with a stale build and clears the labels that name the commit. Run
-`git pull` before the build, and read the revision after the run.
+The helper fetches `origin/main` and stops when the checkout is behind. Update
+the checkout, then run the build command again.
+
+Warning: `--allow-stale` can build old code and downgrade a running container.
+Use it only for a local test. The helper tags that image as `misthelper:local`,
+so it does not replace the published image.
+
+```powershell
+.\scripts\compose.ps1 build --allow-stale
+```
 
 ## Check the revision of the running container
 
