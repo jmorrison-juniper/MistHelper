@@ -61,7 +61,7 @@ dash>=4.4.1,<5
 plotly>=7.1.0,<8
 matplotlib>=3.11.2,<4
 pillow>=12.3.0,<13
-kaleido>=1.4.0,<2
+kaleido>=1.5.0,<2
 
 # Polyglot database backends (ArangoDB + Redis TimeSeries)
 python-arango>=8.3.2,<9
