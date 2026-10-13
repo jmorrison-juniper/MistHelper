@@ -213,6 +213,9 @@ class WebPortalApp:
         app.config["LICENSING_COMPARISON_NAV_ENABLED"] = (
             "licensing_comparison.comparison_page" in app.view_functions
         )  # Render the navigation only when the feature route is registered.
+        app.config["WAN_PERFORMANCE_NAV_ENABLED"] = (
+            "wan_performance.overview" in app.view_functions
+        )  # Render the navigation only when the overview route is registered.
         WebPortalApp._register_webhook_blueprint(app)  # Keep the configured Mist webhook route.
         logger.debug("Registered web portal blueprints")  # Confirm that route registration completed.
 
