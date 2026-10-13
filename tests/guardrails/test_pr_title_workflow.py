@@ -66,7 +66,7 @@ POLICY_SNAPSHOTS = {
         },
         "concurrency": {
             "group": "${{ github.workflow }}-${{ github.head_ref || github.ref }}",
-            "cancel-in-progress": "${{ github.ref != 'refs/heads/main' }}",
+            "cancel-in-progress": False,
         },
         "permissions": {"contents": "read"},
         "jobs": {
@@ -202,7 +202,6 @@ class TestWorkflowPolicy:
             (("concurrency",), {}),
             (("concurrency", "group"), "${{ github.ref }}"),
             (("concurrency", "cancel-in-progress"), True),
-            (("concurrency", "cancel-in-progress"), False),
             (("concurrency", "cancel-in-progress"), "${{ github.ref != 'refs/heads/other' }}"),
             (("permissions",), {}),
             (("permissions", "contents"), "write"),
@@ -246,16 +245,16 @@ class TestWorkflowPolicy:
     @pytest.mark.parametrize(
         "case",
         [
-            ("title-guard", "refs/pull/3/merge", "Pull request title-title-guard", True),
-            ("title-guard", "refs/pull/4/merge", "Pull request title-title-guard", True),
-            ("", "refs/pull/3/merge", "Pull request title-refs/pull/3/merge", True),
-            ("", "refs/heads/main", "Pull request title-refs/heads/main", False),
-            ("main", "refs/heads/main", "Pull request title-main", False),
+            ("title-guard", "refs/pull/3/merge", "Pull request title-title-guard"),
+            ("title-guard", "refs/pull/4/merge", "Pull request title-title-guard"),
+            ("", "refs/pull/3/merge", "Pull request title-refs/pull/3/merge"),
+            ("", "refs/heads/main", "Pull request title-refs/heads/main"),
+            ("main", "refs/heads/main", "Pull request title-main"),
         ],
     )
-    def test_concurrency_contexts(self, case: tuple[str, str, str, bool], workflow: dict[str, Any]) -> None:
-        """Prove branch separation, reference fallback, and main preservation offline."""
-        head_ref, event_ref, expected_group, expected_cancel = case
+    def test_concurrency_contexts(self, case: tuple[str, str, str], workflow: dict[str, Any]) -> None:
+        """Keep requests isolated without cancelling a check at the same commit."""
+        head_ref, event_ref, expected_group = case
         template = workflow["concurrency"]["group"]
         prefix = template.replace("${{ github.workflow }}", workflow["name"])
         assert prefix.replace("${{ github.head_ref || github.ref }}", head_ref or event_ref) == expected_group
@@ -266,10 +265,7 @@ class TestWorkflowPolicy:
             )
             != expected_group
         )
-        cancellation = workflow["concurrency"]["cancel-in-progress"]
-        assert cancellation.replace(
-            "${{ github.ref != 'refs/heads/main' }}", str(event_ref != "refs/heads/main")
-        ) == str(expected_cancel)
+        assert workflow["concurrency"]["cancel-in-progress"] is False
 
 
 class TestDependabotPolicy:
