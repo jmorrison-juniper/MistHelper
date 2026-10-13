@@ -13,6 +13,7 @@ from src.interfaces.portals.wan_performance.domain.identity import (
     SiteIdentity,
 )
 from src.interfaces.portals.wan_performance.domain.measurement import HourlyMeasurement
+from src.interfaces.portals.wan_performance.domain.summary import CalendarSummaries
 from src.interfaces.portals.wan_performance.presentation.offline_preview import OfflinePreviewFactory
 
 logger = logging.getLogger(__name__)  # Keep portal records on the feature logger.
@@ -130,6 +131,7 @@ def port(site_id: str, port_name: str) -> str:
         "wan_performance/port.html",
         dashboard=dashboard,
         circuit_measurement=circuit_measurement,
+        calendar_summaries=CalendarSummaries.build(dashboard.measurements, circuit_identity),
     )
     logger.debug("Rendered the synthetic WAN port")
     return response
