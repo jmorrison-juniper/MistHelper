@@ -47,7 +47,9 @@
 
 ## Rate Limits and Failure Handling
 
-**Decision**: Preserve the source's 60-second per-token handling for rate-limit responses. Use existing rate-limit controls and bounded request scheduling. Show each failed organization and keep its values unavailable.
+**Decision**: Use `RateLimitingUtils` and send one Mist request at a time. After HTTP 429, wait 60 seconds per token and retry once. Show the failure if that retry fails.
+
+**Assumption**: The source documents the 60-second wait but does not state a retry count. This plan uses one retry to bound the work.
 
 **Rationale**: The source behavior is in the issue description. A missing response must not look like a zero balance.
 

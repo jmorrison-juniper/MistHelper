@@ -51,7 +51,7 @@ description: "Implementation tasks for Mist Organization Licensing Comparison"
 - [ ] T008 [US1] Implement organization, license, and inventory reads with `getOrgLicensesSummary`, `getOrgLicensesBySite`, and `getOrgInventory` in `src/interfaces/portals/licensing_comparison/service.py`.
 - [ ] T009 [US1] Implement the page, organization-choice, and comparison routes in `src/interfaces/portals/licensing_comparison/routes.py`.
 - [ ] T010 [US1] Render organization choices, per-organization statuses, license values, and inventory values in `src/interfaces/portals/licensing_comparison/templates/licensing_comparison.html` and `src/interfaces/portals/licensing_comparison/static/licensing_comparison.js`.
-- [ ] T011 [US1] Preserve the 60-second per-token rate-limit handling and bounded Mist request scheduling in `src/interfaces/portals/licensing_comparison/service.py`.
+- [ ] T011 [US1] Send one Mist request at a time. Use `RateLimitingUtils` for pacing, wait 60 seconds after HTTP 429, and retry once in `src/interfaces/portals/licensing_comparison/service.py`.
 
 **Checkpoint**: Authorized organizations compare independently. API failures remain visible and never appear as successful zero values.
 
@@ -63,7 +63,7 @@ description: "Implementation tasks for Mist Organization Licensing Comparison"
 
 ### Tests for User Story 2
 
-- [ ] T012 [P] [US2] Add tests for manual rows, duplicate rejection, non-negative whole-number validation, browser-session expiry, and missing purchase values in `tests/integration/web_portal/licensing_comparison/test_service.py`.
+- [ ] T012 [P] [US2] Add tests for non-negative whole-number validation and missing purchase values in `tests/integration/web_portal/licensing_comparison/test_service.py`.
 - [ ] T013 [US2] Add tests for remaining balances and each SUB-AI component in `tests/integration/web_portal/licensing_comparison/test_service.py`.
 
 ### Implementation for User Story 2
@@ -98,8 +98,14 @@ description: "Implementation tasks for Mist Organization Licensing Comparison"
 
 - [ ] T021 [P] Add the feature page, navigation, stable selectors, and missing-session smoke checks to `tests/e2e/web_portal/test_portal_smoke.py`.
 - [ ] T022 Update `specs/live/20261013-125122-mist-org-licensing-comparison/quickstart.md` with the final test commands and observed results.
-- [ ] T023 Run the SDK contract test, focused tests, portal smoke test, formatting, lint, and type checks for `src/interfaces/portals/licensing_comparison/`, `tests/integration/web_portal/licensing_comparison/`, and `tests/e2e/web_portal/test_portal_smoke.py`.
-- [ ] T024 Check `compose.yml`, `requirements.txt`, `requirements-dev.txt`, `MistHelper.py`, and the final diff for added services, dependencies, ports, menu operations, or non-Spec-Kit artifacts.
+- [ ] T023 Run focused tests, portal smoke tests, formatting, lint, type, complexity, and Bandit checks for the feature package and its tests.
+- [ ] T024 Check that the feature package follows the planned layout and has no more than five direct children. Check `compose.yml`, `requirements.txt`, `requirements-dev.txt`, `MistHelper.py`, and the final diff for prohibited infrastructure or unrelated files. Permit only the planned README and release-note changes.
+- [ ] T025 Add SDK transport contract tests for shared-session authentication, supported endpoint use, pagination, the single rate-limit retry, and redaction of tokens and exception text in `tests/integration/web_portal/licensing_comparison/test_transport_contract.py`.
+- [ ] T026 Add browser tests for session-state persistence through page reload and in-page navigation, empty state in a new browser session, and input validation in `tests/e2e/licensing_comparison/test_session_state.py`.
+- [ ] T027 Review the new code against all seven constitutional principles. Verify class-based ownership, function limits, inline comments, ASCII structured logs, action logs, and secret redaction.
+- [ ] T028 Update `README.md` with a link to the comparison page. Add `changelog.d/issue-4197-mist-org-licensing-comparison.md` with an Added bullet that names issue #4197.
+- [ ] T029 Run local gates, build the feature manifest, stage explicit files, commit, rebase on `origin/main`, and rerun affected gates before push.
+- [ ] T030 After approval, open the implementation PR, pass CI, squash merge, wait for the main image build, verify its revision, deploy the approved image, and check health.
 
 ## Dependencies and Execution Order
 
@@ -117,6 +123,11 @@ description: "Implementation tasks for Mist Organization Licensing Comparison"
 - **US1**: Independent after the foundational phase.
 - **US2**: Depends on the comparison row and license types from US1.
 - **US3**: Depends on the displayed comparison rows from US1 and balances from US2.
+- **Transport contract tests (T025)**: Depend on the shared session and API service design from the foundational phase.
+- **Browser state tests (T026)**: Depend on the existing portal browser test fixture and cover browser-only state.
+- **Constitution review (T027)**: Depends on all implementation tasks and must pass before the implementation pull request.
+- **README and release note (T028)**: Describe only the implemented behavior and name issue #4197.
+- **Delivery steps (T029-T030)**: Run after implementation and its local checks. Require approval before deployment.
 
 ### Parallel Opportunities
 

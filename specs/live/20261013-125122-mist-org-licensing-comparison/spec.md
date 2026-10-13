@@ -77,7 +77,7 @@ An operator exports the current comparison to a CSV file and retains the source 
 - **FR-008**: The page MUST identify Mist request failures and MUST NOT represent a failed or absent result as a successful zero.
 - **FR-009**: The comparison MUST retain the source application's CC BY-NC-SA 4.0 attribution.
 - **FR-010**: The migration MUST use MistHelper's existing portal and shared data services. It MUST NOT add a database, Redis service, separate frontend, separate server, or public port.
-- **FR-011**: The comparison MUST preserve the source application's 60-second per-token handling for Mist rate-limit responses.
+- **FR-011**: The comparison MUST wait 60 seconds per token after a Mist rate-limit response. It MUST retry that request once, then show a failure if the retry fails.
 
 ### Mist Cloud Transport Requirements
 
@@ -85,6 +85,9 @@ An operator exports the current comparison to a CSV file and retains the source 
 - Use the supported `mistapi` SDK methods `getSelf`, `listMspOrgs`, `getOrgLicensesSummary`, `getOrgLicensesBySite`, and `getOrgInventory` where their access scope applies.
 - Do not send direct HTTP requests to Mist REST endpoints when a working SDK method exists.
 - Add contract tests for SDK method availability, shared-session authentication, endpoint parity, pagination, visible failure behavior, and secret redaction.
+- Send one Mist request at a time through the shared `RateLimitingUtils` pacing policy.
+- After HTTP 429, wait 60 seconds for the affected token and retry the request once.
+- Do not retry other HTTP responses. Show their failure status to the operator.
 - Do not add an owned WebSocket transport. The feature needs request-response comparison data and has no stated WebSocket output requirement.
 
 ### Key Entities
@@ -104,7 +107,7 @@ An operator exports the current comparison to a CSV file and retains the source 
 - **SC-001**: Every selected, accessible organization appears once in the comparison with license and inventory values or an explicit failure status.
 - **SC-002**: All valid manual rows and purchased amounts affect the displayed balance in the same browser session.
 - **SC-003**: Every displayed comparison value appears in the exported CSV, and formula-like cell values are neutralized.
-- **SC-004**: A new browser session contains none of the manual rows or purchased amounts from an ended session.
+- **SC-004**: Page reloads and in-page navigation preserve manual rows and purchased amounts. A new browser session contains none of the values from an ended session.
 - **SC-005**: The migration adds zero databases, Redis services, separate frontends, separate servers, and public ports.
 
 ## Assumptions

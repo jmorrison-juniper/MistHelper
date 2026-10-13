@@ -26,10 +26,10 @@ Expected result: the tests pass for authorized organizations, manual values, pur
 Run the existing SDK contract test:
 
 ```bash
-python -m pytest tests/unit/web_portal/test_portal_sdk_calls.py
+python -m pytest tests/unit/web_portal/test_portal_sdk_calls.py tests/integration/web_portal/licensing_comparison/test_transport_contract.py
 ```
 
-Expected result: each new Mist SDK call resolves in the installed `mistapi` package. Add 4xx and 5xx cases to the focused route tests.
+Expected result: SDK methods match the installed package. The tests verify shared-session authentication, supported endpoints, pagination, one retry after HTTP 429, and secret redaction.
 
 ## Validate the Portal Page
 
@@ -40,6 +40,16 @@ python -m pytest tests/e2e/web_portal/test_portal_smoke.py
 ```
 
 Expected result: the feature page returns a success response, its controls have stable selectors, and its navigation link appears.
+
+## Validate Browser Session State
+
+Run the browser test for session-only input:
+
+```bash
+python -m pytest tests/e2e/licensing_comparison/test_session_state.py
+```
+
+Expected result: manual rows and purchased values survive reload and in-page navigation. A new browser session contains no prior values.
 
 ## Validate the Export
 

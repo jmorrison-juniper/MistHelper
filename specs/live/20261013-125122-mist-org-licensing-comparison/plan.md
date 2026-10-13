@@ -22,7 +22,7 @@ Add the source dashboard layout and workflow as a page in the current MistHelper
 
 **Project Type**: Page and API routes in the existing Flask application.
 
-**Performance Goals**: Read selected organizations through the shared Mist rate-limit service. Keep request concurrency bounded. Preserve the source's 60-second per-token handling after a rate-limit response.
+**Performance Goals**: Use `RateLimitingUtils` for baseline pacing. Send one Mist request at a time. After HTTP 429, wait 60 seconds per token and retry once. Do not retry other HTTP failures.
 
 **Constraints**: Preserve the source dashboard workflow and CC BY-NC-SA 4.0 attribution. Use the existing `APISESSION` and data services. Do not add a database, Redis service, separate frontend, server, or public port.
 
@@ -33,10 +33,18 @@ Add the source dashboard layout and workflow as a page in the current MistHelper
 - **Structure**: Place new feature code in `src/interfaces/portals/licensing_comparison/`. This parent currently has two direct children. Keep the feature package at five direct children or fewer.
 - **Existing portal**: Register one blueprint in `web_portal/app.py` and add one navigation link in `web_portal/templates/base.html`. Do not add a route or template to the over-limit `web_portal/routes/` or `web_portal/templates/` directories.
 - **Tests**: Add `tests/integration/web_portal/licensing_comparison/` under the existing portal integration test directory. Extend the existing `tests/e2e/web_portal/test_portal_smoke.py` file for page and selector checks. Add no new direct child to a test directory that already exceeds five children.
+- **Browser state tests**: Add `tests/e2e/licensing_comparison/test_session_state.py` under a feature-specific directory. Do not add a browser test to the over-limit `tests/e2e/web_portal/` directory.
 - **Process-folder debt**: The process baseline lists 792 grandfathered direct children under `specs/` and four managed roots. This feature adds one timestamp record under `specs/live/`. A separate future process change must move one grandfathered record into a managed root.
 - **Mist access**: Use supported `mistapi` methods with the shared portal session. Do not add direct REST calls or an owned WebSocket.
 - **Data and safety**: Keep manual input in browser session storage. Write only an explicit CSV export through the shared data service. Do not turn API failures into successful zero values.
+- **Class-based design**: Put behavior in named classes. Do not add standalone wrapper functions. Keep each function within the constitution limits for parameters, logical blocks, and lines.
+- **Code comments and logs**: Add an explanatory inline comment to each executable line. Use ASCII, machine-parseable logs through `structlog` or an equivalent. Log each meaningful action before and after it. Redact secrets at the logging boundary.
+- **Constitution review**: Verify all seven core principles before the implementation pull request. Treat inline comments and action logging as required gates.
 - **Commit and pull request**: Use a Conventional Commit title and preserve the repository pull request template. This branch contains planning artifacts only.
+
+## Implementation Delivery
+
+After implementation, run every applicable local gate. Build the feature manifest and stage only its explicit files. Commit with a Conventional Commit subject, rebase on `origin/main`, and rerun affected gates. Push the branch and open an implementation pull request that closes issue #4197. Wait for required CI, then squash merge after approval. Wait for the main container build. Verify that the image revision equals the merged commit. After release approval, deploy the approved image and check container and portal health.
 
 **Pre-design gate**: Pass with the structure and storage constraints above. The exact requested branch is already checked out in another worktree. This session uses its own branch from `main`.
 
@@ -72,6 +80,9 @@ tests/integration/web_portal/
     └── test_export.py
 
 tests/e2e/web_portal/test_portal_smoke.py  # Add the page and selector checks.
+
+tests/e2e/licensing_comparison/
+└── test_session_state.py
 ```
 
 The new feature package has five direct children. Its `service.py` owns the comparison records and calculations, so the package needs no extra model module. The route template and assets preserve the source dashboard layout and use the existing application process.

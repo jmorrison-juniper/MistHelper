@@ -47,7 +47,9 @@ The response contains one result per requested row. Each result includes license
 
 - Use `getOrgLicensesSummary`, `getOrgLicensesBySite`, and `getOrgInventory` through `mistapi`.
 - Reject unauthorized IDs, duplicate rows, invalid numeric inputs, and unsupported license types.
-- Preserve per-token 60-second handling after a rate-limit response.
+- Send one Mist request at a time through the shared `RateLimitingUtils` pacing policy.
+- After HTTP 429, wait 60 seconds for that token and retry once.
+- Do not retry other HTTP responses.
 - Return a visible error for each failed organization while retaining successful results.
 - Do not persist manual rows or purchased amounts.
 
@@ -72,5 +74,5 @@ Accept the current comparison rows after the portal validates their shape.
 | Organization not accessible | Reject the request before a Mist call |
 | Invalid manual value | Identify the invalid field and retain no invalid value |
 | Mist 4xx or 5xx response | Show the failed operation and status without a success-shaped zero |
-| Mist rate limit | Apply the source's per-token wait before a bounded retry |
+| Mist rate limit | Wait 60 seconds for the token, then retry once |
 | CSV write or download failure | Show an export error and do not report success |
