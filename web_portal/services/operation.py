@@ -1185,8 +1185,7 @@ class OperationExecutor:
                     "write_back",
                     "Write corrections to Mist",
                     [
-                        {"value": "n", "label": "No"},
-                        {"value": "y", "label": "Yes"},
+                        {"value": "n", "label": "No (use the CLI to write corrections)"},
                     ],
                     default="n",
                     answer_context="address_audit_writeback_gate",
