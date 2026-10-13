@@ -1,11 +1,11 @@
 """Check that WAN preview data stays synthetic and offline."""
 
-import ast  # Inspect the fixture module for live-client dependencies.
+import ast  # Inspect the preview module for live-client dependencies.
 from inspect import getsourcefile  # Locate the fixture code without importing other modules.
 from pathlib import Path  # Read the fixture module through a platform-safe path.
 
-from tests.fixtures.wan_performance.offline_dashboard import (  # Import the isolated fixture factory.
-    OfflineDashboardFactory,
+from src.interfaces.portals.wan_performance.presentation.offline_preview import (
+    OfflinePreviewFactory,  # Reuse the production preview factory.
 )
 
 FORBIDDEN_IMPORT_ROOTS = frozenset(  # Keep offline fixtures separate from service clients.
@@ -18,7 +18,7 @@ FORBIDDEN_CALL_NAMES = frozenset(  # Prevent fixture loading from starting clien
 
 def test_offline_dashboard_contains_only_historical_synthetic_records() -> None:
     """Keep every fixture record synthetic and independent of live measurements."""
-    dashboard = OfflineDashboardFactory.build()  # Load data without selecting runtime services.
+    dashboard = OfflinePreviewFactory.build()  # Load preview data without selecting runtime services.
 
     assert dashboard.provenance == "synthetic"  # Label the full fixture set as synthetic.
     assert dashboard.site.site_id == "11111111-1111-1111-1111-111111111111"  # Preserve the documented route ID.
@@ -29,9 +29,9 @@ def test_offline_dashboard_contains_only_historical_synthetic_records() -> None:
     assert all(record.hour_start_utc.year < 2026 for record in dashboard.measurements)  # Keep fixture times historical.
 
 
-def test_offline_fixture_module_has_no_live_service_imports_or_start_calls() -> None:
+def test_offline_preview_module_has_no_live_service_imports_or_start_calls() -> None:
     """Block fixture code from importing service clients or starting workers."""
-    fixture_source = getsourcefile(OfflineDashboardFactory)  # Locate the module that defines the fixture factory.
+    fixture_source = getsourcefile(OfflinePreviewFactory)  # Locate the module that defines the preview factory.
     assert isinstance(fixture_source, str)  # Require the source file so the isolation contract can run.
     fixture_path = Path(fixture_source)  # Resolve the fixture source file.
     syntax_tree = ast.parse(fixture_path.read_text(encoding="utf-8"))  # Inspect only the fixture module.
