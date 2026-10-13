@@ -34,8 +34,8 @@ Menu 287 replaces a Mist inventory device for RMA. It requires typing `REPLACE`
 to confirm, and `--dry-run` previews the replacement request.
 
 Menu 291 optimizes or resets site RRM with before and after plan capture. It
-requires typing `OPTIMIZE` or `RESET` to confirm, and `--dry-run` previews the
-RRM request.
+defaults to a dry run. Use `--live-run` and then type `OPTIMIZE` or `RESET` to
+send the RRM request.
 
 Menu 292 imports PSKs, user MACs, and assets from CSV. It requires typing
 `IMPORT <row_count>` to confirm, and `--dry-run` previews the import request.

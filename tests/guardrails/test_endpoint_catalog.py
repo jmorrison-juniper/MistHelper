@@ -378,8 +378,8 @@ class TestMenuText:
             (
                 "MistHelper.py",
                 304,
-                "bb5f6875bc618861359413f8ccf42b2919455c8ac7925daba53f0de867ddca49",
-            ),  # WHY: menus 294 to 304 (Juniper RMA) raised the count from 293.
+                "bcee042ce5e4600033985e5a5841cdbbea8c8cb818b373cb8ced5788868a1f92",
+            ),  # WHY: issue #4051 updated menu 291 handler to dry_run=None and clarified title.
             (
                 "web_portal/menu_registry.py",
                 190,

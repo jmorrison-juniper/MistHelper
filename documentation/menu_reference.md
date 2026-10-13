@@ -324,7 +324,7 @@ never runs in an automated test pass.
 | 288 | Show the SSR registration commands | Interactive safe | `SsrRegistrationCommands.run` |
 | 289 | Export the client fingerprint census for a site | Interactive safe | `ClientFingerprintCensus.run` |
 | 290 | Run spectrum analysis and RF diagnostic recording | Interactive | `RfDiagnosticsOperation.run` |
-| 291 | DESTRUCTIVE: Optimize or reset site RRM with before and after plan capture (Requires typing 'OPTIMIZE' or 'RESET' to confirm, supports --dry-run) | Destructive | `lambda dry_run=False: RrmResetOperation.run(dry_run=dry_run)` |
+| 291 | DESTRUCTIVE: Optimize or reset site RRM with before and after plan capture (Requires typing 'OPTIMIZE' or 'RESET' to confirm, dry-run unless --live-run is given) | Destructive | `lambda dry_run=None: RrmResetOperation.run(dry_run=dry_run)` |
 | 292 | DESTRUCTIVE: Import PSKs, user MACs, and assets from CSV (Requires typing 'IMPORT <row_count>' to confirm, supports --dry-run) | Destructive | `lambda dry_run=False: CsvImportOperation.run(dry_run=dry_run)` |
 | 293 | DESTRUCTIVE: Run the Mist Edge lifecycle operation (Requires typing 'CLAIM', 'ASSIGN', 'UNASSIGN', 'BOUNCE', or 'UPGRADE' to confirm, supports --dry-run) | Destructive | `lambda dry_run=False: MxEdgeLifecycleOperation.run(dry_run=dry_run)` |
 | 294 | List Juniper service requests for a date window, every field (read-only, needs Juniper settings) | Interactive safe | `RequestListWorkflow.run` |

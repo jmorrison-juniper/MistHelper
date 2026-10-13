@@ -1054,8 +1054,8 @@ flowchart LR
 
 ## Menu 291
 
-- Title: DESTRUCTIVE: Optimize or reset site RRM with before and after plan capture (Requires typing 'OPTIMIZE' or 'RESET' to confirm, supports --dry-run)
-- Handler: `lambda dry_run=False: RrmResetOperation.run(dry_run=dry_run)`
+- Title: DESTRUCTIVE: Optimize or reset site RRM with before and after plan capture (Requires typing 'OPTIMIZE' or 'RESET' to confirm, dry-run unless --live-run is given)
+- Handler: `lambda dry_run=None: RrmResetOperation.run(dry_run=dry_run)`
 - Shared helpers: [`DataExporter`](README.md#dataexporter), [`InputUtils`](README.md#inpututils), [`PromptUtils`](README.md#promptutils), [`SourceDependencyResolver`](README.md#sourcedependencyresolver), [`SourceDependencyResolverService`](README.md#sourcedependencyresolverservice)
 - Endpoints: 2
 
