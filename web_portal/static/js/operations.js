@@ -310,6 +310,7 @@ function buildParameterGroup(param) {
 function buildParameterLabel(param) {
     var label = document.createElement('label');
     label.className = 'form-label';
+    label.htmlFor = 'param-' + param.name;
     label.textContent = param.label || param.name;
     if (param.required) {
         label.innerHTML += ' <span class="text-danger">*</span>';
