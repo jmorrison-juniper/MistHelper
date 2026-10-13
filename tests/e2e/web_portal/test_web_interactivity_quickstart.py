@@ -51,7 +51,33 @@ def _install_browser_stubs(page: Any, preview_rows: list[list[str]]) -> None:
             status: 200,
             headers: { 'Content-Type': 'application/json' }
           });
+          window.__deferMenu241 = false; // Keep the delayed response opt-in for this regression.
+          window.__failMenu241 = false; // Choose whether the delayed answer succeeds or fails.
+          window.__releaseMenu241 = null; // Let the test choose when the old response arrives.
           window.fetch = async (url, options = {}) => {
+            if (String(url).includes('/api/operations/parameters/241') && window.__deferMenu241) {
+              return new Promise((resolve, reject) => {
+                window.__releaseMenu241 = () => {
+                  if (window.__failMenu241) { // Turn the delayed result into a rejected request for one case.
+                    reject(new Error('Delayed menu 241 failure')); // Give the stale-error case a clear message.
+                    return; // Stop before the successful response path.
+                  }
+                  resolve(jsonResponse({
+                    category: 'cli_only', // Reach the valid SSH-only response handler.
+                    cli_only_message: 'Menu 241 SSH warning' // Identify the old response in the regression.
+                  }));
+                };
+              });
+            }
+            if (String(url).includes('/api/operations/parameters/241')) { // Preserve the selected menu 241 warning.
+              return jsonResponse({
+                category: 'cli_only', // Reach the valid SSH-only response handler.
+                cli_only_message: 'Menu 241 SSH warning' // Identify the selected warning in the regression.
+              });
+            }
+            if (String(url).includes('/api/operations/parameters/242')) { // Serve menu 242 without controls.
+              return jsonResponse({ category: 'interactive_safe', parameters: [] });
+            }
             if (String(url).includes('/api/operations/parameters/262')
                 || String(url).includes('/api/operations/parameters/267')) {
               return jsonResponse({
@@ -170,21 +196,48 @@ def test_quickstart_data_browser_modal_opens_csv(page: Any) -> None:
     logger.debug("Data Browser modal rows: %s", rows)  # Record the rendered rows.
 
 
-def test_quickstart_operations_result_preview_reuses_modal(page: Any) -> None:
-    """The Operations output list opens the same CSV preview modal."""
+@pytest.mark.parametrize("scenario", ["success", "failure", "current"])
+def test_quickstart_operations_result_preview_reuses_modal(page: Any, scenario: str) -> None:
+    """The Operations page reuses its preview modal and ignores stale menu responses."""
     _load_operations_shell(page)  # Load the Operations page shell with the output list.
     _install_browser_stubs(page, [["Alpha", "Switch-1", "ok"]])  # Serve the output preview row.
-    logger.info("Rendering an Operations output file")  # Mark the result-list rendering step.
     page.evaluate("showOutputFiles(['issue992_quickstart.csv'])")  # Render an output file as a completed run would.
     page.locator("#outputFileList button").click()  # Open the preview from the Operations result list.
     page.wait_for_selector("#modalPreviewTable")  # Wait for the modal to render the CSV table.
-    modal_title = page.locator("#dataPreviewModalLabel").inner_text()  # Read the modal title.
-    assert modal_title == "Preview: issue992_quickstart.csv"  # Verify the file title.
+    assert (  # Keep the title assertion readable under the repository line-length limit.
+        page.locator("#dataPreviewModalLabel").inner_text() == "Preview: issue992_quickstart.csv"
+    )
     assert page.locator("#executionPanel").is_visible()  # Verify the Operations page state stays visible.
-    logger.debug("Operations result preview stayed on the Operations page")  # Record the state preservation check.
+    page.evaluate(
+        "renderAccordion([{name:'Gateway',operations:["
+        "{menu_number:241,description:'Gateway',category:'cli_only'},"
+        "{menu_number:242,description:'Export',category:'safe'}]}])"
+    )  # Render both choices for the selected and stale response cases.
+    if scenario == "current":  # Exercise the valid warning while menu 241 owns the page.
+        page.locator('[data-menu="241"]').click()  # Select the operation that owns its warning.
+        page.wait_for_function(  # Wait for the selected warning to appear.
+            "!document.getElementById('cliOnlyPanel').classList.contains('d-none')"
+        )
+        assert page.locator("#selectedOpTitle").inner_text() == "Menu 241"  # Keep the selected title.
+        assert page.locator("#cliOnlyPanel").is_visible()  # Preserve valid guidance for menu 241.
+        return  # Do not run the stale-request cases for this selection.
+    page.evaluate("window.__deferMenu241 = true")  # Hold menu 241 until the operator selects another operation.
+    page.evaluate("window.__failMenu241 = " + str(scenario == "failure").lower())  # Select the delayed outcome.
+    page.locator('[data-menu="241"]').click()  # Start the first parameter request.
+    page.wait_for_function("typeof window.__releaseMenu241 === 'function'")  # Confirm the first request is pending.
+    page.locator('[data-menu="242"]').click()  # Select the operation that must own the page.
+    page.wait_for_function(  # Wait for the current operation response.
+        "document.getElementById('parameterLoading').classList.contains('d-none')"
+    )
+    page.evaluate("window.__releaseMenu241()")  # Deliver the stale menu 241 response after menu 242 completes.
+    page.evaluate("() => new Promise(resolve => setTimeout(resolve, 0))")  # Let the response handler finish.
+    assert page.locator("#selectedOpTitle").inner_text() == "Menu 242"  # Keep the newest operation title.
+    assert page.locator("#cliOnlyPanel").is_hidden()  # Hide stale guidance as the production page does.
+    assert page.locator("#parameterError").is_hidden()  # Hide an error from the stale request.
 
 
 OPERATIONS_HTML = """
+<style>.d-none { display: none !important; }</style>
 <div id="operationAccordion"></div>
 <input id="opSearch">
 <div id="selectedOp"><h5 id="selectedOpTitle"></h5><p id="selectedOpDesc"></p></div>

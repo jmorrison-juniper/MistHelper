@@ -225,14 +225,25 @@ function loadParameters(menuNumber) {
     setElementVisible(loadingDiv, true);
     setElementVisible(formDiv, true);
 
+    console.info('Loading operation parameters for menu', menuNumber); // Trace the request before it changes page state.
     fetch('/api/operations/parameters/' + menuNumber)
         .then(readJsonAnswer)
         .then(function(data) {
+            if (String(menuNumber) !== selectedMenuNumber) {
+                console.debug('Ignoring parameters for unselected menu', menuNumber); // Keep stale data off the current page.
+                return; // Leave the selected operation's loading and panel state unchanged.
+            }
             setElementVisible(loadingDiv, false);
             handleParameterResponse(data, formDiv, fieldsDiv);
+            console.debug('Loaded operation parameters for menu', menuNumber); // Record the completed current response.
         })
         .catch(function(err) {
+            if (String(menuNumber) !== selectedMenuNumber) {
+                console.debug('Ignoring parameter failure for unselected menu', menuNumber); // Keep stale errors off the current page.
+                return; // Leave the selected operation's loading and error state unchanged.
+            }
             setElementVisible(loadingDiv, false);
+            console.error('Failed to load operation parameters for menu', menuNumber, err); // Preserve active failure context.
             showParameterError('Failed to load parameters: ' + err.message);
         });
 }
