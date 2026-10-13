@@ -73,6 +73,9 @@ def web_input_context(
             run_operation()  # input() calls read from the queue
     """
     with InputUtils.use_context_answers(context_answers):  # Keep conditional prompts tied to their context.
+        if not answers and context_answers is not None:
+            yield  # Context-only answers must not modify another operation's positional queue.
+            return
         InputInterceptor.set_queue(answers)  # Preserve positional answers for existing portal operations.
         try:
             yield  # Run one operation with only its submitted answers.

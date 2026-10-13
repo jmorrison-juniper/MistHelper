@@ -66,9 +66,11 @@ class InputUtils:
     ) -> str:
         """Return trimmed user input, degrading to ``default_value`` on EOF/empty."""
         logger.debug("safe_input entered (context=%s)", context)  # Action-log entry per project rule.
+        context_answers = _CONTEXT_ANSWERS.get()  # Read only the answers scoped to this operation.
+        if context_answers is not None and context not in context_answers:
+            raise EOFError(f"No browser answer supplied for prompt context: {context}")
         try:
-            context_answers = _CONTEXT_ANSWERS.get()  # Read only the answers scoped to this operation.
-            if context_answers is not None and context in context_answers:  # Match answers by prompt identity.
+            if context_answers is not None:  # Match answers by prompt identity.
                 user_input = context_answers[context].strip()  # Keep skipped prompts from shifting later answers.
             else:
                 user_input = input(prompt).strip()  # Preserve the ordinary CLI and queued-input path.

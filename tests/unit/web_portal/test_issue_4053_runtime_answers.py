@@ -179,6 +179,7 @@ def test_context_answers_do_not_shift_when_a_prompt_is_skipped(monkeypatch) -> N
     with web_input_context(
         [],
         context_answers={
+            "address_audit_business_csv_pick": "",
             "address_audit_business_name": "Northwind",
             "address_audit_post_table": "q",
         },
@@ -200,3 +201,20 @@ def test_none_context_map_preserves_cli_input(monkeypatch) -> None:
         answer = InputUtils.safe_input("Prompt: ", context="manufacturer_report_selection")
 
     assert answer == "cli answer"
+
+
+def test_context_only_answers_do_not_consume_another_queue_on_missing_context(monkeypatch) -> None:
+    """A missing named answer fails without reading or clearing a positional queue."""
+    monkeypatch.setattr(builtins, "input", InputInterceptor._patched_input)
+    InputInterceptor.set_queue(["another operation answer"])
+
+    try:
+        with pytest.raises(EOFError, match="No browser answer supplied"):
+            with web_input_context([], context_answers={"known_prompt": "browser answer"}):
+                InputUtils.safe_input("Prompt: ", context="unknown_prompt")
+
+        answer = InputInterceptor._patched_input("Positional prompt: ")
+    finally:
+        InputInterceptor.clear_queue()
+
+    assert answer == "another operation answer"
