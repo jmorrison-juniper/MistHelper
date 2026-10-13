@@ -93,7 +93,7 @@ hooks:
     condition: null
   - extension: companion
     command: speckit.companion.after-specify
-    enabled: true
+    enabled: false
     optional: false
     priority: 10
     prompt: Execute speckit.companion.after-specify?
@@ -118,7 +118,7 @@ hooks:
     condition: null
   - extension: companion
     command: speckit.companion.after-plan
-    enabled: true
+    enabled: false
     optional: false
     priority: 10
     prompt: Execute speckit.companion.after-plan?
@@ -134,7 +134,7 @@ hooks:
     condition: null
   - extension: companion
     command: speckit.companion.after-tasks
-    enabled: true
+    enabled: false
     optional: false
     priority: 10
     prompt: Execute speckit.companion.after-tasks?
@@ -151,7 +151,7 @@ hooks:
     condition: null
   - extension: companion
     command: speckit.companion.after-implement
-    enabled: true
+    enabled: false
     optional: false
     priority: 10
     prompt: Execute speckit.companion.after-implement?
@@ -185,7 +185,7 @@ hooks:
   before_converge:
   - extension: companion
     command: speckit.companion.before-converge
-    enabled: true
+    enabled: false
     optional: false
     priority: 10
     prompt: Execute speckit.companion.before-converge?
@@ -195,7 +195,7 @@ hooks:
   after_converge:
   - extension: companion
     command: speckit.companion.after-converge
-    enabled: true
+    enabled: false
     optional: false
     priority: 10
     prompt: Execute speckit.companion.after-converge?
