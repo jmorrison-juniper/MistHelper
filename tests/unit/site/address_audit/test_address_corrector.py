@@ -5,11 +5,15 @@ filter, the per-site review/confirm loop, the fetch-modify-PUT update, and the
 fail-soft behavior on permission/API errors.
 """
 
-from unittest.mock import MagicMock
+from dataclasses import replace
+from pathlib import Path
+from unittest.mock import MagicMock, Mock
 
 from src.mist.resources.site.address_audit import address_corrector as corr_mod
 from src.mist.resources.site.address_audit.address_corrector import AddressCorrector
 from src.mist.resources.site.address_audit.models import AddressRow, AuditResult, MatchedSite
+from web_portal.menu_registry import build_static_menu_actions
+from web_portal.services.operation import OperationExecutor
 
 
 def _result(issue="MISSING_SUITE", site_id="s1", mist="100 Main St", suggested="100 Main St Suite 5, Town, FL"):
@@ -49,6 +53,30 @@ class TestCorrectable:
         """No push when the suggestion equals the current Mist address (case-insensitive)."""
         same = _result(mist="100 Main St Suite 5, Town, FL", suggested="100 Main St Suite 5, Town, FL")
         assert AddressCorrector(MagicMock()).correctable([same]) == []
+
+
+def test_unconfirmed_site_write_fails_even_if_portal_validation_is_bypassed(monkeypatch, tmp_path: Path) -> None:
+    """The real per-site prompt aborts a worker without a site write or a success result."""
+    monkeypatch.chdir(tmp_path)
+    sites = MagicMock()
+    monkeypatch.setattr(corr_mod.mistapi.api.v1.sites, "sites", sites)
+    corrector = AddressCorrector(None)
+    push = Mock(side_effect=AssertionError("A site write requires per-site confirmation."))
+    monkeypatch.setattr(corrector, "_push", push)
+    menu_actions = build_static_menu_actions()
+    menu_actions["195"] = replace(menu_actions["195"], handler=lambda: corrector.review_and_apply([_result()]))
+    executor = OperationExecutor(menu_actions, None, None, None)
+    run = executor._create_run("195")
+    try:
+        executor._execute_operation(run, {"input_context_answers": {"address_audit_writeback_gate": "y"}})
+    finally:
+        executor.shutdown(0)
+    assert run["status"] == "failed"
+    assert run["error_message"] == "Operation requires interactive input (not available in web portal)"
+    assert not run.get("completion_message")
+    push.assert_not_called()
+    sites.getSiteInfo.assert_not_called()
+    sites.updateSiteInfo.assert_not_called()
 
 
 class TestUpdateSiteAddress:
