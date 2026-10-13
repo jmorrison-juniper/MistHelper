@@ -181,6 +181,7 @@ class WebPortalApp:
     @staticmethod
     def _register_blueprints(app: Flask) -> None:
         """Register all route blueprints with the app."""
+        from src.interfaces.portals.wan_dashboard import wan_dashboard_bp
         from src.mist.realtime.websocket_streams.web.blueprint.registry import (
             WebSocketBlueprint,
         )  # Build the WebSocket routes.
@@ -196,6 +197,7 @@ class WebPortalApp:
         app.register_blueprint(maps_bp)
         app.register_blueprint(WebSocketBlueprint.create())  # Add the WebSocket page and its short API routes.
         app.register_blueprint(settings_bp)
+        app.register_blueprint(wan_dashboard_bp)  # Reuse the shared portal app and its security middleware.
         WebPortalApp._register_webhook_blueprint(app)
 
     @staticmethod

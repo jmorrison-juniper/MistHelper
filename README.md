@@ -18,6 +18,9 @@ such as a firmware upgrade.
 
 The tool holds **303 operations**, numbered 1 to 304 with one gap at 152.
 It also serves a web portal, an upgrade capture portal, and a metrics gateway.
+The web portal includes a read-only WAN Dashboard for gateway status, port
+details, traffic, WAN Insights, and CSV exports. See the
+[Web Portal guide](documentation/wiki/Web-Portal.md) for its workflows.
 Read [the operator guide](documentation/operator-guide.md) for what each part
 does.
 
@@ -249,7 +252,7 @@ the wiki: its page-to-page links work only on the published wiki.
 | [Menu Reference](https://github.com/jmorrison-juniper/MistHelper/wiki/Menu-Reference) | Every actionable menu operation |
 | [Menu API Endpoints](https://github.com/jmorrison-juniper/MistHelper/wiki/Menu-API-Endpoints) | The endpoints behind each menu option |
 | [Container Setup](https://github.com/jmorrison-juniper/MistHelper/wiki/Container-Setup) | Build strategies and local usage |
-| [Web Portal](https://github.com/jmorrison-juniper/MistHelper/wiki/Web-Portal) | Browser operations, live WebSocket streams, device utilities, scoped client suggestions, packet captures, screen views, the interactive remote shell, and cancellation of unsubmitted operations |
+| [Web Portal](https://github.com/jmorrison-juniper/MistHelper/wiki/Web-Portal) | Browser operations, WAN status and traffic, CSV exports, live WebSocket streams, device utilities, packet captures, and the interactive remote shell |
 | [SSH Remote Access](https://github.com/jmorrison-juniper/MistHelper/wiki/SSH-Remote-Access) | SSH server deployment and session management |
 | [Data Model](https://github.com/jmorrison-juniper/MistHelper/wiki/Data-Model) | CSV, SQLite, and polyglot output details |
 | [MSP Support](https://github.com/jmorrison-juniper/MistHelper/wiki/MSP-Support) | Multi-org operations for a managed service provider |

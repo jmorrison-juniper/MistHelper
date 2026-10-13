@@ -64,6 +64,10 @@
                            href="{{ url_for('maps.maps_page') }}" data-testid="nav-maps">Maps</a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link {% if request.path.startswith('/wan-dashboard') %}active{% endif %}"
+                           href="{{ url_for('wan_dashboard.page') }}" data-testid="wan-dashboard-tab">WAN Dashboard</a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link {% if request.path.startswith('/websockets') %}active{% endif %}"
                            href="{{ url_for('websockets.page') }}" data-testid="nav-websockets">WebSockets</a>
                     </li>

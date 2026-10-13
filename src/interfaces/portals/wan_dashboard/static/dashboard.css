@@ -1,0 +1,438 @@
+/* The magenta accent keeps the source dashboard identity inside the portal theme. */
+.wan-dashboard {
+    --wan-accent: #e20074;
+    --wan-accent-soft: color-mix(in srgb, var(--wan-accent) 13%, transparent);
+    padding: 1rem 0 2rem;
+}
+
+.wan-header,
+.wan-panel-heading,
+.wan-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.wan-header {
+    margin-bottom: 1rem;
+}
+
+.wan-header h1,
+.wan-modal h2 {
+    margin: 0;
+}
+
+.wan-eyebrow {
+    color: var(--wan-accent);
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    margin: 0 0 0.25rem;
+    text-transform: uppercase;
+}
+
+.wan-description,
+.wan-panel-heading p,
+.wan-muted {
+    color: var(--bs-secondary-color);
+    margin: 0.4rem 0 0;
+}
+
+.wan-header-actions,
+.wan-filters {
+    align-items: end;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.65rem;
+}
+
+.wan-summary-grid {
+    display: grid;
+    gap: 0.75rem;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    margin: 1rem 0;
+}
+
+.wan-summary-card,
+.wan-panel,
+.wan-modal-card {
+    background: var(--bs-body-bg);
+    border: 1px solid var(--bs-border-color);
+    border-radius: 0.75rem;
+    box-shadow: 0 0.35rem 1.2rem rgb(0 0 0 / 10%);
+}
+
+.wan-summary-card {
+    display: grid;
+    gap: 0.4rem;
+    padding: 0.9rem 1rem;
+}
+
+.wan-summary-card strong {
+    color: var(--wan-accent);
+    font-size: 1.6rem;
+}
+
+.wan-summary-note {
+    background: var(--bs-info-bg-subtle);
+    border: 1px solid var(--bs-info-border-subtle);
+    border-radius: 0.35rem;
+    color: var(--bs-info-text-emphasis);
+    font-size: 0.85rem;
+    margin: 0 0 1rem;
+    padding: 0.6rem 0.8rem;
+}
+
+.wan-summary-label {
+    color: var(--bs-secondary-color);
+    font-size: 0.82rem;
+}
+
+.wan-panel {
+    overflow: hidden;
+    padding: 1rem;
+}
+
+.wan-panel-heading {
+    margin-bottom: 1rem;
+}
+
+.wan-panel-heading h2 {
+    font-size: 1.2rem;
+    margin: 0;
+}
+
+.wan-filters label,
+.wan-modal-card > label {
+    font-size: 0.8rem;
+    font-weight: 650;
+}
+
+.wan-filters select {
+    min-width: 10rem;
+}
+
+.wan-filters input {
+    min-width: 15rem;
+}
+
+.wan-table {
+    margin: 0;
+    vertical-align: middle;
+}
+
+.wan-table thead th {
+    border-bottom: 2px solid var(--wan-accent);
+    white-space: nowrap;
+}
+
+.wan-table tbody tr[data-testid="wan-gateway-row"] {
+    cursor: pointer;
+}
+
+.wan-table tbody tr[data-testid="wan-gateway-row"]:hover,
+.wan-table tbody tr.is-expanded {
+    background: var(--wan-accent-soft);
+}
+
+.wan-status {
+    background: var(--wan-accent-soft);
+    border-radius: 0.25rem;
+    margin: 0.75rem 0;
+    padding: 0.65rem 0.85rem;
+}
+
+.wan-status[data-state="error"],
+.wan-status[data-state="rate_limited"],
+.wan-status[data-state="partial"],
+.wan-status[data-state="stale"] {
+    background: var(--bs-warning-bg-subtle);
+}
+
+.wan-status[data-state="empty"] {
+    background: var(--bs-secondary-bg);
+}
+
+.wan-details-row td {
+    background: var(--bs-secondary-bg);
+    padding: 1rem;
+}
+
+.wan-details-grid {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: minmax(0, 2fr) minmax(14rem, 1fr);
+}
+
+.wan-details-grid h3 {
+    font-size: 1rem;
+    margin: 0 0 0.65rem;
+}
+
+.wan-port-list,
+.wan-peer-list {
+    display: grid;
+    gap: 0.55rem;
+}
+
+.wan-port-table {
+    min-width: 78rem;
+    vertical-align: middle;
+}
+
+.wan-port-table th {
+    white-space: nowrap;
+}
+
+.wan-traffic-value {
+    white-space: nowrap;
+}
+
+.wan-port-card,
+.wan-peer-card {
+    background: var(--bs-body-bg);
+    border: 1px solid var(--bs-border-color);
+    border-radius: 0.5rem;
+    padding: 0.75rem;
+}
+
+.wan-port-card header,
+.wan-peer-card header {
+    align-items: center;
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.wan-port-metrics {
+    color: var(--bs-secondary-color);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1rem;
+    margin: 0.5rem 0;
+}
+
+.wan-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+}
+
+.wan-chart {
+    min-height: 18rem;
+    overflow: hidden;
+    padding: 1rem 0;
+}
+
+.wan-modal-card > h3 {
+    font-size: 1rem;
+    margin: 1rem 0 0;
+}
+
+.wan-chart svg {
+    height: 18rem;
+    width: 100%;
+}
+
+.wan-chart .rx-line {
+    fill: none;
+    stroke: var(--wan-accent);
+    stroke-width: 3;
+}
+
+.wan-chart .tx-line {
+    fill: none;
+    stroke: #54a8ff;
+    stroke-width: 3;
+}
+
+.wan-chart .peak-rx-line {
+    fill: none;
+    stroke: #d98900;
+    stroke-dasharray: 6 4;
+    stroke-width: 2;
+}
+
+.wan-chart .peak-tx-line {
+    fill: none;
+    stroke: #7a54cf;
+    stroke-dasharray: 6 4;
+    stroke-width: 2;
+}
+
+.wan-chart .jitter-line {
+    fill: none;
+    stroke: #d98900;
+    stroke-width: 2;
+}
+
+.wan-chart .latency-line {
+    fill: none;
+    stroke: #54a8ff;
+    stroke-width: 2;
+}
+
+.wan-chart .loss-line {
+    fill: none;
+    stroke: #c34040;
+    stroke-width: 2;
+}
+
+.wan-chart .chart-grid {
+    stroke: var(--bs-border-color);
+    stroke-dasharray: 4 5;
+}
+
+.wan-chart-legend {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+}
+
+.wan-chart-legend span:first-child {
+    color: var(--wan-accent);
+}
+
+.wan-chart-legend span:last-child {
+    color: #54a8ff;
+}
+
+.wan-chart-legend .peak-rx-line {
+    color: #d98900;
+}
+
+.wan-chart-legend .peak-tx-line {
+    color: #7a54cf;
+}
+
+.wan-chart-legend .jitter-line {
+    color: #d98900;
+}
+
+.wan-chart-legend .latency-line {
+    color: #54a8ff;
+}
+
+.wan-chart-legend .loss-line {
+    color: #c34040;
+}
+
+.wan-insights-charts {
+    grid-column: 1 / -1;
+}
+
+.wan-insights-charts section {
+    border: 1px solid var(--bs-border-color);
+    border-radius: 0.5rem;
+    margin: 0.75rem 0;
+    padding: 0.75rem;
+}
+
+.wan-insights-charts h3 {
+    font-size: 1rem;
+    margin: 0;
+}
+
+.wan-peer-content {
+    overflow-x: auto;
+}
+
+.wan-peer-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.wan-peer-summary span {
+    background: var(--bs-secondary-bg);
+    border-radius: 1rem;
+    padding: 0.35rem 0.7rem;
+}
+
+.wan-peer-table {
+    min-width: 66rem;
+    vertical-align: middle;
+}
+
+.wan-modal {
+    background: rgb(0 0 0 / 72%);
+    inset: 0;
+    overflow-y: auto;
+    padding: 1rem;
+    position: fixed;
+    z-index: 1080;
+}
+
+.wan-modal-card {
+    margin: 5vh auto;
+    max-width: 70rem;
+    padding: 1.25rem;
+}
+
+.wan-modal-header {
+    border-bottom: 1px solid var(--bs-border-color);
+    margin-bottom: 1rem;
+    padding-bottom: 0.8rem;
+}
+
+.wan-modal-card select {
+    margin: 0.35rem 0 1rem;
+    max-width: 12rem;
+}
+
+.wan-insights-content {
+    display: grid;
+    gap: 0.65rem;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    margin-bottom: 1rem;
+}
+
+.wan-insight-metric {
+    border: 1px solid var(--bs-border-color);
+    border-radius: 0.5rem;
+    padding: 0.75rem;
+}
+
+.wan-insight-metric strong {
+    color: var(--wan-accent);
+    display: block;
+    font-size: 1.2rem;
+    margin-top: 0.25rem;
+}
+
+.wan-empty {
+    color: var(--bs-secondary-color);
+    padding: 1rem;
+    text-align: center;
+}
+
+.wan-attribution {
+    color: var(--bs-secondary-color);
+    font-size: 0.75rem;
+    margin-top: 1rem;
+}
+
+@media (max-width: 760px) {
+    .wan-header,
+    .wan-panel-heading {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .wan-header-actions,
+    .wan-filters {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .wan-summary-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .wan-details-grid,
+    .wan-insights-content {
+        grid-template-columns: 1fr;
+    }
+}

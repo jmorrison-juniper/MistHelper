@@ -28,9 +28,26 @@ answering.
 - **Data Browser**: Browse, preview, search, and download the CSV and SQLite output files.
 - **Operations**: Run the operations whose registry category is `safe` or `interactive_safe`.
 - **Map Viewer**: View a floor plan in an interactive Plotly.js viewer with device markers.
+- **WAN Dashboard**: Review authorized gateway health, inspect WAN ports and VPN peer paths, view traffic and WAN Insights, and export CSV data.
 - **WebSockets**: Open a live Mist API stream, run a device utility, or use a terminal session. See [WebSockets Tab](#websockets-tab).
 - **Themes**: Brand Magenta, Dark, Light, and High Contrast themes with instant switching (persisted in localStorage). Brand Magenta is the default and matches the upgrade capture portal.
 - **Branding**: Customize the title, the logo, and the accent color with environment variables.
+
+## WAN Dashboard
+
+Open the WAN Dashboard at `/wan-dashboard`. It uses the active Mist session and
+the existing organization. It runs inside the current web portal and uses the
+shared Redis cache. It adds no database, Redis service, web server, or port.
+
+Use the site filter or search field to narrow the gateway table. Select
+**Details** to view WAN port settings, live counters, and VPN peer paths. Select
+a traffic range to view a port chart. Select a WAN Insights range to view
+bandwidth, link health, and Application Health values.
+
+Use **Export gateways** to download the filtered table. Use **Export hourly port
+metrics** to download the selected port metrics. The exports neutralize
+spreadsheet formulas. The page credits and follows the CC BY-NC-SA 4.0 license
+of [MistCircuitStats](https://github.com/jmorrison-juniper/MistCircuitStats).
 
 ## WebSockets Tab
 
@@ -239,6 +256,13 @@ sessions. This repairs two defects in the Mist software kit path.
 | `/data` | GET | Data browser page |
 | `/operations` | GET | Operations page |
 | `/maps` | GET | Map viewer page |
+| `/wan-dashboard` | GET | WAN Dashboard page |
+| `/wan-dashboard/api/overview` | GET | Read the authorized, filterable gateway overview |
+| `/wan-dashboard/api/gateways/<gateway_id>/ports` | GET | Read one authorized gateway's WAN port details and peer paths |
+| `/wan-dashboard/api/gateways/<gateway_id>/ports/<port_id>/traffic` | GET | Read traffic samples for a supported range |
+| `/wan-dashboard/api/gateways/<gateway_id>/ports/<port_id>/insights` | GET | Read WAN Insights for a supported range |
+| `/wan-dashboard/api/gateways/export` | GET | Download the selected gateway rows as CSV |
+| `/wan-dashboard/api/gateways/<gateway_id>/ports/<port_id>/hourly/export` | GET | Download the hourly port metrics as CSV |
 | `/health` | GET | Liveness probe. Reports that the process runs. Reads no disk. |
 | `/ready` | GET | Readiness probe. Tests the data directory, the database, and the Mist session. Returns code 503 and names each failed check. |
 | `/api/data/files` | GET | List data files |
