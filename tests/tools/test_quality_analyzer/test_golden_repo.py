@@ -1,6 +1,6 @@
 """Golden regression test (T043).
 
-Runs the analyzer CLI against the real repository (`src/` + `tests/`) and
+Runs the analyzer CLI against the real repository anchor files and
 asserts the SC-002 golden anchors are present in the generated report:
 
     * At least one test file under ``tests/`` is skipped with reason
@@ -28,10 +28,9 @@ The CLI is invoked programmatically via ``main(argv)`` (imported from
 ``tmp_path`` subdirectory so the test never touches the committed
 analyzer output artefacts.
 
-The ``pyproject.toml`` markers list currently has only ``integration`` --
-no ``slow`` marker is registered -- so this test is left unmarked but
-constrained to complete in well under 30s (a full-repo scan on a warm
-disk takes single-digit seconds).
+The scan includes only the real files that supply the golden assertions.
+The CI test-quality gate still scans the full repository.
+Issue #4163 records full-corpus scans that exceeded the test timeout.
 """
 
 from __future__ import annotations  # Postponed annotations for cleaner typing.
@@ -67,11 +66,13 @@ def _run_cli_over_repo(
     # Output paths under tmp_path so we never touch committed output artefacts.
     report_path = tmp_path / "report.json"  # JSON report artefact -- hermetic path.
     summary_path = tmp_path / "summary.md"  # Markdown summary artefact -- hermetic path.
-    # Compose argv per contracts/cli.md: scan `src` + `tests`, disable baseline.
+    scan_roots = [anchor_path for anchor_path, _ in _GOLDEN_WEAK_ANCHORS]
+    scan_roots.append(_GOLDEN_SKIPPED_FILE)
+    assert all((repo_root / root).is_file() for root in scan_roots)
+    # Scan the real anchors without repeating the full CI gate.
     argv = [  # Ordered list of flag/value pairs forwarded to argparse.
         "--roots",
-        "src",
-        "tests",  # SC-002 anchors live under both roots.
+        *scan_roots,
         "--config",
         str(repo_root / ".github" / "test-quality-config.toml"),  # MistHelper rules (issue #3466).
         "--report",
@@ -92,7 +93,11 @@ def _run_cli_over_repo(
     assert report_path.exists(), "Report file was not written: %s" % report_path
     assert summary_path.exists(), "Summary file was not written: %s" % summary_path
     # Parse the JSON report so downstream assertions can inspect findings + skipped_files.
-    return json.loads(report_path.read_text(encoding="utf-8"))  # Report envelope dict.
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["scanned_roots"] == scan_roots
+    assert report["parse_errors"] == []
+    assert len(report["analyzed_files"]) == len(_GOLDEN_WEAK_ANCHORS)
+    return report
 
 
 def test_golden_skipped_files_include_api_data_fetcher(
@@ -101,7 +106,7 @@ def test_golden_skipped_files_include_api_data_fetcher(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """`src/mist/access/api/api_data_fetcher.py` must be present in skipped_files w/ mist_api_excluded."""
-    # Run the CLI once against the full repo tree.
+    # Run the CLI against the real anchor files.
     report = _run_cli_over_repo(repo_root, tmp_path, monkeypatch)  # Report envelope.
     # Build a lookup from file_path -> reason for the skipped_files block.
     skipped_index = {  # Dict comprehension over report['skipped_files'].
@@ -126,7 +131,7 @@ def test_golden_weak_assertion_anchors_present(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Each remaining weak-assertion anchor file must contain at least one weak_assertion finding."""
-    # Run the CLI once against the full repo tree.
+    # Run the CLI against the real anchor files.
     report = _run_cli_over_repo(repo_root, tmp_path, monkeypatch)  # Report envelope.
     # Extract the ordered findings list; default to empty for defensive coding.
     findings = report.get("findings", [])  # Empty list if key missing.
