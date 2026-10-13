@@ -34,6 +34,41 @@
         <p>No synthetic circuit measurement is available.</p>
         {% endif %}
     </section>
+    <section class="mt-4" data-testid="wan-calendar-summaries">
+        <h2>Synthetic calendar summaries</h2>
+        <p>UTC intervals exclude the end boundary. Observed hours count records, not a duration-coverage estimate.
+           Missing hours do not count as healthy hours.</p>
+        <p>Daily means use available hourly values. Equal daily weights apply to weekly and monthly means.
+           These summaries do not establish availability, congestion duration, or percentiles.</p>
+        <div class="table-responsive">
+            <table class="table table-sm portal-table">
+                <caption>Synthetic circuit summaries with explicit missing hours</caption>
+                <thead>
+                    <tr><th scope="col">Period</th><th scope="col">UTC start</th><th scope="col">UTC end</th>
+                        <th scope="col">Observed hours</th><th scope="col">Metric</th>
+                        <th scope="col">Mean</th><th scope="col">Maximum</th><th scope="col">Unit</th></tr>
+                </thead>
+                <tbody>
+                    {% for summary in calendar_summaries %}
+                    {% for name, values in summary.metrics.items() %}
+                    <tr>
+                        <th scope="row">{{ summary.period.kind }}</th>
+                        <td>{{ summary.period.start.isoformat() }}</td>
+                        <td>{{ summary.period.end.isoformat() }}</td>
+                        <td>{{ summary.observed_hours }} of {{ summary.period.expected_hours }}</td>
+                        <td>{{ name.replace("_", " ") }}</td>
+                        <td>{{ values[0] if values[0] is not none else "No observations" }}</td>
+                        <td>{{ values[1] if values[1] is not none else "No observations" }}</td>
+                        <td>{{ values[2].replace("_", " ") }}</td>
+                    </tr>
+                    {% endfor %}
+                    {% else %}
+                    <tr><td colspan="8">No synthetic circuit history is available.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
     <p><a data-testid="wan-back-link"
           href="{{ url_for('wan_performance.gateway', gateway_id=dashboard.circuit.gateway.gateway_id, site_id=dashboard.circuit.gateway.site.site_id) }}">Back to gateway</a></p>
 </section>
