@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}WAN Port Preview - {{ config.PORTAL.title }}{% endblock %}
+
+{% block content %}
+<section class="container-fluid" data-testid="wan-port">
+    {% include "wan_performance/_data_state.html" %}
+    <h1>WAN port {{ dashboard.circuit.port_name }}</h1>
+    <p>Gateway {{ dashboard.circuit.gateway.gateway_id }}</p>
+    <p>Site {{ dashboard.circuit.gateway.site.site_id }}</p>
+
+    <section class="row g-3" aria-label="Circuit measurements">
+        {% for metric_name, label in [("utilization", "Utilization"), ("receive_bandwidth", "Receive bandwidth"), ("transmit_bandwidth", "Transmit bandwidth")] %}
+        <div class="col-sm-6 col-xl-4">
+            <article class="portal-card" data-testid="wan-{{ metric_name }}">
+                <h2 class="h6">{{ label }}</h2>
+                {% if circuit_measurement and metric_name in circuit_measurement.metrics %}
+                <p>
+                    {{ circuit_measurement.metrics[metric_name].value }}
+                    {{ circuit_measurement.metrics[metric_name].unit.replace("_", " ") }}
+                </p>
+                {% else %}
+                <p>Not established in offline data</p>
+                {% endif %}
+            </article>
+        </div>
+        {% endfor %}
+    </section>
+
+    <section class="mt-4" data-testid="wan-history">
+        <h2>Example measurement hour</h2>
+        {% if circuit_measurement %}
+        <p>{{ circuit_measurement.hour_start_utc.isoformat() }}</p>
+        {% else %}
+        <p>No synthetic circuit measurement is available.</p>
+        {% endif %}
+    </section>
+    <p><a data-testid="wan-back-link"
+          href="{{ url_for('wan_performance.gateway', gateway_id=dashboard.circuit.gateway.gateway_id, site_id=dashboard.circuit.gateway.site.site_id) }}">Back to gateway</a></p>
+</section>
+{% endblock %}

@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}VPN Peer Preview - {{ config.PORTAL.title }}{% endblock %}
+
+{% block content %}
+<section class="container-fluid" data-testid="wan-peer">
+    {% include "wan_performance/_data_state.html" %}
+    <h1>VPN peer {{ dashboard.peer_path.peer_mac }}</h1>
+    <p>Site {{ dashboard.peer_path.gateway.site.site_id }}</p>
+    <p>Gateway {{ dashboard.peer_path.gateway.gateway_id }}</p>
+
+    <section class="row g-3" aria-label="Peer quality measurements">
+        {% for metric_name, label in [("packet_loss", "Packet loss"), ("latency", "Latency"), ("jitter", "Jitter")] %}
+        <div class="col-sm-6 col-xl-4">
+            <article class="portal-card" data-testid="wan-{{ metric_name }}">
+                <h2 class="h6">{{ label }}</h2>
+                {% if peer_measurement and metric_name in peer_measurement.metrics %}
+                <p>
+                    {{ peer_measurement.metrics[metric_name].value }}
+                    {{ peer_measurement.metrics[metric_name].unit }}
+                </p>
+                {% else %}
+                <p>Not established in offline data</p>
+                {% endif %}
+            </article>
+        </div>
+        {% endfor %}
+    </section>
+
+    <section class="mt-4" data-testid="wan-tunnel-table">
+        <h2>Tunnel identity</h2>
+        <p>{{ dashboard.peer_path.tunnel_identity }}</p>
+    </section>
+    <p><a data-testid="wan-back-link"
+          href="{{ url_for('wan_performance.gateway', gateway_id=dashboard.peer_path.gateway.gateway_id, site_id=dashboard.peer_path.gateway.site.site_id) }}">Back to gateway</a></p>
+</section>
+{% endblock %}
