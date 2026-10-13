@@ -58,7 +58,7 @@
 
 - [x] T007 [P] Update the build instructions in `documentation/container-deployment.md` and `documentation/wiki/Container-Setup.md` to use the guarded helper.
 - [x] T008 [P] Add the issue release note in `changelog.d/issue-4164-compose-stale-build.md`.
-- [ ] T009 Run the focused contract tests, Ruff, Black, markdown checks, and the applicable test-quality gate. Record each result in the pull request body.
+- [x] T009 Run the focused contract tests, Ruff, Black, markdown checks, and the applicable test-quality gate. Record each result in the pull request body.
 
 ## Dependencies and Execution Order
 
