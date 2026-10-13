@@ -10,6 +10,7 @@ import pytest  # Type pytest fixtures used by repository guard tests.
 from misthelper_devtools.guard_proof_audit import (
     GuardProofAuditor,  # Exercise the same auditor used by the command line.
 )
+from misthelper_devtools.test_quality_analyzer.__main__ import main as analyzer_main
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]  # Point the audit at the checked out repository.
 
@@ -129,6 +130,29 @@ class TestRepositoryGuardProofAudit:
         """The analyzer report must emit one scope metric for each registered detector."""
         monkeypatch.chdir(REPOSITORY_ROOT)  # Make analyzer relative paths match command-line audit behavior.
         report_path = tmp_path / "analyzer-report.json"  # Keep generated proof outside tracked files.
+        scan_roots = (
+            "tests/guardrails/test_git_environment_repair.py",
+            "tests/unit/juniper_docs",
+            "tests/integration/test_compose_deploy.py",
+        )
+        assert all((REPOSITORY_ROOT / root).exists() for root in scan_roots)
+        exit_code = analyzer_main(
+            [
+                "--roots",
+                *scan_roots,
+                "--config",
+                str(REPOSITORY_ROOT / ".github" / "test-quality-config.toml"),
+                "--baseline",
+                "",
+                "--report",
+                str(report_path),
+                "--summary",
+                str(tmp_path / "analyzer-summary.md"),
+                "--log-level",
+                "WARNING",
+            ]
+        )
+        assert exit_code == 0
         auditor = GuardProofAuditor(REPOSITORY_ROOT, analyzer_report=report_path)  # Use the real audit generator.
         report = auditor.audit_sources({})  # Generate and audit the analyzer scope report.
         payload = json.loads(report_path.read_text(encoding="utf-8"))  # Read the generated report for metric names.
@@ -137,6 +161,8 @@ class TestRepositoryGuardProofAudit:
         messages = [f"{finding.path}: {finding.reason}" for finding in report.active_findings]  # Build failures.
         assert report.checked_analyzer_rules == len(detector_modules)  # The audit must measure every detector.
         assert len(metric_keys) == len(detector_modules)  # The report must hold one metric per detector.
+        assert payload["scanned_roots"] == list(scan_roots)
+        assert payload["parse_errors"] == []
         assert not messages, "\n".join(messages)  # No registered detector may inspect zero modules.
 
     def test_sdk_compatibility_gap_no_longer_stays_visible(self) -> None:
