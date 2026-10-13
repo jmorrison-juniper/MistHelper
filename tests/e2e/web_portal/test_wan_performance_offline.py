@@ -4,10 +4,9 @@ import logging
 from dataclasses import replace
 
 import pytest
-from flask import Flask
 from flask.testing import FlaskClient
 
-from tests.fixtures.wan_performance.offline_dashboard import OfflineDashboardFactory
+from src.interfaces.portals.wan_performance.presentation.offline_preview import OfflinePreviewFactory
 
 logger = logging.getLogger(__name__)  # Keep route test records on the module logger.
 SITE_ID = "11111111-1111-1111-1111-111111111111"
@@ -17,14 +16,21 @@ GATEWAY_ID = "aabbccddeeff"
 @pytest.fixture
 def preview_client(
     client: FlaskClient,
-    flask_app: Flask,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> FlaskClient:
-    """Inject the offline fixture without starting a service client."""
-    logger.info("Installing the synthetic WAN provider for one portal test")
-    monkeypatch.setitem(flask_app.config, "WAN_PERFORMANCE_PREVIEW_FACTORY", OfflineDashboardFactory.build)
-    logger.debug("Installed the isolated synthetic WAN provider")
+    """Return the portal client for its labeled offline preview."""
     return client
+
+
+def test_portal_navigation_links_to_the_labeled_wan_preview(client: FlaskClient) -> None:
+    """Expose the synthetic preview through the existing portal navigation."""
+    logger.info("Loading the existing portal dashboard to inspect navigation")
+    response = client.get("/")
+    page = response.get_data(as_text=True)
+    assert response.status_code == 200, f"The portal dashboard returned {response.status_code}."
+    assert 'data-testid="nav-wan-performance"' in page, "The portal navigation omitted WAN Performance."
+    assert 'href="/wan-performance/"' in page, "The portal navigation does not open the preview."
+    assert "WAN Performance Preview" in page, "The navigation does not identify the offline preview."
+    logger.debug("The portal navigation exposed the synthetic WAN preview")
 
 
 @pytest.mark.parametrize(
@@ -74,6 +80,27 @@ def test_overview_shows_verified_fixture_values_and_marks_unknown_metrics(
         f'href="/wan-performance/gateway/{GATEWAY_ID}?site_id={SITE_ID}"' in page
     ), "The overview omitted the gateway detail link."
     logger.debug("The synthetic WAN overview exposed only verified fixture values")
+
+
+def test_detail_pages_link_across_the_gateway_port_peer_journeys(
+    preview_client: FlaskClient,
+) -> None:
+    """Keep gateway, port, peer, and overview navigation connected."""
+    logger.info("Checking the offline WAN detail navigation")
+    gateway_response = preview_client.get(f"/wan-performance/gateway/{GATEWAY_ID}?site_id={SITE_ID}")
+    gateway_page = gateway_response.get_data(as_text=True)
+    assert 'data-testid="wan-port-link"' in gateway_page, "The gateway page omitted its port link."
+    assert 'data-testid="wan-peer-link"' in gateway_page, "The gateway page omitted its peer link."
+    assert 'data-testid="wan-back-link"' in gateway_page, "The gateway page omitted its overview link."
+    port_response = preview_client.get(f"/wan-performance/port/{SITE_ID}/ge-0%2F0%2F1?gateway_id={GATEWAY_ID}")
+    assert 'data-testid="wan-back-link"' in port_response.get_data(
+        as_text=True
+    ), "The port page omitted its gateway link."
+    peer_response = preview_client.get(f"/wan-performance/vpn/{SITE_ID}/11%3A22%3A33%3A44%3A55%3A66")
+    assert 'data-testid="wan-back-link"' in peer_response.get_data(
+        as_text=True
+    ), "The peer page omitted its gateway link."
+    logger.debug("Gateway, port, peer, and overview navigation is connected")
 
 
 def test_port_route_preserves_an_encoded_slash_and_bandwidth_units(
@@ -139,66 +166,62 @@ def test_routes_keep_the_existing_portal_allowlist(preview_client: FlaskClient) 
     logger.debug("The public address received %d", response.status_code)
 
 
-def test_missing_provider_returns_unavailable_instead_of_live_fallback(
+def test_offline_preview_is_available_without_a_live_provider(
     client: FlaskClient,
 ) -> None:
-    """Do not make an API call or return synthetic data without an explicit provider."""
-    logger.info("Requesting WAN Performance without an installed data provider")
+    """Serve labeled synthetic values without a live data provider."""
+    logger.info("Requesting the WAN preview without a live data provider")
     response = client.get("/wan-performance/")
-    assert response.status_code == 503, f"The unavailable route returned {response.status_code}."
-    assert (
-        "data provider" in response.get_data(as_text=True).lower()
-    ), "The unavailable response did not name the missing provider."
-    logger.debug("The WAN route reported unavailable data with %d", response.status_code)
+    page = response.get_data(as_text=True)
+    assert response.status_code == 200, f"The offline preview returned {response.status_code}."
+    assert "Synthetic offline preview" in page, "The preview did not identify its synthetic values."
+    assert "Live data is not connected" in page, "The preview did not distinguish live data."
+    logger.debug("The WAN preview returned synthetic values with status %d", response.status_code)
 
 
-def test_synthetic_provider_stays_disabled_outside_test_mode(
+def test_offline_preview_is_labeled_when_test_mode_is_disabled(
     preview_client: FlaskClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Prevent a configured test fixture from serving a live portal request."""
-    logger.info("Disabling test mode while the synthetic provider remains configured")
+    """Keep synthetic preview values separate from live data outside test mode."""
+    logger.info("Disabling test mode while the offline preview remains available")
     monkeypatch.setitem(preview_client.application.config, "TESTING", False)
     response = preview_client.get("/wan-performance/")
-    assert response.status_code == 503, "The live portal served a synthetic test fixture."
-    assert (
-        "data provider" in response.get_data(as_text=True).lower()
-    ), "The live portal did not report its unavailable provider."
-    logger.debug("The live-mode request returned %d", response.status_code)
+    page = response.get_data(as_text=True)
+    assert response.status_code == 200, "The offline preview is unavailable outside test mode."
+    assert "Synthetic offline preview" in page, "The page did not label synthetic values."
+    assert "Live data is not connected" in page, "The page did not distinguish live data."
+    logger.debug("The offline preview returned %d outside test mode", response.status_code)
 
 
-def test_preview_rejects_a_provider_with_an_unknown_shape(
+def test_preview_rejects_a_factory_with_an_unknown_shape(
     client: FlaskClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Reject an injected provider that does not match the offline contract."""
-    logger.info("Installing a provider with an unsupported return value")
-    monkeypatch.setitem(client.application.config, "WAN_PERFORMANCE_PREVIEW_FACTORY", lambda: object())
+    """Reject a preview factory result that does not match the offline contract."""
+    logger.info("Installing a preview factory with an unsupported return value")
+    monkeypatch.setattr(OfflinePreviewFactory, "build", staticmethod(lambda: object()))
     response = client.get("/wan-performance/")
     assert response.status_code == 500, "The route accepted an unsupported provider result."
     assert (
         "invalid shape" in response.get_data(as_text=True).lower()
     ), "The route did not report the unsupported provider shape."
-    logger.debug("The unsupported provider returned %d", response.status_code)
+    logger.debug("The unsupported preview factory returned %d", response.status_code)
 
 
-def test_preview_rejects_any_live_record_from_the_fixture_provider(
+def test_preview_rejects_any_live_record_from_the_preview_factory(
     client: FlaskClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Keep a live measurement out of the synthetic preview."""
-    logger.info("Building a provider result with one live measurement")
-    dashboard = OfflineDashboardFactory.build()
+    logger.info("Building a preview result with one live measurement")
+    dashboard = OfflinePreviewFactory.build()
     live_measurement = replace(dashboard.measurements[0], provenance="live")
     mixed_dashboard = replace(
         dashboard,
         measurements=(live_measurement, *dashboard.measurements[1:]),
     )
-    monkeypatch.setitem(
-        client.application.config,
-        "WAN_PERFORMANCE_PREVIEW_FACTORY",
-        lambda: mixed_dashboard,
-    )
+    monkeypatch.setattr(OfflinePreviewFactory, "build", staticmethod(lambda: mixed_dashboard))
     response = client.get("/wan-performance/")
     assert response.status_code == 500, "The preview displayed a live measurement."
     assert (
