@@ -85,6 +85,20 @@ def test_selected_pages_use_exact_sdk_filters(site_id, mac):
     assert admission.check.call_count == 2
 
 
+@pytest.mark.parametrize(
+    "count,metadata,partial",
+    [(99, {}, False), (100, {}, True), (100, {"total": 100}, False), (100, {"total": 101}, True)],
+)
+def test_full_page_without_completeness_evidence_is_partial(count, metadata, partial):
+    """Never label a capped page complete when the server supplies no total."""
+    rows = [{"port_id": str(index)} for index in range(count)]
+    returned, actual_partial = SnapshotClient._page(
+        SimpleNamespace(status_code=200, data={"results": rows, **metadata})
+    )
+    assert returned == rows
+    assert actual_partial is partial
+
+
 @pytest.mark.parametrize("field", ["site_id", "mac"])
 def test_selected_pages_refuse_mismatched_returned_identity(field):
     """Stop before insight collection when a filtered page returns another gateway or site."""

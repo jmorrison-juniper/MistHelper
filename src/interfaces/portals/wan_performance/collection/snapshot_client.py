@@ -93,7 +93,9 @@ class SnapshotClient(SnapshotSession):
         if not isinstance(data, dict) or not isinstance(data.get("results"), list):
             raise ValueError("WAN snapshot results must be an array.")
         rows = SnapshotClient._rows(data["results"])
-        total = data.get("total", len(rows))
+        total = data.get("total")
+        if total is None:
+            return rows, len(rows) == 100 or bool(data.get("next"))
         if isinstance(total, bool) or not isinstance(total, int) or total < 0:
             raise ValueError("WAN snapshot total must be a non-negative integer.")
         return rows, bool(data.get("next")) or total > len(rows)
