@@ -102,5 +102,9 @@ The repair separates terminal preparation failure, uncertain application failure
 Three browser cases prove these distinctions without cloud writes.
 
 Actual restoration preparation also reported a current ownership mismatch before schema projection.
-This second blocker requires a safe equality diagnostic.
-Do not classify actual restoration as blocked only by schema until that diagnostic completes.
+The safe equality diagnostic confirmed that organization `org_id` matches.
+Organization settings `id` and `site_id` hold unrelated metadata and do not identify the organization.
+The corrected organization guard validates `org_id`.
+Site guards still validate both `org_id` and `site_id`, with unchanged membership checks.
+Distinct organization metadata and wrong site ownership have regression coverage.
+Actual schema acceptance remains blocked.

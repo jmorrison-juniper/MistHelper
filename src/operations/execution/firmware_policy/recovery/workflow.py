@@ -173,7 +173,9 @@ class RestoreWorkflow:
         if owner not in membership or (record["scope"] == "site" and record["id"] not in membership[owner]):
             raise PolicyError("Select the saved organization and only its current member sites.")
         original = self.api.read(record["scope"], record["id"])
-        if original.get("org_id", owner) != owner or original.get("site_id", record["id"]) != record["id"]:
+        if original.get("org_id", owner) != owner or (
+            record["scope"] == "site" and original.get("site_id", record["id"]) != record["id"]
+        ):  # Organization settings can carry unrelated site metadata, while site ownership must match both fields.
             raise PolicyError("The current settings ownership does not match the selected backup.")
         body, excluded = self.schema.body(record["scope"], record["settings"], original)
         return RestoreTarget(record["scope"], record["id"], owner, original, body), excluded

@@ -199,8 +199,11 @@ Ruff, Black, JavaScript syntax, Bandit, and complexity checks passed for the rep
 Actual restoration preparation also failed an ownership check before projection.
 A safe admitted-read diagnostic is available for the parent.
 It reports only field presence, type, and equality, without identifiers or settings values.
-The organization-record `site_id` comparison is a suspected scope assumption, not a confirmed actual-source cause.
-Actual diagnostic evidence remains required before any ownership repair.
+The parent diagnostic confirmed that organization `org_id` matches the selected owner.
+Its `id` and `site_id` are unrelated metadata, not organization identity fields.
+The repaired organization guard checks `org_id`, while site guards still check `org_id` and `site_id`.
+Saved ownership, current membership, freshness, and readback checks remain unchanged.
+The focused domain run passed 59 tests, including wrong organization and site identity rejection.
 
 ## Next actions
 

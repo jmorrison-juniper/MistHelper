@@ -199,3 +199,54 @@ def test_unrestorable_recovery_settings_prevent_readiness_and_every_write(
     assert session.writes == []
     assert not any(event["phase"] == "backup_verified" for event in events)
     assert not (tmp_path / ".firmware-policy-backups").exists()
+
+
+def test_org_metadata_ids_distinct_from_owner_do_not_fail_current_ownership(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Organization ownership uses org_id, not unrelated id or site_id metadata."""
+    session = RestoreSession(tmp_path)
+    original = session.settings[f"/api/v1/orgs/{ORG_ID}/setting"]
+    original.update({"id": SITE_ID, "site_id": SITE_ID})
+    workflow = session.workflow()
+    bundle = workflow.files.read(session.path.stem)
+    record = next(record for record in bundle.records if record["scope"] == "org")
+    projected: list[str] = []
+
+    def body(scope: str, saved: dict[str, Any], current: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
+        """Isolate ownership from separately enforced writable schema acceptance."""
+        projected.append(scope)
+        assert current == original
+        return {}, []
+
+    monkeypatch.setattr(workflow.schema, "body", body)
+    target, excluded = workflow._target(bundle, record, {ORG_ID: {SITE_ID}})
+    assert target.organization == ORG_ID
+    assert projected == ["org"]
+    assert excluded == []
+    assert session.writes == []
+
+
+@pytest.mark.parametrize("field", ["org_id", "site_id"])
+def test_site_wrong_owner_or_scope_identifier_fails_before_projection(tmp_path: Path, field: str) -> None:
+    """A scope-correct organization check cannot relax site identity verification."""
+    session = RestoreSession(tmp_path)
+    session.settings[f"/api/v1/sites/{SITE_ID}/setting"][field] = SITE_ID if field == "org_id" else ORG_ID
+    workflow = session.workflow()
+    bundle = workflow.files.read(session.path.stem)
+    record = next(record for record in bundle.records if record["scope"] == "site")
+    with pytest.raises(PolicyError, match="The current settings ownership does not match the selected backup"):
+        workflow._target(bundle, record, {ORG_ID: {SITE_ID}})
+    assert session.writes == []
+
+
+def test_org_wrong_owner_still_fails_before_projection(tmp_path: Path) -> None:
+    """Distinct metadata never permits an organization response with a different owner."""
+    session = RestoreSession(tmp_path)
+    session.settings[f"/api/v1/orgs/{ORG_ID}/setting"]["org_id"] = SITE_ID
+    workflow = session.workflow()
+    bundle = workflow.files.read(session.path.stem)
+    record = next(record for record in bundle.records if record["scope"] == "org")
+    with pytest.raises(PolicyError, match="The current settings ownership does not match the selected backup"):
+        workflow._target(bundle, record, {ORG_ID: {SITE_ID}})
+    assert session.writes == []
