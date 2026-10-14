@@ -8,6 +8,7 @@ import threading
 import time
 from collections.abc import Iterator
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -16,7 +17,7 @@ from werkzeug.serving import make_server
 
 from src.foundation.support.utils.rate_limiting import RateLimitingUtils
 from src.operations.execution.firmware_policy.recovery.backup import PolicyBackup
-from src.operations.execution.firmware_policy.sdk import PolicyError
+from src.operations.execution.firmware_policy.sdk import PolicyError, PolicyResponse
 from tests.unit.firmware_policy.fakes import ORG_ID, SITE_ID, SettingsSession
 from web_portal.app import WebPortalApp
 
@@ -43,6 +44,15 @@ def post(client: Any, path: str, body: dict[str, Any], raw_body: bytes | None = 
             path, data=raw_body, content_type="application/json", headers={"X-CSRFToken": match.group(1)}
         )
     return client.post(path, json=body, headers={"X-CSRFToken": match.group(1)})
+
+
+def test_http_5xx_boundary_hides_private_response_body() -> None:
+    """Reject a server failure without copying its private body into portal errors."""
+    response = SimpleNamespace(status_code=503, data={"credential": "private-fixture"})
+    with pytest.raises(PolicyError, match="HTTP 503") as failure:
+        PolicyResponse.request(lambda: response, "Read settings", ORG_ID)
+    assert "private-fixture" not in str(failure.value)
+    assert "credential" not in str(failure.value)
 
 
 class PolicyJobs:

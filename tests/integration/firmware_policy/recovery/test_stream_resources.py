@@ -69,11 +69,13 @@ def test_4001_realistic_records_use_bounded_input_and_linear_retained_memory(tmp
     path.unlink()
 
 
-@pytest.mark.parametrize("content", [b"", b'{"records":[{"scope":"site"'])
+@pytest.mark.parametrize("content", [b"", b"bad json", b'{"records":[{"scope":"site"'])
 def test_empty_body_and_malformed_json_stop_before_any_request_or_write(tmp_path: Path, content: bytes) -> None:
     """A streamed partial source cannot produce a selected recovery plan."""
     session = RestoreSession(tmp_path)
     session.path.write_bytes(content)
+    with pytest.raises(PolicyError):
+        BundleFiles(PolicyBackup(tmp_path)).read(session.path.stem)
     with pytest.raises(PolicyError):
         session.prepare()
     assert session.reads == []

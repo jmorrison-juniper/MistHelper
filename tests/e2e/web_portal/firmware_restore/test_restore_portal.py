@@ -14,10 +14,12 @@ from playwright.sync_api import expect
 from werkzeug.serving import make_server
 
 from src.foundation.support.utils.rate_limiting import RateLimitingUtils
+from src.operations.execution.firmware_policy.sdk import PolicyError
 from tests.e2e.web_portal.test_firmware_policy import PolicyJobs
 from tests.unit.firmware_policy.fakes import ORG_ID, SITE_ID
 from tests.unit.firmware_policy.recovery.fakes import RestoreSession
 from web_portal.app import WebPortalApp
+from web_portal.routes.firmware_policy.restore import RestoreInputs
 
 
 @pytest.fixture
@@ -94,6 +96,9 @@ class TestRestorePortal:
     ) -> None:
         """Malformed or injected posted settings must not become SDK request bodies."""
         app, sdk = restore_portal
+        with app.test_request_context(data=body, content_type="application/json"):
+            with pytest.raises(PolicyError, match="required restoration request fields"):
+                RestoreInputs.body({"token", "confirmation"})
         response = RestoreRequests.post(app.test_client(), "apply", body, raw=True)
         assert response.status_code == 400
         assert sdk.reads == []

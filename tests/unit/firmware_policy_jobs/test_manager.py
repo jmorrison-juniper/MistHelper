@@ -468,8 +468,8 @@ def test_status_storage_empty_body_fails_without_worker_submission(tmp_path: Pat
     identifier = manager.start("owner", "policy", preparation)
     executor.run()
     path = manager.files.directory / f"{identifier}.json"
-    with path.open("w", encoding="utf-8") as stream:
-        stream.write("")  # Simulate an empty durable input without changing its private access.
+    with path.open("wb") as stream:
+        stream.write(b"")  # Simulate an empty durable input without changing its private access.
     replacement_executor = ManualExecutor()
     with pytest.raises(json.JSONDecodeError, match="Expecting value"):
         JobManager(tmp_path, replacement_executor)
