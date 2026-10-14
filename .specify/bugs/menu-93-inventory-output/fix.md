@@ -47,6 +47,7 @@ The portal now requires bounded, explicit empty-result wording. An unrelated dat
 - `.venv/bin/black --check web_portal/services/operation.py tests/unit/web_portal/test_portal_terminal_state_4025.py tests/unit/marvis/actions/test_portal_contract.py` — 3 files unchanged.
 - `.venv/bin/python -B -m py_compile web_portal/services/operation.py tests/unit/web_portal/test_portal_terminal_state_4025.py tests/unit/marvis/actions/test_portal_contract.py` — passed.
 - `.venv/bin/python -B -m pytest -p no:cacheprovider -s -q tests/guardrails/local_test_quality_loop/test_guidance.py::TestLiveGuides` — 1 passed. The guard read and checked all four inputs.
+- `.venv/bin/test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json --changed-from origin/main --full-gate-path .github/workflows/ci.yml --full-gate-path requirements-dev.txt` — 4 changed test files checked, 0 new findings.
 - `.venv/bin/python -B -m pytest -q tests/guardrails/test_process_folder_structure.py` — 5 passed.
 - `.venv/bin/ruff check .` — All checks passed.
 - `.venv/bin/black --check .` — 2,382 files would remain unchanged.
