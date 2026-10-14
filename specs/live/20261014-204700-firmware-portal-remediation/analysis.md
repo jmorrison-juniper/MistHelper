@@ -205,6 +205,23 @@ The repaired organization guard checks `org_id`, while site guards still check `
 Saved ownership, current membership, freshness, and readback checks remain unchanged.
 The focused domain run passed 59 tests, including wrong organization and site identity rejection.
 
+The complete repaired firmware suite passed 322 tests with 92.85 percent coverage.
+The parent independently passed the same 322 tests in the isolated candidate.
+Connected actual policy preparation reported 129 of 145 targets at 89 percent, then failed with confirmation hidden.
+Connected restoration passed the corrected ownership check, then failed strict schema projection with confirmation hidden.
+Neither confirmation word was entered. Backup hashes remained unchanged, and no new backup file appeared after rejection.
+This proves guarded failure safety and usability, not successful restoration acceptance.
+
+The initial CI run passed its quality, coverage, and CodeQL gates, but its E2E job failed.
+It reported 904 passed, 51 skipped, four failed, and four teardown errors.
+The data-preview fixture rendered the operations page without the embedded workflow template directories.
+The resulting missing-template error caused the later theme and ownership errors.
+The fixture now explicitly loads all three actual template directories without adding cloud routes.
+All 39 browser tests in the affected module passed after this test-only repair.
+Downloaded restoration screenshots showed complete and partial compact tables with fixture values only.
+The contract coverage artifact contained 668 measured modules, including 11 firmware modules with nonempty line data.
+The exclusion advisory artifact reported inherited excluded-tree drift. No exclusion or suppression changed.
+
 ## Next actions
 
 Complete the committed test-quality check, rebase, create the pull request, and inspect its final checks.
