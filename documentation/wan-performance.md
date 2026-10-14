@@ -171,6 +171,11 @@ An unavailable history connection preserves readable cached detail views but pre
 
 ### Unsupported source semantics
 
+This review examined source revision `2d1c2199fa1e31c129ef1e051c5389349a207785`.
+Its `ProjectGoals.md` requires hourly availability, transition counts, quality statistics, elapsed threshold hours, and 13-month history.
+Observation counts do not satisfy elapsed threshold hours or complete-hour quality statistics.
+The bounded 31-day detail read does not satisfy the 13-month reporting requirement.
+No verified historical source can supply the absent earlier samples.
 The live view supports verified directional snapshot utilization, not full-hour utilization averages.
 Snapshot status and sparse hourly observations cannot establish historical availability or congestion duration.
 Device-event search supports time bounds and type filters.
@@ -186,8 +191,18 @@ Peer observation time does not establish the sample time of each metric.
 The existing exporter primary-key strategy names `timestamp`, `from_device`, and `to_device`.
 Those application fields do not establish a source response contract.
 No verified response establishes historical VPN samples for normalization into source hours.
-The source documentation does not establish a percentile algorithm for retained observations.
-The portal therefore reports observed means and maxima, not invented percentiles.
+The source quality calculator defines p95 using sorted samples and a zero-based index of `floor(0.95 * count)`.
+For fewer than 20 samples, it substitutes the maximum as an approximation.
+This convention does not establish a complete source sampling window.
+The portal retains one observation per identity and hour, not every raw quality sample.
+Its calendar summaries therefore report observed means and maxima, not a source hourly p95.
+The source status calculator assumes constant state when events are absent.
+It also identifies transitions through `UP` and `DOWN` substrings in free-form event types.
+Neither assumption proves complete event coverage or a verified WAN transition mapping.
+The migration does not use these assumptions to calculate availability or flap counts.
+The source `TODO.md` explicitly describes current VPN statistics as point-in-time data.
+Its historical VPN method, storage, and dashboard tasks remain unchecked.
+That proposed VPN insight route has no matching operation in the bundled OpenAPI.
 The insight response does not define how multiple requested metric names map to its single result sequence.
 Gateway refresh supports any selected organization gateway through exact filtered discovery.
 The cached gateway list reflects bounded port and peer pages, not a complete organization inventory.
