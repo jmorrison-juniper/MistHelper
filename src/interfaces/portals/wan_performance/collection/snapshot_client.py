@@ -160,13 +160,19 @@ class GatewayInsights(SnapshotClient):
             3600,
         ):
             raise ValueError("Gateway insight response does not match the requested hourly window.")
+        timestamps, values = data.get("rt"), data.get("results")
         if (
-            not isinstance(data.get("rt"), list)
-            or not isinstance(data.get("results"), list)
-            or len(data["rt"]) != 1
-            or len(data["results"]) != 1
+            not isinstance(timestamps, list)
+            or not isinstance(values, list)
+            or len(timestamps) != len(values)
+            or len(timestamps) not in (0, 1)
         ):
-            raise ValueError("Gateway insight values and timestamps must contain one aligned sample.")
-        if datetime.fromisoformat(data["rt"][0]) != start:
+            raise ValueError("Gateway insight values and timestamps must contain zero or one aligned sample.")
+        if timestamps and datetime.fromisoformat(timestamps[0]) != start:
             raise ValueError("Gateway insight timestamp does not match the requested hour.")
-        return {"metric": name, "unit": unit, "hour_start_utc": start.isoformat(), "value": data["results"][0]}
+        return {
+            "metric": name,
+            "unit": unit,
+            "hour_start_utc": start.isoformat(),
+            "value": values[0] if values else None,
+        }
