@@ -377,9 +377,9 @@ class TestMenuText:
         (
             (
                 "MistHelper.py",
-                304,
-                "bcee042ce5e4600033985e5a5841cdbbea8c8cb818b373cb8ced5788868a1f92",
-            ),  # WHY: issue #4051 updated menu 291 handler to dry_run=None and clarified title.
+                305,
+                "61827a43bd275d28c23ab38b645460d1296256e95cef52045791e9dac0224da2",
+            ),  # Menu 305 adds only its settings handler. Preserve the complete metadata identity check.
             (
                 "web_portal/menu_registry.py",
                 190,
