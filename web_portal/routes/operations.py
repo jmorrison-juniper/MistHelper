@@ -18,6 +18,7 @@ from flask import (
     request,
 )
 
+from web_portal.routes.firmware_policy import firmware_policy_bp  # Keep destructive policy execution isolated.
 from web_portal.routes.site_filtering import EmptySiteFilter  # Issue #3915: one shared filter.
 
 # Module-level logger so every helper identifies its source file in log output.
@@ -95,6 +96,7 @@ class PickList(list):
 
 
 operations_bp = Blueprint("operations", __name__)
+operations_bp.register_blueprint(firmware_policy_bp)  # Reuse portal CSRF and address access controls.
 
 
 @operations_bp.route("/operations")

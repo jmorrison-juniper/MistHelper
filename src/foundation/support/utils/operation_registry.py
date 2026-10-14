@@ -518,6 +518,13 @@ class OperationRegistry:
         "302": {"category": "interactive_safe", "skip_reason": "Requires Juniper settings and Mist tickets"},
         "303": {"category": "interactive_safe", "skip_reason": "Requires Juniper settings and an identifier"},
         "304": {"category": "interactive_safe", "skip_reason": "Requires Juniper settings and serial numbers"},
+        "305": {
+            "category": "destructive",
+            "skip_reason": (
+                "DESTRUCTIVE: Menu 305 changes organization policies and removes site overrides; "
+                "requires typed CONFIGURE and verified complete settings backups, supports --dry-run."
+            ),
+        },
         "238": {"category": "interactive_safe", "skip_reason": "Requires an MSP ID"},
         "240": {
             "category": "interactive_safe",

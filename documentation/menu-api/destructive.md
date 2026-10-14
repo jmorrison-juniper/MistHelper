@@ -2,7 +2,7 @@
 
 # Menu API endpoints: destructive
 
-This page lists the Mist API endpoints of the 48 menu options in the `destructive` category.
+This page lists the Mist API endpoints of the 49 menu options in the `destructive` category.
 A menu option in this category changes the Mist cloud configuration.
 
 The index page explains how to read the map: [Menu API endpoint map](README.md).
@@ -18,17 +18,17 @@ That diagram links the menu option to the classes that send the requests, and ea
 
 ```mermaid
 flowchart LR
-    root["destructive: 48 menu<br/>options"]
+    root["destructive: 49 menu<br/>options"]
     root --> f_sites_devices["sites/devices<br/>26 menu options"]
-    root --> f_orgs_sites["orgs/sites<br/>22 menu options"]
+    root --> f_orgs_sites["orgs/sites<br/>23 menu options"]
     root --> f_sites_stats["sites/stats<br/>16 menu options"]
     root --> f_orgs_gatewaytemplates["orgs/gatewaytemplates<br/>12 menu options"]
-    root --> f_orgs_inventory["orgs/inventory<br/>11 menu options"]
+    root --> f_orgs_inventory["orgs/inventory<br/>12 menu options"]
+    root --> f_orgs_devices["orgs/devices<br/>7 menu options"]
     root --> f_orgs_deviceprofiles["orgs/deviceprofiles<br/>6 menu options"]
-    root --> f_orgs_devices["orgs/devices<br/>6 menu options"]
-    root --> f_sites_setting["sites/setting<br/>4 menu options"]
-    root --> f_msps_orgs["msps/orgs<br/>3 menu options"]
-    root --> f_orgs_ssr["orgs/ssr<br/>3 menu options"]
+    root --> f_sites_setting["sites/setting<br/>5 menu options"]
+    root --> f_msps_orgs["msps/orgs<br/>4 menu options"]
+    root --> f_orgs_ssr["orgs/ssr<br/>4 menu options"]
     root --> f_orgs_stats["orgs/stats<br/>3 menu options"]
     root --> f_orgs_tickets["orgs/tickets<br/>3 menu options"]
     root --> more["26 more families"]
@@ -1109,3 +1109,39 @@ flowchart LR
 - Endpoints: 0
 
 The map finds no Mist API request for this menu option.
+
+## Menu 305
+
+- Title: DESTRUCTIVE: Organization Auto-Upgrade Policy - Set model versions and restore all site inheritance (Requires typing 'CONFIGURE', verified full backups, supports --dry-run)
+- Handler: `lambda: PolicyMenu(api=PolicyApi(MainEntrypoint.context.apisession), inputs=PolicyMenuInputs(organization=ConfigUtils.get_cached_or_prompted_org_id, selector...`
+- Shared helpers: [`ConfigUtils`](README.md#configutils), [`DataExporter`](README.md#dataexporter), [`InputUtils`](README.md#inpututils), [`MainEntrypoint`](README.md#mainentrypoint), [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
+- Endpoints: 9
+
+```mermaid
+flowchart LR
+    menu["Menu 305:<br/>DESTRUCTIVE:<br/>Organization<br/>Auto-Upgrad..."]
+    menu --> c1["PolicyApi"]
+    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/devices<br/>/versions"]
+    c1 --> e2["GET<br/>/api/v1/orgs<br/>/{org_id}/inventory"]
+    c1 --> e3["GET<br/>/api/v1/orgs<br/>/{org_id}/setting"]
+    c1 --> e4["PUT<br/>/api/v1/orgs<br/>/{org_id}/setting"]
+    c1 --> e5["GET<br/>/api/v1/orgs<br/>/{org_id}/ssr<br/>/versions"]
+    c1 --> e6["GET<br/>/api/v1/sites<br/>/{site_id}/setting"]
+    c1 --> e7["PUT<br/>/api/v1/sites<br/>/{site_id}/setting"]
+    menu --> c2["APICoreFetchUtils"]
+    c2 --> e8["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
+    menu --> c3["OrgLevelAPFirmware<br/>Upgrader"]
+    c3 --> e9["GET<br/>/api/v1/msps<br/>/{msp_id}/orgs"]
+```
+
+| Method | Path | SDK function | Called from | Found by |
+| - | - | - | - | - |
+| GET | `/api/v1/msps/{msp_id}/orgs` | [`msps.orgs.listMspOrgs`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/msps/orgs/list-msp-orgs) | [`OrgLevelAPFirmwareUpgrader._call_list_msp_orgs`](../../src/operations/execution/firmware/org_ap_upgrader.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/devices/versions` | [`orgs.devices.listOrgAvailableDeviceVersions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/upgrade/list-org-available-device-versions) | [`PolicyApi.versions`](../../src/operations/execution/firmware_policy/sdk.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/inventory` | [`orgs.inventory.getOrgInventory`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/inventory/get-org-inventory) | [`PolicyApi.inventory`](../../src/operations/execution/firmware_policy/sdk.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/setting` | [`orgs.setting.getOrgSettings`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/setting/get-org-settings) | [`PolicyApi.read`](../../src/operations/execution/firmware_policy/sdk.py) | Call |
+| PUT | `/api/v1/orgs/{org_id}/setting` | [`orgs.setting.updateOrgSettings`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/setting/update-org-settings) | [`PolicyApi.write`](../../src/operations/execution/firmware_policy/sdk.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`APICoreFetchUtils.all_sites_with_limit`](../../src/mist/access/api/api_core_fetch_utils.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/ssr/versions` | [`orgs.ssr.listOrgAvailableSsrVersions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/upgrade/list-org-available-ssr-versions) | [`PolicyApi.versions`](../../src/operations/execution/firmware_policy/sdk.py) | Call |
+| GET | `/api/v1/sites/{site_id}/setting` | [`sites.setting.getSiteSetting`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/setting/get-site-setting) | [`PolicyApi.read`](../../src/operations/execution/firmware_policy/sdk.py) | Call |
+| PUT | `/api/v1/sites/{site_id}/setting` | [`sites.setting.updateSiteSettings`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/setting/update-site-settings) | [`PolicyApi.write`](../../src/operations/execution/firmware_policy/sdk.py) | Call |

@@ -12,7 +12,9 @@ import sqlite3
 from collections import deque
 from contextlib import closing
 from itertools import islice
+from pathlib import Path
 
+from src.operations.execution.firmware_policy.backup import BACKUP_DIRECTORY
 from src.operations.protection.security import (
     CredentialRedactor,
 )  # Reuse the shared credential classifier and redactor.
@@ -148,6 +150,9 @@ class DataBrowserService:
         if not candidate.startswith(root):  # Refuse a target outside the data directory.
             logger.debug("Data browser refused a path outside the data directory: %s", rel_path)
             return None
+        if BACKUP_DIRECTORY in Path(candidate).relative_to(self._real_data_dir).parts:
+            logger.warning("Data browser refused private firmware settings backup access")
+            return None  # Full settings can contain credentials, so no portal route may serve the backup.
         if not self._is_browsable_file(candidate):  # Refuse a directory or a hidden file type.
             logger.debug("Data browser refused a path that is not a browsable file: %s", rel_path)
             return None

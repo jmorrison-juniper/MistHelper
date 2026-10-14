@@ -52,6 +52,7 @@ from collections.abc import (
     Iterable,  # Type hints for static analysis
 )
 from datetime import datetime  # Import datetime for timestamping logs and events
+from pathlib import Path  # Resolve the private menu 305 backup root on each supported operating system.
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -558,6 +559,11 @@ from src.operations.execution.firmware.org_ap_upgrader import (  # Cat A canonic
 from src.operations.execution.firmware.site_auto_upgrade import (  # Cat A canonical (1014 P2)
     SiteAutoUpgradeConfigurator,
 )
+from src.operations.execution.firmware_policy.cli import (  # Menu 305 configures settings without firmware execution.
+    PolicyMenu,
+    PolicyMenuInputs,
+)
+from src.operations.execution.firmware_policy.sdk import PolicyApi  # Keep all menu 305 requests in the SDK boundary.
 from src.operations.exporting.export.const_definitions_exporter import (
     ConstDefinitionsExporter,  # Cat B (1013 SC-001 position 17) -- re-export
 )
@@ -4918,6 +4924,33 @@ menu_actions: dict[str, Any] = {
         category=OperationRegistry.skip_category("304"),  # Read the safety class.
         destructive=False,  # The lookup reads only.
         supports_fast=False,  # The workflow paces its own batches.
+    ),
+    "305": GlobalImportManager.MenuEntry(  # Require typed confirmation and complete verified settings backups.
+        menu_id="305",
+        handler=lambda: PolicyMenu(
+            api=PolicyApi(MainEntrypoint.context.apisession),
+            inputs=PolicyMenuInputs(
+                organization=ConfigUtils.get_cached_or_prompted_org_id,
+                selectors=(
+                    (
+                        lambda: _build_org_ap_upgrader(org_id="")._select_msps(),
+                        lambda msp: _build_org_ap_upgrader(org_id="")._select_orgs_from_msp(msp),
+                    )
+                    if MainEntrypoint.context.msp_privileges
+                    else None
+                ),
+                stopped=ConfigUtils.check_stop_signal,
+                dry_run=getattr(globals().get("args", None), "dry_run", False),
+                data_directory=Path(os.environ.get("DATA_DIR", "data")),
+            ),
+        ).run(),
+        title=(
+            "DESTRUCTIVE: Organization Auto-Upgrade Policy - Set model versions and restore all site inheritance "
+            "(Requires typing 'CONFIGURE', verified full backups, supports --dry-run)"
+        ),
+        category=OperationRegistry.skip_category("305"),
+        destructive=True,
+        supports_fast=False,
     ),
     "238": GlobalImportManager.MenuEntry(  # Use named fields for menu 238.
         menu_id="238",  # Store key for drift checks.
