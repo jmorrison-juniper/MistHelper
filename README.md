@@ -16,7 +16,7 @@ organizations, your sites, your devices, and your clients, and it writes what it
 finds to a file or to a database. It also runs a small set of change operations,
 such as a firmware upgrade.
 
-The tool holds **304 operations**, numbered 1 to 305 with one gap at 152.
+The tool holds **305 operations**, numbered 1 to 306 with one gap at 152.
 It also serves a web portal, an upgrade capture portal, and a metrics gateway.
 Read [the operator guide](documentation/operator-guide.md) for what each part
 does.
@@ -107,6 +107,7 @@ Use MistHelper when you need one of these.
 | Look up one Juniper service request or RMA (menu 303) | [Menu reference](documentation/menu_reference.md) |
 | Look up warranty and contract data for serial numbers (menu 304) | [Menu reference](documentation/menu_reference.md) |
 | Set organization firmware standards and restore every site's inheritance (menu 305) | [Organization auto-upgrade policy](documentation/org-auto-upgrade-policy.md) |
+| Restore complete writable organization and site settings from private backups (menu 306) | [Backup restoration](documentation/backup-restoration.md) |
 
 ## How to set it up as a container
 

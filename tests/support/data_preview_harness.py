@@ -98,6 +98,7 @@ class DataPreviewHarness:
             "/": "dashboard.dashboard",
             "/operations": "operations.operations_page",
             "/operations/firmware-policy": "operations.firmware_policy.page",
+            "/operations/settings-restore": "operations.firmware_policy.restore.page",
             "/maps": "maps.maps_page",
             "/websockets": "websockets.page",
         }

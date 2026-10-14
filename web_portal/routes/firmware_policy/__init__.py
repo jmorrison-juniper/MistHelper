@@ -13,14 +13,17 @@ from uuid import uuid4
 from flask import Blueprint, Response, current_app, jsonify, render_template, request, session
 from mistapi.api.v1.msps import orgs
 
-from src.operations.execution.firmware_policy.backup import PolicyBackup
 from src.operations.execution.firmware_policy.changes import POLICY_TYPES, FirmwarePolicy
 from src.operations.execution.firmware_policy.cli import POLICY_WARNING, PolicyCatalog
+from src.operations.execution.firmware_policy.recovery.backup import PolicyBackup
 from src.operations.execution.firmware_policy.sdk import PolicyApi, PolicyError, PolicyResponse
 from src.operations.execution.firmware_policy.workflow import OrganizationChange, PolicyWorkflow
 
+from .restore import restore_bp
+
 logger = logging.getLogger(__name__)
 firmware_policy_bp = Blueprint("firmware_policy", __name__, template_folder="templates")
+firmware_policy_bp.register_blueprint(restore_bp)
 
 
 @dataclass

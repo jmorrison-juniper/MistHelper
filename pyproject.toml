@@ -37,6 +37,7 @@ dependencies = [
     "sshkeyboard>=2.3.0,<3",
     
     # Data processing
+    "jsonschema>=4.26.0,<5",
     "numpy>=2.5.3,<3",
     "matplotlib>=3.11.2,<4",
     "python-dotenv>=1.0.0,<2",

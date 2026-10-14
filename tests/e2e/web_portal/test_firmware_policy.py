@@ -13,7 +13,7 @@ import pytest
 from playwright.sync_api import expect
 from werkzeug.serving import make_server
 
-from src.operations.execution.firmware_policy.backup import PolicyBackup
+from src.operations.execution.firmware_policy.recovery.backup import PolicyBackup
 from src.operations.execution.firmware_policy.sdk import PolicyError
 from tests.unit.firmware_policy.fakes import ORG_ID, SITE_ID, SettingsSession
 from web_portal.app import WebPortalApp

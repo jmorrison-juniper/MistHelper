@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from src.operations.execution.firmware_policy.backup import BACKUP_DIRECTORY, PolicyBackup
+from src.operations.execution.firmware_policy.recovery.backup import BACKUP_DIRECTORY, PolicyBackup
 from src.operations.execution.firmware_policy.sdk import PolicyError
 from web_portal.services.data_browser import DataBrowserService
 from web_portal.services.output_scan import OutputFileScanner

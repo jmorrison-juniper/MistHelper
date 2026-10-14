@@ -11,8 +11,8 @@ from typing import Any
 
 from src.foundation.support.utils.input_utils import InputUtils
 
-from .backup import PolicyBackup
 from .changes import POLICY_TYPES, FirmwarePolicy
+from .recovery.backup import PolicyBackup
 from .sdk import PolicyApi, PolicyError
 from .workflow import OrganizationChange, PolicyResult, PolicyWorkflow
 

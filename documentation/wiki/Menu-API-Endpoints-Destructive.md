@@ -2,7 +2,7 @@
 
 # Menu API endpoints: destructive
 
-This page lists the Mist API endpoints of the 49 menu options in the `destructive` category.
+This page lists the Mist API endpoints of the 50 menu options in the `destructive` category.
 A menu option in this category changes the Mist cloud configuration.
 
 The index page explains how to read the map: [Menu API endpoint map](Menu-API-Endpoints).
@@ -18,19 +18,19 @@ That diagram links the menu option to the classes that send the requests, and ea
 
 ```mermaid
 flowchart LR
-    root["destructive: 49 menu<br/>options"]
+    root["destructive: 50 menu<br/>options"]
     root --> f_sites_devices["sites/devices<br/>26 menu options"]
-    root --> f_orgs_sites["orgs/sites<br/>23 menu options"]
+    root --> f_orgs_sites["orgs/sites<br/>24 menu options"]
     root --> f_sites_stats["sites/stats<br/>16 menu options"]
     root --> f_orgs_gatewaytemplates["orgs/gatewaytemplates<br/>12 menu options"]
     root --> f_orgs_inventory["orgs/inventory<br/>12 menu options"]
     root --> f_orgs_devices["orgs/devices<br/>7 menu options"]
     root --> f_orgs_deviceprofiles["orgs/deviceprofiles<br/>6 menu options"]
-    root --> f_sites_setting["sites/setting<br/>5 menu options"]
+    root --> f_sites_setting["sites/setting<br/>6 menu options"]
     root --> f_msps_orgs["msps/orgs<br/>4 menu options"]
     root --> f_orgs_ssr["orgs/ssr<br/>4 menu options"]
+    root --> f_orgs_setting["orgs/setting<br/>3 menu options"]
     root --> f_orgs_stats["orgs/stats<br/>3 menu options"]
-    root --> f_orgs_tickets["orgs/tickets<br/>3 menu options"]
     root --> more["26 more families"]
 ```
 
@@ -1143,5 +1143,31 @@ flowchart LR
 | PUT | `/api/v1/orgs/{org_id}/setting` | [`orgs.setting.updateOrgSettings`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/setting/update-org-settings) | [`PolicyApi.write`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/execution/firmware_policy/sdk.py) | Call |
 | GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`APICoreFetchUtils.all_sites_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/access/api/api_core_fetch_utils.py) | Call |
 | GET | `/api/v1/orgs/{org_id}/ssr/versions` | [`orgs.ssr.listOrgAvailableSsrVersions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/upgrade/list-org-available-ssr-versions) | [`PolicyApi.versions`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/execution/firmware_policy/sdk.py) | Call |
+| GET | `/api/v1/sites/{site_id}/setting` | [`sites.setting.getSiteSetting`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/setting/get-site-setting) | [`PolicyApi.read`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/execution/firmware_policy/sdk.py) | Call |
+| PUT | `/api/v1/sites/{site_id}/setting` | [`sites.setting.updateSiteSettings`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/setting/update-site-settings) | [`PolicyApi.write`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/execution/firmware_policy/sdk.py) | Call |
+
+## Menu 306
+
+- Title: DESTRUCTIVE: Restore complete writable organization and site settings from private backups (Requires typing 'RESTORE', verified recovery backups, supports --dry-run)
+- Handler: `lambda: RestoreMenu(api=PolicyApi(MainEntrypoint.context.apisession), inputs=PolicyMenuInputs(organization=ConfigUtils.get_cached_or_prompted_org_id, stopped...`
+- Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`InputUtils`](Menu-API-Endpoints#inpututils), [`MainEntrypoint`](Menu-API-Endpoints#mainentrypoint)
+- Endpoints: 5
+
+```mermaid
+flowchart LR
+    menu["Menu 306:<br/>DESTRUCTIVE: Restore<br/>complete writabl..."]
+    menu --> c1["PolicyApi"]
+    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/setting"]
+    c1 --> e2["PUT<br/>/api/v1/orgs<br/>/{org_id}/setting"]
+    c1 --> e3["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
+    c1 --> e4["GET<br/>/api/v1/sites<br/>/{site_id}/setting"]
+    c1 --> e5["PUT<br/>/api/v1/sites<br/>/{site_id}/setting"]
+```
+
+| Method | Path | SDK function | Called from | Found by |
+| - | - | - | - | - |
+| GET | `/api/v1/orgs/{org_id}/setting` | [`orgs.setting.getOrgSettings`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/setting/get-org-settings) | [`PolicyApi.read`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/execution/firmware_policy/sdk.py) | Call |
+| PUT | `/api/v1/orgs/{org_id}/setting` | [`orgs.setting.updateOrgSettings`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/setting/update-org-settings) | [`PolicyApi.write`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/execution/firmware_policy/sdk.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`PolicyApi.sites`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/execution/firmware_policy/sdk.py) | Call |
 | GET | `/api/v1/sites/{site_id}/setting` | [`sites.setting.getSiteSetting`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/setting/get-site-setting) | [`PolicyApi.read`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/execution/firmware_policy/sdk.py) | Call |
 | PUT | `/api/v1/sites/{site_id}/setting` | [`sites.setting.updateSiteSettings`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/setting/update-site-settings) | [`PolicyApi.write`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/execution/firmware_policy/sdk.py) | Call |

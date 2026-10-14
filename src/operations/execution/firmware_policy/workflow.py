@@ -7,8 +7,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from .backup import PolicyBackup
 from .changes import FirmwarePolicy, PolicyChanges
+from .recovery.backup import PolicyBackup
 from .sdk import PolicyApi, PolicyError, PolicyResponse
 
 logger = logging.getLogger(__name__)
