@@ -111,3 +111,99 @@ def test_summary_without_matching_records_is_empty() -> None:
     dashboard = OfflinePreviewFactory.build()
     summaries = CalendarSummaries.build((dashboard.measurements[1],), dashboard.circuit)
     assert summaries == ()
+
+
+def test_threshold_counts_break_runs_at_missing_and_unknown_hours() -> None:
+    """Count retained observations rather than inferred time above a threshold."""
+    dashboard = OfflinePreviewFactory.build()
+    original = dashboard.measurements[0]
+    records = tuple(
+        replace(
+            original,
+            hour_start_utc=datetime(2024, 1, 1, hour, tzinfo=UTC),
+            collected_at_utc=datetime(2024, 1, 1, hour, 30, tzinfo=UTC),
+            metrics={
+                "rx_utilization_percent": MetricMeasurement(
+                    value, "%", missing_reason="Absent" if value is None else None
+                ),
+                "tx_utilization_percent": MetricMeasurement(70, "%"),
+            },
+            provenance="live",
+        )
+        for hour, value in [(0, 70), (1, 80), (2, 90), (4, 91), (5, None), (6, 100)]
+    )
+    daily = CalendarSummaries.build(records, dashboard.circuit)[0]
+    assert daily.observed_hours == 6
+    assert daily.period.expected_hours == 24
+    counts = {(entry.metric_name, entry.threshold_percent): entry for entry in daily.threshold_observations}
+    receive = counts[("rx_utilization_percent", 70)]
+    assert (receive.valid_hours, receive.above_hours, receive.longest_run) == (5, 4, 2)
+    assert counts[("rx_utilization_percent", 80)].above_hours == 3
+    assert counts[("rx_utilization_percent", 90)].above_hours == 2
+    assert counts[("tx_utilization_percent", 70)].above_hours == 0
+
+
+def test_weekly_threshold_run_crosses_midnight_without_counting_missing_days() -> None:
+    """Calculate weekly runs from actual adjacent hours, not merged daily maxima."""
+    dashboard = OfflinePreviewFactory.build()
+    records = tuple(
+        replace(
+            dashboard.measurements[0],
+            hour_start_utc=instant,
+            collected_at_utc=instant,
+            metrics={"rx_utilization_percent": MetricMeasurement(95, "%")},
+        )
+        for instant in (
+            datetime(2024, 1, 1, 23, tzinfo=UTC),
+            datetime(2024, 1, 2, 0, tzinfo=UTC),
+            datetime(2024, 1, 3, 0, tzinfo=UTC),
+        )
+    )
+    summaries = CalendarSummaries.build(tuple(reversed(records)), dashboard.circuit)
+    weekly = next(summary for summary in summaries if summary.period.kind == "weekly")
+    assert weekly.threshold_observations[0].longest_run == 2
+    assert weekly.threshold_observations[0].above_hours == 3
+    assert weekly.threshold_observations[0].valid_hours == 3
+    assert all(
+        summary.threshold_observations[0].longest_run == 1 for summary in summaries if summary.period.kind == "daily"
+    )
+
+
+def test_thresholds_do_not_interpret_unverified_units_or_other_metrics() -> None:
+    """Exclude rate fields and incompatible utilization units from threshold counts."""
+    dashboard = OfflinePreviewFactory.build()
+    record = replace(
+        dashboard.measurements[0],
+        metrics={"rx_bps": MetricMeasurement(100, "bit/s"), "rx_utilization_percent": MetricMeasurement(95, "ms")},
+    )
+    assert CalendarSummaries.build((record,), dashboard.circuit)[0].threshold_observations == ()
+
+
+def test_unknown_threshold_observations_report_zero_valid_hours() -> None:
+    """Show absent evidence rather than a healthy threshold result."""
+    dashboard = OfflinePreviewFactory.build()
+    record = replace(
+        dashboard.measurements[0],
+        metrics={"rx_utilization_percent": MetricMeasurement(None, "%", missing_reason="Absent")},
+    )
+    entry = CalendarSummaries.build((record,), dashboard.circuit)[0].threshold_observations[0]
+    assert (entry.valid_hours, entry.above_hours, entry.longest_run) == (0, 0, 0)
+
+
+def test_monthly_thresholds_exclude_other_identity_and_prior_month() -> None:
+    """Keep calendar boundaries and complete circuit identities separate."""
+    dashboard = OfflinePreviewFactory.build()
+    record = replace(
+        dashboard.measurements[0],
+        hour_start_utc=datetime(2024, 2, 1, tzinfo=UTC),
+        collected_at_utc=datetime(2024, 2, 1, tzinfo=UTC),
+        metrics={"rx_utilization_percent": MetricMeasurement(95, "%")},
+    )
+    prior = replace(record, hour_start_utc=datetime(2024, 1, 31, 23, tzinfo=UTC))
+    other = replace(record, identity=dashboard.measurements[1].identity)
+    summaries = CalendarSummaries.build((prior, other, record), dashboard.circuit)
+    monthly = [summary for summary in summaries if summary.period.kind == "monthly"]
+    assert len(monthly) == 2
+    assert [summary.period.expected_hours for summary in monthly] == [744, 696]
+    assert [summary.threshold_observations[0].above_hours for summary in monthly] == [1, 1]
+    assert [summary.threshold_observations[0].longest_run for summary in monthly] == [1, 1]
