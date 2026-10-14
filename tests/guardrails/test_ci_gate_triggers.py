@@ -175,7 +175,7 @@ class TestConcurrency:
             "with": {
                 "name": "backup-restoration-browser-evidence",
                 "path": "test-artifacts/issue4218-*.png",
-                "if-no-files-found": "warn",
+                "if-no-files-found": "error",
             },
         }
         uploads = [step for step in workflow["jobs"]["playwright"]["steps"] if step.get("name") == expected["name"]]

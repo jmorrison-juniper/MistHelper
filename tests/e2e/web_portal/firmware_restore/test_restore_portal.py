@@ -136,14 +136,16 @@ class TestRestorePortal:
 
 @pytest.mark.parametrize("failure", [False, True])
 def test_chromium_selection_preview_confirmation_and_result(
-    restore_portal: tuple[Any, RestoreSession], page: Any, failure: bool
+    restore_portal: tuple[Any, RestoreSession], page: Any, failure: bool, pytestconfig: pytest.Config
 ) -> None:
     """Drive the production template and dynamic scripts against mocked SDK requests."""
     app, sdk = restore_portal
     server = make_server("127.0.0.1", 0, app, threaded=True)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
-    evidence = Path("test-artifacts") / ("issue4218-partial.png" if failure else "issue4218-complete.png")
+    evidence = (
+        pytestconfig.rootpath / "test-artifacts" / ("issue4218-partial.png" if failure else "issue4218-complete.png")
+    )
     evidence.parent.mkdir(parents=True, exist_ok=True)
     try:
         page.goto(f"http://127.0.0.1:{server.server_port}/operations/settings-restore", wait_until="networkidle")

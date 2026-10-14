@@ -105,6 +105,8 @@ The artifact and local-guidance contract run passed all 226 tests.
 Windows file tests also reject directory junctions, reparse files, and missing native attribute evidence before ACL queries.
 Every new recovery bundle must also pass the same bounded restoration loader before the first write.
 The oversized-current-settings test proves that durable but unsupported recovery files permit zero writes.
+The first CI artifact check found no screenshots because isolated test directories hid relative output paths.
+Browser evidence now uses the pytest repository root. Missing restoration evidence fails the upload step.
 
 ## Specification analysis
 
