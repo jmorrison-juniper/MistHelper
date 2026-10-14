@@ -43,8 +43,11 @@ class MistSessionConfigurator:
         """Install configured shared admission on the existing portal session."""
         from src.interfaces.portals.wan_performance.collection.request_admission import RequestLedger
 
-        if RequestLedger.enabled():
-            cls._configure_timeout(session, org_id)
+        try:
+            if RequestLedger.enabled():
+                cls._configure_timeout(session, org_id)
+        except (ConnectionError, ValueError):
+            _MH.logging.exception("Shared API admission is unavailable. WAN refresh is disabled.")
 
     @classmethod
     def configure_once(cls, context: Any, session: Any, method: Any) -> bool:
