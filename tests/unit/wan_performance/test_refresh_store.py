@@ -1,5 +1,6 @@
 """Check fail-closed refresh ownership and isolated snapshot cache behavior."""
 
+import json
 from unittest.mock import MagicMock
 
 import pytest
@@ -60,11 +61,19 @@ def test_synthetic_or_wrong_org_cannot_be_cached():
     client.set.assert_not_called()
 
 
-def test_corrupt_cache_is_not_empty_success():
+def test_malformed_json_cache_is_not_empty_success():
     """Report invalid cache data rather than an apparently empty organization."""
     client = MagicMock()
     client.get.return_value = "{broken"
-    with pytest.raises(ValueError):
+    with pytest.raises(json.JSONDecodeError):
+        RefreshStore(client).cached("org-one")
+
+
+def test_empty_body_cache_is_not_empty_success():
+    """Distinguish an absent cache key from an empty invalid JSON body."""
+    client = MagicMock()
+    client.get.return_value = ""
+    with pytest.raises(json.JSONDecodeError):
         RefreshStore(client).cached("org-one")
 
 
@@ -84,4 +93,5 @@ def test_current_owner_with_remaining_lifetime_can_continue():
     client.get.return_value = "owner"
     client.ttl.return_value = 200
     RefreshLease(client, "org-one", "owner").check()
+    assert client.ttl.call_args.args == ("misthelper:wan:v1:refresh:org-one",)
     client.delete.assert_not_called()
