@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from src.interfaces.portals.wan_performance.collection.snapshot_client import SnapshotClient
+from src.interfaces.portals.wan_performance.domain.identity import GatewayIdentity, SiteIdentity
 
 
 @pytest.fixture(autouse=True)
@@ -52,11 +53,57 @@ def test_fixed_two_calls_and_truncated_results():
         ) as peer_call,
     ):
         result = SnapshotClient(session, admission).collect("org-one")
-    port_call.assert_called_once_with(session, "org-one", device_type="gateway", limit=100)
-    peer_call.assert_called_once_with(session, "org-one", duration="1h", limit=100)
+    port_call.assert_called_once_with(session, "org-one", device_type="gateway", mac=None, limit=100)
+    peer_call.assert_called_once_with(session, "org-one", mac=None, site_id=None, duration="1h", limit=100)
     assert admission.check.call_count == 2
     assert result["ports"] == [{"port_id": "ge-0/0/0"}]
     assert result["partial"] is True
+
+
+@pytest.mark.parametrize("site_id,mac", [("site-one", "aabbccddeeff"), ("site-two", "112233445566")])
+def test_selected_pages_use_exact_sdk_filters(site_id, mac):
+    """Scope both snapshot pages to either selected gateway without extra page requests."""
+    session, admission = MagicMock(), MagicMock()
+    target = GatewayIdentity(SiteIdentity("org-one", site_id), mac)
+    row = {"site_id": site_id, "mac": mac}
+    response = SimpleNamespace(status_code=200, data={"results": [row]})
+    with (
+        patch(
+            "src.interfaces.portals.wan_performance.collection.snapshot_client.searchOrgSwOrGwPorts",
+            return_value=response,
+        ) as ports,
+        patch(
+            "src.interfaces.portals.wan_performance.collection.snapshot_client.searchOrgPeerPathStats",
+            return_value=response,
+        ) as peers,
+    ):
+        result = SnapshotClient(session, admission).collect("org-one", target)
+    ports.assert_called_once_with(session, "org-one", device_type="gateway", mac=mac, limit=100)
+    peers.assert_called_once_with(session, "org-one", mac=mac, site_id=site_id, duration="1h", limit=100)
+    assert result["ports"] == [row]
+    assert result["peers"] == [row]
+    assert admission.check.call_count == 2
+
+
+@pytest.mark.parametrize("field", ["site_id", "mac"])
+def test_selected_pages_refuse_mismatched_returned_identity(field):
+    """Stop before insight collection when a filtered page returns another gateway or site."""
+    target = GatewayIdentity(SiteIdentity("org-one", "site-one"), "aabbccddeeff")
+    row = {"site_id": "site-one", "mac": "aabbccddeeff", field: "different"}
+    with (
+        patch(
+            "src.interfaces.portals.wan_performance.collection.snapshot_client.searchOrgSwOrGwPorts",
+            return_value=SimpleNamespace(status_code=200, data={"results": [row]}),
+        ),
+        patch(
+            "src.interfaces.portals.wan_performance.collection.snapshot_client.searchOrgPeerPathStats",
+            return_value=SimpleNamespace(status_code=200, data={"results": []}),
+        ),
+        patch("src.interfaces.portals.wan_performance.collection.snapshot_client.GatewayInsights.collect") as insights,
+    ):
+        with pytest.raises(ValueError, match="selected site and gateway"):
+            SnapshotClient(MagicMock(), MagicMock()).collect("org-one", target)
+    insights.assert_not_called()
 
 
 def test_admission_failure_makes_zero_calls():
