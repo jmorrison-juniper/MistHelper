@@ -31,6 +31,18 @@ The independent implementation uses behavior reviewed at source commit
 The relevant source files are `docs/screens.md`, `docs/operations.md`, and `src/aggregators/time_aggregator.py`.
 No source code, fixtures, screenshots, or other assets were copied.
 
+## VPN snapshot validation
+
+The collection boundary validates fields from the bundled
+[VPN peer API schema](api/orgs/GET_orgs_org_id_stats_vpn_peers_search.md).
+Latency and jitter use milliseconds.
+Loss uses percent, from 0 through 100.
+MOS uses a score from 0 through 5.
+The validator preserves measured zero and rejects invalid values.
+An absent value remains unknown.
+The validator does not infer an hourly interval, coverage, utilization, or availability.
+This boundary makes no API call and is not connected to the preview.
+
 ## Live integration limits
 
 Live metrics, durable history, cache refresh, and shared request admission remain unavailable.
