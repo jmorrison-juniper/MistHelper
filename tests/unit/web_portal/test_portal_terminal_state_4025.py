@@ -133,8 +133,14 @@ def test_a_database_host_warning_does_not_classify_as_an_empty_result() -> None:
     )
     current_run = _run_record_from(executor, [current_warning])  # Check the exact standalone warning in main.
     assert executor._no_output_reason(current_run) is None  # Preserve current degraded-mode behavior.
-    empty_inventory = _run_record_from(executor, ["No inventory data found for this site."])
-    assert executor._no_output_reason(empty_inventory) == "No inventory data found for this site."
+    empty_messages = (  # Keep established empty-result messages recognized by the narrower classifier.
+        "No inventory data found for this site.",
+        "No data to export for SiteInventory.csv",
+        "No rows for JuniperRequestList.csv, so no file was written",
+    )
+    for empty_message in empty_messages:  # Check each supported empty-result message directly.
+        empty_run = _run_record_from(executor, [empty_message])  # Build one isolated completed run record.
+        assert executor._no_output_reason(empty_run) == empty_message  # Retain the exact reason for the operator.
 
 
 def test_a_404_reason_names_the_status_code(caplog: pytest.LogCaptureFixture) -> None:
