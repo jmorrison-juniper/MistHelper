@@ -226,6 +226,41 @@ def test_single_run_keeps_raw_helper_thread_evidence(tmp_path, monkeypatch):
         executor.shutdown(10)  # Drain the worker and restore every process-wide hook.
 
 
+def test_menu_93_database_warning_keeps_inventory_in_status_and_sse(tmp_path, monkeypatch):
+    """A database warning must not hide the completed inventory export."""
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))  # Keep the inventory file inside the test data root.
+    warning = "No database host answers the connection probe."  # Reproduce the standalone warning from issue #4037.
+
+    def write_inventory() -> None:
+        """Write a valid menu 93 result before the standalone warning."""
+        (tmp_path / "SiteInventory.csv").write_text("device\nAP-1\n", encoding="utf-8")  # Create one visible CSV row.
+        _emit("src.operations.exporting.export.data_exporter", warning)  # Emit the unrelated database warning.
+
+    bus = PortalEventBus()  # Capture the real terminal event without opening a browser.
+    executor = OperationExecutor(  # Run through the production executor and event bus.
+        {"93": _menu_entry("93", write_inventory, "Export site inventory")},
+        None,
+        None,
+        bus,
+    )
+    run = executor._create_run("93")  # Create the same menu number that issue #4037 reports.
+    subscriber = bus.subscribe(run["run_id"])  # Retain the completion event for the final assertion.
+    try:
+        run["_future"] = executor._pool.submit(executor._execute_operation, run, {})  # Run through production capture.
+        result = _wait_for_status(executor, run["run_id"], "completed")  # Read the completed status response.
+        complete_events = [  # Select the event that presents the finished output names.
+            event for event in _drain_events(bus, subscriber) if event["type"] == "complete"
+        ]
+        expected_files = ["SiteInventory.csv"]  # Name the valid result that must stay visible.
+        assert result["output_files"] == expected_files  # Keep the CSV in the status response.
+        assert (tmp_path / expected_files[0]).is_file()  # Prove the listed result exists in the data root.
+        assert len(complete_events) == 1  # Publish one completion event for this run.
+        assert complete_events[0]["data"]["output_files"] == expected_files  # Keep the CSV in completion SSE.
+    finally:
+        executor.shutdown(10)  # Drain the worker and restore every process-wide hook.
+        bus.stop()  # Release the subscriber queue and heartbeat state.
+
+
 def test_snapshot_failure_removes_partial_registration(tmp_path, monkeypatch):
     """A snapshot failure must not leak a handler, scanner, context, or hook."""
     monkeypatch.setenv("DATA_DIR", str(tmp_path))  # Keep the partial scanner inside the test data root.

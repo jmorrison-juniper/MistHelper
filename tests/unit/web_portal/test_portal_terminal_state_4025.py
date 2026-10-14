@@ -119,6 +119,20 @@ def test_a_404_run_does_not_classify_as_an_empty_result(caplog: pytest.LogCaptur
     assert executor._no_output_reason(_run_record_from(executor, lines)) is None
 
 
+def test_a_database_host_warning_does_not_classify_as_an_empty_result() -> None:
+    """A database connectivity warning must not hide a valid CSV result."""
+    executor = _build_executor()  # Use the real portal classifier without a browser or Mist API.
+    reported_warning = "No database host answers the connection probe."  # Reproduce the issue warning wording.
+    run = _run_record_from(executor, [reported_warning])  # Put the standalone warning in a completed run record.
+    assert executor._no_output_reason(run) is None  # Do not interpret a connectivity warning as an empty result.
+    current_warning = (  # Keep the current exporter warning covered as its wording evolves.
+        "Polyglot database hosts do not answer. MistHelper writes CSV and SQLite only. "
+        "Set ARANGO_HOST and REDIS_HOST to reach the databases."
+    )
+    current_run = _run_record_from(executor, [current_warning])  # Check the exact standalone warning in main.
+    assert executor._no_output_reason(current_run) is None  # Preserve current degraded-mode behavior.
+
+
 def test_a_404_reason_names_the_status_code(caplog: pytest.LogCaptureFixture) -> None:
     """The portal failure reason must carry the HTTP status for the operator."""
     response = _StubResponse(status_code=404, data={"detail": "Not Found"}, url=ORG_APPLICATIONS_URL)
