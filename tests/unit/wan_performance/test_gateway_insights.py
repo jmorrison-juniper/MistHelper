@@ -146,7 +146,8 @@ def test_gateway_insights_reject_unverified_contracts(change):
             GatewayInsights(MagicMock(), MagicMock()).collect("org-one")
 
 
-def test_bounded_refresh_persists_gateway_history_before_cache_publication(tmp_path):
+@pytest.mark.parametrize("empty_metrics", [(), ("rx_bps",), ("rx_bps", "tx_bps")])
+def test_bounded_refresh_persists_gateway_history_before_cache_publication(tmp_path, empty_metrics):
     """Connect the real collector, domain model, and existing-file SQLite repository."""
     from src.interfaces.portals.wan_performance.collection.live_service import LiveService
     from src.interfaces.portals.wan_performance.domain.identity import SiteIdentity
@@ -156,15 +157,34 @@ def test_bounded_refresh_persists_gateway_history_before_cache_publication(tmp_p
     sqlite3.connect(path).close()
     repository = SQLiteHistory(path)
     device, metadata, series = responses()
+    metric_responses = [
+        (
+            SimpleNamespace(status_code=200, data={**series.data, "rt": [], "results": []})
+            if name in empty_metrics
+            else series
+        )
+        for name in ("rx_bps", "tx_bps")
+    ]
+    port = {**device, "port_id": "ge-0/0/0", "rx_bps": 40, "tx_bps": 80}
+    peer = {
+        **port,
+        "peer_mac": "11:22:33:44:55:66",
+        "peer_site_id": "site-two",
+        "peer_port_id": "ge-0/0/1",
+        "type": "ipsec",
+        "loss": 0,
+        "latency": 10,
+        "jitter": 2,
+    }
     store = MagicMock()
     with (
         patch(
             "src.interfaces.portals.wan_performance.collection.snapshot_client.searchOrgSwOrGwPorts",
-            return_value=SimpleNamespace(status_code=200, data={"results": []}),
+            return_value=SimpleNamespace(status_code=200, data={"results": [port]}),
         ),
         patch(
             "src.interfaces.portals.wan_performance.collection.snapshot_client.searchOrgPeerPathStats",
-            return_value=SimpleNamespace(status_code=200, data={"results": []}),
+            return_value=SimpleNamespace(status_code=200, data={"results": [peer]}),
         ),
         patch(
             "src.interfaces.portals.wan_performance.collection.snapshot_client.listOrgDevicesStats",
@@ -176,7 +196,7 @@ def test_bounded_refresh_persists_gateway_history_before_cache_publication(tmp_p
         ),
         patch(
             "src.interfaces.portals.wan_performance.collection.snapshot_client.getSiteInsightMetricsForGateway",
-            return_value=series,
+            side_effect=metric_responses,
         ),
     ):
         snapshot = LiveService(MagicMock(), "org-one", store, repository).refresh()
@@ -184,6 +204,16 @@ def test_bounded_refresh_persists_gateway_history_before_cache_publication(tmp_p
     start, end = (datetime.fromtimestamp(series.data[name], UTC) for name in ("start", "end"))
     records = repository.read(identity, start, end)
     assert len(records) == 1
-    assert records[0].metrics["rx_bps"].value == 0
+    for name in ("rx_bps", "tx_bps"):
+        metric = records[0].metrics[name]
+        assert metric.value == (None if name in empty_metrics else 0)
+        assert metric.unit == "bit/s"
+        assert metric.missing_reason == ("The API snapshot has no value." if name in empty_metrics else None)
+    observations = SnapshotRecords.build(snapshot)
+    assert len(observations) == 3
+    for record in observations:
+        assert repository.read(record.identity, record.hour_start_utc, record.hour_start_utc + timedelta(hours=1)) == (
+            record,
+        )
     assert store.acquire.return_value.check.call_count == 8
     store.publish.assert_called_once_with("org-one", snapshot)

@@ -58,6 +58,9 @@ The explicit `false` setting preserves legacy transport behavior and prevents WA
 The existing Redis and database credentials must be configured.
 The common Mist session transport then applies shared request admission.
 An absent session, unsupported transport, missing store, or Redis outage prevents refresh.
+An unsupported session transport or incomplete admission configuration does not stop portal startup.
+The portal logs the limitation, and live refresh returns an unavailable response.
+Common API session initialization still refuses an unaccounted transport.
 No automatic background worker starts.
 
 ### Request bounds
@@ -70,7 +73,8 @@ Gateway discovery uses the returned device UUID, never a UUID derived from its M
 Each insight request covers one completed UTC hour, with `limit=1` and `page=1`.
 The catalog must confirm the scope, type, unit, interval, and max-age.
 Two separate metric requests avoid an undocumented multi-metric mapping.
-The response must align one timestamp with one value in the requested window.
+The response must align zero or one timestamp with the same number of values in the requested window.
+An empty aligned series remains unknown, while valid port and peer observations remain available.
 The collector never follows a `next` URL.
 A page with more results reports partial coverage.
 The cooldown remains after success or failure.

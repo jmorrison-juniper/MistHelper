@@ -157,7 +157,7 @@ def test_hidden_sdk_transport_cannot_bypass_enabled_admission(monkeypatch):
 
     monkeypatch.setenv("WAN_SHARED_ADMISSION", "true")
     with pytest.raises(ConnectionError, match="transport"):
-        MistSessionConfigurator.configure_shared_admission(SimpleNamespace())
+        MistSessionConfigurator._configure_timeout(SimpleNamespace())
 
 
 @pytest.mark.parametrize("execution", ["manual", "fetcher"])
