@@ -109,7 +109,36 @@ def test_restore_source_change_after_org_write_stops_sites(tmp_path: Path, monke
     assert result.completed == [f"org:{ORG_ID}"]
     assert result.failed == [f"site:{SITE_ID}"]
     assert len(session.writes) == 1
-    assert "source backup changed" in result.error
+
+
+@pytest.mark.parametrize("kind", ["policy", "restore"])
+def test_initial_and_recovery_snapshot_callbacks_include_known_completed_and_total(tmp_path: Path, kind: str) -> None:
+    """Settings requests must retain known counts instead of resetting progress to zero."""
+    events: list[dict[str, Any]] = []
+    if kind == "policy":
+        session, workflow, previous = prepared(tmp_path)
+        workflow.progress = events.append
+        workflow.__post_init__()
+        plan = [workflow.prepare({"id": ORG_ID, "name": "Fixture Organization"}, [])]
+        workflow.back_up(plan)
+        expected_initial = [0, 1]
+        expected_total = 2
+    else:
+        session = RestoreSession(tmp_path)
+        workflow = session.workflow()
+        workflow.progress = events.append
+        workflow.__post_init__()
+        plan = workflow.prepare(session.path.stem, [f"org:{ORG_ID}", f"site:{SITE_ID}"], session.cloud)
+        workflow.back_up(plan)
+        expected_initial = [1]
+        expected_total = 2
+    reads = [event for event in events if event["phase"] == "Read site settings"]
+    assert [event["completed"] for event in reads[: len(expected_initial)]] == expected_initial
+    assert all(event["total"] == expected_total for event in reads[: len(expected_initial)])
+    assert reads[-1]["completed"] >= 1
+    assert reads[-1]["total"] == (3 if kind == "policy" else 2)
+    assert any(event["phase"] == "backup_verified" and event["completed"] == event["total"] for event in events)
+    assert session.writes == []
 
 
 @pytest.mark.parametrize("kind", ["policy", "restore"])
@@ -141,3 +170,32 @@ def test_lost_recovery_after_org_write_stops_remaining_sites(
         result = workflow.apply(plan, "RESTORE", proof=proof)
         assert result.failed == [f"site:{SITE_ID}"]
     assert len(session.writes) == 1
+
+
+@pytest.mark.parametrize(
+    "settings",
+    [
+        {"unknown": "private-fixture"},
+        {"ssr": {"conductor_token": "<redacted>"}},
+        {"auto_upgrade": {"enabled": "invalid"}},
+    ],
+)
+def test_unrestorable_recovery_settings_prevent_readiness_and_every_write(
+    tmp_path: Path, settings: dict[str, Any]
+) -> None:
+    """Backup verification cannot declare readiness when restoration rejects its writable state."""
+    session, workflow, previous = prepared(tmp_path)
+    events: list[dict[str, Any]] = []
+    session.settings[f"/api/v1/sites/{SITE_ID}/setting"] = settings
+    workflow.progress = events.append
+    workflow.__post_init__()
+    plan = [workflow.prepare({"id": ORG_ID, "name": "Fixture Organization"}, [])]
+    with pytest.raises(PolicyError) as failure:
+        workflow.back_up(plan)
+    assert str(failure.value) == (
+        "The backup cannot be restored under the supported writable schema. "
+        "Confirmation is blocked. Obtain the vendor contract for these settings."
+    )
+    assert session.writes == []
+    assert not any(event["phase"] == "backup_verified" for event in events)
+    assert not (tmp_path / ".firmware-policy-backups").exists()

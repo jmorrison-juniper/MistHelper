@@ -21,16 +21,16 @@ class SettingsSession:
             f"/api/v1/orgs/{ORG_ID}/setting": {
                 "auto_upgrade": {"enabled": False, "custom_versions": {"AP41": "old"}},
                 "ssr": {"conductor_token": "private-fixture", "disable_stats": True},
-                "timezone": "UTC",
+                "allow_mist": False,
             },
             f"/api/v1/sites/{SITE_ID}/setting": {
                 "auto_upgrade": {"enabled": False},
                 "switch": {"auto_upgrade": {"enabled": True}, "networks": {"main": {"vlan_id": 10}}},
                 "ssr": {"auto_upgrade": {"enabled": False}, "conductor_token": "private-fixture"},
-                "juniper_srx": {"auto_upgrade": {"enabled": False}, "gateways": {"example": {}}},
-                "timezone": "Europe/London",
+                "juniper_srx": {"auto_upgrade": {"enabled": False}, "gateways": []},
+                "allow_mist": True,
             },
-            f"/api/v1/sites/{OTHER_SITE_ID}/setting": {"timezone": "UTC"},
+            f"/api/v1/sites/{OTHER_SITE_ID}/setting": {"allow_mist": False},
         }
         self.writes: list[tuple[str, dict[str, Any]]] = []
         self.reads: list[tuple[str, dict[str, str]]] = []
@@ -39,6 +39,10 @@ class SettingsSession:
         self.fail_read: str | None = None
         self.ignore_write = False
         self.status = 503
+
+    def get_cloud(self) -> str:
+        """Return the SDK cloud identity used by operation ownership checks."""
+        return "api.mist.com"
 
     def mist_get(self, uri: str, query: dict[str, str] | None = None) -> SimpleNamespace:
         """Return deterministic catalog, inventory, site, or local-setting records."""

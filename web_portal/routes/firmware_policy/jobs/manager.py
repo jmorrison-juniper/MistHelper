@@ -12,8 +12,9 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from src.operations.execution.firmware_policy.sdk import PolicyError
+from src.operations.execution.firmware_policy.sdk import PolicyError, PolicyResponse
 
+from .ownership import WorkerOwner
 from .state import JobEntry, JobErrors, JobState
 from .storage import JobFiles
 
@@ -32,8 +33,11 @@ class JobManager:
         self.slots = threading.BoundedSemaphore(16)  # Bound running and queued requests.
         self.executor = executor or ThreadPoolExecutor(max_workers=2, thread_name_prefix="firmware-jobs")
         self.entries: dict[str, JobEntry] = {}  # Complete settings exist only in live contexts.
+        self.worker = WorkerOwner(
+            self.files.directory, self._dispatch
+        )  # Live native leases prevent false interruption.
         for record in self.files.read_all():
-            if record["state"] in {"queued", "preparing", "ready", "applying"}:
+            if record["state"] in {"queued", "preparing", "ready", "applying"} and not self._live(record):
                 record.update(
                     state="interrupted",
                     error="The worker restarted. Prepare a new operation.",
@@ -54,6 +58,7 @@ class JobManager:
             record: dict[str, Any] = dict(
                 job_id=identifier,
                 owner=JobState.owner(owner),
+                worker=self.worker.identifier,
                 kind=kind,
                 state="queued",
                 progress={},
@@ -70,11 +75,29 @@ class JobManager:
         """Return identical missing status for unknown jobs and foreign browsers."""
         with self.lock:
             entry = self._owned(identifier, owner)  # Verify ownership before exposing progress.
+            worker = entry.record.get("worker")  # Plans remain exclusively in the owning process.
+            if worker and worker != self.worker.identifier and self._live(entry.record):
+                result = self.worker.request(worker, dict(action="status", job_id=identifier, owner=owner))
+                if not isinstance(result, dict):
+                    raise PolicyError("The owning worker status is not valid.")
+                return result  # Relay only a sanitized owner-checked status object.
+            if worker != self.worker.identifier and entry.record["state"] in {
+                "queued",
+                "preparing",
+                "ready",
+                "applying",
+            }:
+                entry.record.update(state="interrupted", error="The owning worker stopped. Prepare a new operation.")
+                self.files.save(entry.record)  # An absent native lease means executable plans no longer exist.
             return JobState.public(entry)  # Tokens appear only for verified ready operations.
 
     def apply(self, owner: str, token: str, factory: Callable[[Any], Work], kind: str) -> str:
         """Consume the proof token atomically before any apply worker can execute."""
         with self.lock:
+            local = any(entry.token and secrets.compare_digest(entry.token, token) for entry in self.entries.values())
+            remote = None if local else self._remote_token(owner, token)  # Route only tokens absent from this process.
+            if remote:
+                return str(self.worker.request(remote, dict(action="apply", owner=owner, token=token, kind=kind)))
             entry = self._token(owner, token)  # A foreign browser cannot invalidate a valid token.
             if entry.record["kind"] != kind:
                 raise PolicyError("The token belongs to a different workflow.")
@@ -82,7 +105,12 @@ class JobManager:
                 raise PolicyError("The job queue is full. Wait before confirmation.")
             try:
                 work = factory(entry.context)  # Build the action while the verified context exists.
-            except Exception:
+            except Exception as error:
+                logger.error(
+                    "Firmware job %s action construction stopped with %s",
+                    entry.record["job_id"],
+                    type(error).__name__,
+                )  # Keep job identity and exception type without exposing private exception text.
                 self.slots.release()  # A rejected action cannot leak an executor admission slot.
                 raise PolicyError("The operation could not start. Prepare a new operation.") from None
             entry.token = None  # A replay fails before the executor can issue a write.
@@ -93,6 +121,13 @@ class JobManager:
     def cancel(self, owner: str, token: str) -> None:
         """Invalidate a ready restoration without any cloud operation."""
         with self.lock:
+            local = any(entry.token and secrets.compare_digest(entry.token, token) for entry in self.entries.values())
+            remote = (
+                None if local else self._remote_token(owner, token)
+            )  # Cancellation reaches the process holding the proof.
+            if remote:
+                self.worker.request(remote, dict(action="cancel", owner=owner, token=token))
+                return
             entry = self._token(owner, token)  # Require a matching owner and ready token.
             if entry.record["kind"] != "restore":
                 raise PolicyError("Select a ready restoration token.")
@@ -106,10 +141,60 @@ class JobManager:
 
     def _owned(self, identifier: str, owner: str) -> JobEntry:
         """Refuse empty ownership and another browser without disclosing existence."""
+        identifier = PolicyResponse.identifier(identifier)  # A browser cannot select a filesystem path.
         entry = self.entries.get(identifier)  # An unknown identifier has no observable private state.
+        if entry is None or entry.record.get("worker") != self.worker.identifier:
+            try:
+                record = self.files.read(identifier)  # See jobs admitted after this worker started.
+                entry = JobEntry(record)  # Foreign workers recover public status only.
+                self.entries[identifier] = entry
+            except (OSError, ValueError, PolicyError):
+                raise PolicyError("The job is unavailable for this browser.") from None
         if not owner or entry is None or entry.record["owner"] != JobState.owner(owner):
             raise PolicyError("The job is unavailable for this browser.")
         return entry  # The caller holds the shared lock.
+
+    def _live(self, record: dict[str, Any]) -> bool:
+        """A native lease proves another worker still owns its private plans."""
+        identifier = record.get("worker")  # Legacy records have no recoverable live ownership.
+        return isinstance(identifier, str) and self.worker.alive(identifier)
+
+    def _remote_token(self, owner: str, token: str) -> str | None:
+        """Discover the owning process without writing tokens to durable public status."""
+        for record in self.files.read_all():
+            worker = record.get("worker")
+            if (
+                worker
+                and worker != self.worker.identifier
+                and record["owner"] == JobState.owner(owner)
+                and record["state"] == "ready"
+                and self._live(record)
+            ):
+                status = self.worker.request(worker, dict(action="status", job_id=record["job_id"], owner=owner))
+                if secrets.compare_digest(status.get("token", ""), token):
+                    return str(worker)  # Never consume a proof in the wrong process.
+        return None  # Unknown and consumed tokens cannot trigger a relayed apply.
+
+    def _dispatch(self, document: dict[str, Any]) -> Any:
+        """Expose only fixed authenticated local actions, never caller-supplied executable work."""
+        if not isinstance(document, dict):
+            raise PolicyError("The local worker request is not valid.")
+        if document.get("action") == "status":
+            return self.status(document["job_id"], document["owner"])
+        if document.get("action") == "apply":
+            from .workflows import JobWorkflows
+
+            return self.apply(document["owner"], document["token"], JobWorkflows.apply, document["kind"])
+        if document.get("action") == "cancel":
+            self.cancel(document["owner"], document["token"])
+            return None
+        raise PolicyError("The local worker action is not supported.")
+
+    def close(self) -> None:
+        """Stop a test-owned coordinator only after all admitted worker tasks finish."""
+        if hasattr(self.executor, "shutdown"):
+            self.executor.shutdown(wait=True)  # Production process exit never automatically replays a write.
+        self.worker.close()  # Release the native lease after executable work stops.
 
     def _token(self, owner: str, token: str) -> JobEntry:
         """Check random single-use references without timing-sensitive equality."""
@@ -125,7 +210,12 @@ class JobManager:
         try:
             self.files.save(self.entries[identifier].record)  # Make accepted work visible before dispatch.
             self.executor.submit(self._run, identifier, work, applying)  # A bounded semaphore limits the queue.
-        except Exception:
+        except Exception as error:
+            logger.error(
+                "Firmware job %s dispatch stopped with %s",
+                identifier,
+                type(error).__name__,
+            )  # A failed storage or executor admission retains actionable sanitized context.
             self.slots.release()  # Failed dispatch must not leak an admission slot.
             self.entries[identifier].token = None  # Never reissue an uncertain apply token.
             self.entries[identifier].record.update(

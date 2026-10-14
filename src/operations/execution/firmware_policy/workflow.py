@@ -9,6 +9,7 @@ from typing import Any
 
 from .changes import FirmwarePolicy, PolicyChanges
 from .recovery.backup import BackupProof, PolicyBackup
+from .recovery.schema import RestoreSchema
 from .sdk import PolicyApi, PolicyError, PolicyResponse
 
 logger = logging.getLogger(__name__)
@@ -66,6 +67,7 @@ class PolicyWorkflow:
     backup: PolicyBackup
     stopped: Callable[[], bool] = lambda: False
     progress: Callable[[dict[str, Any]], None] | None = None
+    schema: RestoreSchema = field(default_factory=RestoreSchema, repr=False)
 
     def __post_init__(self) -> None:
         """Connect workflow progress to the same SDK request and quota-wait events."""
@@ -75,6 +77,7 @@ class PolicyWorkflow:
 
     def event(self, phase: str, scope: str, identifier: str, details: dict[str, Any]) -> None:
         """Report names and counts without private snapshot values."""
+        self.api.guard.context = {"scope": scope, "id": identifier, **details}
         if self.progress:
             self.progress({"phase": phase, "scope": scope, "id": identifier, **details})
 
@@ -93,6 +96,16 @@ class PolicyWorkflow:
             if site_id in seen:
                 raise PolicyError("The organization site list contains a duplicate identifier.")
             seen.add(site_id)  # Do not send duplicate settings writes.
+            self.event(
+                "preparing",
+                "site",
+                site_id,
+                {
+                    "name": str(site.get("name", site_id)),
+                    "completed": len(changes),
+                    "total": len(listing),
+                },
+            )  # Establish known counts before a settings request can wait for admission.
             settings = self.api.read("site", site_id)  # Capture complete settings before any change.
             changes.append(SiteChange(site_id, str(site.get("name", site_id)), settings, PolicyChanges.site(settings)))
             self.event(
@@ -121,6 +134,14 @@ class PolicyWorkflow:
         """Prepare a durable verified backup before the operator confirms application."""
         records = self.records(plans)  # Include every complete selected snapshot.
         self._verify_current(plans)  # Refuse stale preparation before writing its recovery file.
+        for record in records:  # A checksum proves integrity, not the ability to restore saved writable settings.
+            try:
+                self.schema.project(record["scope"], record["settings"])
+            except PolicyError:
+                raise PolicyError(
+                    "The backup cannot be restored under the supported writable schema. "
+                    "Confirmation is blocked. Obtain the vendor contract for these settings."
+                ) from None
         self.event("backing_up", "org", plans[0].identifier, {"completed": 0, "total": len(records)})
         path = self.backup.save(records)  # No Mist write can run until the complete backup gate succeeds.
         self.backup.verify(path, records)  # Verify the durable bundle again at the apply boundary.
@@ -185,15 +206,49 @@ class PolicyWorkflow:
         """Refuse concurrent settings changes and cancellation before the backup gate."""
         if self.stopped():
             raise PolicyError("The firmware policy operation was cancelled.")
+        total = sum(1 + len(plan.sites) for plan in plans)
+        completed = 0
         for plan in plans:
             self._membership(plan)  # Reject changes before the complete snapshot comparison.
+            self.event(
+                "verifying_snapshots",
+                "org",
+                plan.identifier,
+                {
+                    "name": plan.name,
+                    "completed": completed,
+                    "total": total,
+                },
+            )
             if self.api.read("org", plan.identifier) != plan.original:
                 raise PolicyError("Organization settings changed after preview. Create a new preview.")
+            completed += 1
             for site in plan.sites:
                 if self.stopped():
                     raise PolicyError("The firmware policy operation was cancelled.")
+                self.event(
+                    "verifying_snapshots",
+                    "site",
+                    site.identifier,
+                    {
+                        "name": site.name,
+                        "completed": completed,
+                        "total": total,
+                    },
+                )
                 if self.api.read("site", site.identifier) != site.original:
                     raise PolicyError("Site settings changed after preview. Create a new preview.")
+                completed += 1
+                self.event(
+                    "verifying_snapshots",
+                    "site",
+                    site.identifier,
+                    {
+                        "name": site.name,
+                        "completed": completed,
+                        "total": total,
+                    },
+                )
 
     def _apply_organization(self, plan: OrganizationChange, result: PolicyResult, proof: BackupProof) -> None:
         """Check freshness, save the policy, and verify its selected values."""

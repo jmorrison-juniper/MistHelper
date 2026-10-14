@@ -46,7 +46,7 @@
 - [x] T018 Update `documentation/org-auto-upgrade-policy.md`, `documentation/backup-restoration.md`, related wiki sections, and narrow `README.md` links.
 - [x] T019 Add `changelog.d/issue-4227-firmware-portal.md`.
 - [ ] T020 Run relevant gates and record exact results in `specs/live/20261014-204700-firmware-portal-remediation/analysis.md`.
-- [ ] T021 Complete acceptance mapping and Spec Kit analysis in `specs/live/20261014-204700-firmware-portal-remediation/analysis.md`.
+- [x] T021 Complete acceptance mapping and Spec Kit analysis in `specs/live/20261014-204700-firmware-portal-remediation/analysis.md`.
 - [ ] T022 Commit milestones, create the template-based pull request, and inspect final CI artifacts without merging.
 
 ## Dependencies

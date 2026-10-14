@@ -143,6 +143,8 @@
             const progress = element(this.prefix + 'Progress');
             progress.style.width = '0%';
             progress.setAttribute('aria-valuenow', '0');
+            progress.removeAttribute('aria-valuetext');
+            progress.classList.remove('progress-bar-striped', 'progress-bar-animated');
             progress.textContent = '0%';
             this.message('Selection changed. Prepare backups again.');
             this.controls();
@@ -159,7 +161,9 @@
         async apply() {
             if (this.busy || !this.token || element(this.prefix + 'Confirmation').value !== this.confirmation) return;
             const token = this.token;
+            const identifier = sessionStorage.getItem(this.prefix + '-settings-job');
             this.invalidate();
+            if (identifier) sessionStorage.setItem(this.prefix + '-settings-job', identifier);
             await this.start(this.endpoint + '/apply', {token, confirmation: this.confirmation});
         }
 
@@ -195,16 +199,23 @@
                 const completed = Number(progress.completed || 0);
                 const total = Number(progress.total || 0);
                 const percentage = total ? Math.min(100, Math.round(100 * completed / total)) : 0;
+                const active = ['queued', 'preparing', 'applying', 'running'].includes(state);
+                const indeterminate = active && !total;
                 const bar = element(this.prefix + 'Progress');
-                bar.style.width = percentage + '%';
-                bar.textContent = percentage + '%';
-                bar.setAttribute('aria-valuenow', String(percentage));
+                bar.style.width = indeterminate ? '100%' : percentage + '%';
+                bar.textContent = indeterminate ? 'Working' : percentage + '%';
+                bar.classList.toggle('progress-bar-striped', indeterminate);
+                bar.classList.toggle('progress-bar-animated', indeterminate);
+                bar.setAttribute('aria-valuetext', indeterminate ?
+                    'Working. The target count is not available yet.' : `${completed} of ${total}.`);
+                if (indeterminate) bar.removeAttribute('aria-valuenow');
+                else bar.setAttribute('aria-valuenow', String(percentage));
                 const wait = Number(progress.wait_seconds || 0);
                 this.message((progress.message || human(progress.phase || state)) +
                     (total ? `: ${completed} of ${total}.` : '') +
                     (wait ? ` Request allowance wait: about ${Math.ceil(wait)} seconds.` : ''));
                 if (data.rows) this.table.update(data.rows);
-                if (['queued', 'preparing', 'applying', 'running'].includes(state)) {
+                if (active) {
                     window.setTimeout(() => this.poll(identifier), 1500);
                     return;
                 }

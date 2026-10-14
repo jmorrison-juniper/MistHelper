@@ -45,11 +45,17 @@ Domain workflows expose an optional sanitized progress callback. A callback rece
 Events describe phase, scope, identifier, name, completed count, total, and waiting seconds when known.
 The portal uses these events to persist sanitized status while a bounded executor owns work.
 Preparation captures complete snapshots and writes verified backups. Apply reuses that recovery proof and rechecks durable files and current settings.
+Preparation also projects every snapshot through the restoration schema before it permits confirmation.
 Existing CLI apply calls still perform the complete backup gate.
 
 Portal preparation returns HTTP 202 with `job_id`. Status returns state, progress, sanitized rows, and a token only when ready.
-Apply consumes that token once and returns another pollable job. Active preparation does not expire after ten minutes.
+Apply consumes that token once and retains the same pollable job identifier. Active preparation does not expire after ten minutes.
 Status survives a worker restart and reports interrupted work explicitly. Private executable plans do not resume automatically.
+Native lifetime locks identify live same-host owners. Authenticated loopback requests reach the worker that owns the private plan.
+All workers require the same private DATA_DIR.
+Shared cloud and organization locks exclude overlapping writers across both workflows and browser sessions.
+The locks remain held through proof checks, freshness checks, writes, and readback.
+Preparation remains concurrent because it performs no cloud writes.
 
 Bundle readers preserve the existing JSON envelope and canonical checksum. They stream records and validate each bounded record.
 Reject duplicate JSON keys, invalid shapes, invalid private access, partial files, and mismatched checksums.
@@ -61,6 +67,7 @@ Request admission includes reads, pagination, usage probes, and writes. Valid wa
 
 ## Complexity Tracking
 
-No new transport, external service, or deployed worker is necessary.
+Mist transport remains exclusively in the SDK. Internal same-host worker routing uses authenticated loopback communication.
+No external service or separately deployed worker is necessary.
 PowerShell is unavailable on this host. The setup-plan script only resolves feature paths and copies the template.
 This phase performs those steps directly using the existing feature pointer and the resolved local template.

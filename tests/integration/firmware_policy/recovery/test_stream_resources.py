@@ -6,8 +6,12 @@ import tracemalloc
 from pathlib import Path
 from uuid import UUID, uuid4
 
+import pytest
+
 from src.operations.execution.firmware_policy.recovery.backup import PolicyBackup
 from src.operations.execution.firmware_policy.recovery.bundle import BundleFiles, LegacyStream
+from src.operations.execution.firmware_policy.sdk import PolicyError
+from tests.unit.firmware_policy.recovery.fakes import RestoreSession
 
 
 def test_4001_realistic_records_use_bounded_input_and_linear_retained_memory(tmp_path: Path, monkeypatch) -> None:
@@ -63,3 +67,14 @@ def test_4001_realistic_records_use_bounded_input_and_linear_retained_memory(tmp
         )
     )
     path.unlink()
+
+
+@pytest.mark.parametrize("content", [b"", b'{"records":[{"scope":"site"'])
+def test_empty_body_and_malformed_json_stop_before_any_request_or_write(tmp_path: Path, content: bytes) -> None:
+    """A streamed partial source cannot produce a selected recovery plan."""
+    session = RestoreSession(tmp_path)
+    session.path.write_bytes(content)
+    with pytest.raises(PolicyError):
+        session.prepare()
+    assert session.reads == []
+    assert session.writes == []

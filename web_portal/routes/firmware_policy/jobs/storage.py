@@ -12,6 +12,8 @@ from uuid import uuid4
 from src.operations.execution.firmware_policy.recovery.backup import BACKUP_DIRECTORY, BackupAccess
 from src.operations.execution.firmware_policy.sdk import PolicyError
 
+from .ownership import FileAccess
+
 logger = logging.getLogger(__name__)
 
 
@@ -21,6 +23,12 @@ class JobDocuments:
     @staticmethod
     def read(path: Path) -> dict[str, Any]:
         """Check the opened file rather than trusting an earlier path inspection."""
+        with FileAccess.hold(path):
+            return JobDocuments._read(path)  # Native coordination prevents replacement during verification.
+
+    @staticmethod
+    def _read(path: Path) -> dict[str, Any]:
+        """Read one privately owned JSON document under its stable native transaction lock."""
         BackupAccess.verify(path)  # Reject shared access and alternate links before opening.
         descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))  # Refuse a substituted symbolic link.
         with os.fdopen(descriptor, encoding="utf-8") as stream:
@@ -80,6 +88,11 @@ class JobFiles:
 
     def _write(self, path: Path, record: dict[str, Any]) -> None:
         """Flush one complete sanitized document before replacing its private destination."""
+        with FileAccess.hold(path):
+            self._replace(path, record)  # Other processes cannot open a descriptor during replacement.
+
+    def _replace(self, path: Path, record: dict[str, Any]) -> None:
+        """Replace a complete private document under its stable native transaction lock."""
         BackupAccess.verify(self.directory.parent, directory=True)  # Reject a substituted backup root.
         BackupAccess.verify(self.directory, directory=True)  # Recheck private access at each write boundary.
         if path.exists() or path.is_symlink():
@@ -113,3 +126,13 @@ class JobFiles:
             records.append(record)  # Only status survives a worker restart.
         logger.debug("Read %s persistent firmware job records", len(records))
         return records  # Recovery never submits writes.
+
+    def read(self, identifier: str) -> dict[str, Any]:
+        """Read another worker's latest durable state without replacing its live execution."""
+        record = JobDocuments.status(
+            self.directory / f"{identifier}.json"
+        )  # Full private validation precedes ownership.
+        progress = self.directory / f"{identifier}.progress"
+        if progress.exists() and record["state"] in {"queued", "preparing", "ready", "applying"}:
+            JobDocuments.progress(progress, record)  # Keep admission waits visible through any worker.
+        return record  # No private proof is reconstructed.

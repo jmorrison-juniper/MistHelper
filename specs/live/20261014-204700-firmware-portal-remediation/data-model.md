@@ -6,6 +6,8 @@ Private fields: complete domain plan, verified backup paths, owner, and source i
 Public fields: opaque reference, workflow kind, state, creation time, progress, and sanitized scope rows.
 States: queued, preparing, ready, applying, complete, partial, failed, cancelled, interrupted.
 Only ready can become applying. Confirmation consumes readiness once under a lock.
+The same operation reference identifies preparation and application.
+Private persistent ownership metadata identifies the live worker without persisting an executable plan.
 
 ## Backup
 
@@ -25,3 +27,6 @@ Sort site presentation by case-insensitive name and identifier.
 Active jobs remain available through valid request waits.
 Persistent status distinguishes interruption from completion.
 An interrupted apply never resumes automatically. The operator must prepare a new operation.
+Same-host workers share a private DATA_DIR and route owned requests through authenticated loopback communication.
+Cloud and organization write locks exclude overlapping policy and restoration applications.
+An unavailable write lock causes explicit failure before cloud reads or writes.

@@ -6,7 +6,7 @@ from typing import Any
 import pytest
 
 from src.operations.execution.firmware_policy.cli import PolicyCatalog
-from src.operations.execution.firmware_policy.sdk import PolicyApi
+from src.operations.execution.firmware_policy.sdk import PolicyApi, PolicyError
 from tests.unit.firmware_policy.fakes import ORG_ID, SettingsSession
 
 
@@ -45,3 +45,20 @@ def test_explicit_ssr_catalog_model_constraint_is_preserved() -> None:
     models = [{"model": "SSR120"}, {"model": "SSR130"}]
     rows: list[dict[str, Any]] = [{"model": "SSR120", "version": "6.0.10-5"}]
     assert PolicyCatalog.ssr_rows(models, rows) == [{"model": "SSR120", "version": "6.0.10-5"}]
+
+
+@pytest.mark.parametrize("status", [403, 503])
+def test_http_4xx_and_http_5xx_model_catalog_failure_prevents_invented_choices(tmp_path: Path, status: int) -> None:
+    """A failed authoritative model lookup cannot fall back to assumed SSR names."""
+    session = SettingsSession(tmp_path)
+    session.fail_read = "/api/v1/const/device_models"
+    session.status = status
+    with pytest.raises(PolicyError, match=f"HTTP {status}"):
+        PolicyCatalog.available(PolicyApi(session), ORG_ID, "ssr")
+    assert session.writes == []
+    assert not any(uri.endswith("/inventory") for uri, query in session.reads)
+    assert [uri for uri, query in session.reads] == [
+        "/api/v1/self/usage",
+        f"/api/v1/orgs/{ORG_ID}/ssr/versions",
+        "/api/v1/const/device_models",
+    ]

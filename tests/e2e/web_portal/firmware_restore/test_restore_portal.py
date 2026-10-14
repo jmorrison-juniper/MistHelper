@@ -89,11 +89,14 @@ class TestRestorePortal:
         assert "private-fixture" not in listing.get_data(as_text=True) + json.dumps(data) + json.dumps(result)
 
     @pytest.mark.parametrize("body", [b"", b"bad json", b"[]", b'{"token":"x","confirmation":"RESTORE","settings":{}}'])
-    def test_malformed_input_fails(self, restore_portal: tuple[Any, RestoreSession], body: bytes) -> None:
+    def test_empty_body_and_malformed_json_input_fails(
+        self, restore_portal: tuple[Any, RestoreSession], body: bytes
+    ) -> None:
         """Malformed or injected posted settings must not become SDK request bodies."""
         app, sdk = restore_portal
         response = RestoreRequests.post(app.test_client(), "apply", body, raw=True)
         assert response.status_code == 400
+        assert sdk.reads == []
         assert sdk.writes == []
 
     def test_csrf_owner_cancel_and_repeat(self, restore_portal: tuple[Any, RestoreSession]) -> None:

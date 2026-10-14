@@ -95,12 +95,13 @@ class PolicyAdmission:
         self.used = 0  # Count requests since the last authoritative observation.
         self.limit = 0  # Never assume quota availability before a successful probe.
         self.quota_wait = 60.0  # Poll actual rolling usage when the API supplies no wait duration.
+        self.context: dict[str, Any] = {}  # Retain known workflow counts during SDK reads and quota waits.
 
     def wait(self, seconds: float, identifier: str) -> None:
         """Report a sanitized wait before sleeping for quota admission."""
         if seconds > 0:  # Zero-delay fixture clocks need no sleep.
             if self.progress:
-                self.progress({"phase": "waiting", "id": identifier, "wait_seconds": seconds})
+                self.progress({**self.context, "phase": "waiting", "id": identifier, "wait_seconds": seconds})
             logger.info("Wait %.3f seconds for policy request admission", seconds)
             time.sleep(seconds)  # A rolling quota does not reset at a wall-clock hour boundary.
             logger.debug("Completed policy admission wait")
@@ -157,7 +158,7 @@ class PolicyAdmission:
             self.used += 1  # Reserve quota even when transport completion is uncertain.
             api_usage_cache.update(policy_actual_used=self.used)  # Retain the actual local request count.
             if self.progress:
-                self.progress({"phase": action, "id": identifier, "wait_seconds": 0})
+                self.progress({**self.context, "phase": action, "id": identifier, "wait_seconds": 0})
             return PolicyResponse.request(call, action, identifier)  # Never retry an uncertain settings write.
 
     def admit(self, identifier: str) -> None:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
@@ -18,15 +19,19 @@ from tests.unit.firmware_policy.recovery.fakes import RestoreSession
 from tests.unit.firmware_policy_jobs.test_manager import ManualExecutor
 from web_portal.routes.firmware_policy import firmware_policy_bp
 from web_portal.routes.firmware_policy.jobs.manager import JobManager
+from web_portal.routes.firmware_policy.jobs.ownership.targets import TargetWrites
 
 
 @pytest.fixture
-def job_portal(tmp_path: Path, monkeypatch: Any) -> tuple[Flask, SettingsSession, ManualExecutor]:
+def job_portal(tmp_path: Path, monkeypatch: Any) -> Iterator[tuple[Flask, SettingsSession, ManualExecutor]]:
     """Use genuine SDK domain safeguards with deterministic admitted worker calls."""
     monkeypatch.setattr("src.operations.execution.firmware_policy.sdk.AdaptivePacer.next_delay", lambda self: 0.0)
     app = Flask(__name__)  # A focused application avoids unrelated portal worker startup.
     app.config.update(SECRET_KEY="offline-session-fixture", TESTING=True, DATA_DIR=str(tmp_path), ORG_ID=ORG_ID)
     api_session = SettingsSession(tmp_path)  # Never connect to a production organization.
+    monkeypatch.setattr(
+        api_session, "get_cloud", lambda: "api.mist.com", raising=False
+    )  # Writer locks use checked cloud identity.
     app.config["APISESSION"] = api_session
     executor = ManualExecutor()
     app.extensions["firmware_policy_jobs"] = JobManager(tmp_path, executor)
@@ -38,7 +43,8 @@ def job_portal(tmp_path: Path, monkeypatch: Any) -> tuple[Flask, SettingsSession
         """Supply a fixture CSRF token through the integrated operations workspace."""
         return str(generate_csrf())  # A redirected legacy link uses the same browser session.
 
-    return app, api_session, executor
+    yield app, api_session, executor
+    app.extensions["firmware_policy_jobs"].close()  # Stop this fixture's private local worker route.
 
 
 def post(client: Any, path: str, body: dict[str, Any]) -> Any:
@@ -283,6 +289,44 @@ def test_backup_metadata_names_share_one_identity_and_site_listing(job_portal: A
     assert len(paths) == 3
     assert "private-fixture" not in response.get_data(as_text=True)
     assert api_session.writes == []
+
+
+@pytest.mark.parametrize("kind", ["policy", "restore"])
+def test_conflicting_cloud_organization_writer_rejects_apply_without_writes(job_portal: Any, kind: str) -> None:
+    """Both portal workflows refuse another active writer before domain freshness or cloud mutation."""
+    app, api_session, executor = job_portal
+    client = app.test_client()
+    endpoint = "/api/firmware-policy"
+    body = policy_body()
+    confirmation = "CONFIGURE"
+    if kind == "restore":
+        api_session = RestoreSession(api_session.data_directory)
+        app.config["APISESSION"] = api_session
+        endpoint = "/api/settings-restore"
+        confirmation = "RESTORE"
+        choices = client.get(f"{endpoint}/bundles").get_json()
+        bundle = choices["bundles"][0]
+        body = {
+            "bundle": bundle["token"],
+            "records": [f"{record['scope']}:{record['id']}" for record in bundle["records"]],
+            "cloud": choices["cloud"],
+        }
+    identifier = post(client, f"{endpoint}/preview", body).get_json()["job_id"]
+    executor.run()
+    ready = client.get(f"/api/firmware-policy/jobs/{identifier}").get_json()
+    assert ready["state"] == "ready"
+    token = ready["token"]
+    api_session.reads.clear()  # A conflicting apply must stop before any cloud freshness read.
+    with TargetWrites.hold(api_session.data_directory / ".firmware-policy-backups", "api.mist.com", {ORG_ID}):
+        assert post(client, f"{endpoint}/apply", {"token": token, "confirmation": confirmation}).status_code == 202
+        executor.run()
+    outcome = client.get(f"/api/firmware-policy/jobs/{identifier}").get_json()
+    assert outcome["state"] == "failed"
+    assert "another active settings writer" in outcome["error"]
+    assert "token" not in outcome
+    assert api_session.reads == []
+    assert api_session.writes == []
+    assert post(client, f"{endpoint}/apply", {"token": token, "confirmation": confirmation}).status_code == 400
 
 
 @pytest.mark.parametrize("status", [403, 503])

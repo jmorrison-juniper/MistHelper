@@ -106,6 +106,11 @@ class RestoreWorkflow:
 
     def event(self, phase: str, target: RestoreTarget | None, completed: int, total: int) -> None:
         """Send names and counts without saved or current settings values."""
+        self.api.guard.context = {
+            "completed": completed,
+            "total": total,
+            **({"scope": target.scope, "id": target.identifier, "name": target.name} if target else {}),
+        }
         if self.progress:
             self.progress(
                 {
@@ -148,8 +153,10 @@ class RestoreWorkflow:
     ) -> list[tuple[RestoreTarget, list[str]]]:
         """Build named private targets with constant-time membership tests."""
         indexed = {key: set(value) for key, value in membership.items()}
-        projected = []
+        projected: list[tuple[RestoreTarget, list[str]]] = []
         for record in records:  # Use indexed memberships instead of scanning the source per selected site.
+            self.event("preparing", None, len(projected), len(records))
+            self.api.guard.context.update(scope=record["scope"], id=record["id"], name=names.get(record["id"], ""))
             target, excluded = self._target(bundle, record, indexed)
             target.organization_name = names[target.organization]
             target.name = names[target.identifier]
@@ -180,13 +187,15 @@ class RestoreWorkflow:
             raise PolicyError("The source backup or active cloud changed. Create a new preview.")
         if RestoreSelection.membership(self.api, set(plan.membership)) != plan.membership:
             raise PolicyError("Site membership changed. Create a new preview.")
-        records = []
+        records: list[dict[str, Any]] = []
         for target in plan.targets:
             if self.stopped():
                 raise PolicyError("The restoration was cancelled.")
+            self.event("verifying_snapshots", target, len(records), len(plan.targets))
             if self.api.read(target.scope, target.identifier) != target.original:
                 raise PolicyError("Settings changed after preview. Create a new preview.")
             records.append({"scope": target.scope, "id": target.identifier, "settings": target.original})
+            self.event("verifying_snapshots", target, len(records), len(plan.targets))
         return records
 
     def back_up(self, plan: RestorePlan) -> BackupProof:

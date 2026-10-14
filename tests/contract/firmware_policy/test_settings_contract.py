@@ -31,8 +31,8 @@ def test_real_sdk_read_endpoint_parity_uses_supplied_session(tmp_path: Path) -> 
     """Read both settings scopes through actual SDK methods and the supplied session."""
     session = SettingsSession(tmp_path)
     api = PolicyApi(session)
-    assert api.read("org", ORG_ID)["timezone"] == "UTC"
-    assert api.read("site", SITE_ID)["timezone"] == "Europe/London"
+    assert api.read("org", ORG_ID)["allow_mist"] is False
+    assert api.read("site", SITE_ID)["allow_mist"] is True
     assert session.reads == [
         ("/api/v1/self/usage", {}),
         (f"/api/v1/orgs/{ORG_ID}/setting", {}),

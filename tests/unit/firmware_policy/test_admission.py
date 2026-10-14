@@ -38,7 +38,7 @@ def test_real_rolling_hour_exhaustion_waits_above_600_seconds(tmp_path: Path, mo
         lambda seconds: clock.__setitem__(0, clock[0] + seconds),
     )
     result = PolicyApi(session, progress=events.append).read("org", ORG_ID)
-    assert result["timezone"] == "UTC"
+    assert result["allow_mist"] is False
     assert clock[0] - 3599 == 660
     assert len(probes) == 12
     assert sum(event.get("wait_seconds", 0) for event in events) == 660
@@ -101,6 +101,6 @@ def test_server_quota_wait_above_600_seconds_is_visible_and_rechecked(
         "src.operations.execution.firmware_policy.sdk.time.sleep",
         lambda seconds: clock.__setitem__(0, clock[0] + seconds),
     )
-    assert PolicyApi(session, progress=events.append).read("org", ORG_ID)["timezone"] == "UTC"
+    assert PolicyApi(session, progress=events.append).read("org", ORG_ID)["allow_mist"] is False
     assert probes == [0, 660]
     assert any(event.get("wait_seconds") == 660 for event in events)

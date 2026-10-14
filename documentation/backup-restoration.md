@@ -33,6 +33,7 @@ Unselected organizations and sites remain unchanged.
 Selected settings intentionally return to saved values, including unrelated historical settings.
 
 The local OpenAPI 3.1 schemas define the writable fields.
+Explicit compatible declarations from the checked-in legacy schema supplement documented fields and schema alternatives.
 Known top-level read-only fields remain under server control.
 These include identifiers and creation or modification timestamps.
 The tool refuses unknown fields, invalid values, nested server-managed content, and unsupported schema shapes.
@@ -91,6 +92,9 @@ The portal keeps settings and credentials on the server.
 Plans belong to one browser session. Active preparation remains valid through long request allowance waits.
 Each preview permits one application.
 Status polling survives a page refresh. A worker interruption stops the plan without automatic write replay.
+Workers on the same host route requests to the live plan owner through authenticated loopback communication.
+They require the same private `data/` directory.
+Organization write locks refuse overlapping policy or restoration changes across browser sessions and workers.
 Existing portal access controls and request protection apply.
 No upload or arbitrary file path is accepted.
 
@@ -118,3 +122,26 @@ The tool uses the same private format for new recovery bundles.
 Keep both the original bundle and each recovery bundle.
 Offline automated acceptance uses fixture settings and mocked SDK transport.
 It does not establish user approval or a successful production restoration.
+
+## Vendor contract evidence
+
+Actual backup acceptance remains blocked by settings that the public writable schemas do not accept.
+The original and freshly created 145-record bundles both fail strict projection before writes.
+Backup integrity alone does not prove restoration usability.
+Policy preparation now requires both checks before confirmation.
+
+The [public Mist schema at revision `79274e6`](https://github.com/mistsys/mist_openapi/blob/79274e6cd85327ef51a9ab99a9c40a999d4b669a/mist.openapi.json)
+does not resolve every observed difference.
+All 3,133 upstream property names already occur in the checked-in public schemas.
+
+Vendor evidence must establish these contracts before the affected records can be restored:
+
+- Whether weekday hours and the UWB port accept null, and how complete replacement preserves those values.
+- Whether policy weekday fields accept an empty string, and its exact meaning.
+- Whether nested NAC identifiers remain server-managed during complete replacement.
+- Whether each unrecognized returned field is writable, read-only, or requires a separate endpoint.
+
+The evidence must identify request field paths, accepted types, replacement behavior, and deletion behavior.
+Do not send private settings, credentials, identifiers, or complete backups to obtain this evidence.
+Do not remove unknown fields, invent replacement values, or attempt speculative settings writes.
+The tool preserves rejection until the contract proves a safe complete restoration.

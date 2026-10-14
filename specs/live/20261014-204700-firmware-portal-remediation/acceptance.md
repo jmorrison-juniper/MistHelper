@@ -78,3 +78,18 @@ It bounds each JSON value or record to 8 MiB and nesting to 64 levels.
 
 Committed test-quality checks and CI evidence remain pending.
 No Windows execution or human acceptance is claimed.
+
+## Connected legacy-bundle check
+
+The parent built candidate `7700bcb` in a separate ephemeral container and copied the original private bundle.
+The settings-free validator passed source privacy and integrity, then rejected record zero during saved ownership or writable-schema checks.
+It sent zero network requests and zero settings writes.
+The exact safe diagnostic cause remains under investigation.
+This real-bundle acceptance is not complete, despite the passing generated large-bundle tests.
+
+The parent also tested a fresh 145-record backup with the same result.
+Safe diagnostics identify public-schema differences, nullable weekday and port fields, enum differences, and a nested read-only identifier.
+Unrecognized field names remain withheld.
+The repair must prove writable support from public schemas and preserve rejection of unproven fields.
+Policy preparation must prove recovery usability before it reveals confirmation.
+No live settings write occurred.

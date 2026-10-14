@@ -9,12 +9,13 @@ from typing import Any
 from src.operations.execution.firmware_policy.changes import FirmwarePolicy
 from src.operations.execution.firmware_policy.cli import POLICY_WARNING, PolicyCatalog
 from src.operations.execution.firmware_policy.recovery.backup import PolicyBackup
-from src.operations.execution.firmware_policy.recovery.bundle import BundleFiles
+from src.operations.execution.firmware_policy.recovery.bundle import BundleFiles, RestoreSelection
 from src.operations.execution.firmware_policy.recovery.workflow import RestoreWorkflow
 from src.operations.execution.firmware_policy.sdk import PolicyApi, PolicyError
 from src.operations.execution.firmware_policy.workflow import PolicyWorkflow
 
 from .manager import Progress, Work
+from .ownership.targets import TargetWrites
 from .state import JobErrors, JobState
 
 
@@ -83,33 +84,52 @@ class JobWorkflows:
         """Rebind progress while reusing the exact verified plan and recovery proof."""
 
         def execute(progress: Progress) -> tuple[Any, dict[str, Any]]:
-            """Never run implicit preparation or replay uncertain writes."""
-            workflow, plans, proof = context  # This tuple exists only in live private memory.
-            workflow.progress = progress  # Apply reports through the same owned job.
-            workflow.api.progress = progress  # Admission waits stay visible during application.
+            """Acquire shared organization ownership before any confirmed cloud action."""
+            workflow, plans, _ = context  # Plans remain private to their preparation worker.
             if isinstance(workflow, RestoreWorkflow):
-                result = workflow.apply(plans, "RESTORE", proof=proof)  # Domain revalidates the opaque proof.
-                failed = len(result.failed)  # Results contain checked target identifiers only.
-                public: dict[str, Any] = dict(
-                    completed=result.completed,
-                    failed=result.failed,
-                    remaining=result.remaining,
-                    error=JobErrors.message(PolicyError(result.error)) if result.error else None,
-                    backups_verified=result.backups_verified,
-                )  # Keep checked HTTP failures and recovery counts visible.
+                organizations = set(plans.membership)  # Restoration and policy share the same organization lock.
+                root = workflow.files.backup.root
             else:
-                result = workflow.apply(plans, proof=proof)  # No new automatic write or backup replay.
-                failed = len(result.failures)  # Failure text can contain sensitive external values.
-                public = dict(
-                    organizations=result.organizations,
-                    sites=result.sites,
-                    unchanged=result.unchanged,
-                    failures=[JobErrors.message(PolicyError(message)) for message in result.failures],
-                    remaining=result.remaining,
-                )
-            return None, dict(state="partial" if failed else "complete", result=public)
+                organizations = {plan.identifier for plan in plans}  # Lock each complete selected organization.
+                root = workflow.backup.root
+            try:
+                cloud = RestoreSelection.cloud(workflow.api)  # Require checked authenticated cloud identity.
+            except AttributeError:
+                raise PolicyError("The authenticated API session cannot provide its cloud identity.") from None
+            with TargetWrites.hold(root, cloud, organizations):
+                return JobWorkflows._apply(
+                    context, progress
+                )  # Retain ownership through complete readback verification.
 
         return execute  # Atomic token consumption occurs before this action can run.
+
+    @staticmethod
+    def _apply(context: Any, progress: Progress) -> tuple[Any, dict[str, Any]]:
+        """Never run implicit preparation or replay uncertain writes."""
+        workflow, plans, proof = context  # This tuple exists only in live private memory.
+        workflow.progress = progress  # Apply reports through the same owned job.
+        workflow.api.progress = progress  # Admission waits stay visible during application.
+        if isinstance(workflow, RestoreWorkflow):
+            result = workflow.apply(plans, "RESTORE", proof=proof)  # Domain revalidates the opaque proof.
+            failed = len(result.failed)  # Results contain checked target identifiers only.
+            public: dict[str, Any] = dict(
+                completed=result.completed,
+                failed=result.failed,
+                remaining=result.remaining,
+                error=JobErrors.message(PolicyError(result.error)) if result.error else None,
+                backups_verified=result.backups_verified,
+            )  # Keep checked HTTP failures and recovery counts visible.
+        else:
+            result = workflow.apply(plans, proof=proof)  # No new automatic write or backup replay.
+            failed = len(result.failures)  # Failure text can contain sensitive external values.
+            public = dict(
+                organizations=result.organizations,
+                sites=result.sites,
+                unchanged=result.unchanged,
+                failures=[JobErrors.message(PolicyError(message)) for message in result.failures],
+                remaining=result.remaining,
+            )
+        return None, dict(state="partial" if failed else "complete", result=public)
 
     @staticmethod
     def policy_rows(plans: Any) -> list[dict[str, Any]]:

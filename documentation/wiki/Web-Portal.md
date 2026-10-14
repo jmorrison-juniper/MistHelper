@@ -45,6 +45,10 @@ Private settings never appear in these tables.
 Large bundles have no arbitrary aggregate size limit.
 Request allowance waits do not expire active preparation.
 An interrupted worker never repeats uncertain writes automatically.
+Policy confirmation also requires each backup to pass restoration projection.
+Same-host workers share plan ownership and organization write exclusion through the private data directory.
+Actual-source restoration acceptance remains blocked by public schema differences.
+See the [restoration guide](../backup-restoration.md#vendor-contract-evidence) for the required vendor evidence.
 
 Warning: these workflows change cloud settings. Restored or enabled policies can permit later upgrades.
 

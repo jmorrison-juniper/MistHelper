@@ -112,7 +112,7 @@ def test_empty_body_and_malformed_json_backup_prevent_all_writes(
 def test_stale_preview_or_stop_signal_prevents_cloud_writes(tmp_path: Path) -> None:
     """Require the backed-up settings to match the current complete settings."""
     session, workflow, plans = prepared(tmp_path)
-    session.settings[f"/api/v1/sites/{SITE_ID}/setting"]["timezone"] = "UTC"
+    session.settings[f"/api/v1/sites/{SITE_ID}/setting"]["allow_mist"] = False
     with pytest.raises(PolicyError, match="changed after preview"):
         workflow.apply(plans)
     assert session.writes == []
@@ -178,7 +178,7 @@ def test_multiple_organizations_share_one_verified_complete_backup(tmp_path: Pat
     other_org = "00000000-0000-0000-0000-000000000004"
     other_site = "00000000-0000-0000-0000-000000000005"
     session.settings[f"/api/v1/orgs/{other_org}/setting"] = deepcopy(session.settings[f"/api/v1/orgs/{ORG_ID}/setting"])
-    session.settings[f"/api/v1/sites/{other_site}/setting"] = {"auto_upgrade": {"enabled": True}, "timezone": "UTC"}
+    session.settings[f"/api/v1/sites/{other_site}/setting"] = {"auto_upgrade": {"enabled": True}, "allow_mist": False}
     original_get = session.mist_get
 
     def get(uri: str, query: dict[str, str] | None = None) -> Any:

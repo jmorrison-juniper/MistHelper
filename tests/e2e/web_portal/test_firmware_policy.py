@@ -280,6 +280,60 @@ def test_browser_large_model_catalog_keeps_backup_controls_reachable(
     assert sdk.writes == []
 
 
+def test_browser_unknown_read_count_has_labeled_indeterminate_progress(
+    policy_server: tuple[str, SettingsSession], page: Any
+) -> None:
+    """Do not show a false zero-percent measurement while discovering target settings."""
+    url, sdk = policy_server
+    page.add_init_script("sessionStorage.setItem('policy-settings-job', 'fixture-reading');")
+    page.route(
+        "**/api/firmware-policy/jobs/fixture-reading",
+        lambda route: route.fulfill(json={"state": "preparing", "progress": {"phase": "read_site_settings"}}),
+    )
+    page.goto(url + "/operations?menu=305", wait_until="networkidle")
+    progress = page.get_by_test_id("policy-progress")
+    expect(progress).to_have_text("Working")
+    expect(progress).to_have_attribute("aria-valuetext", "Working. The target count is not available yet.")
+    assert progress.get_attribute("aria-valuenow") is None
+    expect(page.get_by_test_id("policy-message")).to_contain_text("Read site settings")
+    expect(page.get_by_test_id("policy-confirm-panel")).to_be_hidden()
+    assert sdk.writes == []
+
+
+def test_browser_lost_apply_response_recovers_status_without_duplicate_writes(
+    policy_server: tuple[str, SettingsSession], page: Any
+) -> None:
+    """Preserve the known operation reference when a confirmed response disappears."""
+    url, sdk = policy_server
+    submitted = []
+
+    def lose_response(route: Any) -> None:
+        """Deliver one real mutation request and discard only its browser response."""
+        submitted.append(route.request.url)
+        route.fetch()
+        route.abort()
+
+    page.goto(url + "/operations?menu=305", wait_until="networkidle")
+    page.get_by_test_id("policy-kind-ap").check()
+    page.get_by_test_id("policy-load").click()
+    page.get_by_test_id("policy-enabled-ap").select_option("DISABLE")
+    page.get_by_test_id("policy-model-ap-0").check()
+    page.get_by_test_id("policy-version-ap-0").select_option("new")
+    page.get_by_test_id("policy-preview").click()
+    expect(page.get_by_test_id("policy-confirm-panel")).to_be_visible()
+    identifier = page.evaluate("sessionStorage.getItem('policy-settings-job')")
+    page.route("**/api/firmware-policy/apply", lose_response)
+    page.get_by_test_id("policy-confirmation").fill("CONFIGURE")
+    page.get_by_test_id("policy-apply").click()
+    expect(page.get_by_test_id("policy-message")).to_contain_text("Check the operation status")
+    assert page.evaluate("sessionStorage.getItem('policy-settings-job')") == identifier
+    page.reload(wait_until="networkidle")
+    expect(page.get_by_test_id("policy-result")).to_contain_text("readback verification")
+    expect(page.get_by_test_id("policy-confirm-panel")).to_be_hidden()
+    assert len(submitted) == 1
+    assert len(sdk.writes) == 2
+
+
 def preview_body() -> dict[str, Any]:
     """Supply a complete explicit disabled AP policy without firmware execution."""
     return {
@@ -402,7 +456,7 @@ def test_portal_empty_body_and_malformed_json_backup_block_apply(
 
 
 @pytest.mark.parametrize("status_code", [403, 503])
-def test_portal_http_4xx_and_5xx_result_reports_partial(
+def test_portal_http_4xx_and_http_5xx_result_reports_partial(
     policy_portal: tuple[Any, SettingsSession], status_code: int
 ) -> None:
     """A failed site write reports completed organizations and remaining sites."""

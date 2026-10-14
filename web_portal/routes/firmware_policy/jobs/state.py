@@ -49,7 +49,9 @@ class JobState:
     @staticmethod
     def public(entry: JobEntry) -> dict[str, Any]:
         """Hide ownership and expose a confirmation token only after verification."""
-        result = {key: value for key, value in entry.record.items() if key != "owner"}  # Never return the owner digest.
+        result = {
+            key: value for key, value in entry.record.items() if key not in {"owner", "worker"}
+        }  # Hide private ownership.
         if result["state"] == "ready" and entry.token:
             result["token"] = entry.token  # Only the owning browser can reach this method.
         return result  # Private plans and proofs have no serialization path.

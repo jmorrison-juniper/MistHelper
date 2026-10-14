@@ -58,6 +58,8 @@ Changing a selection invalidates the prepared plan.
 The portal clears its obsolete summary, verification table, and progress.
 Active operations remain valid through request allowance waits.
 The server refuses another browser's plan and refuses a second apply request for the same plan.
+Workers on the same host share ownership checks and organization write locks through the same private `data/` directory.
+Concurrent policy and restoration writes to the same cloud organization are refused.
 Refresh the page to recover the operation's status.
 After a worker interruption, prepare a new plan. The server never repeats uncertain settings writes automatically.
 Portal requests retain the existing CSRF and address access controls.
@@ -67,7 +69,10 @@ Portal requests retain the existing CSRF and address access controls.
 Before the first settings write, the operation saves complete settings for every selected organization and every target site.
 One unique JSON bundle contains all original settings, scope identifiers, a UTC timestamp, a record count, and a SHA-256 checksum.
 The operation reads the file again and compares every original record and its checksum.
+It also checks that the restoration schema accepts every saved settings record.
 If any backup cannot be written or verified, the operation sends zero settings writes.
+If restoration cannot accept a record, preparation fails and confirmation remains hidden.
+See [restoration schema requirements](backup-restoration.md#vendor-contract-evidence) for known contract gaps.
 
 Backups remain under `data/.firmware-policy-backups/`.
 The operation never overwrites an earlier backup.

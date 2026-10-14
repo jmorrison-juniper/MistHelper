@@ -74,3 +74,81 @@ def test_empty_or_malformed_local_schema_fails_explicitly(monkeypatch: Any, cont
     )
     with pytest.raises(PolicyError, match="schemas could not be read"):
         RestoreSchema()
+
+
+@pytest.mark.parametrize("vlan", [10, "{{fixture_vlan}}"])
+def test_documented_switch_composition_preserves_network_and_policy_fields(vlan: Any) -> None:
+    """Combine pinned public switch constituents and enforce the declared VLAN union."""
+    settings = {
+        "switch": {
+            "networks": {"fixture": {"vlan_id": vlan}},
+            "auto_upgrade": {"enabled": False, "custom_versions": {"EX4400": "23.4R2-S5.5"}},
+        },
+    }
+    body, excluded = RestoreSchema().project("site", settings)
+    assert body == settings
+    assert excluded == []
+
+
+@pytest.mark.parametrize(
+    "switch",
+    [
+        {"networks": {"fixture": {"vlan_id": 0}}},
+        {"networks": {"fixture": {"vlan_id": []}}},
+        {"networks": {"fixture": {"vlan_id": 10, "unknown": True}}},
+        {"unknown": True},
+        {"id": ORG_ID},
+    ],
+)
+def test_documented_switch_composition_still_rejects_unknown_invalid_and_read_only_fields(
+    switch: dict[str, Any],
+) -> None:
+    """Public composition support must not permit unknown fields or nested response metadata."""
+    with pytest.raises(PolicyError):
+        RestoreSchema().project("site", {"switch": switch})
+
+
+def test_public_legacy_org_marvis_and_synthetic_enabled_preserve_exact_values() -> None:
+    """Retain exact legacy properties declared in the pinned org settings request schema."""
+    settings = {
+        "marvis": {"auto_operations": {"bounce_port_for_abnormal_poe_client": False}},
+        "synthetic_test": {"wan_speedtest": {"enabled": True, "time_of_day": "02:00"}},
+    }
+    body, excluded = RestoreSchema().project("org", settings)
+    assert body == settings
+    assert excluded == []
+
+
+def test_legacy_properties_need_only_packaged_authoritative_schema(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A candidate image needs no legacy documentation file for the exact public supplements."""
+    reads: list[str] = []
+    read_text = Path.read_text
+
+    def authoritative_only(path: Path, *args: Any, **kwargs: Any) -> str:
+        """Reject every attempted schema read except the packaged authoritative document."""
+        assert path.name == "mist-api-openapi31json.json"
+        reads.append(path.name)
+        return read_text(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", authoritative_only)
+    settings = {"synthetic_test": {"wan_speedtest": {"enabled": False}}}
+    assert RestoreSchema().project("org", settings) == (settings, [])
+    assert reads == ["mist-api-openapi31json.json"]
+
+
+@pytest.mark.parametrize(
+    "settings",
+    [
+        {"synthetic_test": {"wan_speedtest": {"enabled": "yes"}}},
+        {"marvis": {"auto_operations": {"unknown": False}}},
+        {"engagement": {"hours": {"mon": None}}},
+        {"uwb_config": {"port": None}},
+        {"gateway_mgmt": {"auto_signature_update": {"day_of_week": ""}}},
+        {"mqtt_config": {}},
+        {"tunterm_extra_routes": {}},
+    ],
+)
+def test_unproven_actual_shapes_still_fail_closed(settings: dict[str, Any]) -> None:
+    """Actual response observations cannot establish a safe writable settings contract."""
+    with pytest.raises(PolicyError):
+        RestoreSchema().project("site", settings)
