@@ -1477,7 +1477,8 @@ class OperationExecutor:
                 continue  # Skip the line, because a missing required input is not an honest empty result.
             empty_result_match = re.search(  # Reject unrelated warnings that only contain empty-result nouns.
                 r"\bno\s+(?:[\w-]+\s+){0,2}(?:data|records?|rows?|results?)"
-                r"(?:\s+(?:found|provided|available|collected|matched|returned|to\s+export)\b|\s+for\b|\b)|"
+                r"(?:\s+(?:found|provided|available|collected|matched|returned|to\s+export)\b|\s+for\b)|"
+                r"^\s*no\s+inventory\s+data[.!]?\s*$|"
                 r"\bno\s+(?:open|closed)\s+marvis\s+actions\s+match\s+the\s+filter\b|"
                 r"\bno\s+file\s+is\s+written\s+by\s+this\s+check\b",
                 # Anchor the result noun near "no" and accept known outcome wording.

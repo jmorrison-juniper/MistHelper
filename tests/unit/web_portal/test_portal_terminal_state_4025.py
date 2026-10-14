@@ -149,6 +149,21 @@ def test_a_database_host_warning_does_not_classify_as_an_empty_result() -> None:
         assert executor._no_output_reason(empty_run) == empty_message  # Retain the exact reason for the operator.
 
 
+@pytest.mark.parametrize(
+    "warning",
+    [
+        "No database data validation is configured",
+        "No data validation is configured",
+        "No inventory data validation is configured",
+    ],
+)
+def test_a_data_validation_warning_is_not_an_empty_result(warning: str) -> None:
+    """Require an empty outcome instead of a result noun in a configuration warning."""
+    executor = _build_executor()  # Exercise the real classifier without external requests.
+    run = _run_record_from(executor, [warning])  # Isolate the warning from genuine empty-result messages.
+    assert executor._no_output_reason(run) is None  # Do not hide valid output because validation is absent.
+
+
 def test_a_404_reason_names_the_status_code(caplog: pytest.LogCaptureFixture) -> None:
     """The portal failure reason must carry the HTTP status for the operator."""
     response = _StubResponse(status_code=404, data={"detail": "Not Found"}, url=ORG_APPLICATIONS_URL)

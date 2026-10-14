@@ -38,6 +38,11 @@ The portal now requires bounded, explicit empty-result wording. An unrelated dat
 
 ## Local Verification
 
+- `.venv/bin/python -B -m pytest -q tests/unit/web_portal/test_portal_terminal_state_4025.py -k 'data_validation_warning'` — 3 failed before the repair. Each configuration warning reproduced the false positive.
+- `.venv/bin/python -B -m pytest -q tests/e2e/web_portal/test_issue_4037_menu_93_output.py tests/e2e/web_portal/test_juniper_menus_browser.py tests/unit/test_operation_output_file_discovery.py tests/unit/web_portal/test_portal_terminal_state_4025.py tests/unit/web_portal/test_portal_run_isolation.py tests/unit/web_portal/test_portal_silent_completion.py tests/unit/marvis/actions/test_portal_contract.py tests/guardrails/test_process_folder_structure.py` — 104 passed after the repair.
+- `.venv/bin/ruff check web_portal/services/operation.py tests/unit/web_portal/test_portal_terminal_state_4025.py` — passed after the configuration-warning repair.
+- `.venv/bin/black --check web_portal/services/operation.py tests/unit/web_portal/test_portal_terminal_state_4025.py` — 2 files unchanged after the configuration-warning repair.
+- `.venv/bin/python -B -m py_compile web_portal/services/operation.py tests/unit/web_portal/test_portal_terminal_state_4025.py` — passed after the configuration-warning repair.
 - `.venv/bin/python -B -m pytest -q tests/e2e/web_portal/test_issue_4037_menu_93_output.py` — 1 passed.
 - `.venv/bin/python -B -m pytest -q tests/e2e/web_portal/test_issue_4037_menu_93_output.py tests/unit/test_operation_output_file_discovery.py tests/unit/web_portal/test_portal_terminal_state_4025.py tests/unit/web_portal/test_portal_run_isolation.py tests/unit/web_portal/test_portal_silent_completion.py tests/guardrails/test_process_folder_structure.py` — 55 passed.
 - `.venv/bin/python -B -m pytest -q tests/unit/marvis/actions/test_portal_contract.py::TestPortalRuns::test_a_category_without_open_actions_completes_with_a_reason tests/unit/marvis/actions/test_portal_contract.py::TestPortalRuns::test_a_category_without_closed_actions_completes_with_a_reason tests/e2e/web_portal/test_juniper_menus_browser.py::TestTheJuniperMenusAreReadableInTheBrowser::test_menu_301_reports_that_the_access_check_passed` — 3 passed.
@@ -65,6 +70,8 @@ The portal now requires bounded, explicit empty-result wording. An unrelated dat
 ## Deviations from Assessment
 
 The issue comment confirms the warning begins with "no database host answers." The complete warning is unavailable. The regression uses a synthetic continuation about later data rows. The classifier accepts a result noun after at most two subject words. It preserves the data-export, Juniper RMA, Marvis, and Menu 301 no-output reasons. Issue #4216 reported the Marvis and Menu 301 regressions. Direct classifier tests cover those messages.
+
+Review identified an unconditional word-boundary alternative that accepted configuration warnings without an empty outcome. The generic pattern now requires recognized outcome wording. Only the complete bare message "No inventory data" has an explicit exception, with optional terminal punctuation. Three tests reject data-validation warnings, including "No database data validation is configured" and an inventory-data continuation.
 
 ## Follow-ups
 
