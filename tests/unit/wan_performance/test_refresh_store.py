@@ -72,7 +72,7 @@ def test_malformed_json_cache_is_not_empty_success():
 def test_empty_body_cache_is_not_empty_success():
     """Distinguish an absent cache key from an empty invalid JSON body."""
     client = MagicMock()
-    client.get.return_value = ""
+    client.get.return_value = b""
     with pytest.raises(json.JSONDecodeError):
         RefreshStore(client).cached("org-one")
 

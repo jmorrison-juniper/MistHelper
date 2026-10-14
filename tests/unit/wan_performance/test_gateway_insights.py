@@ -92,7 +92,7 @@ def test_gateway_insight_http_errors_are_not_empty_success(status):
             GatewayInsights(MagicMock(), MagicMock()).collect("org-one")
 
 
-@pytest.mark.parametrize("body", ["", "{malformed-json"])
+@pytest.mark.parametrize("body", [b"", b"{bad json"])
 def test_gateway_discovery_rejects_empty_body_and_malformed_json(body):
     """Exercise actual SDK body parsing and stop before metric discovery."""
     from mistapi.__api_response import APIResponse
@@ -100,7 +100,7 @@ def test_gateway_discovery_rejects_empty_body_and_malformed_json(body):
 
     response = Response()
     response.status_code = 200
-    response._content = body.encode()
+    response._content = body
     parsed = APIResponse(response, "https://api.invalid/api/v1/orgs/org-one/stats/devices")
     with (
         patch(
@@ -111,7 +111,7 @@ def test_gateway_discovery_rejects_empty_body_and_malformed_json(body):
         with pytest.raises(ValueError, match="array"):
             GatewayInsights(MagicMock(), MagicMock()).collect("org-one")
     catalog.assert_not_called()
-    assert parsed.raw_data == body
+    assert parsed.raw_data == body.decode()
 
 
 @pytest.mark.parametrize("change", ["alignment", "scope", "unit", "retention", "identity"])
