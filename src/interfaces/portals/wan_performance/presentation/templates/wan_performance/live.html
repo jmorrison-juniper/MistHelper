@@ -26,6 +26,18 @@
         {% endif %}
         <button class="btn btn-primary" type="submit" data-testid="wan-live-refresh">{% if kind == "gateway" %}Refresh selected gateway and current snapshots{% else %}Refresh current snapshots{% endif %}</button>
     </form>
+    {% if kind == "port" and filters %}
+    <form class="mt-3" method="post" action="{{ url_for('wan_performance.live.refresh_port') }}">
+        {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
+        <input type="hidden" name="gateway_id" value="{{ filters.gateway_id }}">
+        <input type="hidden" name="site_id" value="{{ filters.site_id }}">
+        <input type="hidden" name="port_name" value="{{ filters.port_name }}">
+        <button class="btn btn-secondary" type="submit" data-testid="wan-live-port-history-refresh">Collect selected port insight hour</button>
+        <p>This separate refresh permits four SDK requests for one completed UTC hour.
+            It stores catalog-validated receive and transmit rates, not historical utilization percentages.
+            It does not replace the current snapshot or claim complete historical coverage.</p>
+    </form>
+    {% endif %}
     <p>No automatic refresh runs. Overview refresh permits two SDK requests. Selected gateway refresh permits at most six.
         One refresh per organization is permitted every five minutes.
         The common session transport also accounts for normal, paginated, and fast-mode API attempts.</p>

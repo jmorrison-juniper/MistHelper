@@ -202,3 +202,31 @@ def refresh() -> tuple[str, int] | Response:
             url_for("wan_performance.live.gateway", gateway_id=target.gateway_id, site_id=target.site.site_id)
         )
     return redirect(url_for("wan_performance.live.overview"))
+
+
+@live_bp.post("/refresh-port")
+def refresh_port() -> tuple[str, int] | Response:
+    """Collect one selected port insight hour through existing CSRF and shared ownership."""
+    try:
+        service = LivePages.service()
+        gateway_target = LivePages.refresh_target(service.org_id)
+        if gateway_target is None:
+            raise ValueError("Port history refresh requires a site and gateway.")
+        target = CircuitIdentity(gateway_target, request.form.get("port_name", ""))
+        service.refresh_port(target)
+    except STORE_ERRORS:
+        logger.exception("The operator port history refresh failed.")
+        return (
+            LivePages.render(
+                "overview", error="Port history refresh failed. Check the selected port, quota, and store."
+            ),
+            503,
+        )
+    return redirect(
+        url_for(
+            "wan_performance.live.port",
+            site_id=target.gateway.site.site_id,
+            gateway_id=target.gateway.gateway_id,
+            port_name=target.port_name,
+        )
+    )
