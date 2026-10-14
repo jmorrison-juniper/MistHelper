@@ -112,16 +112,13 @@ DEFAULT_OPERATION_SHUTDOWN_GRACE_SECONDS = 30
 
 # A completed run with no file must still state the empty-result reason.
 NO_OUTPUT_REASON_MARKERS = (
-    "no ",  # Most empty-result lines start with "No ... data found".
     "not found",  # Some selection helpers use this wording for an empty lookup.
     "returned no data",  # Some get-by-id handlers use this explicit API result line.
     "skipping",  # Some optional workflows report an intentional skip.
     "0 ",  # Some summary lines state that zero records were exported.
 )
-
 # A missing required answer is not a successful run, even when the handler returned.
-# Issue #3168: the classifier evaluates these markers before the broad "no " output marker,
-# because the broad marker otherwise swallows a specific missing-input message.
+# Issue #3168: evaluate these markers before empty-data patterns, because a missing answer is not an empty result.
 MISSING_INPUT_MARKERS = (
     "no site selected",  # Site-scoped handlers log this when the portal supplied no site answer.
     "no client input provided",  # Client insight handlers log this when no client answer arrived.
@@ -1478,7 +1475,20 @@ class OperationExecutor:
             lowered = message.lower()  # Normalize case so marker checks stay simple.
             if any(marker in lowered for marker in MISSING_INPUT_MARKERS):  # Issue #3168: a missing answer first.
                 continue  # Skip the line, because a missing required input is not an honest empty result.
-            if any(marker in lowered for marker in NO_OUTPUT_REASON_MARKERS):  # Detect an empty-result explanation.
+            empty_result_match = re.search(  # Reject unrelated warnings that only contain empty-result nouns.
+                r"\bno\s+(?:[\w-]+\s+){0,2}(?:data|records?|rows?|results?)"
+                r"(?:\s+(?:found|provided|available|collected|matched|returned|to\s+export)\b|\s+for\b)|"
+                r"^\s*no\s+inventory\s+data[.!]?\s*$|"
+                r"\bno\s+(?:open|closed)\s+marvis\s+actions\s+match\s+the\s+filter\b|"
+                r"\bno\s+file\s+is\s+written\s+by\s+this\s+check\b",
+                # Anchor the result noun near "no" and accept known outcome wording.
+                lowered,  # Search the normalized log text.
+            )
+            has_empty_data = empty_result_match is not None  # Record whether the line names an empty result.
+            has_known_reason = any(  # Preserve the established reason phrases.
+                marker in lowered for marker in NO_OUTPUT_REASON_MARKERS  # Check each known empty-result marker.
+            )
+            if has_empty_data or has_known_reason:  # Require empty-result words, not any line that says "no".
                 return message  # Return the exact line from the handler.
         return None  # No empty-result message appeared.
 

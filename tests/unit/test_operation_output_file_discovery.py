@@ -211,3 +211,15 @@ class TestRunRecordMerge:
         executor = OperationExecutor.__new__(OperationExecutor)  # Avoid the thread pool for a focused unit guard.
         executor._finalize_output_files(run, tmp_path)  # Remove cache-only evidence when the run says no data.
         assert list(run["output_files"]) == []  # The completion guard must read the no-data reason instead.
+
+    def test_finalize_drops_inventory_cache_when_the_run_reports_no_data(self, tmp_path):
+        """A genuine empty inventory result must not expose its prompt cache."""
+        from web_portal.services.operation import OperationExecutor
+
+        (tmp_path / "SiteInventory.csv").write_text("device\n", encoding="utf-8")  # Create the prompt cache file.
+        run = {"run_id": "r7", "menu_number": "93", "output_files": deque(maxlen=50)}  # Build a menu 93 run.
+        run["log_messages"] = [{"message": "No inventory data found for this site."}]  # Mark a genuine empty result.
+        run["output_files"].append("SiteInventory.csv")  # Simulate the scanner finding only the cache refresh.
+        executor = OperationExecutor.__new__(OperationExecutor)  # Avoid the thread pool for a focused unit guard.
+        executor._finalize_output_files(run, tmp_path)  # Remove cache-only evidence when the run says no data.
+        assert list(run["output_files"]) == []  # The completion guard must not present the cache as a result.
