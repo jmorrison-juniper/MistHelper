@@ -1475,8 +1475,10 @@ class OperationExecutor:
             lowered = message.lower()  # Normalize case so marker checks stay simple.
             if any(marker in lowered for marker in MISSING_INPUT_MARKERS):  # Issue #3168: a missing answer first.
                 continue  # Skip the line, because a missing required input is not an honest empty result.
-            empty_result_match = re.search(  # Reject unrelated warnings that only contain the word "no".
-                r"\bno\b.*\b(?:data|records?|rows?|results?)\b",  # Match clear empty-result nouns.
+            empty_result_match = re.search(  # Reject unrelated warnings that only contain empty-result nouns.
+                r"\bno\s+(?:data\s+(?:found|provided|available)|"
+                r"(?:[\w-]+\s+){1,2}(?:data|records?|rows?|results?)\s+(?:found|returned|available))\b",
+                # Require a short subject and an explicit empty-result outcome.
                 lowered,  # Search the normalized log text.
             )
             has_empty_data = empty_result_match is not None  # Record whether the line names an empty result.

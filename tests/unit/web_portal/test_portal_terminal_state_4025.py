@@ -122,7 +122,9 @@ def test_a_404_run_does_not_classify_as_an_empty_result(caplog: pytest.LogCaptur
 def test_a_database_host_warning_does_not_classify_as_an_empty_result() -> None:
     """A database connectivity warning must not hide a valid CSV result."""
     executor = _build_executor()  # Use the real portal classifier without a browser or Mist API.
-    reported_warning = "No database host answers the connection probe."  # Reproduce the issue warning wording.
+    reported_warning = (  # The issue reports this beginning, but the full message was not captured.
+        "No database host answers the connection probe; retry after the data rows become available."
+    )
     run = _run_record_from(executor, [reported_warning])  # Put the standalone warning in a completed run record.
     assert executor._no_output_reason(run) is None  # Do not interpret a connectivity warning as an empty result.
     current_warning = (  # Keep the current exporter warning covered as its wording evolves.
@@ -131,6 +133,8 @@ def test_a_database_host_warning_does_not_classify_as_an_empty_result() -> None:
     )
     current_run = _run_record_from(executor, [current_warning])  # Check the exact standalone warning in main.
     assert executor._no_output_reason(current_run) is None  # Preserve current degraded-mode behavior.
+    empty_inventory = _run_record_from(executor, ["No inventory data found for this site."])
+    assert executor._no_output_reason(empty_inventory) == "No inventory data found for this site."
 
 
 def test_a_404_reason_names_the_status_code(caplog: pytest.LogCaptureFixture) -> None:

@@ -21,7 +21,9 @@ def test_menu_93_database_warning_keeps_inventory_in_completed_result(
     from web_portal.menu_registry import build_static_menu_actions  # Reuse the production-safe menu registry.
 
     monkeypatch.setenv("DATA_DIR", str(tmp_path))  # Keep operation output inside this test's temporary directory.
-    warning = "No database host answers the connection probe."  # Reproduce the standalone warning from issue #4037.
+    warning = (  # The issue reports the beginning, but the full warning was not captured.
+        "No database host answers the connection probe; retry after the data rows become available."
+    )
 
     def write_inventory() -> None:
         """Write one valid result and emit the unrelated warning."""

@@ -7,14 +7,14 @@
 
 ## Summary
 
-The portal now treats a standalone database warning as separate from an empty result. Menu 93 keeps its inventory file in the completed response and completion event.
+The portal now requires bounded, explicit empty-result wording. An unrelated database warning stays separate, and Menu 93 keeps its inventory file in completed output.
 
 ## Changes
 
 | File | Change | Notes |
 |------|--------|-------|
-| `web_portal/services/operation.py` | modified | Require an empty-result term instead of any occurrence of "no". |
-| `tests/unit/web_portal/test_portal_terminal_state_4025.py` | modified | Keep reported and current database warnings out of empty-result classification. |
+| `web_portal/services/operation.py` | modified | Require bounded wording and an explicit empty-result outcome. |
+| `tests/unit/web_portal/test_portal_terminal_state_4025.py` | modified | Reject a warning with later data-row wording and accept an empty inventory result. |
 | `tests/unit/test_operation_output_file_discovery.py` | modified | Keep the inventory cache hidden when a real no-data message appears. |
 | `tests/unit/web_portal/test_portal_run_isolation.py` | modified | Check the completed response and event for Menu 93. |
 | `tests/e2e/web_portal/test_issue_4037_menu_93_output.py` | added | Check the completed Menu 93 result through the no-browser Flask client. |
@@ -36,6 +36,9 @@ The portal now treats a standalone database warning as separate from an empty re
 
 - `.venv/bin/python -B -m pytest -q tests/e2e/web_portal/test_issue_4037_menu_93_output.py` — 1 passed.
 - `.venv/bin/python -B -m pytest -q tests/e2e/web_portal/test_issue_4037_menu_93_output.py tests/unit/test_operation_output_file_discovery.py tests/unit/web_portal/test_portal_terminal_state_4025.py tests/unit/web_portal/test_portal_run_isolation.py tests/unit/web_portal/test_portal_silent_completion.py tests/guardrails/test_process_folder_structure.py` — 55 passed.
+- `.venv/bin/ruff check web_portal/services/operation.py tests/unit/web_portal/test_portal_terminal_state_4025.py tests/e2e/web_portal/test_issue_4037_menu_93_output.py` — passed.
+- `.venv/bin/black --check web_portal/services/operation.py tests/unit/web_portal/test_portal_terminal_state_4025.py tests/e2e/web_portal/test_issue_4037_menu_93_output.py` — 3 files unchanged.
+- `.venv/bin/python -B -m py_compile web_portal/services/operation.py tests/unit/web_portal/test_portal_terminal_state_4025.py tests/e2e/web_portal/test_issue_4037_menu_93_output.py` — passed.
 - `.venv/bin/python -B -m pytest -p no:cacheprovider -s -q tests/guardrails/local_test_quality_loop/test_guidance.py::TestLiveGuides` — 1 passed. The guard read and checked all four inputs.
 - `.venv/bin/python -B -m pytest -q tests/guardrails/test_process_folder_structure.py` — 5 passed.
 - `.venv/bin/ruff check .` — All checks passed.
@@ -49,7 +52,7 @@ The portal now treats a standalone database warning as separate from an empty re
 
 ## Deviations from Assessment
 
-The assessment found that the current exporter warning, "Polyglot database hosts do not answer," does not match the broad `no ` marker. The issue reproduction describes a standalone warning that does match it. The tests cover both warning forms. The fix narrows the classifier and keeps true no-data behavior.
+The issue comment confirms the warning begins with "no database host answers." The complete warning is unavailable. The regression uses a synthetic continuation about later data rows. The classifier requires a short subject and an explicit outcome such as "found," "returned," or "available." It still accepts "No inventory data found," "No data provided," and the current exporter warning.
 
 ## Follow-ups
 
