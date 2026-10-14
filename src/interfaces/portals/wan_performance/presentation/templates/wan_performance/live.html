@@ -87,6 +87,18 @@
             <h3>{{ summary.period.kind }}: {{ summary.period.start.isoformat() }}</h3>
             <p>{{ summary.observed_hours }} observed hours of {{ summary.period.expected_hours }}.</p>
             {% for name, values in summary.metrics.items() %}<p>{{ name }}: mean {{ values[0] }}, maximum {{ values[1] }} {{ values[2] }}</p>{% endfor %}
+            {% if summary.threshold_observations %}
+            <div data-testid="wan-live-threshold-observations">
+                <h4>Observed-hour threshold counts</h4>
+                <p>These are retained snapshot counts, not measured congestion duration.
+                    Missing, unknown, and non-exceeding hours break a run. Equality does not exceed a threshold.</p>
+                {% for entry in summary.threshold_observations %}
+                <p>{{ entry.metric_name }} above {{ entry.threshold_percent }}%:
+                    {{ entry.above_hours }} observations, longest adjacent run {{ entry.longest_run }};
+                    {{ entry.valid_hours }} valid hourly observations of {{ summary.period.expected_hours }} expected hours.</p>
+                {% endfor %}
+            </div>
+            {% endif %}
         {% else %}{% if not history_error %}<p>No persisted observations exist in the selected 31-day window.</p>{% endif %}{% endfor %}
     </section>
     {% endif %}
