@@ -175,7 +175,14 @@ This review examined source revision `2d1c2199fa1e31c129ef1e051c5389349a207785`.
 Its `ProjectGoals.md` requires hourly availability, transition counts, quality statistics, elapsed threshold hours, and 13-month history.
 Observation counts do not satisfy elapsed threshold hours or complete-hour quality statistics.
 The bounded 31-day detail read does not satisfy the 13-month reporting requirement.
-No verified historical source can supply the absent earlier samples.
+No verified source contract establishes 13-month backfill or historical VPN metric samples.
+Gateway insights do supply timestamped samples within each catalog metric's supported `max_age`.
+The gateway insight operation also accepts `port_id` for a selected interface.
+Current scoped refresh uses its two single-metric insight calls for the selected gateway.
+Adding two port insight calls to that refresh would exceed its six-call ceiling.
+A separate selected-port workflow could use four calls for discovery, catalog, and two metrics.
+That workflow is not implemented.
+The migration does not infer historical link capacity from current port speed.
 The live view supports verified directional snapshot utilization, not full-hour utilization averages.
 Snapshot status and sparse hourly observations cannot establish historical availability or congestion duration.
 Device-event search supports time bounds and type filters.
@@ -202,7 +209,9 @@ Neither assumption proves complete event coverage or a verified WAN transition m
 The migration does not use these assumptions to calculate availability or flap counts.
 The source `TODO.md` explicitly describes current VPN statistics as point-in-time data.
 Its historical VPN method, storage, and dashboard tasks remain unchecked.
-That proposed VPN insight route has no matching operation in the bundled OpenAPI.
+The bundled OpenAPI defines a generic device-insight operation with a metric path parameter.
+It does not verify the proposed VPN metric name, per-peer filters, or peer-series mapping.
+The generic operation alone does not establish VPN metric timestamps.
 The insight response does not define how multiple requested metric names map to its single result sequence.
 Gateway refresh supports any selected organization gateway through exact filtered discovery.
 The cached gateway list reflects bounded port and peer pages, not a complete organization inventory.
