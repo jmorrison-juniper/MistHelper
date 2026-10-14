@@ -73,3 +73,86 @@ def test_compact_peer_mac_preserves_the_source_identifier():
     data = snapshot()
     data["peers"][0]["peer_mac"] = "112233445566"
     assert SnapshotRecords.build(data)[1].identity.peer_mac == "112233445566"
+
+
+@pytest.mark.parametrize(
+    ("speed", "receive", "transmit", "expected"),
+    [(1000, 0, 800000000, (0, 80)), (100, 70000000, 90000000, (70, 90))],
+)
+def test_port_utilization_uses_documented_mbps_speed(speed, receive, transmit, expected):
+    """Convert gateway Mbps capacity into directional point-in-time percentages."""
+    data = snapshot()
+    data["ports"][0].update(speed=speed, rx_bps=receive, tx_bps=transmit)
+    record = SnapshotRecords.build(data)[0]
+    for name, value in zip(("rx_utilization_percent", "tx_utilization_percent"), expected, strict=True):
+        assert record.metrics[name].value == value
+        assert record.metrics[name].unit == "%"
+        assert record.metrics[name].sample_count == 1
+        assert record.metrics[name].coverage_fraction is None
+
+
+@pytest.mark.parametrize("speed", [None, 0, -1, True, "1000", 1.5, float("inf")])
+def test_unverified_capacity_keeps_utilization_unknown(speed):
+    """Do not manufacture capacity from absent or invalid link-speed fields."""
+    data = snapshot()
+    data["ports"][0].update(speed=speed, tx_bps=0)
+    record = SnapshotRecords.build(data)[0]
+    assert record.metrics["rx_utilization_percent"].value is None
+    assert record.metrics["tx_utilization_percent"].value is None
+    assert record.metrics["rx_utilization_percent"].missing_reason is not None
+
+
+@pytest.mark.parametrize("receive", [None, -1, True, "bad rate", float("nan"), float("inf")])
+def test_invalid_port_rate_remains_unknown_without_discarding_other_direction(receive, caplog):
+    """Keep valid observations while explicitly reporting an invalid optional port rate."""
+    data = snapshot()
+    data["ports"][0].update(speed=100, rx_bps=receive, tx_bps=50000000)
+    record = SnapshotRecords.build(data)[0]
+    assert record.metrics["rx_bps"].value is None
+    assert record.metrics["rx_utilization_percent"].value is None
+    assert record.metrics["tx_utilization_percent"].value == 50
+    if receive is not None:
+        assert "Invalid port snapshot rate" in caplog.text
+
+
+def test_current_peer_state_keeps_boolean_and_epoch_semantics():
+    """Render current state and reported uptime without calculating availability minutes."""
+    from src.interfaces.portals.wan_performance.collection.snapshot_records import SnapshotStates
+
+    data = snapshot()
+    data["ports"][0]["up"] = False
+    data["peers"][0].update(up=True, is_active=False, uptime=0, last_seen=1704112440)
+    records = SnapshotRecords.build(data)
+    states = SnapshotStates.build(data, records)
+    assert states[records[0].natural_key] == {"Current link state": "Down"}
+    assert states[records[1].natural_key] == {
+        "Current link state": "Up",
+        "Redundant path": "Standby",
+        "Gateway-reported uptime (s)": "0",
+        "Last observed (UTC)": "2024-01-01T12:34:00+00:00",
+    }
+    assert "availability" not in records[1].metrics
+
+
+@pytest.mark.parametrize(
+    "values",
+    [
+        {"up": None, "is_active": None, "uptime": None, "last_seen": None},
+        {"up": 1, "is_active": "true", "uptime": -1, "last_seen": "bad timestamp"},
+        {"up": "false", "is_active": 0, "uptime": True, "last_seen": float("inf")},
+    ],
+)
+def test_unknown_or_invalid_peer_state_does_not_become_healthy(values):
+    """Keep absent and invalid metadata unknown rather than interpreting truthy values."""
+    from src.interfaces.portals.wan_performance.collection.snapshot_records import SnapshotStates
+
+    data = snapshot()
+    data["peers"][0].update(values)
+    records = SnapshotRecords.build(data)
+    states = SnapshotStates.build(data, records)[records[1].natural_key]
+    assert states == {
+        "Current link state": "Unknown",
+        "Redundant path": "Unknown",
+        "Gateway-reported uptime (s)": "Unknown",
+        "Last observed (UTC)": "Unknown",
+    }
