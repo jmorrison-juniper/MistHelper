@@ -3,7 +3,8 @@
 import logging
 from collections import defaultdict
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from datetime import datetime, timedelta
 from statistics import fmean
 from types import MappingProxyType
 
@@ -14,6 +15,17 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
+class ThresholdObservation:
+    """Report sparse hourly snapshot counts without claiming measured duration."""
+
+    metric_name: str
+    threshold_percent: int
+    valid_hours: int
+    above_hours: int
+    longest_run: int
+
+
+@dataclass(frozen=True, slots=True)
 class PeriodSummary:
     """Keep calendar metrics, record coverage, and provenance explicit."""
 
@@ -21,6 +33,7 @@ class PeriodSummary:
     observed_hours: int
     metrics: Mapping[str, tuple[float | None, float | None, str]]
     provenance: str
+    threshold_observations: tuple[ThresholdObservation, ...] = ()
 
     def __post_init__(self) -> None:
         """Prevent a consumer from changing metrics after calculation."""
@@ -59,6 +72,10 @@ class CalendarSummaries:
         SummaryValidation.check(selected)
         daily = cls._daily(selected)
         results = daily + cls._merge(daily, "weekly") + cls._merge(daily, "monthly")
+        results = tuple(
+            replace(summary, threshold_observations=ThresholdObservations.build(selected, summary.period))
+            for summary in results
+        )
         logger.debug("Built %d calendar summaries from %d hourly records", len(results), len(selected))
         return results
 
@@ -111,3 +128,45 @@ class CalendarSummaries:
         mean = round(fmean(means), precision) if means else None
         maximum = round(max(maxima), precision) if maxima else None
         return mean, maximum, unit
+
+
+class ThresholdObservations:
+    """Count source-defined thresholds only where a valid hourly observation exists."""
+
+    @classmethod
+    def build(cls, records: tuple[HourlyMeasurement, ...], period: CalendarPeriod) -> tuple[ThresholdObservation, ...]:
+        """Keep missing hours separate and calculate each calendar period from raw observations."""
+        logger.info("Count utilization threshold observations for %s.", period.start.isoformat())
+        result = tuple(
+            cls._count(name, threshold, samples)
+            for name in ("rx_utilization_percent", "tx_utilization_percent")
+            if (samples := cls._samples(records, period, name)) is not None
+            for threshold in (70, 80, 90)
+        )
+        logger.debug("Counted %d directional threshold observation summaries.", len(result))
+        return result
+
+    @staticmethod
+    def _samples(
+        records: tuple[HourlyMeasurement, ...], period: CalendarPeriod, name: str
+    ) -> dict[datetime, float | int] | None:
+        """Select verified percentages without converting other units or filling unknown values."""
+        matching = tuple(record for record in records if period.contains(record.hour_start_utc))
+        if not any(name in record.metrics and record.metrics[name].unit == "%" for record in matching):
+            return None
+        return {
+            record.hour_start_utc: metric.value
+            for record in matching
+            if (metric := record.metrics.get(name)) is not None and metric.unit == "%" and metric.value is not None
+        }
+
+    @staticmethod
+    def _count(name: str, threshold: int, samples: dict[datetime, float | int]) -> ThresholdObservation:
+        """Break a run at every unknown, absent, or non-exceeding hour."""
+        above = sorted(instant for instant, value in samples.items() if value > threshold)
+        previous = None
+        longest = run = 0
+        for instant in above:
+            run = run + 1 if previous is not None and instant - previous == timedelta(hours=1) else 1
+            longest, previous = max(longest, run), instant
+        return ThresholdObservation(name, threshold, len(samples), len(above), longest)
