@@ -16,6 +16,167 @@ DEVICE_ID = "00000000-0000-0000-0000-000000000001"
 TARGET = GatewayIdentity(SiteIdentity("org-one", "site-one"), "aabbccddeeff")
 
 
+def test_selected_port_insights_use_four_calls_and_preserve_source_hour():
+    """Collect two port-specific rate series without a current-capacity conversion."""
+    from src.interfaces.portals.wan_performance.domain.identity import CircuitIdentity
+
+    target = CircuitIdentity(TARGET, "ge-0/0/1")
+    device, metadata, series = responses()
+    session, admission = MagicMock(), MagicMock()
+    with (
+        patch(
+            "src.interfaces.portals.wan_performance.collection.snapshot_client.listOrgDevicesStats",
+            return_value=SimpleNamespace(status_code=200, data=[device]),
+        ) as discovery,
+        patch(
+            "src.interfaces.portals.wan_performance.collection.snapshot_client.listInsightMetrics",
+            return_value=SimpleNamespace(status_code=200, data=metadata),
+        ) as catalog,
+        patch(
+            "src.interfaces.portals.wan_performance.collection.snapshot_client.getSiteInsightMetricsForGateway",
+            return_value=series,
+        ) as metrics,
+    ):
+        result = GatewayInsights(session, admission).collect_for_port("org-one", target)
+    assert discovery.call_count + catalog.call_count + metrics.call_count == 4
+    assert admission.check.call_count == 4
+    assert {call.args[3] for call in metrics.call_args_list} == {"rx_bps", "tx_bps"}
+    assert all(call.kwargs["port_id"] == target.port_name for call in metrics.call_args_list)
+    assert all(call.kwargs["limit"] == 1 and call.kwargs["page"] == 1 for call in metrics.call_args_list)
+    records = SnapshotRecords.build(
+        {
+            "org_id": "org-one",
+            "provenance": "live",
+            "collected_at_utc": datetime.now(UTC).isoformat(),
+            "ports": [],
+            "peers": [],
+            "insights": result,
+        }
+    )
+    assert len(records) == 1
+    assert records[0].identity == target
+    assert records[0].hour_start_utc.isoformat() == series.data["rt"][0]
+    assert records[0].metrics["rx_bps"].value == 0
+    assert records[0].metrics["tx_bps"].unit == "bit/s"
+    assert "rx_utilization_percent" not in records[0].metrics
+    assert RecordCodec.decode(RecordCodec.encode(records[0])) == records[0]
+
+
+@pytest.mark.parametrize("violation", ["scope", "unit", "max_age", "interval", "alignment"])
+def test_selected_port_refuses_unverified_insight_contract(violation):
+    """Do not assign an hourly port rate when catalog or returned alignment disagrees."""
+    from src.interfaces.portals.wan_performance.domain.identity import CircuitIdentity
+
+    device, metadata, series = responses()
+    if violation == "scope":
+        metadata["rx_bps"]["scopes"] = ["client"]
+    elif violation == "unit":
+        metadata["rx_bps"]["unit"] = "ms"
+    elif violation == "max_age":
+        metadata["rx_bps"]["intervals"]["1h"]["max_age"] = 0
+    elif violation == "interval":
+        metadata["rx_bps"]["intervals"]["1h"]["interval"] = 600
+    else:
+        series.data["rt"] = [datetime.now(UTC).isoformat()]
+    with (
+        patch(
+            "src.interfaces.portals.wan_performance.collection.snapshot_client.listOrgDevicesStats",
+            return_value=SimpleNamespace(status_code=200, data=[device]),
+        ),
+        patch(
+            "src.interfaces.portals.wan_performance.collection.snapshot_client.listInsightMetrics",
+            return_value=SimpleNamespace(status_code=200, data=metadata),
+        ),
+        patch(
+            "src.interfaces.portals.wan_performance.collection.snapshot_client.getSiteInsightMetricsForGateway",
+            return_value=series,
+        ),
+    ):
+        with pytest.raises(ValueError):
+            GatewayInsights(MagicMock(), MagicMock()).collect_for_port("org-one", CircuitIdentity(TARGET, "ge-0/0/1"))
+
+
+@pytest.mark.parametrize("failure", ["http_400", "http_500", "quota", "truncation"])
+def test_selected_port_stops_on_request_failure_or_partial_hour(failure):
+    """A rejected or paginated response cannot become complete persisted port history."""
+    from src.interfaces.portals.wan_performance.domain.identity import CircuitIdentity
+
+    device, metadata, series = responses()
+    admission = MagicMock()
+    if failure == "quota":
+        admission.check.side_effect = [None, None, ConnectionError("quota")]
+    elif failure == "truncation":
+        series.data["next"] = "/more"
+    else:
+        series.status_code = int(failure.removeprefix("http_"))
+    with (
+        patch(
+            "src.interfaces.portals.wan_performance.collection.snapshot_client.listOrgDevicesStats",
+            return_value=SimpleNamespace(status_code=200, data=[device]),
+        ),
+        patch(
+            "src.interfaces.portals.wan_performance.collection.snapshot_client.listInsightMetrics",
+            return_value=SimpleNamespace(status_code=200, data=metadata),
+        ),
+        patch(
+            "src.interfaces.portals.wan_performance.collection.snapshot_client.getSiteInsightMetricsForGateway",
+            return_value=series,
+        ) as metrics,
+    ):
+        with pytest.raises((ConnectionError, ValueError)):
+            GatewayInsights(MagicMock(), admission).collect_for_port("org-one", CircuitIdentity(TARGET, "ge-0/0/1"))
+    assert metrics.call_count == (0 if failure == "quota" else 1)
+
+
+@pytest.mark.parametrize("empty", [False, True])
+def test_selected_port_insights_persist_to_existing_sqlite_without_snapshot_change(tmp_path, empty):
+    """Connect the four-request collector to actual configured-history serialization."""
+    from src.interfaces.portals.wan_performance.collection.live_service import LiveService
+    from src.interfaces.portals.wan_performance.domain.identity import CircuitIdentity
+    from src.interfaces.portals.wan_performance.integration.sqlite_history import SQLiteHistory
+
+    path = tmp_path / "application.db"
+    sqlite3.connect(path).close()
+    history = SQLiteHistory(path)
+    device, metadata, series = responses()
+    if empty:
+        series.data.update(rt=[], results=[])
+    target = CircuitIdentity(TARGET, "ge-0/0/1")
+    store = MagicMock()
+    store.cached.return_value = {
+        "org_id": "org-one",
+        "provenance": "live",
+        "collected_at_utc": datetime.now(UTC).isoformat(),
+        "ports": [{**device, "port_id": target.port_name, "speed": 100}],
+        "peers": [],
+    }
+    with (
+        patch(
+            "src.interfaces.portals.wan_performance.collection.snapshot_client.listOrgDevicesStats",
+            return_value=SimpleNamespace(status_code=200, data=[device]),
+        ),
+        patch(
+            "src.interfaces.portals.wan_performance.collection.snapshot_client.listInsightMetrics",
+            return_value=SimpleNamespace(status_code=200, data=metadata),
+        ),
+        patch(
+            "src.interfaces.portals.wan_performance.collection.snapshot_client.getSiteInsightMetricsForGateway",
+            return_value=series,
+        ),
+    ):
+        assert LiveService(MagicMock(), "org-one", store, history).refresh_port(target) == 1
+    start, end = (datetime.fromtimestamp(series.data[name], UTC) for name in ("start", "end"))
+    retained = history.read(target, start, end)
+    assert len(retained) == 1
+    assert set(retained[0].metrics) == {"rx_bps", "tx_bps"}
+    assert retained[0].metrics["rx_bps"].value == (None if empty else 0)
+    assert retained[0].metrics["rx_bps"].missing_reason == ("The API snapshot has no value." if empty else None)
+    assert retained[0].hour_start_utc == start
+    assert retained[0].identity == target
+    assert store.acquire.return_value.check.call_count == 5
+    store.publish.assert_not_called()
+
+
 def responses(status=200):
     """Build a bounded synthetic window with explicit catalog units and scope."""
     end = datetime.now(UTC).replace(minute=0, second=0, microsecond=0)
