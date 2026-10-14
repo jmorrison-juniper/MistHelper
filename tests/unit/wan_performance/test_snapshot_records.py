@@ -99,7 +99,9 @@ def test_unverified_capacity_keeps_utilization_unknown(speed):
     record = SnapshotRecords.build(data)[0]
     assert record.metrics["rx_utilization_percent"].value is None
     assert record.metrics["tx_utilization_percent"].value is None
-    assert record.metrics["rx_utilization_percent"].missing_reason is not None
+    assert record.metrics["rx_utilization_percent"].missing_reason == (
+        "Utilization requires a valid rate and positive integer link speed in Mbps."
+    )
 
 
 @pytest.mark.parametrize("receive", [None, -1, True, "bad rate", float("nan"), float("inf")])
