@@ -1,4 +1,4 @@
-# WAN Performance preview
+# WAN Performance
 
 Open **WAN Performance Preview** in the existing portal navigation.
 The overview links to the gateway, WAN port, and VPN peer.
@@ -45,11 +45,111 @@ This boundary makes no API call and is not connected to the preview.
 
 ## Live integration limits
 
-Live metrics, durable history, cache refresh, and shared request admission remain unavailable.
-The source documentation and implementations disagree about utilization units and missing availability.
-The configured export writer does not establish a WAN history query or retention contract.
-The current API quota cache is process-local.
-Live integration must resolve these contracts before it starts requests.
+Select **Open live snapshots** from the preview.
+Live pages use the existing portal authorization and server-selected organization.
+Page reads use the recent snapshot cache, without a Mist request.
+Select **Refresh current snapshots** to request new data.
+The existing portal CSRF protection applies to this form.
+
+Shared admission defaults to `auto` when application storage is configured.
+Restart every worker after configuration changes.
+Set `WAN_SHARED_ADMISSION=true` to require admission even without automatic storage detection.
+The explicit `false` setting preserves legacy transport behavior and prevents WAN refresh.
+The existing Redis and database credentials must be configured.
+The common Mist session transport then applies shared request admission.
+An absent session, unsupported transport, missing store, or Redis outage prevents refresh.
+No automatic background worker starts.
+
+### Request bounds
+
+One organization can start one WAN refresh every 300 seconds.
+Each refresh requests one page of 100 gateway ports and one page of 100 VPN paths.
+It also discovers one gateway, reads the metric catalog, and requests two single-metric pages.
+The maximum is six SDK calls, with no automatic retry under admitted transport.
+Gateway discovery uses the returned device UUID, never a UUID derived from its MAC.
+Each insight request covers one completed UTC hour, with `limit=1` and `page=1`.
+The catalog must confirm the scope, type, unit, interval, and max-age.
+Two separate metric requests avoid an undocumented multi-metric mapping.
+The response must align one timestamp with one value in the requested window.
+The collector never follows a `next` URL.
+A page with more results reports partial coverage.
+The cooldown remains after success or failure.
+No release operation can bypass it.
+
+The common transport also counts actual requests across workers.
+Its rolling Redis ledger permits at most 5,000 attempts per authentication fingerprint in 3,600 seconds.
+The same atomic reservation also limits each organization to 5,000 attempts, across different authentication values.
+These local ceilings are conservative migration admission limits.
+Org URLs supply their organization identity.
+Site requests use the selected session context and fail when that identity is absent.
+Pagination, normal operations, fast-mode calls, and SDK retries use that same transport.
+The ledger stores a SHA-256 fingerprint, not the authentication value.
+Redis time supplies the rolling-window clock.
+Admission fails closed when Redis is unavailable.
+
+With shared admission enabled, transport retries are disabled.
+HTTP 429 stops before the SDK starts an automatic retry or waits on `Retry-After`.
+Each connection and read timeout has a 30-second maximum.
+Existing timeout and retry behavior remains unchanged when the setting is false.
+Every configured process uses automatic admission unless explicitly disabled.
+Calls from other applications or unconfigured sessions are outside this ledger.
+SDK authentication bootstrap requests occur before shared transport configuration and remain outside this ledger.
+Token and cookie authentication share the organization ceiling.
+The ledger hashes authentication headers without retaining or logging their values.
+
+### Configured history
+
+The public repository follows the active DataExporter output selection.
+SQLite selection uses the same configured database path.
+The SQLite file must already exist.
+CSV selection uses an isolated collection in the already configured ArangoDB application database.
+CSV-only mode has no history repository.
+The repository never creates another database or mirrors WAN history into Redis.
+
+Upserts use the complete identity and UTC observation hour as the natural key.
+SQLite batches use one transaction.
+ArangoDB batches use one streaming transaction and stable document keys.
+The repository rejects synthetic records before any write.
+Storage failures remain explicit.
+The recent cache changes only after the history transaction succeeds.
+
+Port and peer hours retain the last collected observation.
+Gateway hours retain the validated hourly insight samples and catalog units.
+This is a migration design decision, not proof of a full-hour average.
+The actual collection timestamp remains in every record.
+Rates use `rx_bps` and `tx_bps`, never cumulative byte counters.
+Peer path keys include the remote site, remote port, and VPN type.
+Their derived key is not a claimed source tunnel identifier.
+
+Detail pages read a bounded 31-day window and show daily, weekly, and monthly observation summaries.
+This read window is not a retention period.
+WAN code does not delete application history or change existing TimeSeries retention.
+Unknown values and missing hours never become healthy observations.
+
+### Cache isolation and failure
+
+Org cooldown keys use `misthelper:wan:v1:refresh:<org_id>`.
+Recent snapshot keys use `misthelper:wan:v1:snapshot:<org_id>`, with a 3,600-second TTL.
+The shared request ledger uses `misthelper:api:v1:requests:<authentication_fingerprint>`.
+Organization ledgers use `misthelper:api:v1:org:<org_id>`.
+Ledger keys expire after 3,601 seconds without another admitted request.
+These TTLs are conservative migration decisions, not source cache parity.
+
+Snapshots older than five minutes have a stale label.
+Cache errors render an unavailable state without starting a live request.
+Refresh errors return HTTP 503 and preserve the previous cache.
+History errors do not appear as successful empty history.
+An unavailable history connection preserves readable cached detail views but prevents a new refresh.
+
+### Unsupported source semantics
+
+Port speed units are not established by the bundled port schema.
+The live view therefore does not calculate utilization from an assumed bandwidth.
+Snapshot status cannot establish historical availability or congestion duration.
+Gateway insights cover only the first gateway from bounded discovery.
+Complete organization-wide gateway history and historical VPN coverage remain unimplemented.
+The source documentation and implementations disagree about some metric and missing-data behavior.
+These limits prevent full source acceptance.
 
 The preview adds no database, Snowflake connection, service, Compose group, public port, or credential store.
 PR #4205 has a separate, unmerged WAN implementation.
