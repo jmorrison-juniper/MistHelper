@@ -11,12 +11,35 @@
     {% if error %}<div class="alert alert-warning" role="alert" data-testid="wan-live-error">{{ error }}</div>{% endif %}
     <form method="post" action="{{ url_for('wan_performance.live.refresh') }}">
         {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
-        <button class="btn btn-primary" type="submit" data-testid="wan-live-refresh">Refresh current snapshots</button>
+        {% if kind == "gateway" and filters %}
+        <input type="hidden" name="gateway_id" value="{{ filters.gateway_id }}">
+        <input type="hidden" name="site_id" value="{{ filters.site_id }}">
+        {% elif kind == "overview" %}
+        <fieldset class="mb-3">
+            <legend class="h6">Optional selected gateway</legend>
+            <label for="wan-live-gateway-site">Site ID</label>
+            <input id="wan-live-gateway-site" data-testid="wan-live-gateway-site" name="site_id" type="text">
+            <label for="wan-live-gateway-mac">Gateway MAC</label>
+            <input id="wan-live-gateway-mac" data-testid="wan-live-gateway-mac" name="gateway_id" type="text">
+            <p>Leave both fields empty for port and peer snapshots. Supply both fields to refresh any gateway in the selected organization.</p>
+        </fieldset>
+        {% endif %}
+        <button class="btn btn-primary" type="submit" data-testid="wan-live-refresh">{% if kind == "gateway" %}Refresh selected gateway and current snapshots{% else %}Refresh current snapshots{% endif %}</button>
     </form>
-    <p>No automatic refresh runs. WAN refresh permits at most six SDK requests per organization every five minutes.
+    <p>No automatic refresh runs. Overview refresh permits two SDK requests. Selected gateway refresh permits at most six.
+        One refresh per organization is permitted every five minutes.
         The common session transport also accounts for normal, paginated, and fast-mode API attempts.</p>
+    {% if kind == "overview" %}
+    <details data-testid="wan-live-gateway-list">
+        <summary>Gateways in the cached pages</summary>
+        <ul>{% for gateway in gateways %}
+            <li><a href="{{ url_for('wan_performance.live.gateway', gateway_id=gateway.gateway_id, site_id=gateway.site.site_id) }}">{{ gateway.site.site_id }} / {{ gateway.gateway_id }}</a></li>
+            {% else %}<li>No gateways appear in the cached pages.</li>{% endfor %}</ul>
+        <p>This list reflects bounded pages, not a complete organization inventory. Use the optional fields for another known gateway.</p>
+    </details>
+    {% endif %}
     <div class="row g-3 mt-3">
-        <article class="col-sm-4 portal-card"><h2 class="h6">Utilization</h2><p>Unknown. Port speed units are not established.</p></article>
+        <article class="col-sm-4 portal-card" data-testid="wan-live-utilization"><h2 class="h6">Utilization</h2><p>Directional point-in-time samples appear below. Mbps link speed supplies capacity. Missing or invalid values remain unknown.</p></article>
         <article class="col-sm-4 portal-card"><h2 class="h6">Congestion duration</h2><p>Unknown. Snapshot rates do not establish duration.</p></article>
         <article class="col-sm-4 portal-card"><h2 class="h6">Availability</h2><p>Unknown. Current status does not establish historical availability.</p></article>
     </div>
@@ -40,7 +63,13 @@
                     {% else %}Not a VPN path{% endif %}</td>
                 <td>{% for name, metric in record.metrics.items() %}
                     <div>{{ name }}: {% if metric.value is not none %}{{ metric.value }} {{ metric.unit }}{% else %}Unknown{% endif %}</div>
-                    {% endfor %}</td>
+                    {% endfor %}
+                    {% if states.get(record.natural_key) %}
+                    <div data-testid="wan-live-current-state">
+                        {% for name, value in states[record.natural_key].items() %}<div>{{ name }}: {{ value }}</div>{% endfor %}
+                        <small>Current cached state does not establish availability duration.</small>
+                    </div>
+                    {% endif %}</td>
             </tr>
             {% else %}<tr><td colspan="5">No cached observations are available. No live call ran for this page.</td></tr>{% endfor %}
             </tbody>

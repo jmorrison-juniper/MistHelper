@@ -12,12 +12,13 @@ from werkzeug.wrappers import Response
 from src.foundation.persistence.db import DatabaseConfig
 from src.interfaces.portals.wan_performance.collection.live_service import LiveService
 from src.interfaces.portals.wan_performance.collection.request_admission import AdmittedAdapter
-from src.interfaces.portals.wan_performance.collection.snapshot_records import SnapshotRecords
+from src.interfaces.portals.wan_performance.collection.snapshot_records import SnapshotRecords, SnapshotStates
 from src.interfaces.portals.wan_performance.domain.identity import (
     CircuitIdentity,
     GatewayIdentity,
     IdentityValidator,
     PeerPathIdentity,
+    SiteIdentity,
 )
 from src.interfaces.portals.wan_performance.domain.measurement import HourlyMeasurement
 from src.interfaces.portals.wan_performance.domain.summary import CalendarSummaries, PeriodSummary
@@ -88,12 +89,16 @@ class LivePages:
         """Read cached data, validate route membership, and never start a Mist request."""
         records: tuple[HourlyMeasurement, ...] = ()
         summaries: tuple[PeriodSummary, ...] = ()
+        states: dict[tuple[str, ...], dict[str, str]] = {}
+        gateways: tuple[GatewayIdentity, ...] = ()
         history_error, instant, partial = None, None, False
         try:
             service = cls.service()
             snapshot = service.store.cached(service.org_id)
             if snapshot is not None:
                 records = SnapshotRecords.build(snapshot)
+                states = SnapshotStates.build(snapshot, records)
+                gateways = SnapshotStates.gateways(records)
                 instant = datetime.fromisoformat(str(snapshot["collected_at_utc"]))
                 partial = bool(snapshot.get("partial"))
             records = cls.select(records, kind, filters)
@@ -110,12 +115,25 @@ class LivePages:
             kind=kind,
             records=records,
             summaries=summaries,
+            states=states,
+            gateways=gateways,
             error=error,
             history_error=history_error,
             instant=instant,
             partial=partial,
+            filters=filters or {},
             stale=instant is not None and datetime.now(UTC) - instant > timedelta(minutes=5),
         )
+
+    @staticmethod
+    def refresh_target(org_id: str) -> GatewayIdentity | None:
+        """Keep scoped gateway refresh under the server-selected organization."""
+        gateway_id, site_id = request.form.get("gateway_id"), request.form.get("site_id")
+        if not gateway_id and not site_id:
+            return None
+        if not gateway_id or not site_id:
+            raise ValueError("Gateway refresh requires the complete site and gateway identity.")
+        return GatewayIdentity(SiteIdentity(org_id, site_id), gateway_id)
 
     @staticmethod
     def select(
@@ -168,7 +186,9 @@ def peer(site_id: str, peer_mac: str) -> str:
 def refresh() -> tuple[str, int] | Response:
     """Run an explicit protected refresh, preserving previous cache on failure."""
     try:
-        LivePages.service().refresh()
+        service = LivePages.service()
+        target = LivePages.refresh_target(service.org_id)
+        service.refresh(target)
     except STORE_ERRORS:
         logger.exception("The operator WAN refresh failed.")
         return (
@@ -176,5 +196,9 @@ def refresh() -> tuple[str, int] | Response:
                 "overview", error="WAN refresh failed. Check the shared cooldown, API admission, and configured stores."
             ),
             503,
+        )
+    if target is not None:
+        return redirect(
+            url_for("wan_performance.live.gateway", gateway_id=target.gateway_id, site_id=target.site.site_id)
         )
     return redirect(url_for("wan_performance.live.overview"))

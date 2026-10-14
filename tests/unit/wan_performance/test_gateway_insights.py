@@ -9,10 +9,11 @@ import pytest
 
 from src.interfaces.portals.wan_performance.collection.snapshot_client import GatewayInsights
 from src.interfaces.portals.wan_performance.collection.snapshot_records import SnapshotRecords
-from src.interfaces.portals.wan_performance.domain.identity import GatewayIdentity
+from src.interfaces.portals.wan_performance.domain.identity import GatewayIdentity, SiteIdentity
 from src.interfaces.portals.wan_performance.integration.record_codec import RecordCodec
 
 DEVICE_ID = "00000000-0000-0000-0000-000000000001"
+TARGET = GatewayIdentity(SiteIdentity("org-one", "site-one"), "aabbccddeeff")
 
 
 def responses(status=200):
@@ -57,8 +58,10 @@ def test_insights_use_actual_device_uuid_catalog_and_single_metric_queries():
             return_value=series,
         ) as metrics,
     ):
-        result = GatewayInsights(session, admission).collect("org-one")
-    devices.assert_called_once_with(session, "org-one", type="gateway", limit=1, page=1)
+        result = GatewayInsights(session, admission).collect("org-one", TARGET)
+    devices.assert_called_once_with(
+        session, "org-one", type="gateway", site_id="site-one", mac="aabbccddeeff", limit=2, page=1
+    )
     assert metrics.call_count == 2
     assert admission.check.call_count == 4
     assert metrics.call_args.kwargs["limit"] == 1
@@ -89,7 +92,119 @@ def test_gateway_insight_http_errors_are_not_empty_success(status):
         return_value=SimpleNamespace(status_code=status),
     ):
         with pytest.raises(ConnectionError, match=str(status)):
-            GatewayInsights(MagicMock(), MagicMock()).collect("org-one")
+            GatewayInsights(MagicMock(), MagicMock()).collect("org-one", TARGET)
+
+
+def test_selected_gateway_discovery_uses_exact_site_mac_and_returned_uuid():
+    """Support a second selected gateway without deriving its UUID or increasing the request bound."""
+    from src.interfaces.portals.wan_performance.domain.identity import SiteIdentity
+
+    device, metadata, series = responses()
+    device.update(id="00000000-0000-0000-0000-000000000002", site_id="site-two", mac="112233445566")
+    target = GatewayIdentity(SiteIdentity("org-one", "site-two"), "112233445566")
+    session, admission = MagicMock(), MagicMock()
+    with (
+        patch(
+            "src.interfaces.portals.wan_performance.collection.snapshot_client.listOrgDevicesStats",
+            return_value=SimpleNamespace(status_code=200, data=[device]),
+        ) as discovery,
+        patch(
+            "src.interfaces.portals.wan_performance.collection.snapshot_client.listInsightMetrics",
+            return_value=SimpleNamespace(status_code=200, data=metadata),
+        ),
+        patch(
+            "src.interfaces.portals.wan_performance.collection.snapshot_client.getSiteInsightMetricsForGateway",
+            return_value=series,
+        ) as metrics,
+    ):
+        result = GatewayInsights(session, admission).collect("org-one", target)
+    discovery.assert_called_once_with(
+        session, "org-one", type="gateway", site_id="site-two", mac="112233445566", limit=2, page=1
+    )
+    assert metrics.call_count == 2
+    assert metrics.call_args.args[2] == device["id"]
+    assert result["gateway"] == device
+    assert result["partial"] is False
+    assert admission.check.call_count == 4
+
+
+@pytest.mark.parametrize("rows", ["wrong_site", "wrong_mac", "duplicate", "absent"])
+def test_selected_gateway_rejects_ambiguous_or_mismatched_discovery(rows):
+    """Never select another gateway after a scoped discovery mismatch."""
+    from src.interfaces.portals.wan_performance.domain.identity import SiteIdentity
+
+    device, _, _ = responses()
+    target = GatewayIdentity(SiteIdentity("org-one", "site-one"), device["mac"])
+    if rows == "wrong_site":
+        device["site_id"] = "another-site"
+    elif rows == "wrong_mac":
+        device["mac"] = "112233445566"
+    data = [] if rows == "absent" else [device, device] if rows == "duplicate" else [device]
+    with (
+        patch(
+            "src.interfaces.portals.wan_performance.collection.snapshot_client.listOrgDevicesStats",
+            return_value=SimpleNamespace(status_code=200, data=data),
+        ),
+        patch("src.interfaces.portals.wan_performance.collection.snapshot_client.listInsightMetrics") as catalog,
+    ):
+        with pytest.raises(ValueError):
+            GatewayInsights(MagicMock(), MagicMock()).collect("org-one", target)
+    catalog.assert_not_called()
+
+
+def test_overview_refresh_is_two_pages_without_gateway_discovery():
+    """Keep overview requests bounded and retain explicit port-page truncation."""
+    from src.interfaces.portals.wan_performance.collection.snapshot_client import SnapshotClient
+
+    admission = MagicMock()
+    with (
+        patch(
+            "src.interfaces.portals.wan_performance.collection.snapshot_client.searchOrgSwOrGwPorts",
+            return_value=SimpleNamespace(status_code=200, data={"results": [], "total": 200}),
+        ),
+        patch(
+            "src.interfaces.portals.wan_performance.collection.snapshot_client.searchOrgPeerPathStats",
+            return_value=SimpleNamespace(status_code=200, data={"results": []}),
+        ),
+        patch("src.interfaces.portals.wan_performance.collection.snapshot_client.listOrgDevicesStats") as discovery,
+    ):
+        result = SnapshotClient(MagicMock(), admission).collect("org-one")
+    assert result["partial"] is True
+    assert result["insights"] == {"samples": [], "partial": False}
+    assert admission.check.call_count == 2
+    discovery.assert_not_called()
+
+
+@pytest.mark.parametrize("failure", ["http_400", "http_500", "admission"])
+def test_selected_gateway_stops_on_metric_errors_or_lost_admission(failure):
+    """Keep scoped metric requests under the same admission and HTTP failure contracts."""
+    from src.interfaces.portals.wan_performance.domain.identity import SiteIdentity
+
+    device, metadata, series = responses()
+    target = GatewayIdentity(SiteIdentity("org-one", "site-one"), device["mac"])
+    admission = MagicMock()
+    if failure == "admission":
+        admission.check.side_effect = [None, None, ConnectionError("expired admission")]
+    else:
+        series.status_code = int(failure.removeprefix("http_"))
+    with (
+        patch(
+            "src.interfaces.portals.wan_performance.collection.snapshot_client.listOrgDevicesStats",
+            return_value=SimpleNamespace(status_code=200, data=[device]),
+        ),
+        patch(
+            "src.interfaces.portals.wan_performance.collection.snapshot_client.listInsightMetrics",
+            return_value=SimpleNamespace(status_code=200, data=metadata),
+        ),
+        patch(
+            "src.interfaces.portals.wan_performance.collection.snapshot_client.getSiteInsightMetricsForGateway",
+            return_value=series,
+        ) as metrics,
+    ):
+        with pytest.raises(ConnectionError, match="expired admission" if failure == "admission" else "HTTP"):
+            GatewayInsights(MagicMock(), admission).collect("org-one", target)
+    assert metrics.call_count == (0 if failure == "admission" else 1)
+    assert admission.check.call_count == 3
 
 
 @pytest.mark.parametrize("body", [b"", b"{bad json"])
@@ -109,7 +224,7 @@ def test_gateway_discovery_rejects_empty_body_and_malformed_json(body):
         patch("src.interfaces.portals.wan_performance.collection.snapshot_client.listInsightMetrics") as catalog,
     ):
         with pytest.raises(ValueError, match="array"):
-            GatewayInsights(MagicMock(), MagicMock()).collect("org-one")
+            GatewayInsights(MagicMock(), MagicMock()).collect("org-one", TARGET)
     catalog.assert_not_called()
     assert parsed.raw_data == body.decode()
 
@@ -143,11 +258,12 @@ def test_gateway_insights_reject_unverified_contracts(change):
         ),
     ):
         with pytest.raises(ValueError):
-            GatewayInsights(MagicMock(), MagicMock()).collect("org-one")
+            GatewayInsights(MagicMock(), MagicMock()).collect("org-one", TARGET)
 
 
 @pytest.mark.parametrize("empty_metrics", [(), ("rx_bps",), ("rx_bps", "tx_bps")])
-def test_bounded_refresh_persists_gateway_history_before_cache_publication(tmp_path, empty_metrics):
+@pytest.mark.parametrize("second_gateway", [False, True])
+def test_bounded_refresh_persists_gateway_history_before_cache_publication(tmp_path, empty_metrics, second_gateway):
     """Connect the real collector, domain model, and existing-file SQLite repository."""
     from src.interfaces.portals.wan_performance.collection.live_service import LiveService
     from src.interfaces.portals.wan_performance.domain.identity import SiteIdentity
@@ -176,6 +292,11 @@ def test_bounded_refresh_persists_gateway_history_before_cache_publication(tmp_p
         "latency": 10,
         "jitter": 2,
     }
+    if second_gateway:
+        device = {**device, "id": "00000000-0000-0000-0000-000000000002", "site_id": "site-two", "mac": "112233445566"}
+        port = {**port, "site_id": device["site_id"], "mac": device["mac"]}
+        peer = {**peer, "site_id": device["site_id"], "mac": device["mac"]}
+    target = GatewayIdentity(SiteIdentity("org-one", device["site_id"]), device["mac"])
     store = MagicMock()
     with (
         patch(
@@ -199,8 +320,8 @@ def test_bounded_refresh_persists_gateway_history_before_cache_publication(tmp_p
             side_effect=metric_responses,
         ),
     ):
-        snapshot = LiveService(MagicMock(), "org-one", store, repository).refresh()
-    identity = GatewayIdentity(SiteIdentity("org-one", "site-one"), device["mac"])
+        snapshot = LiveService(MagicMock(), "org-one", store, repository).refresh(target)
+    identity = target
     start, end = (datetime.fromtimestamp(series.data[name], UTC) for name in ("start", "end"))
     records = repository.read(identity, start, end)
     assert len(records) == 1
