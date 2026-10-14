@@ -95,3 +95,64 @@ def test_cross_organization_gateway_target_stops_before_admission():
             LiveService(MagicMock(), "org-one", store, MagicMock()).refresh(target)
     store.acquire.assert_not_called()
     collect.assert_not_called()
+
+
+@pytest.mark.parametrize("failure", ["missing_port", "cross_org", "no_store", "quota", "expired", "storage"])
+def test_port_history_refuses_invalid_scope_or_failed_ownership(failure):
+    """Never publish a snapshot or claim persistence after a rejected port refresh."""
+    from src.interfaces.portals.wan_performance.domain.identity import CircuitIdentity, GatewayIdentity, SiteIdentity
+
+    store, history = MagicMock(), MagicMock()
+    store.cached.return_value = {
+        "org_id": "org-one",
+        "provenance": "live",
+        "collected_at_utc": "2024-01-01T12:34:00+00:00",
+        "ports": [{"org_id": "org-one", "site_id": "site-one", "mac": "aabbccddeeff", "port_id": "ge-0/0/0"}],
+        "peers": [],
+    }
+    target = CircuitIdentity(
+        GatewayIdentity(SiteIdentity("other" if failure == "cross_org" else "org-one", "site-one"), "aabbccddeeff"),
+        "unknown" if failure == "missing_port" else "ge-0/0/0",
+    )
+    if failure == "quota":
+        store.acquire.side_effect = ConnectionError("quota")
+    elif failure == "expired":
+        store.acquire.return_value.check.side_effect = ConnectionError("expired")
+    elif failure == "storage":
+        history.upsert.side_effect = ConnectionError("storage")
+    with patch(
+        "src.interfaces.portals.wan_performance.collection.live_service.GatewayInsights.collect_for_port",
+        return_value={"samples": [], "partial": False},
+    ) as collect:
+        with pytest.raises((ValueError, ConnectionError)):
+            LiveService(MagicMock(), "org-one", store, None if failure == "no_store" else history).refresh_port(target)
+    store.publish.assert_not_called()
+    if failure in {"missing_port", "cross_org", "no_store", "quota"}:
+        collect.assert_not_called()
+        history.upsert.assert_not_called()
+
+
+def test_port_history_refresh_writes_before_return_without_replacing_snapshot():
+    """Use configured history and shared organization ownership for the selected port."""
+    from src.interfaces.portals.wan_performance.domain.identity import CircuitIdentity, GatewayIdentity, SiteIdentity
+
+    store, history = MagicMock(), MagicMock()
+    target = CircuitIdentity(GatewayIdentity(SiteIdentity("org-one", "site-one"), "aabbccddeeff"), "ge-0/0/0")
+    snapshot = {
+        "org_id": "org-one",
+        "provenance": "live",
+        "collected_at_utc": "2024-01-01T12:34:00+00:00",
+        "ports": [{"org_id": "org-one", "site_id": "site-one", "mac": "aabbccddeeff", "port_id": "ge-0/0/0"}],
+        "peers": [],
+    }
+    store.cached.return_value = snapshot
+    with patch(
+        "src.interfaces.portals.wan_performance.collection.live_service.GatewayInsights.collect_for_port",
+        return_value={"samples": [], "partial": False},
+    ) as collect:
+        assert LiveService(MagicMock(), "org-one", store, history).refresh_port(target) == 0
+    collect.assert_called_once_with("org-one", target)
+    store.acquire.assert_called_once_with("org-one")
+    assert store.acquire.return_value.check.call_count == 1
+    history.upsert.assert_called_once_with(())
+    store.publish.assert_not_called()

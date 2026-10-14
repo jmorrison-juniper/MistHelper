@@ -9,7 +9,7 @@ from mistapi.api.v1.const.insight_metrics import listInsightMetrics
 from mistapi.api.v1.orgs.stats import listOrgDevicesStats, searchOrgPeerPathStats, searchOrgSwOrGwPorts
 from mistapi.api.v1.sites.insights import getSiteInsightMetricsForGateway
 
-from src.interfaces.portals.wan_performance.domain.identity import GatewayIdentity, IdentityValidator
+from src.interfaces.portals.wan_performance.domain.identity import CircuitIdentity, GatewayIdentity, IdentityValidator
 from src.interfaces.portals.wan_performance.domain.measurement import MetricMeasurement
 
 logger = logging.getLogger(__name__)
@@ -118,6 +118,14 @@ class GatewayInsights(SnapshotSession):
 
     def collect(self, org_id: str, target: GatewayIdentity) -> dict[str, Any]:
         """Resolve one selected gateway and never infer device UUIDs from MACs."""
+        return self._collect(org_id, target, None)
+
+    def collect_for_port(self, org_id: str, target: CircuitIdentity) -> dict[str, Any]:
+        """Use four requests for one exact port and one completed catalog-supported hour."""
+        return self._collect(org_id, target.gateway, target.port_name)
+
+    def _collect(self, org_id: str, target: GatewayIdentity, port_name: str | None) -> dict[str, Any]:
+        """Share discovery and catalog checks without widening either collection scope."""
         IdentityValidator.identifier(org_id, "org_id")
         if target.site.org_id != org_id:
             raise ValueError("The selected gateway organization does not match the portal.")
@@ -135,8 +143,12 @@ class GatewayInsights(SnapshotSession):
         self.admission.check()
         catalog = listInsightMetrics(self.session)
         end = datetime.now(UTC).replace(minute=0, second=0, microsecond=0)
-        samples = [self._metric(device, name, self._metadata(catalog, name), end) for name in ("rx_bps", "tx_bps")]
-        return {"gateway": device, "samples": samples, "partial": False}
+        units = {name: self._metadata(catalog, name) for name in ("rx_bps", "tx_bps")}
+        if port_name is not None and any(unit != "bit/s" for unit in units.values()):
+            raise ValueError("Port insights require catalog rate units in bit/s.")
+        selected = {**device, "selected_port": port_name}
+        samples = [self._metric(selected, name, unit, end) for name, unit in units.items()]
+        return {"gateway": device, "port_id": port_name, "samples": samples, "partial": False}
 
     @staticmethod
     def _device(response: Any, org_id: str, target: GatewayIdentity) -> dict[str, Any]:
@@ -185,6 +197,7 @@ class GatewayInsights(SnapshotSession):
             device["site_id"],
             device["id"],
             name,
+            port_id=device.get("selected_port"),
             start=str(int(start.timestamp())),
             end=str(int(end.timestamp())),
             interval="1h",
@@ -198,10 +211,16 @@ class GatewayInsights(SnapshotSession):
     @staticmethod
     def _sample(data: Any, name: str, unit: str, start: datetime, end: datetime) -> dict[str, Any]:
         """Validate exact timestamp alignment before assigning a catalog metric name."""
-        if not isinstance(data, dict) or (data.get("start"), data.get("end"), data.get("interval")) != (
+        if not isinstance(data, dict) or (
+            data.get("start"),
+            data.get("end"),
+            data.get("interval"),
+            bool(data.get("next")),
+        ) != (
             int(start.timestamp()),
             int(end.timestamp()),
             3600,
+            False,
         ):
             raise ValueError("Gateway insight response does not match the requested hourly window.")
         timestamps, values = data.get("rt"), data.get("results")

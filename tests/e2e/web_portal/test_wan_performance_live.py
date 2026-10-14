@@ -282,6 +282,50 @@ def test_refresh_requires_csrf(client, live_service):
     live_service.store.acquire.assert_not_called()
 
 
+def test_port_history_refresh_requires_csrf(client, live_service):
+    """Keep the separate selected-port history operation under portal protection."""
+    response = client.post("/wan-performance/live/refresh-port")
+    assert response.status_code == 400
+    live_service.store.acquire.assert_not_called()
+
+
+@pytest.mark.parametrize("invalid", ["missing", "malformed", "unknown", "store", "quota"])
+def test_port_history_refresh_errors_are_explicit_without_snapshot_change(client, live_service, invalid):
+    """Refuse unverified targets and unavailable stores before claiming success."""
+    page = client.get("/wan-performance/live/port/site-one/ge-0/0/0?gateway_id=aabbccddeeff").get_data(as_text=True)
+    token = re.findall(r'name="csrf_token" value="([^"]+)"', page)[0]
+    fields = {"csrf_token": token, "gateway_id": "aabbccddeeff", "site_id": "site-one", "port_name": "ge-0/0/0"}
+    if invalid == "missing":
+        fields.pop("gateway_id")
+    elif invalid == "malformed":
+        fields["port_name"] = "../invalid"
+    elif invalid == "unknown":
+        fields["port_name"] = "other-port"
+    elif invalid == "store":
+        live_service.history = None
+    else:
+        live_service.store.acquire.side_effect = ConnectionError("quota")
+    response = client.post("/wan-performance/live/refresh-port", data=fields)
+    assert response.status_code == 503
+    assert "Port history refresh failed" in response.get_data(as_text=True)
+    live_service.store.publish.assert_not_called()
+    if invalid != "quota":
+        live_service.store.acquire.assert_not_called()
+
+
+def test_browser_selected_port_history_refresh(page: Page, live_browser_url: str, live_service):
+    """Submit the actual port form without refreshing organization snapshot pages."""
+    from src.interfaces.portals.wan_performance.domain.identity import CircuitIdentity, GatewayIdentity, SiteIdentity
+
+    target = CircuitIdentity(GatewayIdentity(SiteIdentity("org-one", "site-one"), "aabbccddeeff"), "ge-0/0/0")
+    page.goto(f"{live_browser_url}/wan-performance/live/port/site-one/ge-0/0/0?gateway_id=aabbccddeeff")
+    with patch.object(live_service, "refresh_port", return_value=1) as refresh_port:
+        page.get_by_test_id("wan-live-port-history-refresh").click()
+        expect(page.get_by_test_id("wan-live-port")).to_be_visible()
+    refresh_port.assert_called_once_with(target)
+    live_service.store.publish.assert_not_called()
+
+
 def test_history_outage_is_distinct_from_empty_history(client, live_service):
     """Do not label a storage failure as a successful empty query."""
     live_service.history.read.side_effect = ConnectionError("database unavailable")

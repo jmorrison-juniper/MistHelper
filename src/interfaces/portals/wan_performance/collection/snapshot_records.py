@@ -40,6 +40,7 @@ class SnapshotRecords:
         if not insight.get("samples"):
             return ()
         gateway = cls._gateway(insight["gateway"], org_id)
+        identity = CircuitIdentity(gateway, insight["port_id"]) if insight.get("port_id") is not None else gateway
         samples = insight["samples"]
         if len(samples) != 2 or {sample["metric"] for sample in samples} != {"rx_bps", "tx_bps"}:
             raise ValueError("Gateway insights require the two requested metric samples.")
@@ -47,7 +48,7 @@ class SnapshotRecords:
         if len(hours) != 1:
             raise ValueError("Gateway insight metrics must use the same UTC hour.")
         metrics = {sample["metric"]: SnapshotRates.parse(sample["value"], sample["unit"]) for sample in samples}
-        return (HourlyMeasurement(gateway, datetime.fromisoformat(hours.pop()), instant, metrics, "live"),)
+        return (HourlyMeasurement(identity, datetime.fromisoformat(hours.pop()), instant, metrics, "live"),)
 
     @staticmethod
     def _gateway(row: dict[str, Any], org_id: str) -> GatewayIdentity:
