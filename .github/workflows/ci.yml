@@ -809,6 +809,13 @@ jobs:
           ARANGO_ROOT_PASSWORD: e2e-throwaway-password
           CAPTURE_PORT: "8056"
         run: pytest tests/e2e/ -v --base-url=http://127.0.0.1:${CAPTURE_PORT} --timeout=180
+      - name: Upload backup restoration browser evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: backup-restoration-browser-evidence
+          path: test-artifacts/issue4218-*.png
+          if-no-files-found: warn
 
   # ──────────────────────────────────────────────────────────────
   # OPS PORTAL (TypeScript + React)

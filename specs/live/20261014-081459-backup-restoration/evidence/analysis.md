@@ -99,6 +99,8 @@ The pull request must pass all required CI checks and CodeQL before merge.
 
 Browser screenshots remain in ignored `test-artifacts/issue4218-complete.png` and `test-artifacts/issue4218-partial.png`.
 They contain fixture data only.
+The CI E2E job uploads matching images as `backup-restoration-browser-evidence`, including after a failed test.
+A workflow contract tests the live step and four removed or altered configurations.
 
 ## Specification analysis
 

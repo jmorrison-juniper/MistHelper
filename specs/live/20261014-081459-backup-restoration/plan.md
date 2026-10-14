@@ -61,6 +61,7 @@ Contract tests exercise the actual SDK retry loop without network access.
 - `web_portal/routes/firmware_policy/restore/`: dedicated protected routes and template.
 - Existing menu, registry, generated references, and private output denial remain authoritative.
 - Add bounded restore-specific unit, integration, contract, and graphical tests inside existing firmware-policy test packages.
+- Retain restoration browser screenshots through the existing CI E2E job and a measured workflow contract guard.
 - [Research](evidence/research.md), [data model](evidence/data-model.md), [contract](evidence/contract.md), and [validation](evidence/quickstart.md).
 
 ## Complexity Tracking

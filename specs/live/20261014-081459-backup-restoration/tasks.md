@@ -44,7 +44,7 @@
 
 - [x] T015 [US3] Add protected restore routes and controls under `web_portal/routes/firmware_policy/restore/`.
 - [x] T016 [US3] Connect the menu link in `web_portal/templates/operations.html` and `tests/support/data_preview_harness.py`.
-- [x] T017 [US3] Add protected API and Chromium tests in `tests/e2e/web_portal/firmware_restore/`.
+- [x] T017 [US3] Add protected API and Chromium tests in `tests/e2e/web_portal/firmware_restore/`. Preserve CI screenshot artifacts in `.github/workflows/ci.yml` and guard the upload contract in `tests/guardrails/test_ci_gate_triggers.py`.
 
 ## Phase 6: Documentation and acceptance
 
