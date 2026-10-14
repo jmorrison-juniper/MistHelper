@@ -66,9 +66,17 @@ No automatic background worker starts.
 ### Request bounds
 
 One organization can start one WAN refresh every 300 seconds.
-Each refresh requests one page of 100 gateway ports and one page of 100 VPN paths.
-It also discovers one gateway, reads the metric catalog, and requests two single-metric pages.
-The maximum is six SDK calls, with no automatic retry under admitted transport.
+Overview refresh requests one page of 100 gateway ports and one page of 100 VPN paths.
+It makes no gateway discovery or insight request.
+Selected gateway refresh also discovers that gateway, reads the metric catalog, and requests two single-metric pages.
+From a gateway page, refresh selects that exact site and gateway MAC.
+Filtered discovery permits two rows to detect an ambiguous match and requires exactly one matching returned device.
+The overview lists every distinct gateway returned in its cached pages.
+To select another known gateway, enter its site ID and MAC in the optional overview fields.
+Both selectors remain under the server-selected organization and use verified SDK filters.
+Selected port and peer pages must match the returned gateway and site.
+The maximum is two SDK calls for overview refresh and six for selected gateway refresh.
+Admitted transport makes no automatic retry.
 Gateway discovery uses the returned device UUID, never a UUID derived from its MAC.
 Each insight request covers one completed UTC hour, with `limit=1` and `page=1`.
 The catalog must confirm the scope, type, unit, interval, and max-age.
@@ -79,6 +87,16 @@ The collector never follows a `next` URL.
 A page with more results reports partial coverage.
 The cooldown remains after success or failure.
 No release operation can bypass it.
+
+Port utilization uses `stats_gateway_port.speed`, documented in Mbps, and `rx_bps` and `tx_bps`, documented in bit/s.
+Each direction divides its current rate by the reported speed multiplied by 1,000,000.
+The result is a point-in-time percentage, not measured time above a threshold.
+Missing or invalid capacity and rates remain unknown, with invalid inputs reported in the log.
+The collector does not clamp percentages or infer full-hour coverage from a snapshot.
+Port state uses the current boolean `up` field.
+VPN details also show the current active-path flag, gateway-reported uptime in seconds, and last-seen time in UTC.
+These fields describe the cached observation, not availability minutes, flap counts, or continuous coverage.
+Missing or invalid state metadata remains unknown and does not enter historical numeric aggregates.
 
 The common transport also counts actual requests across workers.
 Its rolling Redis ledger permits at most 5,000 attempts per authentication fingerprint in 3,600 seconds.
@@ -147,10 +165,14 @@ An unavailable history connection preserves readable cached detail views but pre
 
 ### Unsupported source semantics
 
-Port speed units are not established by the bundled port schema.
-The live view therefore does not calculate utilization from an assumed bandwidth.
-Snapshot status cannot establish historical availability or congestion duration.
-Gateway insights cover only the first gateway from bounded discovery.
+The live view supports verified directional snapshot utilization, not full-hour utilization averages.
+Snapshot status and sparse hourly observations cannot establish historical availability or congestion duration.
+The device-event schema supplies free-form event types, not verified up/down transition values.
+The port `last_flapped` field does not establish timestamp units or a flap-count history.
+VPN peer filters select a period, but returned rows contain latest values rather than a timestamped sample series.
+The insight response does not define how multiple requested metric names map to its single result sequence.
+Gateway refresh supports any selected organization gateway through exact filtered discovery.
+The cached gateway list reflects bounded port and peer pages, not a complete organization inventory.
 Complete organization-wide gateway history and historical VPN coverage remain unimplemented.
 The source documentation and implementations disagree about some metric and missing-data behavior.
 These limits prevent full source acceptance.
