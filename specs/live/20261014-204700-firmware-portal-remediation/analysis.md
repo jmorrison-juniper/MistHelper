@@ -165,6 +165,12 @@ The complete combined command above then passed 311 tests with 92.85 percent cov
 Final Ruff, Black, configured mypy, and diff checks passed after this repair.
 The schema supplement uses only the packaged OpenAPI 3.1 document.
 A regression proves that no legacy-document dependency was introduced.
+Additional direct input and HTTP boundary tests passed 62 tests.
+The final fresh-application restoration test run passed 12 tests.
+Changed-test quality examined 16 files and reported zero new findings.
+Full-suite test quality examined 1,170 files and 694 findings, with zero new findings against the unchanged baseline.
+Both analyzer runs reported zero parse errors.
+The required input preflight read and validated all four inputs.
 
 ## Release acceptance gap
 
