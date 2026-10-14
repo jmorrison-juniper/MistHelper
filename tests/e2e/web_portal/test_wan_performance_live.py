@@ -347,3 +347,19 @@ def test_persisted_observations_render_calendar_summaries(client, live_service):
     assert response.status_code == 200
     assert "daily: 2024-01-01" in response.get_data(as_text=True)
     assert "mean 40.0" in response.get_data(as_text=True)
+
+
+def test_threshold_history_displays_observation_counts_not_duration(client, live_service):
+    """Keep sparse hourly threshold evidence distinct from measured congestion hours."""
+    from src.interfaces.portals.wan_performance.collection.snapshot_records import SnapshotRecords
+
+    live_service.store.cached.return_value["ports"][0].update(speed=100, rx_bps=80000000, tx_bps=90000000)
+    records = SnapshotRecords.build(live_service.store.cached.return_value)
+    live_service.history.read.return_value = (records[0],)
+    response = client.get("/wan-performance/live/port/site-one/ge-0/0/0?gateway_id=aabbccddeeff")
+    text = response.get_data(as_text=True)
+    assert response.status_code == 200
+    assert 'data-testid="wan-live-threshold-observations"' in text
+    assert "above 70%" in text
+    assert "1 valid hourly observations" in text
+    assert "not measured congestion duration" in text
