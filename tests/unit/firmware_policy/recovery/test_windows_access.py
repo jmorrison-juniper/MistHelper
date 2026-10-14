@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import stat
 import subprocess
 from pathlib import Path
 from types import SimpleNamespace
@@ -112,14 +113,25 @@ def test_windows_acl_unavailable_or_invalid_report_fails(tmp_path: Path, monkeyp
     assert "private-fixture" not in str(error.value)
 
 
-def test_windows_private_file_branch_requires_the_acl_query(tmp_path: Path, monkeypatch: Any) -> None:
-    """Exercise the Windows dispatch while retaining real regular-file checks."""
+@pytest.mark.parametrize("directory", [False, True])
+@pytest.mark.parametrize("attributes", [0, stat.FILE_ATTRIBUTE_REPARSE_POINT, None])
+def test_windows_private_file_branch_requires_the_acl_query(
+    tmp_path: Path, monkeypatch: Any, directory: bool, attributes: int | None
+) -> None:
+    """Reject junctions, reparse files, and missing Windows evidence before ACL lookup."""
     path = tmp_path / "private.json"
-    path.write_text("{}")
-    status = path.lstat()
+    path.mkdir() if directory else path.write_text("{}")
+    original = path.lstat()
+    status = SimpleNamespace(st_mode=original.st_mode, st_nlink=original.st_nlink)
+    if attributes is not None:
+        status.st_file_attributes = attributes
     calls: list[Path] = []
     monkeypatch.setattr(BackupAccess, "windows", lambda value: calls.append(value))
     with monkeypatch.context() as context:
         context.setattr("src.operations.execution.firmware_policy.recovery.backup.os.name", "nt")
-        BackupAccess.verify(path, status=status)
-    assert calls == [path]
+        if attributes == 0:
+            BackupAccess.verify(path, directory=directory, status=status)
+        else:
+            with pytest.raises(PolicyError, match="without reparse points"):
+                BackupAccess.verify(path, directory=directory, status=status)
+    assert calls == ([path] if attributes == 0 else [])

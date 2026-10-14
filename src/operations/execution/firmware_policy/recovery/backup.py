@@ -107,6 +107,9 @@ class BackupAccess:
         if not expected or (not directory and status.st_nlink != 1):
             raise PolicyError("The backup must be a private regular file with one link.")
         if os.name == "nt":
+            attributes = getattr(status, "st_file_attributes", stat.FILE_ATTRIBUTE_REPARSE_POINT)
+            if attributes & stat.FILE_ATTRIBUTE_REPARSE_POINT:
+                raise PolicyError("Windows backup access requires verified attributes without reparse points.")
             BackupAccess.windows(path)
         elif status.st_uid != os.getuid() or status.st_mode & 0o077:
             raise PolicyError("The backup belongs to a different account or permits access from another account.")

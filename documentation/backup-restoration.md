@@ -97,6 +97,7 @@ On Windows, a fixed Windows PowerShell query reads the owner and access rules th
 It compares SID values, not translated account names.
 The current account must own the directory and file.
 Only that account, SYSTEM, and the local Administrators group can have access grants.
+Windows junctions and other reparse points are refused before the ACL query.
 The tool changes no permissions.
 If the query is unavailable or access cannot be proven, restoration stops before writes.
 Windows ACL decisions have mocked automated coverage. An actual Windows host check remains unverified in this macOS development session.

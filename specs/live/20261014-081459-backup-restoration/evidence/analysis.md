@@ -59,13 +59,13 @@ Test paths below use these roots:
 
 ## Recorded local results
 
-- Feature and predecessor tests: **188 passed**. Changed-package coverage: **94.67 percent**.
+- Feature and predecessor tests: **193 passed**. Changed-package coverage: **94.69 percent**.
 - Move, structural, menu, SDK compatibility, and output guards: **977 passed, 3 skipped**.
 - Symbol preservation: **862 modules and 15,069 baseline symbols checked**. No lost symbol.
 - Full Ruff: `All checks passed!`
 - Full Black: **2,412 files unchanged**.
 - Committed-test guidance preflight: **1 passed**, with four required inputs validated.
-- Committed changed-from quality gate: **13 files checked, zero new findings**.
+- Committed changed-from quality gate: **1,163 files checked, zero new findings** after the workflow correction.
 - Full test-quality gate: **1,163 files and 694 findings checked, zero new findings**.
 - Configured mypy: `Success: no issues found in 844 source files`.
 - Full configured Bandit: no finding. The fixed Windows command has documented false-positive annotations.
@@ -101,6 +101,8 @@ Browser screenshots remain in ignored `test-artifacts/issue4218-complete.png` an
 They contain fixture data only.
 The CI E2E job uploads matching images as `backup-restoration-browser-evidence`, including after a failed test.
 A workflow contract tests the live step and four removed or altered configurations.
+The artifact and local-guidance contract run passed all 226 tests.
+Windows file tests also reject directory junctions, reparse files, and missing native attribute evidence before ACL queries.
 
 ## Specification analysis
 
