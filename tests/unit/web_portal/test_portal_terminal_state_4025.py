@@ -140,6 +140,9 @@ def test_a_database_host_warning_does_not_classify_as_an_empty_result() -> None:
         "No rows matched the port config filter",
         "No data collected",
         "No rows for JuniperRequestList.csv, so no file was written",
+        "No open Marvis Actions match the filter. No file was written.",
+        "No closed Marvis Actions match the filter. No file was written.",
+        "No file is written by this check. The result is the PASS line in the log.",
     )
     for empty_message in empty_messages:  # Check each supported empty-result message directly.
         empty_run = _run_record_from(executor, [empty_message])  # Build one isolated completed run record.
