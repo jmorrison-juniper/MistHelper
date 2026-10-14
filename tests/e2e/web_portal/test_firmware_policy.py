@@ -199,6 +199,39 @@ def test_browser_confirmation_waits_for_complete_backup_verification(
         released.set()
 
 
+@pytest.mark.parametrize(
+    ("failure_stage", "http_status", "expected"),
+    [
+        ("preparation", 200, "Preparation failed: The backup cannot be restored. No settings changed."),
+        ("application", 200, "Saved changes can remain. No settings request will be repeated."),
+        ("preparation", 503, "Status could not be read: The backup cannot be restored."),
+    ],
+)
+def test_browser_distinguishes_terminal_failure_from_polling_failure(
+    policy_server: tuple[str, SettingsSession], page: Any, failure_stage: str, http_status: int, expected: str
+) -> None:
+    """Report definite preparation rejection without hiding uncertain application or transport outcomes."""
+    url, sdk = policy_server
+    page.add_init_script("sessionStorage.setItem('policy-settings-job', 'fixture-failure');")
+    page.route(
+        "**/api/firmware-policy/jobs/fixture-failure",
+        lambda route: route.fulfill(
+            status=http_status,
+            json={"state": "failed", "failure_stage": failure_stage, "error": "The backup cannot be restored."},
+        ),
+    )
+    page.goto(url + "/operations?menu=305", wait_until="networkidle")
+    message = page.get_by_test_id("policy-message")
+    expect(message).to_contain_text(expected)
+    expect(page.get_by_test_id("policy-confirm-panel")).to_be_hidden()
+    if failure_stage == "application" or http_status != 200:
+        expect(message).not_to_contain_text("No settings changed.")
+    if http_status == 200:
+        expect(message).not_to_contain_text("Status could not be read")
+        assert page.evaluate("sessionStorage.getItem('policy-settings-job')") is None
+    assert sdk.writes == []
+
+
 def test_browser_resumes_wait_progress_and_paginates_sorted_scope_rows(
     policy_server: tuple[str, SettingsSession], page: Any
 ) -> None:

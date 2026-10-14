@@ -72,6 +72,8 @@ The operation reads the file again and compares every original record and its ch
 It also checks that the restoration schema accepts every saved settings record.
 If any backup cannot be written or verified, the operation sends zero settings writes.
 If restoration cannot accept a record, preparation fails and confirmation remains hidden.
+The portal distinguishes preparation failure from an unavailable status response.
+Only a definite preparation failure reports that no settings changed.
 See [restoration schema requirements](backup-restoration.md#vendor-contract-evidence) for known contract gaps.
 
 Backups remain under `data/.firmware-policy-backups/`.

@@ -6,14 +6,14 @@
     const labels = {ap: 'Access points', switch: 'Switches', ssr: 'SSR routers and gateways', juniper_srx: 'SRX gateways and firewalls'};
     const human = value => String(value).replaceAll('_', ' ').replace(/^\w/, letter => letter.toUpperCase());
 
-    async function request(url, body) {
+    async function request(url, body, jobStatus = false) {
         const response = await fetch(url, body === undefined ? {} : {
             method: 'POST',
             headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken()},
             body: JSON.stringify(body)
         });
         const data = await readJsonAnswer(response);
-        if (!response.ok || data.error) {
+        if (!response.ok || (data.error && !jobStatus)) {
             const error = new Error(data.error || 'The settings request failed.');
             error.status = response.status;
             throw error;
@@ -193,7 +193,7 @@
 
         async poll(identifier) {
             try {
-                const data = await request('/api/firmware-policy/jobs/' + encodeURIComponent(identifier));
+                const data = await request('/api/firmware-policy/jobs/' + encodeURIComponent(identifier), undefined, true);
                 const state = data.state || data.status;
                 const progress = data.progress || {};
                 const completed = Number(progress.completed || 0);
@@ -229,14 +229,21 @@
                 } else {
                     sessionStorage.removeItem(this.prefix + '-settings-job');
                     const failed = state !== 'complete';
+                    const preparationFailed = state === 'failed' && data.failure_stage === 'preparation';
                     const result = data.result || {};
                     const failures = result.failures || result.failed || [];
                     const remaining = result.remaining || [];
                     element(this.prefix + 'Result').textContent = failed ?
                         `${failures.length} failed targets. ${remaining.length} remaining targets. ${data.error || result.error || 'Examine the scope table. Saved changes can remain.'}` :
                         'Settings change complete. All changed settings passed readback verification.';
-                    this.message(failed ? (data.error || 'The operation stopped with ' + state + ' status. Saved changes can remain.') :
-                        'Settings change complete. All backups and changed settings verified.', failed);
+                    if (preparationFailed) {
+                        element(this.prefix + 'Result').textContent = '';
+                        this.message('Preparation failed: ' + data.error + ' No settings changed.', true);
+                    } else {
+                        this.message(failed ? ((data.error || 'The operation stopped with ' + state + ' status.') +
+                            ' Saved changes can remain. No settings request will be repeated.') :
+                            'Settings change complete. All backups and changed settings verified.', failed);
+                    }
                 }
 
                 this.controls();

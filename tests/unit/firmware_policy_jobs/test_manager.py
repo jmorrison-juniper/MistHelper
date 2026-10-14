@@ -325,6 +325,7 @@ def test_failed_backup_and_unexpected_errors_expose_no_secret(tmp_path: Path, ca
     executor.run()
     status = manager.status(identifier, "owner")
     assert status["state"] == "failed"
+    assert status["failure_stage"] == "preparation"
     assert "token" not in status
     assert "private-job-fixture" not in json.dumps(status)
     assert "private-job-fixture" not in caplog.text

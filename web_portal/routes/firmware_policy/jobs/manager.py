@@ -267,7 +267,12 @@ class JobManager:
                 "Firmware job %s stopped with %s", identifier, type(error).__name__
             )  # Never log exception content.
             self._update(
-                identifier, {"state": "failed", "error": JobErrors.message(error)}
+                identifier,
+                {
+                    "state": "failed",
+                    "error": JobErrors.message(error),
+                    "failure_stage": "application" if applying else "preparation",
+                },
             )  # Checked reasons retain HTTP status.
             with self.lock:
                 self.entries[identifier].context, self.entries[identifier].token = (

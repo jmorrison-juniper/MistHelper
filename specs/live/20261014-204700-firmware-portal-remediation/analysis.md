@@ -183,6 +183,25 @@ The guarded candidate preserves the rejected data and sends zero settings writes
 The draft pull request must keep its acceptance checklist incomplete.
 The parent owns connected verification and the eventual merge decision.
 
+## Connected guarded candidate findings
+
+The parent verified actual policy planning counts and fail-closed preparation without confirmation.
+A terminal job error incorrectly entered the polling transport error handler.
+Successful status responses now retain terminal errors for state-specific presentation.
+The server supplies a preparation or application failure stage.
+Only definite preparation failure reports that no settings changed.
+Application failures retain the warning that saved changes can remain and requests will not repeat.
+
+The focused policy browser and job suite passed 51 tests.
+After the stage assertion, 22 job and browser tests passed.
+Ruff, Black, JavaScript syntax, Bandit, and complexity checks passed for the repair.
+
+Actual restoration preparation also failed an ownership check before projection.
+A safe admitted-read diagnostic is available for the parent.
+It reports only field presence, type, and equality, without identifiers or settings values.
+The organization-record `site_id` comparison is a suspected scope assumption, not a confirmed actual-source cause.
+Actual diagnostic evidence remains required before any ownership repair.
+
 ## Next actions
 
 Complete the committed test-quality check, rebase, create the pull request, and inspect its final checks.

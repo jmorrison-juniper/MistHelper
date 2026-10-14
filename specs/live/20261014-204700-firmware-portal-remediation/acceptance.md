@@ -93,3 +93,14 @@ Unrecognized field names remain withheld.
 The repair must prove writable support from public schemas and preserve rejection of unproven fields.
 Policy preparation must prove recovery usability before it reveals confirmation.
 No live settings write occurred.
+
+The parent verified guarded policy preparation against the actual organization.
+Planning reported completed site counts and a percentage.
+Unsupported restoration projection stopped preparation and kept confirmation hidden.
+The browser incorrectly labeled this terminal failure as an unreadable status response.
+The repair separates terminal preparation failure, uncertain application failure, and polling transport failure.
+Three browser cases prove these distinctions without cloud writes.
+
+Actual restoration preparation also reported a current ownership mismatch before schema projection.
+This second blocker requires a safe equality diagnostic.
+Do not classify actual restoration as blocked only by schema until that diagnostic completes.
