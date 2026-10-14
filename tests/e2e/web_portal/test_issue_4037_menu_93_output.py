@@ -43,11 +43,13 @@ def test_menu_93_database_warning_keeps_inventory_in_completed_result(
     try:  # Keep executor cleanup active for every assertion path.
         page = client.get("/operations")  # Read the portal token needed by the protected run route.
         token_match = re.search(r'<meta name="csrf-token" content="([^"]+)">', page.get_data(as_text=True))
-        assert token_match is not None  # Require the real page token before submitting the run.
+        if token_match is None:  # A missing page token must stop the protected request.
+            raise AssertionError("The operations page did not return a CSRF token.")  # Name the blocked test setup.
+        csrf_token = token_match.group(1)  # Keep the exact token returned by the real page.
         start = client.post(
             "/api/operations/run",
             json={"menu_number": "93", "parameters": {}},
-            headers={"X-CSRFToken": token_match.group(1)},
+            headers={"X-CSRFToken": csrf_token},
         )  # Start the registered operation through the Flask route.
         assert start.status_code == 202  # Require the portal to accept the mocked run.
         run_id = start.get_json()["run_id"]  # Read the identifier returned by the real route.
