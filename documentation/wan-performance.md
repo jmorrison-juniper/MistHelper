@@ -150,6 +150,19 @@ Peer path keys include the remote site, remote port, and VPN type.
 Their derived key is not a claimed source tunnel identifier.
 
 Detail pages read a bounded 31-day window and show daily, weekly, and monthly observation summaries.
+The port detail has a separate CSRF-protected, operator-triggered insight refresh.
+It requires the exact site, gateway, and port identity from the validated cached page.
+It shares the organization cooldown and request ledger with every other WAN refresh.
+It permits four SDK calls: exact gateway discovery, metric catalog, receive rate, and transmit rate.
+Each metric request selects the actual gateway UUID and exact `port_id`.
+Each request covers one completed UTC hour with `limit=1` and `page=1`.
+Catalog checks require gateway scope, `bit/s`, a 3,600-second interval, and sufficient `max_age`.
+Response checks require aligned timestamps and values, the exact window, and no next page.
+Empty aligned series remain unknown.
+The selected application store retains these port rate records without replacing the current snapshot.
+Natural-key upserts replace an existing row for the same port and UTC hour.
+The insight row contains rates only, not utilization derived from current link speed.
+This operation does not request earlier pages or promise complete hourly coverage.
 This read window is not a retention period.
 WAN code does not delete application history or change existing TimeSeries retention.
 Unknown values and missing hours never become healthy observations.
@@ -180,8 +193,8 @@ Gateway insights do supply timestamped samples within each catalog metric's supp
 The gateway insight operation also accepts `port_id` for a selected interface.
 Current scoped refresh uses its two single-metric insight calls for the selected gateway.
 Adding two port insight calls to that refresh would exceed its six-call ceiling.
-A separate selected-port workflow could use four calls for discovery, catalog, and two metrics.
-That workflow is not implemented.
+A separate selected-port workflow uses four calls for discovery, catalog, and two metrics.
+It collects only one completed catalog-supported hour, not 13-month backfill.
 The migration does not infer historical link capacity from current port speed.
 The live view supports verified directional snapshot utilization, not full-hour utilization averages.
 Snapshot status and sparse hourly observations cannot establish historical availability or congestion duration.
