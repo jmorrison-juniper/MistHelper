@@ -165,6 +165,27 @@ class TestConcurrency:
             "A cancelled main run leaves the merged tree unmeasured."
         )
 
+    @pytest.mark.parametrize("mutation", [None, "missing", "if", "uses", "with"])
+    def test_restoration_browser_evidence_contract(self, workflow: dict[str, Any], mutation: str | None) -> None:
+        """Preserve restoration screenshots after failed tests without retaining cancelled jobs."""
+        expected = {
+            "name": "Upload backup restoration browser evidence",
+            "if": "${{ !cancelled() }}",
+            "uses": "actions/upload-artifact@v7",
+            "with": {
+                "name": "backup-restoration-browser-evidence",
+                "path": "test-artifacts/issue4218-*.png",
+                "if-no-files-found": "error",
+            },
+        }
+        uploads = [step for step in workflow["jobs"]["playwright"]["steps"] if step.get("name") == expected["name"]]
+        if mutation == "missing":
+            uploads = []
+        elif mutation is not None:
+            uploads = [{**step, mutation: "invalid"} for step in uploads]
+        print(f"Checked 1 restoration artifact contract with {len(uploads)} matching steps.")
+        assert (uploads == [expected]) is (mutation is None)
+
 
 class CancellableJobAudit:
     """Find each job that a cancelled run cannot stop (issue #3926).

@@ -525,6 +525,13 @@ class OperationRegistry:
                 "requires typed CONFIGURE and verified complete settings backups, supports --dry-run."
             ),
         },
+        "306": {
+            "category": "destructive",
+            "skip_reason": (
+                "DESTRUCTIVE: Menu 306 restores complete writable settings from private backups; "
+                "requires typed RESTORE and verified recovery backups, supports --dry-run."
+            ),
+        },
         "238": {"category": "interactive_safe", "skip_reason": "Requires an MSP ID"},
         "240": {
             "category": "interactive_safe",

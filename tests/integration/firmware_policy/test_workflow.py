@@ -10,9 +10,9 @@ from typing import Any
 
 import pytest
 
-from src.operations.execution.firmware_policy.backup import PolicyBackup
 from src.operations.execution.firmware_policy.changes import FirmwarePolicy
 from src.operations.execution.firmware_policy.cli import PolicyCatalog, PolicyMenu, PolicyMenuInputs, PolicyPrompt
+from src.operations.execution.firmware_policy.recovery.backup import PolicyBackup
 from src.operations.execution.firmware_policy.sdk import PolicyApi, PolicyError
 from src.operations.execution.firmware_policy.workflow import PolicyWorkflow
 from tests.unit.firmware_policy.fakes import ORG_ID, OTHER_SITE_ID, SITE_ID, SettingsSession

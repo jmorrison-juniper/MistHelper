@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Literal
@@ -10,12 +11,65 @@ from uuid import UUID
 
 import mistapi
 from mistapi.__api_response import APIResponse
+from mistapi.__api_response import console as sdk_console
 from mistapi.api.v1.orgs import devices, inventory, sites, ssr
 from mistapi.api.v1.orgs import setting as org_setting
 from mistapi.api.v1.sites import setting as site_setting
 from requests.exceptions import RequestException
 
 logger = logging.getLogger(__name__)
+
+
+class SettingsRequestGuard(logging.Filter):
+    """Protect private settings from SDK diagnostics and prevent repeated settings writes."""
+
+    lock = threading.RLock()
+
+    def __init__(self, session: mistapi.APISession, write: bool = False) -> None:
+        """Retain the SDK session without exposing its credentials."""
+        super().__init__()
+        self.session = session
+        self.write = write
+        self.previous: int | None = None
+        self.console_level = 0
+
+    def __enter__(self) -> SettingsRequestGuard:
+        """Serialize guarded calls and redact the SDK's shared diagnostic logger."""
+        self.lock.acquire()
+        self._privacy(True)
+        if self.write:
+            self.previous = getattr(self.session, "_MAX_429_RETRIES", None)
+            self.session._MAX_429_RETRIES = 0
+        return self
+
+    def __exit__(self, *_exception: Any) -> None:
+        """Restore the pinned SDK retry setting and release the diagnostic guard."""
+        if self.write:
+            if self.previous is None:
+                del self.session._MAX_429_RETRIES
+            else:
+                self.session._MAX_429_RETRIES = self.previous
+        self._privacy(False)
+        self.lock.release()
+
+    def _privacy(self, enabled: bool) -> None:
+        """Protect both SDK log handlers and its separate direct console output."""
+        if enabled:
+            self.console_level = sdk_console.level
+            sdk_console.level = 0
+            logging.getLogger("mistapi").addFilter(self)
+        else:
+            logging.getLogger("mistapi").removeFilter(self)
+            sdk_console.level = self.console_level
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        """Replace SDK diagnostic content before any log handler receives settings."""
+        record.msg = "SDK settings diagnostic redacted. See the checked settings request status."
+        record.args = ()
+        record.exc_info = None
+        record.exc_text = None
+        record.stack_info = None
+        return True
 
 
 class PolicyError(RuntimeError):
@@ -103,7 +157,8 @@ class PolicyApi:
                 return org_setting.getOrgSettings(self.session, identifier)
             return site_setting.getSiteSetting(self.session, identifier)
 
-        return PolicyResponse.mapping(PolicyResponse.request(call, f"Read {scope} settings", identifier).data)
+        with SettingsRequestGuard(self.session):
+            return PolicyResponse.mapping(PolicyResponse.request(call, f"Read {scope} settings", identifier).data)
 
     def write(self, scope: Literal["org", "site"], identifier: str, body: dict[str, Any]) -> None:
         """Write settings only and let the workflow verify the saved state."""
@@ -115,15 +170,17 @@ class PolicyApi:
                 return org_setting.updateOrgSettings(self.session, identifier, body=body)
             return site_setting.updateSiteSettings(self.session, identifier, body=body)
 
-        PolicyResponse.request(call, f"Write {scope} settings", identifier)  # Check every write status.
+        with SettingsRequestGuard(self.session, write=True):
+            PolicyResponse.request(call, f"Write {scope} settings", identifier)  # Check every write status.
 
     def sites(self, org_id: str) -> list[dict[str, Any]]:
         """Read every site before confirmation, including paginated site lists."""
         org_id = PolicyResponse.identifier(org_id)  # Refuse malformed organization input.
         logger.info("Read all policy sites for %s", org_id)  # Record the complete-list action.
-        result = PolicyResponse.collect(  # Check every SDK page rather than accepting partial pagination.
-            self.session, lambda: sites.listOrgSites(self.session, org_id), "List organization sites", org_id
-        )
+        with SettingsRequestGuard(self.session):
+            result = PolicyResponse.collect(  # Check every SDK page rather than accepting partial pagination.
+                self.session, lambda: sites.listOrgSites(self.session, org_id), "List organization sites", org_id
+            )
         logger.debug("Read %s policy sites for %s", len(result), org_id)  # Record the examined count.
         return result  # The workflow reads each site's local settings next.
 

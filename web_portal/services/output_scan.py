@@ -40,7 +40,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from src.operations.execution.firmware_policy.backup import BACKUP_DIRECTORY
+from src.operations.execution.firmware_policy.recovery.backup import BACKUP_DIRECTORY
 
 logger = logging.getLogger(__name__)
 

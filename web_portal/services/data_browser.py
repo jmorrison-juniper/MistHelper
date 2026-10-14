@@ -14,7 +14,7 @@ from contextlib import closing
 from itertools import islice
 from pathlib import Path
 
-from src.operations.execution.firmware_policy.backup import BACKUP_DIRECTORY
+from src.operations.execution.firmware_policy.recovery.backup import BACKUP_DIRECTORY
 from src.operations.protection.security import (
     CredentialRedactor,
 )  # Reuse the shared credential classifier and redactor.

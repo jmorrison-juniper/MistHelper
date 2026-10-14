@@ -35,6 +35,7 @@ PACKAGE_GROUPS = {  # Map every old direct package to its new domain and group.
 }  # Keep the test map identical to the approved package data model.
 MODULE_PATHS = {  # Map each old direct module to its new canonical module.
     "constants.py": "foundation/constants.py",
+    "operations/execution/firmware_policy/backup.py": ("operations/execution/firmware_policy/recovery/backup.py"),
     "foundation/persistence/db/arango_writer.py": "foundation/persistence/db/writers/arango_writer.py",
     "foundation/persistence/db/redis_writer.py": "foundation/persistence/db/writers/redis_writer.py",
     "mist/intelligence/troubleshooting/interactive_test_runner.py": (
@@ -410,6 +411,9 @@ def test_current_path_maps_a_moved_baseline_to_itself() -> None:
     moved_path = current_path("src/foundation/runtime/config.py")  # Read a path in the new layout.
     expected_path = SOURCE_ROOT / "foundation" / "runtime" / "config.py"  # The same path must come back.
     assert moved_path == expected_path, f"Checked 1 moved path. Read {moved_path}."
+    recovery_path = current_path("src/operations/execution/firmware_policy/backup.py")
+    assert recovery_path == SOURCE_ROOT / "operations" / "execution" / "firmware_policy" / "recovery" / "backup.py"
+    print("Checked 2 canonical module paths.")
 
 
 def test_current_path_still_maps_an_old_flat_package() -> None:

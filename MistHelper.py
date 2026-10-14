@@ -563,6 +563,7 @@ from src.operations.execution.firmware_policy.cli import (  # Menu 305 configure
     PolicyMenu,
     PolicyMenuInputs,
 )
+from src.operations.execution.firmware_policy.recovery.cli import RestoreMenu
 from src.operations.execution.firmware_policy.sdk import PolicyApi  # Keep all menu 305 requests in the SDK boundary.
 from src.operations.exporting.export.const_definitions_exporter import (
     ConstDefinitionsExporter,  # Cat B (1013 SC-001 position 17) -- re-export
@@ -4949,6 +4950,25 @@ menu_actions: dict[str, Any] = {
             "(Requires typing 'CONFIGURE', verified full backups, supports --dry-run)"
         ),
         category=OperationRegistry.skip_category("305"),
+        destructive=True,
+        supports_fast=False,
+    ),
+    "306": GlobalImportManager.MenuEntry(
+        menu_id="306",
+        handler=lambda: RestoreMenu(
+            api=PolicyApi(MainEntrypoint.context.apisession),
+            inputs=PolicyMenuInputs(
+                organization=ConfigUtils.get_cached_or_prompted_org_id,
+                stopped=ConfigUtils.check_stop_signal,
+                dry_run=getattr(globals().get("args", None), "dry_run", False),
+                data_directory=Path(os.environ.get("DATA_DIR", "data")),
+            ),
+        ).run(),
+        title=(
+            "DESTRUCTIVE: Restore complete writable organization and site settings from private backups "
+            "(Requires typing 'RESTORE', verified recovery backups, supports --dry-run)"
+        ),
+        category=OperationRegistry.skip_category("306"),
         destructive=True,
         supports_fast=False,
     ),

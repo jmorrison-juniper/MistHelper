@@ -377,9 +377,9 @@ class TestMenuText:
         (
             (
                 "MistHelper.py",
-                305,
-                "61827a43bd275d28c23ab38b645460d1296256e95cef52045791e9dac0224da2",
-            ),  # Menu 305 adds only its settings handler. Preserve the complete metadata identity check.
+                306,
+                "a7d1bacb93bb13cc32659001e117be43c5a49c21efec71830b3f3c3f1c24df87",
+            ),  # Menu 306 adds guarded restoration. Preserve the complete metadata identity check.
             (
                 "web_portal/menu_registry.py",
                 190,
