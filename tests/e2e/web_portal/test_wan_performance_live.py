@@ -97,6 +97,45 @@ def test_missing_session_is_explicit_unavailable(client):
     assert "no configured Mist session" in response.get_data(as_text=True)
 
 
+@pytest.mark.parametrize("unavailable", ["transport", "configuration"])
+def test_portal_startup_with_hidden_transport_refuses_refresh(monkeypatch, caplog, unavailable):
+    """Keep the portal available while refusing requests without shared admission."""
+    from types import SimpleNamespace
+
+    from requests import Session
+
+    from src.foundation.persistence.db import DatabaseConfig
+    from web_portal.app import WebPortalApp
+
+    monkeypatch.setenv("WAN_SHARED_ADMISSION", "true")
+    session = SimpleNamespace()
+    if unavailable == "configuration":
+        session._session = Session()
+        monkeypatch.setattr(
+            DatabaseConfig,
+            "from_env",
+            MagicMock(side_effect=ValueError("Missing required environment variable: ARANGO_USERNAME")),
+        )
+    app = WebPortalApp.create_app(session, {}, "org-one")
+    try:
+        client = app.test_client()
+        page = client.get("/wan-performance/live/")
+        assert page.status_code == 200
+        assert "Live data is unavailable" in page.get_data(as_text=True)
+        token = re.findall(r'name="csrf_token" value="([^"]+)"', page.get_data(as_text=True))[0]
+        response = client.post("/wan-performance/live/refresh", data={"csrf_token": token})
+        assert response.status_code == 503
+        assert "WAN refresh failed" in response.get_data(as_text=True)
+        assert "Configure shared Redis admission" in caplog.text
+        assert client.get("/wan-performance/").status_code == 200
+        assert ("SDK session transport" if unavailable == "transport" else "ARANGO_USERNAME") in caplog.text
+        assert app.config["APISESSION"] is session
+    finally:
+        WebPortalApp.shutdown_app(app)
+        if unavailable == "configuration":
+            session._session.close()
+
+
 def test_cache_outage_keeps_page_readable(client, live_service):
     """Show an explicit unavailable state without starting uncoordinated refresh."""
     live_service.store.cached.side_effect = ConnectionError("cache unavailable")
