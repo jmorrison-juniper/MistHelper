@@ -1,0 +1,69 @@
+# Tasks: Firmware portal remediation
+
+## Phase 1: Setup
+
+- [x] T001 Inspect issue, ownership, and active feature pointer in `.specify/feature.json`.
+- [x] T002 Write specification and design in `specs/live/20261014-204700-firmware-portal-remediation/`.
+- [x] T003 Bootstrap the missing environment with `scripts/bootstrap_worktree.py`.
+
+## Phase 2: Foundation
+
+- [ ] T004 Separate verified preparation and confirmed application in `src/operations/execution/firmware_policy/workflow.py`.
+- [ ] T005 Connect request admission and sanitized progress in `src/operations/execution/firmware_policy/sdk.py`.
+- [ ] T006 Add private, session-owned pollable jobs in `web_portal/routes/firmware_policy/`.
+
+## Phase 3: Policy workflow
+
+**Goal**: Configure settings through the integrated workspace after verified backups.
+**Independent test**: Fixture browser journey and exact settings request evidence.
+
+- [ ] T007 [P] [US1] Integrate dedicated category rows in `web_portal/routes/operations.py` and workspace selection in `web_portal/static/js/operations.js`.
+- [ ] T008 [P] [US1] Replace raw output and dynamic model controls in `web_portal/static/js/firmware-policy.js`.
+- [ ] T009 [US1] Resolve organization names and pre-confirmation backup jobs in `web_portal/routes/firmware_policy/__init__.py`.
+- [ ] T010 [US1] Test numerical versions, defaults, layout, and confirmation sequence in `tests/e2e/web_portal/test_firmware_policy.py`.
+
+## Phase 4: Restoration workflow
+
+**Goal**: Restore large complete private bundles without arbitrary aggregate limits.
+**Independent test**: More than 4,000 sites and a bundle above 17,402,805 bytes.
+
+- [ ] T011 [P] [US2] Stream and validate legacy records in `src/operations/execution/firmware_policy/recovery/bundle.py`.
+- [ ] T012 [US2] Preserve complete recovery and ordered freshness checks in `src/operations/execution/firmware_policy/recovery/workflow.py`.
+- [ ] T013 [US2] Integrate restored record choices, status, and confirmation in `web_portal/routes/firmware_policy/restore/templates/firmware_restore.html`.
+- [ ] T014 [US2] Test large, tampered, partial, private, and uncertain outcomes in `tests/integration/firmware_policy/recovery/`.
+
+## Phase 5: Long-run visibility
+
+**Goal**: Keep safe progress readable through quota waits and process interruption.
+**Independent test**: Simulated waits above ten minutes, restart state, and duplicate submissions.
+
+- [ ] T015 [US3] Persist sanitized job progress and reject duplicate consumption in `web_portal/routes/firmware_policy/`.
+- [ ] T016 [US3] Test ownership, waiting, restart, complete call counts, and partial outcomes in `tests/unit/firmware_policy/` and `tests/e2e/web_portal/`.
+- [ ] T017 [US3] Capture fixture screenshots and snapshots beneath `specs/live/20261014-204700-firmware-portal-remediation/evidence/`.
+
+## Phase 6: Completion
+
+- [ ] T018 Update `documentation/org-auto-upgrade-policy.md`, `documentation/backup-restoration.md`, related wiki sections, and narrow `README.md` links.
+- [ ] T019 Add `changelog.d/issue-4227-firmware-portal.md`.
+- [ ] T020 Run relevant gates and record exact results in `specs/live/20261014-204700-firmware-portal-remediation/analysis.md`.
+- [ ] T021 Complete acceptance mapping and Spec Kit analysis in `specs/live/20261014-204700-firmware-portal-remediation/analysis.md`.
+- [ ] T022 Commit milestones, create the template-based pull request, and inspect final CI artifacts without merging.
+
+## Dependencies
+
+T004 and T005 precede T009 and T012. T006 precedes T009 and T015.
+T007 and T008 can proceed beside domain work.
+T011 precedes T014. Browser evidence follows route and UI integration.
+All stories precede completion gates and the pull request.
+
+## Parallel execution
+
+Domain work owns only the firmware policy source package and non-browser tests.
+Portal job work owns only firmware policy Python routes and job tests.
+Workspace UI and documentation work proceed independently in this session.
+
+## Implementation strategy
+
+Preserve the full requested scope. First establish safety and job contracts.
+Then integrate both UI workflows, run fixture acceptance, and collect sanitized evidence.
+The parent performs connected read-only acceptance. Live writes remain blocked because the verified organization name differs from the authorized name.
