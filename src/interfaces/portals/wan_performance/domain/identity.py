@@ -8,7 +8,7 @@ class IdentityValidator:
     """Validate opaque source identifiers without changing their values."""
 
     IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
-    PEER_MAC_PATTERN = re.compile(r"^(?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$")
+    PEER_MAC_PATTERN = re.compile(r"^(?:(?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}|[0-9A-Fa-f]{12})$")
 
     @classmethod
     def identifier(cls, value: str, field_name: str) -> str:
@@ -21,9 +21,9 @@ class IdentityValidator:
 
     @classmethod
     def peer_mac(cls, value: str) -> str:
-        """Require the documented six-octet peer address format."""
+        """Validate compact or colon-separated MACs without changing source values."""
         if not isinstance(value, str) or not cls.PEER_MAC_PATTERN.fullmatch(value):
-            raise ValueError("peer_mac must use six hexadecimal octets separated by colons.")
+            raise ValueError("peer_mac must use 12 hexadecimal digits or six colon-separated hexadecimal octets.")
         return value
 
 
