@@ -17,6 +17,7 @@ The portal now treats a standalone database warning as separate from an empty re
 | `tests/unit/web_portal/test_portal_terminal_state_4025.py` | modified | Keep reported and current database warnings out of empty-result classification. |
 | `tests/unit/test_operation_output_file_discovery.py` | modified | Keep the inventory cache hidden when a real no-data message appears. |
 | `tests/unit/web_portal/test_portal_run_isolation.py` | modified | Check the completed response and event for Menu 93. |
+| `tests/e2e/web_portal/test_issue_4037_menu_93_output.py` | added | Check the completed Menu 93 result through the no-browser Flask client. |
 | `.specify/feature.json` | modified | Point to the managed feature record. |
 | `specs/numbered/0/0/1/1/3/1/3/2/4167-menu93-inventory-output/spec.md` | added | Record user needs and acceptance scenarios. |
 | `specs/numbered/0/0/1/1/3/1/3/2/4167-menu93-inventory-output/checklists/requirements.md` | added | Record specification quality checks. |
@@ -29,10 +30,12 @@ The portal now treats a standalone database warning as separate from an empty re
 - `tests/unit/web_portal/test_portal_terminal_state_4025.py::test_a_database_host_warning_does_not_classify_as_an_empty_result` — checks both the reported warning and the current exporter warning.
 - `tests/unit/test_operation_output_file_discovery.py::TestRunRecordMerge::test_finalize_drops_inventory_cache_when_the_run_reports_no_data` — keeps a prompt cache out of a true empty result.
 - `tests/unit/web_portal/test_portal_run_isolation.py::test_menu_93_database_warning_keeps_inventory_in_status_and_sse` — checks the file in the completed response and completion event.
+- `tests/e2e/web_portal/test_issue_4037_menu_93_output.py::test_menu_93_database_warning_keeps_inventory_in_completed_result` — checks the completed status through the no-browser Flask client.
 
 ## Local Verification
 
-- `.venv/bin/python -B -m pytest -q tests/unit/test_operation_output_file_discovery.py tests/unit/web_portal/test_portal_terminal_state_4025.py tests/unit/web_portal/test_portal_run_isolation.py tests/unit/web_portal/test_portal_silent_completion.py` — 49 passed.
+- `.venv/bin/python -B -m pytest -q tests/e2e/web_portal/test_issue_4037_menu_93_output.py` — 1 passed.
+- `.venv/bin/python -B -m pytest -q tests/e2e/web_portal/test_issue_4037_menu_93_output.py tests/unit/test_operation_output_file_discovery.py tests/unit/web_portal/test_portal_terminal_state_4025.py tests/unit/web_portal/test_portal_run_isolation.py tests/unit/web_portal/test_portal_silent_completion.py tests/guardrails/test_process_folder_structure.py` — 55 passed.
 - `.venv/bin/python -B -m pytest -p no:cacheprovider -s -q tests/guardrails/local_test_quality_loop/test_guidance.py::TestLiveGuides` — 1 passed. The guard read and checked all four inputs.
 - `.venv/bin/python -B -m pytest -q tests/guardrails/test_process_folder_structure.py` — 5 passed.
 - `.venv/bin/ruff check .` — All checks passed.
