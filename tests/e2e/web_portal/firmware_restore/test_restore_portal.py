@@ -66,6 +66,21 @@ class RestoreRequests:
 class TestRestorePortal:
     """Prove privacy and pre-write failure behavior through real portal middleware."""
 
+    @pytest.mark.parametrize("body", [b"", b"bad json"])
+    def test_fresh_portal_rejects_unreadable_json(self, tmp_path: Path, monkeypatch: Any, body: bytes) -> None:
+        """Reject unreadable input before any prepared plan exists in a fresh application."""
+        monkeypatch.setenv("DATA_DIR", str(tmp_path))
+        sdk = RestoreSession(tmp_path)
+        app = WebPortalApp.create_app(sdk, {}, ORG_ID)
+        try:
+            with app.test_request_context(data=body, content_type="application/json"):
+                with pytest.raises(PolicyError, match="required restoration request fields"):
+                    RestoreInputs.body({"token", "confirmation"})
+            assert sdk.reads == []
+            assert sdk.writes == []
+        finally:
+            WebPortalApp.shutdown_app(app)
+
     def test_full_api_flow_and_private_output_denial(self, restore_portal: tuple[Any, RestoreSession]) -> None:
         """Preview and restore the full writable snapshot without exposing credentials."""
         app, sdk = restore_portal
