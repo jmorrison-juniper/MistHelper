@@ -82,3 +82,16 @@ def test_expired_collection_lease_cannot_write_history_or_cache():
             LiveService(MagicMock(), "org-one", store, history).refresh()
     history.upsert.assert_not_called()
     store.publish.assert_not_called()
+
+
+def test_cross_organization_gateway_target_stops_before_admission():
+    """Never reserve quota or call the API for a target from another organization."""
+    from src.interfaces.portals.wan_performance.domain.identity import GatewayIdentity, SiteIdentity
+
+    store = MagicMock()
+    target = GatewayIdentity(SiteIdentity("another-org", "site-one"), "112233445566")
+    with patch("src.interfaces.portals.wan_performance.collection.live_service.SnapshotClient.collect") as collect:
+        with pytest.raises(ValueError, match="organization"):
+            LiveService(MagicMock(), "org-one", store, MagicMock()).refresh(target)
+    store.acquire.assert_not_called()
+    collect.assert_not_called()

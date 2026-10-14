@@ -3,7 +3,7 @@
 import re
 import threading
 from collections.abc import Iterator
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from playwright.sync_api import Page, expect
@@ -87,6 +87,82 @@ def test_unknown_gateway_returns_not_found(client, live_service):
     """Reject arbitrary gateway and site combinations outside the cached org."""
     response = client.get("/wan-performance/live/gateway/unknown?site_id=site-one")
     assert response.status_code == 404
+
+
+def test_second_gateway_refresh_keeps_selected_site_and_gateway(client, live_service):
+    """The gateway journey can refresh another cached gateway rather than the first discovered device."""
+    from src.interfaces.portals.wan_performance.domain.identity import GatewayIdentity, SiteIdentity
+
+    snapshot = live_service.store.cached.return_value
+    snapshot["ports"].append({**snapshot["ports"][0], "site_id": "site-two", "mac": "112233445566"})
+    page = client.get("/wan-performance/live/gateway/112233445566?site_id=site-two").get_data(as_text=True)
+    assert 'name="gateway_id" value="112233445566"' in page
+    assert 'name="site_id" value="site-two"' in page
+    token = re.findall(r'name="csrf_token" value="([^"]+)"', page)[0]
+    with patch.object(live_service, "refresh", return_value=snapshot) as refresh:
+        response = client.post(
+            "/wan-performance/live/refresh",
+            data={"csrf_token": token, "gateway_id": "112233445566", "site_id": "site-two"},
+        )
+    assert response.status_code == 302
+    assert response.headers["Location"] == "/wan-performance/live/gateway/112233445566?site_id=site-two"
+    refresh.assert_called_once_with(GatewayIdentity(SiteIdentity("org-one", "site-two"), "112233445566"))
+
+
+def test_overview_can_select_a_gateway_outside_the_cached_port_page(client, live_service):
+    """Use exact organization-scoped discovery for a known gateway that the capped cache does not contain."""
+    from src.interfaces.portals.wan_performance.domain.identity import GatewayIdentity, SiteIdentity
+
+    page = client.get("/wan-performance/live/").get_data(as_text=True)
+    assert 'data-testid="wan-live-gateway-site"' in page
+    assert 'data-testid="wan-live-gateway-mac"' in page
+    token = re.findall(r'name="csrf_token" value="([^"]+)"', page)[0]
+    with patch.object(live_service, "refresh", return_value={}) as refresh:
+        response = client.post(
+            "/wan-performance/live/refresh",
+            data={"csrf_token": token, "site_id": "site-two", "gateway_id": "112233445566"},
+        )
+    assert response.status_code == 302
+    refresh.assert_called_once_with(GatewayIdentity(SiteIdentity("org-one", "site-two"), "112233445566"))
+
+
+def test_blank_gateway_selection_preserves_organization_refresh(client, live_service):
+    """An untouched optional selector must not turn the normal refresh into invalid input."""
+    page = client.get("/wan-performance/live/").get_data(as_text=True)
+    token = re.findall(r'name="csrf_token" value="([^"]+)"', page)[0]
+    with patch.object(live_service, "refresh", return_value={}) as refresh:
+        response = client.post(
+            "/wan-performance/live/refresh", data={"csrf_token": token, "site_id": "", "gateway_id": ""}
+        )
+    assert response.status_code == 302
+    assert response.headers["Location"] == "/wan-performance/live/"
+    refresh.assert_called_once_with(None)
+
+
+def test_point_in_time_utilization_is_visible_without_duration_claims(client, live_service):
+    """Show both directional percentages while keeping historical duration unknown."""
+    live_service.store.cached.return_value["ports"][0].update(speed=100, rx_bps=70000000, tx_bps=80000000)
+    page = client.get("/wan-performance/live/port/site-one/ge-0/0/0?gateway_id=aabbccddeeff")
+    text = page.get_data(as_text=True)
+    assert page.status_code == 200
+    assert "rx_utilization_percent: 70.0 %" in text
+    assert "tx_utilization_percent: 80.0 %" in text
+    assert "point-in-time" in text
+    assert "Snapshot rates do not establish duration" in text
+
+
+def test_peer_current_state_and_uptime_are_distinct_from_availability(client, live_service):
+    """Display verified current peer metadata without treating it as historical duration."""
+    live_service.store.cached.return_value["peers"][0].update(up=True, is_active=False, uptime=0, last_seen=1704112440)
+    page = client.get("/wan-performance/live/vpn/site-one/11:22:33:44:55:66")
+    text = page.get_data(as_text=True)
+    assert page.status_code == 200
+    assert 'data-testid="wan-live-current-state"' in text
+    assert "Current link state: Up" in text
+    assert "Redundant path: Standby" in text
+    assert "Gateway-reported uptime (s): 0" in text
+    assert "Last observed (UTC): 2024-01-01T12:34:00+00:00" in text
+    assert "Current status does not establish historical availability" in text
 
 
 def test_missing_session_is_explicit_unavailable(client):
@@ -184,6 +260,19 @@ def test_browser_live_journeys(page: Page, live_browser_url: str, detail: str):
     expect(page.get_by_test_id("wan-live-history")).to_contain_text("not full-hour averages")
     page.get_by_test_id("wan-live-back-link").click()
     expect(page.get_by_test_id("wan-live-overview")).to_be_visible()
+
+
+def test_browser_scoped_gateway_selector(page: Page, live_browser_url: str, live_service):
+    """Submit the real CSRF-protected form and retain its exact selected gateway journey."""
+    from src.interfaces.portals.wan_performance.domain.identity import GatewayIdentity, SiteIdentity
+
+    page.goto(f"{live_browser_url}/wan-performance/live/")
+    page.get_by_test_id("wan-live-gateway-site").fill("site-one")
+    page.get_by_test_id("wan-live-gateway-mac").fill("aabbccddeeff")
+    with patch.object(live_service, "refresh", return_value={}) as refresh:
+        page.get_by_test_id("wan-live-refresh").click()
+        expect(page.get_by_test_id("wan-live-gateway")).to_be_visible()
+    refresh.assert_called_once_with(GatewayIdentity(SiteIdentity("org-one", "site-one"), "aabbccddeeff"))
 
 
 def test_refresh_requires_csrf(client, live_service):

@@ -9,7 +9,7 @@ from mistapi.api.v1.const.insight_metrics import listInsightMetrics
 from mistapi.api.v1.orgs.stats import listOrgDevicesStats, searchOrgPeerPathStats, searchOrgSwOrGwPorts
 from mistapi.api.v1.sites.insights import getSiteInsightMetricsForGateway
 
-from src.interfaces.portals.wan_performance.domain.identity import IdentityValidator
+from src.interfaces.portals.wan_performance.domain.identity import GatewayIdentity, IdentityValidator
 from src.interfaces.portals.wan_performance.domain.measurement import MetricMeasurement
 
 logger = logging.getLogger(__name__)
@@ -22,23 +22,47 @@ class RequestAdmission(Protocol):
         """Raise when ownership or request admission is unavailable."""
 
 
-class SnapshotClient:
-    """Never run a poll loop, arbitrary pagination, or an implicit retry."""
+class SnapshotSession:
+    """Share the existing portal session and admission contract between collectors."""
 
     def __init__(self, session: Any, admission: RequestAdmission) -> None:
         """Use the injected portal session rather than another token flow."""
         self.session = session
         self.admission = admission
 
-    def collect(self, org_id: str) -> dict[str, object]:
+
+class SnapshotClient(SnapshotSession):
+    """Never run a poll loop, arbitrary pagination, or an implicit retry."""
+
+    def collect(self, org_id: str, target: GatewayIdentity | None = None) -> dict[str, object]:
         """Return at most 100 gateway ports and 100 VPN paths for one organization."""
         IdentityValidator.identifier(org_id, "org_id")
+        if target is not None and target.site.org_id != org_id:
+            raise ValueError("The selected gateway organization does not match the portal.")
         logger.info("Collect bounded WAN snapshot pages for organization %s.", org_id)
         self.admission.check()
-        ports = self._page(searchOrgSwOrGwPorts(self.session, org_id, device_type="gateway", limit=100))
+        ports = self._page(
+            searchOrgSwOrGwPorts(
+                self.session, org_id, device_type="gateway", mac=target.gateway_id if target else None, limit=100
+            )
+        )
         self.admission.check()
-        peers = self._page(searchOrgPeerPathStats(self.session, org_id, duration="1h", limit=100))
-        insights = GatewayInsights(self.session, self.admission).collect(org_id)
+        peers = self._page(
+            searchOrgPeerPathStats(
+                self.session,
+                org_id,
+                mac=target.gateway_id if target else None,
+                site_id=target.site.site_id if target else None,
+                duration="1h",
+                limit=100,
+            )
+        )
+        self._scope(ports[0] + peers[0], target)
+        insights = (
+            GatewayInsights(self.session, self.admission).collect(org_id, target)
+            if target is not None
+            else {"samples": [], "partial": False}
+        )
         snapshot = {
             "org_id": org_id,
             "collected_at_utc": datetime.now(UTC).isoformat(),
@@ -50,6 +74,14 @@ class SnapshotClient:
         }
         logger.debug("Collected %d ports and %d peer paths.", len(ports[0]), len(peers[0]))
         return snapshot
+
+    @staticmethod
+    def _scope(rows: list[dict[str, object]], target: GatewayIdentity | None) -> None:
+        """Refuse returned rows outside the explicitly selected gateway and site."""
+        if target is not None and any(
+            (row.get("site_id"), row.get("mac")) != (target.site.site_id, target.gateway_id) for row in rows
+        ):
+            raise ValueError("WAN snapshot rows do not match the selected site and gateway.")
 
     @staticmethod
     def _page(response: Any) -> tuple[list[dict[str, object]], bool]:
@@ -79,38 +111,48 @@ class SnapshotClient:
         return result
 
 
-class GatewayInsights(SnapshotClient):
+class GatewayInsights(SnapshotSession):
     """Read one actual gateway UUID and two independently mapped hourly metric pages."""
 
-    def collect(self, org_id: str) -> dict[str, Any]:
-        """Bound discovery to one gateway and never infer device UUIDs from MACs."""
+    def collect(self, org_id: str, target: GatewayIdentity) -> dict[str, Any]:
+        """Resolve one selected gateway and never infer device UUIDs from MACs."""
         IdentityValidator.identifier(org_id, "org_id")
+        if target.site.org_id != org_id:
+            raise ValueError("The selected gateway organization does not match the portal.")
         self.admission.check()
-        response = listOrgDevicesStats(self.session, org_id, type="gateway", limit=1, page=1)
-        device = self._device(response, org_id)
-        if device is None:
-            return {"samples": [], "partial": False}
+        response = listOrgDevicesStats(
+            self.session,
+            org_id,
+            type="gateway",
+            site_id=target.site.site_id,
+            mac=target.gateway_id,
+            limit=2,
+            page=1,
+        )
+        device = self._device(response, org_id, target)
         self.admission.check()
         catalog = listInsightMetrics(self.session)
         end = datetime.now(UTC).replace(minute=0, second=0, microsecond=0)
         samples = [self._metric(device, name, self._metadata(catalog, name), end) for name in ("rx_bps", "tx_bps")]
-        return {"gateway": device, "samples": samples, "partial": bool(getattr(response, "next", None))}
+        return {"gateway": device, "samples": samples, "partial": False}
 
     @staticmethod
-    def _device(response: Any, org_id: str) -> dict[str, Any] | None:
+    def _device(response: Any, org_id: str, target: GatewayIdentity) -> dict[str, Any]:
         """Reject non-array discovery, wrong tenant, and non-UUID endpoint identifiers."""
         if response.status_code != 200:
             raise ConnectionError(f"Gateway discovery failed with HTTP {response.status_code}.")
         if not isinstance(response.data, list) or len(response.data) > 1:
             raise ValueError("Gateway discovery requires an array with at most one gateway.")
         if not response.data:
-            return None
+            raise ValueError("The selected gateway is absent from organization discovery.")
         device = response.data[0]
         if not isinstance(device, dict) or device.get("org_id") != org_id:
             raise ValueError("Gateway discovery organization does not match the selected organization.")
         UUID(device["id"])
         IdentityValidator.identifier(device["site_id"], "site_id")
         IdentityValidator.identifier(device["mac"], "gateway MAC")
+        if (device["site_id"], device["mac"]) != (target.site.site_id, target.gateway_id):
+            raise ValueError("Gateway discovery does not match the selected site and MAC.")
         return device
 
     @staticmethod
