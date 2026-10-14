@@ -158,14 +158,15 @@ def test_cli_dry_run_cancel_and_confirm_paths(tmp_path: Path, capsys: Any, dry_r
 
 
 def test_catalog_supports_ap_switch_srx_and_ssr_models(tmp_path: Path) -> None:
-    """Use per-type SDK catalogs and inventory-derived SSR model names."""
+    """Use per-type catalogs and authoritative SSR model constants."""
     session = SettingsSession(tmp_path)
     api = PolicyApi(session)
     catalogs = PolicyCatalog.common(api, [{"id": ORG_ID}], ["ap", "switch", "juniper_srx", "ssr"])
-    assert catalogs["ap"]["AP41"] == ["new", "stable"]
-    assert catalogs["switch"]["EX4400"] == ["new", "stable"]
-    assert catalogs["juniper_srx"]["SRX320"] == ["new", "stable"]
+    assert catalogs["ap"]["AP41"] == ["stable", "new"]
+    assert catalogs["switch"]["EX4400"] == ["stable", "new"]
+    assert catalogs["juniper_srx"]["SRX320"] == ["stable", "new"]
     assert catalogs["ssr"]["SSR120"] == ["6.3.0"]
+    assert catalogs["ssr"]["SSR130"] == ["6.3.0"]
     assert session.writes == []
     with pytest.raises(PolicyError, match="not available"):
         PolicyCatalog.validate([FirmwarePolicy("ap", False, {"AP41": "missing"})], catalogs)

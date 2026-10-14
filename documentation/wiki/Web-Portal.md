@@ -32,6 +32,24 @@ answering.
 - **Themes**: Brand Magenta, Dark, Light, and High Contrast themes with instant switching (persisted in localStorage). Brand Magenta is the default and matches the upgrade capture portal.
 - **Branding**: Customize the title, the logo, and the accent color with environment variables.
 
+## Firmware policies and recovery
+
+Open **Operations**, then expand **Firmware Policies & Recovery**.
+Menu **305** configures organization policies. Menu **306** restores private complete settings backups.
+Both workflows appear beside the left menu, not above the operations page.
+Model checkboxes reveal version choices. Numeric version components sort highest first.
+The AP schedule defaults to every day at `02:00`.
+
+Prepare verified backups before typed confirmation. Progress and compact scope tables remain below the workflow.
+Private settings never appear in these tables.
+Large bundles have no arbitrary aggregate size limit.
+Request allowance waits do not expire active preparation.
+An interrupted worker never repeats uncertain writes automatically.
+
+Warning: these workflows change cloud settings. Restored or enabled policies can permit later upgrades.
+
+See the [policy guide](../org-auto-upgrade-policy.md) and [restoration guide](../backup-restoration.md) for safety and recovery rules.
+
 ## WebSockets Tab
 
 The WebSockets tab at `/websockets` opens the live streams of the Mist API. The

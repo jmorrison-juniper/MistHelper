@@ -390,8 +390,8 @@ pie showData
 | [302](Menu-API-Endpoints-Interactive-Safe#menu-302) | Correlate Mist support tickets with Juniper service requests and RMAs (read-only) | `interactive_safe` | 0 |
 | [303](Menu-API-Endpoints-Interactive-Safe#menu-303) | Look up one Juniper service request or RMA (read-only) | `interactive_safe` | 0 |
 | [304](Menu-API-Endpoints-Interactive-Safe#menu-304) | Look up Juniper warranty, contract, and status data for serial numbers (read-only) | `interactive_safe` | 0 |
-| [305](Menu-API-Endpoints-Destructive#menu-305) | DESTRUCTIVE: Organization Auto-Upgrade Policy - Set model versions and restore all site inheritance (Requires typing 'CONFIGURE', verified full backups, supports --dry-run) | `destructive` | 9 |
-| [306](Menu-API-Endpoints-Destructive#menu-306) | DESTRUCTIVE: Restore complete writable organization and site settings from private backups (Requires typing 'RESTORE', verified recovery backups, supports --dry-run) | `destructive` | 5 |
+| [305](Menu-API-Endpoints-Destructive#menu-305) | DESTRUCTIVE: Organization Auto-Upgrade Policy - Set model versions and restore all site inheritance (Requires typing 'CONFIGURE', verified full backups, supports --dry-run) | `destructive` | 10 |
+| [306](Menu-API-Endpoints-Destructive#menu-306) | DESTRUCTIVE: Restore complete writable organization and site settings from private backups (Requires typing 'RESTORE', verified recovery backups, supports --dry-run) | `destructive` | 7 |
 
 ## Menu options with no endpoint
 
@@ -423,7 +423,7 @@ The map finds no Mist API request for 19 menu options.
 | - | - | - | - |
 | 121 | GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) |
 | 41 | GET | `/api/v1/sites/{site_id}/stats/devices/{device_id}` | [`sites.stats.getSiteDeviceStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/devices/get-site-device-stats) |
-| 36 | GET | `/api/v1/orgs/{org_id}/inventory` | [`orgs.inventory.getOrgInventory`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/inventory/get-org-inventory) |
+| 35 | GET | `/api/v1/orgs/{org_id}/inventory` | [`orgs.inventory.getOrgInventory`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/inventory/get-org-inventory) |
 | 29 | GET | `/api/v1/sites/{site_id}/devices` | [`sites.devices.listSiteDevices`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/devices/list-site-devices) |
 | 22 | GET | `/api/v1/orgs/{org_id}/gatewaytemplates` | [`orgs.gatewaytemplates.listOrgGatewayTemplates`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/gateway-templates/list-org-gateway-templates) |
 | 15 | GET | `/api/v1/orgs/{org_id}/stats/devices` | [`orgs.stats.listOrgDevicesStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/stats/devices/list-org-devices-stats) |
@@ -432,12 +432,12 @@ The map finds no Mist API request for 19 menu options.
 | 10 | GET | `/api/v1/orgs/{org_id}/deviceprofiles` | [`orgs.deviceprofiles.listOrgDeviceProfiles`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/device-profiles/list-org-device-profiles) |
 | 10 | GET | `/api/v1/sites/{site_id}/setting` | [`sites.setting.getSiteSetting`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/setting/get-site-setting) |
 | 9 | GET | `/api/v1/msps/{msp_id}/orgs` | [`msps.orgs.listMspOrgs`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/msps/orgs/list-msp-orgs) |
+| 9 | GET | `/api/v1/orgs/{org_id}` | [`orgs.orgs.getOrg`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/get-org) |
 | 9 | GET | `/api/v1/orgs/{org_id}/setting` | [`orgs.setting.getOrgSettings`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/setting/get-org-settings) |
 | 9 | GET | `/api/v1/sites/{site_id}` | [`sites.sites.getSiteInfo`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/get-site-info) |
-| 8 | GET | `/api/v1/orgs/{org_id}` | [`orgs.orgs.getOrg`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/get-org) |
+| 8 | GET | `/api/v1/const/device_models` | [`const.device_models.listDeviceModels`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/models/list-device-models) |
 | 8 | GET | `/api/v1/orgs/{org_id}/wlans` | [`orgs.wlans.listOrgWlans`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/wlans/list-org-wlans) |
 | 8 | GET | `/api/v1/sites/{site_id}/stats/devices` | [`sites.stats.listSiteDevicesStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/devices/list-site-devices-stats) |
-| 7 | GET | `/api/v1/const/device_models` | [`const.device_models.listDeviceModels`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/models/list-device-models) |
 | 7 | GET | `/api/v1/orgs/{org_id}/alarms/search` | [`orgs.alarms.searchOrgAlarms`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/alarms/search-org-alarms) |
 | 7 | GET | `/api/v1/orgs/{org_id}/devices/events/search` | [`orgs.devices.searchOrgDeviceEvents`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/devices/search-org-device-events) |
 | 7 | PUT | `/api/v1/sites/{site_id}/setting` | [`sites.setting.updateSiteSettings`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/setting/update-site-settings) |

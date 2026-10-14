@@ -5,11 +5,7 @@
 <div class="row mb-3">
     <div class="col">
         <h4>Operations</h4>
-        <p class="text-muted portal-page-intro">Run the read-only data extraction operations that the safety registry allows.</p>
-        <a class="btn btn-outline-warning" href="{{ url_for('operations.firmware_policy.page') }}"
-           data-testid="firmware-policy-menu">305: Organization auto-upgrade policy</a>
-        <a class="btn btn-outline-danger" href="{{ url_for('operations.firmware_policy.restore.page') }}"
-           data-testid="settings-restore-menu">306: Restore settings from private backups</a>
+        <p class="text-muted portal-page-intro">Select an operation on the left. Use its controls on the right. Settings workflows require verified backups and typed confirmation.</p>
     </div>
 </div>
 
@@ -27,6 +23,12 @@
 
     <!-- Right: Execution Panel -->
     <div class="col-md-7">
+        <div id="firmwarePolicyWorkspace" class="d-none" data-testid="firmware-policy-workspace">
+            {% include "firmware_policy.html" %}
+        </div>
+        <div id="settingsRestoreWorkspace" class="d-none" data-testid="settings-restore-workspace">
+            {% include "firmware_restore.html" %}
+        </div>
         <!-- Selected Operation -->
         <div class="portal-card d-none" id="selectedOp" data-testid="selected-op-panel">
             <!-- The panes stack below the `md` grid boundary, so this control
@@ -199,6 +201,7 @@
 
 {% block extra_scripts %}
 <script src="{{ url_for('static', filename='js/operations.js') }}"></script>
+<script src="{{ url_for('static', filename='js/firmware-policy.js') }}"></script>
 <!-- Loaded after operations.js, because the results table uses its escapeHtml helper. -->
 <script src="{{ url_for('static', filename='js/operation_results.js') }}"></script>
 {% endblock %}

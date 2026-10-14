@@ -140,7 +140,7 @@ def test_recovery_bundle_must_pass_the_same_restore_loader_before_writes(tmp_pat
     session = RestoreSession(tmp_path)
     session.settings[f"/api/v1/orgs/{ORG_ID}/setting"]["ssr"]["conductor_token"] = "x" * (8 * 1024 * 1024)
     original = session.path.read_bytes()
-    with pytest.raises(PolicyError, match="8 MiB size limit"):
+    with pytest.raises(PolicyError, match="could not be verified"):
         session.workflow().apply(session.prepare(), "RESTORE")
     assert session.writes == []
     assert session.path.read_bytes() == original

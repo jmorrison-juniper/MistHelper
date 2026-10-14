@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import re
 import threading
-import time
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -14,6 +13,8 @@ import pytest
 from playwright.sync_api import expect
 from werkzeug.serving import make_server
 
+from src.foundation.support.utils.rate_limiting import RateLimitingUtils
+from tests.e2e.web_portal.test_firmware_policy import PolicyJobs
 from tests.unit.firmware_policy.fakes import ORG_ID, SITE_ID
 from tests.unit.firmware_policy.recovery.fakes import RestoreSession
 from web_portal.app import WebPortalApp
@@ -23,6 +24,7 @@ from web_portal.app import WebPortalApp
 def restore_portal(tmp_path: Path, monkeypatch: Any) -> Iterator[tuple[Any, RestoreSession]]:
     """Build the production portal with a private fixture bundle and mocked SDK."""
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(RateLimitingUtils, "get_rate_limited_delay", lambda *_args: (0.0, 0.0))
     sdk = RestoreSession(tmp_path)
     app = WebPortalApp.create_app(sdk, {}, ORG_ID)
     app.config["TESTING"] = True
@@ -36,7 +38,7 @@ class RestoreRequests:
     @staticmethod
     def post(client: Any, endpoint: str, body: Any, raw: bool = False) -> Any:
         """Send a protected request using the rendered restore page's token."""
-        page = client.get("/operations/settings-restore").get_data(as_text=True)
+        page = client.get("/operations/settings-restore", follow_redirects=True).get_data(as_text=True)
         match = re.search(r'<meta name="csrf-token" content="([^"]+)"', page)
         assert match is not None
         options = {"data": body, "content_type": "application/json"} if raw else {"json": body}
@@ -45,14 +47,17 @@ class RestoreRequests:
     @staticmethod
     def preview(client: Any, sdk: RestoreSession) -> Any:
         """Select explicit saved organization and site identifiers on the active cloud."""
-        return RestoreRequests.post(
+        return PolicyJobs.finish(
             client,
-            "preview",
-            {
-                "bundle": sdk.path.stem,
-                "records": [f"org:{ORG_ID}", f"site:{SITE_ID}"],
-                "cloud": sdk.cloud,
-            },
+            RestoreRequests.post(
+                client,
+                "preview",
+                {
+                    "bundle": sdk.path.stem,
+                    "records": [f"org:{ORG_ID}", f"site:{SITE_ID}"],
+                    "cloud": sdk.cloud,
+                },
+            ),
         )
 
 
@@ -64,28 +69,24 @@ class TestRestorePortal:
         app, sdk = restore_portal
         client = app.test_client()
         original = sdk.path.read_bytes()
-        assert 'data-testid="settings-restore-menu"' in client.get("/operations").get_data(as_text=True)
+        assert 'data-testid="settings-restore-workspace"' in client.get("/operations").get_data(as_text=True)
         listing = client.get("/api/settings-restore/bundles")
         assert listing.status_code == 200
         assert listing.get_json()["bundles"][0]["record_count"] == 2
-        preview = RestoreRequests.preview(client, sdk)
-        assert preview.status_code == 200
-        data = preview.get_json()
+        data = RestoreRequests.preview(client, sdk)
+        assert data["state"] == "ready"
         assert data["writes"] == 0
         assert sdk.writes == []
         response = RestoreRequests.post(client, "apply", {"token": data["token"], "confirmation": "RESTORE"})
-        assert response.status_code == 200
-        result = response.get_json()
-        assert result["status"] == "complete"
+        result = PolicyJobs.finish(client, response)
+        assert result["state"] == "complete"
         assert result["result"]["backups_verified"] == 2
         assert result["result"]["completed"] == [f"org:{ORG_ID}", f"site:{SITE_ID}"]
         assert sdk.path.read_bytes() == original
         relative = sdk.path.relative_to(sdk.data_directory).as_posix()
         assert client.get("/api/data/download/" + relative).status_code == 404
         assert client.get("/api/data/preview/" + relative).status_code == 404
-        assert "private-fixture" not in listing.get_data(as_text=True) + preview.get_data(
-            as_text=True
-        ) + response.get_data(as_text=True)
+        assert "private-fixture" not in listing.get_data(as_text=True) + json.dumps(data) + json.dumps(result)
 
     @pytest.mark.parametrize("body", [b"", b"bad json", b"[]", b'{"token":"x","confirmation":"RESTORE","settings":{}}'])
     def test_malformed_input_fails(self, restore_portal: tuple[Any, RestoreSession], body: bytes) -> None:
@@ -95,26 +96,21 @@ class TestRestorePortal:
         assert response.status_code == 400
         assert sdk.writes == []
 
-    def test_csrf_owner_expiration_cancel_and_repeat(self, restore_portal: tuple[Any, RestoreSession]) -> None:
-        """Every preview remains private, short-lived, cancelable, and single-use."""
+    def test_csrf_owner_cancel_and_repeat(self, restore_portal: tuple[Any, RestoreSession]) -> None:
+        """Every prepared operation remains private, cancelable, and single-use."""
         app, sdk = restore_portal
         client = app.test_client()
-        token = RestoreRequests.preview(client, sdk).get_json()["token"]
+        token = RestoreRequests.preview(client, sdk)["token"]
         body = {"token": token, "confirmation": "RESTORE"}
         assert client.post("/api/settings-restore/apply", json=body).status_code == 400
         assert RestoreRequests.post(app.test_client(), "apply", body).status_code == 400
         assert RestoreRequests.post(client, "apply", {"token": token, "confirmation": "RESTORE "}).status_code == 400
         assert RestoreRequests.post(client, "cancel", {"token": token}).get_json()["writes"] == 0
         assert RestoreRequests.post(client, "apply", body).status_code == 400
-        token = RestoreRequests.preview(client, sdk).get_json()["token"]
-        store = app.extensions["settings_restore_previews"]
-        owner, _, plan = store.entries[token]
-        store.entries[token] = (owner, time.monotonic() - 601, plan)
-        assert RestoreRequests.post(client, "apply", {"token": token, "confirmation": "RESTORE"}).status_code == 400
         assert sdk.writes == []
-        token = RestoreRequests.preview(client, sdk).get_json()["token"]
+        token = RestoreRequests.preview(client, sdk)["token"]
         body = {"token": token, "confirmation": "RESTORE"}
-        assert RestoreRequests.post(client, "apply", body).status_code == 200
+        assert PolicyJobs.finish(client, RestoreRequests.post(client, "apply", body))["state"] == "complete"
         assert RestoreRequests.post(client, "apply", body).status_code == 400
         assert len(sdk.writes) == 2
 
@@ -123,11 +119,13 @@ class TestRestorePortal:
         """Do not convert HTTP failures into a successful graphical completion."""
         app, sdk = restore_portal
         client = app.test_client()
-        token = RestoreRequests.preview(client, sdk).get_json()["token"]
+        token = RestoreRequests.preview(client, sdk)["token"]
         sdk.fail_write = f"/api/v1/orgs/{ORG_ID}/setting"
         sdk.status = status
-        result = RestoreRequests.post(client, "apply", {"token": token, "confirmation": "RESTORE"}).get_json()
-        assert result["status"] == "partial"
+        result = PolicyJobs.finish(
+            client, RestoreRequests.post(client, "apply", {"token": token, "confirmation": "RESTORE"})
+        )
+        assert result["state"] == "partial"
         assert result["result"]["failed"] == [f"org:{ORG_ID}"]
         assert result["result"]["remaining"] == [f"site:{SITE_ID}"]
         assert f"HTTP {status}" in result["result"]["error"]
@@ -155,7 +153,8 @@ def test_chromium_selection_preview_confirmation_and_result(
         page.get_by_test_id(f"restore-record-site-{SITE_ID}").check()
         page.get_by_test_id("restore-cloud").fill(sdk.cloud)
         page.get_by_test_id("restore-preview-button").click()
-        expect(page.get_by_test_id("restore-preview")).to_contain_text(SITE_ID)
+        expect(page.get_by_test_id("restore-message")).to_contain_text("All backups verified")
+        expect(page.get_by_test_id("restore-rows")).to_contain_text("First")
         assert sdk.writes == []
         expect(page.get_by_test_id("restore-apply")).to_be_disabled()
         page.get_by_test_id("restore-confirmation").fill("RESTORE ")
@@ -165,7 +164,7 @@ def test_chromium_selection_preview_confirmation_and_result(
             sdk.fail_write = f"/api/v1/orgs/{ORG_ID}/setting"
         page.get_by_test_id("restore-apply").click()
         expect(page.get_by_test_id("restore-result")).to_contain_text(
-            '"status": "partial"' if failure else '"status": "complete"'
+            "failed targets" if failure else "readback verification"
         )
         assert len(sdk.writes) == (1 if failure else 2)
         assert "private-fixture" not in page.content()

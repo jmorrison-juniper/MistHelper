@@ -106,8 +106,8 @@ Use MistHelper when you need one of these.
 | Match Mist support tickets to Juniper RMAs (menu 302) | [Menu reference](documentation/menu_reference.md) |
 | Look up one Juniper service request or RMA (menu 303) | [Menu reference](documentation/menu_reference.md) |
 | Look up warranty and contract data for serial numbers (menu 304) | [Menu reference](documentation/menu_reference.md) |
-| Set organization firmware standards and restore every site's inheritance (menu 305) | [Organization auto-upgrade policy](documentation/org-auto-upgrade-policy.md) |
-| Restore complete writable organization and site settings from private backups (menu 306) | [Backup restoration](documentation/backup-restoration.md) |
+| Set organization firmware standards with verified backups and progress (menu 305) | [Organization auto-upgrade policy](documentation/org-auto-upgrade-policy.md) |
+| Restore complete writable settings with verified recovery and progress (menu 306) | [Backup restoration](documentation/backup-restoration.md) |
 
 ## How to set it up as a container
 

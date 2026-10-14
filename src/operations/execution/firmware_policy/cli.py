@@ -31,19 +31,23 @@ class PolicyCatalog:
         """Validate catalog rows and associate SSR versions with actual gateway models."""
         rows = api.versions(org_id, kind)  # Use the SDK catalog matching the hardware type.
         if kind == "ssr":
-            rows = PolicyCatalog.ssr_rows(api.inventory(org_id), rows)  # Associate versions with real SSR models.
+            rows = PolicyCatalog.ssr_rows(api.models(org_id), rows)  # Use authoritative model constants.
         result = PolicyCatalog.group(rows, kind)  # Validate the individual catalog rows separately.
         if not result:
             raise PolicyError(f"No available model versions were found for {kind} in organization {org_id}.")
         return result  # Retain the exact validated SDK version strings.
 
     @staticmethod
-    def ssr_rows(inventory: list[dict[str, Any]], versions: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """Associate SSR software with the actual SSR model names in inventory."""
+    def ssr_rows(definitions: list[dict[str, Any]], versions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Associate shared SSR packages with authoritative SSR model constants."""
         models = {
-            row["model"] for row in inventory if isinstance(row.get("model"), str) and "SSR" in row["model"].upper()
+            row["model"] for row in definitions if isinstance(row.get("model"), str) and "SSR" in row["model"].upper()
         }
-        return [{"model": model, "version": row.get("version")} for model in models for row in versions]
+        return [
+            {"model": model, "version": row.get("version")}
+            for row in versions
+            for model in (models & {row["model"]} if isinstance(row.get("model"), str) else models)
+        ]  # Preserve a catalog's explicit model constraint when present.
 
     @staticmethod
     def group(rows: list[dict[str, Any]], kind: str) -> dict[str, list[str]]:
@@ -56,7 +60,10 @@ class PolicyCatalog:
             if kind == "juniper_srx" and "SRX" not in model.upper():
                 continue  # Gateway catalogs also contain models outside the SRX policy.
             result.setdefault(model, []).append(version)  # Retain every allowed choice for the model.
-        return {model: sorted(set(versions)) for model, versions in sorted(result.items())}
+        return {
+            model: sorted(set(versions), key=PolicyApi.version_key, reverse=True)
+            for model, versions in sorted(result.items())
+        }
 
     @classmethod
     def common(
@@ -68,7 +75,11 @@ class PolicyCatalog:
             catalogs = [cls.available(api, org["id"], kind) for org in organizations]  # Validate all targets.
             models = set.intersection(*(set(catalog) for catalog in catalogs))  # Exclude unavailable models.
             combined[kind] = {
-                model: sorted(set.intersection(*(set(catalog[model]) for catalog in catalogs)))
+                model: sorted(
+                    set.intersection(*(set(catalog[model]) for catalog in catalogs)),
+                    key=PolicyApi.version_key,
+                    reverse=True,
+                )
                 for model in sorted(models)
             }
             combined[kind] = {model: versions for model, versions in combined[kind].items() if versions}

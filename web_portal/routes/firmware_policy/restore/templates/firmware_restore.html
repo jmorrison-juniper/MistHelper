@@ -1,135 +1,40 @@
-{% extends "base.html" %}
-{% block title %}Restore settings - {{ config.PORTAL.title }}{% endblock %}
-{% block content %}
-<h4>306: Restore complete writable settings</h4>
+<h5>306: Restore complete writable settings</h5>
 <p class="alert alert-danger" data-testid="restore-warning">Warning: restoration replaces complete writable organization and site settings.
-Later changes can be lost. A checksum is not an authentic signature. Verify the backup source and selected cloud.
-Every current target needs a verified recovery backup before the first change. No firmware execution request is sent.</p>
-<div class="portal-card">
-  <label for="restoreBundle">Private backup</label>
-  <select id="restoreBundle" class="form-select mb-3" data-testid="restore-bundle"><option value="">Select a backup</option></select>
-  <fieldset id="restoreRecords" data-testid="restore-records"><legend class="h6">Saved records</legend></fieldset>
-  <p>Include the saved organization for each selected site. Organizations restore before sites.</p>
-  <label for="restoreCloud">Type the active cloud hostname: <strong id="activeCloud" data-testid="restore-active-cloud"></strong></label>
-  <input id="restoreCloud" class="form-control mb-3" autocomplete="off" data-testid="restore-cloud">
-  <button type="button" id="restorePreview" class="btn btn-outline-warning" data-testid="restore-preview-button">Preview restoration</button>
+Later changes can be lost. A checksum is not an authentic signature. Verify the source and cloud.
+No firmware execution request is sent.</p>
+<fieldset id="restoreControls" class="portal-card mb-3">
+    <h6>1. Select private backup records</h6>
+    <label for="restoreBundle" class="form-label">Private backup</label>
+    <select id="restoreBundle" class="form-select mb-3" data-testid="restore-bundle"><option value="">Select a backup</option></select>
+    <button id="restoreRefresh" type="button" class="btn btn-sm btn-outline-secondary mb-2" data-testid="restore-refresh">Refresh backups</button>
+    <div class="form-check mb-2">
+        <input id="restoreAll" type="checkbox" class="form-check-input" data-testid="restore-all">
+        <label for="restoreAll" class="form-check-label">Select all saved records</label>
+    </div>
+    <fieldset id="restoreRecords" class="overflow-auto" style="max-height: 18rem" data-testid="restore-records">
+        <legend class="h6">Saved records</legend>
+    </fieldset>
+    <p class="small text-muted">Include the saved organization for each selected site. Organizations restore before sites.</p>
+    <label for="restoreCloud" class="form-label">Type the active cloud hostname: <strong id="activeCloud" data-testid="restore-active-cloud"></strong></label>
+    <input id="restoreCloud" class="form-control mb-3" autocomplete="off" data-testid="restore-cloud">
+    <h6>2. Prepare verified recovery backups</h6>
+    <p>Validate the source, examine writable effects, and verify recovery for every target before confirmation.</p>
+    <button type="button" id="restorePreview" class="btn btn-outline-warning" data-testid="restore-preview-button">Prepare verified recovery backups</button>
+</fieldset>
+<div id="restorePreviewText" class="mb-3" data-testid="restore-preview"></div>
+<div id="restoreConfirmPanel" class="portal-card mb-3 d-none" data-testid="restore-confirm-panel">
+    <h6>3. Confirm restoration</h6>
+    <p>All recovery backups passed verification. Examine the table below before confirmation.</p>
+    <label for="restoreConfirmation" class="form-label">Type RESTORE exactly</label>
+    <input id="restoreConfirmation" class="form-control mb-3" autocomplete="off" data-testid="restore-confirmation" disabled>
+    <button type="button" id="restoreApply" class="btn btn-danger" data-testid="restore-apply" disabled>Restore verified plan</button>
+    <button type="button" id="restoreCancel" class="btn btn-secondary" data-testid="restore-cancel" disabled>Cancel prepared plan</button>
 </div>
-<pre id="restorePreviewText" class="mt-3" data-testid="restore-preview" aria-live="polite"></pre>
 <div class="portal-card">
-  <label for="restoreConfirmation">Type RESTORE exactly after you examine the preview</label>
-  <input id="restoreConfirmation" class="form-control mb-3" autocomplete="off" data-testid="restore-confirmation" disabled>
-  <button type="button" id="restoreApply" class="btn btn-danger" data-testid="restore-apply" disabled>Verify recovery backups and restore</button>
-  <button type="button" id="restoreCancel" class="btn btn-secondary" data-testid="restore-cancel" disabled>Cancel preview</button>
+    <h6>Progress and results</h6>
+    <div id="restoreMessage" class="alert alert-info" role="status" aria-live="polite" data-testid="restore-message">Select a private backup.</div>
+    <div class="portal-progress mb-2"><div id="restoreProgress" class="progress-bar" role="progressbar"
+        aria-label="Restoration progress" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" data-testid="restore-progress">0%</div></div>
+    <div id="restoreResult" data-testid="restore-result"></div>
+    <div id="restoreRows" data-testid="restore-rows"></div>
 </div>
-<pre id="restoreResult" class="mt-3" role="status" data-testid="restore-result" aria-live="polite"></pre>
-{% endblock %}
-{% block extra_scripts %}
-<script>
-(() => {
-  const element = id => document.getElementById(id);
-  let bundles = [];
-  let token = null;
-  let busy = false;
-  const endpoints = {
-    bundles: {{ url_for('operations.firmware_policy.restore.bundles') | tojson }},
-    preview: {{ url_for('operations.firmware_policy.restore.preview') | tojson }},
-    apply: {{ url_for('operations.firmware_policy.restore.apply') | tojson }},
-    cancel: {{ url_for('operations.firmware_policy.restore.cancel') | tojson }}
-  };
-  function controls() {
-    element('restorePreview').disabled = busy;
-    element('restoreBundle').disabled = busy;
-    element('restoreCloud').disabled = busy;
-    element('restoreRecords').disabled = busy;
-    element('restoreConfirmation').disabled = busy || !token;
-    element('restoreApply').disabled = busy || !token || element('restoreConfirmation').value !== 'RESTORE';
-    element('restoreCancel').disabled = busy || !token;
-  }
-  function invalidate() {
-    token = null;
-    element('restoreConfirmation').value = '';
-    element('restorePreviewText').textContent = '';
-    controls();
-  }
-  async function api(action, body) {
-    const options = body === undefined ? {} : {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content},
-      body: JSON.stringify(body)
-    };
-    const response = await fetch(endpoints[action], options);
-    const result = await response.json();
-    if (!response.ok) throw new Error(result.error || 'The restoration request failed.');
-    return result;
-  }
-  async function run(operation) {
-    busy = true;
-    controls();
-    element('restoreResult').textContent = '';
-    try {
-      await operation();
-    } catch (error) {
-      invalidate();
-      element('restoreResult').textContent = error.message;
-    } finally {
-      busy = false;
-      controls();
-    }
-  }
-  element('restoreBundle').addEventListener('change', () => {
-    invalidate();
-    const records = element('restoreRecords');
-    records.replaceChildren();
-    const bundle = bundles.find(item => item.token === element('restoreBundle').value);
-    for (const record of bundle?.records || []) {
-      const label = document.createElement('label');
-      label.className = 'd-block';
-      const input = document.createElement('input');
-      input.type = 'checkbox';
-      input.value = record.scope + ':' + record.id;
-      input.dataset.testid = 'restore-record-' + record.scope + '-' + record.id;
-      input.addEventListener('change', invalidate);
-      label.append(input, document.createTextNode(' ' + input.value));
-      records.append(label);
-    }
-  });
-  element('restoreCloud').addEventListener('input', invalidate);
-  element('restoreConfirmation').addEventListener('input', controls);
-  element('restorePreview').addEventListener('click', () => run(async () => {
-    invalidate();
-    const result = await api('preview', {
-      bundle: element('restoreBundle').value,
-      records: Array.from(element('restoreRecords').querySelectorAll('input:checked'), input => input.value),
-      cloud: element('restoreCloud').value
-    });
-    token = result.token;
-    delete result.token;
-    element('restorePreviewText').textContent = JSON.stringify(result, null, 2);
-  }));
-  element('restoreApply').addEventListener('click', () => run(async () => {
-    const selected = token;
-    token = null;
-    const result = await api('apply', {token: selected, confirmation: element('restoreConfirmation').value});
-    element('restoreConfirmation').value = '';
-    element('restoreResult').textContent = JSON.stringify(result, null, 2);
-  }));
-  element('restoreCancel').addEventListener('click', () => run(async () => {
-    await api('cancel', {token});
-    invalidate();
-    element('restoreResult').textContent = 'Restoration cancelled. No settings writes.';
-  }));
-  run(async () => {
-    const result = await api('bundles');
-    bundles = result.bundles;
-    element('activeCloud').textContent = result.cloud;
-    for (const bundle of bundles) {
-      const option = document.createElement('option');
-      option.value = bundle.token;
-      option.textContent = bundle.created_at + ' | ' + bundle.record_count + ' records | ' + bundle.token;
-      element('restoreBundle').append(option);
-    }
-    if (!bundles.length) element('restoreResult').textContent = 'No verified private backup is available.';
-  });
-})();
-</script>
-{% endblock %}

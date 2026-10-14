@@ -52,13 +52,13 @@ Named parent objects restore their complete saved writable content.
 
 ## Confirm and restore
 
-1. Type `RESTORE` exactly after you examine the preview.
-2. Wait while the tool reads every current target and verifies complete recovery backups.
-3. Examine completed, failed, and remaining scope identifiers.
+1. Prepare the plan and wait for every complete recovery backup to pass verification.
+2. Examine the sorted scope table, then type `RESTORE` exactly.
+3. Examine progress and the completed, failed, and remaining scopes.
 
 The tool checks the source bundle, cloud, membership, and complete current settings again before changes.
 Every target needs a durable verified recovery record before the first write.
-Each recovery bundle must also pass the same format, private-access, and size checks as a selected source bundle.
+Each recovery bundle must pass the same format, integrity, and private-access checks as a selected source bundle.
 Organization writes precede site writes.
 Each target gets another freshness check immediately before its settings write.
 Each write requires a saved-state check.
@@ -77,15 +77,20 @@ Keep other settings changes stopped during restoration.
 
 ## Graphical workflow
 
-Open Operations on the protected portal and select `306: Restore settings from private backups`.
+Open **Operations**, expand **Firmware Policies & Recovery**, then select menu **306**.
+The workflow occupies the right workspace beside the left menu.
 Use the dynamic backup and saved-record controls.
-Type the active cloud hostname, then select **Preview restoration**.
-Type `RESTORE` exactly to enable **Verify recovery backups and restore**.
-Use **Cancel preview** to invalidate a plan without writes.
+Use **Select all saved records** when the complete bundle is required.
+Type the active cloud hostname, then select **Prepare verified recovery backups**.
+Preparation creates and verifies recovery before the confirmation controls appear.
+Examine the compact, site-name-sorted table and progress below the controls.
+Type `RESTORE` exactly to enable **Restore verified plan**.
+Use **Cancel prepared plan** to invalidate a plan without writes.
 
 The portal keeps settings and credentials on the server.
-Previews expire after ten minutes and belong to one browser session.
+Plans belong to one browser session. Active preparation remains valid through long request allowance waits.
 Each preview permits one application.
+Status polling survives a page refresh. A worker interruption stops the plan without automatic write replay.
 Existing portal access controls and request protection apply.
 No upload or arbitrary file path is accepted.
 
@@ -102,7 +107,11 @@ Windows junctions and other reparse points are refused before the ACL query.
 The tool changes no permissions.
 If the query is unavailable or access cannot be proven, restoration stops before writes.
 Windows ACL decisions have mocked automated coverage. An actual Windows host check remains unverified in this macOS development session.
-The loader rejects symbolic links, hard links, excessive size, duplicate JSON keys, and invalid records.
+The loader rejects symbolic links, hard links, duplicate JSON keys, and invalid records.
+Legacy JSON bundles have no arbitrary aggregate byte or record-count limit.
+The reader validates bounded individual records and complete checksums instead of loading unbounded JSON text.
+Large organizations require sufficient private storage and time for every settings read, recovery backup, freshness check, write, and readback.
+Existing API usage tools control request admission and report allowance waits.
 The private files do not appear in output downloads or previews.
 
 The tool uses the same private format for new recovery bundles.

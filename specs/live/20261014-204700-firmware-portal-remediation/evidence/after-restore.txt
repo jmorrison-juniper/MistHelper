@@ -1,0 +1,101 @@
+- navigation:
+  - link "Logo MistHelper":
+    - /url: /
+    - img "Logo"
+    - text: MistHelper
+  - list:
+    - listitem:
+      - link "Dashboard":
+        - /url: /
+    - listitem:
+      - link "Data":
+        - /url: /data
+    - listitem:
+      - link "Operations":
+        - /url: /operations
+    - listitem:
+      - link "Maps":
+        - /url: /maps
+    - listitem:
+      - link "WebSockets":
+        - /url: /websockets
+  - button "Theme"
+- main:
+  - heading "Operations" [level=4]
+  - paragraph: Select an operation on the left. Use its controls on the right. Settings workflows require verified backups and typed confirmation.
+  - textbox "Search operations":
+    - /placeholder: Search operations...
+  - heading "Firmware Policies & Recovery ( 2 )" [level=2]:
+    - button "Firmware Policies & Recovery ( 2 )"
+  - list:
+    - listitem:
+      - button "305 Organization auto-upgrade policy":
+        - strong: "305"
+        - text: Organization auto-upgrade policy
+    - listitem:
+      - button "306 Restore settings from private backups":
+        - strong: "306"
+        - text: Restore settings from private backups
+  - 'heading "306: Restore complete writable settings" [level=5]'
+  - paragraph: "Warning: restoration replaces complete writable organization and site settings. Later changes can be lost. A checksum is not an authentic signature. Verify the source and cloud. No firmware execution request is sent."
+  - group:
+    - heading "1. Select private backup records" [level=6]
+    - text: Private backup
+    - combobox "Private backup":
+      - option "Select a backup"
+      - option "2026-10-14T21:16:47.940506+00:00 | 3 complete records" [selected]
+      - option "2026-10-14T21:16:04.395459+00:00 | 2 complete records"
+    - button "Refresh backups"
+    - checkbox "Select all saved records" [checked]
+    - text: Select all saved records
+    - group:
+      - checkbox "Fixture Organization (00000000-0000-0000-0000-000000000001)" [checked]
+      - text: Fixture Organization (00000000-0000-0000-0000-000000000001)
+      - checkbox "Alpha site (00000000-0000-0000-0000-000000000002)" [checked]
+      - text: Alpha site (00000000-0000-0000-0000-000000000002)
+      - checkbox "Zulu site (00000000-0000-0000-0000-000000000003)" [checked]
+      - text: Zulu site (00000000-0000-0000-0000-000000000003)
+    - paragraph: Include the saved organization for each selected site. Organizations restore before sites.
+    - text: "Type the active cloud hostname:"
+    - strong: api.mist.com
+    - 'textbox "Type the active cloud hostname: api.mist.com"': api.mist.com
+    - heading "2. Prepare verified recovery backups" [level=6]
+    - paragraph: Validate the source, examine writable effects, and verify recovery for every target before confirmation.
+    - button "Prepare verified recovery backups"
+  - text: 3 complete target backups verified. No settings changed.
+  - heading "3. Confirm restoration" [level=6]
+  - paragraph: All recovery backups passed verification. Examine the table below before confirmation.
+  - text: Type RESTORE exactly
+  - textbox "Type RESTORE exactly"
+  - button "Restore verified plan" [disabled]
+  - button "Cancel prepared plan"
+  - heading "Progress and results" [level=6]
+  - status: All backups verified. Examine the sorted scope table, then type RESTORE.
+  - progressbar "Restoration progress": 100%
+  - table:
+    - rowgroup:
+      - row "Organization / site Scope Backup Settings":
+        - columnheader "Organization / site"
+        - columnheader "Scope"
+        - columnheader "Backup"
+        - columnheader "Settings"
+    - rowgroup:
+      - row "Alpha site Site Verified Ready":
+        - cell "Alpha site"
+        - cell "Site"
+        - cell "Verified"
+        - cell "Ready"
+      - row "Fixture Organization Organization Verified Ready":
+        - cell "Fixture Organization"
+        - cell "Organization"
+        - cell "Verified"
+        - cell "Ready"
+      - row "Zulu site Site Verified Ready":
+        - cell "Zulu site"
+        - cell "Site"
+        - cell "Verified"
+        - cell "Ready"
+  - button "Previous" [disabled]
+  - text: 3 scopes. Page 1 of 1.
+  - button "Next" [disabled]
+- contentinfo: MistHelper Web Portal

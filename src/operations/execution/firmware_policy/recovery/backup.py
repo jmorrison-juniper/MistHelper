@@ -11,6 +11,8 @@ import stat
 
 # The fixed Windows security query never includes caller-controlled command text.
 import subprocess  # nosec B404
+import threading
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -19,6 +21,51 @@ from uuid import uuid4
 from ..sdk import PolicyError
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class BackupProof:
+    """Bind a durable recovery file to one unchanged, single-use plan."""
+
+    path: Path
+    records: list[dict[str, Any]] = field(repr=False)
+    binding: str = ""
+    consumed: bool = False
+    lock: Any = field(default_factory=threading.Lock, repr=False, compare=False)
+    fingerprint: tuple[int, ...] = field(default=(), repr=False)
+
+    def verify(self, backup: PolicyBackup, records: list[dict[str, Any]], binding: str) -> None:
+        """Reject another plan, a consumed proof, or a changed durable backup."""
+        with self.lock:  # Prevent concurrent callers from consuming one prepared operation twice.
+            if self.consumed or self.records != records or self.binding != binding:
+                raise PolicyError("The recovery proof is consumed or belongs to another plan.")
+            try:
+                before = self.identity(self.path.lstat())
+                backup.verify(self.path, records)  # Recheck private durable recovery before consumption.
+                self.fingerprint = self.identity(self.path.lstat())
+            except OSError:
+                raise PolicyError("The recovery backup could not be verified.") from None
+            if before != self.fingerprint:
+                raise PolicyError("The recovery backup changed during verification.")
+            self.consumed = True  # Never reuse a proof after the apply boundary.
+
+    @staticmethod
+    def identity(status: os.stat_result) -> tuple[int, ...]:
+        """Retain file identity and change time for constant-time recovery freshness."""
+        return (status.st_dev, status.st_ino, status.st_size, status.st_mtime_ns, status.st_ctime_ns)
+
+    def ensure(self, backup: PolicyBackup) -> None:
+        """Require the verified complete recovery file to remain private before each write."""
+        try:
+            BackupAccess.verify(backup.root, directory=True)
+            status = self.path.lstat()
+            BackupAccess.verify(self.path, status=status)
+            if not self.consumed or self.identity(status) != self.fingerprint:
+                raise PolicyError("The verified recovery backup changed. Changes can remain.")
+        except OSError:
+            raise PolicyError("The verified recovery backup is unavailable. Changes can remain.") from None
+
+
 BACKUP_DIRECTORY = ".firmware-policy-backups"
 WINDOWS_ACL_QUERY = """
 $ErrorActionPreference = 'Stop'
@@ -126,11 +173,18 @@ class PolicyBackup:
     def digest(records: list[dict[str, Any]]) -> str:
         """Hash canonical complete records so verification detects content changes."""
         try:
-            content = json.dumps(records, sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8")
+            digest = hashlib.sha256(b"[")  # Match the legacy canonical list without aggregate serialization.
+            encoder = json.JSONEncoder(sort_keys=True, separators=(",", ":"), allow_nan=False)
+            for index, record in enumerate(records):  # Bound serialization to each record.
+                if index:
+                    digest.update(b",")
+                for chunk in encoder.iterencode(record):
+                    digest.update(chunk.encode("utf-8"))
+            digest.update(b"]")
         except (TypeError, ValueError) as error:
             logger.error("Firmware policy backup contains invalid JSON values: %s", type(error).__name__)
             raise PolicyError("The complete settings cannot be serialized into a valid backup.") from None
-        return hashlib.sha256(content).hexdigest()  # Record integrity without revealing settings.
+        return digest.hexdigest()  # Record integrity without revealing settings.
 
     def save(self, records: list[dict[str, Any]]) -> Path:
         """Write every target's settings before the workflow can send its first change."""
@@ -174,12 +228,16 @@ class PolicyBackup:
             if path.is_symlink() or path.parent != self.root:
                 raise PolicyError("The backup file is outside the private backup directory.")
             BackupAccess.verify(path)
-            document = json.loads(path.read_text(encoding="utf-8"))  # Read the actual durable file.
+            from .bundle import BundleFiles  # Defer the dependency because bundles use the backup writer.
+
+            try:
+                document = BundleFiles(self).read(path.stem)  # Validate each record and the private descriptor.
+            except PolicyError:
+                raise PolicyError(
+                    "The settings backup could not be verified and does not match the original settings."
+                ) from None
             valid = (  # Verify all records, their count, and their canonical checksum.
-                isinstance(document, dict)
-                and document.get("records") == expected
-                and document.get("record_count") == len(expected)
-                and document.get("sha256") == self.digest(expected)
+                document.records == expected and document.checksum == self.digest(expected)
             )
             if not valid:
                 raise PolicyError("The settings backup does not match the original settings.")

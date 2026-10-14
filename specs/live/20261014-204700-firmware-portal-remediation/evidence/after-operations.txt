@@ -1,0 +1,70 @@
+- navigation:
+  - link "Logo MistHelper":
+    - /url: /
+    - img "Logo"
+    - text: MistHelper
+  - list:
+    - listitem:
+      - link "Dashboard":
+        - /url: /
+    - listitem:
+      - link "Data":
+        - /url: /data
+    - listitem:
+      - link "Operations":
+        - /url: /operations
+    - listitem:
+      - link "Maps":
+        - /url: /maps
+    - listitem:
+      - link "WebSockets":
+        - /url: /websockets
+  - button "Theme"
+- main:
+  - heading "Operations" [level=4]
+  - paragraph: Select an operation on the left. Use its controls on the right. Settings workflows require verified backups and typed confirmation.
+  - textbox "Search operations":
+    - /placeholder: Search operations...
+  - heading "Firmware Policies & Recovery ( 2 )" [level=2]:
+    - button "Firmware Policies & Recovery ( 2 )"
+  - list:
+    - listitem:
+      - button "305 Organization auto-upgrade policy":
+        - strong: "305"
+        - text: Organization auto-upgrade policy
+    - listitem:
+      - button "306 Restore settings from private backups":
+        - strong: "306"
+        - text: Restore settings from private backups
+  - 'heading "305: Organization auto-upgrade policy" [level=5]'
+  - note: "Warning: enabled policies can cause later cloud-managed upgrades. This operation sends no firmware upgrade or device-push request."
+  - paragraph: All AP, switch, SSR, and SRX site overrides will be removed, including types not selected below. SSR and SRX policies apply at initial onboarding. Only AP policies support a schedule.
+  - group:
+    - heading "1. Organizations and device types" [level=6]
+    - text: Scope
+    - combobox "Scope":
+      - option "Current organization" [selected]
+    - text: Organizations
+    - listbox "Organizations":
+      - option "Fixture Organization (00000000-0000-0000-0000-000000000001)" [selected]
+    - group "Device types":
+      - text: Device types
+      - checkbox "Access points"
+      - text: Access points
+      - checkbox "Switches"
+      - text: Switches
+      - checkbox "SSR routers and gateways"
+      - text: SSR routers and gateways
+      - checkbox "SRX gateways and firewalls"
+      - text: SRX gateways and firewalls
+    - button "Load available model versions"
+    - heading "2. Models and versions" [level=6]
+    - paragraph: Check a model to select its version. Highest versions appear first.
+    - text: Load available model versions for the selected scope.
+    - heading "3. Prepare and verify backups" [level=6]
+    - paragraph: Read complete settings and verify a private backup for every target before confirmation. No cloud settings change during this stage.
+    - button "Prepare verified backups" [disabled]
+  - heading "Progress and results" [level=6]
+  - status: 1 organization choices loaded.
+  - progressbar "Policy workflow progress": 0%
+- contentinfo: MistHelper Web Portal

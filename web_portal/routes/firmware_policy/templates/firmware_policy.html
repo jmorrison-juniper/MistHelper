@@ -1,69 +1,57 @@
-{% extends "base.html" %}
-{% block title %}305: Organization auto-upgrade policy - {{ config.PORTAL.title }}{% endblock %}
-{% block content %}
-<div class="row">
-    <div class="col-lg-10 mx-auto">
-        <a href="{{ url_for('operations.operations_page') }}" class="btn btn-outline-secondary mb-3"
-           data-testid="policy-back">Operations</a>
-        <h4>305: Organization auto-upgrade policy</h4>
-        <div class="alert alert-warning" role="note" data-testid="policy-warning">{{ policy_warning }}</div>
-        <p>All AP, switch, SSR, and SRX site overrides will be removed, including types you do not select below.</p>
-        <p>SSR and SRX policies apply when a device is first onboarded. Only AP policies have a schedule.</p>
-        <div id="policyMessage" class="alert alert-info" role="status" aria-live="polite"
-             data-testid="policy-message">Loading organization choices...</div>
+<h5>305: Organization auto-upgrade policy</h5>
+<p class="alert alert-warning" role="note" data-testid="policy-warning">Warning: enabled policies can cause later cloud-managed upgrades.
+This operation sends no firmware upgrade or device-push request.</p>
+<p>All AP, switch, SSR, and SRX site overrides will be removed, including types not selected below.
+SSR and SRX policies apply at initial onboarding. Only AP policies support a schedule.</p>
 
-        <div class="portal-card mb-3">
-            <h5>1. Organizations and device types</h5>
-            <label for="policyMsp" class="form-label">Scope</label>
-            <select id="policyMsp" class="form-select mb-3" data-testid="policy-msp">
-                <option value="">Current organization</option>
-            </select>
-            <label for="policyOrganizations" class="form-label">Organizations</label>
-            <select id="policyOrganizations" class="form-select mb-3" multiple size="5"
-                    data-testid="policy-organizations"></select>
-            <fieldset>
-                <legend class="fs-6">Device types to configure at organization level</legend>
-                {% for kind, label in [('ap', 'Access points'), ('switch', 'Switches'), ('ssr', 'SSR'), ('juniper_srx', 'SRX')] %}
-                <div class="form-check">
-                    <input id="policyKind-{{ kind }}" type="checkbox" class="form-check-input"
-                           value="{{ kind }}" data-policy-kind data-testid="policy-kind-{{ kind }}">
-                    <label class="form-check-label" for="policyKind-{{ kind }}">{{ label }}</label>
-                </div>
-                {% endfor %}
-            </fieldset>
-            <button id="policyLoad" type="button" class="btn btn-accent mt-3"
-                    data-testid="policy-load">Load available model versions</button>
-        </div>
-
-        <div class="portal-card mb-3">
-            <h5>2. Model versions and policy controls</h5>
-            <div id="policyModels" data-testid="policy-models">
-                Select organizations and device types, then load their shared model versions.
+<fieldset id="policyControls">
+    <div class="portal-card mb-3">
+        <h6>1. Organizations and device types</h6>
+        <label for="policyMsp" class="form-label">Scope</label>
+        <select id="policyMsp" class="form-select mb-3" data-testid="policy-msp">
+            <option value="">Current organization</option>
+        </select>
+        <label for="policyOrganizations" class="form-label">Organizations</label>
+        <select id="policyOrganizations" class="form-select mb-3" multiple size="3"
+                data-testid="policy-organizations"></select>
+        <fieldset>
+            <legend class="fs-6">Device types</legend>
+            {% for kind, label in [('ap', 'Access points'), ('switch', 'Switches'), ('ssr', 'SSR routers and gateways'), ('juniper_srx', 'SRX gateways and firewalls')] %}
+            <div class="form-check">
+                <input id="policyKind-{{ kind }}" type="checkbox" class="form-check-input"
+                       value="{{ kind }}" data-policy-kind data-testid="policy-kind-{{ kind }}">
+                <label class="form-check-label" for="policyKind-{{ kind }}">{{ label }}</label>
             </div>
-        </div>
-
-        <div class="portal-card mb-3">
-            <h5>3. Preview and dry run</h5>
-            <p>The preview reads every selected organization's settings and all its sites. It changes no settings and creates no backup.</p>
-            <button id="policyPreview" type="button" class="btn btn-outline-secondary" disabled
-                    data-testid="policy-preview">Preview / dry run</button>
-            <pre id="policyPlan" class="mt-3 text-wrap" data-testid="policy-plan"></pre>
-        </div>
-
-        <div class="portal-card mb-3">
-            <h5>4. Back up, verify, and apply</h5>
-            <p>Before any change, the server saves and verifies complete settings for every target organization and site.</p>
-            <p>A failed backup stops the operation with zero settings changes. Backups can contain credentials and cannot be downloaded through this portal.</p>
-            <label for="policyConfirmation" class="form-label">Type CONFIGURE to confirm the displayed settings change</label>
-            <input id="policyConfirmation" class="form-control mb-3" autocomplete="off"
-                   data-testid="policy-confirmation">
-            <button id="policyApply" type="button" class="btn btn-warning" disabled
-                    data-testid="policy-apply">Verify all backups and apply settings</button>
-            <pre id="policyResult" class="mt-3 text-wrap" aria-live="polite" data-testid="policy-result"></pre>
-        </div>
+            {% endfor %}
+        </fieldset>
+        <button id="policyLoad" type="button" class="btn btn-accent mt-3"
+                data-testid="policy-load">Load available model versions</button>
     </div>
+    <div class="portal-card mb-3">
+        <h6>2. Models and versions</h6>
+        <p class="small text-muted">Check a model to select its version. Highest versions appear first.</p>
+        <div id="policyModels" data-testid="policy-models">Select the scope and device types, then load available models.</div>
+    </div>
+    <div class="portal-card mb-3">
+        <h6>3. Prepare and verify backups</h6>
+        <p>Read complete settings and verify a private backup for every target before confirmation. No cloud settings change during this stage.</p>
+        <button id="policyPreview" type="button" class="btn btn-outline-secondary" disabled
+                data-testid="policy-preview">Prepare verified backups</button>
+        <div id="policyPlan" class="mt-3" data-testid="policy-plan"></div>
+    </div>
+</fieldset>
+<div id="policyConfirmPanel" class="portal-card mb-3 d-none" data-testid="policy-confirm-panel">
+    <h6>4. Confirm the verified plan</h6>
+    <p>All target backups passed verification. Examine the table below before confirmation.</p>
+    <label for="policyConfirmation" class="form-label">Type CONFIGURE to confirm</label>
+    <input id="policyConfirmation" class="form-control mb-3" autocomplete="off" data-testid="policy-confirmation">
+    <button id="policyApply" type="button" class="btn btn-warning" disabled data-testid="policy-apply">Apply verified settings plan</button>
 </div>
-{% endblock %}
-{% block extra_scripts %}
-<script src="{{ url_for('static', filename='js/firmware-policy.js') }}"></script>
-{% endblock %}
+<div class="portal-card">
+    <h6>Progress and results</h6>
+    <div id="policyMessage" class="alert alert-info" role="status" aria-live="polite" data-testid="policy-message">Select the organization scope.</div>
+    <div class="portal-progress mb-2"><div id="policyProgress" class="progress-bar" role="progressbar"
+        aria-label="Policy workflow progress" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" data-testid="policy-progress">0%</div></div>
+    <div id="policyResult" data-testid="policy-result"></div>
+    <div id="policyRows" data-testid="policy-rows"></div>
+</div>

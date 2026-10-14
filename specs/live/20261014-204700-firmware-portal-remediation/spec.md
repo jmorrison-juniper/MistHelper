@@ -92,7 +92,7 @@ Site rows sort by site name. The organization name precedes its identifier.
 ### Mist Cloud Transport Requirements
 
 Use existing mistapi settings methods: `getOrgSettings`, `updateOrgSettings`, `getSiteSetting`, and `updateSiteSettings`.
-Reuse `listOrgSites`, `listOrgAvailableDeviceVersions`, `listOrgAvailableSsrVersions`, and `getOrgInventory`.
+Reuse `listOrgSites`, `listOrgAvailableDeviceVersions`, `listOrgAvailableSsrVersions`, and `listDeviceModels`.
 Read organization identity through the authenticated SDK identity or organization lookup.
 Reuse the existing API usage endpoint and request control. Do not send direct HTTP requests or firmware execution requests.
 Contract tests inspect exact methods, HTTP failures, request counts, write ordering, and private-value redaction.
@@ -117,7 +117,7 @@ Contract tests inspect exact methods, HTTP failures, request counts, write order
 ## Assumptions
 
 - The parent performs connected acceptance and any deployment. This worktree changes no deployed container or production volume.
-- Only the parent can authorize live writes after verifying the name Morrison Home Org.
+- The user confirmed Morrison House as the intended live test organization. The parent owns that live testing.
 - Existing legacy backups remain readable. Their checksums prove integrity, not authenticity.
 - Catalog-supported models define availability. Unsupported model/version combinations must not be invented.
 - Process interruption fails closed. Recovery uses a new verified preparation, never automatic write replay.
