@@ -5,7 +5,7 @@ from typing import Any
 
 from src.interfaces.portals.wan_performance.collection.snapshot_client import SnapshotClient
 from src.interfaces.portals.wan_performance.collection.snapshot_records import SnapshotRecords
-from src.interfaces.portals.wan_performance.domain.identity import IdentityValidator
+from src.interfaces.portals.wan_performance.domain.identity import GatewayIdentity, IdentityValidator
 from src.interfaces.portals.wan_performance.integration.history_repository import HistoryRepository
 from src.interfaces.portals.wan_performance.integration.refresh_store import RefreshStore
 
@@ -24,13 +24,15 @@ class LiveService:
         self.store = store
         self.history = history
 
-    def refresh(self) -> dict[str, object]:
+    def refresh(self, target: GatewayIdentity | None = None) -> dict[str, object]:
         """Collect bounded pages only after shared WAN refresh admission succeeds."""
         logger.info("Start the bounded operator WAN refresh for organization %s.", self.org_id)
         if self.history is None:
             raise ConnectionError("History is unavailable. WAN refresh requires the selected durable store.")
+        if target is not None and target.site.org_id != self.org_id:
+            raise ValueError("The selected gateway organization does not match the portal.")
         lease = self.store.acquire(self.org_id)
-        snapshot = SnapshotClient(self.session, lease).collect(self.org_id)
+        snapshot = SnapshotClient(self.session, lease).collect(self.org_id, target)
         records = SnapshotRecords.build(snapshot)
         lease.check()
         self.history.upsert(records)
