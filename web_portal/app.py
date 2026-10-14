@@ -153,6 +153,10 @@ class WebPortalApp:
         from web_portal.services.event_bus import PortalEventBus
 
         app.config["APISESSION"] = apisession
+        if apisession is not None:
+            from src.foundation.support.refactors.initialize_mist_session import MistSessionConfigurator
+
+            MistSessionConfigurator.configure_shared_admission(apisession, org_id)
         app.config["MENU_ACTIONS"] = menu_actions
         app.config["ORG_ID"] = org_id
         data_dir = os.environ.get("DATA_DIR", "data")
