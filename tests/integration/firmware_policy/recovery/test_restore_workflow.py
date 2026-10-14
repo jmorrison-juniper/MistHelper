@@ -135,6 +135,17 @@ def test_private_recovery_access_precedes_backup_contents_and_cloud_writes(tmp_p
     assert recovery[0].read_bytes() == b""
 
 
+def test_recovery_bundle_must_pass_the_same_restore_loader_before_writes(tmp_path: Path) -> None:
+    """A durable recovery file outside supported restore bounds cannot permit a change."""
+    session = RestoreSession(tmp_path)
+    session.settings[f"/api/v1/orgs/{ORG_ID}/setting"]["ssr"]["conductor_token"] = "x" * (8 * 1024 * 1024)
+    original = session.path.read_bytes()
+    with pytest.raises(PolicyError, match="8 MiB size limit"):
+        session.workflow().apply(session.prepare(), "RESTORE")
+    assert session.writes == []
+    assert session.path.read_bytes() == original
+
+
 @pytest.mark.parametrize("status", [400, 403, 500, 503])
 @pytest.mark.parametrize("scope", ["org", "site"])
 def test_failed_write_stops_with_precise_partial_result(tmp_path: Path, status: int, scope: str) -> None:

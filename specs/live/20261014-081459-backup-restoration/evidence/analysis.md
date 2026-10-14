@@ -59,7 +59,7 @@ Test paths below use these roots:
 
 ## Recorded local results
 
-- Feature and predecessor tests: **193 passed**. Changed-package coverage: **94.69 percent**.
+- Feature and predecessor tests: **194 passed**. Changed-package coverage: **94.69 percent**.
 - Move, structural, menu, SDK compatibility, and output guards: **977 passed, 3 skipped**.
 - Symbol preservation: **862 modules and 15,069 baseline symbols checked**. No lost symbol.
 - Full Ruff: `All checks passed!`
@@ -103,6 +103,8 @@ The CI E2E job uploads matching images as `backup-restoration-browser-evidence`,
 A workflow contract tests the live step and four removed or altered configurations.
 The artifact and local-guidance contract run passed all 226 tests.
 Windows file tests also reject directory junctions, reparse files, and missing native attribute evidence before ACL queries.
+Every new recovery bundle must also pass the same bounded restoration loader before the first write.
+The oversized-current-settings test proves that durable but unsupported recovery files permit zero writes.
 
 ## Specification analysis
 

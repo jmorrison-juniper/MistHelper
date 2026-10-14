@@ -58,6 +58,7 @@ Named parent objects restore their complete saved writable content.
 
 The tool checks the source bundle, cloud, membership, and complete current settings again before changes.
 Every target needs a durable verified recovery record before the first write.
+Each recovery bundle must also pass the same format, private-access, and size checks as a selected source bundle.
 Organization writes precede site writes.
 Each target gets another freshness check immediately before its settings write.
 Each write requires a saved-state check.

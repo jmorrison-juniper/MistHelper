@@ -143,20 +143,20 @@ class RestoreWorkflow:
         records = self.current(plan)
         path = self.files.backup.save(records)
         self.files.backup.verify(path, records)
+        self.files.read(path.stem)
         self.current(plan)
         result = RestoreResult(remaining=[target.key for target in plan.targets], backups_verified=len(records))
         logger.info("Restore settings after verifying %s complete recovery records", len(records))
         for target in plan.targets:
+            result.remaining.remove(target.key)
             try:
                 self._write(plan, target)
             except PolicyError as error:
                 result.failed.append(target.key)
-                result.remaining.remove(target.key)
                 result.error = str(error)
                 logger.error("Restoration stopped for %s: %s", target.key, error)
                 break
             result.completed.append(target.key)
-            result.remaining.remove(target.key)
         logger.debug("Restoration verified %s scopes with %s failures", len(result.completed), len(result.failed))
         return result
 
