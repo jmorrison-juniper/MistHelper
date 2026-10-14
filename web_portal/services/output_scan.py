@@ -40,6 +40,8 @@ import time
 from pathlib import Path
 from typing import Any
 
+from src.operations.execution.firmware_policy.backup import BACKUP_DIRECTORY
+
 logger = logging.getLogger(__name__)
 
 DEFAULT_SCAN_LIMIT = 200  # One run must not flood the result panel with names.
@@ -80,6 +82,7 @@ _MTIME_GRANULARITY_NANOSECONDS = 0
 # Warning: add a name here only when no operation writes a report into it. A
 # pruned tree can never reach the result panel.
 EXCLUDED_DIR_NAMES = (
+    BACKUP_DIRECTORY,  # Full settings backups contain private credentials and are never product reports.
     "juniper_pdf_library",  # The harvested Juniper document corpus. Read-only reference material.
     "mist_ideas_cache",  # The scraped idea cache. src/ideas writes it outside a portal run.
     "portal-test-artifacts",  # The end-to-end test reports. A test run is not an operation output.

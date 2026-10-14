@@ -8,7 +8,7 @@ file adds to it, and it does not hold a copy of a rule from it. Where the two fi
 ## What this repository is
 
 MistHelper is a Python tool for the operation of a network on the Juniper Mist cloud. It gives a
-network operations center 303 registered menu operations, numbered 1 through 304 with one gap at
+network operations center 304 registered menu operations, numbered 1 through 305 with one gap at
 152. Menu 0 exits the tool. The tool exports data, manages devices, and upgrades firmware.
 Each export writes to CSV, to SQLite, or to
 ArangoDB and Redis. The audience is a junior engineer in a network operations center, so each
@@ -200,14 +200,14 @@ updates a row and does not duplicate it. Define the strategy before you write th
 ### Menu categories
 
 `src/foundation/support/utils/operation_registry.py` is the single source of truth for the
-category of each menu. The measurement date of the counts below is 2026-10-09. The guard
+category of each menu. The measurement date of the counts below is 2026-10-14. The guard
 `tests/guardrails/test_destructive_menu_docs.py` fails when this table drifts from the registry.
 
 | Category | Count | Menu numbers |
 | - | - | - |
 | `interactive_safe` | 106 | 60-96, 195-203, 209-229, 235-238, 240-242, 244-247, 254, 256-268, 270, 288-289, 294-304 |
 | `safe` | 84 | 1-13, 15-17, 20-58, 188, 193, 204-205, 230-234, 243, 248-253, 255, 269, 271-280, 282 |
-| `destructive` | 48 | 154-187, 189-191, 194, 206-208, 239, 281, 286-287, 291-293 |
+| `destructive` | 49 | 154-187, 189-191, 194, 206-208, 239, 281, 286-287, 291-293, 305 |
 | `interactive` | 33 | 0, 124-150, 192, 283-285, 290 |
 | `websocket` | 22 | 102-123 |
 | `resource_intensive` | 10 | 14, 18-19, 59, 97-101, 153 |
@@ -294,12 +294,15 @@ artifact.
 Warning: a `destructive` operation changes the Mist cloud or a production device, and a wrong
 run can cause an outage that nobody can undo. Do not automate one without an explicit
 confirmation from the user. The destructive set is 154-187, 189-191, 194, 206-208, 239, 281,
-286-287, and 291-293. It is not one block, so do not treat a range boundary as a shortcut.
+286-287, 291-293, and 305. It is not one block, so do not treat a range boundary as a shortcut.
 
 Menu 239 starts the upgrade capture portal and drives a firmware upgrade for the selected site.
 Menus 281, 286-287, and 291-293 change alarm state, client sessions, inventory, RRM, CSV imports,
 or Mist Edge state. An earlier version of the table stopped at 208, and issue #2825 records that
 gap.
+
+Menu 305 changes organization firmware standards and removes site overrides. It requires typed `CONFIGURE` and verified full settings backups.
+The dedicated portal workflow and backup rules are in `documentation/org-auto-upgrade-policy.md`.
 
 A destructive operation asks the operator to type a word such as `UPGRADE`, `REBOOT`, `CONVERT`,
 or `CLEAR` through `InputUtils.safe_input`, and it returns at the first wrong answer.
