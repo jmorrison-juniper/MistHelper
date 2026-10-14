@@ -5,6 +5,7 @@
 <section class="container-fluid" data-testid="wan-overview">
     {% include "wan_performance/_data_state.html" %}
     <h1>WAN Performance</h1>
+    <a class="quick-link" data-testid="wan-live-link" href="{{ url_for('wan_performance.live.overview') }}">Open live snapshots</a>
     <p>Offline example for site {{ dashboard.circuit.gateway.site.site_id }}.</p>
 
     <div class="row g-3">
