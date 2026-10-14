@@ -3,7 +3,7 @@
 import hashlib
 import json
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from src.interfaces.portals.wan_performance.collection.peer_metrics import PeerSnapshotMetrics
@@ -60,7 +60,7 @@ class SnapshotRecords:
     def _port(cls, row: dict[str, Any], org_id: str, instant: datetime) -> HourlyMeasurement:
         """Store only bit rates, not cumulative counters or unverified speed units."""
         identity = CircuitIdentity(cls._gateway(row, org_id), row["port_id"])
-        metrics = {name: SnapshotRates.parse(row.get(name), "bit/s") for name in ("rx_bps", "tx_bps")}
+        metrics = PortSnapshotMetrics.parse(row)
         return HourlyMeasurement(identity, instant.replace(minute=0, second=0, microsecond=0), instant, metrics, "live")
 
     @classmethod
@@ -93,3 +93,110 @@ class SnapshotRates:
         if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0:
             raise ValueError("WAN bit rate must be a non-negative finite number.")
         return MetricMeasurement(value, unit, sample_count=1)
+
+
+class PortSnapshotMetrics:
+    """Use documented gateway Mbps capacity for directional snapshot utilization."""
+
+    @classmethod
+    def parse(cls, row: dict[str, Any]) -> dict[str, MetricMeasurement]:
+        """Keep optional invalid rates unknown without inventing observed duration."""
+        logger.info("Validate directional port snapshot rates and utilization.")
+        metrics = {name: cls._rate(name, row.get(name)) for name in ("rx_bps", "tx_bps")}
+        utilization = {
+            name.removesuffix("_bps") + "_utilization_percent": cls._utilization(metric, row.get("speed"))
+            for name, metric in metrics.items()
+        }
+        logger.debug("Validated %d directional port snapshot metrics.", len(metrics) + len(utilization))
+        return {**metrics, **utilization}
+
+    @staticmethod
+    def _rate(name: str, value: object) -> MetricMeasurement:
+        """Report invalid optional rates instead of discarding valid adjacent observations."""
+        try:
+            return SnapshotRates.parse(value, "bit/s")
+        except (ValueError, OverflowError):
+            logger.error("Invalid port snapshot rate %s. The observation remains unknown.", name)
+            return MetricMeasurement(None, "bit/s", missing_reason="Invalid API port rate.")
+
+    @staticmethod
+    def _utilization(rate: MetricMeasurement, speed: object) -> MetricMeasurement:
+        """Convert Mbps to bit/s without treating an observation as full-hour coverage."""
+        missing = "Utilization requires a valid rate and positive integer link speed in Mbps."
+        if rate.value is None:
+            return MetricMeasurement(None, "%", missing_reason=missing)
+        if isinstance(speed, bool) or not isinstance(speed, int) or speed <= 0:
+            if speed is not None:
+                logger.error("Invalid port link speed. Snapshot utilization remains unknown.")
+            return MetricMeasurement(None, "%", missing_reason=missing)
+        try:
+            return MetricMeasurement(rate.value / speed / 1_000_000 * 100, "%", sample_count=1)
+        except (ValueError, OverflowError):
+            logger.error("Port utilization is not a finite representable value.")
+            return MetricMeasurement(None, "%", missing_reason=missing)
+
+
+class SnapshotStates:
+    """Keep current port and VPN state metadata outside historical numeric aggregates."""
+
+    @classmethod
+    def build(
+        cls, snapshot: dict[str, Any], records: tuple[HourlyMeasurement, ...]
+    ) -> dict[tuple[str, ...], dict[str, str]]:
+        """Join validated source rows to their complete observation identities."""
+        logger.info("Validate current WAN snapshot state metadata.")
+        rows = snapshot["ports"] + snapshot["peers"]
+        states = {}
+        for row, record in zip(rows, records[: len(rows)], strict=True):
+            values = {"Current link state": cls._boolean(row.get("up"), "Up", "Down")}
+            if isinstance(record.identity, PeerPathIdentity):
+                values["Redundant path"] = cls._boolean(row.get("is_active"), "Active", "Standby")
+                values["Gateway-reported uptime (s)"] = cls._seconds(row.get("uptime"))
+                values["Last observed (UTC)"] = cls._last_seen(row.get("last_seen"))
+            states[record.natural_key] = values
+        logger.debug("Validated current state metadata for %d WAN observations.", len(states))
+        return states
+
+    @staticmethod
+    def _boolean(value: object, true_label: str, false_label: str) -> str:
+        """Preserve actual booleans rather than interpreting truthy values."""
+        if isinstance(value, bool):
+            return true_label if value else false_label
+        if value is not None:
+            logger.error("Invalid WAN state value for %s/%s.", true_label, false_label)
+        return "Unknown"
+
+    @staticmethod
+    def _seconds(value: object) -> str:
+        """Preserve reported integer uptime, including zero, without inferring availability."""
+        if value is None:
+            return "Unknown"
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            logger.error("Invalid gateway-reported VPN uptime. Current uptime remains unknown.")
+            return "Unknown"
+        return str(value)
+
+    @staticmethod
+    def _last_seen(value: object) -> str:
+        """Convert the documented epoch-second observation timestamp into explicit UTC."""
+        if value is None:
+            return "Unknown"
+        try:
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0:
+                raise ValueError("The observation timestamp must use non-negative epoch seconds.")
+            return datetime.fromtimestamp(value, UTC).isoformat()
+        except (ValueError, OverflowError, OSError):
+            logger.error("Invalid VPN observation timestamp. The last observation time remains unknown.")
+            return "Unknown"
+
+    @staticmethod
+    def gateways(records: tuple[HourlyMeasurement, ...]) -> tuple[GatewayIdentity, ...]:
+        """List every distinct gateway returned by the bounded cached pages."""
+        logger.info("Select distinct gateway identities from cached WAN observations.")
+        identities = {
+            record.identity if isinstance(record.identity, GatewayIdentity) else record.identity.gateway
+            for record in records
+        }
+        result = tuple(sorted(identities, key=lambda identity: identity.natural_key))
+        logger.debug("Selected %d distinct cached gateway identities.", len(result))
+        return result
