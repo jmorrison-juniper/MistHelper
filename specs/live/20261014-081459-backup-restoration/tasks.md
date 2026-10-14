@@ -51,7 +51,7 @@
 - [x] T018 Update menu counts and generated references in `README.md`, `.github/copilot-instructions.md`, and `documentation/`.
 - [x] T019 Add `changelog.d/issue-4218-backup-restoration.md` and the operator restoration guide.
 - [x] T020 Run relevant local gates and repair feature failures. Record acceptance mapping in `evidence/analysis.md`.
-- [ ] T021 Analyze specification, plan, and tasks. Commit and run the clean committed-test quality procedure.
+- [x] T021 Analyze specification, plan, and tasks. Commit and run the clean committed-test quality procedure.
 - [ ] T022 Create the templated pull request, wait for all checks and CodeQL, and squash merge when green.
 - [ ] T023 Send the merged revision and verified evidence to the parent for persistent-runtime deployment.
 

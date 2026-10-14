@@ -64,6 +64,9 @@ Test paths below use these roots:
 - Symbol preservation: **862 modules and 15,069 baseline symbols checked**. No lost symbol.
 - Full Ruff: `All checks passed!`
 - Full Black: **2,412 files unchanged**.
+- Committed-test guidance preflight: **1 passed**, with four required inputs validated.
+- Committed changed-from quality gate: **13 files checked, zero new findings**.
+- Full test-quality gate: **1,163 files and 694 findings checked, zero new findings**.
 - Configured mypy: `Success: no issues found in 844 source files`.
 - Full configured Bandit: no finding. The fixed Windows command has documented false-positive annotations.
 - Scoped complexity: `All functions within complexity threshold.`
