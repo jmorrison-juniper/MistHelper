@@ -1476,10 +1476,9 @@ class OperationExecutor:
             if any(marker in lowered for marker in MISSING_INPUT_MARKERS):  # Issue #3168: a missing answer first.
                 continue  # Skip the line, because a missing required input is not an honest empty result.
             empty_result_match = re.search(  # Reject unrelated warnings that only contain empty-result nouns.
-                r"\bno\s+(?:data\s+(?:found|provided|available|to\s+export)\b|"
-                r"(?:[\w-]+\s+){1,2}(?:data|records?|rows?|results?)\s+(?:found|returned|available)\b|"
-                r"rows?\s+for\s+.+?,\s*so\s+no\s+file\s+was\s+written\b)",
-                # Require a short subject and an explicit empty-result outcome.
+                r"\bno\s+(?:[\w-]+\s+){0,2}(?:data|records?|rows?|results?)"
+                r"(?:\s+(?:found|provided|available|collected|matched|returned|to\s+export)\b|\s+for\b|\b)",
+                # Anchor the result noun near "no" and accept known outcome wording.
                 lowered,  # Search the normalized log text.
             )
             has_empty_data = empty_result_match is not None  # Record whether the line names an empty result.

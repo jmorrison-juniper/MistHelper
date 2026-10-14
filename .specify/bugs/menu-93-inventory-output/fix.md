@@ -52,7 +52,7 @@ The portal now requires bounded, explicit empty-result wording. An unrelated dat
 
 ## Deviations from Assessment
 
-The issue comment confirms the warning begins with "no database host answers." The complete warning is unavailable. The regression uses a synthetic continuation about later data rows. The classifier requires a bounded, explicit outcome. It accepts "No inventory data found," "No data to export," and "No rows for [file], so no file was written." It does not classify the unrelated database warning.
+The issue comment confirms the warning begins with "no database host answers." The complete warning is unavailable. The regression uses a synthetic continuation about later data rows. The classifier accepts a result noun after at most two subject words. It preserves "No inventory data," "No rows matched the port config filter," and "No data collected."
 
 ## Follow-ups
 

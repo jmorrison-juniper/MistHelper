@@ -135,7 +135,10 @@ def test_a_database_host_warning_does_not_classify_as_an_empty_result() -> None:
     assert executor._no_output_reason(current_run) is None  # Preserve current degraded-mode behavior.
     empty_messages = (  # Keep established empty-result messages recognized by the narrower classifier.
         "No inventory data found for this site.",
+        "No inventory data",
         "No data to export for SiteInventory.csv",
+        "No rows matched the port config filter",
+        "No data collected",
         "No rows for JuniperRequestList.csv, so no file was written",
     )
     for empty_message in empty_messages:  # Check each supported empty-result message directly.
