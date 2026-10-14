@@ -93,6 +93,12 @@ Each direction divides its current rate by the reported speed multiplied by 1,00
 The result is a point-in-time percentage, not measured time above a threshold.
 Missing or invalid capacity and rates remain unknown, with invalid inputs reported in the log.
 The collector does not clamp percentages or infer full-hour coverage from a snapshot.
+Persisted directional percentages support observation counts above 70%, 80%, and 90%.
+Daily, weekly, and monthly reports show counts and the longest run of adjacent observed hours.
+An equal value does not exceed the threshold.
+Missing, unknown, and non-exceeding hours break a run.
+Each report shows valid observation hours against expected calendar hours.
+These counts describe retained snapshots, not cumulative or continuous congestion duration.
 Port state uses the current boolean `up` field.
 VPN details also show the current active-path flag, gateway-reported uptime in seconds, and last-seen time in UTC.
 These fields describe the cached observation, not availability minutes, flap counts, or continuous coverage.
@@ -167,9 +173,21 @@ An unavailable history connection preserves readable cached detail views but pre
 
 The live view supports verified directional snapshot utilization, not full-hour utilization averages.
 Snapshot status and sparse hourly observations cannot establish historical availability or congestion duration.
-The device-event schema supplies free-form event types, not verified up/down transition values.
+Device-event search supports time bounds and type filters.
+Its response supplies free-form event types, not verified WAN up/down transition values.
+The documented examples describe DNS and tunnel provisioning, not link transitions.
 The port `last_flapped` field does not establish timestamp units or a flap-count history.
-VPN peer filters select a period, but returned rows contain latest values rather than a timestamped sample series.
+VPN peer search supports `start`, `end`, and `duration`.
+The collector already requests `duration="1h"` within its existing call ceiling.
+The resolved `vpn_peer_stat` response schema describes latency and jitter as last sampled values.
+Its rows have `last_seen`, but no measurement `timestamp`.
+The public `VpnPeersStatsExample` has no measurement timestamp either.
+Peer observation time does not establish the sample time of each metric.
+The existing exporter primary-key strategy names `timestamp`, `from_device`, and `to_device`.
+Those application fields do not establish a source response contract.
+No verified response establishes historical VPN samples for normalization into source hours.
+The source documentation does not establish a percentile algorithm for retained observations.
+The portal therefore reports observed means and maxima, not invented percentiles.
 The insight response does not define how multiple requested metric names map to its single result sequence.
 Gateway refresh supports any selected organization gateway through exact filtered discovery.
 The cached gateway list reflects bounded port and peer pages, not a complete organization inventory.
