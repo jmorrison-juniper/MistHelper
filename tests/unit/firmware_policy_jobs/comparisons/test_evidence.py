@@ -17,7 +17,7 @@ class TestBrowserEvidence:
         return yaml.safe_load(workflow.read_text(encoding="utf-8"))
 
     @staticmethod
-    def check(configuration: dict[str, Any]) -> None:
+    def check(configuration: dict[str, Any]) -> int:
         """Require existing evidence, comparison screenshots, and failed-flow traces."""
         steps = configuration["jobs"]["playwright"]["steps"]
         upload = next(step for step in steps if step.get("with", {}).get("name") == "firmware-policy-browser-evidence")
@@ -34,10 +34,11 @@ class TestBrowserEvidence:
         ):
             assert argument in command, "Required browser evidence capture is missing"
         print("browser_evidence: checked 2 artifact paths and 3 capture arguments")
+        return len(set(upload["with"]["path"].splitlines()))
 
     def test_live_workflow_retains_comparison_evidence(self) -> None:
         """Require the declared main-flow screenshots and failed-flow evidence."""
-        self.check(self.configuration())
+        assert self.check(self.configuration()) == 2
 
     @pytest.mark.parametrize("mutation", ["paths", "screenshot", "tracing", "output"])
     def test_missing_evidence_fails(self, mutation: str) -> None:
