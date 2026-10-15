@@ -320,7 +320,7 @@ pie showData
 | [232](safe.md#menu-232) | Search WAN clients for the organization (searchOrgWanClients) | `safe` | 1 |
 | [233](safe.md#menu-233) | Search WAN client events for the organization (searchOrgWanClientEvents) | `safe` | 1 |
 | [234](safe.md#menu-234) | Search system events for the organization (searchOrgSystemEvents) | `safe` | 1 |
-| [235](interactive-safe.md#menu-235) | Run any org-scoped Mist count endpoint (35 operations) | `interactive_safe` | 35 |
+| [235](interactive-safe.md#menu-235) | Run any org-scoped Mist count endpoint (37 operations) | `interactive_safe` | 35 |
 | [236](interactive-safe.md#menu-236) | Run any site-scoped Mist count endpoint (32 operations) | `interactive_safe` | 33 |
 | [237](interactive-safe.md#menu-237) | Run any MSP-scoped Mist count endpoint (3 operations) | `interactive_safe` | 3 |
 | [238](interactive-safe.md#menu-238) | Export the license entitlement, usage, and subscriptions for an MSP (listMspLicenses) | `interactive_safe` | 1 |

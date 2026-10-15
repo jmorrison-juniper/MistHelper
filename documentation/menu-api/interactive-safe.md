@@ -955,7 +955,7 @@ flowchart LR
 
 ## Menu 235
 
-- Title: Run any org-scoped Mist count endpoint (35 operations)
+- Title: Run any org-scoped Mist count endpoint (37 operations)
 - Handler: `CountExporter.org_counts`
 - Shared helpers: [`ConfigUtils`](README.md#configutils), [`DataExporter`](README.md#dataexporter), [`InputUtils`](README.md#inpututils), [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 35
