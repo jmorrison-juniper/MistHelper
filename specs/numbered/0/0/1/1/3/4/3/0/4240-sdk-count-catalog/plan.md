@@ -43,7 +43,7 @@ Add the two missing organization count operations to the existing operator catal
 ### Documentation
 
 ```text
-specs/live/20261015-161000-sdk-count-catalog/
+specs/numbered/0/0/1/1/3/4/3/0/4240-sdk-count-catalog/
 ├── plan.md
 ├── research.md
 ├── data-model.md
