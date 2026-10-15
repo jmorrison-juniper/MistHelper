@@ -1,5 +1,31 @@
 # Acceptance evidence
 
+## Current firmware-policy-only revision
+
+The user explicitly approved firmware-policy-only restoration after the earlier complete-settings acceptance failed safely.
+Complete private source and recovery backups remain required.
+Earlier evidence below records the preceding implementation, not acceptance of the revised candidate.
+
+| Requirement | Revision evidence | Status |
+| - | - | - |
+| FR-017, FR-018 | All-class policy restoration with current sibling preservation | Passed revised unit, integration, and browser tests |
+| FR-019 | Unrelated historical fields do not block policy recovery or enter restoration writes | Passed strict policy rejection and unrelated-field preservation tests |
+| FR-020 | Visible policy-only scope and schedule-default disclosure before confirmation | Passed revised browser tests and missing/empty/valid schedule tests |
+| SC-002, SC-003 | Realistic large-bundle firmware policy roundtrip | Passed 4,003-record, 489,502,953-byte pipeline |
+| Connected source and application | Parent validates a committed isolated candidate, with no production deployment | Pending candidate |
+
+Complete settings restoration remains outside the user-approved revised scope.
+No actual connected firmware-policy restoration success is claimed here.
+
+The combined revised firmware, jobs, and portal suite passed 332 tests with 92.25 percent coverage.
+The full guardrail suite passed 909 tests and skipped three with reported causes.
+The first guard run rejected the intentionally changed menu 306 title.
+The exact identity digest now pins the user-approved title. The guard still checks the complete metadata.
+The same-browser policy-to-restoration test preserves a later unrelated organization setting and valid `any` schedules.
+The settings-free validator passed a private fixture and rejected a malformed policy.
+It reported zero network requests and zero settings writes in both cases.
+The actual private source remains with the parent. This session did not access it.
+
 ## Requirement mapping
 
 | Requirements | Evidence | State |

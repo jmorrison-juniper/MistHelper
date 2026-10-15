@@ -1151,14 +1151,14 @@ flowchart LR
 
 ## Menu 306
 
-- Title: DESTRUCTIVE: Restore complete writable organization and site settings from private backups (Requires typing 'RESTORE', verified recovery backups, supports --dry-run)
+- Title: DESTRUCTIVE: Restore organization and site firmware policies from private backups (Requires typing 'RESTORE', verified recovery backups, supports --dry-run)
 - Handler: `lambda: RestoreMenu(api=PolicyApi(MainEntrypoint.context.apisession), inputs=PolicyMenuInputs(organization=ConfigUtils.get_cached_or_prompted_org_id, stopped...`
 - Shared helpers: [`ConfigUtils`](README.md#configutils), [`InputUtils`](README.md#inpututils), [`MainEntrypoint`](README.md#mainentrypoint), [`RateLimitingUtils`](README.md#ratelimitingutils)
 - Endpoints: 7
 
 ```mermaid
 flowchart LR
-    menu["Menu 306:<br/>DESTRUCTIVE: Restore<br/>complete writabl..."]
+    menu["Menu 306:<br/>DESTRUCTIVE: Restore<br/>organization and..."]
     menu --> c1["PolicyApi"]
     c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}"]
     c1 --> e2["GET<br/>/api/v1/orgs<br/>/{org_id}/setting"]

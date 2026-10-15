@@ -175,8 +175,8 @@ def test_lost_recovery_after_org_write_stops_remaining_sites(
 @pytest.mark.parametrize(
     "settings",
     [
-        {"unknown": "private-fixture"},
-        {"ssr": {"conductor_token": "<redacted>"}},
+        {"auto_upgrade": {"unknown": "private-fixture"}},
+        {"ssr": {"auto_upgrade": {"version": "<redacted>"}}},
         {"auto_upgrade": {"enabled": "invalid"}},
     ],
 )
@@ -193,7 +193,7 @@ def test_unrestorable_recovery_settings_prevent_readiness_and_every_write(
     with pytest.raises(PolicyError) as failure:
         workflow.back_up(plan)
     assert str(failure.value) == (
-        "The backup cannot be restored under the supported writable schema. "
+        "The backup firmware policies cannot be restored under the supported schema. "
         "Confirmation is blocked. Obtain the vendor contract for these settings."
     )
     assert session.writes == []
@@ -250,3 +250,35 @@ def test_org_wrong_owner_still_fails_before_projection(tmp_path: Path) -> None:
     with pytest.raises(PolicyError, match="The current settings ownership does not match the selected backup"):
         workflow._target(bundle, record, {ORG_ID: {SITE_ID}})
     assert session.writes == []
+
+
+def test_policy_preparation_accepts_nonpolicy_unknown_null_and_redacted_values(tmp_path: Path) -> None:
+    """Recovery usability concerns saved policies, not unrelated response schema drift."""
+    session, workflow, previous = prepared(tmp_path)
+    uri = f"/api/v1/sites/{SITE_ID}/setting"
+    session.settings[uri].update(
+        {
+            "unknown": "x" * 121856,
+            "uwb_config": {"port": None},
+            "mist_nac": {"idps": [{"id": ORG_ID}]},
+        }
+    )
+    session.settings[uri]["ssr"]["conductor_token"] = "<redacted>"
+    plans = [workflow.prepare({"id": ORG_ID, "name": "Fixture Organization"}, [])]
+    proof = workflow.back_up(plans)
+    workflow.backup.verify(proof.path, workflow.records(plans))
+    assert session.writes == []
+    assert proof.path.stat().st_size > 120000
+
+
+def test_policy_new_org_ap_without_proven_absence_recovery_blocks_readiness(tmp_path: Path) -> None:
+    """A new organization policy cannot receive confirmation when its absence cannot be restored."""
+    from src.operations.execution.firmware_policy.changes import FirmwarePolicy
+
+    session, workflow, previous = prepared(tmp_path)
+    session.settings[f"/api/v1/orgs/{ORG_ID}/setting"].pop("auto_upgrade")
+    plans = [workflow.prepare({"id": ORG_ID}, [FirmwarePolicy("ap", False, {"AP41": "historical"})])]
+    with pytest.raises(PolicyError, match="Confirmation is blocked"):
+        workflow.back_up(plans)
+    assert session.writes == []
+    assert not (tmp_path / ".firmware-policy-backups").exists()

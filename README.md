@@ -107,7 +107,7 @@ Use MistHelper when you need one of these.
 | Look up one Juniper service request or RMA (menu 303) | [Menu reference](documentation/menu_reference.md) |
 | Look up warranty and contract data for serial numbers (menu 304) | [Menu reference](documentation/menu_reference.md) |
 | Set organization firmware standards with verified backups and progress (menu 305) | [Organization auto-upgrade policy](documentation/org-auto-upgrade-policy.md) |
-| Restore complete writable settings with verified recovery and progress (menu 306) | [Backup restoration](documentation/backup-restoration.md) |
+| Restore firmware policies with complete verified recovery backups and progress (menu 306) | [Backup restoration](documentation/backup-restoration.md) |
 
 ## How to set it up as a container
 

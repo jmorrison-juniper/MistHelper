@@ -47,7 +47,7 @@
 - [x] T019 Add `changelog.d/issue-4227-firmware-portal.md`.
 - [x] T020 Run relevant gates and record exact results in `specs/live/20261014-204700-firmware-portal-remediation/analysis.md`.
 - [x] T021 Complete acceptance mapping and Spec Kit analysis in `specs/live/20261014-204700-firmware-portal-remediation/analysis.md`.
-- [ ] T022 Commit milestones, create the template-based pull request, and inspect final CI artifacts without merging.
+- [x] T022 Commit milestones, create the template-based pull request, and inspect final CI artifacts without merging.
 
 ## Dependencies
 
@@ -71,11 +71,11 @@ This implementation session performs only fixture changes and never accesses the
 
 ## User-directed firmware-only revision
 
-- [ ] T023 Revise `recovery/schema.py` and workflow readback for FR-017 through FR-020, preserving full backups and unrelated current settings.
-- [ ] T024 Update menu 306 controls, labels, preview normalization, CLI wording, docs, wiki, and the narrow README row.
-- [ ] T025 Test all four policy classes, absent policies, unrelated-field preservation, malformed policy rejection, and realistic 4,001-site roundtrips.
-- [ ] T026 Run revised gates and analysis, capture fixture evidence, and provide a committed candidate with a settings-free projection validator.
-- [ ] T027 Record parent connected acceptance and final CI inspection on the draft pull request without merging or deployment.
+- [x] T023 [US2] Revise `src/operations/execution/firmware_policy/recovery/schema.py` and workflow readback for FR-017 through FR-020.
+- [x] T024 [US2] Update `firmware_restore.html`, `firmware-policy.js`, CLI wording, operator docs, wiki, and `README.md`.
+- [x] T025 [US2] Test all policy classes, absence, sibling preservation, malformed content, and scale in the existing `tests/unit/firmware_policy/`, `tests/integration/firmware_policy/`, and `tests/e2e/web_portal/` suites.
+- [ ] T026 Run revised gates and analysis, capture fixture evidence in `evidence/after-restore.png`, and provide a committed archive with the settings-free validator.
+- [ ] T027 Record parent connected acceptance and final CI inspection in `acceptance.md` and the draft pull request without merging or deployment.
 
 T023 precedes T025. T024 can proceed beside T023.
 T026 follows T023 through T025. T027 follows the candidate handoff.

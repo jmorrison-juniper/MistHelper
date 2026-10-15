@@ -226,6 +226,7 @@
                     const summary = element(this.prefix === 'policy' ? 'policyPlan' : 'restorePreviewText');
                     summary.textContent = `${data.rows ? data.rows.length : total} complete target backups verified. No settings changed.`;
                     if (this.prefix === 'policy') this.policySummary(summary, data.organizations || []);
+                    else this.restoreSummary(summary, data);
                 } else {
                     sessionStorage.removeItem(this.prefix + '-settings-job');
                     const failed = state !== 'complete';
@@ -258,6 +259,14 @@
                 }
             }
 
+        }
+
+        restoreSummary(parent, data) {
+            const scope = document.createElement('p');
+            scope.className = 'small mt-2';
+            scope.dataset.testid = 'restore-policy-scope';
+            scope.textContent = data.warning || 'Only AP, switch, SSR, and SRX firmware policies restore. Unrelated current settings remain unchanged.';
+            parent.appendChild(scope);
         }
 
         policySummary(parent, organizations) {

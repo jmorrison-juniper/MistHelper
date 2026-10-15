@@ -304,7 +304,7 @@ gap.
 Menu 305 changes organization firmware standards and removes site overrides. It requires typed `CONFIGURE` and verified full settings backups.
 The dedicated portal workflow and backup rules are in `documentation/org-auto-upgrade-policy.md`.
 
-Menu 306 restores complete writable settings from private backups. It requires exact `RESTORE` and verified recovery backups.
+Menu 306 restores firmware policies from complete private backups. It requires exact `RESTORE` and complete verified recovery backups.
 The scope, deletion limits, and graphical workflow are in `documentation/backup-restoration.md`.
 
 A destructive operation asks the operator to type a word such as `UPGRADE`, `REBOOT`, `CONVERT`,

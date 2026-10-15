@@ -81,8 +81,8 @@ class TestRestorePortal:
         finally:
             WebPortalApp.shutdown_app(app)
 
-    def test_full_api_flow_and_private_output_denial(self, restore_portal: tuple[Any, RestoreSession]) -> None:
-        """Preview and restore the full writable snapshot without exposing credentials."""
+    def test_policy_api_flow_and_private_output_denial(self, restore_portal: tuple[Any, RestoreSession]) -> None:
+        """Restore firmware policies without exposing credentials or restoring unrelated historical settings."""
         app, sdk = restore_portal
         client = app.test_client()
         original = sdk.path.read_bytes()
@@ -104,6 +104,16 @@ class TestRestorePortal:
         assert client.get("/api/data/download/" + relative).status_code == 404
         assert client.get("/api/data/preview/" + relative).status_code == 404
         assert "private-fixture" not in listing.get_data(as_text=True) + json.dumps(data) + json.dumps(result)
+
+    def test_page_declares_policy_only_scope(self, restore_portal: tuple[Any, RestoreSession]) -> None:
+        """State the narrower restoration scope before an operator prepares any backup."""
+        app, sdk = restore_portal
+        html = app.test_client().get("/operations?menu=306").get_data(as_text=True)
+        assert "306: Restore firmware policies" in html
+        assert "Unrelated current settings remain unchanged" in html
+        assert "Complete private backups are retained" in html
+        assert "restoration replaces complete writable" not in html
+        assert sdk.writes == []
 
     @pytest.mark.parametrize("body", [b"", b"bad json", b"[]", b'{"token":"x","confirmation":"RESTORE","settings":{}}'])
     def test_empty_body_and_malformed_json_input_fails(
@@ -177,6 +187,10 @@ def test_chromium_selection_preview_confirmation_and_result(
         page.get_by_test_id("restore-cloud").fill(sdk.cloud)
         page.get_by_test_id("restore-preview-button").click()
         expect(page.get_by_test_id("restore-message")).to_contain_text("All backups verified")
+        expect(page.get_by_test_id("restore-policy-scope")).to_contain_text("firmware policies")
+        expect(page.get_by_test_id("restore-policy-scope")).to_contain_text(
+            "Unrelated current settings remain unchanged"
+        )
         expect(page.get_by_test_id("restore-rows")).to_contain_text("First")
         assert sdk.writes == []
         expect(page.get_by_test_id("restore-apply")).to_be_disabled()

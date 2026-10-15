@@ -1,4 +1,4 @@
-"""Prove writable settings against local OpenAPI schemas and explicit deletion contracts."""
+"""Validate firmware policy restoration while preserving current unrelated settings."""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ from typing import Any
 from jsonschema import Draft202012Validator, FormatChecker
 from referencing import Registry
 
+from ..changes import PolicyValidation
 from ..sdk import PolicyError
 
 logger = logging.getLogger(__name__)
@@ -83,87 +84,100 @@ class SchemaProjection:
 
 
 class RestoreSchema:
-    """Validate complete writable projections and exact expected saved state."""
+    """Validate only firmware policies and preserve complete current snapshots."""
 
     def __init__(self) -> None:
         """Load checked-in schemas without a network resolver or secret-bearing errors."""
         path = Path(__file__).resolve().parents[5] / "documentation" / "mist-api-openapi31json.json"
         try:
             self.document = json.loads(path.read_text(encoding="utf-8"))
-            self._switch_schema()  # Normalize the documented switch composition without accepting unknown fields.
-            self._legacy_fields()  # Preserve fields explicitly declared by the pinned legacy settings endpoints.
             self.projection = SchemaProjection(self.document)
         except (OSError, ValueError):
             raise PolicyError("The local settings schemas could not be read.") from None
 
-    def _switch_schema(self) -> None:
-        """Combine the explicitly documented network template and switch policy properties."""
-        schemas = self.document["components"]["schemas"]  # Use only the pinned public schema definitions.
-        declaration = schemas["site_setting_switch"]
-        expected = [
-            {"$ref": "#/components/schemas/network_template"},
-            {"$ref": "#/components/schemas/switch_auto_upgrade_container"},
-        ]
-        if declaration.get("allOf") != expected:
-            raise PolicyError("The local switch settings composition cannot be verified.")
-        network = schemas["network_template"]
-        upgrade = schemas["switch_auto_upgrade_container"]
-        if set(network["properties"]) & set(upgrade["properties"]):
-            raise PolicyError("The local switch settings composition has conflicting properties.")
-        schemas["site_setting_switch"] = {
-            "type": "object",
-            "additionalProperties": False,
-            "properties": {**network["properties"], **upgrade["properties"]},
-            "required": list(dict.fromkeys(network.get("required", []) + upgrade.get("required", []))),
-        }  # OpenAPI 3.0 declares this same complete switch object directly rather than with allOf.
-
-    def _legacy_fields(self) -> None:
-        """Retain exact legacy writable properties without changing unrelated schema constraints."""
-        schemas = self.document["components"]["schemas"]
-        schemas["org_setting_marvis"]["properties"]["auto_operations"] = {
-            "$ref": "#/components/schemas/marvis_auto_operations",
-        }  # Pinned OpenAPI 3.0 org_setting.marvis references marvis, which declares this property.
-        schemas["synthetictest_config_wan_speedtest"]["properties"]["enabled"] = {
-            "type": "boolean",
-        }  # Pinned OpenAPI 3.0 org/site synthetic_test declares this exact boolean beside time_of_day.
-
     def project(self, scope: str, settings: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
-        """Exclude only schema-defined top-level read-only fields and validate all others."""
-        logger.info("Validate complete writable restoration settings")
-        schema = self.document["components"]["schemas"][f"{scope}_setting"]
+        """Select four policy paths without inspecting or disclosing unrelated settings."""
+        logger.info("Validate firmware policy restoration settings")
+        if scope not in ("org", "site") or not isinstance(settings, dict):
+            raise PolicyError("The firmware policy scope or settings object is invalid.")
         body: dict[str, Any] = {}
-        excluded: list[str] = []
-        for key, value in settings.items():
-            child = schema["properties"].get(key)
-            if child is None:
-                raise PolicyError("The settings contain a field absent from the local writable schema.")
-            if self.projection.node(child).get("readOnly"):
-                excluded.append(key)
-            else:
-                self.projection.inspect(value, child)
-                body[key] = deepcopy(value)
-        root = {**schema, "components": self.document["components"]}
-        validator = Draft202012Validator(root, registry=Registry(), format_checker=FormatChecker())
-        if not validator.is_valid(body):
-            raise PolicyError("The complete writable settings do not match the local schema.")
-        logger.debug("Validated %s writable fields and %s exclusions", len(body), len(excluded))
-        return body, sorted(excluded)
+        notices = ["outside_firmware_policy_scope"]  # Report the deliberate scope without private key names.
+        for kind in ("ap", "switch", "ssr", "juniper_srx"):
+            parent = settings if kind == "ap" else settings.get(kind, {})
+            if not isinstance(parent, dict):
+                raise PolicyError("A firmware policy parent is not an object.")
+            if "auto_upgrade" in parent:
+                value = self._policy(scope, kind, parent["auto_upgrade"], notices)
+                body.update({"auto_upgrade": value} if kind == "ap" else {kind: {"auto_upgrade": value}})
+        logger.debug("Validated %s firmware policy fields", len(body))
+        return body, notices
+
+    def _policy(self, scope: str, kind: str, value: Any, notices: list[str]) -> dict[str, Any]:
+        """Validate supported historical policy values without requiring a current catalog."""
+        if not isinstance(value, dict):
+            raise PolicyError("A firmware auto-upgrade policy is not an object.")
+        result: dict[str, Any] = deepcopy(value)  # Preserve the source while normalizing documented AP defaults.
+        if kind == "ap":
+            self._schedule(result, notices)
+        properties = self.document["components"]["schemas"][f"{scope}_setting"]["properties"]
+        child = properties["auto_upgrade"] if kind == "ap" else self._nested_policy(kind)
+        self.projection.inspect(result, child)  # Unknown policy fields and masked policy values still fail.
+        validator = Draft202012Validator(
+            {**child, "components": self.document["components"]}, registry=Registry(), format_checker=FormatChecker()
+        )
+        if not validator.is_valid(result):
+            raise PolicyError("The firmware policy does not match the supported schema.")
+        return result
+
+    @staticmethod
+    def _schedule(value: dict[str, Any], notices: list[str]) -> None:
+        """Report menu 168 AP schedule defaults and reject other invalid schedules."""
+        for key, default in (("day_of_week", "any"), ("time_of_day", "02:00")):
+            if key not in value or value[key] == "":
+                value[key] = default
+                notices.append(f"normalized:auto_upgrade.{key}={default}")
+        PolicyValidation.schedule("ap", value["day_of_week"], value["time_of_day"])
+
+    def _nested_policy(self, kind: str) -> dict[str, Any]:
+        """Use the shared documented hardware policy schema, not its unrelated parent schema."""
+        parent = self.document["components"]["schemas"]["org_setting"]["properties"][kind]
+        child: dict[str, Any] = self.projection.node(parent)["properties"]["auto_upgrade"]
+        return child
 
     def body(self, scope: str, saved: dict[str, Any], current: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
-        """Build complete replacement values and refuse unsupported absent-field deletion."""
+        """Replace policies while retaining only current unrelated parent values."""
         desired, excluded = self.project(scope, saved)
         existing, _ = self.project(scope, current)
-        absent = set(existing) - set(desired)
-        if absent - ({"auto_upgrade"} if scope == "site" else set()):
-            raise PolicyError("A current field is absent from the backup and has no proven deletion contract.")
-        body = deepcopy(desired)
-        if "auto_upgrade" in absent:
+        if scope == "org" and "auto_upgrade" in existing and "auto_upgrade" not in desired:
+            raise PolicyError("The absent organization AP policy has no proven deletion contract.")
+        body = {key: value for key, value in desired.items() if key == "auto_upgrade"}
+        if scope == "site" and "auto_upgrade" in existing and "auto_upgrade" not in desired:
             body["-auto_upgrade"] = ""
+        self._parents(body, current, desired, existing)
         return body, excluded
 
-    def verify(self, scope: str, saved: dict[str, Any], expected: dict[str, Any]) -> None:
-        """Require complete writable equality without accepting an unverified update."""
-        actual, _ = self.project(scope, saved)
-        desired = {key: value for key, value in expected.items() if not key.startswith("-")}
+    @staticmethod
+    def _parents(
+        body: dict[str, Any], current: dict[str, Any], desired: dict[str, Any], existing: dict[str, Any]
+    ) -> None:
+        """Use complete current parents to preserve unrelated siblings during nested policy replacement."""
+        for kind in ("switch", "ssr", "juniper_srx"):
+            if kind in desired or kind in existing:
+                parent = deepcopy(current.get(kind, {}))
+                parent.pop("auto_upgrade", None)
+                parent.update(desired.get(kind, {}))
+                body[kind] = parent
+
+    def verify(self, scope: str, saved: dict[str, Any], expected: dict[str, Any], original: dict[str, Any]) -> None:
+        """Prove policy values and every unrelated current value except the modification timestamp."""
+        self.project(scope, saved)  # Retain strict validation of the policy values returned by the server.
+        desired = deepcopy(original)
+        for key, value in expected.items():
+            if key == "-auto_upgrade":
+                desired.pop("auto_upgrade", None)
+            else:
+                desired[key] = value
+        desired.pop("modified_time", None)
+        actual = {key: value for key, value in saved.items() if key != "modified_time"}
         if actual != desired:
             raise PolicyError("Saved settings verification failed. Changes can remain in this scope.")

@@ -122,7 +122,7 @@ def list_operations():
                 },
                 {
                     "menu_number": "306",
-                    "description": "Restore settings from private backups",
+                    "description": "Restore firmware policies from private backups",
                     "category": "settings_workflow",
                 },
             ],

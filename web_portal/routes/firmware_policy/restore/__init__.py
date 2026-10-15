@@ -1,4 +1,4 @@
-"""Serve protected complete settings restoration without exposing private backup contents."""
+"""Serve protected firmware policy restoration without exposing private backup contents."""
 
 from __future__ import annotations
 

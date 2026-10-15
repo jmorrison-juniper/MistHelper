@@ -4965,7 +4965,7 @@ menu_actions: dict[str, Any] = {
             ),
         ).run(),
         title=(
-            "DESTRUCTIVE: Restore complete writable organization and site settings from private backups "
+            "DESTRUCTIVE: Restore organization and site firmware policies from private backups "
             "(Requires typing 'RESTORE', verified recovery backups, supports --dry-run)"
         ),
         category=OperationRegistry.skip_category("306"),

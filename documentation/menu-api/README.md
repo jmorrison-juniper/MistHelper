@@ -391,7 +391,7 @@ pie showData
 | [303](interactive-safe.md#menu-303) | Look up one Juniper service request or RMA (read-only) | `interactive_safe` | 0 |
 | [304](interactive-safe.md#menu-304) | Look up Juniper warranty, contract, and status data for serial numbers (read-only) | `interactive_safe` | 0 |
 | [305](destructive.md#menu-305) | DESTRUCTIVE: Organization Auto-Upgrade Policy - Set model versions and restore all site inheritance (Requires typing 'CONFIGURE', verified full backups, supports --dry-run) | `destructive` | 10 |
-| [306](destructive.md#menu-306) | DESTRUCTIVE: Restore complete writable organization and site settings from private backups (Requires typing 'RESTORE', verified recovery backups, supports --dry-run) | `destructive` | 7 |
+| [306](destructive.md#menu-306) | DESTRUCTIVE: Restore organization and site firmware policies from private backups (Requires typing 'RESTORE', verified recovery backups, supports --dry-run) | `destructive` | 7 |
 
 ## Menu options with no endpoint
 

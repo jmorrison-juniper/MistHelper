@@ -30,7 +30,11 @@ class LargeSession(SettingsSession):
         self.listings: dict[str, list[dict[str, str]]] = {identifier: [] for identifier in self.organizations}
         self.settings = {}
         for organization in self.organizations:
-            self.settings[f"/api/v1/orgs/{organization}/setting"] = {"org_id": organization, "allow_mist": False}
+            self.settings[f"/api/v1/orgs/{organization}/setting"] = {
+                "org_id": organization,
+                "allow_mist": False,
+                "auto_upgrade": {"enabled": False, "day_of_week": "any", "time_of_day": "02:00"},
+            }
         for index in range(count):
             organization = self.organizations[index % 2]
             identifier = str(UUID(int=index + 10))
@@ -38,7 +42,7 @@ class LargeSession(SettingsSession):
             self.settings[f"/api/v1/sites/{identifier}/setting"] = {
                 "site_id": identifier,
                 "org_id": organization,
-                "auto_upgrade": {"enabled": False},
+                "auto_upgrade": {"enabled": False, "day_of_week": "any", "time_of_day": "02:00"},
             }
 
     def get_cloud(self) -> str:
@@ -154,7 +158,8 @@ def test_realistic_144_site_backup_above_17402805_bytes_roundtrips_privately(
     assert result.failed == result.remaining == []
     assert len(result.completed) == 145
     assert files.read(source.stem).records == records
-    assert all(settings["ssr"]["conductor_token"] == payload for settings in session.settings.values())
+    assert all("ssr" not in settings for settings in session.settings.values())
+    assert all("ssr" not in body for uri, body in session.writes)
 
 
 @pytest.mark.parametrize("status", [403, 503])
@@ -188,8 +193,11 @@ def test_realistic_4001_site_policy_backup_restore_pipeline_has_complete_ordered
     payload = "x" * 121856
     for uri, settings in session.settings.items():
         settings["ssr"] = {"conductor_token": payload}
+        settings["unknown_response_field"] = None
+        settings["uwb_config"] = {"port": None}
+        settings["mist_nac"] = {"idps": [{"id": session.organizations[0]}]}
         if "/orgs/" in uri:
-            settings["auto_upgrade"] = {"enabled": False}
+            settings["auto_upgrade"] = {"enabled": False, "day_of_week": "any", "time_of_day": "02:00"}
     original = deepcopy(session.settings)
     backup = PolicyBackup(tmp_path)
     api = PolicyApi(session)

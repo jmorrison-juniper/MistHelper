@@ -210,20 +210,20 @@ def test_policy_backup_lists_and_restores_in_the_same_browser(job_portal: Any, m
         f"/api/v1/orgs/{ORG_ID}/setting": {
             "org_id": ORG_ID,
             "allow_mist": False,
-            "auto_upgrade": {"enabled": True},
+            "auto_upgrade": {"enabled": True, "day_of_week": "any", "time_of_day": "any"},
         },
         f"/api/v1/sites/{SITE_ID}/setting": {
             "org_id": ORG_ID,
             "site_id": SITE_ID,
-            "auto_upgrade": {"enabled": True},
+            "auto_upgrade": {"enabled": True, "day_of_week": "any", "time_of_day": "any"},
         },
         f"/api/v1/sites/{OTHER_SITE_ID}/setting": {
             "org_id": ORG_ID,
             "site_id": OTHER_SITE_ID,
-            "auto_upgrade": {"enabled": True},
+            "auto_upgrade": {"enabled": True, "day_of_week": "any", "time_of_day": "any"},
         },
     }  # Use writable settings accepted by both real domain workflows.
-    originals = deepcopy(api_session.settings)  # Compare the entire recovered settings, not only policy fields.
+    originals = deepcopy(api_session.settings)  # Existing valid any schedules must survive an exact policy roundtrip.
     client = app.test_client()
     identifier = post(client, "/api/firmware-policy/preview", policy_body()).get_json()["job_id"]
     executor.run()
@@ -236,6 +236,8 @@ def test_policy_backup_lists_and_restores_in_the_same_browser(job_portal: Any, m
     executor.run()
     assert client.get(f"/api/firmware-policy/jobs/{identifier}").get_json()["state"] == "complete"
     assert api_session.settings != originals
+    api_session.settings[f"/api/v1/orgs/{ORG_ID}/setting"]["allow_mist"] = True  # Simulate an unrelated later change.
+    originals[f"/api/v1/orgs/{ORG_ID}/setting"]["allow_mist"] = True  # Restoration must retain the current sibling.
     assert client.get("/operations/settings-restore").status_code == 302
     response = client.get("/api/settings-restore/bundles")
     assert response.status_code == 200, response.get_json()

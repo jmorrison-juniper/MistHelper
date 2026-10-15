@@ -1,4 +1,4 @@
-"""Share guarded complete restoration between the CLI and the protected graphical portal."""
+"""Share guarded firmware policy restoration between the CLI and the protected graphical portal."""
 
 from __future__ import annotations
 
@@ -67,10 +67,18 @@ class RestorePlan:
             "cloud": self.cloud,
             "targets": [target.preview() for target in self.targets],
             "excluded": self.exclusions,
+            "restoration_scope": "firmware_policies_only",
+            "normalizations": {
+                key: [notice for notice in notices if notice.startswith("normalized:")]
+                for key, notices in self.exclusions.items()
+                if any(notice.startswith("normalized:") for notice in notices)
+            },
             "writes": 0,
             "warning": (
-                "Warning: restoration replaces complete writable settings, including changes made after the backup. "
-                "Missing fields without proven deletion support stop restoration. "
+                "Warning: restoration replaces firmware policies only. Unrelated current settings remain unchanged. "
+                "Missing or empty AP schedule fields use menu 168 defaults: day any and time 02:00. "
+                "The preview identifies each defaulted path. These defaults can change future upgrade timing. "
+                "Missing policies without proven deletion support stop restoration. "
                 "A checksum is not an authentic signature. Verify the backup source and selected cloud. "
                 "Organization settings are restored before sites. No firmware execution request is sent."
             ),
@@ -168,7 +176,7 @@ class RestoreWorkflow:
     def _target(
         self, bundle: RestoreBundle, record: dict[str, Any], membership: dict[str, set[str]]
     ) -> tuple[RestoreTarget, list[str]]:
-        """Bind a selected record to proven ownership and complete writable effects."""
+        """Bind a selected record to proven ownership and policy-only effects."""
         owner = RestoreSelection.ownership(bundle, record)
         if owner not in membership or (record["scope"] == "site" and record["id"] not in membership[owner]):
             raise PolicyError("Select the saved organization and only its current member sites.")
@@ -240,7 +248,7 @@ class RestoreWorkflow:
         proof.verify(self.files.backup, records, self.binding(plan))  # Bind complete recovery to the exact operation.
         self.current(plan)
         result = RestoreResult(remaining=[target.key for target in plan.targets], backups_verified=len(records))
-        logger.info("Restore settings after verifying %s complete recovery records", len(records))
+        logger.info("Restore firmware policies after verifying %s complete recovery records", len(records))
         self._restore_targets(plan, result, proof)
         attempted = set(result.completed + result.failed)  # Keep remaining outcomes linear in selected record count.
         result.remaining = [key for key in result.remaining if key not in attempted]
@@ -279,4 +287,4 @@ class RestoreWorkflow:
         saved = self.api.read(target.scope, target.identifier)
         if any(saved.get(key) != target.original[key] for key in ("id", "org_id", "site_id") if key in target.original):
             raise PolicyError("Saved settings ownership verification failed. Changes can remain.")
-        self.schema.verify(target.scope, saved, target.body)
+        self.schema.verify(target.scope, saved, target.body, target.original)

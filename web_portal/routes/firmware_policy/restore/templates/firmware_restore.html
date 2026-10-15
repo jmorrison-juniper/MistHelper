@@ -1,6 +1,7 @@
-<h5>306: Restore complete writable settings</h5>
-<p class="alert alert-danger" data-testid="restore-warning">Warning: restoration replaces complete writable organization and site settings.
-Later changes can be lost. A checksum is not an authentic signature. Verify the source and cloud.
+<h5>306: Restore firmware policies</h5>
+<p class="alert alert-danger" data-testid="restore-warning">Warning: restoration replaces only AP, switch, SSR, and SRX firmware policies.
+Later firmware policy changes can be lost. Unrelated current settings remain unchanged.
+Complete private backups are retained. A checksum is not an authentic signature. Verify the source and cloud.
 No firmware execution request is sent.</p>
 <fieldset id="restoreControls" class="portal-card mb-3">
     <h6>1. Select private backup records</h6>
@@ -18,16 +19,16 @@ No firmware execution request is sent.</p>
     <label for="restoreCloud" class="form-label">Type the active cloud hostname: <strong id="activeCloud" data-testid="restore-active-cloud"></strong></label>
     <input id="restoreCloud" class="form-control mb-3" autocomplete="off" data-testid="restore-cloud">
     <h6>2. Prepare verified recovery backups</h6>
-    <p>Validate the source, examine writable effects, and verify recovery for every target before confirmation.</p>
+    <p>Validate the source, examine firmware policy effects, and verify complete recovery backups for every target before confirmation.</p>
     <button type="button" id="restorePreview" class="btn btn-outline-warning" data-testid="restore-preview-button">Prepare verified recovery backups</button>
 </fieldset>
 <div id="restorePreviewText" class="mb-3" data-testid="restore-preview"></div>
 <div id="restoreConfirmPanel" class="portal-card mb-3 d-none" data-testid="restore-confirm-panel">
     <h6>3. Confirm restoration</h6>
-    <p>All recovery backups passed verification. Examine the table below before confirmation.</p>
+    <p>All recovery backups passed verification. Examine the firmware policy scope and table below before confirmation.</p>
     <label for="restoreConfirmation" class="form-label">Type RESTORE exactly</label>
     <input id="restoreConfirmation" class="form-control mb-3" autocomplete="off" data-testid="restore-confirmation" disabled>
-    <button type="button" id="restoreApply" class="btn btn-danger" data-testid="restore-apply" disabled>Restore verified plan</button>
+    <button type="button" id="restoreApply" class="btn btn-danger" data-testid="restore-apply" disabled>Restore verified firmware policies</button>
     <button type="button" id="restoreCancel" class="btn btn-secondary" data-testid="restore-cancel" disabled>Cancel prepared plan</button>
 </div>
 <div class="portal-card">

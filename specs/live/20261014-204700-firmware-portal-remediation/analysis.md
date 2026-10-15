@@ -1,5 +1,42 @@
 # Specification Analysis Report
 
+## Current scope revision
+
+The user explicitly approved firmware-policy-only restoration.
+Earlier complete-settings vendor blockers below are historical findings, not the current restoration contract.
+The revised implementation must pass FR-017 through FR-020 and retain complete private backups and unrelated current settings.
+The revised read-only analysis examined all three core artifacts and the constitution.
+It found no new blocking ambiguity, conflict, or uncovered requirement.
+The existing feature pointer remains unchanged.
+PowerShell remains unavailable. Direct required-file resolution used the existing managed feature directory.
+
+| Requirement | Tasks | Evidence |
+| - | - | - |
+| FR-017, FR-018 | T023, T025 | All-class policy bodies and current sibling preservation |
+| FR-019 | T023, T025 | Strict policy validation without unrelated historical projection |
+| FR-020 | T024, T025 | Visible scope, explicit schedule defaults, and unsupported removal rejection |
+| SC-002, SC-003 | T025, T026 | Exact ordered large-bundle policy pipeline |
+| Existing FR-001 through FR-016 and SC-001 through SC-006 | T001 through T022 | Existing mapping below, with revised scoped recovery evidence |
+| Connected acceptance and final CI artifacts | T027 | Pending parent candidate acceptance and final revised CI |
+
+The inventory contains 20 functional requirements, six success criteria, and 27 tasks.
+Every requirement has task coverage. No new constitution conflict or unmapped task was found.
+Implementation does not complete the deployment pipeline. The parent retains connected acceptance and deployment ownership.
+
+Revised validation:
+
+- The complete combined firmware command below passed 332 tests with 92.25 percent coverage.
+- `python -m pytest tests/guardrails -q --no-cov` passed 909 tests, with three reported skips.
+- `python -m ruff check .` passed. `python -m black --check .` left 2,431 files unchanged.
+- The configured full mypy command below passed 844 source files.
+- Changed-package Bandit, complexity, pydocstyle, and vulture passed. Interrogate reported 100 percent.
+- Changed-package Pylint reported 9.80/10.
+- STE checked five operator/instruction files and reported scores from 91 to 98.
+- Menu generators updated the intentional menu 306 scope label. Compile, JavaScript syntax, and hot-file symbol checks passed.
+
+The candidate remains draft until the parent verifies actual firmware policy recovery.
+Earlier complete-settings blockers remain recorded below as historical evidence.
+
 The analysis examined `spec.md`, `plan.md`, `tasks.md`, and the project constitution.
 It checked all three required artifacts through the active feature pointer.
 PowerShell is unavailable, so the prerequisite script could not execute.

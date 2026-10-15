@@ -69,12 +69,13 @@ Portal requests retain the existing CSRF and address access controls.
 Before the first settings write, the operation saves complete settings for every selected organization and every target site.
 One unique JSON bundle contains all original settings, scope identifiers, a UTC timestamp, a record count, and a SHA-256 checksum.
 The operation reads the file again and compares every original record and its checksum.
-It also checks that the restoration schema accepts every saved settings record.
+It also checks that firmware policy restoration accepts every saved policy.
 If any backup cannot be written or verified, the operation sends zero settings writes.
 If restoration cannot accept a record, preparation fails and confirmation remains hidden.
 The portal distinguishes preparation failure from an unavailable status response.
 Only a definite preparation failure reports that no settings changed.
-See [restoration schema requirements](backup-restoration.md#vendor-contract-evidence) for known contract gaps.
+See [restoration scope and limits](backup-restoration.md#exact-restoration-scope) for policy recovery rules.
+Complete backups do not imply complete historical settings restoration.
 
 Backups remain under `data/.firmware-policy-backups/`.
 The operation never overwrites an earlier backup.

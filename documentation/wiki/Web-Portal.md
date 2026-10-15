@@ -35,7 +35,7 @@ answering.
 ## Firmware policies and recovery
 
 Open **Operations**, then expand **Firmware Policies & Recovery**.
-Menu **305** configures organization policies. Menu **306** restores private complete settings backups.
+Menu **305** configures organization policies. Menu **306** restores firmware policies from complete private backups.
 Both workflows appear beside the left menu, not above the operations page.
 Model checkboxes reveal version choices. Numeric version components sort highest first.
 The AP schedule defaults to every day at `02:00`.
@@ -45,10 +45,10 @@ Private settings never appear in these tables.
 Large bundles have no arbitrary aggregate size limit.
 Request allowance waits do not expire active preparation.
 An interrupted worker never repeats uncertain writes automatically.
-Policy confirmation also requires each backup to pass restoration projection.
+Policy confirmation also requires each backup to pass firmware policy restoration projection.
 Same-host workers share plan ownership and organization write exclusion through the private data directory.
-Actual-source restoration acceptance remains blocked by public schema differences.
-See the [restoration guide](../backup-restoration.md#vendor-contract-evidence) for the required vendor evidence.
+Unrelated current settings remain unchanged. Complete private source and recovery backups remain available.
+See the [restoration guide](../backup-restoration.md#exact-restoration-scope) for the user-directed scope and contract limits.
 
 Warning: these workflows change cloud settings. Restored or enabled policies can permit later upgrades.
 

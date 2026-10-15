@@ -1,10 +1,10 @@
 # Backup restoration: Menu 306
 
-Warning: restoration replaces complete writable organization and site settings.
-It can remove changes made after the selected backup.
+Warning: restoration replaces organization and site firmware policies.
+It can remove later firmware policy changes and permit cloud-managed upgrades.
 Examine the preview and verify the backup source before you type `RESTORE`.
 
-Menu 306 restores selected records from the private complete backups that menu 305 creates.
+Menu 306 restores firmware policies from selected records in the complete private backups that menu 305 creates.
 It does not send a firmware execution request or a device-push request.
 Restored firmware policies can permit later cloud-managed upgrades.
 
@@ -28,28 +28,33 @@ The cloud confirmation does not convert a checksum into an authentic signature.
 
 ## Exact restoration scope
 
-The tool restores complete saved writable settings, not only firmware policy fields.
+The user selected firmware-policy-only restoration. Complete settings restoration is outside this scope.
 Unselected organizations and sites remain unchanged.
-Selected settings intentionally return to saved values, including unrelated historical settings.
+Only these firmware policy paths can return to saved values:
 
-The local OpenAPI 3.1 schemas define the writable fields.
-Explicit compatible declarations from the checked-in legacy schema supplement documented fields and schema alternatives.
-Known top-level read-only fields remain under server control.
-These include identifiers and creation or modification timestamps.
-The tool refuses unknown fields, invalid values, nested server-managed content, and unsupported schema shapes.
-It does not silently remove an unsafe writable field from the restoration.
+| Hardware | Policy path |
+| - | - |
+| AP | `auto_upgrade` |
+| Switch | `switch.auto_upgrade` |
+| SSR | `ssr.auto_upgrade` |
+| SRX | `juniper_srx.auto_upgrade` |
 
-A secret placeholder is not a recoverable credential.
-The tool refuses recognized masked or redacted values.
-Some returned credentials can be unavailable or indistinguishable from real values.
-The tool cannot reconstruct a credential that the backup never contained.
-Verify the backup source and completeness before restoration.
+Unrelated current settings remain unchanged, including credentials and nested parent siblings.
+Complete source and recovery snapshots remain private and unchanged.
+Unknown or nullable unrelated fields do not enter policy validation or historical restoration requests.
+The local public schema validates firmware policy content only.
+Malformed, masked, or unsupported firmware policy values stop preparation before writes.
+Menu 168 provides the AP policy request pattern, not a complete settings replacement contract.
+Missing or empty AP schedule choices use the documented menu 168 defaults.
+The preview states those defaults before confirmation.
 
-An absent top-level site `auto_upgrade` field uses the existing `-auto_upgrade` deletion contract.
+An absent saved top-level site `auto_upgrade` field uses the existing `-auto_upgrade` deletion contract when a current override exists.
 This restores organization inheritance, not a disabled local policy.
-Other absent current fields have no general proven deletion contract.
+An absent saved organization AP policy has no proven unset contract.
 The tool stops before writes rather than inventing null or deletion behavior.
-Named parent objects restore their complete saved writable content.
+Nested policy removal replaces the current parent object without its `auto_upgrade` member.
+The replacement retains current unrelated siblings, never historical unrelated siblings.
+Saved nested policies replace only that member within the current parent.
 
 ## Confirm and restore
 
@@ -85,7 +90,7 @@ Use **Select all saved records** when the complete bundle is required.
 Type the active cloud hostname, then select **Prepare verified recovery backups**.
 Preparation creates and verifies recovery before the confirmation controls appear.
 Examine the compact, site-name-sorted table and progress below the controls.
-Type `RESTORE` exactly to enable **Restore verified plan**.
+Type `RESTORE` exactly to enable **Restore verified firmware policies**.
 Use **Cancel prepared plan** to invalidate a plan without writes.
 
 The portal keeps settings and credentials on the server.
@@ -123,25 +128,21 @@ Keep both the original bundle and each recovery bundle.
 Offline automated acceptance uses fixture settings and mocked SDK transport.
 It does not establish user approval or a successful production restoration.
 
-## Vendor contract evidence
+## Scope decision and contract limits
 
-Actual backup acceptance remains blocked by settings that the public writable schemas do not accept.
-The original and freshly created 145-record bundles both fail strict projection before writes.
-Backup integrity alone does not prove restoration usability.
-Policy preparation now requires both checks before confirmation.
+The earlier complete-settings implementation rejected both actual 145-record bundles before writes.
+Public writable schemas did not establish complete restoration of unknown, nullable, and nested server-managed settings.
+The user explicitly selected firmware-policy-only restoration instead.
+This decision does not authorize guesses about unrelated writable fields.
+Policy preparation requires backup integrity and firmware policy recovery projection before confirmation.
 
 The [public Mist schema at revision `79274e6`](https://github.com/mistsys/mist_openapi/blob/79274e6cd85327ef51a9ab99a9c40a999d4b669a/mist.openapi.json)
 does not resolve every observed difference.
 All 3,133 upstream property names already occur in the checked-in public schemas.
 
-Vendor evidence must establish these contracts before the affected records can be restored:
-
-- Whether weekday hours and the UWB port accept null, and how complete replacement preserves those values.
-- Whether policy weekday fields accept an empty string, and its exact meaning.
-- Whether nested NAC identifiers remain server-managed during complete replacement.
-- Whether each unrecognized returned field is writable, read-only, or requires a separate endpoint.
-
-The evidence must identify request field paths, accepted types, replacement behavior, and deletion behavior.
+Complete restoration would require vendor evidence for unrelated fields and their accepted types, replacement rules, and deletion rules.
+This remains outside menu 306.
 Do not send private settings, credentials, identifiers, or complete backups to obtain this evidence.
 Do not remove unknown fields, invent replacement values, or attempt speculative settings writes.
-The tool preserves rejection until the contract proves a safe complete restoration.
+Unsupported firmware policy deletion or content still blocks preparation.
+Fixture tests do not establish successful connected restoration. The parent verifies the committed candidate before merge or deployment.
