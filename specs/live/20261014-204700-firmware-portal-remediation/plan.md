@@ -46,6 +46,14 @@ Events describe phase, scope, identifier, name, completed count, total, and wait
 The portal uses these events to persist sanitized status while a bounded executor owns work.
 Preparation captures complete snapshots and writes verified backups. Apply reuses that recovery proof and rechecks durable files and current settings.
 Preparation also projects every snapshot through the restoration schema before it permits confirmation.
+The user-directed revision restricts that projection to firmware policies.
+Complete source and recovery records remain private and unchanged.
+Restoration projects only `auto_upgrade` and nested `switch`, `ssr`, and `juniper_srx` auto-upgrade policies.
+Required nested parent replacements retain current siblings, not historical unrelated siblings.
+Readback checks the planned policies and preservation of unrelated current fields.
+Whole-settings unknown fields, nullable fields, and read-only metadata do not enter policy projection or restoration requests.
+Only proven policy deletion contracts are permitted.
+Any AP schedule defaults from menu 168 appear in the preview before confirmation.
 Existing CLI apply calls still perform the complete backup gate.
 
 Portal preparation returns HTTP 202 with `job_id`. Status returns state, progress, sanitized rows, and a token only when ready.

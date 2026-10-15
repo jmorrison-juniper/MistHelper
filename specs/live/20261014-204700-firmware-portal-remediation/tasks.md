@@ -68,3 +68,15 @@ Preserve the full requested scope. First establish safety and job contracts.
 Then integrate both UI workflows, run fixture acceptance, and collect sanitized evidence.
 The parent performs connected acceptance. The user confirmed Morrison House as the intended live scope.
 This implementation session performs only fixture changes and never accesses the production volume.
+
+## User-directed firmware-only revision
+
+- [ ] T023 Revise `recovery/schema.py` and workflow readback for FR-017 through FR-020, preserving full backups and unrelated current settings.
+- [ ] T024 Update menu 306 controls, labels, preview normalization, CLI wording, docs, wiki, and the narrow README row.
+- [ ] T025 Test all four policy classes, absent policies, unrelated-field preservation, malformed policy rejection, and realistic 4,001-site roundtrips.
+- [ ] T026 Run revised gates and analysis, capture fixture evidence, and provide a committed candidate with a settings-free projection validator.
+- [ ] T027 Record parent connected acceptance and final CI inspection on the draft pull request without merging or deployment.
+
+T023 precedes T025. T024 can proceed beside T023.
+T026 follows T023 through T025. T027 follows the candidate handoff.
+The user approved firmware-policy-only restoration instead of complete settings restoration.

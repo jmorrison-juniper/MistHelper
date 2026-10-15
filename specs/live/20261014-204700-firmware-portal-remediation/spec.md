@@ -8,6 +8,11 @@
 
 **Input**: Issue #4227. Repair menus 305 and 306 after PRs #4219 and #4225.
 
+**Scope revision**: On 2026-10-14, the user selected firmware-policy-only restoration instead of complete settings restoration.
+Complete private source and recovery backups remain required.
+Only AP, switch, SSR, and SRX firmware policies can change during restoration.
+Unrelated current settings remain unchanged.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Configure a verified policy (Priority: P1)
@@ -28,10 +33,11 @@ The operator prepares verified backups, examines a compact table, then types CON
 4. **Given** preparation, **When** backups remain incomplete, **Then** confirmation is hidden and no settings write occurs.
 5. **Given** all backups verified, **When** CONFIGURE is entered, **Then** progress reports organization changes before site changes.
 
-### User Story 2 - Restore a large private backup (Priority: P1)
+### User Story 2 - Restore firmware policies from a large private backup (Priority: P1)
 
 The operator selects menu 306 beside the same menu list, selects a private backup and records, and examines recovery status.
 The operator types RESTORE only after every recovery backup verifies.
+The operator sees that restoration affects firmware policies only, not complete historical settings.
 
 **Why this priority**: The released restore workflow rejects an existing 17,402,805-byte private backup.
 
@@ -43,6 +49,8 @@ The operator types RESTORE only after every recovery backup verifies.
 2. **Given** tampered, partial, malformed, or public backups, **When** preparation runs, **Then** it fails before a settings write.
 3. **Given** verified recovery, **When** RESTORE is confirmed, **Then** organizations restore before sites with readback verification.
 4. **Given** an uncertain write, **When** it fails, **Then** it is not retried automatically and partial outcomes remain visible.
+5. **Given** historical unrelated settings, **When** firmware policies restore, **Then** unrelated current settings remain unchanged.
+6. **Given** an absent saved policy, **When** restoration requires removal, **Then** only a proven removal contract permits the write.
 
 ### User Story 3 - Observe long operations (Priority: P2)
 
@@ -82,12 +90,16 @@ Site rows sort by site name. The organization name precedes its identifier.
 - **FR-008**: Provide pollable preparation and apply progress with request-wait information and compact sorted tables.
 - **FR-009**: Support more than 4,000 sites and backups above 8 MiB without arbitrary aggregate limits.
 - **FR-010**: Bound untrusted parsing by record resources and structure while preserving legacy readable backup format.
-- **FR-011**: Preserve private access, source integrity, full recovery, freshness, exclusions, and readback verification.
+- **FR-011**: Preserve private access, source integrity, complete recovery backups, freshness, and policy readback with unrelated-settings preservation.
 - **FR-012**: Reuse existing request usage and admission tools, including rolling-hour usage control.
 - **FR-013**: Apply all organization writes before site writes and never retry an uncertain write automatically.
 - **FR-014**: Preserve status across polling and report worker interruption without silently repeating writes.
 - **FR-015**: Keep settings, credentials, production backups, and logs outside UI evidence and public artifacts.
 - **FR-016**: Update the operator guides, wiki, README link, acceptance mapping, and release note.
+- **FR-017**: Restore only AP, switch, SSR, and SRX firmware policy fields from selected backup records.
+- **FR-018**: Build required parent replacements from current unrelated siblings, never historical unrelated siblings.
+- **FR-019**: Reject malformed or unproven firmware policy content without rejecting unrelated historical settings outside restoration scope.
+- **FR-020**: State policy-only scope, any schedule normalization, and unsupported removal effects before confirmation.
 
 ### Mist Cloud Transport Requirements
 
@@ -109,7 +121,7 @@ Contract tests inspect exact methods, HTTP failures, request counts, write order
 
 - **SC-001**: Both menus retain the left list and right workflow at desktop widths.
 - **SC-002**: A 4,001-site fixture completes preparation and ordered application without missing or duplicate writes.
-- **SC-003**: A valid backup larger than 17,402,805 bytes completes a verified roundtrip.
+- **SC-003**: A valid backup larger than 17,402,805 bytes completes a verified firmware-policy roundtrip without unrelated changes.
 - **SC-004**: Every failed backup, wrong confirmation, stale target, or foreign session causes zero premature writes.
 - **SC-005**: Progress remains available during waits above ten minutes without permitting duplicate application.
 - **SC-006**: No rendered fixture page or committed evidence contains private settings.
@@ -121,3 +133,6 @@ Contract tests inspect exact methods, HTTP failures, request counts, write order
 - Existing legacy backups remain readable. Their checksums prove integrity, not authenticity.
 - Catalog-supported models define availability. Unsupported model/version combinations must not be invented.
 - Process interruption fails closed. Recovery uses a new verified preparation, never automatic write replay.
+- Menu 168 establishes construction of AP policy requests, not complete settings restoration.
+- Missing or empty AP schedule choices use the menu 168 defaults and appear explicitly in the restoration preview.
+- Complete settings restoration is outside the revised scope. No unknown full-settings field is guessed or written from a backup.

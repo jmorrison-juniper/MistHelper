@@ -3,6 +3,8 @@
 ## Prepared operation
 
 Private fields: complete domain plan, verified backup paths, owner, and source identity.
+Restoration bodies contain targeted firmware policies and current parent siblings only.
+Historical unrelated settings remain in the source bundle and never enter a restoration write.
 Public fields: opaque reference, workflow kind, state, creation time, progress, and sanitized scope rows.
 States: queued, preparing, ready, applying, complete, partial, failed, cancelled, interrupted.
 Only ready can become applying. Confirmation consumes readiness once under a lock.

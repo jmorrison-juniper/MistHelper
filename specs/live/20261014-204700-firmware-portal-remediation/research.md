@@ -30,3 +30,13 @@ The parent confirmed one 17,402,805-byte backup with mode 0600.
 The connected restore page reports the exact 8 MiB error and has no selectable records.
 The connected policy page shows duplicate organization identifiers and visible unchecked version selectors.
 No production settings were read into this repository. No connected settings write occurred.
+
+## User-directed restoration scope revision
+
+Decision: Restore firmware policy fields only, while retaining complete private backups.
+Rationale: The user explicitly chose this scope after the complete-settings writable contract blocked actual acceptance.
+Menu 168 constructs only an AP `auto_upgrade` request and does not establish a complete restoration contract.
+Its schedule selection supplies daily defaults when saved day or time choices are empty.
+Alternative rejected: Guessing unknown complete writable fields or removing data from private backups.
+The previous vendor blocker applies to complete settings restoration, which is outside the revised scope.
+Unproven firmware policy removal still fails before writes.
