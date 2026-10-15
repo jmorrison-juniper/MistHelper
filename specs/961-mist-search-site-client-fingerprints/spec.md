@@ -1,18 +1,23 @@
-# Feature Specification: Mist API Read Operation -- searchSiteClientFingerprints
+# Feature Specification: Mist API Read Operation -- searchOrgClientFingerprints
 
 **Feature Branch**: `961-mist-search-site-client-fingerprints`
 **Created**: 2026-09-15
-**Status**: Draft
+**Status**: Draft; this original site-scoped record duplicates the organization endpoint in spec 861.
 **Input**: User description:
 "Catalog the missing Mist API GET endpoint `searchSiteClientFingerprints` and add it as a new MistHelper menu item."
 
 ## Source Endpoint
 
-- **operationId**: `searchSiteClientFingerprints`
+- **operationId**: `searchOrgClientFingerprints`
 - **Method**: `GET`
-- **Path**: `/api/v1/sites/{site_id}/insights/fingerprints/search`
-- **Tag**: `Sites NAC Fingerprints`
-- **mistapi SDK module**: `mistapi.api.v1.sites.insights`
+- **Path**: `/api/v1/orgs/{org_id}/insights/fingerprints/search`
+- **Tag**: `Orgs NAC Fingerprints`
+- **mistapi SDK module**: `mistapi.api.v1.orgs.insights`
+- **mistapi SDK status**: mistapi 0.64.1 defines `searchOrgClientFingerprints`.
+
+### Scope Correction
+
+The original request used the site path. Mist removed that path because the operation only worked at the organization level. Issues #3334 and #3691 record this correction.
 
 ### Description
 
@@ -20,7 +25,7 @@ Search Client Fingerprints
 
 ### Path Parameters
 
-_None._
+- `org_id` (required)
 
 ### Query Parameters
 
@@ -31,27 +36,34 @@ _None._
 - `os` (optional)
 - `os_type` (optional)
 - `mac` (optional)
+- `limit` (optional)
+- `start` (optional)
+- `end` (optional)
+- `duration` (optional)
+- `interval` (optional)
+- `sort` (optional)
+- `search_after` (optional)
 
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Read-only data retrieval (Priority: P1)
 
-A junior NOC engineer launches MistHelper, selects the new menu item, supplies the required identifiers
-(org / site / device as applicable), and receives the JSON payload exposed by `searchSiteClientFingerprints` -- exported to the
+A junior NOC engineer launches MistHelper, selects the menu item, supplies the required organization identifier,
+and receives the JSON payload exposed by `searchOrgClientFingerprints` -- exported to the
 configured storage backend (CSV, SQLite, or ArangoDB+Redis) under `data/`.
 
 **Why this priority**: This is a read-only Mist API call -- no destructive effect, so it can ship as P1
 without elaborate guardrails. Coverage of this endpoint unlocks data the user cannot currently extract
 from MistHelper without writing custom code.
 
-**Independent Test**: Run the new menu item against a known org/site; verify the resulting file exists
+**Independent Test**: Run the menu item against a known organization; verify the resulting file exists
 under `data/`, has at least one row when the upstream API returns data, and that re-running the menu
 item upserts cleanly into SQLite (no duplicate primary keys).
 
 **Acceptance Scenarios**:
 
-1. **Given** valid credentials and org context, **When** the user selects the new menu item, **Then**
-   MistHelper invokes `mistapi.api.v1.sites.insights.searchSiteClientFingerprints()` exactly once per required scope and persists results.
+1. **Given** valid credentials and an organization identifier, **When** the user selects the menu item, **Then**
+   MistHelper invokes `mistapi.api.v1.orgs.insights.searchOrgClientFingerprints()` once and persists results.
 2. **Given** an SSH or container session, **When** the user is prompted for identifiers, **Then**
    `safe_input()` handles EOF gracefully and the operation exits 0 without a traceback.
 3. **Given** repeated runs, **When** SQLite is the active backend, **Then** rows upsert by the configured
@@ -60,18 +72,18 @@ item upserts cleanly into SQLite (no duplicate primary keys).
 ### Edge Cases
 
 - The API returns an empty list -> menu reports "no data returned" and exits cleanly.
-- The user supplies an unknown org/site UUID -> 404 from Mist API surfaces as a logged warning, not a traceback.
+- The user supplies an unknown organization UUID -> 404 from Mist API surfaces as a logged warning, not a traceback.
 - Rate limiting (429) triggers the adaptive delay system; no manual intervention required.
 - The user runs with `--fast` -> retries cap respected, concurrency raised.
 - Output backend is ArangoDB+Redis -> graph edges (per spec 188) and Redis caches are updated consistently.
 
 ## Requirements *(mandatory)*
 
-**FR-001**: Provide a new menu item that invokes `mistapi.api.v1.sites.insights.searchSiteClientFingerprints()` via the `mistapi` SDK when available.
+**FR-001**: Provide a menu item that invokes `mistapi.api.v1.orgs.insights.searchOrgClientFingerprints()` via the `mistapi` SDK.
 **FR-002**: Collect required inputs using `safe_input()` so the operation works in SSH and container contexts.
 **FR-003**: Apply rate limiting and retry logic consistent with adjacent menu items (delay_metrics.json + tuning_data.json).
 **FR-004**: Persist results using `DataExporter.write_with_format_selection(data, filename, api_function_name=...)` so CSV/SQLite/ArangoDB backends all work.
-**FR-005**: Register the operationId `searchSiteClientFingerprints` in `ENDPOINT_PRIMARY_KEY_STRATEGIES` with the correct PK strategy (natural / composite / auto-increment).
+**FR-005**: Register the operationId `searchOrgClientFingerprints` in `ENDPOINT_PRIMARY_KEY_STRATEGIES` with the correct PK strategy (natural / composite / auto-increment).
 **FR-006**: Log `INFO` before the API call and `DEBUG` with response counts after, ASCII-only, per Action Logging principle.
 **FR-007**: Add inline comments on every new executable line per Inline Comments principle.
 **FR-008**: Update the README.md menu table with the new operation number. Add the release note as a new fragment under `changelog.d/`, named `pr-<number>.md`, `issue-<number>-<slug>.md`, or `<YYYY-MM-DD>-<slug>.md`. Never edit CHANGELOG.md on a feature branch.
