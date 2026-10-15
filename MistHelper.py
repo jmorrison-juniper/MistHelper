@@ -4515,7 +4515,7 @@ menu_actions: dict[str, Any] = {
     "235": GlobalImportManager.MenuEntry(  # Use named fields for menu 235.
         menu_id="235",  # Store key for drift checks.
         handler=CountExporter.org_counts,
-        title="Run any org-scoped Mist count endpoint (35 operations)",
+        title="Run any org-scoped Mist count endpoint (37 operations)",
         category=OperationRegistry.skip_category("235"),  # Read the safety class.
         destructive=False,  # Keep the safety flag.
         supports_fast=False,  # Avoid fast-mode inspection.

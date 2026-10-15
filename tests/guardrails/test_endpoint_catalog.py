@@ -378,13 +378,13 @@ class TestMenuText:
             (
                 "MistHelper.py",
                 306,
-                "b0be43f00624ade6428e6f53a08ceb0d28b563e2ac445ba6c20d431c837e0f9a",
-            ),  # The user approved firmware-policy-only restoration. Preserve the complete metadata identity check.
+                "01648768e81231a8733c2d1324642890d07da3ef3440374895e18423ebf079a7",
+            ),  # Preserve the command-line menu identity after the menu 235 label update.
             (
                 "web_portal/menu_registry.py",
                 190,
-                "d2fb2aac76023a48c7b13f0a7aaee32b47001dcb2ec9ba65139f404618d25248",
-            ),  # WHY: the same eleven Juniper RMA rows.
+                "83ce780caef7e63e476b07df07d259c5e765fae2a257f5fcbbc690035c5d9f5a",
+            ),  # Preserve the portal menu identity after the menu 235 label update.
         ),
     )
     def test_menu_263_complete_identity(self, path: str, count: int, expected: str) -> None:

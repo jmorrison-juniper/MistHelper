@@ -147,7 +147,7 @@ MENU_DESCRIPTIONS = {
     "232": "Search WAN clients for the organization (searchOrgWanClients)",
     "233": "Search WAN client events for the organization (searchOrgWanClientEvents)",
     "234": "Search system events for the organization (searchOrgSystemEvents)",
-    "235": "Run any org-scoped Mist count endpoint (35 operations)",
+    "235": "Run any org-scoped Mist count endpoint (37 operations)",
     "236": "Run any site-scoped Mist count endpoint (32 operations)",
     "237": "Run any MSP-scoped Mist count endpoint (3 operations)",
     "238": "Export the license entitlement, usage, and subscriptions for an MSP (listMspLicenses)",
