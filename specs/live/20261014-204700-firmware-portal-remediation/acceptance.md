@@ -12,10 +12,10 @@ Earlier evidence below records the preceding implementation, not acceptance of t
 | FR-019 | Unrelated historical fields do not block policy recovery or enter restoration writes | Passed strict policy rejection and unrelated-field preservation tests |
 | FR-020 | Visible policy-only scope and schedule-default disclosure before confirmation | Passed revised browser tests and missing/empty/valid schedule tests |
 | SC-002, SC-003 | Realistic large-bundle firmware policy roundtrip | Passed 4,003-record, 489,502,953-byte pipeline |
-| Connected source and application | Parent validates a committed isolated candidate, with no production deployment | Pending candidate |
+| Connected source and application | Parent validated the isolated committed candidate and confirmed the real firmware policy roundtrip | Passed |
 
 Complete settings restoration remains outside the user-approved revised scope.
-No actual connected firmware-policy restoration success is claimed here.
+The parent confirmed actual firmware-policy restoration success under the explicit user-directed scope.
 
 The combined revised firmware, jobs, and portal suite passed 332 tests with 92.25 percent coverage.
 The full guardrail suite passed 909 tests and skipped three with reported causes.
@@ -37,7 +37,37 @@ The repair starts saved status independently, retains prepared form choices, and
 Waiting and ready regressions hold identity loading until resumed status appears.
 All 65 firmware browser/API cases passed after the repair.
 Terminal preparation and application errors remain visible after delayed identity loading.
-Connected application and restoration acceptance remain pending.
+## Final external acceptance
+
+The parent completed authorized connected menu 305 CONFIGURE and menu 306 RESTORE on candidate `8f0ceba`.
+All 145 restoration scopes passed readback.
+The admitted SDK observer confirmed 145 equal policy projections, unrelated snapshots, and owners.
+It confirmed exact membership equality and performed zero writes.
+Only the documented modification timestamp was excluded from unrelated-settings comparison.
+No firmware execution request occurred.
+Complete source and recovery backups remain preserved privately.
+See [parent live evidence](https://github.com/jmorrison-juniper/MistHelper/issues/4227#issuecomment-6184224213).
+
+The parent verified the exact `e2f779e` refresh candidate at 800px.
+Preparation, reload, and a five-second wait retained organization, model, version, enabled state, and schedule.
+The confirmation remained ready. A genuine edit invalidated it.
+The parent examined the private fixture screenshot.
+The [draft pull request](https://github.com/jmorrison-juniper/MistHelper/pull/4228) records this refresh proof.
+The child stopped its exact offline fixture process after acceptance.
+
+The following runs succeeded on exact `e2f779e`:
+
+- [Quality Gates 38678356548](https://github.com/jmorrison-juniper/MistHelper/actions/runs/38678356548).
+- [CodeQL 38678356397](https://github.com/jmorrison-juniper/MistHelper/actions/runs/38678356397).
+- [STE 38678356464](https://github.com/jmorrison-juniper/MistHelper/actions/runs/38678356464).
+The final logs reported 914 E2E passes and 94 percent combined coverage.
+The actual browser artifact `11947529468` contains two complete/partial screenshots in a 378,193-byte ZIP.
+Both agents downloaded and examined these screenshots.
+Artifact metadata binds them to exact `e2f779e`.
+The draft pull request records the complete final evidence.
+The parent retains manual merge and deployment ownership.
+Released-image verification and production deployment remain pending.
+This child performed neither action.
 
 ## Requirement mapping
 
@@ -75,7 +105,7 @@ No connected screenshot, private backup, production log, or credential belongs i
 
 The parent confirmed the connected fixture policy apply and restoration flows.
 The parent also confirmed numerical ordering, hidden unchecked selectors, schedule defaults, sorted verification rows, and confirmation sequencing.
-Connected production acceptance remains the parent's responsibility.
+The parent completed connected acceptance as recorded above.
 The authorized live organization is Morrison House. This implementation session performs no production requests.
 
 ## Gate results
@@ -115,10 +145,13 @@ Complete snapshots still require memory proportional to their settings.
 The parser permits unlimited aggregate size and record count.
 It bounds each JSON value or record to 8 MiB and nesting to 64 levels.
 
-Committed test-quality checks and CI evidence remain pending.
-No Windows execution or human acceptance is claimed.
+Committed test-quality checks and runtime CI passed as recorded above.
+No Windows execution is claimed. Parent browser acceptance passed.
 
-## Connected legacy-bundle check
+## Historical complete-settings legacy-bundle check
+
+This section records the superseded complete-settings scope.
+Its vendor contract blocker does not apply to the approved firmware-policy-only scope.
 
 The parent built candidate `7700bcb` in a separate ephemeral container and copied the original private bundle.
 The settings-free validator passed source privacy and integrity, then rejected record zero during saved ownership or writable-schema checks.

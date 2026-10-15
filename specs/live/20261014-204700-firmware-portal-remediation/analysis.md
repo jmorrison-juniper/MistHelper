@@ -17,9 +17,10 @@ PowerShell remains unavailable. Direct required-file resolution used the existin
 | FR-020 | T024, T025 | Visible scope, explicit schedule defaults, and unsupported removal rejection |
 | SC-002, SC-003 | T025, T026 | Exact ordered large-bundle policy pipeline |
 | Existing FR-001 through FR-016 and SC-001 through SC-006 | T001 through T022 | Existing mapping below, with revised scoped recovery evidence |
-| Connected acceptance and final CI artifacts | T027 | Pending parent candidate acceptance and final revised CI |
+| Connected acceptance and final CI artifacts | T027 | Passed. See the final external acceptance record in acceptance.md |
+| FR-014, SC-005 | T028 | Waiting and ready refresh tests, plus parent exact-candidate refresh proof |
 
-The inventory contains 20 functional requirements, six success criteria, and 27 tasks.
+The inventory contains 20 functional requirements, six success criteria, and 28 completed tasks.
 Every requirement has task coverage. No new constitution conflict or unmapped task was found.
 Implementation does not complete the deployment pipeline. The parent retains connected acceptance and deployment ownership.
 
@@ -46,7 +47,10 @@ It prints structural counts or a failure stage, record index, and error type.
 It performs zero network requests and zero settings writes.
 The parent received both paths and hashes before revised CI.
 
-The candidate remains draft until the parent verifies actual firmware policy recovery.
+The parent verified actual firmware policy recovery and exact-candidate refresh behavior.
+Final runtime CI and artifact inspection passed on `e2f779e`.
+The draft pull request remains under parent manual release ownership.
+This final record changes no executable source or runtime behavior.
 Earlier complete-settings blockers remain recorded below as historical evidence.
 
 The analysis examined `spec.md`, `plan.md`, `tasks.md`, and the project constitution.
@@ -97,7 +101,8 @@ New job modules use a nested package. Existing operation-page files receive narr
 The plan records existing structure debt and incremental remediation.
 No constitution change or new transport exception is requested.
 
-The parent owns the remaining release stages, including connected acceptance, merge approval, image verification, and deployment.
+The parent completed connected acceptance.
+The parent owns the remaining release stages: merge approval, released-image verification, and deployment.
 These stages are pending, not bypassed.
 This analysis does not certify every inherited source-style rule or claim Windows execution.
 
@@ -106,8 +111,8 @@ The remaining tasks map to the requirements above. No task is unrelated.
 
 ## Metrics
 
-- Total requirements: 22, including six measurable success criteria.
-- Total tasks: 22.
+- Total requirements: 26, including six measurable success criteria.
+- Total tasks: 28, all completed.
 - Requirement coverage: 100 percent.
 - Ambiguity findings: 0.
 - Duplication findings: 0.
@@ -117,7 +122,8 @@ The remaining tasks map to the requirements above. No task is unrelated.
 
 The table below records the implementation milestone.
 The guarded-candidate checks follow it.
-Actual-source acceptance remains blocked and is not a passing release criterion.
+The historical complete-settings acceptance failed safely.
+Current firmware-policy-only acceptance passed as recorded above and in `acceptance.md`.
 
 Commands below use `.venv/bin/` executables in this worktree.
 
@@ -221,7 +227,10 @@ Full-suite test quality examined 1,170 files and 694 findings, with zero new fin
 Both analyzer runs reported zero parse errors.
 The required input preflight read and validated all four inputs.
 
-## Release acceptance gap
+## Historical complete-settings acceptance gap
+
+The explicit user-directed firmware-policy-only scope supersedes this historical blocker.
+No vendor contract for complete settings restoration is claimed.
 
 | ID | Requirement | Severity | Evidence | Required decision |
 | - | - | - | - | - |
@@ -271,7 +280,11 @@ Downloaded restoration screenshots showed complete and partial compact tables wi
 The contract coverage artifact contained 668 measured modules, including 11 firmware modules with nonempty line data.
 The exclusion advisory artifact reported inherited excluded-tree drift. No exclusion or suppression changed.
 
-## Next actions
+## Final release handoff
 
-Complete the committed test-quality check, rebase, create the pull request, and inspect its final checks.
-Record connected acceptance separately. Do not merge, deploy, or enable automatic merge in this implementation session.
+Implementation, test-quality checks, connected acceptance, and final runtime CI artifact inspection are complete.
+The final documentation commit records existing acceptance and changes no behavior or requirements.
+The earlier read-only analysis remains applicable. All 26 requirements have coverage across 28 completed tasks.
+The parent waits for documentation-commit CI before manual merge.
+Released-image verification and deployment remain pending under parent ownership.
+Do not merge, deploy, or enable automatic merge in this implementation session.
