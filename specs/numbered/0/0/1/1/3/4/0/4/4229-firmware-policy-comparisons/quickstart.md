@@ -63,6 +63,18 @@ uv pip compile requirements.txt --python .venv/bin/python --quiet --output-file 
 The parent owns connected acceptance, production evidence, and release.
 No container, production credential, real backup, or production write was used.
 
+The CI process-folder guard found that the initial timestamp record exceeded
+the five-child limit in `specs/live/`. Only this feature moved to the canonical
+issue 4229 numeric route. No existing record, baseline, or guard changed.
+
+```sh
+.venv/bin/python -m pytest -q -s tests/guardrails/test_process_folder_structure.py tests/guardrails/test_nested_package_structure.py
+.venv/bin/python -m pytest -q tests/guardrails/test_spec_route_contract.py
+```
+
+The first command passed 14 tests and examined 795 process children and 172 source directories.
+The route contract passed three tests. Direct calculation verified eight base-5 route segments.
+
 ## Parent browser acceptance
 
 The parent independently examined policy and historical screenshots at 800 pixels.

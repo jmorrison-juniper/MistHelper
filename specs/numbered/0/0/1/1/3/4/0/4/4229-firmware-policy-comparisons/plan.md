@@ -30,6 +30,8 @@ Add historical inspection to recovery without restoration preparation.
   Extract comparison behavior into focused classes.
 - Process folders have existing debt. Only unique feature records enter them.
   Incremental remediation remains the existing process-folder baseline ratchet.
+- `specs/live/` already holds five records. This issue uses the canonical
+  eight-level base-5 numeric route instead of adding a sixth live record.
 - Product output remains under the configured data directory. Synthetic evidence
   uses ignored `test-artifacts/`.
 - Every REST request uses mistapi and shared request admission.

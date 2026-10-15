@@ -3,7 +3,7 @@
 ## Phase 1: Setup
 
 - [x] T001 Inspect baseline, issue ownership, and open PR overlap in `AGENTS.md` and `.github/copilot-instructions.md`.
-- [x] T002 Resolve the app-owned branch hook and create `specs/live/20261015-053000-firmware-policy-comparisons/spec.md`.
+- [x] T002 Resolve the app-owned branch hook and create `specs/numbered/0/0/1/1/3/4/0/4/4229-firmware-policy-comparisons/spec.md`.
 - [x] T003 Prepare the isolated environment with `scripts/bootstrap_worktree.py`.
 
 ## Phase 2: Foundation
@@ -47,8 +47,8 @@ Independent test: Hold preparation, reload, fail, retry, and select mixed versio
 
 - [x] T023 Exercise accessible comparisons, 800-pixel geometry, history, locking, retry, reload, and versions in `tests/e2e/web_portal/test_firmware_policy.py`. Retain rooted screenshots and failure traces through `tests/e2e/web_portal/firmware_restore/evidence.py`, `.github/workflows/ci.yml`, and `tests/unit/firmware_policy_jobs/comparisons/test_evidence.py`.
 - [x] T024 Update `documentation/org-auto-upgrade-policy.md`, `documentation/backup-restoration.md`, and `changelog.d/issue-4229-firmware-policy-comparisons.md`.
-- [x] T025 Run applicable local gates and record exact results in `specs/live/20261015-053000-firmware-policy-comparisons/quickstart.md`.
-- [x] T026 Analyze requirement coverage across `specs/live/20261015-053000-firmware-policy-comparisons/spec.md`, `plan.md`, and `tasks.md`. Report findings in the PR.
+- [x] T025 Run applicable local gates and record exact results in `specs/numbered/0/0/1/1/3/4/0/4/4229-firmware-policy-comparisons/quickstart.md`.
+- [x] T026 Analyze requirement coverage across `specs/numbered/0/0/1/1/3/4/0/4/4229-firmware-policy-comparisons/spec.md`, `plan.md`, and `tasks.md`. Report findings in the PR.
 - [x] T027 Commit explicit paths, rebase, push, and create a draft with `.github/PULL_REQUEST_TEMPLATE.md`.
 
 ## Dependencies
