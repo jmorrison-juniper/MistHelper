@@ -312,7 +312,7 @@ class PolicyApi:
         with SettingsRequestGuard(self.session):
             result = PolicyResponse.collect(  # Check every SDK page rather than accepting partial pagination.
                 self.session,
-                lambda: sites.listOrgSites(self.session, org_id),
+                lambda: sites.listOrgSites(self.session, org_id, limit=1000),
                 "List organization sites",
                 org_id,
                 self.guard.request,
@@ -358,7 +358,7 @@ class PolicyApi:
         with SettingsRequestGuard(self.session):
             return PolicyResponse.collect(
                 self.session,
-                lambda: inventory.getOrgInventory(self.session, org_id, type="gateway"),
+                lambda: inventory.getOrgInventory(self.session, org_id, type="gateway", limit=1000),
                 "Read gateway inventory",
                 org_id,
                 self.guard.request,

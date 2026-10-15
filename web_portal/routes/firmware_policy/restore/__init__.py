@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from flask import Blueprint, Response, current_app, jsonify, make_response, redirect, request
+from flask import Blueprint, Response, current_app, jsonify, make_response, redirect, request, session
 
 from src.operations.execution.firmware_policy.recovery.backup import BackupAccess, PolicyBackup
 from src.operations.execution.firmware_policy.recovery.bundle import BundleFiles, RestoreSelection
@@ -14,6 +14,7 @@ from src.operations.execution.firmware_policy.sdk import PolicyApi, PolicyError,
 
 from ..jobs import PortalJobs
 from ..jobs.workflows import JobWorkflows
+from .inspection import HistoricalInspection
 
 restore_bp = Blueprint("restore", __name__, template_folder="templates")
 
@@ -163,4 +164,40 @@ restore_bp.add_url_rule(
 )
 restore_bp.add_url_rule(
     "/api/settings-restore/cancel", endpoint="cancel", view_func=RestoreRoutes.cancel, methods=["POST"]
+)
+
+
+class InspectionRoutes:
+    """Expose protected one-scope inspection without entering preparation or application."""
+
+    @staticmethod
+    def historical() -> Response:
+        """Require an explicit saved record and optional current comparison."""
+        body = RestoreInputs.body({"bundle", "record", "compare"})
+        result = HistoricalInspection(RestoreInputs.workflow()).read(body["bundle"], body["record"], body["compare"])
+        return jsonify(result)
+
+    @staticmethod
+    def prepared(identifier: str) -> Response | tuple[Response, int]:
+        """Hide unknown and foreign jobs before resolving private prepared policy values."""
+        body = RestoreInputs.body({"scope", "id"})
+        if body["scope"] not in ("org", "site"):
+            raise PolicyError("Select an organization or site scope.")
+        body["id"] = PolicyResponse.identifier(body["id"])
+        owner = session.get("firmware_job_owner", "")
+        try:
+            PortalJobs.manager().status(identifier, owner)
+        except PolicyError:
+            return jsonify({"error": "The job is unavailable for this browser."}), 404
+        return jsonify(PortalJobs.manager().comparison(identifier, owner, body))
+
+
+restore_bp.add_url_rule(
+    "/api/settings-restore/inspect", endpoint="inspect", view_func=InspectionRoutes.historical, methods=["POST"]
+)
+restore_bp.add_url_rule(
+    "/api/firmware-policy/jobs/<identifier>/comparison",
+    endpoint="comparison",
+    view_func=InspectionRoutes.prepared,
+    methods=["POST"],
 )

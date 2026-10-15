@@ -118,6 +118,28 @@ class JobManager:
             self._submit(entry.record["job_id"], work, True)  # Use one identifier throughout the operation.
             return str(entry.record["job_id"])  # The browser polls the same owned record.
 
+    def comparison(self, identifier: str, owner: str, selection: dict[str, Any]) -> dict[str, Any]:
+        """Read one owner-checked ready plan without consuming its token or proof."""
+        from ..restore.inspection import PreparedInspection
+
+        with self.lock:
+            entry = self._owned(identifier, owner)
+            worker = entry.record.get("worker")
+            if isinstance(worker, str) and worker != self.worker.identifier and self._live(entry.record):
+                return dict(
+                    self.worker.request(
+                        worker, dict(action="comparison", job_id=identifier, owner=owner, selection=selection)
+                    )
+                )
+            if entry.record["state"] != "ready" or entry.context is None:
+                raise PolicyError("The prepared comparison is unavailable. Prepare a new operation.")
+            context = entry.context
+        result = PreparedInspection.read(context, selection["scope"], selection["id"])
+        with self.lock:
+            if entry.record["state"] != "ready" or entry.context is not context:
+                raise PolicyError("The prepared operation changed during comparison.")
+        return result
+
     def cancel(self, owner: str, token: str) -> None:
         """Invalidate a ready restoration without any cloud operation."""
         with self.lock:
@@ -188,6 +210,8 @@ class JobManager:
         if document.get("action") == "cancel":
             self.cancel(document["owner"], document["token"])
             return None
+        if document.get("action") == "comparison":
+            return self.comparison(document["job_id"], document["owner"], document["selection"])
         raise PolicyError("The local worker action is not supported.")
 
     def close(self) -> None:
@@ -227,6 +251,19 @@ class JobManager:
         """Persist only the explicit progress contract under the job lock."""
         with self.lock:
             progress = JobState.progress(event)  # Strip unsupported private values.
+            previous = self.entries[identifier].record["progress"]
+            stages = {
+                "preparing",
+                "verifying_snapshots",
+                "backing_up",
+                "verifying_backup",
+                "backup_verified",
+                "applying",
+                "verifying",
+            }
+            stage = progress.get("phase") if progress.get("phase") in stages else previous.get("workflow_phase")
+            if stage:
+                progress["workflow_phase"] = stage
             if progress.get("phase") == "waiting":
                 previous = self.entries[identifier].record["progress"]  # Admission callbacks can omit current counts.
                 for key in ("completed", "total"):
