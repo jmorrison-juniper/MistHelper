@@ -9,7 +9,6 @@ import re
 from typing import Any
 from unittest.mock import MagicMock, patch
 
-import mistapi
 import pytest
 
 from src.foundation.support.refactors.endpoint_primary_key_strategies import ENDPOINT_PRIMARY_KEY_STRATEGIES
@@ -21,6 +20,7 @@ EXCLUDED_SDK_COUNT_OPERATIONS = {"countSiteClientFingerprints"}
 
 def _sdk_count_operations() -> set[str]:
     """Return every count operation the installed SDK defines."""
+    mistapi = importlib.import_module("mistapi")
     root = pathlib.Path(mistapi.__file__).parent
     names: set[str] = set()
     for path in root.rglob("*.py"):
