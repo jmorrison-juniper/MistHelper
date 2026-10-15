@@ -33,6 +33,18 @@ Revised validation:
 - Changed-package Pylint reported 9.80/10.
 - STE checked five operator/instruction files and reported scores from 91 to 98.
 - Menu generators updated the intentional menu 306 scope label. Compile, JavaScript syntax, and hot-file symbol checks passed.
+- The required input preflight read and validated all four quality inputs.
+- The committed changed-test gate checked 18 files with zero findings and zero parse errors.
+- The full quality gate checked 1,170 files and 694 unchanged baseline findings, with zero new findings and zero parse errors.
+- `markdown-link-check README.md documentation/org-auto-upgrade-policy.md documentation/backup-restoration.md` checked three files and found zero broken links.
+- STE checked five revised feature records and reported scores from 93 to 96.
+
+Committed candidate `8f0ceba57f07ff5c3a485a8327f7fd6a5fef14f7` includes the revised source, UI, docs, tests, and fixture screenshot.
+Archive SHA-256: `be9edbed8406e820ff2f2192610dbf7b2eb7e74c30e5e0c37a8cb5d5c723fde9`.
+The settings-free validator SHA-256 is `737c7ce74d0988afd1589643abc7d40eff5e7650a163ac53553c3ed422f87de8`.
+It prints structural counts or a failure stage, record index, and error type.
+It performs zero network requests and zero settings writes.
+The parent received both paths and hashes before revised CI.
 
 The candidate remains draft until the parent verifies actual firmware policy recovery.
 Earlier complete-settings blockers remain recorded below as historical evidence.

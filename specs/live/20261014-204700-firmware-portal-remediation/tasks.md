@@ -74,7 +74,7 @@ This implementation session performs only fixture changes and never accesses the
 - [x] T023 [US2] Revise `src/operations/execution/firmware_policy/recovery/schema.py` and workflow readback for FR-017 through FR-020.
 - [x] T024 [US2] Update `firmware_restore.html`, `firmware-policy.js`, CLI wording, operator docs, wiki, and `README.md`.
 - [x] T025 [US2] Test all policy classes, absence, sibling preservation, malformed content, and scale in the existing `tests/unit/firmware_policy/`, `tests/integration/firmware_policy/`, and `tests/e2e/web_portal/` suites.
-- [ ] T026 Run revised gates and analysis, capture fixture evidence in `evidence/after-restore.png`, and provide a committed archive with the settings-free validator.
+- [x] T026 Run revised gates and analysis, capture fixture evidence in `evidence/after-restore.png`, and provide a committed archive with the settings-free validator.
 - [ ] T027 Record parent connected acceptance and final CI inspection in `acceptance.md` and the draft pull request without merging or deployment.
 
 T023 precedes T025. T024 can proceed beside T023.
