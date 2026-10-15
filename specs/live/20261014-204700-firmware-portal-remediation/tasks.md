@@ -76,6 +76,7 @@ This implementation session performs only fixture changes and never accesses the
 - [x] T025 [US2] Test all policy classes, absence, sibling preservation, malformed content, and scale in the existing `tests/unit/firmware_policy/`, `tests/integration/firmware_policy/`, and `tests/e2e/web_portal/` suites.
 - [x] T026 Run revised gates and analysis, capture fixture evidence in `evidence/after-restore.png`, and provide a committed archive with the settings-free validator.
 - [ ] T027 Record parent connected acceptance and final CI inspection in `acceptance.md` and the draft pull request without merging or deployment.
+- [x] T028 [US3] Preserve the prepared form and saved job during delayed initialization in `firmware-policy.js`, with waiting and ready reload tests.
 
 T023 precedes T025. T024 can proceed beside T023.
 T026 follows T023 through T025. T027 follows the candidate handoff.

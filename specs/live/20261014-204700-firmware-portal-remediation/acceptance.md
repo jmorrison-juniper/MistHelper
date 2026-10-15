@@ -26,6 +26,19 @@ The settings-free validator passed a private fixture and rejected a malformed po
 It reported zero network requests and zero settings writes in both cases.
 The actual private source remains with the parent. This session did not access it.
 
+The parent passed actual private firmware projection on both 145-record source bundles.
+The original source contained 149 policies and two explicitly defaulted records.
+The fresh source contained four policies and no defaults.
+Both validators reported zero network requests and zero settings writes.
+The parent independently passed the revised 332-test suite.
+
+Connected refresh exposed initialization that invalidated the saved job before attempting resume.
+The repair starts saved status independently, retains prepared form choices, and never invalidates during identity initialization.
+Waiting and ready regressions hold identity loading until resumed status appears.
+All 65 firmware browser/API cases passed after the repair.
+Terminal preparation and application errors remain visible after delayed identity loading.
+Connected application and restoration acceptance remain pending.
+
 ## Requirement mapping
 
 | Requirements | Evidence | State |

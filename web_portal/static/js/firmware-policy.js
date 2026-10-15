@@ -137,6 +137,7 @@
         invalidate() {
             this.token = null;
             sessionStorage.removeItem(this.prefix + '-settings-job');
+            sessionStorage.removeItem(this.prefix + '-settings-form');
             element(this.prefix + 'Confirmation').value = '';
             element(this.prefix === 'policy' ? 'policyPlan' : 'restorePreviewText').replaceChildren();
             this.table.update([]);
@@ -155,6 +156,11 @@
             this.invalidate();
             element(this.prefix + 'Result').textContent = '';
             this.table.update([]);
+            if (this.prefix === 'policy') {
+                sessionStorage.setItem('policy-settings-form', JSON.stringify({
+                    ...body, catalogs, msp: element('policyMsp').value
+                }));
+            }
             await this.start(this.endpoint + '/preview', body);
         }
 
@@ -162,8 +168,10 @@
             if (this.busy || !this.token || element(this.prefix + 'Confirmation').value !== this.confirmation) return;
             const token = this.token;
             const identifier = sessionStorage.getItem(this.prefix + '-settings-job');
+            const form = sessionStorage.getItem(this.prefix + '-settings-form');
             this.invalidate();
             if (identifier) sessionStorage.setItem(this.prefix + '-settings-job', identifier);
+            if (form) sessionStorage.setItem(this.prefix + '-settings-form', form);
             await this.start(this.endpoint + '/apply', {token, confirmation: this.confirmation});
         }
 
@@ -305,8 +313,8 @@
         element('policyPreview').disabled = true;
     }
 
-    async function organizations() {
-        resetCatalog();
+    async function organizations(initializing = false, preserveStatus = false) {
+        if (!initializing) resetCatalog();
         const current = generation;
         element('policyOrganizations').replaceChildren();
         try {
@@ -316,9 +324,14 @@
             data.organizations.forEach(org => {
                 option(element('policyOrganizations'), org.id, org.name + ' (' + org.id + ')').selected = data.organizations.length === 1;
             });
-            policy.message(data.count + ' organization choices loaded.');
+            if (!preserveStatus) {
+                policy.message(data.count + ' organization choices loaded.');
+            }
         } catch (error) {
-            policy.message(error.message, true);
+            if (preserveStatus) {
+                option(element('policyOrganizations'), '', 'Organization choices could not be loaded.').disabled = true;
+                console.error('Organization initialization failed:', error.message);
+            } else policy.message(error.message, true);
         }
     }
 
@@ -441,7 +454,7 @@
             policy.message(error.message, true);
         }
     });
-    element('policyMsp').addEventListener('change', organizations);
+    element('policyMsp').addEventListener('change', () => organizations());
     element('policyOrganizations').addEventListener('change', resetCatalog);
     document.querySelectorAll('[data-policy-kind]').forEach(input => input.addEventListener('change', resetCatalog));
     ['change', 'input'].forEach(event => element('policyModels').addEventListener(event, () => policy.invalidate()));
@@ -507,17 +520,25 @@
             if (menu === '305' && !policyInitialized) {
                 policyInitialized = true;
                 const pending = sessionStorage.getItem('policy-settings-job');
-                await organizations();
+                const savedForm = sessionStorage.getItem('policy-settings-form');
+                const form = pending && savedForm ? JSON.parse(savedForm) : null;
+                if (pending) {
+                    policy.busy = true;
+                    policy.controls();
+                    policy.resume();
+                }
                 try {
                     const data = await request('/api/operations/msps');
                     (data.msps || []).forEach(msp => option(element('policyMsp'), msp.id || msp.msp_id, msp.name || msp.msp_name));
                 } catch (error) {
-                    policy.message('MSP choices could not be read: ' + error.message, true);
+                    if (pending) {
+                        option(element('policyMsp'), '', 'MSP choices could not be loaded.').disabled = true;
+                        console.error('MSP initialization failed:', error.message);
+                    } else policy.message('MSP choices could not be read: ' + error.message, true);
                 }
-                if (pending) {
-                    sessionStorage.setItem('policy-settings-job', pending);
-                    await policy.resume();
-                }
+                if (form) element('policyMsp').value = form.msp || '';
+                await organizations(true, Boolean(pending));
+                if (form && sessionStorage.getItem('policy-settings-job') === pending) restorePolicyForm(form);
             }
             if (menu === '306' && !restoreInitialized) {
                 restoreInitialized = true;
@@ -526,4 +547,32 @@
             }
         }
     };
+
+    function restorePolicyForm(form) {
+        Array.from(element('policyOrganizations').options).forEach(item => {
+            item.selected = form.organizations.includes(item.value);
+        });
+        document.querySelectorAll('[data-policy-kind]').forEach(input => {
+            input.checked = form.policies.some(chosen => chosen.kind === input.value);
+        });
+        catalogs = form.catalogs;
+        drawModels();
+        form.policies.forEach(chosen => {
+            element('policy-enabled-' + chosen.kind).value = chosen.enabled ? 'ENABLE' : 'DISABLE';
+            const group = element('policyModels').querySelector(`[data-kind="${chosen.kind}"]`);
+            group.querySelectorAll('[data-model]').forEach(row => {
+                const version = chosen.models[row.dataset.model];
+                if (!version) return;
+                row.querySelector('input').checked = true;
+                row.querySelector('select').value = version;
+                row.querySelector('select').disabled = false;
+                row.querySelector('select').parentElement.hidden = false;
+            });
+            if (chosen.kind === 'ap') {
+                element('policy-day').value = chosen.day;
+                element('policy-time').value = chosen.time;
+            }
+        });
+        policy.controls();
+    }
 }());

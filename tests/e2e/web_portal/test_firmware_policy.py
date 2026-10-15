@@ -189,7 +189,7 @@ def test_browser_confirmation_waits_for_complete_backup_verification(
         expect(page.get_by_test_id("policy-plan")).to_contain_text("AP41: new")
         page.get_by_test_id("policy-confirmation").fill("CONFIGURE")
         expect(page.get_by_test_id("policy-apply")).to_be_enabled()
-        page.get_by_test_id("policy-kind-ap").check()
+        page.get_by_test_id("policy-kind-ap").uncheck()
         expect(page.get_by_test_id("policy-confirm-panel")).to_be_hidden()
         expect(page.get_by_test_id("policy-plan")).to_be_empty()
         expect(page.get_by_test_id("policy-message")).to_have_text("Selection changed. Prepare backups again.")
@@ -375,6 +375,51 @@ def test_browser_lost_apply_response_recovers_status_without_duplicate_writes(
     expect(page.get_by_test_id("policy-confirm-panel")).to_be_hidden()
     assert len(submitted) == 1
     assert len(sdk.writes) == 2
+
+
+@pytest.mark.parametrize("state", ["preparing", "ready"])
+def test_reload_preserves_prepared_form_and_job_during_delayed_identity(
+    policy_server: tuple[str, SettingsSession], page: Any, state: str
+) -> None:
+    """Retain the owned job and exact choices while identity loading finishes after resumed status."""
+    url, sdk = policy_server
+    page.goto(url + "/operations?menu=305", wait_until="networkidle")
+    page.get_by_test_id("policy-kind-ap").check()
+    page.get_by_test_id("policy-load").click()
+    page.get_by_test_id("policy-enabled-ap").select_option("DISABLE")
+    page.get_by_test_id("policy-model-ap-0").check()
+    page.get_by_test_id("policy-version-ap-0").select_option("new")
+    page.get_by_test_id("policy-time").fill("any")
+    page.get_by_test_id("policy-preview").click()
+    expect(page.get_by_test_id("policy-confirm-panel")).to_be_visible()
+    identifier = page.evaluate("sessionStorage.getItem('policy-settings-job')")
+    delayed: list[Any] = []
+    page.route("**/api/firmware-policy/organizations", lambda route: delayed.append(route))
+    page.route(
+        "**/api/firmware-policy/jobs/" + identifier,
+        lambda route: route.fulfill(
+            json={
+                "state": state,
+                "token": "fixture-ready" if state == "ready" else None,
+                "progress": {"phase": "request_allowance", "completed": 1, "total": 145, "wait_seconds": 7201},
+                "rows": [{"scope": "org", "id": ORG_ID, "name": "Fixture", "backup": "verified", "status": "ready"}],
+            }
+        ),
+    )
+    with page.expect_request("**/api/firmware-policy/organizations"):
+        page.reload(wait_until="domcontentloaded")
+    message = page.get_by_test_id("policy-message")
+    expect(message).to_contain_text("All backups verified" if state == "ready" else "7201 seconds")
+    assert page.evaluate("sessionStorage.getItem('policy-settings-job')") == identifier
+    assert len(delayed) == 1
+    delayed[0].fulfill(json={"count": 1, "organizations": [{"id": ORG_ID, "name": "Fixture"}]})
+    expect(page.get_by_test_id("policy-time")).to_have_value("any")
+    expect(page.get_by_test_id("policy-enabled-ap")).to_have_value("DISABLE")
+    expect(page.get_by_test_id("policy-model-ap-0")).to_be_checked()
+    expect(page.get_by_test_id("policy-version-ap-0")).to_have_value("new")
+    expect(message).to_contain_text("All backups verified" if state == "ready" else "7201 seconds")
+    assert page.evaluate("sessionStorage.getItem('policy-settings-job')") == identifier
+    assert sdk.writes == []
 
 
 def preview_body() -> dict[str, Any]:

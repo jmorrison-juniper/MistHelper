@@ -61,6 +61,8 @@ The server refuses another browser's plan and refuses a second apply request for
 Workers on the same host share ownership checks and organization write locks through the same private `data/` directory.
 Concurrent policy and restoration writes to the same cloud organization are refused.
 Refresh the page to recover the operation's status.
+Refresh also retains the prepared organization, hardware, version, and schedule choices.
+Loading organization choices cannot invalidate a saved operation or replace its terminal status.
 After a worker interruption, prepare a new plan. The server never repeats uncertain settings writes automatically.
 Portal requests retain the existing CSRF and address access controls.
 
