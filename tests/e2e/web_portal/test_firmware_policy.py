@@ -144,8 +144,15 @@ def test_catalog_all_hardware_dynamic_versions_and_schedule_defaults(
             == {"ap": "0.15.10", "switch": "DL.10.18.1002", "ssr": "6.0.10-5", "juniper_srx": "23.4R2-S5.5"}[kind]
         )
         assert version.locator("option").count() == len(next(iter(models.values()))) + 1
+        expect(version).to_have_value(
+            {"ap": "0.15.10", "switch": "DL.10.18.1002", "ssr": "6.0.10-5", "juniper_srx": "23.4R2-S5.5"}[kind]
+        )
+        manual = next(iter(models.values()))[0]
+        version.select_option(manual)
         page.get_by_test_id("policy-model-" + kind + "-0").uncheck()
         expect(version).to_be_hidden()
+        page.get_by_test_id("policy-model-" + kind + "-0").check()
+        expect(version).to_have_value(manual)
     expect(page.get_by_test_id("policy-day")).to_have_value("any")
     expect(page.get_by_test_id("policy-time")).to_have_value("02:00")
     expect(page.get_by_test_id("policy-confirm-panel")).to_be_hidden()
@@ -183,9 +190,11 @@ def test_browser_confirmation_waits_for_complete_backup_verification(
         assert sdk.writes == []
         released.set()
         expect(page.get_by_test_id("policy-confirm-panel")).to_be_visible()
+        expect(page.get_by_test_id("policy-preview")).to_be_disabled()
         expect(page.get_by_test_id("policy-plan")).to_contain_text("AP41: new")
         page.reload(wait_until="networkidle")
         expect(page.get_by_test_id("policy-confirm-panel")).to_be_visible()
+        expect(page.get_by_test_id("policy-preview")).to_be_disabled()
         expect(page.get_by_test_id("policy-plan")).to_contain_text("AP41: new")
         page.get_by_test_id("policy-confirmation").fill("CONFIGURE")
         expect(page.get_by_test_id("policy-apply")).to_be_enabled()
@@ -256,7 +265,7 @@ def test_browser_resumes_wait_progress_and_paginates_sorted_scope_rows(
     expect(page.get_by_test_id("policy-message")).to_contain_text("7201 seconds")
     expect(page.get_by_test_id("policy-confirm-panel")).to_be_hidden()
     table = page.get_by_test_id("policyRows-table")
-    assert table.locator("tbody tr").count() == 50
+    assert table.locator("tbody tr:not([hidden])").count() == 50
     assert table.locator("tbody tr").first.locator("td").first.inner_text() == "Site 0000"
     page.get_by_test_id("policyRows-next").click()
     assert table.locator("tbody tr").first.locator("td").first.inner_text() == "Site 0050"
@@ -428,6 +437,228 @@ def preview_body() -> dict[str, Any]:
         "organizations": [ORG_ID],
         "policies": [{"kind": "ap", "enabled": False, "models": {"AP41": "new"}, "day": "mon", "time": "02:00"}],
     }
+
+
+def prepare_browser_policy(page: Any, url: str) -> None:
+    """Create a genuine ready fixture plan through the protected graphical controls."""
+    page.goto(url + "/operations?menu=305", wait_until="networkidle")
+    page.get_by_test_id("policy-kind-ap").check()
+    page.get_by_test_id("policy-load").click()
+    page.get_by_test_id("policy-enabled-ap").select_option("DISABLE")
+    page.get_by_test_id("policy-model-ap-0").check()
+    page.get_by_test_id("policy-version-ap-0").select_option("new")
+    page.get_by_test_id("policy-preview").click()
+    expect(page.get_by_test_id("policy-confirm-panel")).to_be_visible()
+
+
+def test_browser_expands_owned_preconfirmation_comparison_without_writes(
+    policy_server: tuple[str, SettingsSession], page: Any
+) -> None:
+    """Keyboard expansion displays textual differences and retained saved field absence."""
+    url, sdk = policy_server
+    page.set_viewport_size({"width": 800, "height": 1000})
+    prepare_browser_policy(page, url)
+    button = page.get_by_test_id("policyRows-inspect-org-" + ORG_ID)
+    button.focus()
+    page.keyboard.press("Enter")
+    expect(button).to_have_attribute("aria-expanded", "true")
+    comparison = page.get_by_test_id("firmware-comparison-table")
+    expect(comparison).to_contain_text("Current observation")
+    expect(comparison).to_contain_text("Proposed settings")
+    expect(comparison).to_contain_text("Proposed change")
+    expect(comparison).to_contain_text("Missing field")
+    assert comparison.locator("dd.fw-bold").count() > 0
+    assert (
+        comparison.evaluate(
+            "(element) => element.scrollWidth <= element.clientWidth + 1 && "
+            "[...element.querySelectorAll('h6, dt, dd')].every(cell => "
+            "cell.scrollWidth <= cell.clientWidth + 1 && cell.getBoundingClientRect().right <= window.innerWidth)"
+        )
+        is True
+    )
+    assert (
+        page.locator("#policyRows .table-responsive").evaluate(
+            "(element) => element.scrollLeft === 0 && element.scrollWidth <= element.clientWidth + 1"
+        )
+        is True
+    )
+    assert "private-fixture" not in comparison.inner_text()
+    expect(page.get_by_test_id("policy-preview")).to_be_disabled()
+    page.get_by_test_id("policy-confirmation").fill("CONFIGURE")
+    expect(page.get_by_test_id("policy-apply")).to_be_enabled()
+    assert sdk.writes == []
+    artifact = Path("test-artifacts/issue-4229-policy-comparison.png")
+    artifact.parent.mkdir(parents=True, exist_ok=True)
+    page.screenshot(path=str(artifact), full_page=True)
+    button.focus()
+    page.keyboard.press("Enter")
+    expect(button).to_have_attribute("aria-expanded", "false")
+
+
+def test_browser_historical_view_and_explicit_current_comparison_are_read_only(
+    policy_server: tuple[str, SettingsSession], page: Any
+) -> None:
+    """Historical inspection remains available after synthetic settings changes without preparation."""
+    url, sdk = policy_server
+    page.set_viewport_size({"width": 800, "height": 1000})
+    prepare_browser_policy(page, url)
+    source = next((sdk.data_directory / ".firmware-policy-backups").glob("*.json"))
+    original = source.read_bytes()
+    sdk.settings[f"/api/v1/sites/{SITE_ID}/setting"]["auto_upgrade"]["enabled"] = True
+    page.goto(url + "/operations?menu=306", wait_until="networkidle")
+    page.get_by_test_id("restore-bundle").select_option(source.stem)
+    page.get_by_test_id("history-record").select_option("site:" + SITE_ID)
+    start = len(sdk.reads)
+    page.get_by_test_id("history-view").click()
+    history = page.get_by_test_id("history-comparison")
+    expect(history).to_contain_text("Current settings not requested")
+    assert not [uri for uri, _ in sdk.reads[start:] if uri.endswith("/setting")]
+    expect(page.get_by_test_id("restore-confirm-panel")).to_be_hidden()
+    page.get_by_test_id("history-compare").click()
+    expect(history).to_contain_text("Current differs from saved")
+    expect(history).to_contain_text("Current settings observed at")
+    assert history.evaluate("(element) => element.scrollWidth <= element.clientWidth + 1") is True
+    assert source.read_bytes() == original
+    assert len(list(source.parent.glob("*.json"))) == 1
+    assert sdk.writes == []
+    page.screenshot(path="test-artifacts/issue-4229-history-comparison.png", full_page=True)
+
+
+def test_browser_restore_comparison_does_not_consume_ready_restoration(
+    policy_server: tuple[str, SettingsSession], page: Any
+) -> None:
+    """Show historical and verified recovery columns while keeping restoration confirmation available."""
+    url, sdk = policy_server
+    page.set_viewport_size({"width": 800, "height": 1000})
+    prepare_browser_policy(page, url)
+    source = next((sdk.data_directory / ".firmware-policy-backups").glob("*.json"))
+    page.goto(url + "/operations?menu=306", wait_until="networkidle")
+    page.get_by_test_id("restore-bundle").select_option(source.stem)
+    page.get_by_test_id("restore-all").check()
+    page.get_by_test_id("restore-cloud").fill("api.mist.com")
+    page.get_by_test_id("restore-preview-button").click()
+    expect(page.get_by_test_id("restore-confirm-panel")).to_be_visible()
+    expect(page.get_by_test_id("restore-preview-button")).to_be_disabled()
+    button = page.get_by_test_id("restoreRows-inspect-site-" + SITE_ID)
+    button.click()
+    comparison = page.get_by_test_id("firmware-comparison-table")
+    expect(comparison).to_contain_text("Verified recovery backup")
+    expect(comparison).to_contain_text("Proposed settings")
+    assert comparison.evaluate("(element) => element.scrollWidth <= element.clientWidth + 1") is True
+    assert (
+        page.locator("#restoreRows .table-responsive").evaluate(
+            "(element) => element.scrollLeft === 0 && element.scrollWidth <= element.clientWidth + 1"
+        )
+        is True
+    )
+    expect(page.locator("#restoreRows")).to_contain_text("Proposed normalization")
+    page.get_by_test_id("restore-confirmation").fill("RESTORE")
+    expect(page.get_by_test_id("restore-apply")).to_be_enabled()
+    assert len(list(source.parent.glob("*.json"))) == 2
+    assert sdk.writes == []
+
+
+def test_browser_definite_preparation_failure_allows_one_deliberate_retry(
+    policy_server: tuple[str, SettingsSession], page: Any, monkeypatch: Any
+) -> None:
+    """Unlock preparation only after a checked preparation failure, then lock its successful retry."""
+    url, sdk = policy_server
+    verify = PolicyBackup.verify
+    attempts = []
+
+    def fail_once(backup: PolicyBackup, path: Path, records: list[dict[str, Any]]) -> None:
+        """Reject the first synthetic verification without changing cloud settings."""
+        attempts.append(path)
+        if len(attempts) == 1:
+            raise PolicyError("The settings backup could not be verified.")
+        verify(backup, path, records)
+
+    monkeypatch.setattr(PolicyBackup, "verify", fail_once)
+    page.goto(url + "/operations?menu=305", wait_until="networkidle")
+    page.get_by_test_id("policy-kind-ap").check()
+    page.get_by_test_id("policy-load").click()
+    page.get_by_test_id("policy-enabled-ap").select_option("DISABLE")
+    page.get_by_test_id("policy-model-ap-0").check()
+    page.get_by_test_id("policy-preview").click()
+    expect(page.get_by_test_id("policy-message")).to_contain_text("Preparation failed")
+    expect(page.get_by_test_id("policy-preview")).to_be_enabled()
+    page.get_by_test_id("policy-preview").click()
+    expect(page.get_by_test_id("policy-confirm-panel")).to_be_visible()
+    expect(page.get_by_test_id("policy-preview")).to_be_disabled()
+    assert len(set(attempts)) == 2
+    assert sdk.writes == []
+
+
+def test_browser_lost_preparation_response_remains_locked_after_reload(
+    policy_server: tuple[str, SettingsSession], page: Any
+) -> None:
+    """An unavailable admission response cannot authorize an accidental second backup."""
+    url, sdk = policy_server
+    submitted = []
+
+    def lose_response(route: Any) -> None:
+        """Drop a synthetic admission response after recording its single request."""
+        submitted.append(route.request.url)
+        route.abort()
+
+    page.route("**/api/firmware-policy/preview", lose_response)
+    page.goto(url + "/operations?menu=305", wait_until="networkidle")
+    page.get_by_test_id("policy-kind-ap").check()
+    page.get_by_test_id("policy-load").click()
+    page.get_by_test_id("policy-enabled-ap").select_option("DISABLE")
+    page.get_by_test_id("policy-model-ap-0").check()
+    page.get_by_test_id("policy-preview").click()
+    expect(page.get_by_test_id("policy-message")).to_contain_text("Check the operation status")
+    expect(page.get_by_test_id("policy-preview")).to_be_disabled()
+    page.reload(wait_until="networkidle")
+    expect(page.get_by_test_id("policy-preview")).to_be_disabled()
+    assert len(submitted) == 1
+    assert sdk.writes == []
+
+
+def test_inspection_routes_require_owner_csrf_and_exact_read_only_selection(
+    policy_portal: tuple[Any, SettingsSession],
+) -> None:
+    """Protect firmware field responses without consuming the owner's ready proof."""
+    app, sdk = policy_portal
+    client = app.test_client()
+    preview = PolicyJobs.finish(client, post(client, "/api/firmware-policy/preview", preview_body()))
+    endpoint = "/api/firmware-policy/jobs/" + preview["job_id"] + "/comparison"
+    body = {"scope": "site", "id": SITE_ID}
+    assert client.post(endpoint, json=body).status_code == 400
+    assert post(app.test_client(), endpoint, body).status_code == 404
+    result = post(client, endpoint, body)
+    assert result.status_code == 200
+    assert result.get_json()["scope"] == "site"
+    assert "private-fixture" not in result.get_data(as_text=True)
+    invalid = post(client, endpoint, {**body, "settings": {"private": "invalid"}})
+    assert invalid.status_code == 400
+    current = client.get("/api/firmware-policy/jobs/" + preview["job_id"]).get_json()
+    assert current["token"] == preview["token"]
+    assert current["state"] == "ready"
+    assert sdk.writes == []
+
+
+@pytest.mark.parametrize("status", [403, 503])
+def test_historical_route_current_read_failure_hides_private_response(
+    policy_portal: tuple[Any, SettingsSession], status: int
+) -> None:
+    """A failed current comparison cannot return saved values as a success-shaped fallback."""
+    app, sdk = policy_portal
+    client = app.test_client()
+    preview = PolicyJobs.finish(client, post(client, "/api/firmware-policy/preview", preview_body()))
+    source = next((sdk.data_directory / ".firmware-policy-backups").glob("*.json"))
+    sdk.fail_read = f"/api/v1/sites/{SITE_ID}/setting"
+    sdk.status = status
+    result = post(
+        client, "/api/settings-restore/inspect", {"bundle": source.stem, "record": "site:" + SITE_ID, "compare": True}
+    )
+    assert result.status_code == 400
+    assert f"HTTP {status}" in result.get_json()["error"]
+    assert "private-fixture" not in result.get_data(as_text=True)
+    assert "fields" not in result.get_json()
+    assert client.get("/api/firmware-policy/jobs/" + preview["job_id"]).get_json()["token"] == preview["token"]
+    assert sdk.writes == []
 
 
 def test_portal_full_preview_and_apply_verifies_every_backup(policy_portal: tuple[Any, SettingsSession]) -> None:

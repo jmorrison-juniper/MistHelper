@@ -44,6 +44,8 @@ Select the organization scope and device types, then load the available model ve
 Organization names appear before identifiers.
 Check a supported model to reveal its version selector.
 Versions sort by numeric components, highest first, including release and service suffixes.
+The first model selection selects its highest available version.
+A later checkbox selection retains your manual version choice.
 All four supported hardware classes use the same model controls.
 Each hardware group has a bounded scrolling model list. Every supported model remains available.
 The AP schedule defaults to every day at `02:00`, in each site's time zone.
@@ -51,7 +53,16 @@ You must still select an explicit enabled or disabled state.
 
 Select **Prepare verified backups** to read complete settings and verify every target backup.
 Preparation changes no cloud settings. Progress appears below the controls.
-The compact scope table sorts by site name and shows backup verification without private settings.
+The compact scope table sorts by site name and shows backup verification.
+Expand **Inspect firmware policies** to compare saved, current, and proposed firmware fields for one scope.
+The comparison labels the saved snapshot time and current observation time.
+Text and bold emphasis identify differences. Color is not the only difference marker.
+Missing site policies show organization inheritance, not a disabled local policy.
+Missing fields remain missing in the saved column.
+The comparison exposes no unrelated settings or private parent values.
+Current inspection does not refresh the plan or consume its confirmation proof.
+If current settings differ from preparation, the comparison reports that the plan is stale.
+The application still requires every final freshness check.
 Confirmation appears only after all target backups pass verification.
 Type `CONFIGURE`, then select **Apply verified settings plan**.
 Changing a selection invalidates the prepared plan.
@@ -62,6 +73,9 @@ Workers on the same host share ownership checks and organization write locks thr
 Concurrent policy and restoration writes to the same cloud organization are refused.
 Refresh the page to recover the operation's status.
 Refresh also retains the prepared organization, hardware, version, and schedule choices.
+Preparation stays locked while pending, ready, or uncertain, including after a page refresh.
+A definite preparation failure permits a deliberate retry.
+Changing a selection invalidates readiness and permits preparation for the new selection.
 Loading organization choices cannot invalidate a saved operation or replace its terminal status.
 After a worker interruption, prepare a new plan. The server never repeats uncertain settings writes automatically.
 Portal requests retain the existing CSRF and address access controls.
@@ -87,7 +101,8 @@ On Windows, use a private account-controlled `data/` directory because Windows m
 Warning: full settings backups can contain credentials. Do not share them or commit them.
 
 The portal excludes backups from file listing, preview, download, and output discovery.
-Backup contents never enter browser responses or logs.
+Complete backup contents never enter browser responses or logs.
+Only validated firmware fields appear through the protected inspection controls.
 Retain a backup until you verify the final cloud settings.
 This operation does not automatically restore a backup.
 
@@ -110,6 +125,27 @@ Saved changes can remain after a partial failure. The operation does not issue a
 
 The settings requests use the existing API usage tools and shared request allowance.
 A long allowance wait reports an estimate rather than expiring an active operation.
+
+## Preparation phases and request counts
+
+Pass 1 reads complete organization and site settings.
+Pass 2 reads them again to verify freshness before backup creation.
+The server then saves one unique private bundle and verifies its complete contents locally.
+Repeated local verification does not create another bundle or repeat a Mist settings read.
+Confirmation checks the proof and complete current settings again.
+These checks remain required even after the operator inspects a comparison.
+
+Site lists and gateway inventory use `limit=1000` and complete checked SDK pagination.
+Organization site lists contain site metadata, not complete local settings.
+The pinned SDK provides no bulk complete-settings endpoint.
+Pagination helpers cannot add settings fields to a metadata response.
+Single-site settings endpoints have no page-size parameter.
+
+For 4,000 sites, one complete settings pass requires 4,001 requests.
+Two preparation passes require 8,002 settings requests before identity, catalog,
+membership, and usage requests. A 5,000-request rolling-hour allowance requires waiting.
+The portal preserves request admission rather than bypassing that allowance.
+Row comparisons read current settings only for the requested scope.
 
 ## API contract
 

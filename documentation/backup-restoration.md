@@ -90,6 +90,12 @@ Use **Select all saved records** when the complete bundle is required.
 Type the active cloud hostname, then select **Prepare verified recovery backups**.
 Preparation creates and verifies recovery before the confirmation controls appear.
 Examine the compact, site-name-sorted table and progress below the controls.
+Expand **Inspect firmware policies** before confirmation.
+The comparison distinguishes the historical source, verified recovery backup,
+current observation, and proposed policy.
+It labels each snapshot time and current observation time.
+Missing source fields remain missing. Proposed schedule defaults appear as normalization notices.
+Text and bold emphasis identify changed fields without relying on color.
 Type `RESTORE` exactly to enable **Restore verified firmware policies**.
 Use **Cancel prepared plan** to invalidate a plan without writes.
 
@@ -102,6 +108,32 @@ They require the same private `data/` directory.
 Organization write locks refuse overlapping policy or restoration changes across browser sessions and workers.
 Existing portal access controls and request protection apply.
 No upload or arbitrary file path is accepted.
+
+## Historical firmware inspection
+
+In menu 306, select a private backup and one saved record under
+**Inspect historical firmware policies without restoration**.
+Select **View saved firmware policies** to inspect its saved firmware fields.
+This action checks source integrity, authenticated organization access, and current membership.
+It does not read current settings or prepare restoration.
+
+Select **Compare with current settings** to request an explicit current observation.
+The comparison labels current differences and the actual observation time.
+Missing policies, empty policies, disabled policies, and inherited site policies remain distinct.
+No effective organization values are invented for an absent site override.
+The controls remain available after settings changes, while the private bundle remains retained.
+
+Inspection creates no backup, changes no settings, and consumes no restoration proof.
+It does not authorize restoration or change a prepared plan.
+Unknown policy fields and private siblings never appear.
+An unavailable current read reports an error, not an empty policy.
+The source bundle remains unchanged.
+The private file remains excluded from the general data browser and raw downloads.
+
+The [preparation phases and request counts](org-auto-upgrade-policy.md#preparation-phases-and-request-counts)
+explain why initial capture and freshness verification each read complete settings.
+Preparation stays locked through pending, ready, and uncertain status.
+Only definite preparation failure or a deliberate selection change permits another preparation.
 
 ## Private files and recovery
 

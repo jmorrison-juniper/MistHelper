@@ -44,9 +44,100 @@
         return select;
     }
 
+    class FirmwareComparison {
+        static async load(parent, url, body) {
+            if (parent.dataset.loading === 'true') return;
+            parent.dataset.loading = 'true';
+            const reference = crypto.randomUUID();
+            parent.dataset.request = reference;
+            parent.textContent = 'Reading one firmware policy comparison. No settings will change.';
+            try {
+                const data = await request(url, body);
+                if (parent.dataset.request !== reference) return;
+                FirmwareComparison.render(parent, data);
+            } catch (error) {
+                if (parent.dataset.request !== reference) return;
+                parent.textContent = 'Comparison unavailable: ' + error.message;
+                parent.classList.add('text-danger');
+            } finally {
+                parent.dataset.loading = 'false';
+            }
+        }
+
+        static render(parent, data) {
+            parent.replaceChildren();
+            parent.classList.remove('text-danger');
+            FirmwareComparison.metadata(parent, data);
+            const fields = document.createElement('div');
+            fields.dataset.testid = 'firmware-comparison-table';
+            fields.setAttribute('role', 'group');
+            fields.setAttribute('aria-label', 'Firmware policy field comparisons');
+            fields.style.minWidth = '0';
+            data.fields.forEach(field => FirmwareComparison.row(fields, field, data.columns));
+            parent.appendChild(fields);
+        }
+
+        static metadata(parent, data) {
+            const times = document.createElement('p');
+            times.textContent = 'Saved snapshot at ' + data.snapshot_at +
+                (data.observed_at ? '. Current settings observed at ' + data.observed_at : '. Current settings not requested.') +
+                (data.recovery_snapshot_at ? '. Verified recovery snapshot at ' + data.recovery_snapshot_at : '');
+            parent.appendChild(times);
+            if (data.stale) {
+                const warning = document.createElement('p');
+                warning.className = 'alert alert-warning fw-bold';
+                warning.textContent = 'Current settings differ from preparation. This view does not refresh the plan. Prepare a new plan before confirmation.';
+                parent.appendChild(warning);
+            }
+            (data.normalizations || []).forEach(notice => {
+                const text = document.createElement('p');
+                text.className = 'fw-bold';
+                text.textContent = 'Proposed normalization: ' + notice;
+                parent.appendChild(text);
+            });
+        }
+
+        static row(body, field, columns) {
+            const row = document.createElement('section');
+            row.className = 'card mb-2 text-wrap text-break';
+            row.style.cssText = 'min-width: 0; overflow-wrap: anywhere';
+            const heading = document.createElement('h6');
+            heading.className = 'card-header';
+            heading.textContent = field.path;
+            const values = document.createElement('dl');
+            values.className = 'row g-2 m-0 p-3';
+            const titles = {saved: 'Saved backup', prepared: 'Verified recovery backup', current: 'Current observation', proposed: 'Proposed settings'};
+            columns.forEach(column => {
+                const value = field.cells[column];
+                const changed = (column === 'current' && field.current_changed) || (column === 'proposed' && field.proposed_changed);
+                values.appendChild(FirmwareComparison.cell(titles[column], value.present ? String(value.value) : 'Missing field', changed));
+            });
+            const changes = [field.current_changed ? 'Current differs from saved' : '', field.proposed_changed ? 'Proposed change' : ''];
+            const difference = FirmwareComparison.cell('Difference', changes.filter(Boolean).join('. ') || 'No difference', changes.some(Boolean));
+            difference.className = 'col-12';
+            values.appendChild(difference);
+            row.append(heading, values);
+            body.appendChild(row);
+        }
+
+        static cell(titleText, valueText, changed) {
+            const cell = document.createElement('div');
+            cell.className = 'col-12 col-sm-6';
+            cell.style.minWidth = '0';
+            const title = document.createElement('dt');
+            title.textContent = titleText;
+            const content = document.createElement('dd');
+            content.className = 'mb-0' + (changed ? ' fw-bold bg-warning-subtle' : '');
+            content.textContent = valueText;
+            cell.append(title, content);
+            return cell;
+        }
+    }
+
     class ScopeTable {
-        constructor(prefix) {
+        constructor(prefix, inspect) {
             this.root = element(prefix + 'Rows');
+            this.inspect = inspect;
             this.page = 0;
             this.rows = [];
         }
@@ -64,11 +155,15 @@
             wrap.className = 'table-responsive';
             const table = document.createElement('table');
             table.className = 'table table-sm portal-table';
+            table.style.tableLayout = 'fixed';
+            table.style.width = '100%';
+            table.style.overflowWrap = 'anywhere';
             table.dataset.testid = this.root.id + '-table';
             const head = table.createTHead().insertRow();
-            ['Organization / site', 'Scope', 'Backup', 'Settings'].forEach(text => {
+            ['Organization / site', 'Scope', 'Backup', 'Settings', 'Firmware policies'].forEach(text => {
                 const cell = document.createElement('th');
                 cell.scope = 'col';
+                cell.style.whiteSpace = 'normal';
                 cell.textContent = text;
                 head.appendChild(cell);
             });
@@ -78,9 +173,33 @@
                 const line = body.insertRow();
                 [row.name || row.id, row.scope === 'org' ? 'Organization' : 'Site',
                     human(row.backup || row.backup_status || 'Pending'), human(row.status || 'Not changed')].forEach(text => {
-                    line.insertCell().textContent = String(text);
+                    const cell = line.insertCell();
+                    cell.style.whiteSpace = 'normal';
+                    cell.textContent = String(text);
                 });
                 line.cells[0].title = row.id;
+                const detailRow = body.insertRow();
+                detailRow.hidden = true;
+                const detail = detailRow.insertCell();
+                detail.colSpan = 5;
+                detail.style.whiteSpace = 'normal';
+                detail.id = this.root.id + '-detail-' + row.scope + '-' + row.id;
+                detail.setAttribute('aria-live', 'polite');
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'btn btn-sm btn-outline-secondary text-wrap';
+                button.textContent = 'Inspect firmware policies';
+                button.setAttribute('aria-label', 'Inspect firmware policies for ' + (row.name || row.id));
+                button.dataset.testid = this.root.id + '-inspect-' + row.scope + '-' + row.id;
+                button.setAttribute('aria-expanded', 'false');
+                button.setAttribute('aria-controls', detail.id);
+                button.disabled = !this.inspect();
+                button.addEventListener('click', async () => {
+                    detailRow.hidden = !detailRow.hidden;
+                    button.setAttribute('aria-expanded', String(!detailRow.hidden));
+                    if (!detailRow.hidden) await this.inspect(row, detail);
+                });
+                line.insertCell().appendChild(button);
             });
             wrap.appendChild(table);
             this.root.appendChild(wrap);
@@ -115,7 +234,13 @@
             this.confirmation = confirmation;
             this.token = null;
             this.busy = false;
-            this.table = new ScopeTable(prefix);
+            this.locked = sessionStorage.getItem(prefix + '-settings-lock') === 'true';
+            this.table = new ScopeTable(prefix, (row, parent) => {
+                if (!row) return Boolean(this.token);
+                const identifier = sessionStorage.getItem(prefix + '-settings-job');
+                return FirmwareComparison.load(parent, '/api/firmware-policy/jobs/' + encodeURIComponent(identifier) + '/comparison',
+                    {scope: row.scope, id: row.id});
+            });
             element(prefix + 'Confirmation').addEventListener('input', () => this.controls());
             element(prefix + 'Apply').addEventListener('click', () => this.apply());
         }
@@ -127,6 +252,7 @@
 
         controls() {
             element(this.prefix + 'Controls').disabled = this.busy;
+            element(this.prefix + 'Preview').disabled = this.busy || this.locked || (this.prefix === 'policy' && !catalogs);
             element(this.prefix + 'Confirmation').disabled = this.busy || !this.token;
             element(this.prefix + 'Apply').disabled = this.busy || !this.token ||
                 element(this.prefix + 'Confirmation').value !== this.confirmation;
@@ -136,6 +262,8 @@
 
         invalidate() {
             this.token = null;
+            this.locked = false;
+            sessionStorage.removeItem(this.prefix + '-settings-lock');
             sessionStorage.removeItem(this.prefix + '-settings-job');
             sessionStorage.removeItem(this.prefix + '-settings-form');
             element(this.prefix + 'Confirmation').value = '';
@@ -152,7 +280,7 @@
         }
 
         async prepare(body) {
-            if (this.busy) return;
+            if (this.busy || this.locked) return;
             this.invalidate();
             element(this.prefix + 'Result').textContent = '';
             this.table.update([]);
@@ -177,6 +305,8 @@
 
         async start(url, body) {
             this.busy = true;
+            this.locked = true;
+            sessionStorage.setItem(this.prefix + '-settings-lock', 'true');
             this.controls();
             this.message('The server is preparing this operation. No automatic settings retry is permitted.');
             try {
@@ -186,6 +316,10 @@
                 await this.poll(data.job_id);
             } catch (error) {
                 this.busy = false;
+                if (url.endsWith('/preview') && error.status >= 400 && error.status < 500) {
+                    this.locked = false;
+                    sessionStorage.removeItem(this.prefix + '-settings-lock');
+                }
                 this.message(error.message + ' Check the operation status before another attempt.', true);
                 this.controls();
             }
@@ -203,6 +337,8 @@
             try {
                 const data = await request('/api/firmware-policy/jobs/' + encodeURIComponent(identifier), undefined, true);
                 const state = data.state || data.status;
+                this.locked = true;
+                sessionStorage.setItem(this.prefix + '-settings-lock', 'true');
                 const progress = data.progress || {};
                 const completed = Number(progress.completed || 0);
                 const total = Number(progress.total || 0);
@@ -219,17 +355,31 @@
                 if (indeterminate) bar.removeAttribute('aria-valuenow');
                 else bar.setAttribute('aria-valuenow', String(percentage));
                 const wait = Number(progress.wait_seconds || 0);
-                this.message((progress.message || human(progress.phase || state)) +
+                const phases = {
+                    preparing: 'Capture complete settings. Pass 1. No backup is saved during this read pass',
+                    verifying_snapshots: state === 'applying' ?
+                        'Check confirmed snapshot freshness again. No new backup is created' :
+                        'Check snapshot freshness. Pass 2. Read settings again before the single backup save',
+                    backing_up: 'Save and verify one private backup bundle locally. No Mist settings read is repeated here',
+                    verifying_backup: 'Verify the saved private bundle again locally. No new backup or Mist request',
+                    backup_verified: 'Private backup verification complete',
+                    applying: 'Apply the confirmed settings plan',
+                    verifying: 'Verify saved settings'
+                };
+                const phase = progress.workflow_phase || progress.phase;
+                this.message((phases[phase] || human(progress.phase || state)) +
+                    (progress.phase && progress.phase !== phase ? '. ' + human(progress.phase) : '') +
                     (total ? `: ${completed} of ${total}.` : '') +
                     (wait ? ` Request allowance wait: about ${Math.ceil(wait)} seconds.` : ''));
-                if (data.rows) this.table.update(data.rows);
                 if (active) {
+                    if (data.rows) this.table.update(data.rows);
                     window.setTimeout(() => this.poll(identifier), 1500);
                     return;
                 }
                 this.busy = false;
                 if (state === 'ready') {
                     this.token = data.token;
+                    if (data.rows) this.table.update(data.rows);
                     this.message('All backups verified. Examine the sorted scope table, then type ' + this.confirmation + '.');
                     const summary = element(this.prefix === 'policy' ? 'policyPlan' : 'restorePreviewText');
                     summary.textContent = `${data.rows ? data.rows.length : total} complete target backups verified. No settings changed.`;
@@ -246,6 +396,8 @@
                         `${failures.length} failed targets. ${remaining.length} remaining targets. ${data.error || result.error || 'Examine the scope table. Saved changes can remain.'}` :
                         'Settings change complete. All changed settings passed readback verification.';
                     if (preparationFailed) {
+                        this.locked = false;
+                        sessionStorage.removeItem(this.prefix + '-settings-lock');
                         element(this.prefix + 'Result').textContent = '';
                         this.message('Preparation failed: ' + data.error + ' No settings changed.', true);
                     } else {
@@ -253,6 +405,7 @@
                             ' Saved changes can remain. No settings request will be repeated.') :
                             'Settings change complete. All backups and changed settings verified.', failed);
                     }
+                    if (data.rows) this.table.update(data.rows);
                 }
 
                 this.controls();
@@ -303,6 +456,8 @@
     let policyInitialized = false;
     let restoreInitialized = false;
     let bundles = [];
+    policy.controls();
+    restore.controls();
 
     function resetCatalog() {
         generation += 1;
@@ -376,9 +531,14 @@
                 const sorted = [...versions].sort((left, right) => right.localeCompare(left, undefined, {numeric: true}));
                 const select = control(versionBox, 'policy-version-' + kind + '-' + index, 'Version for ' + model, sorted);
                 select.disabled = true;
+                let firstSelection = true;
                 checkbox.addEventListener('change', () => {
                     versionBox.hidden = !checkbox.checked;
                     select.disabled = !checkbox.checked;
+                    if (checkbox.checked && firstSelection) {
+                        if (!select.value && sorted.length) select.value = sorted[0];
+                        firstSelection = false;
+                    }
                 });
                 row.append(checkbox, label, versionBox);
                 modelList.appendChild(row);
@@ -399,7 +559,7 @@
             }
             element('policyModels').appendChild(group);
         });
-        element('policyPreview').disabled = false;
+        policy.controls();
     }
 
     function selectedPolicies() {
@@ -465,6 +625,10 @@
             bundles = data.bundles;
             element('activeCloud').textContent = data.cloud;
             element('restoreBundle').replaceChildren();
+            element('historyRecord').replaceChildren();
+            option(element('historyRecord'), '', 'Select a saved record');
+            element('historyComparison').replaceChildren();
+            element('historyComparison').dataset.request = '';
             option(element('restoreBundle'), '', 'Select a backup');
             bundles.forEach(bundle => option(element('restoreBundle'), bundle.token,
                 `${bundle.created_at} | ${bundle.record_count} complete records`));
@@ -480,7 +644,12 @@
         const records = element('restoreRecords');
         records.replaceChildren();
         const bundle = bundles.find(item => item.token === element('restoreBundle').value);
+        element('historyRecord').replaceChildren();
+        element('historyComparison').replaceChildren();
+        option(element('historyRecord'), '', 'Select a saved record');
         (bundle ? bundle.records : []).forEach(record => {
+            option(element('historyRecord'), record.scope + ':' + record.id,
+                (record.name || record.id) + ' (' + record.scope + ')');
             const label = document.createElement('label');
             label.className = 'd-block mb-1';
             const input = document.createElement('input');
@@ -513,6 +682,20 @@
         } catch (error) {
             restore.message(error.message, true);
         }
+    });
+    ['historyView', 'historyCompare'].forEach(id => element(id).addEventListener('click', () => {
+        const bundle = element('restoreBundle').value;
+        const record = element('historyRecord').value;
+        if (!bundle || !record) {
+            element('historyComparison').textContent = 'Select a backup and one saved record.';
+            return;
+        }
+        FirmwareComparison.load(element('historyComparison'), '/api/settings-restore/inspect',
+            {bundle, record, compare: id === 'historyCompare'});
+    }));
+    element('historyRecord').addEventListener('change', () => {
+        element('historyComparison').replaceChildren();
+        element('historyComparison').dataset.request = '';
     });
 
     window.FirmwareWorkspace = {

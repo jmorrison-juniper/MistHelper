@@ -137,6 +137,7 @@ class PolicyWorkflow:
         self._recovery(plans)  # Prove that the saved policies can replace the planned future policies.
         self.event("backing_up", "org", plans[0].identifier, {"completed": 0, "total": len(records)})
         path = self.backup.save(records)  # No Mist write can run until the complete backup gate succeeds.
+        self.event("verifying_backup", "org", plans[0].identifier, {"completed": 0, "total": len(records)})
         self.backup.verify(path, records)  # Verify the durable bundle again at the apply boundary.
         self.event("backup_verified", "org", plans[0].identifier, {"completed": len(records), "total": len(records)})
         return BackupProof(path, records, self.binding(plans))  # Bind the exact planned policy and snapshots.

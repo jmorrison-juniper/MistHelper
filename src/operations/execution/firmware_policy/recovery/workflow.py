@@ -215,6 +215,7 @@ class RestoreWorkflow:
         records = self.current(plan)
         self.event("backing_up", None, 0, len(records))
         path = self.files.backup.save(records)
+        self.event("verifying_backup", None, 0, len(records))
         self.files.backup.verify(path, records)
         self.files.read(path.stem)
         self.event("backup_verified", None, len(records), len(records))

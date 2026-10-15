@@ -22,10 +22,19 @@ No firmware execution request is sent.</p>
     <p>Validate the source, examine firmware policy effects, and verify complete recovery backups for every target before confirmation.</p>
     <button type="button" id="restorePreview" class="btn btn-outline-warning" data-testid="restore-preview-button">Prepare verified recovery backups</button>
 </fieldset>
+<fieldset class="portal-card mb-3" data-testid="firmware-history">
+    <legend class="h6">Inspect historical firmware policies without restoration</legend>
+    <p>Select a backup above, then select one saved record. Viewing creates no backup and changes no settings.</p>
+    <label for="historyRecord" class="form-label">Saved firmware record</label>
+    <select id="historyRecord" class="form-select mb-2" data-testid="history-record"><option value="">Select a saved record</option></select>
+    <button id="historyView" type="button" class="btn btn-outline-secondary" data-testid="history-view">View saved firmware policies</button>
+    <button id="historyCompare" type="button" class="btn btn-outline-secondary" data-testid="history-compare">Compare with current settings</button>
+    <div id="historyComparison" class="mt-3" role="status" aria-live="polite" data-testid="history-comparison"></div>
+</fieldset>
 <div id="restorePreviewText" class="mb-3" data-testid="restore-preview"></div>
 <div id="restoreConfirmPanel" class="portal-card mb-3 d-none" data-testid="restore-confirm-panel">
     <h6>3. Confirm restoration</h6>
-    <p>All recovery backups passed verification. Examine the firmware policy scope and table below before confirmation.</p>
+    <p>All recovery backups passed verification. Expand a row to inspect historical, current, recovery, and proposed firmware policies before confirmation.</p>
     <label for="restoreConfirmation" class="form-label">Type RESTORE exactly</label>
     <input id="restoreConfirmation" class="form-control mb-3" autocomplete="off" data-testid="restore-confirmation" disabled>
     <button type="button" id="restoreApply" class="btn btn-danger" data-testid="restore-apply" disabled>Restore verified firmware policies</button>
