@@ -56,10 +56,24 @@ def test_every_operation_has_a_primary_key_strategy() -> None:
     assert missing == []
 
 
-def test_all_strategies_are_auto_increment() -> None:
-    """Count distributions carry no stable key, so every strategy must auto-increment."""
-    kinds = {ENDPOINT_PRIMARY_KEY_STRATEGIES[e.operation]["type"] for e in ALL_OPS}
-    assert kinds == {"auto_increment_with_unique"}
+def test_strategies_match_the_count_operation_contracts() -> None:
+    """Each count operation must retain the key type required by its exported rows."""
+    expected_operations = _sdk_count_operations() - EXCLUDED_SDK_COUNT_OPERATIONS
+    expected_types = {operation: "auto_increment_with_unique" for operation in expected_operations}
+    expected_types["countOrgClientFingerprints"] = "composite_pk"
+    actual_types = {
+        operation: ENDPOINT_PRIMARY_KEY_STRATEGIES[operation]["type"]
+        for operation in expected_operations
+        if operation in ENDPOINT_PRIMARY_KEY_STRATEGIES
+    }
+
+    assert actual_types == expected_types
+    assert ENDPOINT_PRIMARY_KEY_STRATEGIES["countOrgVars"]["primary_key"] == ["misthelper_internal_id"]
+    assert ENDPOINT_PRIMARY_KEY_STRATEGIES["countOrgClientFingerprints"]["primary_key"] == [
+        "site_id",
+        "distinct",
+        "value",
+    ]
 
 
 def test_resolve_returns_none_for_a_missing_module() -> None:
