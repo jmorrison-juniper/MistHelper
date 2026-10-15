@@ -1,6 +1,6 @@
 # Tasks: Count Catalog Completeness
 
-**Input**: Timestamp design documents in `specs/live/20261015-161000-sdk-count-catalog/`
+**Input**: Design documents in `specs/numbered/0/0/1/1/3/4/3/0/4240-sdk-count-catalog/`
 
 **Prerequisites**: `plan.md`, `spec.md`, `research.md`, `data-model.md`, and `quickstart.md`
 
@@ -33,7 +33,7 @@
 
 **Purpose**: Verify the focused change and keep generated references current.
 
-- [x] T006 [US1] Run the documented count exporter quickstart in `specs/live/20261015-161000-sdk-count-catalog/quickstart.md`. (delivered: specs/live/20261015-161000-sdk-count-catalog/quickstart.md)
+- [x] T006 [US1] Run the documented count exporter quickstart in `specs/numbered/0/0/1/1/3/4/3/0/4240-sdk-count-catalog/quickstart.md`. (delivered: specs/numbered/0/0/1/1/3/4/3/0/4240-sdk-count-catalog/quickstart.md)
 
 ## Dependencies & Execution Order
 
