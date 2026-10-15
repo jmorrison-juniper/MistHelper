@@ -808,7 +808,7 @@ jobs:
           ARANGO_HOST: "http://127.0.0.1:8529"
           ARANGO_ROOT_PASSWORD: e2e-throwaway-password
           CAPTURE_PORT: "8056"
-        run: pytest tests/e2e/ -v --base-url=http://127.0.0.1:${CAPTURE_PORT} --timeout=180 --screenshot only-on-failure --tracing retain-on-failure --output=test-artifacts/issue-4229-browser
+        run: pytest tests/e2e/ -v --base-url=http://127.0.0.1:${CAPTURE_PORT} --timeout=180 --screenshot only-on-failure --tracing retain-on-failure --output=${{ github.workspace }}/test-artifacts/issue-4229-browser
       - name: Upload backup restoration browser evidence
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7

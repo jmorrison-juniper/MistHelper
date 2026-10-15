@@ -18,6 +18,7 @@ from werkzeug.serving import make_server
 from src.foundation.support.utils.rate_limiting import RateLimitingUtils
 from src.operations.execution.firmware_policy.recovery.backup import PolicyBackup
 from src.operations.execution.firmware_policy.sdk import PolicyError, PolicyResponse
+from tests.e2e.web_portal.firmware_restore.evidence import BrowserEvidence
 from tests.unit.firmware_policy.fakes import ORG_ID, SITE_ID, SettingsSession
 from web_portal.app import WebPortalApp
 
@@ -487,7 +488,7 @@ def test_browser_expands_owned_preconfirmation_comparison_without_writes(
     page.get_by_test_id("policy-confirmation").fill("CONFIGURE")
     expect(page.get_by_test_id("policy-apply")).to_be_enabled()
     assert sdk.writes == []
-    artifact = Path("test-artifacts/issue-4229-policy-comparison.png")
+    artifact = BrowserEvidence.path("issue-4229-policy-comparison.png")
     artifact.parent.mkdir(parents=True, exist_ok=True)
     page.screenshot(path=str(artifact), full_page=True)
     button.focus()
@@ -521,7 +522,9 @@ def test_browser_historical_view_and_explicit_current_comparison_are_read_only(
     assert source.read_bytes() == original
     assert len(list(source.parent.glob("*.json"))) == 1
     assert sdk.writes == []
-    page.screenshot(path="test-artifacts/issue-4229-history-comparison.png", full_page=True)
+    artifact = BrowserEvidence.path("issue-4229-history-comparison.png")
+    artifact.parent.mkdir(parents=True, exist_ok=True)
+    page.screenshot(path=str(artifact), full_page=True)
 
 
 def test_browser_restore_comparison_does_not_consume_ready_restoration(

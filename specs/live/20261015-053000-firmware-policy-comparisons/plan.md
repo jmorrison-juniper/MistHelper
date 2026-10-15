@@ -54,6 +54,7 @@ src/operations/execution/firmware_policy/sdk.py
 tests/unit/firmware_policy_jobs/comparisons/
 tests/integration/firmware_policy/recovery/comparisons/
 tests/e2e/web_portal/test_firmware_policy.py
+tests/e2e/web_portal/firmware_restore/evidence.py
 .github/workflows/ci.yml
 documentation/org-auto-upgrade-policy.md
 documentation/backup-restoration.md

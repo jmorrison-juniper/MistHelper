@@ -45,7 +45,7 @@ Independent test: Hold preparation, reload, fail, retry, and select mixed versio
 
 ## Phase 6: Validation and delivery
 
-- [x] T023 Exercise accessible comparisons, 800-pixel geometry, history, locking, retry, reload, and versions in `tests/e2e/web_portal/test_firmware_policy.py`. Retain screenshots and failure traces through `.github/workflows/ci.yml` and `tests/unit/firmware_policy_jobs/comparisons/test_evidence.py`.
+- [x] T023 Exercise accessible comparisons, 800-pixel geometry, history, locking, retry, reload, and versions in `tests/e2e/web_portal/test_firmware_policy.py`. Retain rooted screenshots and failure traces through `tests/e2e/web_portal/firmware_restore/evidence.py`, `.github/workflows/ci.yml`, and `tests/unit/firmware_policy_jobs/comparisons/test_evidence.py`.
 - [x] T024 Update `documentation/org-auto-upgrade-policy.md`, `documentation/backup-restoration.md`, and `changelog.d/issue-4229-firmware-policy-comparisons.md`.
 - [x] T025 Run applicable local gates and record exact results in `specs/live/20261015-053000-firmware-policy-comparisons/quickstart.md`.
 - [x] T026 Analyze requirement coverage across `specs/live/20261015-053000-firmware-policy-comparisons/spec.md`, `plan.md`, and `tasks.md`. Report findings in the PR.

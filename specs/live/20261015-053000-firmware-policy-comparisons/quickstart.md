@@ -21,7 +21,7 @@ Three comparison flows also passed explicit 800-pixel geometry checks.
 Each check measures content width and detects horizontal scope-table movement.
 
 ```sh
-.venv/bin/python -m pytest -q tests/unit/firmware_policy_jobs tests/integration/firmware_policy tests/unit/firmware_policy tests/contract/firmware_policy tests/e2e/web_portal/test_firmware_policy.py tests/e2e/web_portal/firmware_restore/test_restore_portal.py --cov=src.operations.execution.firmware_policy --cov=web_portal.routes.firmware_policy --cov-report=term --cov-fail-under=80 --screenshot only-on-failure --tracing retain-on-failure --output test-artifacts/issue-4229-playwright
+.venv/bin/python -m pytest -q tests/unit/firmware_policy_jobs tests/integration/firmware_policy tests/unit/firmware_policy tests/contract/firmware_policy tests/e2e/web_portal/test_firmware_policy.py tests/e2e/web_portal/firmware_restore/test_restore_portal.py --cov=src.operations.execution.firmware_policy --cov=web_portal.routes.firmware_policy --cov-report=term --cov-fail-under=80 --screenshot only-on-failure --tracing retain-on-failure --output="$(pwd)/test-artifacts/issue-4229-browser"
 .venv/bin/python -m pytest -q tests/e2e/web_portal/test_firmware_policy.py -k 'expands_owned or historical_view or restore_comparison'
 ```
 
@@ -71,12 +71,22 @@ The parent confirmed the highest default, preparation locking, accessible expans
 selection invalidation, historical viewing, and explicit current comparison.
 The browser reported zero page errors.
 
-The CI evidence contract and workflow guards passed 27 tests.
+The CI evidence contract and workflow guards passed 29 tests.
 The contract checks two artifact paths and three browser capture arguments.
 Four mutation cases prove that missing paths or capture arguments fail.
+Two additional cases prove repository-rooted paths after a working-directory change.
 The dedicated `firmware-policy-browser-evidence` artifact retains successful-flow
 screenshots and failed-flow screenshots and traces.
 The existing restoration evidence artifact remains unchanged.
+Screenshot paths resolve from the test module to the repository artifact directory.
+The CI failure-output path uses `github.workspace`, not the isolated test working directory.
+Local preflight verified both repository PNG files at 800 pixels wide.
+An intentionally failing synthetic capture probe retained one PNG and one valid trace ZIP.
+The temporary probe test was removed after verification.
+
+The parent recorded independent connected read-only acceptance in
+[the issue evidence](https://github.com/jmorrison-juniper/MistHelper/issues/4229#issuecomment-6186028684).
+The parent owns the private inputs and artifacts. This child received only sanitized results.
 
 This acceptance used the credential-free fixture at `127.0.0.1:9667`.
 Its responsive JavaScript matches product commit

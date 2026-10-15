@@ -6,6 +6,8 @@ from typing import Any
 import pytest
 import yaml
 
+from tests.e2e.web_portal.firmware_restore.evidence import BrowserEvidence
+
 
 class TestBrowserEvidence:
     """Check the live evidence contract and prove that missing evidence fails."""
@@ -30,7 +32,7 @@ class TestBrowserEvidence:
         for argument in (
             "--screenshot only-on-failure",
             "--tracing retain-on-failure",
-            "--output=test-artifacts/issue-4229-browser",
+            "--output=${{ github.workspace }}/test-artifacts/issue-4229-browser",
         ):
             assert argument in command, "Required browser evidence capture is missing"
         print("browser_evidence: checked 2 artifact paths and 3 capture arguments")
@@ -55,3 +57,14 @@ class TestBrowserEvidence:
             execution["run"] = execution["run"].replace("--" + mutation, "--removed")
         with pytest.raises(AssertionError, match="browser evidence"):
             self.check(configuration)
+
+    @pytest.mark.parametrize("name", ["issue-4229-policy-comparison.png", "issue-4229-history-comparison.png"])
+    def test_screenshot_paths_ignore_changed_working_directory(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, name: str
+    ) -> None:
+        """Resolve real screenshot destinations under the repository after a directory change."""
+        monkeypatch.chdir(tmp_path)
+        destination = BrowserEvidence.path(name)
+        expected = Path(__file__).resolve().parents[4] / "test-artifacts" / name
+        assert destination == expected
+        assert destination.is_absolute()
