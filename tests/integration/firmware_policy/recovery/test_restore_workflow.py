@@ -24,8 +24,17 @@ def test_complete_restore_preserves_original_and_verifies_all_recovery_records(
     original = session.path.read_bytes()
     plan = session.prepare()
     preview = plan.preview()
-    assert [target["changed_fields"] for target in preview["targets"]] == [1, 2]
-    assert preview["excluded"] == {f"org:{ORG_ID}": ["org_id"], f"site:{SITE_ID}": ["org_id", "site_id"]}
+    assert [target["changed_fields"] for target in preview["targets"]] == [1, 1]
+    assert preview["excluded"] == {
+        f"org:{ORG_ID}": [
+            "outside_firmware_policy_scope",
+            "normalized:auto_upgrade.day_of_week=any",
+            "normalized:auto_upgrade.time_of_day=02:00",
+        ],
+        f"site:{SITE_ID}": ["outside_firmware_policy_scope"],
+    }
+    assert preview["restoration_scope"] == "firmware_policies_only"
+    assert preview["normalizations"][f"org:{ORG_ID}"] == preview["excluded"][f"org:{ORG_ID}"][1:]
     verified: list[list[dict[str, Any]]] = []
     verify = PolicyBackup.verify
     put = session.mist_put
@@ -53,11 +62,13 @@ def test_complete_restore_preserves_original_and_verifies_all_recovery_records(
     assert session.writes == [
         (
             f"/api/v1/orgs/{ORG_ID}/setting",
-            {"allow_mist": True, "auto_upgrade": {"enabled": True}, "ssr": {"conductor_token": "private-fixture"}},
+            {"auto_upgrade": {"enabled": False, "day_of_week": "any", "time_of_day": "02:00"}},
         ),
-        (f"/api/v1/sites/{SITE_ID}/setting", {"dns_servers": ["8.8.8.8"], "-auto_upgrade": ""}),
+        (f"/api/v1/sites/{SITE_ID}/setting", {"-auto_upgrade": ""}),
     ]
     assert session.path.read_bytes() == original
+    assert session.settings[f"/api/v1/orgs/{ORG_ID}/setting"]["allow_mist"] is False
+    assert session.settings[f"/api/v1/sites/{SITE_ID}/setting"]["dns_servers"] == ["1.1.1.1"]
 
 
 @pytest.mark.parametrize("confirmation", ["", "restore", "RESTORE ", " RESTORE", "YES"])
@@ -140,7 +151,7 @@ def test_recovery_bundle_must_pass_the_same_restore_loader_before_writes(tmp_pat
     session = RestoreSession(tmp_path)
     session.settings[f"/api/v1/orgs/{ORG_ID}/setting"]["ssr"]["conductor_token"] = "x" * (8 * 1024 * 1024)
     original = session.path.read_bytes()
-    with pytest.raises(PolicyError, match="8 MiB size limit"):
+    with pytest.raises(PolicyError, match="could not be verified"):
         session.workflow().apply(session.prepare(), "RESTORE")
     assert session.writes == []
     assert session.path.read_bytes() == original
@@ -172,6 +183,67 @@ def test_failed_saved_state_stops_later_scopes(tmp_path: Path) -> None:
     assert result.completed == []
     assert result.failed == [f"org:{ORG_ID}"]
     assert result.remaining == [f"site:{SITE_ID}"]
+    assert len(session.writes) == 1
+
+
+def test_restore_only_policies_preserves_120kb_current_siblings_and_unknown_fields(tmp_path: Path) -> None:
+    """Historic unknown fields never enter requests, while current parent siblings retain exact values."""
+    session = RestoreSession(tmp_path)
+    org_uri = f"/api/v1/orgs/{ORG_ID}/setting"
+    site_uri = f"/api/v1/sites/{SITE_ID}/setting"
+    session.saved[0]["settings"]["ssr"] = {
+        "conductor_token": "historic",
+        "auto_upgrade": {"enabled": False, "version": "old-version"},
+    }
+    session.saved[0]["settings"]["historic_unknown"] = "historic"
+    session.saved[1]["settings"]["switch"] = {
+        "unknown_readonly": ORG_ID,
+        "auto_upgrade": {"enabled": True, "snapshot": False},
+    }
+    session.path = session.backup.save(session.saved)
+    session.settings[org_uri]["ssr"] = {
+        "conductor_token": "x" * 121856,
+        "unknown": None,
+        "auto_upgrade": {"enabled": True, "version": "current-version"},
+    }
+    session.settings[org_uri]["uwb_config"] = {"port": None}
+    session.settings[site_uri]["switch"] = {"current_unknown": None}
+    result = session.workflow().apply(session.prepare(), "RESTORE")
+    assert result.failed == []
+    org_body, site_body = [body for uri, body in session.writes]
+    assert set(org_body) == {"auto_upgrade", "ssr"}
+    assert org_body["ssr"] == {
+        "conductor_token": "x" * 121856,
+        "unknown": None,
+        "auto_upgrade": {"enabled": False, "version": "old-version"},
+    }
+    assert site_body["switch"] == {
+        "current_unknown": None,
+        "auto_upgrade": {"enabled": True, "snapshot": False},
+    }
+    assert "historic_unknown" not in session.settings[org_uri]
+    assert session.settings[org_uri]["uwb_config"] == {"port": None}
+    assert "unknown_readonly" not in session.settings[site_uri]["switch"]
+    assert session.settings[site_uri]["dns_servers"] == ["1.1.1.1"]
+
+
+def test_restore_readback_rejects_unrelated_current_setting_mutation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A persisted policy cannot hide an unexpected unrelated setting change."""
+    session = RestoreSession(tmp_path)
+    put = session.mist_put
+
+    def changed(uri: str, body: dict[str, Any]) -> Any:
+        """Return successful policy persistence with an unrelated server mutation."""
+        response = put(uri, body)
+        session.settings[uri]["allow_mist"] = True
+        return response
+
+    monkeypatch.setattr(session, "mist_put", changed)
+    result = session.workflow().apply(session.prepare(), "RESTORE")
+    assert result.completed == []
+    assert result.failed == [f"org:{ORG_ID}"]
     assert len(session.writes) == 1
 
 

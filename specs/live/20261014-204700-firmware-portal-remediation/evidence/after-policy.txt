@@ -1,0 +1,129 @@
+- navigation:
+  - link "Logo MistHelper":
+    - /url: /
+    - img "Logo"
+    - text: MistHelper
+  - list:
+    - listitem:
+      - link "Dashboard":
+        - /url: /
+    - listitem:
+      - link "Data":
+        - /url: /data
+    - listitem:
+      - link "Operations":
+        - /url: /operations
+    - listitem:
+      - link "Maps":
+        - /url: /maps
+    - listitem:
+      - link "WebSockets":
+        - /url: /websockets
+  - button "Theme"
+- main:
+  - heading "Operations" [level=4]
+  - paragraph: Select an operation on the left. Use its controls on the right. Settings workflows require verified backups and typed confirmation.
+  - textbox "Search operations":
+    - /placeholder: Search operations...
+  - heading "Firmware Policies & Recovery ( 2 )" [level=2]:
+    - button "Firmware Policies & Recovery ( 2 )"
+  - list:
+    - listitem:
+      - button "305 Organization auto-upgrade policy":
+        - strong: "305"
+        - text: Organization auto-upgrade policy
+    - listitem:
+      - button "306 Restore settings from private backups":
+        - strong: "306"
+        - text: Restore settings from private backups
+  - 'heading "305: Organization auto-upgrade policy" [level=5]'
+  - note: "Warning: enabled policies can cause later cloud-managed upgrades. This operation sends no firmware upgrade or device-push request."
+  - paragraph: All AP, switch, SSR, and SRX site overrides will be removed, including types not selected below. SSR and SRX policies apply at initial onboarding. Only AP policies support a schedule.
+  - group:
+    - heading "1. Organizations and device types" [level=6]
+    - text: Scope
+    - combobox "Scope":
+      - option "Current organization" [selected]
+    - text: Organizations
+    - listbox "Organizations":
+      - option "Fixture Organization (00000000-0000-0000-0000-000000000001)" [selected]
+    - group "Device types":
+      - text: Device types
+      - checkbox "Access points" [checked]
+      - text: Access points
+      - checkbox "Switches"
+      - text: Switches
+      - checkbox "SSR routers and gateways"
+      - text: SSR routers and gateways
+      - checkbox "SRX gateways and firewalls"
+      - text: SRX gateways and firewalls
+    - button "Load available model versions"
+    - heading "2. Models and versions" [level=6]
+    - paragraph: Check a model to select its version. Highest versions appear first.
+    - group "Access points":
+      - text: Access points Automatic policy state
+      - combobox "Automatic policy state":
+        - option "Select a value"
+        - option "ENABLE"
+        - option "DISABLE" [selected]
+      - checkbox "AP-EXAMPLE" [checked]
+      - text: AP-EXAMPLE Version for AP-EXAMPLE
+      - combobox "Version for AP-EXAMPLE":
+        - option "Select a value"
+        - option "0.15.10" [selected]
+        - option "0.15.9"
+        - option "0.14.9"
+      - text: AP upgrade day (any means every day)
+      - combobox "AP upgrade day (any means every day)":
+        - option "Select a value"
+        - option "any" [selected]
+        - option "mon"
+        - option "tue"
+        - option "wed"
+        - option "thu"
+        - option "fri"
+        - option "sat"
+        - option "sun"
+      - text: "AP time: HH:MM or any, in each site's time zone"
+      - 'textbox "AP time: HH:MM or any, in each site''s time zone"': 02:00
+    - heading "3. Prepare and verify backups" [level=6]
+    - paragraph: Read complete settings and verify a private backup for every target before confirmation. No cloud settings change during this stage.
+    - button "Prepare verified backups"
+    - text: 3 complete target backups verified. No settings changed.
+    - paragraph: Fixture Organization (00000000-0000-0000-0000-000000000001)
+    - paragraph: "Access points: Disabled. AP-EXAMPLE: 0.15.10. Day: any. Time: 02:00"
+  - heading "4. Confirm the verified plan" [level=6]
+  - paragraph: All target backups passed verification. Examine the table below before confirmation.
+  - text: Type CONFIGURE to confirm
+  - textbox "Type CONFIGURE to confirm"
+  - button "Apply verified settings plan" [disabled]
+  - heading "Progress and results" [level=6]
+  - status: All backups verified. Examine the sorted scope table, then type CONFIGURE.
+  - progressbar "Policy workflow progress": 100%
+  - table:
+    - rowgroup:
+      - row "Organization / site Scope Backup Settings":
+        - columnheader "Organization / site"
+        - columnheader "Scope"
+        - columnheader "Backup"
+        - columnheader "Settings"
+    - rowgroup:
+      - row "Alpha site Site Verified Ready":
+        - cell "Alpha site"
+        - cell "Site"
+        - cell "Verified"
+        - cell "Ready"
+      - row "Fixture Organization Organization Verified Ready":
+        - cell "Fixture Organization"
+        - cell "Organization"
+        - cell "Verified"
+        - cell "Ready"
+      - row "Zulu site Site Verified Ready":
+        - cell "Zulu site"
+        - cell "Site"
+        - cell "Verified"
+        - cell "Ready"
+  - button "Previous" [disabled]
+  - text: 3 scopes. Page 1 of 1.
+  - button "Next" [disabled]
+- contentinfo: MistHelper Web Portal

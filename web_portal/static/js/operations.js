@@ -73,6 +73,14 @@ function loadOperations() {
         .then(function(data) {
             renderAccordion(data.categories || []);
             document.getElementById('opLoading').style.display = 'none';
+            var requestedMenu = new URLSearchParams(window.location.search).get('menu');
+            if (requestedMenu === '305' || requestedMenu === '306') {
+                var requestedItem = document.querySelector('[data-menu="' + requestedMenu + '"]');
+                if (requestedItem) {
+                    requestedItem.closest('.accordion-collapse').classList.add('show');
+                    selectOperation(Number(requestedMenu), requestedItem);
+                }
+            }
         })
         .catch(function() {
             document.getElementById('opLoading').textContent = 'Failed to load operations.';
@@ -109,13 +117,18 @@ function buildAccordionItem(cat, collapseId) {
 
 function buildOperationItem(op) {
     var badge = buildCategoryBadge(op.category);
-    var html = '<li class="list-group-item list-group-item-action op-item" ';
+    var dedicated = op.category === 'settings_workflow';
+    var html = dedicated ? '<li class="list-group-item p-0"><button type="button" class="list-group-item list-group-item-action op-item w-100 text-start" ' :
+        '<li class="list-group-item list-group-item-action op-item" ';
     html += 'data-menu="' + op.menu_number + '" ';
     html += 'data-category="' + (op.category || 'non_interactive') + '" ';
+    if (op.category === 'settings_workflow') {
+        html += 'data-testid="' + (String(op.menu_number) === '305' ? 'firmware-policy-menu' : 'settings-restore-menu') + '" ';
+    }
     html += 'onclick="selectOperation(' + op.menu_number + ', this)">';
     html += '<strong class="me-2">' + op.menu_number + '</strong> ';
     html += escapeHtml(op.description) + badge;
-    html += '</li>';
+    html += dedicated ? '</button></li>' : '</li>';
     return html;
 }
 
@@ -137,6 +150,24 @@ function selectOperation(menuNumber, element) {
     selectedMenuNumber = String(menuNumber);
     selectedCategory = element ? element.getAttribute('data-category') : 'non_interactive';
     highlightActiveItem(element);
+    setElementVisible('firmwarePolicyWorkspace', String(menuNumber) === '305');
+    setElementVisible('settingsRestoreWorkspace', String(menuNumber) === '306');
+    var pageUrl = new URL(window.location.href);
+    if (String(menuNumber) === '305' || String(menuNumber) === '306') {
+        pageUrl.searchParams.set('menu', String(menuNumber));
+        window.history.replaceState(null, '', pageUrl);
+        setElementVisible('selectedOp', false);
+        clearExecutionPanel();
+        setElementVisible('resultsPanel', false);
+        window.FirmwareWorkspace.select(String(menuNumber));
+        var workspace = document.getElementById(String(menuNumber) === '305' ? 'firmwarePolicyWorkspace' : 'settingsRestoreWorkspace');
+        if (panesAreStacked()) scrollElementIntoView(workspace);
+        return;
+    }
+    if (pageUrl.searchParams.get('menu') === '305' || pageUrl.searchParams.get('menu') === '306') {
+        pageUrl.searchParams.delete('menu');
+        window.history.replaceState(null, '', pageUrl);
+    }
     showSelectedPanel(menuNumber, element);
     resetParameterPanels();
     clearExecutionPanel();  // Clear the prior run without revealing an empty panel for the new selection.

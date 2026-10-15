@@ -39,7 +39,11 @@ class RestoreSession(SettingsSession):
             {
                 "scope": "org",
                 "id": ORG_ID,
-                "settings": {**deepcopy(self.settings[f"/api/v1/orgs/{ORG_ID}/setting"]), "allow_mist": True},
+                "settings": {
+                    **deepcopy(self.settings[f"/api/v1/orgs/{ORG_ID}/setting"]),
+                    "allow_mist": True,
+                    "auto_upgrade": {"enabled": False},
+                },
             },
             {
                 "scope": "site",

@@ -31,9 +31,10 @@ def test_real_sdk_read_endpoint_parity_uses_supplied_session(tmp_path: Path) -> 
     """Read both settings scopes through actual SDK methods and the supplied session."""
     session = SettingsSession(tmp_path)
     api = PolicyApi(session)
-    assert api.read("org", ORG_ID)["timezone"] == "UTC"
-    assert api.read("site", SITE_ID)["timezone"] == "Europe/London"
+    assert api.read("org", ORG_ID)["allow_mist"] is False
+    assert api.read("site", SITE_ID)["allow_mist"] is True
     assert session.reads == [
+        ("/api/v1/self/usage", {}),
         (f"/api/v1/orgs/{ORG_ID}/setting", {}),
         (f"/api/v1/sites/{SITE_ID}/setting", {}),
     ]
@@ -56,6 +57,35 @@ def test_repeated_pagination_link_fails(monkeypatch: Any) -> None:
     monkeypatch.setattr(mistapi, "get_next", lambda session, response: first)
     with pytest.raises(PolicyError, match="repeated pagination"):
         PolicyResponse.collect(object(), lambda: first, "List organization sites", ORG_ID)
+
+
+def test_api_admits_every_sdk_site_page(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The next-page SDK helper must pass through the same request admission path."""
+    session = SettingsSession(tmp_path)
+    original = session.mist_get
+    first = SimpleNamespace(status_code=200, data=[{"id": SITE_ID}], next="page-two")
+    second = SimpleNamespace(status_code=200, data=[], next=None)
+    pages = []
+
+    def get(uri: str, query: dict[str, str] | None = None) -> Any:
+        """Return an admitted paginated site list and actual fixture usage."""
+        return first if uri.endswith("/sites") else original(uri, query)
+
+    monkeypatch.setattr(session, "mist_get", get)
+    monkeypatch.setattr(mistapi, "get_next", lambda supplied, response: pages.append(response) or second)
+    api = PolicyApi(session)
+    requests = []
+    checked = api.guard.request
+
+    def admitted(call: Any, action: str, identifier: str) -> Any:
+        """Observe admission without replacing status or quota checks."""
+        requests.append((action, identifier))
+        return checked(call, action, identifier)
+
+    monkeypatch.setattr(api.guard, "request", admitted)
+    assert api.sites(ORG_ID) == [{"id": SITE_ID}]
+    assert pages == [first]
+    assert requests == [("List organization sites", ORG_ID)] * 2
 
 
 @pytest.mark.parametrize("value", [None, [], "unreadable"])

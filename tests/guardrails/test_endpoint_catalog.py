@@ -378,8 +378,8 @@ class TestMenuText:
             (
                 "MistHelper.py",
                 306,
-                "a7d1bacb93bb13cc32659001e117be43c5a49c21efec71830b3f3c3f1c24df87",
-            ),  # Menu 306 adds guarded restoration. Preserve the complete metadata identity check.
+                "b0be43f00624ade6428e6f53a08ceb0d28b563e2ac445ba6c20d431c837e0f9a",
+            ),  # The user approved firmware-policy-only restoration. Preserve the complete metadata identity check.
             (
                 "web_portal/menu_registry.py",
                 190,

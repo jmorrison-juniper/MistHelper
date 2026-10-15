@@ -1,0 +1,32 @@
+- navigation:
+  - link "Logo MistHelper":
+    - /url: /
+    - img "Logo"
+    - text: MistHelper
+  - list:
+    - listitem:
+      - link "Dashboard":
+        - /url: /
+    - listitem:
+      - link "Data":
+        - /url: /data
+    - listitem:
+      - link "Operations":
+        - /url: /operations
+    - listitem:
+      - link "Maps":
+        - /url: /maps
+    - listitem:
+      - link "WebSockets":
+        - /url: /websockets
+  - button "Theme"
+- main:
+  - heading "Operations" [level=4]
+  - paragraph: Run the read-only data extraction operations that the safety registry allows.
+  - 'link "305: Organization auto-upgrade policy"':
+    - /url: /operations/firmware-policy
+  - 'link "306: Restore settings from private backups"':
+    - /url: /operations/settings-restore
+  - textbox "Search operations":
+    - /placeholder: Search operations...
+- contentinfo: MistHelper Web Portal

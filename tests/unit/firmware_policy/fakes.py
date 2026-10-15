@@ -17,20 +17,20 @@ class SettingsSession:
 
     def __init__(self, data_directory: Path) -> None:
         """Hold mock full settings, request evidence, and failure controls."""
-        self.settings = {
+        self.settings: dict[str, dict[str, Any]] = {
             f"/api/v1/orgs/{ORG_ID}/setting": {
                 "auto_upgrade": {"enabled": False, "custom_versions": {"AP41": "old"}},
                 "ssr": {"conductor_token": "private-fixture", "disable_stats": True},
-                "timezone": "UTC",
+                "allow_mist": False,
             },
             f"/api/v1/sites/{SITE_ID}/setting": {
                 "auto_upgrade": {"enabled": False},
                 "switch": {"auto_upgrade": {"enabled": True}, "networks": {"main": {"vlan_id": 10}}},
                 "ssr": {"auto_upgrade": {"enabled": False}, "conductor_token": "private-fixture"},
-                "juniper_srx": {"auto_upgrade": {"enabled": False}, "gateways": {"example": {}}},
-                "timezone": "Europe/London",
+                "juniper_srx": {"auto_upgrade": {"enabled": False}, "gateways": []},
+                "allow_mist": True,
             },
-            f"/api/v1/sites/{OTHER_SITE_ID}/setting": {"timezone": "UTC"},
+            f"/api/v1/sites/{OTHER_SITE_ID}/setting": {"allow_mist": False},
         }
         self.writes: list[tuple[str, dict[str, Any]]] = []
         self.reads: list[tuple[str, dict[str, str]]] = []
@@ -40,9 +40,14 @@ class SettingsSession:
         self.ignore_write = False
         self.status = 503
 
+    def get_cloud(self) -> str:
+        """Return the SDK cloud identity used by operation ownership checks."""
+        return "api.mist.com"
+
     def mist_get(self, uri: str, query: dict[str, str] | None = None) -> SimpleNamespace:
         """Return deterministic catalog, inventory, site, or local-setting records."""
         self.reads.append((uri, query or {}))
+        data: Any
         if uri == self.fail_read:
             return SimpleNamespace(status_code=self.status, data={"error": "private-fixture"}, next=None)
         if uri in self.settings:
@@ -53,6 +58,12 @@ class SettingsSession:
             data = [{"package": "SSR", "version": "6.3.0"}]
         elif uri.endswith("/inventory"):
             data = [{"model": "SSR120", "type": "gateway"}, {"model": "SRX320", "type": "gateway"}]
+        elif uri == "/api/v1/const/device_models":
+            data = [{"model": "SSR120", "type": "gateway"}, {"model": "SSR130", "type": "gateway"}]
+        elif uri == f"/api/v1/orgs/{ORG_ID}":
+            data = {"id": ORG_ID, "name": "Fixture Organization"}
+        elif uri == "/api/v1/self/usage":
+            data = {"requests": 0, "request_limit": 5000}
         elif uri.endswith("/devices/versions"):
             model = {"ap": "AP41", "switch": "EX4400", "gateway": "SRX320"}[(query or {}).get("type", "ap")]
             data = [{"model": model, "version": "new"}, {"model": model, "version": "stable"}]

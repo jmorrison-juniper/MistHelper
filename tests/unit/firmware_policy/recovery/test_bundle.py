@@ -86,9 +86,37 @@ def test_symlink_hardlink_traversal_and_public_files_fail(tmp_path: Path) -> Non
             files.read(session.path.stem)
 
 
-def test_oversized_bundle_fails(tmp_path: Path) -> None:
-    """A size bound must apply before JSON parsing allocates the document."""
+def test_oversized_record_fails(tmp_path: Path) -> None:
+    """A per-record bound must not become an aggregate bundle size threshold."""
     session = RestoreSession(tmp_path)
-    session.path.write_bytes(b" " * (8 * 1024 * 1024 + 1))
-    with pytest.raises(PolicyError, match="size limit"):
+    session.path.write_bytes(b'{"records":[{"settings":{"large":"' + b"x" * (8 * 1024 * 1024 + 1) + b'"}}]}')
+    with pytest.raises(PolicyError, match="record resource limit"):
         BundleFiles(session.backup).read(session.path.stem)
+
+
+def test_duplicate_setting_keys_are_rejected_before_checksum_validation(tmp_path: Path) -> None:
+    """Ambiguous record values cannot disappear during the streamed object decode."""
+    session = RestoreSession(tmp_path)
+    text = session.path.read_text()
+    text = text.replace('"allow_mist": true', '"allow_mist": true, "allow_mist": false', 1)
+    session.path.write_text(text)
+    with pytest.raises(PolicyError, match="duplicate JSON keys"):
+        BundleFiles(session.backup).read(session.path.stem)
+    assert session.writes == []
+
+
+def test_truncated_late_record_cannot_become_a_partial_bundle(tmp_path: Path) -> None:
+    """A valid first record cannot bypass a missing late record delimiter."""
+    session = RestoreSession(tmp_path)
+    text = session.path.read_text()
+    session.path.write_text(text[: text.index('"site_id"') + 15])
+    with pytest.raises(PolicyError):
+        BundleFiles(session.backup).read(session.path.stem)
+    assert session.writes == []
+
+
+def test_job_status_directory_is_not_a_backup_selection(tmp_path: Path) -> None:
+    """Private portal status can share the private root without entering restoration."""
+    session = RestoreSession(tmp_path)
+    (session.backup.root / ".portal-jobs").mkdir(mode=0o700)
+    assert [row["token"] for row in BundleFiles(session.backup).list()] == [session.path.stem]

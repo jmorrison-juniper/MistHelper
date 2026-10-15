@@ -528,7 +528,7 @@ class OperationRegistry:
         "306": {
             "category": "destructive",
             "skip_reason": (
-                "DESTRUCTIVE: Menu 306 restores complete writable settings from private backups; "
+                "DESTRUCTIVE: Menu 306 restores firmware policies from private backups; "
                 "requires typed RESTORE and verified recovery backups, supports --dry-run."
             ),
         },

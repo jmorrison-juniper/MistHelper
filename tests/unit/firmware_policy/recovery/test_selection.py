@@ -90,13 +90,16 @@ def test_mid_run_failures_stop_with_exact_partial_results(tmp_path: Path, monkey
 
 
 def test_nested_parent_replacement_restores_missing_child_without_changing_input(tmp_path: Path) -> None:
-    """A complete parent body must restore saved siblings rather than current siblings."""
+    """Restoration preserves current siblings instead of restoring historical unrelated values."""
     session = RestoreSession(tmp_path)
     session.settings[f"/api/v1/orgs/{ORG_ID}/setting"]["ssr"]["disable_stats"] = True
     original = session.path.read_bytes()
     result = session.workflow().apply(session.prepare(), "RESTORE")
     assert len(result.completed) == 2
-    assert session.settings[f"/api/v1/orgs/{ORG_ID}/setting"]["ssr"] == {"conductor_token": "private-fixture"}
+    assert session.settings[f"/api/v1/orgs/{ORG_ID}/setting"]["ssr"] == {
+        "conductor_token": "private-fixture",
+        "disable_stats": True,
+    }
     assert session.path.read_bytes() == original
 
 

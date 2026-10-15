@@ -1,10 +1,10 @@
 # Backup restoration: Menu 306
 
-Warning: restoration replaces complete writable organization and site settings.
-It can remove changes made after the selected backup.
+Warning: restoration replaces organization and site firmware policies.
+It can remove later firmware policy changes and permit cloud-managed upgrades.
 Examine the preview and verify the backup source before you type `RESTORE`.
 
-Menu 306 restores selected records from the private complete backups that menu 305 creates.
+Menu 306 restores firmware policies from selected records in the complete private backups that menu 305 creates.
 It does not send a firmware execution request or a device-push request.
 Restored firmware policies can permit later cloud-managed upgrades.
 
@@ -28,37 +28,43 @@ The cloud confirmation does not convert a checksum into an authentic signature.
 
 ## Exact restoration scope
 
-The tool restores complete saved writable settings, not only firmware policy fields.
+The user selected firmware-policy-only restoration. Complete settings restoration is outside this scope.
 Unselected organizations and sites remain unchanged.
-Selected settings intentionally return to saved values, including unrelated historical settings.
+Only these firmware policy paths can return to saved values:
 
-The local OpenAPI 3.1 schemas define the writable fields.
-Known top-level read-only fields remain under server control.
-These include identifiers and creation or modification timestamps.
-The tool refuses unknown fields, invalid values, nested server-managed content, and unsupported schema shapes.
-It does not silently remove an unsafe writable field from the restoration.
+| Hardware | Policy path |
+| - | - |
+| AP | `auto_upgrade` |
+| Switch | `switch.auto_upgrade` |
+| SSR | `ssr.auto_upgrade` |
+| SRX | `juniper_srx.auto_upgrade` |
 
-A secret placeholder is not a recoverable credential.
-The tool refuses recognized masked or redacted values.
-Some returned credentials can be unavailable or indistinguishable from real values.
-The tool cannot reconstruct a credential that the backup never contained.
-Verify the backup source and completeness before restoration.
+Unrelated current settings remain unchanged, including credentials and nested parent siblings.
+Complete source and recovery snapshots remain private and unchanged.
+Unknown or nullable unrelated fields do not enter policy validation or historical restoration requests.
+The local public schema validates firmware policy content only.
+Malformed, masked, or unsupported firmware policy values stop preparation before writes.
+Menu 168 provides the AP policy request pattern, not a complete settings replacement contract.
+Missing or empty AP schedule choices use the documented menu 168 defaults.
+The preview states those defaults before confirmation.
 
-An absent top-level site `auto_upgrade` field uses the existing `-auto_upgrade` deletion contract.
+An absent saved top-level site `auto_upgrade` field uses the existing `-auto_upgrade` deletion contract when a current override exists.
 This restores organization inheritance, not a disabled local policy.
-Other absent current fields have no general proven deletion contract.
+An absent saved organization AP policy has no proven unset contract.
 The tool stops before writes rather than inventing null or deletion behavior.
-Named parent objects restore their complete saved writable content.
+Nested policy removal replaces the current parent object without its `auto_upgrade` member.
+The replacement retains current unrelated siblings, never historical unrelated siblings.
+Saved nested policies replace only that member within the current parent.
 
 ## Confirm and restore
 
-1. Type `RESTORE` exactly after you examine the preview.
-2. Wait while the tool reads every current target and verifies complete recovery backups.
-3. Examine completed, failed, and remaining scope identifiers.
+1. Prepare the plan and wait for every complete recovery backup to pass verification.
+2. Examine the sorted scope table, then type `RESTORE` exactly.
+3. Examine progress and the completed, failed, and remaining scopes.
 
 The tool checks the source bundle, cloud, membership, and complete current settings again before changes.
 Every target needs a durable verified recovery record before the first write.
-Each recovery bundle must also pass the same format, private-access, and size checks as a selected source bundle.
+Each recovery bundle must pass the same format, integrity, and private-access checks as a selected source bundle.
 Organization writes precede site writes.
 Each target gets another freshness check immediately before its settings write.
 Each write requires a saved-state check.
@@ -77,15 +83,23 @@ Keep other settings changes stopped during restoration.
 
 ## Graphical workflow
 
-Open Operations on the protected portal and select `306: Restore settings from private backups`.
+Open **Operations**, expand **Firmware Policies & Recovery**, then select menu **306**.
+The workflow occupies the right workspace beside the left menu.
 Use the dynamic backup and saved-record controls.
-Type the active cloud hostname, then select **Preview restoration**.
-Type `RESTORE` exactly to enable **Verify recovery backups and restore**.
-Use **Cancel preview** to invalidate a plan without writes.
+Use **Select all saved records** when the complete bundle is required.
+Type the active cloud hostname, then select **Prepare verified recovery backups**.
+Preparation creates and verifies recovery before the confirmation controls appear.
+Examine the compact, site-name-sorted table and progress below the controls.
+Type `RESTORE` exactly to enable **Restore verified firmware policies**.
+Use **Cancel prepared plan** to invalidate a plan without writes.
 
 The portal keeps settings and credentials on the server.
-Previews expire after ten minutes and belong to one browser session.
+Plans belong to one browser session. Active preparation remains valid through long request allowance waits.
 Each preview permits one application.
+Status polling survives a page refresh. A worker interruption stops the plan without automatic write replay.
+Workers on the same host route requests to the live plan owner through authenticated loopback communication.
+They require the same private `data/` directory.
+Organization write locks refuse overlapping policy or restoration changes across browser sessions and workers.
 Existing portal access controls and request protection apply.
 No upload or arbitrary file path is accepted.
 
@@ -102,10 +116,33 @@ Windows junctions and other reparse points are refused before the ACL query.
 The tool changes no permissions.
 If the query is unavailable or access cannot be proven, restoration stops before writes.
 Windows ACL decisions have mocked automated coverage. An actual Windows host check remains unverified in this macOS development session.
-The loader rejects symbolic links, hard links, excessive size, duplicate JSON keys, and invalid records.
+The loader rejects symbolic links, hard links, duplicate JSON keys, and invalid records.
+Legacy JSON bundles have no arbitrary aggregate byte or record-count limit.
+The reader validates bounded individual records and complete checksums instead of loading unbounded JSON text.
+Large organizations require sufficient private storage and time for every settings read, recovery backup, freshness check, write, and readback.
+Existing API usage tools control request admission and report allowance waits.
 The private files do not appear in output downloads or previews.
 
 The tool uses the same private format for new recovery bundles.
 Keep both the original bundle and each recovery bundle.
 Offline automated acceptance uses fixture settings and mocked SDK transport.
 It does not establish user approval or a successful production restoration.
+
+## Scope decision and contract limits
+
+The earlier complete-settings implementation rejected both actual 145-record bundles before writes.
+Public writable schemas did not establish complete restoration of unknown, nullable, and nested server-managed settings.
+The user explicitly selected firmware-policy-only restoration instead.
+This decision does not authorize guesses about unrelated writable fields.
+Policy preparation requires backup integrity and firmware policy recovery projection before confirmation.
+
+The [public Mist schema at revision `79274e6`](https://github.com/mistsys/mist_openapi/blob/79274e6cd85327ef51a9ab99a9c40a999d4b669a/mist.openapi.json)
+does not resolve every observed difference.
+All 3,133 upstream property names already occur in the checked-in public schemas.
+
+Complete restoration would require vendor evidence for unrelated fields and their accepted types, replacement rules, and deletion rules.
+This remains outside menu 306.
+Do not send private settings, credentials, identifiers, or complete backups to obtain this evidence.
+Do not remove unknown fields, invent replacement values, or attempt speculative settings writes.
+Unsupported firmware policy deletion or content still blocks preparation.
+Fixture tests do not establish successful connected restoration. The parent verifies the committed candidate before merge or deployment.

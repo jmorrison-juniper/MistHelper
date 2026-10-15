@@ -17,6 +17,7 @@ from urllib.parse import urlsplit
 from uuid import uuid4
 
 from flask import Flask, Response, current_app, jsonify, render_template, request
+from jinja2 import ChoiceLoader, FileSystemLoader
 from playwright.sync_api import ConsoleMessage, Page, Route, expect
 from playwright.sync_api import Response as BrowserResponse
 from werkzeug.serving import make_server
@@ -78,6 +79,13 @@ class DataPreviewHarness:
         self.fixture.write()
         self.url = ""
         self.app = Flask(__name__, template_folder=str(root / "templates"), static_folder=str(root / "static"))
+        self.app.jinja_loader = ChoiceLoader(
+            [
+                FileSystemLoader(root / "templates"),
+                FileSystemLoader(root / "routes" / "firmware_policy" / "templates"),
+                FileSystemLoader(root / "routes" / "firmware_policy" / "restore" / "templates"),
+            ]
+        )
         self.app.config.update(
             TESTING=True,
             DATA_DIR=str(directory),

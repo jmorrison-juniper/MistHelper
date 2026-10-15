@@ -10,6 +10,7 @@ import pytest
 
 from src.operations.execution.firmware_policy.recovery.backup import BACKUP_DIRECTORY, PolicyBackup
 from src.operations.execution.firmware_policy.sdk import PolicyError
+from tests.unit.firmware_policy.fakes import ORG_ID, SITE_ID
 from web_portal.services.data_browser import DataBrowserService
 from web_portal.services.output_scan import OutputFileScanner
 
@@ -17,8 +18,8 @@ from web_portal.services.output_scan import OutputFileScanner
 def test_full_backup_verifies_content_count_checksum_and_permissions(tmp_path: Path) -> None:
     """Retain complete organization and site settings with private POSIX permissions."""
     records = [
-        {"scope": "org", "id": "one", "settings": {"ssr": {"conductor_token": "private-fixture"}}},
-        {"scope": "site", "id": "two", "settings": {"auto_upgrade": {"enabled": False}, "timezone": "UTC"}},
+        {"scope": "org", "id": ORG_ID, "settings": {"ssr": {"conductor_token": "private-fixture"}}},
+        {"scope": "site", "id": SITE_ID, "settings": {"auto_upgrade": {"enabled": False}, "timezone": "UTC"}},
     ]
     backup = PolicyBackup(tmp_path)
     path = backup.save(records)
@@ -37,7 +38,7 @@ def test_full_backup_verifies_content_count_checksum_and_permissions(tmp_path: P
 def test_corrupted_backup_fails_verification(tmp_path: Path, field: str) -> None:
     """Reject changed settings, incomplete counts, and invalid checksums."""
     backup = PolicyBackup(tmp_path)
-    records = [{"scope": "org", "id": "one", "settings": {"timezone": "UTC"}}]
+    records = [{"scope": "org", "id": ORG_ID, "settings": {"timezone": "UTC"}}]
     path = backup.save(records)
     document = json.loads(path.read_text())
     document[field] = None
@@ -49,7 +50,7 @@ def test_corrupted_backup_fails_verification(tmp_path: Path, field: str) -> None
 def test_missing_and_unreadable_backups_fail(tmp_path: Path) -> None:
     """A missing or invalid JSON file cannot satisfy the backup gate."""
     backup = PolicyBackup(tmp_path)
-    records = [{"scope": "org", "id": "one", "settings": {}}]
+    records = [{"scope": "org", "id": ORG_ID, "settings": {}}]
     path = backup.save(records)
     path.write_text("{incomplete")
     with pytest.raises(PolicyError, match="could not be verified"):
@@ -63,7 +64,7 @@ def test_missing_and_unreadable_backups_fail(tmp_path: Path) -> None:
 def test_empty_body_and_malformed_json_backup_fail(tmp_path: Path, content: bytes) -> None:
     """Reject empty files and malformed JSON rather than treating them as good backups."""
     backup = PolicyBackup(tmp_path)
-    records = [{"scope": "site", "id": "one", "settings": {"timezone": "UTC"}}]
+    records = [{"scope": "site", "id": SITE_ID, "settings": {"timezone": "UTC"}}]
     path = backup.save(records)
     path.write_bytes(content)
     with pytest.raises(PolicyError, match="could not be verified"):
@@ -89,7 +90,9 @@ def test_private_backup_is_not_listed_previewed_downloaded_or_scanned(tmp_path: 
     """Deny full settings bundles, including access through another symbolic link."""
     scanner = OutputFileScanner(str(tmp_path))
     scanner.snapshot()
-    path = PolicyBackup(tmp_path).save([{"settings": {"conductor_token": "private-fixture"}}])
+    path = PolicyBackup(tmp_path).save(
+        [{"scope": "org", "id": ORG_ID, "settings": {"conductor_token": "private-fixture"}}]
+    )
     browser = DataBrowserService(str(tmp_path))
     assert browser.list_files() == []
     assert browser.resolve_safe_path(str(path.relative_to(tmp_path))) is None

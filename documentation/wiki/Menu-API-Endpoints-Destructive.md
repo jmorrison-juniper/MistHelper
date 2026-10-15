@@ -23,15 +23,15 @@ flowchart LR
     root --> f_orgs_sites["orgs/sites<br/>24 menu options"]
     root --> f_sites_stats["sites/stats<br/>16 menu options"]
     root --> f_orgs_gatewaytemplates["orgs/gatewaytemplates<br/>12 menu options"]
-    root --> f_orgs_inventory["orgs/inventory<br/>12 menu options"]
+    root --> f_orgs_inventory["orgs/inventory<br/>11 menu options"]
     root --> f_orgs_devices["orgs/devices<br/>7 menu options"]
     root --> f_orgs_deviceprofiles["orgs/deviceprofiles<br/>6 menu options"]
     root --> f_sites_setting["sites/setting<br/>6 menu options"]
     root --> f_msps_orgs["msps/orgs<br/>4 menu options"]
     root --> f_orgs_ssr["orgs/ssr<br/>4 menu options"]
+    root --> f_orgs_orgs["orgs/orgs<br/>3 menu options"]
     root --> f_orgs_setting["orgs/setting<br/>3 menu options"]
-    root --> f_orgs_stats["orgs/stats<br/>3 menu options"]
-    root --> more["26 more families"]
+    root --> more["27 more families"]
 ```
 
 ## Menu 154
@@ -1114,15 +1114,15 @@ The map finds no Mist API request for this menu option.
 
 - Title: DESTRUCTIVE: Organization Auto-Upgrade Policy - Set model versions and restore all site inheritance (Requires typing 'CONFIGURE', verified full backups, supports --dry-run)
 - Handler: `lambda: PolicyMenu(api=PolicyApi(MainEntrypoint.context.apisession), inputs=PolicyMenuInputs(organization=ConfigUtils.get_cached_or_prompted_org_id, selector...`
-- Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`InputUtils`](Menu-API-Endpoints#inpututils), [`MainEntrypoint`](Menu-API-Endpoints#mainentrypoint), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
-- Endpoints: 9
+- Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`InputUtils`](Menu-API-Endpoints#inpututils), [`MainEntrypoint`](Menu-API-Endpoints#mainentrypoint), [`RateLimitingUtils`](Menu-API-Endpoints#ratelimitingutils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
+- Endpoints: 10
 
 ```mermaid
 flowchart LR
     menu["Menu 305:<br/>DESTRUCTIVE:<br/>Organization<br/>Auto-Upgrad..."]
     menu --> c1["PolicyApi"]
-    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/devices<br/>/versions"]
-    c1 --> e2["GET<br/>/api/v1/orgs<br/>/{org_id}/inventory"]
+    c1 --> e1["GET<br/>/api/v1/const<br/>/device_models"]
+    c1 --> e2["GET<br/>/api/v1/orgs<br/>/{org_id}/devices<br/>/versions"]
     c1 --> e3["GET<br/>/api/v1/orgs<br/>/{org_id}/setting"]
     c1 --> e4["PUT<br/>/api/v1/orgs<br/>/{org_id}/setting"]
     c1 --> e5["GET<br/>/api/v1/orgs<br/>/{org_id}/ssr<br/>/versions"]
@@ -1132,42 +1132,50 @@ flowchart LR
     c2 --> e8["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
     menu --> c3["OrgLevelAPFirmware<br/>Upgrader"]
     c3 --> e9["GET<br/>/api/v1/msps<br/>/{msp_id}/orgs"]
+    menu --> c4["PolicyAdmission"]
+    c4 --> e10["GET<br/>/api/v1/self/usage"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
+| GET | `/api/v1/const/device_models` | [`const.device_models.listDeviceModels`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/models/list-device-models) | [`PolicyApi.models`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/execution/firmware_policy/sdk.py) | Call |
 | GET | `/api/v1/msps/{msp_id}/orgs` | [`msps.orgs.listMspOrgs`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/msps/orgs/list-msp-orgs) | [`OrgLevelAPFirmwareUpgrader._call_list_msp_orgs`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/execution/firmware/org_ap_upgrader.py) | Call |
 | GET | `/api/v1/orgs/{org_id}/devices/versions` | [`orgs.devices.listOrgAvailableDeviceVersions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/upgrade/list-org-available-device-versions) | [`PolicyApi.versions`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/execution/firmware_policy/sdk.py) | Call |
-| GET | `/api/v1/orgs/{org_id}/inventory` | [`orgs.inventory.getOrgInventory`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/inventory/get-org-inventory) | [`PolicyApi.inventory`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/execution/firmware_policy/sdk.py) | Call |
 | GET | `/api/v1/orgs/{org_id}/setting` | [`orgs.setting.getOrgSettings`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/setting/get-org-settings) | [`PolicyApi.read`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/execution/firmware_policy/sdk.py) | Call |
 | PUT | `/api/v1/orgs/{org_id}/setting` | [`orgs.setting.updateOrgSettings`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/setting/update-org-settings) | [`PolicyApi.write`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/execution/firmware_policy/sdk.py) | Call |
 | GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`APICoreFetchUtils.all_sites_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/access/api/api_core_fetch_utils.py) | Call |
 | GET | `/api/v1/orgs/{org_id}/ssr/versions` | [`orgs.ssr.listOrgAvailableSsrVersions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/upgrade/list-org-available-ssr-versions) | [`PolicyApi.versions`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/execution/firmware_policy/sdk.py) | Call |
+| GET | `/api/v1/self/usage` | [`self.usage.getSelfApiUsage`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/self/account/get-self-api-usage) | [`PolicyAdmission.mist_get`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/execution/firmware_policy/sdk.py) | Call |
 | GET | `/api/v1/sites/{site_id}/setting` | [`sites.setting.getSiteSetting`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/setting/get-site-setting) | [`PolicyApi.read`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/execution/firmware_policy/sdk.py) | Call |
 | PUT | `/api/v1/sites/{site_id}/setting` | [`sites.setting.updateSiteSettings`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/setting/update-site-settings) | [`PolicyApi.write`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/execution/firmware_policy/sdk.py) | Call |
 
 ## Menu 306
 
-- Title: DESTRUCTIVE: Restore complete writable organization and site settings from private backups (Requires typing 'RESTORE', verified recovery backups, supports --dry-run)
+- Title: DESTRUCTIVE: Restore organization and site firmware policies from private backups (Requires typing 'RESTORE', verified recovery backups, supports --dry-run)
 - Handler: `lambda: RestoreMenu(api=PolicyApi(MainEntrypoint.context.apisession), inputs=PolicyMenuInputs(organization=ConfigUtils.get_cached_or_prompted_org_id, stopped...`
-- Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`InputUtils`](Menu-API-Endpoints#inpututils), [`MainEntrypoint`](Menu-API-Endpoints#mainentrypoint)
-- Endpoints: 5
+- Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`InputUtils`](Menu-API-Endpoints#inpututils), [`MainEntrypoint`](Menu-API-Endpoints#mainentrypoint), [`RateLimitingUtils`](Menu-API-Endpoints#ratelimitingutils)
+- Endpoints: 7
 
 ```mermaid
 flowchart LR
-    menu["Menu 306:<br/>DESTRUCTIVE: Restore<br/>complete writabl..."]
+    menu["Menu 306:<br/>DESTRUCTIVE: Restore<br/>organization and..."]
     menu --> c1["PolicyApi"]
-    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}/setting"]
-    c1 --> e2["PUT<br/>/api/v1/orgs<br/>/{org_id}/setting"]
-    c1 --> e3["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
-    c1 --> e4["GET<br/>/api/v1/sites<br/>/{site_id}/setting"]
-    c1 --> e5["PUT<br/>/api/v1/sites<br/>/{site_id}/setting"]
+    c1 --> e1["GET<br/>/api/v1/orgs<br/>/{org_id}"]
+    c1 --> e2["GET<br/>/api/v1/orgs<br/>/{org_id}/setting"]
+    c1 --> e3["PUT<br/>/api/v1/orgs<br/>/{org_id}/setting"]
+    c1 --> e4["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
+    c1 --> e5["GET<br/>/api/v1/sites<br/>/{site_id}/setting"]
+    c1 --> e6["PUT<br/>/api/v1/sites<br/>/{site_id}/setting"]
+    menu --> c2["PolicyAdmission"]
+    c2 --> e7["GET<br/>/api/v1/self/usage"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
+| GET | `/api/v1/orgs/{org_id}` | [`orgs.orgs.getOrg`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/get-org) | [`PolicyApi.organization`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/execution/firmware_policy/sdk.py) | Call |
 | GET | `/api/v1/orgs/{org_id}/setting` | [`orgs.setting.getOrgSettings`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/setting/get-org-settings) | [`PolicyApi.read`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/execution/firmware_policy/sdk.py) | Call |
 | PUT | `/api/v1/orgs/{org_id}/setting` | [`orgs.setting.updateOrgSettings`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/setting/update-org-settings) | [`PolicyApi.write`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/execution/firmware_policy/sdk.py) | Call |
 | GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`PolicyApi.sites`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/execution/firmware_policy/sdk.py) | Call |
+| GET | `/api/v1/self/usage` | [`self.usage.getSelfApiUsage`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/self/account/get-self-api-usage) | [`PolicyAdmission.mist_get`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/execution/firmware_policy/sdk.py) | Call |
 | GET | `/api/v1/sites/{site_id}/setting` | [`sites.setting.getSiteSetting`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/setting/get-site-setting) | [`PolicyApi.read`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/execution/firmware_policy/sdk.py) | Call |
 | PUT | `/api/v1/sites/{site_id}/setting` | [`sites.setting.updateSiteSettings`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/setting/update-site-settings) | [`PolicyApi.write`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/execution/firmware_policy/sdk.py) | Call |

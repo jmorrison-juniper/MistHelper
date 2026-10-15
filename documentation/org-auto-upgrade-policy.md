@@ -16,7 +16,7 @@ Warning: enabled policies can cause later cloud-managed upgrades. These upgrades
 
 Choose each model version from the available firmware list.
 An MSP run offers only model versions available in every selected organization.
-SSR model choices come from gateway inventory because the SSR version list has no model field.
+SSR model choices use the supported device-model catalog because the SSR version list has no model field.
 The operation does not invent a version when the API provides none.
 
 ## CLI workflow
@@ -36,17 +36,34 @@ Menu 168 remains unchanged.
 
 ## Operations portal
 
-The numbered-menu portal on port 8055 contains a link named `305: Organization auto-upgrade policy`.
-The link opens a dedicated graphical workflow. The generic read-only operation runner continues to reject destructive menus.
+Open **Operations**, then expand **Firmware Policies & Recovery** and select menu **305**.
+The workflow occupies the right workspace beside the left menu.
+The generic read-only operation runner continues to reject destructive menus.
 
 Select the organization scope and device types, then load the available model versions.
-Dynamic controls show model choices, version choices, enabled state, and the AP schedule.
-Select `Preview / dry run` to read complete settings and review every target.
-The preview changes no settings and creates no backup.
+Organization names appear before identifiers.
+Check a supported model to reveal its version selector.
+Versions sort by numeric components, highest first, including release and service suffixes.
+All four supported hardware classes use the same model controls.
+Each hardware group has a bounded scrolling model list. Every supported model remains available.
+The AP schedule defaults to every day at `02:00`, in each site's time zone.
+You must still select an explicit enabled or disabled state.
 
-To apply the displayed plan, type `CONFIGURE`, then select `Verify all backups and apply settings`.
-Changing any selection invalidates the preview. A preview expires after ten minutes.
-The server refuses another browser's preview and refuses a second apply request for the same preview.
+Select **Prepare verified backups** to read complete settings and verify every target backup.
+Preparation changes no cloud settings. Progress appears below the controls.
+The compact scope table sorts by site name and shows backup verification without private settings.
+Confirmation appears only after all target backups pass verification.
+Type `CONFIGURE`, then select **Apply verified settings plan**.
+Changing a selection invalidates the prepared plan.
+The portal clears its obsolete summary, verification table, and progress.
+Active operations remain valid through request allowance waits.
+The server refuses another browser's plan and refuses a second apply request for the same plan.
+Workers on the same host share ownership checks and organization write locks through the same private `data/` directory.
+Concurrent policy and restoration writes to the same cloud organization are refused.
+Refresh the page to recover the operation's status.
+Refresh also retains the prepared organization, hardware, version, and schedule choices.
+Loading organization choices cannot invalidate a saved operation or replace its terminal status.
+After a worker interruption, prepare a new plan. The server never repeats uncertain settings writes automatically.
 Portal requests retain the existing CSRF and address access controls.
 
 ## Complete settings backups
@@ -54,7 +71,13 @@ Portal requests retain the existing CSRF and address access controls.
 Before the first settings write, the operation saves complete settings for every selected organization and every target site.
 One unique JSON bundle contains all original settings, scope identifiers, a UTC timestamp, a record count, and a SHA-256 checksum.
 The operation reads the file again and compares every original record and its checksum.
+It also checks that firmware policy restoration accepts every saved policy.
 If any backup cannot be written or verified, the operation sends zero settings writes.
+If restoration cannot accept a record, preparation fails and confirmation remains hidden.
+The portal distinguishes preparation failure from an unavailable status response.
+Only a definite preparation failure reports that no settings changed.
+See [restoration scope and limits](backup-restoration.md#exact-restoration-scope) for policy recovery rules.
+Complete backups do not imply complete historical settings restoration.
 
 Backups remain under `data/.firmware-policy-backups/`.
 The operation never overwrites an earlier backup.
@@ -72,7 +95,7 @@ This operation does not automatically restore a backup.
 
 The operation checks that current settings still match the preview before creating backups.
 It checks settings again before each write.
-It saves and verifies each organization policy before removing that organization's site overrides.
+It saves and verifies organization policies before removing site overrides.
 It removes AP, switch, SSR, and SRX local overrides, including policy types not selected for organization changes.
 Unselected organization policies remain unchanged.
 Every replaced nested object retains its unrelated sibling settings.
@@ -84,6 +107,9 @@ Server-generated `modified_time` values can change after a settings write.
 If a write or verification fails, the operation stops and reports partial completion.
 The report separates verified organization changes, verified site changes, unchanged sites, failures, and remaining sites.
 Saved changes can remain after a partial failure. The operation does not issue automatic retries or rollback writes.
+
+The settings requests use the existing API usage tools and shared request allowance.
+A long allowance wait reports an estimate rather than expiring an active operation.
 
 ## API contract
 

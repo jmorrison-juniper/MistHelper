@@ -1,0 +1,62 @@
+- main:
+  - link "Operations":
+    - /url: /operations
+  - 'heading "305: Organization auto-upgrade policy" [level=4]'
+  - note: "Warning: enabled policies can cause later cloud-managed upgrades. This operation sends no firmware upgrade or device-push request."
+  - paragraph: All AP, switch, SSR, and SRX site overrides will be removed, including types you do not select below.
+  - paragraph: SSR and SRX policies apply when a device is first onboarded. Only AP policies have a schedule.
+  - status: Select model versions and an explicit enabled state. Then preview the complete change.
+  - heading "1. Organizations and device types" [level=5]
+  - text: Scope
+  - combobox "Scope":
+    - option "Current organization" [selected]
+  - text: Organizations
+  - listbox "Organizations":
+    - option "00000000-0000-0000-0000-000000000001 (00000000-0000-0000-0000-000000000001)" [selected]
+  - group "Device types to configure at organization level":
+    - text: Device types to configure at organization level
+    - checkbox "Access points" [checked]
+    - text: Access points
+    - checkbox "Switches"
+    - text: Switches
+    - checkbox "SSR"
+    - text: SSR
+    - checkbox "SRX"
+    - text: SRX
+  - button "Load available model versions"
+  - heading "2. Model versions and policy controls" [level=5]
+  - group "ap":
+    - text: ap Automatic policy enabled state
+    - combobox "Automatic policy enabled state":
+      - option "Select a value" [selected]
+      - option "ENABLE"
+      - option "DISABLE"
+    - checkbox "Configure AP41"
+    - text: Configure AP41 Version for AP41
+    - combobox "Version for AP41" [disabled]:
+      - option "Select a value" [selected]
+      - option "new"
+      - option "stable"
+    - text: AP upgrade day
+    - combobox "AP upgrade day":
+      - option "Select a value" [selected]
+      - option "any"
+      - option "mon"
+      - option "tue"
+      - option "wed"
+      - option "thu"
+      - option "fri"
+      - option "sat"
+      - option "sun"
+    - text: "AP upgrade time: HH:MM or any, in each site's time zone"
+    - 'textbox "AP upgrade time: HH:MM or any, in each site''s time zone"':
+      - /placeholder: 02:00 or any
+  - heading "3. Preview and dry run" [level=5]
+  - paragraph: The preview reads every selected organization's settings and all its sites. It changes no settings and creates no backup.
+  - button "Preview / dry run"
+  - heading "4. Back up, verify, and apply" [level=5]
+  - paragraph: Before any change, the server saves and verifies complete settings for every target organization and site.
+  - paragraph: A failed backup stops the operation with zero settings changes. Backups can contain credentials and cannot be downloaded through this portal.
+  - text: Type CONFIGURE to confirm the displayed settings change
+  - textbox "Type CONFIGURE to confirm the displayed settings change"
+  - button "Verify all backups and apply settings" [disabled]

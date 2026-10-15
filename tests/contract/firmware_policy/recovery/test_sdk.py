@@ -49,7 +49,7 @@ def test_all_restore_requests_use_actual_settings_sdk_methods(tmp_path: Path) ->
     result = session.workflow().apply(session.prepare(), "RESTORE")
     assert len(result.completed) == 2
     assert all(uri.endswith("/setting") for uri, _ in session.writes)
-    assert all(uri.endswith(("/setting", "/sites")) for uri, _ in session.reads)
+    assert all(uri.endswith(("/setting", "/sites", "/usage", f"/orgs/{ORG_ID}")) for uri, _ in session.reads)
 
 
 def test_real_sdk_429_write_is_attempted_once_and_console_stays_private(
@@ -73,6 +73,14 @@ def test_real_sdk_429_write_is_attempted_once_and_console_stays_private(
         return response
 
     monkeypatch.setattr(sdk, "_session", SimpleNamespace(put=offline_put), raising=False)
+    monkeypatch.setattr(
+        sdk,
+        "mist_get",
+        lambda **kwargs: SimpleNamespace(
+            status_code=200,
+            data={"requests": 0, "request_limit": 5000},
+        ),
+    )
     monkeypatch.setattr(sdk, "_url", lambda uri: "https://api.mist.com" + uri)
     monkeypatch.setattr(sdk, "_log_proxy", lambda: None)
     monkeypatch.setattr(console, "level", 10)

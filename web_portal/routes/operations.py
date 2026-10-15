@@ -107,10 +107,28 @@ def operations_page():
 
 @operations_bp.route("/api/operations/list")
 def list_operations():
-    """Return categorized list of non-destructive operations."""
+    """List safe operations and dedicated settings workflows without widening the run gate."""
     menu_actions = current_app.config.get("MENU_ACTIONS", {})
     executor = _get_executor()
     categories = executor.build_category_list(menu_actions)
+    categories.append(
+        {
+            "name": "Firmware Policies & Recovery",
+            "operations": [
+                {
+                    "menu_number": "305",
+                    "description": "Organization auto-upgrade policy",
+                    "category": "settings_workflow",
+                },
+                {
+                    "menu_number": "306",
+                    "description": "Restore firmware policies from private backups",
+                    "category": "settings_workflow",
+                },
+            ],
+        }
+    )
+    categories.sort(key=lambda category: category["name"])
     total = sum(len(cat["operations"]) for cat in categories)
     return jsonify({"categories": categories, "total_count": total})
 

@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class RestoreMenu:
-    """Run the same complete restoration guards as the protected graphical interface."""
+    """Run the same firmware policy restoration guards as the protected graphical interface."""
 
     api: PolicyApi
     inputs: PolicyMenuInputs
@@ -61,7 +61,7 @@ class RestoreMenu:
         """Read the exact confirmation without trimming operator input."""
         logger.info("Ask operator for exact restoration confirmation")
         confirmation = InputUtils.safe_input(
-            "Type RESTORE to verify all recovery backups and restore: ", context="backup_restore"
+            "Type RESTORE to verify complete recovery backups and restore firmware policies: ", context="backup_restore"
         )
         logger.debug("Restoration confirmation supplied=%s", bool(confirmation))
         return confirmation
