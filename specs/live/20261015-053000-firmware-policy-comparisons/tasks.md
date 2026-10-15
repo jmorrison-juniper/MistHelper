@@ -49,7 +49,7 @@ Independent test: Hold preparation, reload, fail, retry, and select mixed versio
 - [x] T024 Update `documentation/org-auto-upgrade-policy.md`, `documentation/backup-restoration.md`, and `changelog.d/issue-4229-firmware-policy-comparisons.md`.
 - [x] T025 Run applicable local gates and record exact results in `specs/live/20261015-053000-firmware-policy-comparisons/quickstart.md`.
 - [x] T026 Analyze requirement coverage across `specs/live/20261015-053000-firmware-policy-comparisons/spec.md`, `plan.md`, and `tasks.md`. Report findings in the PR.
-- [ ] T027 Commit explicit paths, rebase, push, and create a draft with `.github/PULL_REQUEST_TEMPLATE.md`.
+- [x] T027 Commit explicit paths, rebase, push, and create a draft with `.github/PULL_REQUEST_TEMPLATE.md`.
 
 ## Dependencies
 

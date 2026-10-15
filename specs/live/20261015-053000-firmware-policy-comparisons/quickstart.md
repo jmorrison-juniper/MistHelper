@@ -62,3 +62,18 @@ uv pip compile requirements.txt --python .venv/bin/python --quiet --output-file 
 
 The parent owns connected acceptance, production evidence, and release.
 No container, production credential, real backup, or production write was used.
+
+## Parent browser acceptance
+
+The parent independently examined policy and historical screenshots at 800 pixels.
+Saved, current, proposed, and difference labels remained visible without clipped fields.
+The parent confirmed the highest default, preparation locking, accessible expansion,
+selection invalidation, historical viewing, and explicit current comparison.
+The browser reported zero page errors.
+
+This acceptance used the credential-free fixture at `127.0.0.1:9667`.
+Its responsive JavaScript matches product commit
+`b0a2a98bde3f29dd3ad7c652557f6f734b761a33`.
+The server process preceded the final server edits.
+This result confirms synthetic browser behavior, not the final server process or production acceptance.
+The final handoff identifies the committed candidate and its restarted fixture separately.
