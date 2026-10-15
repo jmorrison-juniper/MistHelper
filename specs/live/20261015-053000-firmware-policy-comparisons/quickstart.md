@@ -15,7 +15,7 @@ Browser tests use synthetic settings and a kernel-selected loopback port.
 
 ## Recorded local results
 
-The affected suite passed 352 tests with 93.14 percent coverage.
+The affected suite passed 357 tests with 93.14 percent coverage.
 The suite includes unit, contract, integration, and Chromium tests.
 Three comparison flows also passed explicit 800-pixel geometry checks.
 Each check measures content width and detects horizontal scope-table movement.
@@ -70,6 +70,13 @@ Saved, current, proposed, and difference labels remained visible without clipped
 The parent confirmed the highest default, preparation locking, accessible expansion,
 selection invalidation, historical viewing, and explicit current comparison.
 The browser reported zero page errors.
+
+The CI evidence contract and workflow guards passed 27 tests.
+The contract checks two artifact paths and three browser capture arguments.
+Four mutation cases prove that missing paths or capture arguments fail.
+The dedicated `firmware-policy-browser-evidence` artifact retains successful-flow
+screenshots and failed-flow screenshots and traces.
+The existing restoration evidence artifact remains unchanged.
 
 This acceptance used the credential-free fixture at `127.0.0.1:9667`.
 Its responsive JavaScript matches product commit

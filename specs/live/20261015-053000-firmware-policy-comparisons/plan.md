@@ -54,6 +54,7 @@ src/operations/execution/firmware_policy/sdk.py
 tests/unit/firmware_policy_jobs/comparisons/
 tests/integration/firmware_policy/recovery/comparisons/
 tests/e2e/web_portal/test_firmware_policy.py
+.github/workflows/ci.yml
 documentation/org-auto-upgrade-policy.md
 documentation/backup-restoration.md
 changelog.d/issue-4229-firmware-policy-comparisons.md
@@ -83,6 +84,8 @@ The browser locks preparation on submission, ready status, and uncertain status.
 It permits retry after a definite preparation-stage failure. Selection changes
 explicitly invalidate the old plan. Application failures never trigger retries.
 Phase-aware progress retains workflow phase through admission callbacks.
+Browser evidence includes comparison screenshots and failed-flow traces in a dedicated artifact.
+A live-workflow contract test rejects missing paths or capture arguments.
 
 ## Complexity Tracking
 
