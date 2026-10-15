@@ -57,8 +57,8 @@ class PolicyCatalog:
             model, version = row.get("model"), row.get("version")  # Validate before string operations.
             if not isinstance(model, str) or not model.strip() or not isinstance(version, str) or not version.strip():
                 raise PolicyError("The firmware catalog contains an invalid model or version.")
-            if kind == "juniper_srx" and "SRX" not in model.upper():
-                continue  # Gateway catalogs also contain models outside the SRX policy.
+            if kind in ("switch", "juniper_srx") and ("SRX" in model.upper()) != (kind == "juniper_srx"):
+                continue  # Mixed switch and gateway responses must keep SRX models exclusive to the SRX policy.
             result.setdefault(model, []).append(version)  # Retain every allowed choice for the model.
         return {
             model: sorted(set(versions), key=PolicyApi.version_key, reverse=True)
