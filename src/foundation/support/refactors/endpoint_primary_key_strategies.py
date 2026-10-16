@@ -2018,6 +2018,13 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "unique_constraints": [],
         "description": "User MAC address count aggregates",
     },
+    "countOrgVars": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["org_id", "distinct"],
+        "unique_constraints": [],
+        "description": "Organization variable count aggregates",
+    },
     "countOrgWanClients": {
         "type": "auto_increment_with_unique",
         "primary_key": ["misthelper_internal_id"],

@@ -53,6 +53,7 @@ _ORG_OPS: tuple[_CountOp, ...] = (
     _CountOp("countOrgAssetsByDistanceField", "mistapi.api.v1.orgs.stats"),
     _CountOp("countOrgAuditLogs", "mistapi.api.v1.orgs.logs"),
     _CountOp("countOrgBgpStats", "mistapi.api.v1.orgs.stats"),
+    _CountOp("countOrgClientFingerprints", "mistapi.api.v1.orgs.insights"),
     _CountOp("countOrgDeviceEvents", "mistapi.api.v1.orgs.devices"),
     _CountOp("countOrgDeviceLastConfigs", "mistapi.api.v1.orgs.devices"),
     _CountOp("countOrgDevices", "mistapi.api.v1.orgs.devices"),
@@ -77,6 +78,7 @@ _ORG_OPS: tuple[_CountOp, ...] = (
     _CountOp("countOrgTickets", "mistapi.api.v1.orgs.tickets"),
     _CountOp("countOrgTunnelsStats", "mistapi.api.v1.orgs.stats"),
     _CountOp("countOrgUserMacs", "mistapi.api.v1.orgs.usermacs"),
+    _CountOp("countOrgVars", "mistapi.api.v1.orgs.vars"),
     _CountOp("countOrgWanClientEvents", "mistapi.api.v1.orgs.wan_client"),
     _CountOp("countOrgWanClients", "mistapi.api.v1.orgs.wan_clients"),
     _CountOp("countOrgWebhooksDeliveries", "mistapi.api.v1.orgs.webhooks"),
@@ -132,7 +134,7 @@ class CountExporter:
     """Exporter for every Mist count endpoint, grouped by scope.
 
     Why:
-        One class covers 70 operations that differ only by name, module, and the
+        One class covers 72 operations that differ only by name, module, and the
         identifier they need. Static methods only, with no per-instance state,
         matching the pattern that ``SiteAssetExporter`` established.
     """
@@ -219,7 +221,7 @@ class CountExporter:
 
         Why:
             Every count operation takes the same two positional arguments, so a
-            single caller covers all 70.
+            single caller covers all 72.
         """
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         callable_obj = CountExporter._resolve(operation)  # Resolve the SDK function.

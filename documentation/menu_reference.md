@@ -268,7 +268,7 @@ never runs in an automated test pass.
 | 232 | Search WAN clients for the organization (searchOrgWanClients) | Safe org exports | `OrgSearchExporter.wan_clients` |
 | 233 | Search WAN client events for the organization (searchOrgWanClientEvents) | Safe org exports | `OrgSearchExporter.wan_client_events` |
 | 234 | Search system events for the organization (searchOrgSystemEvents) | Safe org exports | `OrgSearchExporter.system_events` |
-| 235 | Run any org-scoped Mist count endpoint (35 operations) | Interactive safe | `CountExporter.org_counts` |
+| 235 | Run any org-scoped Mist count endpoint (37 operations) | Interactive safe | `CountExporter.org_counts` |
 | 236 | Run any site-scoped Mist count endpoint (32 operations) | Interactive safe | `CountExporter.site_counts` |
 | 237 | Run any MSP-scoped Mist count endpoint (3 operations) | Interactive safe | `CountExporter.msp_counts` |
 | 238 | Export the license entitlement, usage, and subscriptions for an MSP (listMspLicenses) | Interactive safe | `MSPLicenseExporter.licenses` |
