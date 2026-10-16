@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
-from flask import Flask
+from flask import Flask, render_template
 from flask.testing import FlaskClient
 
 from src.interfaces.portals.upgrade_portal.runtime import lock
@@ -87,6 +87,48 @@ def build_client(service: FakeDashboardService) -> tuple[FlaskClient, Flask]:
         app.add_url_rule("/", endpoint=endpoint, view_func=lambda: "")
     app.register_blueprint(wan_dashboard_bp)  # Exercise the production feature routes.
     return app.test_client(), app  # Keep the app available for access-control checks.
+
+
+def test_isolated_portal_hides_dashboard_navigation_without_its_route() -> None:
+    """The shared template renders when the isolated app lacks the dashboard route."""
+    template_folder = (
+        Path(__file__).resolve().parents[4] / "web_portal" / "templates"
+    )  # Locate the shared portal templates.
+    app = Flask(__name__, template_folder=str(template_folder))  # Render the production base template.
+    app.config["PORTAL"] = {
+        "title": "MistHelper",
+        "theme": "magenta",
+        "accent_color": "#e20074",
+        "logo_url": "",
+    }  # Supply the portal branding required by the layout.
+    for endpoint in (
+        "dashboard.dashboard",
+        "data.data_browser",
+        "operations.operations_page",
+        "maps.maps_page",
+        "websockets.page",
+    ):
+        app.add_url_rule("/", endpoint=endpoint, view_func=lambda: "")  # Stub unrelated portal links.
+    app.add_url_rule(
+        "/websockets",
+        endpoint="isolated_websockets_page",
+        view_func=lambda: render_template("base.html"),
+    )  # Render the layout from a page without the feature blueprint.
+    app.context_processor(
+        lambda: {
+            "csrf_token": lambda: "local-test-token",
+            "portal_title": "MistHelper",
+            "portal_logo": "",
+            "portal_accent": "#e20074",
+            "portal_theme": "magenta",
+            "available_themes": [],
+        }
+    )  # Supply the portal context without loading shared services.
+
+    response = app.test_client().get("/websockets")  # Render the layout in isolation.
+
+    assert response.status_code == 200  # The shared layout must render successfully.
+    assert b'data-testid="wan-dashboard-tab"' not in response.data  # Hide navigation without its registered route.
 
 
 class TestOverviewRoutes:

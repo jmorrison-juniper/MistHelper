@@ -184,3 +184,14 @@ Task: T014 Extend the dashboard end-to-end test in tests/e2e/web_portal/test_por
 - Compileall passed, and `compose.yml` remained unchanged.
 - The Markdown link checker found one existing extensionless GitHub Wiki link in `documentation/wiki/Web-Portal.md:19`. The `Container-Setup.md` page and target heading exist.
 - The portal browser journey passed with synthetic Mist responses. The recorded offline latency baseline remains 74.54 ms for the source and 72.17 ms for the integrated page.
+
+### CI navigation regression repair (2026-10-16)
+
+- The initial CI run found a template error when an isolated app did not register the WAN dashboard blueprint.
+- The portal now enables the dashboard link only when `wan_dashboard.page` exists in the route table.
+- `.venv/bin/python -m pytest -p no:cacheprovider -q tests/unit/websocket_streams/web/test_ws_blueprint_routes.py::test_page_and_catalog_routes_answer` passed 1 test.
+- `.venv/bin/python -m pytest -p no:cacheprovider -q tests/integration/web_portal/wan_dashboard tests/e2e/web_portal/test_portal_smoke.py` passed 71 tests.
+- `.venv/bin/python -m pytest -p no:cacheprovider -q tests/unit/websocket_streams/web/test_ws_blueprint_routes.py::test_page_and_catalog_routes_answer` passed 1 test.
+- The new isolated-template regression test passed 1 test.
+- `.venv/bin/python -m pytest -p no:cacheprovider -q tests/e2e/websockets_tab` passed 197 tests.
+- `.venv/bin/python -m ruff check web_portal/app.py` passed.
