@@ -7,15 +7,18 @@ Why:
     These tests lock the contract so future edits cannot silently regress
     the stdout write, the log level, or the handler configuration.
 
-The five test cases below map one-to-one to contract clauses C-1 through
-C-5 in ``specs/1031-warning-echo-refactor/contracts/echo_helper.md``.
+The original five tests cover clauses C-1 through C-5 in
+``specs/1031-warning-echo-refactor/contracts/echo_helper.md``.
+The filter tests also prove that unrelated diagnostics keep their visibility.
 """
 
 from __future__ import annotations  # WHY: PEP 604 unions and consistent style.
 
 import logging  # WHY: caplog level assertions require the logging module.
 
-from src.foundation.support.utils.console import echo  # WHY: import proves clause C-6 (stable path).
+import pytest
+
+from src.foundation.support.utils.console import ConsoleEchoFilter, echo  # WHY: stable helper and console filter.
 
 _CONSOLE_LOGGER_NAME = "src.foundation.support.utils.console"  # WHY: module logger name resolved by __name__.
 
@@ -110,3 +113,21 @@ def test_echo_multiple_calls_do_not_duplicate_handlers(capsys) -> None:
     _ = capsys.readouterr()  # Drain stdout.
     handler_count_after = len(logger.handlers)  # Compare against the snapshot.
     assert handler_count_after == handler_count_before  # Contract C-5: handler count unchanged.
+
+
+class TestConsoleEchoFilter:
+    """Verify that the console excludes only records already printed by echo."""
+
+    @pytest.mark.parametrize("level", [logging.DEBUG, logging.INFO, logging.WARNING, logging.ERROR])
+    def test_rejects_echo_logger_records(self, level: int) -> None:
+        """The helper's console copy stays excluded at every handler threshold."""
+        record = logging.LogRecord(_CONSOLE_LOGGER_NAME, level, __file__, 0, "Menu", (), None)
+        assert ConsoleEchoFilter().filter(record) is False
+
+    @pytest.mark.parametrize("level", [logging.DEBUG, logging.INFO, logging.WARNING, logging.ERROR])
+    def test_preserves_unrelated_records(self, level: int) -> None:
+        """Normal diagnostics keep their original record and visibility."""
+        record = logging.LogRecord("misthelper.operation", level, __file__, 0, "Site %s", ("HQ",), None)
+        assert ConsoleEchoFilter().filter(record) is True
+        assert record.getMessage() == "Site HQ"
+        assert record.levelno == level

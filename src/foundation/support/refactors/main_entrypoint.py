@@ -31,6 +31,7 @@ from typing import Any, cast  # Loose typing for late-bound MistHelper attribute
 from src.foundation.runtime.config.source_dependency_resolver import (
     SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
 )
+from src.foundation.support.utils.console import ConsoleEchoFilter
 
 logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
 
@@ -194,6 +195,7 @@ class ApplicationBootstrap:  # Explicit startup step for CLI and web hosts
         file_level = int(os.environ.get("LOGGING_LOG_LEVEL", logging.INFO))  # Read file level at startup only.
         console_handler = logging.StreamHandler()  # Preserve console logging for operators.
         console_handler.setLevel(console_level)  # Apply the requested console threshold.
+        console_handler.addFilter(ConsoleEchoFilter())  # Keep the file copy without repeating direct terminal output.
         file_path = log_dir / "script.log"  # Preserve the existing log file name.
         file_handler = _MH.LogRotationSettings.from_environment().build_handler(str(file_path))  # Bound log growth.
         file_handler.setLevel(file_level)  # Apply the requested file threshold.

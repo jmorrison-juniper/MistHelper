@@ -11,8 +11,10 @@ Why:
     message directly to stdout and emitting a single INFO-level log
     record on the module logger. Callers migrate mechanically: replace
     ``logging.warning(msg, *args)`` with ``echo(msg, *args)`` and drop
-    the marker comment. No handler configuration is touched. No level
-    argument is offered. The helper is a primitive with two effects.
+    the marker comment. The application console handler uses
+    ``ConsoleEchoFilter`` to exclude the redundant log copy from the
+    terminal. File handlers retain the INFO record. No level argument
+    is offered. The helper is a primitive with two effects.
 
 See ``specs/1031-warning-echo-refactor/contracts/echo_helper.md`` for
 the full contract (clauses C-1 through C-6).
@@ -23,6 +25,14 @@ from __future__ import annotations  # WHY: consistent PEP 604 style across src/f
 import logging  # WHY: emit the INFO-level record that keeps script.log capture intact.
 
 _LOGGER = logging.getLogger(__name__)  # Module-level logger; propagates to root handlers.
+
+
+class ConsoleEchoFilter(logging.Filter):
+    """Exclude direct-output records from the console without changing file logs."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        """Keep diagnostics whose text the helper has not already printed."""
+        return record.name != _LOGGER.name  # The helper already sent this logger's messages to stdout.
 
 
 def echo(msg: str, *args: object) -> None:
