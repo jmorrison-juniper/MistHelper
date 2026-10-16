@@ -54,6 +54,7 @@ def test_session_values_survive_reload_and_same_tab_navigation(
         fresh_context = browser.new_context()  # Create a separate browser session.
         fresh_page = fresh_context.new_page()  # Open a tab with empty session storage.
         fresh_page.goto(licensing_portal_url + "/license-comparison")  # Load the dashboard in the new session.
+        fresh_page.get_by_test_id("organization-checkbox").wait_for()
         assert fresh_page.locator(".manual-row").count() == 0  # Keep the prior manual row private to its session.
         assert fresh_page.evaluate("JSON.parse(sessionStorage.getItem('misthelper.licensingComparison.v1'))") == {
             "selected": [],

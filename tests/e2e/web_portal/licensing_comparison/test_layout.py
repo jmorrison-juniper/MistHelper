@@ -175,6 +175,7 @@ def test_browser_reports_failed_discovery(page: Any, licensing_portal_url: str, 
     expect(page.locator("#page-status")).to_have_text("Synthetic discovery failure")
     expect(page.get_by_test_id("compare-button")).to_be_disabled()
     expect(page.get_by_test_id("refresh-organizations")).to_be_enabled()
+    assert page.get_by_test_id("organization-checkbox").count() == 0
 
 
 def test_csrf_and_missing_session_boundaries(licensing_client: Any) -> None:
@@ -211,6 +212,7 @@ def test_three_rows_unknown_license_and_missing_inventory(page: Any, licensing_p
     expect(page.locator("#comparison-results tr").nth(1)).to_contain_text("0 / 2")
     expect(page.locator("th[data-license='SUB-NEW']")).to_have_attribute("title", "SUB-NEW: description unavailable.")
     expect(page.locator("th[data-license='SUB-OTHER']")).to_be_visible()
+    assert page.locator("#comparison-results tr").count() == 3
 
 
 def test_empty_comparison_and_clear_purchases(page: Any, licensing_portal_url: str) -> None:
@@ -225,6 +227,7 @@ def test_empty_comparison_and_clear_purchases(page: Any, licensing_portal_url: s
     page.get_by_test_id("compare-button").click()
     expect(page.locator("#comparison-results")).to_have_text("No comparison results are available.")
     expect(page.get_by_test_id("csv-export")).to_be_disabled()
+    assert page.locator("#comparison-results tr").count() == 1
 
 
 def test_invalid_saved_state_reports_error_without_breaking_controls(page: Any, licensing_portal_url: str) -> None:
@@ -236,3 +239,4 @@ def test_invalid_saved_state_reports_error_without_breaking_controls(page: Any, 
     expect(page.get_by_test_id("add-manual-row")).to_be_enabled()
     page.get_by_test_id("organization-checkbox").check()
     expect(page.get_by_test_id("compare-button")).to_be_enabled()
+    assert page.locator(".manual-row").count() == 0
