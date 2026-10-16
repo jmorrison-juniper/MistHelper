@@ -62,7 +62,51 @@ def test_selected_port_insights_use_four_calls_and_preserve_source_hour():
     assert RecordCodec.decode(RecordCodec.encode(records[0])) == records[0]
 
 
-@pytest.mark.parametrize("violation", ["scope", "unit", "max_age", "interval", "alignment"])
+def test_selected_port_accepts_response_array_named_for_requested_metric():
+    """Map the API's explicit one-metric response key without guessing series order."""
+    from src.interfaces.portals.wan_performance.domain.identity import CircuitIdentity
+
+    device, metadata, series = responses()
+    base = {key: value for key, value in series.data.items() if key != "results"}
+    receive = SimpleNamespace(status_code=200, data={**base, "rx_bps": [None]})
+    transmit = SimpleNamespace(status_code=200, data={**base, "tx_bps": ["12"]})
+    with (
+        patch(
+            "src.interfaces.portals.wan_performance.collection.snapshot_client.listOrgDevicesStats",
+            return_value=SimpleNamespace(status_code=200, data=[device]),
+        ) as discovery,
+        patch(
+            "src.interfaces.portals.wan_performance.collection.snapshot_client.listInsightMetrics",
+            return_value=SimpleNamespace(status_code=200, data=metadata),
+        ) as catalog,
+        patch(
+            "src.interfaces.portals.wan_performance.collection.snapshot_client.getSiteInsightMetricsForGateway",
+            side_effect=[receive, transmit],
+        ) as metrics,
+    ):
+        result = GatewayInsights(MagicMock(), MagicMock()).collect_for_port(
+            "org-one", CircuitIdentity(TARGET, "ge-0/0/1")
+        )
+
+    assert discovery.call_count + catalog.call_count + metrics.call_count == 4
+    assert metrics.call_count == 2
+    assert [sample["value"] for sample in result["samples"]] == [None, "12"]
+    records = SnapshotRecords.build(
+        {
+            "org_id": "org-one",
+            "provenance": "live",
+            "collected_at_utc": datetime.now(UTC).isoformat(),
+            "ports": [],
+            "peers": [],
+            "insights": result,
+        }
+    )
+    assert records[0].metrics["rx_bps"].value is None
+    assert records[0].metrics["rx_bps"].missing_reason == "The API snapshot has no value."
+    assert records[0].metrics["tx_bps"].value == 12
+
+
+@pytest.mark.parametrize("violation", ["scope", "unit", "max_age", "interval", "alignment", "ambiguous_mapping"])
 def test_selected_port_refuses_unverified_insight_contract(violation):
     """Do not assign an hourly port rate when catalog or returned alignment disagrees."""
     from src.interfaces.portals.wan_performance.domain.identity import CircuitIdentity
@@ -76,6 +120,8 @@ def test_selected_port_refuses_unverified_insight_contract(violation):
         metadata["rx_bps"]["intervals"]["1h"]["max_age"] = 0
     elif violation == "interval":
         metadata["rx_bps"]["intervals"]["1h"]["interval"] = 600
+    elif violation == "ambiguous_mapping":
+        series.data["rx_bps"] = ["0"]
     else:
         series.data["rt"] = [datetime.now(UTC).isoformat()]
     with (
