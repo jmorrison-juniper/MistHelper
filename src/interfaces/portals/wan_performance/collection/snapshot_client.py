@@ -209,6 +209,25 @@ class GatewayInsights(SnapshotSession):
         return self._sample(response.data, name, unit, start, end)
 
     @staticmethod
+    def _timestamps(value: object) -> list[str]:
+        """Require string timestamps before date parsing."""
+        if not isinstance(value, list) or not all(isinstance(timestamp, str) for timestamp in value):
+            raise ValueError("Gateway insight timestamps must be a string array.")
+        return [timestamp for timestamp in value if isinstance(timestamp, str)]
+
+    @staticmethod
+    def _sample_arrays(data: dict[str, Any], name: str) -> tuple[list[str], list[object]]:
+        """Select one unambiguous result array and validate its paired timestamps."""
+        has_metric, has_results = name in data, "results" in data
+        if has_metric and has_results:
+            raise ValueError("Gateway insight response has ambiguous metric values.")
+        values = data[name] if has_metric else data.get("results")
+        timestamps = GatewayInsights._timestamps(data.get("rt"))
+        if not isinstance(values, list) or len(timestamps) != len(values) or len(timestamps) > 1:
+            raise ValueError("Gateway insight values and timestamps must contain zero or one aligned sample.")
+        return timestamps, values
+
+    @staticmethod
     def _sample(data: Any, name: str, unit: str, start: datetime, end: datetime) -> dict[str, Any]:
         """Validate exact timestamp alignment before assigning a catalog metric name."""
         if not isinstance(data, dict) or (
@@ -223,14 +242,7 @@ class GatewayInsights(SnapshotSession):
             False,
         ):
             raise ValueError("Gateway insight response does not match the requested hourly window.")
-        timestamps, values = data.get("rt"), data.get("results")
-        if (
-            not isinstance(timestamps, list)
-            or not isinstance(values, list)
-            or len(timestamps) != len(values)
-            or len(timestamps) not in (0, 1)
-        ):
-            raise ValueError("Gateway insight values and timestamps must contain zero or one aligned sample.")
+        timestamps, values = GatewayInsights._sample_arrays(data, name)
         if timestamps and datetime.fromisoformat(timestamps[0]) != start:
             raise ValueError("Gateway insight timestamp does not match the requested hour.")
         return {
