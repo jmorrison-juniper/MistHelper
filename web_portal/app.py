@@ -201,6 +201,9 @@ class WebPortalApp:
         app.register_blueprint(WebSocketBlueprint.create())  # Keep the live-stream page and API routes.
         app.register_blueprint(settings_bp)  # Keep portal settings available.
         app.register_blueprint(licensing_comparison_bp)  # Add licensing comparison to the existing process.
+        app.config["LICENSING_COMPARISON_NAV_ENABLED"] = (
+            "licensing_comparison.comparison_page" in app.view_functions
+        )  # Render the navigation only when the feature route is registered.
         WebPortalApp._register_webhook_blueprint(app)  # Keep the configured Mist webhook route.
         logger.debug("Registered web portal blueprints")  # Confirm that route registration completed.
 

@@ -33,7 +33,7 @@ Add the source dashboard layout and workflow as a page in the current MistHelper
 - **Structure**: Place new feature code in `src/interfaces/portals/licensing_comparison/`. This parent currently has two direct children. Keep the feature package at five direct children or fewer.
 - **Existing portal**: Register one blueprint in `web_portal/app.py` and add one navigation link in `web_portal/templates/base.html`. Do not add a route or template to the over-limit `web_portal/routes/` or `web_portal/templates/` directories.
 - **Tests**: Add `tests/integration/web_portal/licensing_comparison/` under the existing portal integration test directory. Extend the existing `tests/e2e/web_portal/test_portal_smoke.py` file for page and selector checks. Add no new direct child to a test directory that already exceeds five children.
-- **Browser state tests**: Add `tests/e2e/licensing_comparison/test_session_state.py` under a feature-specific directory. Do not add a browser test to the over-limit `tests/e2e/web_portal/` directory.
+- **Browser state tests**: Add browser tests under `tests/e2e/web_portal/licensing_comparison/`. Keep the E2E root within its existing five-entry limit.
 - **Process-folder debt**: The process baseline lists 792 grandfathered direct children under `specs/` and four managed roots. This feature adds one timestamp record under `specs/live/`. A separate future process change must move one grandfathered record into a managed root.
 - **Mist access**: Use supported `mistapi` methods with the shared portal session. Do not add direct REST calls or an owned WebSocket.
 - **Data and safety**: Keep manual input in browser session storage. Write only an explicit CSV export through the shared data service. Do not turn API failures into successful zero values.
@@ -61,6 +61,9 @@ See [data-model.md](data-model.md), [contracts/licensing-comparison.md](contract
 ```text
 src/interfaces/portals/licensing_comparison/
 ├── __init__.py
+├── api.py
+├── comparison.py
+├── export.py
 ├── routes.py
 ├── service.py
 ├── templates/
@@ -79,13 +82,15 @@ tests/integration/web_portal/
     ├── test_service.py
     └── test_export.py
 
-tests/e2e/web_portal/test_portal_smoke.py  # Add the page and selector checks.
+tests/e2e/web_portal/
+├── test_portal_smoke.py                 # Add the page and selector checks.
+└── licensing_comparison/
+    ├── test_routes.py
+    └── test_session_state.py
 
-tests/e2e/licensing_comparison/
-└── test_session_state.py
 ```
 
-The new feature package has five direct children. Its `service.py` owns the comparison records and calculations, so the package needs no extra model module. The route template and assets preserve the source dashboard layout and use the existing application process.
+The package guard counts five direct Python modules and excludes `__init__.py`. Keep template and asset directories free of Python modules. Keep the E2E root within its existing five-entry limit by placing feature tests under the existing portal package.
 
 ## Complexity Tracking
 

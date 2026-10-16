@@ -16,10 +16,10 @@ This guide records checks for the licensing comparison page in the shared portal
 Run the service, route, export, and browser tests:
 
 ```bash
-./.venv/bin/python -m pytest -q tests/integration/web_portal/licensing_comparison tests/e2e/licensing_comparison tests/e2e/web_portal/test_portal_smoke.py --cov=src/interfaces/portals/licensing_comparison --cov-report=term-missing
+./.venv/bin/python -m pytest -q tests/integration/web_portal/licensing_comparison tests/e2e/web_portal/licensing_comparison tests/e2e/web_portal/test_portal_smoke.py --cov=src/interfaces/portals/licensing_comparison --cov-report=term-missing
 ```
 
-Observed result: 52 focused licensing and portal smoke tests passed in 2.14 seconds. Feature coverage was 93.10 percent. The tests cover authorized organizations, input validation, HTTP 4xx and 5xx responses, pagination, one retry after HTTP 429, bundle balances, CSV output, source attribution, and browser session state.
+Observed result: 52 focused licensing and portal smoke tests passed in 2.28 seconds. Feature coverage was 93.05 percent. The tests cover authorized organizations, input validation, HTTP 4xx and 5xx responses, pagination, one retry after HTTP 429, bundle balances, CSV output, source attribution, and browser session state.
 
 ## Validate the Mist SDK
 
@@ -35,14 +35,14 @@ Run the repository type check:
 ./.venv/bin/mypy src/ --config-file pyproject.toml
 ```
 
-Observed result: `Success: no issues found in 847 source files`.
+Observed result: `Success: no issues found in 850 source files`.
 
 ## Validate Browser Session State
 
 Run the browser test for session-only input:
 
 ```bash
-./.venv/bin/python -m pytest -q tests/e2e/licensing_comparison/test_session_state.py
+./.venv/bin/python -m pytest -q tests/e2e/web_portal/licensing_comparison/test_session_state.py
 ```
 
 Observed result: one browser test passed. It checks reload, same-tab navigation, and an empty new browser session.
@@ -50,8 +50,8 @@ Observed result: one browser test passed. It checks reload, same-tab navigation,
 ## Quality Gates
 
 - Ruff passed for the licensing package, the portal factory, and the portal smoke tests.
-- Black passed. It left all 16 checked Python files unchanged.
-- Mypy passed with no issues in 847 source files.
+- Black passed. It left all 17 checked Python files unchanged.
+- Mypy passed with no issues in 850 source files.
 - Bandit passed for the licensing package.
 - The complexity gate found no function above the limit of 10.
 - The documentation linter passed for the six checked Markdown files. Their scores ranged from 96 to 100 out of 100.
@@ -60,4 +60,4 @@ Observed result: one browser test passed. It checks reload, same-tab navigation,
 
 ## Portal Integration
 
-The app registers the licensing comparison blueprint and navigation link in the existing portal. The portal smoke tests verify the page selectors and the missing-session response. The feature adds no server, database, Redis service, or public port.
+The app registers the licensing comparison blueprint and navigation link in the existing portal. The link appears only when its route exists. The portal smoke tests verify the page selectors and the missing-session response. The package guards pass with five direct feature modules and five E2E root entries. The feature adds no server, database, Redis service, or public port.

@@ -8,8 +8,11 @@ import pytest
 
 import src.interfaces.portals.licensing_comparison.api as licensing_api
 from src.interfaces.portals.licensing_comparison.api import MistApiRequester, OrganizationDataReader, ServiceContext
-from src.interfaces.portals.licensing_comparison.service import LicensingComparisonService
-from src.interfaces.portals.licensing_comparison.validation import ManualRowValidator, OrganizationIdValidator
+from src.interfaces.portals.licensing_comparison.service import (
+    LicensingComparisonService,
+    ManualRowValidator,
+    OrganizationIdValidator,
+)
 
 API_SESSION = object()  # Use one test session marker to prove that the service shares it.
 

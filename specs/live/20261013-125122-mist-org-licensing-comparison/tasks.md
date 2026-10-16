@@ -98,13 +98,14 @@ description: "Implementation tasks for Mist Organization Licensing Comparison"
 
 - [x] T021 [P] Add the feature page, navigation, stable selectors, and missing-session smoke checks to `tests/e2e/web_portal/test_portal_smoke.py`. (delivered: `tests/e2e/web_portal/test_portal_smoke.py`)
 - [x] T022 Update `specs/live/20261013-125122-mist-org-licensing-comparison/quickstart.md` with isolated test commands and observed results. (delivered: `specs/live/20261013-125122-mist-org-licensing-comparison/quickstart.md`)
-- [x] T023 Rerun focused tests, portal smoke tests, formatting, lint, type, complexity, and Bandit checks after the service refactor. (52 tests passed at 93.10 percent feature coverage; Ruff, Black, Mypy, complexity, and Bandit passed.)
+- [x] T023 Rerun focused tests, portal smoke tests, formatting, lint, type, complexity, and Bandit checks after the service refactor. (52 tests passed at 93.05 percent feature coverage; Ruff, Black, Mypy, complexity, and Bandit passed.)
 - [x] T024 Check the feature package layout, infrastructure files, and final scope. (five package entries; `compose.yml`, dependency files, `MistHelper.py`, and the protected portal files remain unchanged.)
 - [x] T025 Add SDK transport contract tests for shared-session authentication, supported endpoint use, pagination, the single rate-limit retry, and redaction of tokens and exception text in `tests/integration/web_portal/licensing_comparison/test_transport_contract.py`. (delivered: `tests/integration/web_portal/licensing_comparison/test_transport_contract.py`)
-- [x] T026 Add browser tests for session-state persistence through page reload and in-page navigation, empty state in a new browser session, and input validation in `tests/e2e/licensing_comparison/test_session_state.py`. (delivered: `tests/e2e/licensing_comparison/test_session_state.py`)
+- [x] T026 Add browser tests for session-state persistence through page reload and in-page navigation, empty state in a new browser session, and input validation in `tests/e2e/web_portal/licensing_comparison/test_session_state.py`. (delivered: `tests/e2e/web_portal/licensing_comparison/test_session_state.py`)
 - [x] T027 Review the new code against all seven constitutional principles. Verify class-based ownership, function limits, inline comments, ASCII structured logs, action logs, and secret redaction. (Class responsibilities and function limits pass. API and export actions use parameterized ASCII logs. Transport tests verify secret redaction. No production deployment occurred.)
 - [x] T028 Update `README.md` with a link to the comparison page. Add `documentation/licensing-comparison.md` and `changelog.d/issue-4197-mist-org-licensing-comparison.md` with an Added bullet that names issue #4197. (delivered: `README.md`, `documentation/licensing-comparison.md`, `changelog.d/issue-4197-mist-org-licensing-comparison.md`)
 - [x] T029 Run local gates, build the feature manifest, stage explicit files, commit, rebase on `origin/main`, and rerun affected gates before push. (Two commits are rebased on `origin/main`. Focused tests, coverage, Ruff, Black, Mypy, complexity, Bandit, STE, and the committed test-quality gate passed.)
+- [x] T031 Resolve CI package and template regressions for issue #4197. Keep feature navigation conditional on route registration, place E2E tests under the existing portal package, and keep the feature within five direct Python modules. (101 focused tests passed. The nested package and E2E package guards passed. Coverage is 93.05 percent.)
 - [ ] T030 After approval, open the implementation PR, pass CI, squash merge, wait for the main image build, verify its revision, deploy the approved image, and check health.
 
 ## Dependencies and Execution Order
@@ -156,14 +157,14 @@ description: "Implementation tasks for Mist Organization Licensing Comparison"
 
 - The feature owns `src/interfaces/portals/licensing_comparison/__init__.py`, `routes.py`, `service.py`, `static/licensing_comparison.css`, `static/licensing_comparison.js`, and `templates/licensing_comparison.html`.
 - The feature owns `tests/integration/web_portal/licensing_comparison/__init__.py`, `test_export.py`, `test_routes.py`, `test_service.py`, and `test_transport_contract.py`.
-- The feature owns `tests/e2e/licensing_comparison/conftest.py`, `test_routes.py`, and `test_session_state.py`.
+- The feature owns `tests/e2e/web_portal/licensing_comparison/conftest.py`, `test_routes.py`, and `test_session_state.py`.
 - The feature owns `documentation/licensing-comparison-attribution.md`, `documentation/licensing-comparison.md`, this task record, and `quickstart.md`.
 - The narrow handoff authorizes this feature to register its blueprint and navigation link in `web_portal/app.py` and `web_portal/templates/base.html`. Keep all existing WAN changes from draft PR #4208.
 - The feature does not own `compose.yml`, `requirements.txt`, `requirements-dev.txt`, or `MistHelper.py`.
 - T003 and T021 are complete under the narrow handoff. The changes add licensing registration and smoke coverage without removing or rewriting WAN behavior from draft PR #4208.
 - T023 is complete. The focused tests and listed local quality gates passed after the service refactor.
 - T027 is complete. No production deployment occurred because T030 requires approval.
-- T024 passed. The feature package has five direct entries, and no database, Redis service, or port was added.
+- T024 passed. The package guard counts five direct Python modules. The E2E root keeps its five existing entries, and no database, Redis service, or port was added.
 - T028 is complete. The page is registered and the README and release note describe the delivered feature.
 - T029 is complete. T030 remains open for approval, CI, merge, image verification, and deployment.
 - Use synthetic Mist responses. Do not use production credentials.
