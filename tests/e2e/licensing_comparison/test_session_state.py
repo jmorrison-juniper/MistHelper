@@ -10,7 +10,7 @@ import pytest
 from flask import Flask
 from werkzeug.serving import make_server
 
-import src.interfaces.portals.licensing_comparison.service as licensing_service
+import src.interfaces.portals.licensing_comparison.api as licensing_api
 from src.interfaces.portals.licensing_comparison import licensing_comparison_bp
 
 
@@ -37,11 +37,11 @@ def licensing_portal_url(monkeypatch: pytest.MonkeyPatch) -> Iterator[str]:
         "getOrgInventory": [],
     }  # Use synthetic data for every browser request.
     for module, operation in (
-        (licensing_service.self_api, "getSelf"),
-        (licensing_service.license_types_api, "listLicenseTypes"),
-        (licensing_service.licenses_api, "getOrgLicensesSummary"),
-        (licensing_service.licenses_api, "getOrgLicensesBySite"),
-        (licensing_service.inventory_api, "getOrgInventory"),
+        (licensing_api.self_api, "getSelf"),
+        (licensing_api.license_types_api, "listLicenseTypes"),
+        (licensing_api.licenses_api, "getOrgLicensesSummary"),
+        (licensing_api.licenses_api, "getOrgLicensesBySite"),
+        (licensing_api.inventory_api, "getOrgInventory"),
     ):  # Replace the SDK calls that the page can trigger.
         monkeypatch.setattr(
             module,
@@ -51,7 +51,7 @@ def licensing_portal_url(monkeypatch: pytest.MonkeyPatch) -> Iterator[str]:
             ),
         )  # Return a local success response with no network access.
     monkeypatch.setattr(
-        licensing_service.RateLimitingUtils,
+        licensing_api.RateLimitingUtils,
         "get_rate_limited_delay",
         lambda *_arguments: (None, 0.0),
     )  # Prevent test requests from sleeping.

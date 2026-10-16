@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from flask.testing import FlaskClient
 
-import src.interfaces.portals.licensing_comparison.routes as licensing_routes
+import src.interfaces.portals.licensing_comparison.export as licensing_export
 
 
 def test_dashboard_renders_source_attribution(licensing_client: FlaskClient) -> None:
@@ -57,8 +57,8 @@ def test_csv_export_reports_a_shared_writer_failure(
 ) -> None:
     """Return an explicit server error when the shared exporter fails."""
     monkeypatch.setattr(
-        licensing_routes.DataExporter,
-        "write_with_format_selection",
+        licensing_export.CsvExportService,
+        "_persist",
         lambda *_arguments, **_keywords: False,
     )  # Force a controlled exporter failure.
     response = licensing_client.post(

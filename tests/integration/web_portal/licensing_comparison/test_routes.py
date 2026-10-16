@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import pytest
 from flask import Flask
 
-import src.interfaces.portals.licensing_comparison.service as licensing_service
+import src.interfaces.portals.licensing_comparison.api as licensing_api
 from src.interfaces.portals.licensing_comparison import licensing_comparison_bp
 
 
@@ -48,17 +48,17 @@ def test_organization_route_reports_a_missing_session() -> None:
 def test_organization_route_returns_direct_and_msp_choices(monkeypatch: pytest.MonkeyPatch) -> None:
     """Return organizations from the direct context and granted MSP access."""
     monkeypatch.setattr(
-        licensing_service.self_api,
+        licensing_api.self_api,
         "getSelf",
         lambda _session: SimpleNamespace(status_code=200, data={"privileges": [{"msp_id": "msp-1"}]}),
     )  # Grant access to one MSP.
     monkeypatch.setattr(
-        licensing_service.msp_orgs_api,
+        licensing_api.msp_orgs_api,
         "listMspOrgs",
         lambda _session, _msp_id: SimpleNamespace(status_code=200, data=[{"id": "org-2", "name": "Managed"}]),
     )  # Return the organizations from that grant.
     monkeypatch.setattr(
-        licensing_service.RateLimitingUtils,
+        licensing_api.RateLimitingUtils,
         "get_rate_limited_delay",
         lambda *_arguments: (None, 0.0),
     )  # Prevent real waiting.
@@ -74,12 +74,12 @@ def test_compare_route_rejects_an_unauthorized_organization(
 ) -> None:
     """Reject an organization ID that does not come from session access."""
     monkeypatch.setattr(
-        licensing_service.self_api,
+        licensing_api.self_api,
         "getSelf",
         lambda _session: SimpleNamespace(status_code=200, data={"privileges": []}),
     )  # Expose no MSP grants.
     monkeypatch.setattr(
-        licensing_service.RateLimitingUtils,
+        licensing_api.RateLimitingUtils,
         "get_rate_limited_delay",
         lambda *_arguments: (None, 0.0),
     )  # Prevent real waiting.
@@ -100,27 +100,27 @@ def test_compare_route_preserves_http_4xx_and_5xx_failures(
 ) -> None:
     """Keep failed Mist status codes visible in partial route results."""
     monkeypatch.setattr(
-        licensing_service.self_api,
+        licensing_api.self_api,
         "getSelf",
         lambda _session: SimpleNamespace(status_code=200, data={"privileges": []}),
     )  # Allow only the configured direct organization.
     monkeypatch.setattr(
-        licensing_service.licenses_api,
+        licensing_api.licenses_api,
         "getOrgLicensesSummary",
         lambda _session, _org_id: SimpleNamespace(status_code=failure_status, data={"error": "synthetic"}, next=None),
     )  # Return one synthetic client or server error.
     monkeypatch.setattr(
-        licensing_service.licenses_api,
+        licensing_api.licenses_api,
         "getOrgLicensesBySite",
         lambda _session, _org_id: SimpleNamespace(status_code=200, data=[], next=None),
     )  # Return a successful site read.
     monkeypatch.setattr(
-        licensing_service.inventory_api,
+        licensing_api.inventory_api,
         "getOrgInventory",
         lambda _session, _org_id, **_keywords: SimpleNamespace(status_code=200, data=[], next=None),
     )  # Return a successful inventory read.
     monkeypatch.setattr(
-        licensing_service.RateLimitingUtils,
+        licensing_api.RateLimitingUtils,
         "get_rate_limited_delay",
         lambda *_arguments: (None, 0.0),
     )  # Prevent real waiting.

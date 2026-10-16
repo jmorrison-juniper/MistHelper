@@ -3,18 +3,15 @@
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime
 from pathlib import Path
-from uuid import uuid4
 
-from flask import Response, current_app, jsonify, render_template, request, send_file
+from flask import Response, current_app, jsonify, render_template, request
 
-from src.foundation.models.dataclasses.export_backend_options import ExportBackendOptions
 from src.interfaces.portals.licensing_comparison import licensing_comparison_bp
-from src.interfaces.portals.licensing_comparison.service import LicensingComparisonService, ServiceContext
+from src.interfaces.portals.licensing_comparison.api import ServiceContext
+from src.interfaces.portals.licensing_comparison.export import ComparisonExportRows, CsvExportService
+from src.interfaces.portals.licensing_comparison.service import LicensingComparisonService
 from src.mist.access.api import api_usage_cache
-from src.operations.exporting.export.data_exporter import DataExporter
-from web_portal.services.data_browser import DataBrowserService
 
 logger = logging.getLogger(__name__)
 
@@ -69,36 +66,13 @@ def compare_organizations() -> tuple[Response, int]:
 def export_comparison() -> Response | tuple[Response, int]:
     """Write an operator-requested CSV through the shared data exporter."""
     payload = request.get_json(silent=True)
-    rows, error = LicensingComparisonService.export_rows(payload)
+    rows, error = ComparisonExportRows.build(payload)
     if error:
         return jsonify({"error": error}), 400
-    data_dir = Path(current_app.config.get("DATA_DIR", "data")).resolve()
-    filename = f"mist_org_licensing_comparison_{datetime.now(UTC):%Y%m%dT%H%M%SZ}_{uuid4().hex[:8]}.csv"
-    target = data_dir / filename
-    logger.info("Writing %d licensing comparison rows to CSV.", len(rows))
-    written = DataExporter.write_with_format_selection(
-        rows,
-        str(target),
-        api_function_name=None,  # type: ignore[arg-type]  # CSV export must not mirror operator input to a database.
-        fieldnames=[
-            "organization",
-            "organization_id",
-            "source",
-            "source_attribution",
-            "request_status",
-            "license_summary",
-            "license_use_by_site",
-            "inventory",
-            "balances",
-        ],
-        backend_options=ExportBackendOptions(format_override="csv"),
-    )
-    if not written:
-        logger.error("The licensing comparison CSV write failed.")
+    response, error = CsvExportService(Path(current_app.config.get("DATA_DIR", "data"))).write(rows)
+    if error:
+        return jsonify({"error": error}), 500
+    if response is None:
+        logger.error("The CSV export completed without a download response.")
         return jsonify({"error": "The CSV export failed. Try again."}), 500
-    resolved = DataBrowserService(str(data_dir)).resolve_safe_path(filename)
-    if resolved is None:
-        logger.error("The licensing comparison CSV could not be resolved below the data directory.")
-        return jsonify({"error": "The CSV export could not be read from the data directory."}), 500
-    logger.debug("Prepared the licensing comparison CSV download.")
-    return send_file(resolved, as_attachment=True, download_name=filename, mimetype="text/csv")
+    return response

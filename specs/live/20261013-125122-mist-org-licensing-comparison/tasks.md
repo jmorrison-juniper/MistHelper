@@ -98,7 +98,7 @@ description: "Implementation tasks for Mist Organization Licensing Comparison"
 
 - [x] T021 [P] Add the feature page, navigation, stable selectors, and missing-session smoke checks to `tests/e2e/web_portal/test_portal_smoke.py`. (delivered: `tests/e2e/web_portal/test_portal_smoke.py`)
 - [x] T022 Update `specs/live/20261013-125122-mist-org-licensing-comparison/quickstart.md` with isolated test commands and observed results. (delivered: `specs/live/20261013-125122-mist-org-licensing-comparison/quickstart.md`)
-- [x] T023 Run focused tests, portal smoke tests, formatting, lint, type, complexity, and Bandit checks for the feature package and its tests. (42 tests passed at 88.13 percent feature coverage; Ruff, Black, Mypy, complexity, and Bandit passed.)
+- [x] T023 Rerun focused tests, portal smoke tests, formatting, lint, type, complexity, and Bandit checks after the service refactor. (52 tests passed at 93.10 percent feature coverage; Ruff, Black, Mypy, complexity, and Bandit passed.)
 - [x] T024 Check the feature package layout, infrastructure files, and final scope. (five package entries; `compose.yml`, dependency files, `MistHelper.py`, and the protected portal files remain unchanged.)
 - [x] T025 Add SDK transport contract tests for shared-session authentication, supported endpoint use, pagination, the single rate-limit retry, and redaction of tokens and exception text in `tests/integration/web_portal/licensing_comparison/test_transport_contract.py`. (delivered: `tests/integration/web_portal/licensing_comparison/test_transport_contract.py`)
 - [x] T026 Add browser tests for session-state persistence through page reload and in-page navigation, empty state in a new browser session, and input validation in `tests/e2e/licensing_comparison/test_session_state.py`. (delivered: `tests/e2e/licensing_comparison/test_session_state.py`)
@@ -161,9 +161,9 @@ description: "Implementation tasks for Mist Organization Licensing Comparison"
 - The narrow handoff authorizes this feature to register its blueprint and navigation link in `web_portal/app.py` and `web_portal/templates/base.html`. Keep all existing WAN changes from draft PR #4208.
 - The feature does not own `compose.yml`, `requirements.txt`, `requirements-dev.txt`, or `MistHelper.py`.
 - T003 and T021 are complete under the narrow handoff. The changes add licensing registration and smoke coverage without removing or rewriting WAN behavior from draft PR #4208.
-- T023 is complete. The focused tests and listed local quality gates passed.
-- T027 remains open because the full deployment principle needs integration and delivery steps that this task excludes.
+- T023 is complete. The focused tests and listed local quality gates passed after the service refactor.
+- T027 remains open because the final deployment safety check needs approval and deployment steps outside this task.
 - T024 passed. The feature package has five direct entries, and no database, Redis service, or port was added.
 - T028 is complete. The page is registered and the README and release note describe the delivered feature.
-- T029 and T030 remain open. No commit, push, implementation PR, or deployment occurred.
+- A local implementation commit exists. The service refactor remains uncommitted. No push, implementation PR, merge, or deployment occurred.
 - Use synthetic Mist responses. Do not use production credentials.

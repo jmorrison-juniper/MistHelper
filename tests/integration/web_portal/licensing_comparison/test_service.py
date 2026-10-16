@@ -6,8 +6,10 @@ from typing import Any
 
 import pytest
 
-import src.interfaces.portals.licensing_comparison.service as licensing_service
-from src.interfaces.portals.licensing_comparison.service import LicensingComparisonService, ServiceContext
+import src.interfaces.portals.licensing_comparison.api as licensing_api
+from src.interfaces.portals.licensing_comparison.api import MistApiRequester, OrganizationDataReader, ServiceContext
+from src.interfaces.portals.licensing_comparison.service import LicensingComparisonService
+from src.interfaces.portals.licensing_comparison.validation import ManualRowValidator, OrganizationIdValidator
 
 API_SESSION = object()  # Use one test session marker to prove that the service shares it.
 
@@ -20,16 +22,16 @@ class StubMistApi:
         self.responses = responses  # Keep each operation's prepared response.
         self.calls: list[tuple[str, tuple[Any, ...], dict[str, Any]]] = []  # Record SDK arguments.
         for module, operation in (
-            (licensing_service.self_api, "getSelf"),
-            (licensing_service.msp_orgs_api, "listMspOrgs"),
-            (licensing_service.licenses_api, "getOrgLicensesSummary"),
-            (licensing_service.licenses_api, "getOrgLicensesBySite"),
-            (licensing_service.inventory_api, "getOrgInventory"),
-            (licensing_service.license_types_api, "listLicenseTypes"),
+            (licensing_api.self_api, "getSelf"),
+            (licensing_api.msp_orgs_api, "listMspOrgs"),
+            (licensing_api.licenses_api, "getOrgLicensesSummary"),
+            (licensing_api.licenses_api, "getOrgLicensesBySite"),
+            (licensing_api.inventory_api, "getOrgInventory"),
+            (licensing_api.license_types_api, "listLicenseTypes"),
         ):  # Patch only the SDK methods used by this service.
             self._patch_method(monkeypatch, module, operation)  # Route the call to the fixture response.
         monkeypatch.setattr(
-            licensing_service.RateLimitingUtils,
+            licensing_api.RateLimitingUtils,
             "get_rate_limited_delay",
             lambda *_arguments: (None, 0.0),
         )  # Prevent shared rate-limit state from sleeping in tests.
@@ -138,7 +140,7 @@ def test_retries_one_rate_limit_response(monkeypatch: pytest.MonkeyPatch) -> Non
         },
     )  # Model one 429 response followed by a successful retry.
     waits: list[int] = []  # Record the retry delay without waiting in real time.
-    monkeypatch.setattr(licensing_service.time, "sleep", waits.append)  # Replace sleep with an observation.
+    monkeypatch.setattr(licensing_api.time, "sleep", waits.append)  # Replace sleep with an observation.
     payload, error, status = service_for_test().compare(["org-1"], [], {})  # Run the normal comparison flow.
     summary_calls = [call for call in api.calls if call[0] == "getOrgLicensesSummary"]  # Count summary attempts.
     assert status == 200  # The retry allows the comparison to complete.
@@ -161,7 +163,9 @@ def test_reads_all_inventory_pages_using_installed_page_arguments(
         monkeypatch,
         {"getOrgInventory": deque([api_response(200, page_records[0], "/next"), api_response(200, page_records[1])])},
     )  # Make the first page advertise a next page.
-    result = service_for_test()._read_inventory("org-1")  # Read the endpoint directly for page assertions.
+    context = ServiceContext(API_SESSION, "org-1", "Primary", {})  # Reuse the synthetic session context.
+    requester = MistApiRequester(context)  # Apply the production request policy.
+    result = OrganizationDataReader(context, requester).read_inventory("org-1")  # Read pages for contract assertions.
     page_calls = [call for call in api.calls if call[0] == "getOrgInventory"]  # Collect inventory requests.
     assert result.succeeded is True  # Both pages completed with HTTP 2xx.
     assert len(result.data) == 1001  # Preserve every inventory record across the two pages.
@@ -231,3 +235,67 @@ def test_rejects_fractional_manual_license_counts(monkeypatch: pytest.MonkeyPatc
         "Manual license and inventory counts must be non-negative whole numbers."
     )  # Identify the invalid count.
     assert [call[0] for call in api.calls] == ["getSelf"]  # Avoid license reads after validation fails.
+
+
+@pytest.mark.parametrize(
+    ("rows", "expected_error"),
+    [
+        (None, "Manual rows must be a list."),
+        ([None], "Each manual row must be an object."),
+        ([{"row_id": "invalid", "name": "Manual"}], "Each manual row needs a valid row_id."),
+        ([{"row_id": "manual-one", "name": " "}], "Each manual row needs a name of 1 to 120 characters."),
+        (
+            [{"row_id": "manual-one", "name": "Manual", "licenses": {"SUB-AI": -1}}],
+            "Manual license and inventory counts must be non-negative whole numbers.",
+        ),
+    ],
+)
+def test_manual_row_validation_rejects_invalid_shapes(rows: Any, expected_error: str) -> None:
+    """Reject malformed manual rows before the comparison uses their data."""
+    clean_rows, error = ManualRowValidator.validate_manual_rows(rows, [])
+    assert clean_rows == []
+    assert error == expected_error
+
+
+def test_manual_row_validation_rejects_duplicate_names_and_identifiers() -> None:
+    """Prevent manual rows from shadowing accessible organizations or each other."""
+    choices = [{"org_id": "org-1", "name": "Primary", "source": "direct"}]
+    rows = [{"row_id": "manual-one", "name": "Primary"}]
+    clean_rows, name_error = ManualRowValidator.validate_manual_rows(rows, choices)
+    duplicate_rows = [
+        {"row_id": "manual-one", "name": "Office"},
+        {"row_id": "manual-one", "name": "Second office"},
+    ]
+    duplicate_result, identifier_error = ManualRowValidator.validate_manual_rows(duplicate_rows, [])
+    assert clean_rows == []
+    assert name_error == "Manual organization names must be unique."
+    assert duplicate_result == []
+    assert identifier_error == "Manual row identifiers must be unique."
+
+
+@pytest.mark.parametrize(
+    ("purchases", "expected_error"),
+    [
+        (None, "Purchased amounts must be an object."),
+        ({"org-2": {"SUB-AI": 1}}, "Purchased amounts name an organization that is not in this comparison."),
+        (
+            {"org-1": {"SUB-AI": 1.5}},
+            "Purchased amounts must use supported license names and non-negative whole numbers.",
+        ),
+    ],
+)
+def test_purchase_validation_rejects_invalid_values(purchases: Any, expected_error: str) -> None:
+    """Reject purchase data that uses invalid organizations or counts."""
+    clean_purchases, error = ManualRowValidator.validate_purchases(purchases, {"org-1"})
+    assert clean_purchases == {}
+    assert error == expected_error
+
+
+def test_organization_id_validation_rejects_invalid_and_duplicate_values() -> None:
+    """Reject non-string organization IDs and duplicate selections."""
+    invalid_ids, invalid_error = OrganizationIdValidator.validate(["org-1", None])
+    duplicate_ids, duplicate_error = OrganizationIdValidator.validate(["org-1", "org-1"])
+    assert invalid_ids is None
+    assert invalid_error == "Organization IDs must be a list of non-empty strings."
+    assert duplicate_ids is None
+    assert duplicate_error == "The organization list contains duplicate IDs."

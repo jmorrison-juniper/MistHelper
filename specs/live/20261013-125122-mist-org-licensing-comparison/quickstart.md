@@ -16,10 +16,10 @@ This guide records checks for the licensing comparison page in the shared portal
 Run the service, route, export, and browser tests:
 
 ```bash
-./.venv/bin/python -m pytest -q tests/integration/web_portal/licensing_comparison tests/e2e/licensing_comparison
+./.venv/bin/python -m pytest -q tests/integration/web_portal/licensing_comparison tests/e2e/licensing_comparison tests/e2e/web_portal/test_portal_smoke.py --cov=src/interfaces/portals/licensing_comparison --cov-report=term-missing
 ```
 
-Observed result: 42 focused licensing and portal smoke tests passed in 2.04 seconds. Feature coverage was 88.13 percent. The tests cover authorized organizations, input validation, HTTP 4xx and 5xx responses, pagination, one retry after HTTP 429, bundle balances, CSV output, source attribution, and browser session state.
+Observed result: 52 focused licensing and portal smoke tests passed in 2.14 seconds. Feature coverage was 93.10 percent. The tests cover authorized organizations, input validation, HTTP 4xx and 5xx responses, pagination, one retry after HTTP 429, bundle balances, CSV output, source attribution, and browser session state.
 
 ## Validate the Mist SDK
 
@@ -29,13 +29,13 @@ The focused test suite checks the installed SDK methods, explicit inventory pagi
 ./.venv/bin/python -m pytest -q tests/integration/web_portal/licensing_comparison/test_transport_contract.py tests/integration/web_portal/licensing_comparison/test_service.py
 ```
 
-The repository type check also passed:
+Run the repository type check:
 
 ```bash
 ./.venv/bin/mypy src/ --config-file pyproject.toml
 ```
 
-Observed result: `Success: no issues found in 843 source files`.
+Observed result: `Success: no issues found in 847 source files`.
 
 ## Validate Browser Session State
 
@@ -50,13 +50,13 @@ Observed result: one browser test passed. It checks reload, same-tab navigation,
 ## Quality Gates
 
 - Ruff passed for the licensing package, the portal factory, and the portal smoke tests.
-- Black passed. It left all 13 checked Python files unchanged.
+- Black passed. It left all 16 checked Python files unchanged.
 - Mypy passed with no issues in 847 source files.
 - Bandit passed for the licensing package.
 - The complexity gate found no function above the limit of 10.
 - The documentation linter passed for the six checked Markdown files. Their scores ranged from 96 to 100 out of 100.
 - The local Markdown link scan checked 47 links across six files and found no broken local links. The documented link-check command is not installed in this worktree.
-- The test-quality gate remains pending until the implementation commit exists.
+- The test-quality gate passed for the first implementation commit. Rerun it after the refactor commit.
 
 ## Portal Integration
 
