@@ -30,6 +30,7 @@ class ComparisonExportRows:
         """Neutralize formula markers in text cells before CSV export."""
         if not isinstance(value, str):
             return value
+        # Spreadsheet formula prefixes must remain inert when an operator opens the CSV.
         if value.lstrip(" \t\r\n").startswith(("=", "+", "-", "@")):
             return "'" + value
         return value

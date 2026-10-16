@@ -56,7 +56,7 @@ Observed result: one browser test passed. It checks reload, same-tab navigation,
 - The complexity gate found no function above the limit of 10.
 - The documentation linter passed for the six checked Markdown files. Their scores ranged from 96 to 100 out of 100.
 - The local Markdown link scan checked 47 links across six files and found no broken local links. The documented link-check command is not installed in this worktree.
-- The test-quality gate passed for the first implementation commit. Rerun it after the refactor commit.
+- The test-quality gate checked seven test files, found zero findings, and reported zero new findings.
 
 ## Portal Integration
 

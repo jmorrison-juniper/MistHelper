@@ -75,6 +75,7 @@ class MistApiRequester:
             return ApiOutcome(operation, None, error="The Mist API session is unavailable.")
         for attempt in range(2):
             outcome = self._request_once(operation, target, request_call)
+            # A single retry respects the Mist rate limit without an unbounded loop.
             if outcome.status_code != 429 or attempt != 0:
                 return outcome
             logger.warning("Mist limited %s for %s. Waiting 60 seconds before one retry.", operation, target)
@@ -91,6 +92,7 @@ class MistApiRequester:
             logger.error("Mist request %s for %s failed with %s.", operation, target, type(error).__name__)
             return ApiOutcome(operation, None, error=f"{operation} could not reach Mist.")
         status = getattr(response, "status_code", None)
+        # Reject malformed SDK responses before status comparisons.
         if type(status) is not int:
             return ApiOutcome(operation, None, error=f"{operation} returned no valid HTTP status.")
         if not 200 <= status < 300:
@@ -166,6 +168,7 @@ class OrganizationAccess:
         direct = self._choice(self.context.organization_id, self.context.organization_name, "direct")
         if direct is not None:
             choices[direct["org_id"]] = direct
+        # MSP access must come from the active profile, not from submitted IDs.
         msp_ids = self._granted_msp_ids(profile.data.get("privileges", []))
         if msp_ids is None:
             return list(choices.values()), [
@@ -233,6 +236,7 @@ class OrganizationDataReader:
                     "Mist returned invalid inventory data.",
                 )
             records.extend(result.data)
+            # Continue after a full page or an explicit SDK next link.
             if not result.has_more and len(result.data) < page_size:
                 return ApiOutcome("getOrgInventory", result.status_code, records)
             page_number += 1

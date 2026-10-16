@@ -56,6 +56,7 @@ class BalanceCalculator:
         for license_name, purchased_count in purchases.items():
             used_count = used_counts.get(license_name.upper().replace("_", "-"))
             catalog_item = catalog_index.get(license_name.casefold().replace("-", "_"))
+            # Unknown usage stays unknown instead of becoming a false zero balance.
             balances.append(
                 {
                     "license_type": license_name,
@@ -79,6 +80,7 @@ class BalanceCalculator:
             return []
         components: list[dict[str, Any]] = []
         for component, multiplier in Counter(item for item in includes if isinstance(item, str)).items():
+            # Repeated catalog entries multiply the purchased component count.
             component_name = component.upper().replace("_", "-")
             component_used = used_counts.get(component_name)
             components.append(

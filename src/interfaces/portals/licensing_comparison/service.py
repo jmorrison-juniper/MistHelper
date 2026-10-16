@@ -57,6 +57,7 @@ class ComparisonCoordinator:
             return None, error or "Organization IDs must be a list of non-empty strings.", 400
         choices, discovery_errors = self.access.discover()
         allowed = {choice["org_id"]: choice for choice in choices}
+        # Never trust an organization ID that the active session did not discover.
         if any(org_id not in allowed for org_id in valid_ids):
             return None, "The request includes an organization that this session cannot access.", 403
         clean_manual, error = ManualRowValidator.validate_manual_rows(manual_rows, choices)

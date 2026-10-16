@@ -94,6 +94,7 @@ class ManualRowValidator:
         """Validate purchased counts and their organization keys."""
         if not isinstance(purchases, dict):
             return {}, "Purchased amounts must be an object."
+        # Never accept purchase rows for organizations outside this comparison.
         if any(not isinstance(row_id, str) or row_id not in row_ids for row_id in purchases):
             return {}, "Purchased amounts name an organization that is not in this comparison."
         clean_purchases: dict[str, dict[str, int]] = {}

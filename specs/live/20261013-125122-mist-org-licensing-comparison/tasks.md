@@ -102,9 +102,9 @@ description: "Implementation tasks for Mist Organization Licensing Comparison"
 - [x] T024 Check the feature package layout, infrastructure files, and final scope. (five package entries; `compose.yml`, dependency files, `MistHelper.py`, and the protected portal files remain unchanged.)
 - [x] T025 Add SDK transport contract tests for shared-session authentication, supported endpoint use, pagination, the single rate-limit retry, and redaction of tokens and exception text in `tests/integration/web_portal/licensing_comparison/test_transport_contract.py`. (delivered: `tests/integration/web_portal/licensing_comparison/test_transport_contract.py`)
 - [x] T026 Add browser tests for session-state persistence through page reload and in-page navigation, empty state in a new browser session, and input validation in `tests/e2e/licensing_comparison/test_session_state.py`. (delivered: `tests/e2e/licensing_comparison/test_session_state.py`)
-- [ ] T027 Review the new code against all seven constitutional principles. Verify class-based ownership, function limits, inline comments, ASCII structured logs, action logs, and secret redaction.
+- [x] T027 Review the new code against all seven constitutional principles. Verify class-based ownership, function limits, inline comments, ASCII structured logs, action logs, and secret redaction. (Class responsibilities and function limits pass. API and export actions use parameterized ASCII logs. Transport tests verify secret redaction. No production deployment occurred.)
 - [x] T028 Update `README.md` with a link to the comparison page. Add `documentation/licensing-comparison.md` and `changelog.d/issue-4197-mist-org-licensing-comparison.md` with an Added bullet that names issue #4197. (delivered: `README.md`, `documentation/licensing-comparison.md`, `changelog.d/issue-4197-mist-org-licensing-comparison.md`)
-- [ ] T029 Run local gates, build the feature manifest, stage explicit files, commit, rebase on `origin/main`, and rerun affected gates before push.
+- [x] T029 Run local gates, build the feature manifest, stage explicit files, commit, rebase on `origin/main`, and rerun affected gates before push. (Two commits are rebased on `origin/main`. Focused tests, coverage, Ruff, Black, Mypy, complexity, Bandit, STE, and the committed test-quality gate passed.)
 - [ ] T030 After approval, open the implementation PR, pass CI, squash merge, wait for the main image build, verify its revision, deploy the approved image, and check health.
 
 ## Dependencies and Execution Order
@@ -162,8 +162,8 @@ description: "Implementation tasks for Mist Organization Licensing Comparison"
 - The feature does not own `compose.yml`, `requirements.txt`, `requirements-dev.txt`, or `MistHelper.py`.
 - T003 and T021 are complete under the narrow handoff. The changes add licensing registration and smoke coverage without removing or rewriting WAN behavior from draft PR #4208.
 - T023 is complete. The focused tests and listed local quality gates passed after the service refactor.
-- T027 remains open because the final deployment safety check needs approval and deployment steps outside this task.
+- T027 is complete. No production deployment occurred because T030 requires approval.
 - T024 passed. The feature package has five direct entries, and no database, Redis service, or port was added.
 - T028 is complete. The page is registered and the README and release note describe the delivered feature.
-- A local implementation commit exists. The service refactor remains uncommitted. No push, implementation PR, merge, or deployment occurred.
+- T029 is complete. T030 remains open for approval, CI, merge, image verification, and deployment.
 - Use synthetic Mist responses. Do not use production credentials.
