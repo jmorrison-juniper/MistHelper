@@ -138,7 +138,7 @@ def test_required_read_failure_prevents_planning(tmp_path: Path, status: int) ->
 def test_cli_dry_run_cancel_and_confirm_paths(tmp_path: Path, capsys: Any, dry_run: bool, confirmation: str) -> None:
     """Use familiar model selection without calling any firmware execution method."""
     session = SettingsSession(tmp_path)
-    answers = iter(["1", "1", "1", "DISABLE", "mon", "02:00", confirmation])
+    answers = iter(["1", "1", "1", "1", "DISABLE", "mon", "02:00", confirmation])
     menu = PolicyMenu(
         PolicyApi(session),
         PolicyMenuInputs(lambda: ORG_ID, dry_run=dry_run, data_directory=tmp_path),
@@ -170,6 +170,45 @@ def test_catalog_supports_ap_switch_srx_and_ssr_models(tmp_path: Path) -> None:
     assert session.writes == []
     with pytest.raises(PolicyError, match="not available"):
         PolicyCatalog.validate([FirmwarePolicy("ap", False, {"AP41": "missing"})], catalogs)
+
+
+@pytest.mark.parametrize("model_scope,expected_models", [("1", ["SSR120"]), ("2", ["SSR120", "SSR130"])])
+def test_cli_inventory_scope_and_explicit_all_supported_models(
+    tmp_path: Path, capsys: Any, model_scope: str, expected_models: list[str]
+) -> None:
+    """Use actual SDK catalogs and inventory without settings writes in a dry run."""
+    session = SettingsSession(tmp_path)
+    answers = iter(["3", model_scope, "1", "1", "DISABLE"])
+    PolicyMenu(
+        PolicyApi(session),
+        PolicyMenuInputs(lambda: ORG_ID, dry_run=True, data_directory=tmp_path),
+        PolicyPrompt(lambda prompt: next(answers)),
+    ).run()
+    output = capsys.readouterr().out
+    assert "1: SSR120" in output
+    assert ("2: SSR130" in output) == ("SSR130" in expected_models)
+    assert "Dry run: no settings writes" in output
+    assert session.writes == []
+    assert not (tmp_path / ".firmware-policy-backups").exists()
+    assert any(uri.endswith("/inventory") for uri, _ in session.reads) == (model_scope == "1")
+
+
+def test_cli_empty_inventory_stops_before_settings_preparation(tmp_path: Path, capsys: Any, monkeypatch: Any) -> None:
+    """Explain the explicit all-model choice without silently changing display scope."""
+    session = SettingsSession(tmp_path)
+    api = PolicyApi(session)
+    monkeypatch.setattr(api, "inventory", lambda identifier: [])
+    answers = iter(["1", "1"])
+    PolicyMenu(
+        api,
+        PolicyMenuInputs(lambda: ORG_ID, dry_run=True, data_directory=tmp_path),
+        PolicyPrompt(lambda prompt: next(answers)),
+    ).run()
+    output = capsys.readouterr().out
+    assert "No compatible inventory models" in output
+    assert "Select Show all supported models" in output
+    assert not any(uri.endswith("/setting") for uri, _ in session.reads)
+    assert session.writes == []
 
 
 def test_multiple_organizations_share_one_verified_complete_backup(tmp_path: Path, monkeypatch: Any) -> None:
@@ -216,7 +255,7 @@ def test_msp_selectors_are_reused_without_running_upgrade_workflows(tmp_path: Pa
         calls.append(msp["msp_id"])
         return [{"id": ORG_ID, "name": "MSP organization"}]
 
-    answers = iter(["2", "1", "1", "1", "DISABLE", "any", "any"])
+    answers = iter(["2", "1", "1", "1", "1", "DISABLE", "any", "any"])
     inputs = PolicyMenuInputs(lambda: None, (select_msps, select_orgs), dry_run=True, data_directory=tmp_path)
     PolicyMenu(PolicyApi(session), inputs, PolicyPrompt(lambda prompt: next(answers))).run()
     assert calls == ["msps", ORG_ID]

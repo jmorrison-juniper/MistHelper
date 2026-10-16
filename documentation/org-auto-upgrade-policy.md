@@ -19,11 +19,19 @@ An MSP run offers only model versions available in every selected organization.
 SSR model choices use the supported device-model catalog because the SSR version list has no model field.
 The operation does not invent a version when the API provides none.
 
+By default, the CLI and portal show only models present in at least one selected organization inventory.
+Every displayed model/version pair must remain supported by all selected organizations.
+Select **Show all supported models** to include compatible models absent from inventory.
+This explicit choice does not require an inventory read.
+An empty inventory produces no default model choices. An inventory error stops selection without an automatic full-list fallback.
+Inventory uses all hardware types and checked pagination, including equipment not assigned to a site.
+Model matching ignores letter case. Hardware types remain separate, including SSR and SRX gateways.
+
 ## CLI workflow
 
 1. Select menu 305, or run `python MistHelper.py --menu 305 --dry-run`.
 2. Select the current organization or use the existing MSP organization selectors.
-3. Select the device types and models to configure.
+3. Select the device types, model-list scope, and models to configure.
 4. Select one available version for each selected model.
 5. Type `ENABLE` or `DISABLE` for each selected policy.
 6. For access points, enter a day and `HH:MM` time, or explicitly enter `any`.
@@ -47,7 +55,8 @@ Versions sort by numeric components, highest first, including release and servic
 The first model selection selects its highest available version.
 A later checkbox selection retains your manual version choice.
 All four supported hardware classes use the same model controls.
-Each hardware group has a bounded scrolling model list. Every supported model remains available.
+Each hardware group has a bounded scrolling model list.
+Change the model-list scope, then load versions again. This change clears previous choices and prepared confirmation.
 The AP schedule defaults to every day at `02:00`, in each site's time zone.
 You must still select an explicit enabled or disabled state.
 
@@ -135,7 +144,7 @@ Repeated local verification does not create another bundle or repeat a Mist sett
 Confirmation checks the proof and complete current settings again.
 These checks remain required even after the operator inspects a comparison.
 
-Site lists and gateway inventory use `limit=1000` and complete checked SDK pagination.
+Site lists and organization inventory use `limit=1000` and complete checked SDK pagination.
 Organization site lists contain site metadata, not complete local settings.
 The pinned SDK provides no bulk complete-settings endpoint.
 Pagination helpers cannot add settings fields to a metadata response.

@@ -353,13 +353,13 @@ class PolicyApi:
         return prefix.casefold(), tuple(int(component) for component in number.split(".")), not bool(suffix), components
 
     def inventory(self, org_id: str) -> list[dict[str, Any]]:
-        """Read gateway models because SSR catalog rows do not contain model names."""
+        """Read every inventory type for the default firmware model display."""
         org_id = PolicyResponse.identifier(org_id)  # Check the scope before inventory access.
         with SettingsRequestGuard(self.session):
             return PolicyResponse.collect(
                 self.session,
-                lambda: inventory.getOrgInventory(self.session, org_id, type="gateway", limit=1000),
-                "Read gateway inventory",
+                lambda: inventory.getOrgInventory(self.session, org_id, type="all", limit=1000),
+                "Read organization inventory",
                 org_id,
                 self.guard.request,
             )

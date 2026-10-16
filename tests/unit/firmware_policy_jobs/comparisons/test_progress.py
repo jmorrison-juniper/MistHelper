@@ -55,7 +55,7 @@ def test_supported_lists_use_1000_and_admit_every_sdk_page(tmp_path: Path, monke
     normal.sites(ORG_ID)
     normal.inventory(ORG_ID)
     queries = [query for uri, query in session.reads if uri.endswith(("/sites", "/inventory"))]
-    assert queries == [{"limit": "1000"}, {"type": "gateway", "limit": "1000"}]
+    assert queries == [{"limit": "1000"}, {"type": "all", "limit": "1000"}]
 
 
 @pytest.mark.parametrize("status", [403, 503])
