@@ -252,7 +252,8 @@
 
         controls() {
             element(this.prefix + 'Controls').disabled = this.busy;
-            element(this.prefix + 'Preview').disabled = this.busy || this.locked || (this.prefix === 'policy' && !catalogs);
+            element(this.prefix + 'Preview').disabled = this.busy || this.locked ||
+                (this.prefix === 'policy' && (!catalogs || Object.values(catalogs).some(models => !Object.keys(models).length)));
             element(this.prefix + 'Confirmation').disabled = this.busy || !this.token;
             element(this.prefix + 'Apply').disabled = this.busy || !this.token ||
                 element(this.prefix + 'Confirmation').value !== this.confirmation;
@@ -286,7 +287,7 @@
             this.table.update([]);
             if (this.prefix === 'policy') {
                 sessionStorage.setItem('policy-settings-form', JSON.stringify({
-                    ...body, catalogs, msp: element('policyMsp').value
+                    ...body, catalogs, msp: element('policyMsp').value, show_all: element('policyShowAll').checked
                 }));
             }
             await this.start(this.endpoint + '/preview', body);
@@ -493,6 +494,7 @@
     function scope() {
         return {
             organizations: Array.from(element('policyOrganizations').selectedOptions, item => item.value),
+            show_all: element('policyShowAll').checked,
             kinds: Array.from(document.querySelectorAll('[data-policy-kind]:checked'), item => item.value)
         };
     }
@@ -544,6 +546,12 @@
                 modelList.appendChild(row);
             });
             group.appendChild(modelList);
+            if (!Object.keys(models).length) {
+                const empty = document.createElement('p');
+                empty.textContent = 'No compatible inventory models for this type. Select Show all supported models or another device type.';
+                empty.dataset.testid = 'policy-empty-' + kind;
+                group.appendChild(empty);
+            }
             if (kind === 'ap') {
                 control(group, 'policy-day', 'AP upgrade day (any means every day)', ['any', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']).value = 'any';
                 const label = document.createElement('label');
@@ -616,6 +624,7 @@
     });
     element('policyMsp').addEventListener('change', () => organizations());
     element('policyOrganizations').addEventListener('change', resetCatalog);
+    element('policyShowAll').addEventListener('change', resetCatalog);
     document.querySelectorAll('[data-policy-kind]').forEach(input => input.addEventListener('change', resetCatalog));
     ['change', 'input'].forEach(event => element('policyModels').addEventListener(event, () => policy.invalidate()));
 
@@ -739,6 +748,7 @@
             input.checked = form.policies.some(chosen => chosen.kind === input.value);
         });
         catalogs = form.catalogs;
+        element('policyShowAll').checked = form.show_all === true;
         drawModels();
         form.policies.forEach(chosen => {
             element('policy-enabled-' + chosen.kind).value = chosen.enabled ? 'ENABLE' : 'DISABLE';

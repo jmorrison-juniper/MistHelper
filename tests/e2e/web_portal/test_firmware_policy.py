@@ -65,7 +65,7 @@ def test_catalog_route_excludes_srx_from_switch_choices(
     response = post(
         app.test_client(),
         "/api/firmware-policy/catalog",
-        {"organizations": [ORG_ID], "kinds": ["switch", "juniper_srx"]},
+        {"organizations": [ORG_ID], "kinds": ["switch", "juniper_srx"], "show_all": True},
     )
     assert response.status_code == 200, response.get_data(as_text=True)
     assert response.get_json()["catalogs"] == {
@@ -82,6 +82,54 @@ def test_http_5xx_boundary_hides_private_response_body() -> None:
         PolicyResponse.request(lambda: response, "Read settings", ORG_ID)
     assert "private-fixture" not in str(failure.value)
     assert "credential" not in str(failure.value)
+
+
+@pytest.mark.parametrize("show_all", [False, True])
+def test_catalog_route_inventory_default_and_explicit_all(
+    policy_portal: tuple[Any, SettingsSession], show_all: bool
+) -> None:
+    """The protected route defaults to installed models while retaining explicit future equipment."""
+    app, sdk = policy_portal
+    body: dict[str, Any] = {"organizations": [ORG_ID], "kinds": ["ssr"]}
+    if show_all:
+        body["show_all"] = True
+    response = post(app.test_client(), "/api/firmware-policy/catalog", body)
+    assert response.status_code == 200
+    expected = {"SSR120": ["6.3.0"], "SSR130": ["6.3.0"]} if show_all else {"SSR120": ["6.3.0"]}
+    assert response.get_json() == {"catalogs": {"ssr": expected}}
+    assert any(uri.endswith("/inventory") for uri, _ in sdk.reads) == (not show_all)
+    assert sdk.writes == []
+
+
+@pytest.mark.parametrize("value", ["false", 1, None, []])
+def test_catalog_route_rejects_nonboolean_display_scope(policy_portal: tuple[Any, SettingsSession], value: Any) -> None:
+    """Posted strings must not enable all-model scope through truthiness."""
+    app, sdk = policy_portal
+    response = post(
+        app.test_client(),
+        "/api/firmware-policy/catalog",
+        {"organizations": [ORG_ID], "kinds": ["ap"], "show_all": value},
+    )
+    assert response.status_code == 400
+    assert "must be a boolean" in response.get_json()["error"]
+    assert sdk.reads == []
+    assert sdk.writes == []
+
+
+@pytest.mark.parametrize("status", [403, 503])
+def test_catalog_route_inventory_failure_has_no_full_catalog(
+    policy_portal: tuple[Any, SettingsSession], status: int
+) -> None:
+    """HTTP 4xx and 5xx inventory failures retain checked status without private response data."""
+    app, sdk = policy_portal
+    sdk.fail_read = f"/api/v1/orgs/{ORG_ID}/inventory"
+    sdk.status = status
+    response = post(app.test_client(), "/api/firmware-policy/catalog", {"organizations": [ORG_ID], "kinds": ["ssr"]})
+    assert response.status_code == 400
+    assert f"HTTP {status}" in response.get_json()["error"]
+    assert "catalogs" not in response.get_json()
+    assert "private-fixture" not in response.get_data(as_text=True)
+    assert sdk.writes == []
 
 
 class PolicyJobs:
@@ -115,6 +163,88 @@ def policy_server(policy_portal: tuple[Any, SettingsSession]) -> Iterator[tuple[
     finally:
         server.shutdown()
         thread.join(timeout=10)
+
+
+def test_browser_inventory_scope_invalidates_prepared_confirmation(
+    policy_server: tuple[str, SettingsSession], page: Any
+) -> None:
+    """Use actual protected routes to reveal absent models and invalidate a verified plan."""
+    url, sdk = policy_server
+    page.goto(url + "/operations?menu=305", wait_until="networkidle")
+    expect(page.get_by_test_id("policy-show-all")).not_to_be_checked()
+    page.get_by_test_id("policy-kind-ssr").check()
+    page.get_by_test_id("policy-load").click()
+    expect(page.get_by_test_id("policy-model-list-ssr").locator("[data-model]")).to_have_count(1)
+    expect(page.get_by_test_id("policy-model-list-ssr")).not_to_contain_text("SSR130")
+    page.get_by_test_id("policy-show-all").check()
+    expect(page.get_by_test_id("policy-preview")).to_be_disabled()
+    page.get_by_test_id("policy-load").click()
+    expect(page.get_by_test_id("policy-model-list-ssr").locator("[data-model]")).to_have_count(2)
+    page.get_by_test_id("policy-model-ssr-1").check()
+    page.get_by_test_id("policy-enabled-ssr").select_option("DISABLE")
+    page.get_by_test_id("policy-preview").click()
+    expect(page.get_by_test_id("policy-confirmation")).to_be_visible(timeout=15000)
+    page.reload(wait_until="networkidle")
+    expect(page.get_by_test_id("policy-show-all")).to_be_checked()
+    expect(page.get_by_test_id("policy-model-ssr-1")).to_be_checked()
+    expect(page.get_by_test_id("policy-confirmation")).to_be_visible(timeout=15000)
+    page.get_by_test_id("policy-confirmation").fill("CONFIGURE")
+    expect(page.get_by_test_id("policy-apply")).to_be_enabled()
+    page.get_by_test_id("policy-show-all").uncheck()
+    expect(page.get_by_test_id("policy-confirm-panel")).to_be_hidden()
+    expect(page.get_by_test_id("policy-preview")).to_be_disabled()
+    expect(page.get_by_test_id("policy-models")).not_to_contain_text("SSR130")
+    artifact = BrowserEvidence.path("issue-4253-inventory-model-filter.png")
+    artifact.parent.mkdir(parents=True, exist_ok=True)
+    page.screenshot(path=str(artifact), full_page=True)
+    assert sdk.writes == []
+
+
+def test_browser_empty_inventory_retains_explicit_all_model_control(
+    policy_server: tuple[str, SettingsSession], page: Any, monkeypatch: Any
+) -> None:
+    """Empty membership stays visible and cannot enable preparation through a state selection."""
+    url, sdk = policy_server
+    original = sdk.mist_get
+
+    def empty_inventory(uri: str, query: dict[str, str] | None = None) -> SimpleNamespace:
+        """Supply an actual successful empty inventory response through the SDK boundary."""
+        response = original(uri, query)
+        if uri.endswith("/inventory"):
+            response.data = []
+        return response
+
+    monkeypatch.setattr(sdk, "mist_get", empty_inventory)
+    page.goto(url + "/operations?menu=305", wait_until="networkidle")
+    page.get_by_test_id("policy-kind-ap").check()
+    page.get_by_test_id("policy-load").click()
+    expect(page.get_by_test_id("policy-empty-ap")).to_contain_text("No compatible inventory models")
+    page.get_by_test_id("policy-enabled-ap").select_option("DISABLE")
+    expect(page.get_by_test_id("policy-preview")).to_be_disabled()
+    page.get_by_test_id("policy-show-all").check()
+    page.get_by_test_id("policy-load").click()
+    expect(page.get_by_test_id("policy-model-ap-0")).to_be_visible()
+    expect(page.get_by_test_id("policy-empty-ap")).to_have_count(0)
+    assert sdk.writes == []
+
+
+def test_browser_inventory_error_clears_prior_choices_without_fallback(
+    policy_server: tuple[str, SettingsSession], page: Any
+) -> None:
+    """A failed catalog reload cannot preserve old selections or enable preparation."""
+    url, sdk = policy_server
+    page.goto(url + "/operations?menu=305", wait_until="networkidle")
+    page.get_by_test_id("policy-kind-ap").check()
+    page.get_by_test_id("policy-load").click()
+    expect(page.get_by_test_id("policy-model-ap-0")).to_be_visible()
+    sdk.fail_read = f"/api/v1/orgs/{ORG_ID}/inventory"
+    sdk.status = 503
+    page.get_by_test_id("policy-load").click()
+    expect(page.get_by_test_id("policy-message")).to_contain_text("HTTP 503")
+    expect(page.get_by_test_id("policy-model-ap-0")).to_have_count(0)
+    expect(page.get_by_test_id("policy-preview")).to_be_disabled()
+    expect(page.get_by_test_id("policy-show-all")).not_to_be_checked()
+    assert sdk.writes == []
 
 
 @pytest.mark.parametrize("width", [1440, 800, 390])

@@ -24,6 +24,12 @@ SSR and SRX policies apply at initial onboarding. Only AP policies support a sch
             </div>
             {% endfor %}
         </fieldset>
+        <div class="form-check mt-3">
+            <input id="policyShowAll" type="checkbox" class="form-check-input" data-testid="policy-show-all">
+            <label for="policyShowAll" class="form-check-label">Show all supported models</label>
+        </div>
+        <p class="small text-muted">By default, models must exist in at least one selected organization inventory.
+        Every model version must remain available in all selected organizations.</p>
         <button id="policyLoad" type="button" class="btn btn-accent mt-3"
                 data-testid="policy-load">Load available model versions</button>
     </div>

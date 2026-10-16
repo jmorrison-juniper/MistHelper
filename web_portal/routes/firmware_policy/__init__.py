@@ -10,6 +10,7 @@ from flask import Blueprint, Response, current_app, jsonify, make_response, redi
 from mistapi.api.v1.msps import orgs
 from werkzeug.exceptions import HTTPException
 
+from src.operations.execution.firmware_policy import PolicyInventory
 from src.operations.execution.firmware_policy.changes import POLICY_TYPES, FirmwarePolicy
 from src.operations.execution.firmware_policy.cli import PolicyCatalog
 from src.operations.execution.firmware_policy.sdk import PolicyApi, PolicyError, PolicyResponse, SettingsRequestGuard
@@ -126,9 +127,13 @@ class FirmwarePolicyRoutes:
         kinds = body.get("kinds")  # Require explicit selected types instead of querying unsupported types.
         if not isinstance(kinds, list) or not kinds or any(kind not in POLICY_TYPES for kind in kinds):
             raise PolicyError("Select supported device types.")
+        show_all = body.get("show_all", False)
+        if not isinstance(show_all, bool):
+            raise PolicyError("The Show all supported models value must be a boolean.")
         api = PortalPolicyInputs.api()  # Reuse authenticated identity and catalog admission.
         organizations = [api.organization(identifier) for identifier in identifiers]  # Ignore posted names.
-        catalogs = PolicyCatalog.common(api, organizations, kinds)
+        supported = PolicyCatalog.common(api, organizations, kinds)
+        catalogs = PolicyInventory.display(api, organizations, supported, show_all)
         return jsonify({"catalogs": catalogs})  # Return only non-secret model and version values.
 
     @staticmethod

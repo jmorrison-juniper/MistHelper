@@ -57,7 +57,12 @@ class SettingsSession:
         elif uri.endswith("/ssr/versions"):
             data = [{"package": "SSR", "version": "6.3.0"}]
         elif uri.endswith("/inventory"):
-            data = [{"model": "SSR120", "type": "gateway"}, {"model": "SRX320", "type": "gateway"}]
+            data = [
+                {"model": "AP41", "type": "ap"},
+                {"model": "EX4400", "type": "switch"},
+                {"model": "SSR120", "type": "gateway"},
+                {"model": "SRX320", "type": "gateway"},
+            ]
         elif uri == "/api/v1/const/device_models":
             data = [{"model": "SSR120", "type": "gateway"}, {"model": "SSR130", "type": "gateway"}]
         elif uri == f"/api/v1/orgs/{ORG_ID}":

@@ -11,6 +11,7 @@ from typing import Any
 
 from src.foundation.support.utils.input_utils import InputUtils
 
+from . import PolicyInventory
 from .changes import POLICY_TYPES, FirmwarePolicy
 from .recovery.backup import PolicyBackup
 from .sdk import PolicyApi, PolicyError
@@ -181,7 +182,16 @@ class PolicyMenu:
             print(POLICY_WARNING)  # Do not promise that an enabled policy prevents future upgrades.
             organizations = self._organizations()  # Reuse existing MSP selection without executing upgrades.
             kinds = [POLICY_TYPES[index] for index in self.prompt.indices("Device types", list(POLICY_TYPES))]
-            catalogs = PolicyCatalog.common(self.api, organizations, kinds)  # Validate every organization first.
+            show_all = self.prompt.choice("Model list", ["Inventory models (default)", "Show all supported models"])
+            supported = PolicyCatalog.common(self.api, organizations, kinds)
+            catalogs = PolicyInventory.display(
+                self.api, organizations, supported, show_all == "Show all supported models"
+            )
+            if any(not models for models in catalogs.values()):
+                raise PolicyError(
+                    "No compatible inventory models for a selected type. "
+                    "Select Show all supported models or another device type."
+                )
             policies = [self.prompt.policy(kind, catalogs[kind]) for kind in kinds]  # Select shared model values.
             PolicyCatalog.validate(policies, catalogs)  # Refuse a version not in each organization's catalog.
             workflow = PolicyWorkflow(self.api, PolicyBackup(self.inputs.data_directory), self.inputs.stopped)
