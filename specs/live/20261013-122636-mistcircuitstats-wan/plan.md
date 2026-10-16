@@ -1,6 +1,6 @@
 # Implementation Plan: MistCircuitStats WAN Dashboard
 
-**Branch**: `feat/4195-mistcircuitstats-wan-dashboard` | **Date**: 2026-10-13 | **Spec**: [spec.md](spec.md)
+**Branch**: `jmorrison-juniper-mistcircuitstats-migration` | **Date**: 2026-10-13 | **Spec**: [spec.md](spec.md)
 
 **Input**: Timestamp feature specification in `specs/live/20261013-122636-mistcircuitstats-wan/spec.md`
 

@@ -1,6 +1,6 @@
 # Feature Specification: MistCircuitStats WAN Dashboard
 
-**Feature Branch**: `feat/4195-mistcircuitstats-wan-dashboard`
+**Feature Branch**: `jmorrison-juniper-mistcircuitstats-migration`
 
 **Created**: 2026-10-13
 
