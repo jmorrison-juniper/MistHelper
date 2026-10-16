@@ -47,6 +47,34 @@ def post(client: Any, path: str, body: dict[str, Any], raw_body: bytes | None = 
     return client.post(path, json=body, headers={"X-CSRFToken": match.group(1)})
 
 
+def test_catalog_route_excludes_srx_from_switch_choices(
+    policy_portal: tuple[Any, SettingsSession], monkeypatch: Any
+) -> None:
+    """Keep mixed SDK rows in their correct hardware groups through the protected route."""
+    app, session = policy_portal
+    original_get = session.mist_get
+
+    def mixed_get(uri: str, query: dict[str, str] | None = None) -> SimpleNamespace:
+        """Return mixed switch rows without a cloud request or a settings change."""
+        response = original_get(uri, query)
+        if uri.endswith("/devices/versions") and (query or {}).get("type") == "switch":
+            response.data.extend([{"model": "SRX320", "version": "stable"}, {"model": "QFX5120", "version": "new"}])
+        return response
+
+    monkeypatch.setattr(session, "mist_get", mixed_get)
+    response = post(
+        app.test_client(),
+        "/api/firmware-policy/catalog",
+        {"organizations": [ORG_ID], "kinds": ["switch", "juniper_srx"]},
+    )
+    assert response.status_code == 200, response.get_data(as_text=True)
+    assert response.get_json()["catalogs"] == {
+        "switch": {"EX4400": ["stable", "new"], "QFX5120": ["new"]},
+        "juniper_srx": {"SRX320": ["stable", "new"]},
+    }
+    assert session.writes == []
+
+
 def test_http_5xx_boundary_hides_private_response_body() -> None:
     """Reject a server failure without copying its private body into portal errors."""
     response = SimpleNamespace(status_code=503, data={"credential": "private-fixture"})
