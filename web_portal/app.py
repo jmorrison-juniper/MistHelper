@@ -181,22 +181,28 @@ class WebPortalApp:
     @staticmethod
     def _register_blueprints(app: Flask) -> None:
         """Register all route blueprints with the app."""
+        from src.interfaces.portals.licensing_comparison import (
+            licensing_comparison_bp,  # Load the comparison within the shared portal process.
+        )
         from src.mist.realtime.websocket_streams.web.blueprint.registry import (
-            WebSocketBlueprint,
-        )  # Build the WebSocket routes.
-        from web_portal.routes.dashboard import dashboard_bp
-        from web_portal.routes.data import data_bp
-        from web_portal.routes.maps import maps_bp
-        from web_portal.routes.operations import operations_bp
-        from web_portal.routes.settings import settings_bp
+            WebSocketBlueprint,  # Keep the existing live-stream route factory.
+        )
+        from web_portal.routes.dashboard import dashboard_bp  # Preserve the portal home route.
+        from web_portal.routes.data import data_bp  # Preserve the shared data browser.
+        from web_portal.routes.maps import maps_bp  # Preserve the map viewer.
+        from web_portal.routes.operations import operations_bp  # Preserve the operation runner.
+        from web_portal.routes.settings import settings_bp  # Preserve portal settings.
 
-        app.register_blueprint(dashboard_bp)
-        app.register_blueprint(data_bp)
-        app.register_blueprint(operations_bp)
-        app.register_blueprint(maps_bp)
-        app.register_blueprint(WebSocketBlueprint.create())  # Add the WebSocket page and its short API routes.
-        app.register_blueprint(settings_bp)
-        WebPortalApp._register_webhook_blueprint(app)
+        logger.info("Registering web portal blueprints")  # Mark the route table update before registration.
+        app.register_blueprint(dashboard_bp)  # Keep the portal home route available.
+        app.register_blueprint(data_bp)  # Keep the shared data browser available.
+        app.register_blueprint(operations_bp)  # Keep the operation runner available.
+        app.register_blueprint(maps_bp)  # Keep the map viewer available.
+        app.register_blueprint(WebSocketBlueprint.create())  # Keep the live-stream page and API routes.
+        app.register_blueprint(settings_bp)  # Keep portal settings available.
+        app.register_blueprint(licensing_comparison_bp)  # Add licensing comparison to the existing process.
+        WebPortalApp._register_webhook_blueprint(app)  # Keep the configured Mist webhook route.
+        logger.debug("Registered web portal blueprints")  # Confirm that route registration completed.
 
     @staticmethod
     def _register_webhook_blueprint(app: Flask) -> None:
