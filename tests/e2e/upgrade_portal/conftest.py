@@ -2699,6 +2699,12 @@ def page(context: Any, capture_portal_server: str) -> Iterator[Any]:
         keeps the 401 skips, because that server holds no stand-in record and
         signs with a different key.
 
+        The fixture does not close the page. The function-scoped `context`
+        fixture owns it: that fixture stops the trace, then disposes the
+        browser context, and that path waits for no page detach event. A
+        separate `page.close()` waited for a detach event that Chromium never
+        sent, so a teardown hung until the job limit (issue #4247).
+
     Args:
         context: The browser context that `pytest-playwright` built.
         capture_portal_server: The address of the running portal.
@@ -2712,8 +2718,7 @@ def page(context: Any, capture_portal_server: str) -> Iterator[Any]:
     isolation_response = opened.goto("/healthz")  # Reject a wrong server before one workflow assertion.
     assert isolation_response is not None and isolation_response.ok  # Prove the test reaches the isolated app.
     OWNER_CHECK.require(isolation_response.headers)  # Refuse a portal of another run.
-    yield opened
-    opened.close()  # A page left open would hold a browser target for the whole run.
+    yield opened  # The context finalizer closes this page after it stops the trace.
 
 
 @pytest.fixture
@@ -2745,8 +2750,7 @@ def second_operator_page(browser: Any, capture_portal_server: str) -> Iterator[A
     assert isolation_response is not None and isolation_response.ok  # Prove the test reaches the isolated app.
     OWNER_CHECK.require(isolation_response.headers)  # Refuse a portal of another run.
     yield opened
-    opened.close()
-    context.close()  # The context holds a profile directory until it closes.
+    context.close()  # Issue #4247: the context close disposes the page with no page detach wait.
 
 
 @pytest.fixture
@@ -2806,10 +2810,7 @@ def firmware_operator_page(
     assert isolation_response is not None and isolation_response.ok  # Prove the test reaches the isolated app.
     OWNER_CHECK.require(isolation_response.headers)  # Refuse a shared, live, or stray server.
     yield opened  # The test uses the reachable operator only where it starts firmware.
-    try:  # Close the page also when the teardown fails.
-        OrgOperationRelease.end_for(opened, org_operation_ledger)  # Issue #3518: end each live operation.
-    finally:  # A page left open would hold a browser target for the whole run.
-        opened.close()  # Close the page of the test.
+    OrgOperationRelease.end_for(opened, org_operation_ledger)  # Issue #3518: end each live operation.
 
 
 @pytest.fixture
@@ -2834,7 +2835,6 @@ def controls_operator_page(context: Any, capture_portal_server: str) -> Iterator
     assert isolation_response is not None and isolation_response.ok  # Prove the test reaches the isolated app.
     OWNER_CHECK.require(isolation_response.headers)  # Refuse a shared, live, or stray server.
     yield opened  # The test drives the recovery controls of the seeded operations.
-    opened.close()  # A page left open would hold a browser target for the whole run.
 
 
 @pytest.fixture
@@ -2860,7 +2860,6 @@ def empty_site_operator_page(context: Any, capture_portal_server: str) -> Iterat
     assert isolation_response is not None and isolation_response.ok  # Prove the test reaches the isolated app.
     OWNER_CHECK.require(isolation_response.headers)  # Refuse a shared, live, or stray server.
     yield opened  # The test selects the empty site and then clears it.
-    opened.close()  # A page left open would hold a browser target for the whole run.
 
 
 @pytest.fixture
@@ -2886,7 +2885,6 @@ def short_read_operator_page(context: Any, capture_portal_server: str) -> Iterat
     assert isolation_response is not None and isolation_response.ok  # Prove the test reaches the isolated app.
     OWNER_CHECK.require(isolation_response.headers)  # Refuse a shared, live, or stray server.
     yield opened  # The test selects the short-read site and then clears it.
-    opened.close()  # A page left open would hold a browser target for the whole run.
 
 
 @pytest.fixture
@@ -2914,7 +2912,6 @@ def lost_page_operator_page(context: Any, capture_portal_server: str) -> Iterato
     assert isolation_response is not None and isolation_response.ok  # Prove the test reaches the isolated app.
     OWNER_CHECK.require(isolation_response.headers)  # Refuse a shared, live, or stray server.
     yield opened  # The test reads the picker of the lost-page organization.
-    opened.close()  # A page left open would hold a browser target for the whole run.
 
 
 @pytest.fixture
@@ -2943,7 +2940,6 @@ def later_check_operator_page(context: Any, capture_portal_server: str) -> Itera
     assert isolation_response is not None and isolation_response.ok  # Prove the test reaches the isolated app.
     OWNER_CHECK.require(isolation_response.headers)  # Refuse a shared, live, or stray server.
     yield opened  # The test switches the lost page on and off with the request header.
-    opened.close()  # A page left open would hold a browser target for the whole run.
 
 
 @pytest.fixture
@@ -2966,8 +2962,7 @@ def signed_out_page(browser: Any, capture_portal_server: str) -> Iterator[Any]:
     context = browser.new_context(base_url=BASE_URL)  # A clean cookie jar starts the real sign-in journey.
     opened = install_screenshot_retry(context.new_page())  # The page carries no session cookie on its first request.
     yield opened  # The caller drives the complete sign-in path through the browser.
-    opened.close()  # A page left open would hold a browser target for the whole run.
-    context.close()  # The context holds a profile directory until it closes.
+    context.close()  # Issue #4247: the context close disposes the page with no page detach wait.
 
 
 # WHY: The server process loads this module by name and reads `app`. That name
