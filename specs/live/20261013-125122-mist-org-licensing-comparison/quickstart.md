@@ -3,7 +3,7 @@
 **Date**: 2026-10-13
 **Feature**: [spec.md](spec.md)
 
-This guide defines validation for the planned integration. It does not start or deploy the feature.
+This guide records checks for the licensing comparison page in the shared portal.
 
 ## Prerequisites
 
@@ -11,52 +11,53 @@ This guide defines validation for the planned integration. It does not start or 
 - Use synthetic Mist responses. Do not use a production credential.
 - Read the route and data shapes in [the interface contract](contracts/licensing-comparison.md).
 
-## Validate the Service
+## Validate the Isolated Package
 
-Run the planned focused tests:
-
-```bash
-python -m pytest tests/integration/web_portal/licensing_comparison/test_service.py tests/integration/web_portal/licensing_comparison/test_routes.py tests/integration/web_portal/licensing_comparison/test_export.py
-```
-
-Expected result: the tests pass for authorized organizations, manual values, purchased values, SUB-AI components, request failures, and CSV output.
-
-## Validate Mist SDK Calls
-
-Run the existing SDK contract test:
+Run the service, route, export, and browser tests:
 
 ```bash
-python -m pytest tests/unit/web_portal/test_portal_sdk_calls.py tests/integration/web_portal/licensing_comparison/test_transport_contract.py
+./.venv/bin/python -m pytest -q tests/integration/web_portal/licensing_comparison tests/e2e/web_portal/licensing_comparison tests/e2e/web_portal/test_portal_smoke.py --cov=src/interfaces/portals/licensing_comparison --cov-report=term-missing
 ```
 
-Expected result: SDK methods match the installed package. The tests verify shared-session authentication, supported endpoints, pagination, one retry after HTTP 429, and secret redaction.
+Observed result: 52 focused licensing and portal smoke tests passed in 2.28 seconds. Feature coverage was 93.05 percent. The tests cover authorized organizations, input validation, HTTP 4xx and 5xx responses, pagination, one retry after HTTP 429, bundle balances, CSV output, source attribution, and browser session state.
 
-## Validate the Portal Page
+## Validate the Mist SDK
 
-Run the existing Flask end-to-end smoke tests:
+The focused test suite checks the installed SDK methods, explicit inventory pagination arguments, and use of the supplied Mist session:
 
 ```bash
-python -m pytest tests/e2e/web_portal/test_portal_smoke.py
+./.venv/bin/python -m pytest -q tests/integration/web_portal/licensing_comparison/test_transport_contract.py tests/integration/web_portal/licensing_comparison/test_service.py
 ```
 
-Expected result: the feature page returns a success response, its controls have stable selectors, and its navigation link appears.
+Run the repository type check:
+
+```bash
+./.venv/bin/mypy src/ --config-file pyproject.toml
+```
+
+Observed result: `Success: no issues found in 850 source files`.
 
 ## Validate Browser Session State
 
 Run the browser test for session-only input:
 
 ```bash
-python -m pytest tests/e2e/licensing_comparison/test_session_state.py
+./.venv/bin/python -m pytest -q tests/e2e/web_portal/licensing_comparison/test_session_state.py
 ```
 
-Expected result: manual rows and purchased values survive reload and in-page navigation. A new browser session contains no prior values.
+Observed result: one browser test passed. It checks reload, same-tab navigation, and an empty new browser session.
 
-## Validate the Export
+## Quality Gates
 
-Use synthetic comparison rows that include a manual organization, a SUB-AI component, a missing value, and a formula-like cell.
+- Ruff passed for the licensing package, the portal factory, and the portal smoke tests.
+- Black passed. It left all 17 checked Python files unchanged.
+- Mypy passed with no issues in 850 source files.
+- Bandit passed for the licensing package.
+- The complexity gate found no function above the limit of 10.
+- The documentation linter passed for the six checked Markdown files. Their scores ranged from 96 to 100 out of 100.
+- The local Markdown link scan checked 47 links across six files and found no broken local links. The documented link-check command is not installed in this worktree.
+- The test-quality gate checked seven test files, found zero findings, and reported zero new findings.
 
-Expected result: the downloaded CSV matches the displayed rows, preserves unavailable values, and neutralizes formula-like text.
+## Portal Integration
 
-## Deployment Boundary
-
-Do not start a new server, database, Redis service, or public port for this feature. Use the existing MistHelper Flask portal and compose group after implementation.
+The app registers the licensing comparison blueprint and navigation link in the existing portal. The link appears only when its route exists. The portal smoke tests verify the page selectors and the missing-session response. The package guards pass with five direct feature modules and five E2E root entries. The feature adds no server, database, Redis service, or public port.

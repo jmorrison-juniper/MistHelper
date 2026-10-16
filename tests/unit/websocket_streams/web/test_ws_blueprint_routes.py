@@ -253,6 +253,8 @@ def test_page_and_catalog_routes_answer(client: Any) -> None:
     page = client.get("/websockets")  # Request the page shell.
     catalog = client.get("/api/websockets/catalog")  # Request the catalog JSON.
     assert page.status_code == 200  # The page route rendered.
+    licensing_nav_marker = b'data-testid="nav-licensing-comparison"'  # Name the optional feature selector.
+    assert licensing_nav_marker not in page.data  # Hide feature navigation when its route is absent.
     assert b"WebSockets" in page.data  # The page title is present.
     assert catalog.status_code == 200  # The catalog route answered.
     assert catalog.get_json()["ready"] is True  # The fake is ready.

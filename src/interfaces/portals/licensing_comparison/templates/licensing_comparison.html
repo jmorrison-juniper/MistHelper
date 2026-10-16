@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>Mist organization license comparison</title>
+    <link rel="stylesheet" href="{{ url_for('licensing_comparison.static', filename='licensing_comparison.css') }}">
+    <script defer src="{{ url_for('licensing_comparison.static', filename='licensing_comparison.js') }}"></script>
+  </head>
+  <body>
+    <main class="dashboard">
+      <header class="page-header">
+        <div>
+          <p class="eyebrow">MistHelper / Organization tools</p>
+          <h1>License comparison</h1>
+          <p>Compare license use and inventory across organizations available to this Mist session.</p>
+        </div>
+        <button id="export-button" type="button" data-testid="csv-export" disabled>Export CSV</button>
+      </header>
+
+      {% if not session_available %}
+      <section class="notice notice-error" role="alert" data-testid="missing-session">
+        The Mist API session is not available. Sign in again, then reload this page.
+      </section>
+      {% endif %}
+
+      <section class="panel controls" aria-labelledby="selection-heading">
+        <div>
+          <h2 id="selection-heading">Choose organizations</h2>
+          <p>Select one or more organizations that this session can access.</p>
+        </div>
+        <label for="organization-select">Organizations</label>
+        <select id="organization-select" multiple data-testid="organization-select" {% if not session_available %}disabled{% endif %}></select>
+        <button id="compare-button" type="button" data-testid="compare-button" {% if not session_available %}disabled{% endif %}>Compare</button>
+        <p id="page-status" class="status" role="status" aria-live="polite"></p>
+      </section>
+
+      <section class="panel" aria-labelledby="results-heading">
+        <div class="section-heading">
+          <div>
+            <h2 id="results-heading">Comparison results</h2>
+            <p>Failed requests stay visible and do not appear as zero use.</p>
+          </div>
+          <button id="add-row-button" type="button" data-testid="add-manual-row">Add manual organization</button>
+        </div>
+        <div id="manual-rows" class="manual-rows" data-testid="manual-rows"></div>
+        <div id="purchased-inputs" class="purchased-inputs" data-testid="purchased-inputs"></div>
+        <div class="table-scroll">
+          <table data-testid="comparison-table">
+            <thead>
+              <tr>
+                <th scope="col">Organization</th>
+                <th scope="col">Status</th>
+                <th scope="col">License summary</th>
+                <th scope="col">License use by site</th>
+                <th scope="col">Inventory</th>
+                <th scope="col">Remaining licenses</th>
+              </tr>
+            </thead>
+            <tbody id="comparison-results">
+              <tr><td colspan="6">Select organizations and compare them to see results.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <footer class="attribution">
+        <strong>Source attribution:</strong> MistOrgLicensingComparison by jmorrison-juniper is licensed under
+        <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/">CC BY-NC-SA 4.0</a>.
+        This MistHelper feature is independently written from its approved requirements.
+      </footer>
+    </main>
+    <template id="manual-row-template">
+      <fieldset class="manual-row">
+        <legend>Manual organization</legend>
+        <label>Organization name <input class="manual-name" type="text" maxlength="120" required></label>
+        <label>License use, JSON <input class="manual-licenses" type="text" placeholder='{"SUB-MAN": 4}'></label>
+        <label>Inventory, JSON <input class="manual-inventory" type="text" placeholder='{"ap": 2}'></label>
+        <button class="remove-row-button" type="button">Remove</button>
+      </fieldset>
+    </template>
+  </body>
+</html>
