@@ -21,14 +21,14 @@ class TestBrowserEvidence:
     @staticmethod
     def check(configuration: dict[str, Any]) -> int:
         """Require existing evidence, comparison screenshots, and failed-flow traces."""
-        steps = configuration["jobs"]["playwright"]["steps"]
+        steps = configuration["jobs"]["playwright_shards"]["steps"]
         upload = next(step for step in steps if step.get("with", {}).get("name") == "firmware-policy-browser-evidence")
         expected = {
             "test-artifacts/issue-4229-*.png",
             "test-artifacts/issue-4229-browser/",
         }
         assert expected.issubset(upload["with"]["path"].splitlines()), "Required browser evidence paths are missing"
-        command = next(step["run"] for step in steps if step.get("run", "").startswith("pytest tests/e2e/"))
+        command = next(step["run"] for step in steps if "pytest ${E2E_TEST_PATHS}" in step.get("run", ""))
         for argument in (
             "--screenshot only-on-failure",
             "--tracing retain-on-failure",
@@ -46,14 +46,14 @@ class TestBrowserEvidence:
     def test_missing_evidence_fails(self, mutation: str) -> None:
         """Reject a workflow that loses either evidence paths or capture arguments."""
         configuration = self.configuration()
-        steps = configuration["jobs"]["playwright"]["steps"]
+        steps = configuration["jobs"]["playwright_shards"]["steps"]
         if mutation == "paths":
             upload = next(
                 step for step in steps if step.get("with", {}).get("name") == "firmware-policy-browser-evidence"
             )
             upload["with"]["path"] = "test-artifacts/issue4218-*.png"
         else:
-            execution = next(step for step in steps if step.get("run", "").startswith("pytest tests/e2e/"))
+            execution = next(step for step in steps if "pytest ${E2E_TEST_PATHS}" in step.get("run", ""))
             execution["run"] = execution["run"].replace("--" + mutation, "--removed")
         with pytest.raises(AssertionError, match="browser evidence"):
             self.check(configuration)

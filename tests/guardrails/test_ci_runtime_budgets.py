@@ -27,7 +27,13 @@ def test_the_root_unit_shard_has_a_twenty_minute_budget() -> None:
     }
 
 
-def test_the_browser_job_has_a_twenty_minute_budget() -> None:
-    """Keep browser execution and cleanup inside one measured job budget."""
-    browser_job = _jobs()["playwright"]  # Select the required browser job.
-    assert browser_job["timeout-minutes"] == 20  # Allow the 13-minute suite to complete its cleanup.
+def test_each_browser_shard_has_a_twenty_minute_budget() -> None:
+    """Keep browser execution and cleanup of each shard inside one measured job budget."""
+    browser_job = _jobs()["playwright_shards"]  # Select the browser shard matrix job (issue #4250).
+    assert browser_job["timeout-minutes"] == 20  # Keep the unchanged 20-minute limit for each shard.
+
+
+def test_the_browser_gate_has_a_five_minute_budget() -> None:
+    """Keep the required browser gate short, because it only reads the shard result."""
+    browser_gate = _jobs()["playwright"]  # Select the required "E2E smoke tests" aggregator.
+    assert browser_gate["timeout-minutes"] == 5  # The aggregator runs one shell comparison.

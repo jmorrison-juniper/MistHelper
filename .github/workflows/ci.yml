@@ -738,14 +738,30 @@ jobs:
           name: quality-exclusion-drift
           path: exclusion-drift.json
 
-  playwright:
-    name: "E2E smoke tests"
+  playwright_shards:
+    name: "E2E shard (${{ matrix.shard }})"
     needs:
       - pip_audit
       - mypy
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # Issue #4250: the full browser suite needs about 18 minutes plus about 98
+    # seconds of setup, so one job reached its 20-minute limit. Each row runs one
+    # directory of tests/e2e on its own runner with the same limit, services,
+    # options, and per-test timeout. The guard
+    # tests/guardrails/test_e2e_shard_partition.py proves that the rows cover
+    # each test file under tests/e2e exactly one time.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - shard: upgrade-portal
+            test_paths: "tests/e2e/upgrade_portal"
+          - shard: web-portal
+            test_paths: "tests/e2e/web_portal"
+          - shard: websockets-tab
+            test_paths: "tests/e2e/websockets_tab"
     # Issue #2242: the browser suite could cover no write journey, because the
     # portal refuses a write it cannot guard with the site lock. With no lock
     # store the run creation answered 503, and 50 browser tests skipped. The run
@@ -808,16 +824,25 @@ jobs:
           ARANGO_HOST: "http://127.0.0.1:8529"
           ARANGO_ROOT_PASSWORD: e2e-throwaway-password
           CAPTURE_PORT: "8056"
-        run: pytest tests/e2e/ -v --base-url=http://127.0.0.1:${CAPTURE_PORT} --timeout=180 --screenshot only-on-failure --tracing retain-on-failure --output=${{ github.workspace }}/test-artifacts/issue-4229-browser
+          E2E_TEST_PATHS: ${{ matrix.test_paths }}
+          E2E_SHARD: ${{ matrix.shard }}
+        # Issue #4250: tee keeps a copy of the pytest output in a file, so a
+        # cancelled shard still uploads the lines that it printed.
+        run: |
+          set -o pipefail
+          mkdir -p test-artifacts
+          pytest ${E2E_TEST_PATHS} -v --base-url=http://127.0.0.1:${CAPTURE_PORT} --timeout=180 --screenshot only-on-failure --tracing retain-on-failure --output=${{ github.workspace }}/test-artifacts/issue-4229-browser 2>&1 | tee "test-artifacts/e2e-${E2E_SHARD}.log"
       - name: Upload backup restoration browser evidence
-        if: ${{ !cancelled() }}
+        # Issue #4250: only the web-portal shard runs the restoration journeys.
+        if: ${{ !cancelled() && matrix.shard == 'web-portal' }}
         uses: actions/upload-artifact@v7
         with:
           name: backup-restoration-browser-evidence
           path: test-artifacts/issue4218-*.png
           if-no-files-found: error
       - name: Upload firmware policy comparison browser evidence
-        if: ${{ !cancelled() }}
+        # Issue #4250: only the web-portal shard runs the comparison journeys.
+        if: ${{ !cancelled() && matrix.shard == 'web-portal' }}
         uses: actions/upload-artifact@v7
         with:
           name: firmware-policy-browser-evidence
@@ -825,6 +850,41 @@ jobs:
             test-artifacts/issue-4229-*.png
             test-artifacts/issue-4229-browser/
           if-no-files-found: error
+      - name: Upload shard diagnostics
+        # Issue #4250: a failed or cancelled shard keeps its pytest output, its
+        # phase trail, and each retained trace and screenshot.
+        if: ${{ failure() || cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-diagnostics-${{ matrix.shard }}
+          path: |
+            test-artifacts/e2e-${{ matrix.shard }}.log
+            test-artifacts/e2e-phase-trail.jsonl
+            test-artifacts/issue-4229-browser/
+          if-no-files-found: warn
+      - name: Report job timeout
+        # Issue #4250: a cancelled result means the shard hit timeout-minutes, not
+        # that a test failed. The diagnostics artifact holds the output.
+        if: cancelled()
+        run: echo "::error::The E2E shard ${{ matrix.shard }} was cancelled at its 20-minute limit. Read the e2e-diagnostics-${{ matrix.shard }} artifact."
+
+  playwright:
+    name: "E2E smoke tests"
+    # Issue #4250: this job keeps the required check name. It fails when a shard
+    # failed, was cancelled, was skipped, or is missing.
+    needs:
+      - playwright_shards
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify E2E shards
+        run: |
+          if [ "${{ needs.playwright_shards.result }}" != "success" ]; then
+            echo "::error::The E2E shards finished with ${{ needs.playwright_shards.result }}."
+            exit 1
+          fi
+          echo "The E2E shards finished with success."
 
   # ──────────────────────────────────────────────────────────────
   # OPS PORTAL (TypeScript + React)

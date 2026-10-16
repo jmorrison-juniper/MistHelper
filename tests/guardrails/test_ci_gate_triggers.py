@@ -170,7 +170,7 @@ class TestConcurrency:
         """Preserve restoration screenshots after failed tests without retaining cancelled jobs."""
         expected = {
             "name": "Upload backup restoration browser evidence",
-            "if": "${{ !cancelled() }}",
+            "if": "${{ !cancelled() && matrix.shard == 'web-portal' }}",
             "uses": "actions/upload-artifact@v7",
             "with": {
                 "name": "backup-restoration-browser-evidence",
@@ -178,7 +178,9 @@ class TestConcurrency:
                 "if-no-files-found": "error",
             },
         }
-        uploads = [step for step in workflow["jobs"]["playwright"]["steps"] if step.get("name") == expected["name"]]
+        uploads = [
+            step for step in workflow["jobs"]["playwright_shards"]["steps"] if step.get("name") == expected["name"]
+        ]
         if mutation == "missing":
             uploads = []
         elif mutation is not None:
@@ -222,7 +224,8 @@ class TestCancelledRunStops:
     def test_each_gate_after_a_failure_still_runs(self, workflow: dict[str, Any]) -> None:
         """The jobs that ran after a failed gate keep that behavior through !cancelled()."""
         gated = CancellableJobAudit.gated_jobs(workflow)  # Read the jobs that run after a failed dependency.
-        assert len(gated) == 8, f"Expected 8 jobs with !cancelled(), found {len(gated)}: {gated}"  # Pin the set.
+        # Issue #4250 adds playwright_shards, so the pinned set holds 9 jobs.
+        assert len(gated) == 9, f"Expected 9 jobs with !cancelled(), found {len(gated)}: {gated}"  # Pin the set.
         assert "quality_gate_issues" in gated, "The issue job must still run after a failed gate."
 
     def test_the_audit_rejects_an_always_condition(self) -> None:
