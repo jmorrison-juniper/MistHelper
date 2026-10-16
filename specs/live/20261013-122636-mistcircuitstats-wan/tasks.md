@@ -195,3 +195,5 @@ Task: T014 Extend the dashboard end-to-end test in tests/e2e/web_portal/test_por
 - The new isolated-template regression test passed 1 test.
 - `.venv/bin/python -m pytest -p no:cacheprovider -q tests/e2e/websockets_tab` passed 197 tests.
 - `.venv/bin/python -m ruff check web_portal/app.py` passed.
+- The first updated CI run found 90 pixels of horizontal overflow on a tablet viewport. The portal now collapses navigation below 1200 pixels.
+- The tablet navigation and overflow regression tests passed 2 tests locally.
