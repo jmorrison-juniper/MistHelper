@@ -82,6 +82,10 @@ Each insight request covers one completed UTC hour, with `limit=1` and `page=1`.
 The catalog must confirm the scope, type, unit, interval, and max-age.
 Two separate metric requests avoid an undocumented multi-metric mapping.
 The response must align zero or one timestamp with the same number of values in the requested window.
+The documented response uses a `results` array.
+A verified live response used an array named for the requested metric instead.
+The collector maps that exact name only when `results` is absent.
+It rejects responses that contain both value fields.
 An empty aligned series remains unknown, while valid port and peer observations remain available.
 The collector never follows a `next` URL.
 A page with more results reports partial coverage.
