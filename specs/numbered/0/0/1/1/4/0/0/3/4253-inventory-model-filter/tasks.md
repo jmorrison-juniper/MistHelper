@@ -32,6 +32,7 @@
 - [x] T010 Update `documentation/org-auto-upgrade-policy.md` and `changelog.d/issue-4253-inventory-model-filter.md`.
 - [x] T011 Run local gates and report read-only consistency analysis for this feature.
 - [x] T012 Prepare explicit commit paths and the repository pull request template for release delivery.
+- [x] T013 Regenerate `documentation/menu-api/README.md`, `documentation/menu-api/destructive.md`, `documentation/wiki/Menu-API-Endpoints.md`, and `documentation/wiki/Menu-API-Endpoints-Destructive.md`.
 
 ## Dependencies and parallel execution
 
@@ -57,3 +58,7 @@ The guard and SDK run passed 38 tests and skipped one changelog check before the
 All ten changed Markdown records scored at least 93.
 The requirements audit could not create its temporary pip environment because `ensurepip` aborted.
 A separate installed audit reported existing pip advisories. No dependency manifest changed.
+CI dependency audit passed. The local temporary-environment failure does not require a dependency change.
+CI found four stale generated API pages because menu 305 now reads inventory.
+Regeneration changed only that endpoint and its generated counts. No open pull request owned these four pages.
+The regenerated map check examined 16 pages and passed for all 306 menu options.

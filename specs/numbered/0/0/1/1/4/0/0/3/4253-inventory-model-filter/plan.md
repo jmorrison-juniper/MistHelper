@@ -38,6 +38,7 @@ Pre-design and post-design checks pass with the documented existing structural d
 - `web_portal/static/js/firmware-policy.js`: scope invalidation, empty state, and refresh persistence.
 - Existing firmware-policy unit, integration, and browser tests.
 - `documentation/org-auto-upgrade-policy.md` and an issue-specific changelog fragment.
+- Generated `documentation/menu-api/README.md`, `documentation/menu-api/destructive.md`, and their matching wiki pages.
 
 ## Validation
 
