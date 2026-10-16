@@ -3,13 +3,16 @@
 Covers `MainEntrypoint.run()` end-to-end plus the `_MistHelperProxy` `__getattr__`
 lazy-lookup path. MistHelper module attributes are monkeypatched with MagicMock
 instances so the entrypoint's eight-step pipeline executes without touching real
-argparse, network, or authentication code. No source edits, no live I/O.
+argparse, network, or authentication code. Console routing tests use real
+logging handlers and temporary files without network requests.
 """
 
 from __future__ import annotations  # WHY: PEP 604 unions in type hints on Python 3.10+.
 
 import argparse  # WHY: MagicMock(spec=argparse.ArgumentParser) contract typing.
-from collections.abc import Callable  # WHY: tests type handler fixtures.
+import logging
+from collections.abc import Callable, Iterator  # WHY: tests type handler fixtures.
+from pathlib import Path
 from typing import Any  # WHY: mocks dict holds both MagicMock and Namespace objects.
 from unittest.mock import MagicMock, call  # WHY: FR-008 mandates MagicMock(spec=...) + call-order verification.
 
@@ -295,3 +298,75 @@ class TestMistHelperMenuAndModeCaches:
             "cli",
             "interactive",
         ]  # WHY: cached predicates and late-bound handlers must match the original behavior.
+
+
+class TestConsoleOutputRouting:
+    """Exercise real bootstrap handlers without credentials or shared log files."""
+
+    @pytest.fixture
+    def isolated_logging(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[ApplicationBootstrap]:
+        """Restore host handlers after each isolated logging configuration."""
+        root = logging.getLogger()  # Preserve pytest's handlers outside the isolated configuration.
+        monkeypatch.setattr(root, "handlers", [])  # Prevent force=True from closing the host handlers.
+        monkeypatch.setattr(root, "filters", list(root.filters))  # Keep sanitizer changes local to this test.
+        monkeypatch.setattr(root, "level", logging.DEBUG)  # Restore the prior root threshold during teardown.
+        monkeypatch.chdir(tmp_path)  # Keep file output outside the checkout and production data.
+        monkeypatch.setenv("LOGGING_LOG_LEVEL", str(logging.INFO))  # Retain the menu's file records.
+        try:
+            yield ApplicationBootstrap(parse_cli=False)  # Use the production logging setup without startup I/O.
+        finally:
+            for handler in tuple(root.handlers):  # Close only handlers installed in this isolated test.
+                root.removeHandler(handler)  # Remove closed streams before pytest restores its handlers.
+                handler.close()  # Release the temporary file on Windows too.
+
+    @pytest.mark.parametrize("console_level", [None, "10", "20", "30"])
+    def test_real_menu_has_one_terminal_and_file_copy(
+        self,
+        isolated_logging: ApplicationBootstrap,
+        console_level: str | None,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """Unset, DEBUG, INFO, and WARNING thresholds preserve one menu copy."""
+        if console_level is None:  # Reproduce an SSH session that has no inherited console threshold.
+            monkeypatch.delenv("CONSOLE_LOG_LEVEL", raising=False)
+        else:
+            monkeypatch.setenv("CONSOLE_LOG_LEVEL", console_level)
+        isolated_logging._configure_logging()  # Install the real console and rotating file handlers.
+        isolated_logging._configure_logging()  # Prove repeated startup does not accumulate handlers.
+        MistHelper._print_interactive_menu()  # Render the actual registry rather than a substitute menu.
+        output = capsys.readouterr()  # SSH combines these streams, so check both separately.
+        log_text = Path("data", "script.log").read_text(encoding="utf-8")
+        logged_messages = [record.partition(" - INFO - ")[2] for record in log_text.splitlines()]
+        assert len(MistHelper.menu_actions) > 0  # Prevent an empty registry from producing a false pass.
+        for entry in MistHelper.menu_actions.values():
+            line = f"{entry.menu_id}: {entry.title}"
+            assert output.out.splitlines().count(line) == 1
+            assert line not in output.err
+            assert logged_messages.count(line) == 1
+
+    def test_echo_keeps_formatting_and_unrelated_diagnostics(
+        self,
+        isolated_logging: ApplicationBootstrap,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """Only the redundant copy is excluded from the console handler."""
+        monkeypatch.setenv("CONSOLE_LOG_LEVEL", str(logging.DEBUG))
+        isolated_logging._configure_logging()
+        MistHelper.echo("Site %s has %d APs", "HQ", 2)
+        MistHelper.echo("100% signal")
+        MistHelper.echo("")
+        logging.getLogger("misthelper.routing").info("Read started")
+        logging.getLogger("misthelper.routing").warning("Read warning")
+        logging.getLogger("misthelper.routing").error("Read failed")
+        output = capsys.readouterr()
+        assert output.out == "Site HQ has 2 APs\n100% signal\n\n"
+        assert "Site HQ has 2 APs" not in output.err
+        assert "100% signal" not in output.err
+        assert output.err.count("Read started") == 1
+        assert output.err.count("Read warning") == 1
+        assert output.err.count("Read failed") == 1
+        log_text = Path("data", "script.log").read_text(encoding="utf-8")
+        assert log_text.count("Site HQ has 2 APs") == 1
+        assert log_text.count("100% signal") == 1
