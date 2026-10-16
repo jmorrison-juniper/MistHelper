@@ -9,7 +9,7 @@ description: "Implementation tasks for Mist Organization Licensing Comparison"
 
 **Prerequisites**: plan.md, spec.md, research.md, data-model.md, contracts/licensing-comparison.md, quickstart.md
 
-**Scope**: The isolated feature package and focused tests are in progress. Portal registration is pending.
+**Scope**: Implementation and portal registration are complete. Pull request #4245 awaits final CI and the authorized squash merge.
 
 ## Format: `[ID] [P?] [Story] Description`
 
@@ -99,14 +99,14 @@ description: "Implementation tasks for Mist Organization Licensing Comparison"
 - [x] T021 [P] Add the feature page, navigation, stable selectors, and missing-session smoke checks to `tests/e2e/web_portal/test_portal_smoke.py`. (delivered: `tests/e2e/web_portal/test_portal_smoke.py`)
 - [x] T022 Update `specs/live/20261013-125122-mist-org-licensing-comparison/quickstart.md` with isolated test commands and observed results. (delivered: `specs/live/20261013-125122-mist-org-licensing-comparison/quickstart.md`)
 - [x] T023 Rerun focused tests, portal smoke tests, formatting, lint, type, complexity, and Bandit checks after the service refactor. (52 tests passed at 93.05 percent feature coverage; Ruff, Black, Mypy, complexity, and Bandit passed.)
-- [x] T024 Check the feature package layout, infrastructure files, and final scope. (five package entries; `compose.yml`, dependency files, `MistHelper.py`, and the protected portal files remain unchanged.)
+- [x] T024 Check the feature package layout, infrastructure files, and final scope. (Five direct Python modules pass the package guard. Infrastructure files remain unchanged. Portal registration follows the narrow handoff.)
 - [x] T025 Add SDK transport contract tests for shared-session authentication, supported endpoint use, pagination, the single rate-limit retry, and redaction of tokens and exception text in `tests/integration/web_portal/licensing_comparison/test_transport_contract.py`. (delivered: `tests/integration/web_portal/licensing_comparison/test_transport_contract.py`)
 - [x] T026 Add browser tests for session-state persistence through page reload and in-page navigation, empty state in a new browser session, and input validation in `tests/e2e/web_portal/licensing_comparison/test_session_state.py`. (delivered: `tests/e2e/web_portal/licensing_comparison/test_session_state.py`)
 - [x] T027 Review the new code against all seven constitutional principles. Verify class-based ownership, function limits, inline comments, ASCII structured logs, action logs, and secret redaction. (Class responsibilities and function limits pass. API and export actions use parameterized ASCII logs. Transport tests verify secret redaction. No production deployment occurred.)
 - [x] T028 Update `README.md` with a link to the comparison page. Add `documentation/licensing-comparison.md` and `changelog.d/issue-4197-mist-org-licensing-comparison.md` with an Added bullet that names issue #4197. (delivered: `README.md`, `documentation/licensing-comparison.md`, `changelog.d/issue-4197-mist-org-licensing-comparison.md`)
 - [x] T029 Run local gates, build the feature manifest, stage explicit files, commit, rebase on `origin/main`, and rerun affected gates before push. (Two commits are rebased on `origin/main`. Focused tests, coverage, Ruff, Black, Mypy, complexity, Bandit, STE, and the committed test-quality gate passed.)
 - [x] T031 Resolve CI package and template regressions for issue #4197. Keep feature navigation conditional on route registration, place E2E tests under the existing portal package, and keep the feature within five direct Python modules. (101 focused tests passed. The nested package and E2E package guards passed. Coverage is 93.05 percent.)
-- [ ] T030 After approval, open the implementation PR, pass CI, squash merge, wait for the main image build, verify its revision, deploy the approved image, and check health.
+- [ ] T030 Complete final CI and the authorized squash merge for implementation PR #4245. Image verification, deployment, and health checks remain outside the current authorization.
 
 ## Dependencies and Execution Order
 
@@ -166,5 +166,15 @@ description: "Implementation tasks for Mist Organization Licensing Comparison"
 - T027 is complete. No production deployment occurred because T030 requires approval.
 - T024 passed. The package guard counts five direct Python modules. The E2E root keeps its five existing entries, and no database, Redis service, or port was added.
 - T028 is complete. The page is registered and the README and release note describe the delivered feature.
-- T029 is complete. T030 remains open for approval, CI, merge, image verification, and deployment.
+- T029 is complete. T030 remains open for final CI and the authorized merge. No deployment is authorized.
 - Use synthetic Mist responses. Do not use production credentials.
+
+## Rebase Verification
+
+The implementation rebased cleanly onto `096f12a59` from `origin/main`. The local environment initially held `mistapi` 0.64.0.
+Seven checks failed because that installed SDK lacked methods required by the merged SDK repair.
+Installing `mistapi==0.64.1` restored those methods without a dependency-manifest change.
+The same selected tests then reported `256 passed in 3.42s`, with 93.05 percent feature coverage.
+Ruff, Black, the CI mypy command, Bandit, and the complexity gate passed.
+The mypy command checked 850 source files. Black checked 17 Python files.
+No licensing, WAN, or shared portal code changed during this rebase.
