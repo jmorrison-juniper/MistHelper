@@ -1,84 +1,76 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>Mist organization license comparison</title>
-    <link rel="stylesheet" href="{{ url_for('licensing_comparison.static', filename='licensing_comparison.css') }}">
-    <script defer src="{{ url_for('licensing_comparison.static', filename='licensing_comparison.js') }}"></script>
-  </head>
-  <body>
-    <main class="dashboard">
-      <header class="page-header">
-        <div>
-          <p class="eyebrow">MistHelper / Organization tools</p>
-          <h1>License comparison</h1>
-          <p>Compare license use and inventory across organizations available to this Mist session.</p>
-        </div>
-        <button id="export-button" type="button" data-testid="csv-export" disabled>Export CSV</button>
-      </header>
+{% extends "base.html" %}
+{% block title %}License comparison - {{ config.PORTAL.title }}{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('licensing_comparison.static', filename='licensing_comparison.css') }}">
+{% endblock %}
+{% block content %}
+<div class="licensing-dashboard" data-testid="licensing-dashboard" data-session-available="{{ 'true' if session_available else 'false' }}">
+  <header class="licensing-header">
+    <h1>Mist organization licensing comparison</h1>
+    <p>Compare license use and inventory across organizations available to this Mist session.</p>
+  </header>
+  {% if not session_available %}
+  <div class="licensing-notice" role="alert" data-testid="missing-session">
+    The Mist API session is not available. Sign in again, then reload this page.
+  </div>
+  {% endif %}
 
-      {% if not session_available %}
-      <section class="notice notice-error" role="alert" data-testid="missing-session">
-        The Mist API session is not available. Sign in again, then reload this page.
-      </section>
-      {% endif %}
+  <section class="licensing-panel" aria-labelledby="selection-heading">
+    <div class="licensing-panel-heading">
+      <h2 id="selection-heading">Organizations</h2>
+      <div class="licensing-actions">
+        <button id="select-all-button" class="licensing-secondary" type="button" data-testid="select-all-organizations" disabled>Select All</button>
+        <button id="compare-button" type="button" data-testid="compare-button" disabled>Compare Selected (<span id="selected-count">0</span>)</button>
+        <button id="refresh-button" class="licensing-outline" type="button" data-testid="refresh-organizations" {% if not session_available %}disabled{% endif %}>Refresh</button>
+      </div>
+    </div>
+    <div id="organization-select" class="licensing-organizations" role="group" aria-label="Organizations" data-testid="organization-select"></div>
+    <p id="page-status" class="licensing-status" role="status" aria-live="polite"></p>
+  </section>
 
-      <section class="panel controls" aria-labelledby="selection-heading">
-        <div>
-          <h2 id="selection-heading">Choose organizations</h2>
-          <p>Select one or more organizations that this session can access.</p>
-        </div>
-        <label for="organization-select">Organizations</label>
-        <select id="organization-select" multiple data-testid="organization-select" {% if not session_available %}disabled{% endif %}></select>
-        <button id="compare-button" type="button" data-testid="compare-button" {% if not session_available %}disabled{% endif %}>Compare</button>
-        <p id="page-status" class="status" role="status" aria-live="polite"></p>
-      </section>
+  <section class="licensing-panel" aria-labelledby="results-heading">
+    <div class="licensing-panel-heading">
+      <h2 id="results-heading">License comparison</h2>
+      <div class="licensing-actions">
+        <button id="add-row-button" class="licensing-outline" type="button" data-testid="add-manual-row">Add manual organization</button>
+        <button id="export-button" class="licensing-secondary" type="button" data-testid="csv-export" disabled>Export CSV</button>
+      </div>
+    </div>
+    <div class="licensing-panel-body">
+      <p>License columns show <strong>used / entitled</strong>. Unavailable values and incomplete totals remain explicit.</p>
+      <div class="licensing-table-scroll" tabindex="0" role="region" aria-label="License comparison results" data-testid="comparison-scroll">
+        <table class="licensing-table" data-testid="comparison-table">
+          <caption class="visually-hidden">License use, entitlements, and inventory by organization</caption>
+          <thead id="comparison-head"></thead>
+          <tbody id="comparison-results"><tr><td>Select organizations and compare them to see results.</td></tr></tbody>
+          <tfoot id="comparison-totals" data-testid="comparison-totals"></tfoot>
+        </table>
+      </div>
+      <div id="manual-rows" class="licensing-manual-rows" data-testid="manual-rows"></div>
+    </div>
+  </section>
 
-      <section class="panel" aria-labelledby="results-heading">
-        <div class="section-heading">
-          <div>
-            <h2 id="results-heading">Comparison results</h2>
-            <p>Failed requests stay visible and do not appear as zero use.</p>
-          </div>
-          <button id="add-row-button" type="button" data-testid="add-manual-row">Add manual organization</button>
-        </div>
-        <div id="manual-rows" class="manual-rows" data-testid="manual-rows"></div>
-        <div id="purchased-inputs" class="purchased-inputs" data-testid="purchased-inputs"></div>
-        <div class="table-scroll">
-          <table data-testid="comparison-table">
-            <thead>
-              <tr>
-                <th scope="col">Organization</th>
-                <th scope="col">Status</th>
-                <th scope="col">License summary</th>
-                <th scope="col">License use by site</th>
-                <th scope="col">Inventory</th>
-                <th scope="col">Remaining licenses</th>
-              </tr>
-            </thead>
-            <tbody id="comparison-results">
-              <tr><td colspan="6">Select organizations and compare them to see results.</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
+  <section class="licensing-panel" aria-labelledby="purchased-heading">
+    <div class="licensing-panel-heading">
+      <h2 id="purchased-heading">Purchased licenses (optional)</h2>
+      <button id="clear-purchases-button" class="licensing-secondary" type="button" data-testid="clear-purchases">Clear</button>
+    </div>
+    <div class="licensing-panel-body">
+      <p>Enter counts for each organization. Remaining = purchased minus used. Bundle components use the current Mist catalog.</p>
+      <div id="purchased-inputs" class="licensing-purchased-inputs" data-testid="purchased-inputs"></div>
+      <button id="calculate-button" type="button" data-testid="calculate-remaining" disabled>Calculate remaining</button>
+      <div id="balance-results" class="licensing-balances" data-testid="balance-results"></div>
+    </div>
+  </section>
 
-      <footer class="attribution">
-        <strong>Source attribution:</strong> MistOrgLicensingComparison by jmorrison-juniper is licensed under
-        <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/">CC BY-NC-SA 4.0</a>.
-        This MistHelper feature is independently written from its approved requirements.
-      </footer>
-    </main>
-    <template id="manual-row-template">
-      <fieldset class="manual-row">
-        <legend>Manual organization</legend>
-        <label>Organization name <input class="manual-name" type="text" maxlength="120" required></label>
-        <label>License use, JSON <input class="manual-licenses" type="text" placeholder='{"SUB-MAN": 4}'></label>
-        <label>Inventory, JSON <input class="manual-inventory" type="text" placeholder='{"ap": 2}'></label>
-        <button class="remove-row-button" type="button">Remove</button>
-      </fieldset>
-    </template>
-  </body>
-</html>
+  <section id="summary-cards" class="licensing-summary" aria-label="Comparison summary" data-testid="summary-cards" hidden></section>
+  <p class="licensing-attribution">
+    <strong>Source attribution:</strong> MistOrgLicensingComparison by jmorrison-juniper is licensed under
+    <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/">CC BY-NC-SA 4.0</a>.
+    This MistHelper feature is independently written from its approved requirements.
+  </p>
+</div>
+{% endblock %}
+{% block extra_scripts %}
+<script defer src="{{ url_for('licensing_comparison.static', filename='licensing_comparison.js') }}"></script>
+{% endblock %}
