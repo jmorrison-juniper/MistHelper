@@ -1,6 +1,6 @@
 # Feature Specification: MistCircuitStats WAN Dashboard
 
-**Feature Branch**: `3992-mistcircuitstats-integration`
+**Feature Branch**: `jmorrison-juniper-mistcircuitstats-migration`
 
 **Created**: 2026-10-13
 

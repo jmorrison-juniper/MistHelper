@@ -1,6 +1,6 @@
 # Implementation Plan: MistCircuitStats WAN Dashboard
 
-**Branch**: `3992-mistcircuitstats-integration` | **Date**: 2026-10-13 | **Spec**: [spec.md](spec.md)
+**Branch**: `jmorrison-juniper-mistcircuitstats-migration` | **Date**: 2026-10-13 | **Spec**: [spec.md](spec.md)
 
 **Input**: Timestamp feature specification in `specs/live/20261013-122636-mistcircuitstats-wan/spec.md`
 
@@ -90,7 +90,8 @@ src/interfaces/portals/wan_dashboard/
 ├── routes.py                      # Define the page and read-only endpoints.
 ├── services.py                    # Collect and prepare Mist data.
 ├── templates/
-│   └── dashboard.html             # Preserve the source dashboard workflow.
+│   └── wan_dashboard/
+│       └── dashboard.html         # Avoid a collision with the shared portal template.
 └── static/
     ├── dashboard.css              # Preserve responsive page styling.
     └── dashboard.js               # Render tables, charts, and exports.

@@ -131,6 +131,17 @@ class TestNoViewportOverflows:
         open_operations(page, responsive_portal, viewport)
         assert horizontal_overflow(page) == 0
 
+    def test_navigation_collapses_on_a_tablet_landscape(self, page: Any, responsive_portal: str) -> None:
+        """The portal keeps every navigation link inside the tablet viewport."""
+        open_operations(page, responsive_portal, {"width": 1024, "height": 768})
+        toggler = page.locator(".navbar-toggler")  # Find the control for the collapsed navigation.
+        dashboard_link = page.locator('[data-testid="wan-dashboard-tab"]')  # Keep the new feature available.
+        assert toggler.is_visible()  # Show the navigation control below the wide-screen breakpoint.
+        assert page.locator("#portalNav").is_hidden()  # Keep the full link list out of the page width.
+        assert dashboard_link.count() == 1  # Keep the WAN dashboard link in the collapsed menu.
+        toggler.click()  # Open the navigation to expose its links.
+        assert dashboard_link.is_visible()  # Keep the WAN dashboard reachable after the menu opens.
+
     def test_completed_result_stays_inside_the_phone_viewport(self, page: Any, responsive_portal: str) -> None:
         """A long output file name must not expand the mobile document."""
         open_operations(page, responsive_portal, {"width": 402, "height": 874})

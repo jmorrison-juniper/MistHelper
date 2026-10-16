@@ -184,6 +184,9 @@ class WebPortalApp:
         from src.interfaces.portals.licensing_comparison import (
             licensing_comparison_bp,  # Load the comparison within the shared portal process.
         )
+        from src.interfaces.portals.wan_dashboard import (
+            wan_dashboard_bp,  # Reuse the existing portal for read-only WAN data.
+        )
         from src.mist.realtime.websocket_streams.web.blueprint.registry import (
             WebSocketBlueprint,  # Keep the existing live-stream route factory.
         )
@@ -201,6 +204,10 @@ class WebPortalApp:
         app.register_blueprint(WebSocketBlueprint.create())  # Keep the live-stream page and API routes.
         app.register_blueprint(settings_bp)  # Keep portal settings available.
         app.register_blueprint(licensing_comparison_bp)  # Add licensing comparison to the existing process.
+        app.register_blueprint(wan_dashboard_bp)  # Add the WAN dashboard to the existing portal.
+        app.config["WAN_DASHBOARD_NAV_ENABLED"] = (
+            "wan_dashboard.page" in app.view_functions
+        )  # Render the navigation only when the dashboard route is registered.
         app.config["LICENSING_COMPARISON_NAV_ENABLED"] = (
             "licensing_comparison.comparison_page" in app.view_functions
         )  # Render the navigation only when the feature route is registered.

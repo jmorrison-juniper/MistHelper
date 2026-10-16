@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+{% block title %}WAN Dashboard - {{ config.PORTAL.title }}{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('wan_dashboard.static', filename='dashboard.css') }}">
+{% endblock %}
+
+{% block content %}
+<section id="wan-dashboard" class="wan-dashboard" data-testid="wan-dashboard">
+    <header class="wan-header">
+        <div>
+            <p class="wan-eyebrow">MistCircuitStats</p>
+            <h1>WAN Dashboard</h1>
+            <p class="wan-description">Review gateway health, WAN ports, traffic, and native WAN Insights.</p>
+        </div>
+        <div class="wan-header-actions">
+            <button id="wan-refresh" class="btn btn-outline-primary" type="button">Refresh data</button>
+            <a id="wan-gateway-export" class="btn btn-primary" data-testid="wan-gateway-export"
+               href="{{ url_for('wan_dashboard.gateway_export') }}">Export gateways</a>
+        </div>
+    </header>
+
+    <div id="wan-status" class="wan-status" role="status" aria-live="polite" data-testid="wan-status">
+        Loading gateway data.
+    </div>
+
+    <div class="wan-summary-grid" aria-label="WAN summary">
+        <article class="wan-summary-card">
+            <span class="wan-summary-label">Gateways</span>
+            <strong id="wan-gateway-count">--</strong>
+        </article>
+        <article class="wan-summary-card">
+            <span class="wan-summary-label">Connected gateways</span>
+            <strong id="wan-connected-count">--</strong>
+        </article>
+        <article class="wan-summary-card">
+            <span class="wan-summary-label">WAN ports</span>
+            <strong id="wan-port-count">--</strong>
+        </article>
+        <article class="wan-summary-card">
+            <span class="wan-summary-label">Active WAN ports</span>
+            <strong id="wan-active-port-count">--</strong>
+        </article>
+    </div>
+    <p class="wan-summary-note">
+        RX and TX values show 7-day traffic totals. Select a value to open traffic charts with adjustable time ranges.
+    </p>
+
+    <div class="wan-panel">
+        <div class="wan-panel-heading">
+            <div>
+                <h2>Organization gateways</h2>
+                <p>Expand a gateway to inspect port configuration and link data.</p>
+            </div>
+            <div class="wan-filters">
+                <label for="wan-site-filter">Site</label>
+                <select id="wan-site-filter" class="form-select" data-testid="wan-site-filter">
+                    <option value="">All sites</option>
+                </select>
+                <label for="wan-gateway-search">Search</label>
+                <input id="wan-gateway-search" class="form-control" type="search" autocomplete="off"
+                       placeholder="Gateway, model, or site" data-testid="wan-gateway-search">
+            </div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table wan-table" data-testid="wan-gateway-table">
+                <thead>
+                    <tr>
+                        <th scope="col">Site</th>
+                        <th scope="col">Gateway</th>
+                        <th scope="col">Model</th>
+                        <th scope="col">Status</th>
+                        <th scope="col">External IP</th>
+                        <th scope="col">WAN ports</th>
+                        <th scope="col">Uptime</th>
+                        <th scope="col"><span class="visually-hidden">Details</span></th>
+                    </tr>
+                </thead>
+                <tbody id="wan-gateway-rows" data-testid="wan-port-details">
+                    <tr><td colspan="8" class="wan-empty">Loading gateways.</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <p id="wan-empty-state" class="wan-empty" hidden>No gateways match these filters.</p>
+    </div>
+
+    <section id="wan-chart-modal" class="wan-modal" role="dialog" aria-modal="true"
+             aria-labelledby="wan-chart-title" hidden>
+        <div class="wan-modal-card">
+            <div class="wan-modal-header">
+                <div>
+                    <p class="wan-eyebrow">Port traffic</p>
+                    <h2 id="wan-chart-title">Traffic history</h2>
+                </div>
+                <button id="wan-modal-close" class="btn btn-outline-secondary" type="button"
+                        aria-label="Close traffic chart">Close</button>
+            </div>
+            <label for="wan-traffic-range">Traffic range</label>
+            <select id="wan-traffic-range" class="form-select" data-testid="wan-traffic-range">
+                <option value="1h">1 hour</option>
+                <option value="6h">6 hours</option>
+                <option value="24h">24 hours</option>
+                <option value="7d" selected>7 days</option>
+            </select>
+            <h3>Traffic rate</h3>
+            <div id="wan-chart-rate" class="wan-chart" aria-label="Receive and transmit traffic rate chart"></div>
+            <h3>Data transferred per interval</h3>
+            <div id="wan-chart-data" class="wan-chart" aria-label="Receive and transmit data transferred chart"></div>
+            <p id="wan-chart-status" class="wan-muted" role="status" aria-live="polite"></p>
+        </div>
+    </section>
+
+    <section id="wan-peer-modal" class="wan-modal" role="dialog" aria-modal="true"
+             aria-labelledby="wan-peer-title" hidden>
+        <div class="wan-modal-card">
+            <div class="wan-modal-header">
+                <div>
+                    <p class="wan-eyebrow">VPN peer paths</p>
+                    <h2 id="wan-peer-title">Peer path details</h2>
+                </div>
+                <button id="wan-peer-close" class="btn btn-outline-secondary" type="button"
+                        aria-label="Close VPN peer paths">Close</button>
+            </div>
+            <div id="wan-peer-summary" class="wan-peer-summary"></div>
+            <div id="wan-peer-content" class="wan-peer-content"></div>
+        </div>
+    </section>
+
+    <section id="wan-insights-modal" class="wan-modal" role="dialog" aria-modal="true"
+             aria-labelledby="wan-insights-title" hidden>
+        <div class="wan-modal-card">
+            <div class="wan-modal-header">
+                <div>
+                    <p class="wan-eyebrow">Mist WAN Insights</p>
+                    <h2 id="wan-insights-title">Link and application health</h2>
+                </div>
+                <button id="wan-insights-close" class="btn btn-outline-secondary" type="button"
+                        aria-label="Close WAN Insights">Close</button>
+            </div>
+            <label for="wan-insights-range">Insights range</label>
+            <select id="wan-insights-range" class="form-select" data-testid="wan-insights-range">
+                <option value="1h">1 hour</option>
+                <option value="6h">6 hours</option>
+                <option value="24h">24 hours</option>
+                <option value="3d">3 days</option>
+                <option value="7d">7 days</option>
+            </select>
+            <div id="wan-insights-content" class="wan-insights-content" aria-live="polite"></div>
+            <a id="wan-port-export" class="btn btn-outline-primary" data-testid="wan-port-export" href="#">
+                Export hourly port metrics
+            </a>
+        </div>
+    </section>
+
+    <footer class="wan-attribution">
+        MistCircuitStats source: <a href="https://github.com/jmorrison-juniper/MistCircuitStats"
+        rel="noopener noreferrer" target="_blank">jmorrison-juniper/MistCircuitStats</a>.
+        This page is modified for MistHelper and retains the CC BY-NC-SA 4.0 license.
+    </footer>
+</section>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{{ url_for('wan_dashboard.static', filename='dashboard.js') }}" defer></script>
+{% endblock %}
