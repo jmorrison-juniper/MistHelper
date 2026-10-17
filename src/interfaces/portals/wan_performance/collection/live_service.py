@@ -47,9 +47,11 @@ class LiveService:
         logger.info("Start selected-port history refresh for organization %s.", self.org_id)
         if self.history is None:
             raise ConnectionError("History is unavailable. Port refresh requires the selected durable store.")
-        self._check_port(target)
+        port = self._check_port(target)
         lease = self.store.acquire(self.org_id)
-        insights = GatewayInsights(self.session, lease).collect_for_port(self.org_id, target)
+        insights = GatewayInsights(self.session, lease).collect_for_port(
+            self.org_id, target, port.get("speed"), port.get("up")
+        )
         snapshot = {
             "org_id": self.org_id,
             "provenance": "live",
@@ -64,10 +66,45 @@ class LiveService:
         logger.debug("Persisted %d selected-port insight records without snapshot publication.", len(records))
         return len(records)
 
-    def _check_port(self, target: CircuitIdentity) -> None:
+    def _check_port(self, target: CircuitIdentity) -> dict[str, object]:
         """Refuse another organization or a port absent from the validated cached page."""
         if target.gateway.site.org_id != self.org_id:
             raise ValueError("The selected port organization does not match the portal.")
         cached = self.store.cached(self.org_id)
-        if cached is None or target not in {record.identity for record in SnapshotRecords.build(cached)}:
+        if cached is None:
             raise ValueError("The selected port is absent from the cached organization.")
+        records = SnapshotRecords.build(cached)
+        if target not in {record.identity for record in records}:
+            raise ValueError("The selected port is absent from the cached organization.")
+        for row in self._cached_port_rows(cached):
+            if (
+                row.get("org_id"),
+                row.get("site_id"),
+                row.get("mac"),
+                row.get("port_id"),
+            ) == (
+                self.org_id,
+                target.gateway.site.site_id,
+                target.gateway.gateway_id,
+                target.port_name,
+            ):
+                return row
+        raise ValueError("The selected port has no matching cached speed and status row.")
+
+    @staticmethod
+    def _cached_port_rows(cached: dict[str, object]) -> list[dict[str, object]]:
+        """Validate cached port metadata before resolving speed and current state."""
+        raw_ports = cached.get("ports")
+        if not isinstance(raw_ports, list):
+            raise ValueError("The cached organization has no port metadata.")
+        rows = []
+        for raw_row in raw_ports:
+            if not isinstance(raw_row, dict):
+                raise ValueError("Cached port metadata must contain objects.")
+            row: dict[str, object] = {}
+            for key, value in raw_row.items():
+                if not isinstance(key, str):
+                    raise ValueError("Cached port metadata keys must be strings.")
+                row[key] = value
+            rows.append(row)
+        return rows
