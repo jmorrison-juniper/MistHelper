@@ -26,6 +26,7 @@ class MetricMeasurement:
     sample_count: int | None = None
     coverage_fraction: float | None = None
     missing_reason: str | None = None
+    raw_values: tuple[float | int, ...] | None = None
 
     def __post_init__(self) -> None:
         """Reject invalid numeric values and unexplained missing data."""
@@ -33,8 +34,20 @@ class MetricMeasurement:
         validate_value(self.value, self.missing_reason)
         validate_sample_count(self.sample_count)
         validate_coverage_fraction(self.coverage_fraction)
+        self._validate_raw_values()
 
-    def to_dict(self) -> dict[str, float | int | str | None]:
+    def _validate_raw_values(self) -> None:
+        """Keep retained source samples finite and aligned with their count."""
+        if self.raw_values is None:
+            return
+        if not isinstance(self.raw_values, tuple):
+            raise ValueError("raw_values must be a tuple of finite numbers.")
+        for raw_value in self.raw_values:
+            validate_value(raw_value, None)
+        if self.sample_count is not None and self.sample_count != len(self.raw_values):
+            raise ValueError("sample_count must match raw_values when raw samples are retained.")
+
+    def to_dict(self) -> dict[str, object]:
         """Return JSON-compatible metric values and their units."""
         return {
             "value": self.value,
@@ -42,6 +55,7 @@ class MetricMeasurement:
             "sample_count": self.sample_count,
             "coverage_fraction": self.coverage_fraction,
             "missing_reason": self.missing_reason,
+            "raw_values": self.raw_values,
         }
 
 

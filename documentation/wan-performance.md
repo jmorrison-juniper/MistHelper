@@ -106,33 +106,36 @@ The configured request ledger, bounded page size, and history store keep this wo
 One organization can start one WAN refresh every 300 seconds.
 Overview refresh requests one page of 100 gateway ports and one page of 100 VPN paths.
 It makes no gateway discovery or insight request.
-Selected gateway refresh also discovers that gateway, reads the metric catalog, and requests two single-metric pages.
+Selected gateway refresh also discovers that gateway, reads the metric catalog, and requests one combined rate page.
 From a gateway page, refresh selects that exact site and gateway MAC.
 Filtered discovery permits two rows to detect an ambiguous match and requires exactly one matching returned device.
 The overview lists every distinct gateway returned in its cached pages.
 To select another known gateway, enter its site ID and MAC in the optional overview fields.
 Both selectors remain under the server-selected organization and use verified SDK filters.
 Selected port and peer pages must match the returned gateway and site.
-The maximum is two SDK calls for overview refresh and six for selected gateway refresh.
+The maximum is two SDK calls for overview refresh and three for selected gateway refresh.
 Admitted transport makes no automatic retry.
 Gateway discovery uses the returned device UUID, never a UUID derived from its MAC.
-Each insight request covers one completed UTC hour, with `limit=1` and `page=1`.
+Each gateway insight request covers one completed UTC hour, with `limit=1` and `page=1`.
+Selected-port rate requests use a 10-minute interval and align at most six timestamps with named rate arrays.
 The catalog must confirm the scope, type, unit, interval, and max-age.
-Two separate metric requests avoid an undocumented multi-metric mapping.
-The response must align zero or one timestamp with the same number of values in the requested window.
-The documented response uses a `results` array.
-A verified live response used an array named for the requested metric instead.
-The collector maps that exact name only when `results` is absent.
-It rejects responses that contain both value fields.
+One bounded request names both `rx_bps` and `tx_bps`.
+The collector rejects unnamed or misaligned rate arrays.
 An empty aligned series remains unknown, while valid port and peer observations remain available.
-The collector never follows a `next` URL.
+The insight collector never follows a `next` URL.
 A page with more results reports partial coverage.
 The cooldown remains after success or failure.
 No release operation can bypass it.
 
 Port utilization uses `stats_gateway_port.speed`, documented in Mbps, and `rx_bps` and `tx_bps`, documented in bit/s.
-Each direction divides its current rate by the reported speed multiplied by 1,000,000.
-The result is a point-in-time percentage, not measured time above a threshold.
+Each direction divides each rate sample by the reported speed multiplied by 1,000,000.
+`utilization_pct` stores the larger directional percentage at each 10-minute sample.
+The hourly p95 uses the source floor-index rule and the maximum fallback for fewer than 20 samples.
+Daily p95 summarizes hourly p95 values.
+Weekly and monthly p95 use the maximum daily p95, as the source does.
+Missing rates or capacity keep utilization unknown.
+The six sample intervals estimate threshold occupancy in 10-minute units.
+The collector reports congestion minutes only when all six utilization samples are known.
 Missing or invalid capacity and rates remain unknown, with invalid inputs reported in the log.
 The collector does not clamp percentages or infer full-hour coverage from a snapshot.
 Persisted directional percentages support observation counts above 70%, 80%, and 90%.
@@ -141,10 +144,19 @@ An equal value does not exceed the threshold.
 Missing, unknown, and non-exceeding hours break a run.
 Each report shows valid observation hours against expected calendar hours.
 These counts describe retained snapshots, not cumulative or continuous congestion duration.
-Port and peer history retain an explicit boolean `up` observation in the configured history store.
-Daily, weekly, monthly, and rolling summaries report known up/down observations and changes between adjacent observed hours.
-The up percentage uses known observations only, and each summary reports known hours against expected hours.
-These values describe sampled state. Gaps break transitions, and the values do not claim measured availability or a complete flap count.
+Selected-port refresh searches gateway device events for `GW_PORT_UP`, `GW_PORT_DOWN`, `GW_WAN_UP`, and `GW_WAN_DOWN`.
+It filters events to the selected gateway and matches the port identifier or event text.
+The event search follows at most five pages of 100 records.
+An event search beyond that bound marks status minutes and flap count unknown.
+The source status rule leaves time before the first matching event unknown.
+It holds each event state until the next event or the hour end.
+When no matching event exists, the current cached port state represents the full hour.
+Flap count equals the number of matched transition events.
+Period summaries sum known up/down minutes and event counts, and show complete event hours against expected hours.
+The up percentage uses known minutes only.
+Port and peer snapshots also retain an explicit boolean `up` observation.
+Their sampled-state summaries still report known states and changes between adjacent observed hours.
+Gaps break sampled-state transitions.
 Port state also appears as the current boolean `up` field.
 VPN details also show the current active-path flag, gateway-reported uptime in seconds, and last-seen time in UTC.
 These fields describe the cached observation, not availability minutes or continuous coverage.
@@ -187,7 +199,7 @@ The repository rejects synthetic records before any write.
 Storage failures remain explicit.
 The recent cache changes only after the history transaction succeeds.
 
-Port and peer hours retain the last collected observation.
+Port and peer snapshot hours retain the last collected observation.
 Gateway hours retain the validated hourly insight samples and catalog units.
 This is a migration design decision, not proof of a full-hour average.
 The actual collection timestamp remains in every record.
@@ -199,28 +211,29 @@ Detail pages query up to thirteen calendar months of retained history and show d
 The query bound is 397 days and at most 9,528 hourly records for one identity.
 This limit bounds reads. It does not change MistHelper storage retention.
 Daily summaries show mean, maximum, and observed p95 across retained hourly values.
+For selected-port utilization, each hourly value is the p95 of its raw 10-minute samples.
 The p95 uses the source index rule and maximum fallback for fewer than 20 observations.
 Weekly and monthly p95 values use the maximum daily p95, as the source does for utilization.
+Loss, jitter, and latency retain one average per selected hour.
+Their p95 summarizes retained hourly values, not source raw within-hour quality samples.
 Detail pages also show rolling 3-hour, 12-hour, and 24-hour summaries ending at the latest retained observation.
 Each rolling window reports its observed record count, mean, maximum, and observed p95.
 This anchor avoids presenting stale retained data as a current measurement.
-The portal does not collect raw within-hour samples for p95.
-Its p95 describes the retained hourly records, not the source raw-sample percentile within each hour.
 The port detail has a separate CSRF-protected, operator-triggered insight refresh.
 It requires the exact site, gateway, and port identity from the validated cached page.
 It shares the organization cooldown and request ledger with every other WAN refresh.
-It permits five SDK calls: exact gateway discovery, metric catalog, receive rate, transmit rate, and device link health.
-Each metric request selects the actual gateway UUID and exact `port_id`.
-Each request covers one completed UTC hour with `limit=1` and `page=1`.
-Catalog checks require gateway scope, `bit/s`, a 3,600-second interval, and sufficient `max_age`.
+It permits at most nine SDK calls: exact gateway discovery, metric catalog, combined rates, device link health, and five event pages.
+The combined rate request selects the actual gateway UUID and exact `port_id`.
+Rate requests cover one completed UTC hour with `interval=10m` and at most six aligned samples.
+Catalog checks require gateway scope, a supported rate unit, a 600-second interval, and sufficient `max_age`.
 The device link-health request uses the existing `getSiteInsightMetricsForDevice` SDK method and the `wan_link_health` metric.
 It retains `avg_loss`, `avg_jitter`, and `avg_latency` with percent and millisecond units.
-Response checks require the exact window, no next page, at most one timestamp, and at most one value per field.
+Response checks require the exact window, no next page, and aligned named metric arrays.
 Empty aligned series remain unknown.
-The selected application store retains these port rate and link-health records without replacing the current snapshot.
+The selected application store retains these port rate, utilization, link-health, congestion, and event-derived records without replacing the current snapshot.
 Natural-key upserts replace an existing row for the same port and UTC hour.
-The insight row contains rates and average link-health values, not utilization derived from current link speed.
-This operation does not request earlier pages or promise complete hourly coverage.
+The record derives utilization from the cached Mbps speed and six aligned rate samples.
+It does not request earlier rate windows or promise complete 13-month coverage.
 This read window is not a retention period.
 WAN code does not delete application history or change existing TimeSeries retention.
 Unknown values and missing hours never become healthy observations.
@@ -245,23 +258,25 @@ An unavailable history connection preserves readable cached detail views but pre
 
 This review examined source revision `2d1c2199fa1e31c129ef1e051c5389349a207785`.
 Its `ProjectGoals.md` requires hourly availability, transition counts, quality statistics, elapsed threshold hours, and 13-month history.
-Observation counts do not satisfy elapsed threshold hours or complete-hour quality statistics.
+Sample-based threshold durations and raw within-hour utilization p95 are implemented for a selected collected hour.
+Average loss, jitter, and latency do not retain the source raw quality samples.
 The detail query spans thirteen calendar months in the selected MistHelper history store.
 It reads records that the application already retained and does not backfill missing records.
-The horizon does not prove complete 13-month availability or hourly coverage.
+The history horizon does not prove complete 13-month availability or hourly coverage.
 No verified source contract establishes historical VPN metrics for each peer path.
 Gateway insights do supply timestamped samples within each catalog metric's supported `max_age`.
 The gateway insight operation also accepts `port_id` for a selected interface.
 The existing MistHelper WAN Dashboard reads `wan_link_health` through `getSiteInsightMetricsForDevice`.
 The selected-port workflow uses that same read-only SDK method for average loss, jitter, and latency.
-It uses five calls for discovery, catalog, two rate metrics, and one device link-health metric.
+It uses four fixed calls for discovery, catalog, combined rates, and device link health.
+It uses up to five additional event pages.
 It collects only one completed hour, not 13-month backfill.
-The migration does not infer historical link capacity from current port speed.
-The live view supports verified directional snapshot utilization, not full-hour utilization averages.
-Snapshot status and sparse hourly observations cannot establish historical availability or congestion duration.
-Device-event search supports time bounds and type filters.
-Its response supplies free-form event types, not verified WAN up/down transition values.
-The documented examples describe DNS and tunnel provisioning, not link transitions.
+The migration uses cached link capacity to derive utilization from aligned 10-minute rate samples.
+The live event query returned the four source WAN event types with timestamp and port fields.
+It records known up/down minutes and matched transition counts for one completed hour.
+The source no-event rule uses the cached current state for the full hour.
+When events exist, time before the first event remains unknown.
+The event search has a five-page cap and cannot prove historical availability across gaps.
 The port `last_flapped` field does not establish timestamp units or a flap-count history.
 VPN peer search supports `start`, `end`, and `duration`.
 The collector already requests `duration="1h"` within its existing call ceiling.
@@ -276,12 +291,9 @@ The source quality collector calculates p95 from `loss_samples`, `jitter_samples
 It falls back to a single value when those sample arrays are absent.
 The observed p95 uses the source index rule on retained WAN observations.
 MistHelper retains one observation per identity and hour, not every raw quality sample.
-The observed p95 does not claim the source within-hour sample p95.
-It makes the retained observation distribution visible without inventing missing samples.
-The source status calculator assumes constant state when events are absent.
-It also identifies transitions through `UP` and `DOWN` substrings in free-form event types.
-Neither assumption proves complete event coverage or a verified WAN transition mapping.
-The migration does not use these assumptions to calculate availability or flap counts.
+The raw utilization p95 uses the source index rule on the six 10-minute values.
+The quality p95 still summarizes retained hourly averages.
+The bounded event page cap can leave an hour incomplete.
 The source `TODO.md` explicitly describes current VPN statistics as point-in-time data.
 Its historical VPN method, storage, and dashboard tasks remain unchecked.
 The bundled OpenAPI defines a generic device-insight operation with a metric path parameter.
@@ -292,7 +304,7 @@ Gateway refresh supports any selected organization gateway through exact filtere
 The cached gateway list reflects bounded port and peer pages, not a complete organization inventory.
 Complete organization-wide gateway history and historical VPN coverage remain unimplemented.
 The source documentation and implementations disagree about some metric and missing-data behavior.
-These limits prevent full source acceptance.
+The 13-month history view does not backfill missing hours or restore data that Mist no longer retains.
 
 The preview adds no database, Snowflake connection, service, Compose group, public port, or credential store.
 PR #4205 has a separate, unmerged WAN implementation.
