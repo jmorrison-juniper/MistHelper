@@ -37,6 +37,16 @@ def test_round_trip_and_idempotent_upsert(history):
     assert result[0].to_dict() == record.to_dict()
 
 
+def test_history_round_trip_preserves_sampled_link_state(history):
+    """Persist boolean state evidence so historical summaries can use it."""
+    record = replace(live_record(), is_up_observation=False)
+    history.upsert((record,))
+
+    result = history.read(record.identity, record.hour_start_utc, record.hour_start_utc + timedelta(hours=1))
+
+    assert result[0].is_up_observation is False
+
+
 def test_half_open_query_and_identity_isolation(history):
     """Exclude another identity and the upper time boundary."""
     record = live_record()

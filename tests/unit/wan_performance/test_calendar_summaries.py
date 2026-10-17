@@ -292,3 +292,38 @@ def test_monthly_thresholds_exclude_other_identity_and_prior_month() -> None:
     assert [summary.period.expected_hours for summary in monthly] == [744, 696]
     assert [summary.threshold_observations[0].above_hours for summary in monthly] == [1, 1]
     assert [summary.threshold_observations[0].longest_run for summary in monthly] == [1, 1]
+
+
+def test_status_summaries_count_observed_changes_and_expose_sparse_coverage() -> None:
+    """Count known states and adjacent-hour changes without filling missing periods."""
+    dashboard = OfflinePreviewFactory.build()
+    first = dashboard.measurements[0]
+    records = tuple(
+        replace(
+            first,
+            hour_start_utc=first.hour_start_utc + timedelta(hours=hour),
+            collected_at_utc=first.collected_at_utc + timedelta(hours=hour),
+            is_up_observation=state,
+        )
+        for hour, state in ((0, True), (1, False), (2, False), (3, None), (4, True), (5, False))
+    )
+
+    daily = CalendarSummaries.build(records, first.identity)[0]
+
+    assert daily.state_observations is not None
+    assert daily.state_observations.valid_hours == 5
+    assert daily.state_observations.expected_hours == 24
+    assert daily.state_observations.up_hours == 2
+    assert daily.state_observations.down_hours == 3
+    assert daily.state_observations.observed_up_percent == 40
+    assert daily.state_observations.observed_transitions == 2
+
+
+def test_status_summaries_remain_absent_without_boolean_evidence() -> None:
+    """Do not render an availability-shaped result when no state is known."""
+    dashboard = OfflinePreviewFactory.build()
+    record = replace(dashboard.measurements[0], is_up_observation=None)
+
+    daily = CalendarSummaries.build((record,), record.identity)[0]
+
+    assert daily.state_observations is None
