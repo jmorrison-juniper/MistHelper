@@ -64,9 +64,10 @@ def test_peer_history_codec_preserves_remote_port_identity():
 
 
 def test_peer_history_codec_rejects_empty_body():
-    """Reject an empty stored payload instead of inventing an empty record."""
+    """Reject an empty byte body after decoding its transport representation."""
+    empty_body = b""
     with pytest.raises(json.JSONDecodeError):
-        RecordCodec.decode("")
+        RecordCodec.decode(empty_body.decode("utf-8"))
 
 
 def test_peer_history_codec_rejects_malformed_json():
