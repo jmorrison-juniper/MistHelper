@@ -78,11 +78,11 @@ T015 must test a failing grouped task record, not only successful directory disc
 - [x] T017 [US3] Relocate only owner-approved records from `specs/live/` using the complete map in `design/contracts/migration.md`. (delivered: design/contracts/migration.md)
 - [x] T018 [US3] Update each approved selector and reference listed in `design/contracts/migration.md`, preserving unrelated narrative content. (delivered: specs/live/0/0/0/1/2/1/3/2/2/1/2/3/0/3/4/1/3/20261013-182828-fix-generated-control-labels/plan.md)
 - [x] T019 [US3] Record file mapping, unchanged hashes, exact approved reference patches, owner evidence, and remaining historical debt in `design/contracts/migration.md`. (delivered: design/contracts/migration.md)
-- [ ] T020 [US3] Coordinate the Redis record relocation and rebased guard result with PR #4223 through the handover in `design/contracts/migration.md`.
+- [x] T020 [US3] Coordinate the Redis record relocation and rebased guard result with PR #4223 through the handover in `design/contracts/migration.md`. (verified: PR #4223 merged after its grouped-record commit and current-main route tests passed; see `analysis.md`)
 
 T017 cannot run without owner handovers.
-T020 follows the merged process implementation and belongs to the Redis PR owner.
-Do not edit `specs/live/20261014-050510-mistcircuitstats-redis/` from this worktree.
+T020 followed the merged process implementation and the Redis record owner's handover.
+Do not edit `specs/live/0/0/0/1/2/1/3/2/2/2/0/0/1/4/2/2/0/20261014-050510-mistcircuitstats-redis/` from this worktree.
 
 ## Phase 6: Documentation and Verification
 
@@ -90,8 +90,8 @@ Do not edit `specs/live/20261014-050510-mistcircuitstats-redis/` from this workt
 
 - [x] T021 Update path examples in `.specify/templates/plan-template.md`, `.specify/templates/tasks-template.md`, `.github/skills/speckit-specify/SKILL.md`, and `.github/agents/speckit.specify.agent.md`. (delivered: .specify/templates/plan-template.md, .specify/templates/tasks-template.md, .github/skills/speckit-specify/SKILL.md, .github/agents/speckit.specify.agent.md)
 - [x] T022 Update the repository grouping rule in `.github/copilot-instructions.md` and add `changelog.d/issue-4263-live-timestamp-groups.md`. (delivered: .github/copilot-instructions.md, changelog.d/issue-4263-live-timestamp-groups.md)
-- [ ] T023 Run focused process, route, selection, canonical task-audit, prose, link, and changed-code gates from `design/quickstart.md`.
-- [ ] T024 Record final counts, preservation evidence, old-path search results, and CI results in `analysis.md` before claiming issue completion.
+- [x] T023 Run focused process, route, selection, canonical task-audit, prose, link, and changed-code gates from `design/quickstart.md`. (verified: checks and audit results are recorded; the audit reported unrelated findings; see `analysis.md`)
+- [x] T024 Record final counts, preservation evidence, old-path search results, and CI results in `analysis.md` before claiming issue completion. (delivered: `analysis.md`; issue #4263 remains open pending review)
 
 Inspect remaining skill, agent, context, CI, and documentation consumers during T001.
 Add their exact affected paths to T003 before edits.
@@ -162,10 +162,12 @@ That authorization does not supply another owner's handover or a canonical tool 
 Start only the tasks whose prerequisites are satisfied.
 Keep all relocation and integration tasks blocked until their evidence exists.
 
-Twenty-one tasks have complete evidence.
-T020 belongs to the Redis owner after this process increment merges.
-T023 remains open because the repository-wide audit stops on a tracked nested record documented in issue #4269.
-T024 requires T020, a completed T023, and actual CI results.
+Evidence for all 24 implementation tasks is recorded on this PR branch and awaits review and merge.
+T020 records the merged Redis handover in PR #4223.
+T023 records all required feature-level validation. The repository-wide audit exits 1 on unrelated records, which remain unchanged.
+T024 records the final counts, preservation proof, old-path search, and merged PR checks in `analysis.md`.
+PR #4274 remains open and unmerged.
+Issue #4263 remains open pending review.
 The user separately authorized T017 through T019 for the single #4202 move before the remaining shared-tool and migration-fixture work.
 This scoped exception does not authorize another move or complete those prerequisites.
 Selection fixtures use the existing route-contract test file rather than an additional test module.
