@@ -1,223 +1,67 @@
-:root {
-  color-scheme: light;
-  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  color: #172b4d;
-  background: #f3f6fa;
-}
-
-* {
-  box-sizing: border-box;
-}
-
-body {
-  margin: 0;
-}
-
-button,
-select,
-input {
-  font: inherit;
-}
-
-button {
-  border: 0;
+.licensing-dashboard {
+  --licensing-accent: #e20074;
+  color-scheme: dark;
+  background: #1a1a1a;
+  color: #e0e0e0;
+  padding: 1rem;
   border-radius: 0.5rem;
-  padding: 0.7rem 1rem;
-  color: #fff;
-  background: #1769aa;
-  cursor: pointer;
+  min-width: 0;
 }
 
-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.55;
-}
-
-.dashboard {
-  width: min(100% - 2rem, 1440px);
-  margin: 2rem auto;
-}
-
-.page-header,
-.section-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-}
-
-.page-header {
-  margin-bottom: 1.5rem;
-}
-
-.page-header h1,
-h2,
-p {
-  margin-top: 0;
-}
-
-.page-header h1 {
-  margin-bottom: 0.4rem;
-}
-
-.eyebrow {
-  margin-bottom: 0.4rem;
-  color: #526581;
-  font-size: 0.82rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.panel {
-  margin: 1rem 0;
-  padding: 1.25rem;
-  border: 1px solid #d8e0eb;
-  border-radius: 0.8rem;
-  background: #fff;
-  box-shadow: 0 0.4rem 1.3rem rgb(23 43 77 / 5%);
-}
-
-.controls {
-  display: grid;
-  grid-template-columns: minmax(14rem, 1fr) minmax(16rem, 2fr) auto;
-  align-items: end;
-  gap: 0.85rem 1rem;
-}
-
-.controls > div,
-.controls .status {
-  grid-column: 1 / -1;
-}
-
-.controls label,
-.manual-row label {
-  display: grid;
-  gap: 0.35rem;
-  font-weight: 600;
-}
-
-select,
-input {
-  min-height: 2.6rem;
-  border: 1px solid #9eacc1;
-  border-radius: 0.45rem;
-  padding: 0.45rem 0.6rem;
-  background: #fff;
-}
-
-select[multiple] {
-  min-height: 7rem;
-}
-
-.section-heading {
-  margin-bottom: 1rem;
-}
-
-.manual-rows {
-  display: grid;
-  gap: 0.7rem;
-  margin-bottom: 1rem;
-}
-
-.purchased-inputs {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
-  gap: 0.75rem;
-  margin-bottom: 1rem;
-}
-
-.purchase-input {
-  display: grid;
-  gap: 0.4rem;
-  padding: 0.8rem;
-  border: 1px solid #d8e0eb;
-  border-radius: 0.5rem;
-}
-
-.purchase-input textarea {
-  min-height: 4.5rem;
-  font: inherit;
-}
-
-.manual-row {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(12rem, 1fr)) auto;
-  align-items: end;
-  gap: 0.75rem;
-  border: 1px solid #d8e0eb;
-  border-radius: 0.5rem;
-}
-
-.manual-row legend {
-  padding: 0 0.4rem;
-  font-weight: 700;
-}
-
-.remove-row-button {
-  background: #a83434;
-}
-
-.table-scroll {
-  overflow-x: auto;
-}
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-th,
-td {
-  padding: 0.75rem;
-  border-bottom: 1px solid #e3e9f0;
-  text-align: left;
-  vertical-align: top;
-}
-
-th {
-  background: #edf2f8;
-}
-
-td pre {
-  max-width: 25rem;
-  margin: 0;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-.status {
-  min-height: 1.3rem;
-  margin-bottom: 0;
-  color: #44546f;
-}
-
-.notice {
-  padding: 0.9rem 1rem;
-  border-radius: 0.5rem;
-}
-
-.notice-error {
-  border: 1px solid #d64c4c;
-  color: #8e1f1f;
-  background: #fff1f0;
-}
-
-.attribution {
-  margin: 1.5rem 0;
-  color: #526581;
-  font-size: 0.9rem;
-}
+.licensing-dashboard * { box-sizing: border-box; }
+.licensing-dashboard h1 { color: #ff5cae; font-size: 1.5rem; }
+.licensing-dashboard h2 { margin: 0; font-size: 1.15rem; color: #e0e0e0; }
+.licensing-dashboard p { margin: 0 0 1rem; }
+.licensing-header { margin-bottom: 1.5rem; }
+.licensing-panel { margin-bottom: 1.5rem; border: 1px solid #454545; border-radius: 0.4rem; background: #2d2d2d; overflow: hidden; }
+.licensing-panel-heading { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; padding: 0.75rem 1rem; background: #363636; border-bottom: 2px solid var(--licensing-accent); }
+.licensing-panel-body { padding: 1rem; }
+.licensing-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.licensing-dashboard button { background: var(--licensing-accent); color: #fff; border: 1px solid var(--licensing-accent); border-radius: 0.3rem; padding: 0.5rem 0.75rem; font: inherit; cursor: pointer; }
+.licensing-dashboard button:hover:not(:disabled) { background: #a90057; }
+.licensing-dashboard button:disabled { opacity: 0.5; cursor: not-allowed; }
+.licensing-dashboard button.licensing-secondary { background: transparent; border-color: #bbb; }
+.licensing-dashboard button.licensing-outline { background: transparent; color: #ff69b6; }
+.licensing-dashboard :focus-visible { outline: 3px solid #ffb0d8; outline-offset: 2px; }
+.licensing-organizations { display: flex; flex-wrap: wrap; gap: 0.75rem; padding: 1rem; }
+.licensing-org-choice { display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0.6rem; border: 1px solid #666; border-radius: 0.3rem; overflow-wrap: anywhere; cursor: pointer; }
+.licensing-org-choice:has(:checked) { border-color: var(--licensing-accent); background: #3d3037; }
+.licensing-org-choice input { accent-color: var(--licensing-accent); width: 1.1rem; height: 1.1rem; }
+.licensing-dashboard .licensing-status { min-height: 1.5rem; padding: 0 1rem; margin-bottom: 0.75rem; }
+.licensing-table-scroll { max-width: 100%; overflow-x: auto; }
+.licensing-table { width: 100%; border-collapse: collapse; white-space: nowrap; }
+.licensing-table th, .licensing-table td { text-align: left; padding: 0.65rem; border-bottom: 1px solid #505050; vertical-align: top; }
+.licensing-table thead th { color: #ff69b6; background: #363636; border-bottom: 2px solid var(--licensing-accent); }
+.licensing-table th[data-license] { cursor: help; text-decoration: underline dotted; text-underline-offset: 0.25rem; }
+.licensing-table tbody tr:hover { background: #363636; }
+.licensing-table tfoot { background: var(--licensing-accent); color: white; font-weight: 700; }
+.licensing-table .licensing-errors { max-width: 20rem; white-space: normal; }
+.licensing-manual-rows, .licensing-purchased-inputs, .licensing-balances { display: grid; gap: 1rem; }
+.licensing-manual-rows:empty, .licensing-balances:empty { display: none; }
+.licensing-manual-rows { margin-top: 1rem; }
+.licensing-dashboard fieldset { min-width: 0; border: 1px solid #666; padding: 0.75rem; border-radius: 0.3rem; }
+.licensing-dashboard legend { float: none; width: auto; padding: 0 0.4rem; font-size: 1rem; color: #ffb0d8; }
+.licensing-count-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); gap: 0.75rem; margin: 0.75rem 0; }
+.licensing-dashboard label { font-size: 0.9rem; }
+.licensing-count-grid label, .licensing-name-label { display: grid; gap: 0.35rem; }
+.licensing-dashboard input:not([type="checkbox"]) { width: 100%; min-width: 0; border: 1px solid #677079; border-radius: 0.25rem; background: #212529; color: #e0e0e0; padding: 0.45rem; font: inherit; }
+.licensing-dashboard input:invalid { border-color: #ff8d8d; }
+.licensing-dashboard #calculate-button { margin-top: 1rem; }
+.licensing-balances { margin-top: 1rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr)); }
+.licensing-balance-card { border: 1px solid #505050; border-radius: 0.3rem; padding: 0.75rem; background: #242424; overflow-wrap: anywhere; }
+.licensing-balance-card h3 { font-size: 1rem; color: #ffb0d8; }
+.licensing-balance-card p { margin-bottom: 0.4rem; }
+.licensing-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; }
+.licensing-summary[hidden] { display: none; }
+.licensing-summary article { padding: 1.5rem 0.75rem; border: 1px solid #454545; border-radius: 0.4rem; text-align: center; background: #2d2d2d; }
+.licensing-summary strong { display: block; font-size: 2rem; color: #ff69b6; }
+.licensing-attribution { margin-top: 1.5rem !important; font-size: 0.85rem; }
+.licensing-dashboard a { color: #ff8dc7; }
+.licensing-notice { border: 1px solid #ff8d8d; padding: 1rem; margin-bottom: 1rem; }
 
 @media (max-width: 760px) {
-  .page-header,
-  .section-heading {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .controls,
-  .manual-row,
-  .purchased-inputs {
-    grid-template-columns: 1fr;
-  }
+  .licensing-dashboard { padding: 0.5rem; }
+  .licensing-panel-heading, .licensing-panel-body { padding: 0.75rem; }
+  .licensing-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .licensing-header h1 { overflow-wrap: anywhere; }
 }
