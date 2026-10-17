@@ -105,6 +105,9 @@ class SessionAccess(ManagerAttributes):
     def stop(self, session_id: str, reason: str = "The operator stopped the session.") -> dict[str, object]:
         """Request one session stop and return current state."""
         session = self.session(session_id)  # Raise the stable not-found error when absent.
+        plan = session.request.batch_plan  # Batch cancellation blocks queued target dispatch first.
+        if plan is not None:
+            plan.progress.cancellation.cancel_queued()
         session.request_stop(reason)  # Preserve the first stop reason and idempotent state change.
         if session.live and session.runner is not None:  # Each live request must wake the runner.
             cast(StreamRunner, session.runner).stop()  # Concrete and fake runners stop without blocking.

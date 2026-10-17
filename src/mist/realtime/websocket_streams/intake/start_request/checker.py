@@ -54,6 +54,22 @@ class StartRequestChecker:
         logger.emit(logging.DEBUG, "intake_request_check_finished", {"status": "valid"})  # Log no key or identifiers.
         return request  # The session manager receives checked data only.
 
+    def check_batch(self, body: object) -> StartRequest:
+        """Check one batch target without using the Single Site typed confirmation."""
+        logger.emit(logging.INFO, "intake_batch_target_check_started", {"action": "validate"})  # Omit target data.
+        mapping = self._validator.body(body)  # Apply the established strict request shape.
+        definition = self._validator.definition(mapping)  # Resolve one server-owned catalog entry.
+        self._validator.check_lock(definition)  # Recheck the current safety flag before batch admission.
+        request = self._builder.build_batch(mapping, definition)  # Check target, family, and parameters.
+        logger.emit(logging.DEBUG, "intake_batch_target_check_finished", {"status": "valid"})  # Omit identifiers.
+        return request  # The batch phrase is checked separately against the stored preview.
+
+    def resolve_definition(self, kind: str, key: str) -> ChannelDefinition | UtilityDefinition:
+        """Return one current catalog definition or its stable refusal."""
+        definition = self._validator.definition({"kind": kind, "key": key})  # Apply the catalog kind rules.
+        self._validator.check_lock(definition)  # Preview never exposes a locked utility as runnable.
+        return definition  # The batch builder reads only server-owned target metadata.
+
 
 class CheckedRequestBuilder:
     """Build a request after body, catalog, and lock checks."""
@@ -73,6 +89,21 @@ class CheckedRequestBuilder:
             str(body["kind"]), definition, targets, parameters, title, confirmation, device.name if device else None
         )  # Freeze the checked request data.
 
+    def build_batch(
+        self, body: Mapping[str, object], definition: ChannelDefinition | UtilityDefinition
+    ) -> StartRequest:
+        """Build one batch target after normal validation and device lookup."""
+        targets = self._targets.check(definition, body.get("targets", {}))  # Validate all declared identifiers.
+        parameters = self._validator.parameters.check(definition, body.get("parameters", {}))  # Validate parameters.
+        device = self._device(definition, targets)  # Confirm device membership and utility family.
+        if isinstance(definition, UtilityDefinition) and definition.safety in {Safety.CHANGE, Safety.SHELL}:
+            if device is None:  # Risky batches must remain tied to one verified device.
+                raise StreamRequestError("bad_request", "This batch needs a verified device target.")
+        title = self._titles.build(definition.name, targets, body.get("labels"), device)  # Keep safe display text.
+        return StartRequest(
+            str(body["kind"]), definition, targets, parameters, title, None, device.name if device else None
+        )  # Batch admission uses its exact preview phrase instead.
+
     def _values(
         self, body: Mapping[str, object], definition: ChannelDefinition | UtilityDefinition
     ) -> tuple[dict[str, tuple[str, ...]], dict[str, object], DeviceFacts | None, str | None]:
@@ -80,7 +111,9 @@ class CheckedRequestBuilder:
         targets = self._targets.check(definition, body.get("targets", {}))  # Check identifier targets.
         parameters = self._validator.parameters.check(definition, body.get("parameters", {}))  # Check utility fields.
         device = self._device(definition, targets)  # Confirm the selected device and family.
-        confirmation = self._confirmation(definition, body.get("confirmation"), device)  # Check typed name.
+        confirmation = RequestConfirmationChecker.check(
+            definition, body.get("confirmation"), device
+        )  # Check typed name.
         return targets, parameters, device, confirmation  # Keep build operations bounded.
 
     def _device(
@@ -100,10 +133,12 @@ class CheckedRequestBuilder:
             )
         return device  # Confirmation and title behavior use the checked facts.
 
+
+class RequestConfirmationChecker:
+    """Validate typed confirmation against the selected device name."""
+
     @staticmethod
-    def _confirmation(
-        definition: ChannelDefinition | UtilityDefinition, raw: object, device: DeviceFacts | None
-    ) -> str | None:
+    def check(definition: ChannelDefinition | UtilityDefinition, raw: object, device: DeviceFacts | None) -> str | None:
         """Return the checked typed confirmation when required."""
         needs_confirmation = isinstance(definition, UtilityDefinition) and definition.safety in {
             Safety.CHANGE,

@@ -16,7 +16,10 @@ from src.mist.realtime.websocket_streams.web.blueprint.routes.pickers import (
     OrganizationPickerRoutes,
     PickerRoutes,
 )  # Register resource picker routes.
-from src.mist.realtime.websocket_streams.web.blueprint.routes.sessions import SessionRoutes  # Register session routes.
+from src.mist.realtime.websocket_streams.web.blueprint.routes.sessions import (
+    BatchSessionRoutes,
+    SessionRoutes,
+)  # Register session route groups.
 from src.mist.realtime.websocket_streams.web.blueprint.routes.terminal import (
     TerminalRoutes,
 )  # Register terminal routes.
@@ -50,6 +53,7 @@ class WebSocketBlueprint:
     @staticmethod
     def _add_session_routes(blueprint: Blueprint) -> None:
         """Add session lifecycle and download routes."""
+        BatchSessionRouteRegistry.add(blueprint)  # Keep Multi Site routes under their own route group.
         blueprint.add_url_rule(
             "/api/websockets/sessions", view_func=SessionRoutes.sessions, methods=["GET", "POST"]
         )  # Preserve list and start methods.
@@ -105,3 +109,39 @@ class WebSocketBlueprint:
             "/api/websockets/sites/<site_id>/maps/<map_id>/sdkclients", view_func=PickerRoutes.sdkclients
         )  # Preserve SDK client picker.
         blueprint.add_url_rule("/api/websockets/mxedges", view_func=PickerRoutes.mxedges)  # Preserve Mist Edges.
+
+
+class BatchSessionRouteRegistry:
+    """Register the additive batch session endpoints."""
+
+    @staticmethod
+    def add(blueprint: Blueprint) -> None:
+        """Add preview, progress, and archive routes for Multi Site sessions."""
+        BatchSessionRouteRegistry._preview_routes(blueprint)  # Register target discovery and session routes.
+        BatchSessionRouteRegistry._artifact_routes(blueprint)  # Register manifest and archive access.
+
+    @staticmethod
+    def _preview_routes(blueprint: Blueprint) -> None:
+        """Add batch preview and target progress routes."""
+        blueprint.add_url_rule(
+            "/api/websockets/batches/previews", view_func=BatchSessionRoutes.batch_preview, methods=["POST"]
+        )  # Create a read-only complete target snapshot.
+        blueprint.add_url_rule(
+            "/api/websockets/batches", view_func=BatchSessionRoutes.batch_start, methods=["POST"]
+        )  # Admit one preview-bound public parent session.
+        blueprint.add_url_rule(
+            "/api/websockets/batches/<session_id>", view_func=BatchSessionRoutes.batch_summary
+        )  # Read the public parent and aggregate target progress.
+        blueprint.add_url_rule(
+            "/api/websockets/batches/<session_id>/targets", view_func=BatchSessionRoutes.batch_targets
+        )  # Read a stable target-list page.
+
+    @staticmethod
+    def _artifact_routes(blueprint: Blueprint) -> None:
+        """Add batch artifact manifest and archive routes."""
+        blueprint.add_url_rule(
+            "/api/websockets/batches/<session_id>/artifacts", view_func=BatchSessionRoutes.batch_artifacts
+        )  # Read the safe file manifest and retention deadline.
+        blueprint.add_url_rule(
+            "/api/websockets/batches/<session_id>/download", view_func=DownloadResponse.batch_zip
+        )  # Download the selected saved layout as ZIP.

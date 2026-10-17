@@ -28,6 +28,14 @@ class StreamRequestError(Exception):
         "picker_request_failed": 502,
         "picker_service_failed": 503,
         "picker_incomplete": 503,
+        "preview_expired": 409,
+        "preview_consumed": 409,
+        "preview_scope": 403,
+        "target_limit": 413,
+        "output_failed": 507,
+        "not_batch": 409,
+        "artifact_not_ready": 409,
+        "cleanup_pending": 409,
     }  # Keep every contract code in one explicit table.
 
     def __init__(self, code: str, message: str, extra: Mapping[str, object] | None = None) -> None:

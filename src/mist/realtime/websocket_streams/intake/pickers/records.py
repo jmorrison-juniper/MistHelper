@@ -21,6 +21,7 @@ class PickerPageReader:
     def __init__(self, apisession: object) -> None:
         """Store the authenticated SDK session for cursor requests."""
         self._apisession = apisession  # Later pages must use the same authenticated session.
+        self._validator = PickerPageValidator()  # One validator defines accepted SDK page shapes.
 
     def read(self, response: object) -> list[dict[str, object]]:
         """Return every validated row or fail without exposing partial results."""
@@ -29,8 +30,8 @@ class PickerPageReader:
         seen_cursors: set[str] = set()  # Refuse a repeated cursor instead of looping.
         page: object | None = response  # Start with the already authenticated first response.
         while page is not None:  # Continue only while the SDK supplies a later page.
-            rows.extend(self._page_rows(page))  # Validate the status and shape before retaining rows.
-            cursor = self._cursor(page)  # Read only the SDK-provided next-page cursor.
+            rows.extend(self._validator.page_rows(page))  # Validate before retaining response rows.
+            cursor = self._validator.cursor(page)  # Read only the SDK-provided next-page cursor.
             if cursor is None:  # A missing cursor proves that the page sequence is complete.
                 break  # Return the full validated result.
             if cursor in seen_cursors:  # A repeated cursor cannot make progress.
@@ -39,38 +40,6 @@ class PickerPageReader:
             page = self._next(page)  # Fetch the next page through the Mist SDK.
         logger.emit(logging.DEBUG, "intake_picker_pages_finished", {"count": len(rows)})  # Report row count only.
         return rows  # Expose rows only after every page passes validation.
-
-    def _page_rows(self, response: object) -> list[dict[str, object]]:
-        """Validate one response status and return its mapping rows."""
-        status = getattr(response, "status_code", None)  # Read the SDK status without the upstream body.
-        if status != 200:  # List endpoints must return a successful HTTP status.
-            self._raise_status(status)  # Report refusal or service failure with a safe status only.
-        data = getattr(response, "data", None)  # Read the SDK-decoded response body.
-        rows = self._row_list(data)  # Accept only documented list or result-envelope shapes.
-        if rows is None or any(not isinstance(row, dict) for row in rows):  # Reject malformed page records.
-            raise StreamRequestError("picker_unavailable", "Mist returned an unsupported picker response.")
-        return [dict(row) for row in rows]  # Copy mappings before the caller can retain or change them.
-
-    def _row_list(self, data: object) -> list[object] | None:
-        """Return the documented record list from a decoded response."""
-        if isinstance(data, list):  # Most Mist list endpoints return a list directly.
-            return data  # Keep the complete list for page validation.
-        if not isinstance(data, dict):  # Only documented SDK envelopes can hold list records.
-            return None  # Let the caller report the unsupported shape.
-        for key in ("results", "items", "sdkclients"):  # Accept known Mist result envelope names.
-            value = data.get(key)  # Read one documented record field.
-            if isinstance(value, list):  # A list proves the response shape.
-                return value  # Preserve empty lists as complete page results.
-        return None  # Do not interpret an unknown object as an empty list.
-
-    def _cursor(self, response: object) -> str | None:
-        """Return a valid next cursor or reject an unsupported cursor shape."""
-        cursor = getattr(response, "next", None)  # APIResponse exposes the server-provided cursor.
-        if cursor is None:  # No cursor marks the final page.
-            return None  # The caller can finish the read.
-        if not isinstance(cursor, str) or not cursor.strip():  # A cursor must be usable by the SDK.
-            raise StreamRequestError("picker_incomplete", "Mist returned an invalid page cursor.")
-        return cursor  # Keep the cursor private to the SDK request.
 
     def _next(self, response: object) -> object:
         """Fetch one cursor through the authenticated Mist SDK."""
@@ -89,7 +58,60 @@ class PickerPageReader:
         if page is None:  # A cursor that produces no response is an incomplete list.
             raise StreamRequestError("picker_incomplete", "Mist did not return the requested page.")
         logger.emit(logging.DEBUG, "intake_picker_next_page_finished", {"status": "received"})
-        return page  # The caller validates this page before accepting its rows.
+        return page  # The validator checks this page before accepting its rows.
+
+
+class PickerPageValidator:
+    """Validate Mist page statuses, row shapes, and cursor values."""
+
+    def page_rows(self, response: object) -> list[dict[str, object]]:
+        """Validate one response status and return its mapping rows."""
+        status = getattr(response, "status_code", None)  # Read the SDK status without the upstream body.
+        if status != 200:  # List endpoints must return a successful HTTP status.
+            self._raise_status(status)  # Report a safe refusal or service status.
+        data = getattr(response, "data", None)  # Read the SDK-decoded response body.
+        rows = self._row_list(data)  # Accept only documented list or result-envelope shapes.
+        if rows is None:  # Reject a page with no documented record list.
+            raise StreamRequestError("picker_unavailable", "Mist returned an unsupported picker response.")
+        return self._copy_rows(rows)  # Copy mappings before the caller can retain or change them.
+
+    @staticmethod
+    def _copy_rows(rows: list[object]) -> list[dict[str, object]]:
+        """Validate row keys and copy every page record."""
+        records: list[dict[str, object]] = []  # Keep validated API rows in the declared mapping shape.
+        for row in rows:  # Inspect each row before it enters the shared picker.
+            if not isinstance(row, dict):  # Mist list records must be JSON objects.
+                raise StreamRequestError("picker_unavailable", "Mist returned an unsupported picker response.")
+            record: dict[str, object] = {}  # Copy each object into a string-keyed mapping.
+            for key, value in row.items():  # JSON object keys must remain strings.
+                if not isinstance(key, str):  # Refuse malformed keys instead of coercing their identity.
+                    raise StreamRequestError("picker_unavailable", "Mist returned an unsupported picker response.")
+                record[key] = value  # Preserve the original field value.
+            records.append(record)  # Accept this complete record after key validation.
+        return records  # Return only independently copied rows.
+
+    @staticmethod
+    def _row_list(data: object) -> list[object] | None:
+        """Return the documented record list from a decoded response."""
+        if isinstance(data, list):  # Most Mist list endpoints return a list directly.
+            return data  # Keep the complete list for page validation.
+        if not isinstance(data, dict):  # Only documented SDK envelopes can hold list records.
+            return None  # Let the caller report the unsupported shape.
+        for key in ("results", "items", "sdkclients"):  # Accept known Mist result envelope names.
+            value = data.get(key)  # Read one documented record field.
+            if isinstance(value, list):  # A list proves the response shape.
+                return value  # Preserve empty lists as complete page results.
+        return None  # Do not interpret an unknown object as an empty list.
+
+    @staticmethod
+    def cursor(response: object) -> str | None:
+        """Return a valid next cursor or reject an unsupported cursor shape."""
+        cursor = getattr(response, "next", None)  # APIResponse exposes the server-provided cursor.
+        if cursor is None:  # No cursor marks the final page.
+            return None  # The caller can finish the read.
+        if not isinstance(cursor, str) or not cursor.strip():  # A cursor must be usable by the SDK.
+            raise StreamRequestError("picker_incomplete", "Mist returned an invalid page cursor.")
+        return cursor  # Keep the cursor private to the SDK request.
 
     @staticmethod
     def _raise_status(status: object) -> NoReturn:

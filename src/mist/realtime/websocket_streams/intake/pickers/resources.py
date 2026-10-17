@@ -19,8 +19,54 @@ from src.mist.realtime.websocket_streams.live.transport.runtime.logging.structur
 logger = StructuredTransportLogger(logging.getLogger(__name__))  # Keep resource logs bounded and identifier-free.
 
 
-class ResourcePicker(PickerRuntime):
-    """List site resources used by start request fields."""
+class SiteResourcePicker(PickerRuntime):
+    """List maps and assets through complete authenticated SDK pagination."""
+
+    def maps(self, site_id: str) -> dict[str, object]:
+        """Return map rows for one site."""
+        return self._site_picker(site_id, "maps", "The site has no maps.")  # Use the shared SDK flow.
+
+    def assets(self, site_id: str) -> dict[str, object]:
+        """Return BLE asset rows for one site."""
+        return self._site_picker(site_id, "assets", "The site has no assets.")  # Use shared flow.
+
+    def _site_picker(self, site_id: str, family: str, empty_reason: str) -> dict[str, object]:
+        """Return rows from one site resource endpoint."""
+        logger.emit(logging.INFO, "intake_site_picker_started", {"detail": family})  # Log the fixed picker family.
+        try:  # Keep SDK failures separate from a complete empty resource list.
+            response = self._site_response(site_id, family)  # Request the selected site resource.
+            rows = self._site_rows(response)  # Validate pages and normalize each resource.
+            logger.emit(logging.DEBUG, "intake_site_picker_finished", {"detail": family, "count": len(rows)})
+            return self._payload(rows, empty_reason)  # Return the common contract shape.
+        except StreamRequestError:  # Preserve checked page and target failures.
+            raise  # Preserve HTTP, cursor, and response-shape failures.
+        except Exception as error:  # Translate unclassified SDK failures.
+            logger.emit(logging.ERROR, "intake_site_picker_failed", {"detail": type(error).__name__})  # Safe type.
+            raise StreamRequestError(
+                "picker_service_failed", "The portal could not list this data from Mist."
+            ) from error  # Do not report an SDK failure as an empty list.
+
+    def _site_response(self, site_id: str, family: str) -> object:
+        """Request one site resource from the authenticated Mist SDK."""
+        import mistapi  # Import here so focused tests can replace the SDK seam.
+
+        if family == "maps":  # Map lists accept the runtime page limit.
+            return mistapi.api.v1.sites.maps.listSiteMaps(
+                self._apisession, site_id=site_id, limit=runtime_settings.DEFAULT_API_PAGE_LIMIT
+            )  # Read every map page through the SDK cursor.
+        return mistapi.api.v1.sites.assets.listSiteAssets(
+            self._apisession, site_id=site_id, limit=runtime_settings.DEFAULT_API_PAGE_LIMIT
+        )  # The other caller requests site assets.
+
+    def _site_rows(self, response: object) -> list[dict[str, object]]:
+        """Normalize every validated page from a site resource response."""
+        return [
+            self._row(item, ("name", "id"), ("type", "status"), None) for item in self._page_reader.read(response)
+        ]  # Keep the same row fields for maps and assets.
+
+
+class ResourcePicker(SiteResourcePicker):
+    """List organization sites and map-specific SDK clients."""
 
     def sites(self) -> dict[str, object]:
         """Return every site in the configured organization."""
@@ -45,14 +91,6 @@ class ResourcePicker(PickerRuntime):
                 "picker_service_failed", "The portal could not list sites from Mist."
             ) from error  # Do not report an SDK failure as an empty list.
 
-    def maps(self, site_id: str) -> dict[str, object]:
-        """Return map rows for one site."""
-        return self._site_picker(site_id, "maps", "The site has no maps.")  # Use the shared SDK flow.
-
-    def assets(self, site_id: str) -> dict[str, object]:
-        """Return BLE asset rows for one site."""
-        return self._site_picker(site_id, "assets", "The site has no assets.")  # Use shared flow.
-
     def sdkclients(self, site_id: str, map_id: str) -> dict[str, object]:
         """Return SDK client rows for one map."""
         logger.emit(logging.INFO, "intake_sdkclient_picker_started", {"action": "list"})  # Log no identifiers.
@@ -74,35 +112,6 @@ class ResourcePicker(PickerRuntime):
             logger.emit(logging.ERROR, "intake_sdkclient_picker_failed", {"detail": type(error).__name__})  # Safe type.
             raise StreamRequestError(
                 "picker_service_failed", "The portal could not list SDK clients from Mist."
-            ) from error  # Do not report an SDK failure as an empty list.
-
-    def _site_picker(self, site_id: str, family: str, empty_reason: str) -> dict[str, object]:
-        """Return rows from one simple site SDK list."""
-        logger.emit(logging.INFO, "intake_site_picker_started", {"detail": family})  # Log the fixed picker family.
-        try:  # Keep SDK failures separate from a complete empty site resource list.
-            import mistapi  # Import here so focused tests can replace the SDK seam.
-
-            if family == "maps":  # Map lists accept the runtime page limit.
-                response = mistapi.api.v1.sites.maps.listSiteMaps(
-                    self._apisession, site_id=site_id, limit=runtime_settings.DEFAULT_API_PAGE_LIMIT
-                )  # Read every map page through the SDK cursor.
-            else:  # The only other caller requests site assets.
-                response = mistapi.api.v1.sites.assets.listSiteAssets(
-                    self._apisession, site_id=site_id, limit=runtime_settings.DEFAULT_API_PAGE_LIMIT
-                )  # Read every asset page through the SDK cursor.
-            rows = [
-                self._row(item, ("name", "id"), ("type", "status"), None) for item in self._page_reader.read(response)
-            ]  # Normalize every validated resource page.
-            logger.emit(
-                logging.DEBUG, "intake_site_picker_finished", {"detail": family, "count": len(rows)}
-            )  # Safe data.
-            return self._payload(rows, empty_reason)  # Return the common contract shape.
-        except StreamRequestError:  # Preserve checked page and target failures.
-            raise  # Preserve HTTP, cursor, and response-shape failures.
-        except Exception as error:  # Translate unclassified SDK failures.
-            logger.emit(logging.ERROR, "intake_site_picker_failed", {"detail": type(error).__name__})  # Log safe type.
-            raise StreamRequestError(
-                "picker_service_failed", "The portal could not list this data from Mist."
             ) from error  # Do not report an SDK failure as an empty list.
 
 

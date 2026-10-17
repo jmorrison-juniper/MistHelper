@@ -4,7 +4,7 @@ from __future__ import annotations  # Keep Flask annotations lazy.
 
 import logging  # Structured events use repository handlers.
 
-from flask import Response  # Stream the JSON Lines iterator.
+from flask import Response, request  # Stream JSON Lines or return one bounded archive.
 
 from src.mist.realtime.websocket_streams.intake.fields.error import StreamRequestError  # Convert contract refusals.
 from src.mist.realtime.websocket_streams.live.transport.runtime.logging.structured_logger import (
@@ -35,3 +35,20 @@ class DownloadResponse:
             )  # Preserve streamed download headers.
         except StreamRequestError as error:  # Convert a checked refusal to JSON.
             return JsonResponse.error(error)  # Preserve the standard error shape.
+
+    @staticmethod
+    def batch_zip(session_id: str) -> Response | tuple[Response, int]:
+        """Return one completed Multi Site result archive."""
+        if set(request.args) != {"format"} or request.args.get("format") != "zip":
+            return JsonResponse.error(StreamRequestError("bad_request", "The batch download requires format=zip."))
+        try:
+            services = ServiceRequest.current()  # Resolve the app-scoped service bundle.
+            filename, content = services.artifacts.zip_download(session_id)  # Copy a bounded pinned snapshot.
+            logger.emit(logging.DEBUG, "web.response.batch_download.ready", {"status": "ready"})
+            return Response(
+                content,
+                mimetype="application/zip",
+                headers={"Content-Disposition": f"attachment; filename={filename}"},
+            )
+        except StreamRequestError as error:
+            return JsonResponse.error(error)
