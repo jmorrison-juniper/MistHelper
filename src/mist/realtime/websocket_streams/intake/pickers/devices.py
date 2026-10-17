@@ -6,6 +6,10 @@ import logging  # Structured records write through standard repository handlers.
 import time  # Cache age uses a monotonic clock.
 from typing import cast  # Device family data is checked before record construction.
 
+import src.foundation.runtime.config.runtime_settings as runtime_settings  # Read the live validated page limit.
+from src.mist.realtime.websocket_streams.intake.fields.error import (
+    StreamRequestError,
+)  # Keep failed discovery distinct from an empty site.
 from src.mist.realtime.websocket_streams.intake.identifiers.identity_rules import (
     IdentityIdentifierRules,
 )  # Validate device MACs before they scope a client read.
@@ -55,11 +59,10 @@ class DevicePicker(PickerRuntime):
         """Return fresh copied device rows."""
         now = time.monotonic()  # Wall-clock changes cannot invalidate cache age.
         cached = self._device_cache.get(site_id)  # Read the current site entry.
-        if cached and now - cached[0] <= 30.0:  # Reuse rows for the required 30-second interval.
+        if cached is not None and now - cached[0] <= 30.0:  # Reuse rows for the required 30-second interval.
             return [dict(row) for row in cached[1]]  # Protect cached rows from caller mutation.
         rows = self._fetch_devices(site_id)  # Read Mist after cache absence or expiry.
-        if rows:  # Empty answers can be transient failures.
-            self._device_cache[site_id] = (now, [dict(row) for row in rows])  # Store a defensive copy.
+        self._device_cache[site_id] = (now, [dict(row) for row in rows])  # Cache complete empty or nonempty lists.
         return rows  # Return fresh normalized rows.
 
     def _fetch_devices(self, site_id: str) -> list[dict[str, object]]:
@@ -68,14 +71,18 @@ class DevicePicker(PickerRuntime):
             import mistapi  # Import here so focused tests can replace the SDK seam.
 
             response = mistapi.api.v1.sites.devices.listSiteDevices(
-                self._apisession, site_id=site_id, type="all"
-            )  # Request every device type.
-            rows = [self._device_row(record) for record in self._records(response)]  # Normalize each SDK row.
+                self._apisession, site_id=site_id, type="all", limit=runtime_settings.DEFAULT_API_PAGE_LIMIT
+            )  # Request every device type at the configured page limit.
+            rows = [self._device_row(record) for record in self._page_reader.read(response)]  # Normalize each SDK row.
             logger.emit(logging.DEBUG, "intake_device_fetch_finished", {"count": len(rows)})  # Log no row content.
             return rows  # Return the complete normalized result.
+        except StreamRequestError:
+            raise  # Preserve HTTP, cursor, and response-shape failures.
         except Exception as error:
             logger.emit(logging.ERROR, "intake_device_fetch_failed", {"detail": type(error).__name__})  # Log safe type.
-            return []  # The public payload supplies the operator reason.
+            raise StreamRequestError(
+                "picker_service_failed", "The portal could not read devices from Mist."
+            ) from error  # Do not turn an SDK failure into an empty list.
 
     def _device_row(self, record: dict[str, object]) -> dict[str, object]:
         """Return one normalized device row."""

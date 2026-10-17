@@ -12,15 +12,15 @@
 
 **Purpose**: Confirm existing boundaries and prepare safe local validation.
 
-- [ ] T001 [P] Check the structure guard and direct-child counts for `src/mist/realtime/websocket_streams/` and `tests/unit/websocket_streams/` before choosing implementation files; do not add modules or package directories.
-- [ ] T002 [P] Confirm that mocked Mist SDK and WebSocket fixtures use temporary output paths and do not write test output under `data/` in `tests/unit/websocket_streams/` and `tests/contract/websocket_streams/`.
+- [x] T001 [P] Check the structure guard and direct-child counts for `src/mist/realtime/websocket_streams/` and `tests/unit/websocket_streams/` before choosing implementation files; do not add modules or package directories.
+- [x] T002 [P] Confirm that mocked Mist SDK and WebSocket fixtures use temporary output paths and do not write test output under `data/` in `tests/unit/websocket_streams/` and `tests/contract/websocket_streams/`.
 
 ## Phase 2: Foundational
 
 **Purpose**: Prove transport and SDK behavior and establish shared batch invariants before story work.
 
-- [ ] T003 Add contract coverage in `tests/contract/websocket_streams/test_ws_sdk_contract.py` for installed SDK 0.64.1 page traversal. `mistapi.get_next` follows the authenticated `response.next` URL. Validate every returned status and shape. Do not use `mistapi.get_all` where it cannot report a failed page.
-- [ ] T004 [P] Run and preserve the first-output and split-control transport proofs in `tests/contract/websocket_streams/test_ws_sdk_contract.py`; confirm that the owned transport retains first output and split control sequences before implementation approval.
+- [x] T003 Add contract coverage in `tests/contract/websocket_streams/test_ws_sdk_contract.py` for installed SDK 0.64.1 page traversal. `mistapi.get_next` follows the authenticated `response.next` URL. Validate every returned status and shape. Do not use `mistapi.get_all` where it cannot report a failed page.
+- [x] T004 [P] Run and preserve the first-output and split-control transport proofs in `tests/contract/websocket_streams/test_ws_sdk_contract.py`; confirm that the owned transport retains first output and split control sequences before implementation approval.
 - [ ] T005 [P] Add unit coverage for target identity, terminal target states, and count invariants in `tests/unit/websocket_streams/live/sessions/test_ws_session_record.py` and `tests/unit/websocket_streams/live/sessions/test_ws_session_manager.py`.
 - [ ] T006 Check the shared live-session and transport limits in `src/mist/realtime/websocket_streams/live/sessions/settings.py` and `src/mist/realtime/websocket_streams/live/sessions/manager/operations.py`; define how batch permits share capacity with Single Site sessions without changing existing limits.
 

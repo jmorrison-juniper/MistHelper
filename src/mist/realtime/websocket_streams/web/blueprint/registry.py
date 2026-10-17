@@ -12,6 +12,7 @@ from src.mist.realtime.websocket_streams.web.blueprint.routes.page import (
 )  # Register page and catalog routes.
 from src.mist.realtime.websocket_streams.web.blueprint.routes.pickers import (
     ClientPickerRoutes,
+    OrganizationPickerRoutes,
     PickerRoutes,
 )  # Register resource picker routes.
 from src.mist.realtime.websocket_streams.web.blueprint.routes.sessions import SessionRoutes  # Register session routes.
@@ -80,6 +81,9 @@ class WebSocketBlueprint:
     @staticmethod
     def _add_picker_routes(blueprint: Blueprint) -> None:
         """Add all Mist picker routes."""
+        blueprint.add_url_rule(
+            "/api/websockets/batches/sites", view_func=OrganizationPickerRoutes.sites
+        )  # Expose complete organization site discovery for batch selection.
         blueprint.add_url_rule(
             "/api/websockets/sites/<site_id>/devices", view_func=PickerRoutes.devices
         )  # Preserve device picker.

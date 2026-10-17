@@ -9,6 +9,7 @@ from pathlib import Path  # The structural contract reads this test file.
 from types import SimpleNamespace  # The ordering proof builds offline records.
 from typing import Any, cast  # The binary-loss proof isolates the SDK callback boundary.
 
+import mistapi  # Verify the authenticated SDK pagination helper.
 from mistapi import APISession  # The tests pin private API session fields used by the own client.
 from mistapi.device_utils import ex, mxedge, srx  # The tests inspect SDK utility facades.
 from mistapi.device_utils.__tools.__ws_wrapper import (
@@ -40,30 +41,25 @@ class TestWebSocketSdkContract:
         for callback in ("on_open", "on_message", "on_error", "on_close"):  # The runner registers these callbacks.
             assert hasattr(_MistWebsocket, callback)  # The callback method must exist.
 
-    def test_util_response_contract(self) -> None:
-        """Pin the utility response attributes and methods."""
-        response = UtilResponse()  # Build the SDK response object.
-        assert hasattr(response, "disconnect")  # UtilityRunner.stop calls disconnect.
-        assert hasattr(response, "done")  # UtilityRunner monitors done.
-        assert hasattr(response, "ws_error")  # UtilityRunner maps WebSocket errors.
-        assert hasattr(response, "trigger_api_response")  # UtilityRunner maps trigger status.
-
     def test_capture_and_shell_signatures(self) -> None:
         """Pin the SDK functions that need custom runner arguments."""
         signatures = tuple(  # Read every SDK utility signature in stable order.
             inspect.signature(function) for function in (ex.remotePcap, srx.remotePcap, mxedge.siteRemotePcap)
         )
         shell = inspect.signature(ex.createShellSession)  # Read the shell factory signature.
-        actual = (  # Measure capture support and the complete shell contract.
+        response = UtilResponse()  # Build the SDK response object.
+        assert (  # Pin capture and shell contracts in one value.
             tuple("device_interfaces" in signature.parameters for signature in signatures),
             tuple(shell.parameters)[:3],
             "rows" in shell.parameters,
             "cols" in shell.parameters,
-        )
-        assert actual == ((True, True, True), ("apisession", "site_id", "device_id"), True, True)  # Pin the contract.
+        ) == ((True, True, True), ("apisession", "site_id", "device_id"), True, True)
+        assert tuple(  # Pin every response method that UtilityRunner calls.
+            hasattr(response, name) for name in ("disconnect", "done", "ws_error", "trigger_api_response")
+        ) == (True, True, True, True)
 
     def test_api_session_private_transport_attributes(self) -> None:
-        """Pin the private API session fields that transport uses."""
+        """Pin the private session fields used by the owned transport."""
         session = APISession()  # Build the SDK session without network authentication.
         attributes = tuple(  # Measure every private field that the owned transport reads.
             hasattr(session, name) for name in ("_cloud_uri", "_apitoken", "_apitoken_index", "_session")
@@ -76,6 +72,18 @@ class TestWebSocketSdkContract:
         )
         assert attributes == (True, True, True, True)  # The SDK exposes every required private field.
         assert defaults == ("", [], -1, "Session")  # A new session keeps stable offline defaults.
+
+    def test_sdk_cursor_uses_authenticated_session(self, monkeypatch: Any) -> None:
+        """Prove SDK pagination uses the authenticated session and cursor."""
+        session = APISession()  # Build the SDK session without network authentication.
+        requested: list[str] = []  # Record the cursor passed to the authenticated session.
+        next_page = SimpleNamespace(status_code=200, data=[])  # Supply one deterministic later page.
+        monkeypatch.setattr(session, "mist_get", lambda uri: requested.append(uri) or next_page)  # Isolate HTTP.
+        assert mistapi.get_next(  # Follow the SDK-provided cursor through the authenticated session.
+            mist_session=session, response=SimpleNamespace(next="/api/v1/orgs/sites?page=2")
+        ) is next_page and requested == [
+            "/api/v1/orgs/sites?page=2"
+        ]  # Prove the exact cursor path.
 
     def test_sdk_stream_cannot_preserve_binary_terminal_output(self, monkeypatch: Any) -> None:
         """Prove that the SDK stream client changes required terminal bytes."""
