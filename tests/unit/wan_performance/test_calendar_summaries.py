@@ -7,7 +7,7 @@ import pytest
 
 from src.interfaces.portals.wan_performance.domain.calendar import CalendarPeriod, CalendarWindow
 from src.interfaces.portals.wan_performance.domain.measurement import MetricMeasurement
-from src.interfaces.portals.wan_performance.domain.summary import CalendarSummaries
+from src.interfaces.portals.wan_performance.domain.summary import CalendarSummaries, StateObservationSummary
 from src.interfaces.portals.wan_performance.presentation.offline_preview import OfflinePreviewFactory
 
 
@@ -310,13 +310,7 @@ def test_status_summaries_count_observed_changes_and_expose_sparse_coverage() ->
 
     daily = CalendarSummaries.build(records, first.identity)[0]
 
-    assert daily.state_observations is not None
-    assert daily.state_observations.valid_hours == 5
-    assert daily.state_observations.expected_hours == 24
-    assert daily.state_observations.up_hours == 2
-    assert daily.state_observations.down_hours == 3
-    assert daily.state_observations.observed_up_percent == 40
-    assert daily.state_observations.observed_transitions == 2
+    assert daily.state_observations == StateObservationSummary(5, 24, 2, 3, 40, 2)
 
 
 def test_status_summaries_remain_absent_without_boolean_evidence() -> None:
