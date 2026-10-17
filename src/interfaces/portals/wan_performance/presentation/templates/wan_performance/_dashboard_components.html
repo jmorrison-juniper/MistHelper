@@ -1,0 +1,120 @@
+{% macro kpi_grid(metrics, test_id) %}
+<section class="wan-kpi-grid" data-testid="{{ test_id }}" aria-label="Key performance indicators">
+    {% for metric in metrics %}
+    <article class="wan-kpi-card">
+        <strong>{{ metric.value }}{% if metric.unit %} {{ metric.unit }}{% endif %}</strong>
+        <span>{{ metric.label }}</span>
+    </article>
+    {% endfor %}
+</section>
+{% endmacro %}
+
+{% macro gauge_grid(metrics, test_id) %}
+<section class="wan-gauge-grid" data-testid="{{ test_id }}" aria-label="Current metric gauges">
+    {% for metric in metrics %}
+    {% set gauge_value = (metric.value|float * 100 / metric.scale_max)|round|int %}
+    <article class="wan-panel wan-gauge-card">
+        <h2>{{ metric.label }}</h2>
+        <svg class="wan-gauge" viewBox="0 0 200 120" role="img"
+             aria-label="{{ metric.label }}: {{ metric.value }} {{ metric.unit }}">
+            <path class="wan-gauge-track" d="M 18 102 A 82 82 0 0 1 182 102"/>
+            <path class="wan-gauge-low" d="M 18 102 A 82 82 0 0 1 182 102"/>
+            <path class="wan-gauge-mid" d="M 18 102 A 82 82 0 0 1 182 102"/>
+            <path class="wan-gauge-high" d="M 18 102 A 82 82 0 0 1 182 102"/>
+            <line class="wan-gauge-needle" x1="100" y1="102" x2="100" y2="20"
+                  transform="rotate({{ -90 + gauge_value * 1.8 }} 100 102)"/>
+            <circle class="wan-gauge-center" cx="100" cy="102" r="5"/>
+            <text class="wan-gauge-label" x="100" y="100" text-anchor="middle">
+                {{ metric.value }}{% if metric.unit %} {{ metric.unit }}{% endif %}
+            </text>
+        </svg>
+    </article>
+    {% endfor %}
+</section>
+{% endmacro %}
+
+{% macro table_panel(table, test_id) %}
+<section class="wan-panel" data-testid="{{ test_id }}">
+    <header class="wan-panel-heading"><h2>{{ table.title }}</h2></header>
+    <div class="table-responsive">
+        <table class="table table-sm wan-table">
+            <thead><tr>{% for column in table.columns %}<th scope="col">{{ column }}</th>{% endfor %}</tr></thead>
+            <tbody>
+                {% for row in table.rows %}
+                <tr>{% for value in row %}<td>{{ value }}</td>{% endfor %}</tr>
+                {% else %}
+                <tr><td colspan="{{ table.columns|length }}">{{ table.empty_message }}</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endmacro %}
+
+{% macro chart_grid(charts, test_id) %}
+<section class="wan-chart-grid" data-testid="{{ test_id }}">
+    {% for chart in charts %}
+    <figure class="wan-panel wan-chart-panel">
+        <figcaption class="wan-panel-heading">
+            <h2>{{ chart.title }}</h2>
+            <p>{{ chart.subtitle }}</p>
+        </figcaption>
+        {% if chart.labels %}
+        <svg class="wan-chart" viewBox="0 0 640 230" role="img" aria-label="{{ chart.title }}">
+            <path class="wan-chart-gridline" d="M32 30H620 M32 75H620 M32 120H620 M32 165H620"/>
+            {% set point_count = chart.labels|length %}
+            {% set x_steps = point_count - 1 if point_count > 1 else 1 %}
+            {% set value_span = chart.scale[1] - chart.scale[0] %}
+            {% for tick in range(5) %}
+            {% set tick_value = chart.scale[1] - (tick * value_span / 4) %}
+            {% set tick_y = 30 + (tick * 135 / 4) %}
+            <text class="wan-chart-axis-label" x="26" y="{{ tick_y + 4 }}">{{ tick_value|round(1) }}</text>
+            {% endfor %}
+            {% for label, value, color in chart.reference_lines %}
+            {% set reference_y = 165 - ((value - chart.scale[0]) * 130 / value_span) %}
+            <line class="wan-chart-reference" style="--wan-series-color: {{ color }};"
+                  x1="32" x2="620" y1="{{ reference_y }}" y2="{{ reference_y }}"/>
+            <text class="wan-chart-reference-label" x="616" y="{{ reference_y - 3 }}">{{ label }}</text>
+            {% endfor %}
+            {% for series in chart.series %}
+            {% if series.values|length == point_count %}
+            {% if chart.kind == "bar" %}
+            {% set bar_width = 588 / point_count * 0.58 %}
+            {% for value in series.values %}
+            {% set x_position = 326 if point_count == 1 else 32 + (loop.index0 * 588 / x_steps) %}
+            {% set y_position = 165 - ((value - chart.scale[0]) * 130 / value_span) %}
+            <rect class="wan-chart-bar"
+                  style="--wan-series-color: {{ chart.bar_colors[loop.index0] if chart.bar_colors else series.color }};"
+                  x="{{ x_position - bar_width / 2 }}" y="{{ y_position }}"
+                  width="{{ bar_width }}" height="{{ 165 - y_position }}"/>
+            {% endfor %}
+            {% else %}
+            <polyline class="wan-chart-series" style="--wan-series-color: {{ series.color }};"
+                      points="{% for value in series.values %}{{ 32 + (loop.index0 * 588 / x_steps) }},{{ 165 - ((value - chart.scale[0]) * 130 / value_span) }}{% if not loop.last %} {% endif %}{% endfor %}"/>
+            {% for value in series.values %}
+            <circle class="wan-chart-point" style="--wan-series-color: {{ series.color }};"
+                    cx="{{ 32 + (loop.index0 * 588 / x_steps) }}"
+                    cy="{{ 165 - ((value - chart.scale[0]) * 130 / value_span) }}" r="3"/>
+            {% endfor %}
+            {% endif %}
+            {% endif %}
+            {% endfor %}
+            {% if chart.empty_message %}
+            <text class="wan-chart-empty-label" x="326" y="108">{{ chart.empty_message }}</text>
+            {% endif %}
+            {% for label in chart.labels %}
+            <text class="wan-chart-label" x="{{ 32 + (loop.index0 * 588 / x_steps) }}" y="205">{{ label }}</text>
+            {% endfor %}
+        </svg>
+        <div class="wan-chart-legend">
+            {% for series in chart.series %}
+            <span><i style="--wan-series-color: {{ series.color }};"></i>{{ series.label }} ({{ series.unit }})</span>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="wan-chart-empty">{{ chart.subtitle }}</p>
+        {% endif %}
+    </figure>
+    {% endfor %}
+</section>
+{% endmacro %}
