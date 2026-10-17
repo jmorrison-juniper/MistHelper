@@ -54,6 +54,7 @@ class WebPortalApp:
         WebPortalApp._register_context_processor(app)
         WebPortalApp._register_favicon_route(app)  # Answer the direct browser icon request.
         WebPortalApp._register_shutdown_hook(app)  # Wire teardown now, so every app built here shuts down cleanly.
+        WebPortalApp._start_wan_refresh_worker(app)
         InputInterceptor.install()
         return app
 
@@ -298,10 +299,64 @@ class WebPortalApp:
             return
         logger.info("Shutting down the web portal")  # One INFO line at the start, an operator can see it begin.
         app.config[WebPortalApp.SHUTDOWN_DONE_CONFIG_KEY] = True  # Mark done first, so a second call returns above.
+        WebPortalApp._stop_wan_refresh_worker(app)
         WebPortalApp._stop_event_bus(app)
         WebPortalApp._stop_operation_executor(app)
         WebPortalApp._stop_websocket_sessions(app)  # Close live WebSocket streams before the process exits.
         logger.info("Web portal shutdown complete")  # One INFO line at the end, an operator can see a clean stop.
+
+    @staticmethod
+    def _start_wan_refresh_worker(app: Flask) -> None:
+        """Start one shared-admission worker when the portal session and history exist."""
+        setting = os.environ.get("WAN_BACKGROUND_REFRESH", "true").strip().lower()
+        if setting == "false":
+            logger.info("WAN background refresh is disabled by configuration.")
+            return
+        if setting != "true":
+            logger.error("WAN_BACKGROUND_REFRESH must be true or false.")
+            return
+        if app.config.get("APISESSION") is None:
+            logger.info("WAN background refresh is disabled because no Mist session exists.")
+            return
+        from src.interfaces.portals.wan_performance.collection.background_refresh import (
+            WanBackgroundRefreshWorker,
+        )
+
+        service = WebPortalApp._get_wan_refresh_service(app)
+        if service is None:
+            return
+        worker = WanBackgroundRefreshWorker(service)
+        app.config["WAN_BACKGROUND_REFRESH_WORKER"] = worker
+        worker.start()
+
+    @staticmethod
+    def _get_wan_refresh_service(app: Flask) -> Any | None:
+        """Return a live service only when the existing shared admission and history work."""
+        from src.interfaces.portals.wan_performance.collection.request_admission import RequestLedger
+        from src.interfaces.portals.wan_performance.presentation.live_routes import LivePages
+
+        try:
+            if not RequestLedger.enabled():
+                logger.info("WAN background refresh requires shared Redis admission.")
+                return None
+            with app.app_context():
+                service = LivePages.service()
+            if service.history is None:
+                logger.info("WAN background refresh requires the selected history store.")
+                return None
+            return service
+        except (ConnectionError, OSError, ValueError):
+            logger.exception("WAN background refresh could not initialize its existing portal services.")
+            return None
+
+    @staticmethod
+    def _stop_wan_refresh_worker(app: Flask) -> None:
+        """Stop the worker before other portal resources close."""
+        worker = app.config.get("WAN_BACKGROUND_REFRESH_WORKER")
+        if worker is None:
+            return
+        worker.stop()
+        logger.debug("WAN background refresh worker stopped.")
 
     @staticmethod
     def _stop_event_bus(app: Flask) -> None:
