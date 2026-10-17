@@ -4,6 +4,8 @@ import hashlib
 import json
 import logging
 from datetime import UTC, datetime
+from numbers import Number
+from typing import cast
 
 from arango.client import ArangoClient
 from arango.cursor import Cursor
@@ -11,6 +13,7 @@ from arango.database import StandardDatabase
 from arango.exceptions import ArangoError
 
 from src.foundation.persistence.db import DatabaseConfig
+from src.interfaces.portals.wan_performance.domain.calendar import MAX_HISTORY_RECORDS, MAX_HISTORY_WINDOW_DAYS
 from src.interfaces.portals.wan_performance.domain.measurement import HourlyMeasurement, MeasurementIdentity
 from src.interfaces.portals.wan_performance.integration.record_codec import RecordCodec
 
@@ -63,20 +66,22 @@ class ArangoHistory:
         logger.debug("Committed %d WAN history records.", len(documents))
 
     def read(self, identity: MeasurementIdentity, start: datetime, end: datetime) -> tuple[HourlyMeasurement, ...]:
-        """Read a bounded half-open UTC window through the public AQL interface."""
+        """Read a thirteen-month half-open UTC window through the public AQL interface."""
         if any(value.tzinfo is None or value.utcoffset() != UTC.utcoffset(value) for value in (start, end)):
             raise ValueError("History window must use UTC.")
-        if not 0 < (end - start).total_seconds() <= 366 * 86400:
-            raise ValueError("History window must span more than zero and at most 366 days.")
+        if not 0 < (end - start).total_seconds() <= MAX_HISTORY_WINDOW_DAYS * 86400:
+            raise ValueError(f"History window must span more than zero and at most {MAX_HISTORY_WINDOW_DAYS} days.")
         logger.info("Read WAN history from the configured ArangoDB store.")
         cursor = self.database.aql.execute(
             "FOR record IN @@collection FILTER record.identity == @identity "
-            "AND record.hour >= @start AND record.hour < @end SORT record.hour LIMIT 8784 RETURN record.payload",
+            "AND record.hour >= @start AND record.hour < @end "
+            "SORT record.hour LIMIT @limit RETURN record.payload",
             bind_vars={
                 "@collection": self.COLLECTION,
                 "identity": json.dumps(identity.natural_key),
                 "start": start.isoformat(),
                 "end": end.isoformat(),
+                "limit": cast(Number, MAX_HISTORY_RECORDS),
             },
         )
         if not isinstance(cursor, Cursor):

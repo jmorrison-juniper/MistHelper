@@ -52,7 +52,7 @@
 {% endmacro %}
 
 {% macro chart_grid(charts, test_id) %}
-<section class="wan-chart-grid" data-testid="{{ test_id }}">
+<section class="wan-chart-grid{% if charts|length == 1 %} wan-chart-grid--single{% endif %}" data-testid="{{ test_id }}">
     {% for chart in charts %}
     <figure class="wan-panel wan-chart-panel">
         <figcaption class="wan-panel-heading">

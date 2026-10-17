@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
 
-from src.interfaces.portals.wan_performance.domain.calendar import CalendarPeriod
+from src.interfaces.portals.wan_performance.domain.calendar import CalendarPeriod, CalendarWindow
 from src.interfaces.portals.wan_performance.domain.measurement import MetricMeasurement
 from src.interfaces.portals.wan_performance.domain.summary import CalendarSummaries
 from src.interfaces.portals.wan_performance.presentation.offline_preview import OfflinePreviewFactory
@@ -49,16 +49,81 @@ def test_calendar_period_rejects_unsupported_kind() -> None:
         CalendarPeriod.containing(datetime(2024, 1, 1, tzinfo=UTC), "annual")
 
 
+def test_rolling_period_rejects_non_utc_time_and_unknown_window() -> None:
+    """Reject rolling windows without an exact UTC boundary and supported duration."""
+    with pytest.raises(ValueError, match="UTC"):
+        CalendarPeriod.ending_at(datetime(2024, 1, 1), "rolling_3h")
+    with pytest.raises(ValueError, match="3, 12, or 24"):
+        CalendarPeriod.ending_at(datetime(2024, 1, 1, tzinfo=UTC), "rolling_7h")
+
+
+@pytest.mark.parametrize(
+    ("end", "start"),
+    [
+        (datetime(2024, 3, 31, 12, 45, tzinfo=UTC), datetime(2023, 2, 28, 12, 45, tzinfo=UTC)),
+        (datetime(2025, 3, 31, 12, 45, tzinfo=UTC), datetime(2024, 2, 29, 12, 45, tzinfo=UTC)),
+    ],
+)
+def test_history_window_uses_thirteen_calendar_months(end: datetime, start: datetime) -> None:
+    """Clamp month-end dates while preserving the exact UTC time."""
+    assert CalendarWindow.thirteen_months_ending(end) == (start, end)
+
+
+@pytest.mark.parametrize(
+    "end",
+    [datetime(2024, 1, 1), datetime(2024, 1, 1, tzinfo=timezone(timedelta(hours=1)))],
+)
+def test_history_window_rejects_ambiguous_time(end: datetime) -> None:
+    """Reject naive and non-UTC history boundaries."""
+    with pytest.raises(ValueError, match="UTC"):
+        CalendarWindow.thirteen_months_ending(end)
+
+
 def test_summary_keeps_missing_hours_and_peer_records_separate() -> None:
-    """Count observed circuit hours without using peer rows or filling gaps."""
+    """Count observed circuit hours and rolling windows without using peer rows."""
     dashboard = OfflinePreviewFactory.build()
     summaries = CalendarSummaries.build(dashboard.measurements, dashboard.circuit)
-    assert [summary.period.kind for summary in summaries] == ["daily", "weekly", "monthly"]
-    assert [summary.observed_hours for summary in summaries] == [1, 1, 1]
-    assert [summary.period.expected_hours for summary in summaries] == [24, 168, 744]
-    assert summaries[0].metrics["utilization"] == (12.5, 12.5, "percent")
+    assert [summary.period.kind for summary in summaries] == [
+        "daily",
+        "weekly",
+        "monthly",
+        "rolling_3h",
+        "rolling_12h",
+        "rolling_24h",
+    ]
+    assert [summary.observed_hours for summary in summaries] == [1, 1, 1, 1, 1, 1]
+    assert [summary.period.expected_hours for summary in summaries] == [24, 168, 744, 3, 12, 24]
+    assert summaries[0].metrics["utilization"] == (12.5, 12.5, 12.5, "percent")
     assert "packet_loss" not in summaries[0].metrics
     assert summaries[0].provenance == "synthetic"
+
+
+def test_rolling_windows_end_at_latest_retained_observation() -> None:
+    """Show available values in each rolling window without filling missing hours."""
+    dashboard = OfflinePreviewFactory.build()
+    first = dashboard.measurements[0]
+    records = tuple(
+        replace(
+            first,
+            hour_start_utc=instant,
+            collected_at_utc=instant,
+            metrics={"latency": MetricMeasurement(value, "ms")},
+        )
+        for instant, value in (
+            (datetime(2024, 1, 1, 10, tzinfo=UTC), 10),
+            (datetime(2024, 1, 1, 12, tzinfo=UTC), 20),
+            (datetime(2024, 1, 1, 13, tzinfo=UTC), 30),
+        )
+    )
+    summaries = CalendarSummaries.build(records, first.identity)
+    rolling = {summary.period.kind: summary for summary in summaries if summary.period.kind.startswith("rolling_")}
+
+    assert rolling["rolling_3h"].period.start == datetime(2024, 1, 1, 11, tzinfo=UTC)
+    assert rolling["rolling_3h"].period.end == datetime(2024, 1, 1, 14, tzinfo=UTC)
+    assert rolling["rolling_3h"].observed_hours == 2
+    assert rolling["rolling_3h"].metrics["latency"] == (25.0, 30.0, 30.0, "ms")
+    assert rolling["rolling_12h"].observed_hours == 3
+    assert rolling["rolling_24h"].observed_hours == 3
 
 
 def test_weekly_mean_preserves_source_unweighted_daily_means() -> None:
@@ -74,7 +139,7 @@ def test_weekly_mean_preserves_source_unweighted_daily_means() -> None:
     )
     summaries = CalendarSummaries.build((first, second, third), dashboard.circuit)
     weekly = next(summary for summary in summaries if summary.period.kind == "weekly")
-    assert weekly.metrics["utilization"] == (46.25, 80.0, "percent")
+    assert weekly.metrics["utilization"] == (46.25, 80.0, 80.0, "percent")
     assert weekly.observed_hours == 3
 
 
@@ -86,8 +151,28 @@ def test_summary_does_not_turn_missing_metrics_into_zero() -> None:
         metrics={"utilization": MetricMeasurement(None, "percent", missing_reason="No samples")},
     )
     summaries = CalendarSummaries.build((record,), dashboard.circuit)
-    assert summaries[0].metrics == {"utilization": (None, None, "percent")}
+    assert summaries[0].metrics == {"utilization": (None, None, None, "percent")}
     assert summaries[0].observed_hours == 1
+
+
+def test_daily_p95_uses_source_index_and_short_sample_fallback() -> None:
+    """Use the source floor-index percentile and its maximum fallback for short samples."""
+    dashboard = OfflinePreviewFactory.build()
+    first = dashboard.measurements[0]
+    records = tuple(
+        replace(
+            first,
+            hour_start_utc=datetime(2024, 1, 1, hour, tzinfo=UTC),
+            collected_at_utc=datetime(2024, 1, 1, hour, tzinfo=UTC),
+            metrics={"latency": MetricMeasurement(float(hour), "ms")},
+        )
+        for hour in range(22)
+    )
+    daily = CalendarSummaries.build(records, first.identity)[0]
+    assert daily.metrics["latency"] == (10.5, 21.0, 20.0, "ms")
+
+    short = CalendarSummaries.build(records[:3], first.identity)[0]
+    assert short.metrics["latency"][2] == 2.0
 
 
 @pytest.mark.parametrize("violation", ["duplicate", "provenance", "unit"])

@@ -97,6 +97,10 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.wan-chart-grid--single {
+    grid-template-columns: minmax(0, 1fr);
+}
+
 .wan-overview-layout {
     align-items: start;
     display: grid;
