@@ -287,8 +287,12 @@ Peer observation time does not establish the sample time of each metric.
 The existing exporter primary-key strategy names `timestamp`, `from_device`, and `to_device`.
 Those application fields do not establish a source response contract.
 No verified response establishes historical VPN samples for normalization into source hours.
-The source quality collector calculates p95 from `loss_samples`, `jitter_samples`, and `latency_samples`.
-It falls back to a single value when those sample arrays are absent.
+The source `QualityCollector.get_wan_edge_stats` reads `wan_interfaces` from `getSiteDeviceStats`.
+It calculates gateway WAN-interface p95 from `loss_samples`, `jitter_samples`, and `latency_samples`.
+It falls back to scalar loss, jitter, and latency fields when those sample arrays are absent.
+This quality data belongs to gateway WAN interfaces, not to a selected VPN peer path.
+The source `vpn_peer.py` page has gauge and chart placeholders without data callbacks.
+It does not implement peer-specific quality history or peer raw-sample p95.
 The observed p95 uses the source index rule on retained WAN observations.
 MistHelper retains one observation per identity and hour, not every raw quality sample.
 The raw utilization p95 uses the source index rule on the six 10-minute values.
