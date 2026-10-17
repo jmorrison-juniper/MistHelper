@@ -2,7 +2,7 @@
 
 **Branch**: `3993-mistcircuitstats-redis` | **Date**: 2026-10-14 | **Spec**: [spec.md](spec.md)
 
-**Input**: Timestamp feature specification in `specs/live/20261014-050510-mistcircuitstats-redis/spec.md`
+**Input**: Timestamp feature specification in `specs/live/0/0/0/1/2/1/3/2/2/2/0/0/1/4/2/2/0/20261014-050510-mistcircuitstats-redis/spec.md`
 
 ## Summary
 
@@ -79,7 +79,7 @@ See [data-model.md](data-model.md), [contracts/mist-api.md](contracts/mist-api.m
 ### Documentation (this feature)
 
 ```text
-specs/live/20261014-050510-mistcircuitstats-redis/
+specs/live/0/0/0/1/2/1/3/2/2/2/0/0/1/4/2/2/0/20261014-050510-mistcircuitstats-redis/
 ├── spec.md
 ├── checklists/
 │   └── requirements.md
