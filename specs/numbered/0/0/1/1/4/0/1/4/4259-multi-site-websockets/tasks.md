@@ -115,7 +115,7 @@
 **Purpose**: Run required gates, prepare a complete pull request, and verify the merged result.
 
 - [x] T041 Run `python -B -m pytest -p no:cacheprovider -s -q tests/guardrails/local_test_quality_loop/test_guidance.py::TestLiveGuides` and confirm every required input is present before the test-quality check.
-- [ ] T042 After committing the intended tests, run `test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json --changed-from origin/main --full-gate-path .github/workflows/ci.yml --full-gate-path requirements-dev.txt`; require zero new findings before push.
+- [x] T042 After committing the intended tests, run `test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json --changed-from origin/main --full-gate-path .github/workflows/ci.yml --full-gate-path requirements-dev.txt`; require zero new findings before push.
 - [ ] T043 Inspect `.github/pull_request_template.md` and `.github/PULL_REQUEST_TEMPLATE/` before preparing the PR body. Preserve the selected template and include exact local gate commands and results. Wait for required checks and CodeQL with `gh pr checks <number> --watch`, then wait for human review before merge.
 - [ ] T044 After a maintainer merges the PR, verify the merge commit on `main`, the linked issue state, and the merged feature files. Do not merge or delete the branch without required approval and preservation evidence.
 
