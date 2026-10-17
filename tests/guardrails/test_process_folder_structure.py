@@ -249,3 +249,29 @@ def test_feature_nested_under_feature_fails(tmp_path: Path) -> None:
     )
     with pytest.raises(AssertionError, match="nested feature"):
         validate_specs_structure(root, baseline)
+
+
+def test_duplicate_feature_identity_fails_across_groups(tmp_path: Path) -> None:
+    """Reject one feature name that appears in two timestamp routes."""
+    root = tmp_path / "specs"
+    (root / "legacy-feature").mkdir(parents=True)
+    identity = "20261013-182828-duplicate"
+    direct = root / "live" / identity
+    grouped = root / "live"
+    for _ in range(17):
+        grouped /= "0"
+    grouped /= identity
+    direct.mkdir(parents=True)
+    grouped.mkdir(parents=True)
+    (direct / "spec.md").write_text("# Direct record\n", encoding="utf-8")
+    (grouped / "spec.md").write_text("# Grouped record\n", encoding="utf-8")
+    baseline = tmp_path / "baseline.json"
+    baseline.write_text(
+        json.dumps(
+            {"managed_roots": sorted(APPROVED_MANAGED_ROOTS), "grandfathered_legacy_children": ["legacy-feature"]}
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(AssertionError, match="Duplicate feature identity"):
+        validate_specs_structure(root, baseline)

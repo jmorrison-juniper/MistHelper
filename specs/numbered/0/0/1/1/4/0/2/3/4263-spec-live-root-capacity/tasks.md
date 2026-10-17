@@ -25,9 +25,9 @@ Do not start relocation without T002.
 
 **Purpose**: Define deterministic fixture vectors and the unchanged numeric contract.
 
-- [ ] T004 Add timestamp vectors, calendar failures, range boundaries, duplicate names, and unchanged eight-level numeric vectors in `tests/guardrails/test_spec_route_contract.py`.
+- [x] T004 Add timestamp vectors, calendar failures, range boundaries, duplicate names, and unchanged eight-level numeric vectors in `tests/guardrails/test_spec_route_contract.py`. (delivered: `tests/guardrails/test_spec_route_contract.py`; verified: focused suite, 49 passed)
 - [x] T005 Add six-child fixtures at the live root, nested group, and terminal bucket in `tests/guardrails/test_process_folder_structure.py`. (delivered: tests/guardrails/test_process_folder_structure.py)
-- [ ] T006 Add independent worktree, missing selection, unsafe path, duplicate identity, and nested feature fixtures in `tests/guardrails/test_spec_route_contract.py`.
+- [x] T006 Add independent worktree, missing selection, unsafe path, duplicate identity, and nested feature fixtures in `tests/guardrails/test_spec_route_contract.py`. (delivered: both guard test files; verified: focused suite, 49 passed)
 
 T004 must pin exactly 17 timestamp digits, each between zero and four.
 Test the supported UTC epoch range, malformed dates, and pre-1970 rejection.
@@ -41,7 +41,7 @@ T006 must prove an explicit directory overrides persisted state without writing 
 **Independent Test**: Generate six records in an isolated fixture and reject the sixth child at each structural depth.
 
 - [x] T007 [US1] Implement validated 17-digit timestamp routes through `Get-SpecRadixSegments` in `.specify/scripts/powershell/spec-route.ps1`. (delivered: .specify/scripts/powershell/spec-route.ps1)
-- [ ] T008 [US1] Validate destination absence, feature boundaries, and five-child capacity before writes in `.specify/scripts/powershell/create-new-feature.ps1`.
+- [x] T008 [US1] Validate destination absence, feature boundaries, and five-child capacity before writes in `.specify/scripts/powershell/create-new-feature.ps1`. (delivered: `.specify/scripts/powershell/create-new-feature.ps1`, `tests/guardrails/test_spec_route_contract.py`; verified: focused suite, 49 passed)
 - [x] T009 [US1] Extend structural traversal and count reporting in `tests/guardrails/test_process_folder_structure.py` without changing its threshold or baseline. (delivered: tests/guardrails/test_process_folder_structure.py)
 - [x] T010 [US1] Verify bounded feature-artifact generation and no partial output on failure in `tests/guardrails/test_spec_route_contract.py`. (delivered: tests/guardrails/test_spec_route_contract.py)
 
@@ -76,7 +76,7 @@ T015 must test a failing grouped task record, not only successful directory disc
 
 **Independent Test**: Verify the complete original manifest and exact approved reference patches after relocation.
 
-- [ ] T016 [US3] Add preservation, occupied-destination, unreadable-source, symlink, and failed-verification fixtures in `tests/guardrails/test_spec_route_contract.py`.
+- [x] T016 [US3] Add preservation, occupied-destination, unreadable-source, symlink, and failed-verification fixtures in `tests/guardrails/test_spec_route_contract.py`. (delivered: `tests/guardrails/test_spec_route_contract.py`; verified: focused suite, 49 passed)
 - [x] T017 [US3] Relocate only owner-approved records from `specs/live/` using the complete map in `design/contracts/migration.md`. (delivered: design/contracts/migration.md)
 - [x] T018 [US3] Update each approved selector and reference listed in `design/contracts/migration.md`, preserving unrelated narrative content. (delivered: specs/live/0/0/0/1/2/1/3/2/2/1/2/3/0/3/4/1/3/20261013-182828-fix-generated-control-labels/plan.md)
 - [x] T019 [US3] Record file mapping, unchanged hashes, exact approved reference patches, owner evidence, and remaining historical debt in `design/contracts/migration.md`. (delivered: design/contracts/migration.md)
@@ -164,8 +164,7 @@ That authorization does not supply another owner's handover or a canonical tool 
 Start only the tasks whose prerequisites are satisfied.
 Keep all relocation and integration tasks blocked until their evidence exists.
 
-Fifteen tasks have complete evidence.
-T004, T006, T008, and T016 retain partial fixture or failure-path coverage.
+Nineteen tasks have complete evidence.
 T014 requires the canonical shared-tool release.
 T015 and T023 remain incomplete because the public task audit misses grouped records.
 T020 belongs to the Redis owner after this process increment merges.
@@ -173,4 +172,6 @@ T024 requires that integration and actual CI results.
 The user separately authorized T017 through T019 for the single #4202 move before the remaining shared-tool and migration-fixture work.
 This scoped exception does not authorize another move or complete those prerequisites.
 Selection fixtures use the existing route-contract test file rather than an additional test module.
+The focused suite passed 49 tests with PowerShell 7.6.7 on PATH.
+Ruff passed, Black left both test files unchanged, and mypy reported no issues in two source files.
 No planning or integration task is complete merely because a missed nested audit returned zero.
