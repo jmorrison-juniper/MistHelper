@@ -102,25 +102,34 @@ class PeerPathIdentity:
 
     gateway: GatewayIdentity
     port_name: str
+    peer_port_id: str
     peer_mac: str
     tunnel_identity: str
 
     def __post_init__(self) -> None:
         """Validate peer fields without deriving an unverified tunnel key."""
         CircuitIdentity(self.gateway, self.port_name)
+        CircuitIdentity(self.gateway, self.peer_port_id)
         IdentityValidator.peer_mac(self.peer_mac)
         IdentityValidator.identifier(self.tunnel_identity, "tunnel_identity")
 
     @property
-    def natural_key(self) -> tuple[str, str, str, str, str, str]:
+    def natural_key(self) -> tuple[str, str, str, str, str, str, str]:
         """Return each parent and peer-path identity value."""
-        return (*self.gateway.natural_key, self.port_name, self.peer_mac, self.tunnel_identity)
+        return (
+            *self.gateway.natural_key,
+            self.port_name,
+            self.peer_port_id,
+            self.peer_mac,
+            self.tunnel_identity,
+        )
 
     def to_dict(self) -> dict[str, str]:
         """Return JSON-compatible identity values with their parent context."""
         return {
             **self.gateway.to_dict(),
             "port_name": self.port_name,
+            "peer_port_id": self.peer_port_id,
             "peer_mac": self.peer_mac,
             "tunnel_identity": self.tunnel_identity,
         }
