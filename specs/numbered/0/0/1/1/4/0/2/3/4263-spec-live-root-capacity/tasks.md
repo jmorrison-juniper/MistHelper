@@ -162,7 +162,7 @@ That authorization does not supply another owner's handover or a canonical tool 
 Start only the tasks whose prerequisites are satisfied.
 Keep all relocation and integration tasks blocked until their evidence exists.
 
-All 24 implementation tasks have evidence on current main.
+Evidence for all 24 implementation tasks is recorded on this PR branch and awaits review and merge.
 T020 records the merged Redis handover in PR #4223.
 T023 records all required feature-level validation. The repository-wide audit exits 1 on unrelated records, which remain unchanged.
 T024 records the final counts, preservation proof, old-path search, and merged PR checks in `analysis.md`.

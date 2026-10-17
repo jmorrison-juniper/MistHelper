@@ -189,13 +189,14 @@ Publish this bounded increment without claiming complete issue acceptance.
 This checkpoint predates the merge of PR #4223. The final evidence below supersedes it.
 At that checkpoint, do not merge before required checks and CodeQL pass.
 
-## Final Current-Main Evidence
+## Final Validation Evidence
 
 **Recorded**: 2026-10-17T04:54:30Z.
 
 **Base**: `main` at `9ba3a7e5ca8f3c371e58887531623a249510d7df`.
 
-This section records evidence after PR #4223 merged.
+This section records validation run against current main after PR #4223 merged.
+This evidence is recorded on the #4276 PR branch and is not yet part of main.
 It supersedes the earlier checkpoint that left T020, T023, and T024 open.
 Issue #4263 is open pending review.
 
@@ -210,9 +211,7 @@ The merge commit has first parent `d34cf32584b4023aaa0252d715c97bb6654fefa4`, wh
 The merged record has eleven files at its grouped path.
 The current-main route and structure suite passes all 51 tests.
 
-The Redis dependency paragraph in `design/contracts/migration.md` still states the pre-merge status.
-The requested file set excludes that contract file.
-The merged PR and its final tree provide the current handover evidence.
+The Redis handover in `design/contracts/migration.md` records the merged status, rebase, guard result, and check counts.
 
 ### T023 Validation
 
@@ -282,7 +281,7 @@ This record does not treat that PR as merged and does not change its files.
 | Measure | Current result |
 | --- | --- |
 | Feature artifacts | 10 files |
-| Feature tasks | 24 total, 24 complete |
+| Feature task checkboxes on this PR branch | 24 total, 24 checked |
 | Live-root children | 5 |
 | Process guard scope | 795 children examined, 792 grandfathered, and 3 managed roots |
 | Structural directories | 117 |
