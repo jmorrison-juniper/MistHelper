@@ -1,4 +1,4 @@
-"""Refresh WAN snapshots from one Redis-elected portal worker."""
+"""Coordinate bounded WAN refreshes across portal worker processes."""
 
 from __future__ import annotations
 
