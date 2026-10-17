@@ -16,7 +16,7 @@ logger = StructuredTransportLogger(logging.getLogger(__name__))  # Keep picker f
 
 
 class SitePickerService:
-    """Read device, map, and asset picker rows."""
+    """Read organization sites and site resource picker rows."""
 
     def __init__(self, picker: Any | None, reason: str | None) -> None:
         """Store the Mist picker and readiness."""
@@ -27,6 +27,11 @@ class SitePickerService:
         """Return device picker rows."""
         picker = self._ready_picker("devices")  # Require the production picker.
         return cast(dict[str, object], picker.devices(site_id))  # Preserve device filtering and cache behavior.
+
+    def sites(self) -> dict[str, object]:
+        """Return all configured organization sites."""
+        picker = self._ready_picker("sites")  # Require the production picker.
+        return cast(dict[str, object], picker.sites())  # Preserve complete organization pagination.
 
     def maps(self, site_id: str) -> dict[str, object]:
         """Return map picker rows."""

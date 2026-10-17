@@ -77,3 +77,15 @@ class ClientPickerRoutes:
                 services.pickers.clients.clients(site_id, device_id),
             )[2]
         )  # Validate both target identifiers before the Mist read.
+
+
+class OrganizationPickerRoutes:
+    """Serve organization-wide WebSocket target discovery."""
+
+    @staticmethod
+    def sites() -> Response | tuple[Response, int]:
+        """Return complete site rows for the configured organization."""
+        services = ServiceRequest.current()  # Resolve the app-scoped service bundle.
+        return JsonResponse.call(
+            lambda: services.pickers.site.sites()
+        )  # The service uses only the configured organization identifier.

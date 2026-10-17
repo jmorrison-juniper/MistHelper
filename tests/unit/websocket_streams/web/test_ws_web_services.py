@@ -19,6 +19,9 @@ from src.mist.realtime.websocket_streams.intake.fields.error import (
 from src.mist.realtime.websocket_streams.live.sessions.buffer.page import (
     MessagePage,
 )  # The fake manager returns a read answer.
+from src.mist.realtime.websocket_streams.web.blueprint.registry import (
+    WebSocketBlueprint,
+)  # Verify additive batch picker route registration.
 from src.mist.realtime.websocket_streams.web.services.assembly.bundle import (
     WebSocketServiceBundle,
 )  # Type the built service set.
@@ -104,6 +107,10 @@ class FakeChecker:
 
 class FakePickers:
     """Fake picker service."""
+
+    def sites(self) -> dict[str, object]:
+        """Return one organization site row."""
+        return self._payload("org")  # Reuse the stable picker payload.
 
     def devices(self, site_id: str) -> dict[str, object]:
         """Return one device row."""
@@ -192,6 +199,7 @@ def test_ready_service_delegates_to_manager_and_pickers() -> None:
     map_picker = service.pickers.site.maps("site1")  # Read maps through the picker service.
     asset_picker = service.pickers.site.assets("site1")  # Read assets through the picker service.
     client_picker = service.pickers.related.sdkclients("site1", "map1")  # Read SDK clients.
+    site_picker = service.pickers.site.sites()  # Read sites through the site picker service.
     assert manager.started is True and started["session_id"] == "abc123"  # Manager start ran.
     assert listed["sessions"] == [] and read.next_after == 4  # Manager reads ran.
     assert stopped["state"] == "stopped"  # Stop ran.
@@ -199,6 +207,7 @@ def test_ready_service_delegates_to_manager_and_pickers() -> None:
     assert list(lines) == ['{"seq":1}\n'] and picker["rows"][0]["label"] == "Row"  # Streams and picker ran.
     assert device_picker["rows"][0]["label"] == "Row" and map_picker["rows"][0]["label"] == "Row"  # Picker rows.
     assert asset_picker["rows"][0]["label"] == "Row" and client_picker["rows"][0]["label"] == "Row"  # More rows.
+    assert site_picker["rows"][0]["id"] == "org"  # Organization sites use the same route-facing service.
 
 
 def test_for_app_reuses_injected_service() -> None:
@@ -214,14 +223,17 @@ def test_for_app_builds_not_ready_service_without_credentials() -> None:
     app = Flask(__name__)  # Build a small Flask app.
     app.config["APISESSION"] = None  # Simulate a portal with no Mist session.
     app.config["ORG_ID"] = ""  # Simulate a portal with no organization.
+    app.register_blueprint(WebSocketBlueprint.create())  # Register the WebSocket picker route.
     service = WebSocketServiceRegistry.for_app(app)  # Build the app-scoped service.
     catalog = service.catalog.payload()  # The catalog route can still answer.
     listed = service.sessions.lifecycle.list()  # The session list can still answer.
+    response = app.test_client().get("/api/websockets/batches/sites")  # Request the additive site picker.
     with pytest.raises(StreamRequestError) as error:  # A start must refuse when not ready.
         service.sessions.lifecycle.start({"kind": "channel"})  # Attempt a start.
     service.sessions.lifecycle.shutdown()  # Shutdown the empty manager safely.
     assert catalog["ready"] is False  # The payload reports not ready.
     assert listed["sessions"] == []  # The empty manager returns no sessions.
+    assert response.status_code == 503  # The new picker route preserves not-ready behavior.
     assert error.value.code == "not_ready"  # The refusal uses the contract code.
 
 
