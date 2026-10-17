@@ -130,16 +130,18 @@ The session downloaded official PowerShell 7.6.7 and verified SHA-256 `50dde99bb
 The executable remains outside the repository in session artifacts.
 Tests require its directory on PATH.
 
-## Verified Shared-Tool Blocker
+## Resolved Shared-Tool Blocker
 
-The public CLI offers only `--root`, `--allow-list`, and `--verbose`.
-It offers no explicit feature-path option.
-Two isolated fixtures prove the discovery gap.
-A completed flat record with one open task exits 1.
-The same nested record exits 0 and reports no unchecked tasks.
-That nested result proves a missed record, not completed work.
+The canonical task audit now discovers grouped feature records and stops at feature boundaries.
+The owner merged the implementation in [jmorrison-juniper/misthelper-devtools#73](https://github.com/jmorrison-juniper/misthelper-devtools/pull/73).
+The owner released v0.6.3 in [jmorrison-juniper/misthelper-devtools#74](https://github.com/jmorrison-juniper/misthelper-devtools/pull/74).
+MistHelper pins release commit `e8e093d205428b5503887267b6a9751fa7354be7`.
 
-Track the canonical repair in [jmorrison-juniper/misthelper-devtools#72](https://github.com/jmorrison-juniper/misthelper-devtools/issues/72).
-The repository regression directly scans the grouped task file through the supported `TaskFileScanner` API.
-It verifies one unfinished task, then one completed task.
-This regression does not repair the CLI's discovery or replace its repository audit.
+The canonical task-audit test module passes 24 tests.
+Its public-command fixture finds one open task in a grouped record and returns failure.
+Its completed grouped fixture verifies the reported feature and task counts.
+
+The repository-wide audit finds a separate tracked duplicate feature identity under `specs/189-quality-gate-remediation/`.
+The audit exits 2 before it reports counts.
+Issue [#4269](https://github.com/jmorrison-juniper/MistHelper/issues/4269) tracks owner review and the required structure resolution.
+Do not move or remove either copy without its owner's approval.

@@ -60,14 +60,12 @@ Require every newly generated directory, including artifact directories, to rema
 - [x] T011 [US2] Resolve validated explicit directories and established or bounded design paths in `.specify/scripts/powershell/common.ps1`. (delivered: .specify/scripts/powershell/common.ps1)
 - [x] T012 [US2] Preserve non-persisting read paths and actual supporting-artifact output in `.specify/scripts/powershell/check-prerequisites.ps1`. (delivered: .specify/scripts/powershell/check-prerequisites.ps1)
 - [x] T013 [US2] Apply selected paths without shared pointer writes in `.specify/scripts/powershell/setup-plan.ps1`, `.specify/scripts/powershell/setup-tasks.ps1`, and `.specify/scripts/powershell/update-agent-context.ps1`. (delivered: .specify/scripts/powershell/setup-plan.ps1, .specify/scripts/powershell/setup-tasks.ps1, .specify/scripts/powershell/update-agent-context.ps1)
-- [ ] T014 [US2] Obtain a reviewed recursive task-discovery release from the canonical `misthelper-devtools` repository and update `requirements-dev.txt`.
-- [ ] T015 [US2] Verify valid and failing grouped task fixtures, established layouts, and design-role ambiguity in `tests/guardrails/test_spec_route_contract.py`.
+- [x] T014 [US2] Obtain a reviewed recursive task-discovery release from the canonical `misthelper-devtools` repository and update `requirements-dev.txt`. (delivered: pin to devtools v0.6.3 at `e8e093d205428b5503887267b6a9751fa7354be7`; verified: PRs [jmorrison-juniper/misthelper-devtools#73](https://github.com/jmorrison-juniper/misthelper-devtools/pull/73) and [jmorrison-juniper/misthelper-devtools#74](https://github.com/jmorrison-juniper/misthelper-devtools/pull/74) merged, tag points to the release commit)
+- [x] T015 [US2] Verify valid and failing grouped task fixtures, established layouts, and design-role ambiguity in `tests/guardrails/test_spec_route_contract.py`. (delivered: public-audit tests for completed and open grouped records; verified: 51 route and structure tests passed, 24 canonical task-audit tests passed)
 
-T014 is external work, not permission to edit another checkout or installed package.
-File its separate issue and obtain its canonical owner before implementation.
-The verified blocker is [jmorrison-juniper/misthelper-devtools#72](https://github.com/jmorrison-juniper/misthelper-devtools/issues/72).
-The audit must report actual feature and task counts and stop discovery at feature roots.
-Do not add a local replacement or suppress a shared-tool failure.
+T014 required the canonical devtools owner and a reviewed release.
+The owner merged the recursive audit fix and released v0.6.3.
+The dependency pin uses the full release commit.
 T015 must test a failing grouped task record, not only successful directory discovery.
 
 ## Phase 5: User Story 3 - Approved preservation (Priority: P2)
@@ -164,11 +162,10 @@ That authorization does not supply another owner's handover or a canonical tool 
 Start only the tasks whose prerequisites are satisfied.
 Keep all relocation and integration tasks blocked until their evidence exists.
 
-Nineteen tasks have complete evidence.
-T014 requires the canonical shared-tool release.
-T015 and T023 remain incomplete because the public task audit misses grouped records.
+Twenty-one tasks have complete evidence.
 T020 belongs to the Redis owner after this process increment merges.
-T024 requires that integration and actual CI results.
+T023 remains open because the repository-wide audit stops on a tracked nested record documented in issue #4269.
+T024 requires T020, a completed T023, and actual CI results.
 The user separately authorized T017 through T019 for the single #4202 move before the remaining shared-tool and migration-fixture work.
 This scoped exception does not authorize another move or complete those prerequisites.
 Selection fixtures use the existing route-contract test file rather than an additional test module.

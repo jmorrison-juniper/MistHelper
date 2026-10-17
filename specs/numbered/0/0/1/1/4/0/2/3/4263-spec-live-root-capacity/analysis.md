@@ -100,7 +100,8 @@ Do not claim full implementation, close issue #4263, or unblock PR #4223 without
 
 A1 is resolved through official PowerShell 7.6.7 in session artifacts.
 The executable requires its directory on PATH.
-A2 remains blocked by [jmorrison-juniper/misthelper-devtools#72](https://github.com/jmorrison-juniper/misthelper-devtools/issues/72).
+A2 is resolved by merged devtools PRs [jmorrison-juniper/misthelper-devtools#73](https://github.com/jmorrison-juniper/misthelper-devtools/pull/73) and [jmorrison-juniper/misthelper-devtools#74](https://github.com/jmorrison-juniper/misthelper-devtools/pull/74), and release tag `v0.6.3`.
+The MistHelper development dependency now pins release commit `e8e093d205428b5503887267b6a9751fa7354be7`.
 A3 is resolved for the single authorized [nine-file move](design/contracts/migration.md).
 The tracked selector remains unchanged.
 
@@ -128,9 +129,10 @@ Passing the number directly fixes the prescribed numeric route.
 
 The sole skipped policy test requires a pull-request event.
 It does not skip routing, selection, preservation, or process validation.
-The full task audit also misses grouped records.
-The earlier public CLI fixtures prove that defect independently of the existing flat-record findings.
-Neither its output nor the explicit scanner API constitutes successful recursive task discovery.
+The canonical audit tests pass against the released recursive implementation.
+The repository-wide audit now detects grouped records but stops on the tracked duplicate feature identity at `specs/189-quality-gate-remediation/189-quality-gate-remediation/`.
+Issue [#4269](https://github.com/jmorrison-juniper/MistHelper/issues/4269) records this separate owner-dependent structure blocker.
+The audit exits 2 before it reports feature or task counts.
 
 The process guard examined 795 root children, including 792 grandfathered entries and three managed roots.
 It examined 109 structural directories and 38 feature records.
@@ -144,12 +146,42 @@ The old slash and Windows path search finds only the explicit source mapping in 
 The coordinator independently confirmed the same preservation result and an earlier 34-test pass in 10.01s.
 The changelog now states the completed move and remaining dependencies.
 
-Fifteen implementation tasks have verified evidence.
-Nine remain open, including partial fixture work, shared discovery, Redis integration, and final CI evidence.
+Twenty-one implementation tasks have verified evidence.
+T020 remains open for the Redis record owner.
+T023 remains open because the repository-wide recursive audit stops on issue #4269.
+T024 requires T020, a completed T023, and fresh CI evidence.
 The plan and task skill-agent changes are necessary to consume actual nested design paths instead of obsolete root-only paths.
-No product code, dependency pin, existing record other than #4202, or shared selector changed.
+No product code, existing record other than #4202, or shared selector changed.
+The development dependency pin changed to the verified devtools v0.6.3 commit.
 The two existing complexity-11 functions remain unchanged in complexity.
 The blanket complexity command is not a pass. No new or increased complexity exception was found.
+
+## Follow-Up Release Validation
+
+**Recorded**: 2026-10-17T02:39:19Z.
+
+| Check | Result |
+| --- | --- |
+| Prerequisites | Passed for the explicit #4263 feature path. The command returned the actual `design/` paths and `tasks.md`. The tracked feature pointer stayed unchanged. |
+| MistHelper route and structure tests | 51 passed in 17.13 seconds. This includes completed and open grouped-task public-command cases. |
+| Canonical task-audit tests | 24 passed. The tested source and test files match devtools release commit `e8e093d205428b5503887267b6a9751fa7354be7`. |
+| Repository-wide recursive audit | Exit 2 before counts. It found the tracked nested identity under `specs/189-quality-gate-remediation/`. Issue [#4269](https://github.com/jmorrison-juniper/MistHelper/issues/4269) tracks owner review. |
+| Ruff | Passed for `tests/guardrails/test_spec_route_contract.py`. |
+| Black | Passed. The changed test file needs no formatting changes. |
+| Mypy | Passed with no issues in the changed test file. |
+| Bandit | Passed for the changed test file. |
+| Complexity | Passed. Every changed test function stays within the limit. |
+| Test-quality input preflight | One passed. The check read and validated all four required inputs. |
+| STE | Passed for the three changed Markdown records. Scores: 97, 94, and 95. |
+| Markdown links | Scanned three tracked files and found zero broken links. |
+| Dependency consistency | `pip check` reported no broken requirements. |
+| Patch whitespace | `git diff --check` passed. |
+
+T014 and T015 now have verified evidence.
+T020 still requires the Redis record owner's rebase, checks, and explicit merge authorization.
+T023 remains open because the repository-wide audit stops on issue #4269.
+T024 remains open until T020 and T023 finish and the final CI evidence exists.
+Do not move either #189 copy or claim full issue completion without owner review.
 
 The required committed-diff test-quality check runs after the local commit.
 Its exact result belongs in the issue and PR evidence.

@@ -6,6 +6,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys  # Locate the installed audit command beside this test interpreter.
 from pathlib import Path
 
 import pytest
@@ -185,6 +186,50 @@ class SpecCommandFixture:
             (feature / "design" / name).write_text("# Isolated design\n")
         (feature / "design" / "contracts" / "paths.md").write_text("# Contract\n")
         return feature
+
+
+def create_grouped_task_feature(root: Path, route: str, tasks: str) -> None:
+    """Create a completed grouped feature for the public task audit."""
+    feature = root / "specs" / route  # Keep the record beneath a real managed root.
+    feature.mkdir(parents=True)  # Create each structural route segment for discovery.
+    (feature / "spec.md").write_text("**Status**: Implemented\n", encoding="utf-8")  # Mark the record complete.
+    (feature / "tasks.md").write_text(tasks, encoding="utf-8")  # Provide the task markers under test.
+
+
+def run_public_task_audit(root: Path) -> subprocess.CompletedProcess[str]:
+    """Run the installed console command against an isolated feature tree."""
+    script_directory = str(Path(sys.executable).parent)  # Find the command beside the test interpreter.
+    command = shutil.which("speckit-task-audit", path=script_directory)  # Use the pinned public tool.
+    assert command is not None, "Install requirements-dev.txt before this test."  # Fail if setup omitted the tool.
+    return subprocess.run(  # Exercise the same entry point that audits a repository.
+        [command, "--root", str(root)],
+        check=False,  # Preserve expected failures for result checks.
+        capture_output=True,  # Read the audit report and error details.
+        text=True,  # Decode the report for stable assertions.
+        timeout=30,  # Bound this local audit test.
+    )
+
+
+def test_public_task_audit_finds_open_grouped_tasks(tmp_path: Path) -> None:
+    """Require the public audit to fail and report an open grouped task."""
+    route = "live/" + "/".join("0" for _ in range(17)) + "/20261017-000000-grouped-open"
+    create_grouped_task_feature(tmp_path, route, "- [ ] T001 Open\n")  # Add one open task in a valid route.
+    result = run_public_task_audit(tmp_path)  # Audit the isolated grouped record.
+    assert result.returncode == 1, result.stderr  # An open task must fail the public audit.
+    assert "Examined 1 feature record(s), 1 task file(s)" in result.stdout  # Prove record discovery.
+    assert "1 task marker(s)" in result.stdout  # Prove the task file was scanned.
+    assert f"specs/{route}: 1 unchecked tasks" in result.stdout  # Name the exact grouped failure.
+
+
+def test_public_task_audit_accepts_completed_grouped_tasks(tmp_path: Path) -> None:
+    """Require the public audit to pass and count a completed grouped task."""
+    route = "live/" + "/".join("0" for _ in range(17)) + "/20261017-000000-grouped-complete"
+    create_grouped_task_feature(tmp_path, route, "- [X] T001 Done\n")  # Add one completed task in a valid route.
+    result = run_public_task_audit(tmp_path)  # Audit the isolated grouped record.
+    assert result.returncode == 0, result.stderr  # A completed task must pass.
+    assert "Examined 1 feature record(s), 1 task file(s)" in result.stdout  # Prove record discovery.
+    assert "1 task marker(s)" in result.stdout  # Prove the task file was scanned.
+    assert "No unchecked task boxes found." in result.stdout  # Prove the completion result.
 
 
 @pytest.mark.parametrize(
