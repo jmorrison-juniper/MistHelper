@@ -40,10 +40,13 @@ Review each remaining occurrence rather than suppressing the search.
 
 ## Redis Planning Dependency
 
-PR [#4223](https://github.com/jmorrison-juniper/MistHelper/pull/4223) remains blocked until the process implementation merges.
-Its owner then rebases, relocates the Redis record, and updates its references.
-Run the strengthened guard on that rebased branch.
-Do not merge based on an earlier passing result or this planning PR.
+PR [#4223](https://github.com/jmorrison-juniper/MistHelper/pull/4223) is merged at `9ba3a7e5ca8f3c371e58887531623a249510d7df`.
+Its owner rebased the grouped Redis record change onto the merged process implementation, then relocated the record and updated its references.
+The merge contains the grouped-record commit `737deb854712e6590544dc1744255c2e3a477587`.
+The current-main route and structure guard suite passed 51 tests in 17.06 seconds.
+The current PR check report shows 39 successful and 6 skipped checks. The user reported 36 checks passed at merge.
+The record at the grouped destination contains eleven files.
+Do not repeat the move or edit that record in this feature branch.
 
 ## Proposed Move Requiring Owner Review
 
