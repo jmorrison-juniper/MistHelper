@@ -393,6 +393,44 @@ def test_persisted_observations_render_calendar_summaries(client, live_service):
     assert "mean 40.0" in response.get_data(as_text=True)
 
 
+def test_selected_port_quality_metrics_render_in_history(client, live_service):
+    """Show persisted hourly link-health metrics on the selected-port detail page."""
+    from datetime import UTC, datetime
+
+    from src.interfaces.portals.wan_performance.collection.snapshot_records import SnapshotRecords
+
+    snapshot = live_service.store.cached.return_value
+    gateway = {key: snapshot["ports"][0][key] for key in ("org_id", "site_id", "mac")}
+    snapshot["insights"] = {
+        "gateway": gateway,
+        "port_id": "ge-0/0/0",
+        "samples": [
+            {
+                "metric": name,
+                "unit": unit,
+                "value": value,
+                "hour_start_utc": datetime(2024, 1, 1, 12, tzinfo=UTC).isoformat(),
+            }
+            for name, unit, value in (
+                ("rx_bps", "bit/s", 100),
+                ("tx_bps", "bit/s", 200),
+                ("avg_loss_pct", "%", 0.25),
+                ("avg_jitter_ms", "ms", 4.5),
+                ("avg_latency_ms", "ms", 33.3),
+            )
+        ],
+    }
+    live_service.history.read.return_value = SnapshotRecords.build(snapshot)
+
+    response = client.get("/wan-performance/live/port/site-one/ge-0/0/0?gateway_id=aabbccddeeff")
+
+    assert response.status_code == 200
+    text = response.get_data(as_text=True)
+    assert "avg_loss_pct: 0.25 %" in text
+    assert "avg_jitter_ms: 4.5 ms" in text
+    assert "avg_latency_ms: 33.3 ms" in text
+
+
 def test_threshold_history_displays_observation_counts_not_duration(client, live_service):
     """Keep sparse hourly threshold evidence distinct from measured congestion hours."""
     from src.interfaces.portals.wan_performance.collection.snapshot_records import SnapshotRecords

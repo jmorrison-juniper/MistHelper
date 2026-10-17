@@ -13,6 +13,7 @@ from src.foundation.persistence.db import DatabaseConfig
 from src.interfaces.portals.wan_performance.collection.live_service import LiveService
 from src.interfaces.portals.wan_performance.collection.request_admission import AdmittedAdapter
 from src.interfaces.portals.wan_performance.collection.snapshot_records import SnapshotRecords, SnapshotStates
+from src.interfaces.portals.wan_performance.domain.calendar import CalendarWindow
 from src.interfaces.portals.wan_performance.domain.identity import (
     CircuitIdentity,
     GatewayIdentity,
@@ -48,7 +49,8 @@ class LiveHistory:
             return (), "History is unavailable. The selected application store is not available."
         try:
             end = datetime.now(UTC)
-            history = service.history.read(records[0].identity, end - timedelta(days=31), end)
+            start, end = CalendarWindow.thirteen_months_ending(end)
+            history = service.history.read(records[0].identity, start, end)
             return CalendarSummaries.build(history, records[0].identity), None
         except STORE_ERRORS:
             logger.exception("WAN history is unavailable for the selected identity.")

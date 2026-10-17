@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from arango.cursor import Cursor
 
+from src.interfaces.portals.wan_performance.domain.calendar import MAX_HISTORY_RECORDS, MAX_HISTORY_WINDOW_DAYS
 from src.interfaces.portals.wan_performance.integration.arango_history import ArangoHistory
 from src.interfaces.portals.wan_performance.integration.history_repository import HistorySelection
 from src.interfaces.portals.wan_performance.integration.sqlite_history import SQLiteHistory
@@ -71,6 +72,24 @@ def test_invalid_window_is_rejected(history):
     record = live_record()
     with pytest.raises(ValueError, match="window"):
         history.read(record.identity, record.hour_start_utc, record.hour_start_utc)
+
+
+def test_history_read_supports_thirteen_month_window(history):
+    """Accept the maximum source-compatible calendar horizon in the configured store."""
+    record = live_record()
+    history.upsert((record,))
+    start = record.hour_start_utc
+    end = start + timedelta(days=MAX_HISTORY_WINDOW_DAYS)
+    assert history.read(record.identity, start, end) == (record,)
+
+
+def test_history_read_rejects_window_above_thirteen_month_bound(history):
+    """Reject requests that exceed the fixed history and record limits."""
+    record = live_record()
+    start = record.hour_start_utc
+    end = start + timedelta(days=MAX_HISTORY_WINDOW_DAYS, seconds=1)
+    with pytest.raises(ValueError, match="at most"):
+        history.read(record.identity, start, end)
 
 
 def test_corrupt_persisted_data_is_not_a_success(history):
@@ -208,6 +227,23 @@ def test_arango_reads_bind_full_identity_and_close_cursor():
     assert "FILTER record.identity == @identity" in database.aql.execute.call_args.args[0]
     assert database.aql.execute.call_args.kwargs["bind_vars"]["@collection"] == "wan_performance_hours"
     cursor.close.assert_called_once_with()
+
+
+def test_arango_history_read_binds_thirteen_month_record_limit():
+    """Keep the requested record count fixed and prevent an unbounded AQL read."""
+    from src.interfaces.portals.wan_performance.integration.record_codec import RecordCodec
+
+    record = live_record()
+    cursor = MagicMock(spec=Cursor)
+    cursor.__iter__.return_value = iter([RecordCodec.encode(record)])
+    database = MagicMock()
+    database.aql.execute.return_value = cursor
+    ArangoHistory(database).read(
+        record.identity,
+        record.hour_start_utc,
+        record.hour_start_utc + timedelta(days=MAX_HISTORY_WINDOW_DAYS),
+    )
+    assert database.aql.execute.call_args.kwargs["bind_vars"]["limit"] == MAX_HISTORY_RECORDS
 
 
 def test_sqlite_rolls_back_entire_failed_batch(history):

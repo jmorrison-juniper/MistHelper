@@ -42,8 +42,11 @@ class SnapshotRecords:
         gateway = cls._gateway(insight["gateway"], org_id)
         identity = CircuitIdentity(gateway, insight["port_id"]) if insight.get("port_id") is not None else gateway
         samples = insight["samples"]
-        if len(samples) != 2 or {sample["metric"] for sample in samples} != {"rx_bps", "tx_bps"}:
-            raise ValueError("Gateway insights require the two requested metric samples.")
+        expected = {"rx_bps", "tx_bps"}
+        if isinstance(identity, CircuitIdentity):
+            expected.update({"avg_loss_pct", "avg_jitter_ms", "avg_latency_ms"})
+        if len(samples) != len(expected) or {sample["metric"] for sample in samples} != expected:
+            raise ValueError("Gateway insights require the requested hourly metric samples.")
         hours = {sample["hour_start_utc"] for sample in samples}
         if len(hours) != 1:
             raise ValueError("Gateway insight metrics must use the same UTC hour.")
@@ -82,17 +85,17 @@ class SnapshotRecords:
 
 
 class SnapshotRates:
-    """Validate source rate values with explicit source or catalog units."""
+    """Validate WAN metric values with explicit source or catalog units."""
 
     @staticmethod
     def parse(value: object, unit: str) -> MetricMeasurement:
-        """Preserve zero while rejecting invalid or negative bit rates."""
+        """Preserve zero while rejecting invalid or negative metric values."""
         if value is None:
             return MetricMeasurement(None, unit, missing_reason="The API snapshot has no value.")
         if isinstance(value, str):
             value = float(value)
         if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0:
-            raise ValueError("WAN bit rate must be a non-negative finite number.")
+            raise ValueError("WAN metric value must be a non-negative finite number.")
         return MetricMeasurement(value, unit, sample_count=1)
 
 
