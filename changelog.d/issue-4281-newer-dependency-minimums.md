@@ -1,3 +1,3 @@
-### Update dependency minimum versions
+### Update dependency requirements
 
-- **Changed**: Use newer minimum dependency versions, including Pillow 13. Retain compatible upper limits and the Windows-only Waitress condition. Align the development Hypothesis pin with the runtime minimum. Issue #4281.
+- **Changed**: Raise dependency minimums and remove most upper version limits. Install Waitress on all platforms. Issue #4281.
