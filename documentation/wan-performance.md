@@ -36,13 +36,14 @@ Browser tests capture the four integrated pages under `test-artifacts/wan-perfor
 The source and integrated captures use a 1440-pixel width and a 1100-pixel viewport.
 The shared MistHelper navigation and synthetic-state banner replace the source connection bar.
 The overview keeps the source two-column order for summary tables and charts.
-The port page adds calendar summaries for the migrated hourly history.
+Single-chart detail views use the full source chart width.
+Migrated history summaries stay collapsed until the operator opens them.
 
 | Page | Source to integrated image size | Visual and data comparison |
 | - | - | - |
 | Overview | 1440 x 2447 to 1440 x 2352 | The 25 KPI cards match. Three tables stack left of the region and distribution charts. Two trend charts, site controls, and site charts follow. Values include 12.5 percent utilization and 1.0 Gbps total bandwidth. |
 | Gateway | 1440 x 1100 to 1440 x 1100 | Six KPI cards, two linked tables, and two charts keep the source order. Values include 125 Mbps receive, 50 Mbps transmit, 0.25 percent loss, 33.3 ms latency, and 4.5 ms jitter. |
-| WAN port | 1440 x 1265 to 1440 x 1749 | Six KPI cards, the utilization gauge, statistics and configuration tables, bandwidth chart, packet table, and error table keep the source order. Calendar summaries add page height. Values include 1,000 Mbps speed, 125 Mbps receive, 50 Mbps transmit, and 12.5 percent utilization. |
+| WAN port | 1440 x 1265 to 1440 x 1377 | Six KPI cards, the utilization gauge, statistics and configuration tables, full-width bandwidth chart, packet table, and error table keep the source order. A collapsed history disclosure adds 112 pixels with the shared shell. Values include 1,000 Mbps speed, 125 Mbps receive, 50 Mbps transmit, and 12.5 percent utilization. |
 | VPN peer | 1440 x 1274 to 1440 x 1378 | Six KPI cards, four gauges, the quality chart, and two detail tables keep the source order. The integrated page adds tunnel identity. Values include 0.25 percent loss, 33.3 ms latency, 4.5 ms jitter, and 4.20 MOS. |
 
 The MistHelper shell and synthetic-state banner add shared navigation and state labels.
@@ -175,19 +176,30 @@ Rates use `rx_bps` and `tx_bps`, never cumulative byte counters.
 Peer path keys include the remote site, remote port, and VPN type.
 Their derived key is not a claimed source tunnel identifier.
 
-Detail pages read a bounded 31-day window and show daily, weekly, and monthly observation summaries.
+Detail pages query up to thirteen calendar months of retained history and show daily, weekly, and monthly summaries.
+The query bound is 397 days and at most 9,528 hourly records for one identity.
+This limit bounds reads. It does not change MistHelper storage retention.
+Daily summaries show mean, maximum, and observed p95 for persisted values.
+The p95 uses the source index rule and maximum fallback for fewer than 20 observations.
+Weekly and monthly p95 values use the maximum daily p95, as the source does for utilization.
+Detail pages also show rolling 3-hour, 12-hour, and 24-hour summaries ending at the latest retained observation.
+Each rolling window reports its observed record count, mean, maximum, and observed p95.
+This anchor avoids presenting stale retained data as a current measurement.
+These percentiles describe retained observations, not all raw samples within each hour.
 The port detail has a separate CSRF-protected, operator-triggered insight refresh.
 It requires the exact site, gateway, and port identity from the validated cached page.
 It shares the organization cooldown and request ledger with every other WAN refresh.
-It permits four SDK calls: exact gateway discovery, metric catalog, receive rate, and transmit rate.
+It permits five SDK calls: exact gateway discovery, metric catalog, receive rate, transmit rate, and device link health.
 Each metric request selects the actual gateway UUID and exact `port_id`.
 Each request covers one completed UTC hour with `limit=1` and `page=1`.
 Catalog checks require gateway scope, `bit/s`, a 3,600-second interval, and sufficient `max_age`.
-Response checks require aligned timestamps and values, the exact window, and no next page.
+The device link-health request uses the existing `getSiteInsightMetricsForDevice` SDK method and the `wan_link_health` metric.
+It retains `avg_loss`, `avg_jitter`, and `avg_latency` with percent and millisecond units.
+Response checks require the exact window, no next page, at most one timestamp, and at most one value per field.
 Empty aligned series remain unknown.
-The selected application store retains these port rate records without replacing the current snapshot.
+The selected application store retains these port rate and link-health records without replacing the current snapshot.
 Natural-key upserts replace an existing row for the same port and UTC hour.
-The insight row contains rates only, not utilization derived from current link speed.
+The insight row contains rates and average link-health values, not utilization derived from current link speed.
 This operation does not request earlier pages or promise complete hourly coverage.
 This read window is not a retention period.
 WAN code does not delete application history or change existing TimeSeries retention.
@@ -213,14 +225,16 @@ An unavailable history connection preserves readable cached detail views but pre
 This review examined source revision `2d1c2199fa1e31c129ef1e051c5389349a207785`.
 Its `ProjectGoals.md` requires hourly availability, transition counts, quality statistics, elapsed threshold hours, and 13-month history.
 Observation counts do not satisfy elapsed threshold hours or complete-hour quality statistics.
-The bounded 31-day detail read does not satisfy the 13-month reporting requirement.
-No verified source contract establishes 13-month backfill or historical VPN metric samples.
+The detail query spans thirteen calendar months in the selected MistHelper history store.
+It reads records that the application already retained and does not backfill missing records.
+The horizon does not prove complete 13-month availability or hourly coverage.
+No verified source contract establishes historical VPN metrics for each peer path.
 Gateway insights do supply timestamped samples within each catalog metric's supported `max_age`.
 The gateway insight operation also accepts `port_id` for a selected interface.
-Current scoped refresh uses its two single-metric insight calls for the selected gateway.
-Adding two port insight calls to that refresh would exceed its six-call ceiling.
-A separate selected-port workflow uses four calls for discovery, catalog, and two metrics.
-It collects only one completed catalog-supported hour, not 13-month backfill.
+The existing MistHelper WAN Dashboard reads `wan_link_health` through `getSiteInsightMetricsForDevice`.
+The selected-port workflow uses that same read-only SDK method for average loss, jitter, and latency.
+It uses five calls for discovery, catalog, two rate metrics, and one device link-health metric.
+It collects only one completed hour, not 13-month backfill.
 The migration does not infer historical link capacity from current port speed.
 The live view supports verified directional snapshot utilization, not full-hour utilization averages.
 Snapshot status and sparse hourly observations cannot establish historical availability or congestion duration.
@@ -237,11 +251,12 @@ Peer observation time does not establish the sample time of each metric.
 The existing exporter primary-key strategy names `timestamp`, `from_device`, and `to_device`.
 Those application fields do not establish a source response contract.
 No verified response establishes historical VPN samples for normalization into source hours.
-The source quality calculator defines p95 using sorted samples and a zero-based index of `floor(0.95 * count)`.
-For fewer than 20 samples, it substitutes the maximum as an approximation.
-This convention does not establish a complete source sampling window.
-The portal retains one observation per identity and hour, not every raw quality sample.
-Its calendar summaries therefore report observed means and maxima, not a source hourly p95.
+The source quality collector calculates p95 from `loss_samples`, `jitter_samples`, and `latency_samples`.
+It falls back to a single value when those sample arrays are absent.
+The observed p95 uses the source index rule on retained WAN observations.
+MistHelper retains one observation per identity and hour, not every raw quality sample.
+The observed p95 does not claim the source within-hour sample p95.
+It makes the retained observation distribution visible without inventing missing samples.
 The source status calculator assumes constant state when events are absent.
 It also identifies transitions through `UP` and `DOWN` substrings in free-form event types.
 Neither assumption proves complete event coverage or a verified WAN transition mapping.

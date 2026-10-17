@@ -36,8 +36,9 @@
         <input type="hidden" name="site_id" value="{{ filters.site_id }}">
         <input type="hidden" name="port_name" value="{{ filters.port_name }}">
         <button class="btn btn-secondary" type="submit" data-testid="wan-live-port-history-refresh">Collect selected port insight hour</button>
-        <p>This separate refresh permits four SDK requests for one completed UTC hour.
-            It stores catalog-validated receive and transmit rates, not historical utilization percentages.
+        <p>This separate refresh permits five SDK requests for one completed UTC hour.
+            It stores catalog-validated receive and transmit rates plus device-scoped average loss, jitter, and latency.
+            It does not store historical utilization percentages.
             It does not replace the current snapshot or claim complete historical coverage.</p>
     </form>
     {% endif %}
@@ -92,16 +93,18 @@
         </div>
     </section>
     {% if kind in ["gateway", "port", "peer"] %}
-    <section data-testid="wan-live-history">
-        <h2>Persisted observation summaries</h2>
+    <details data-testid="wan-live-history">
+        <summary>Persisted observation summaries</summary>
         <p>Port and peer hours retain the last observation. Gateway hours use catalog-validated insight samples.
             These are not full-hour averages.
-            Coverage, availability, congestion duration, and percentiles remain unknown.</p>
+            Rolling 3-hour, 12-hour, and 24-hour windows end at the latest retained observation.
+            The observed p95 summarizes retained hourly values, not raw within-hour samples.
+            Coverage, availability, and congestion duration remain unknown.</p>
         {% if history_error %}<p role="alert">{{ history_error }}</p>{% endif %}
         {% for summary in summaries %}
-            <h3>{{ summary.period.kind }}: {{ summary.period.start.isoformat() }}</h3>
+            <h3>{{ summary.period.kind }}: {{ summary.period.start.isoformat() }} to {{ summary.period.end.isoformat() }}</h3>
             <p>{{ summary.observed_hours }} observed hours of {{ summary.period.expected_hours }}.</p>
-            {% for name, values in summary.metrics.items() %}<p>{{ name }}: mean {{ values[0] }}, maximum {{ values[1] }} {{ values[2] }}</p>{% endfor %}
+            {% for name, values in summary.metrics.items() %}<p>{{ name }}: mean {{ values[0] }}, maximum {{ values[1] }}, observed p95 {{ values[2] }} {{ values[3] }}</p>{% endfor %}
             {% if summary.threshold_observations %}
             <div data-testid="wan-live-threshold-observations">
                 <h4>Observed-hour threshold counts</h4>
@@ -114,8 +117,8 @@
                 {% endfor %}
             </div>
             {% endif %}
-        {% else %}{% if not history_error %}<p>No persisted observations exist in the selected 31-day window.</p>{% endif %}{% endfor %}
-    </section>
+        {% else %}{% if not history_error %}<p>No persisted observations exist in the previous thirteen calendar months.</p>{% endif %}{% endfor %}
+    </details>
     {% endif %}
     <a data-testid="wan-live-back-link" href="{{ url_for('wan_performance.live.overview') }}">Return to the WAN overview</a>
     <a data-testid="wan-offline-link" href="{{ url_for('wan_performance.overview') }}">Open the isolated synthetic preview</a>
