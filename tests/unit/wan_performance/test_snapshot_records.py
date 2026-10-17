@@ -1,5 +1,7 @@
 """Normalize controlled API snapshots without claiming full-hour observations."""
 
+import json
+
 import pytest
 
 from src.interfaces.portals.wan_performance.collection.snapshot_records import SnapshotRecords
@@ -59,6 +61,18 @@ def test_peer_history_codec_preserves_remote_port_identity():
 
     assert restored == record
     assert restored.identity.peer_port_id == "ge-0/0/1"
+
+
+def test_peer_history_codec_rejects_empty_body():
+    """Reject an empty stored payload instead of inventing an empty record."""
+    with pytest.raises(json.JSONDecodeError):
+        RecordCodec.decode("")
+
+
+def test_peer_history_codec_rejects_malformed_json():
+    """Reject malformed stored JSON before it reaches history consumers."""
+    with pytest.raises(json.JSONDecodeError):
+        RecordCodec.decode("{")
 
 
 def test_cross_org_row_is_rejected():

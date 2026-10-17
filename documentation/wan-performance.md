@@ -240,6 +240,9 @@ The request includes the peer MAC, local port, remote port, one completed UTC ho
 The collector stores only timestamped loss, latency, jitter, and MOS rows returned for that exact path.
 It uses `APISession.mist_get` because the installed generated wrapper does not accept both peer filters.
 The collector checks response bounds, timestamps, interval, and pagination before storage.
+The live catalog reports device scope, keyed-timeseries type, and `unit=null` for `vpn_peer-metrics`.
+It supports 10m samples with a maximum age of 86,400 seconds and 1h samples with a maximum age of 1,209,600 seconds.
+The keyed result has no catalog unit. The source page labels loss as percent, latency and jitter as milliseconds, and MOS as a score.
 Mocked response tests cover the source-shaped rows. Live peer mapping remains unverified because the bounded probe returned no peer rows.
 This read window is not a retention period.
 WAN code does not delete application history or change existing TimeSeries retention.
