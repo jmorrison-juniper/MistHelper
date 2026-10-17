@@ -4,7 +4,7 @@ description: "Implementation tasks for the MistCircuitStats Redis dashboard migr
 
 # Tasks: MistCircuitStats Redis Dashboard Migration
 
-**Input**: Design documents in `specs/live/20261014-050510-mistcircuitstats-redis/`
+**Input**: Design documents in `specs/live/0/0/0/1/2/1/3/2/2/2/0/0/1/4/2/2/0/20261014-050510-mistcircuitstats-redis/`
 
 **Prerequisites**: `plan.md`, `spec.md`, `research.md`, `data-model.md`, `contracts/`, `quickstart.md`
 
@@ -14,16 +14,16 @@ description: "Implementation tasks for the MistCircuitStats Redis dashboard migr
 
 **Purpose**: Record source evidence and ownership decisions before code changes.
 
-- [ ] T001 [P] Complete the source review for pagination, enrichment, `SKIP_ENRICHMENT`, token rotation, API host, organization settings, and stale handling. Keep the verified `worker.py` facts and guide discrepancies in `specs/live/20261014-050510-mistcircuitstats-redis/research.md`.
-- [ ] T002 [P] Obtain a maintainer decision on CC BY-NC-SA 4.0 reuse terms. Record approved attribution and any reuse limits in `specs/live/20261014-050510-mistcircuitstats-redis/research.md`. Copy no source code or assets without approval.
-- [x] T003 Map the overview, gateway, port, peer, insight, collector, refresh store, request admission, and offline preview to the canonical #4208 proposal in `specs/live/20261014-050510-mistcircuitstats-redis/contracts/ownership.md`. Record that #4208 is open and not merged. (delivered: `specs/live/20261014-050510-mistcircuitstats-redis/contracts/ownership.md`)
+- [ ] T001 [P] Complete the source review for pagination, enrichment, `SKIP_ENRICHMENT`, token rotation, API host, organization settings, and stale handling. Keep the verified `worker.py` facts and guide discrepancies in `specs/live/0/0/0/1/2/1/3/2/2/2/0/0/1/4/2/2/0/20261014-050510-mistcircuitstats-redis/research.md`.
+- [ ] T002 [P] Obtain a maintainer decision on CC BY-NC-SA 4.0 reuse terms. Record approved attribution and any reuse limits in `specs/live/0/0/0/1/2/1/3/2/2/2/0/0/1/4/2/2/0/20261014-050510-mistcircuitstats-redis/research.md`. Copy no source code or assets without approval.
+- [x] T003 Map the overview, gateway, port, peer, insight, collector, refresh store, request admission, and offline preview to the canonical #4208 proposal in `specs/live/0/0/0/1/2/1/3/2/2/2/0/0/1/4/2/2/0/20261014-050510-mistcircuitstats-redis/contracts/ownership.md`. Record that #4208 is open and not merged. (delivered: `specs/live/0/0/0/1/2/1/3/2/2/2/0/0/1/4/2/2/0/20261014-050510-mistcircuitstats-redis/contracts/ownership.md`)
 
 ## Phase 2: Foundational
 
 **Purpose**: Confirm shared API and cache contracts. These tasks block every product story.
 
-- [ ] T004 [P] Verify the source request arguments, response fields, pagination, and SDK signatures in `specs/live/20261014-050510-mistcircuitstats-redis/contracts/mist-api.md`. Resolve the reported insight mismatch for `rx_bps`, `tx_bps`, `port_id`, `interval=3600`, and a seven-day window before any insight work.
-- [ ] T005 [P] Verify the existing Redis namespace, payload, owner, target TTL, refresh lease, and outage behavior. Resolve the guide's three-interval TTL against the implementation's 31-day TTL in `specs/live/20261014-050510-mistcircuitstats-redis/contracts/redis-cache.md`. Record approved values and any assigned product path in `specs/live/20261014-050510-mistcircuitstats-redis/contracts/ownership.md`.
+- [ ] T004 [P] Verify the source request arguments, response fields, pagination, and SDK signatures in `specs/live/0/0/0/1/2/1/3/2/2/2/0/0/1/4/2/2/0/20261014-050510-mistcircuitstats-redis/contracts/mist-api.md`. Resolve the reported insight mismatch for `rx_bps`, `tx_bps`, `port_id`, `interval=3600`, and a seven-day window before any insight work.
+- [ ] T005 [P] Verify the existing Redis namespace, payload, owner, target TTL, refresh lease, and outage behavior. Resolve the guide's three-interval TTL against the implementation's 31-day TTL in `specs/live/0/0/0/1/2/1/3/2/2/2/0/0/1/4/2/2/0/20261014-050510-mistcircuitstats-redis/contracts/redis-cache.md`. Record approved values and any assigned product path in `specs/live/0/0/0/1/2/1/3/2/2/2/0/0/1/4/2/2/0/20261014-050510-mistcircuitstats-redis/contracts/ownership.md`.
 
 **Checkpoint**: Wait for T001, T002, T004, T005, and owner approval for one unique scope and path before any product task starts.
 
@@ -81,11 +81,11 @@ description: "Implementation tasks for the MistCircuitStats Redis dashboard migr
 **Purpose**: Verify safety and repository constraints across accepted stories.
 
 - [ ] T019 [P] Verify cache and API failure, request admission, and secret redaction contracts in `tests/integration/wan_performance/test_background_refresh.py`.
-- [ ] T020 Verify only assigned product and test paths changed in `specs/live/20261014-050510-mistcircuitstats-redis/contracts/ownership.md`.
+- [ ] T020 Verify only assigned product and test paths changed in `specs/live/0/0/0/1/2/1/3/2/2/2/0/0/1/4/2/2/0/20261014-050510-mistcircuitstats-redis/contracts/ownership.md`.
 - [ ] T021 Verify no new app, service, Compose group, public port, Redis service, or database appears in `compose.yml`.
-- [ ] T022 Verify all source assets and code reuse has maintainer approval and required attribution in `specs/live/20261014-050510-mistcircuitstats-redis/research.md`.
-- [ ] T023 Run the applicable tests, lint, type, security, documentation, and test-quality gates listed in `.github/copilot-instructions.md`. Record each exact command and result in `specs/live/20261014-050510-mistcircuitstats-redis/quickstart.md`.
-- [ ] T024 Record one separate incremental action to reduce the existing grandfathered `specs/` entries in `specs/live/20261014-050510-mistcircuitstats-redis/research.md`. Do not remove another feature's entry or change the baseline in this feature.
+- [ ] T022 Verify all source assets and code reuse has maintainer approval and required attribution in `specs/live/0/0/0/1/2/1/3/2/2/2/0/0/1/4/2/2/0/20261014-050510-mistcircuitstats-redis/research.md`.
+- [ ] T023 Run the applicable tests, lint, type, security, documentation, and test-quality gates listed in `.github/copilot-instructions.md`. Record each exact command and result in `specs/live/0/0/0/1/2/1/3/2/2/2/0/0/1/4/2/2/0/20261014-050510-mistcircuitstats-redis/quickstart.md`.
+- [ ] T024 Record one separate incremental action to reduce the existing grandfathered `specs/` entries in `specs/live/0/0/0/1/2/1/3/2/2/2/0/0/1/4/2/2/0/20261014-050510-mistcircuitstats-redis/research.md`. Do not remove another feature's entry or change the baseline in this feature.
 
 ## Dependencies and Execution Order
 
