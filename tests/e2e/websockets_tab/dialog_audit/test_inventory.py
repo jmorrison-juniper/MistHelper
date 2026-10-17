@@ -576,9 +576,9 @@ class TestReadonlySource:
         paths = ChannelSourceMap(checked).build()
         assert list(paths) == ["/sites/" + TestReadonlyLifecyclePolicy.SITE + "/stats/devices"]
         runner = RunnerFactory(SimpleNamespace(_cloud_uri="api.mist.com")).build(checked, SimpleNamespace())
-        assert isinstance(runner, ChannelStreamRunner)  # Real dispatch; no utility or shell runner is constructed.
-        runner.stop()  # No thread was started: the local stop only sets its owned event.
-        assert runner._state.runtime.stop.is_set() and runner._state.runtime.client is None
+        assert isinstance(runner._runner, ChannelStreamRunner)  # Real dispatch stays behind the shared permit.
+        runner._runner.stop()  # No thread was started: stop the concrete runner without a network call.
+        assert runner._runner._state.runtime.stop.is_set() and runner._runner._state.runtime.client is None
         sent: list[str] = []
         coordinator = SubscriptionCoordinator(tuple(paths), lambda: 0, 1)
         pending = coordinator._start(SimpleNamespace(send=sent.append))  # Real production send logic, synthetic socket.

@@ -8,6 +8,9 @@ from src.mist.realtime.websocket_streams.intake.fields.error import (
 from src.mist.realtime.websocket_streams.intake.pickers.devices import (
     DevicePicker,
 )  # Device behavior owns the short cache.
+from src.mist.realtime.websocket_streams.intake.pickers.records import (
+    PickerPageReader,
+)  # Share complete pagination across every picker.
 from src.mist.realtime.websocket_streams.intake.pickers.resources import (
     EdgePicker,
     ResourcePicker,
@@ -23,6 +26,7 @@ class StreamPickerService(DevicePicker, ResourcePicker, WiredClientPicker, EdgeP
         self._apisession = apisession  # Every picker read uses the same authenticated session.
         self._org_id = org_id  # Organization-scope Mist Edge reads use this identifier.
         self._device_cache: dict[str, tuple[float, list[dict[str, object]]]] = {}  # Cache devices for 30 seconds.
+        self._page_reader = PickerPageReader(apisession)  # Preserve one authenticated SDK cursor reader.
 
     def clients(self, site_id: str, device_id: str) -> dict[str, object]:
         """Return read-only wired choices for one selected switch."""

@@ -119,7 +119,7 @@ def test_client_choices_require_selected_site_and_device(monkeypatch: Any) -> No
         {"id": CLIENT_MAC, "label": "Client One", "family": "ex", "detail": CLIENT_MAC},
         {"id": "001122334477", "label": "Port Client", "family": "ex", "detail": "001122334477"},
     ]  # Keep verified associations and one row per MAC.
-    assert calls == [(SITE_ID, DEVICE_MAC, 100)]  # Query one selected device with bounded results.
+    assert calls == [(SITE_ID, DEVICE_MAC, 1000)]  # Request the maximum configured page size.
 
 
 def test_client_choices_reject_unknown_device_before_lookup(monkeypatch: Any) -> None:
@@ -169,12 +169,14 @@ def test_client_lookup_errors_are_not_empty_results(monkeypatch: Any, status_cod
 def test_client_lookup_with_more_pages_is_unavailable(monkeypatch: Any) -> None:
     """The picker refuses partial results when Mist returns a next page."""
     install_switches(monkeypatch)  # Cache a valid selected switch.
+    monkeypatch.setattr(mistapi, "get_next", lambda **_kwargs: None)  # Simulate a missing requested page.
     monkeypatch.setattr(
         mistapi.api.v1.sites.wired_clients,
         "searchSiteWiredClients",
         lambda *_args, **_kwargs: SimpleNamespace(
             status_code=200,
-            data={"results": [{"site_id": SITE_ID, "mac": CLIENT_MAC, "device_mac": [DEVICE_MAC]}], "next": "/next"},
+            data={"results": [{"site_id": SITE_ID, "mac": CLIENT_MAC, "device_mac": [DEVICE_MAC]}]},
+            next="/next",
         ),
     )  # Simulate an incomplete paginated answer.
     service = StreamPickerService(object(), ORG_ID)  # Build the picker with a fake session.
@@ -215,11 +217,11 @@ def test_empty_client_lookup_has_a_plain_reason(monkeypatch: Any) -> None:
 def test_malformed_client_response_is_unavailable(monkeypatch: Any) -> None:
     """An unknown response shape does not appear as an empty result."""
     install_switches(monkeypatch)  # Cache a valid selected switch.
-    answer = SimpleNamespace(status_code=200, data={"items": []})  # Omit the documented results key.
+    answer = SimpleNamespace(status_code=200, data={"records": []})  # Omit every documented result key.
     install_search(monkeypatch, answer, [])  # Replace the SDK GET.
     service = StreamPickerService(object(), ORG_ID)  # Build the picker with a fake session.
 
-    with pytest.raises(StreamRequestError, match="unsupported client response") as raised:
+    with pytest.raises(StreamRequestError, match="unsupported picker response") as raised:
         service.clients(SITE_ID, DEVICE_ID)  # Refuse the unknown response contract.
 
     assert getattr(raised.value, "code", None) == "picker_unavailable"  # Keep manual entry enabled.

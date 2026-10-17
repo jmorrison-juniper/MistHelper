@@ -4,7 +4,10 @@ from __future__ import annotations  # Keep annotations lazy for Python 3.13.
 
 import json  # The read test decodes the joined JSON text.
 import logging  # caplog checks the audit line.
+import threading  # Permit tests run competing acquisition requests.
 import time  # Real runner failure tests use bounded waits.
+from dataclasses import replace  # Parent requests retain the checked batch plan.
+from unittest.mock import Mock  # Artifact callbacks simulate safe storage outcomes.
 
 import pytest  # The tests check contract errors.
 import websocket  # Failure tests build the same exception type as websocket-client.
@@ -20,6 +23,8 @@ from src.mist.realtime.websocket_streams.intake.fields.error import (
     StreamRequestError,
 )  # The manager raises these errors.
 from src.mist.realtime.websocket_streams.intake.start_request.models import (
+    BatchExecutionPlan,
+    BatchTargetRequest,
     StartRequest,
 )  # Tests build checked requests by hand.
 from src.mist.realtime.websocket_streams.live.runners.channel.runner import (
@@ -36,15 +41,22 @@ from src.mist.realtime.websocket_streams.live.runners.utility.runner.utility_run
     UtilityRunner,
 )  # Utility runner class.
 from src.mist.realtime.websocket_streams.live.sessions.manager.factory import (
+    BatchRunner,
     RunnerFactory,
+    SharedTransport,
 )  # Test concrete runner selection.
 from src.mist.realtime.websocket_streams.live.sessions.manager.lifecycle import (
     StreamSessionManager,
 )  # Test manager behavior.
 from src.mist.realtime.websocket_streams.live.sessions.record.state import (
+    SessionSink,
     SessionState,
 )  # Tests finish sessions directly.
 from src.mist.realtime.websocket_streams.live.sessions.settings import StreamSettings  # The manager needs limits.
+from src.mist.realtime.websocket_streams.live.terminal.byte_history import (
+    ByteHistory,
+    HistoryRead,
+)  # Tests control finite shell output pages.
 from src.mist.realtime.websocket_streams.live.terminal.input_queue import (
     TerminalInput,
 )  # Tests assert the shell queue type.
@@ -141,14 +153,19 @@ class FakeSink:
     """A fake sink for runner factory tests."""
 
     terminal = None  # Factory tests build runners without a real terminal sink.
+    state = SessionState.LIVE  # Batch child sinks read the parent lifecycle state.
+
+    def __init__(self) -> None:
+        """Retain messages for batch redaction tests."""
+        self.messages: list[dict[str, object]] = []  # Keep the safe parent output for assertions.
 
     def mark_live(self, note: str = "") -> None:
         """Ignore live transitions."""
         return None  # Factory tests do not start runners.
 
     def add_message(self, kind: str, content: object, *, source: str | None = None, summary: str | None = None) -> None:
-        """Ignore stream messages."""
-        return None  # Factory tests do not start runners.
+        """Retain one public parent message."""
+        self.messages.append({"kind": kind, "content": content})  # Retain only the public parent payload.
 
     def finish(self, state: SessionState, reason: str) -> None:
         """Ignore final states."""
@@ -169,6 +186,179 @@ class FakeSink:
 
 class TestStreamSessionManager:
     """Verify manager behavior."""
+
+    def test_batch_target_states_preserve_first_terminal_outcome(self) -> None:
+        """Keep terminal target state and aggregate counts stable."""
+        targets = (
+            BatchTargetRequest("one", {"site_id": "one"}, self._channel_request("one")),
+            BatchTargetRequest("two", {"site_id": "two"}, self._channel_request("two")),
+        )  # Build two frozen natural-key targets.
+        plan = BatchExecutionPlan(targets, 2)  # Start both with a bounded target concurrency.
+        transitions = plan.progress.transitions
+        assert transitions.transition("one", "running") is True  # Dispatch the first target.
+        assert transitions.transition("one", "completed", completion="collected") is True  # Record its result.
+        assert transitions.transition("one", "failed", "late_failure") is False  # Reject a later duplicate outcome.
+        assert transitions.transition("two", "failed", "target_failed") is True  # Preserve one target failure.
+        summary = plan.progress.summary.summary()  # Read the aggregate target state.
+        assert summary["counts"] == {"queued": 0, "running": 0, "completed": 1, "stopped": 0, "failed": 1}
+        assert summary["status"] == "partial"  # Mixed target outcomes remain visible.
+        assert plan.progress.summary.target_page(0, 2)["targets"][0]["completion"] == "collected"
+
+    def test_batch_stop_during_runner_build_prevents_target_start(self) -> None:
+        """A stop while a runner is built prevents late target registration."""
+        entered, release = threading.Event(), threading.Event()  # Hold construction at the race boundary.
+        runner = FakeRunner()  # Record whether dispatch starts after the stop.
+        target = BatchTargetRequest("target", {"site_id": "site"}, self._channel_request("target"))
+        plan = BatchExecutionPlan((target,), 1)  # One running target makes the cancellation outcome clear.
+
+        def build(_request: StartRequest, _sink: SessionSink) -> FakeRunner:
+            """Pause runner construction until the parent has stopped."""
+            entered.set()  # Signal that the scheduler reached the build boundary.
+            release.wait(1)  # Let the test stop before registration.
+            return runner  # Reuse the observable runner after the barrier.
+
+        parent = replace(self._channel_request("parent"), batch_plan=plan)  # Bind the frozen batch plan.
+        batch = BatchRunner(parent, FakeSink(), build, StreamSettings.from_environment(), SharedTransport(1))
+        batch.start()  # Run the scheduler outside the test thread.
+        assert entered.wait(1) is True  # Confirm the target reached construction.
+        batch.stop()  # Cancel the parent while no child runner is registered.
+        release.set()  # Let construction complete after cancellation.
+        scheduler = batch._thread  # Retain the worker that owns the cancellation race.
+        if scheduler is None:
+            raise AssertionError("The batch scheduler did not start.")
+        scheduler.join(timeout=1)  # Wait for the scheduler to record its final outcome.
+        assert scheduler.is_alive() is False  # Do not leak the test worker.
+        assert runner.started == 0  # A late target cannot start after cancellation.
+        assert plan.progress.summary.target_page(0, 1)["targets"][0]["state"] == "stopped"
+
+    def test_batch_terminal_chunks_redact_secrets_before_parent_output(self) -> None:
+        """Keep split terminal credentials out of the parent session messages."""
+        target = BatchTargetRequest("target", {"site_id": "site"}, self._channel_request("target"))
+        plan = BatchExecutionPlan((target,), 1)  # Store one target outcome with bounded concurrency.
+        parent = FakeSink()  # Observe the public parent messages.
+        sink = BatchRunner.TargetSink(parent, plan, target, None)  # Build one private target output sink.
+        sink.add_message("terminal", "Authorization: Bearer ")  # Split the header before its secret value.
+        sink.add_message("terminal", "split-secret")  # Complete the secret value in another transport chunk.
+        assert parent.messages == []  # Do not emit an incomplete line.
+        sink.finish(SessionState.FINISHED, "complete")  # Flush only after the target stream ends.
+        result = json.dumps(parent.messages)  # Inspect the exact data that entered the parent buffer.
+        assert "split-secret" not in result  # Keep raw credentials out of saved and displayed results.
+        assert "[REDACTED]" in result  # Preserve evidence that the content was filtered.
+
+    def test_batch_shell_quiet_interval_restarts_after_new_output(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Require two quiet seconds after the latest matching prompt."""
+        clock = FakeClock()  # Control the elapsed time without sleeping.
+        pages = [
+            (0.1, b"router#"),
+            (0.1, b"\r\nroute\r\nrouter#"),
+            (1.5, b""),
+            (0.1, b"\r\nmore\r\nrouter#"),
+            (1.0, b""),
+            (1.1, b""),
+        ]  # Keep the prompt, new output, and quiet periods deterministic.
+        history = ByteHistory()  # Supply the terminal history interface.
+
+        def read_page(after: int, wait_seconds: float = 0.0) -> HistoryRead:
+            """Return one scripted output page and advance the monotonic clock."""
+            elapsed, data = pages.pop(0)  # Consume one deterministic output event.
+            clock.value += elapsed  # Advance time by the scripted wait duration.
+            return HistoryRead(data, after, after + len(data), 0, False)  # Preserve the absolute byte cursor.
+
+        monkeypatch.setattr(history, "read", read_page)  # Replace blocking history reads with scripted pages.
+        clock_target = "src.mist.realtime.websocket_streams.live.sessions.manager.factory.time.monotonic"  # Patch time.
+        monkeypatch.setattr(clock_target, clock)  # Advance each shell wait through scripted time.
+        target = BatchTargetRequest("target", {"site_id": "site"}, self._channel_request("target"))  # Freeze identity.
+        plan = BatchExecutionPlan((target,), 1)  # Build one private shell target.
+        parent = replace(self._channel_request("parent"), batch_plan=plan)  # Bind the checked plan.
+        batch = BatchRunner(
+            parent,  # Bind the confirmed parent request.
+            FakeSink(),  # Capture target output.
+            FakeFactory().build,  # Reuse the deterministic runner builder.
+            StreamSettings.from_environment(),  # Use bounded runtime settings.
+            SharedTransport(1),  # Reserve one shared transport slot.
+        )  # Build the batch collector.
+        terminal = TerminalState(history, TerminalInput(), 30.0, "2030-01-01T00:00:00Z")  # Build private state.
+        prompt_cursor, prompt = batch._shell._initial_prompt(terminal)  # Capture the first verified prompt.
+        assert prompt == "router#"  # Normalize the prompt before command dispatch.
+        assert BatchRunner.Shell._prompt(b"router#\r\nmore output") is None  # Reject an earlier prompt match.
+        cursor, complete = batch._shell._command_prompt(
+            terminal, prompt_cursor, prompt, 0  # Continue from the verified initial cursor.
+        )
+        assert complete is True  # The latest prompt completes after a full quiet interval.
+        assert cursor > 0 and not pages  # The collector reads through the final quiet interval.
+
+    def test_batch_shell_dispatch_logs_no_command_text(self, caplog: pytest.LogCaptureFixture) -> None:
+        """Log shell dispatch state without command text."""
+        target = BatchTargetRequest("target", {"site_id": "site"}, self._channel_request("target"))  # Freeze identity.
+        plan = BatchExecutionPlan((target,), 1)  # Build one private shell target.
+        parent = replace(self._channel_request("parent"), batch_plan=plan)  # Bind the checked plan.
+        batch = BatchRunner(
+            parent,  # Bind the confirmed parent request.
+            FakeSink(),  # Capture target output.
+            FakeFactory().build,  # Reuse the deterministic runner builder.
+            StreamSettings.from_environment(),  # Use bounded runtime settings.
+            SharedTransport(1),  # Reserve one shared transport slot.
+        )  # Build the batch collector.
+        runner = FakeRunner()  # Observe the command sent to the child runner.
+        caplog.set_level(logging.DEBUG)  # Capture the structured dispatch records.
+        batch._targets._send_shell_command(runner, "show version", 0)  # Dispatch one approved command.
+        assert runner.inputs == ["show version\n"]  # Send the exact approved command with one line ending.
+        assert "batch_shell_command_dispatch_started" in caplog.text  # Record the pre-action event.
+        assert "batch_shell_command_dispatch_completed" in caplog.text  # Record the post-action event.
+        assert "show version" not in caplog.text  # Keep command text out of logs.
+
+    def test_batch_artifact_failure_remains_failed_after_manifest_write(self) -> None:
+        """Keep a successful manifest from hiding an earlier result write failure."""
+        target = BatchTargetRequest("target", {"site_id": "site"}, self._channel_request("target"))
+        writer = Mock(side_effect=StreamRequestError("output_failed", "The output could not be saved."))
+        finisher = Mock()
+        plan = BatchExecutionPlan(
+            (target,),
+            1,
+            artifact_id="artifact",
+            artifact_writer=writer,
+            artifact_finisher=finisher,
+        )
+        saved = plan.progress.artifacts.write_result("target", target.identity, "output", {}, None)
+        finished = plan.progress.artifacts.finish()
+        assert saved is False  # Reject the result that the artifact writer did not save.
+        assert finished is False  # Preserve the earlier write failure after manifest completion.
+        assert finisher.call_count == 1  # Still write terminal target metadata for recovery.
+        assert plan.progress.summary.summary()["artifact_status"] == "failed"  # Keep the public status truthful.
+
+    def test_single_site_waiter_has_priority_over_batch_target(self) -> None:
+        """Reserve a released transport slot for an admitted Single Site waiter."""
+        pool = SharedTransport(1)  # Use the smallest pool that exposes priority ordering.
+        assert pool.acquire(threading.Event(), batch=True) is True  # Hold the only slot for existing work.
+        batch_done = threading.Event()  # Observe the queued batch target.
+        single_done = threading.Event()  # Observe the admitted Single Site waiter.
+        results: list[tuple[str, bool]] = []  # Retain each acquisition result.
+
+        def acquire_batch() -> None:
+            """Wait for one batch slot."""
+            results.append(("batch", pool.acquire(threading.Event(), batch=True)))  # Queue batch work.
+            batch_done.set()  # Signal acquisition completion.
+
+        def acquire_single() -> None:
+            """Wait for one Single Site slot."""
+            results.append(("single", pool.acquire(threading.Event(), batch=False)))  # Queue admitted single work.
+            single_done.set()  # Signal acquisition completion.
+
+        batch_thread = threading.Thread(target=acquire_batch)  # Start the lower-priority waiter.
+        batch_thread.start()  # Register batch work before the Single Site request.
+        time.sleep(0.05)  # Allow the batch worker to enter its bounded wait.
+        single_thread = threading.Thread(target=acquire_single)  # Start the reserved-priority waiter.
+        single_thread.start()  # Register admitted Single Site work.
+        time.sleep(0.05)  # Allow both waiters to observe the occupied pool.
+        pool.release()  # Make one transport slot available.
+        assert single_done.wait(1) is True  # The Single Site request receives the released slot first.
+        assert batch_done.is_set() is False  # Batch work waits while a Single Site session owns the slot.
+        pool.release()  # Let the next eligible batch target proceed.
+        assert batch_done.wait(1) is True  # Batch work starts after Single Site work releases capacity.
+        pool.release()  # Return the last test permit.
+        batch_thread.join(timeout=1)  # Do not leave background test work running.
+        single_thread.join(timeout=1)  # Do not leave background test work running.
+        assert results == [("single", True), ("batch", True)]  # Verify the exact scheduling order.
 
     def test_start_limit_lists_live_titles(self) -> None:
         """Refuse a session when the live limit is reached."""
@@ -369,10 +559,10 @@ class TestStreamSessionManager:
         finally:  # Put back the global logger state even when assertions fail.
             mist_logger.filters = original_filters  # Restore the previous logger filter list.
             RunnerFactory._filter_installed = original_flag  # Restore the previous class flag.
-        assert isinstance(channel_runner, ChannelStreamRunner)  # Channel requests use the channel runner.
-        assert isinstance(utility_runner, UtilityRunner)  # Line utilities use the utility runner.
-        assert isinstance(shell_runner, ShellRunner)  # Shell requests use the shell runner.
-        assert isinstance(screen_runner, ScreenRunner)  # Screen utilities use the screen runner.
+        assert isinstance(getattr(channel_runner, "_runner", channel_runner), ChannelStreamRunner)
+        assert isinstance(getattr(utility_runner, "_runner", utility_runner), UtilityRunner)
+        assert isinstance(getattr(shell_runner, "_runner", shell_runner), ShellRunner)
+        assert isinstance(getattr(screen_runner, "_runner", screen_runner), ScreenRunner)
         assert len(filters) == 1  # Shell and screen share one redaction filter.
 
     def _runner_factory_for_class_tests(self) -> RunnerFactory:

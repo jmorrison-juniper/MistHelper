@@ -74,18 +74,31 @@ class FakeWebSocketServices:
         self.shell_inputs: list[dict[str, object]] = []  # Record shell input forms.
         self.terminal_data: dict[str, bytes] = {}  # Store fake terminal byte history by session.
         self.message_gap = False  # Let a browser journey expose a reconnect buffer gap.
+        self.batch_target_calls: list[tuple[str | None, str, str]] = []  # Record scoped target reads.
+        self.batch_preview_body: dict[str, object] | None = None  # Keep the last safe preview request.
+        self.batch_progress: dict[str, dict[str, object]] = {}  # Store target progress by public parent.
+        self.batch_targets_data: dict[str, list[dict[str, object]]] = {}  # Store a frozen target list.
         lifecycle = SimpleNamespace(
             start=self.start_session, list=self.list_sessions, stop=self.stop_session, shutdown=self.shutdown
         )  # Group fake session lifecycle behavior.
         self.sessions = SimpleNamespace(
-            lifecycle=lifecycle, messages=SimpleNamespace(read=self.read_messages)
+            lifecycle=lifecycle,
+            messages=SimpleNamespace(read=self.read_messages),
+            batches=SimpleNamespace(
+                preview=self.preview_batch,
+                start=self.start_batch,
+                summary=self.batch_summary,
+                targets=self.batch_target_page,
+            ),
         )  # Group fake session behavior.
         self.catalog = SimpleNamespace(payload=self.catalog_payload)  # Group fake catalog behavior.
         self.artifacts = SimpleNamespace(
             delete=self.delete_session, download=self.download_session
         )  # Group fake artifact behavior.
         self.terminal = self  # Expose direct fake terminal behavior.
-        self.pickers = SimpleNamespace(site=self, related=self)  # Group fake picker behavior.
+        self.pickers = SimpleNamespace(
+            site=self, related=self, batch=SimpleNamespace(targets=self.batch_targets, sites=self.batch_sites)
+        )  # Group fake picker behavior.
 
     def reset(self) -> None:
         """Clear sessions before one browser story."""
@@ -95,6 +108,10 @@ class FakeWebSocketServices:
             self.shell_inputs.clear()  # Remove prior shell input.
             self.terminal_data.clear()  # Remove prior terminal bytes.
             self.message_gap = False  # Start each browser journey without lost buffered messages.
+            self.batch_target_calls.clear()  # Remove prior target discovery calls.
+            self.batch_preview_body = None  # Remove the previous preview request.
+            self.batch_progress.clear()  # Remove prior parent progress.
+            self.batch_targets_data.clear()  # Remove prior frozen target lists.
 
     def catalog_payload(self) -> dict[str, object]:
         """Return the catalog shown by the page."""
@@ -103,7 +120,7 @@ class FakeWebSocketServices:
             "reason": None,
             "flags": {},
             "limits": {"max_sessions": 2, "idle_seconds": 120, "capture_seconds": 60},
-            "channels": [self._channel()],
+            "channels": [self._channel(), self._device_command_channel()],
             "utilities": self._utilities(),
         }  # Catalog.
 
@@ -151,7 +168,26 @@ class FakeWebSocketServices:
             session.state = "stopped"  # Mark stopped.
             session.live = False  # Remove it from the live limit.
             session.reason = "The operator stopped the session."  # Plain reason.
+            if session_id in self.batch_progress:
+                self._stop_batch_targets(session_id)  # Mark pending work stopped without changing completed work.
             return self._payload(session)  # Return the stopped card.
+
+    def _stop_batch_targets(self, session_id: str) -> None:
+        """Stop queued and active fake targets while preserving completed outcomes."""
+        rows = self.batch_targets_data[session_id]  # Read the parent target snapshot.
+        for item in rows:
+            if item["state"] in {"queued", "running"}:
+                item["state"] = "stopped"  # Do not rewrite completed or failed outcomes.
+        completed = sum(item["state"] == "completed" for item in rows)  # Count preserved terminal work.
+        stopped = sum(item["state"] == "stopped" for item in rows)  # Count the stopped remainder.
+        previous = self.batch_progress[session_id]  # Preserve the admitted worker limit.
+        self.batch_progress[session_id] = {
+            "status": "stopped",
+            "target_count": len(rows),
+            "concurrency": previous["concurrency"],
+            "counts": {"queued": 0, "running": 0, "completed": completed, "stopped": stopped, "failed": 0},
+            "artifact_status": "ready",
+        }  # Return an internally consistent final summary.
 
     def send_input(self, session_id: str, body: object) -> dict[str, object]:
         """Accept shell input and echo a safe output line."""
@@ -212,6 +248,11 @@ class FakeWebSocketServices:
         row = {"id": DEVICE_ID, "label": "EX Switch 1", "family": "ex", "detail": "EX4100"}  # Device row.
         return {"rows": [row], "total_count": 1, "reason": None}  # Picker payload.
 
+    def sites(self) -> dict[str, object]:
+        """Return the complete fake organization site list."""
+        rows = [{"id": SITE_ID, "label": "HQ"}, {"id": SITE_ID_2, "label": "Branch"}]  # Stable site identities.
+        return {"rows": rows, "total_count": len(rows), "reason": None}  # Complete picker payload.
+
     def maps(self, site_id: str) -> dict[str, object]:
         """Return no maps for these stories."""
         return {"rows": [], "total_count": 0, "reason": f"The site {site_id} has no maps."}  # Empty picker.
@@ -232,6 +273,131 @@ class FakeWebSocketServices:
         """Return no Mist Edges for these stories."""
         return {"rows": [], "total_count": 0, "reason": "No Mist Edge is available."}  # Empty picker.
 
+    def batch_targets(self, site_id: str | None, kind: str, key: str, _parents: dict[str, str]) -> dict[str, object]:
+        """Return one site-scoped device for browser selection stories."""
+        self.batch_target_calls.append((site_id, kind, key))  # Retain only the bounded operation scope.
+        row = {
+            "id": DEVICE_ID,
+            "label": "EX Switch 1",
+            "family": "ex",
+            "detail": "EX4100",
+            "site_id": site_id,
+            "target_type": "device",
+        }  # Keep one deterministic natural target.
+        return {
+            "rows": [row],
+            "total_count": 1,
+            "complete": True,
+            "reason": None,
+            "excluded": {"incompatible_family": 0},
+            "scope": {"site_id": site_id},
+        }  # Match the complete discovery response.
+
+    def batch_sites(self, _kind: str, _key: str) -> dict[str, object]:
+        """Return the complete organization rows for a selected catalog operation."""
+        payload = self.sites()  # Reuse the full fake organization site list.
+        payload["complete"] = True  # Mark every fake page as complete.
+        payload["scope"] = {"organization": True}  # Preserve the organization target scope.
+        return payload  # Match the operation-driven site response.
+
+    def preview_batch(self, body: object) -> dict[str, object]:
+        """Return a complete frozen target preview for one browser journey."""
+        self.batch_preview_body = body if isinstance(body, dict) else {}  # Retain the request for assertions.
+        targets = [
+            {
+                "target_key": f"target-{index}",
+                "target_id": f"device-{index}",
+                "target_type": "device",
+                "site_id": SITE_ID if index % 2 else SITE_ID_2,
+                "site_label": "HQ" if index % 2 else "Branch",
+                "label": f"EX Switch {index}",
+            }
+            for index in range(1, 102)
+        ]  # Exercise a target list larger than the earlier display limit.
+        return {
+            "preview_id": "fake-preview",
+            "expires_at": "2026-10-16T12:00:00Z",
+            "scope_revision": self.batch_preview_body.get("scope_revision", 0),
+            "operation": {
+                "kind": "channel",
+                "key": "site.stats.devices",
+                "name": "Device statistics",
+                "safety": "read",
+            },
+            "targets": targets,
+            "target_count": len(targets),
+            "excluded": {"incompatible_family": 2},
+            "confirmation": {"required": False, "phrase": None, "safety": "read"},
+            "limits": {"target_count": 1000, "concurrency": 1, "output_bytes": 67108864},
+        }  # Return only safe preview fields.
+
+    def start_batch(self, body: object) -> dict[str, object]:
+        """Create one fake parent session and its queued target outcomes."""
+        payload = body if isinstance(body, dict) else {}  # Keep the fake request shape bounded.
+        session_id = "batch1"  # Use one stable public parent id.
+        session = BrowserSession(
+            session_id, "channel", "site.stats.devices", "Multi Site: Device statistics", "json", "read"
+        )  # Keep the same public session shape as the channel runner.
+        with self._lock:  # Allocate the public session and its target state together.
+            self._sessions[session_id] = session  # Store the parent for session list and message reads.
+            self.batch_progress[session_id] = self._new_batch_progress(
+                int(payload.get("concurrency", 1))
+            )  # Model one active worker and a complete queued set.
+            self.batch_targets_data[session_id] = self._new_batch_targets()  # Keep target order frozen.
+        return self._batch_payload(session)  # Return one parent with additive batch state.
+
+    @staticmethod
+    def _new_batch_progress(concurrency: int) -> dict[str, object]:
+        """Build one running summary with a consistent initial target count."""
+        return {
+            "status": "running",
+            "target_count": 101,
+            "concurrency": concurrency,
+            "counts": {"queued": 99, "running": 1, "completed": 1, "stopped": 0, "failed": 0},
+            "artifact_status": "writing",
+        }  # Model a mixed active and queued batch.
+
+    @staticmethod
+    def _new_batch_targets() -> list[dict[str, object]]:
+        """Build a stable page of targets with one completed and one active result."""
+        return [
+            {
+                "target_key": f"target-{index}",
+                "target": {"target_id": f"device-{index}", "label": f"EX Switch {index}"},
+                "state": "running" if index == 1 else "completed" if index == 2 else "queued",
+                "started_at": None,
+                "ended_at": None,
+                "reason_code": None,
+                "result_count": 0,
+                "command_index": None,
+                "completion": None,
+            }
+            for index in range(1, 102)
+        ]  # Keep target order equal to the reviewed snapshot.
+
+    def _batch_payload(self, session: BrowserSession) -> dict[str, object]:
+        """Return a public session payload with its batch summary."""
+        summary = self.batch_progress[session.session_id]  # Read the parent-owned summary.
+        return dict(self._payload(session), mode="multi_site", batch=summary)  # Add only batch fields.
+
+    def batch_summary(self, session_id: str) -> dict[str, object]:
+        """Return one parent session with its current batch state."""
+        with self._lock:  # Copy both values from the same fake snapshot.
+            session = self._sessions[session_id]  # The route names the public parent.
+            return dict(self._payload(session), mode="multi_site", batch=dict(self.batch_progress[session_id]))
+
+    def batch_target_page(self, session_id: str, after: int, limit: int) -> dict[str, object]:
+        """Return one stable target page from the fake parent snapshot."""
+        rows = self.batch_targets_data[session_id]  # The frozen target order remains stable.
+        page = rows[after : after + limit]  # Apply the server cursor and limit.
+        next_after = after + len(page)  # Return the next target position.
+        return {
+            "targets": page,
+            "next_after": next_after,
+            "complete": next_after >= len(rows),
+            "counts": self.batch_progress[session_id]["counts"],
+        }  # Match the batch target-page contract.
+
     def shutdown(self) -> None:
         """Stop all fake sessions."""
         with self._lock:  # Stop sessions atomically.
@@ -250,6 +416,19 @@ class FakeWebSocketServices:
             "identifiers": [site_field],
             "repeatable": "site_id",
         }  # Channel.
+
+    def _device_command_channel(self) -> dict[str, object]:
+        """Return one channel with a site-scoped device target."""
+        site_field = {"name": "site_id", "label": "Site", "kind": "uuid", "required": True, "picker": "sites"}
+        device_field = {"name": "device_id", "label": "Device", "kind": "uuid", "required": True, "picker": "devices"}
+        return {
+            "key": "site.devices.cmd",
+            "scope": "site",
+            "name": "Device command events",
+            "description": "Live command output for each selected device.",
+            "identifiers": [site_field, device_field],
+            "repeatable": "device_id",
+        }  # Catalog metadata drives device choices.
 
     def _utilities(self) -> list[dict[str, object]]:
         """Return the fake utility catalog entries."""
@@ -367,7 +546,7 @@ class FakeWebSocketServices:
     def _payload(self, session: BrowserSession) -> dict[str, object]:
         """Return one session payload."""
         counters = {"received": len(session.messages), "dropped": 0, "shortened": 0, "bytes": 0}  # Counters.
-        return {
+        payload = {
             "session_id": session.session_id,
             "kind": session.kind,
             "key": session.key,
@@ -385,6 +564,10 @@ class FakeWebSocketServices:
             "rate_per_second": 1.0,
             "last_seq": len(session.messages),
         }  # Payload.
+        if session.session_id in self.batch_progress:
+            payload["mode"] = "multi_site"  # Mark only batch parents.
+            payload["batch"] = self.batch_progress[session.session_id]  # Add batch progress to session listings.
+        return payload  # Preserve the existing session payload shape.
 
     def _title(self, key: str) -> str:
         """Return a title for one catalog key."""
@@ -607,3 +790,90 @@ def test_route_table_shows_columns(page: Any, websocket_portal: str) -> None:
     assert "Destination  Gateway" in text  # The header cells show in aligned columns.
     assert '"columns"' not in text  # The raw JSON text does not show.
     assert shot.exists()  # The screenshot was written.
+
+
+def test_scope_tabs_preserve_single_site_form(page: Any, websocket_portal: str) -> None:
+    """Keep the current form state when the operator changes scope tabs."""
+    open_page(page, websocket_portal)  # Load the WebSockets page.
+    single_tab = page.get_by_test_id("ws-single-site-tab")  # Read the current workflow tab.
+    multi_tab = page.get_by_test_id("ws-multi-site-tab")  # Read the new workflow tab.
+    assert single_tab.get_attribute("aria-selected") == "true"  # The current workflow starts selected.
+    page.get_by_test_id("ws-catalog-entry-site.stats.devices").click()  # Select one current operation.
+    multi_tab.click()  # Change tabs without submitting or canceling the operation.
+    page.get_by_test_id("ws-multi-site-panel").wait_for(state="visible")  # Show the multi-site controls.
+    single_tab.click()  # Return to the current workflow.
+    page.locator("#wsSingleSitePanel").wait_for(state="visible")  # Restore the single-site panel.
+    assert single_tab.get_attribute("aria-selected") == "true"  # Report the selected tab state.
+    assert multi_tab.get_attribute("aria-selected") == "false"  # Keep the other tab unselected.
+    assert page.locator("#wsSelectedTitle").inner_text() == "Device statistics"  # Preserve the pending selection.
+
+
+def test_multi_site_operation_loads_complete_site_choices(page: Any, websocket_portal: str) -> None:
+    """Derive organization site choices from the selected catalog operation."""
+    open_page(page, websocket_portal)  # Load the WebSockets page.
+    page.get_by_test_id("ws-multi-site-tab").click()  # Open the separate Multi Site workflow.
+    page.get_by_test_id("ws-batch-operation").select_option("channel:site.stats.devices")  # Choose site scope.
+    status = page.get_by_test_id("ws-batch-site-status")  # Read the accessible discovery state.
+    status.get_by_text("2 eligible site(s).").wait_for(timeout=READY_TIMEOUT_MS)  # Wait for complete site discovery.
+    page.get_by_test_id("ws-batch-sites").select_option("selected")  # Select an explicit site subset.
+    options = page.locator("#wsBatchSiteOptions")  # Read the multi-select options.
+    options.wait_for(state="visible", timeout=READY_TIMEOUT_MS)  # Show choices only for selected mode.
+    assert options.locator("option").count() == 2  # Keep every discovered natural key.
+
+
+def test_multi_site_operation_loads_site_scoped_devices(
+    page: Any, websocket_portal: str, fake_services: FakeWebSocketServices
+) -> None:
+    """Load catalog-driven device targets only for selected organization sites."""
+    open_page(page, websocket_portal)  # Load the WebSockets page.
+    page.get_by_test_id("ws-multi-site-tab").click()  # Open the Multi Site workflow.
+    page.get_by_test_id("ws-batch-operation").select_option("channel:site.devices.cmd")  # Choose device scope.
+    page.get_by_test_id("ws-batch-site-status").get_by_text("2 eligible site(s).").wait_for(
+        timeout=READY_TIMEOUT_MS
+    )  # Wait for complete site discovery.
+    page.get_by_test_id("ws-batch-sites").select_option("selected")  # Request an explicit site subset.
+    page.locator("#wsBatchSiteOptions").select_option(SITE_ID)  # Select one organization site.
+    status = page.get_by_test_id("ws-batch-target-status")  # Read the operation target state.
+    status.get_by_text("1 eligible resource(s).").wait_for(timeout=READY_TIMEOUT_MS)  # Wait for device discovery.
+    options = page.get_by_test_id("ws-batch-target-options")  # Read verified device choices.
+    assert options.locator("option").count() == 1  # Do not include devices from the other site.
+    assert "HQ" in options.locator("option").first.inner_text()  # Keep site context in the label.
+    assert fake_services.batch_target_calls[-1] == (SITE_ID, "channel", "site.devices.cmd")
+    # The newest request uses only the selected organization site.
+
+
+def test_multi_site_preview_reviews_full_target_list_and_stops_batch(page: Any, websocket_portal: str) -> None:
+    """Review every resolved target and stop a fake parent without Mist access."""
+    open_page(page, websocket_portal)  # Load the local WebSockets test portal.
+    page.get_by_test_id("ws-multi-site-tab").click()  # Open the Multi Site workflow.
+    page.get_by_test_id("ws-batch-operation").select_option(
+        "channel:site.stats.devices"
+    )  # Choose a read-only operation.
+    page.get_by_test_id("ws-batch-site-status").get_by_text("2 eligible site(s).").wait_for(
+        timeout=READY_TIMEOUT_MS
+    )  # Wait for the complete target scope before preview.
+    preview_button = page.get_by_test_id("ws-batch-preview")  # Find the safe target snapshot action.
+    preview_button.click()  # Request only fake discovery data from the test service.
+    page.get_by_test_id("ws-batch-review").wait_for(state="visible", timeout=READY_TIMEOUT_MS)
+    review = page.get_by_test_id("ws-batch-review-summary")  # Read the reviewed snapshot summary.
+    review.get_by_text("101 target(s)", exact=True).wait_for(timeout=READY_TIMEOUT_MS)
+    targets = page.get_by_test_id("ws-batch-review-targets")  # Read all resolved targets, not a sample.
+    target_text = targets.inner_text()  # Read the full accessible target review.
+    assert "EX Switch 101 — HQ" in target_text, target_text[:300]  # Verify the final target appears.
+    assert target_text.count("\n") == 100  # Require the complete preview before admission.
+    assert review.get_by_text("2 excluded: incompatible_family", exact=True).is_visible()  # Explain exclusions.
+    page.wait_for_function(
+        "() => !document.getElementById('wsBatchStart').disabled", timeout=READY_TIMEOUT_MS
+    )  # Wait until the complete preview can be admitted.
+    page.get_by_test_id("ws-batch-start").click()  # Admit the reviewed fake batch.
+    progress = page.get_by_test_id("ws-batch-progress")  # Find the public parent progress panel.
+    progress.wait_for(state="visible", timeout=READY_TIMEOUT_MS)
+    page.locator("#wsBatchProgressTitle").get_by_text("Batch progress - running").wait_for(
+        timeout=READY_TIMEOUT_MS
+    )  # Confirm the parent is active.
+    target_progress = page.get_by_test_id("ws-batch-target-progress")  # Read the server-paged target outcomes.
+    assert target_progress.locator("div").count() == 101  # Confirm progress exposes the complete frozen set.
+    page.get_by_test_id("ws-batch-stop").click()  # Stop only the fake parent batch.
+    page.locator("#wsBatchProgressTitle").get_by_text("Batch progress - stopped").wait_for(
+        timeout=READY_TIMEOUT_MS
+    )  # Confirm the stop result reaches the browser.

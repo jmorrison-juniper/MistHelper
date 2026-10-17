@@ -17,6 +17,18 @@
     </div>
 </div>
 
+<div class="nav nav-tabs mb-3" role="tablist" aria-label="WebSocket operation scope">
+    <button class="nav-link active" id="wsSingleSiteTab" data-testid="ws-single-site-tab"
+            type="button" role="tab" aria-selected="true" aria-controls="wsSingleSitePanel" tabindex="0">
+        Single Site
+    </button>
+    <button class="nav-link" id="wsMultiSiteTab" data-testid="ws-multi-site-tab"
+            type="button" role="tab" aria-selected="false" aria-controls="wsMultiSitePanel" tabindex="-1">
+        Multi Site
+    </button>
+</div>
+
+<section id="wsSingleSitePanel" role="tabpanel" aria-labelledby="wsSingleSiteTab" tabindex="0">
 <div class="row g-3 ws-page" data-testid="websockets-page">
     <div class="col-lg-4">
         <div class="portal-card h-100">
@@ -151,6 +163,108 @@
         </div>
     </div>
 </div>
+
+</section>
+
+<section id="wsMultiSitePanel" class="d-none" role="tabpanel" aria-labelledby="wsMultiSiteTab"
+         tabindex="0" data-testid="ws-multi-site-panel" aria-hidden="true">
+    <div class="row g-3">
+        <div class="col-lg-4">
+            <div class="portal-card h-100">
+                <h5>Operation</h5>
+                <label class="form-label" for="wsBatchOperation">Catalog operation</label>
+                <select class="form-select" id="wsBatchOperation" data-testid="ws-batch-operation">
+                    <option value="">Choose an operation.</option>
+                </select>
+                <p class="form-text mt-2" id="wsBatchOperationDescription" data-testid="ws-batch-operation-description">
+                    Choose a catalog channel or utility.
+                </p>
+                <div id="wsBatchParameterFields" data-testid="ws-batch-parameter-fields"></div>
+                <div class="mb-3 d-none" id="wsBatchCommandsGroup">
+                    <label class="form-label" for="wsBatchCommands">Commands</label>
+                    <textarea class="form-control" id="wsBatchCommands" data-testid="ws-batch-commands"
+                              rows="6" maxlength="16384" aria-describedby="wsBatchCommandsHelp"></textarea>
+                    <div class="form-text" id="wsBatchCommandsHelp">
+                        Enter one command per line. A command can contain up to 4096 UTF-8 bytes.
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="portal-card h-100">
+                <h5>Targets</h5>
+                <div id="wsBatchSiteGroup">
+                    <label class="form-label" for="wsBatchSiteMode">Sites</label>
+                    <select class="form-select" id="wsBatchSiteMode" data-testid="ws-batch-sites">
+                        <option value="all">All eligible sites</option>
+                        <option value="selected">Selected sites</option>
+                    </select>
+                    <select class="form-select mt-2 d-none" id="wsBatchSiteOptions" multiple size="6"
+                            aria-label="Available sites"></select>
+                    <div class="form-text" id="wsBatchSiteStatus" data-testid="ws-batch-site-status" role="status"
+                         aria-live="polite">Choose an operation to load eligible sites.</div>
+                </div>
+                <div id="wsBatchTargets" class="mt-3" data-testid="ws-batch-targets"></div>
+                <div class="alert alert-warning d-none mt-3" id="wsBatchSafetyWarning"
+                     data-testid="ws-batch-safety-warning"></div>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="portal-card h-100">
+                <h5>Review and save</h5>
+                <label class="form-label" for="wsBatchConcurrency">Target concurrency</label>
+                <input class="form-control mb-3" type="number" id="wsBatchConcurrency"
+                       data-testid="ws-batch-concurrency" min="1" max="5" value="3">
+                <label class="form-label" for="wsBatchLayout">Output layout</label>
+                <select class="form-select" id="wsBatchLayout" data-testid="ws-batch-layout">
+                    <option value="combined">One combined file</option>
+                    <option value="grouped">Files grouped by target</option>
+                    <option value="both">Combined and grouped files</option>
+                </select>
+                <label class="form-label mt-3" for="wsBatchGroupBy">Group files by</label>
+                <select class="form-select" id="wsBatchGroupBy" data-testid="ws-batch-group-by">
+                    <option value="site">Site</option>
+                    <option value="device_type">Device type</option>
+                    <option value="device">Device</option>
+                    <option value="client">Client</option>
+                </select>
+                <button type="button" class="btn btn-outline-secondary mt-3" id="wsBatchPreview"
+                        data-testid="ws-batch-preview">Preview targets</button>
+                <div class="alert alert-danger d-none mt-3" id="wsBatchError" data-testid="ws-batch-error"></div>
+                <div class="border rounded p-2 mt-3 d-none" id="wsBatchReview" data-testid="ws-batch-review">
+                    <h6>Confirmed target snapshot</h6>
+                    <div id="wsBatchReviewSummary" data-testid="ws-batch-review-summary"></div>
+                    <div id="wsBatchReviewTargets" class="small mt-2"
+                         data-testid="ws-batch-review-targets"></div>
+                </div>
+                <div class="mt-3 d-none" id="wsBatchConfirmationGroup">
+                    <label class="form-label" for="wsBatchConfirmation">Type the exact confirmation phrase.</label>
+                    <input class="form-control" id="wsBatchConfirmation" data-testid="ws-batch-confirmation"
+                           autocomplete="off">
+                </div>
+                <button type="button" class="btn btn-accent mt-3" id="wsBatchStart"
+                        data-testid="ws-batch-start" disabled>Start batch</button>
+            </div>
+        </div>
+    </div>
+    <div class="portal-card mt-3 d-none" id="wsBatchProgress" data-testid="ws-batch-progress">
+        <div class="d-flex justify-content-between align-items-start gap-2">
+            <div>
+                <h5 id="wsBatchProgressTitle">Batch progress</h5>
+                <div id="wsBatchProgressCounts" role="status" aria-live="polite"></div>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="button" class="btn btn-sm btn-outline-danger" id="wsBatchStop"
+                        data-testid="ws-batch-stop">Stop batch</button>
+                <a class="btn btn-sm btn-outline-secondary" id="wsBatchDownload"
+                   data-testid="ws-batch-download" href="#">Download results</a>
+                <a class="btn btn-sm btn-outline-secondary d-none" id="wsBatchZipDownload"
+                   data-testid="ws-batch-zip-download" href="#">Download ZIP</a>
+            </div>
+        </div>
+        <div id="wsBatchTargetProgress" class="mt-3" data-testid="ws-batch-target-progress"></div>
+    </div>
+</section>
 {% endblock %}
 
 {% block extra_scripts %}

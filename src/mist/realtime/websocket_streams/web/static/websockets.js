@@ -89,6 +89,21 @@
         terminalController: null  // The xterm.js controller for terminal sessions.
     };
 
+    var batchState = {
+        operations: [],  // Catalog-backed operation references for the Multi Site selector.
+        operation: null,  // The current catalog entry and its kind.
+        sites: [],  // Complete organization site rows for the current operation.
+        targets: [],  // Complete operation-scoped target rows for the current site selection.
+        targetField: null,  // The deepest catalog target field, when the operation has one.
+        targetMode: 'all',  // Keep the resource selector explicit and stable.
+        revision: 0,  // Reject results from an earlier operation or site selection.
+        preview: null,  // The server preview binds the exact target snapshot.
+        previewPending: false,  // Keep duplicate preview requests from racing.
+        sessionId: null,  // The public batch parent owns all target progress.
+        progressTimer: null,  // One timer refreshes the parent and frozen targets.
+        progressPending: false  // Keep progress reads in order.
+    };
+
     function byId(id) {
         return document.getElementById(id);  // Find one fixed page element.
     }
@@ -132,12 +147,14 @@
     function init() {
         if (!byId('wsCatalog')) return;  // Other portal pages load no WebSockets code.
         wireStaticEvents();  // Connect the fixed buttons and inputs.
+        wireBatchEvents();  // Keep Multi Site controls separate from the current form.
         loadCatalog();  // Read the channels and the utilities.
         loadSessions(false);  // Read the sessions and show the last selected session.
         startSessionTimer();  // Keep the session counters current.
     }
 
     function wireStaticEvents() {
+        wireScopeTabs();  // Keep scope navigation independent from stream selection.
         byId('wsStartForm').addEventListener('submit', startSelected);  // Start the selected entry.
         byId('wsCancelSelectionButton').addEventListener('click', cancelSelection);  // Discard an unsubmitted form.
         byId('wsCatalogFilter').addEventListener('input', renderCatalog);  // Filter the catalog while the operator types.
@@ -151,13 +168,662 @@
         });
     }
 
+    function wireBatchEvents() {
+        byId('wsBatchOperation').addEventListener('change', selectBatchOperation);  // Select one catalog operation.
+        byId('wsBatchSiteMode').addEventListener('change', changeBatchSiteMode);  // Select all sites or a subset.
+        byId('wsBatchSiteOptions').addEventListener('change', changeBatchSiteSelection);  // Reload site-scoped targets.
+        byId('wsBatchTargets').addEventListener('change', changeBatchTargetSelection);  // Bind resources to previews.
+        byId('wsBatchParameterFields').addEventListener('input', invalidateBatchPreview);  // Bind previews to parameters.
+        byId('wsBatchParameterFields').addEventListener('change', invalidateBatchPreview);  // Bind choice parameters too.
+        byId('wsBatchCommands').addEventListener('input', invalidateBatchPreview);  // Bind shell previews to exact commands.
+        byId('wsBatchConcurrency').addEventListener('change', invalidateBatchPreview);  // Bind preview limits to concurrency.
+        byId('wsBatchLayout').addEventListener('change', invalidateBatchPreview);  // Bind output layout to preview.
+        byId('wsBatchGroupBy').addEventListener('change', invalidateBatchPreview);  // Bind grouping to preview.
+        byId('wsBatchPreview').addEventListener('click', previewBatch);  // Ask the server to freeze verified targets.
+        byId('wsBatchConfirmation').addEventListener('input', updateBatchStart);  // Require the exact preview phrase.
+        byId('wsBatchStart').addEventListener('click', startBatch);  // Admit only the reviewed server preview.
+        byId('wsBatchStop').addEventListener('click', stopBatch);  // Stop the public parent session.
+    }
+
+    function wireScopeTabs() {
+        var tabs = [byId('wsSingleSiteTab'), byId('wsMultiSiteTab')];  // Keep both workflow controls together.
+        tabs.forEach(function(tab) {
+            tab.addEventListener('click', function() { selectScopeTab(tab); });  // Preserve each panel while switching.
+            tab.addEventListener('keydown', function(event) { moveScopeTab(event, tabs); });  // Support arrow navigation.
+        });
+    }
+
+    function moveScopeTab(event, tabs) {
+        var current = tabs.indexOf(event.currentTarget);  // Read the focused tab.
+        var selected = current;  // Keep Home and End on the current tab unless pressed.
+        if (event.key === 'ArrowRight') selected = (current + 1) % tabs.length;  // Move to the next tab.
+        else if (event.key === 'ArrowLeft') selected = (current + tabs.length - 1) % tabs.length;  // Move backward.
+        else if (event.key === 'Home') selected = 0;  // Move to the first tab.
+        else if (event.key === 'End') selected = tabs.length - 1;  // Move to the last tab.
+        else return;  // Leave other keyboard input unchanged.
+        event.preventDefault();  // Keep native arrow behavior inside the tab list.
+        tabs[selected].focus();  // Move keyboard focus with the selection.
+        selectScopeTab(tabs[selected]);  // Show the selected panel without resetting either workflow.
+    }
+
+    function selectScopeTab(selectedTab) {
+        var tabs = [byId('wsSingleSiteTab'), byId('wsMultiSiteTab')];  // Keep the tab order stable.
+        var panels = [byId('wsSingleSitePanel'), byId('wsMultiSitePanel')];  // Match panels to the tab order.
+        tabs.forEach(function(tab, index) {
+            var selected = tab === selectedTab;  // Compare exact tab elements.
+            tab.classList.toggle('active', selected);  // Use the existing Bootstrap tab styling.
+            tab.setAttribute('aria-selected', String(selected));  // Expose selection to assistive tools.
+            tab.tabIndex = selected ? 0 : -1;  // Keep one tab in the page tab sequence.
+            show(panels[index], selected);  // Preserve each panel's live state when hidden.
+            panels[index].setAttribute('aria-hidden', String(!selected));  // Expose panel visibility.
+        });
+    }
+
     function loadCatalog() {
         apiJson('/api/websockets/catalog').then(function(payload) {
             var failed = { channels: [], utilities: [], ready: false, reason: payload.error };  // Show the reason instead of an empty page.
             state.catalog = payload.error ? failed : payload;  // Keep the catalog for the filter and the form.
             renderReadyState(state.catalog);  // Show the engine state and the entry count.
             renderCatalog();  // Draw the entry groups.
+            renderBatchOperations();  // Build Multi Site choices from the same catalog payload.
         });
+    }
+
+    function renderBatchOperations() {
+        var select = byId('wsBatchOperation');  // The Multi Site operation selector.
+        clearNode(select);  // Remove options from an older catalog response.
+        select.appendChild(new Option('Choose an operation.', ''));  // Keep an explicit empty state.
+        batchState.operations = [];  // Replace stale catalog references.
+        (state.catalog.channels || []).forEach(function(entry) {
+            addBatchOperation(select, 'channel', entry);  // Keep channel scope from catalog metadata.
+        });
+        (state.catalog.utilities || []).forEach(function(entry) {
+            addBatchOperation(select, entry.safety === 'shell' ? 'shell' : 'utility', entry);
+        });
+        select.disabled = !state.catalog.ready;  // A not-ready catalog cannot start a batch.
+    }
+
+    function addBatchOperation(select, kind, entry) {
+        var operation = { kind: kind, entry: entry };  // Keep the catalog entry as the sole metadata source.
+        batchState.operations.push(operation);  // Resolve selection values without trusting the browser.
+        select.appendChild(new Option((kind === 'channel' ? 'Channel: ' : 'Utility: ') + (entry.name || entry.key),
+            kind + ':' + entry.key));  // Include the catalog identity in the control value.
+    }
+
+    function selectBatchOperation() {
+        var value = byId('wsBatchOperation').value;  // Read the selected catalog identity.
+        batchState.operation = batchState.operations.find(function(item) {
+            return item.kind + ':' + item.entry.key === value;  // Match the server catalog key and kind.
+        }) || null;
+        var channel = !!batchState.operation && batchState.operation.kind === 'channel';  // One connection multiplexes channels.
+        byId('wsBatchConcurrency').disabled = channel;  // Channel batches have exactly one owned connection.
+        byId('wsBatchConcurrency').value = channel ? '1' : '3';  // Utilities and shells default to three workers.
+        invalidateBatchPreview();  // A new operation needs a new target snapshot.
+        renderBatchOperation();  // Show its catalog-backed fields and safety state.
+        renderBatchParameters();  // Show each operator-controlled field from the catalog.
+        loadBatchSites();  // Read organization sites only when the operation declares site scope.
+    }
+
+    function renderBatchOperation() {
+        var operation = batchState.operation;  // Read the resolved catalog reference.
+        var entry = operation && operation.entry;  // No browser field can create metadata.
+        setText('wsBatchOperationDescription', entry ? entry.description : 'Choose a catalog channel or utility.');
+        batchState.targetField = batchTargetField(operation);  // Derive the resource selector from catalog metadata.
+        batchState.targetMode = 'all';  // Start each operation with its complete eligible resource list.
+        show(byId('wsBatchCommandsGroup'), !!entry && entry.safety === 'shell');  // Only shell utilities take commands.
+        byId('wsBatchCommands').value = '';  // A new operation cannot inherit another shell command list.
+        show(byId('wsBatchSiteGroup'), operationNeedsSites(operation));  // Organization channels need no site selection.
+        clearNode(byId('wsBatchTargets'));  // Remove selectors from a prior operation.
+        batchState.targets = [];  // Do not carry targets across catalog operations.
+        var warning = entry && (entry.safety === 'change' || entry.safety === 'shell');
+        show(byId('wsBatchSafetyWarning'), !!warning);  // Keep the catalog safety class visible.
+        setText('wsBatchSafetyWarning', warning
+            ? 'Warning: This batch runs on every confirmed target. Verify the operation and target list before start.'
+            : '');
+    }
+
+    function operationNeedsSites(operation) {
+        if (!operation) return false;  // No operation has no target scope.
+        var entry = operation.entry;  // Read the server catalog definition.
+        var fields = operation.kind === 'channel' ? entry.identifiers || [] : entry.targets || [];
+        return fields.some(function(field) { return field.name === 'site_id'; });  // Derive site need from metadata.
+    }
+
+    function batchTargetField(operation) {
+        if (!operation) return null;  // No operation has no resource target.
+        var entry = operation.entry;  // Read only the catalog entry selected above.
+        var fields = operation.kind === 'channel' ? entry.identifiers || [] : entry.targets || [];
+        return fields.slice().reverse().find(function(field) {
+            return field.name !== 'site_id';  // The last non-site field is the deepest target resource.
+        }) || null;
+    }
+
+    function renderBatchParameters() {
+        var container = byId('wsBatchParameterFields');  // Keep batch inputs separate from the Single Site form.
+        clearNode(container);  // Remove parameters from the prior catalog operation.
+        var entry = batchState.operation && batchState.operation.entry;  // Use the selected catalog metadata.
+        (entry && entry.fields || []).forEach(function(field) {
+            container.appendChild(batchParameterControl(field));  // Render each checked utility parameter.
+        });
+    }
+
+    function batchParameterControl(field) {
+        var input = createInput(field);  // Reuse the catalog input type without Single Site picker callbacks.
+        tagField(input, field, false);  // Keep parameter names and validation metadata explicit.
+        if (field.picker) setSingleOption(input, 'Batch parameter choices are unavailable.');
+        else configureControl(input, field);  // Configure catalog choices, defaults, and limits.
+        var group = make('div', field.kind === 'boolean' ? 'form-check mb-3' : 'mb-3');
+        var label = make('label', field.kind === 'boolean' ? 'form-check-label' : 'form-label',
+            field.required ? (field.label || field.name) + ' (required)' : (field.label || field.name));
+        label.setAttribute('for', input.id);  // Keep the input accessible by its label.
+        group.appendChild(label);  // Place the label before the input.
+        group.appendChild(input);  // Add the configured parameter input.
+        hintTexts(field, input).forEach(function(text) {
+            group.appendChild(make('div', 'form-text', text));  // Preserve reviewed catalog help.
+        });
+        return group;  // Keep the field grouped for screen readers.
+    }
+
+    function loadBatchSites() {
+        if (!operationNeedsSites(batchState.operation)) {
+            batchState.sites = [];  // An organization operation does not need site rows.
+            setText('wsBatchSiteStatus', 'This operation uses organization scope.');
+            loadBatchTargets();  // Organization operations discover their own catalog targets.
+            return;
+        }
+        var revision = batchState.revision;  // Fence this request by the current operation revision.
+        setText('wsBatchSiteStatus', 'Loading organization sites.');
+        apiJson('/api/websockets/batches/sites?kind=' + encodeURIComponent(batchState.operation.kind) +
+            '&key=' + encodeURIComponent(batchState.operation.entry.key)).then(function(payload) {
+            if (revision !== batchState.revision) return;  // Discard stale organization responses.
+            if (payload.error || !Array.isArray(payload.rows)) {
+                batchState.sites = [];  // A failure is not a complete empty list.
+                setText('wsBatchSiteStatus', payload.error || 'Site discovery is unavailable.');
+                return;
+            }
+            batchState.sites = payload.rows;  // Keep complete rows for preview selection.
+            fillBatchSites(payload.rows, payload.reason);  // Draw only the current operation's list.
+            loadBatchTargets();  // Resolve resources only after complete site discovery.
+        });
+    }
+
+    function fillBatchSites(rows, reason) {
+        var select = byId('wsBatchSiteOptions');  // The operator selects a subset only in selected mode.
+        clearNode(select);  // Remove rows from the last operation.
+        rows.forEach(function(row) {
+            select.appendChild(new Option(row.label || row.id, row.id));  // Preserve source IDs as values.
+        });
+        var count = rows.length;  // Report only the bounded result count.
+        setText('wsBatchSiteStatus', count ? count + ' eligible site(s).' : reason || 'No eligible sites.');
+        show(select, byId('wsBatchSiteMode').value === 'selected' && count > 0);
+    }
+
+    function changeBatchSiteMode() {
+        var selected = byId('wsBatchSiteMode').value === 'selected';  // Show choices only when selection is explicit.
+        show(byId('wsBatchSiteOptions'), selected && batchState.sites.length > 0);
+        invalidateBatchPreview();  // All and selected targets are different execution snapshots.
+        loadBatchTargets();  // Rebuild resources for the selected site subset.
+    }
+
+    function changeBatchSiteSelection() {
+        invalidateBatchPreview();  // A changed site set invalidates the exact target snapshot.
+        loadBatchTargets();  // Do not keep resources from a different site set.
+    }
+
+    function changeBatchTargetSelection(event) {
+        if (event.target.matches('[data-testid="ws-batch-target-mode"]')) {
+            batchState.targetMode = event.target.value;  // Bind all or selected resources to the preview.
+            var options = byId('wsBatchTargetOptions');  // The resource list can stay in the DOM.
+            show(options, batchState.targetMode === 'selected' && batchState.targets.length > 0);
+        }
+        invalidateBatchPreview();  // Every target mode or resource change needs a new preview.
+    }
+
+    function loadBatchTargets() {
+        var operation = batchState.operation;  // Bind target discovery to the current catalog entry.
+        var revision = batchState.revision;  // Reject results after any operation or scope change.
+        batchState.targets = [];  // Do not retain a partial or stale target list.
+        clearNode(byId('wsBatchTargets'));  // Remove controls from the prior discovery.
+        if (!operation) return;  // No operation has no eligible targets.
+        if (operationNeedsSites(operation) && !batchState.targetField) {
+            batchState.targets = selectedBatchSites().map(siteTarget);  // A site-only operation targets sites.
+            setText('wsBatchTargets', batchState.targets.length + ' eligible site target(s).');
+            return;
+        }
+        if (!operationNeedsSites(operation)) {
+            apiJson(batchTargetUrl(null, operation)).then(function(payload) {
+                if (revision !== batchState.revision) return;  // Discard stale organization responses.
+                finishBatchTargetDiscovery([payload], revision);  // Apply only one complete organization result.
+            });
+            return;
+        }
+        var sites = selectedBatchSites();  // Respect all-sites or selected-sites mode.
+        if (!sites.length) {
+            renderBatchTargetRows([], 'Select at least one site to discover resources.');  // Keep empty selection clear.
+            return;
+        }
+        readBatchDiscoveryPages(sites, 0, [], operation, revision).then(function(payloads) {
+            if (revision !== batchState.revision) return;  // Discard stale site and operation responses.
+            finishBatchTargetDiscovery(payloads, revision);  // Publish rows only after every site succeeds.
+        }).catch(function(error) {
+            if (revision !== batchState.revision) return;  // Ignore errors from an old target request.
+            renderBatchTargetRows([], error.message || 'Target discovery is unavailable.');  // Keep failure explicit.
+        });
+    }
+
+    function selectedBatchSites() {
+        if (byId('wsBatchSiteMode').value !== 'selected') return batchState.sites.slice();  // All eligible sites.
+        var selected = Array.from(byId('wsBatchSiteOptions').selectedOptions).map(function(option) {
+            return option.value;  // Preserve the exact source site ID.
+        });
+        return batchState.sites.filter(function(site) {
+            return selected.indexOf(site.id) >= 0;  // Keep only explicit organization members.
+        });
+    }
+
+    function siteTarget(site) {
+        return {
+            id: site.id,
+            label: site.label || site.id,
+            family: null,
+            detail: site.detail || null,
+            site_id: site.id,
+            target_type: 'site'
+        };  // Keep site targets in the same identity shape as resources.
+    }
+
+    function batchTargetUrl(site, operation) {
+        var query = 'kind=' + encodeURIComponent(operation.kind) + '&key=' +
+            encodeURIComponent(operation.entry.key);  // Send catalog identity, never a raw SDK path.
+        var path = site
+            ? '/api/websockets/batches/sites/' + encodeURIComponent(site.id) + '/targets'
+            : '/api/websockets/batches/targets';  // Select the organization or verified site route.
+        return path + '?' + query;  // Keep the request scope explicit.
+    }
+
+    function readBatchDiscoveryPages(sites, offset, payloads, operation, revision) {
+        if (revision !== batchState.revision) return Promise.resolve(payloads);  // Stop stale discovery.
+        if (offset >= sites.length) return Promise.resolve(payloads);  // Every selected site has a result.
+        var group = sites.slice(offset, offset + 5);  // Bound concurrent Mist discovery requests.
+        var requests = group.map(function(site) {
+            return apiJson(batchTargetUrl(site, operation));  // Read one catalog-scoped site target list.
+        });
+        return Promise.all(requests).then(function(results) {
+            var failure = results.find(function(result) {
+                return result.error || result.complete !== true || !Array.isArray(result.rows);
+            });
+            if (failure) throw new Error(failure.error || 'Target discovery is incomplete.');  // Reject partial scopes.
+            return readBatchDiscoveryPages(sites, offset + group.length, payloads.concat(results), operation, revision);
+        });
+    }
+
+    function finishBatchTargetDiscovery(payloads, revision) {
+        if (revision !== batchState.revision) return;  // Keep all result effects behind the same revision fence.
+        var failed = payloads.find(function(payload) {
+            return payload.error || payload.complete !== true || !Array.isArray(payload.rows);
+        });
+        if (failed) {
+            renderBatchTargetRows([], failed.error || 'Target discovery is incomplete.');  // Do not use partial results.
+            return;
+        }
+        batchState.targets = payloads.reduce(function(rows, payload) {
+            return rows.concat(payload.rows);  // Keep site and parent identity on every target.
+        }, []);
+        renderBatchTargetRows(batchState.targets, null);  // Show the complete operation target list.
+    }
+
+    function renderBatchTargetRows(rows, reason) {
+        var container = byId('wsBatchTargets');  // Keep resource controls in the target column.
+        clearNode(container);  // Replace the prior status or selector.
+        if (!batchState.targetField) {
+            setText('wsBatchTargets', reason || rows.length + ' eligible target(s).');  // Organization-only operation.
+            return;
+        }
+        var label = make('label', 'form-label', 'Resources');  // Name the second target dimension.
+        label.setAttribute('for', 'wsBatchTargetMode');  // Bind the label to its selector.
+        var mode = make('select', 'form-select');  // Let the operator choose all or a subset.
+        mode.id = 'wsBatchTargetMode';  // Keep a stable accessible control ID.
+        mode.dataset.testid = 'ws-batch-target-mode';  // Expose a stable browser test hook.
+        mode.appendChild(new Option('All eligible resources', 'all'));  // Default to the complete operation scope.
+        mode.appendChild(new Option('Selected resources', 'selected'));  // Require explicit selection when chosen.
+        mode.value = batchState.targetMode;  // Preserve the current target mode for this operation.
+        container.appendChild(label);  // Add the accessible field label.
+        container.appendChild(mode);  // Add the all or selected control.
+        var options = make('select', 'form-select mt-2');  // Keep resource identities source-backed.
+        options.id = 'wsBatchTargetOptions';  // Keep a stable control ID.
+        options.multiple = true;  // Allow a target subset.
+        options.size = 6;  // Show the selection affordance.
+        options.setAttribute('aria-label', 'Available resources');  // Name the multiple-choice list.
+        options.dataset.testid = 'ws-batch-target-options';  // Expose a stable browser test hook.
+        rows.forEach(function(row) {
+            options.appendChild(new Option(batchTargetLabel(row), batchTargetKey(row)));  // Preserve natural identity.
+        });
+        container.appendChild(options);  // Place choices below the mode selector.
+        var status = make('div', 'form-text', reason || rows.length + ' eligible resource(s).');  // Report discovery.
+        status.id = 'wsBatchTargetStatus';  // Keep an accessible status target.
+        status.dataset.testid = 'ws-batch-target-status';  // Expose a stable browser test hook.
+        status.setAttribute('role', 'status');  // Announce changes to assistive tools.
+        status.setAttribute('aria-live', 'polite');  // Avoid interrupting current speech.
+        container.appendChild(status);  // Show empty, error, and complete states.
+        show(options, !reason && batchState.targetMode === 'selected' && rows.length > 0);
+    }
+
+    function batchTargetLabel(row) {
+        var site = batchState.sites.find(function(item) {
+            return item.id === row.site_id;  // Resolve the source site label for cross-site targets.
+        });
+        var name = row.label || row.id;  // Keep a readable target name.
+        return site ? name + ' — ' + (site.label || site.id) : name;  // Preserve site context in each option.
+    }
+
+    function batchTargetKey(row) {
+        return JSON.stringify({
+            id: row.id,
+            site_id: row.site_id || null,
+            map_id: row.map_id || null,
+            target_type: row.target_type || null
+        });  // Bind client choices to their complete parent identity.
+    }
+
+    function invalidateBatchPreview() {
+        batchState.revision += 1;  // Invalidate every pending target read and preview.
+        batchState.preview = null;  // An old confirmation cannot start a changed request.
+        batchState.previewPending = false;  // Let a new operation replace an older in-flight preview.
+        byId('wsBatchPreview').disabled = false;  // The changed selection can request a fresh snapshot.
+        byId('wsBatchStart').disabled = true;  // Start requires a fresh confirmed preview.
+        byId('wsBatchConfirmation').value = '';  // Do not carry a typed phrase across snapshots.
+        show(byId('wsBatchReview'), false);  // Remove review text for a stale target set.
+        show(byId('wsBatchConfirmationGroup'), false);  // Hide confirmation until preview returns.
+        show(byId('wsBatchError'), false);  // Clear errors tied to the previous selection.
+    }
+
+    function previewBatch() {
+        var revision = batchState.revision;  // Bind this response to the exact UI revision.
+        var body;
+        try {
+            body = batchPreviewRequest();  // Validate local selector state before the network request.
+        } catch (error) {
+            setBatchError(error.message);  // Show local validation without creating a preview.
+            return;
+        }
+        batchState.previewPending = true;  // Prevent duplicate preview submissions.
+        byId('wsBatchPreview').disabled = true;  // Keep the current selection stable while the server resolves it.
+        setText('wsBatchError', '');  // Clear the prior refusal.
+        show(byId('wsBatchError'), false);  // Hide the empty error box.
+        apiJson('/api/websockets/batches/previews', {
+            method: 'POST',
+            body: JSON.stringify(body)
+        }).then(function(payload) {
+            if (revision !== batchState.revision) return;  // Ignore responses for a changed selection.
+            if (payload.error) {
+                setBatchError(payload.error);  // The service refused an incomplete or invalid preview.
+                return;
+            }
+            batchState.preview = payload;  // Keep the opaque preview reference for admission.
+            renderBatchPreview(payload);  // Show the complete server-resolved list.
+        }).finally(function() {
+            if (revision !== batchState.revision) return;  // A later request owns the controls.
+            batchState.previewPending = false;  // Allow another preview after completion.
+            byId('wsBatchPreview').disabled = false;  // Permit a new read-only snapshot.
+            updateBatchStart();  // Enable admission after the full snapshot finishes rendering.
+        });
+    }
+
+    function batchPreviewRequest() {
+        var operation = batchState.operation;  // The current server-catalog identity.
+        if (!operation) throw new Error('Choose a catalog operation.');  // No preview can exist without a key.
+        var selection = {};  // Add only selectors required by catalog metadata.
+        if (operationNeedsSites(operation)) {
+            var siteMode = byId('wsBatchSiteMode').value;  // Preserve all or selected scope.
+            selection.sites = siteMode === 'selected'
+                ? { mode: siteMode, ids: selectedBatchSites().map(function(site) { return site.id; }) }
+                : { mode: siteMode };
+            if (siteMode === 'selected' && !selection.sites.ids.length) {
+                throw new Error('Select one or more sites.');
+            }
+        }
+        if (batchState.targetField) selection.resources = batchResourceSelection();  // Freeze resource choice.
+        return {
+            operation: { kind: operation.kind, key: operation.entry.key },
+            selection: selection,
+            parameters: batchParameterValues(),
+            commands: operation.kind === 'shell' ? batchCommands() : undefined,
+            scope_revision: batchState.revision
+        };
+    }
+
+    function batchResourceSelection() {
+        if (batchState.targetMode !== 'selected') return { mode: 'all' };  // Default to all eligible resources.
+        var selected = Array.from(byId('wsBatchTargetOptions').selectedOptions).map(function(option) {
+            return batchState.targets.find(function(row) { return batchTargetKey(row) === option.value; });
+        }).filter(Boolean);
+        if (!selected.length) throw new Error('Select one or more resources.');
+        return { mode: 'selected', targets: selected };  // Send identities, not display labels or array indexes.
+    }
+
+    function batchParameterValues() {
+        var values = {};  // Collect only the visible catalog fields.
+        byId('wsBatchParameterFields').querySelectorAll('[data-ws-field]').forEach(function(input) {
+            if (input.type === 'checkbox') values[input.dataset.wsField] = input.checked;
+            else if (input.type === 'number' && input.value !== '') values[input.dataset.wsField] = Number(input.value);
+            else if (input.multiple) values[input.dataset.wsField] = Array.from(input.selectedOptions).map(function(option) {
+                return option.value;
+            });
+            else if (input.value !== '') values[input.dataset.wsField] = input.value;
+        });
+        return values;
+    }
+
+    function batchCommands() {
+        var text = byId('wsBatchCommands').value;  // Keep the shell command text out of request logs.
+        var commands = text.split(/\r?\n/);  // Treat platform line endings as command separators.
+        if (commands[commands.length - 1] === '') commands.pop();  // Ignore one final textarea line break.
+        return commands;  // The server validates and stores the exact command order.
+    }
+
+    function renderBatchPreview(preview) {
+        var summary = byId('wsBatchReviewSummary');  // Show the exact operation and execution scope.
+        clearNode(summary);  // Remove an older target snapshot.
+        var operation = preview.operation || {};  // Read the safe server catalog description.
+        summary.appendChild(make('div', '', 'Operation: ' + (operation.name || operation.key || 'Unknown')));  // Identify the resolved catalog action.
+        summary.appendChild(make('div', '', preview.target_count + ' target(s)'));  // Report exact server count.
+        summary.appendChild(make('div', 'text-muted', 'Preview expires ' + preview.expires_at));  // Explain snapshot age.
+        summary.appendChild(make('div', '', 'Output: ' + byId('wsBatchLayout').selectedOptions[0].textContent));  // Show the selected saved layout.
+        summary.appendChild(make('div', '', 'Group by: ' + byId('wsBatchGroupBy').selectedOptions[0].textContent));  // Show the saved group key.
+        summary.appendChild(make('div', '', 'Concurrency: ' + byId('wsBatchConcurrency').value));  // Show the admitted worker limit.
+        summary.appendChild(make('div', '', 'Safety: ' + (operation.safety || 'read')));  // Keep the catalog risk visible.
+        var limits = preview.limits || {};  // Read the server's checked resource bounds.
+        summary.appendChild(make('div', 'text-muted', 'Output limit: ' + limits.output_bytes + ' bytes'));  // Show the disk cap.
+        if (operation.kind === 'shell') {
+            summary.appendChild(make(
+                'div',
+                'text-muted',
+                'Shell limits: ' + limits.shell_command_bytes + ' bytes per command, ' + limits.shell_total_bytes + ' bytes total.'
+            ));  // Show the finite command bounds.
+        }
+        appendBatchParameters(summary);  // Review parameter values without displaying secret-like fields.
+        appendBatchCommands(summary, operation);  // Review the exact local command list for shell batches.
+        appendBatchExclusions(summary, preview.excluded);  // Explain candidates that the catalog excluded.
+        var targets = byId('wsBatchReviewTargets');  // Show every resolved target before admission.
+        clearNode(targets);  // Replace the prior target list.
+        (preview.targets || []).forEach(function(target) {
+            var label = target.label || target.target_id || target.target_key;  // Prefer safe display text.
+            var site = target.site_label ? ' — ' + target.site_label : '';  // Keep site context beside each target.
+            targets.appendChild(make('div', 'text-truncate', label + site));  // Render only as text.
+        });
+        show(byId('wsBatchReview'), true);  // Require visible review before start.
+        var confirmation = preview.confirmation || {};  // Read the server safety requirement.
+        show(byId('wsBatchConfirmationGroup'), !!confirmation.required);  // Only risky batches need a phrase.
+        byId('wsBatchConfirmation').value = '';  // No earlier confirmation applies to this preview.
+        byId('wsBatchStart').dataset.confirmation = confirmation.phrase || '';  // Keep exact text for comparison.
+        updateBatchStart();  // Enable start only after preview and confirmation checks pass.
+    }
+
+    function appendBatchParameters(summary) {
+        var parameters = batchParameterValues();  // Read the exact local values that the preview bound.
+        Object.keys(parameters).sort().forEach(function(name) {
+            var secret = /pass|secret|token|credential|private.?key/i.test(name);  // Avoid echoing secret-like fields.
+            var value = secret ? '[hidden]' : JSON.stringify(parameters[name]);  // Keep values readable and safe.
+            summary.appendChild(make('div', 'text-break', 'Parameter ' + name + ': ' + value));  // Render reviewed input as text.
+        });
+    }
+
+    function appendBatchCommands(summary, operation) {
+        if (operation.kind !== 'shell') return;  // Only finite shell batches have command text.
+        batchCommands().forEach(function(command, index) {
+            summary.appendChild(make('pre', 'text-break mb-1', (index + 1) + '. ' + command));  // Show exact local command text.
+        });
+    }
+
+    function appendBatchExclusions(summary, excluded) {
+        Object.keys(excluded || {}).sort().forEach(function(reason) {
+            summary.appendChild(make('div', 'text-muted', excluded[reason] + ' excluded: ' + reason));  // Explain filtered candidates.
+        });
+    }
+
+    function updateBatchStart() {
+        var preview = batchState.preview;  // Only the current preview can enable admission.
+        var required = byId('wsBatchStart').dataset.confirmation || '';  // The phrase is server-issued.
+        var correct = !required || byId('wsBatchConfirmation').value === required;
+        var targets = preview && Array.isArray(preview.targets) ? preview.targets : [];  // Require the full server list.
+        var complete = !!preview && targets.length === Number(preview.target_count);  // Require the entire target snapshot.
+        byId('wsBatchStart').disabled = !complete || !correct || batchState.previewPending;  // Require full review.
+    }
+
+    function startBatch() {
+        var preview = batchState.preview;  // Admission uses only the current reviewed snapshot.
+        if (!preview || byId('wsBatchStart').disabled) return;  // Ignore stale or unconfirmed clicks.
+        var body = {
+            preview_id: preview.preview_id,
+            concurrency: Number(byId('wsBatchConcurrency').value),
+            output: { mode: byId('wsBatchLayout').value, group_by: byId('wsBatchGroupBy').value }
+        };  // Keep target and execution details on the server.
+        if (preview.confirmation && preview.confirmation.required) {
+            body.confirmation = byId('wsBatchConfirmation').value;  // Send the exact server phrase.
+        }
+        byId('wsBatchStart').disabled = true;  // Prevent duplicate admission while the request is pending.
+        setBatchError('');  // Clear a refusal from an earlier attempt.
+        show(byId('wsBatchError'), false);  // Hide the empty error box.
+        apiJson('/api/websockets/batches', { method: 'POST', body: JSON.stringify(body) }).then(function(payload) {
+            if (payload.error) {
+                setBatchError(payload.error);  // Keep the preview available for an explicit retry after refusal.
+                if (payload.error === NETWORK_ERROR) {
+                    batchState.preview = null;  // A lost response may follow a successful admission.
+                    setBatchError('The start result is unknown. Refresh the session list before starting again.');
+                    return;
+                }
+                updateBatchStart();  // Restore start only when the confirmation still matches.
+                return;
+            }
+            if (typeof payload.session_id !== 'string' || !payload.session_id) {
+                setBatchError('The server did not return a batch session identifier.');
+                return;
+            }
+            batchState.preview = null;  // The one-use preview has started a public parent session.
+            batchState.sessionId = payload.session_id;  // Progress requests use the server-issued parent id.
+            show(byId('wsBatchReview'), false);  // Do not show an old snapshot as an active preview.
+            show(byId('wsBatchProgress'), true);  // Show the admitted batch state.
+            byId('wsBatchDownload').href = '/api/websockets/sessions/' +
+                encodeURIComponent(batchState.sessionId) + '/download';  // Use the established parent download.
+            byId('wsBatchZipDownload').href = '/api/websockets/batches/' +
+                encodeURIComponent(batchState.sessionId) + '/download?format=zip';  // Use the saved layout archive.
+            show(byId('wsBatchZipDownload'), false);  // The final archive is unavailable while targets run.
+            selectSession(payload);  // Show the same parent messages in the shared output panel.
+            pollBatchProgress();  // Show initial status without waiting for the next interval.
+        });
+    }
+
+    function startBatchProgressTimer() {
+        stopBatchProgressTimer();  // Keep one progress timer for the selected parent.
+        batchState.progressTimer = window.setInterval(function() {
+            if (!document.hidden) pollBatchProgress();  // Avoid polling while the browser tab is hidden.
+        }, POLL_MS);  // Keep progress aligned with message updates.
+    }
+
+    function stopBatchProgressTimer() {
+        if (batchState.progressTimer) window.clearInterval(batchState.progressTimer);  // Stop the old parent's reads.
+        batchState.progressTimer = null;  // No progress timer runs now.
+    }
+
+    function pollBatchProgress() {
+        var sessionId = batchState.sessionId;  // Keep the response tied to the current parent.
+        if (!sessionId || batchState.progressPending) return;  // Allow one bounded request chain at a time.
+        batchState.progressPending = true;  // Prevent progress responses from arriving out of order.
+        var base = '/api/websockets/batches/' + encodeURIComponent(sessionId);  // Read the aggregate parent state.
+        apiJson(base).then(function(summary) {
+            if (summary.error || sessionId !== batchState.sessionId) return;  // Ignore an expired or replaced parent.
+            renderBatchProgress(summary.batch || {});  // Show aggregate counts and lifecycle state.
+            return readBatchProgressPages(base, sessionId).then(function(targets) {
+                if (sessionId !== batchState.sessionId) return;  // Ignore target rows from a replaced parent.
+                if (Array.isArray(targets)) renderBatchTargetProgress(targets);  // Keep the frozen order.
+                else setBatchError('The target progress page could not be read completely.');
+            });
+        }).finally(function() {
+            batchState.progressPending = false;  // Permit the next refresh after every outcome.
+        });
+    }
+
+    function readBatchProgressPages(base, sessionId) {
+        var rows = [];  // Keep a full stable target snapshot for display.
+        var after = 0;  // Target cursors count the immutable preview order.
+        function readPage() {
+            var url = base + '/targets?after=' + after + '&limit=500';  // Read the largest supported page.
+            return apiJson(url).then(function(payload) {
+                if (payload.error || sessionId !== batchState.sessionId) return null;  // Never present a partial page as complete.
+                rows = rows.concat(payload.targets || []);  // Append one ordered target page.
+                after = payload.next_after || after;  // Continue from the server cursor.
+                return payload.complete ? rows : readPage();  // Read all pages without partial reordering.
+            });
+        }
+        return readPage();  // Return the complete target list when all pages succeed.
+    }
+
+    function renderBatchProgress(batch) {
+        var counts = batch.counts || {};  // The server owns each target state count.
+        var summary = ['queued', 'running', 'completed', 'stopped', 'failed'].map(function(stateName) {
+            return stateName + ': ' + Number(counts[stateName] || 0);  // Show every terminal and active count.
+        }).join(' | ');
+        setText('wsBatchProgressTitle', 'Batch progress - ' + (batch.status || 'unknown'));  // Show parent state.
+        setText('wsBatchProgressCounts', summary + ' | output: ' + (batch.artifact_status || 'unknown'));  // Show storage state.
+        var complete = ['completed', 'failed', 'partial', 'stopped'].indexOf(batch.status) >= 0;
+        byId('wsBatchStop').disabled = complete;
+        show(byId('wsBatchZipDownload'), complete);  // A completed batch can create the requested layout archive.
+        if (complete) {
+            stopBatchProgressTimer();  // A final result needs no more progress requests.
+        }
+    }
+
+    function renderBatchTargetProgress(targets) {
+        var container = byId('wsBatchTargetProgress');  // The target status list.
+        clearNode(container);  // Replace the prior progress snapshot.
+        targets.forEach(function(item) {
+            var target = item.target || {};  // Use server-resolved identity, never a browser label.
+            var label = target.label || target.target_id || item.target_key;  // Prefer safe display text.
+            var row = make('div', 'd-flex justify-content-between gap-2 border-top py-1');  // One target state.
+            row.appendChild(make('span', 'text-truncate', label || 'Target'));  // Keep long labels within the panel.
+            row.appendChild(make('span', 'text-nowrap', item.state || 'queued'));  // Show current server state.
+            container.appendChild(row);  // Add the target in frozen preview order.
+        });
+    }
+
+    function stopBatch() {
+        if (!batchState.sessionId) return;  // No parent means no batch to stop.
+        byId('wsBatchStop').disabled = true;  // Prevent duplicate stop requests.
+        var url = '/api/websockets/sessions/' + encodeURIComponent(batchState.sessionId) + '/stop';
+        apiJson(url, { method: 'POST' }).then(function(payload) {
+            if (payload.error) {
+                setBatchError(payload.error);  // Keep a failed stop request visible.
+                byId('wsBatchStop').disabled = false;  // Allow an explicit retry.
+                return;
+            }
+            if (isSelected(payload)) updateSessionHeader(payload);  // Reflect the parent stop state.
+            pollBatchProgress();  // Refresh queued and active target outcomes.
+        });
+    }
+
+    function setBatchError(message) {
+        setText('wsBatchError', message || 'The preview could not be created.');  // Keep error text plain.
+        show(byId('wsBatchError'), true);  // Make the failure visible.
     }
 
     function renderReadyState(catalog) {
@@ -897,6 +1563,17 @@
     function selectSession(session) {
         stopTerminalController();  // Stop any terminal read loop for the previous session.
         state.selectedSession = session;  // The message panel shows this session.
+        if (session.mode === 'multi_site') {
+            batchState.sessionId = session.session_id;  // Restore progress when the session list selects a batch.
+            show(byId('wsBatchProgress'), true);  // Keep batch controls available after a page reload.
+            byId('wsBatchDownload').href = '/api/websockets/sessions/' +
+                encodeURIComponent(session.session_id) + '/download';  // Restore combined result access.
+            byId('wsBatchZipDownload').href = '/api/websockets/batches/' +
+                encodeURIComponent(session.session_id) + '/download?format=zip';  // Restore saved layout access.
+            show(byId('wsBatchZipDownload'), !!session.batch &&
+                ['completed', 'failed', 'partial', 'stopped'].indexOf(session.batch.status) >= 0);
+            startBatchProgressTimer();  // Poll target state for the selected batch parent.
+        }
         state.nextAfter = 0;  // Read the buffer from the oldest kept message.
         state.messages = [];  // Remove the messages of the last session.
         show(byId('wsMessageGap'), false);  // Remove a gap notice that belongs to the last session.

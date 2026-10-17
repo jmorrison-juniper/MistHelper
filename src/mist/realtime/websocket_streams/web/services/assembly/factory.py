@@ -30,6 +30,7 @@ from src.mist.realtime.websocket_streams.web.services.operations.catalog import 
     WebSocketCatalogService,
 )  # Catalog payload.
 from src.mist.realtime.websocket_streams.web.services.operations.sessions import (
+    WebSocketBatchService,
     WebSocketMessageService,
     WebSocketSessionService,
 )  # Session lifecycle and message reads.
@@ -37,6 +38,7 @@ from src.mist.realtime.websocket_streams.web.services.operations.terminal import
     WebSocketTerminalService,
 )  # Terminal actions.
 from src.mist.realtime.websocket_streams.web.services.pickers.related import (
+    BatchTargetPickerService,
     RelatedPickerService,
 )  # Related picker actions.
 from src.mist.realtime.websocket_streams.web.services.pickers.service import (
@@ -92,14 +94,32 @@ class WebSocketServiceFactory:
         lifecycle = WebSocketSessionService(collaborators.checker, collaborators.manager, reason)  # Build lifecycle.
         messages = WebSocketMessageService(collaborators.manager)  # Build message reads.
         artifacts = SessionArtifactService(collaborators.manager, reason)  # Build deletion and downloads.
+        ArtifactCleanupBinder.bind(collaborators.manager, artifacts)  # Retention removes files before buffers.
         terminal = WebSocketTerminalService(collaborators.manager, reason)  # Build terminal actions.
         site_pickers = SitePickerService(collaborators.picker, reason)  # Build site picker actions.
         related_pickers = RelatedPickerService(collaborators.picker, reason)  # Build related picker actions.
         client_suggestions = ClientSuggestionService(collaborators.picker, reason)  # Build scoped client suggestions.
+        batch_targets = BatchTargetPickerService(
+            collaborators.picker, collaborators.catalog, reason
+        )  # Build catalog-driven target discovery.
+        batches = WebSocketBatchService(
+            collaborators.checker, batch_targets, collaborators.manager, artifacts, reason
+        )  # Preview validation shares the complete operation-scoped picker.
         return WebSocketServiceBundle(
             catalog,
-            SessionServices(lifecycle, messages),
+            SessionServices(lifecycle, messages, batches),
             artifacts,
             terminal,
-            PickerServices(site_pickers, related_pickers, client_suggestions),
+            PickerServices(site_pickers, related_pickers, client_suggestions, batch_targets),
         )  # Keep the service set fixed and explicit.
+
+
+class ArtifactCleanupBinder:
+    """Bind session retention to its artifact-tree cleanup."""
+
+    @staticmethod
+    def bind(manager: object, artifacts: SessionArtifactService) -> None:
+        """Register cleanup only when the manager supports artifact retention."""
+        set_cleanup = getattr(manager, "set_artifact_cleanup", None)  # Keep fallback managers compatible.
+        if callable(set_cleanup):
+            set_cleanup(artifacts.cleanup_expired)  # Remove files before the session buffers expire.

@@ -89,7 +89,7 @@ class SessionPayloadSupport(SessionAttributes):
 
     def _payload_values(self, output: str, safety: str) -> dict[str, object]:
         """Return the stable public payload values."""
-        return {
+        payload: dict[str, object] = {
             "session_id": self.session_id,
             "kind": self.request.kind,
             "key": self.request.key,
@@ -107,6 +107,11 @@ class SessionPayloadSupport(SessionAttributes):
             "rate_per_second": self._rate_per_second(),
             "last_seq": self.buffer.last_seq,
         }  # Preserve every existing list and read payload field.
+        plan = self.request.batch_plan  # Single Site sessions keep their exact established payload.
+        if plan is not None:
+            payload["mode"] = "multi_site"  # Identify the additive parent session mode.
+            payload["batch"] = plan.progress.summary.summary()  # Include current target progress only for batches.
+        return payload  # Add batch fields only for a Multi Site parent.
 
     @staticmethod
     def _log_state(event: str, status: str, level: int) -> None:

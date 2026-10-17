@@ -50,13 +50,26 @@ class SessionRetention(ManagerAttributes):
 
     def _prune_ended(self) -> None:
         """Keep five recent ended sessions for at most ten minutes."""
-        with self._lock:  # Cleanup changes the shared session map.
+        with self._lock:  # Build one stable expired-session snapshot.
             ended = [session for session in self._sessions.values() if not session.live]  # Ignore live sessions.
             ended.sort(key=lambda item: item.ended_mono or item.started_mono, reverse=True)  # Newest first.
-            removed = self._expired_session_ids(ended)  # Apply count and age bounds.
-            for session_id in removed:  # Release each ended session buffer.
-                self._sessions.pop(session_id, None)  # Another delete can make removal harmless.
-        self._logger.emit(logging.DEBUG, "session_prune_complete", {"count": len(removed)})  # Log count only.
+            expired = self._expired_session_ids(ended)  # Apply count and age bounds.
+        removed = self._remove_expired(expired)  # Remove artifacts before releasing each session buffer.
+        self._logger.emit(logging.DEBUG, "session_prune_complete", {"count": removed})  # Log count only.
+
+    def _remove_expired(self, expired: list[str]) -> int:
+        """Remove expired sessions after their artifact trees are safe to delete."""
+        removed = 0
+        for session_id in expired:
+            cleanup = self._artifact_cleanup
+            if cleanup is not None and not cleanup(session_id):
+                continue
+            with self._lock:
+                session = self._sessions.get(session_id)
+                if session is not None and not session.live:
+                    self._sessions.pop(session_id, None)
+                    removed += 1
+        return removed
 
     def _expired_session_ids(self, ended: list[StreamSession]) -> list[str]:
         """Return ended session identifiers that exceed retention bounds."""
@@ -126,9 +139,15 @@ class StreamSessionManager(SessionStarter, SessionAccess, SessionExport, Session
         self._settings = settings  # Limits stay immutable for this manager.
         self._clock = time.monotonic if clock is None else clock  # Tests can supply deterministic time.
         self._lock = threading.RLock()  # Web requests and cleanup share the session map.
+        self._artifact_cleanup = None  # The web service binds artifact retention after construction.
         self._sessions: dict[str, StreamSession] = {}  # Map public identifiers to concrete sessions.
         self._builder = SessionBuilder(settings, runner_factory, self._clock)  # Build sessions and bind terminals.
         self._logger = StructuredTransportLogger(logging.getLogger(__name__))  # Apply the T072 boundary.
         self._reaper_stop = threading.Event()  # Shutdown wakes the cleanup wait.
         self._reaper_thread: threading.Thread | None = None  # Cleanup starts lazily.
         self._shutdown = False  # Repeat shutdown remains safe.
+
+    def set_artifact_cleanup(self, cleanup: Callable[[str], bool]) -> None:
+        """Bind artifact deletion to the existing session retention boundary."""
+        with self._lock:
+            self._artifact_cleanup = cleanup

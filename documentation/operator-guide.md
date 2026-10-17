@@ -317,6 +317,34 @@ codes.
 Set `PORTAL_WS_TERMINAL_HISTORY_KB` to change the server byte history for one
 terminal session. The default is `1024`. The range is `256` to `8192`.
 
+### Run a Multi Site WebSocket operation
+
+Open the WebSockets tab, then select **Multi Site**. Choose a catalog operation.
+Select all eligible sites or choose a site subset. If the operation supports
+devices or clients, choose all eligible resources or select specific resources.
+
+Select **Preview targets** before you start the operation. The portal loads all
+pages, validates each target, and shows every target in the review panel. Check
+the operation, parameters, target list, exclusions, and output limits. The
+portal does not start work from a partial target list.
+
+Read-only operations need no typed confirmation. A change operation or shell
+batch requires the exact phrase shown in the preview, such as
+`RUN 12 TARGETS`. A shell batch accepts a finite command list before review.
+It does not accept interactive input after it starts.
+
+Select a combined or grouped output layout. Set the grouping field when you
+choose grouped output. Channel operations use one connection. Utility and shell
+operations use bounded concurrency from one to five targets.
+
+Select **Start batch** to create one parent session. The progress panel shows
+the target counts and each target state. Select **Stop batch** to stop queued
+work and close active targets. Completed results remain available.
+
+Download the parent JSONL file for combined results. Download the ZIP file for
+the selected output layout. The portal redacts secrets before it saves results.
+Batch files follow the session retention policy.
+
 ### Watch the network from a monitoring system
 
 Menu 241 starts a metrics gateway on port 8057. The gateway reads your

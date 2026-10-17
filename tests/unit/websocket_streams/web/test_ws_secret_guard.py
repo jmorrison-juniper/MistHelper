@@ -16,6 +16,9 @@ import pytest  # Use fixtures for the portal app lifetime.
 
 from src.mist.realtime.websocket_streams.live.sessions.buffer.message import StreamMessage
 from src.mist.realtime.websocket_streams.live.sessions.buffer.page import MessagePage  # The fake read returns records.
+from src.mist.realtime.websocket_streams.live.transport.runtime.logging.redaction import (
+    LineSecretRedactor,
+)  # Verify chunk-safe secret handling.
 from src.mist.realtime.websocket_streams.web.services.registry import (
     WebSocketServiceRegistry,
 )  # Inject the fake service bundle.
@@ -64,14 +67,28 @@ class SecretGuardServices:
             start=self.start_session, list=self.list_sessions, stop=self.stop_session, shutdown=self.shutdown
         )  # Group session lifecycle behavior.
         self.sessions = SimpleNamespace(
-            lifecycle=lifecycle, messages=SimpleNamespace(read=self.read_messages)
+            lifecycle=lifecycle,
+            messages=SimpleNamespace(read=self.read_messages),
+            batches=SimpleNamespace(
+                preview=self.preview_batch,
+                start=self.start_batch,
+                summary=self.batch_summary,
+                targets=self.batch_targets,
+            ),
         )  # Group lifecycle and message behavior.
         self.catalog = SimpleNamespace(payload=self.catalog_payload)  # Group catalog behavior.
         self.artifacts = SimpleNamespace(
-            delete=self.delete_session, download=self.download_session
+            delete=self.delete_session,
+            download=self.download_session,
+            manifest=self.batch_manifest,
+            zip_download=self.batch_zip,
         )  # Group artifact behavior.
         self.terminal = SecretGuardTerminal()  # Expose direct terminal behavior.
-        self.pickers = SimpleNamespace(site=self, related=self)  # Group picker behavior.
+        self.pickers = SimpleNamespace(
+            site=self,
+            related=self,
+            batch=SimpleNamespace(sites=self.batch_sites, targets=self.batch_targets),
+        )  # Group picker behavior.
 
     def catalog_payload(self) -> dict[str, object]:
         """Return a safe catalog payload."""
@@ -110,6 +127,34 @@ class SecretGuardServices:
     def download_session(self, _session_id: str) -> tuple[str, Iterator[str]]:
         """Return a safe download stream."""
         return "session.jsonl", iter(['{"seq":1,"content":"ok"}\n'])  # Safe stream.
+
+    def preview_batch(self, _body: object) -> dict[str, object]:
+        """Return a safe batch preview."""
+        return {"preview_id": "safe-id", "target_count": 0}  # No private target data.
+
+    def start_batch(self, _body: object) -> dict[str, object]:
+        """Return one safe batch parent."""
+        return self._session("abc123") | {"mode": "multi_site", "batch": {"status": "completed"}}
+
+    def batch_summary(self, session_id: str) -> dict[str, object]:
+        """Return one safe batch progress payload."""
+        return self._session(session_id) | {"mode": "multi_site", "batch": {"status": "completed"}}
+
+    def batch_targets(self, *_args: object) -> dict[str, object]:
+        """Return one safe empty target page."""
+        return {"targets": [], "next_after": 0, "complete": True, "counts": {}}
+
+    def batch_manifest(self, _session_id: str) -> dict[str, object]:
+        """Return one safe artifact manifest."""
+        return {"status": "ready", "partial": False, "files": [], "targets": []}
+
+    def batch_zip(self, _session_id: str) -> tuple[str, bytes]:
+        """Return one safe bounded archive answer."""
+        return "batch.zip", b"safe"
+
+    def batch_sites(self, *_args: object) -> dict[str, object]:
+        """Return complete safe organization site discovery."""
+        return {"rows": [], "complete": True, "excluded": {}}
 
     def devices(self, site_id: str) -> dict[str, object]:
         """Return a safe picker answer."""
@@ -185,6 +230,15 @@ def test_websocket_routes_do_not_leak_secrets(portal_client: Any) -> None:
         portal_client.post("/api/websockets/sessions/abc123/resize", json={"cols": 80, "rows": 24}),
         portal_client.delete("/api/websockets/sessions/abc123"),
         portal_client.get("/api/websockets/sessions/abc123/download"),
+        portal_client.post("/api/websockets/batches/previews", json={}),
+        portal_client.post("/api/websockets/batches", json={}),
+        portal_client.get("/api/websockets/batches/abc123"),
+        portal_client.get("/api/websockets/batches/abc123/targets?after=0&limit=10"),
+        portal_client.get("/api/websockets/batches/abc123/artifacts"),
+        portal_client.get("/api/websockets/batches/abc123/download?format=zip"),
+        portal_client.get("/api/websockets/batches/sites?kind=channel&key=site.stats.devices"),
+        portal_client.get(f"/api/websockets/batches/sites/{SITE_ID}/targets?kind=channel&key=site.stats.devices"),
+        portal_client.get("/api/websockets/batches/targets?kind=channel&key=org.stats"),
         portal_client.get(f"/api/websockets/sites/{SITE_ID}/devices"),
         portal_client.get(f"/api/websockets/sites/{SITE_ID}/maps"),
         portal_client.get(f"/api/websockets/sites/{SITE_ID}/assets"),
@@ -196,3 +250,22 @@ def test_websocket_routes_do_not_leak_secrets(portal_client: Any) -> None:
     assert API_TOKEN not in bodies  # The API token did not leak.
     assert CHANNEL_PATH not in bodies  # The raw channel path did not leak.
     assert "wss://" not in bodies and WS_ADDRESS not in bodies  # No WebSocket address leaked.
+
+
+def test_line_redactor_hides_authorization_split_across_chunks() -> None:
+    """Hold an incomplete line until a split authorization value is redacted."""
+    redactor = LineSecretRedactor()  # Use the same line boundary as batch terminal output.
+    assert redactor.feed("Authorization: Bearer ") == ""  # Do not expose an incomplete credential prefix.
+    assert redactor.feed("split-secret") == ""  # Do not expose a credential before its line ends.
+    result = redactor.feed("\r\nsafe output\n")  # Complete the secret line and a following safe line.
+    assert "split-secret" not in result  # Never return the secret value.
+    assert "[REDACTED]" in result  # Keep an explicit redaction marker.
+    assert "safe output\n" in result  # Preserve later safe output.
+
+
+def test_line_redactor_discards_the_rest_of_an_overlong_line() -> None:
+    """Bound an unterminated line and resume only after its newline."""
+    redactor = LineSecretRedactor(max_line_bytes=5)  # Use a small boundary to exercise overflow.
+    assert redactor.feed("unsafe") == "[REDACTED]\n"  # Replace an overlong incomplete line.
+    assert redactor.feed("secret") == ""  # Drop later chunks from the same line.
+    assert redactor.feed("\nsafe\n") == "safe\n"  # Resume after the unsafe line ends.
