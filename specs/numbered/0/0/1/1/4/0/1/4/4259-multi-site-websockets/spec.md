@@ -51,8 +51,10 @@ An operator starts one operation across the selected targets. The page reports p
 1. **Given** the selected target set is valid, **When** the operator starts the batch, **Then** the portal starts one parent session and processes targets with bounded concurrency.
 2. **Given** one target fails, **When** other targets return results, **Then** the page shows each outcome and retains successful output.
 3. **Given** a batch is live, **When** the operator stops it, **Then** the portal stops queued work and requests a stop for every active target session.
-4. **Given** the selected operation is a remote shell, **When** the operator sends a command, **Then** the portal sends it to each selected device and displays output by device.
+4. **Given** the selected operation is a remote shell, **When** the operator previews an ordered command list, **Then** the portal runs it on each confirmed device and displays output by device.
 5. **Given** a site or device result arrives, **When** the page displays it, **Then** the result includes its site and target identity.
+6. **Given** the initial shell output contains a normalized device prompt, **When** a command returns that same prompt and two seconds without output, **Then** the portal records the output and continues to the next command.
+7. **Given** the initial or command prompt is not recognized within 30 seconds, **When** collection stops, **Then** the portal preserves partial output, marks the target unproven, and skips later commands.
 
 ### User Story 4 - Save batch results (Priority: P2)
 
@@ -79,6 +81,7 @@ An operator chooses combined output, target folders, or both. The operator can d
 - The operator changes a target selection while a picker response is still in flight.
 - The operator stops a batch while targets wait or run.
 - The selected target list exceeds the current session limit or a documented batch limit.
+- A shell command times out, returns no prompt, or does not finish its output before the deadline.
 - A download contains empty output, partial results, unusual device names, or duplicate result records.
 
 ## Requirements
@@ -96,22 +99,25 @@ An operator chooses combined output, target folders, or both. The operator can d
 - **FR-009**: One parent session MUST report overall batch state and each target's queued, running, completed, stopped, or failed state.
 - **FR-010**: Every batch result and error MUST retain the operation, site, target type, and target identity.
 - **FR-011**: The portal MUST run target work with a bounded concurrency limit and MUST stop queued work after cancellation.
-- **FR-012**: The remote shell batch MUST send each operator command only to the selected devices and MUST show output separately for each device.
-- **FR-013**: The portal MUST preserve current operation safety classes, feature locks, and typed confirmations. A batch MUST bind its confirmation to the exact operation and target set.
+- **FR-012**: The remote shell batch MUST accept an ordered command list during preview, send each command only to confirmed devices, and collect output per device. It MUST capture the initial normalized prompt and require that same prompt plus two seconds without output before continuing. After the 30-second initial-output deadline or a 30-second per-command deadline, it MUST retain partial output, mark completion unproven, and skip later commands. Collection completion MUST NOT imply command success when no device status exists.
+- **FR-013**: The portal MUST preserve current operation safety classes, feature locks, and typed confirmations. A batch MUST bind its confirmation to the exact operation, parameters, commands, and target set. Single Site confirmation MUST remain unchanged.
 - **FR-014**: The portal MUST offer combined output and folder layouts grouped by site, device type, device, or client.
 - **FR-015**: Saved output MUST remain under the existing `data/` directory and MUST use server-created safe paths.
-- **FR-016**: Target discovery MUST use Mist SDK methods, the largest supported result limit, and the SDK pagination helper to read every page.
+- **FR-016**: Target discovery MUST use Mist SDK methods, the validated runtime page limit, and checked SDK page or cursor traversal to read every page.
 - **FR-017**: Target discovery MUST reuse complete fetched lists during one batch and MUST not repeat a discovery request without a changed scope.
 - **FR-018**: The portal MUST show access, pagination, and target errors separately from an empty list.
 - **FR-019**: The portal MUST redact API tokens, WebSocket addresses, and shell secrets from logs, API responses, and saved output.
 - **FR-020**: Live validation MUST use read-only commands only and MUST not change Mist cloud configuration or device state.
+- **FR-021**: A channel batch MUST multiplex its catalog paths through the owned WebSocket transport and demultiplex results by target identity. It MUST not use the Single Site ten-path validation limit.
+- **FR-022**: The portal MUST reject more than 1000 resolved targets without truncation and MUST show this limit in the preview.
+- **FR-023**: The preview MUST show effective concurrency and output limits. It MUST reject shell lists over 20 commands, 4096 UTF-8 bytes per command, 16384 bytes per list, or 64 MiB saved output without truncation.
 
 ### Mist Cloud Transport Requirements
 
-- Site discovery MUST use `mistapi.api.v1.orgs.sites.listOrgSites` with the maximum supported `limit` and `mistapi.get_all`.
-- Device discovery MUST use `mistapi.api.v1.sites.devices.listSiteDevices` with `type="all"`, the maximum supported `limit` where accepted, and `mistapi.get_all`.
-- Existing client suggestions MUST use `mistapi.api.v1.sites.wired_clients.searchSiteWiredClients` with a complete paginated response and verified site-device association.
-- Map, asset, SDK client, and Mist Edge selectors MUST use their existing SDK methods and the same complete-pagination contract when the method returns paged data.
+- Site discovery MUST use `mistapi.api.v1.orgs.sites.listOrgSites` with the validated runtime `limit` and complete SDK page traversal.
+- Device discovery MUST use `mistapi.api.v1.sites.devices.listSiteDevices` with `type="all"`, the validated runtime `limit` where accepted, and complete SDK page traversal.
+- Existing client suggestions MUST use `mistapi.api.v1.sites.wired_clients.searchSiteWiredClients` with complete page or cursor traversal and verified site-device association.
+- Map, asset, SDK client, and Mist Edge selectors MUST use their existing SDK methods and complete SDK page or cursor traversal when the method returns paged data.
 - The owned WebSocket transport MUST continue to use catalog-defined channel paths and Mist SDK utility triggers. The SDK utility path supports one device per trigger, so the batch must keep a separate target identity for each trigger and result.
 - Contract tests MUST prove that each SDK method uses the authenticated session, requests the maximum supported page size, reads all pages, preserves each result identity, reports a failed page, and redacts secrets. Tests MUST prove that the existing owned WebSocket transport preserves first output and split control sequences.
 
@@ -134,6 +140,8 @@ An operator chooses combined output, target folders, or both. The operator can d
 - **SC-005**: A target list that spans multiple API pages produces the same complete target set as a single-page fixture.
 - **SC-006**: The portal writes no result file outside `data/` and includes all target results in the selected output layout.
 - **SC-007**: The portal stops queued work and requests termination of active work after one batch cancellation.
+- **SC-008**: The preview shows the 1000-target cap, concurrency, shell limits, and 64 MiB output cap. The portal rejects an over-limit request without truncation.
+- **SC-009**: A channel batch uses one transport connection and concurrency one. Utility and shell target concurrency ranges from one through five, with a default of three.
 
 ## Assumptions
 
@@ -141,7 +149,14 @@ An operator chooses combined output, target folders, or both. The operator can d
 - Multi Site supports operations that the existing catalog declares. It does not expose arbitrary REST paths or undeclared device commands.
 - The selected operation's metadata is the source of truth for target requirements, device family, client selector, output type, and safety class.
 - A batch counts as one public live session. Its target work uses the existing live session limit and a separate bounded target concurrency limit.
-- A remote shell batch requires the existing shell feature lock and an explicit confirmation that binds to the exact target set.
+- A channel batch uses one owned connection for its selected paths. Utility and shell work use bounded per-target executions.
+- A remote shell preview accepts a finite command list before start, requires the existing shell feature lock, and binds confirmation to the operation, commands, and exact target set.
+- The Single Site tab retains the current repeatable channel behavior, including its ten-path limit. Multi Site channel batches use their own target validation.
+- The preview resolves an all-device selection to explicit identities before the operator confirms it.
+- The batch runs the previewed list against each confirmed device with bounded concurrency.
+- The batch captures output per device and closes each shell after output collection or a 30-second deadline.
+- The existing Single Site interactive shell remains unchanged.
+- User-facing device labels come only from catalog families. The current families are access point, EX switch, SRX gateway, Session Smart router, and Mist Edge. Plain MX routers are not assumed when the catalog does not declare them.
 - Results remain available with the batch session and use the existing `data/` output boundary.
 - Live testing may use the Morrison House Oregon site for read-only operations such as `show route`, `show arp`, and Virtual Chassis statistics.
 - Tests use mocked SDK responses and do not require a production Mist credential.
