@@ -3,6 +3,7 @@
 import pytest
 
 from src.interfaces.portals.wan_performance.collection.snapshot_records import SnapshotRecords
+from src.interfaces.portals.wan_performance.integration.record_codec import RecordCodec
 
 
 def snapshot():
@@ -48,6 +49,16 @@ def test_remote_peer_ports_have_distinct_path_keys():
     second = snapshot()
     second["peers"][0]["peer_port_id"] = "ge-0/0/2"
     assert SnapshotRecords.build(first)[1].natural_key != SnapshotRecords.build(second)[1].natural_key
+
+
+def test_peer_history_codec_preserves_remote_port_identity():
+    """Keep each peer path's remote port in durable history serialization."""
+    record = SnapshotRecords.build(snapshot())[1]
+
+    restored = RecordCodec.decode(RecordCodec.encode(record))
+
+    assert restored == record
+    assert restored.identity.peer_port_id == "ge-0/0/1"
 
 
 def test_cross_org_row_is_rejected():

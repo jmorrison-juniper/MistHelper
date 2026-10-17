@@ -156,3 +156,122 @@ def test_port_history_refresh_writes_before_return_without_replacing_snapshot():
     assert store.acquire.return_value.check.call_count == 1
     history.upsert.assert_called_once_with(())
     store.publish.assert_not_called()
+
+
+def test_peer_history_refresh_uses_cached_path_and_shared_admission():
+    """Collect and persist one peer series only for a validated cached path."""
+    from datetime import UTC, datetime, timedelta
+
+    from src.interfaces.portals.wan_performance.collection.snapshot_records import SnapshotRecords
+    from src.interfaces.portals.wan_performance.domain.measurement import HourlyMeasurement, MetricMeasurement
+
+    snapshot = {
+        "org_id": "org-one",
+        "provenance": "live",
+        "collected_at_utc": "2024-01-01T12:34:00+00:00",
+        "ports": [],
+        "peers": [
+            {
+                "org_id": "org-one",
+                "site_id": "site-one",
+                "mac": "aabbccddeeff",
+                "port_id": "ge-0/0/0",
+                "peer_site_id": "site-two",
+                "peer_port_id": "ge-0/0/1",
+                "peer_mac": "11:22:33:44:55:66",
+                "type": "ipsec",
+            }
+        ],
+    }
+    store, history = MagicMock(), MagicMock()
+    store.cached.return_value = snapshot
+    target = SnapshotRecords.build(snapshot)[0].identity
+    hour = datetime(2024, 1, 1, 12, tzinfo=UTC)
+    sample = HourlyMeasurement(
+        target,
+        hour,
+        hour + timedelta(minutes=10),
+        {
+            "loss": MetricMeasurement(0.25, "%"),
+            "latency": MetricMeasurement(33.3, "ms"),
+            "jitter": MetricMeasurement(4.5, "ms"),
+            "mos": MetricMeasurement(4.2, "score"),
+        },
+        "live",
+    )
+    with patch(
+        "src.interfaces.portals.wan_performance.collection.live_service.PeerQualityInsights.collect",
+        return_value=(sample,),
+    ) as collect:
+        count = LiveService(MagicMock(), "org-one", store, history).refresh_peer(target)
+
+    assert count == 1
+    store.acquire.assert_called_once_with("org-one")
+    collect.assert_called_once_with(target)
+    store.acquire.return_value.check.assert_called_once_with()
+    history.upsert.assert_called_once_with((sample,))
+    store.publish.assert_not_called()
+
+
+def test_peer_history_refresh_rejects_uncached_path_before_admission():
+    """Refuse peer identifiers that do not match the selected cached snapshot."""
+    from src.interfaces.portals.wan_performance.collection.snapshot_records import SnapshotRecords
+
+    snapshot = {
+        "org_id": "org-one",
+        "provenance": "live",
+        "collected_at_utc": "2024-01-01T12:34:00+00:00",
+        "ports": [],
+        "peers": [],
+    }
+    store = MagicMock()
+    store.cached.return_value = snapshot
+    target = SnapshotRecords.build(
+        {
+            **snapshot,
+            "peers": [
+                {
+                    "org_id": "org-one",
+                    "site_id": "site-one",
+                    "mac": "aabbccddeeff",
+                    "port_id": "ge-0/0/0",
+                    "peer_site_id": "site-two",
+                    "peer_port_id": "ge-0/0/1",
+                    "peer_mac": "11:22:33:44:55:66",
+                    "type": "ipsec",
+                }
+            ],
+        }
+    )[0].identity
+    with patch("src.interfaces.portals.wan_performance.collection.live_service.PeerQualityInsights.collect") as collect:
+        with pytest.raises(ValueError, match="absent from the cached organization"):
+            LiveService(MagicMock(), "org-one", store, MagicMock()).refresh_peer(target)
+    store.acquire.assert_not_called()
+    collect.assert_not_called()
+
+
+def test_peer_history_refresh_stops_when_cached_snapshot_is_unavailable():
+    """Do not query or write peer history when Redis cannot provide the path identity."""
+    store, history = MagicMock(), MagicMock()
+    store.cached.side_effect = ConnectionError("cache unavailable")
+    from src.interfaces.portals.wan_performance.domain.identity import (
+        GatewayIdentity,
+        PeerPathIdentity,
+        SiteIdentity,
+    )
+
+    target = PeerPathIdentity(
+        GatewayIdentity(SiteIdentity("org-one", "site-one"), "aabbccddeeff"),
+        "ge-0/0/0",
+        "ge-0/0/1",
+        "11:22:33:44:55:66",
+        "path-key-1",
+    )
+
+    with patch("src.interfaces.portals.wan_performance.collection.live_service.PeerQualityInsights.collect") as collect:
+        with pytest.raises(ConnectionError, match="cache unavailable"):
+            LiveService(MagicMock(), "org-one", store, history).refresh_peer(target)
+
+    store.acquire.assert_not_called()
+    collect.assert_not_called()
+    history.upsert.assert_not_called()

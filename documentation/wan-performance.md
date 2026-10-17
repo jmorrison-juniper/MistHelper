@@ -234,6 +234,13 @@ The selected application store retains these port rate, utilization, link-health
 Natural-key upserts replace an existing row for the same port and UTC hour.
 The record derives utilization from the cached Mbps speed and six aligned rate samples.
 It does not request earlier rate windows or promise complete 13-month coverage.
+The peer detail has a separate CSRF-protected refresh for one cached peer path.
+It sends the source `vpn_peer-metrics` request through the existing admitted Mist session.
+The request includes the peer MAC, local port, remote port, one completed UTC hour, and a two-row cap.
+The collector stores only timestamped loss, latency, jitter, and MOS rows returned for that exact path.
+It uses `APISession.mist_get` because the installed generated wrapper does not accept both peer filters.
+The collector checks response bounds, timestamps, interval, and pagination before storage.
+Mocked response tests cover the source-shaped rows. Live peer mapping remains unverified because the bounded probe returned no peer rows.
 This read window is not a retention period.
 WAN code does not delete application history or change existing TimeSeries retention.
 Unknown values and missing hours never become healthy observations.
@@ -263,7 +270,10 @@ Average loss, jitter, and latency do not retain the source raw quality samples.
 The detail query spans thirteen calendar months in the selected MistHelper history store.
 It reads records that the application already retained and does not backfill missing records.
 The history horizon does not prove complete 13-month availability or hourly coverage.
-No verified source contract establishes historical VPN metrics for each peer path.
+The source `data_provider.py` calls `api_client.get_vpn_peer_metrics_timeseries` for peer detail.
+The source `detail_data.py` passes site, device, peer MAC, start, and end to that provider.
+The source `mist_client.py` requests `vpn_peer-metrics` with peer MAC, local port, remote port, interval, start, and end.
+The source `app.py` wires the returned loss, latency, jitter, and MOS series to the peer detail chart.
 Gateway insights do supply timestamped samples within each catalog metric's supported `max_age`.
 The gateway insight operation also accepts `port_id` for a selected interface.
 The existing MistHelper WAN Dashboard reads `wan_link_health` through `getSiteInsightMetricsForDevice`.
@@ -286,27 +296,29 @@ The public `VpnPeersStatsExample` has no measurement timestamp either.
 Peer observation time does not establish the sample time of each metric.
 The existing exporter primary-key strategy names `timestamp`, `from_device`, and `to_device`.
 Those application fields do not establish a source response contract.
-No verified response establishes historical VPN samples for normalization into source hours.
+The source peer method defines the requested time-series fields, but the bundled API schema omits its response contract.
 The source `QualityCollector.get_wan_edge_stats` reads `wan_interfaces` from `getSiteDeviceStats`.
 It calculates gateway WAN-interface p95 from `loss_samples`, `jitter_samples`, and `latency_samples`.
 It falls back to scalar loss, jitter, and latency fields when those sample arrays are absent.
-This quality data belongs to gateway WAN interfaces, not to a selected VPN peer path.
-The source `vpn_peer.py` page has gauge and chart placeholders without data callbacks.
-It does not implement peer-specific quality history or peer raw-sample p95.
+This gateway-wide WAN-interface quality series differs from the peer-specific detail chart.
 The observed p95 uses the source index rule on retained WAN observations.
 MistHelper retains one observation per identity and hour, not every raw quality sample.
 The raw utilization p95 uses the source index rule on the six 10-minute values.
 The quality p95 still summarizes retained hourly averages.
 The bounded event page cap can leave an hour incomplete.
-The source `TODO.md` explicitly describes current VPN statistics as point-in-time data.
-Its historical VPN method, storage, and dashboard tasks remain unchecked.
 The bundled OpenAPI defines a generic device-insight operation with a metric path parameter.
-It does not verify the proposed VPN metric name, per-peer filters, or peer-series mapping.
-The generic operation alone does not establish VPN metric timestamps.
-The insight response does not define how multiple requested metric names map to its single result sequence.
+Its response schema pairs string `rt` timestamps with numeric `results` values.
+It does not list `vpn_peer-metrics`, the peer filters, or source-shaped timestamped metric rows.
+The installed `getSiteInsightMetricsForDevice` wrapper also lacks `peer_mac` and `peer_port_id` arguments.
+The migration therefore uses `APISession.mist_get` through the shared admitted Mist session.
+Its query carries the exact source metric name and peer, local-port, and remote-port filters.
+The source wrapper expects `results` rows with timestamp, loss, latency, jitter, and MOS fields.
+Mocked tests verify that source-shaped request and response contract.
+The generic OpenAPI schema differs from the source contract, and a bounded one-hour query returned no peer rows.
+Live response mapping therefore remains unverified.
 Gateway refresh supports any selected organization gateway through exact filtered discovery.
 The cached gateway list reflects bounded port and peer pages, not a complete organization inventory.
-Complete organization-wide gateway history and historical VPN coverage remain unimplemented.
+Complete organization-wide gateway history and VPN history beyond individually refreshed hours remain unimplemented.
 The source documentation and implementations disagree about some metric and missing-data behavior.
 The 13-month history view does not backfill missing hours or restore data that Mist no longer retains.
 

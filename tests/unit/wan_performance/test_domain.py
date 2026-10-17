@@ -50,17 +50,27 @@ def test_peer_identity_keeps_tunnel_paths_separate() -> None:
     peer = PeerPathIdentity(  # Build a path with an explicit opaque tunnel identity.
         gateway=circuit.gateway,
         port_name=circuit.port_name,
+        peer_port_id="ge-0/0/1",
         peer_mac="11:22:33:44:55:66",
         tunnel_identity="synthetic-tunnel-1",
     )
     second_peer = PeerPathIdentity(  # Build a second path without merging its tunnel identity.
         gateway=circuit.gateway,
         port_name=circuit.port_name,
+        peer_port_id="ge-0/0/1",
         peer_mac="11:22:33:44:55:66",
         tunnel_identity="synthetic-tunnel-2",
     )
+    remote_port_peer = PeerPathIdentity(  # Keep the remote port in the stored natural key.
+        gateway=circuit.gateway,
+        port_name=circuit.port_name,
+        peer_port_id="ge-0/0/2",
+        peer_mac="11:22:33:44:55:66",
+        tunnel_identity="synthetic-tunnel-1",
+    )
 
     assert peer.natural_key != second_peer.natural_key  # Keep separate tunnels distinct.
+    assert peer.natural_key != remote_port_peer.natural_key  # Keep distinct remote ports separate.
     assert peer.to_dict()["peer_mac"] == "11:22:33:44:55:66"  # Preserve the peer identifier.
 
 

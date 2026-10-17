@@ -4,9 +4,15 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
+from src.interfaces.portals.wan_performance.collection.peer_insights import PeerQualityInsights
 from src.interfaces.portals.wan_performance.collection.snapshot_client import GatewayInsights, SnapshotClient
 from src.interfaces.portals.wan_performance.collection.snapshot_records import SnapshotRecords
-from src.interfaces.portals.wan_performance.domain.identity import CircuitIdentity, GatewayIdentity, IdentityValidator
+from src.interfaces.portals.wan_performance.domain.identity import (
+    CircuitIdentity,
+    GatewayIdentity,
+    IdentityValidator,
+    PeerPathIdentity,
+)
 from src.interfaces.portals.wan_performance.integration.history_repository import HistoryRepository
 from src.interfaces.portals.wan_performance.integration.refresh_store import RefreshStore
 
@@ -64,6 +70,22 @@ class LiveService:
         lease.check()
         self.history.upsert(records)
         logger.debug("Persisted %d selected-port insight records without snapshot publication.", len(records))
+        return len(records)
+
+    def refresh_peer(self, target: PeerPathIdentity) -> int:
+        """Persist one selected peer quality hour without replacing the snapshot."""
+        if self.history is None:
+            raise ConnectionError("History is unavailable. Peer refresh requires the selected durable store.")
+        if target.gateway.site.org_id != self.org_id:
+            raise ValueError("The selected peer organization does not match the portal.")
+        snapshot = self.store.cached(self.org_id)
+        if snapshot is None or target not in {record.identity for record in SnapshotRecords.build(snapshot)}:
+            raise ValueError("The selected peer path is absent from the cached organization.")
+        lease = self.store.acquire(self.org_id)
+        records = PeerQualityInsights(self.session, lease).collect(target)
+        lease.check()
+        self.history.upsert(records)
+        logger.debug("Persisted %d selected peer quality records.", len(records))
         return len(records)
 
     def _check_port(self, target: CircuitIdentity) -> dict[str, object]:

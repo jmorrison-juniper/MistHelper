@@ -130,6 +130,7 @@ class OfflinePreviewFactory:
         peer_path = PeerPathIdentity(  # Give the sample VPN path a distinct peer and tunnel identity.
             gateway=gateway,
             port_name=circuit.port_name,
+            peer_port_id="ge-0/0/2",
             peer_mac="11:22:33:44:55:66",
             tunnel_identity="synthetic-tunnel-4200",
         )
