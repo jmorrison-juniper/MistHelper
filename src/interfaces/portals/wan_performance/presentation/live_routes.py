@@ -232,3 +232,37 @@ def refresh_port() -> tuple[str, int] | Response:
             port_name=target.port_name,
         )
     )
+
+
+@live_bp.post("/refresh-peer")
+def refresh_peer() -> tuple[str, int] | Response:
+    """Collect one selected peer quality hour through portal and shared API controls."""
+    try:
+        service = LivePages.service()
+        gateway = LivePages.refresh_target(service.org_id)
+        if gateway is None:
+            raise ValueError("Peer history refresh requires a site and gateway.")
+        target = PeerPathIdentity(
+            gateway,
+            request.form.get("port_name", ""),
+            request.form.get("peer_port_id", ""),
+            request.form.get("peer_mac", ""),
+            request.form.get("tunnel_identity", ""),
+        )
+        service.refresh_peer(target)
+    except STORE_ERRORS:
+        logger.exception("The operator peer history refresh failed.")
+        return (
+            LivePages.render(
+                "overview", error="Peer history refresh failed. Check the selected path, quota, and store."
+            ),
+            503,
+        )
+    return redirect(
+        url_for(
+            "wan_performance.live.peer",
+            site_id=target.gateway.site.site_id,
+            peer_mac=target.peer_mac,
+            path_key=target.tunnel_identity,
+        )
+    )

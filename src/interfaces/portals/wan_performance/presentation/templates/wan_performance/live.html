@@ -42,6 +42,21 @@
             It does not replace the current snapshot or claim complete historical coverage.</p>
     </form>
     {% endif %}
+    {% if kind == "peer" and records|length == 1 and records[0].identity.peer_mac is defined %}
+    {% set peer = records[0].identity %}
+    <form class="mt-3" method="post" action="{{ url_for('wan_performance.live.refresh_peer') }}">
+        {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
+        <input type="hidden" name="gateway_id" value="{{ peer.gateway.gateway_id }}">
+        <input type="hidden" name="site_id" value="{{ peer.gateway.site.site_id }}">
+        <input type="hidden" name="port_name" value="{{ peer.port_name }}">
+        <input type="hidden" name="peer_port_id" value="{{ peer.peer_port_id }}">
+        <input type="hidden" name="peer_mac" value="{{ peer.peer_mac }}">
+        <input type="hidden" name="tunnel_identity" value="{{ peer.tunnel_identity }}">
+        <button class="btn btn-secondary" type="submit" data-testid="wan-live-peer-history-refresh">Collect selected peer quality hour</button>
+        <p>This request reads at most two hourly source samples for the selected peer path.
+            It uses shared API admission and does not replace the current snapshot.</p>
+    </form>
+    {% endif %}
     <p>No automatic refresh runs. Overview refresh permits two SDK requests. Selected gateway refresh permits at most six.
         One refresh per organization is permitted every five minutes.
         The common session transport also accounts for normal, paginated, and fast-mode API attempts.</p>
