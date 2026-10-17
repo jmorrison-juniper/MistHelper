@@ -13,6 +13,12 @@ from types import SimpleNamespace  # Return a checked request with a key attribu
 import pytest  # Assert contract errors from service calls.
 from flask import Flask  # Build small app instances for the service tests.
 
+from src.mist.realtime.websocket_streams.catalog.model import (
+    FieldKind,
+    FieldSpec,
+    Safety,
+    UtilityDefinition,
+)  # Use production catalog records in eligibility tests.
 from src.mist.realtime.websocket_streams.intake.fields.error import (
     StreamRequestError,
 )  # Not-ready errors use this type.
@@ -31,6 +37,9 @@ from src.mist.realtime.websocket_streams.web.services.assembly.collaborators imp
 from src.mist.realtime.websocket_streams.web.services.assembly.factory import (
     WebSocketServiceFactory,
 )  # Build test bundles.
+from src.mist.realtime.websocket_streams.web.services.pickers.related import (
+    BatchTargetPickerService,
+)  # Test catalog-scoped target eligibility.
 from src.mist.realtime.websocket_streams.web.services.registry import (
     WebSocketServiceRegistry,
 )  # Store and stop app bundles.
@@ -227,7 +236,9 @@ def test_for_app_builds_not_ready_service_without_credentials() -> None:
     service = WebSocketServiceRegistry.for_app(app)  # Build the app-scoped service.
     catalog = service.catalog.payload()  # The catalog route can still answer.
     listed = service.sessions.lifecycle.list()  # The session list can still answer.
-    response = app.test_client().get("/api/websockets/batches/sites")  # Request the additive site picker.
+    response = app.test_client().get(
+        "/api/websockets/batches/sites?kind=channel&key=site.stats.devices"
+    )  # Request the additive site picker.
     with pytest.raises(StreamRequestError) as error:  # A start must refuse when not ready.
         service.sessions.lifecycle.start({"kind": "channel"})  # Attempt a start.
     service.sessions.lifecycle.shutdown()  # Shutdown the empty manager safely.
@@ -258,3 +269,58 @@ def test_stop_for_app_without_service_is_safe() -> None:
     app = Flask(__name__)  # Build a small Flask app.
     WebSocketServiceRegistry.stop_for_app(app)  # Stop without a configured service.
     assert WebSocketServiceRegistry.CONFIG_KEY not in app.config  # No service was created.
+
+
+def test_batch_target_picker_filters_families_and_rejects_foreign_sites() -> None:
+    """Catalog family and full organization membership constrain target rows."""
+    site_id = "11111111-2222-3333-4444-555555555555"  # Keep one site in the fake organization.
+    foreign_site_id = "22222222-3333-4444-5555-666666666666"  # Keep one site outside the fake organization.
+    site_field = FieldSpec("site_id", "Site", FieldKind.UUID, required=True, picker="sites")
+    device_field = FieldSpec("device_id", "Device", FieldKind.UUID, required=True, picker="devices")
+    definition = UtilityDefinition(
+        "ex.retrieveRoutes",
+        "ex",
+        "retrieveRoutes",
+        "Routes",
+        "Read routes.",
+        (),
+        Safety.READ,
+        "lines",
+        (site_field, device_field),
+    )  # Restrict the target list to catalog-approved EX devices.
+    calls: list[str] = []  # Prove foreign site rejection occurs before device discovery.
+    picker = SimpleNamespace(
+        sites=lambda: {"rows": [{"id": site_id, "label": "Site"}]},
+        devices=lambda requested_site: (
+            calls.append(requested_site)
+            or {
+                "rows": [
+                    {"id": "switch", "label": "Switch", "family": "ex"},
+                    {"id": "gateway", "label": "Gateway", "family": "srx"},
+                ]
+            }
+        ),
+    )  # Supply complete fake site and device rows.
+    catalog = SimpleNamespace(find=lambda _kind, _key: definition)  # Resolve only the fixed operation.
+    service = BatchTargetPickerService(picker, catalog, None)  # Build the ready target service.
+    result = service.targets(site_id, "utility", "ex.retrieveRoutes", {})  # Discover eligible devices.
+    assert [row["id"] for row in result["rows"]] == ["switch"]  # Keep only the catalog family.
+    assert result["excluded"] == {"incompatible_family": 1}  # Report excluded families explicitly.
+    with pytest.raises(StreamRequestError) as error:  # Reject a foreign site before reading devices.
+        service.targets(foreign_site_id, "utility", "ex.retrieveRoutes", {})  # Request the other site.
+    assert error.value.code == "bad_request"  # Preserve the safe scope error.
+    assert calls == [site_id]  # Do not query device rows for a foreign site.
+
+
+def test_batch_target_route_rejects_unknown_query_fields() -> None:
+    """The Multi Site target route rejects unrecognized query parameters."""
+    app = Flask(__name__)  # Build a small Flask app.
+    service, _manager = make_service()  # Build a ready service with fake collaborators.
+    app.config[WebSocketServiceRegistry.CONFIG_KEY] = service  # Inject the fake service.
+    app.register_blueprint(WebSocketBlueprint.create())  # Register the target discovery route.
+    response = app.test_client().get(
+        "/api/websockets/batches/sites/11111111-2222-3333-4444-555555555555/targets"
+        "?kind=channel&key=site.stats.devices&unexpected=value"
+    )  # Send an unsupported field through Flask.
+    assert response.status_code == 400  # Reject unknown query keys.
+    assert response.get_json()["code"] == "bad_request"  # Preserve the route error contract.

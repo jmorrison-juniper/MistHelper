@@ -37,8 +37,8 @@
 
 ### Implementation for User Story 1
 
-- [ ] T009 [US1] Add accessible Single Site and Multi Site tab panels while preserving the current Single Site markup and test IDs in `src/mist/realtime/websocket_streams/web/templates/websockets_page.html`.
-- [ ] T010 [US1] Keep separate tab state and add tab navigation without changing Single Site request construction, the 10-path limit, or terminal behavior in `src/mist/realtime/websocket_streams/web/static/websockets.js`.
+- [x] T009 [US1] Add accessible Single Site and Multi Site tab panels while preserving the current Single Site markup and test IDs in `src/mist/realtime/websocket_streams/web/templates/websockets_page.html`.
+- [x] T010 [US1] Keep separate tab state and add tab navigation without changing Single Site request construction, the 10-path limit, or terminal behavior in `src/mist/realtime/websocket_streams/web/static/websockets.js`.
 
 ## Phase 4: User Story 2 - Select organization targets (Priority: P1)
 
@@ -54,8 +54,8 @@
 
 ### Implementation for User Story 2
 
-- [ ] T014 [US2] Extend SDK-backed discovery and response validation in `src/mist/realtime/websocket_streams/intake/pickers/devices.py`, `src/mist/realtime/websocket_streams/intake/pickers/resources.py`, and `src/mist/realtime/websocket_streams/intake/pickers/service.py`; fetch every supported page, retain verified associations, and report a failed page instead of an empty list.
-- [ ] T015 [US2] Add the Multi Site sites and target picker routes through existing route files in `src/mist/realtime/websocket_streams/web/blueprint/routes/pickers.py` and `src/mist/realtime/websocket_streams/web/blueprint/registry.py`.
+- [x] T014 [US2] Extend SDK-backed discovery and response validation in `src/mist/realtime/websocket_streams/intake/pickers/devices.py`, `src/mist/realtime/websocket_streams/intake/pickers/resources.py`, and `src/mist/realtime/websocket_streams/intake/pickers/service.py`; fetch every supported page, retain verified associations, and report a failed page instead of an empty list.
+- [x] T015 [US2] Add the Multi Site sites and target picker routes through existing route files in `src/mist/realtime/websocket_streams/web/blueprint/routes/pickers.py` and `src/mist/realtime/websocket_streams/web/blueprint/registry.py`.
 - [ ] T016 [US2] Add catalog-derived target controls for all/selected sites and supported resources, with site and device identity, family filtering, revision checks, and distinct discovery errors in `src/mist/realtime/websocket_streams/web/templates/websockets_page.html` and `src/mist/realtime/websocket_streams/web/static/websockets.js`.
 - [ ] T017 [US2] Exercise target selection, stale-response rejection, and empty/error states in `tests/e2e/websockets_tab/test_websockets_page.py`.
 
