@@ -45,29 +45,70 @@ def wan_browser_portal(client: FlaskClient) -> Iterator[str]:
         logger.debug("The offline WAN browser server stopped")
 
 
+def _assert_preview_layout(page: Page, view: str) -> None:
+    """Check that each synthetic route keeps its screenshot page structure."""
+    selectors = {
+        "wan-overview": ("wan-overview-kpis", "wan-overview-tables", "wan-overview-charts"),
+        "wan-gateway": ("wan-gateway-kpis", "wan-gateway-tables", "wan-gateway-charts"),
+        "wan-port": (
+            "wan-port-kpis",
+            "wan-port-gauges",
+            "wan-port-current-statistics",
+            "wan-port-configuration",
+            "wan-port-charts",
+            "wan-port-packet-statistics",
+            "wan-port-error-counters",
+        ),
+        "wan-peer": (
+            "wan-peer-kpis",
+            "wan-peer-gauges",
+            "wan-peer-charts",
+            "wan-peer-details",
+            "wan-peer-statistics",
+        ),
+    }
+    expect(page.get_by_test_id(view)).to_be_visible()
+    expect(page.get_by_test_id("wan-data-state")).to_contain_text("Synthetic offline preview")
+    for selector in selectors[view]:
+        expect(page.get_by_test_id(selector)).to_be_visible()
+
+
+def _assert_detail_metrics(page: Page, detail: str) -> None:
+    """Check screenshot fixture values on the selected detail page."""
+    expected = (
+        {"wan-port-kpis": "125.0", "wan-port-gauges": "12.5", "wan-calendar-summaries": "1 of 744"}
+        if detail == "port"
+        else {"wan-peer-kpis": "33.3", "wan-peer-gauges": "0.25"}
+    )
+    for selector, value in expected.items():
+        expect(page.get_by_test_id(selector)).to_contain_text(value)
+
+
 @pytest.mark.parametrize(("detail", "selector"), [("port", "wan-port"), ("peer", "wan-peer")])
-def test_browser_follows_the_offline_wan_journeys(
+def test_browser_follows_live_and_synthetic_wan_journeys(
     page: Page, wan_browser_portal: str, detail: str, selector: str, pytestconfig: pytest.Config
 ) -> None:
     """Follow real portal links through each synthetic detail view and back."""
     logger.info("Starting the offline WAN browser journey for %s", detail)
     page.set_default_timeout(15_000)
+    page.set_viewport_size({"width": 1440, "height": 1100})
     response = page.goto(f"{wan_browser_portal}/", wait_until="domcontentloaded", timeout=15_000)
     if response is None:
         raise AssertionError("The portal dashboard returned no browser response.")
     assert response.status == 200, f"The portal dashboard returned HTTP {response.status}."
     page.get_by_test_id("nav-wan-performance").click()
+    expect(page.get_by_test_id("wan-live-overview")).to_be_visible()
+    page.get_by_test_id("wan-offline-link").click()
+    evidence = Path(pytestconfig.rootpath) / "test-artifacts" / "wan-performance"
+    evidence.mkdir(parents=True, exist_ok=True)
     for link, view in (("wan-gateway-link", "wan-overview"), (f"wan-{detail}-link", "wan-gateway")):
-        expect(page.get_by_test_id(view)).to_be_visible()
-        expect(page.get_by_test_id("wan-data-state")).to_contain_text("Synthetic offline preview")
+        _assert_preview_layout(page, view)
+        page.screenshot(path=str(evidence / f"{view}-comparison.png"), full_page=True)
         page.get_by_test_id(link).click()
     expect(page.get_by_test_id(selector)).to_be_visible()
     expect(page.get_by_test_id("wan-data-state")).to_contain_text("Live data is not connected")
-    if detail == "port":
-        expect(page.get_by_test_id("wan-calendar-summaries")).to_contain_text("1 of 744")
-    evidence = Path(pytestconfig.rootpath) / "test-artifacts" / "wan-performance"
-    evidence.mkdir(parents=True, exist_ok=True)
-    page.screenshot(path=str(evidence / f"{detail}-journey.png"), full_page=True)
+    _assert_detail_metrics(page, detail)
+    page.screenshot(path=str(evidence / f"{detail}-comparison.png"), full_page=True)
     page.get_by_test_id("wan-back-link").click()
     expect(page.get_by_test_id("wan-gateway")).to_be_visible()
     page.get_by_test_id("wan-back-link").click()
@@ -75,16 +116,16 @@ def test_browser_follows_the_offline_wan_journeys(
     logger.debug("The offline WAN browser journey for %s returned to the overview", detail)
 
 
-def test_portal_navigation_links_to_the_labeled_wan_preview(client: FlaskClient) -> None:
-    """Expose the synthetic preview through the existing portal navigation."""
+def test_portal_navigation_opens_live_wan_snapshots(client: FlaskClient) -> None:
+    """Open live snapshots first and keep the synthetic preview separate."""
     logger.info("Loading the existing portal dashboard to inspect navigation")
     response = client.get("/")
     page = response.get_data(as_text=True)
     assert response.status_code == 200, f"The portal dashboard returned {response.status_code}."
     assert 'data-testid="nav-wan-performance"' in page, "The portal navigation omitted WAN Performance."
-    assert 'href="/wan-performance/"' in page, "The portal navigation does not open the preview."
-    assert "WAN Performance Preview" in page, "The navigation does not identify the offline preview."
-    logger.debug("The portal navigation exposed the synthetic WAN preview")
+    assert 'href="/wan-performance/live/"' in page, "The portal navigation does not open live snapshots."
+    assert ">WAN Performance</a>" in page, "The navigation does not identify the live portal."
+    logger.debug("The portal navigation exposed live WAN snapshots")
 
 
 @pytest.mark.parametrize(
@@ -125,10 +166,9 @@ def test_overview_shows_verified_fixture_values_and_marks_unknown_metrics(
     logger.info("Checking the synthetic WAN overview metrics")
     response = preview_client.get("/wan-performance/")
     page = response.get_data(as_text=True)
-    assert 'data-testid="wan-utilization"' in page, "The overview omitted utilization."
-    assert "42.5" in page, "The overview omitted the fixture utilization value."
-    assert 'data-testid="wan-congestion"' in page, "The overview omitted its congestion state."
-    assert 'data-testid="wan-availability"' in page, "The overview omitted its availability state."
+    assert 'data-testid="wan-overview-kpis"' in page, "The overview omitted its KPI cards."
+    assert "12.5" in page, "The overview omitted the screenshot fixture utilization value."
+    assert 'data-testid="wan-unknown-metrics"' in page, "The overview omitted its unknown-metric note."
     assert "Not established in offline data" in page, "The overview presented an unverified metric as known."
     assert (
         f'href="/wan-performance/gateway/{GATEWAY_ID}?site_id={SITE_ID}"' in page
@@ -166,8 +206,8 @@ def test_port_route_preserves_an_encoded_slash_and_bandwidth_units(
     page = response.get_data(as_text=True)
     assert response.status_code == 200, f"The encoded port route returned {response.status_code}."
     assert "ge-0/0/1" in page, "The port page changed the interface name."
-    assert "Receive bandwidth" in page, "The port page omitted receive bandwidth."
-    assert "80.0" in page, "The port page omitted its synthetic receive value."
+    assert "RX (Mbps)" in page, "The port page omitted receive bandwidth."
+    assert "125.0" in page, "The port page omitted its synthetic receive value."
     assert "megabits per second" in page, "The port page omitted the bandwidth unit."
     logger.debug("The encoded WAN port route returned %d", response.status_code)
 
@@ -183,8 +223,8 @@ def test_port_calendar_summaries_report_observations_and_missing_hours(
     assert "1 of 24" in page, "The daily view did not expose missing hours."
     assert "1 of 168" in page, "The weekly view did not expose missing hours."
     assert "1 of 744" in page, "The monthly view did not expose missing hours."
-    assert "Equal daily weights" in page, "The calendar view did not disclose source weighting."
-    assert "not a duration-coverage estimate" in page, "The calendar view mislabeled observation coverage."
+    assert "equal weight" in page, "The calendar view did not disclose source weighting."
+    assert "not duration coverage" in page, "The calendar view mislabeled observation coverage."
 
 
 def test_port_calendar_view_handles_missing_synthetic_records(

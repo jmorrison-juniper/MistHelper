@@ -82,8 +82,8 @@
                     {% if config.get("WAN_PERFORMANCE_NAV_ENABLED", false) %}
                     <li class="nav-item">
                         <a class="nav-link {% if request.path.startswith('/wan-performance') %}active{% endif %}"
-                           href="{{ url_for('wan_performance.overview') }}"
-                           data-testid="nav-wan-performance">WAN Performance Preview</a>
+                           href="{{ url_for('wan_performance.live.overview') }}"
+                           data-testid="nav-wan-performance">WAN Performance</a>
                     </li>
                     {% endif %}
                 </ul>
