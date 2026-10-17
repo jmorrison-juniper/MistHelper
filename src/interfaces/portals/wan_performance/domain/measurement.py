@@ -54,6 +54,7 @@ class HourlyMeasurement:
     collected_at_utc: datetime
     metrics: Mapping[str, MetricMeasurement]
     provenance: Literal["live", "synthetic"]
+    is_up_observation: bool | None = None
 
     def __post_init__(self) -> None:
         """Validate time, provenance, and metric names before record use."""
@@ -63,11 +64,17 @@ class HourlyMeasurement:
             raise ValueError("collected_at_utc cannot precede hour_start_utc.")
         if self.provenance not in {"live", "synthetic"}:
             raise ValueError("provenance must be live or synthetic.")
+        self._validate_state()
         if not self.metrics or any(not isinstance(name, str) or not name.strip() for name in self.metrics):
             raise ValueError("metrics must contain named measurements.")
         if any(not isinstance(metric, MetricMeasurement) for metric in self.metrics.values()):
             raise ValueError("each metrics value must be a MetricMeasurement.")
         object.__setattr__(self, "metrics", MappingProxyType(dict(self.metrics)))
+
+    def _validate_state(self) -> None:
+        """Require status evidence to remain an explicit boolean."""
+        if self.is_up_observation is not None and not isinstance(self.is_up_observation, bool):
+            raise ValueError("is_up_observation must be a boolean or None.")
 
     @staticmethod
     def _validate_utc_hour(value: datetime, field_name: str, hour_aligned: bool) -> None:
@@ -90,4 +97,5 @@ class HourlyMeasurement:
             "collected_at_utc": self.collected_at_utc.isoformat(),
             "metrics": {name: metric.to_dict() for name, metric in self.metrics.items()},
             "provenance": self.provenance,
+            "is_up_observation": self.is_up_observation,
         }

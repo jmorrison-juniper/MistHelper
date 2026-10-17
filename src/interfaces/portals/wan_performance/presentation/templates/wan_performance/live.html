@@ -117,6 +117,17 @@
                 {% endfor %}
             </div>
             {% endif %}
+            {% if summary.state_observations %}
+            <div data-testid="wan-live-state-observations">
+                <h4>Observed link-state summary</h4>
+                <p>{{ summary.state_observations.up_hours }} up and {{ summary.state_observations.down_hours }} down
+                    observations of {{ summary.state_observations.valid_hours }} known states across
+                    {{ summary.state_observations.expected_hours }} expected hours.
+                    Observed up percentage: {{ summary.state_observations.observed_up_percent }}%.
+                    Observed changes between adjacent hours: {{ summary.state_observations.observed_transitions }}.
+                    This is sampled state, not measured availability or a complete flap count.</p>
+            </div>
+            {% endif %}
         {% else %}{% if not history_error %}<p>No persisted observations exist in the previous thirteen calendar months.</p>{% endif %}{% endfor %}
     </details>
     {% endif %}
