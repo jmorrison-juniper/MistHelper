@@ -38,6 +38,29 @@ class StateObservationSummary:
 
 
 @dataclass(frozen=True, slots=True)
+class LinkEventSummary:
+    """Aggregate source link-event minutes and transitions with explicit coverage."""
+
+    complete_hours: int
+    known_hours: int
+    expected_hours: int
+    up_minutes: float
+    down_minutes: float
+    flap_count: float
+    observed_up_percent: float | None
+
+
+@dataclass(frozen=True, slots=True)
+class CongestionDurationSummary:
+    """Aggregate complete sample-based threshold durations without filling gaps."""
+
+    threshold_percent: int
+    complete_hours: int
+    expected_hours: int
+    minutes: float
+
+
+@dataclass(frozen=True, slots=True)
 class PeriodSummary:
     """Keep period metrics, record coverage, and provenance explicit."""
 
@@ -47,6 +70,8 @@ class PeriodSummary:
     provenance: str
     threshold_observations: tuple[ThresholdObservation, ...] = ()
     state_observations: StateObservationSummary | None = None
+    link_event_summary: LinkEventSummary | None = None
+    congestion_durations: tuple[CongestionDurationSummary, ...] = ()
 
     def __post_init__(self) -> None:
         """Prevent a consumer from changing metrics after calculation."""
@@ -90,6 +115,8 @@ class CalendarSummaries:
                 summary,
                 threshold_observations=ThresholdObservations.build(selected, summary.period),
                 state_observations=StateObservations.build(selected, summary.period),
+                link_event_summary=LinkEventSummaries.build(selected, summary.period),
+                congestion_durations=CongestionDurations.build(selected, summary.period),
             )
             for summary in results
         )
@@ -156,7 +183,9 @@ class CalendarSummaries:
         means = [value[0] for value in values if value[0] is not None]
         maxima = [value[1] for value in values if value[1] is not None]
         percentiles = [value[2] for value in values if value[2] is not None]
-        return cls._values(means, maxima, percentiles, name, values[0][3])
+        merged = cls._values(means, maxima, percentiles, name, values[0][3])
+        source_p95 = round(max(percentiles), 4 if "loss" in name else 2) if percentiles else None
+        return merged[0], merged[1], source_p95, merged[3]
 
     @classmethod
     def _observed_metrics(
@@ -279,3 +308,104 @@ class StateObservations:
                 count += 1
             previous = record if current is not None else None
         return count
+
+
+class LinkEventSummaries:
+    """Aggregate event-derived availability and flaps over retained port hours."""
+
+    @staticmethod
+    def build(records: tuple[HourlyMeasurement, ...], period: CalendarPeriod) -> LinkEventSummary | None:
+        """Sum only complete event searches and retain unknown minutes as uncovered."""
+        matching = tuple(record for record in records if period.contains(record.hour_start_utc))
+        if not LinkEventSummaries._has_events(matching):
+            return None
+        complete = LinkEventSummaries._complete(matching)
+        known = LinkEventSummaries._known(complete)
+        up = LinkEventSummaries._sum(known, "up_minutes")
+        down = LinkEventSummaries._sum(known, "down_minutes")
+        flaps = LinkEventSummaries._flaps(complete)
+        observed = LinkEventSummaries._observed_percent(up, down)
+        return LinkEventSummary(len(complete), len(known), period.expected_hours, up, down, flaps, observed)
+
+    @staticmethod
+    def _has_events(records: tuple[HourlyMeasurement, ...]) -> bool:
+        """Check whether the period contains any event-search result."""
+        return any("flap_count" in record.metrics for record in records)
+
+    @staticmethod
+    def _complete(records: tuple[HourlyMeasurement, ...]) -> tuple[HourlyMeasurement, ...]:
+        """Keep hours with a completed event search, including known zero-event hours."""
+        return tuple(record for record in records if record.metrics["flap_count"].value is not None)
+
+    @classmethod
+    def _known(cls, records: tuple[HourlyMeasurement, ...]) -> tuple[HourlyMeasurement, ...]:
+        """Keep hours with both up and down duration measurements."""
+        return tuple(
+            record
+            for record in records
+            if cls._value(record, "up_minutes") is not None and cls._value(record, "down_minutes") is not None
+        )
+
+    @staticmethod
+    def _value(record: HourlyMeasurement, name: str) -> float | None:
+        """Return only explicit status values without replacing unknown minutes with zero."""
+        metric = record.metrics.get(name)
+        return float(metric.value) if metric is not None and metric.value is not None else None
+
+    @classmethod
+    def _sum(cls, records: tuple[HourlyMeasurement, ...], name: str) -> float:
+        """Add known status minutes and exclude incomplete state windows."""
+        return sum(value for record in records if (value := cls._value(record, name)) is not None)
+
+    @staticmethod
+    def _flaps(records: tuple[HourlyMeasurement, ...]) -> float:
+        """Sum the flap counts from completed event searches."""
+        return sum(
+            value for record in records if (value := LinkEventSummaries._value(record, "flap_count")) is not None
+        )
+
+    @staticmethod
+    def _observed_percent(up: float, down: float) -> float | None:
+        """Calculate observed availability only when event durations cover time."""
+        return round(up / (up + down) * 100, 2) if up + down else None
+
+
+class CongestionDurations:
+    """Sum ten-minute utilization occupancy only for complete sample windows."""
+
+    @classmethod
+    def build(
+        cls, records: tuple[HourlyMeasurement, ...], period: CalendarPeriod
+    ) -> tuple[CongestionDurationSummary, ...]:
+        """Report complete hours for each threshold and leave missing hours uncovered."""
+        matching = tuple(record for record in records if period.contains(record.hour_start_utc))
+        return tuple(
+            cls._threshold(matching, period, threshold)
+            for threshold in (70, 80, 90)
+            if any(cls._name(threshold) in record.metrics for record in matching)
+        )
+
+    @classmethod
+    def _threshold(
+        cls, records: tuple[HourlyMeasurement, ...], period: CalendarPeriod, threshold: int
+    ) -> CongestionDurationSummary:
+        """Sum one threshold duration over complete six-sample hours."""
+        name = cls._name(threshold)
+        values = tuple(
+            metric.value
+            for record in records
+            if (metric := record.metrics.get(name)) is not None
+            and metric.value is not None
+            and metric.coverage_fraction == 1.0
+        )
+        return CongestionDurationSummary(
+            threshold,
+            len(values),
+            period.expected_hours,
+            sum(float(value) for value in values),
+        )
+
+    @staticmethod
+    def _name(threshold: int) -> str:
+        """Use one canonical key for persisted threshold-duration metrics."""
+        return f"congestion_minutes_over_{threshold}_pct"

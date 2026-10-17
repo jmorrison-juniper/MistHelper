@@ -148,7 +148,7 @@ def test_point_in_time_utilization_is_visible_without_duration_claims(client, li
     assert "rx_utilization_percent: 70.0 %" in text
     assert "tx_utilization_percent: 80.0 %" in text
     assert "point-in-time" in text
-    assert "Snapshot rates do not establish duration" in text
+    assert "complete 10-minute sample intervals above each threshold" in text
 
 
 def test_peer_current_state_and_uptime_are_distinct_from_availability(client, live_service):
@@ -162,7 +162,7 @@ def test_peer_current_state_and_uptime_are_distinct_from_availability(client, li
     assert "Redundant path: Standby" in text
     assert "Gateway-reported uptime (s): 0" in text
     assert "Last observed (UTC): 2024-01-01T12:34:00+00:00" in text
-    assert "Current status does not establish historical availability" in text
+    assert "Current cached state does not establish availability duration" in text
 
 
 def test_missing_session_is_explicit_unavailable(client):
@@ -417,6 +417,13 @@ def test_selected_port_quality_metrics_render_in_history(client, live_service):
                 ("avg_loss_pct", "%", 0.25),
                 ("avg_jitter_ms", "ms", 4.5),
                 ("avg_latency_ms", "ms", 33.3),
+                ("utilization_pct", "%", 25),
+                ("congestion_minutes_over_70_pct", "min", 20),
+                ("congestion_minutes_over_80_pct", "min", 10),
+                ("congestion_minutes_over_90_pct", "min", 0),
+                ("up_minutes", "min", 50),
+                ("down_minutes", "min", 10),
+                ("flap_count", "count", 2),
             )
         ],
     }
@@ -429,6 +436,8 @@ def test_selected_port_quality_metrics_render_in_history(client, live_service):
     assert "avg_loss_pct: 0.25 %" in text
     assert "avg_jitter_ms: 4.5 ms" in text
     assert "avg_latency_ms: 33.3 ms" in text
+    assert "up_minutes: 50 min" in text
+    assert "congestion_minutes_over_70_pct: 20 min" in text
 
 
 def test_threshold_history_displays_observation_counts_not_duration(client, live_service):

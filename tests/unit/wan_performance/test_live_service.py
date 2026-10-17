@@ -151,7 +151,7 @@ def test_port_history_refresh_writes_before_return_without_replacing_snapshot():
         return_value={"samples": [], "partial": False},
     ) as collect:
         assert LiveService(MagicMock(), "org-one", store, history).refresh_port(target) == 0
-    collect.assert_called_once_with("org-one", target)
+    collect.assert_called_once_with("org-one", target, None, None)
     store.acquire.assert_called_once_with("org-one")
     assert store.acquire.return_value.check.call_count == 1
     history.upsert.assert_called_once_with(())
