@@ -1,73 +1,67 @@
 {% extends "base.html" %}
-{% block title %}WAN Port Preview - {{ config.PORTAL.title }}{% endblock %}
+{% from "wan_performance/_dashboard_components.html" import chart_grid, gauge_grid, kpi_grid, table_panel %}
+{% block title %}WAN Port - {{ config.PORTAL.title }}{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/wan_performance.css') }}">
+{% endblock %}
 
 {% block content %}
-<section class="container-fluid" data-testid="wan-port">
+<section class="container-fluid wan-performance" data-testid="wan-port">
     {% include "wan_performance/_data_state.html" %}
-    <h1>WAN port {{ dashboard.circuit.port_name }}</h1>
-    <p>Gateway {{ dashboard.circuit.gateway.gateway_id }}</p>
-    <p>Site {{ dashboard.circuit.gateway.site.site_id }}</p>
-
-    <section class="row g-3" aria-label="Circuit measurements">
-        {% for metric_name, label in [("utilization", "Utilization"), ("receive_bandwidth", "Receive bandwidth"), ("transmit_bandwidth", "Transmit bandwidth")] %}
-        <div class="col-sm-6 col-xl-4">
-            <article class="portal-card" data-testid="wan-{{ metric_name }}">
-                <h2 class="h6">{{ label }}</h2>
-                {% if circuit_measurement and metric_name in circuit_measurement.metrics %}
-                <p>
-                    {{ circuit_measurement.metrics[metric_name].value }}
-                    {{ circuit_measurement.metrics[metric_name].unit.replace("_", " ") }}
-                </p>
-                {% else %}
-                <p>Not established in offline data</p>
-                {% endif %}
-            </article>
+    <nav class="wan-breadcrumbs" aria-label="Breadcrumb">
+        <a href="{{ url_for('wan_performance.overview') }}">Overview</a><span>&gt;</span>
+        <a href="{{ url_for('wan_performance.gateway', gateway_id=dashboard.circuit.gateway.gateway_id, site_id=dashboard.circuit.gateway.site.site_id) }}">Gateway</a>
+        <span>&gt;</span><strong>Port Details</strong>
+    </nav>
+    <header class="wan-page-heading">
+        <div>
+            <h1>Port: WAN 1</h1>
+            <p>Site: {{ dashboard.site_name }} · Gateway:
+                <a href="{{ url_for('wan_performance.gateway', gateway_id=dashboard.circuit.gateway.gateway_id, site_id=dashboard.circuit.gateway.site.site_id) }}">{{ dashboard.circuit.gateway.gateway_id }}</a>
+            </p>
+            <p>Interface: {{ dashboard.circuit.port_name }}</p>
         </div>
-        {% endfor %}
-    </section>
+        <strong class="text-success">Up</strong>
+    </header>
 
-    <section class="mt-4" data-testid="wan-history">
-        <h2>Example measurement hour</h2>
-        {% if circuit_measurement %}
-        <p>{{ circuit_measurement.hour_start_utc.isoformat() }}</p>
-        {% else %}
-        <p>No synthetic circuit measurement is available.</p>
-        {% endif %}
-    </section>
+    {{ kpi_grid(dashboard.pages["port"].kpis, "wan-port-kpis") }}
+    <div class="wan-port-summary">
+        {{ gauge_grid(dashboard.pages["port"].gauges, "wan-port-gauges") }}
+        {{ table_panel(dashboard.pages["port"].tables[0], "wan-port-current-statistics") }}
+        {{ table_panel(dashboard.pages["port"].tables[1], "wan-port-configuration") }}
+    </div>
+    {{ chart_grid(dashboard.pages["port"].charts, "wan-port-charts") }}
+    <div class="wan-detail-layout">
+        {{ table_panel(dashboard.pages["port"].tables[2], "wan-port-packet-statistics") }}
+        {{ table_panel(dashboard.pages["port"].tables[3], "wan-port-error-counters") }}
+    </div>
+
     <section class="mt-4" data-testid="wan-calendar-summaries">
-        <h2>Synthetic calendar summaries</h2>
-        <p>UTC intervals exclude the end boundary. Observed hours count records, not a duration-coverage estimate.
-           Missing hours do not count as healthy hours.</p>
-        <p>Daily means use available hourly values. Equal daily weights apply to weekly and monthly means.
-           These summaries do not establish availability, congestion duration, or percentiles.</p>
+        <h2>UTC observation summaries</h2>
+        <p class="wan-data-note">Observed hours count retained records, not duration coverage.
+            Missing hours do not count as healthy hours.
+            Weekly and monthly means give each available daily mean equal weight.</p>
+        {% if calendar_summaries %}
         <div class="table-responsive">
-            <table class="table table-sm portal-table">
-                <caption>Synthetic circuit summaries with explicit missing hours</caption>
-                <thead>
-                    <tr><th scope="col">Period</th><th scope="col">UTC start</th><th scope="col">UTC end</th>
-                        <th scope="col">Observed hours</th><th scope="col">Metric</th>
-                        <th scope="col">Mean</th><th scope="col">Maximum</th><th scope="col">Unit</th></tr>
-                </thead>
+            <table class="table table-sm wan-table">
+                <thead><tr><th scope="col">Period</th><th scope="col">Observed hours</th>
+                    <th scope="col">Metric</th><th scope="col">Mean</th><th scope="col">Maximum</th><th scope="col">Unit</th></tr></thead>
                 <tbody>
                     {% for summary in calendar_summaries %}
                     {% for name, values in summary.metrics.items() %}
-                    <tr>
-                        <th scope="row">{{ summary.period.kind }}</th>
-                        <td>{{ summary.period.start.isoformat() }}</td>
-                        <td>{{ summary.period.end.isoformat() }}</td>
-                        <td>{{ summary.observed_hours }} of {{ summary.period.expected_hours }}</td>
-                        <td>{{ name.replace("_", " ") }}</td>
-                        <td>{{ values[0] if values[0] is not none else "No observations" }}</td>
-                        <td>{{ values[1] if values[1] is not none else "No observations" }}</td>
-                        <td>{{ values[2].replace("_", " ") }}</td>
-                    </tr>
+                    <tr><td>{{ summary.period.kind }}</td><td>{{ summary.observed_hours }} of {{ summary.period.expected_hours }}</td>
+                        <td>{{ name.replace("_", " ") }}</td><td>{{ values[0] if values[0] is not none else "No observations" }}</td>
+                        <td>{{ values[1] if values[1] is not none else "No observations" }}</td><td>{{ values[2].replace("_", " ") }}</td></tr>
                     {% endfor %}
                     {% else %}
-                    <tr><td colspan="8">No synthetic circuit history is available.</td></tr>
+                    <tr><td colspan="6">No synthetic circuit history is available.</td></tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
+        {% else %}
+        <p>No synthetic circuit history is available.</p>
+        {% endif %}
     </section>
     <p><a data-testid="wan-back-link"
           href="{{ url_for('wan_performance.gateway', gateway_id=dashboard.circuit.gateway.gateway_id, site_id=dashboard.circuit.gateway.site.site_id) }}">Back to gateway</a></p>

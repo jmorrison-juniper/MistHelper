@@ -27,6 +27,19 @@ def test_offline_dashboard_contains_only_historical_synthetic_records() -> None:
     assert len(dashboard.measurements) == 2  # Require one circuit record and one peer record.
     assert all(record.provenance == "synthetic" for record in dashboard.measurements)  # Block live fixture records.
     assert all(record.hour_start_utc.year < 2026 for record in dashboard.measurements)  # Keep fixture times historical.
+    assert tuple(dashboard.pages) == ("overview", "gateway", "port", "peer")  # Keep all four screenshot pages.
+    assert len(dashboard.pages["overview"].kpis) == 25  # Match the source overview KPI count.
+    assert len(dashboard.pages["gateway"].kpis) == 6  # Match the source gateway KPI count.
+    assert len(dashboard.pages["gateway"].tables) == 2  # Match the source gateway table count.
+    assert len(dashboard.pages["gateway"].charts) == 2  # Match the source gateway chart count.
+    assert len(dashboard.pages["port"].kpis) == 6  # Match the source port KPI count.
+    assert len(dashboard.pages["port"].gauges) == 1  # Match the source port gauge count.
+    assert len(dashboard.pages["peer"].gauges) == 4  # Match the source peer gauge count.
+    assert dashboard.pages["overview"].kpis[12].value == "12.5"  # Match the overview utilization card.
+    assert dashboard.pages["overview"].kpis[21].value == "0"  # Match the overview peer count.
+    assert dashboard.pages["gateway"].tables[0].rows[0][3:5] == ("125.0", "50.0")  # Match gateway bandwidth.
+    assert dashboard.pages["port"].gauges[0].value == "12.5"  # Match the port utilization gauge.
+    assert dashboard.pages["peer"].gauges[0].value == "0.25"  # Match the peer quality gauge.
 
 
 def test_offline_preview_module_has_no_live_service_imports_or_start_calls() -> None:

@@ -1,6 +1,8 @@
 # WAN Performance
 
-Open **WAN Performance Preview** in the existing portal navigation.
+Select **WAN Performance** in the existing portal navigation.
+The tab opens the read-only live overview.
+Select **Open the isolated synthetic preview** to view the four source-shaped sample pages.
 The overview links to the gateway, WAN port, and VPN peer.
 Each detail page has a return link.
 The existing portal access controls protect these pages.
@@ -12,6 +14,8 @@ The preview creates no Mist, database, Redis, or background refresh client.
 Synthetic records do not enter the configured application store.
 The preview does not represent the state of a production network.
 
+The synthetic overview, gateway, WAN-port, and VPN-peer pages follow the source screenshots' layout.
+They show synthetic KPI cards, tables, gauges, and charts without claiming live measurements.
 The WAN port shows one synthetic measurement hour and calendar summaries.
 The periods use UTC days, ISO weeks that start on Monday, and calendar months.
 Each interval includes its start and excludes its end.
@@ -25,6 +29,24 @@ This preserves the source calendar calculation.
 It is not a sample-weighted mean or a duration-weighted mean.
 Maxima use the largest available hourly value.
 The preview does not calculate percentiles, availability, congestion duration, or live utilization.
+
+## Screenshot comparison
+
+Browser tests capture the four integrated pages under `test-artifacts/wan-performance/`.
+The source and integrated captures use a 1440-pixel width and a 1100-pixel viewport.
+The shared MistHelper navigation and synthetic-state banner replace the source connection bar.
+The overview keeps the source two-column order for summary tables and charts.
+The port page adds calendar summaries for the migrated hourly history.
+
+| Page | Source to integrated image size | Visual and data comparison |
+| - | - | - |
+| Overview | 1440 x 2447 to 1440 x 2352 | The 25 KPI cards match. Three tables stack left of the region and distribution charts. Two trend charts, site controls, and site charts follow. Values include 12.5 percent utilization and 1.0 Gbps total bandwidth. |
+| Gateway | 1440 x 1100 to 1440 x 1100 | Six KPI cards, two linked tables, and two charts keep the source order. Values include 125 Mbps receive, 50 Mbps transmit, 0.25 percent loss, 33.3 ms latency, and 4.5 ms jitter. |
+| WAN port | 1440 x 1265 to 1440 x 1749 | Six KPI cards, the utilization gauge, statistics and configuration tables, bandwidth chart, packet table, and error table keep the source order. Calendar summaries add page height. Values include 1,000 Mbps speed, 125 Mbps receive, 50 Mbps transmit, and 12.5 percent utilization. |
+| VPN peer | 1440 x 1274 to 1440 x 1378 | Six KPI cards, four gauges, the quality chart, and two detail tables keep the source order. The integrated page adds tunnel identity. Values include 0.25 percent loss, 33.3 ms latency, 4.5 ms jitter, and 4.20 MOS. |
+
+The MistHelper shell and synthetic-state banner add shared navigation and state labels.
+The sample data does not establish live connectivity, availability, or congestion duration.
 
 The independent implementation uses behavior reviewed at source commit
 `2d1c2199fa1e31c129ef1e051c5389349a207785`.
@@ -45,7 +67,7 @@ This boundary makes no API call and is not connected to the preview.
 
 ## Live integration limits
 
-Select **Open live snapshots** from the preview.
+The portal tab opens live snapshots.
 Live pages use the existing portal authorization and server-selected organization.
 Page reads use the recent snapshot cache, without a Mist request.
 Select **Refresh current snapshots** to request new data.
