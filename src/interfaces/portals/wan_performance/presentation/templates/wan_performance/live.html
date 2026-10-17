@@ -10,7 +10,7 @@
         These are latest observations, not full-hour measurements.
         Unknown values do not mean healthy service.</p>
     {% if instant %}<p>Collected at {{ instant.isoformat() }} UTC.</p>{% endif %}
-    {% if partial %}<div role="alert">Partial results. The fixed page cap excluded additional records.</div>{% endif %}
+    {% if partial %}<div role="alert">Partial results. A fixed page cap excluded records or link-event history.</div>{% endif %}
     {% if error %}<div class="alert alert-warning" role="alert" data-testid="wan-live-error">{{ error }}</div>{% endif %}
     <form method="post" action="{{ url_for('wan_performance.live.refresh') }}">
         {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
@@ -36,9 +36,9 @@
         <input type="hidden" name="site_id" value="{{ filters.site_id }}">
         <input type="hidden" name="port_name" value="{{ filters.port_name }}">
         <button class="btn btn-secondary" type="submit" data-testid="wan-live-port-history-refresh">Collect selected port insight hour</button>
-        <p>This separate refresh permits five SDK requests for one completed UTC hour.
-            It stores catalog-validated receive and transmit rates plus device-scoped average loss, jitter, and latency.
-            It does not store historical utilization percentages.
+        <p>This separate refresh permits at most nine SDK requests for one completed UTC hour.
+            It stores six aligned 10-minute rate samples, raw utilization percentages, average loss, jitter, and latency.
+            It also stores event-derived up and down minutes and link transitions.
             It does not replace the current snapshot or claim complete historical coverage.</p>
     </form>
     {% endif %}
@@ -56,8 +56,8 @@
     {% endif %}
     <div class="row g-3 mt-3">
         <article class="col-sm-4 portal-card" data-testid="wan-live-utilization"><h2 class="h6">Utilization</h2><p>Directional point-in-time samples appear below. Mbps link speed supplies capacity. Missing or invalid values remain unknown.</p></article>
-        <article class="col-sm-4 portal-card"><h2 class="h6">Congestion duration</h2><p>Unknown. Snapshot rates do not establish duration.</p></article>
-        <article class="col-sm-4 portal-card"><h2 class="h6">Availability</h2><p>Unknown. Current status does not establish historical availability.</p></article>
+        <article class="col-sm-4 portal-card"><h2 class="h6">Congestion duration</h2><p>Summaries count complete 10-minute sample intervals above each threshold. Missing samples remain unknown.</p></article>
+        <article class="col-sm-4 portal-card"><h2 class="h6">Availability</h2><p>Summaries use link events. Time before the first event remains unknown. A no-event hour uses the current cached state for the full hour.</p></article>
     </div>
     <section class="mt-4">
         <h2>Gateways, WAN ports, and VPN paths</h2>
@@ -78,7 +78,7 @@
                     <small>Path key {{ record.identity.tunnel_identity }}</small>
                     {% else %}Not a VPN path{% endif %}</td>
                 <td>{% for name, metric in record.metrics.items() %}
-                    <div>{{ name }}: {% if metric.value is not none %}{{ metric.value }} {{ metric.unit }}{% else %}Unknown{% endif %}</div>
+                    <div>{{ name }}: {% if metric.value is not none %}{{ metric.value }} {{ metric.unit }}{% else %}Unknown{% if metric.missing_reason %}: {{ metric.missing_reason }}{% endif %}{% endif %}</div>
                     {% endfor %}
                     {% if states.get(record.natural_key) %}
                     <div data-testid="wan-live-current-state">
@@ -98,13 +98,42 @@
         <p>Port and peer hours retain the last observation. Gateway hours use catalog-validated insight samples.
             These are not full-hour averages.
             Rolling 3-hour, 12-hour, and 24-hour windows end at the latest retained observation.
-            The observed p95 summarizes retained hourly values, not raw within-hour samples.
-            Coverage, availability, and congestion duration remain unknown.</p>
+            The utilization p95 uses raw samples within each hour. Weekly and monthly p95 use the maximum daily p95.
+            Congestion duration uses complete 10-minute sample intervals.
+            Link availability excludes unknown time before the first event.</p>
         {% if history_error %}<p role="alert">{{ history_error }}</p>{% endif %}
         {% for summary in summaries %}
             <h3>{{ summary.period.kind }}: {{ summary.period.start.isoformat() }} to {{ summary.period.end.isoformat() }}</h3>
             <p>{{ summary.observed_hours }} observed hours of {{ summary.period.expected_hours }}.</p>
             {% for name, values in summary.metrics.items() %}<p>{{ name }}: mean {{ values[0] }}, maximum {{ values[1] }}, observed p95 {{ values[2] }} {{ values[3] }}</p>{% endfor %}
+            {% if summary.congestion_durations %}
+            <div data-testid="wan-live-congestion-duration">
+                <h4>Sample-based congestion duration</h4>
+                <p>Each counted sample represents 10 minutes above the threshold.
+                    Hours with missing samples do not contribute a duration.</p>
+                {% for duration in summary.congestion_durations %}
+                <p>Above {{ duration.threshold_percent }}%: {{ duration.minutes }} minutes across
+                    {{ duration.complete_hours }} complete hours of {{ duration.expected_hours }} expected hours.</p>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% if summary.link_event_summary %}
+            <div data-testid="wan-live-link-event-summary">
+                <h4>Link-event availability</h4>
+                <p>{{ summary.link_event_summary.complete_hours }} complete event windows of
+                    {{ summary.link_event_summary.expected_hours }} expected hours.
+                    Known state covers {{ summary.link_event_summary.up_minutes + summary.link_event_summary.down_minutes }} minutes
+                    in {{ summary.link_event_summary.known_hours }} hours.
+                    Up: {{ summary.link_event_summary.up_minutes }} minutes.
+                    Down: {{ summary.link_event_summary.down_minutes }} minutes.
+                    Matching transitions: {{ summary.link_event_summary.flap_count }}.
+                    Up percentage of known minutes:
+                    {{ summary.link_event_summary.observed_up_percent if summary.link_event_summary.observed_up_percent is not none else "Unknown" }}.</p>
+                <p>Time before the first event remains unknown.
+                    If no event occurs, the current cached status represents the full hour.
+                    A page-capped event search remains unknown.</p>
+            </div>
+            {% endif %}
             {% if summary.threshold_observations %}
             <div data-testid="wan-live-threshold-observations">
                 <h4>Observed-hour threshold counts</h4>
