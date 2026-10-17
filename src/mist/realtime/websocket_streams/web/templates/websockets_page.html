@@ -234,7 +234,8 @@
                 <div class="border rounded p-2 mt-3 d-none" id="wsBatchReview" data-testid="ws-batch-review">
                     <h6>Confirmed target snapshot</h6>
                     <div id="wsBatchReviewSummary" data-testid="ws-batch-review-summary"></div>
-                    <div id="wsBatchReviewTargets" class="small mt-2"></div>
+                    <div id="wsBatchReviewTargets" class="small mt-2"
+                         data-testid="ws-batch-review-targets"></div>
                 </div>
                 <div class="mt-3 d-none" id="wsBatchConfirmationGroup">
                     <label class="form-label" for="wsBatchConfirmation">Type the exact confirmation phrase.</label>
@@ -257,9 +258,11 @@
                         data-testid="ws-batch-stop">Stop batch</button>
                 <a class="btn btn-sm btn-outline-secondary" id="wsBatchDownload"
                    data-testid="ws-batch-download" href="#">Download results</a>
+                <a class="btn btn-sm btn-outline-secondary d-none" id="wsBatchZipDownload"
+                   data-testid="ws-batch-zip-download" href="#">Download ZIP</a>
             </div>
         </div>
-        <div id="wsBatchTargetProgress" class="mt-3"></div>
+        <div id="wsBatchTargetProgress" class="mt-3" data-testid="ws-batch-target-progress"></div>
     </div>
 </section>
 {% endblock %}

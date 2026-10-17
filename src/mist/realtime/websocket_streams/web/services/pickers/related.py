@@ -76,7 +76,7 @@ class BatchTargetPickerService:
                 "bad_request", "This operation does not use site scope.", {"field": "kind"}
             )  # Keep scope errors explicit.
         logger.emit(logging.INFO, "web.batch.sites.start", {"kind": kind})  # Log before complete site discovery.
-        payload = self._picker.sites()  # Read all authenticated organization pages.
+        payload = cast(dict[str, object], self._picker.sites())  # Read all authenticated organization pages.
         payload["complete"] = True  # The picker returns only after every page passes validation.
         payload["scope"] = {"organization": True}  # Keep the configured organization server-owned.
         logger.emit(logging.DEBUG, "web.batch.sites.finish", {"count": payload["total_count"]})  # Log row count only.
@@ -90,9 +90,20 @@ class BatchTargetResolver:
         """Store the authenticated picker and server catalog."""
         self._picker = picker  # Existing picker methods own Mist calls and pagination.
         self._catalog = catalog  # Catalog metadata fixes family and target type.
+        self._resources = BatchTargetResourceReader(picker)  # Resource selection retains complete picker results.
+        self._responses = BatchTargetResponseBuilder()  # One response builder owns stable target ordering.
 
     def discover(self, site_id: str | None, kind: str, key: str, parents: dict[str, str]) -> dict[str, object]:
         """Return operation targets after complete scope validation."""
+        definition, target_field = self._target_field(kind, key, parents)  # Validate server-owned target metadata.
+        if site_id is None:
+            rows, excluded = self._organization_rows(target_field, parents, definition)
+        else:
+            rows, excluded = self._site_rows(site_id, target_field, parents, definition)
+        return self._responses.build(rows, site_id, excluded)  # Keep the final contract complete and stable.
+
+    def _target_field(self, kind: str, key: str, parents: dict[str, str]) -> tuple[Any, Any | None]:
+        """Resolve the catalog operation and validate its parent fields."""
         definition = self._catalog.find(kind, key)  # Resolve only server-owned catalog metadata.
         if definition is None:  # Reject unknown operation keys before any picker call.
             raise StreamRequestError("unknown_key", "The selected catalog operation is not available.")  # Refuse.
@@ -101,50 +112,15 @@ class BatchTargetResolver:
         allowed_parents = {"map_id"} if target_field is not None and target_field.picker == "sdkclients" else set()
         if set(parents) - allowed_parents:  # Parent values must match the catalog resource relationship.
             raise StreamRequestError("bad_request", "The target request has an unsupported parent.")  # Refuse.
-        if site_id is None:
-            if getattr(definition, "scope", "") != "organization":  # Do not widen a site operation to the organization.
-                raise StreamRequestError(
-                    "bad_request", "This operation requires a site.", {"field": "site_id"}
-                )  # Keep scope errors explicit.
-            rows, excluded = self._resource_rows(target_field, None, parents, definition)
-            return self._response(rows, None, excluded)
-        sites = self._picker.sites()["rows"]  # Verify selected scope against all organization pages.
-        site = next((row for row in sites if row.get("id") == site_id), None)
-        if site is None:  # Reject a foreign site before its resource list is read.
-            raise StreamRequestError(
-                "bad_request", "The site is not part of this organization.", {"field": "site_id"}
-            )  # Keep scope errors explicit.
-        if target_field is None:
-            rows, excluded = [
-                {
-                    "id": site["id"],  # Preserve the source site identity.
-                    "label": site.get("label") or site.get("name") or site["id"],  # Prefer an operator label.
-                    "family": None,  # Sites do not use device utility families.
-                    "detail": site.get("detail"),  # Keep safe picker detail.
-                    "site_id": site["id"],  # Keep the required target scope.
-                    "target_type": "site",  # Identify the target kind.
-                }
-            ], 0
-        else:
-            rows, excluded = self._resource_rows(target_field, site_id, parents, definition)
-        return self._response(rows, site_id, excluded)
+        return definition, target_field  # Keep all further reads inside the selected catalog contract.
 
-    def _resource_rows(
-        self, field: Any | None, site_id: str | None, parents: dict[str, str], definition: Any
+    def _organization_rows(
+        self, target_field: Any | None, parents: dict[str, str], definition: Any
     ) -> tuple[list[dict[str, object]], int]:
-        """Read the catalog-selected resource and attach its full target identity."""
-        picker_name = field.picker if field is not None else None
-        if picker_name == "devices" and site_id is not None:  # Device utilities need the full device inventory.
-            payload = self._picker.devices(site_id)  # Request every device type for family filtering.
-        elif picker_name == "maps" and site_id is not None:  # Location channels target maps.
-            payload = self._picker.maps(site_id)  # Preserve map identity for channel paths.
-        elif picker_name == "assets" and site_id is not None:  # Diagnostics target site assets.
-            payload = self._picker.assets(site_id)  # Preserve site-scoped asset identity.
-        elif picker_name == "mxedges":  # Site or organization operations target Mist Edges.
-            payload = self._picker.mxedges(site_id)  # Support both site and organization edge scopes.
-        elif picker_name == "sdkclients" and site_id is not None:  # SDK clients require a verified map.
-            return self._sdkclient_rows(site_id, parents)
-        elif field is None and site_id is None:  # A catalog operation with no resource targets the organization.
+        """Return organization targets only for an organization-scoped operation."""
+        if getattr(definition, "scope", "") != "organization":  # Do not widen a site operation.
+            raise StreamRequestError("bad_request", "This operation requires a site.", {"field": "site_id"})
+        if target_field is None:  # Organization operations without resource targets use one explicit row.
             return [
                 {
                     "id": "organization",
@@ -154,23 +130,68 @@ class BatchTargetResolver:
                     "target_type": "organization",
                 }
             ], 0
-        else:  # Do not guess an unsupported resource endpoint.
-            raise StreamRequestError("picker_unavailable", "The catalog target has no supported picker.")  # Refuse.
-        rows = payload.get("rows")
-        if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
-            # A complete response must contain only target mappings.
-            raise StreamRequestError(
-                "picker_unavailable", "Mist returned an unsupported target list."
-            )  # Refuse malformed rows.
-        family = definition.family if isinstance(definition, UtilityDefinition) else None
-        eligible = [dict(row) for row in rows if family is None or row.get("family") == family]
-        excluded = len(rows) - len(eligible)
-        target_type = "sdkclient" if picker_name == "sdkclients" else picker_name.rstrip("s")
-        for row in eligible:
-            row["target_type"] = target_type  # Keep the source resource type on each target.
-            if site_id is not None:
-                row["site_id"] = site_id  # Keep site identity in every cross-site row.
-        return eligible, excluded
+        return self._resources.read(target_field, None, parents, definition)  # Read the selected org resource.
+
+    def _site_rows(
+        self, site_id: str, target_field: Any | None, parents: dict[str, str], definition: Any
+    ) -> tuple[list[dict[str, object]], int]:
+        """Verify organization membership before reading any selected-site resource."""
+        sites = self._picker.sites()["rows"]  # Verify scope against every authenticated organization page.
+        site = next((row for row in sites if row.get("id") == site_id), None)
+        if site is None:  # Reject a foreign site before its resource list is read.
+            raise StreamRequestError("bad_request", "The site is not part of this organization.", {"field": "site_id"})
+        if target_field is None:
+            return [
+                {
+                    "id": site["id"],
+                    "label": site.get("label") or site.get("name") or site["id"],
+                    "family": None,
+                    "detail": site.get("detail"),
+                    "site_id": site["id"],
+                    "target_type": "site",
+                }
+            ], 0
+        return self._resources.read(target_field, site_id, parents, definition)  # Read only after scope validation.
+
+
+class BatchTargetResourceReader:
+    """Read picker resources and add their catalog-approved target scope."""
+
+    def __init__(self, picker: Any) -> None:
+        """Store the authenticated picker collaborator."""
+        self._picker = picker  # Existing picker methods own SDK authentication and pagination.
+
+    def read(
+        self, field: Any, site_id: str | None, parents: dict[str, str], definition: Any
+    ) -> tuple[list[dict[str, object]], int]:
+        """Return scoped target rows or verified SDK clients."""
+        if field.picker == "sdkclients" and site_id is not None:  # SDK clients require a selected site and map.
+            return self._sdkclient_rows(site_id, parents)  # Keep explicit map association checks.
+        payload = self._picker_payload(field.picker, site_id)  # Select only catalog-supported picker methods.
+        return self._eligible_rows(payload, field.picker, site_id, definition)  # Filter families and attach scope.
+
+    def _picker_payload(self, picker_name: str, site_id: str | None) -> dict[str, object]:
+        """Call the matching authenticated picker or refuse unsupported scope."""
+        if picker_name == "devices" and site_id is not None:
+            return cast(
+                dict[str, object], self._picker.devices(site_id)
+            )  # Request the full inventory before family filtering.
+        if picker_name == "maps" and site_id is not None:
+            return cast(dict[str, object], self._picker.maps(site_id))  # Keep map identity for channel paths.
+        if picker_name == "assets" and site_id is not None:
+            return cast(dict[str, object], self._picker.assets(site_id))  # Preserve site-scoped asset identity.
+        if picker_name == "mxedges":  # Mist Edge operations support site and organization scopes.
+            return cast(dict[str, object], self._picker.mxedges(site_id))  # Preserve the selected scope.
+        raise StreamRequestError("picker_unavailable", "The catalog target has no supported picker.")  # Refuse.
+
+    def _eligible_rows(
+        self, payload: dict[str, object], picker_name: str, site_id: str | None, definition: Any
+    ) -> tuple[list[dict[str, object]], int]:
+        """Validate picker rows, filter utility families, and attach target scope."""
+        rows = BatchTargetResponseBuilder.validate(payload)  # Reject incomplete and malformed picker results.
+        eligible = BatchTargetResponseBuilder.family_rows(rows, definition)  # Keep only catalog-compatible targets.
+        BatchTargetResponseBuilder.apply_scope(eligible, picker_name, site_id)  # Preserve each target identity.
+        return eligible, len(rows) - len(eligible)  # Report every family excluded from the result.
 
     def _sdkclient_rows(self, site_id: str, parents: dict[str, str]) -> tuple[list[dict[str, object]], int]:
         """Read SDK clients only from maps that belong to the selected site."""
@@ -179,20 +200,44 @@ class BatchTargetResolver:
         if map_id is not None:
             maps = [row for row in maps if row.get("id") == map_id]
             if not maps:  # Reject a map that does not belong to this site.
-                raise StreamRequestError(
-                    "bad_request", "The map is not part of this site.", {"field": "map_id"}
-                )  # Keep scope errors explicit.
-        rows: list[dict[str, object]] = []
-        for map_row in maps:
-            clients = self._picker.sdkclients(site_id, str(map_row["id"]))["rows"]
-            for client in clients:
-                row = dict(client)
-                row.update({"target_type": "sdkclient", "site_id": site_id, "map_id": map_row["id"]})  # Keep parents.
-                rows.append(row)  # Retain the client with its map association.
-        return rows, 0
+                raise StreamRequestError("bad_request", "The map is not part of this site.", {"field": "map_id"})
+        rows = [
+            dict(client) | {"target_type": "sdkclient", "site_id": site_id, "map_id": map_row["id"]}
+            for map_row in maps
+            for client in self._picker.sdkclients(site_id, str(map_row["id"]))["rows"]
+        ]  # Retain each client with its verified map and site association.
+        return rows, 0  # SDK client rows have no family exclusions.
 
-    def _response(self, rows: list[dict[str, object]], site_id: str | None, excluded: int) -> dict[str, object]:
-        """Return the complete target response with explicit exclusions."""
+
+class BatchTargetResponseBuilder:
+    """Build deterministic, complete target discovery responses."""
+
+    @staticmethod
+    def validate(payload: dict[str, object]) -> list[dict[str, object]]:
+        """Reject incomplete or malformed picker rows."""
+        rows = payload.get("rows")
+        if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
+            raise StreamRequestError("picker_unavailable", "Mist returned an unsupported target list.")
+        return [dict(row) for row in rows]
+
+    @staticmethod
+    def family_rows(rows: list[dict[str, object]], definition: Any) -> list[dict[str, object]]:
+        """Filter device rows by the catalog family when one applies."""
+        family = definition.family if isinstance(definition, UtilityDefinition) else None
+        return [row for row in rows if family is None or row.get("family") == family]
+
+    @staticmethod
+    def apply_scope(rows: list[dict[str, object]], picker_name: str, site_id: str | None) -> None:
+        """Attach the resource type and selected site to each eligible row."""
+        target_type = "mxedge" if picker_name == "mxedges" else picker_name.rstrip("s")
+        for row in rows:
+            row["target_type"] = target_type  # Keep the source resource type on each target.
+            if site_id is not None:
+                row["site_id"] = site_id  # Keep site identity in every cross-site row.
+
+    @staticmethod
+    def build(rows: list[dict[str, object]], site_id: str | None, excluded: int) -> dict[str, object]:
+        """Return deduplicated rows and explicit completion metadata."""
         unique: dict[tuple[object, ...], dict[str, object]] = {}  # Deduplicate by the complete natural target key.
         for row in rows:
             identity = (row.get("target_type"), row.get("site_id"), row.get("map_id"), row.get("id"))

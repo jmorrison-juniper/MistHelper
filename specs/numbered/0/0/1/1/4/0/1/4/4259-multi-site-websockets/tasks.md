@@ -21,8 +21,8 @@
 
 - [x] T003 Add contract coverage in `tests/contract/websocket_streams/test_ws_sdk_contract.py` for installed SDK 0.64.1 page traversal. `mistapi.get_next` follows the authenticated `response.next` URL. Validate every returned status and shape. Do not use `mistapi.get_all` where it cannot report a failed page.
 - [x] T004 [P] Run and preserve the first-output and split-control transport proofs in `tests/contract/websocket_streams/test_ws_sdk_contract.py`; confirm that the owned transport retains first output and split control sequences before implementation approval.
-- [ ] T005 [P] Add unit coverage for target identity, terminal target states, and count invariants in `tests/unit/websocket_streams/live/sessions/test_ws_session_record.py` and `tests/unit/websocket_streams/live/sessions/test_ws_session_manager.py`.
-- [ ] T006 Check the shared live-session and transport limits in `src/mist/realtime/websocket_streams/live/sessions/settings.py` and `src/mist/realtime/websocket_streams/live/sessions/manager/operations.py`; define how batch permits share capacity with Single Site sessions without changing existing limits.
+- [x] T005 [P] Add unit coverage for target identity, terminal target states, and count invariants in `tests/unit/websocket_streams/live/sessions/test_ws_session_record.py` and `tests/unit/websocket_streams/live/sessions/test_ws_session_manager.py`.
+- [x] T006 Check the shared live-session and transport limits in `src/mist/realtime/websocket_streams/live/sessions/settings.py` and `src/mist/realtime/websocket_streams/live/sessions/manager/operations.py`; define how batch permits share capacity with Single Site sessions without changing existing limits.
 
 ## Phase 3: User Story 1 - Preserve the Single Site workflow (Priority: P1)
 
@@ -32,8 +32,8 @@
 
 ### Tests for User Story 1
 
-- [ ] T007 [P] [US1] Add regression checks for the current Single Site start payload, session controls, and downloads in `tests/unit/websocket_streams/web/test_ws_web_services.py`.
-- [ ] T008 [P] [US1] Add browser checks for the initial Single Site tab, 10/11 channel paths, session continuity across tab changes, and interactive shell controls in `tests/e2e/websockets_tab/test_websockets_page.py` and `tests/e2e/websockets_tab/test_websockets_terminal.py`.
+- [x] T007 [P] [US1] Add regression checks for the current Single Site start payload, session controls, and downloads in `tests/unit/websocket_streams/web/test_ws_web_services.py`.
+- [x] T008 [P] [US1] Add browser checks for the initial Single Site tab, 10/11 channel paths, session continuity across tab changes, and interactive shell controls in `tests/e2e/websockets_tab/test_websockets_page.py` and `tests/e2e/websockets_tab/test_websockets_terminal.py`.
 
 ### Implementation for User Story 1
 
@@ -48,16 +48,16 @@
 
 ### Tests for User Story 2
 
-- [ ] T011 [P] [US2] Add unit cases for site, device, map, asset, Mist Edge, and client eligibility, full natural-key deduplication, and missing associations in the existing `tests/unit/websocket_streams/intake/test_ws_stream_pickers.py`.
-- [ ] T012 [P] [US2] Add SDK contract cases for authenticated requests, runtime limits 250 and 1000, all pages, `type="all"` device discovery, later-page failures, complete empty results, and verified wired-client traversal in `tests/contract/websocket_streams/test_ws_sdk_contract.py`. Cover paged site, device, map, asset, Mist Edge, SDK-client, and wired-client methods with maximum limits, identity retention, and failed-page handling. Base wired-client assertions on T003.
-- [ ] T013 [P] [US2] Add Flask picker response tests for complete, empty, denied, incomplete, and stale-scope outcomes in `tests/unit/websocket_streams/web/test_ws_web_services.py`.
+- [x] T011 [P] [US2] Add unit cases for site, device, map, asset, Mist Edge, and client eligibility, full natural-key deduplication, and missing associations in the existing `tests/unit/websocket_streams/intake/test_ws_stream_pickers.py`.
+- [x] T012 [P] [US2] Add SDK contract cases for authenticated requests, runtime limits 250 and 1000, all pages, `type="all"` device discovery, later-page failures, complete empty results, and verified wired-client traversal in `tests/contract/websocket_streams/test_ws_sdk_contract.py`. Cover paged site, device, map, asset, Mist Edge, SDK-client, and wired-client methods with maximum limits, identity retention, and failed-page handling. Base wired-client assertions on T003.
+- [x] T013 [P] [US2] Add Flask picker response tests for complete, empty, denied, incomplete, and stale-scope outcomes in `tests/unit/websocket_streams/web/test_ws_web_services.py`.
 
 ### Implementation for User Story 2
 
 - [x] T014 [US2] Extend SDK-backed discovery and response validation in `src/mist/realtime/websocket_streams/intake/pickers/devices.py`, `src/mist/realtime/websocket_streams/intake/pickers/resources.py`, and `src/mist/realtime/websocket_streams/intake/pickers/service.py`; fetch every supported page, retain verified associations, and report a failed page instead of an empty list.
 - [x] T015 [US2] Add the Multi Site sites and target picker routes through existing route files in `src/mist/realtime/websocket_streams/web/blueprint/routes/pickers.py` and `src/mist/realtime/websocket_streams/web/blueprint/registry.py`.
-- [ ] T016 [US2] Add catalog-derived target controls for all/selected sites and supported resources, with site and device identity, family filtering, revision checks, and distinct discovery errors in `src/mist/realtime/websocket_streams/web/templates/websockets_page.html` and `src/mist/realtime/websocket_streams/web/static/websockets.js`.
-- [ ] T017 [US2] Exercise target selection, stale-response rejection, and empty/error states in `tests/e2e/websockets_tab/test_websockets_page.py`.
+- [x] T016 [US2] Add catalog-derived target controls for all/selected sites and supported resources, with site and device identity, family filtering, revision checks, and distinct discovery errors in `src/mist/realtime/websocket_streams/web/templates/websockets_page.html` and `src/mist/realtime/websocket_streams/web/static/websockets.js`.
+- [x] T017 [US2] Exercise target selection, stale-response rejection, and empty/error states in `tests/e2e/websockets_tab/test_websockets_page.py`.
 
 ## Phase 5: User Story 3 - Run and monitor a multi-target operation (Priority: P1)
 
@@ -67,20 +67,20 @@
 
 ### Tests for User Story 3
 
-- [ ] T018 [P] [US3] Add unit cases for preview expiry and consumption, exact fingerprint binding, typed confirmation, target limits 1-1000, channel concurrency exactly 1, utility and shell concurrency 1-5 with default 3, cancellation races, and terminal target outcomes in `tests/unit/websocket_streams/live/sessions/test_ws_session_manager.py` and `tests/unit/websocket_streams/live/sessions/test_ws_session_record.py`.
-- [ ] T019 [P] [US3] Add channel contract cases for one owned connection, catalog paths, path-to-target demultiplexing, first-output retention, and batches that exceed the Single Site 10-path limit in `tests/contract/websocket_streams/test_ws_channel_parity.py`.
-- [ ] T020 [P] [US3] Add utility and finite-shell runner unit cases for bounded target dispatch, one utility trigger per target, ordered shell commands, initial normalized prompt capture, same-prompt completion, two-second quiet, both 30-second deadlines, partial output, command skipping, and unavailable device exit status in `tests/unit/websocket_streams/live/runners/utility/test_ws_utility_runner.py` and `tests/unit/websocket_streams/live/runners/test_ws_shell_runner.py`.
-- [ ] T021 [P] [US3] Add Flask integration cases for preview, atomic admission, target pagination, progress, partial failures, stop, repeated stop, invalid targets, and session capacity in `tests/unit/websocket_streams/web/test_ws_web_services.py`.
+- [x] T018 [P] [US3] Add unit cases for preview expiry and consumption, exact fingerprint binding, typed confirmation, target limits 1-1000, channel concurrency exactly 1, utility and shell concurrency 1-5 with default 3, cancellation races, and terminal target outcomes in `tests/unit/websocket_streams/live/sessions/test_ws_session_manager.py` and `tests/unit/websocket_streams/live/sessions/test_ws_session_record.py`.
+- [x] T019 [P] [US3] Add channel contract cases for one owned connection, catalog paths, path-to-target demultiplexing, first-output retention, and batches that exceed the Single Site 10-path limit in `tests/contract/websocket_streams/test_ws_channel_parity.py`.
+- [x] T020 [P] [US3] Add utility and finite-shell runner unit cases for bounded target dispatch, one utility trigger per target, ordered shell commands, initial normalized prompt capture, same-prompt completion, two-second quiet, both 30-second deadlines, partial output, command skipping, and unavailable device exit status in `tests/unit/websocket_streams/live/runners/utility/test_ws_utility_runner.py` and `tests/unit/websocket_streams/live/runners/test_ws_shell_runner.py`.
+- [x] T021 [P] [US3] Add Flask integration cases for preview, atomic admission, target pagination, progress, partial failures, stop, repeated stop, invalid targets, and session capacity in `tests/unit/websocket_streams/web/test_ws_web_services.py`.
 
 ### Implementation for User Story 3
 
-- [ ] T022 [US3] Add immutable preview validation for operation, parameters, exact targets, shell command order, and the `RUN <target_count> TARGETS` confirmation in existing intake files `src/mist/realtime/websocket_streams/intake/start_request/models.py`, `src/mist/realtime/websocket_streams/intake/start_request/targets.py`, and `src/mist/realtime/websocket_streams/intake/start_request/validation.py`.
-- [ ] T023 [US3] Add bounded target scheduling, shared transport permits, batch cancellation, and parent lifetime handling in existing session files `src/mist/realtime/websocket_streams/live/sessions/manager/operations.py`, `src/mist/realtime/websocket_streams/live/sessions/manager/lifecycle.py`, and `src/mist/realtime/websocket_streams/live/sessions/record/session.py`.
-- [ ] T024 [US3] Route all selected channel paths through one owned connection and demultiplex each event by its frozen target identity in `src/mist/realtime/websocket_streams/live/runners/channel/runner.py` and `src/mist/realtime/websocket_streams/live/runners/channel/routing.py`; do not apply the Single Site 10-path validation limit.
-- [ ] T025 [US3] Run utility triggers as separate bounded per-target executions and retain target identity for each result in `src/mist/realtime/websocket_streams/live/runners/utility/runner/utility_runner.py` and `src/mist/realtime/websocket_streams/live/runners/utility/runner/execution.py`.
-- [ ] T026 [US3] Run only the ordered finite command list accepted in the preview and bound to its confirmed snapshot; enforce 1-20 commands, 4096 UTF-8 bytes per command, 16384 bytes per list, 30-second initial-output and per-command deadlines, same normalized prompt, and two-second quiet completion in `src/mist/realtime/websocket_streams/live/runners/shell/runners.py`. Preserve partial output and skip later commands after a timeout. Keep Single Site interactive shell behavior unchanged.
-- [ ] T027 [US3] Add batch preview, start, summary, target-page, and batch-shell rejection routes through existing files `src/mist/realtime/websocket_streams/web/blueprint/routes/sessions.py`, `src/mist/realtime/websocket_streams/web/blueprint/registry.py`, and `src/mist/realtime/websocket_streams/web/services/operations/sessions.py`.
-- [ ] T028 [US3] Add the Multi Site preview, confirmation, per-target progress, partial-failure, and parent-stop browser flow in `tests/e2e/websockets_tab/test_websockets_page.py`; verify that no live broadcast input is available.
+- [x] T022 [US3] Add immutable preview validation for operation, parameters, exact targets, shell command order, and the `RUN <target_count> TARGETS` confirmation in existing intake files `src/mist/realtime/websocket_streams/intake/start_request/models.py`, `src/mist/realtime/websocket_streams/intake/start_request/targets.py`, and `src/mist/realtime/websocket_streams/intake/start_request/validation.py`.
+- [x] T023 [US3] Add bounded target scheduling, shared transport permits, batch cancellation, and parent lifetime handling in existing session files `src/mist/realtime/websocket_streams/live/sessions/manager/operations.py`, `src/mist/realtime/websocket_streams/live/sessions/manager/lifecycle.py`, and `src/mist/realtime/websocket_streams/live/sessions/record/session.py`.
+- [x] T024 [US3] Route all selected channel paths through one owned connection and demultiplex each event by its frozen target identity in `src/mist/realtime/websocket_streams/live/runners/channel/runner.py` and `src/mist/realtime/websocket_streams/live/runners/channel/routing.py`; do not apply the Single Site 10-path validation limit.
+- [x] T025 [US3] Run utility triggers as separate bounded per-target executions and retain target identity for each result in `src/mist/realtime/websocket_streams/live/runners/utility/runner/utility_runner.py` and `src/mist/realtime/websocket_streams/live/runners/utility/runner/execution.py`.
+- [x] T026 [US3] Run only the ordered finite command list accepted in the preview and bound to its confirmed snapshot; enforce 1-20 commands, 4096 UTF-8 bytes per command, 16384 bytes per list, 30-second initial-output and per-command deadlines, same normalized prompt, and two-second quiet completion in `src/mist/realtime/websocket_streams/live/runners/shell/runners.py`. Preserve partial output and skip later commands after a timeout. Keep Single Site interactive shell behavior unchanged.
+- [x] T027 [US3] Add batch preview, start, summary, target-page, and batch-shell rejection routes through existing files `src/mist/realtime/websocket_streams/web/blueprint/routes/sessions.py`, `src/mist/realtime/websocket_streams/web/blueprint/registry.py`, and `src/mist/realtime/websocket_streams/web/services/operations/sessions.py`.
+- [x] T028 [US3] Add the Multi Site preview, confirmation, per-target progress, partial-failure, and parent-stop browser flow in `tests/e2e/websockets_tab/test_websockets_page.py`; verify that no live broadcast input is available.
 
 ## Phase 6: User Story 4 - Save batch results (Priority: P2)
 
@@ -90,31 +90,31 @@
 
 ### Tests for User Story 4
 
-- [ ] T029 [P] [US4] Add unit cases for traversal, symlinks, unsafe labels, reserved names, split-secret redaction, output quotas, and failed writes in `tests/unit/websocket_streams/web/test_ws_output_boundaries.py` and `tests/unit/websocket_streams/web/test_ws_secret_guard.py`.
-- [ ] T030 [P] [US4] Add Flask integration cases for manifests, combined and grouped downloads, ZIP entries, partial snapshots, download pins, deletion, expiry, and restart cleanup in `tests/unit/websocket_streams/web/test_ws_web_services.py`.
+- [x] T029 [P] [US4] Add unit cases for traversal, symlinks, unsafe labels, reserved names, split-secret redaction, output quotas, and failed writes in `tests/unit/websocket_streams/web/test_ws_output_boundaries.py` and `tests/unit/websocket_streams/web/test_ws_secret_guard.py`.
+- [x] T030 [P] [US4] Add Flask integration cases for manifests, combined and grouped downloads, ZIP entries, partial snapshots, download pins, deletion, expiry, and restart cleanup in `tests/unit/websocket_streams/web/test_ws_web_services.py`.
 
 ### Implementation for User Story 4
 
-- [ ] T031 [US4] Persist redacted result envelopes through a bounded writer under `data/websocket-streams/{session_id}/`; enforce the 64 MiB total limit, reserve 1 MiB for metadata, and use safe server-created paths in `src/mist/realtime/websocket_streams/web/services/operations/artifacts.py` and `src/mist/realtime/websocket_streams/live/sessions/record/output.py`.
-- [ ] T032 [US4] Remove session-owned artifact trees on deletion, retention expiry, and safe restart cleanup; preserve the existing five-ended-session and 600-second limits in `src/mist/realtime/websocket_streams/live/sessions/manager/lifecycle.py` and `src/mist/realtime/websocket_streams/web/services/operations/artifacts.py`.
-- [ ] T033 [US4] Add artifact manifest, JSONL, and ZIP download handling through existing response and route files `src/mist/realtime/websocket_streams/web/blueprint/responses/download.py` and `src/mist/realtime/websocket_streams/web/blueprint/routes/sessions.py`.
-- [ ] T034 [US4] Add browser checks for target-labeled results, partial progress, layout selection, and parent-session downloads in `tests/e2e/websockets_tab/test_websockets_page.py`.
+- [x] T031 [US4] Persist redacted result envelopes through a bounded writer under `data/websocket-streams/{session_id}/`; enforce the 64 MiB total limit, reserve 1 MiB for metadata, and use safe server-created paths in `src/mist/realtime/websocket_streams/web/services/operations/artifacts.py` and `src/mist/realtime/websocket_streams/live/sessions/record/output.py`.
+- [x] T032 [US4] Remove session-owned artifact trees on deletion, retention expiry, and safe restart cleanup; preserve the existing five-ended-session and 600-second limits in `src/mist/realtime/websocket_streams/live/sessions/manager/lifecycle.py` and `src/mist/realtime/websocket_streams/web/services/operations/artifacts.py`.
+- [x] T033 [US4] Add artifact manifest, JSONL, and ZIP download handling through existing response and route files `src/mist/realtime/websocket_streams/web/blueprint/responses/download.py` and `src/mist/realtime/websocket_streams/web/blueprint/routes/sessions.py`.
+- [x] T034 [US4] Add browser checks for target-labeled results, partial progress, layout selection, and parent-session downloads in `tests/e2e/websockets_tab/test_websockets_page.py`.
 
 ## Phase 7: Polish and Cross-Cutting Concerns
 
 **Purpose**: Document the feature and run safe local checks after implementation.
 
-- [ ] T035 [P] Update operator guidance for target selection, preview confirmation, finite shell batches, output layouts, and retention in `./README.md`.
-- [ ] T036 [P] Add the issue release note for Multi Site WebSocket operations in `changelog.d/issue-4259-multi-site-websockets.md`.
-- [ ] T037 Run safe validation with mocked credentials: the transport contract tests, `python -m pytest tests/unit/websocket_streams -q`, `python -m pytest tests/contract/websocket_streams -q`, `python -m pytest tests/e2e/websockets_tab -q`, and `git diff --check`. If credentials are available, use Morrison House Oregon for read-only checks only. Never change cloud configuration or device state.
-- [ ] T038 Run the repository structure guard and applicable lint, type, security, and documentation checks for changed files. Read each command from `.github/workflows/ci.yml` and repository instructions. Report unavailable checks instead of treating them as passed.
-- [ ] T040 Audit every changed executable line for its required inline comment and every meaningful action for before/after/error logs; add focused tests where practical and do not commit until the audit passes.
+- [ ] T035 [P] Update operator guidance in `./README.md` after the owner approves reconciliation with PR #4208.
+- [x] T036 [P] Add the issue release note for Multi Site WebSocket operations in `changelog.d/issue-4259-multi-site-websockets.md`.
+- [x] T037 Run safe validation with mocked credentials: the transport contract tests, `python -m pytest tests/unit/websocket_streams -q`, `python -m pytest tests/contract/websocket_streams -q`, `python -m pytest tests/e2e/websockets_tab -q`, and `git diff --check`. If credentials are available, use Morrison House Oregon for read-only checks only. Never change cloud configuration or device state.
+- [x] T038 Run the repository structure guard and applicable lint, type, security, and documentation checks for changed files. Read each command from `.github/workflows/ci.yml` and repository instructions. Report unavailable checks instead of treating them as passed.
+- [x] T040 Audit every changed executable line for its required inline comment and every meaningful action for before/after/error logs; add focused tests where practical and do not commit until the audit passes.
 
 ## Phase 8: Delivery and Post-Merge
 
 **Purpose**: Run required gates, prepare a complete pull request, and verify the merged result.
 
-- [ ] T041 Run `python -B -m pytest -p no:cacheprovider -s -q tests/guardrails/local_test_quality_loop/test_guidance.py::TestLiveGuides` and confirm every required input is present before the test-quality check.
+- [x] T041 Run `python -B -m pytest -p no:cacheprovider -s -q tests/guardrails/local_test_quality_loop/test_guidance.py::TestLiveGuides` and confirm every required input is present before the test-quality check.
 - [ ] T042 After committing the intended tests, run `test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json --changed-from origin/main --full-gate-path .github/workflows/ci.yml --full-gate-path requirements-dev.txt`; require zero new findings before push.
 - [ ] T043 Inspect `.github/pull_request_template.md` and `.github/PULL_REQUEST_TEMPLATE/` before preparing the PR body. Preserve the selected template and include exact local gate commands and results. Wait for required checks and CodeQL with `gh pr checks <number> --watch`, then wait for human review before merge.
 - [ ] T044 After a maintainer merges the PR, verify the merge commit on `main`, the linked issue state, and the merged feature files. Do not merge or delete the branch without required approval and preservation evidence.
@@ -188,3 +188,9 @@ Task T013: Add Flask picker response cases in tests/unit/websocket_streams/web/t
 ## Unresolved Cross-Artifact Check
 
 The installed `mistapi` 0.64.1 source confirms that `get_next` follows the authenticated `response.next` URL and that the wired-client OpenAPI schema defines that field as the next-page URL. T003 must add failure-path contract coverage before implementation relies on this behavior.
+
+## Phase 9: Convergence
+
+- [x] T045 CRITICAL: Add explanatory inline comments to every feature-owned executable line in the finite-shell collector, including prompt handling, output reads, command dispatch, and completion checks, per Constitution VI (contradicts)
+- [x] T046 CRITICAL: Add structured before/after/error action logs around finite-shell command dispatch and prompt/output collection without logging commands or secrets, per Constitution VII (contradicts)
+- [x] T047 Reset the quiet interval whenever new shell output arrives and accept completion only when the latest output ends with the same normalized prompt followed by two seconds of silence, per FR-012 / US3/AC6 (partial)

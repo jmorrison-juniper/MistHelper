@@ -90,4 +90,6 @@ class WebSocketManagerFactory:
             StreamSessionManager,
         )  # Own sessions.
 
-        return StreamSessionManager(settings, RunnerFactory(apisession))  # Preserve runners and cleanup.
+        return StreamSessionManager(
+            settings, RunnerFactory(apisession, settings=settings)
+        )  # Preserve runners and cleanup.

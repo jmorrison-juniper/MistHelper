@@ -5,6 +5,7 @@ from __future__ import annotations  # Keep annotations lazy for Python 3.13.
 import logging  # Connection actions use structured JSON records.
 import threading  # The reader runs outside the web request thread.
 import time  # A monotonic clock measures stable subscribed operation.
+from collections.abc import Callable  # Output failure stops the shared channel safely.
 
 from src.mist.realtime.websocket_streams.intake.start_request.models import (
     StartRequest,
@@ -188,9 +189,14 @@ class ChannelStreamRunner:
 
     def __init__(self, endpoint: MistStreamEndpoint, request: StartRequest, sink: SessionSink) -> None:
         """Build one channel runner."""
+        self._request = request  # The batch plan owns target outcomes for the parent session.
+        self._sink = sink  # The parent state distinguishes stop from transport failure.
         self._state = ChannelRunnerState()  # Group mutable runtime, outcome, and attempt state.
         self._retry = ChannelRetryController(endpoint, self._state, sink)  # Own retries and final outcomes.
-        router = ChannelEventRouter(request, sink, self._state)  # Own message shaping and event routing.
+        output_failure = self._OutputFailure(self._retry, self.stop)  # Keep storage failure handling cohesive.
+        router = ChannelEventRouter(
+            request, sink, self._state, output_failure.handle
+        )  # Stop the shared socket on output failure.
         self._attempt = ChannelConnectionAttempt(endpoint, self._state, router, self._retry)  # Own one attempt.
 
     def start(self) -> None:
@@ -218,5 +224,47 @@ class ChannelStreamRunner:
             result = self._attempt.run()  # Open and read one complete connection attempt.
             next_failures = self._retry.advance(result, failures)  # Apply final, reset, and retry rules.
             if next_failures is None:  # Stop, refusal, or exhaustion ended the sequence.
+                self._finish_batch_targets()
                 return  # The retry controller recorded a final state when required.
             failures = next_failures  # Continue with the consecutive failure count.
+        self._finish_batch_targets()
+
+    def _finish_batch_targets(self) -> None:
+        """Finish each active channel target with the parent outcome."""
+        plan = self._request.batch_plan
+        if plan is None:
+            return
+        state = (
+            "stopped" if self._sink.state in {SessionState.STOPPING, SessionState.STOPPED} else "failed"
+        )  # Preserve parent stop state.
+        reason = "cancelled" if state == "stopped" else "channel_failed"  # Use stable target reason codes.
+        for target in plan.targets:
+            completion = "collected" if state == "stopped" else "unproven"  # Report collection state separately.
+            if not plan.progress.transitions.transition(target.target_key, state, reason, completion):
+                continue  # Keep an earlier target outcome unchanged.
+            outcome = {
+                "target": dict(target.identity),
+                "state": state,
+                "reason_code": reason,
+                "completion": completion,
+            }  # Preserve complete target identity in the final result.
+            plan.progress.artifacts.write_result(
+                target.target_key, target.identity, "outcome", outcome, None
+            )  # Persist before buffer eviction.
+            self._sink.add_message("outcome", outcome, source=target.target_key)  # Publish one target outcome event.
+
+    class _OutputFailure:
+        """Fail and stop the shared channel after required artifact storage fails."""
+
+        def __init__(self, retry: ChannelRetryController, stop: Callable[[], None]) -> None:
+            """Store the two actions required by an output failure."""
+            self._retry = retry  # The retry controller owns the public final state.
+            self._stop = stop  # The runner owns the active connection stop.
+
+        def handle(self) -> None:
+            """Stop the shared connection after recording a safe failure."""
+            self._retry.finish(
+                SessionState.FAILED,
+                "The batch output could not be saved.",
+            )  # Fail the public batch safely.
+            self._stop()  # Close the shared connection and prevent further results.

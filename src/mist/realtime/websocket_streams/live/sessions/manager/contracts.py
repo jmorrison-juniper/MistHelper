@@ -59,6 +59,7 @@ class ManagerAttributes:
     _reaper_stop: threading.Event  # Shutdown wakes the cleanup wait.
     _reaper_thread: threading.Thread | None  # Cleanup starts lazily.
     _shutdown: bool  # Repeat shutdown stays safe.
+    _artifact_cleanup: Callable[[str], bool] | None  # Artifact trees follow the session retention boundary.
     session: Callable[[str], StreamSession]  # Operations resolve one public identifier.
     stop: Callable[..., dict[str, object]]  # Cleanup reuses normal stop semantics.
     _reap_session: Callable[[StreamSession], None]  # Reaper applies one-session rules.
