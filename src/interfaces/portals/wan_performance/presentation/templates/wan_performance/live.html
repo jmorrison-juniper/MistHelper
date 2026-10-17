@@ -1,7 +1,10 @@
 {% extends "base.html" %}
 {% block title %}WAN Performance - {{ config.PORTAL.title }}{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/wan_performance.css') }}">
+{% endblock %}
 {% block content %}
-<section class="container-fluid" data-testid="wan-live-{{ kind }}">
+<section class="container-fluid wan-performance" data-testid="wan-live-{{ kind }}">
     <h1>WAN Performance{% if kind != "overview" %}: {{ kind }}{% endif %}</h1>
     <p data-testid="wan-live-data-state">Live snapshot{% if stale %} — stale{% endif %}.
         These are latest observations, not full-hour measurements.
