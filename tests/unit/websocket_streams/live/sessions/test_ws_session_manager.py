@@ -223,9 +223,11 @@ class TestStreamSessionManager:
         assert entered.wait(1) is True  # Confirm the target reached construction.
         batch.stop()  # Cancel the parent while no child runner is registered.
         release.set()  # Let construction complete after cancellation.
-        assert batch._thread is not None  # The scheduler owns its worker thread.
-        batch._thread.join(timeout=1)  # Wait for the scheduler to record its final outcome.
-        assert batch._thread.is_alive() is False  # Do not leak the test worker.
+        scheduler = batch._thread  # Retain the worker that owns the cancellation race.
+        if scheduler is None:
+            raise AssertionError("The batch scheduler did not start.")
+        scheduler.join(timeout=1)  # Wait for the scheduler to record its final outcome.
+        assert scheduler.is_alive() is False  # Do not leak the test worker.
         assert runner.started == 0  # A late target cannot start after cancellation.
         assert plan.progress.summary.target_page(0, 1)["targets"][0]["state"] == "stopped"
 
