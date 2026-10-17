@@ -16,7 +16,35 @@
 
 **Scope**: Test-only seed repair, direct contracts, negative guard proofs, and real Chromium assertions.
 
-## Delivery grant and current proof
+## Historical delivery grant and proof
+
+### Evidence correction for issue #4273
+
+This record preserves historical reports from the #3494 implementation and delivery stages.
+Those reports are not fresh results for the current checkout.
+The local session artifacts are unavailable.
+No replacement artifact was created, and no absent result was inferred.
+
+The permanent [delivery receipt](https://github.com/jmorrison-juniper/MistHelper/pull/3733#issuecomment-5959964003)
+records the merge and reported checks.
+The [reservation release](https://github.com/jmorrison-juniper/MistHelper/issues/3494#issuecomment-5961232880)
+confirms the accepted commit `a11c1189d8e861bd3683e669bfdb9b654ec1eeab`.
+These records preserve delivery history, not the missing command outputs, XML, coverage data, or source snapshots.
+The closed #3494 and merged #3733 do not resolve the missing citations in #4273.
+
+Source inspection supports T001, T004 through T008, T010 through T012, T014, and T025.
+Their delivered files remain in the repository.
+T003 remains open because its saved baseline is unavailable.
+Every other task that cited absent session evidence remains open, including verification and evidence-reconciliation tasks.
+D001 remains complete only as a historical delivery action supported by the permanent receipt.
+D002 through D005 remain open because their full verification artifacts are unavailable.
+An open task here identifies an evidence gap, not a request to repeat the merged repair or its publication.
+The STE limitations and reported optional-suite failures remain unchanged.
+
+The following sections retain the original stage reports and instructions.
+Their environment paths are historical, and their execution restrictions apply to those stages only.
+
+### Historical delivery report
 
 The original tasks and evidence describe the initial local preparation.
 The parent now grants this session sole position-19 publication and delivery.
@@ -52,20 +80,16 @@ Its initial `ff3cc1` failures remain historical evidence, not a current-baseline
 The separate lifecycle gap remains unchanged.
 The merged tier reader, model selectors, authentication seams, and refusal behavior remain unchanged.
 
-The exact commands, full outputs, XML, source hashes, and current measurements are in:
-
-```text
-/Users/jmorrison/.copilot/session-state/7178994b-cbb3-4f5d-9d9e-8afb0922529b/files/issue3494-delivery-0d1/
-```
-
-The machine receipt records the actual source and merged-main identities.
+The original report stored command outputs, XML, source hashes, and measurements in a local session directory.
+That directory is unavailable.
+The permanent delivery receipt records the reported source and merged-main identities.
 Do not write a guessed future SHA into these documents.
 
 ### Delivery stages
 
 - [X] D001 Verify the live claim, exact granted main, and complete open-PR file lists. Rebase only the seven-file repair.
-- [X] D002 Repeat current-base red, native green, focused contracts, full current E2E, exact changed coverage, and applicable local gates.
-- [ ] D003 Commit the current proof, run the clean committed-scope ratchet, push once, and open the current full-template PR.
+- [ ] D002 Repeat current-base red, native green, focused contracts, full current E2E, exact changed coverage, and applicable local gates. UNAVAILABLE: the original raw verification artifacts are absent.
+- [ ] D003 Commit the current proof, run the clean committed-scope ratchet, push once, and open the current full-template PR. Historical delivery: PR #3733 records publication, but the original ratchet output is UNAVAILABLE.
 - [ ] D004 Require every fresh applicable quality, title, and CodeQL result. Merge only the full verified head through strict protection.
 - [ ] D005 Run the actual resulting-main local proof, verify cleanup, add the persistent PR receipt, and pause after the parent handoff.
 
@@ -79,8 +103,10 @@ Shared test support belongs to the foundational phase because all three stories 
 All tasks start unchecked.
 Supplied baseline evidence does not complete a task.
 Complete a task only after you verify its delivered file and evidence.
-Append both `(delivered: actual/path)` and `(evidence: absolute/session/path)` to each completed task.
-The evidence must record the command, exit code, result, checked counts, and relevant assertions.
+For source delivery, append `(delivered: actual/path)` with a repository file that can be inspected.
+For verification, cite retained evidence with the command, exit code, result, checked counts, and relevant assertions.
+Do not use a temporary local session path as a permanent evidence citation.
+If raw evidence is unavailable, retain the historical report and leave the verification task unchecked.
 Use actual paths and results, not placeholders.
 
 Use `PASS`, `FAIL`, `UNAVAILABLE`, `PARTIAL`, or `SKIPPED` as explicit result labels.
@@ -165,9 +191,9 @@ Report fresh adjacent skips separately, with their actual node IDs and reasons.
 
 **Purpose**: Establish the explicit reservation, existing environment, and local evidence paths.
 
-- [X] T001 Confirm the scope and retained requirements in `specs/3494-browser-capture-statistics/spec.md` and `specs/3494-browser-capture-statistics/plan.md`. Record the boundaries in `specs/3494-browser-capture-statistics/tasks.md`. (delivered: specs/3494-browser-capture-statistics/tasks.md) (evidence: /Users/jmorrison/.copilot/session-state/7178994b-cbb3-4f5d-9d9e-8afb0922529b/files/issue3494-implementation/baseline/manifest.txt)
-- [X] T002 Verify the existing interpreter, tools, Chromium, and isolated-server capabilities. Save their versions and unavailable capabilities in `$SESSION_DIR/environment.txt`. (delivered: specs/3494-browser-capture-statistics/tasks.md) (evidence: /Users/jmorrison/.copilot/session-state/7178994b-cbb3-4f5d-9d9e-8afb0922529b/files/issue3494-implementation/environment.txt)
-- [X] T003 Record the explicit feature manifest in `specs/3494-browser-capture-statistics/tasks.md`. Save the original conftest, capture invariants, and existing-change boundary in `$SESSION_DIR/baseline/`. (delivered: specs/3494-browser-capture-statistics/tasks.md) (evidence: /Users/jmorrison/.copilot/session-state/7178994b-cbb3-4f5d-9d9e-8afb0922529b/files/issue3494-implementation/baseline/manifest.txt)
+- [X] T001 Confirm the scope and retained requirements in `specs/3494-browser-capture-statistics/spec.md` and `specs/3494-browser-capture-statistics/plan.md`. Record the boundaries in `specs/3494-browser-capture-statistics/tasks.md`. (delivered: specs/3494-browser-capture-statistics/tasks.md)
+- [ ] T002 Verify the existing interpreter, tools, Chromium, and isolated-server capabilities. Save their versions and unavailable capabilities in `$SESSION_DIR/environment.txt`. UNAVAILABLE: the original environment record is absent.
+- [ ] T003 Record the explicit feature manifest in `specs/3494-browser-capture-statistics/tasks.md`. Save the original conftest, capture invariants, and existing-change boundary in `$SESSION_DIR/baseline/`. The manifest remains here, but the saved baseline is UNAVAILABLE.
 
 Set `PYTHONDONTWRITEBYTECODE=1`.
 Set session-local pytest, Ruff, Black, mypy, and general cache paths.
@@ -184,12 +210,12 @@ Preserve any unrelated existing changes.
 
 **Purpose**: Create all direct contracts and guard cases before the browser tests and seed repair.
 
-- [X] T004 Add a semantic call recorder in `tests/unit/upgrade_portal/test_e2e_capture_statistics.py`. Record the real index builder's inputs and outputs, then restore the patch after each test. (delivered: tests/unit/upgrade_portal/test_e2e_capture_statistics.py) (evidence: /Users/jmorrison/.copilot/session-state/7178994b-cbb3-4f5d-9d9e-8afb0922529b/files/issue3494-implementation/focused-unit.txt)
-- [X] T005 Add `CaptureStatisticsGuard` in `tests/unit/upgrade_portal/test_e2e_capture_statistics.py`. Validate supplied statistics, normalized MAC membership, explicit fields, and checked counts. (delivered: tests/unit/upgrade_portal/test_e2e_capture_statistics.py) (evidence: /Users/jmorrison/.copilot/session-state/7178994b-cbb3-4f5d-9d9e-8afb0922529b/files/issue3494-implementation/guard-proofs.txt)
-- [X] T006 Add `CaptureIndexGuard` in `tests/unit/upgrade_portal/test_e2e_capture_statistics.py`. Validate supplied index entries, explicit fields, and checked counts. (delivered: tests/unit/upgrade_portal/test_e2e_capture_statistics.py) (evidence: /Users/jmorrison/.copilot/session-state/7178994b-cbb3-4f5d-9d9e-8afb0922529b/files/issue3494-implementation/guard-proofs.txt)
-- [X] T007 Add parameterized `TestCaptureStatisticsGuards` cases in `tests/unit/upgrade_portal/test_e2e_capture_statistics.py`. Use independent positive controls and fresh damaged records. (delivered: tests/unit/upgrade_portal/test_e2e_capture_statistics.py) (evidence: /Users/jmorrison/.copilot/session-state/7178994b-cbb3-4f5d-9d9e-8afb0922529b/files/issue3494-implementation/guard-summary.json)
-- [X] T008 Add `TestGlobalCaptureStatistics` contracts in `tests/unit/upgrade_portal/test_e2e_capture_statistics.py`. Check all five captures, builder calls, index fields, counts, preservation, and the empty-site fixture. (delivered: tests/unit/upgrade_portal/test_e2e_capture_statistics.py) (evidence: /Users/jmorrison/.copilot/session-state/7178994b-cbb3-4f5d-9d9e-8afb0922529b/files/issue3494-implementation/focused-unit.txt)
-- [X] T009 Run the global contracts against unchanged seeds in `tests/unit/upgrade_portal/test_e2e_capture_statistics.py`. Save the actual red assertions and checked counts in `$SESSION_DIR/red-unit.txt`. (delivered: tests/unit/upgrade_portal/test_e2e_capture_statistics.py) (evidence: /Users/jmorrison/.copilot/session-state/7178994b-cbb3-4f5d-9d9e-8afb0922529b/files/issue3494-implementation/red-unit.txt)
+- [X] T004 Add a semantic call recorder in `tests/unit/upgrade_portal/test_e2e_capture_statistics.py`. Record the real index builder's inputs and outputs, then restore the patch after each test. (delivered: tests/unit/upgrade_portal/test_e2e_capture_statistics.py)
+- [X] T005 Add `CaptureStatisticsGuard` in `tests/unit/upgrade_portal/test_e2e_capture_statistics.py`. Validate supplied statistics, normalized MAC membership, explicit fields, and checked counts. (delivered: tests/unit/upgrade_portal/test_e2e_capture_statistics.py)
+- [X] T006 Add `CaptureIndexGuard` in `tests/unit/upgrade_portal/test_e2e_capture_statistics.py`. Validate supplied index entries, explicit fields, and checked counts. (delivered: tests/unit/upgrade_portal/test_e2e_capture_statistics.py)
+- [X] T007 Add parameterized `TestCaptureStatisticsGuards` cases in `tests/unit/upgrade_portal/test_e2e_capture_statistics.py`. Use independent positive controls and fresh damaged records. (delivered: tests/unit/upgrade_portal/test_e2e_capture_statistics.py)
+- [X] T008 Add `TestGlobalCaptureStatistics` contracts in `tests/unit/upgrade_portal/test_e2e_capture_statistics.py`. Check all five captures, builder calls, index fields, counts, preservation, and the empty-site fixture. (delivered: tests/unit/upgrade_portal/test_e2e_capture_statistics.py)
+- [ ] T009 Run the global contracts against unchanged seeds in `tests/unit/upgrade_portal/test_e2e_capture_statistics.py`. Save the actual red assertions and checked counts in `$SESSION_DIR/red-unit.txt`. UNAVAILABLE: the original red assertions and output are absent.
 
 ### Required direct contracts
 
@@ -261,10 +287,10 @@ Keep `conftest.py` unchanged through this checkpoint.
 
 **Independent test**: Chromium must pass one count case and three parameterized row cases with zero skips.
 
-- [X] T010 [US1] Add the semantic picker workflow in `tests/e2e/upgrade_portal/test_capture_version_comparison.py`. Use the owned page, real route, exact capture IDs, and safe navigation helpers. (delivered: tests/e2e/upgrade_portal/test_capture_version_comparison.py) (evidence: /Users/jmorrison/.copilot/session-state/7178994b-cbb3-4f5d-9d9e-8afb0922529b/files/issue3494-implementation/focused-browser.txt)
-- [X] T011 [US1] Add the separate visible-count case in `tests/e2e/upgrade_portal/test_capture_version_comparison.py`. Require exact text `3`. (delivered: tests/e2e/upgrade_portal/test_capture_version_comparison.py) (evidence: /Users/jmorrison/.copilot/session-state/7178994b-cbb3-4f5d-9d9e-8afb0922529b/files/issue3494-implementation/focused-browser.txt)
-- [X] T012 [US1] Add three parameterized row cases in `tests/e2e/upgrade_portal/test_capture_version_comparison.py`. Require each MAC, changed state, and exact version-change text. (delivered: tests/e2e/upgrade_portal/test_capture_version_comparison.py) (evidence: /Users/jmorrison/.copilot/session-state/7178994b-cbb3-4f5d-9d9e-8afb0922529b/files/issue3494-implementation/focused-browser.txt)
-- [X] T013 [US1] Run the new Chromium module against unchanged seeds in `tests/e2e/upgrade_portal/test_capture_version_comparison.py`. Save red count and row results in `$SESSION_DIR/red-browser.txt`. (delivered: tests/e2e/upgrade_portal/test_capture_version_comparison.py) (evidence: /Users/jmorrison/.copilot/session-state/7178994b-cbb3-4f5d-9d9e-8afb0922529b/files/issue3494-implementation/red-browser.txt)
+- [X] T010 [US1] Add the semantic picker workflow in `tests/e2e/upgrade_portal/test_capture_version_comparison.py`. Use the owned page, real route, exact capture IDs, and safe navigation helpers. (delivered: tests/e2e/upgrade_portal/test_capture_version_comparison.py)
+- [X] T011 [US1] Add the separate visible-count case in `tests/e2e/upgrade_portal/test_capture_version_comparison.py`. Require exact text `3`. (delivered: tests/e2e/upgrade_portal/test_capture_version_comparison.py)
+- [X] T012 [US1] Add three parameterized row cases in `tests/e2e/upgrade_portal/test_capture_version_comparison.py`. Require each MAC, changed state, and exact version-change text. (delivered: tests/e2e/upgrade_portal/test_capture_version_comparison.py)
+- [ ] T013 [US1] Run the new Chromium module against unchanged seeds in `tests/e2e/upgrade_portal/test_capture_version_comparison.py`. Save red count and row results in `$SESSION_DIR/red-browser.txt`. UNAVAILABLE: the original red browser output is absent.
 
 Open `/compare` and require a real HTTP `200` response.
 Select `e2e-capture-pre-0001` with `compare-before-select`.
@@ -298,8 +324,8 @@ Stop before any lifecycle, selection, or product change.
 
 **Independent test**: All five global captures must satisfy the direct input, index, and count contracts.
 
-- [X] T014 [US2] Replace only the empty-statistics block of `stand_in_capture` in `tests/e2e/upgrade_portal/conftest.py`. Supply per-device statistics to the shipped index builder. (delivered: tests/e2e/upgrade_portal/conftest.py) (evidence: /Users/jmorrison/.copilot/session-state/7178994b-cbb3-4f5d-9d9e-8afb0922529b/files/issue3494-implementation/seed-preservation.txt)
-- [X] T015 [US2] Review the narrow edit in `tests/e2e/upgrade_portal/conftest.py` against the preservation contracts. Save the scoped diff and unchanged lifecycle evidence in `$SESSION_DIR/seed-preservation.txt`. (delivered: tests/e2e/upgrade_portal/conftest.py) (evidence: /Users/jmorrison/.copilot/session-state/7178994b-cbb3-4f5d-9d9e-8afb0922529b/files/issue3494-implementation/seed-preservation.txt)
+- [X] T014 [US2] Replace only the empty-statistics block of `stand_in_capture` in `tests/e2e/upgrade_portal/conftest.py`. Supply per-device statistics to the shipped index builder. (delivered: tests/e2e/upgrade_portal/conftest.py)
+- [ ] T015 [US2] Review the narrow edit in `tests/e2e/upgrade_portal/conftest.py` against the preservation contracts. Save the scoped diff and unchanged lifecycle evidence in `$SESSION_DIR/seed-preservation.txt`. UNAVAILABLE: the original scoped preservation evidence is absent.
 
 T014 requires both T009 and T013 to deliver seed-related red results.
 Do not repair the fixture before that evidence exists.
@@ -334,8 +360,8 @@ Preserve shipped MAC, virtual-chassis, API-refusal, and lifecycle rules.
 
 **Independent test**: Valid controls pass. Every damaged case raises its exact failure with checked counts.
 
-- [X] T016 [US3] Run `TestCaptureStatisticsGuards` in `tests/unit/upgrade_portal/test_e2e_capture_statistics.py`. Save positive controls and all expected negative results in `$SESSION_DIR/guard-proofs.txt`. (delivered: tests/unit/upgrade_portal/test_e2e_capture_statistics.py) (evidence: /Users/jmorrison/.copilot/session-state/7178994b-cbb3-4f5d-9d9e-8afb0922529b/files/issue3494-implementation/guard-proofs.txt)
-- [X] T017 [US3] Verify field causes, normalized membership, inventory-only version rejection, and exact counts from `tests/unit/upgrade_portal/test_e2e_capture_statistics.py`. Record the measured case totals in `$SESSION_DIR/guard-summary.json`. (delivered: tests/unit/upgrade_portal/test_e2e_capture_statistics.py) (evidence: /Users/jmorrison/.copilot/session-state/7178994b-cbb3-4f5d-9d9e-8afb0922529b/files/issue3494-implementation/guard-summary.json)
+- [ ] T016 [US3] Run `TestCaptureStatisticsGuards` in `tests/unit/upgrade_portal/test_e2e_capture_statistics.py`. Save positive controls and all expected negative results in `$SESSION_DIR/guard-proofs.txt`. UNAVAILABLE: the original guard output is absent.
+- [ ] T017 [US3] Verify field causes, normalized membership, inventory-only version rejection, and exact counts from `tests/unit/upgrade_portal/test_e2e_capture_statistics.py`. Record the measured case totals in `$SESSION_DIR/guard-summary.json`. UNAVAILABLE: the original measured summary is absent.
 
 Run all related guard selectors in one pytest invocation.
 Require positive case and field-check counts for valid controls.
@@ -352,30 +378,30 @@ Reject skips, broad exceptions, source-text assertions, and seed-dependent negat
 
 **Purpose**: Prove the repaired behavior, full browser compatibility, changed-region coverage, and configured quality results.
 
-- [X] T018 Run the focused unit and contract scope from `specs/3494-browser-capture-statistics/plan.md`. The final combined scope passed 371 cases with zero skips. (delivered: tests/unit/upgrade_portal/test_e2e_capture_statistics.py) (evidence: /Users/jmorrison/.copilot/session-state/7178994b-cbb3-4f5d-9d9e-8afb0922529b/files/issue3494-validation/reviewed-unit.xml)
-- [X] T019 Run the required new cases in `tests/e2e/upgrade_portal/test_capture_version_comparison.py` with strict Chromium. Save four passing cases and zero skips in `$SESSION_DIR/focused-browser.txt`. (delivered: tests/e2e/upgrade_portal/test_capture_version_comparison.py) (evidence: /Users/jmorrison/.copilot/session-state/7178994b-cbb3-4f5d-9d9e-8afb0922529b/files/issue3494-implementation/focused-browser.txt)
-- [X] T020 Run every journey under `tests/e2e/upgrade_portal`, including nested modules and run controls. The default scope passed 322 cases and skipped 52 existing cases. The opt-in runner executed all 51 cases separately. Its result was 22 passed, 19 baseline failures, and 10 expected failures. The identical immutable baseline had 21 passed, 20 failures, and 10 expected failures. No new group failed. This result is not a green opt-in suite. (delivered: specs/3494-browser-capture-statistics/tasks.md) (evidence: /Users/jmorrison/.copilot/session-state/7178994b-cbb3-4f5d-9d9e-8afb0922529b/files/issue3494-validation/final-browser.xml and opt-in-comparison.json)
-- [X] T021 Create a session-local branch coverage configuration for the three authorized Python files. Preserve all tracked coverage settings. Use greenlet tracing for the real Playwright calls. (delivered: tests/e2e/upgrade_portal/test_capture_version_comparison.py) (evidence: /Users/jmorrison/.copilot/session-state/7178994b-cbb3-4f5d-9d9e-8afb0922529b/files/issue3494-validation/coverage.ini)
-- [X] T022 [P] Measure the new unit module with the session coverage configuration. All 86 cases passed, including the isolated missing-package guard proof. (delivered: tests/unit/upgrade_portal/test_e2e_capture_statistics.py) (evidence: /Users/jmorrison/.copilot/session-state/7178994b-cbb3-4f5d-9d9e-8afb0922529b/files/issue3494-validation/last-unit.xml)
-- [X] T023 [P] Measure the new browser module with strict Chromium and the session coverage configuration. All four required cases passed without skips. (delivered: tests/e2e/upgrade_portal/test_capture_version_comparison.py) (evidence: /Users/jmorrison/.copilot/session-state/7178994b-cbb3-4f5d-9d9e-8afb0922529b/files/issue3494-validation/final-browser.xml)
-- [X] T024 Combine current-source coverage data. All 405 changed executable lines and 46 guard branch paths have complete coverage. No changed line is excluded. (delivered: tests/e2e/upgrade_portal/conftest.py and both new test modules) (evidence: /Users/jmorrison/.copilot/session-state/7178994b-cbb3-4f5d-9d9e-8afb0922529b/files/issue3494-validation/coverage-measure.json)
-- [X] T025 [P] Add the owned test-repair note in `changelog.d/issue-3494-browser-capture-statistics.md`. Use one `### Fixed` heading and name #3494. (delivered: changelog.d/issue-3494-browser-capture-statistics.md) (evidence: /Users/jmorrison/.copilot/session-state/7178994b-cbb3-4f5d-9d9e-8afb0922529b/files/issue3494-implementation/implementation-results.json)
-- [X] T026 [P] Compile the three authorized Python files and `MistHelper.py` without repository bytecode. All four compiled successfully. (delivered: the three reserved Python files) (evidence: /Users/jmorrison/.copilot/session-state/7178994b-cbb3-4f5d-9d9e-8afb0922529b/files/issue3494-validation/gate-results.json)
-- [X] T027 [P] Run full configured Ruff from `pyproject.toml`. The full root scope passed without findings. (delivered: the three reserved Python files) (evidence: /Users/jmorrison/.copilot/session-state/7178994b-cbb3-4f5d-9d9e-8afb0922529b/files/issue3494-validation/gate-results.json)
-- [X] T028 [P] Run full configured Black from `pyproject.toml` without fixes. All 2002 files were unchanged. (delivered: the three reserved Python files) (evidence: /Users/jmorrison/.copilot/session-state/7178994b-cbb3-4f5d-9d9e-8afb0922529b/files/issue3494-validation/gate-results.json)
-- [X] T029 [P] Run the exact CI mypy targets from `.github/workflows/ci.yml`. All 663 source files passed. The two new test modules also passed a separate strict check. (delivered: both new test modules) (evidence: /Users/jmorrison/.copilot/session-state/7178994b-cbb3-4f5d-9d9e-8afb0922529b/files/issue3494-validation/gate-results.json)
-- [X] T030 [P] Run `bandit-exclude-check` against the unchanged exclusions in `pyproject.toml`. Both source-path samples passed. (delivered: the unchanged exclusion boundary) (evidence: /Users/jmorrison/.copilot/session-state/7178994b-cbb3-4f5d-9d9e-8afb0922529b/files/issue3494-validation/gate-results.json)
-- [X] T031 Run full configured Bandit after T030. The scan checked 786 files and 213949 lines, with zero findings. Its configured scope excludes tests. (delivered: the unchanged product boundary) (evidence: /Users/jmorrison/.copilot/session-state/7178994b-cbb3-4f5d-9d9e-8afb0922529b/files/issue3494-validation/bandit.json)
-- [X] T032 [P] Run the full unchanged test-quality ratchet before committing. It checked 994 files, including both new modules. It found zero new findings against 725 existing findings. (delivered: both new test modules) (evidence: /Users/jmorrison/.copilot/session-state/7178994b-cbb3-4f5d-9d9e-8afb0922529b/files/issue3494-validation/test-quality-final.json)
-- [X] T033 [P] Verify local feature links directly before staging. Four Markdown files contained three valid local links. The tracked-only probe checked zero untracked files, so it was not sufficient evidence. (delivered: the three feature documents and the owned fragment) (evidence: /Users/jmorrison/.copilot/session-state/7178994b-cbb3-4f5d-9d9e-8afb0922529b/files/issue3494-validation/gate-results.json)
-- [ ] T034 [P] Complete the dictionary-based STE grade. The available heuristic grade covered seven files and scored 92 through 98. Its dictionary_used value was false for every file. Full STE verification remains UNAVAILABLE until the licensed dictionary and language model are available. No score or exit code converts that limitation into a pass. (evidence: /Users/jmorrison/.copilot/session-state/7178994b-cbb3-4f5d-9d9e-8afb0922529b/files/issue3494-validation/ste.json)
-- [X] T035 Summarize exact gate outcomes and owned-server cleanup. Preserve the optional baseline failures and unavailable STE capability. (delivered: specs/3494-browser-capture-statistics/tasks.md) (evidence: /Users/jmorrison/.copilot/session-state/7178994b-cbb3-4f5d-9d9e-8afb0922529b/files/issue3494-validation/gate-results.json)
-- [X] T036 Analyze the explicit spec, plan, tasks, scoped diff, manifest, and evidence. Correct the dependency guard, new class structure, action logs, coverage guide, and trailer. The final structure has 13 compliant classes and 35 compliant methods. (delivered: the two new test modules and owned feature documents) (evidence: /Users/jmorrison/.copilot/session-state/7178994b-cbb3-4f5d-9d9e-8afb0922529b/files/issue3494-validation/analysis.md)
-- [X] T037 Reconcile the seven-file manifest and completion evidence. The eight protected file checks and protected-tree comparison passed. (delivered: specs/3494-browser-capture-statistics/tasks.md) (evidence: /Users/jmorrison/.copilot/session-state/7178994b-cbb3-4f5d-9d9e-8afb0922529b/files/issue3494-validation/preservation.json)
+- [ ] T018 Run the focused unit and contract scope from `specs/3494-browser-capture-statistics/plan.md`. The original report states 371 passed with zero skips. UNAVAILABLE: the original reviewed unit XML is absent.
+- [ ] T019 Run the required new cases in `tests/e2e/upgrade_portal/test_capture_version_comparison.py` with strict Chromium. Save four passing cases and zero skips in `$SESSION_DIR/focused-browser.txt`. UNAVAILABLE: the original browser output is absent.
+- [ ] T020 Run every journey under `tests/e2e/upgrade_portal`, including nested modules and run controls. The original report states 322 passed and 52 existing skips. It reports all 51 opt-in cases executed separately, with 22 passed, 19 baseline failures, and 10 expected failures. It reports 21 passed, 20 failures, and 10 expected failures on the identical baseline. No new group failed according to that report. This result is not a green opt-in suite. UNAVAILABLE: the original browser XML and opt-in comparison are absent.
+- [ ] T021 Create a session-local branch coverage configuration for the three authorized Python files. Preserve all tracked coverage settings. Use greenlet tracing for the real Playwright calls. UNAVAILABLE: the original coverage configuration is absent.
+- [ ] T022 [P] Measure the new unit module with the session coverage configuration. The original report states 86 passed, including the isolated missing-package guard proof. UNAVAILABLE: the original measured unit XML is absent.
+- [ ] T023 [P] Measure the new browser module with strict Chromium and the session coverage configuration. The original report states four required cases passed without skips. UNAVAILABLE: the original measured browser XML is absent.
+- [ ] T024 Combine current-source coverage data. The original report states complete coverage for 405 changed executable lines and 46 guard branch paths, without exclusions. UNAVAILABLE: the original coverage measurement is absent.
+- [X] T025 [P] Add the owned test-repair note in `changelog.d/issue-3494-browser-capture-statistics.md`. Use one `### Fixed` heading and name #3494. (delivered: changelog.d/issue-3494-browser-capture-statistics.md)
+- [ ] T026 [P] Compile the three authorized Python files and `MistHelper.py` without repository bytecode. The original report states all four compiled successfully. UNAVAILABLE: the original gate output is absent.
+- [ ] T027 [P] Run full configured Ruff from `pyproject.toml`. The original report states the full root scope passed without findings. UNAVAILABLE: the original gate output is absent.
+- [ ] T028 [P] Run full configured Black from `pyproject.toml` without fixes. The original report states all 2002 files were unchanged. UNAVAILABLE: the original gate output is absent.
+- [ ] T029 [P] Run the exact CI mypy targets from `.github/workflows/ci.yml`. The original report states 663 source files passed and both new test modules passed a separate strict check. UNAVAILABLE: the original gate output is absent.
+- [ ] T030 [P] Run `bandit-exclude-check` against the unchanged exclusions in `pyproject.toml`. The original report states both source-path samples passed. UNAVAILABLE: the original gate output is absent.
+- [ ] T031 Run full configured Bandit after T030. The original report states 786 files and 213949 lines had zero findings. Its configured scope excludes tests. UNAVAILABLE: the original Bandit report is absent.
+- [ ] T032 [P] Run the full unchanged test-quality ratchet before committing. The original report states 994 files included both new modules, with zero new findings against 725 existing findings. UNAVAILABLE: the original ratchet report is absent.
+- [ ] T033 [P] Verify local feature links directly before staging. The original report states four Markdown files contained three valid local links. The tracked-only probe checked zero untracked files, so it was not sufficient evidence. UNAVAILABLE: the original gate output is absent.
+- [ ] T034 [P] Complete the dictionary-based STE grade. The available heuristic grade covered seven files and scored 92 through 98. Its dictionary_used value was false for every file. Full STE verification remains UNAVAILABLE until the licensed dictionary and language model are available. No score or exit code converts that limitation into a pass. The original partial report is also unavailable.
+- [ ] T035 Summarize exact gate outcomes and owned-server cleanup. Preserve the optional baseline failures and unavailable STE capability. The historical summary remains here, but the original gate and cleanup evidence is UNAVAILABLE.
+- [ ] T036 Analyze the explicit spec, plan, tasks, scoped diff, manifest, and evidence. Correct the dependency guard, new class structure, action logs, coverage guide, and trailer. The original report states 13 compliant classes and 35 compliant methods. UNAVAILABLE: the original analysis is absent.
+- [ ] T037 Reconcile the seven-file manifest and completion evidence. The original report states eight protected file checks and a protected-tree comparison passed. UNAVAILABLE: the original preservation report is absent.
 - [ ] T038 Make the authorized local-only commit after this document and the staged checks are complete. Save its exact SHA, file list, and message outside the committed documents in `$VALIDATION_DIR/local-commit.json`. That external proof records completion without a self-referential commit or a dirty worktree.
-- [X] T039 [P] Run the tracked Markdown link check after staging the seven-file manifest. Four tracked Markdown files passed, with zero broken links. (delivered: the three feature documents and owned fragment) (evidence: /Users/jmorrison/.copilot/session-state/7178994b-cbb3-4f5d-9d9e-8afb0922529b/files/issue3494-validation/gate-results.json)
+- [ ] T039 [P] Run the tracked Markdown link check after staging the seven-file manifest. The original report states four tracked Markdown files passed without broken links. UNAVAILABLE: the original gate output is absent.
 - [ ] T040 [P] Complete dictionary-based STE verification. Repeat the available heuristic grade after the final documents. Save its PARTIAL result outside the checkout. This task remains unavailable while the licensed dictionary and language model are absent.
-- [X] T041 Record final local results, remaining capability limits, and task evidence here. Keep the actual commit SHA in the external local-commit proof, not this committed document. Publication requires a separate parent release. (delivered: specs/3494-browser-capture-statistics/tasks.md) (evidence: /Users/jmorrison/.copilot/session-state/7178994b-cbb3-4f5d-9d9e-8afb0922529b/files/issue3494-validation/gate-results.json)
+- [ ] T041 Record final local results, remaining capability limits, and task evidence here. Keep the actual commit SHA in the external local-commit proof, not this committed document. Publication requires a separate parent release. The historical summary remains here, but its original gate evidence is UNAVAILABLE.
 
 ### Focused commands
 
@@ -783,7 +809,7 @@ Record the tracked link and partial STE results without overstating their covera
 All 41 tasks use the required checkbox, sequential ID, applicable labels, and exact file paths.
 No task authorizes product changes, lifecycle remediation, shared-state writes, or remote operations.
 
-## Implementation completion notes
+## Historical implementation completion notes
 
 The user limited this implementation stage to source delivery and focused verification.
 The root agent owns broader regression, configured gates, changed-region coverage, analysis, and any local commit.
@@ -793,7 +819,7 @@ The focused checks below do not complete T027 or T028, which require full reposi
 
 **REPO_ROOT**: `/Users/jmorrison/GitHub/copilot-worktrees/MistHelper/jmorrison-juniper-laughing-couscous`.
 
-**SESSION_DIR**: `/Users/jmorrison/.copilot/session-state/7178994b-cbb3-4f5d-9d9e-8afb0922529b/files/issue3494-implementation`.
+**SESSION_DIR**: The original local implementation evidence directory is unavailable.
 
 ### Delivered file manifest
 
@@ -821,7 +847,7 @@ Issue #3375 remains unchanged.
 Issue #3359 remains a duplicate, not a separate repair.
 The separate visible-count case and all three rendered-row cases retain its requirements.
 
-### Fresh measured results
+### Historical measured results
 
 Each named text artifact records the full command and exit code.
 The XML artifacts retain every executed node ID.
