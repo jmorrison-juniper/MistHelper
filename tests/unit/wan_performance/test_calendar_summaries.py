@@ -7,7 +7,11 @@ import pytest
 
 from src.interfaces.portals.wan_performance.domain.calendar import CalendarPeriod, CalendarWindow
 from src.interfaces.portals.wan_performance.domain.measurement import MetricMeasurement
-from src.interfaces.portals.wan_performance.domain.summary import CalendarSummaries, StateObservationSummary
+from src.interfaces.portals.wan_performance.domain.summary import (
+    CalendarSummaries,
+    LinkEventSummary,
+    StateObservationSummary,
+)
 from src.interfaces.portals.wan_performance.presentation.offline_preview import OfflinePreviewFactory
 
 
@@ -208,13 +212,7 @@ def test_event_availability_and_congestion_summaries_preserve_incomplete_hours()
 
     daily = CalendarSummaries.build(records, first.identity)[0]
 
-    assert daily.link_event_summary is not None
-    assert daily.link_event_summary.complete_hours == 1
-    assert daily.link_event_summary.expected_hours == 24
-    assert daily.link_event_summary.up_minutes == 20
-    assert daily.link_event_summary.down_minutes == 30
-    assert daily.link_event_summary.flap_count == 2
-    assert daily.link_event_summary.observed_up_percent == 40
+    assert daily.link_event_summary == LinkEventSummary(1, 1, 24, 20, 30, 2, 40)
     assert daily.congestion_durations[0].minutes == 20
     assert daily.congestion_durations[0].complete_hours == 1
     assert daily.congestion_durations[1].minutes == 0
