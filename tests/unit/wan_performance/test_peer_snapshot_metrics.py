@@ -14,6 +14,7 @@ def test_documented_units_and_zero_values() -> None:
         "sample_count": None,
         "coverage_fraction": None,
         "missing_reason": None,
+        "raw_values": None,
     }
     assert metrics["jitter"].value == 2.5
     assert metrics["loss"].unit == "%"

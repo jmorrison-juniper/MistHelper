@@ -44,13 +44,26 @@ class SnapshotRecords:
         samples = insight["samples"]
         expected = {"rx_bps", "tx_bps"}
         if isinstance(identity, CircuitIdentity):
-            expected.update({"avg_loss_pct", "avg_jitter_ms", "avg_latency_ms"})
+            expected.update(
+                {
+                    "avg_loss_pct",
+                    "avg_jitter_ms",
+                    "avg_latency_ms",
+                    "utilization_pct",
+                    "congestion_minutes_over_70_pct",
+                    "congestion_minutes_over_80_pct",
+                    "congestion_minutes_over_90_pct",
+                    "up_minutes",
+                    "down_minutes",
+                    "flap_count",
+                }
+            )
         if len(samples) != len(expected) or {sample["metric"] for sample in samples} != expected:
             raise ValueError("Gateway insights require the requested hourly metric samples.")
         hours = {sample["hour_start_utc"] for sample in samples}
         if len(hours) != 1:
             raise ValueError("Gateway insight metrics must use the same UTC hour.")
-        metrics = {sample["metric"]: SnapshotRates.parse(sample["value"], sample["unit"]) for sample in samples}
+        metrics = {sample["metric"]: SnapshotRates.parse_sample(sample) for sample in samples}
         return (HourlyMeasurement(identity, datetime.fromisoformat(hours.pop()), instant, metrics, "live"),)
 
     @staticmethod
@@ -110,6 +123,30 @@ class SnapshotRates:
         if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0:
             raise ValueError("WAN metric value must be a non-negative finite number.")
         return MetricMeasurement(value, unit, sample_count=1)
+
+    @staticmethod
+    def parse_sample(sample: dict[str, Any]) -> MetricMeasurement:
+        """Retain raw samples and explicit coverage for live insight measurements."""
+        value = sample["value"]
+        if isinstance(value, str):
+            value = float(value)
+        missing_reason = sample.get("missing_reason")
+        if value is None:
+            if not isinstance(missing_reason, str) or not missing_reason.strip():
+                missing_reason = "The API snapshot has no value."
+        elif missing_reason is not None:
+            raise ValueError("Present insight values cannot have a missing reason.")
+        raw_values = sample.get("raw_values")
+        if raw_values is not None:
+            raw_values = tuple(raw_values)
+        return MetricMeasurement(
+            value,
+            sample["unit"],
+            sample.get("sample_count"),
+            sample.get("coverage_fraction"),
+            missing_reason,
+            raw_values,
+        )
 
 
 class PortSnapshotMetrics:
