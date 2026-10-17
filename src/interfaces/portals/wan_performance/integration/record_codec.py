@@ -114,7 +114,13 @@ class RecordCodec:
         """Preserve complete circuit or peer-path identity through serialization."""
         gateway = GatewayIdentity(SiteIdentity(values["org_id"], values["site_id"]), values["gateway_id"])
         if "peer_mac" in values:
-            return PeerPathIdentity(gateway, values["port_name"], values["peer_mac"], values["tunnel_identity"])
+            return PeerPathIdentity(
+                gateway,
+                values["port_name"],
+                values["peer_port_id"],
+                values["peer_mac"],
+                values["tunnel_identity"],
+            )
         if "port_name" not in values:
             return gateway
         return CircuitIdentity(gateway, values["port_name"])

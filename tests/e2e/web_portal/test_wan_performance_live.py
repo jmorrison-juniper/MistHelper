@@ -289,6 +289,13 @@ def test_port_history_refresh_requires_csrf(client, live_service):
     live_service.store.acquire.assert_not_called()
 
 
+def test_peer_history_refresh_requires_csrf(client, live_service):
+    """Keep the selected-peer read behind the portal's CSRF protection."""
+    response = client.post("/wan-performance/live/refresh-peer")
+    assert response.status_code == 400
+    live_service.store.acquire.assert_not_called()
+
+
 @pytest.mark.parametrize("invalid", ["missing", "malformed", "unknown", "store", "quota"])
 def test_port_history_refresh_errors_are_explicit_without_snapshot_change(client, live_service, invalid):
     """Refuse unverified targets and unavailable stores before claiming success."""
@@ -323,6 +330,21 @@ def test_browser_selected_port_history_refresh(page: Page, live_browser_url: str
         page.get_by_test_id("wan-live-port-history-refresh").click()
         expect(page.get_by_test_id("wan-live-port")).to_be_visible()
     refresh_port.assert_called_once_with(target)
+    live_service.store.publish.assert_not_called()
+
+
+def test_browser_selected_peer_history_refresh(page: Page, live_browser_url: str, live_service):
+    """Submit a peer history request with the exact cached path identifiers."""
+    from src.interfaces.portals.wan_performance.collection.snapshot_records import SnapshotRecords
+
+    target = SnapshotRecords.build(live_service.store.cached.return_value)[1].identity
+    page.goto(
+        f"{live_browser_url}/wan-performance/live/vpn/site-one/{target.peer_mac}" f"?path_key={target.tunnel_identity}"
+    )
+    with patch.object(live_service, "refresh_peer", return_value=1) as refresh_peer:
+        page.get_by_test_id("wan-live-peer-history-refresh").click()
+        expect(page.get_by_test_id("wan-live-peer")).to_be_visible()
+    refresh_peer.assert_called_once_with(target)
     live_service.store.publish.assert_not_called()
 
 

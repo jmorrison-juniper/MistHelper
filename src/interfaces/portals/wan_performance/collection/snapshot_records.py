@@ -94,7 +94,9 @@ class SnapshotRecords:
         if any(not isinstance(value, str) or not value.strip() for value in fields):
             raise ValueError("WAN peer path requires peer_site_id, peer_port_id, and type.")
         path_key = hashlib.sha256(json.dumps(fields).encode()).hexdigest()
-        identity = PeerPathIdentity(cls._gateway(row, org_id), row["port_id"], row["peer_mac"], path_key)
+        identity = PeerPathIdentity(
+            cls._gateway(row, org_id), row["port_id"], row["peer_port_id"], row["peer_mac"], path_key
+        )
         return HourlyMeasurement(
             identity,
             instant.replace(minute=0, second=0, microsecond=0),
