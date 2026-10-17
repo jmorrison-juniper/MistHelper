@@ -1,3 +1,3 @@
 ### Update dependency requirements
 
-- **Changed**: Raise dependency minimums and remove most upper version limits. Install Waitress on all platforms. Issue #4281.
+- **Changed**: Raise dependency minimums, including Pillow 13, while retaining upper limits and the Windows-only Waitress condition. Align the development Hypothesis minimum. Issue #4281.
