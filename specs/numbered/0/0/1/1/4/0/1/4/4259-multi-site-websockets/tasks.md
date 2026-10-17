@@ -48,7 +48,7 @@
 
 ### Tests for User Story 2
 
-- [ ] T011 [P] [US2] Add site, device, map, asset, and Mist Edge picker cases to `tests/unit/websocket_streams/intake/test_ws_start_request.py`. Add client association and natural-key deduplication cases to `tests/unit/websocket_streams/intake/test_ws_client_discovery_3889.py`. Use only these existing test files.
+- [ ] T011 [P] [US2] Add unit cases for site, device, map, asset, Mist Edge, and client eligibility, full natural-key deduplication, and missing associations in the existing `tests/unit/websocket_streams/intake/test_ws_stream_pickers.py`.
 - [ ] T012 [P] [US2] Add SDK contract cases for authenticated requests, runtime limits 250 and 1000, all pages, `type="all"` device discovery, later-page failures, complete empty results, and verified wired-client traversal in `tests/contract/websocket_streams/test_ws_sdk_contract.py`. Cover paged site, device, map, asset, Mist Edge, SDK-client, and wired-client methods with maximum limits, identity retention, and failed-page handling. Base wired-client assertions on T003.
 - [ ] T013 [P] [US2] Add Flask picker response tests for complete, empty, denied, incomplete, and stale-scope outcomes in `tests/unit/websocket_streams/web/test_ws_web_services.py`.
 
