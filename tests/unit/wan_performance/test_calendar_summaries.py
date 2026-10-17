@@ -143,6 +143,84 @@ def test_weekly_mean_preserves_source_unweighted_daily_means() -> None:
     assert weekly.observed_hours == 3
 
 
+def test_monthly_p95_uses_maximum_daily_raw_sample_p95():
+    """Preserve the source maximum-of-daily-p95 rule for calendar months."""
+    dashboard = OfflinePreviewFactory.build()
+    first = dashboard.measurements[0]
+    records = tuple(
+        replace(
+            first,
+            hour_start_utc=datetime(2024, 1, day, 12, tzinfo=UTC),
+            collected_at_utc=datetime(2024, 1, day, 12, tzinfo=UTC),
+            metrics={
+                "utilization_pct": MetricMeasurement(
+                    float(day),
+                    "%",
+                    sample_count=1,
+                    coverage_fraction=1,
+                    raw_values=(float(day),),
+                )
+            },
+        )
+        for day in range(1, 21)
+    )
+
+    monthly = next(
+        summary for summary in CalendarSummaries.build(records, first.identity) if summary.period.kind == "monthly"
+    )
+
+    assert monthly.metrics["utilization_pct"] == (10.5, 20.0, 20.0, "%")
+
+
+def test_event_availability_and_congestion_summaries_preserve_incomplete_hours():
+    """Sum event minutes and sample occupancy only where each source window is complete."""
+    dashboard = OfflinePreviewFactory.build()
+    first = dashboard.measurements[0]
+    metrics = {
+        "up_minutes": MetricMeasurement(20.0, "min", sample_count=1, coverage_fraction=5 / 6),
+        "down_minutes": MetricMeasurement(30.0, "min", sample_count=1, coverage_fraction=5 / 6),
+        "flap_count": MetricMeasurement(2.0, "count", sample_count=1, coverage_fraction=1),
+        "congestion_minutes_over_70_pct": MetricMeasurement(20.0, "min", sample_count=6, coverage_fraction=1),
+        "congestion_minutes_over_80_pct": MetricMeasurement(
+            None, "min", sample_count=4, coverage_fraction=4 / 6, missing_reason="Incomplete samples."
+        ),
+    }
+    incomplete = {
+        name: MetricMeasurement(
+            None,
+            "min" if name != "flap_count" else "count",
+            sample_count=0,
+            coverage_fraction=0,
+            missing_reason="Incomplete source window.",
+        )
+        for name in metrics
+    }
+    records = (
+        replace(first, metrics=metrics, provenance="live"),
+        replace(
+            first,
+            hour_start_utc=first.hour_start_utc + timedelta(hours=1),
+            collected_at_utc=first.collected_at_utc + timedelta(hours=1),
+            metrics=incomplete,
+            provenance="live",
+        ),
+    )
+
+    daily = CalendarSummaries.build(records, first.identity)[0]
+
+    assert daily.link_event_summary is not None
+    assert daily.link_event_summary.complete_hours == 1
+    assert daily.link_event_summary.expected_hours == 24
+    assert daily.link_event_summary.up_minutes == 20
+    assert daily.link_event_summary.down_minutes == 30
+    assert daily.link_event_summary.flap_count == 2
+    assert daily.link_event_summary.observed_up_percent == 40
+    assert daily.congestion_durations[0].minutes == 20
+    assert daily.congestion_durations[0].complete_hours == 1
+    assert daily.congestion_durations[1].minutes == 0
+    assert daily.congestion_durations[1].complete_hours == 0
+
+
 def test_summary_does_not_turn_missing_metrics_into_zero() -> None:
     """Preserve absent values without claiming a healthy measurement."""
     dashboard = OfflinePreviewFactory.build()
