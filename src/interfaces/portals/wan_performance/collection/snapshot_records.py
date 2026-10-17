@@ -65,7 +65,14 @@ class SnapshotRecords:
         """Store only bit rates, not cumulative counters or unverified speed units."""
         identity = CircuitIdentity(cls._gateway(row, org_id), row["port_id"])
         metrics = PortSnapshotMetrics.parse(row)
-        return HourlyMeasurement(identity, instant.replace(minute=0, second=0, microsecond=0), instant, metrics, "live")
+        return HourlyMeasurement(
+            identity,
+            instant.replace(minute=0, second=0, microsecond=0),
+            instant,
+            metrics,
+            "live",
+            cls._up_observation(row.get("up")),
+        )
 
     @classmethod
     def _peer(cls, row: dict[str, Any], org_id: str, instant: datetime) -> HourlyMeasurement:
@@ -81,7 +88,13 @@ class SnapshotRecords:
             instant,
             PeerSnapshotMetrics.parse(row),
             "live",
+            cls._up_observation(row.get("up")),
         )
+
+    @staticmethod
+    def _up_observation(value: object) -> bool | None:
+        """Retain only an explicitly reported up/down state."""
+        return value if isinstance(value, bool) else None
 
 
 class SnapshotRates:

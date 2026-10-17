@@ -126,9 +126,13 @@ An equal value does not exceed the threshold.
 Missing, unknown, and non-exceeding hours break a run.
 Each report shows valid observation hours against expected calendar hours.
 These counts describe retained snapshots, not cumulative or continuous congestion duration.
-Port state uses the current boolean `up` field.
+Port and peer history retain an explicit boolean `up` observation in the configured history store.
+Daily, weekly, monthly, and rolling summaries report known up/down observations and changes between adjacent observed hours.
+The up percentage uses known observations only, and each summary reports known hours against expected hours.
+These values describe sampled state. Gaps break transitions, and the values do not claim measured availability or a complete flap count.
+Port state also appears as the current boolean `up` field.
 VPN details also show the current active-path flag, gateway-reported uptime in seconds, and last-seen time in UTC.
-These fields describe the cached observation, not availability minutes, flap counts, or continuous coverage.
+These fields describe the cached observation, not availability minutes or continuous coverage.
 Missing or invalid state metadata remains unknown and does not enter historical numeric aggregates.
 
 The common transport also counts actual requests across workers.
@@ -179,13 +183,14 @@ Their derived key is not a claimed source tunnel identifier.
 Detail pages query up to thirteen calendar months of retained history and show daily, weekly, and monthly summaries.
 The query bound is 397 days and at most 9,528 hourly records for one identity.
 This limit bounds reads. It does not change MistHelper storage retention.
-Daily summaries show mean, maximum, and observed p95 for persisted values.
+Daily summaries show mean, maximum, and observed p95 across retained hourly values.
 The p95 uses the source index rule and maximum fallback for fewer than 20 observations.
 Weekly and monthly p95 values use the maximum daily p95, as the source does for utilization.
 Detail pages also show rolling 3-hour, 12-hour, and 24-hour summaries ending at the latest retained observation.
 Each rolling window reports its observed record count, mean, maximum, and observed p95.
 This anchor avoids presenting stale retained data as a current measurement.
-These percentiles describe retained observations, not all raw samples within each hour.
+The portal does not collect raw within-hour samples for p95.
+Its p95 describes the retained hourly records, not the source raw-sample percentile within each hour.
 The port detail has a separate CSRF-protected, operator-triggered insight refresh.
 It requires the exact site, gateway, and port identity from the validated cached page.
 It shares the organization cooldown and request ledger with every other WAN refresh.

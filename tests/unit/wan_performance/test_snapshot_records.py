@@ -126,6 +126,8 @@ def test_current_peer_state_keeps_boolean_and_epoch_semantics():
     data["peers"][0].update(up=True, is_active=False, uptime=0, last_seen=1704112440)
     records = SnapshotRecords.build(data)
     states = SnapshotStates.build(data, records)
+    assert records[0].is_up_observation is False
+    assert records[1].is_up_observation is True
     assert states[records[0].natural_key] == {"Current link state": "Down"}
     assert states[records[1].natural_key] == {
         "Current link state": "Up",
@@ -158,3 +160,4 @@ def test_unknown_or_invalid_peer_state_does_not_become_healthy(values):
         "Gateway-reported uptime (s)": "Unknown",
         "Last observed (UTC)": "Unknown",
     }
+    assert records[1].is_up_observation is None
