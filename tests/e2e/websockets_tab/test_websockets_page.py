@@ -74,6 +74,7 @@ class FakeWebSocketServices:
         self.shell_inputs: list[dict[str, object]] = []  # Record shell input forms.
         self.terminal_data: dict[str, bytes] = {}  # Store fake terminal byte history by session.
         self.message_gap = False  # Let a browser journey expose a reconnect buffer gap.
+        self.batch_target_calls: list[tuple[str | None, str, str]] = []  # Record scoped target reads.
         lifecycle = SimpleNamespace(
             start=self.start_session, list=self.list_sessions, stop=self.stop_session, shutdown=self.shutdown
         )  # Group fake session lifecycle behavior.
@@ -85,7 +86,9 @@ class FakeWebSocketServices:
             delete=self.delete_session, download=self.download_session
         )  # Group fake artifact behavior.
         self.terminal = self  # Expose direct fake terminal behavior.
-        self.pickers = SimpleNamespace(site=self, related=self)  # Group fake picker behavior.
+        self.pickers = SimpleNamespace(
+            site=self, related=self, batch=SimpleNamespace(targets=self.batch_targets, sites=self.batch_sites)
+        )  # Group fake picker behavior.
 
     def reset(self) -> None:
         """Clear sessions before one browser story."""
@@ -95,6 +98,7 @@ class FakeWebSocketServices:
             self.shell_inputs.clear()  # Remove prior shell input.
             self.terminal_data.clear()  # Remove prior terminal bytes.
             self.message_gap = False  # Start each browser journey without lost buffered messages.
+            self.batch_target_calls.clear()  # Remove prior target discovery calls.
 
     def catalog_payload(self) -> dict[str, object]:
         """Return the catalog shown by the page."""
@@ -103,7 +107,7 @@ class FakeWebSocketServices:
             "reason": None,
             "flags": {},
             "limits": {"max_sessions": 2, "idle_seconds": 120, "capture_seconds": 60},
-            "channels": [self._channel()],
+            "channels": [self._channel(), self._device_command_channel()],
             "utilities": self._utilities(),
         }  # Catalog.
 
@@ -212,6 +216,11 @@ class FakeWebSocketServices:
         row = {"id": DEVICE_ID, "label": "EX Switch 1", "family": "ex", "detail": "EX4100"}  # Device row.
         return {"rows": [row], "total_count": 1, "reason": None}  # Picker payload.
 
+    def sites(self) -> dict[str, object]:
+        """Return the complete fake organization site list."""
+        rows = [{"id": SITE_ID, "label": "HQ"}, {"id": SITE_ID_2, "label": "Branch"}]  # Stable site identities.
+        return {"rows": rows, "total_count": len(rows), "reason": None}  # Complete picker payload.
+
     def maps(self, site_id: str) -> dict[str, object]:
         """Return no maps for these stories."""
         return {"rows": [], "total_count": 0, "reason": f"The site {site_id} has no maps."}  # Empty picker.
@@ -232,6 +241,33 @@ class FakeWebSocketServices:
         """Return no Mist Edges for these stories."""
         return {"rows": [], "total_count": 0, "reason": "No Mist Edge is available."}  # Empty picker.
 
+    def batch_targets(self, site_id: str | None, kind: str, key: str, _parents: dict[str, str]) -> dict[str, object]:
+        """Return one site-scoped device for browser selection stories."""
+        self.batch_target_calls.append((site_id, kind, key))  # Retain only the bounded operation scope.
+        row = {
+            "id": DEVICE_ID,
+            "label": "EX Switch 1",
+            "family": "ex",
+            "detail": "EX4100",
+            "site_id": site_id,
+            "target_type": "device",
+        }  # Keep one deterministic natural target.
+        return {
+            "rows": [row],
+            "total_count": 1,
+            "complete": True,
+            "reason": None,
+            "excluded": {"incompatible_family": 0},
+            "scope": {"site_id": site_id},
+        }  # Match the complete discovery response.
+
+    def batch_sites(self, _kind: str, _key: str) -> dict[str, object]:
+        """Return the complete organization rows for a selected catalog operation."""
+        payload = self.sites()  # Reuse the full fake organization site list.
+        payload["complete"] = True  # Mark every fake page as complete.
+        payload["scope"] = {"organization": True}  # Preserve the organization target scope.
+        return payload  # Match the operation-driven site response.
+
     def shutdown(self) -> None:
         """Stop all fake sessions."""
         with self._lock:  # Stop sessions atomically.
@@ -250,6 +286,19 @@ class FakeWebSocketServices:
             "identifiers": [site_field],
             "repeatable": "site_id",
         }  # Channel.
+
+    def _device_command_channel(self) -> dict[str, object]:
+        """Return one channel with a site-scoped device target."""
+        site_field = {"name": "site_id", "label": "Site", "kind": "uuid", "required": True, "picker": "sites"}
+        device_field = {"name": "device_id", "label": "Device", "kind": "uuid", "required": True, "picker": "devices"}
+        return {
+            "key": "site.devices.cmd",
+            "scope": "site",
+            "name": "Device command events",
+            "description": "Live command output for each selected device.",
+            "identifiers": [site_field, device_field],
+            "repeatable": "device_id",
+        }  # Catalog metadata drives device choices.
 
     def _utilities(self) -> list[dict[str, object]]:
         """Return the fake utility catalog entries."""
@@ -607,3 +656,53 @@ def test_route_table_shows_columns(page: Any, websocket_portal: str) -> None:
     assert "Destination  Gateway" in text  # The header cells show in aligned columns.
     assert '"columns"' not in text  # The raw JSON text does not show.
     assert shot.exists()  # The screenshot was written.
+
+
+def test_scope_tabs_preserve_single_site_form(page: Any, websocket_portal: str) -> None:
+    """Keep the current form state when the operator changes scope tabs."""
+    open_page(page, websocket_portal)  # Load the WebSockets page.
+    single_tab = page.get_by_test_id("ws-single-site-tab")  # Read the current workflow tab.
+    multi_tab = page.get_by_test_id("ws-multi-site-tab")  # Read the new workflow tab.
+    assert single_tab.get_attribute("aria-selected") == "true"  # The current workflow starts selected.
+    page.get_by_test_id("ws-catalog-entry-site.stats.devices").click()  # Select one current operation.
+    multi_tab.click()  # Change tabs without submitting or canceling the operation.
+    page.get_by_test_id("ws-multi-site-panel").wait_for(state="visible")  # Show the multi-site controls.
+    single_tab.click()  # Return to the current workflow.
+    page.locator("#wsSingleSitePanel").wait_for(state="visible")  # Restore the single-site panel.
+    assert single_tab.get_attribute("aria-selected") == "true"  # Report the selected tab state.
+    assert multi_tab.get_attribute("aria-selected") == "false"  # Keep the other tab unselected.
+    assert page.locator("#wsSelectedTitle").inner_text() == "Device statistics"  # Preserve the pending selection.
+
+
+def test_multi_site_operation_loads_complete_site_choices(page: Any, websocket_portal: str) -> None:
+    """Derive organization site choices from the selected catalog operation."""
+    open_page(page, websocket_portal)  # Load the WebSockets page.
+    page.get_by_test_id("ws-multi-site-tab").click()  # Open the separate Multi Site workflow.
+    page.get_by_test_id("ws-batch-operation").select_option("channel:site.stats.devices")  # Choose site scope.
+    status = page.get_by_test_id("ws-batch-site-status")  # Read the accessible discovery state.
+    status.get_by_text("2 eligible site(s).").wait_for(timeout=READY_TIMEOUT_MS)  # Wait for complete site discovery.
+    page.get_by_test_id("ws-batch-sites").select_option("selected")  # Select an explicit site subset.
+    options = page.locator("#wsBatchSiteOptions")  # Read the multi-select options.
+    options.wait_for(state="visible", timeout=READY_TIMEOUT_MS)  # Show choices only for selected mode.
+    assert options.locator("option").count() == 2  # Keep every discovered natural key.
+
+
+def test_multi_site_operation_loads_site_scoped_devices(
+    page: Any, websocket_portal: str, fake_services: FakeWebSocketServices
+) -> None:
+    """Load catalog-driven device targets only for selected organization sites."""
+    open_page(page, websocket_portal)  # Load the WebSockets page.
+    page.get_by_test_id("ws-multi-site-tab").click()  # Open the Multi Site workflow.
+    page.get_by_test_id("ws-batch-operation").select_option("channel:site.devices.cmd")  # Choose device scope.
+    page.get_by_test_id("ws-batch-site-status").get_by_text("2 eligible site(s).").wait_for(
+        timeout=READY_TIMEOUT_MS
+    )  # Wait for complete site discovery.
+    page.get_by_test_id("ws-batch-sites").select_option("selected")  # Request an explicit site subset.
+    page.locator("#wsBatchSiteOptions").select_option(SITE_ID)  # Select one organization site.
+    status = page.get_by_test_id("ws-batch-target-status")  # Read the operation target state.
+    status.get_by_text("1 eligible resource(s).").wait_for(timeout=READY_TIMEOUT_MS)  # Wait for device discovery.
+    options = page.get_by_test_id("ws-batch-target-options")  # Read verified device choices.
+    assert options.locator("option").count() == 1  # Do not include devices from the other site.
+    assert "HQ" in options.locator("option").first.inner_text()  # Keep site context in the label.
+    assert fake_services.batch_target_calls[-1] == (SITE_ID, "channel", "site.devices.cmd")
+    # The newest request uses only the selected organization site.

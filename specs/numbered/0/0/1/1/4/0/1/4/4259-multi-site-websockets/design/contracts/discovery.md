@@ -11,6 +11,7 @@ They do not replace current picker endpoints.
 | - | - |
 | `GET /api/websockets/batches/sites?kind=channel&key=site.stats.devices` | Configured organization |
 | `GET /api/websockets/batches/sites/{site_id}/targets?kind=utility&key={catalog_key}` | Eligible resources for one operation and site |
+| `GET /api/websockets/batches/targets?kind=utility&key=org.mxedge.capture` | Organization-scoped operation targets |
 
 The second route accepts `device_id` or `map_id` only when catalog metadata requires that parent.
 Reject unknown query keys.

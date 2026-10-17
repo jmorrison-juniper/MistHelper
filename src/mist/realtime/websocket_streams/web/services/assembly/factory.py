@@ -37,6 +37,7 @@ from src.mist.realtime.websocket_streams.web.services.operations.terminal import
     WebSocketTerminalService,
 )  # Terminal actions.
 from src.mist.realtime.websocket_streams.web.services.pickers.related import (
+    BatchTargetPickerService,
     RelatedPickerService,
 )  # Related picker actions.
 from src.mist.realtime.websocket_streams.web.services.pickers.service import (
@@ -96,10 +97,13 @@ class WebSocketServiceFactory:
         site_pickers = SitePickerService(collaborators.picker, reason)  # Build site picker actions.
         related_pickers = RelatedPickerService(collaborators.picker, reason)  # Build related picker actions.
         client_suggestions = ClientSuggestionService(collaborators.picker, reason)  # Build scoped client suggestions.
+        batch_targets = BatchTargetPickerService(
+            collaborators.picker, collaborators.catalog, reason
+        )  # Build catalog-driven target discovery.
         return WebSocketServiceBundle(
             catalog,
             SessionServices(lifecycle, messages),
             artifacts,
             terminal,
-            PickerServices(site_pickers, related_pickers, client_suggestions),
+            PickerServices(site_pickers, related_pickers, client_suggestions, batch_targets),
         )  # Keep the service set fixed and explicit.
