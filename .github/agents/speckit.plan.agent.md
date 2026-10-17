@@ -59,6 +59,10 @@ You **MUST** consider the user input before proceeding (if not empty).
 
 2. **Load context**: Read FEATURE_SPEC and `.specify/memory/constitution.md`. Load IMPL_PLAN template (already copied).
 
+   For new bounded records, place supporting outputs under `FEATURE_DIR/design/`.
+   Keep primary command inputs at the root and no more than five children at each new level.
+   Preserve established layouts and use returned paths rather than duplicate artifacts.
+
 3. **Execute plan workflow**: Follow the structure in IMPL_PLAN template to:
    - Fill Technical Context (mark unknowns as "NEEDS CLARIFICATION")
    - Fill Constitution Check section from constitution
@@ -153,7 +157,7 @@ Command ends after Phase 2 planning. Report branch, IMPL_PLAN path, and generate
    - Do not include full implementation code, model/service/controller bodies, migrations, or complete test suites
    - Keep this artifact as a validation/run guide; implementation details belong in `tasks.md` and the implementation phase
 
-**Output**: data-model.md, /contracts/*, quickstart.md
+**Output**: design/data-model.md, design/contracts/*, design/quickstart.md for new bounded records.
 
 ## Key rules
 

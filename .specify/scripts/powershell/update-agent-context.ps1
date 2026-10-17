@@ -36,7 +36,7 @@ $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 . (Join-Path $ScriptDir 'common.ps1')
 
 # Acquire environment paths
-$envData = Get-FeaturePathsEnv
+$envData = Get-FeaturePathsEnv -NoPersist
 $REPO_ROOT     = $envData.REPO_ROOT
 $CURRENT_BRANCH = $envData.CURRENT_BRANCH
 $HAS_GIT       = $envData.HAS_GIT
@@ -468,4 +468,3 @@ function Main {
 }
 
 Main
-

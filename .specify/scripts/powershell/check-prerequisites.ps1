@@ -63,13 +63,8 @@ EXAMPLES:
 . "$PSScriptRoot/common.ps1"
 
 # Get feature paths.
-# In -PathsOnly mode this is pure resolution, so pass -NoPersist to opt out of
-# the feature.json write side effect (issue #3025).
-if ($PathsOnly) {
-    $paths = Get-FeaturePathsEnv -NoPersist
-} else {
-    $paths = Get-FeaturePathsEnv
-}
+# Every prerequisite inspection is read-only, including task and analysis checks.
+$paths = Get-FeaturePathsEnv -NoPersist
 
 # If paths-only mode, output paths and exit (no validation)
 if ($PathsOnly) {
@@ -128,15 +123,15 @@ if ($RequireTasks -and -not (Test-Path $paths.TASKS -PathType Leaf)) {
 $docs = @()
 
 # Always check these optional docs
-if (Test-Path $paths.RESEARCH) { $docs += 'research.md' }
-if (Test-Path $paths.DATA_MODEL) { $docs += 'data-model.md' }
+if (Test-Path $paths.RESEARCH) { $docs += [IO.Path]::GetRelativePath($paths.FEATURE_DIR, $paths.RESEARCH) }
+if (Test-Path $paths.DATA_MODEL) { $docs += [IO.Path]::GetRelativePath($paths.FEATURE_DIR, $paths.DATA_MODEL) }
 
 # Check contracts directory (only if it exists and has files)
 if ((Test-Path $paths.CONTRACTS_DIR) -and (Get-ChildItem -Path $paths.CONTRACTS_DIR -ErrorAction SilentlyContinue | Select-Object -First 1)) {
-    $docs += 'contracts/'
+    $docs += [IO.Path]::GetRelativePath($paths.FEATURE_DIR, $paths.CONTRACTS_DIR)
 }
 
-if (Test-Path $paths.QUICKSTART) { $docs += 'quickstart.md' }
+if (Test-Path $paths.QUICKSTART) { $docs += [IO.Path]::GetRelativePath($paths.FEATURE_DIR, $paths.QUICKSTART) }
 
 # Include tasks.md if requested and it exists
 if ($IncludeTasks -and (Test-Path $paths.TASKS)) {

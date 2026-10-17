@@ -2,7 +2,7 @@
 
 **Branch**: `jmorrison-jnpr-fix-generated-control-labels` | **Date**: 2026-10-13 | **Spec**: [spec.md](spec.md)
 
-**Input**: `specs/live/20261013-182828-fix-generated-control-labels/spec.md`
+**Input**: `specs/live/0/0/0/1/2/1/3/2/2/1/2/3/0/3/4/1/3/20261013-182828-fix-generated-control-labels/spec.md`
 
 ## Summary
 
@@ -40,7 +40,7 @@ Extend the existing browser proof and remove its strict expected-failure marker.
 web_portal/static/js/operations.js
 tests/e2e/web_portal/test_operations_accessible_names.py
 changelog.d/issue-4059-fix-generated-control-labels.md
-specs/live/20261013-182828-fix-generated-control-labels/
+specs/live/0/0/0/1/2/1/3/2/2/1/2/3/0/3/4/1/3/20261013-182828-fix-generated-control-labels/
   spec.md
   plan.md
   tasks.md
