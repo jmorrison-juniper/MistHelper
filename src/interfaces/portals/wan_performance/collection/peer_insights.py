@@ -6,7 +6,7 @@ from typing import Any, Protocol
 
 from mistapi.__api_response import APIResponse
 
-from src.interfaces.portals.wan_performance.collection.peer_metrics import PeerSnapshotMetrics
+from src.interfaces.portals.wan_performance.collection.snapshot_records import PeerSnapshotMetrics
 from src.interfaces.portals.wan_performance.domain.identity import PeerPathIdentity
 from src.interfaces.portals.wan_performance.domain.measurement import HourlyMeasurement
 
