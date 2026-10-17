@@ -153,7 +153,7 @@ if ($Timestamp -and $PSBoundParameters.ContainsKey('Number')) {
 
 # Determine branch prefix
 if ($Timestamp) {
-    $featureNum = Get-Date -Format 'yyyyMMdd-HHmmss'
+    $featureNum = [DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss')
     $branchName = "$featureNum-$branchSuffix"
 } else {
     # Determine branch number from existing feature directories. Auto-detect only
@@ -191,6 +191,10 @@ if ($branchName.Length -gt $maxBranchLength) {
 
 $featureDir = Resolve-SpecFeaturePath -SpecsDir $specsDir -BranchName $branchName -Number $Number -Timestamp:$Timestamp
 $specFile = Join-Path $featureDir 'spec.md'
+Assert-SpecFeatureDestination -SpecsDir $specsDir -FeatureDir $featureDir
+if (-not (Test-Path -LiteralPath $specFile) -and (Get-SpecDirectoryCount -Path $featureDir -AllowFeature) -ge 5) {
+    throw "Feature artifacts exceed five children: $featureDir. Examined 1 feature."
+}
 
 if (-not $DryRun) {
     if ((Test-Path -LiteralPath $featureDir -PathType Container) -and -not $AllowExistingBranch) {

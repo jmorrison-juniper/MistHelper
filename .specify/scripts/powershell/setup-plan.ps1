@@ -29,7 +29,7 @@ if ($RemainingArgs.Count -gt 0) {
 . "$PSScriptRoot/common.ps1"
 
 # Get all paths and variables from common functions
-$paths = Get-FeaturePathsEnv -ReturnNullOnError
+$paths = Get-FeaturePathsEnv -NoPersist
 if (-not $paths) {
     [Console]::Error.WriteLine("ERROR: Failed to resolve feature paths")
     exit 1
@@ -46,6 +46,9 @@ if (Test-Path $paths.IMPL_PLAN -PathType Leaf) {
         Write-Output "Plan already exists at $($paths.IMPL_PLAN), skipping template copy"
     }
 } else {
+    if (@(Get-ChildItem -LiteralPath $paths.FEATURE_DIR -Force -ErrorAction Stop).Count -ge 5) {
+        throw "Feature artifacts exceed five children: $($paths.FEATURE_DIR). Examined 1 feature."
+    }
     $content = Resolve-TemplateContent -TemplateName 'plan-template' -RepoRoot $paths.REPO_ROOT
     if ($null -ne $content) {
         $utf8NoBom = New-Object System.Text.UTF8Encoding($false)

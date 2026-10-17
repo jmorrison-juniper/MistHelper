@@ -2,7 +2,12 @@
 
 **Branch**: `[###-feature-name]` | **Date**: [DATE] | **Spec**: [link]
 
-**Input**: Numeric feature specification from `/specs/numbered/[base-5-route]/[###-feature-name]/spec.md`, or timestamp feature specification from `/specs/live/[timestamp-feature-name]/spec.md`
+**Input**: Numeric specification from `/specs/numbered/[eight-base-5-segments]/[feature]/spec.md`, or timestamp specification from `/specs/live/[seventeen-base-5-segments]/[feature]/spec.md`.
+
+Keep `spec.md`, `plan.md`, and `tasks.md` at the feature root.
+Place research, data model, quickstart, contracts, and checklists under `design/` for new bounded records.
+Keep five children or fewer at every new directory level.
+Use actual supporting-artifact paths returned by the prerequisite commands.
 
 **Note**: This template is filled in by the `/speckit.plan` command. See `.specify/templates/plan-template.md` for the execution workflow.
 
@@ -73,13 +78,17 @@ For a feature that uses Juniper Mist Cloud:
 ```text
 specs/numbered/[base-5-route]/[###-feature]/
 or
-specs/live/[timestamp-feature]/
-├── plan.md              # This file (/speckit.plan command output)
-├── research.md          # Phase 0 output (/speckit.plan command)
-├── data-model.md        # Phase 1 output (/speckit.plan command)
-├── quickstart.md        # Phase 1 output (/speckit.plan command)
-├── contracts/           # Phase 1 output (/speckit.plan command)
-└── tasks.md             # Phase 2 output (/speckit.tasks command - NOT created by /speckit.plan)
+specs/live/[seventeen-base-5-segments]/[timestamp-feature]/
+  spec.md
+  plan.md
+  tasks.md
+  analysis.md
+  design/
+    research.md
+    data-model.md
+    quickstart.md
+    contracts/
+    checklists/
 ```
 
 ### Source Code (repository root)

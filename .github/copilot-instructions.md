@@ -156,7 +156,15 @@ multithreaded mode, and `--capture-portal` for the upgrade capture portal.
 New Spec Kit records MUST use the managed roots `specs/numbered/`, `specs/live/`,
 `specs/skills/`, or `specs/indexes/`. Numeric records MUST use the fixed
 eight-level base-5 route from `.specify/scripts/powershell/spec-route.ps1`.
-Timestamp records MUST use `specs/live/`. The guard reads
+Timestamp records MUST use 17 base-5 UTC epoch-second segments under `specs/live/`.
+The full timestamp feature name remains the final directory.
+Use `Resolve-SpecFeaturePath` in `spec-route.ps1` to calculate the route.
+Existing direct timestamp records remain discoverable during migration.
+New records MUST use grouped routes and MUST NOT enter another feature directory.
+Each structural directory MUST have five children or fewer.
+Use `design/` for supporting artifacts when a new feature root would exceed five children.
+Read-only prerequisite, setup, and context commands MUST NOT change `.specify/feature.json`.
+The guard reads
 `tests/guardrails/process_folder_baseline.json`, reports examined counts, and
 rejects each new direct child that is not a managed root or a grandfathered
 baseline entry.

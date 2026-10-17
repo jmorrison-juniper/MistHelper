@@ -3,15 +3,72 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
 import pytest
+from misthelper_devtools.speckit_task_audit import TaskFileScanner
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 SPECS_ROOT = REPOSITORY_ROOT / "specs"
 BASELINE_PATH = Path(__file__).with_name("process_folder_baseline.json")
 APPROVED_MANAGED_ROOTS = frozenset({"indexes", "live", "numbered", "skills"})
+
+
+class ManagedSpecTree:
+    """Measure structural groups without treating established artifacts as features."""
+
+    def __init__(self) -> None:
+        self.directories = 0
+        self.records = 0
+        self.identities: set[str] = set()
+
+    def visit(self, directory: Path, depth: int = 0) -> None:
+        """Reject overflow, unsafe entries, and unsupported group boundaries."""
+        self.directories += 1
+        if directory.is_symlink():
+            raise AssertionError(f"Unsafe structural root: {directory}.")
+        children = list(directory.iterdir())
+        if len(children) > 5:
+            raise AssertionError(f"Managed group exceeds five children: {directory}: {len(children)}.")
+        width = 17 if "live" in directory.parts else 8
+        for child in children:
+            if child.is_symlink() or not child.is_dir():
+                raise AssertionError(f"Unsafe structural entry: {child}.")
+            if (child / "spec.md").is_file():
+                self.record(child, depth, width)
+            elif depth < width and re.fullmatch("[0-4]", child.name):
+                self.visit(child, depth + 1)
+            else:
+                raise AssertionError(f"Invalid structural group: {child}.")
+
+    def record(self, directory: Path, depth: int, width: int) -> None:
+        """Preserve artifact content while rejecting features beneath a feature."""
+        self.records += 1
+        if directory.name in self.identities:
+            raise AssertionError(f"Duplicate feature identity: {directory.name}.")
+        self.identities.add(directory.name)
+        direct_timestamp = width == 17 and depth == 0 and re.match(r"^\d{8}-\d{6}-", directory.name)
+        if depth != width and not direct_timestamp:
+            raise AssertionError(f"Invalid feature route: {directory}.")
+        for child in directory.rglob("*"):
+            if child.is_symlink():
+                raise AssertionError(f"Unsafe feature artifact: {child}.")
+            if child.name == "spec.md" and child.parent != directory:
+                raise AssertionError(f"Rejected nested feature: {child.parent}.")
+
+    def validate(self, roots: dict[str, Path]) -> str:
+        """Report traversal counts even when a structural entry cannot be read."""
+        try:
+            for name in ("live", "numbered"):
+                if name in roots:
+                    self.visit(roots[name])
+        except (AssertionError, OSError) as error:
+            raise AssertionError(
+                f"{error} Examined {self.directories} structural directories and {self.records} feature records."
+            ) from error
+        return f"{self.directories} structural directories, {self.records} feature records"
 
 
 def load_baseline(baseline_path: Path, examined_count: int = 0) -> tuple[set[str], set[str]]:
@@ -63,9 +120,11 @@ def validate_specs_structure(specs_root: Path, baseline_path: Path) -> str:
     violations = {name: count for name, count in level_counts.items() if count > 5}
     if violations:
         raise AssertionError(f"Managed specs roots exceed five children: {violations}")
+    structural_counts = ManagedSpecTree().validate(children)
     message = (
         f"process_folder_scope: {len(actual_names)} children examined, "
-        f"{len(legacy)} legacy grandfathered, {len(managed_present)} managed roots"
+        f"{len(legacy)} legacy grandfathered, {len(managed_present)} managed roots, "
+        f"{structural_counts}"
     )
     print(message)
     return message
@@ -123,3 +182,70 @@ def test_examined_counts_are_reported(capsys: pytest.CaptureFixture[str]) -> Non
     """Report the measured child and managed-root counts."""
     validate_specs_structure(SPECS_ROOT, BASELINE_PATH)
     assert "children examined" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("depth", [0, 1, 17])
+def test_six_children_fail_at_each_structural_depth(tmp_path: Path, depth: int) -> None:
+    """Reject overflow below the root as well as at the root."""
+    root = tmp_path / "specs"
+    (root / "legacy-feature").mkdir(parents=True)
+    parent = root / "live"
+    for _ in range(depth):
+        parent /= "0"
+    parent.mkdir(parents=True)
+    for number in range(6):
+        (parent / str(number)).mkdir()
+    baseline = tmp_path / "baseline.json"
+    baseline.write_text(
+        json.dumps(
+            {"managed_roots": sorted(APPROVED_MANAGED_ROOTS), "grandfathered_legacy_children": ["legacy-feature"]}
+        )
+    )
+    with pytest.raises(AssertionError, match="five children"):
+        validate_specs_structure(root, baseline)
+
+
+def test_grouped_timestamp_record_is_valid(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """Accept a full timestamp route without treating its groups as features."""
+    root = tmp_path / "specs"
+    (root / "legacy-feature").mkdir(parents=True)
+    feature = root / "live"
+    for _ in range(17):
+        feature /= "0"
+    feature /= "19700101-000000-first"
+    feature.mkdir(parents=True)
+    (feature / "spec.md").write_text("**Status**: Specified\n")
+    tasks = feature / "tasks.md"
+    tasks.write_text("- [ ] T001 Required grouped work\n")
+    baseline = tmp_path / "baseline.json"
+    baseline.write_text(
+        json.dumps(
+            {"managed_roots": sorted(APPROVED_MANAGED_ROOTS), "grandfathered_legacy_children": ["legacy-feature"]}
+        )
+    )
+    validate_specs_structure(root, baseline)
+    assert "1 feature records" in capsys.readouterr().out
+    counts = TaskFileScanner().scan(tasks)
+    assert (counts.checked, counts.unchecked, counts.malformed) == (0, 1, 0)
+    tasks.write_text("- [x] T001 Required grouped work\n")
+    counts = TaskFileScanner().scan(tasks)
+    assert (counts.checked, counts.unchecked, counts.malformed) == (1, 0, 0)
+
+
+def test_feature_nested_under_feature_fails(tmp_path: Path) -> None:
+    """Reject a feature parent even when the child count is below five."""
+    root = tmp_path / "specs"
+    (root / "legacy-feature").mkdir(parents=True)
+    feature = root / "live" / "20261013-182828-parent"
+    nested = feature / "design" / "20261014-050510-child"
+    nested.mkdir(parents=True)
+    (feature / "spec.md").write_text("# Parent\n")
+    (nested / "spec.md").write_text("# Child\n")
+    baseline = tmp_path / "baseline.json"
+    baseline.write_text(
+        json.dumps(
+            {"managed_roots": sorted(APPROVED_MANAGED_ROOTS), "grandfathered_legacy_children": ["legacy-feature"]}
+        )
+    )
+    with pytest.raises(AssertionError, match="nested feature"):
+        validate_specs_structure(root, baseline)

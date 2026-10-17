@@ -164,11 +164,6 @@ function Get-FeaturePathsEnv {
         if (-not [System.IO.Path]::IsPathRooted($featureDir)) {
             $featureDir = Join-Path $repoRoot $featureDir
         }
-        # Persist to feature.json so future sessions without the env var still
-        # work - unless the caller opted out for read-only resolution (#3025).
-        if (-not $NoPersist) {
-            Save-FeatureJson -RepoRoot $repoRoot -FeatureDirectory $env:SPECIFY_FEATURE_DIRECTORY
-        }
     } elseif (Test-Path $featureJson) {
         $featureJsonRaw = Get-Content -LiteralPath $featureJson -Raw
         try {
@@ -192,6 +187,12 @@ function Get-FeaturePathsEnv {
         exit 1
     }
     
+    $featureDir = [IO.Path]::GetFullPath($featureDir)
+    Assert-SpecFeatureSelection -RepoRoot $repoRoot -FeatureDir $featureDir
+    if ($env:SPECIFY_FEATURE_DIRECTORY -and -not $NoPersist) {
+        Save-FeatureJson -RepoRoot $repoRoot -FeatureDirectory $env:SPECIFY_FEATURE_DIRECTORY
+    }
+
     # When no branch context exists (no SPECIFY_FEATURE, feature resolved via
     # SPECIFY_FEATURE_DIRECTORY or feature.json), fall back to the feature
     # directory basename so CURRENT_BRANCH is a usable identifier rather than
@@ -210,10 +211,54 @@ function Get-FeaturePathsEnv {
         FEATURE_SPEC  = Join-Path $featureDir 'spec.md'
         IMPL_PLAN     = Join-Path $featureDir 'plan.md'
         TASKS         = Join-Path $featureDir 'tasks.md'
-        RESEARCH      = Join-Path $featureDir 'research.md'
-        DATA_MODEL    = Join-Path $featureDir 'data-model.md'
-        QUICKSTART    = Join-Path $featureDir 'quickstart.md'
-        CONTRACTS_DIR = Join-Path $featureDir 'contracts'
+        RESEARCH      = Get-SpecDesignArtifact -FeatureDir $featureDir -Name 'research.md'
+        DATA_MODEL    = Get-SpecDesignArtifact -FeatureDir $featureDir -Name 'data-model.md'
+        QUICKSTART    = Get-SpecDesignArtifact -FeatureDir $featureDir -Name 'quickstart.md'
+        CONTRACTS_DIR = Get-SpecDesignArtifact -FeatureDir $featureDir -Name 'contracts'
+    }
+}
+
+function Get-SpecDesignArtifact {
+    <#
+    .SYNOPSIS
+    Select the actual design artifact and reject conflicting artifact ownership.
+    #>
+    param([string]$FeatureDir, [string]$Name)
+    $rootPath = Join-Path $FeatureDir $Name
+    $designPath = Join-Path (Join-Path $FeatureDir 'design') $Name
+    if ((Test-Path -LiteralPath $rootPath) -and (Test-Path -LiteralPath $designPath)) {
+        throw "Ambiguous feature artifact: $Name in $FeatureDir. Examined 2 locations."
+    }
+    if (Test-Path -LiteralPath $designPath) {
+        return $designPath
+    }
+    return $rootPath
+}
+
+function Assert-SpecFeatureSelection {
+    <#
+    .SYNOPSIS
+    Reject escaped paths, linked parents, and features selected inside another feature.
+    #>
+    param([string]$RepoRoot, [string]$FeatureDir)
+    $root = [IO.Path]::GetFullPath((Join-Path $RepoRoot 'specs'))
+    if (-not $FeatureDir.StartsWith($root + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "Feature selection is outside the specs root: $FeatureDir. Examined 0 parents."
+    }
+    $current = $FeatureDir
+    $examined = 0
+    while ($current -ne $root) {
+        if (Test-Path -LiteralPath $current) {
+            $examined++
+            $entry = Get-Item -LiteralPath $current -Force -ErrorAction Stop
+            if (-not $entry.PSIsContainer -or ($entry.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+                throw "Unsafe selected feature path: $current. Examined $examined parents."
+            }
+            if ($current -ne $FeatureDir -and (Test-Path -LiteralPath (Join-Path $current 'spec.md'))) {
+                throw "Rejected nested feature selection: $FeatureDir. Examined $examined parents."
+            }
+        }
+        $current = Split-Path -Parent $current
     }
 }
 

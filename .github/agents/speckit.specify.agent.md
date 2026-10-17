@@ -79,7 +79,15 @@ Given that feature description, do this:
 
 3. **Create the spec feature directory**:
 
-   Specs live under the default `specs/` directory unless the user explicitly provides `SPECIFY_FEATURE_DIRECTORY`.
+   Use the repository's managed route, not a new direct child of `specs/`.
+   For automatic timestamp allocation, run `.specify/scripts/powershell/create-new-feature.ps1 -Json -DryRun -Timestamp -ShortName "<short-name>" "<description>"`.
+   Derive `SPECIFY_FEATURE_DIRECTORY` from the returned `SPEC_FILE` parent.
+   For numeric allocation, use `-Number <issue-number>` instead of `-Timestamp`.
+   The numeric route has eight base-5 segments. The timestamp route has seventeen under `specs/live/`.
+   These repository rules override the generic flat-directory construction below.
+   If the user supplies an explicit directory, validate it through `Assert-SpecFeatureDestination` before writing.
+   Keep the active selector command-scoped in a shared workflow.
+   Do not commit a change to another owner's tracked feature pointer.
 
    **Resolution order for `SPECIFY_FEATURE_DIRECTORY`**:
    1. If the user explicitly provided `SPECIFY_FEATURE_DIRECTORY` (e.g., via environment variable, argument, or configuration), use it as-is
@@ -143,7 +151,9 @@ Given that feature description, do this:
 
 7. **Specification Quality Validation**: After writing the initial spec, validate it against quality criteria:
 
-   a. **Create Spec Quality Checklist**: Generate a checklist file at `SPECIFY_FEATURE_DIRECTORY/checklists/requirements.md` using the checklist template structure with these validation items:
+   a. **Create Spec Quality Checklist**: Generate a checklist file at `SPECIFY_FEATURE_DIRECTORY/design/checklists/requirements.md` using the checklist template structure with these validation items.
+      Use `../../spec.md` for its feature link. Preserve an established record's existing checklist path.
+      Keep five children or fewer at every new directory level.
 
       ```markdown
       # Specification Quality Checklist: [FEATURE NAME]

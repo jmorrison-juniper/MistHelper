@@ -26,7 +26,7 @@ if ($RemainingArgs.Count -gt 0) {
 . "$PSScriptRoot/common.ps1"
 
 # Get feature paths
-$paths = Get-FeaturePathsEnv -ReturnNullOnError
+$paths = Get-FeaturePathsEnv -NoPersist
 if (-not $paths) {
     [Console]::Error.WriteLine("ERROR: Failed to resolve feature paths")
     exit 1
@@ -46,14 +46,19 @@ if (-not (Test-Path $paths.FEATURE_SPEC -PathType Leaf)) {
     exit 1
 }
 
+if (-not (Test-Path -LiteralPath $paths.TASKS) -and
+    @(Get-ChildItem -LiteralPath $paths.FEATURE_DIR -Force -ErrorAction Stop).Count -ge 5) {
+    throw "Feature artifacts exceed five children: $($paths.FEATURE_DIR). Examined 1 feature."
+}
+
 # Build available docs list
 $docs = @()
-if (Test-Path $paths.RESEARCH) { $docs += 'research.md' }
-if (Test-Path $paths.DATA_MODEL) { $docs += 'data-model.md' }
+if (Test-Path $paths.RESEARCH) { $docs += [IO.Path]::GetRelativePath($paths.FEATURE_DIR, $paths.RESEARCH) }
+if (Test-Path $paths.DATA_MODEL) { $docs += [IO.Path]::GetRelativePath($paths.FEATURE_DIR, $paths.DATA_MODEL) }
 if ((Test-Path $paths.CONTRACTS_DIR) -and (Get-ChildItem -Path $paths.CONTRACTS_DIR -ErrorAction SilentlyContinue | Select-Object -First 1)) {
-    $docs += 'contracts/'
+    $docs += [IO.Path]::GetRelativePath($paths.FEATURE_DIR, $paths.CONTRACTS_DIR)
 }
-if (Test-Path $paths.QUICKSTART) { $docs += 'quickstart.md' }
+if (Test-Path $paths.QUICKSTART) { $docs += [IO.Path]::GetRelativePath($paths.FEATURE_DIR, $paths.QUICKSTART) }
 
 # Resolve tasks template through override stack
 $tasksTemplate = Resolve-Template -TemplateName 'tasks-template' -RepoRoot $paths.REPO_ROOT
