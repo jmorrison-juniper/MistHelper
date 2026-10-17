@@ -318,7 +318,7 @@ class WebPortalApp:
         if app.config.get("APISESSION") is None:
             logger.info("WAN background refresh is disabled because no Mist session exists.")
             return
-        from src.interfaces.portals.wan_performance.collection.background_refresh import (
+        from src.interfaces.portals.wan_performance.background_refresh import (
             WanBackgroundRefreshWorker,
         )
 
