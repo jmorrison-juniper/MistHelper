@@ -84,7 +84,22 @@ An absent session, unsupported transport, missing store, or Redis outage prevent
 An unsupported session transport or incomplete admission configuration does not stop portal startup.
 The portal logs the limitation, and live refresh returns an unavailable response.
 Common API session initialization still refuses an unaccounted transport.
-No automatic background worker starts.
+Set `WAN_BACKGROUND_REFRESH=false` to disable the worker.
+The default is true when the Mist session, shared Redis admission, and selected history store are ready.
+Each portal process starts a worker thread, but a Redis lease elects one process for the organization.
+The elected process runs an immediate bounded refresh, then waits 300 seconds after each attempt.
+The worker uses the same request ledger, five-minute organization cooldown, cache, and configured history store as manual refresh.
+It never creates a second database or Redis service.
+An unclean process exit leaves a 600-second lease, so another process waits for expiry before it can refresh.
+
+The source refresh worker polls bulk port data without a fixed cycle delay and orders work by stale site.
+The source dashboard precomputer writes five whole-dashboard result groups every 20 seconds.
+This portal instead reads at most 100 ports and 100 VPN paths per cycle, then refreshes one organization every 300 seconds.
+It computes selected-identity history summaries when a detail page opens.
+It does not publish whole-organization precomputed dashboard groups.
+The MistHelper collector has no complete all-site source dataset, so whole-organization summaries from its bounded pages would be incomplete.
+The source's continuous poll rate and full-site cache coverage are not migrated.
+The configured request ledger, bounded page size, and history store keep this worker inside the MistHelper deployment model.
 
 ### Request bounds
 
@@ -213,6 +228,7 @@ Unknown values and missing hours never become healthy observations.
 ### Cache isolation and failure
 
 Org cooldown keys use `misthelper:wan:v1:refresh:<org_id>`.
+Worker election keys use `misthelper:wan:v1:worker:<org_id>` with a 600-second lease.
 Recent snapshot keys use `misthelper:wan:v1:snapshot:<org_id>`, with a 3,600-second TTL.
 The shared request ledger uses `misthelper:api:v1:requests:<authentication_fingerprint>`.
 Organization ledgers use `misthelper:api:v1:org:<org_id>`.
