@@ -128,16 +128,22 @@ class BatchTargetPickerRoutes:
     @staticmethod
     def _query(allowed: set[str]) -> tuple[str, str, dict[str, str]]:
         """Read one catalog identity and only allowed parent identifiers."""
-        unknown = set(request.args.keys()) - allowed  # Refuse browser-supplied discovery controls.
-        if unknown:
-            raise StreamRequestError("bad_request", "The target request has an unknown field.")
-        values = {name: request.args.getlist(name) for name in allowed}  # Preserve duplicate query parameters.
-        if any(len(value) > 1 for value in values.values()):
-            raise StreamRequestError("bad_request", "The target request repeats a field.")
-        kind, key = request.args.get("kind"), request.args.get("key")
+        values = BatchTargetPickerRoutes._query_values(allowed)  # Validate parameter names and duplicate values.
+        kind, key = request.args.get("kind"), request.args.get("key")  # Read the required catalog identity.
         if not kind or not key:
             raise StreamRequestError("bad_request", "The target request needs a catalog operation.")
         parents = {name: value[0] for name, value in values.items() if name in {"device_id", "map_id"} and value}
         for name, value in parents.items():
             IdentifierRequest.require_uuid(value, name)  # Validate parent identifiers before discovery.
         return kind, key, parents  # Pass only the checked catalog identity and required parents.
+
+    @staticmethod
+    def _query_values(allowed: set[str]) -> dict[str, list[str]]:
+        """Reject unknown or repeated target query fields."""
+        unknown = set(request.args.keys()) - allowed  # Refuse browser-supplied discovery controls.
+        if unknown:
+            raise StreamRequestError("bad_request", "The target request has an unknown field.")
+        values = {name: request.args.getlist(name) for name in allowed}  # Preserve duplicate query parameters.
+        if any(len(value) > 1 for value in values.values()):
+            raise StreamRequestError("bad_request", "The target request repeats a field.")
+        return values  # Keep only complete, single-value route parameters.

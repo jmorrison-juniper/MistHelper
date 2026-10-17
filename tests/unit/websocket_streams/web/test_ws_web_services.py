@@ -409,6 +409,12 @@ def test_batch_target_route_rejects_unknown_query_fields() -> None:
     )  # Send an unsupported field through Flask.
     assert response.status_code == 400  # Reject unknown query keys.
     assert response.get_json()["code"] == "bad_request"  # Preserve the route error contract.
+    repeated = app.test_client().get(
+        "/api/websockets/batches/sites/11111111-2222-3333-4444-555555555555/targets"
+        "?kind=channel&kind=utility&key=site.stats.devices"
+    )  # Reject duplicate controls before any picker request.
+    assert repeated.status_code == 400  # Keep duplicate query fields invalid.
+    assert repeated.get_json()["code"] == "bad_request"  # Preserve the checked error contract.
 
 
 def test_batch_preview_freezes_complete_site_targets(tmp_path: Path) -> None:
