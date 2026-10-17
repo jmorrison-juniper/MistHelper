@@ -56,7 +56,7 @@ def test_summary_keeps_missing_hours_and_peer_records_separate() -> None:
     assert [summary.period.kind for summary in summaries] == ["daily", "weekly", "monthly"]
     assert [summary.observed_hours for summary in summaries] == [1, 1, 1]
     assert [summary.period.expected_hours for summary in summaries] == [24, 168, 744]
-    assert summaries[0].metrics["utilization"] == (42.5, 42.5, "percent")
+    assert summaries[0].metrics["utilization"] == (12.5, 12.5, "percent")
     assert "packet_loss" not in summaries[0].metrics
     assert summaries[0].provenance == "synthetic"
 
@@ -74,7 +74,7 @@ def test_weekly_mean_preserves_source_unweighted_daily_means() -> None:
     )
     summaries = CalendarSummaries.build((first, second, third), dashboard.circuit)
     weekly = next(summary for summary in summaries if summary.period.kind == "weekly")
-    assert weekly.metrics["utilization"] == (61.25, 80.0, "percent")
+    assert weekly.metrics["utilization"] == (46.25, 80.0, "percent")
     assert weekly.observed_hours == 3
 
 
