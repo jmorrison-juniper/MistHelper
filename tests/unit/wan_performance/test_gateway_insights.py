@@ -16,8 +16,31 @@ DEVICE_ID = "00000000-0000-0000-0000-000000000001"
 TARGET = GatewayIdentity(SiteIdentity("org-one", "site-one"), "aabbccddeeff")
 
 
-def test_selected_port_insights_use_four_calls_and_preserve_source_hour():
-    """Collect two port-specific rate series without a current-capacity conversion."""
+@pytest.fixture(autouse=True)
+def device_quality_response():
+    """Keep selected-port device insight tests on bounded synthetic responses."""
+    from src.interfaces.portals.wan_performance.collection import snapshot_client
+
+    end = datetime.now(UTC).replace(minute=0, second=0, microsecond=0)
+    start = end - timedelta(hours=1)
+    response = SimpleNamespace(
+        status_code=200,
+        data={
+            "start": int(start.timestamp()),
+            "end": int(end.timestamp()),
+            "interval": 3600,
+            "rt": [start.isoformat()],
+            "avg_loss": [0.25],
+            "avg_jitter": [4.5],
+            "avg_latency": [33.3],
+        },
+    )
+    with patch.object(snapshot_client, "getSiteInsightMetricsForDevice", return_value=response) as request:
+        yield request
+
+
+def test_selected_port_insights_collect_rates_and_quality_with_bounded_calls(device_quality_response):
+    """Collect source-compatible rates and link health for one exact port and hour."""
     from src.interfaces.portals.wan_performance.domain.identity import CircuitIdentity
 
     target = CircuitIdentity(TARGET, "ge-0/0/1")
@@ -38,11 +61,26 @@ def test_selected_port_insights_use_four_calls_and_preserve_source_hour():
         ) as metrics,
     ):
         result = GatewayInsights(session, admission).collect_for_port("org-one", target)
-    assert discovery.call_count + catalog.call_count + metrics.call_count == 4
-    assert admission.check.call_count == 4
+    assert discovery.call_count == 1
+    assert catalog.call_count == 1
+    assert metrics.call_count == 2
+    assert device_quality_response.call_count == 1
+    assert admission.check.call_count == 5
     assert {call.args[3] for call in metrics.call_args_list} == {"rx_bps", "tx_bps"}
     assert all(call.kwargs["port_id"] == target.port_name for call in metrics.call_args_list)
     assert all(call.kwargs["limit"] == 1 and call.kwargs["page"] == 1 for call in metrics.call_args_list)
+    device_quality_response.assert_called_once_with(
+        session,
+        "site-one",
+        "wan_link_health",
+        "aabbccddeeff",
+        port_id=target.port_name,
+        start=str(series.data["start"]),
+        end=str(series.data["end"]),
+        interval="1h",
+        limit=1,
+        page=1,
+    )
     records = SnapshotRecords.build(
         {
             "org_id": "org-one",
@@ -58,6 +96,9 @@ def test_selected_port_insights_use_four_calls_and_preserve_source_hour():
     assert records[0].hour_start_utc.isoformat() == series.data["rt"][0]
     assert records[0].metrics["rx_bps"].value == 0
     assert records[0].metrics["tx_bps"].unit == "bit/s"
+    assert records[0].metrics["avg_loss_pct"].value == 0.25
+    assert records[0].metrics["avg_jitter_ms"].value == 4.5
+    assert records[0].metrics["avg_latency_ms"].value == 33.3
     assert "rx_utilization_percent" not in records[0].metrics
     assert RecordCodec.decode(RecordCodec.encode(records[0])) == records[0]
 
@@ -78,7 +119,7 @@ def test_selected_port_accepts_response_array_named_for_requested_metric():
         patch(
             "src.interfaces.portals.wan_performance.collection.snapshot_client.listInsightMetrics",
             return_value=SimpleNamespace(status_code=200, data=metadata),
-        ) as catalog,
+        ),
         patch(
             "src.interfaces.portals.wan_performance.collection.snapshot_client.getSiteInsightMetricsForGateway",
             side_effect=[receive, transmit],
@@ -88,9 +129,14 @@ def test_selected_port_accepts_response_array_named_for_requested_metric():
             "org-one", CircuitIdentity(TARGET, "ge-0/0/1")
         )
 
-    assert discovery.call_count + catalog.call_count + metrics.call_count == 4
+    assert discovery.call_count == 1
     assert metrics.call_count == 2
-    assert [sample["value"] for sample in result["samples"]] == [None, "12"]
+    assert [sample["value"] for sample in result["samples"][:2]] == [None, "12"]
+    assert [sample["metric"] for sample in result["samples"][2:]] == [
+        "avg_loss_pct",
+        "avg_jitter_ms",
+        "avg_latency_ms",
+    ]
     records = SnapshotRecords.build(
         {
             "org_id": "org-one",
@@ -176,7 +222,7 @@ def test_selected_port_stops_on_request_failure_or_partial_hour(failure):
 
 @pytest.mark.parametrize("empty", [False, True])
 def test_selected_port_insights_persist_to_existing_sqlite_without_snapshot_change(tmp_path, empty):
-    """Connect the four-request collector to actual configured-history serialization."""
+    """Connect the five-request collector to actual configured-history serialization."""
     from src.interfaces.portals.wan_performance.collection.live_service import LiveService
     from src.interfaces.portals.wan_performance.domain.identity import CircuitIdentity
     from src.interfaces.portals.wan_performance.integration.sqlite_history import SQLiteHistory
@@ -214,13 +260,107 @@ def test_selected_port_insights_persist_to_existing_sqlite_without_snapshot_chan
     start, end = (datetime.fromtimestamp(series.data[name], UTC) for name in ("start", "end"))
     retained = history.read(target, start, end)
     assert len(retained) == 1
-    assert set(retained[0].metrics) == {"rx_bps", "tx_bps"}
+    assert set(retained[0].metrics) == {
+        "rx_bps",
+        "tx_bps",
+        "avg_loss_pct",
+        "avg_jitter_ms",
+        "avg_latency_ms",
+    }
     assert retained[0].metrics["rx_bps"].value == (None if empty else 0)
     assert retained[0].metrics["rx_bps"].missing_reason == ("The API snapshot has no value." if empty else None)
     assert retained[0].hour_start_utc == start
     assert retained[0].identity == target
-    assert store.acquire.return_value.check.call_count == 5
+    assert store.acquire.return_value.check.call_count == 6
     store.publish.assert_not_called()
+
+
+@pytest.mark.parametrize("status", [400, 403, 429, 500, 503])
+def test_port_quality_http_errors_are_not_stored_as_empty_success(device_quality_response, status):
+    """Stop a selected-port refresh when the quality request fails."""
+    from src.interfaces.portals.wan_performance.domain.identity import CircuitIdentity
+
+    device, metadata, series = responses()
+    device_quality_response.return_value.status_code = status
+    with (
+        patch(
+            "src.interfaces.portals.wan_performance.collection.snapshot_client.listOrgDevicesStats",
+            return_value=SimpleNamespace(status_code=200, data=[device]),
+        ),
+        patch(
+            "src.interfaces.portals.wan_performance.collection.snapshot_client.listInsightMetrics",
+            return_value=SimpleNamespace(status_code=200, data=metadata),
+        ),
+        patch(
+            "src.interfaces.portals.wan_performance.collection.snapshot_client.getSiteInsightMetricsForGateway",
+            return_value=series,
+        ),
+    ):
+        with pytest.raises(ConnectionError, match=str(status)):
+            GatewayInsights(MagicMock(), MagicMock()).collect_for_port("org-one", CircuitIdentity(TARGET, "ge-0/0/1"))
+
+
+def test_port_quality_timeout_is_not_stored_as_empty_success(device_quality_response):
+    """Propagate a device insight timeout instead of writing missing metrics."""
+    from src.interfaces.portals.wan_performance.domain.identity import CircuitIdentity
+
+    device, metadata, series = responses()
+    device_quality_response.side_effect = TimeoutError("read timed out")
+    with (
+        patch(
+            "src.interfaces.portals.wan_performance.collection.snapshot_client.listOrgDevicesStats",
+            return_value=SimpleNamespace(status_code=200, data=[device]),
+        ),
+        patch(
+            "src.interfaces.portals.wan_performance.collection.snapshot_client.listInsightMetrics",
+            return_value=SimpleNamespace(status_code=200, data=metadata),
+        ),
+        patch(
+            "src.interfaces.portals.wan_performance.collection.snapshot_client.getSiteInsightMetricsForGateway",
+            return_value=series,
+        ),
+    ):
+        with pytest.raises(TimeoutError, match="read timed out"):
+            GatewayInsights(MagicMock(), MagicMock()).collect_for_port("org-one", CircuitIdentity(TARGET, "ge-0/0/1"))
+
+
+def test_port_quality_missing_arrays_remain_unknown(device_quality_response):
+    """Persist missing quality values as unknown without inventing zero samples."""
+    from src.interfaces.portals.wan_performance.domain.identity import CircuitIdentity
+
+    device, metadata, series = responses()
+    response = device_quality_response.return_value
+    response.data["rt"] = []
+    response.data.update(avg_loss=[], avg_jitter=[], avg_latency=[])
+    with (
+        patch(
+            "src.interfaces.portals.wan_performance.collection.snapshot_client.listOrgDevicesStats",
+            return_value=SimpleNamespace(status_code=200, data=[device]),
+        ),
+        patch(
+            "src.interfaces.portals.wan_performance.collection.snapshot_client.listInsightMetrics",
+            return_value=SimpleNamespace(status_code=200, data=metadata),
+        ),
+        patch(
+            "src.interfaces.portals.wan_performance.collection.snapshot_client.getSiteInsightMetricsForGateway",
+            return_value=series,
+        ),
+    ):
+        result = GatewayInsights(MagicMock(), MagicMock()).collect_for_port(
+            "org-one", CircuitIdentity(TARGET, "ge-0/0/1")
+        )
+    record = SnapshotRecords.build(
+        {
+            "org_id": "org-one",
+            "provenance": "live",
+            "collected_at_utc": datetime.now(UTC).isoformat(),
+            "ports": [],
+            "peers": [],
+            "insights": result,
+        }
+    )[0]
+    assert record.metrics["avg_loss_pct"].value is None
+    assert record.metrics["avg_loss_pct"].missing_reason == "The API snapshot has no value."
 
 
 def responses(status=200):

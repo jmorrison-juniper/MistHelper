@@ -7,7 +7,7 @@ from uuid import UUID
 
 from mistapi.api.v1.const.insight_metrics import listInsightMetrics
 from mistapi.api.v1.orgs.stats import listOrgDevicesStats, searchOrgPeerPathStats, searchOrgSwOrGwPorts
-from mistapi.api.v1.sites.insights import getSiteInsightMetricsForGateway
+from mistapi.api.v1.sites.insights import getSiteInsightMetricsForDevice, getSiteInsightMetricsForGateway
 
 from src.interfaces.portals.wan_performance.domain.identity import CircuitIdentity, GatewayIdentity, IdentityValidator
 from src.interfaces.portals.wan_performance.domain.measurement import MetricMeasurement
@@ -114,14 +114,14 @@ class SnapshotClient(SnapshotSession):
 
 
 class GatewayInsights(SnapshotSession):
-    """Read one actual gateway UUID and two independently mapped hourly metric pages."""
+    """Read one gateway UUID and its bounded gateway and device insight pages."""
 
     def collect(self, org_id: str, target: GatewayIdentity) -> dict[str, Any]:
         """Resolve one selected gateway and never infer device UUIDs from MACs."""
         return self._collect(org_id, target, None)
 
     def collect_for_port(self, org_id: str, target: CircuitIdentity) -> dict[str, Any]:
-        """Use four requests for one exact port and one completed catalog-supported hour."""
+        """Use five bounded requests for one port and one completed UTC hour."""
         return self._collect(org_id, target.gateway, target.port_name)
 
     def _collect(self, org_id: str, target: GatewayIdentity, port_name: str | None) -> dict[str, Any]:
@@ -148,6 +148,8 @@ class GatewayInsights(SnapshotSession):
             raise ValueError("Port insights require catalog rate units in bit/s.")
         selected = {**device, "selected_port": port_name}
         samples = [self._metric(selected, name, unit, end) for name, unit in units.items()]
+        if port_name is not None:
+            samples.extend(PortQualityInsights(self.session, self.admission).collect(device, port_name, end))
         return {"gateway": device, "port_id": port_name, "samples": samples, "partial": False}
 
     @staticmethod
@@ -247,6 +249,90 @@ class GatewayInsights(SnapshotSession):
             raise ValueError("Gateway insight timestamp does not match the requested hour.")
         return {
             "metric": name,
+            "unit": unit,
+            "hour_start_utc": start.isoformat(),
+            "value": values[0] if values else None,
+        }
+
+
+class PortQualityInsights(SnapshotSession):
+    """Read bounded hourly loss, jitter, and latency for one selected gateway port."""
+
+    _FIELDS = {
+        "avg_loss": ("avg_loss_pct", "%"),
+        "avg_jitter": ("avg_jitter_ms", "ms"),
+        "avg_latency": ("avg_latency_ms", "ms"),
+    }
+
+    def collect(self, device: dict[str, Any], port_name: str, end: datetime) -> list[dict[str, Any]]:
+        """Use the existing device-scoped Mist insight endpoint and shared admission."""
+        start = end - timedelta(hours=1)
+        mac = device["mac"].replace("-", "")[-12:]
+        self.admission.check()
+        response = getSiteInsightMetricsForDevice(
+            self.session,
+            device["site_id"],
+            "wan_link_health",
+            mac,
+            port_id=port_name,
+            start=str(int(start.timestamp())),
+            end=str(int(end.timestamp())),
+            interval="1h",
+            limit=1,
+            page=1,
+        )
+        if response.status_code != 200:
+            raise ConnectionError(f"Port link-health request failed with HTTP {response.status_code}.")
+        return self._samples(response.data, start, end)
+
+    @classmethod
+    def _samples(cls, data: Any, start: datetime, end: datetime) -> list[dict[str, Any]]:
+        """Validate the requested hour and preserve absent fields as unknown values."""
+        if not isinstance(data, dict) or (
+            data.get("start"),
+            data.get("end"),
+            data.get("interval"),
+            bool(data.get("next")),
+        ) != (int(start.timestamp()), int(end.timestamp()), 3600, False):
+            raise ValueError("Port link-health response does not match the requested hourly window.")
+        timestamps = cls._timestamps(data.get("rt", []))
+        return [
+            cls._sample(data, field, metric, unit, timestamps, start) for field, (metric, unit) in cls._FIELDS.items()
+        ]
+
+    @staticmethod
+    def _timestamps(value: object) -> list[datetime]:
+        """Parse at most one UTC timestamp from the response."""
+        if not isinstance(value, list) or len(value) > 1:
+            raise ValueError("Port link-health timestamps must contain at most one value.")
+        if not value:
+            return []
+        timestamp = value[0]
+        if isinstance(timestamp, (int, float)) and not isinstance(timestamp, bool):
+            return [datetime.fromtimestamp(timestamp, UTC)]
+        if not isinstance(timestamp, str):
+            raise ValueError("Port link-health timestamp must be text or epoch seconds.")
+        return [datetime.fromisoformat(timestamp.replace("Z", "+00:00"))]
+
+    @staticmethod
+    def _sample(
+        data: dict[str, Any],
+        field: str,
+        metric: str,
+        unit: str,
+        timestamps: list[datetime],
+        start: datetime,
+    ) -> dict[str, Any]:
+        """Map one optional hourly series to its source-compatible name and unit."""
+        values = data.get(field, [])
+        if values is None:
+            values = []
+        if not isinstance(values, list) or len(values) > 1:
+            raise ValueError(f"Port link-health field {field} must contain at most one value.")
+        if values and timestamps and timestamps[0] != start:
+            raise ValueError("Port link-health timestamp does not match the requested hour.")
+        return {
+            "metric": metric,
             "unit": unit,
             "hour_start_utc": start.isoformat(),
             "value": values[0] if values else None,

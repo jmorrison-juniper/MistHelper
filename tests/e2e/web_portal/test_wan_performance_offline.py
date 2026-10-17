@@ -1,6 +1,7 @@
 """Verify the WAN Performance pages with isolated synthetic fixtures."""
 
 import logging
+import re
 import threading
 from collections.abc import Iterator
 from dataclasses import replace
@@ -108,6 +109,13 @@ def test_browser_follows_live_and_synthetic_wan_journeys(
     expect(page.get_by_test_id(selector)).to_be_visible()
     expect(page.get_by_test_id("wan-data-state")).to_contain_text("Live data is not connected")
     _assert_detail_metrics(page, detail)
+    chart_grid = page.get_by_test_id(f"wan-{detail}-charts")
+    expect(chart_grid).to_have_class(re.compile("wan-chart-grid--single"))
+    chart_panel = chart_grid.locator(".wan-chart-panel")
+    chart_bounds = chart_panel.bounding_box()
+    assert (
+        chart_bounds is not None and chart_bounds["width"] > 1_000
+    ), "The single detail chart did not use the source page width."
     page.screenshot(path=str(evidence / f"{detail}-comparison.png"), full_page=True)
     page.get_by_test_id("wan-back-link").click()
     expect(page.get_by_test_id("wan-gateway")).to_be_visible()
@@ -223,6 +231,10 @@ def test_port_calendar_summaries_report_observations_and_missing_hours(
     assert "1 of 24" in page, "The daily view did not expose missing hours."
     assert "1 of 168" in page, "The weekly view did not expose missing hours."
     assert "1 of 744" in page, "The monthly view did not expose missing hours."
+    assert "rolling_3h" in page and "1 of 3" in page, "The 3-hour view omitted its observed sample count."
+    assert "rolling_12h" in page and "1 of 12" in page, "The 12-hour view omitted its observed sample count."
+    assert "rolling_24h" in page and "1 of 24" in page, "The 24-hour view omitted its observed sample count."
+    assert "end at the latest retained observation" in page, "The rolling window anchor was not disclosed."
     assert "equal weight" in page, "The calendar view did not disclose source weighting."
     assert "not duration coverage" in page, "The calendar view mislabeled observation coverage."
 
