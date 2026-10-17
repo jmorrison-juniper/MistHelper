@@ -37,6 +37,7 @@ class RecordCodec:
             datetime.fromisoformat(row["collected_at_utc"]),
             {name: MetricMeasurement(**metric) for name, metric in metrics.items()},
             "live",
+            row.get("is_up_observation"),
         )
 
     @staticmethod

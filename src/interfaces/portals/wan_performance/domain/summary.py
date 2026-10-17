@@ -26,6 +26,18 @@ class ThresholdObservation:
 
 
 @dataclass(frozen=True, slots=True)
+class StateObservationSummary:
+    """Report sampled state and adjacent-hour changes without claiming uptime."""
+
+    valid_hours: int
+    expected_hours: int
+    up_hours: int
+    down_hours: int
+    observed_up_percent: float | None
+    observed_transitions: int
+
+
+@dataclass(frozen=True, slots=True)
 class PeriodSummary:
     """Keep period metrics, record coverage, and provenance explicit."""
 
@@ -34,6 +46,7 @@ class PeriodSummary:
     metrics: Mapping[str, tuple[float | None, float | None, float | None, str]]
     provenance: str
     threshold_observations: tuple[ThresholdObservation, ...] = ()
+    state_observations: StateObservationSummary | None = None
 
     def __post_init__(self) -> None:
         """Prevent a consumer from changing metrics after calculation."""
@@ -73,7 +86,11 @@ class CalendarSummaries:
         daily = cls._daily(selected)
         results = daily + cls._merge(daily, "weekly") + cls._merge(daily, "monthly") + cls._rolling(selected)
         results = tuple(
-            replace(summary, threshold_observations=ThresholdObservations.build(selected, summary.period))
+            replace(
+                summary,
+                threshold_observations=ThresholdObservations.build(selected, summary.period),
+                state_observations=StateObservations.build(selected, summary.period),
+            )
             for summary in results
         )
         logger.debug("Built %d calendar summaries from %d hourly records", len(results), len(selected))
@@ -217,3 +234,48 @@ class ThresholdObservations:
             run = run + 1 if previous is not None and instant - previous == timedelta(hours=1) else 1
             longest, previous = max(longest, run), instant
         return ThresholdObservation(name, threshold, len(samples), len(above), longest)
+
+
+class StateObservations:
+    """Summarize observed link states while exposing incomplete coverage."""
+
+    @classmethod
+    def build(cls, records: tuple[HourlyMeasurement, ...], period: CalendarPeriod) -> StateObservationSummary | None:
+        """Count known states and changes between directly adjacent observed hours."""
+        matching = tuple(
+            sorted(
+                (record for record in records if period.contains(record.hour_start_utc)),
+                key=lambda record: record.hour_start_utc,
+            )
+        )
+        if not any(record.is_up_observation is not None for record in matching):
+            return None
+        known = tuple(record for record in matching if record.is_up_observation is not None)
+        transitions = cls._transitions(known)
+        up_hours = sum(record.is_up_observation is True for record in known)
+        percent = round(up_hours / len(known) * 100, 2) if known else None
+        return StateObservationSummary(
+            valid_hours=len(known),
+            expected_hours=period.expected_hours,
+            up_hours=up_hours,
+            down_hours=len(known) - up_hours,
+            observed_up_percent=percent,
+            observed_transitions=transitions,
+        )
+
+    @staticmethod
+    def _transitions(records: tuple[HourlyMeasurement, ...]) -> int:
+        """Count only status changes across consecutive known hourly observations."""
+        count = 0
+        previous = None
+        for record in records:
+            current = record.is_up_observation
+            if (
+                previous is not None
+                and current is not None
+                and record.hour_start_utc - previous.hour_start_utc == timedelta(hours=1)
+                and current != previous.is_up_observation
+            ):
+                count += 1
+            previous = record if current is not None else None
+        return count
