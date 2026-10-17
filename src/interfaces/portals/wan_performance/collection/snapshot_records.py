@@ -3,10 +3,11 @@
 import hashlib
 import json
 import logging
+from collections.abc import Mapping
 from datetime import UTC, datetime
+from types import MappingProxyType
 from typing import Any
 
-from src.interfaces.portals.wan_performance.collection.peer_metrics import PeerSnapshotMetrics
 from src.interfaces.portals.wan_performance.domain.identity import (
     CircuitIdentity,
     GatewayIdentity,
@@ -16,6 +17,39 @@ from src.interfaces.portals.wan_performance.domain.identity import (
 from src.interfaces.portals.wan_performance.domain.measurement import HourlyMeasurement, MetricMeasurement
 
 logger = logging.getLogger(__name__)
+
+
+class PeerSnapshotMetrics:
+    """Read source peer fields without assigning a unit to the keyed API metric."""
+
+    FIELDS: Mapping[str, tuple[str, int | None]] = MappingProxyType(
+        {"latency": ("ms", None), "jitter": ("ms", None), "loss": ("%", 100), "mos": ("score", 5)}
+    )
+
+    @classmethod
+    def parse(cls, row: Mapping[str, object]) -> Mapping[str, MetricMeasurement]:
+        """Return immutable peer fields while keeping missing values unknown."""
+        logger.info("Validate VPN peer snapshot metrics.")
+        metrics = {name: cls._metric(name, row.get(name)) for name in cls.FIELDS}
+        logger.debug("Validated %d VPN peer snapshot metrics.", len(metrics))
+        return MappingProxyType(metrics)
+
+    @classmethod
+    def _metric(cls, name: str, value: object) -> MetricMeasurement:
+        """Validate the source field value before constructing its measurement."""
+        unit, maximum = cls.FIELDS[name]
+        try:
+            if value is None:
+                return MetricMeasurement(None, unit, missing_reason="The API snapshot has no value.")
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                raise ValueError("The value must be a number.")
+            metric = MetricMeasurement(value, unit)
+            if value < 0 or (maximum is not None and value > maximum):
+                raise ValueError("The value is outside the documented bounds.")
+            return metric
+        except ValueError as error:
+            logger.error("Invalid VPN snapshot metric %s: %s", name, error)
+            raise ValueError(f"Invalid {name} in VPN snapshot: {error}") from error
 
 
 class SnapshotRecords:

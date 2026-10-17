@@ -2,7 +2,7 @@
 
 import pytest
 
-from src.interfaces.portals.wan_performance.collection.peer_metrics import PeerSnapshotMetrics
+from src.interfaces.portals.wan_performance.collection.snapshot_records import PeerSnapshotMetrics
 
 
 def test_documented_units_and_zero_values() -> None:
