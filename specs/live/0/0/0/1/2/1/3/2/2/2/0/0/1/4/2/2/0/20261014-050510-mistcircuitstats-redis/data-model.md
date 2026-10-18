@@ -91,7 +91,7 @@ Use source and API contracts to infer peer history, latency, jitter, or state tr
 | `expires_at` | UTC timestamp | Required. Must match the approved Redis TTL. |
 | `records` | List of observations | Required. Validate shape before publication. |
 
-Proposed Redis key form: `misthelper:wan:mcsr:v1:<org_id>:<site_id>:<record_type>:<record_id>`. The exact scope for organization-level peer records remains an implementation decision. Every write must use one explicit owner and an approved TTL.
+Historical Redis candidate: `misthelper:wan:mcsr:v1:<org_id>:<site_id>:<record_type>:<record_id>`. This prefix is not reserved or approved. Review the existing cache in [contracts/redis-cache.md](contracts/redis-cache.md) before selecting any target model. Every write requires one approved owner and TTL. No #4220 write path has approval.
 
 ### Refresh Result
 

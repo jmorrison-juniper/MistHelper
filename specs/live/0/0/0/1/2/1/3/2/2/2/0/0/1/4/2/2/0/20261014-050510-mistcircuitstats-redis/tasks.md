@@ -8,15 +8,17 @@ description: "Implementation tasks for the MistCircuitStats Redis dashboard migr
 
 **Prerequisites**: `plan.md`, `spec.md`, `research.md`, `data-model.md`, `contracts/`, `quickstart.md`
 
-**Important**: Resolve T001-T005 before product implementation. PR #4208 is the proposed canonical owner for overlapping WAN behavior, but it is not merged. Product tasks remain blocked while source behavior, license reuse, API contracts, Redis ownership, or feature ownership is unresolved. Use only confirmed owner paths in `contracts/ownership.md`. Keep product work in a separate implementation PR.
+**Reviewed**: 2026-10-18. PR #4223 merged the original plan. PR #4252 delivered the existing dashboard and closed #4195. Draft PR #4208 remains open.
+
+**Important**: Resolve T001-T005 before product implementation. T003 records existing and proposed ownership, not approval of a new product path. All product tests and changes remain blocked while source behavior, reuse rights, API contracts, Redis policy, or unique ownership is unresolved. Use only future owner-approved paths in `contracts/ownership.md`. Paths named below are review evidence, not permission to modify them.
 
 ## Phase 1: Setup
 
 **Purpose**: Record source evidence and ownership decisions before code changes.
 
 - [ ] T001 [P] Complete the source review for pagination, enrichment, `SKIP_ENRICHMENT`, token rotation, API host, organization settings, and stale handling. Keep the verified `worker.py` facts and guide discrepancies in `specs/live/0/0/0/1/2/1/3/2/2/2/0/0/1/4/2/2/0/20261014-050510-mistcircuitstats-redis/research.md`.
-- [ ] T002 [P] Obtain a maintainer decision on CC BY-NC-SA 4.0 reuse terms. Record approved attribution and any reuse limits in `specs/live/0/0/0/1/2/1/3/2/2/2/0/0/1/4/2/2/0/20261014-050510-mistcircuitstats-redis/research.md`. Copy no source code or assets without approval.
-- [x] T003 Map the overview, gateway, port, peer, insight, collector, refresh store, request admission, and offline preview to the canonical #4208 proposal in `specs/live/0/0/0/1/2/1/3/2/2/2/0/0/1/4/2/2/0/20261014-050510-mistcircuitstats-redis/contracts/ownership.md`. Record that #4208 is open and not merged. (delivered: `specs/live/0/0/0/1/2/1/3/2/2/2/0/0/1/4/2/2/0/20261014-050510-mistcircuitstats-redis/contracts/ownership.md`)
+- [ ] T002 Obtain explicit rights confirmation for CC BY-NC-SA 4.0 reuse. Record attribution and limits in `specs/live/0/0/0/1/2/1/3/2/2/2/0/0/1/4/2/2/0/20261014-050510-mistcircuitstats-redis/research.md`. Copy or adapt no source code, tests, fixtures, screenshots, or assets without approval. Depend on T001 because both tasks update the same evidence file.
+- [x] T003 Map the existing #4252 dashboard and the open #4208 proposal in `specs/live/0/0/0/1/2/1/3/2/2/2/0/0/1/4/2/2/0/20261014-050510-mistcircuitstats-redis/contracts/ownership.md`. Record that no unique #4220 path has approval. (delivered: `specs/live/0/0/0/1/2/1/3/2/2/2/0/0/1/4/2/2/0/20261014-050510-mistcircuitstats-redis/contracts/ownership.md`)
 
 ## Phase 2: Foundational
 
@@ -35,12 +37,12 @@ description: "Implementation tasks for the MistCircuitStats Redis dashboard migr
 
 ### Tests for User Story 1
 
-- [ ] T006 [P] [US1] Add site and gateway ownership tests in `tests/unit/wan_performance/test_background_refresh.py`. Use mocked Mist responses and assert that each site and gateway retains its source identifiers.
-- [ ] T007 [P] [US1] Add browser coverage for the canonical overview and details in `tests/e2e/web_portal/test_wan_performance_live.py`. Assert that filters show only authorized site data and do not create duplicate views.
+- [ ] T006 [P] [US1] After all gates pass, review `tests/integration/web_portal/wan_dashboard/test_services.py`. Reuse existing site and gateway coverage. Add only approved missing coverage in the exact test path assigned by `contracts/ownership.md`. Assert source identity and organization isolation with independently authored records.
+- [ ] T007 [P] [US1] After all gates pass, review `tests/e2e/web_portal/test_portal_smoke.py`. Reuse existing browser coverage. Add only owner-approved missing coverage for site filters and canonical navigation. Record its exact path in `contracts/ownership.md` before editing.
 
 ### Implementation for User Story 1
 
-- [ ] T008 [US1] After #4208 resolves and both feature owners approve one unique source-only behavior, implement it in the single path recorded by `contracts/ownership.md`. Do not create a competing WAN package, route, collector, cache, or API request.
+- [ ] T008 [US1] After T001-T007 and owner approval, implement only a verified unique source behavior in the single path recorded by `contracts/ownership.md`. Reuse merged #4252 behavior. Reconcile open #4208 without assuming it will merge. Do not create a competing page, collector, cache, or API request.
 - [ ] T009 [US1] Connect the approved source-only behavior to its assigned canonical view in the single path recorded by `contracts/ownership.md`. Depend on T008. Reuse shared MistHelper session and request admission. Do not add a second collector.
 
 ## Phase 4: User Story 2 - Judge Data Freshness (Priority: P2)
@@ -51,13 +53,13 @@ description: "Implementation tasks for the MistCircuitStats Redis dashboard migr
 
 ### Tests for User Story 2
 
-- [ ] T010 [P] [US2] Add TTL, schema, ownership, and malformed-payload tests in `tests/unit/wan_performance/test_refresh_store.py`. Verify each value against the approved `contracts/redis-cache.md` contract.
-- [ ] T011 [P] [US2] Add refresh failure and partial-result tests in `tests/unit/wan_performance/test_background_refresh.py`. Verify that failed collection does not publish a partial replacement.
-- [ ] T012 [P] [US2] Add browser checks for stale and unavailable states in `tests/e2e/web_portal/test_wan_performance_live.py`. Verify that stale or missing cache data never appears as live.
+- [ ] T010 [US2] After all gates pass, review cache coverage in `tests/integration/web_portal/wan_dashboard/test_services.py`. Add only owner-approved TTL, schema, ownership, and malformed-payload tests in the path assigned by `contracts/ownership.md`. Verify the approved `contracts/redis-cache.md` policy.
+- [ ] T011 [US2] After T010, add only approved refresh failure and partial-result tests in the exact path assigned by `contracts/ownership.md`. Verify that failed collection cannot publish a partial replacement. Reuse existing dashboard tests when they satisfy the contract.
+- [ ] T012 [US2] After T011, add only approved browser checks in the exact path assigned by `contracts/ownership.md`. Review `tests/e2e/web_portal/test_portal_smoke.py` first. Verify that stale or missing cache data never appears as live.
 
 ### Implementation for User Story 2
 
-- [ ] T013 [US2] After #4208 resolves and the owners approve a unique cache requirement, extend the assigned cache path in `contracts/ownership.md`. Use the approved namespace, JSON schema, owner check, and TTL. Do not add another Redis adapter.
+- [ ] T013 [US2] After T008-T012 and owner approval of a unique cache requirement, extend only the cache path assigned by `contracts/ownership.md`. Use the approved namespace, JSON schema, owner check, and TTL. Do not add another Redis adapter or reserve the historical candidate prefix.
 - [ ] T014 [US2] Publish a refresh only after full validation in the single path assigned by `contracts/ownership.md`. Depend on T013. Preserve the last valid snapshot when Mist, Redis, or pagination fails.
 - [ ] T015 [US2] Return explicit stale, partial, failed, and unavailable states through the canonical view assigned by `contracts/ownership.md`. Depend on T014. Do not make fallback Mist requests from portal reads.
 
@@ -69,18 +71,18 @@ description: "Implementation tasks for the MistCircuitStats Redis dashboard migr
 
 ### Tests for User Story 3
 
-- [ ] T016 [P] [US3] Verify synthetic labels and zero live requests in `tests/unit/wan_performance/test_offline_fixtures.py`.
-- [ ] T017 [P] [US3] Verify offline preview labeling and separation from live routes in `tests/e2e/web_portal/test_wan_performance_offline.py`.
+- [ ] T016 [P] [US3] After all gates pass, verify existing synthetic coverage in `tests/integration/web_portal/wan_dashboard/test_routes.py`. Add only owner-approved missing unit coverage in the path assigned by `contracts/ownership.md`. Use independently authored fixtures and assert zero live requests.
+- [ ] T017 [P] [US3] After all gates pass, review browser coverage in `tests/e2e/web_portal/test_portal_smoke.py`. Add only owner-approved synthetic-label and live-route separation checks in the path assigned by `contracts/ownership.md`. Do not reproduce source screenshots without explicit rights.
 
 ### Implementation for User Story 3
 
-- [ ] T018 [US3] Reuse the #4208 offline preview after it has one confirmed owner. Change no preview file unless the owner assigns a unique source-only requirement and path in `contracts/ownership.md`.
+- [ ] T018 [US3] After T016-T017, reuse approved existing preview behavior without duplication. Treat #4208 preview files as unmerged proposals. Change no preview file without a unique approved requirement and path in `contracts/ownership.md`.
 
 ## Phase 6: Polish and Cross-Cutting Concerns
 
 **Purpose**: Verify safety and repository constraints across accepted stories.
 
-- [ ] T019 [P] Verify cache and API failure, request admission, and secret redaction contracts in `tests/integration/wan_performance/test_background_refresh.py`.
+- [ ] T019 Verify cache and API failure, request admission, and secret redaction after accepted product work. Review `tests/integration/web_portal/wan_dashboard/` first. Add only approved missing checks in the exact path assigned by `contracts/ownership.md`.
 - [ ] T020 Verify only assigned product and test paths changed in `specs/live/0/0/0/1/2/1/3/2/2/2/0/0/1/4/2/2/0/20261014-050510-mistcircuitstats-redis/contracts/ownership.md`.
 - [ ] T021 Verify no new app, service, Compose group, public port, Redis service, or database appears in `compose.yml`.
 - [ ] T022 Verify all source assets and code reuse has maintainer approval and required attribution in `specs/live/0/0/0/1/2/1/3/2/2/2/0/0/1/4/2/2/0/20261014-050510-mistcircuitstats-redis/research.md`.
@@ -91,32 +93,32 @@ description: "Implementation tasks for the MistCircuitStats Redis dashboard migr
 
 ### Phase Dependencies
 
-- **Setup (Phase 1)**: No product changes. T001-T002 record source evidence and rights. T003 records the #4208 proposal as canonical owner, not merged.
+- **Setup (Phase 1)**: No product changes. T001-T002 record source evidence and rights serially. T003 records the merged #4252 baseline and open #4208 proposal.
 - **Foundational (Phase 2)**: T004-T005 depend on the source and ownership review. They block all product tasks.
 - **User Story 1 (Phase 3)**: Depends on T001-T005. It owns the canonical accepted view and refresh entry point.
 - **User Story 2 (Phase 4)**: Depends on T001-T005 and the assigned store from User Story 1.
-- **User Story 3 (Phase 5)**: Depends on T003. Reuse the offline preview only if it has one confirmed owner.
+- **User Story 3 (Phase 5)**: Depends on T001-T005 and owner approval. Reuse preview behavior only after rights and synthetic-data separation pass.
 - **Polish (Phase 6)**: Depends on every accepted implementation task.
 
 ### User Story Dependencies
 
 - **User Story 1 (P1)**: Depends on T001, T002, T004, T005, and the owners' approval of one unique scope. It cannot duplicate #4195 or #4200.
 - **User Story 2 (P2)**: Depends on the canonical refresh and store owner from User Story 1.
-- **User Story 3 (P3)**: Can proceed independently after its owner is confirmed. Existing preview behavior may satisfy it without code.
+- **User Story 3 (P3)**: Depends on all foundational gates and its confirmed owner. Existing preview behavior may satisfy it without code.
 
 ### Parallel Opportunities
 
-- T001 and T002 can run in parallel because source behavior review and license review produce separate evidence.
+- T001 and T002 run serially because both update `research.md`.
 - After T003, API and Redis verification tasks T004 and T005 can run in parallel.
 - Test tasks T006 and T007 can run in parallel after the ownership contract is approved.
-- User Story 2 tests T010-T012 can run in parallel after the cache and route owners are confirmed.
+- User Story 2 tests T010-T012 run serially because approved paths may share files.
 - User Story 3 tests T016-T017 can run in parallel after offline preview ownership is confirmed.
 
 ## Parallel Example: User Story 1
 
 ```text
-Task: T006 Add site and gateway ownership tests in tests/unit/wan_performance/test_background_refresh.py
-Task: T007 Add browser coverage in tests/e2e/web_portal/test_wan_performance_live.py
+Task: T006 Review existing site and gateway tests, then add only approved missing coverage.
+Task: T007 Review existing browser tests, then add only approved missing coverage.
 ```
 
 ## Implementation Strategy
@@ -130,7 +132,7 @@ Task: T007 Add browser coverage in tests/e2e/web_portal/test_wan_performance_liv
 
 ### Incremental Delivery
 
-1. Land the planning PR without product changes.
+1. Preserve merged planning PR #4223 and refresh this record without product changes.
 2. Open a separate implementation PR on #4220 after T001-T005 pass.
 3. Add the canonical refresh path and its tests.
 4. Add approved cache freshness and failure states.

@@ -4,11 +4,13 @@
 
 **Input**: Timestamp feature specification in `specs/live/0/0/0/1/2/1/3/2/2/2/0/0/1/4/2/2/0/20261014-050510-mistcircuitstats-redis/spec.md`
 
+**Reviewed**: 2026-10-18. PR #4223 merged this planning record. This refresh changes no product files.
+
 ## Summary
 
 Migrate only verified MistCircuitStats-Redis behavior that is not already owned by the MistCircuitStats or MistWANPerformance efforts. Keep one MistHelper portal, one Mist API session, the existing Compose group, and existing storage. Reuse existing Redis only for a bounded, feature-owned cache. Do not copy source code or assets before maintainers approve license compatibility.
 
-The current proposals overlap on gateway, WAN port, peer-path, insight, and multi-site views. PR #4208 is the proposed canonical owner for these views, the refresh store, shared request admission, and offline preview. Issue #4195 remains active. Issue #4200 and PR #4208 remain open. The mapping in [contracts/ownership.md](contracts/ownership.md) records #4208 as a proposal, not merged product behavior. Do not add a second page, collector, cache, or API path. Any source-only refresh behavior remains blocked until the owners confirm its unique scope and path.
+PR #4252 delivered the existing WAN dashboard and closed #4195. Issue #4200 and draft PR #4208 remain open with overlapping proposed behavior. The mapping in [contracts/ownership.md](contracts/ownership.md) separates existing behavior from that proposal. Do not add a second page, collector, cache, or API path. Source-only refresh behavior remains blocked until the owners confirm its unique scope and path.
 
 ## Technical Context
 
@@ -16,7 +18,7 @@ The current proposals overlap on gateway, WAN port, peer-path, insight, and mult
 
 **Primary Dependencies**: The existing Mist API SDK (`mistapi>=0.64.0,<0.65`), Flask portal, Redis client, and project services. Add no dependency unless the implementation gate proves a need.
 
-**Storage**: Existing MistHelper Redis for an approved transient snapshot cache. Use existing configured application storage only if an accepted journey requires durable history. Add no database.
+**Storage**: Reuse the existing dashboard cache only after owner approval. Its current namespace and TTL values appear in [contracts/redis-cache.md](contracts/redis-cache.md). No #4220 cache policy has approval. Add no database.
 
 **Testing**: Existing pytest suite, portal test client, and Playwright tests. Use mocked Mist responses and fictional records. Do not use production credentials.
 
@@ -34,8 +36,8 @@ The current proposals overlap on gateway, WAN port, peer-path, insight, and mult
 
 ### Before Research
 
-- **Managed records**: The feature uses the required `specs/live/` root. It adds one timestamped feature record, not a new direct root.
-- **Process-folder debt**: The guard data shows 795 direct children, with 792 grandfathered entries and three present managed roots. The measured roots are `live` with four entries, `numbered` with one, and `skills` with five. This feature adds no direct child to `specs/`. T024 tracks a separate incremental debt-reduction action. Do not change the baseline to make this feature pass.
+- **Managed records**: Refresh the existing grouped `specs/live/` record. Create no feature directory and change no tracked feature selector.
+- **Process-folder debt**: The established record exceeds five children. This refresh adds none and does not restructure unrelated records. T024 retains the separate debt action. Historical counts belong to the original review, not this refresh.
 - **Product boundaries**: No product code, Compose file, public port, container, application service, or database changes belong in this planning PR.
 - **Mist API**: All REST requests must use working `mistapi` methods. The candidate methods in [research.md](research.md) need source-to-SDK verification. Add no owned WebSocket transport.
 - **Shared admission**: The design must use MistHelper's shared API request admission. It must not introduce a separate API client, token store, or hidden retry path.
@@ -66,9 +68,9 @@ See [data-model.md](data-model.md), [contracts/mist-api.md](contracts/mist-api.m
 
 ### Design Decisions
 
-1. **One portal owner**: Treat the #4208 proposal as the canonical owner for shared WAN views and services. Reuse it only after it lands or its owner assigns the path. Do not treat open code as part of `main`.
+1. **One portal owner**: Reuse the existing #4252 dashboard where it meets the accepted journey. Treat #4208 as proposed behavior only. Require owner approval before changing either path.
 2. **One collection owner**: Compare the source's org, site, gateway, port, peer, and insight calls with current MistHelper collection. Assign each data set to one collector. Do not issue duplicate calls for the same result.
-3. **Existing Redis only**: If a cache remains necessary after overlap review, reserve `misthelper:wan:mcsr:v1:<org_id>:<site_id>:<record_type>:<record_id>` for this feature. The cache contract must define its owner, version, serializer, TTL, and invalidation before code.
+3. **Existing Redis only**: Review the existing `wan-dashboard:v1:` cache before proposing any change. The old `misthelper:wan:mcsr:v1:` candidate is unreserved and unapproved. Approve one owner, version, serializer, TTL, and invalidation policy before code.
 4. **Freshness-aware refresh**: Preserve a successful snapshot until a complete replacement is ready. Mark stale, partial, failed, or unavailable data explicitly. Do not label a stale snapshot as live.
 5. **Shared API admission**: Route collection through the existing MistHelper session and request admission. Bound pagination and concurrent work by the approved shared policy. Do not rotate independent tokens.
 6. **No automatic source parity**: The source implementation review reports `PARALLEL_WORKERS=4`, `WORKER_INTERVAL=300`, `STALE_THRESHOLD=600`, incremental refresh, and cached-on-startup behavior. The guide reports five workers and a TTL of three intervals, while implementation reports a 31-day TTL. Verify remaining settings and behavior against source tests before deciding what MistHelper requires.
@@ -97,7 +99,7 @@ specs/live/0/0/0/1/2/1/3/2/2/2/0/0/1/4/2/2/0/20261014-050510-mistcircuitstats-re
 
 ### Product Code and Tests
 
-PR #4208 proposes WAN collection, storage, request admission, offline preview, and presentation under `src/interfaces/portals/wan_performance/`. It is open and is not part of `main`. Issue #4195 is active and overlaps on the same WAN data. This feature owns no standalone product path. Do not implement a second route, collector, cache, admission ledger, or preview. A source-only refresh lifecycle may proceed only after both owners confirm that no existing change owns it and assign one exact target path.
+The existing dashboard lives under `src/interfaces/portals/wan_dashboard/` and serves `/wan-dashboard`. Its tests live under `tests/integration/web_portal/wan_dashboard/`, with portal browser coverage under `tests/e2e/web_portal/`. PR #4208 proposes a separate `src/interfaces/portals/wan_performance/` package but remains open and is not part of `main`. These paths are evidence, not #4220 assignments. This feature owns no standalone product path. Do not implement a second route, collector, cache, admission ledger, or preview. A source-only refresh lifecycle requires approved unique scope and an exact owner-assigned path.
 
 **Structure Decision**: No product source or test path is approved. Keep product files out of the planning PR. Keep all source-specific work blocked until owners approve unique scope, the gateway insight response mismatch is resolved, and the Redis contract passes.
 

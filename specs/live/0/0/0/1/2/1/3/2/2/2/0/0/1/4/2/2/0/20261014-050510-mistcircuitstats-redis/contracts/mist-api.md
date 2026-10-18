@@ -2,6 +2,12 @@
 
 **Status**: Candidate map. Verify every request against the source implementation, current SDK signatures, and current OpenAPI schemas before implementation.
 
+## Existing SDK Evidence
+
+Merged PR #4252 supplies `tests/integration/web_portal/wan_dashboard/test_mistapi_contract.py`. It checks 17 method signatures for the `mist_session` parameter and the `0.64` SDK version.
+
+This proves method availability and a shared-session argument. It does not prove source metric fields, units, timestamps, port identity, interval, or time-window parity. The source worker's direct HTTP Insights path remains distinct from the SDK contract. Do not infer transport approval from a passing signature test.
+
 ## Contract Source
 
 - OpenAPI document: `documentation/mist-api-openapi31json.json`

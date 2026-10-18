@@ -2,6 +2,7 @@
 
 **Purpose**: Validate specification completeness and quality before planning.
 **Created**: 2026-10-14
+**Reviewed**: 2026-10-18
 **Feature**: [spec.md](../spec.md)
 
 ## Content Quality
@@ -34,3 +35,5 @@
 - Source-to-SDK method parity, source implementation behavior, and dashboard ownership remain bounded planning or implementation investigations.
 - The source license requires a maintainer decision before any source code or asset reuse.
 - The specification names no internal code structure. The required Mist API section records external contract constraints, while method candidates and paths remain in the design contract.
+- Planning completeness does not authorize product work. Unique scope, source reuse rights, Insights parity, and Redis policy remain blocked.
+- The current review recognizes merged #4252 and open draft #4208. The dated `analysis.md` records the earlier review only.
