@@ -162,3 +162,44 @@ def test_a_weak_gate_fails(workflow: dict[str, Any], mutation: str) -> None:
     with pytest.raises(AssertionError):
         ShardPartitionAudit.check_gate(workflow)
     logger.debug("The gate audit refused the %s mutation", mutation)  # Record the proof for a failure read.
+
+
+class WanEvidenceAudit:
+    """Require accessible synthetic WAN captures from the owning browser shard."""
+
+    @staticmethod
+    def check(workflow: dict[str, Any]) -> int:
+        """Check one upload step and fail when its artifact contract changes."""
+        steps = workflow["jobs"]["playwright_shards"]["steps"]
+        uploads = [step for step in steps if step.get("name") == "Upload WAN Performance browser evidence"]
+        assert len(uploads) == 1, "Expected one WAN browser evidence upload"
+        upload = uploads[0]
+        assert upload["if"] == "${{ !cancelled() && matrix.shard == 'web-portal' }}", "Wrong WAN evidence shard"
+        assert upload["uses"] == "actions/upload-artifact@v7", "Wrong WAN evidence uploader"
+        assert upload["with"] == {
+            "name": "wan-performance-browser-evidence",
+            "path": "test-artifacts/wan-performance/*.png",
+            "if-no-files-found": "error",
+        }, "WAN evidence must preserve its name, synthetic capture path, and missing-file failure"
+        print("wan_browser_evidence: checked 1 upload step and 6 contract values")
+        return 1
+
+
+def test_wan_browser_evidence_upload(workflow: dict[str, Any]) -> None:
+    """Require the live workflow to retain synthetic WAN browser captures."""
+    assert WanEvidenceAudit.check(workflow) == 1
+
+
+@pytest.mark.parametrize("mutation", ["missing", "if", "uses", "name", "path", "if-no-files-found"])
+def test_changed_wan_evidence_upload_fails(workflow: dict[str, Any], mutation: str) -> None:
+    """Prove that a removed or weakened artifact upload cannot pass the guard."""
+    steps = workflow["jobs"]["playwright_shards"]["steps"]
+    upload = next(step for step in steps if step.get("name") == "Upload WAN Performance browser evidence")
+    if mutation == "missing":
+        steps.remove(upload)
+    elif mutation in ("if", "uses"):
+        upload[mutation] = "invalid"
+    else:
+        upload["with"][mutation] = "invalid"
+    with pytest.raises(AssertionError):
+        WanEvidenceAudit.check(workflow)
