@@ -89,8 +89,8 @@ fields, unsupported items, and known gaps, with no credentials.
 **Purpose**: Publish only after shared-file ownership and required checks are clear.
 
 - [X] T028 Build the explicit manifest for `specs/numbered/0/0/1/1/3/3/4/4/4224-cisco-config-converter/` and stage only its listed files. (delivered: quickstart.md)
-- [ ] T029 Rebase the commit containing `specs/numbered/0/0/1/1/3/3/4/4/4224-cisco-config-converter/plan.md` onto `origin/main` and rerun affected checks.
-- [ ] T030 Push the feature branch and update pull request #4226 with exact gate results for `specs/numbered/0/0/1/1/3/3/4/4/4224-cisco-config-converter/`.
+- [X] T029 Rebase the commit containing `specs/numbered/0/0/1/1/3/3/4/4/4224-cisco-config-converter/plan.md` onto `origin/main` and rerun affected checks. (delivered: quickstart.md)
+- [X] T030 Push the feature branch and update pull request #4226 with exact gate results for `specs/numbered/0/0/1/1/3/3/4/4/4224-cisco-config-converter/`. (delivered: quickstart.md)
 
 ## Dependencies and Execution Order
 
@@ -174,7 +174,7 @@ Task T009: Browser preview journey in tests/e2e/web_portal/test_portal_smoke.py
 - T009 and T018 have passing isolated Chromium journeys. Their shared-navigation acceptance remains blocked by T015.
 - T015 remains blocked because PR #4208 owns `web_portal/app.py` and `web_portal/templates/base.html`.
 - T027 has 18 passing existing portal smoke tests. Full shared integration validation remains blocked by T015.
-- T029 and T030 remain unchecked until final ancestry and publication checks finish.
+- T029 found the branch current with fetched `origin/main`. T030 publishes only the isolated implementation, not shared portal integration.
 
 - Tests must not use live Mist credentials.
 - Do not use direct HTTP as a fallback for Mist SDK access.
