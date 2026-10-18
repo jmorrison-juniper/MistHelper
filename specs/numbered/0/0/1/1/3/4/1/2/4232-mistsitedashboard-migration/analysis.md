@@ -137,3 +137,8 @@ The local commit was rebased onto `origin/main` at `1e9b280ddb0285048e515cb837f6
 Git reported that the branch was already current.
 No existing source file, shared portal file, dependency manifest, or feature selector changed.
 The dedicated pull request must remain unmerged without auto-merge.
+
+[Pull request #4287](https://github.com/jmorrison-juniper/MistHelper/pull/4287) contains the dedicated planning record and offline model.
+It uses the repository template and leaves unrelated or unrun checks explicitly incomplete.
+Twelve tasks are complete. Nineteen future or gated tasks remain unchecked.
+The local requirement and implementation evidence does not claim CI approval.
