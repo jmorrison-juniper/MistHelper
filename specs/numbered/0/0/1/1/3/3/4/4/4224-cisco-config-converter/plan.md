@@ -44,7 +44,7 @@ Build an isolated preview and export slice for Cisco IOS text. Convert only glob
 - **Inline comments and action logging**: Follow the constitution for generated executable lines, meaningful action logs, ASCII log output, and secret exclusion.
 - **Compatibility**: Integrate the Cisco blueprint and navigation entry through the shared portal. Reconcile edits to shared portal files with their current owner before implementation changes are published.
 - **Deployment**: Add no service, volume, network, database, Redis instance, or Compose group.
-- **Release notes**: The issue-specific fragment is `changelog.d/issue-4224-cisco-config-converter.md`.
+- **Release notes**: The PR-specific fragment is `changelog.d/pr-4226.md`.
 - **Workflow scope**: Implement preview, review, export, and portal registration. Keep cloud apply deferred.
 
 No constitution violation is required by this plan. Use original implementation and verified public contract facts. SDK verification is complete, but cloud apply is deferred.
@@ -105,6 +105,18 @@ tests/e2e/web_portal/
 Keep the feature package at five direct children. Keep its page and script in the presentation directory and expose them through its blueprint. Extend the existing portal smoke test instead of adding a child under the overfull browser-test directory.
 
 **Structure Decision**: Keep parsing, conversion, models, routes, and presentation in one feature-owned package under `src/interfaces/portals/`. Test the blueprint in an isolated Flask app. Reconcile shared portal registration and browser acceptance with the owner of those files before publishing implementation changes.
+
+**Upload integration**: The host must use `ConverterRequest` before registering the blueprint.
+This request class applies feature-only body limits and in-memory streams before CSRF parses
+multipart input. Other request paths retain Flask behavior. Registration fails without the
+request class or active CSRF protection.
+
+**Unsupported input**: Report each unsupported source line and a safe command category.
+Omit unknown values because they can contain credentials.
+
+**Shared-file boundary**: PR #4208 owns the application factory and navigation template.
+Keep T015 incomplete until ownership transfers. Browser tests mount the feature blueprint in
+an isolated test host and do not claim shared registration.
 
 ## Complexity Tracking
 

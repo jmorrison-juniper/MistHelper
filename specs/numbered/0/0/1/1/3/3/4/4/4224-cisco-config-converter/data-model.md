@@ -22,7 +22,7 @@ Represents the output shown before export.
 | Field | Meaning | Validation |
 |---|---|---|
 | `gateway_template` | Proposed Mist template request object | Contains `name`, `type`, and `dns_servers` only when supported input provides values. |
-| `unsupported_items` | Input commands not represented in proposed settings | Preserve in review and export. Never silently drop them. |
+| `unsupported_items` | Source line numbers and command categories not represented in proposed settings | Preserve in review and export. Omit values that can contain credentials. |
 | `known_gaps` | Limits of the supported conversion subset | Show during review and include in export. |
 
 The converter maps only global IPv4 `ip name-server` directives to `dns_servers`. It does not
