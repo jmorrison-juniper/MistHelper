@@ -61,7 +61,7 @@ pdfplumber>=0.11.10
 #   python -m playwright install chromium
 # `scripts/bootstrap_worktree.py` runs that command for you.
 playwright==1.64.0
-pytest-playwright==0.9.0
+pytest-playwright==0.10.0
 
 # Security
 bandit[toml]==1.9.4
