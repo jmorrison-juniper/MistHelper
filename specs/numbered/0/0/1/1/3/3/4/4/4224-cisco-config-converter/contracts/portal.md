@@ -2,29 +2,51 @@
 
 ## Navigation and Page
 
-- The converter appears as one navigation entry in the existing MistHelper web portal.
-- The page contains input selection, gateway role and model selection, parsed input, conversion proposal, unsupported items, known gaps, export, and apply controls.
+- The converter appears as one navigation entry in the shared MistHelper portal.
+- The page contains input selection, template name and type fields, conversion proposal,
+  unsupported items, known gaps, review, and export controls.
 - Preview and export remain available without Mist credentials.
-- Apply is unavailable until a valid organization and Mist session are available.
+- Cloud apply is not part of the first release.
 - Every new interactive control has a stable `data-testid`.
 
 ## Input
 
-- Accept only the approved Cisco IOS configuration file type and verified existing portal size limit.
-- Do not implement input-size checks until T004 records the current portal limit. If the current policy has no limit, stop and request an approved value.
-- Reject empty files, invalid encodings, unsupported file types, and paths outside the configured input area.
-- Treat a submitted file name as display text. Resolve file access under the configured input area.
+- Accept `.txt`, `.conf`, `.cfg`, `.ios`, `.config`, and `.log` files up to 16 MiB.
+- Limit the multipart request body to the file limit plus 16 KiB of form overhead.
+- Reject empty or whitespace-only files, invalid UTF-8, null characters, unsupported suffixes,
+  path-like names, and files above the limit.
+- Treat the uploaded file name as display text and process bytes in memory.
 - Do not place file content or credentials in logs or browser storage.
+- MistHelper has no shared portal upload-size setting. The 16 MiB limit is a feature policy based
+  on the independently observed source behavior.
 
 ## Preview and Export
 
-- Preview returns parsed items, proposed settings, unsupported items, and applicable known gaps.
-- Unsupported items remain visible in the review and in the exported proposal.
+- Convert only global IPv4 `ip name-server` directives to `dns_servers`.
+- Accept the verified template types `standalone` and `spoke`.
+- Require a template name with 1 to 120 non-whitespace characters.
+- Preserve IPv6, malformed, unknown, and other commands as unsupported items.
+- Do not add gateway-role or hardware-model mappings.
+- Unsupported items and known gaps remain visible in review and export.
 - Preview and export do not make Mist API requests.
-- Export contains proposed configuration data only. It does not contain credentials.
+- Export contains the operator-provided `name` and selected `type`. It contains `dns_servers`
+  only when supported input provides values. It also contains unsupported items and known gaps,
+  but no credentials.
+- Store only proposal digests in the signed Flask session. Require the same digest for review
+  and export. Reject edited proposals.
+- Extend the shared portal base template. Use its `csrf-token` meta value.
+- Include the CSRF token in the multipart preview form and send `X-CSRFToken` on every JSON
+  POST request.
+- Keep CSRF protection enabled. Test preview, review, and export with `CSRFProtect` active.
 
 ## Errors
 
 - Invalid input returns a clear operator-facing error and makes no Mist API request.
-- Conversion exceptions do not produce a partial proposal that appears complete.
-- A failed or indeterminate apply result does not appear as a successful apply.
+- A malformed command remains visible as unsupported and does not invalidate the whole file.
+- A file with no supported command does not include an empty `dns_servers` field.
+
+## Integration Status
+
+The Cisco blueprint and navigation entry are registered in the local integration worktree.
+WAN Performance registration remains conditional on the WAN package being present. Reconcile
+shared portal-file changes with their owner before publishing implementation changes.
