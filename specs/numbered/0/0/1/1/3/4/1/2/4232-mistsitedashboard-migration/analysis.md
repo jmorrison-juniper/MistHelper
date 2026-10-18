@@ -81,7 +81,7 @@ All commands ran from the worktree root with Python 3.13.13.
 | `.venv/bin/python -m pytest tests/unit/dataclasses/test_service_measurement.py --cov=src.foundation.models.data.service_measurement --cov-report=term-missing --cov-fail-under=100 -q` | 26 passed. 28 statements, zero missed, 100 percent coverage |
 | `.venv/bin/python -m pytest tests/unit/dataclasses tests/unit/dataproc/test_data_processing_utils.py -q` | 92 passed |
 | `PATH=<session-pwsh>:$PATH .venv/bin/python -m pytest tests/guardrails/test_spec_route_contract.py tests/guardrails/test_move_module_guidance.py -q` | 44 passed |
-| `.venv/bin/python -m pytest tests/guardrails/test_changelog_fragment_policy.py -q` | 17 passed, one skipped before staging |
+| `.venv/bin/python -m pytest tests/guardrails/test_changelog_fragment_policy.py -q -rs` | 17 passed, one skipped because no pull-request event exists locally |
 | `.venv/bin/python -m ruff check src/foundation/models/data/service_measurement.py tests/unit/dataclasses/test_service_measurement.py` | All checks passed |
 | `.venv/bin/python -m black --check src/foundation/models/data/service_measurement.py tests/unit/dataclasses/test_service_measurement.py` | Two files unchanged |
 | `.venv/bin/python -m mypy src/foundation/models/data/service_measurement.py --config-file pyproject.toml` | Success. One source file checked |
@@ -96,6 +96,10 @@ All commands ran from the worktree root with Python 3.13.13.
 | `.venv/bin/pip-audit -r requirements.txt --progress-spinner off` | Failed before analysis. Temporary `ensurepip` died with SIGABRT |
 | `.venv/bin/pip-audit --local --progress-spinner off` | Exit 1. Eight pip 26.0.1 advisory records, four distinct IDs. Shared devtools could not be audited |
 | `.venv/bin/speckit-task-audit` | Existing repository drift. Examined 837 records, 360 task files, and 10,235 markers, including 36 malformed markers |
+| `.venv/bin/markdown-link-check specs/numbered/0/0/1/1/3/4/1/2/4232-mistsitedashboard-migration changelog.d/issue-4232-site-health-measurement.md` | Eleven tracked Markdown files, zero broken links |
+| `.venv/bin/python -B -m pytest -p no:cacheprovider -s -q tests/guardrails/local_test_quality_loop/test_guidance.py::TestLiveGuides` | One passed. Four inputs read and validated |
+| `.venv/bin/test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json --changed-from origin/main --full-gate-path .github/workflows/ci.yml --full-gate-path requirements-dev.txt` | One changed test file checked, zero findings, zero parse errors, zero new findings |
+| `.venv/bin/test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json` | 1,190 files checked, 694 existing findings, 49 skipped, zero parse errors, zero new findings |
 
 The requirements-audit failure and pip advisories reproduce existing issue #4255.
 No dependency manifest changed.
@@ -117,7 +121,8 @@ It also measured the two model methods at 18 and ten lines.
 `symbol-diff` has no base version for this new module and reports that missing input.
 No existing module or module-level declaration changed.
 
-Local links and the committed test-quality ratchet remain pending until the final local commit.
+The changed-test ratchet skipped two configured paths outside its selected test module.
+The full test-quality gate retained the existing baseline without modifications.
 Browser, full-suite coverage, menu sweeps, and container checks are not run because this slice changes none of those surfaces.
 The current JSON test covers normalized-record integration, not Mist response integration.
 
@@ -127,3 +132,8 @@ The complete dashboard remains unimplemented.
 T010 through T012 are implemented and verified.
 The model is not connected to a dashboard or SDK response parser.
 License reuse, live contracts, portal access, shared-file ownership, persistence, and deployment remain blocked.
+
+The local commit was rebased onto `origin/main` at `1e9b280ddb0285048e515cb837f6802ac38ceb0e`.
+Git reported that the branch was already current.
+No existing source file, shared portal file, dependency manifest, or feature selector changed.
+The dedicated pull request must remain unmerged without auto-merge.
