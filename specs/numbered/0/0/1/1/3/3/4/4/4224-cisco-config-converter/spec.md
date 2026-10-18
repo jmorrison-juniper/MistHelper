@@ -109,3 +109,5 @@ An operator exports a conversion proposal after reviewing the parsed configurati
 - Cloud apply is deferred pending separate scope and approval.
 - The Cisco blueprint registers in the shared portal. Register WAN Performance only when its package is present.
 - The implementation uses original code and public contracts. It does not copy material from the CC BY-NC 4.0 source repository.
+- Public syntax verification uses [Cisco DNS configuration guidance](https://www.cisco.com/c/en/us/support/docs/ip/domain-name-system-dns/24182-reversedns.html).
+- Unsupported items retain source line numbers and command categories. Their values remain omitted because unknown commands can contain credentials.

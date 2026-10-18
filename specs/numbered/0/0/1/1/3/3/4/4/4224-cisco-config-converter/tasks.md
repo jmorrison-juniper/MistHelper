@@ -14,17 +14,17 @@ hardware roles or models, and it does not change Mist.
 
 **Purpose**: Confirm the implementation boundaries and validation inputs.
 
-- [ ] T001 Use original code and verified public contract facts only. Record the supported syntax and conversion rules in `specs/numbered/0/0/1/1/3/3/4/4/4224-cisco-config-converter/spec.md`.
-- [ ] T002 Verify the accepted suffixes, 16 MiB file limit, and 16 KiB multipart overhead in `specs/numbered/0/0/1/1/3/3/4/4/4224-cisco-config-converter/contracts/portal.md`.
-- [ ] T003 Verify the deferred cloud-write boundary in `specs/numbered/0/0/1/1/3/3/4/4/4224-cisco-config-converter/contracts/mist-apply.md`.
+- [X] T001 Use original code and verified public contract facts only. Record the supported syntax and conversion rules in `specs/numbered/0/0/1/1/3/3/4/4/4224-cisco-config-converter/spec.md`. (delivered: spec.md)
+- [X] T002 Verify the accepted suffixes, 16 MiB file limit, and 16 KiB multipart overhead in `specs/numbered/0/0/1/1/3/3/4/4/4224-cisco-config-converter/contracts/portal.md`. (delivered: tests/integration/web_portal/cisco_config_converter/test_routes.py)
+- [X] T003 Verify the deferred cloud-write boundary in `specs/numbered/0/0/1/1/3/3/4/4/4224-cisco-config-converter/contracts/mist-apply.md`. (delivered: contracts/mist-apply.md)
 
 ## Phase 2: Foundational
 
 **Purpose**: Create feature-owned source and test packages before story work.
 
-- [ ] T004 [P] Create the feature package and presentation directory under `src/interfaces/portals/cisco_config_converter/`. Keep the package at five direct children or fewer.
-- [ ] T005 [P] Create the route-test package under `tests/integration/web_portal/cisco_config_converter/`.
-- [ ] T006 Configure the feature blueprint for CSRF-protected requests and digest-bound review state in `src/interfaces/portals/cisco_config_converter/routes.py`.
+- [X] T004 [P] Create the feature package and presentation directory under `src/interfaces/portals/cisco_config_converter/`. Keep the package at five direct children or fewer. (delivered: src/interfaces/portals/cisco_config_converter/__init__.py)
+- [X] T005 [P] Create the route-test package under `tests/integration/web_portal/cisco_config_converter/`. (delivered: tests/integration/web_portal/cisco_config_converter/__init__.py)
+- [X] T006 Configure the feature blueprint for CSRF-protected requests and digest-bound review state in `src/interfaces/portals/cisco_config_converter/routes.py`. (delivered: src/interfaces/portals/cisco_config_converter/routes.py)
 
 **Checkpoint**: The feature package and isolated test package exist, and cloud apply is absent.
 
@@ -37,19 +37,19 @@ IPv4 `ip name-server` values appear in `dns_servers` and unsupported commands re
 
 ### Tests for User Story 1
 
-- [ ] T007 [P] [US1] Test supported, empty, whitespace-only, malformed, invalid UTF-8, unsupported suffix, and unsupported-command input in `tests/unit/gateway/overrides/test_cisco_config_converter.py`.
-- [ ] T008 [P] [US1] Test upload boundaries, path-like names, CSRF protection, review binding, and edited-proposal rejection in `tests/integration/web_portal/cisco_config_converter/test_routes.py`.
+- [X] T007 [P] [US1] Test supported, empty, whitespace-only, malformed, invalid UTF-8, unsupported suffix, and unsupported-command input in `tests/unit/gateway/overrides/test_cisco_config_converter.py`. (delivered: tests/unit/gateway/overrides/test_cisco_config_converter.py)
+- [X] T008 [P] [US1] Test upload boundaries, path-like names, CSRF protection, review binding, and edited-proposal rejection in `tests/integration/web_portal/cisco_config_converter/test_routes.py`. (delivered: tests/integration/web_portal/cisco_config_converter/test_routes.py)
 - [ ] T009 [P] [US1] Extend the portal smoke journey for upload, template-type selection, preview, and review in `tests/e2e/web_portal/test_portal_smoke.py`.
 
 ### Implementation for User Story 1
 
-- [ ] T010 [US1] Define source, proposal, unsupported-item, and review-state models in `src/interfaces/portals/cisco_config_converter/models.py`. Limit uploads to 16 MiB, accept only `.txt`, `.conf`, `.cfg`, `.ios`, `.config`, and `.log`, and require a template name of 1 to 120 non-whitespace characters.
-- [ ] T011 [US1] Convert only global IPv4 `ip name-server` directives to `dns_servers` in `src/interfaces/portals/cisco_config_converter/conversion.py` using original code. Preserve IPv6, malformed, and unknown commands as unsupported.
-- [ ] T012 [US1] Implement in-memory upload validation, preview, and digest-bound review in `src/interfaces/portals/cisco_config_converter/routes.py`. Decode UTF-8 strictly and reject null characters.
-- [ ] T013 [US1] Add template-name and template-type fields, proposal review, unsupported items, and stable `data-testid` values in `src/interfaces/portals/cisco_config_converter/presentation/converter.html`.
-- [ ] T014 [US1] Add CSRF headers and preview interactions in `src/interfaces/portals/cisco_config_converter/presentation/converter.js`. Do not store credentials or configuration content in browser storage.
+- [X] T010 [US1] Define source, proposal, unsupported-item, and review-state models in `src/interfaces/portals/cisco_config_converter/models.py`. Limit uploads to 16 MiB, accept only `.txt`, `.conf`, `.cfg`, `.ios`, `.config`, and `.log`, and require a template name of 1 to 120 non-whitespace characters. (delivered: src/interfaces/portals/cisco_config_converter/models.py)
+- [X] T011 [US1] Convert only global IPv4 `ip name-server` directives to `dns_servers` in `src/interfaces/portals/cisco_config_converter/conversion.py` using original code. Preserve IPv6, malformed, and unknown commands as unsupported. (delivered: src/interfaces/portals/cisco_config_converter/conversion.py)
+- [X] T012 [US1] Implement in-memory upload validation, preview, and digest-bound review in `src/interfaces/portals/cisco_config_converter/routes.py`. Decode UTF-8 strictly and reject null characters. (delivered: src/interfaces/portals/cisco_config_converter/routes.py)
+- [X] T013 [US1] Add template-name and template-type fields, proposal review, unsupported items, and stable `data-testid` values in `src/interfaces/portals/cisco_config_converter/presentation/converter.html`. (delivered: src/interfaces/portals/cisco_config_converter/presentation/converter.html)
+- [X] T014 [US1] Add CSRF headers and preview interactions in `src/interfaces/portals/cisco_config_converter/presentation/converter.js`. Do not store credentials or configuration content in browser storage. (delivered: src/interfaces/portals/cisco_config_converter/presentation/converter.js)
 - [ ] T015 [US1] Register the converter blueprint and navigation entry in `web_portal/app.py` and `web_portal/templates/base.html` after reconciling ownership of those shared files.
-- [ ] T016 [US1] Verify preview needs no credentials, makes no Mist request, and writes no configuration file in `tests/integration/web_portal/cisco_config_converter/test_routes.py`.
+- [X] T016 [US1] Verify preview needs no credentials, makes no Mist request, and writes no configuration file in `tests/integration/web_portal/cisco_config_converter/test_routes.py`. (delivered: tests/integration/web_portal/cisco_config_converter/test_routes.py)
 
 **Checkpoint**: The operator can review a proposal without credentials or a cloud request.
 
@@ -62,14 +62,14 @@ fields, unsupported items, and known gaps, with no credentials.
 
 ### Tests for User Story 2
 
-- [ ] T017 [P] [US2] Test valid, unreviewed, edited, stale, and invalid export requests in `tests/integration/web_portal/cisco_config_converter/test_routes.py`.
+- [X] T017 [P] [US2] Test valid, unreviewed, edited, stale, and invalid export requests in `tests/integration/web_portal/cisco_config_converter/test_routes.py`. (delivered: tests/integration/web_portal/cisco_config_converter/test_routes.py)
 - [ ] T018 [P] [US2] Extend the portal smoke journey to test the export control and downloaded proposal in `tests/e2e/web_portal/test_portal_smoke.py`.
 
 ### Implementation for User Story 2
 
-- [ ] T019 [US2] Add the JSON route for the exact reviewed proposal in `src/interfaces/portals/cisco_config_converter/routes.py`. Include unsupported items and known gaps.
-- [ ] T020 [US2] Add the export control and download result in `src/interfaces/portals/cisco_config_converter/presentation/converter.html`.
-- [ ] T021 [US2] Verify export makes no Mist call, writes no configuration file, and exposes no content or credentials in logs or browser storage in `tests/integration/web_portal/cisco_config_converter/test_routes.py` and `tests/e2e/web_portal/test_portal_smoke.py`.
+- [X] T019 [US2] Add the JSON route for the exact reviewed proposal in `src/interfaces/portals/cisco_config_converter/routes.py`. Include unsupported items and known gaps. (delivered: src/interfaces/portals/cisco_config_converter/routes.py)
+- [X] T020 [US2] Add the export control and download result in `src/interfaces/portals/cisco_config_converter/presentation/converter.html`. (delivered: src/interfaces/portals/cisco_config_converter/presentation/converter.html)
+- [X] T021 [US2] Verify export makes no Mist call, writes no configuration file, and exposes no content or credentials in logs or browser storage in `tests/integration/web_portal/cisco_config_converter/test_routes.py` and `tests/e2e/web_portal/test_portal_smoke.py`. (delivered: tests/integration/web_portal/cisco_config_converter/test_routes.py)
 
 **Checkpoint**: The operator can export the reviewed proposal without applying it.
 
@@ -77,18 +77,18 @@ fields, unsupported items, and known gaps, with no credentials.
 
 **Purpose**: Document the behavior and validate the feature against existing portal behavior.
 
-- [ ] T022 [P] Add the issue-specific release note in `changelog.d/issue-4224-cisco-config-converter.md`.
-- [ ] T023 Run the parser, route, and browser tests listed in `specs/numbered/0/0/1/1/3/3/4/4/4224-cisco-config-converter/quickstart.md`.
-- [ ] T024 Run the applicable lint, format, type, security, documentation, and test-quality gates listed in `.github/copilot-instructions.md`.
-- [ ] T025 Verify that the feature adds no Compose service, volume, network, database, or Redis instance, and that product output remains under `data/`.
-- [ ] T026 Update `specs/numbered/0/0/1/1/3/3/4/4/4224-cisco-config-converter/quickstart.md` with exact commands and results after validation.
+- [X] T022 [P] Add the PR-specific release note in `changelog.d/pr-4226.md`. (delivered: changelog.d/pr-4226.md)
+- [X] T023 Run the parser, route, and browser tests listed in `specs/numbered/0/0/1/1/3/3/4/4/4224-cisco-config-converter/quickstart.md`. (delivered: quickstart.md)
+- [X] T024 Run the applicable lint, format, type, security, documentation, and test-quality gates listed in `.github/copilot-instructions.md`. (delivered: quickstart.md)
+- [X] T025 Verify that the feature adds no Compose service, volume, network, database, or Redis instance, and that product output remains under `data/`. (delivered: src/interfaces/portals/cisco_config_converter/routes.py)
+- [X] T026 Update `specs/numbered/0/0/1/1/3/3/4/4/4224-cisco-config-converter/quickstart.md` with exact commands and results after validation. (delivered: quickstart.md)
 - [ ] T027 Verify existing portal routes and browser behavior with the relevant tests in `tests/e2e/web_portal/`.
 
 ## Phase 6: Delivery
 
 **Purpose**: Publish only after shared-file ownership and required checks are clear.
 
-- [ ] T028 Build the explicit manifest for `specs/numbered/0/0/1/1/3/3/4/4/4224-cisco-config-converter/` and stage only its listed files.
+- [X] T028 Build the explicit manifest for `specs/numbered/0/0/1/1/3/3/4/4/4224-cisco-config-converter/` and stage only its listed files. (delivered: quickstart.md)
 - [ ] T029 Rebase the commit containing `specs/numbered/0/0/1/1/3/3/4/4/4224-cisco-config-converter/plan.md` onto `origin/main` and rerun affected checks.
 - [ ] T030 Push the feature branch and update pull request #4226 with exact gate results for `specs/numbered/0/0/1/1/3/3/4/4/4224-cisco-config-converter/`.
 
@@ -170,6 +170,11 @@ Task T009: Browser preview journey in tests/e2e/web_portal/test_portal_smoke.py
 5. Keep organization template creation deferred to separate scope and approval.
 
 ## Notes
+
+- T009 and T018 have passing isolated Chromium journeys. Their shared-navigation acceptance remains blocked by T015.
+- T015 remains blocked because PR #4208 owns `web_portal/app.py` and `web_portal/templates/base.html`.
+- T027 has 18 passing existing portal smoke tests. Full shared integration validation remains blocked by T015.
+- T029 and T030 remain unchecked until final ancestry and publication checks finish.
 
 - Tests must not use live Mist credentials.
 - Do not use direct HTTP as a fallback for Mist SDK access.

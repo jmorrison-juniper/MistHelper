@@ -28,6 +28,7 @@
 - Preserve IPv6, malformed, unknown, and other commands as unsupported items.
 - Do not add gateway-role or hardware-model mappings.
 - Unsupported items and known gaps remain visible in review and export.
+- Identify unsupported items by source line and command category. Omit their values because unknown commands can contain credentials.
 - Preview and export do not make Mist API requests.
 - Export contains the operator-provided `name` and selected `type`. It contains `dns_servers`
   only when supported input provides values. It also contains unsupported items and known gaps,
@@ -38,6 +39,8 @@
 - Include the CSRF token in the multipart preview form and send `X-CSRFToken` on every JSON
   POST request.
 - Keep CSRF protection enabled. Test preview, review, and export with `CSRFProtect` active.
+- Before registration, configure the host with `ConverterRequest` to prevent upload spooling before CSRF reads multipart data.
+- Blueprint registration rejects hosts without this request class or active `CSRFProtect`.
 
 ## Errors
 
@@ -47,6 +50,6 @@
 
 ## Integration Status
 
-The Cisco blueprint and navigation entry are registered in the local integration worktree.
-WAN Performance registration remains conditional on the WAN package being present. Reconcile
-shared portal-file changes with their owner before publishing implementation changes.
+The feature blueprint passes isolated route and browser tests. Shared portal registration and
+navigation remain blocked because PR #4208 owns `web_portal/app.py` and
+`web_portal/templates/base.html`. This branch does not edit either file.
