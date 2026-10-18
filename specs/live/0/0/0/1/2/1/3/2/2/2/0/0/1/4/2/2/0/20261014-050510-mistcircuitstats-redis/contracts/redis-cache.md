@@ -2,6 +2,19 @@
 
 **Status**: Proposed contract. Do not implement until #4195 and #4200 ownership and existing Redis conventions are reviewed.
 
+## Existing Dashboard Baseline
+
+Merged PR #4252 uses `RedisDashboardCache` with the existing shared Redis client in `src/interfaces/portals/wan_dashboard/services.py`.
+
+| Setting | Existing value | Scope |
+|---|---|---|
+| `CACHE_PREFIX` | `wan-dashboard:v1:` | Existing dashboard keys |
+| `SITE_TTL` | 300 seconds | Site data |
+| `ENTITY_TTL` | 600 seconds | Entity data |
+| `STALE_TTL` | 86400 seconds | Last-success data |
+
+These values describe existing behavior only. They do not approve a #4220 cache, writer, TTL, lease, or outage policy. Do not alter existing keys during planning.
+
 ## Resource Boundary
 
 - Use the existing MistHelper Redis service only.
@@ -12,7 +25,7 @@
 
 ## Namespace and Ownership
 
-Proposed key form:
+Historical candidate only. This prefix is not reserved or approved:
 
 ```text
 misthelper:wan:mcsr:v1:<org_id>:<site_id>:<record_type>:<record_id>
@@ -25,6 +38,7 @@ misthelper:wan:mcsr:v1:<org_id>:<site_id>:<record_type>:<record_id>
 - A refresh owner may publish only after it validates the organization, key owner, schema, and complete record set.
 - Organization-scoped peer records must use a documented organization scope instead of an empty site identifier.
 - The prefix and key parts require review against existing MistHelper Redis keys before implementation.
+- Prefer the existing canonical cache when it meets an approved requirement. Do not create a second namespace without an explicit unique-scope decision.
 
 ## Serialization
 
