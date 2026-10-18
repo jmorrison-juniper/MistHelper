@@ -88,7 +88,7 @@ Do not duplicate the other feature's collector or route registration.
 
 - [x] T028 Add the unique release fragment `changelog.d/issue-4232-site-health-measurement.md` for the offline slice and its limits. (delivered: changelog.d/issue-4232-site-health-measurement.md)
 - [x] T029 Run applicable local gates and the committed test-quality ratchet, then record exact commands and results in `analysis.md`. (delivered: analysis.md)
-- [ ] T030 Publish a dedicated pull request with `.github/PULL_REQUEST_TEMPLATE.md`. Keep cloud access, merging, auto-merge, and deployment blocked.
+- [x] T030 Publish a dedicated pull request with `.github/PULL_REQUEST_TEMPLATE.md`. Keep cloud access, merging, auto-merge, and deployment blocked. (delivered: analysis.md)
 - [ ] T031 Verify future persistence through `DataExporter.write_with_format_selection()` and declared natural keys before live release. B04 and B07 remain open.
 
 ## Dependencies and execution order
