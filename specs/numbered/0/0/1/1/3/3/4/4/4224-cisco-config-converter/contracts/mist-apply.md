@@ -1,37 +1,23 @@
-# Mist Apply Contract: Create Gateway Template
+# Mist Apply Contract: Deferred
 
 ## Operation
 
 - SDK operation: `createOrgGatewayTemplate`
 - Mist API operation: `POST /api/v1/orgs/{org_id}/gatewaytemplates`
-- Request body: `gateway_template` schema in `documentation/mist-api-openapi31json.json`
+- SDK module: `mistapi.api.v1.orgs.gatewaytemplates`
+- SDK signature: `createOrgGatewayTemplate(mist_session, org_id, body)`
+- Request body: gateway-template schema in `documentation/mist-api-openapi31json.json`
 - Transport: the supported `mistapi` 0.64.x SDK only
-- Scope: create one new organization gateway template from the reviewed proposal
+- Verified fields: required `name`, type `standalone` or `spoke`, and optional `dns_servers`
+  as an array of strings
+- Documented responses: HTTP 200, 400, 401, 403, 404, and 429
 
-Before implementation, obtain product-owner approval for creating a new organization gateway template as the required cloud effect. The issue does not confirm this exact operation or a site assignment. Then verify the SDK module path, function signature, authentication behavior, accepted payload, and response against the installed SDK. The local planning workspace does not have `mistapi` installed. If the effect is not approved, revise this contract and the spec. If the SDK operation is absent or incompatible, stop and revise this contract before implementation. Do not replace it with direct HTTP.
+The first release supports preview, review, and JSON export only. It does not call the Mist API
+or create a gateway template. A verified SDK contract does not authorize a cloud change.
 
-## Preconditions
+## Future Apply Gate
 
-1. The proposal is complete and reviewed.
-2. The selected role and hardware model still match the proposal.
-3. The Mist session is valid and the operator can access the selected organization.
-4. The operator types the required confirmation phrase.
-5. The proposal passes the verified gateway template request schema.
-
-If any precondition fails, make no SDK call.
-
-## Result
-
-- On a confirmed SDK success, report template creation and show the returned template identifier when present.
-- On an SDK failure, report failure without exposing credentials or claiming the template was created.
-- On an interrupted request without a definitive response, report an indeterminate result and do not retry automatically.
-- Do not update or delete an existing template, assign the new template to a site, or apply it to a device in this feature.
-
-## Required Contract Tests
-
-- Verify the SDK call uses the operator's Mist session and selected organization.
-- Verify the request matches the SDK operation's accepted payload and endpoint.
-- Verify missing credentials and rejected confirmation make zero SDK calls.
-- Verify an SDK error does not produce a success result.
-- Verify an interrupted or ambiguous result is not retried automatically.
-- Verify logs and operator-facing errors do not expose tokens or passwords.
+Cloud apply remains outside this release. Before a future apply feature, obtain separate scope
+and approval for the cloud effect. Define organization selection, confirmation, failure
+handling, retry policy, and contract tests. Use the verified SDK operation only. Do not add
+wrapper fields or settings derived from unsupported Cisco commands.

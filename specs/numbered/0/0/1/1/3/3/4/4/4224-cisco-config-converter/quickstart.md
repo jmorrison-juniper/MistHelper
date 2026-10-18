@@ -1,59 +1,64 @@
 # Quickstart: Cisco Config Converter Validation
 
-This guide defines validation scenarios for implementation. It does not start a container or contact a live Mist organization.
+This guide validates preview, review, and JSON export. It does not start a container or contact a
+live Mist organization.
 
 ## Prerequisites
 
 - Use the project Python 3.13 environment and development dependencies.
-- Use approved Cisco IOS sample configurations with no production credentials.
-- Mock all Mist SDK responses.
-- Complete the license, SDK, gateway mapping, and upload policy gates in [plan.md](plan.md) before implementation.
-- Record the verified upload limit and permitted file types in [contracts/portal.md](contracts/portal.md). Do not substitute an assumed value.
+- Use original Cisco IOS sample configurations without production credentials.
+- Provide a template name with 1 to 120 non-whitespace characters.
+- Convert only global IPv4 `ip name-server` commands to `dns_servers`.
+- Select template type `standalone` or `spoke`.
+- Keep hardware roles, hardware models, IPv6 commands, malformed directives, and unknown commands unsupported.
+- Process uploads in memory. The file limit is 16 MiB.
 
 ## Parser and Conversion
 
 Run the parser and conversion unit tests:
 
 ```sh
-python -m pytest tests/unit/gateway/overrides/test_cisco_config_converter.py
+.venv/bin/python -m pytest tests/unit/gateway/overrides/test_cisco_config_converter.py
 ```
 
-Expected result: valid fixtures produce a proposal; invalid encodings, empty files, oversized files, and unsupported commands produce safe results. The size boundary must match the verified portal limit.
+Expected result: supported IPv4 DNS commands produce `dns_servers`. Malformed directives remain
+visible as unsupported items. Empty or whitespace-only files and invalid encodings are rejected.
+The tests cover the exact 16 MiB boundary and reject one byte above it.
 
 ## Preview and Export
 
-Run the portal tests in the feature directory with no Mist credentials configured:
+Run the isolated portal route tests without Mist credentials:
 
 ```sh
-python -m pytest tests/integration/web_portal/cisco_config_converter/test_routes.py
+.venv/bin/python -m pytest tests/integration/web_portal/cisco_config_converter/test_routes.py
 ```
 
-Expected result: preview and export complete without cloud requests. Unsupported items remain visible.
-
-## Mist Apply
-
-Run the mocked SDK contract tests:
-
-```sh
-python -m pytest tests/integration/web_portal/cisco_config_converter/test_sdk_contract.py
-```
-
-Expected result: the verified SDK method receives the selected organization and reviewed settings only after the operator enters the required confirmation. Missing credentials, rejected confirmation, and request failures do not appear as success.
+Expected result: preview and export complete without cloud requests. Unsupported items remain
+visible. An edited proposal is rejected.
 
 ## Browser Journey
 
-Run the portal smoke test after adding the converter journey:
+Run the isolated browser journey:
 
 ```sh
-python -m pytest tests/e2e/web_portal/test_portal_smoke.py
+.venv/bin/python -m pytest tests/e2e/web_portal/test_portal_smoke.py
 ```
 
-Expected result: the browser opens the converter, selects a sample file and gateway target, and shows a proposal without Mist credentials. A failed browser run must retain its screenshot or trace as a test artifact.
+Expected result: the browser uploads a sample, selects a template type, reviews the proposal, and
+exports it without Mist credentials. Add this journey to
+`tests/e2e/web_portal/test_portal_smoke.py`. A failed browser run saves a screenshot as a test
+artifact.
 
-## Compose and Existing Portal
+## Portal Regression
 
-Inspect `compose.yml` and the product output configuration. Expected result: the feature adds no service, volume, network, database, or Redis instance, and all output remains under `data/`.
+Run the converter tests with the existing portal browser suite:
 
-Run the portal test set that covers navigation and current workflows. Use the repository's documented E2E command and report each exact result. Confirm that all existing routes remain available.
+```sh
+.venv/bin/python -m pytest tests/unit/gateway/overrides/test_cisco_config_converter.py tests/integration/web_portal/cisco_config_converter tests/e2e/web_portal -q
+```
 
-After all focused, browser, Compose, and regression checks finish, update this guide once with the exact commands and observed results.
+Expected result: converter and existing portal tests pass. The feature adds no service, volume,
+network, database, or Redis instance. Product output remains under `data/`.
+
+Cloud apply remains outside this release. Reconcile shared portal-file changes with their owner
+before publishing implementation changes.

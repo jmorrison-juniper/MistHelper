@@ -7,61 +7,42 @@ Represents operator-provided Cisco IOS text and its file metadata.
 | Field | Meaning | Validation |
 |---|---|---|
 | `name` | Original file name shown to the operator | Treat as display text. Do not use it as a path. |
-| `content` | Decoded Cisco IOS configuration text | Reject empty input and invalid encoding. Do not log the content. |
-| `size_bytes` | Input size in bytes | Must be within the existing portal upload limit. |
-| `format` | Detected supported input format | Accept only the approved Cisco IOS text format. |
-| `source_id` | Identifier for this in-session input | Do not use it as a filesystem path or credential. |
+| `content` | Uploaded Cisco IOS configuration bytes | Require non-empty UTF-8 text. Do not log the content. |
+| `size_bytes` | Input size in bytes | Limit to 16 MiB. |
+| `format` | Supported text-file suffix | Accept `.txt`, `.conf`, `.cfg`, `.ios`, `.config`, or `.log`. |
+| `template_name` | Proposed gateway template name | Require 1 to 120 non-whitespace characters. |
+| `template_type` | Mist gateway template type | Accept only `standalone` or `spoke`. |
 
-## Gateway Selection
-
-Represents the operator's selected conversion target.
-
-| Field | Meaning | Validation |
-|---|---|---|
-| `role` | Gateway role used to select conversion rules | Must match an approved role mapping. |
-| `hardware_model` | Gateway hardware model used to select conversion rules | Must match an approved model mapping for the selected role. |
-
-The role and model pair must remain attached to the proposal. Reject apply if the pair changes after review.
+Process uploaded bytes in memory. Do not create a server-side path or a persistent source record.
 
 ## Conversion Proposal
 
-Represents the output shown before export or apply.
+Represents the output shown before export.
 
 | Field | Meaning | Validation |
 |---|---|---|
-| `proposal_id` | Identifier for the current preview | Scope to the active browser session. |
-| `source_id` | Source configuration used for conversion | Must refer to a validated source in the same session. |
-| `gateway_selection` | Role and model pair used by conversion | Must match the reviewed selection at apply time. |
-| `proposed_settings` | Mist gateway template settings | Must satisfy the verified SDK request schema before cloud submission. |
+| `gateway_template` | Proposed Mist template request object | Contains `name`, `type`, and `dns_servers` only when supported input provides values. |
 | `unsupported_items` | Input commands not represented in proposed settings | Preserve in review and export. Never silently drop them. |
-| `known_gaps` | Documented conversion limits that apply to this proposal | Show before export or apply. |
-| `review_state` | Whether the operator has reviewed this proposal | Apply requires a reviewed state. |
+| `known_gaps` | Limits of the supported conversion subset | Show during review and include in export. |
 
-## Apply Request
+The converter maps only global IPv4 `ip name-server` directives to `dns_servers`. It does not
+map gateway roles, hardware models, IPv6 commands, malformed directives, or other settings.
 
-Represents the operator's request to create a Mist organization gateway template.
+## Review State
 
-| Field | Meaning | Validation |
-|---|---|---|
-| `proposal_id` | Proposal selected for apply | Must exist in the current session and have a reviewed state. |
-| `organization_id` | Mist organization that owns the new template | Must be present and authorized by the Mist session. |
-| `confirmation` | Typed operator confirmation | Must match the required phrase before the SDK call. Never log the phrase. |
-| `result_state` | Outcome of the SDK request | Use success, failure, or indeterminate. Never report success for an unknown outcome. |
-| `template_id` | Identifier returned after successful creation | Present only when the SDK confirms creation. |
+The signed Flask session stores a digest of the current proposal and a digest for the reviewed
+proposal. Export requires both digests to match the submitted proposal.
 
 ## State Transitions
 
 ```text
-uploaded -> validated -> parsed -> proposal_ready -> reviewed
-                                                  -> exported
-                                                  -> apply_requested -> applied
-                                                                      -> failed
-                                                                      -> indeterminate
+uploaded -> validated -> parsed -> proposal_ready -> reviewed -> exported
 ```
 
 - Invalid input stops before `validated`.
-- An empty supported result does not produce a misleading proposal.
-- Export does not change the proposal's cloud state.
-- Apply requires `reviewed`, valid credentials, organization access, and typed confirmation.
-- An interrupted request with no definitive Mist response becomes `indeterminate`.
-- Credentials are not fields of these entities and are never copied into persistent or browser-visible data.
+- An empty supported result does not add a `dns_servers` field.
+- Unknown, IPv6, and malformed commands remain unsupported items.
+- Export does not change Mist cloud state.
+- Cloud apply is outside the first release.
+- Credentials are not fields of these entities and are never copied into persistent or
+  browser-visible data.
