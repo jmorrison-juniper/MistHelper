@@ -121,6 +121,7 @@ def test_browser_follows_live_and_synthetic_wan_journeys(
     expect(page.get_by_test_id("wan-gateway")).to_be_visible()
     page.get_by_test_id("wan-back-link").click()
     expect(page.get_by_test_id("wan-overview")).to_be_visible()
+    page.screenshot(path=str(evidence / f"{detail}-journey.png"), full_page=True)
     logger.debug("The offline WAN browser journey for %s returned to the overview", detail)
 
 
