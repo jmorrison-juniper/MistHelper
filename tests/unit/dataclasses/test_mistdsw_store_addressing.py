@@ -2,6 +2,8 @@
 
 from __future__ import annotations  # WHY: keep test annotations consistent with Python 3.13 code.
 
+from dataclasses import replace  # WHY: vary one caller-owned policy value per boundary case.
+
 import pytest  # WHY: parameterized cases and explicit validation failures need pytest helpers.
 
 from src.foundation.models.data.mistdsw_addressing import (  # WHY: build typed inputs without profile defaults.
@@ -125,6 +127,54 @@ class TestStoreAddressingPreparation:  # WHY: keep valid calculation behavior to
 
 class TestStoreAddressingValidation:  # WHY: keep invalid input behavior together.
     """Reject malformed, unsafe, or inconsistent synthetic inputs."""
+
+    @pytest.mark.parametrize(  # WHY: test invalid IPv4 prefix bounds and child counts.
+        ("supernet_prefix", "subnet_prefix"),
+        [(-1, 24), (23, 24), (24, 23), (22, 31)],
+    )
+    def test_rejects_invalid_prefix_geometry(
+        self, supernet_prefix: int, subnet_prefix: int
+    ) -> None:  # WHY: require valid parent and child network sizes.
+        """The supplied prefix values must define the supplied child networks."""
+        base_configuration = sample_configuration()  # WHY: retain valid names and network definitions.
+        configuration = AddressingConfiguration(  # WHY: replace only the invalid prefix values.
+            policy=replace(  # WHY: preserve all unrelated caller-owned policy values.
+                base_configuration.policy,
+                supernet_prefix=supernet_prefix,
+                subnet_prefix=subnet_prefix,
+            ),
+            variable_networks=base_configuration.variable_networks,  # WHY: retain four synthetic child definitions.
+            supernet_variable_name="lab_supernet",  # WHY: keep the output key valid.
+            supplemental_networks=base_configuration.supplemental_networks,  # WHY: retain valid auxiliary networks.
+        )
+        with pytest.raises(ValueError):  # WHY: reject invalid geometry before generation.
+            StoreAddressingPreparer.prepare(
+                sample_request(configuration=configuration)
+            )  # WHY: validate the same public input boundary.
+
+    @pytest.mark.parametrize(  # WHY: test invalid DHCP offset ordering and subnet bounds.
+        ("dhcp_start_offset", "dhcp_end_offset"),
+        [(0, 2), (3, 2), (255, 255)],
+    )
+    def test_rejects_invalid_dhcp_offsets(
+        self, dhcp_start_offset: int, dhcp_end_offset: int
+    ) -> None:  # WHY: require ordered DHCP hosts inside each child subnet.
+        """The DHCP range must use ordered host offsets within the subnet."""
+        base_configuration = sample_configuration()  # WHY: retain valid synthetic network definitions.
+        configuration = AddressingConfiguration(  # WHY: replace only the invalid DHCP offsets.
+            policy=replace(  # WHY: preserve valid prefixes and gateway offset.
+                base_configuration.policy,
+                dhcp_start_offset=dhcp_start_offset,
+                dhcp_end_offset=dhcp_end_offset,
+            ),
+            variable_networks=base_configuration.variable_networks,  # WHY: retain four valid child definitions.
+            supernet_variable_name="lab_supernet",  # WHY: keep the output key valid.
+            supplemental_networks=base_configuration.supplemental_networks,  # WHY: retain valid auxiliary networks.
+        )
+        with pytest.raises(ValueError, match="offsets"):  # WHY: reject invalid host bounds before generation.
+            StoreAddressingPreparer.prepare(
+                sample_request(configuration=configuration)
+            )  # WHY: validate the same public input boundary.
 
     def test_rejects_generated_variable_key_collisions(self) -> None:  # WHY: require an unambiguous output mapping.
         """A supernet key cannot overwrite a generated segment field."""
