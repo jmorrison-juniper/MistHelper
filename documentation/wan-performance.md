@@ -325,6 +325,15 @@ Complete organization-wide gateway history and VPN history beyond individually r
 The source documentation and implementations disagree about some metric and missing-data behavior.
 The 13-month history view does not backfill missing hours or restore data that Mist no longer retains.
 
+### Browser evidence
+
+The web-portal CI shard uploads the `wan-performance-browser-evidence` artifact.
+It contains four synthetic page captures and two completed navigation captures from `test-artifacts/wan-performance/`.
+The page files are `wan-overview-comparison.png`, `wan-gateway-comparison.png`, `port-comparison.png`, and `peer-comparison.png`.
+The navigation files are `port-journey.png` and `peer-journey.png`.
+These captures contain synthetic data only. They do not verify live API response mapping or full source parity.
+The upload fails when no capture exists.
+
 The preview adds no database, Snowflake connection, service, Compose group, public port, or credential store.
 PR #4205 has a separate, unmerged WAN implementation.
 This preview does not use that implementation.
