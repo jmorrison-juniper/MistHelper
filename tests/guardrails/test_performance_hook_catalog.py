@@ -14,6 +14,9 @@ import subprocess  # Ask Git for the tracked Python files named by the spec.
 from dataclasses import dataclass  # Keep scan records explicit and typed.
 from pathlib import Path  # Resolve repository paths on Windows and Linux.
 
+import pytest
+import yaml
+
 from tests.support.git_environment import (
     git_subprocess_environment,  # WHY: issue #3022, repair a partial editor git config set.
 )
@@ -306,3 +309,43 @@ class TestCatalogContractFailures:
         print(f"Checked {len(expected_counts)} specification counts against the scan summary.")
         for expected_count in expected_counts:
             assert expected_count in specification
+
+
+class TestCatalogWorkflowRevision:
+    """Require CI to fetch the historical tree before the catalog guard runs."""
+
+    @staticmethod
+    def _revision_fetch_is_valid(steps: list[dict[str, object]]) -> bool:
+        """Check the exact revision, shard scope, and execution order."""
+        fetch_command = f"git fetch --no-tags --depth=1 origin {_INVENTORY_SOURCE_REVISION}"
+        test_index = next(index for index, step in enumerate(steps) if step.get("name") == "Run tests with coverage")
+        return any(
+            step.get("run") == fetch_command and step.get("if") == "${{ matrix.shard == 'root-and-contracts' }}"
+            for step in steps[:test_index]
+        )
+
+    def test_coverage_shard_fetches_the_recorded_revision(self) -> None:
+        """Protect the pinned Git tree in a clean shallow CI checkout."""
+        workflow = yaml.safe_load((_REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8"))
+        steps = workflow["jobs"]["pytest_coverage_shards"]["steps"]
+        print(f"Checked {len(steps)} coverage workflow steps for the inventory revision fetch.")
+        assert self._revision_fetch_is_valid(steps), "Fetch the exact inventory revision before the coverage tests"
+
+    @pytest.mark.parametrize("defect", ["missing", "wrong-revision", "wrong-shard", "late-fetch"])
+    def test_revision_fetch_guard_rejects_invalid_workflow_steps(self, defect: str) -> None:
+        """Prove that missing, incorrect, or late fetches fail the workflow contract."""
+        fetch_step = {
+            "run": f"git fetch --no-tags --depth=1 origin {_INVENTORY_SOURCE_REVISION}",
+            "if": "${{ matrix.shard == 'root-and-contracts' }}",
+        }
+        steps = [fetch_step, {"name": "Run tests with coverage"}]
+        if defect == "missing":
+            steps.pop(0)
+        elif defect == "wrong-revision":
+            fetch_step["run"] = "git fetch --no-tags --depth=1 origin HEAD"
+        elif defect == "wrong-shard":
+            fetch_step["if"] = "${{ matrix.shard == 'root-units' }}"
+        else:
+            steps.reverse()
+        print(f"Checked {len(steps)} synthetic workflow steps with defect {defect}.")
+        assert not self._revision_fetch_is_valid(steps)

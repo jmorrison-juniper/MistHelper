@@ -14,6 +14,13 @@ git ls-tree -r --name-only 7c4e57f3db93afda4c93ef0aec1e73c35fb7774e
 The inventory keeps the exact rows and counts from that scan.
 The guard checks every inventory path against that Git tree.
 It does not compare inventory paths with current source files.
+If the checkout has shallow history, fetch the recorded revision before the guard runs:
+
+```powershell
+git fetch --no-tags --depth=1 origin 7c4e57f3db93afda4c93ef0aec1e73c35fb7774e
+```
+
+The `root-and-contracts` CI shard fetches this revision before its tests.
 
 ## 2. Select a hook
 
