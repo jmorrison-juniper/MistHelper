@@ -11,6 +11,7 @@ import stat
 
 # The fixed Windows security query never includes caller-controlled command text.
 import subprocess  # nosec B404
+import sys
 import threading
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -153,7 +154,7 @@ class BackupAccess:
         expected = stat.S_ISDIR(status.st_mode) if directory else stat.S_ISREG(status.st_mode)
         if not expected or (not directory and status.st_nlink != 1):
             raise PolicyError("The backup must be a private regular file with one link.")
-        if os.name == "nt":
+        if sys.platform == "win32":
             attributes = getattr(status, "st_file_attributes", stat.FILE_ATTRIBUTE_REPARSE_POINT)
             if attributes & stat.FILE_ATTRIBUTE_REPARSE_POINT:
                 raise PolicyError("Windows backup access requires verified attributes without reparse points.")
