@@ -173,28 +173,44 @@ class APIDataFetcher:
         max_retries = runtime_settings.API_REQUEST_MAX_RETRIES  # Read retry ceiling from the source settings module.
         retry_delay = runtime_settings.API_REQUEST_RETRY_DELAY  # Read backoff delay from the source settings module.
         last_response = None  # Track the last response.
+        first_failure_status: object = "none"  # WHY: later attempts must not erase the first failure.
         for attempt in range(max_retries + 1):  # Bounded retry loop.
             response = self.api_call(mh.apisession, self.org_id, **self.kwargs)  # Invoke the API.
             last_response = response  # Remember it.
             if self._is_response_valid(response):  # Good response?
                 return response  # Return on success.
+            if first_failure_status == "none":  # WHY: only the first failed attempt is recorded.
+                first_failure_status = APIDataFetcher._describe_status(response)  # Keep status of attempt one.
             if attempt < max_retries:  # More attempts left.
                 delay = retry_delay * (2**attempt)  # Exponential backoff.
-                APIDataFetcher._log_retry_attempt(api_name, attempt, delay)  # Log + print + sleep.
-        logger.error("API call %s failed after %s attempts", api_name, max_retries + 1)
+                APIDataFetcher._log_retry_attempt(api_name, attempt, delay, response)  # Log + sleep.
+        logger.error(  # WHY: the operator must see both the first and the last failure.
+            "API call %s failed after %s attempts (first HTTP status: %s, last HTTP status: %s)",
+            api_name,
+            max_retries + 1,
+            first_failure_status,
+            APIDataFetcher._describe_status(last_response),
+        )
         return last_response  # Return last response.
 
     @staticmethod
-    def _log_retry_attempt(api_name: str, attempt: int, delay: float) -> None:  # Log + sleep before retry.
+    def _describe_status(response: Any) -> int | str:  # Safe status text for logs.
+        """Return the integer HTTP status of a response, or the word unavailable."""
+        status = getattr(response, "status_code", None)  # WHY: a swallowed timeout has no status.
+        return status if type(status) is int else "unavailable"  # WHY: never format arbitrary SDK objects.
+
+    @staticmethod
+    def _log_retry_attempt(api_name: str, attempt: int, delay: float, response: Any) -> None:  # Log, then sleep.
         """Log a warning, print user-visible retry notice, and sleep for the backoff window."""
         max_retries = runtime_settings.API_REQUEST_MAX_RETRIES  # Read retry ceiling without importing MistHelper.
         # WHY (#886 Phase 2): retired duplicate print(); logging.warning below already reaches the
         # operator terminal via the WARNING-level default handler.
         logger.warning(  # Warn and back off (operator-visible).
-            "API call %s failed (attempt %s/%s) - retrying in %.0fs",
+            "API call %s failed (attempt %s/%s, HTTP status: %s) - retrying in %.0fs",
             api_name,
             attempt + 1,
             max_retries + 1,
+            APIDataFetcher._describe_status(response),
             delay,
         )
         time.sleep(delay)  # Wait before retry.

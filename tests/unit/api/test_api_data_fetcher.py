@@ -236,9 +236,11 @@ class TestLogRetryAttempt:
             carries the "retrying in" notice.
         """
         with caplog.at_level(logging.WARNING):
-            APIDataFetcher._log_retry_attempt("listOrgSites", attempt=0, delay=2.0)
+            failed = SimpleNamespace(status_code=503)
+            APIDataFetcher._log_retry_attempt("listOrgSites", attempt=0, delay=2.0, response=failed)
         assert "listOrgSites" in caplog.text
         assert "retrying in 2s" in caplog.text
+        assert "HTTP status: 503" in caplog.text
 
 
 # ---------------------------------------------------------------------------
@@ -288,6 +290,26 @@ class TestCallAPIWithRetry:
         result = fetcher._call_api_with_retry("listOrgSites")
         assert result is bad
         assert api_call.call_count == runtime_settings.API_REQUEST_MAX_RETRIES + 1
+
+    def test_first_failure_status_survives_later_different_failure(
+        self, fake_mh: _FakeMH, api_call: MagicMock, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """The final error line must name the first HTTP status and the last one.
+
+        Why:
+            A permanent 503 on attempt one must not vanish behind a later
+            swallowed timeout that carries no status.
+        """
+        later_failures = [MagicMock(status_code=None)] * runtime_settings.API_REQUEST_MAX_RETRIES
+        sequence = [MagicMock(status_code=503), *later_failures]
+        api_call.side_effect = sequence
+        fetcher = _make_fetcher(api_call)
+        with caplog.at_level(logging.WARNING):
+            fetcher._call_api_with_retry("listOrgSites")
+        final = [r.getMessage() for r in caplog.records if "failed after" in r.getMessage()]
+        assert len(final) == 1
+        assert "first HTTP status: 503" in final[0]
+        assert "last HTTP status: unavailable" in final[0]
 
 
 # ---------------------------------------------------------------------------
