@@ -652,6 +652,7 @@ class TestProcessImportObject:
         with patch.object(manager, "_create_and_record") as create_spy:
             manager._process_import_object(self._network_type(), {"name": "Corp", "id": "src-1"}, False, results)
         create_spy.assert_called_once()  # WHY: the object must reach the API.
+        assert results == []  # WHY: the create call records its own row, so this layer adds none.
 
     def test_the_source_fields_are_stripped_before_the_create_call(self, manager: OrgConfigMigrationManager) -> None:
         """A source identifier in the body makes the create call fail on the server."""
@@ -782,6 +783,7 @@ class TestImportTypeBatch:
         with patch.object(manager, "_process_import_object") as process_spy:
             manager._import_type_batch(config_type, [], True, results)
         process_spy.assert_not_called()  # WHY: no object means no call.
+        assert results == []  # WHY: an empty batch must record no row.
 
 
 class TestPartitionImportResults:
