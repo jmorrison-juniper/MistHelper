@@ -240,6 +240,7 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
     def _fetch_site_port_stats(site_info, connection_semaphore):  # Fetch port stats for a site.
         """Fetch one site's switch/gateway port stats with bounded concurrency and retries."""
         site_id, site_name = site_info  # Unpack tuple
+        first_exception: Exception | None = None  # WHY: the last failure must not hide the first one.
         for attempt in range(fast_mode_constants.FAST_MODE_MAX_RETRIES + 1):  # Retry loop
             try:
                 port_stats = OrgDeviceStatsExporter._attempt_site_port_stats_fetch(
@@ -256,7 +257,10 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
                     logger.debug("! Collected %s port stats from site %s", len(port_stats), site_name)  # First-try
                 return port_stats  # Annotated rows
             except Exception as exception:  # Retry on transient failure
+                if first_exception is None:  # Only attempt one is recorded.
+                    first_exception = exception  # Keep the original cause for the final report.
                 if not OrgDeviceStatsExporter._handle_site_port_stats_retry(attempt, site_name, exception):
+                    logger.error("! First failure for site %s was: %r", site_name, first_exception)  # Root cause.
                     return []  # Final failure path
         return []  # Defensive fallback
 

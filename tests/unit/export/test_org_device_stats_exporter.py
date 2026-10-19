@@ -546,6 +546,23 @@ class TestFetchSitePortStats:
             result = OrgDeviceStatsExporter._fetch_site_port_stats(("s1", "Site1"), sem)
         assert result == []
 
+    def test_first_failure_survives_later_different_failure(self, fake_mh, caplog):
+        """The final error log must name the first exception, not only the last one."""
+        from src.operations.exporting.export.org_device_stats_exporter import OrgDeviceStatsExporter
+
+        failures = [ValueError("first-cause"), RuntimeError("middle"), TimeoutError("last-cause")]
+        with (
+            patch.object(OrgDeviceStatsExporter, "_attempt_site_port_stats_fetch", side_effect=failures),
+            patch("src.operations.exporting.export.org_device_stats_exporter.time.sleep"),
+            caplog.at_level(logging.ERROR),
+        ):
+            result = OrgDeviceStatsExporter._fetch_site_port_stats(("s1", "Site1"), MagicMock())
+        assert result == []
+        first_lines = [r.getMessage() for r in caplog.records if "First failure" in r.getMessage()]
+        assert len(first_lines) == 1
+        assert "first-cause" in first_lines[0]
+        assert "last-cause" not in first_lines[0]
+
 
 class TestProcessRetryFuture:
     """Cover success, empty, and exception branches."""
