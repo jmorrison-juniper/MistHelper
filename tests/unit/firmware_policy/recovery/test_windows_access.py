@@ -128,10 +128,36 @@ def test_windows_private_file_branch_requires_the_acl_query(
     calls: list[Path] = []
     monkeypatch.setattr(BackupAccess, "windows", lambda value: calls.append(value))
     with monkeypatch.context() as context:
-        context.setattr("src.operations.execution.firmware_policy.recovery.backup.os.name", "nt")
+        context.setattr("src.operations.execution.firmware_policy.recovery.backup.sys.platform", "win32")
+        context.delattr("src.operations.execution.firmware_policy.recovery.backup.os.getuid", raising=False)
         if attributes == 0:
             BackupAccess.verify(path, directory=directory, status=status)
         else:
             with pytest.raises(PolicyError, match="without reparse points"):
                 BackupAccess.verify(path, directory=directory, status=status)
     assert calls == ([path] if attributes == 0 else [])
+
+
+@pytest.mark.parametrize("platform", ["linux", "darwin"])
+@pytest.mark.parametrize("directory", [False, True])
+@pytest.mark.parametrize("access", [(1001, 0o700), (1002, 0o700), (1001, 0o750), (1001, 0o704)])
+def test_posix_private_access_requires_current_owner_and_private_mode(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, platform: str, directory: bool, access: tuple[int, int]
+) -> None:
+    """Keep POSIX owner and access checks independent of the Windows ACL query."""
+    owner, mode = access
+    path = tmp_path / "private.json"
+    status = SimpleNamespace(st_mode=(stat.S_IFDIR if directory else stat.S_IFREG) | mode, st_nlink=1, st_uid=owner)
+    calls: list[Path] = []
+    monkeypatch.setattr(BackupAccess, "windows", lambda value: calls.append(value))
+    with monkeypatch.context() as context:
+        context.setattr("src.operations.execution.firmware_policy.recovery.backup.sys.platform", platform)
+        context.setattr(
+            "src.operations.execution.firmware_policy.recovery.backup.os.getuid", lambda: 1001, raising=False
+        )
+        if owner == 1001 and mode == 0o700:
+            BackupAccess.verify(path, directory=directory, status=status)
+        else:
+            with pytest.raises(PolicyError, match="different account or permits access"):
+                BackupAccess.verify(path, directory=directory, status=status)
+    assert calls == []
