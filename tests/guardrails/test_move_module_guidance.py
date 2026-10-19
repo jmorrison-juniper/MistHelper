@@ -7,6 +7,9 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+import pytest
+import yaml
+
 
 class MoveModuleGuideGuard:
     """Read the module-move table and compare supported rows with live jobs."""
@@ -64,6 +67,8 @@ class MoveModuleGuideGuard:
 
     def run(self) -> bool:
         """Read the guide and workflow, then report unsupported live coverage."""
+        self.result = self.Result((), ())
+        self.errors.clear()
         logging.info("Reading the module-move guide and live workflow")
         guide = self._read(".github/copilot-instructions.md")
         workflow = self._read(".github/workflows/ci.yml")
@@ -75,20 +80,65 @@ class MoveModuleGuideGuard:
         if rows != self.expected:
             self.errors.append("The Move a module table does not match the required rows")
             return False
+        return self._check_jobs(rows, workflow)
+
+    def _check_jobs(self, rows: tuple[tuple[str, str, str], ...], workflow: str) -> bool:
+        """Compare documented commands with active jobs, not comments or unrelated jobs."""
+        try:
+            document = yaml.safe_load(workflow)
+        except yaml.YAMLError as error:
+            self.errors.append(f"The workflow YAML is invalid: {error}")
+            return False
+        if not isinstance(document, dict) or not isinstance(document.get("jobs"), dict):
+            self.errors.append("The workflow must hold a jobs mapping")
+            return False
         checked: list[str] = []
         unchecked: list[str] = []
-        for gate, _, _command in rows:
-            patterns = self._live_patterns(gate)
-            if patterns and all(re.search(pattern, workflow) for pattern in patterns):
+        for gate, _, command in rows:
+            job_name = {"Guardrails": "pytest_coverage_shards", "Menu reference": "menu_reference_drift"}.get(gate)
+            job = document["jobs"].get(job_name)
+            if job_name and job is not None and self._matches_job(gate, command, job):
                 checked.append(gate)
             else:
                 unchecked.append(gate)
                 logging.warning("Move a module gate unchecked: %s", gate)
-            if gate == "Import smoke" and "tests/unit/scripts/test_script_imports.py" not in workflow:
-                self.errors.append("The Import smoke live job is missing")
         self.result = self.Result(tuple(checked), tuple(unchecked))
+        print(f"Move a module: checked {len(checked)} rows, unchecked {len(unchecked)} rows")
+        for gate in unchecked:
+            print(f"Move a module gate unchecked: {gate}")
         logging.debug("Checked %s module-move gates and left %s unchecked", len(checked), len(unchecked))
         return not self.errors
+
+    def _matches_job(self, gate: str, command: str, job: object) -> bool:
+        """Fail when a known job no longer runs the documented command."""
+        if not isinstance(job, dict) or not isinstance(job.get("steps"), list):
+            self.errors.append(f"The {gate} live job must hold steps")
+            return False
+        runs = [step["run"] for step in job["steps"] if isinstance(step, dict) and isinstance(step.get("run"), str)]
+        if gate == "Guardrails":
+            matches = self._guardrail_selection(command, job, runs)
+        else:
+            commands = command.split(" and ")
+            matches = commands[0] in runs and f"{commands[1]} --check" in runs
+        if not matches:
+            self.errors.append(f"The {gate} documented command differs from the live job")
+        return matches
+
+    @staticmethod
+    def _guardrail_selection(command: str, job: dict[str, object], runs: list[str]) -> bool:
+        """Require the documented test directory in a matrix consumed by pytest."""
+        strategy = job.get("strategy", {})
+        if not isinstance(strategy, dict) or not isinstance(strategy.get("matrix"), dict):
+            return False
+        includes = strategy["matrix"].get("include", [])
+        if not isinstance(includes, list):
+            return False
+        path = command.removeprefix("python -m pytest ")
+        selected = any(
+            isinstance(row, dict) and isinstance(row.get("test_paths"), str) and path in row["test_paths"].split()
+            for row in includes
+        )
+        return selected and any(run.startswith("pytest ${{ matrix.test_paths }} ") for run in runs)
 
     def _read(self, relative_path: str) -> str | None:
         """Read one UTF-8 input and retain a named failure."""
@@ -112,29 +162,20 @@ class MoveModuleGuideGuard:
                 rows.append(tuple(cells))
         return tuple(rows)
 
-    @staticmethod
-    def _live_patterns(gate: str) -> tuple[str, ...]:
-        """Return workflow evidence for a gate, or no evidence when no job exists."""
-        return {
-            "Guardrails": (r"\btests/guardrails\b",),
-            "Import smoke": (r"python -m pytest tests/unit/scripts/test_script_imports\.py -q",),
-            "Menu reference": (
-                r"python scripts/generate_menu_wiki\.py",
-                r"python -m scripts\.menu_api_map --check",
-            ),
-        }.get(gate, ())
-
 
 class TestMoveModuleGuide:
     """Prove table validation, live drift detection, and unchecked reporting."""
 
-    def test_current_guide_matches_live_jobs(self) -> None:
+    def test_current_guide_matches_live_jobs(self, capsys: pytest.CaptureFixture[str]) -> None:
         """Require the committed table to remain synchronized with available jobs."""
         root = Path(__file__).resolve().parents[2]
         guard = MoveModuleGuideGuard(root)
         assert guard.run(), guard.errors
-        assert guard.result.checked == ("Guardrails", "Import smoke", "Menu reference")
-        assert guard.result.unchecked == ("Resolver", "Old paths", "Symbols")
+        assert guard.result.checked == ("Guardrails", "Menu reference")
+        assert guard.result.unchecked == ("Import smoke", "Resolver", "Old paths", "Symbols")
+        output = capsys.readouterr().out
+        assert "checked 2 rows, unchecked 4 rows" in output
+        assert all(f"gate unchecked: {gate}" in output for gate in guard.result.unchecked)
 
     def test_table_drift_fails(self, tmp_path: Path) -> None:
         """Reject a changed command before it can hide a missing gate."""
@@ -153,13 +194,61 @@ class TestMoveModuleGuide:
         self._copy_inputs(tmp_path)
         workflow = tmp_path / ".github/workflows/ci.yml"
         workflow.write_text(
-            workflow.read_text(encoding="utf-8").replace("tests/unit/scripts/test_script_imports.py", "other.py"),
+            workflow.read_text(encoding="utf-8").replace("menu_reference_drift:", "other_job:"),
             encoding="utf-8",
         )
         guard = MoveModuleGuideGuard(tmp_path)
+        assert guard.run() is True
+        assert guard.result.checked == ("Guardrails",)
+        assert "Menu reference" in guard.result.unchecked
+        assert guard.errors == []
+
+    @pytest.mark.parametrize(
+        ("old", "new", "gate"),
+        (
+            ("tests/guardrails tests/integration", "tests/other tests/integration", "Guardrails"),
+            ("run: pytest ${{ matrix.test_paths }}", "run: echo ${{ matrix.test_paths }}", "Guardrails"),
+            ("run: python scripts/generate_menu_wiki.py", "run: echo skipped", "Menu reference"),
+            ("run: python -m scripts.menu_api_map --check", "run: python -m scripts.menu_api_map", "Menu reference"),
+        ),
+    )
+    def test_live_command_drift_fails(self, tmp_path: Path, old: str, new: str, gate: str) -> None:
+        """Reject changed active commands even when a comment preserves the old text."""
+        self._copy_inputs(tmp_path)
+        workflow = tmp_path / ".github/workflows/ci.yml"
+        original = workflow.read_text(encoding="utf-8")
+        assert old in original
+        workflow.write_text(original.replace(old, new) + f"\n# {old}\n", encoding="utf-8")
+        guard = MoveModuleGuideGuard(tmp_path)
         assert guard.run() is False
-        assert "Import smoke" in guard.result.unchecked
-        assert guard.errors == ["The Import smoke live job is missing"]
+        assert gate in guard.result.unchecked
+        assert guard.errors == [f"The {gate} documented command differs from the live job"]
+
+    @pytest.mark.parametrize("content", ("jobs: [", "", "jobs: []"))
+    def test_invalid_workflow_fails(self, tmp_path: Path, content: str) -> None:
+        """Reject unreadable workflow contracts instead of reporting success."""
+        self._copy_inputs(tmp_path)
+        (tmp_path / ".github/workflows/ci.yml").write_text(content, encoding="utf-8")
+        guard = MoveModuleGuideGuard(tmp_path)
+        assert guard.run() is False
+        assert len(guard.errors) == 1
+        assert "workflow" in guard.errors[0]
+
+    @pytest.mark.parametrize("path", (".github/copilot-instructions.md", ".github/workflows/ci.yml"))
+    @pytest.mark.parametrize("content", (None, b"\xff"))
+    def test_unreadable_input_fails(self, tmp_path: Path, path: str, content: bytes | None) -> None:
+        """Name missing and invalid UTF-8 inputs without claiming checked rows."""
+        self._copy_inputs(tmp_path)
+        destination = tmp_path / path
+        if content is None:
+            destination.unlink()
+        else:
+            destination.write_bytes(content)
+        guard = MoveModuleGuideGuard(tmp_path)
+        assert guard.run() is False
+        assert len(guard.errors) == 1
+        assert path in guard.errors[0]
+        assert guard.result.checked == ()
 
     def test_nested_package_guidance_drift_fails(self, tmp_path: Path) -> None:
         """Reject missing nested-package ratchet wording before it can drift."""

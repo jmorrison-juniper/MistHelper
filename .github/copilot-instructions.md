@@ -269,6 +269,12 @@ Run each applicable gate when you move a module. A move changes logger names and
 | Menu reference | A generated page is stale. | `python scripts/generate_menu_wiki.py` and `python -m scripts.menu_api_map` |
 | Symbols | A module-level name is lost. | `symbol-diff --base origin/main <file>` for each changed file |
 
+The guard `tests/guardrails/test_move_module_guidance.py` compares the documented commands with active workflow jobs.
+It checks the guardrail test selection and the menu reference commands.
+It reports rows without a matching live job as unchecked.
+The script dependency import job does not check moved modules.
+Run each unchecked gate locally when it applies.
+
 For a content-identical move, document Bandit and pip-audit as `Not applicable` in the pull
 request body because the move changes no executable content.
 
