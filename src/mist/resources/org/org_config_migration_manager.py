@@ -638,10 +638,10 @@ class OrgConfigMigrationManager:  # Org config migration manager.
             create_fn = self._resolve_api_fn(config_type["create_fn"])  # Resolve create endpoint
             response = create_fn(self.session, self.org_id, body=cleaned)  # Call Mist API to create
             new_id = self._extract_created_id(response)  # Extract new object ID from response
-            if source_id and new_id:  # Record mapping for downstream cross-references
+            if source_id:  # Record mapping for downstream cross-references
                 self._build_remap_entry(source_id, new_id)  # Remap to new id.
             logger.warning("      OK: %s", name)  # User feedback showing success
-            logger.debug("Created %s '%s' with ID %s", type_key, name, new_id[:8] if new_id else "n/a")  # Log result
+            logger.debug("Created %s '%s' with ID %s", type_key, name, new_id[:8])  # Log result
             results.append({"type": type_key, "name": name, "status": "imported"})  # Record success
         except Exception as error:  # Catch API errors without stopping the entire import
             logging.error("      FAIL: %s - %s", name, error)  # User feedback showing failure
@@ -649,10 +649,16 @@ class OrgConfigMigrationManager:  # Org config migration manager.
             results.append({"type": type_key, "name": name, "status": "failed", "reason": str(error)})  # Record failure
 
     def _extract_created_id(self, response) -> str:  # Extract the created id.
-        """Extract the new object ID from a create API response."""
-        if hasattr(response, "data") and isinstance(response.data, dict):  # Check response has data dict
-            return response.data.get("id", "")  # type: ignore[no-any-return] # Return the new ID
-        return ""  # Fallback when response format is unexpected
+        """Return the new object ID from a create API response, or raise when it is absent."""
+        data = getattr(response, "data", None)  # Read the payload without assuming the response shape.
+        if not isinstance(data, dict):  # A non-dict payload cannot hold an identifier.
+            logger.error("Create response has no data dictionary: type=%s", type(data).__name__)  # Name the shape.
+            raise ValueError("Create response has no data dictionary, so the new object ID is unknown")
+        new_id = data.get("id")  # A missing key must not read as an empty identifier.
+        if not new_id:  # Absent or empty identifier breaks every later cross-reference.
+            logger.error("Create response data has no id key")  # Name the absent key.
+            raise ValueError("Create response has no object id, so cross-references cannot be remapped")
+        return str(new_id)  # Return the identifier as text.
 
     # ------------------------------------------------------------------
     # Import report

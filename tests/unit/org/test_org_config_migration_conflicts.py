@@ -486,17 +486,34 @@ class TestExtractCreatedId:
         response.data = {"id": "dest-1", "name": "Corp-LAN"}  # WHY: the documented shape.
         assert manager._extract_created_id(response) == "dest-1"
 
-    def test_a_missing_identifier_returns_an_empty_string(self, manager: OrgConfigMigrationManager) -> None:
-        """A partial response must not raise inside the create loop."""
+    def test_a_missing_identifier_raises(self, manager: OrgConfigMigrationManager) -> None:
+        """A partial response must fail visibly, not read as an empty identifier."""
         response = MagicMock()  # WHY: stand in for the SDK response wrapper.
         response.data = {"name": "Corp-LAN"}  # WHY: the identifier is absent.
-        assert manager._extract_created_id(response) == ""
+        with pytest.raises(ValueError, match="no object id"):
+            manager._extract_created_id(response)
 
-    def test_a_list_payload_returns_an_empty_string(self, manager: OrgConfigMigrationManager) -> None:
-        """A list payload is the wrong shape, and indexing it would raise."""
+    def test_a_list_payload_raises(self, manager: OrgConfigMigrationManager) -> None:
+        """A list payload is the wrong shape and must fail visibly."""
         response = MagicMock()  # WHY: stand in for the SDK response wrapper.
         response.data = [{"id": "dest-1"}]  # WHY: reproduce the wrong shape.
-        assert manager._extract_created_id(response) == ""
+        with pytest.raises(ValueError, match="no data dictionary"):
+            manager._extract_created_id(response)
+
+
+class TestCreateWithoutIdentifier:
+    """Cover the create loop when the response lacks the new identifier."""
+
+    def test_a_create_without_an_identifier_is_recorded_as_failed(self, manager: OrgConfigMigrationManager) -> None:
+        """A silent success would leave every later reference unmapped."""
+        response = MagicMock()  # WHY: stand in for the SDK response wrapper.
+        response.data = {"name": "Corp-LAN"}  # WHY: the identifier is absent.
+        results: list[dict[str, Any]] = []  # WHY: the loop appends one row for each object.
+        with patch.object(manager, "_resolve_api_fn", return_value=MagicMock(return_value=response)):
+            manager._create_and_record({"key": "networks", "create_fn": "x"}, {}, "Corp-LAN", "src-1", results)
+        assert [row["status"] for row in results] == ["failed"]
+        assert "no object id" in results[0]["reason"]
+        assert "src-1" not in manager._remap_table  # WHY: no mapping may exist for an unknown identifier.
 
 
 class TestExtractResponseData:
