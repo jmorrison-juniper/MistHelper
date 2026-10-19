@@ -16,7 +16,7 @@ This content review supports the disposition and hook choices.
 
 ## Inclusion and exclusion
 
-The scan includes 1,465 files from the two required Git commands.
+The scan includes 1,337 files from the two required Git commands.
 It includes application, portal, platform, test, tool, script, migration, and specification Python files.
 
 Git reports 9,618 ignored Python files under `.venv`.

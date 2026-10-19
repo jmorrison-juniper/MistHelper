@@ -199,7 +199,7 @@ The monitor measures a child process from start through exit.
 
 The monitor gives call attribution without a production event.
 
-- Tool: `cProfile` and `pstats`, joined to `artifacts/python-inventory.csv`.
+- Tool: `cProfile` and `pstats`, joined to current symbols in `artifacts/hook-catalog.csv`.
 - Metrics: `profile.call_count`, `profile.primitive_call_count`,
   `profile.total_time_ns`, `profile.cumulative_time_ns`.
 - Use it for every symbol that needs per-function attribution and no permanent

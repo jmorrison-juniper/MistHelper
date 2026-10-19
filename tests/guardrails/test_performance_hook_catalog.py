@@ -21,43 +21,12 @@ from tests.support.git_environment import (
 _LOGGER = logging.getLogger(__name__)  # Share one logger for this guard module.
 _REPO_ROOT = Path(__file__).resolve().parents[2]  # Locate the repository root from tests/guardrails.
 _ARTIFACT_ROOT = _REPO_ROOT / "specs" / "2448-misthelper-performance-monitoring" / "artifacts"  # Locate artifacts.
-MOVED_PATHS = {  # Map each snapshot path to the canonical path that holds the same module today.
-    # Issue #4007 moved the troubleshooting modules into the shared core package.
-    # The snapshot artifacts stay byte-identical, so the guard resolves the move here.
-    "src/mist/intelligence/troubleshooting/interactive_test_runner.py": (
-        "src/mist/intelligence/troubleshooting/core/interactive_test_runner.py"
-    ),
-    "src/mist/intelligence/troubleshooting/marvis_troubleshoot_utils.py": (
-        "src/mist/intelligence/troubleshooting/core/marvis_troubleshoot_utils.py"
-    ),
-    "src/mist/intelligence/troubleshooting/troubleshoot_utils.py": (
-        "src/mist/intelligence/troubleshooting/core/troubleshoot_utils.py"
-    ),
-    # Issue #4002 moved shell execution into the SSH runtime package.
-    # The snapshot artifacts stay byte-identical, so the guard resolves the move here.
-    "src/operations/execution/ssh/shell_execution/__init__.py": (
-        "src/operations/execution/ssh/runtime/shell_execution/__init__.py"
-    ),
-    "src/operations/execution/ssh/shell_execution/shell_executor.py": (
-        "src/operations/execution/ssh/runtime/shell_execution/shell_executor.py"
-    ),
-}
+_INVENTORY_SOURCE_REVISION = "7c4e57f3db93afda4c93ef0aec1e73c35fb7774e"  # Pin the historical inventory source.
 
 
-def current_catalog_path(snapshot_path: str) -> str:
-    """Return the current repository path for one snapshot path.
-
-    Why:
-        A reviewed move keeps the module, so the guard must follow it and still
-        fail for a path that no approved move explains.
-    """
-    return MOVED_PATHS.get(snapshot_path, snapshot_path)  # Follow an approved move, or keep the snapshot path.
-
-
-def moved_hook_paths(moved_paths: dict[str, str], hook_rows: list[dict[str, str]]) -> set[str]:
-    """Return moved snapshot paths that hold at least one hook row."""
-    hook_snapshot_paths = {row["file_path"] for row in hook_rows}  # Read hook membership from the catalog.
-    return set(moved_paths) & hook_snapshot_paths  # Exclude valid inventory-only moved paths.
+def missing_catalog_paths(catalog_paths: set[str], source_paths: set[str]) -> list[str]:
+    """Return catalog paths that do not exist in the selected source tree."""
+    return sorted(catalog_paths - source_paths)  # Keep failure output stable.
 
 
 def row_resolves(row: dict[str, str], symbol_index: dict[str, list[SymbolRecord]]) -> bool:
@@ -66,11 +35,20 @@ def row_resolves(row: dict[str, str], symbol_index: dict[str, list[SymbolRecord]
     Why:
         A moved file keeps its symbols, and a lost symbol must still fail the guard.
     """
-    symbols = symbol_index.get(current_catalog_path(row["file_path"]), [])  # Read symbols at the current path.
+    symbols = symbol_index.get(row["file_path"], [])  # Read symbols at the active catalog path.
     names = {symbol.name for symbol in symbols}  # Build a local-name lookup for class rows.
     qualified_names = {symbol.qualified_name for symbol in symbols}  # Build a qualified-name lookup.
     symbol_name = row["symbol_or_class"]  # Read the symbol that the hook row names.
     return symbol_name in names or symbol_name in qualified_names  # Accept exact AST names only.
+
+
+def unresolved_hook_rows(hook_rows: list[dict[str, str]], symbol_index: dict[str, list[SymbolRecord]]) -> list[str]:
+    """Return active hook rows that do not resolve to a current AST symbol."""
+    return [
+        f"{row['hook_id']} {row['file_path']} {row['symbol_or_class']}"
+        for row in hook_rows
+        if not row_resolves(row, symbol_index)
+    ]  # Report each unresolved row with its evidence.
 
 
 @dataclass(frozen=True)
@@ -115,6 +93,21 @@ class CatalogSourceScanner:
         paths = [line for line in result.stdout.splitlines() if line]  # Drop the final empty line, if present.
         _LOGGER.debug("Git returned %s tracked Python files", len(paths))  # Log the source set size.
         return sorted(paths)  # Return a stable order for direct artifact comparisons.
+
+    def tracked_python_paths_at_revision(self, revision: str) -> list[str]:
+        """Return tracked Python paths from one historical Git tree."""
+        _LOGGER.info("Reading tracked Python files at source revision %s", revision)  # Log the source query.
+        result = subprocess.run(  # Read the historical tree without checking out or changing files.
+            ["git", "ls-tree", "-r", "--name-only", "-z", revision],
+            cwd=self.repo_root,
+            check=True,
+            capture_output=True,
+            text=True,
+            env=git_subprocess_environment(),  # WHY: issue #3022, a partial editor git config set makes git stop.
+        )
+        paths = [path for path in result.stdout.split("\0") if path.endswith(".py")]  # Select Python paths.
+        _LOGGER.debug("Git returned %s historical Python paths", len(paths))  # Log the historical set size.
+        return sorted(paths)  # Return a stable order for artifact comparisons.
 
     def symbol_index(self, paths: list[str]) -> dict[str, list[SymbolRecord]]:
         """Return the AST symbols for each repository path.
@@ -220,54 +213,40 @@ class TestPerformanceHookCatalog:
         Main changes can add, remove, or rename Python files and symbols.
     """
 
-    def test_inventory_names_only_files_that_still_exist(self) -> None:
-        # WHY: the catalog is a snapshot, so a new file is normal and must not fail this gate.
-        # A REMOVED or RENAMED file is real rot, because a catalog row then names nothing.
+    def test_inventory_paths_exist_at_the_recorded_source_revision(self) -> None:
+        # WHY: the inventory is historical evidence and must not follow moves after its source revision.
         scanner = CatalogSourceScanner(_REPO_ROOT)  # Create the source scanner for this repository.
         catalog = PerformanceHookCatalog(_ARTIFACT_ROOT)  # Create the artifact reader for this spec.
-        tracked_paths = set(scanner.tracked_python_paths())  # Recreate the documented Git source set.
-        inventory_paths = sorted(
-            current_catalog_path(row["file_path"]) for row in catalog.inventory_rows()
-        )  # Read artifact paths through the approved move map.
-        stale = [path for path in inventory_paths if path not in tracked_paths]  # Find rows naming no file.
-        assert not stale, "The catalog names files that no longer exist:\n" + "\n".join(stale)  # Report each one.
-
-    def test_every_catalogued_file_still_parses(self) -> None:
-        # WHY: the summary describes a snapshot the catalog took on one date. An exact symbol
-        # count belongs to that snapshot, and live code changes its count for normal reasons.
-        # Issue #2547: comparing a recorded count against live source failed the gate on every
-        # unrelated change, and it made the summary a shared record that conflicts on each rebase.
-        # A file that stops parsing is real rot, so this guard keeps that check.
-        # `test_hook_rows_resolve_to_current_ast_symbols` catches symbol rot exactly.
-        scanner = CatalogSourceScanner(_REPO_ROOT)  # Create the source scanner for this repository.
-        catalog = PerformanceHookCatalog(_ARTIFACT_ROOT)  # Create the artifact reader for this spec.
-        paths = sorted(
-            current_catalog_path(row["file_path"]) for row in catalog.inventory_rows()
-        )  # Read the snapshot set through the approved move map.
-        symbol_index = scanner.symbol_index(paths)  # Parse each recorded file, which raises on bad syntax.
+        inventory_rows = catalog.inventory_rows()  # Read the historical inventory rows.
+        inventory_paths = {row["file_path"] for row in inventory_rows}  # Use paths as inventory keys.
+        source_paths = set(scanner.tracked_python_paths_at_revision(_INVENTORY_SOURCE_REVISION))
+        missing = missing_catalog_paths(inventory_paths, source_paths)  # Find paths absent from that source.
         scan_summary = catalog.scan_summary()  # Read the generated scan summary.
-        assert scan_summary["eligible_file_count"] == len(paths)  # The summary must match its own table.
-        assert scan_summary["parse_error_count"] == 0  # The snapshot claims every file parsed.
-        assert set(symbol_index) == set(paths)  # Every recorded file still parses through AST today.
+        print(f"Checked {len(inventory_rows)} inventory rows at source revision {_INVENTORY_SOURCE_REVISION}.")
+        assert len(inventory_paths) == len(inventory_rows), "Inventory paths must be unique"
+        assert scan_summary["eligible_file_count"] == len(inventory_rows), "Inventory row count drifted"
+        assert scan_summary["parse_error_count"] == 0, "The recorded scan has parse errors"
+        assert not missing, "Missing paths at the recorded source revision:\n" + "\n".join(missing)
 
     def test_hook_rows_resolve_to_current_ast_symbols(self) -> None:
         scanner = CatalogSourceScanner(_REPO_ROOT)  # Create the source scanner for this repository.
         catalog = PerformanceHookCatalog(_ARTIFACT_ROOT)  # Create the artifact reader for this spec.
         paths = scanner.tracked_python_paths()  # Recreate the documented Git source set.
         symbol_index = scanner.symbol_index(paths)  # Parse source with AST for exact symbol checks.
-        failures = []  # Collect all stale hook rows for one complete assertion.
-        for row in catalog.hook_rows():  # Check each catalog hook row against the source tree.
-            if not row_resolves(row, symbol_index):  # Detect a missing file or missing symbol.
-                failures.append(f"{row['hook_id']} {row['file_path']} {row['symbol_or_class']}")  # Report the row.
-        assert not failures, "\n".join(failures)  # Fail once with every stale hook row.
+        hook_rows = catalog.hook_rows()  # Read the active hook rows.
+        failures = unresolved_hook_rows(hook_rows, symbol_index)  # Find missing files or symbols.
+        print(f"Checked {len(hook_rows)} active hook rows against the current source tree.")
+        assert not failures, f"Checked {len(hook_rows)} active hook rows. Unresolved rows:\n" + "\n".join(failures)
 
     def test_summary_artifacts_match_catalog_tables(self) -> None:
         catalog = PerformanceHookCatalog(_ARTIFACT_ROOT)  # Create the artifact reader for this spec.
         hook_rows = catalog.hook_rows()  # Read hook rows once for all count checks.
         inventory_rows = catalog.inventory_rows()  # Read inventory rows once for all count checks.
         summary = catalog.hook_summary()  # Read the summary that documents hook counts.
+        scan_summary = catalog.scan_summary()  # Read the summary that documents inventory counts.
         strategies = catalog.strategy_rows()  # Read the strategy summary table.
         assert summary["inventory_file_rows"] == len(inventory_rows)  # Check the inventory row total.
+        assert scan_summary["eligible_file_count"] == len(inventory_rows)  # Check the inventory source count.
         assert summary["hook_count"] == len(hook_rows)  # Check the hook row total.
         assert summary["files_with_hooks"] == len({row["file_path"] for row in hook_rows})  # Check files.
         assert summary["monitor_type_counts"] == self._count_by(hook_rows, "monitor_type")  # Check monitors.
@@ -275,6 +254,7 @@ class TestPerformanceHookCatalog:
         assert {row["strategy"]: int(row["hook_count"]) for row in strategies} == summary[
             "strategy_hook_counts"
         ]  # Check strategies.
+        print(f"Checked {len(hook_rows)} hook rows and {len(inventory_rows)} inventory rows against summaries.")
 
     @staticmethod
     def _count_by(rows: list[dict[str, str]], column: str) -> dict[str, int]:
@@ -284,74 +264,45 @@ class TestPerformanceHookCatalog:
         return dict(sorted(counts.items()))  # Return a sorted map for deterministic JSON comparison.
 
 
-class TestCatalogMovedPaths:
-    """Verify the approved move map and the unknown-path failure.
+class TestCatalogContractFailures:
+    """Prove that both catalog contracts reject stale evidence."""
 
-    Why:
-        The map must follow a reviewed move only, and it must not hide a lost file.
-    """
+    def test_inventory_path_absent_from_source_revision_is_reported(self) -> None:
+        missing = missing_catalog_paths({"src/removed.py"}, {"src/current.py"})
+        print("Checked 1 synthetic inventory path against 1 source path.")
+        assert missing == ["src/removed.py"]
 
-    def test_each_moved_path_names_a_snapshot_row_and_a_tracked_file(self) -> None:
-        scanner = CatalogSourceScanner(_REPO_ROOT)  # Create the source scanner for this repository.
-        catalog = PerformanceHookCatalog(_ARTIFACT_ROOT)  # Create the artifact reader for this spec.
-        tracked_paths = set(scanner.tracked_python_paths())  # Read the live Git source set one time.
-        snapshot_paths = {row["file_path"] for row in catalog.inventory_rows()}  # Read the snapshot set.
-        checked = 0  # Count the mappings that this test proved.
-        for old_path, new_path in MOVED_PATHS.items():  # Prove each mapping against both sets.
-            assert old_path in snapshot_paths, f"{old_path} is not a snapshot row, so the mapping is dead"
-            assert old_path not in tracked_paths, f"{old_path} still exists, so the mapping is wrong"
-            assert new_path in tracked_paths, f"{new_path} is not tracked, so the mapping names no file"
-            assert current_catalog_path(old_path) == new_path  # The resolver must return the new path.
-            checked += 1  # Record this proved mapping.
-        _LOGGER.info("Checked %s moved catalog paths", checked)  # Report the examined count.
-        assert checked == len(MOVED_PATHS)  # The loop must prove every mapping.
+    def test_hook_path_or_symbol_absent_from_current_tree_is_reported(self) -> None:
+        hook_rows = [
+            {
+                "hook_id": "hook-test",
+                "file_path": "src/removed.py",
+                "symbol_or_class": "RemovedSymbol",
+            }
+        ]
+        failures = unresolved_hook_rows(hook_rows, {})
+        print("Checked 1 synthetic active hook row against 0 indexed symbols.")
+        assert failures == ["hook-test src/removed.py RemovedSymbol"]
 
-    def test_unknown_path_keeps_itself_and_fails_the_missing_file_check(self) -> None:
-        scanner = CatalogSourceScanner(_REPO_ROOT)  # Create the source scanner for this repository.
-        tracked_paths = set(scanner.tracked_python_paths())  # Read the live Git source set one time.
-        unknown_path = "src/mist/intelligence/troubleshooting/core/absent.py"  # Name an unexplained missing file.
-        resolved = current_catalog_path(unknown_path)  # Resolve the unknown path through the move map.
-        assert resolved == unknown_path  # The map must not invent a destination for an unknown path.
-        assert resolved not in tracked_paths  # The missing-file check still reports this path as stale.
+    def test_inventory_source_revision_is_documented(self) -> None:
+        quickstart_path = _REPO_ROOT / "specs" / "2448-misthelper-performance-monitoring" / "quickstart.md"
+        quickstart = quickstart_path.read_text(encoding="utf-8")
+        assert f"`{_INVENTORY_SOURCE_REVISION}`" in quickstart
 
-    def test_ssh_shell_execution_paths_follow_the_reviewed_move(self) -> None:
-        expected_paths = {  # Name both snapshot paths and their exact current destinations.
-            "src/operations/execution/ssh/shell_execution/__init__.py": (
-                "src/operations/execution/ssh/runtime/shell_execution/__init__.py"
-            ),
-            "src/operations/execution/ssh/shell_execution/shell_executor.py": (
-                "src/operations/execution/ssh/runtime/shell_execution/shell_executor.py"
-            ),
-        }
-        actual_paths = {  # Read the approved map so a missing or incorrect entry fails closed.
-            old_path: MOVED_PATHS.get(old_path) for old_path in expected_paths
-        }
-        assert actual_paths == expected_paths  # Both old SSH paths must resolve to the reviewed destinations.
-
-    def test_inventory_only_moved_path_needs_no_hook_row(self) -> None:
-        synthetic_moves = {  # Model one hook file and one inventory-only file without repository fixtures.
-            "snapshot/hooked.py": "src/current/hooked.py",
-            "snapshot/inventory_only.py": "src/current/inventory_only.py",
-        }
-        synthetic_hook_rows = [{"file_path": "snapshot/hooked.py"}]  # Give only the hook file a catalog row.
-        selected_paths = moved_hook_paths(synthetic_moves, synthetic_hook_rows)  # Apply the guard rule.
-        legacy_required_paths = set(synthetic_moves)  # Recreate the old rule that required a row for every move.
-        assert selected_paths != legacy_required_paths  # Prove the old rule rejects the inventory-only move.
-        assert selected_paths == {"snapshot/hooked.py"}  # Do not require the inventory-only move to have a hook.
-
-    def test_moved_path_keeps_the_symbol_check_exact(self) -> None:
-        scanner = CatalogSourceScanner(_REPO_ROOT)  # Create the source scanner for this repository.
-        catalog = PerformanceHookCatalog(_ARTIFACT_ROOT)  # Create the artifact reader for this spec.
-        destinations = list(MOVED_PATHS.values())  # Collect canonical destinations for uniqueness checks.
-        assert len(destinations) == len(set(destinations))  # Reject two snapshot paths that hide one destination.
-        new_paths = sorted(set(MOVED_PATHS.values()))  # Collect the canonical destinations only.
-        symbol_index = scanner.symbol_index(new_paths)  # Parse the moved modules for an exact symbol check.
-        hook_rows = catalog.hook_rows()  # Read hook rows once for selection and exact symbol checks.
-        selected_paths = moved_hook_paths(MOVED_PATHS, hook_rows)  # Ignore inventory-only moved files.
-        moved_rows = [row for row in hook_rows if row["file_path"] in selected_paths]  # Select moved hook rows.
-        checker = row_resolves  # Reuse the production row resolver of this guard.
-        for row in moved_rows:  # Each moved row must resolve to a real symbol at the new path.
-            assert checker(row, symbol_index), f"{row['hook_id']} names no live symbol"
-        absent_symbol_row = {**moved_rows[0], "symbol_or_class": "AbsentSymbolName"}  # Build a stale row.
-        assert not checker(absent_symbol_row, symbol_index)  # A lost symbol must still fail.
-        _LOGGER.info("Checked %s moved hook rows", len(moved_rows))  # Report the examined count.
+    def test_spec_inventory_counts_match_scan_summary(self) -> None:
+        catalog = PerformanceHookCatalog(_ARTIFACT_ROOT)
+        summary = catalog.scan_summary()
+        specification = (_REPO_ROOT / "specs" / "2448-misthelper-performance-monitoring" / "spec.md").read_text(
+            encoding="utf-8"
+        )
+        expected_counts = (
+            f"The final inventory contains {int(summary['eligible_file_count']):,} Python files and "
+            f"{int(summary['symbol_count']):,} symbols.",
+            f"The symbols include {int(summary['function_count']):,} functions, "
+            f"{int(summary['async_function_count']):,} asynchronous functions, and "
+            f"{int(summary['class_count']):,} classes.",
+            f"The inventory identifies {int(summary['nested_symbol_count']):,} nested symbols and no parse errors.",
+        )
+        print(f"Checked {len(expected_counts)} specification counts against the scan summary.")
+        for expected_count in expected_counts:
+            assert expected_count in specification

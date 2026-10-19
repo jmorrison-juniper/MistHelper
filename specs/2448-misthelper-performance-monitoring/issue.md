@@ -11,38 +11,38 @@ Do not add permanent timers to every function.
 
 The AST inventory covers every Python file from the required tracked and
 untracked Git lists.
-It contains 1,465 files and 32,859 symbols.
-The symbols include 27,651 functions, 149 asynchronous functions, and 4,103
+It contains 1,337 files and 31,598 symbols.
+The symbols include 27,379 functions, 167 asynchronous functions, and 4,052
 classes.
-The scan found 18,611 nested symbols and no parse errors.
+The scan found 17,960 nested symbols and no parse errors.
 
 The scan excludes 9,618 ignored Python files under `.venv`.
 These files are package-managed external dependencies.
 
 The file dispositions are:
 
-- 59 `production hook` files.
-- 416 `aggregate boundary only` files.
-- 886 `benchmark/profile only` files.
-- 104 `no hook` files.
+- 58 `production hook` files.
+- 414 `aggregate boundary only` files.
+- 762 `benchmark/profile only` files.
+- 103 `no hook` files.
 
 ## Hook catalog
 
 | Measure | Value |
 | --- | --- |
-| Planned hooks | 765 |
-| Files with a planned hook | 524 |
+| Planned hooks | 710 |
+| Files with a planned hook | 495 |
 | Catalog validation errors | 0 |
 
 The hook dispositions are:
 
-- 89 `production hook` rows at resource boundaries.
-- 416 `aggregate boundary only` rows for profiler correlation.
-- 260 `targeted diagnostic hook` rows for loop, allocation, object layout, and
+- 87 `production hook` rows at resource boundaries.
+- 414 `aggregate boundary only` rows for profiler correlation.
+- 209 `targeted diagnostic hook` rows for loop, allocation, object layout, and
   native costs.
 
-Every catalog row resolves to a file and a symbol in the inventory. The
-validation step reports zero unresolved rows.
+See `quickstart.md` section 1 for the validation contract for each artifact.
+The validation step reports zero unresolved rows.
 
 ## Monitor coverage
 
@@ -51,22 +51,21 @@ defines each type, its tool, its clock, its metrics, and its measured boundary.
 
 | Monitor type | Hooks |
 | --- | --- |
-| `cProfile correlation` | 416 |
-| `loop_counter` | 214 |
-| `operation_span` | 27 |
-| `http_transport` | 26 |
-| `allocation_trace` | 19 |
-| `compute_span` | 15 |
+| `cProfile correlation` | 414 |
+| `loop_counter` | 173 |
+| `operation_span` | 26 |
+| `http_transport` | 25 |
+| `allocation_trace` | 17 |
+| `compute_span` | 10 |
 | `database` | 9 |
-| `gc_diagnostic` | 8 |
+| `gc_diagnostic` | 7 |
 | `cache` | 7 |
-| `startup_import` | 6 |
+| `startup_import` | 5 |
 | `serializer_file` | 5 |
 | `file_io` | 4 |
 | `serializer` | 4 |
 | `database_events` | 1 |
 | `native_boundary` | 1 |
-| `stage_span` | 1 |
 | `cache_file` | 1 |
 | `bounded_diagnostic` | 1 |
 
@@ -77,16 +76,16 @@ Each of the ten optimization strategies has hook evidence.
 
 | Strategy | Hooks | Files |
 | --- | --- | --- |
-| 1 algorithms and repeated work | 690 | 497 |
-| 2 input and output counts | 152 | 129 |
-| 3 data structures | 399 | 371 |
-| 4 allocations and copying | 607 | 432 |
-| 5 serialization and validation | 202 | 188 |
-| 6 bounded caching | 62 | 48 |
-| 7 measured Python loops | 660 | 481 |
-| 8 object layout and collection | 287 | 274 |
-| 9 startup and imports | 11 | 11 |
-| 10 native acceleration | 17 | 16 |
+| 1 algorithms and repeated work | 640 | 470 |
+| 2 input and output counts | 147 | 125 |
+| 3 data structures | 391 | 364 |
+| 4 allocations and copying | 562 | 405 |
+| 5 serialization and validation | 198 | 185 |
+| 6 bounded caching | 61 | 47 |
+| 7 measured Python loops | 610 | 454 |
+| 8 object layout and collection | 284 | 271 |
+| 9 startup and imports | 10 | 10 |
+| 10 native acceleration | 16 | 15 |
 
 ## Required implementation
 

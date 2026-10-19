@@ -41,7 +41,8 @@ Do not provide a decorator that instruments all functions.
 
 Assign one run-local identifier to a parent workload.
 Attach child events to that identifier.
-Map `cProfile` records to `artifacts/python-inventory.csv` by file and qualified symbol.
+Map `cProfile` records to current symbols in `artifacts/hook-catalog.csv`.
+Follow the artifact validation contract in `quickstart.md` section 1.
 
 ## Instrumentation layers
 

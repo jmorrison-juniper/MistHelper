@@ -2,15 +2,18 @@
 
 ## 1. Confirm the inventory
 
-Run these commands from the repository root:
+The inventory is historical evidence from source revision
+`7c4e57f3db93afda4c93ef0aec1e73c35fb7774e`.
+Do not regenerate it or compare it with `HEAD`.
+Validate its paths against the recorded source revision:
 
 ```powershell
-git ls-files '*.py'
-git ls-files --others --exclude-standard '*.py'
+git ls-tree -r --name-only 7c4e57f3db93afda4c93ef0aec1e73c35fb7774e
 ```
 
-Compare the paths with `artifacts/python-inventory.csv`.
-The CSV must contain one row for each eligible file.
+The inventory keeps the exact rows and counts from that scan.
+The guard checks every inventory path against that Git tree.
+It does not compare inventory paths with current source files.
 
 ## 2. Select a hook
 
@@ -19,6 +22,9 @@ Select one `production hook` row for runtime instrumentation.
 Select one `aggregate boundary only` row for profiler correlation.
 
 Do not add a local timer to an aggregate-only file.
+Keep this catalog active and update each affected path after a source move.
+Resolve every hook row against the current source tree.
+Do not add a path map for moved files.
 
 ## 3. Build a safe workload
 
