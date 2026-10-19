@@ -11,16 +11,13 @@ It does not add a permanent timer to each function.
 
 ## Inventory baseline
 
-The AST scan includes every path returned by these commands:
+The scan summary defines the eligible source paths and exclusions.
 
-```powershell
-git ls-files '*.py'
-git ls-files --others --exclude-standard '*.py'
-```
-
-The final inventory contains 1,465 Python files and 32,859 symbols.
-The symbols include 28,501 functions, 167 asynchronous functions, and 4,191 classes.
-The inventory identifies 18,611 nested symbols and no parse errors.
+The final inventory contains 1,337 Python files and 31,598 symbols.
+The symbols include 27,379 functions, 167 asynchronous functions, and 4,052 classes.
+The inventory identifies 17,960 nested symbols and no parse errors.
+These counts match `artifacts/scan-summary.json`.
+Section 1 in `quickstart.md` records the inventory source revision and its validation rule.
 
 The scan excludes 9,618 ignored Python files under `.venv`.
 Git identifies this directory as a virtual environment.
@@ -36,12 +33,13 @@ Each eligible file has one disposition.
 
 | Disposition | Meaning | File count |
 | --- | --- | ---: |
-| `production hook` | Add one or more low-overhead hooks at a stable runtime boundary. | 59 |
-| `aggregate boundary only` | Use a parent span and an opt-in profiler. Do not add a local timer. | 416 |
-| `benchmark/profile only` | Use the file only to drive or support controlled measurements. | 886 |
-| `no hook` | The file has no useful runtime boundary, or it is a migration or specification file. | 104 |
+| `production hook` | Add one or more low-overhead hooks at a stable runtime boundary. | 58 |
+| `aggregate boundary only` | Use a parent span and an opt-in profiler. Do not add a local timer. | 414 |
+| `benchmark/profile only` | Use the file only to drive or support controlled measurements. | 762 |
+| `no hook` | The file has no useful runtime boundary, or it is a migration or specification file. | 103 |
 
-The hook catalog contains 89 production-hook records and 416 aggregate records.
+The hook catalog contains 710 rows: 87 production-hook rows, 414 aggregate rows,
+and 209 targeted diagnostic rows.
 Each record names an exact file and an exact symbol or class.
 
 ## Functional requirements

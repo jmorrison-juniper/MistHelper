@@ -67,10 +67,9 @@ TEXT_SUFFIXES = {  # Name tracked text formats that can contain canonical source
     ".yaml",
     ".yml",
 }  # Cover code, configuration, scripts, and current documentation.
-PERFORMANCE_CATALOGS = {  # Keep active source inventories inside the old-path guard.
+PERFORMANCE_CATALOGS = {  # Keep the active hook catalog inside the old-path guard.
     "specs/2448-misthelper-performance-monitoring/artifacts/hook-catalog.csv",
-    "specs/2448-misthelper-performance-monitoring/artifacts/python-inventory.csv",
-}  # Exclude other historical artifacts without excluding these active catalogs.
+}  # Exclude historical inventory evidence and other generated artifacts.
 
 
 def visible_children(directory: Path) -> list[Path]:
@@ -80,10 +79,18 @@ def visible_children(directory: Path) -> list[Path]:
     ]  # Exclude package metadata.
 
 
+def legacy_path_violations(text_files: list[tuple[str, str]], legacy_pattern: re.Pattern[str]) -> list[str]:
+    """Return files that contain a retired source path."""
+    return [
+        path for path, contents in text_files if legacy_pattern.search(contents)
+    ]  # Keep the failing file paths for the assertion.
+
+
 def test_src_has_only_domain_packages() -> None:
     """Require the approved direct source package set."""  # Preserve the existing behavior.
     children = visible_children(SOURCE_ROOT)  # Read the measured direct source children.
     child_names = {child.name for child in children}  # Compare names without filesystem ordering.
+    print(f"Checked {len(children)} direct src children.")
     assert (
         child_names == EXPECTED_DOMAINS
     ), f"Checked {len(children)} src children: {sorted(child_names)}"  # Report the measured count and names.
@@ -106,6 +113,7 @@ def test_new_domain_levels_follow_five_item_rule() -> None:
         f"Checked {len(checked_directories)} new package levels. "  # Report the measured directory count.
         f"Violations: {violations}"  # Report each measured violation.
     )
+    print(f"Checked {len(checked_directories)} source package levels.")
     assert not violations, message  # Fail with the checked level count and each violation.
 
 
@@ -149,11 +157,23 @@ def test_tracked_text_uses_only_canonical_source_paths() -> None:
         if path.name not in {"CHANGELOG.md", ".spec-context.events.jsonl"}
         and ("artifacts" not in path.parts or path.relative_to(REPOSITORY_ROOT).as_posix() in PERFORMANCE_CATALOGS)
     ]  # Exclude immutable history and generated evidence.
-    violations = [
-        str(path.relative_to(REPOSITORY_ROOT))
-        for path in text_files
-        if legacy_pattern.search(path.read_text(encoding="utf-8"))
-    ]  # Collect files that still name an old path.
+    text_file_contents = [
+        (path.relative_to(REPOSITORY_ROOT).as_posix(), path.read_text(encoding="utf-8")) for path in text_files
+    ]  # Read each selected tracked text file.
+    violations = legacy_path_violations(text_file_contents, legacy_pattern)  # Find old source paths.
+    print(f"Checked {len(text_file_contents)} tracked text files for legacy source paths.")
     assert (
         not violations
-    ), f"Checked {len(text_files)} text files. Legacy source paths: {violations}"  # Preserve the existing behavior.
+    ), f"Checked {len(text_file_contents)} text files. Legacy source paths: {violations}"  # Report examined files.
+
+
+def test_legacy_path_guard_rejects_a_synthetic_old_path() -> None:
+    """Prove that the source-path guard detects a stale path."""
+    synthetic_file = "tests/synthetic_legacy_source.py"  # Name the synthetic evidence without writing a file.
+    legacy_pattern = re.compile(r"\bsrc[./\\]troubleshooting\b")  # Match a known retired source path.
+    violations = legacy_path_violations(  # Exercise the decision helper with one stale input.
+        [(synthetic_file, "import src." + "troubleshooting")],
+        legacy_pattern,
+    )
+    print("Checked 1 synthetic text file for a legacy source path.")
+    assert violations == [synthetic_file]

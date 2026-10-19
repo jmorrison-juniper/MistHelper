@@ -95,7 +95,8 @@
 **Depends on:** T05.
 
 - Add an opt-in `cProfile` runner.
-- Map profile entries to the AST inventory.
+- Map profile entries to current symbols in the active hook catalog.
+- Follow the artifact validation contract in `quickstart.md` section 1.
 - Report file, function, method, and class aggregates.
 
 **Acceptance:** Every aggregate catalog row resolves to an inventory symbol.
