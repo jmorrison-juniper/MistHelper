@@ -14,8 +14,8 @@ import urllib.error  # Classify a URL error or an HTTP error during a read.
 from pathlib import Path  # Build every output path in a portable way.
 
 from src.mist.intelligence.juniper_docs.acquire.catalog_client import JvdCatalogClient, is_transient_error  # Client.
-from src.mist.intelligence.juniper_docs.acquire.content_index import CorpusContentIndex  # Content identity.
 from src.mist.intelligence.juniper_docs.acquire.pdf_paths import PdfPathAllocator  # Collision-safe path policy.
+from src.mist.intelligence.juniper_docs.harvest.content_index import CorpusContentIndex  # Content identity.
 
 _LOGGER = logging.getLogger(__name__)  # Module logger for every download.
 

@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from src.mist.intelligence.juniper_docs.acquire.content_index import CorpusContentIndex
 from src.mist.intelligence.juniper_docs.acquire.downloader import CorpusDownloader
 from src.mist.intelligence.juniper_docs.acquire.pdf_paths import PdfPathAllocator
+from src.mist.intelligence.juniper_docs.harvest.content_index import CorpusContentIndex
 from tests.unit.juniper_docs.conftest import FakeCatalogClient
 
 _PDF = (Path(__file__).parent / "fixtures" / "minimal.pdf").read_bytes()  # Valid offline PDF.
