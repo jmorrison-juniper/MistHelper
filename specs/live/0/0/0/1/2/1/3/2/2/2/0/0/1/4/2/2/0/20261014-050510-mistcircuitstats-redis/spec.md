@@ -4,7 +4,9 @@
 
 **Created**: 2026-10-14
 
-**Status**: Draft
+**Reviewed**: 2026-10-18
+
+**Status**: Draft. Product implementation remains blocked by the recorded approval gates.
 
 **Input**: Migrate the read-only MistCircuitStats-Redis dashboard into MistHelper. Preserve its useful workflows without adding another application, database, or duplicate WAN views.
 
@@ -81,9 +83,9 @@ An operator or reviewer opens an offline preview and uses example data without M
 - **FR-011**: The implementation MUST use MistHelper's current API session, organization context, shared rate-limit admission, and configured storage. It MUST NOT create a second API client or token store.
 - **FR-012**: The change MUST NOT add another application, Compose group, web service, public port, Redis service, or application database.
 - **FR-013**: Offline screenshots and fixtures MUST contain fictional data and MUST remain visibly separate from live telemetry.
-- **FR-014**: The project MUST preserve the source provenance and CC BY-NC-SA 4.0 license. It MUST NOT copy source code or assets until maintainers confirm rights and license compatibility.
+- **FR-014**: The project MUST preserve the source provenance and CC BY-NC-SA 4.0 license. It MUST NOT copy or adapt source code, tests, fixtures, screenshots, or assets without explicit rights confirmation.
 - **FR-015**: The plan and tasks MUST identify verification files for cache isolation, expiry, decoding, partial refresh, API failures, request limits, secret redaction, and synthetic-data separation.
-- **FR-016**: The plan and implementation MUST define shared dashboard ownership across #4195, #4200, and #4220. Neither related proposal is assumed to be merged.
+- **FR-016**: The plan and implementation MUST define shared dashboard ownership across #4195, #4200, and #4220. Reuse the dashboard delivered by merged PR #4252. Treat open draft PR #4208 as proposed behavior only.
 
 ### Mist Cloud Transport Requirements *(include if feature uses Mist Cloud)*
 
@@ -92,6 +94,7 @@ An operator or reviewer opens an offline preview and uses example data without M
 - Use the SDK methods named by the verified request map. Do not add direct HTTP requests when a working SDK method exists.
 - The feature owns no WebSocket transport. Use a working SDK method whenever one exists. Add no direct HTTP path without verified evidence that the SDK cannot meet the required contract.
 - Contract tests MUST prove SDK authentication, endpoint and parameter parity, request admission, API failure safety, cache failure safety, and secret redaction. If an SDK gap is claimed, a test MUST demonstrate the gap before any transport alternative is proposed.
+- The merged dashboard's SDK signature tests prove method availability and the shared-session parameter only. They do not prove the source Insights request or response contract.
 
 ### Key Entities *(include if feature involves data)*
 
@@ -122,8 +125,9 @@ An operator or reviewer opens an offline preview and uses example data without M
 - Target users are MistHelper network operators who already have permission to view the selected organization.
 - MistHelper remains the only application entry point and keeps its existing portal, Compose group, API session, and storage configuration.
 - The source guide describes a 300-second default worker interval and a cache TTL of three worker intervals. A source implementation review reports a 31-day TTL. Treat this mismatch as unresolved until the source and target cache policies are compared.
-- Open issue #4195 and open PR #4208 cover overlapping gateway, port, peer, and WAN views. Neither proposal is treated as merged or available in the main branch.
-- Issue #4200 and its open implementation may change the canonical WAN view. The implementation must reconcile ownership with its maintainer before it writes code.
-- The source license is CC BY-NC-SA 4.0. No code, asset, or screenshot may be copied until maintainers confirm reuse rights and compatibility.
+- Issue #4195 is closed through merged PR #4252. Its WAN dashboard is existing product behavior, not an unmerged dependency.
+- Issue #4200 and draft PR #4208 remain open. Reconcile their proposed scope with the existing dashboard before assigning any unique #4220 behavior.
+- No unique #4220 product path, refresh owner, or Redis policy has approval. Existing dashboard cache values do not approve a second cache.
+- The source license is CC BY-NC-SA 4.0. Rights confirmation remains absent for copied or adapted code, tests, fixtures, screenshots, and assets.
 - Source settings remain unverified unless this specification records source implementation and test evidence. The source review reports a 300-second worker interval, a 600-second stale threshold, incremental refresh, and cached-on-startup behavior.
 - The current MistHelper OpenAPI file gives candidate contracts. Source-to-SDK method parity remains an investigation task.

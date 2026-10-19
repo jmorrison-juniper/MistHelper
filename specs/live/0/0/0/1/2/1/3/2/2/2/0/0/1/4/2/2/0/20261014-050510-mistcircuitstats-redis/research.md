@@ -3,6 +3,22 @@
 **Date**: 2026-10-14
 **Status**: Planning evidence. Source implementation and license compatibility remain unverified.
 
+## Current-State Review: 2026-10-18
+
+- [Planning PR #4223](https://github.com/jmorrison-juniper/MistHelper/pull/4223) merged on 2026-10-17. [Issue #4220](https://github.com/jmorrison-juniper/MistHelper/issues/4220) remains open.
+- [PR #4252](https://github.com/jmorrison-juniper/MistHelper/pull/4252) merged on 2026-10-16 and closed #4195. Its dashboard and cache exist on `main`.
+- [Draft PR #4208](https://github.com/jmorrison-juniper/MistHelper/pull/4208) and [issue #4200](https://github.com/jmorrison-juniper/MistHelper/issues/4200) remain open. Their proposed package is not merged behavior.
+- The source default branch is `main`, at commit `61153fcb8dc51c6c7ff41a46179ef376d9da7601`. Its latest merged change is [jmorrison-juniper/MistCircuitStats-Redis#35](https://github.com/jmorrison-juniper/MistCircuitStats-Redis/pull/35).
+- GitHub reports the source license as `NOASSERTION`. The source [LICENSE](https://github.com/jmorrison-juniper/MistCircuitStats-Redis/blob/61153fcb8dc51c6c7ff41a46179ef376d9da7601/LICENSE) explicitly declares CC BY-NC-SA 4.0. No explicit reuse approval was found.
+
+The issue comments contain historical states. The 2026-10-17 comment calls #4223 open. The live PR state overrides that comment.
+
+The source worker still defines four workers, a 300-second interval, a 600-second stale threshold, and a 31-day TTL. These are source facts, not approved target settings. The source review does not establish complete behavior or test coverage.
+
+The existing dashboard uses the shared Redis client through `RedisDashboardCache`. Its namespace and TTL values appear in [contracts/redis-cache.md](contracts/redis-cache.md). Its SDK test checks 17 method signatures and the supported SDK version. That test does not establish source Insights parameter or response parity.
+
+No unique behavior, product path, Redis policy, or source reuse rights gained approval during this review. No product task starts from this refresh. [analysis.md](analysis.md) remains the historical 2026-10-14 analysis. The refresh uses a new read-only analysis without rewriting that report.
+
 ## Decision 1: Treat the source behavior as documented, not proven
 
 **Decision**: Use the source README, operations guide, and implementation review as evidence with separate confidence. Record conflicts instead of choosing the guide or code value without review.
@@ -37,7 +53,7 @@ The review does not establish the implementation status of `SKIP_ENRICHMENT`, to
 
 **Decision**: Use one canonical portal view and one collection owner for each gateway, port, peer, and insight data set. Reuse a landed #4195 or #4200 feature when it satisfies the requirement. Add only verified gaps.
 
-**Rationale**: Issue #4195 covers MistCircuitStats WAN views. Issue #4200 and open PR #4208 cover WAN overview, gateway, port, peer, offline preview, live collection, request admission, and history. PR #4208 targets `main` but remains open. Neither issue or PR is assumed to be merged.
+**Rationale**: PR #4252 delivered #4195 WAN views and closed that issue. Issue #4200 and open draft PR #4208 propose overlapping views, collection, request admission, and history. Use the existing dashboard as the baseline. Do not assume #4208 will merge unchanged.
 
 **Alternatives considered**:
 
@@ -48,7 +64,7 @@ The review does not establish the implementation status of `SKIP_ENRICHMENT`, to
 
 ## Decision 3: Reuse the existing Redis service only for transient state
 
-**Decision**: Add no Redis service. If the overlap review proves a separate cache is needed, use the existing Redis service and a versioned `misthelper:wan:mcsr:v1:` key namespace. Set cache expiry from the approved refresh interval and record the exact value in implementation documentation.
+**Decision**: Add no Redis service or duplicate cache. Review the existing dashboard namespace before any cache change. The earlier `misthelper:wan:mcsr:v1:` proposal has no reservation or approval. Record an approved owner, path, and policy before implementation.
 
 **Rationale**: MistHelper already has Redis in its Compose group. The source guide and implementation review report different TTLs, so neither value sets the target cache policy. A second service or database would violate issue #4220.
 
@@ -127,8 +143,9 @@ The review does not establish the implementation status of `SKIP_ENRICHMENT`, to
 
 - Exact source SDK methods, arguments, response fields, and pagination are not established by the supplied summary.
 - The implementation review confirms selected worker facts, but does not verify `SKIP_ENRICHMENT`, token rotation, API host settings, organization settings, or every pagination and enrichment path.
-- PR #4208 is the proposed canonical owner for shared WAN pages, collection, request admission, cache, and offline preview. It remains open and is not merged. Issue #4195 remains active, so owners must confirm the mapping before implementation.
+- PR #4252 supplies the existing WAN dashboard. Draft PR #4208 remains open with overlapping proposed behavior. Owners must approve one unique #4220 behavior and path before implementation.
 - The status of the source license's compatibility with MistHelper remains unknown.
 - The source worker's refresh lease, startup cache selection, and partial-refresh rules are not established.
 - The source insight call uses a direct HTTP path. The selected SDK method's response does not yet prove the expected `rx_bps`, `tx_bps`, `port_id`, interval, and seven-day window contract.
 - Redis namespace, serialization, refresh lock, payload size, target TTL, and outage details need confirmation against current MistHelper Redis policy.
+- Source screenshot fidelity remains blocked without explicit reuse rights. Do not recreate source screenshots or adapt source tests and fixtures without those rights.
