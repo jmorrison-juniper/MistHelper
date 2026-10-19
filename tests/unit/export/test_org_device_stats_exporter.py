@@ -734,7 +734,7 @@ class TestSaveDevicePortStatsOutput:
             ),
         ):
             OrgDeviceStatsExporter._save_device_port_stats_output(rows, "out.csv")
-        fake_mh.DataExporter.write_with_format_selection.assert_called_once()
+        assert fake_mh.DataExporter.write_with_format_selection.call_count == 1  # Export ran despite the sort error.
 
 
 class TestValidateFastPortStatsStartTime:
@@ -744,8 +744,8 @@ class TestValidateFastPortStatsStartTime:
         """Numeric start_time should return without raising."""
         from src.operations.exporting.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
-        OrgDeviceStatsExporter._validate_fast_port_stats_start_time(1234.5)
-        OrgDeviceStatsExporter._validate_fast_port_stats_start_time(1234)
+        assert OrgDeviceStatsExporter._validate_fast_port_stats_start_time(1234.5) is None
+        assert OrgDeviceStatsExporter._validate_fast_port_stats_start_time(1234) is None
 
     def test_non_numeric_raises(self, fake_mh):
         """Non-numeric value raises TypeError with descriptive message."""
