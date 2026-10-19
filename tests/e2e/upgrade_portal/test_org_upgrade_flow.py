@@ -200,7 +200,7 @@ class TestOrganizationUpgradeBrowserFlow:
         # browser, so the server never read the cancelled job. A reload reads it,
         # as the 30-second poll of a real page does, and the sites go back.
         page.unroute(re.compile(r".*/api/org-upgrades/[^/]+$"))  # Let the server answer from now on.
-        page.reload(wait_until="domcontentloaded")  # The job page reads every child again.
+        page.get_by_test_id("org-upgrade-refresh").click()  # Read server state without competing browser navigations.
         status = page.locator("[data-org-upgrade-field='status']")  # The aggregate state.
         sync_api.expect(status).to_have_text("cancelled")  # Every child ended on the cancel.
         # WHY: Issue #3225. A cancelled operation is final, so the page renders
