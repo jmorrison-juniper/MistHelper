@@ -131,11 +131,15 @@ Use the tested source imports to select a standalone test group. For a test with
 
 ### Current ownership holds
 
-At main `729a75613f971bddbee7f5e29e321b87a4efc719`, PR #4350 owns three planned source paths.
+At the approved base `efd178c3f76e580afc0b5511734498b61f3a0090`, PR #4350 owns three planned source paths.
 Defer `tests/unit/arango_indexes/test_preservation.py`, `tests/unit/export/test_endpoint_family_exporter.py`, and `tests/unit/refactors/test_sqlite_database_writer.py`.
+Defer the entire five-file Arango package because its tests share helpers.
+Restore every Arango file and its contract and discovery imports to the exact approved base.
 PR #4208 still owns its workflow and test paths. Other holds remain with PRs #4317, #4316, #4327, and #4226.
 Refresh exact file lists before each batch. Keep these paths unchanged until their owners release them.
-Do not open or update a pull request before the coordinator releases the hold after PR #4353.
+PR #4353 merged. The coordinator authorized the exact-base rebase and a pull request for completed, unowned moves.
+Keep the issue open for incomplete tasks. Do not merge or enable auto-merge.
+Compare both rename endpoints with every open pull request before publication.
 
 ### Juniper RMA grouping correction
 
