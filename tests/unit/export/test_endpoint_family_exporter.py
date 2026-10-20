@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib
 import inspect
+import json
 import sqlite3
 from contextlib import closing
 from types import SimpleNamespace
@@ -100,6 +101,33 @@ class TestSlePrimaryKeyExport:
                 ("site-1", "100", "200", "second")
             ]
         assert writer.write_with_format_selection.call_count == 2
+
+    @pytest.mark.parametrize("operation", ("getSiteSleSummaryTrend", "getSiteSleClassifierSummaryTrend"))
+    def test_trend_empty_body_skips_output(self, operation: str) -> None:
+        """An empty SDK body cannot create a partial identity or an output row."""
+        host = _fake_mist_helper()
+        with patch.object(EndpointFamilyExporter, "_mist_helper", return_value=host):
+            assert EndpointFamilyExporter._persist(None, "window.csv", operation) == 0
+        host.DataExporter.write_with_format_selection.assert_not_called()
+
+    @pytest.mark.parametrize("operation", ("getSiteSleSummaryTrend", "getSiteSleClassifierSummaryTrend"))
+    def test_trend_malformed_json_sdk_error_is_visible(self, operation: str, caplog: pytest.LogCaptureFixture) -> None:
+        """A JSON decoder failure remains visible and cannot reach persistence."""
+        host = _fake_mist_helper()
+        sdk_call = MagicMock(side_effect=json.JSONDecodeError("Malformed JSON", "{", 1))
+        entry = next(row for row in _SITE_SLE_OPS if row.operation == operation)
+        arguments = MagicMock(values=tuple("selected" for _field in entry.required), label="window")
+        with (
+            patch.object(EndpointFamilyExporter, "_mist_helper", return_value=host),
+            patch.object(EndpointFamilyExporter, "_resolve", return_value=sdk_call),
+            patch.object(EndpointFamilyExporter, "_collect_arguments", return_value=arguments),
+            caplog.at_level("ERROR"),
+        ):
+            EndpointFamilyExporter._run(entry)
+        sdk_call.assert_called_once_with(host.apisession, *arguments.values)
+        host.DataExporter.write_with_format_selection.assert_not_called()
+        assert operation in caplog.text
+        assert "Malformed JSON" in caplog.text
 
 
 def _fake_mist_helper() -> Any:
