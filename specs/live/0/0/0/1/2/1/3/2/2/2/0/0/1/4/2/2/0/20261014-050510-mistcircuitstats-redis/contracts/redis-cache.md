@@ -4,7 +4,7 @@
 
 ## Existing Cache Baseline
 
-Merged PR #4252 uses `RedisDashboardCache` with the shared Redis client in `src/interfaces/portals/wan_dashboard/services.py`.
+Merged PR #4252 uses `RedisDashboardCache` with the shared Redis client in `src/interfaces/portals/wan_dashboard/services/__init__.py`.
 
 | Setting | Existing value | Scope |
 |---|---|---|
@@ -20,7 +20,7 @@ Preserve these keys and TTLs. Do not change them in this migration. Do not reser
 - One background worker is the sole Mist API collector and sole writer of WAN snapshot values.
 - Run the worker inside the existing web container. Use a renewable Redis lease to elect one active worker across Gunicorn processes.
 - Do not collect Mist data or write WAN snapshots when the process does not hold the lease.
-- Keep collection disabled unless `WAN_DASHBOARD_REFRESH_ENABLED` is true and `WAN_DASHBOARD_REFRESH_INTERVAL_SECONDS` and `WAN_DASHBOARD_WORKER_LEASE_SECONDS` hold positive application configuration values.
+- Keep collection disabled unless `WAN_DASHBOARD_LOAD_TEST_APPROVED` and `WAN_DASHBOARD_REFRESH_ENABLED` are true and `WAN_DASHBOARD_REFRESH_INTERVAL_SECONDS` and `WAN_DASHBOARD_WORKER_LEASE_SECONDS` hold positive application configuration values.
 - Missing or invalid timing configuration must prevent worker startup and all Mist requests.
 - Scheduled refreshes and operator refresh requests use the same worker.
 - Keep one active run and at most one queued follow-up. Coalesce further Refresh requests into that follow-up.
@@ -45,7 +45,7 @@ Preserve these keys and TTLs. Do not change them in this migration. Do not reser
 
 ## Refresh Interval and Lease
 
-The Redis lease mechanism is approved. Do not select its duration or set a refresh interval in this plan. The production-scale load test must measure:
+The Redis lease mechanism is approved. Do not select its duration or set a refresh interval in this plan. Keep `WAN_DASHBOARD_LOAD_TEST_APPROVED` false until the production-scale load test measures:
 
 - All page requests for 1,001–5,000 sites, 1,001–5,000 gateways, and 5,001–20,000 WAN ports.
 - Additional non-WAN port pages.

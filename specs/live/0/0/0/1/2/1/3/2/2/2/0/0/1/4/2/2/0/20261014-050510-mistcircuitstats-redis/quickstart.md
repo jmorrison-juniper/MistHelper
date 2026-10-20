@@ -1,6 +1,6 @@
 # Quickstart: MistCircuitStats Redis Dashboard Migration
 
-**Status**: Partial implementation guide. Cache-only reads are implemented. Worker refresh remains blocked on T004.
+**Status**: Cache-only reads and the fail-closed worker are implemented. Scheduled collection remains disabled until production test T004.
 
 ## Preconditions
 
@@ -97,7 +97,7 @@ The page disables Refresh until the background worker exists.
 The dashboard shows cached data as stale when its collection time is unknown.
 An in-memory snapshot becomes unavailable after 86,400 seconds.
 
-The worker, Redis lease, request queue, progress display, and scheduled refresh remain unimplemented.
+At this cache-only increment, the worker, Redis lease, request queue, progress display, and scheduled refresh remained unimplemented.
 Do not set refresh timing values before T004 passes.
 Per-port Insights parity remains in issue #4330.
 
@@ -157,7 +157,39 @@ The focused tasks marked complete are T007, T008, T009, T010, and T011.
 T004 and the worker, queue, status, timing, and production-load tasks remain open.
 No production credential, `.env` file, Redis service, or Mist API was used.
 
-## Final Revalidation: 2026-10-20
+## Worker Increment
+
+The current increment runs one background worker inside the existing web container. Redis elects one active collector across Gunicorn processes. The Refresh control queues work for that worker. The worker uses only the four approved bulk SDK reads and the shared pagination path.
+
+Collection stays disabled unless `WAN_DASHBOARD_LOAD_TEST_APPROVED` and `WAN_DASHBOARD_REFRESH_ENABLED` are true and both timing values are positive. Do not set these values before T004 passes. The repository example environment file remains owned by draft PR #4208 and is unchanged.
+
+The worker publishes a complete snapshot and its status in one Redis operation. A failed API page, rate limit, Redis write, or lease preserves the last complete snapshot and reports a safe stale error. Each web process uses only its own recent complete snapshot during a Redis outage. No dashboard request calls Mist.
+
+The page displays refresh state, current bulk-read phase, completed page counts, the last complete timestamp, and safe refresh errors. One queued follow-up represents any number of Refresh requests during an active run. A snapshot expires after 86,400 seconds.
+
+Per-port Insights parity remains out of scope and is tracked in issue #4330. No production load test, credential, Redis service, or Mist API request ran for this increment. T004 remains open.
+
+### Focused Validation
+
+```text
+.venv/bin/python -m pytest tests/unit/wan_dashboard/test_worker.py tests/integration/web_portal/wan_dashboard/test_mistapi_contract.py tests/integration/web_portal/wan_dashboard/test_routes.py tests/integration/web_portal/wan_dashboard/test_services.py tests/e2e/web_portal/test_wan_dashboard_cache_only.py -q
+77 passed in 3.01s
+```
+
+The worker and route tests verify disabled configuration, one Redis lease owner, queue coalescing, complete-only publication, stale retention after rate limits and Redis failures, status output, and the CSRF-protected Refresh request. The SDK contract tests verify the four bulk methods, pagination progress, no request without the lease, and no partial snapshot after a failed or repeated page.
+
+```text
+.venv/bin/python -m black --check src/interfaces/portals/wan_dashboard/services/worker.py src/interfaces/portals/wan_dashboard/services/__init__.py src/interfaces/portals/wan_dashboard/routes.py tests/unit/wan_dashboard/test_worker.py tests/integration/web_portal/wan_dashboard/test_mistapi_contract.py tests/integration/web_portal/wan_dashboard/test_routes.py tests/e2e/web_portal/test_wan_dashboard_cache_only.py
+7 files would be left unchanged.
+.venv/bin/python -m ruff check src/interfaces/portals/wan_dashboard/services/worker.py src/interfaces/portals/wan_dashboard/services/__init__.py src/interfaces/portals/wan_dashboard/routes.py tests/unit/wan_dashboard/test_worker.py tests/integration/web_portal/wan_dashboard/test_mistapi_contract.py tests/integration/web_portal/wan_dashboard/test_routes.py tests/e2e/web_portal/test_wan_dashboard_cache_only.py
+All checks passed!
+node --check src/interfaces/portals/wan_dashboard/static/dashboard.js
+Passed.
+rtk git diff --check
+Passed.
+```
+
+## Cache-Only Increment Revalidation (Historical): 2026-10-20
 
 The cache-only routes now build their service from the organization scope and Redis client. A Mist SDK session is not required for a cache read. The Refresh control remains disabled because the worker does not exist.
 
@@ -185,7 +217,29 @@ The full task audit examined 839 feature records, 362 task files, and 10,252 tas
 
 The current shell cannot rerun the PowerShell prerequisite because `pwsh` is absent. The earlier session-local PowerShell run passed for this feature path and left `.specify/feature.json` unchanged.
 
-No production load test, live Mist request, Redis service, or credential was used. T004 remains open. The worker, lease, refresh queue, progress status, and worker-refresh browser tests remain incomplete.
+No production load test, live Mist request, Redis service, or credential was used during the cache-only increment. T004 remained open at that point.
+
+## Worker Increment Revalidation: 2026-10-20
+
+The Spec Kit prerequisite passed for this feature with an explicit `SPECIFY_FEATURE_DIRECTORY`. The read-only requirements checklist has 16 checked items.
+
+The focused worker, SDK contract, route, service, and browser tests passed:
+
+```text
+.venv/bin/python -m pytest tests/unit/wan_dashboard/test_worker.py tests/integration/web_portal/wan_dashboard/test_mistapi_contract.py tests/integration/web_portal/wan_dashboard/test_routes.py tests/integration/web_portal/wan_dashboard/test_services.py tests/e2e/web_portal/test_wan_dashboard_cache_only.py -q
+77 passed in 3.01s
+```
+
+Black, Ruff, mypy, compilation, Bandit, JavaScript syntax, complexity, and the module-move guard passed. Mypy checked three source files. The module-move guard passed 15 tests.
+
+The test-quality preflight passed one test. It read four required inputs and checked one guide.
+The explicit feature STE check passed nine files with scores from 94 to 100. The Markdown link scan found zero broken local links in eight tracked files.
+
+The full task audit exited with 36 malformed task records outside this feature. It examined 840 feature records, 363 task files, and 10,289 task markers. The #4220 record has 30 task markers, 25 checked tasks, 5 open tasks, and no malformed task markers.
+
+The prerequisite command passed with the session-local PowerShell binary and the explicit feature selector. It did not change `.specify/feature.json`.
+
+No production load test, live Mist request, Redis service, or credential was used for this increment. T004 and dependent timing task T027 remain open. Synthetic-data tasks T020, T023, and T024 also remain open.
 
 ## Revalidation After Browser Coverage
 
@@ -218,3 +272,67 @@ The export test service now supplies cache-only methods. The browser test now ve
 ```
 
 The focused dashboard test set passed again after the rebase with 54 tests. The post-rebase test-quality gate checked three files and reported zero new findings. The repeat CI run remains pending.
+
+## Worker Test-Quality Revalidation: 2026-10-20
+
+The test helper now calls the worker class directly. The analyzer can include its failure cases in source-driving tests.
+
+The focused worker, SDK contract, route, service, and browser tests passed:
+
+```text
+./.venv/bin/python -m pytest tests/unit/wan_dashboard/test_worker.py tests/integration/web_portal/wan_dashboard/test_mistapi_contract.py tests/integration/web_portal/wan_dashboard/test_routes.py tests/integration/web_portal/wan_dashboard/test_services.py tests/e2e/web_portal/test_wan_dashboard_cache_only.py -q
+87 passed in 2.94s
+```
+
+Ruff, Black, mypy, compilation, Bandit, complexity, JavaScript syntax, and whitespace checks passed:
+
+```text
+./.venv/bin/python -m ruff check src/interfaces/portals/wan_dashboard/services/worker.py src/interfaces/portals/wan_dashboard/services/__init__.py src/interfaces/portals/wan_dashboard/routes.py tests/unit/wan_dashboard/test_worker.py tests/integration/web_portal/wan_dashboard/test_mistapi_contract.py tests/integration/web_portal/wan_dashboard/test_routes.py tests/integration/web_portal/wan_dashboard/test_services.py tests/e2e/web_portal/test_wan_dashboard_cache_only.py
+All checks passed!
+./.venv/bin/python -m black --check src/interfaces/portals/wan_dashboard/services/worker.py src/interfaces/portals/wan_dashboard/services/__init__.py src/interfaces/portals/wan_dashboard/routes.py tests/unit/wan_dashboard/test_worker.py tests/integration/web_portal/wan_dashboard/test_mistapi_contract.py tests/integration/web_portal/wan_dashboard/test_routes.py tests/integration/web_portal/wan_dashboard/test_services.py tests/e2e/web_portal/test_wan_dashboard_cache_only.py
+8 files would be left unchanged.
+./.venv/bin/python -m mypy src/interfaces/portals/wan_dashboard/services/worker.py src/interfaces/portals/wan_dashboard/services/__init__.py src/interfaces/portals/wan_dashboard/routes.py --config-file pyproject.toml
+Success: no issues found in 3 source files
+./.venv/bin/python -m py_compile src/interfaces/portals/wan_dashboard/services/worker.py src/interfaces/portals/wan_dashboard/services/__init__.py src/interfaces/portals/wan_dashboard/routes.py
+./.venv/bin/bandit -c pyproject.toml -r src/interfaces/portals/wan_dashboard -q
+./.venv/bin/radon cc src/interfaces/portals/wan_dashboard -j | ./.venv/bin/complexity-gate --max 10
+All functions within complexity threshold.
+node --check src/interfaces/portals/wan_dashboard/static/dashboard.js
+rtk git diff --check
+```
+
+The full test-quality gate checked 1,197 files and 684 findings. It reported zero new findings:
+
+```text
+./.venv/bin/test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json
+gate: 0 new findings vs baseline
+```
+
+The required preflight read all four test-quality inputs. The post-commit changed-test gate checked four files and reported zero new findings:
+
+```text
+./.venv/bin/python -B -m pytest -p no:cacheprovider -s -q tests/guardrails/local_test_quality_loop/test_guidance.py::TestLiveGuides
+1 passed in 0.19s
+./.venv/bin/test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json --changed-from origin/main --full-gate-path .github/workflows/ci.yml --full-gate-path requirements-dev.txt
+gate_scope: 4 files checked, 0 findings checked
+gate: 0 new findings vs baseline
+```
+
+The latest focused tests use synthetic data. No production load test, live Mist request, Redis service, or credential was used. T004 remains a production-only blocker. T020, T023, and T024 still need synthetic-data work.
+
+## CI Failure Corrections: 2026-10-20
+
+The first pull request run found that the public-symbol guard lacked the WAN dashboard service package move. The guard now maps the old module path to its package initializer.
+
+The focused guard tests passed:
+
+```text
+./.venv/bin/python -m pytest tests/guardrails/test_src_public_symbol_preservation.py -q
+20 passed in 2.45s
+./.venv/bin/python -m ruff check tests/guardrails/test_src_public_symbol_preservation.py
+All checks passed!
+./.venv/bin/python -m black --check tests/guardrails/test_src_public_symbol_preservation.py
+1 file would be left unchanged.
+```
+
+The same run found four stale generated menu API pages. This feature changes no menu operation or endpoint map source. Keep that unrelated gate open until the generated pages match the source.

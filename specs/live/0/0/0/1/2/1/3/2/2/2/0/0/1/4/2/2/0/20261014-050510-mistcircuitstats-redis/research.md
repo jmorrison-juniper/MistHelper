@@ -14,7 +14,7 @@
 
 ## Evidence from the Merged Dashboard
 
-The existing service is `src/interfaces/portals/wan_dashboard/services.py`. Its organization overview uses these four bulk SDK reads with pagination:
+The existing service is `src/interfaces/portals/wan_dashboard/services/__init__.py`. Its organization overview uses these four bulk SDK reads with pagination:
 
 | SDK method | Use |
 |---|---|

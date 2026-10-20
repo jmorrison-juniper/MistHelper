@@ -36,6 +36,16 @@ OVERVIEW_RESPONSE = json.dumps(  # Keep browser data fictional and complete.
 DETAIL_RESPONSE = json.dumps(  # Keep missing detail explicit and safe.
     {"status": "unavailable", "data": [], "notice": "Gateway details are unavailable."}
 )
+REFRESH_STATUS_RESPONSE = json.dumps(  # Keep browser refresh progress fictional and bounded.
+    {
+        "status": "disabled",
+        "current_phase": None,
+        "completed_pages": {},
+        "last_complete_at": None,
+        "safe_error": None,
+        "queued_follow_up": False,
+    }
+)
 
 
 @pytest.fixture(scope="module")
@@ -60,8 +70,11 @@ def dashboard_url(flask_app: Any) -> Iterator[str]:
         logger.debug("WAN dashboard browser server stopped on port %d", port)  # Record the shutdown result.
 
 
-def test_cached_dashboard_disables_refresh_and_reports_missing_details(page: Any, dashboard_url: str) -> None:
+def test_cached_dashboard_disables_refresh_and_reports_missing_details(
+    page: Any, dashboard_url: str, flask_app: Any
+) -> None:
     """Show a stale cached overview and unavailable detail without a Mist request."""
+    flask_app.extensions.pop("wan_dashboard_worker", None)  # Keep the worker disabled for this page.
     observed_paths: list[str] = []  # Keep only dashboard API paths from browser traffic.
     page.on(  # Observe each request made by the shipped dashboard script.
         "request",
@@ -74,6 +87,10 @@ def test_cached_dashboard_disables_refresh_and_reports_missing_details(page: Any
     page.route(  # Supply one fictional cached overview without contacting Mist.
         "**/wan-dashboard/api/overview",
         lambda route: route.fulfill(status=200, content_type="application/json", body=OVERVIEW_RESPONSE),
+    )
+    page.route(  # Supply an explicit disabled state without a Mist request.
+        "**/wan-dashboard/api/refresh-status",
+        lambda route: route.fulfill(status=200, content_type="application/json", body=REFRESH_STATUS_RESPONSE),
     )
     page.route(  # Supply an explicit unavailable detail response.
         "**/wan-dashboard/api/gateways/gw-a/ports",
@@ -89,5 +106,39 @@ def test_cached_dashboard_disables_refresh_and_reports_missing_details(page: Any
     )  # Show the safe unavailable state.
     assert observed_paths == [  # Prove the browser used only cache-backed dashboard routes.
         "/wan-dashboard/api/overview",
+        "/wan-dashboard/api/refresh-status",
         "/wan-dashboard/api/gateways/gw-a/ports",
     ]
+
+
+def test_refresh_button_queues_work_with_csrf_header(page: Any, dashboard_url: str, flask_app: Any) -> None:
+    """An enabled Refresh control posts one queue request with its CSRF token."""
+    flask_app.extensions["wan_dashboard_worker"] = object()  # Enable only the page control in this test.
+    queued_requests: list[dict[str, str]] = []  # Keep request evidence local to the browser.
+    page.route(  # Serve the fictional overview without a Mist request.
+        "**/wan-dashboard/api/overview",
+        lambda route: route.fulfill(status=200, content_type="application/json", body=OVERVIEW_RESPONSE),
+    )
+    page.route(  # Keep status reads fictional and bounded.
+        "**/wan-dashboard/api/refresh-status",
+        lambda route: route.fulfill(status=200, content_type="application/json", body=REFRESH_STATUS_RESPONSE),
+    )
+
+    def queue_request(route: Any) -> None:
+        """Record the HTTP method and CSRF header before returning a local result."""
+        queued_requests.append(
+            {
+                "method": route.request.method,
+                "csrf": route.request.headers.get("x-csrftoken", ""),
+            }
+        )
+        route.fulfill(status=202, content_type="application/json", body='{"status":"coalesced"}')
+
+    page.route("**/wan-dashboard/api/refresh", queue_request)  # Prevent network access beyond the test browser.
+    page.goto(f"{dashboard_url}/wan-dashboard", wait_until="networkidle", timeout=15000)  # Load the local portal.
+    csrf_token = page.locator('meta[name="csrf-token"]').get_attribute("content") or ""
+    expect(page.get_by_test_id("wan-refresh")).to_be_enabled()  # Show Refresh only for the registered worker.
+    page.get_by_test_id("wan-refresh").click()  # Ask the worker queue to refresh the cache.
+
+    expect(page.get_by_test_id("wan-refresh")).to_be_enabled()  # Re-enable the control after the queue reply.
+    assert queued_requests == [{"method": "POST", "csrf": csrf_token}]  # Send one CSRF-protected request.
