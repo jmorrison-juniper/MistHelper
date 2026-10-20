@@ -272,3 +272,40 @@ The export test service now supplies cache-only methods. The browser test now ve
 ```
 
 The focused dashboard test set passed again after the rebase with 54 tests. The post-rebase test-quality gate checked three files and reported zero new findings. The repeat CI run remains pending.
+
+## Worker Test-Quality Revalidation: 2026-10-20
+
+The test helper now calls the worker class directly. The analyzer can include its failure cases in source-driving tests.
+
+The focused worker, SDK contract, route, service, and browser tests passed:
+
+```text
+./.venv/bin/python -m pytest tests/unit/wan_dashboard/test_worker.py tests/integration/web_portal/wan_dashboard/test_mistapi_contract.py tests/integration/web_portal/wan_dashboard/test_routes.py tests/integration/web_portal/wan_dashboard/test_services.py tests/e2e/web_portal/test_wan_dashboard_cache_only.py -q
+87 passed in 2.94s
+```
+
+Ruff, Black, mypy, compilation, Bandit, complexity, JavaScript syntax, and whitespace checks passed:
+
+```text
+./.venv/bin/python -m ruff check src/interfaces/portals/wan_dashboard/services/worker.py src/interfaces/portals/wan_dashboard/services/__init__.py src/interfaces/portals/wan_dashboard/routes.py tests/unit/wan_dashboard/test_worker.py tests/integration/web_portal/wan_dashboard/test_mistapi_contract.py tests/integration/web_portal/wan_dashboard/test_routes.py tests/integration/web_portal/wan_dashboard/test_services.py tests/e2e/web_portal/test_wan_dashboard_cache_only.py
+All checks passed!
+./.venv/bin/python -m black --check src/interfaces/portals/wan_dashboard/services/worker.py src/interfaces/portals/wan_dashboard/services/__init__.py src/interfaces/portals/wan_dashboard/routes.py tests/unit/wan_dashboard/test_worker.py tests/integration/web_portal/wan_dashboard/test_mistapi_contract.py tests/integration/web_portal/wan_dashboard/test_routes.py tests/integration/web_portal/wan_dashboard/test_services.py tests/e2e/web_portal/test_wan_dashboard_cache_only.py
+8 files would be left unchanged.
+./.venv/bin/python -m mypy src/interfaces/portals/wan_dashboard/services/worker.py src/interfaces/portals/wan_dashboard/services/__init__.py src/interfaces/portals/wan_dashboard/routes.py --config-file pyproject.toml
+Success: no issues found in 3 source files
+./.venv/bin/python -m py_compile src/interfaces/portals/wan_dashboard/services/worker.py src/interfaces/portals/wan_dashboard/services/__init__.py src/interfaces/portals/wan_dashboard/routes.py
+./.venv/bin/bandit -c pyproject.toml -r src/interfaces/portals/wan_dashboard -q
+./.venv/bin/radon cc src/interfaces/portals/wan_dashboard -j | ./.venv/bin/complexity-gate --max 10
+All functions within complexity threshold.
+node --check src/interfaces/portals/wan_dashboard/static/dashboard.js
+rtk git diff --check
+```
+
+The full test-quality gate checked 1,197 files and 684 findings. It reported zero new findings:
+
+```text
+./.venv/bin/test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json
+gate: 0 new findings vs baseline
+```
+
+The latest focused tests use synthetic data. No production load test, live Mist request, Redis service, or credential was used. T004 remains a production-only blocker. T020, T023, and T024 still need synthetic-data work.

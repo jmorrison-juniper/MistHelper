@@ -154,7 +154,7 @@ Task: T014 Test that the Refresh control queues the same worker.
 ### Incremental Delivery
 
 1. Keep dashboard reads cache-only. Return unavailable when the cache has no complete snapshot.
-2. Add the single worker and route the Refresh control to its queue after T004 establishes safe timing.
+2. Keep the single worker and Refresh queue disabled until T004 establishes safe timing.
 3. Measure production-band API use and worker timing before enabling collection.
 4. Track per-port Insights parity only in issue #4330.
 
@@ -163,4 +163,4 @@ Task: T014 Test that the Refresh control queues the same worker.
 - `[P]` marks tasks that can run in parallel after their dependencies pass.
 - `[US1]`, `[US2]`, and `[US3]` map tasks to the user stories in `spec.md`.
 - The user authorized source reuse with attribution. Keep the source license terms with any reused material.
-- This increment does not implement the worker, queue, status display, or scheduled refresh.
+- The worker, queue, and status display are implemented. Keep collection disabled until T004 approves timing.

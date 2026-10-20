@@ -11,7 +11,11 @@ from flask import Flask, render_template
 from flask.testing import FlaskClient
 
 from src.interfaces.portals.upgrade_portal.runtime import lock
-from src.interfaces.portals.wan_dashboard.routes import WanDashboardService, wan_dashboard_bp
+from src.interfaces.portals.wan_dashboard.routes import (
+    DashboardReadRoutes,
+    WanDashboardService,
+    wan_dashboard_bp,
+)
 from src.interfaces.portals.wan_dashboard.services.worker import WanDashboardWorker
 
 
@@ -492,11 +496,16 @@ class TestCacheOnlyFailureBoundary:
         service = FakeDashboardService()  # Keep the cached response synthetic.
         live_reader = MagicMock(side_effect=transport_error("synthetic transport failure"))
         monkeypatch.setattr(service, "get_overview", live_reader)  # Make any route-level collection fail.
-        client, _app = build_client(service)  # Register the cache-only route boundary.
+        client, app = build_client(service)  # Register the cache-only route boundary.
 
         response = client.get("/wan-dashboard/api/overview")  # Read only the cached synthetic result.
+        with app.test_request_context():
+            _json_response, mapped_status = DashboardReadRoutes._result(
+                {"status": "error", "data": [], "notice": "Synthetic failure."}
+            )  # Exercise source status mapping beside the forbidden transport path.
 
         assert response.status_code == 200  # Keep cached data available without Mist access.
+        assert mapped_status == 502  # Map a server failure to the documented route result.
         live_reader.assert_not_called()  # Do not enter the configured connection-error or timeout path.
 
     @pytest.mark.parametrize("status_code", [429, 503], ids=["http-4xx", "http-5xx"])
@@ -514,8 +523,13 @@ class TestCacheOnlyFailureBoundary:
             "get_cached_overview",
             lambda **_filters: {"status": service_status, "data": [], "notice": "Synthetic failure."},
         )  # Return one bounded cache-service failure state.
-        client, _app = build_client(service)  # Register the production route.
+        client, app = build_client(service)  # Register the production route.
 
         response = client.get("/wan-dashboard/api/overview")  # Request the selected local failure state.
+        with app.test_request_context():
+            _json_response, mapped_status = DashboardReadRoutes._result(
+                {"status": service_status, "data": [], "notice": "Synthetic failure."}
+            )  # Exercise the source boundary with the selected HTTP status family.
 
         assert response.status_code == expected_status  # Preserve the route's documented status mapping.
+        assert mapped_status == expected_status  # Keep the direct source decision consistent.
