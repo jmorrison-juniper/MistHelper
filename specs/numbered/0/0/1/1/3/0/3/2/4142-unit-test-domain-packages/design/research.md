@@ -764,3 +764,31 @@ The previous local full root-unit result remains evidence for the identical fixt
 This rebase reruns the changed main test and the exact shared-state regression locally.
 CI must rerun its complete unchanged gate set for the new head.
 Task T037 is complete. The committed and full quality gates remain required before the rebase push.
+
+## Coordinated rebase after PR #4364
+
+Published head `4cf81839ce904153434e0aef5336252cfa7d5a3c` passed all 36 checks, with seven intentional skips.
+Run `39477418333` measured 93-percent combined coverage.
+Its root-unit shard passed 24,837 tests, skipped 24, and reported 76 warnings.
+The coordinator then requested exact base `1c089ed07ba865a7e505df4774a79751c72187cf`.
+
+The clean published branch preserved both fixes before rebase.
+The rebase completed without conflicts or a merge commit.
+The new base changes WAN dashboard source, integration tests, browser tests, and its existing specification.
+This branch introduces no change to those production paths.
+Its scope remains the unowned test-layout slices and the verified fixture repair.
+
+The merged WAN service tests, SDK isolation regression, merged credential and UI tests, deferred test, and guards passed 653 tests.
+One existing optional-runtime test skipped.
+The base unit tree is unchanged from `57d718be98ab2716127578d33b80326c641e64af`.
+The retained exact-main node snapshot therefore remains valid for this unit-tree comparison.
+Fresh branch collection contains 29,603 unit tests.
+The complete multisets match through 377 exact moves, with zero missing or added IDs.
+The baseline retains 733 ordered entries, 668 mapped path-field changes, and no other changes.
+Both fixes remain intact. The SDK fixture matches the previous green head exactly.
+The original insight test and historical specification remain unchanged.
+
+The live ownership scan found zero intersections across 794 raw paths and ten other open pull requests.
+Ruff and Black passed all 396 changed Python files.
+The compile, feature prerequisites, and required quality-input preflight passed.
+Task T038 is complete. The committed and full quality gates remain required before publication.
