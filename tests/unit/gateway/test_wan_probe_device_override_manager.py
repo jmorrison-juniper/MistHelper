@@ -113,3 +113,102 @@ def test_generate_report_calls_exporter_with_expected_output_filename(caplog) ->
         record for record in caplog.records if "Menu #167 DESTRUCTIVE operation complete" in record.getMessage()
     ]  # WHY: isolate the repaired success summary.
     assert [record.levelno for record in completion_records] == [logging.INFO]  # WHY: success is not a warning.
+
+
+class TestDeviceUpdateHttpStatus:
+    """Check the real update pipeline without sending a device configuration."""
+
+    @staticmethod
+    def _prepare_update(response, monkeypatch) -> SimpleNamespace:
+        """Prepare the manager and controlled SDK calls for one HTTP response."""
+        from mistapi.__api_response import APIResponse
+
+        from src.mist.resources.gateway import wan_probe_device_override_manager as module
+
+        sdk = MagicMock()
+        sdk.api.v1.sites.devices.getSiteDevice.return_value = SimpleNamespace(data={"port_config": {"ge-0/0/0": {}}})
+        sdk.api.v1.sites.devices.updateSiteDevice.return_value = APIResponse(response, "https://mist.invalid/device")
+        session = object()
+        monkeypatch.setattr(module, "mistapi", sdk)
+        monkeypatch.setattr(module, "apisession", session)
+        manager = WANProbeDeviceOverrideManager()
+        manager.selected_template = {"id": "tmpl-1", "name": "Template-A"}
+        device = {
+            "device_name": "gw-1",
+            "device_id": "dev-1",
+            "site_name": "site-a",
+            "site_id": "site-1",
+            "overridden_wan_ports": [{"port_name": "ge-0/0/0"}],
+        }
+        return SimpleNamespace(device=device, endpoints=sdk.api.v1.sites.devices, session=session, manager=manager)
+
+    def test_http_503_records_failed_update(self, monkeypatch, caplog) -> None:
+        """A server refusal must retain its status and must not report success."""
+        from requests import Response
+
+        response = Response()
+        response.status_code = 503
+        response._content = b'{"id": "dev-1"}'
+        with caplog.at_level(logging.DEBUG):
+            update = self._prepare_update(response, monkeypatch)
+            result = WANProbeDeviceOverrideManager._update_single_device(update.manager, update.device, dry_run=False)
+
+        assert result == {
+            "device_name": "gw-1",
+            "device_id": "dev-1",
+            "site_name": "site-a",
+            "site_id": "site-1",
+            "template_name": "Template-A",
+            "ports_updated": ["ge-0/0/0"],
+            "status": "FAILED",
+            "error": "API returned status 503",
+        }
+        update.endpoints.getSiteDevice.assert_called_once_with(update.session, "site-1", "dev-1")
+        update.endpoints.updateSiteDevice.assert_called_once_with(
+            update.session,
+            "site-1",
+            "dev-1",
+            body={
+                "port_config": {
+                    "ge-0/0/0": {
+                        "wan_probe_override": {
+                            "ips": update.manager.probe_ips,
+                            "probe_profile": update.manager.probe_profile,
+                        }
+                    }
+                }
+            },
+        )
+        records = [
+            record
+            for record in caplog.records
+            if record.name == "src.mist.resources.gateway.wan_probe_device_override_manager"
+        ]
+        assert [(record.levelno, record.getMessage()) for record in records if record.levelno >= logging.ERROR] == [
+            (logging.ERROR, "Failed to update device gw-1: 503")
+        ]
+        assert not any("Successfully updated" in record.getMessage() for record in records)
+
+    def test_http_200_preserves_success(self, monkeypatch, caplog) -> None:
+        """A successful response remains distinct from a refused device update."""
+        from requests import Response
+
+        response = Response()
+        response.status_code = 200
+        response._content = b'{"id": "dev-1"}'
+        with caplog.at_level(logging.DEBUG):
+            update = self._prepare_update(response, monkeypatch)
+            result = WANProbeDeviceOverrideManager._update_single_device(update.manager, update.device, dry_run=False)
+
+        assert result["status"] == "SUCCESS"
+        assert result["error"] == ""
+        assert result["ports_updated"] == ["ge-0/0/0"]
+        records = [
+            record
+            for record in caplog.records
+            if record.name == "src.mist.resources.gateway.wan_probe_device_override_manager"
+        ]
+        assert (logging.INFO, "Successfully updated device gw-1") in [
+            (record.levelno, record.getMessage()) for record in records
+        ]
+        assert not any(record.levelno >= logging.ERROR for record in records)
