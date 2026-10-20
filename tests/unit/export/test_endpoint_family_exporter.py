@@ -111,10 +111,15 @@ class TestSlePrimaryKeyExport:
         host.DataExporter.write_with_format_selection.assert_not_called()
 
     @pytest.mark.parametrize("operation", ("getSiteSleSummaryTrend", "getSiteSleClassifierSummaryTrend"))
-    def test_trend_malformed_json_sdk_error_is_visible(self, operation: str, caplog: pytest.LogCaptureFixture) -> None:
-        """A JSON decoder failure remains visible and cannot reach persistence."""
+    @pytest.mark.parametrize("body", (b"", b"{"), ids=("empty-body", "malformed-json"))
+    def test_trend_malformed_json_sdk_error_is_visible(
+        self, operation: str, body: bytes, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Empty or malformed response bytes produce visible decoder failures without output."""
         host = _fake_mist_helper()
-        sdk_call = MagicMock(side_effect=json.JSONDecodeError("Malformed JSON", "{", 1))
+        with pytest.raises(json.JSONDecodeError) as failure:
+            json.loads(body)
+        sdk_call = MagicMock(side_effect=failure.value)
         entry = next(row for row in _SITE_SLE_OPS if row.operation == operation)
         arguments = MagicMock(values=tuple("selected" for _field in entry.required), label="window")
         with (
@@ -127,7 +132,7 @@ class TestSlePrimaryKeyExport:
         sdk_call.assert_called_once_with(host.apisession, *arguments.values)
         host.DataExporter.write_with_format_selection.assert_not_called()
         assert operation in caplog.text
-        assert "Malformed JSON" in caplog.text
+        assert str(failure.value) in caplog.text
 
 
 def _fake_mist_helper() -> Any:
