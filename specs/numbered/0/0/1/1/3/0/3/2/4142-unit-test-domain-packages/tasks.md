@@ -52,6 +52,7 @@ The coordinator must release the PR hold after #4353 before any pull request ope
 - [X] T035 [US2] Defer the insight-metrics test move to preserve its historical specification link under FR-004. Restore the original test path without a shim or duplicate. Verify baseline path values, ownership, complete node IDs, Markdown links, and required quality gates before the correction push.
 - [X] T036 [US2] Rebase onto the coordinator-approved current main after PR #4357. Preserve the published correction and the merged UI test. Repair the moved MSP fixture's shared SDK mutation. Verify the failing seven-module order, the complete root-unit shard, node IDs, baseline fields, ownership, style, and required quality gates. Publish only after local validation.
 - [X] T037 [US2] After the green current-main checks, preserve that remote head and rebase onto the coordinator-approved main after PR #4361. Verify the merged credential test, both fixes, node IDs, baseline fields, ownership, style, and required quality gates. Keep the pull request draft with auto-merge disabled.
+- [X] T038 [US2] Preserve the green published head and rebase onto exact coordinated main `1c089ed07ba865a7e505df4774a79751c72187cf`. Verify merged WAN service tests, both fixes, complete node IDs, baseline fields, ownership, style, prerequisites, and quality gates. Keep the pull request draft without auto-merge.
 
 ## Phase 4: User Story 2 - Run the existing unit tests (Priority: P1)
 

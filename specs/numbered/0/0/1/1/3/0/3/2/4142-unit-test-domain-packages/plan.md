@@ -148,6 +148,8 @@ The moved MSP test fixture must preserve SDK module identities across test order
 Use scoped parent bindings instead of removing the SDK import cache.
 After PR #4361 merged, the coordinator approved rebase onto `57d718be98ab2716127578d33b80326c641e64af`.
 Preserve its credential-preflight test and both verified fixes.
+The next coordinated base is `1c089ed07ba865a7e505df4774a79751c72187cf`, after PR #4364.
+Preserve its WAN dashboard changes without expanding this branch's scope.
 
 ### Juniper RMA grouping correction
 
