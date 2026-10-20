@@ -97,13 +97,18 @@ later producer batches. Lambda conversion and portal cutover remain separate.
 | Check | Result |
 | - | - |
 | `.venv/bin/python -m pytest tests/unit/reports/psk_hygiene/test_operation.py tests/unit/export/test_data_exporter.py -q` | 95 passed. |
+| `.venv/bin/python -m pytest tests/unit/reports/psk_hygiene/test_operation.py --cov=src.mist.intelligence.reports.psk_hygiene.operation --cov-report=term-missing --cov-fail-under=80 -q` | 12 passed. Handler coverage was 96.55%. |
 | `.venv/bin/python -m ruff check src/mist/intelligence/reports/psk_hygiene/operation.py tests/unit/reports/psk_hygiene/test_operation.py` | All checks passed. |
+| `.venv/bin/python -m ruff check .` | All checks passed. |
 | `.venv/bin/python -m black --check src/mist/intelligence/reports/psk_hygiene/operation.py tests/unit/reports/psk_hygiene/test_operation.py` | Two files unchanged. |
+| `.venv/bin/python -m black --check .` | 2,472 files unchanged. |
 | `.venv/bin/python -m mypy src/mist/intelligence/reports/psk_hygiene/operation.py tests/unit/reports/psk_hygiene/test_operation.py --config-file pyproject.toml` | Success for two files. Mypy also reported unused configuration sections. |
+| `.venv/bin/python -m mypy src/ MistHelper.py wsgi.py scripts/mist_ideas_analyzer_pkg/__init__.py scripts/mist_ideas_distiller_v2_pkg/__init__.py --config-file pyproject.toml` | Success for 857 source files. Mypy reported its existing unused configuration section. |
 | `.venv/bin/bandit -c pyproject.toml -r src/mist/intelligence/reports/psk_hygiene -q` | No findings. |
 | `.venv/bin/radon cc src/mist/intelligence/reports/psk_hygiene -j \| .venv/bin/complexity-gate --max 10` | All functions within the threshold. |
 | `.venv/bin/python -m py_compile src/mist/intelligence/reports/psk_hygiene/operation.py` | No output and exit zero. |
 | `.venv/bin/ste-linter --config .ste-linter.toml --min-score 80` on the seven changed Markdown files | Passed. Scores ranged from 95 through 99. |
+| `.venv/bin/markdown-link-check` on the seven changed Markdown files | Seven tracked files checked. No broken links. |
 | `.venv/bin/test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json --changed-from origin/main --full-gate-path .github/workflows/ci.yml --full-gate-path requirements-dev.txt` | One test file checked, zero new findings, two skipped, and zero parse errors. |
 | `git diff --check` and protected-path comparison | Passed. `MistHelper.py`, portal classification, and `.specify/feature.json` remain unchanged. |
 
@@ -114,3 +119,6 @@ returned exit one because it reports added module-level names.
 The current inventory and remaining producer scope are in
 [research.md](design/research.md). The dedicated lambda issue and final portal
 replacement remain prerequisites for closing #3168.
+
+The full test suite and live Mist validation were not run. The focused tests
+use local fakes and do not contact Mist.
