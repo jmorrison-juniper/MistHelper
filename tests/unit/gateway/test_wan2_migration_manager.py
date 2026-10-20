@@ -136,3 +136,31 @@ def test_apply_site_settings_http_503_reports_failed_without_variable_set(monkey
     assert result == {"variable_set": False, "status": "FAILED", "error": "API returned status 503"}
     assert "Site One" in caplog.text
     assert "503" in caplog.text
+
+
+def test_apply_site_settings_http_400_reports_failed_without_variable_set(monkeypatch, caplog) -> None:
+    """An HTTP 400 from updateSiteSettings leaves the variable unset and records the refusal."""
+    from src.mist.resources.gateway import wan2_migration_manager as module  # Patch the production request boundary.
+
+    apisession = object()  # Avoid a live Mist session during the request test.
+    settings = {"vars": {"wan2_interface": "ge-0/0/1"}}  # Supply the payload that the SDK receives.
+    update_settings = MagicMock(return_value=SimpleNamespace(status_code=400))  # Model an HTTP refusal.
+    setting = SimpleNamespace(updateSiteSettings=update_settings)  # Match the SDK method path.
+    sites = SimpleNamespace(setting=setting)  # Preserve the production endpoint shape.
+    fake_mistapi = SimpleNamespace(api=SimpleNamespace(v1=SimpleNamespace(sites=sites)))  # Mock the SDK boundary.
+    monkeypatch.setattr(module, "mistapi", fake_mistapi)  # Route the production call to the mock.
+    monkeypatch.setattr(module, "apisession", apisession)  # Keep the request independent of credentials.
+    result = {"variable_set": False, "status": "", "error": ""}  # Start with the production result shape.
+
+    with caplog.at_level("ERROR", logger=module.logger.name):  # Capture the refusal log.
+        WAN2MigrationManager._apply_site_settings("site-1", "Site One", settings, result)  # Exercise API update.
+
+    update_settings.assert_called_once_with(apisession, "site-1", body=settings)  # Require the expected SDK request.
+    expected_result = {
+        "variable_set": False,
+        "status": "FAILED",
+        "error": "API returned status 400",
+    }  # Exact refusal result.
+    assert result == expected_result  # Require the exact failure contract.
+    assert "Site One" in caplog.text  # Require site context in the error log.
+    assert "400" in caplog.text  # Require the refusal status in the error log.
