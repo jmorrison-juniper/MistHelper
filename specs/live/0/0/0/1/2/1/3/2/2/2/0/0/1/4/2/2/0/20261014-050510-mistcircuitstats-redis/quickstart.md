@@ -308,4 +308,14 @@ The full test-quality gate checked 1,197 files and 684 findings. It reported zer
 gate: 0 new findings vs baseline
 ```
 
+The required preflight read all four test-quality inputs. The post-commit changed-test gate checked four files and reported zero new findings:
+
+```text
+./.venv/bin/python -B -m pytest -p no:cacheprovider -s -q tests/guardrails/local_test_quality_loop/test_guidance.py::TestLiveGuides
+1 passed in 0.19s
+./.venv/bin/test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json --changed-from origin/main --full-gate-path .github/workflows/ci.yml --full-gate-path requirements-dev.txt
+gate_scope: 4 files checked, 0 findings checked
+gate: 0 new findings vs baseline
+```
+
 The latest focused tests use synthetic data. No production load test, live Mist request, Redis service, or credential was used. T004 remains a production-only blocker. T020, T023, and T024 still need synthetic-data work.
