@@ -49,6 +49,7 @@ The coordinator must release the PR hold after #4353 before any pull request ope
 - [X] T032 [US1] Move the four unclaimed certificate, subscription, rogue-evidence, and client-census packages into the mapped audit groups. Update helper imports and repository-root references. Verify tests, full node IDs, the baseline, and applicable guards.
 - [X] T033 [US1] Move and split the three remaining unowned audit-report packages through the exact bounded map. Keep PSK and wired-client reports deferred. Verify helper imports, tests, full node IDs, the baseline, and applicable guards.
 - [X] T034 [US2] Preserve the complete move commit and rebase onto the coordinator-approved main after PR #4353. Restore the held Arango package and its callers to main. Retain main's new posture outcome test and verify its fixture import. Compare both rename endpoints against all open pull requests. Verify focused tests, full node IDs, baseline fields, and changed-file style. Record results in `design/research.md`.
+- [X] T035 [US2] Defer the insight-metrics test move to preserve its historical specification link under FR-004. Restore the original test path without a shim or duplicate. Verify baseline path values, ownership, complete node IDs, Markdown links, and required quality gates before the correction push.
 
 ## Phase 4: User Story 2 - Run the existing unit tests (Priority: P1)
 
