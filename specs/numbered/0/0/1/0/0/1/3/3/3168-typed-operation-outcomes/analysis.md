@@ -122,3 +122,7 @@ replacement remain prerequisites for closing #3168.
 
 The full test suite and live Mist validation were not run. The focused tests
 use local fakes and do not contact Mist.
+
+Main advanced to `e70e573b56284f89893657a3266d6e797821b5ea` before PR creation.
+The branch was rebased onto that commit. The focused tests, code checks, and
+test-quality gate passed again against the new base at `2026-10-20T02:30:55Z`.
