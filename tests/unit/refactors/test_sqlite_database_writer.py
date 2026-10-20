@@ -26,6 +26,7 @@ from src.foundation.persistence.db.database_schema_utils import (
     DatabaseSchemaUtils,
 )  # WHY: the real DDL proves the ALTER names match CREATE.
 from src.foundation.support.refactors import sqlite_database_writer as swr_mod  # WHY: module handle for monkeypatching
+from src.foundation.support.refactors.endpoint_primary_key_strategies import SleTrendIdentity
 from src.foundation.support.refactors.sqlite_database_writer import SQLiteDatabaseWriter  # WHY: SUT direct import
 
 # ---------------------------------------------------------------------------
@@ -68,6 +69,89 @@ def stub_deps(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> SimpleNamespac
     )
     monkeypatch.setattr(swr_mod, "_resolve_runtime_dependencies", lambda: deps)  # Divert deps resolution
     return deps  # Tests can adjust individual mock behaviour via the returned namespace
+
+
+class TestSleWindowRows:
+    """Prove replacement and legacy preservation through the real SQLite writer."""
+
+    @pytest.fixture(params=("getSiteSleSummaryTrend", "getSiteSleClassifierSummaryTrend"))
+    def window(self, request: pytest.FixtureRequest, stub_deps: SimpleNamespace) -> tuple[str, dict[str, Any]]:
+        """Use real schema selection and DDL with a complete fake window."""
+        stub_deps.DatabaseSchemaUtils = DatabaseSchemaUtils
+        row = {
+            "site_id": "site-1",
+            "scope": "site",
+            "scope_id": "scope-1",
+            "metric": "coverage",
+            "classifier_name": "low-rssi",
+            "start": 100,
+            "end": 200,
+            "value": "old",
+        }
+        return request.param, row
+
+    @pytest.mark.parametrize("legacy", (False, True))
+    def test_primary_key_repeat_preserves_legacy_rows(
+        self, window: tuple[str, dict[str, Any]], stub_deps: SimpleNamespace, legacy: bool
+    ) -> None:
+        """Keep every old row and replace only the newly identified window."""
+        operation, row = window
+        path = Path(stub_deps.misthelper_module.DATABASE_PATH)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        legacy_rows = self._legacy_rows(path, row) if legacy else []
+        for value in ("first", "second"):
+            assert SQLiteDatabaseWriter([{**row, "value": value}], "trend", operation).write() is True
+        with closing(sqlite3.connect(path)) as connection:
+            stored = connection.execute("SELECT value, misthelper_sle_window_key FROM trend ORDER BY rowid").fetchall()
+            if legacy:
+                preserved = connection.execute(
+                    "SELECT * FROM trend WHERE misthelper_sle_window_key IS NULL ORDER BY rowid"
+                ).fetchall()
+                assert [record[:-1] for record in preserved] == legacy_rows
+        assert stored == ([("legacy", None)] * 2 if legacy else []) + [
+            ("second", SleTrendIdentity.key(row, list(SleTrendIdentity.fields(operation))))
+        ]
+        assert row["value"] == "old"
+
+    @staticmethod
+    def _legacy_rows(path: Path, row: dict[str, Any]) -> list[tuple[Any, ...]]:
+        """Keep two complete old rows so new writes cannot silently remove historical duplicates."""
+        with closing(sqlite3.connect(path)) as connection:
+            connection.execute(
+                DatabaseSchemaUtils.build_create_table_sql(
+                    "trend", list(row), {"type": "auto_increment_with_unique", "unique_constraints": []}
+                )
+            )
+            for _duplicate in range(2):
+                placeholders = ", ".join("?" for _field in row)
+                connection.execute(
+                    f"INSERT INTO trend ({', '.join(row)}) VALUES ({placeholders})",
+                    [str(value) for value in {**row, "value": "legacy"}.values()],
+                )
+            connection.commit()
+            return connection.execute("SELECT * FROM trend ORDER BY rowid").fetchall()
+
+    @pytest.mark.parametrize("change", ({"start": 200, "end": 300}, {"site_id": "site-2"}, {"metric": "capacity"}))
+    def test_distinct_windows_and_identifiers_remain(
+        self, window: tuple[str, dict[str, Any]], stub_deps: SimpleNamespace, change: dict[str, Any]
+    ) -> None:
+        """Do not collapse a new historical window or another request dimension."""
+        operation, row = window
+        assert SQLiteDatabaseWriter([row], "trend", operation).write() is True
+        assert SQLiteDatabaseWriter([{**row, **change}], "trend", operation).write() is True
+        with closing(sqlite3.connect(stub_deps.misthelper_module.DATABASE_PATH)) as connection:
+            assert connection.execute("SELECT COUNT(*) FROM trend").fetchone() == (2,)
+
+    @pytest.mark.parametrize("change", ({"start": None}, {"end": 99}, {"site_id": ""}, {"misthelper_internal_id": 1}))
+    def test_invalid_identity_never_changes_existing_data(
+        self, window: tuple[str, dict[str, Any]], stub_deps: SimpleNamespace, change: dict[str, Any]
+    ) -> None:
+        """Reject missing identities before a SQLite operation can replace a row."""
+        operation, row = window
+        assert SQLiteDatabaseWriter([row], "trend", operation).write() is True
+        assert SQLiteDatabaseWriter([{**row, **change}], "trend", operation).write() is False
+        with closing(sqlite3.connect(stub_deps.misthelper_module.DATABASE_PATH)) as connection:
+            assert connection.execute("SELECT value FROM trend").fetchall() == [("old",)]
 
 
 # ---------------------------------------------------------------------------
