@@ -275,4 +275,4 @@ wan_dashboard_bp.add_url_rule("/api/refresh-status", endpoint="refresh_status", 
 wan_dashboard_bp.add_url_rule(
     "/api/refresh", endpoint="refresh", view_func=DashboardRefreshRoutes.enqueue, methods=["POST"]
 )
-wan_dashboard_bp.record_once(WanDashboardWorker.register_blueprint)  # Start only the configured in-process worker.
+wan_dashboard_bp.record_once(WanDashboardWorker.on_blueprint_registered)  # Start only the configured in-process worker.

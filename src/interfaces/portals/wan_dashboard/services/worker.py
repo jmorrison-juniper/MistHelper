@@ -230,7 +230,7 @@ class WanDashboardWorker:
         self._thread: threading.Thread | None = None  # Start no thread until blueprint registration completes.
 
     @classmethod
-    def register_blueprint(cls, state: BlueprintSetupState) -> None:
+    def on_blueprint_registered(cls, state: BlueprintSetupState) -> None:
         """Start a configured worker when Flask registers the existing dashboard blueprint."""
         app = state.app  # The app receives the blueprint and owns the worker lifecycle.
         settings = WorkerSettings.from_sources(app.config, os.environ)
