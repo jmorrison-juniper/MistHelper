@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-19
 
-**Status**: Specified
+**Status**: Implemented
 
 **Input**: Complete the bounded portal retry repair for #2752.
 

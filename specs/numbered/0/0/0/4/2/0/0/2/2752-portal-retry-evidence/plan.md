@@ -96,3 +96,31 @@ No shared feature pointer or agent context changes.
 Optional commit hooks are deferred until the coherent change is ready.
 The disabled companion hooks do not run.
 Supporting design is consolidated here because this repair adds no model or external interface.
+
+## Validation Results
+
+The unchanged-code regression run reported 12 failures and one pass.
+The final direct and wiring selection passed 163 tests.
+Combined coverage for the three production modules reached 90.25%, above the configured 90% threshold.
+The five changed methods covered 64 of 67 statements.
+The three uncovered statements are unchanged defensive returns after bounded loops.
+
+Compilation, Ruff, Black, mypy, complexity, Bandit, pylint, dead-code, and docstring checks passed.
+The three symbol comparisons reported no module-level name change.
+The committed test-quality comparison checked three files and reported zero new findings.
+The full analyzer checked 1191 files and reported zero new findings.
+The required preflight read and validated four inputs.
+The managed-folder and changelog guards passed 28 tests with one documented skip.
+The changed Markdown link check examined five files and found zero broken links.
+All changed Markdown files exceeded the STE threshold.
+
+The standard dependency audit failed because its temporary environment could not run `ensurepip`.
+The fully resolved, hashed runtime audit passed without known vulnerabilities through the supported `--disable-pip` mode.
+No dependency or gate setting changed.
+
+Cross-artifact analysis mapped all six requirements to the implementation tasks without a contract conflict.
+The current-main assessment leaves no additional real production retry gap in the bounded issue manifest.
+The address and port-statistics retries already preserve first-failure evidence.
+The lock-audit loop processes independent records rather than retrying one operation.
+PR checks and CodeQL must pass on the published head before delivery.
+The PR remains open for human review.

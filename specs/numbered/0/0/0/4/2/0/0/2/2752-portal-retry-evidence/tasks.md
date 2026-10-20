@@ -32,7 +32,7 @@
 
 ## Phase 6: Verification and Delivery
 
-- [ ] T010 Run applicable local gates and cross-artifact analysis for spec.md, plan.md, and tasks.md.
+- [x] T010 Run applicable local gates and cross-artifact analysis for spec.md, plan.md, and tasks.md.
 - [x] T011 Add changelog.d/issue-2752-portal-retry-evidence.md and prepare the repository PR template.
 - [x] T012 Define human-review publication controls in plan.md.
 
