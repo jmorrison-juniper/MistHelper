@@ -12,8 +12,8 @@ from src.operations.execution.firmware_policy.cli import PolicyMenuInputs, Polic
 from src.operations.execution.firmware_policy.recovery.backup import BackupAccess, PolicyBackup
 from src.operations.execution.firmware_policy.recovery.cli import RestoreMenu
 from src.operations.execution.firmware_policy.sdk import PolicyError
-from tests.unit.firmware_policy.fakes import ORG_ID, SITE_ID
-from tests.unit.firmware_policy.recovery.fakes import RestoreSession
+from tests.unit.prod_readiness.operations.execution.firmware.policy.fakes import ORG_ID, SITE_ID
+from tests.unit.prod_readiness.operations.execution.firmware.policy.recovery.fakes import RestoreSession
 
 
 def test_complete_restore_preserves_original_and_verifies_all_recovery_records(

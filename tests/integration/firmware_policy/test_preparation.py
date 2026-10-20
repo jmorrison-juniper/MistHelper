@@ -7,8 +7,8 @@ import pytest
 
 from src.operations.execution.firmware_policy.sdk import PolicyError
 from tests.integration.firmware_policy.test_workflow import prepared
-from tests.unit.firmware_policy.fakes import ORG_ID, SITE_ID
-from tests.unit.firmware_policy.recovery.fakes import RestoreSession
+from tests.unit.prod_readiness.operations.execution.firmware.policy.fakes import ORG_ID, SITE_ID
+from tests.unit.prod_readiness.operations.execution.firmware.policy.recovery.fakes import RestoreSession
 
 
 @pytest.mark.parametrize("kind", ["policy", "restore"])

@@ -11,7 +11,7 @@ import pytest
 from src.operations.execution.firmware_policy.recovery.backup import PolicyBackup
 from src.operations.execution.firmware_policy.recovery.bundle import BundleFiles, LegacyStream
 from src.operations.execution.firmware_policy.sdk import PolicyError
-from tests.unit.firmware_policy.recovery.fakes import RestoreSession
+from tests.unit.prod_readiness.operations.execution.firmware.policy.recovery.fakes import RestoreSession
 
 
 def test_4001_realistic_records_use_bounded_input_and_linear_retained_memory(tmp_path: Path, monkeypatch) -> None:

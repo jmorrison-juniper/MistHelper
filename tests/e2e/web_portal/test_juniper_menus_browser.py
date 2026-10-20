@@ -37,7 +37,7 @@ from tests.e2e.web_portal.juniper_browser_harness import (
     juniper_menu_actions,
     sample_tickets,
 )
-from tests.unit.juniper_rma.fixtures import read_replies as replies
+from tests.unit.prod_readiness.operations.exporting.juniper_rma.fixtures import read_replies as replies
 from web_portal.app import WebPortalApp
 
 logger = logging.getLogger(__name__)  # The module logger records each browser step.

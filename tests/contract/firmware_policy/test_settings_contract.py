@@ -11,7 +11,7 @@ import mistapi
 import pytest
 
 from src.operations.execution.firmware_policy.sdk import PolicyApi, PolicyError, PolicyResponse
-from tests.unit.firmware_policy.fakes import ORG_ID, SITE_ID, SettingsSession
+from tests.unit.prod_readiness.operations.execution.firmware.policy.fakes import ORG_ID, SITE_ID, SettingsSession
 
 
 @pytest.mark.parametrize("status_code", [400, 403, 500, 503])

@@ -15,7 +15,12 @@ from src.operations.execution.firmware_policy.cli import PolicyCatalog, PolicyMe
 from src.operations.execution.firmware_policy.recovery.backup import PolicyBackup
 from src.operations.execution.firmware_policy.sdk import PolicyApi, PolicyError
 from src.operations.execution.firmware_policy.workflow import PolicyWorkflow
-from tests.unit.firmware_policy.fakes import ORG_ID, OTHER_SITE_ID, SITE_ID, SettingsSession
+from tests.unit.prod_readiness.operations.execution.firmware.policy.fakes import (
+    ORG_ID,
+    OTHER_SITE_ID,
+    SITE_ID,
+    SettingsSession,
+)
 
 
 def prepared(tmp_path: Path) -> tuple[SettingsSession, PolicyWorkflow, list[Any]]:
