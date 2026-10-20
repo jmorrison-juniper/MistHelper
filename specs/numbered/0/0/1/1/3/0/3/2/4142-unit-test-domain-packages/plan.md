@@ -146,6 +146,8 @@ After PR #4357 merged, the coordinator approved rebase onto current main `aaab7b
 Preserve its UI test change and the historical-link deferral.
 The moved MSP test fixture must preserve SDK module identities across test order.
 Use scoped parent bindings instead of removing the SDK import cache.
+After PR #4361 merged, the coordinator approved rebase onto `57d718be98ab2716127578d33b80326c641e64af`.
+Preserve its credential-preflight test and both verified fixes.
 
 ### Juniper RMA grouping correction
 
