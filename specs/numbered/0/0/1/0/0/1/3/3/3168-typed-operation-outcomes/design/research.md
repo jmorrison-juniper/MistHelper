@@ -14,42 +14,42 @@ The draft remains unchanged.
 
 ## Current Main Inventory
 
-An AST inventory of `MistHelper.py` at commit
-`531bfe42cb5cf7a9cdf9621cd4e93ab22b5e1ede` examined 306 `handler` keyword rows
-without parse failures. It counted 114 lambda expressions, 186 attribute
-references, and 6 name references.
+An AST inventory of `MistHelper.py` at `origin/main` commit
+`24e93d2205796f134441f9aed56d5fa88dbffb73` examined 306 `handler` keyword rows
+without parse failures. It found 186 attribute references, 114 lambda
+expressions, and 6 named references.
 
-The six name references point to named dispatch wrappers. Each wrapper has a
-`None` annotation and no return statement. An import-based scan resolved 185
-attribute handlers. A package lookup resolved the remaining
-`RogueDhcpScanOperation.run` in `operation.py`. That handler returns `None`.
+The six named references point to dependency-wiring dispatch wrappers. Each
+wrapper returns `None` after it calls its operation. The 114 lambdas remain out
+of scope because a separate batch owns lambda conversion.
 
-Four attribute handlers have value-shaped results:
+| Menu | Named handler | Result | Caller contract |
+| - | - | - | - |
+| 31 | `_dispatch_gateway_management_ips` | `None` | The menu invokes the wrapper and consumes no result. |
+| 32 | `_dispatch_gateway_templates` | `None` | The menu invokes the wrapper and consumes no result. |
+| 35 | `_dispatch_gateway_with_wan_overrides` | `None` | The menu invokes the wrapper and consumes no result. |
+| 36 | `_dispatch_gateway_stats_wan_port_conflicts` | `None` | The menu invokes the wrapper and consumes no result. |
+| 99 | `_dispatch_gateway_device_configs` | `None` | The menu invokes the wrapper and consumes no result. |
+| 163 | `_dispatch_gateway_wan2_variable_migration` | `None` | The menu invokes the destructive wrapper and consumes no result. |
+
+The current attribute handlers with value-shaped results are:
 
 | Menu | Handler | Return | Caller contract |
 | - | - | - | - |
-| 274 | `PskHygieneReport.run` | `bool` | The menu discards the value. Unit tests assert it. |
-| 280 | `AlertDigestOperation.run_digest` | `bool` | The digest has separate empty-result and failure paths. |
-| 276 | `OrgSecurityPostureChecklist.run` | `dict[str, int]` | Callers use the summary counts as structured data. |
-| 92 | `PromptUtils.select_site_with_logging` | `str | None` | Multiple operations use the selected site as input. |
+| 274 | `PskHygieneReport.run` | `OperationOutcome` | The menu ignores the result. The unit tests assert each state. |
+| 280 | `AlertDigestOperation.run_digest` | `OperationOutcome` | The menu ignores the result. The unit tests assert each state. |
+| 276 | `OrgSecurityPostureChecklist.run` | `OperationOutcome` | The menu ignores the result. The detail field holds verdict counts. |
+| 92 | `PromptUtils.select_site_with_logging` | `str | None` | Callers use the selected site as input for later operations. |
 
-This batch migrates menu 274 only. It maps missing organization input to
-`missing_input`, empty PSK rows to `no_output`, a rejected non-empty export to
-`failed`, and a successful export to `completed`. Core fetch and export
-exceptions continue to propagate.
+Menus 274, 280, and 276 already return `OperationOutcome`. The current named
+operation inventory has no un-migrated value-return producer. Menu 92 remains
+an input helper because its return value selects the site for other operations.
+Do not convert that input value to an operation outcome.
 
-Menu 274 was migrated in PR #4323. Menu 280 is the second bounded batch. It
-maps zero alert rows to `no_output` and skips the digest writer. This is a
-recorded assumption: the writer previously created an empty-state placeholder
-file, and the typed state now reports that no result records exist. A failed
-lookback or alarm search and a rejected write map to `failed`. Fetch and
-write exceptions propagate. The shared client resolver has no missing-input
-signal, so this batch maps no `missing_input` path. Menu 281 keeps its Boolean
-return because it is destructive and a separate batch owns it.
-
-Keep menu 92 as an input helper. Keep menus 276 and 280 for later batches.
-These counts replace the historical six-value estimate. They do not classify
-every `None` handler as migration-ready.
+The next producer work must select a named operation family whose handlers
+currently return `None`. It must keep the separate lambda conversion and portal
+replacement batches unchanged. This inventory does not claim that issue #3168
+is complete.
 
 ## Model Representation
 

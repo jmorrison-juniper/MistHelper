@@ -172,3 +172,38 @@ The PR body states this assumption.
 Behavior change: a missing API session or organization ID and a rejected export
 no longer raise an exception. They return `missing_input` and `failed`.
 
+## Current-Main Handler Inventory
+
+**Date**: 2026-10-20
+**Scope**: Inventory-only batch for #3168. No runtime handler or portal code changed.
+
+The AST inventory examined 306 `handler` keyword rows in `MistHelper.py` at
+`origin/main` commit `24e93d2205796f134441f9aed56d5fa88dbffb73`. It found 186
+attribute references, 114 lambdas, and 6 named dispatch wrappers. The named
+wrappers return `None`. The lambda registrations remain out of scope.
+
+Menus 274, 280, and 276 already return `OperationOutcome`. Menu 92 returns
+`str | None` for site selection, and multiple operations use that value as
+input. It is not an outcome producer. Therefore, this batch found no remaining
+un-migrated value-return operation handler.
+
+The PowerShell prerequisite script could not run because PowerShell is not
+installed on this host. The existing requirements checklist has no unchecked
+items. The worktree was clean and based on the same commit as `origin/main`
+before these documentation changes.
+
+| Check | Result |
+| - | - |
+| `python3 scripts/bootstrap_worktree.py` | Environment ready. It installed both requirement files and Chromium. The health check found zero corrupt package installs. |
+| `.venv/bin/ste-linter --config .ste-linter.toml --min-score 80` on the four changed records | Passed. Scores: research 95, plan 98, tasks 98, analysis 96. |
+| `.venv/bin/markdown-link-check` on the four changed records | Four tracked Markdown files checked. Zero broken links. |
+| `git diff --check` | Passed with exit code zero. |
+| `.venv/bin/speckit-task-audit --root .` | Examined 841 records, 364 task files, and 10,344 markers. It exited 1 on 36 malformed markers and existing missing-task evidence. It reported no issue #3168 finding. |
+
+No runtime test applies because this batch changes documentation only. The
+AST inventory found four value-shaped attribute handlers. Three already
+return `OperationOutcome`, and the fourth is the excluded menu 92 input helper.
+
+This batch does not change lambda registrations, portal classification, or
+issue status. Issue #3168 remains open. The next producer batch must select a
+named operation family whose handlers return `None`.
