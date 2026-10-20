@@ -117,30 +117,102 @@ class GatewayTestExporter:
         connection_semaphore: Any = None,
     ) -> dict[str, Any] | None:
         """Fetch synthetic test stats for one gateway with retry + optional connection pool gating."""
-        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         max_retries, retry_delay = GatewayTestExporter._resolve_retry_defaults(
             max_retries, retry_delay
         )  # Defaults via helper
-        site_id, device_id, _, _ = device_info  # Unpack for backoff/error logs only (names unused here).
+        return GatewayTestExporter._retry_synthetic_stats(
+            device_info, max_retries, retry_delay, connection_semaphore
+        )  # Run the bounded retry sequence.
+
+    @staticmethod
+    def _retry_synthetic_stats(
+        device_info: tuple[str, str, str, str],
+        max_retries: int,
+        retry_delay: float,
+        connection_semaphore: Any,
+    ) -> dict[str, Any] | None:
+        """Run bounded synthetic test attempts and retain the first failure."""
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
+        failure_evidence: list[Exception] = []  # Keep the first exception across fallback attempts.
         for attempt in range(max_retries + 1):  # Bounded retry loop.
             stats = GatewayTestExporter._try_synthetic_fetch_attempt(
-                device_info, attempt, connection_semaphore
+                device_info, attempt, connection_semaphore, failure_evidence
             )  # One attempt.
             if stats is not None:  # Success.
+                GatewayTestExporter._log_synthetic_retry_outcome(
+                    device_info, failure_evidence, True, attempt + 1
+                )  # Report the original cause with the recovered result.
                 return stats  # Return tagged stats.
             if attempt >= max_retries:  # Out of retries.
-                logger.error("! Final attempt failed for device %s at site %s", device_id, site_id)  # Final failure.
+                GatewayTestExporter._log_synthetic_retry_outcome(
+                    device_info, failure_evidence, False, attempt + 1
+                )  # Report failure or exhaustion.
                 return None  # Give up.
-            backoff_delay = retry_delay * (mh.FastModeBackoffMultiplier.VALUE**attempt)  # Exponential backoff.
-            logger.info(  # Log the retry.
-                "! Fast retry in %.1fs (attempt %s/%s)", backoff_delay, attempt + 2, max_retries + 1
-            )
-            time.sleep(backoff_delay)  # Wait before retry.
+            GatewayTestExporter._sleep_synthetic_retry(mh, attempt, retry_delay, max_retries)
         return None  # Defensive.
 
     @staticmethod
+    def _log_synthetic_retry_outcome(
+        device_info: tuple[str, str, str, str],
+        failure_evidence: list[Exception],
+        recovered: bool,
+        attempts: int,
+    ) -> None:
+        """Report the retained exception after a retry recovers or ends."""
+        site_id, device_id, _, _ = device_info  # Read identifiers for the operator message.
+        if not failure_evidence:  # Empty API results have no exception to preserve.
+            if not recovered:  # Report exhaustion when no attempt raised an exception.
+                GatewayTestExporter._log_synthetic_exhaustion(device_id, site_id)
+            return  # Do not add a failure summary when no exception exists.
+        first_error = failure_evidence[0]  # Read the original exception without replacing it.
+        if recovered:  # Identify a useful fallback result.
+            GatewayTestExporter._log_synthetic_recovery(device_id, first_error, attempts)
+            return  # Keep the success path separate from exhaustion.
+        GatewayTestExporter._log_synthetic_failure(device_id, site_id, first_error, attempts)
+
+    @staticmethod
+    def _log_synthetic_recovery(device_id: str, first_error: Exception, attempts: int) -> None:
+        """Report the first exception after a synthetic test retry recovers."""
+        logger.info(  # Report the original cause with the recovered result.
+            "Synthetic test stats for device %s recovered after %s attempts. First failure was %s: %s",
+            device_id,
+            attempts,
+            type(first_error).__name__,
+            first_error,
+        )
+
+    @staticmethod
+    def _log_synthetic_failure(device_id: str, site_id: str, first_error: Exception, attempts: int) -> None:
+        """Report the first exception after synthetic test retries end."""
+        logger.error(  # Report the earliest cause after exhausting every attempt.
+            "! Final attempt failed for device %s at site %s after %s attempts. First failure was %s: %s",
+            device_id,
+            site_id,
+            attempts,
+            type(first_error).__name__,
+            first_error,
+        )
+
+    @staticmethod
+    def _log_synthetic_exhaustion(device_id: str, site_id: str) -> None:
+        """Report retry exhaustion when no exception occurred."""
+        logger.error("! Final attempt failed for device %s at site %s", device_id, site_id)
+
+    @staticmethod
+    def _sleep_synthetic_retry(mh: Any, attempt: int, retry_delay: float, max_retries: int) -> None:
+        """Apply the existing exponential delay before a synthetic test retry."""
+        backoff_delay = retry_delay * (mh.FastModeBackoffMultiplier.VALUE**attempt)  # Keep the existing multiplier.
+        logger.info(  # Log the retry.
+            "! Fast retry in %.1fs (attempt %s/%s)", backoff_delay, attempt + 2, max_retries + 1
+        )
+        time.sleep(backoff_delay)  # Keep the existing delay.
+
+    @staticmethod
     def _try_synthetic_fetch_attempt(
-        device_info: tuple[str, str, str, str], attempt: int, connection_semaphore: Any
+        device_info: tuple[str, str, str, str],
+        attempt: int,
+        connection_semaphore: Any,
+        failure_evidence: list[Exception] | None = None,
     ) -> dict[str, Any] | None:
         """Single attempt: validate inputs, call API, tag stats, log success. Return stats or None."""
         site_id, device_id, _, _ = device_info  # Unpack for the call + logging (names unused directly here).
@@ -158,7 +230,14 @@ class GatewayTestExporter:
                 site_id,
                 exception,
             )
+            GatewayTestExporter._record_first_synthetic_failure(failure_evidence, exception)
             return None  # Signal failure to caller.
+
+    @staticmethod
+    def _record_first_synthetic_failure(failure_evidence: list[Exception] | None, error: Exception) -> None:
+        """Keep the first synthetic test exception for one retry sequence."""
+        if failure_evidence is not None and not failure_evidence:  # Retain only the earliest attempt failure.
+            failure_evidence.append(error)  # Keep its type and message for the retry summary.
 
     @staticmethod
     def _tag_synthetic_stats(stats: dict[str, Any], device_info: tuple[str, str, str, str], attempt: int) -> None:

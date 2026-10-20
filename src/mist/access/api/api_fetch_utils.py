@@ -204,7 +204,12 @@ class APIFetchUtils:  # Higher-level org/site fetchers.
         return work_items  # Hand the gateway work list back to the caller.
 
     @staticmethod
-    def _gw_fetch_one_config(apisession, work_item, connection_semaphore):
+    def _gw_fetch_one_config(
+        apisession,
+        work_item,
+        connection_semaphore,
+        failure_evidence: list[requests.RequestException] | None = None,
+    ):
         """Fetch one gateway device's config (site-tagged). Return the config dict, or None on empty/failure."""
         work_site_id, work_device_id, work_site_name = work_item  # Unpack the work item.
         with connection_semaphore:  # Limit concurrent connections via the pool semaphore.
@@ -213,39 +218,93 @@ class APIFetchUtils:  # Higher-level org/site fetchers.
                 config_response = mistapi.api.v1.sites.devices.getSiteDevice(  # Call the device API.
                     apisession, work_site_id, work_device_id
                 )
-                config = getattr(config_response, "data", {})  # Unwrap data safely.
-                if config:  # Only keep non-empty configs.
-                    config["site_name"] = work_site_name  # Tag with site name for enrichment.
-                    config["site_id"] = work_site_id  # Tag with site id for enrichment.
-                    logger.debug("! Config fetched for %s", work_device_id)  # Trace success.
-                    return config  # Return the enriched config.
-                logger.warning("! Empty config for device %s", work_device_id)  # Warn on empty config.
-                return None  # Treat empty config as a miss.
+                return APIFetchUtils._gw_tag_config_response(config_response, work_item)  # Tag the response.
             except requests.RequestException as inner_error:  # Per-device transport failure should not abort the batch.
-                logging.error("! Failed to fetch config for device %s: %s", work_device_id, inner_error)  # Log error.
+                APIFetchUtils._gw_keep_first_error(
+                    work_device_id, failure_evidence, inner_error
+                )  # Keep the first request failure.
                 return None  # Mark this device failed.
+
+    @staticmethod
+    def _gw_tag_config_response(response, work_item):
+        """Tag non-empty gateway config data or report an empty response."""
+        site_id, device_id, site_name = work_item  # Unpack the response tags.
+        config = getattr(response, "data", {})  # Unwrap data safely.
+        if config:  # Only keep non-empty configs.
+            config["site_name"] = site_name  # Tag with site name for enrichment.
+            config["site_id"] = site_id  # Tag with site id for enrichment.
+            logger.debug("! Config fetched for %s", device_id)  # Trace success.
+            return config  # Return the enriched config.
+        logger.warning("! Empty config for device %s", device_id)  # Warn on empty config.
+        return None  # Treat empty config as a miss.
+
+    @staticmethod
+    def _gw_keep_first_error(
+        device_id: str,
+        failure_evidence: list[requests.RequestException] | None,
+        error: requests.RequestException,
+    ) -> None:
+        """Log and keep the first request exception for one gateway retry sequence."""
+        logging.error("! Failed to fetch config for device %s: %s", device_id, error)  # Log the request failure.
+        if failure_evidence is not None and not failure_evidence:  # Retain the first request failure only.
+            failure_evidence.append(error)  # Keep its type and message for the retry summary.
+
+    @staticmethod
+    def _gw_log_first_failure(
+        device_id: str, first_error: requests.RequestException, recovered: bool, attempts: int
+    ) -> None:
+        """Report the first request exception after a retry recovers or ends."""
+        if recovered:  # Identify a useful fallback result.
+            logger.info(  # Report the original cause with the recovered result.
+                "Gateway config for device %s recovered after %s attempts. First failure was %s: %s",
+                device_id,
+                attempts,
+                type(first_error).__name__,
+                first_error,
+            )
+            return  # Keep the success path separate from exhaustion.
+        logger.warning(  # Warn with the earliest cause after exhausting every attempt.
+            "! Failed to fetch config for device %s after %s attempts. First failure was %s: %s",
+            device_id,
+            attempts,
+            type(first_error).__name__,
+            first_error,
+        )
+
+    @staticmethod
+    def _gw_wait_before_retry(device_id: str, attempt: int, max_retries: int) -> None:
+        """Apply the existing exponential delay before the next gateway config attempt."""
+        delay = 0.5 * (1.5**attempt)  # Keep the existing backoff formula.
+        logger.debug(  # Trace the retry and its attempt number.
+            "Retrying device %s in %.2fs (attempt %s/%s)", device_id, delay, attempt + 2, max_retries + 1
+        )
+        time.sleep(delay)  # Keep the existing delay.
 
     @staticmethod
     def _gw_retry_one_item(apisession, failed_work_item, connection_semaphore, max_retries):
         """Retry one failed gateway config fetch up to max_retries with backoff. Return the config or None."""
         _, failed_device_id, _ = failed_work_item  # Only the device id is needed here (for logging).
+        failure_evidence: list[requests.RequestException] = []  # Keep the first exception across fallback attempts.
         for attempt in range(max_retries + 1):  # Bounded retry loop (initial try plus retries).
-            result = APIFetchUtils._gw_fetch_one_config(apisession, failed_work_item, connection_semaphore)  # Try.
+            result = APIFetchUtils._gw_fetch_one_config(
+                apisession, failed_work_item, connection_semaphore, failure_evidence
+            )  # Try and retain first-failure evidence.
             if result is not None:  # Retry succeeded.
+                if failure_evidence:  # A prior request failed before this successful fallback.
+                    APIFetchUtils._gw_log_first_failure(
+                        failed_device_id, failure_evidence[0], True, attempt + 1
+                    )  # Report the first failure with the recovered result.
                 return result  # Hand back the recovered config.
             if attempt < max_retries:  # More attempts remain.
-                delay = 0.5 * (1.5**attempt)  # Exponential backoff delay.
-                logger.debug(  # Trace the retry/backoff.
-                    "Retrying device %s in %.2fs (attempt %s/%s)",
-                    failed_device_id,
-                    delay,
-                    attempt + 2,
-                    max_retries + 1,
-                )
-                time.sleep(delay)  # Back off before retrying.
-        logger.warning(  # Warn after exhausting every attempt.
-            "! Failed to fetch config for device %s after %s attempts", failed_device_id, max_retries + 1
-        )
+                APIFetchUtils._gw_wait_before_retry(failed_device_id, attempt, max_retries)
+        if failure_evidence:  # Include the first request failure in the exhaustion report.
+            APIFetchUtils._gw_log_first_failure(
+                failed_device_id, failure_evidence[0], False, max_retries + 1
+            )  # Report the first failure after exhaustion.
+        else:
+            logger.warning(  # Warn when attempts returned empty data without a request exception.
+                "! Failed to fetch config for device %s after %s attempts", failed_device_id, max_retries + 1
+            )
         return None  # Every attempt failed.
 
     @staticmethod
