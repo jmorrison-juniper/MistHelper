@@ -22,20 +22,14 @@ import hashlib
 import json
 import logging
 import re
-import sqlite3
 from collections.abc import Iterable, Mapping, Sized
-from contextlib import closing
 from itertools import chain
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any, Literal, cast
 from unittest.mock import MagicMock, Mock
 
 import pytest
 
-from src.foundation.models.data.data_processing_utils import DataProcessingUtils
-from src.foundation.persistence.db.database_schema_utils import DatabaseSchemaUtils
-from src.foundation.support.refactors import sqlite_database_writer
 from src.foundation.support.refactors.endpoint_primary_key_strategies import ENDPOINT_PRIMARY_KEY_STRATEGIES
 from src.operations.exporting.export.endpoint_catalog import (
     DESTRUCTIVE,
@@ -55,7 +49,6 @@ from src.operations.exporting.export.endpoint_family_exporter import (
     _SITE_DETAIL_OPS,
     _SITE_MAP_OPS,
     _SITE_SLE_OPS,
-    EndpointFamilyExporter,
     _EndpointFamilyOp,
 )
 from src.operations.exporting.export.simple_endpoint_exporter import (
@@ -232,48 +225,6 @@ class TestSlePrimaryKeys:
         result = SleStrategyAudit.measure(table, {"paths": {}})
         assert result["entries"] == len(ENDPOINT_PRIMARY_KEY_STRATEGIES) + 1
         assert result["defects"] == ("getUnexpectedTrend",)
-
-
-class TestSlePrimaryKeyExport:
-    """Exercise the export-to-SQLite path rather than only comparing registry values."""
-
-    @pytest.fixture
-    def export_environment(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, MagicMock]:
-        """Connect the actual exporter to the real SQLite writer in an isolated directory."""
-        database = tmp_path / "windows.db"
-        host = SimpleNamespace(DATABASE_PATH=str(database))
-        dependencies = SimpleNamespace(
-            DatabaseSchemaUtils=DatabaseSchemaUtils, DataProcessingUtils=DataProcessingUtils, misthelper_module=host
-        )
-        monkeypatch.setattr(sqlite_database_writer, "_resolve_runtime_dependencies", lambda: dependencies)
-        writer = MagicMock()
-        writer.write_with_format_selection.side_effect = (
-            lambda rows, filename, api_function_name: sqlite_database_writer.SQLiteDatabaseWriter(
-                rows, "trend", api_function_name
-            ).write()
-        )
-        monkeypatch.setattr(EndpointFamilyExporter, "_mist_helper", lambda: SimpleNamespace(DataExporter=writer))
-        return database, writer
-
-    @pytest.mark.parametrize("operation", ("getSiteSleSummaryTrend", "getSiteSleClassifierSummaryTrend"))
-    def test_primary_key_reexport_replaces_one_window(
-        self, operation: str, export_environment: tuple[Path, MagicMock]
-    ) -> None:
-        """A second complete export updates one stored window with the latest response."""
-        database, writer = export_environment
-        arguments = dict(site_id="site-1", scope="site", scope_id="scope-1", metric="coverage", classifier="low-rssi")
-        for value in ("first", "second"):
-            assert (
-                EndpointFamilyExporter._persist(
-                    {"start": 100, "end": 200, "value": value}, "window.csv", operation, arguments
-                )
-                == 1
-            )
-        with closing(sqlite3.connect(database)) as connection:
-            assert connection.execute("SELECT site_id, start, end, value FROM trend").fetchall() == [
-                ("site-1", "100", "200", "second")
-            ]
-        assert writer.write_with_format_selection.call_count == 2
 
 
 @pytest.fixture(params=("selectable", "catalog", "pk"))

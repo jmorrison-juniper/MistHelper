@@ -37,7 +37,7 @@
 **Goal**: Report all registry entries and all confirmed summary-window candidates.
 **Independent test**: The complete scan reports stable counts. Empty input and an injected defect fail.
 
-- [x] T013 [US3] Add the complete-table guard and export replacement test. (delivered: tests/guardrails/test_endpoint_catalog.py)
+- [x] T013 [US3] Add the complete-table guard and export replacement test. (delivered: tests/guardrails/test_endpoint_catalog.py, tests/unit/export/test_endpoint_family_exporter.py)
 - [x] T014 [US3] Record both additional defects and separate issues #4347 and #4348. (delivered: design/research.md)
 
 ## Phase 6: Final validation and delivery
