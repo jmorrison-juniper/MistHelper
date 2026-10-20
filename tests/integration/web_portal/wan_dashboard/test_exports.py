@@ -22,6 +22,10 @@ class ExportService:
             "data": [{"name": "=1+1", "site_name": "Site, North", "status": "up", "model": "M", "wan_port_count": 1}],
         }  # Include formula and delimiter text.
 
+    def export_cached_gateways(self, **filters: object) -> dict[str, object]:
+        """Return cached gateway rows without entering the Mist collector path."""
+        return self.export_gateways(**filters)  # Reuse the synthetic CSV-safety record.
+
     def get_hourly_export(self, gateway_id: str, port_id: str, time_range: str) -> dict[str, object]:
         """Return one hourly row with the exact source field names."""
         return {
@@ -46,6 +50,10 @@ class ExportService:
                 "port_id": port_id,
             },
         }  # Keep export values synthetic.
+
+    def get_cached_hourly_export(self, gateway_id: str, port_id: str, time_range: str) -> dict[str, object]:
+        """Return cached hourly data without entering the Mist collector path."""
+        return self.get_hourly_export(gateway_id, port_id, time_range)  # Reuse the synthetic export record.
 
 
 def build_client() -> FlaskClient:
@@ -104,7 +112,7 @@ class TestHourlyExport:
         service = ExportService()  # Reuse the local response provider.
         monkeypatch.setattr(
             service,
-            "get_hourly_export",
+            "get_cached_hourly_export",
             lambda *_args: {
                 "status": "partial",
                 "data": {"hourly": []},

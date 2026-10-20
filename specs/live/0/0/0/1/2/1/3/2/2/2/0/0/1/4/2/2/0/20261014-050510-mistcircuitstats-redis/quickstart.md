@@ -203,3 +203,18 @@ The integration test run checked 1 site lock trail. It held zero lines before an
 The read-only requirements checklist has 16 checked items and zero unchecked items. Its previous prerequisite check passed and left `.specify/feature.json` unchanged. This worktree lacks `pwsh`, so the PowerShell prerequisite could not run again.
 
 The task audit examined 839 feature records, 362 task files, and 10,252 task markers. It exited with 36 malformed records outside this feature. The #4220 task record has 30 tasks, 8 checked tasks, 22 open tasks, and no malformed markers.
+
+## Pull Request CI Corrections: 2026-10-20
+
+The first CI run passed 32 checks and failed four checks. CodeQL passed. Three export tests used the former service methods. The shared WAN dashboard browser test expected an active Refresh control.
+
+The export test service now supplies cache-only methods. The browser test now verifies that Refresh stays disabled until the worker exists.
+
+```text
+.venv/bin/python -m pytest -q tests/integration/web_portal/wan_dashboard/test_exports.py
+3 passed in 0.16s
+.venv/bin/python -m pytest -q tests/e2e/web_portal/test_portal_smoke.py::TestDashboardPage::test_wan_dashboard_navigation_and_page_shell
+1 passed in 2.27s
+```
+
+The focused dashboard test set passed again after the rebase with 54 tests. The post-rebase test-quality gate checked three files and reported zero new findings. The repeat CI run remains pending.
