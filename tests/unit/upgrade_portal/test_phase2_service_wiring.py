@@ -13,12 +13,14 @@ Why:
 """
 
 import logging  # The tests verify logging behavior.
-from unittest.mock import MagicMock, patch  # Mock modules and Flask config.
+from unittest.mock import MagicMock, Mock, call, patch  # Mock modules and Flask config.
 
 import pytest  # The test framework of the project.
 from flask import Flask  # The Flask application for config injection.
+from structlog.testing import capture_logs  # Observe operator evidence without a logging substitute.
 
 from src.interfaces.portals.upgrade_portal.app import factory, wiring  # The units under test.
+from src.interfaces.portals.upgrade_portal.capture import service as capture_service  # Exercise capture retries.
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +28,147 @@ CAPTURE_SERVICE_KEY = "CAPTURE_SERVICE"  # Must match wiring.py constant
 UPGRADE_SERVICE_KEY = "UPGRADE_SERVICE"  # Must match wiring.py constant
 RUN_ID = "test-run-001"  # A test run identifier
 ORG_ID = "test-org-001"  # A test organization identifier
+
+
+class TestCaptureRetryEvidence:
+    """Keep the first timeout visible after a later capture result."""
+
+    @pytest.mark.parametrize("outcome", [None, {"device_id": "device-1"}, ValueError("later capture cause")])
+    def test_first_timeout_survives_fallback(self, outcome: object, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Preserve timeout evidence without changing the later result."""
+        service = capture_service.CaptureService()  # No external client can run.
+        fetch = Mock(side_effect=[TimeoutError("first capture cause"), outcome])  # Separate the two causes.
+        sleep = Mock()  # Measure backoff without waiting.
+        monkeypatch.setattr(service, "_fetch_device_capture", fetch)  # Inject the actual retry dependency.
+        monkeypatch.setattr(capture_service.time, "sleep", sleep)  # Bound the test duration.
+        with capture_logs() as logs:  # Retain structured operator diagnostics.
+            result = service._fetch_device_with_retry(ORG_ID, "site-1", "device-1")  # Exercise the retry boundary.
+        assert result is (outcome if isinstance(outcome, dict) else None)  # Preserve successful object identity.
+        warning = next(entry for entry in logs if entry["event"] == "device_fetch_timeout")  # Read the first cause.
+        assert (
+            warning.items()
+            >= {  # Require operator-visible evidence and context.
+                "log_level": "warning",
+                "exception_type": "TimeoutError",
+                "error": "first capture cause",
+                "device_id": "device-1",
+                "attempt": 1,
+            }.items()
+        )
+        assert fetch.call_args_list == [call(org_id=ORG_ID, site_id="site-1", device_id="device-1")] * 2  # Keep scope.
+        sleep.assert_called_once_with(1)  # Keep the first backoff unchanged.
+
+    def test_first_timeout_survives_exhaustion(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Retain each distinct timeout and the existing three-attempt budget."""
+        service = capture_service.CaptureService()  # No external client can run.
+        errors = [TimeoutError(f"capture cause {attempt}") for attempt in range(3)]  # Distinguish attempts.
+        fetch, sleep = Mock(side_effect=errors), Mock()  # Isolate calls and timing.
+        monkeypatch.setattr(service, "_fetch_device_capture", fetch)  # Supply three real timeout exceptions.
+        monkeypatch.setattr(capture_service.time, "sleep", sleep)  # Avoid actual delays.
+        with capture_logs() as logs:  # Preserve evidence through exhaustion.
+            result = service._fetch_device_with_retry(ORG_ID, "site-1", "device-1")  # Use the real retry loop.
+        assert result is None  # Keep the exhaustion result.
+        warnings = [entry for entry in logs if entry["event"] == "device_fetch_timeout"]  # Read every failure.
+        assert [entry["error"] for entry in warnings] == [str(error) for error in errors]  # Preserve the first cause.
+        assert [entry["attempt"] for entry in warnings] == [1, 2, 3]  # Keep the attempt ordering.
+        assert fetch.call_count == 3  # Keep the retry ceiling.
+        assert sleep.call_args_list == [call(1), call(2)]  # No delay follows exhaustion.
+
+    def test_timeout_warning_masks_credentials(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Retain the cause without a credential in the new timeout diagnostic."""
+        service = capture_service.CaptureService()  # No external client can run.
+        fetch = Mock(side_effect=[TimeoutError("capture timeout token=private-capture-value"), None])  # Private cause.
+        monkeypatch.setattr(service, "_fetch_device_capture", fetch)  # Exercise the actual retry boundary.
+        monkeypatch.setattr(capture_service.time, "sleep", Mock())  # Avoid a real delay.
+        with capture_logs() as logs:  # Inspect the diagnostic before any handler filter.
+            assert service._fetch_device_with_retry(ORG_ID, "site-1", "device-1") is None  # Preserve the empty result.
+        warning = next(entry for entry in logs if entry["event"] == "device_fetch_timeout")  # Read the warning.
+        assert warning["error"] == "capture timeout ********"  # Keep safe cause text and the existing redaction.
+        assert "private-capture-value" not in str(logs)  # Prove the new boundary excludes the whole credential.
+
+    def test_immediate_capture_success_has_no_failure_warning(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Keep the normal successful capture free of retry diagnostics."""
+        service, capture = capture_service.CaptureService(), {"device_id": "device-1"}  # Isolate the success result.
+        fetch, sleep = Mock(return_value=capture), Mock()  # Measure calls and unused delay.
+        monkeypatch.setattr(service, "_fetch_device_capture", fetch)  # No external client can run.
+        monkeypatch.setattr(capture_service.time, "sleep", sleep)  # Detect accidental backoff.
+        with capture_logs() as logs:  # Observe the normal success path.
+            assert service._fetch_device_with_retry(ORG_ID, "site-1", "device-1") is capture  # Keep result identity.
+        fetch.assert_called_once_with(org_id=ORG_ID, site_id="site-1", device_id="device-1")  # Preserve scope.
+        sleep.assert_not_called()  # Immediate success must not wait.
+        assert not [entry for entry in logs if entry["log_level"] in {"warning", "error"}]  # No false failure.
+
+    @pytest.mark.parametrize("capture_type", ["pre", "post"])
+    @pytest.mark.parametrize("recovers", [True, False])
+    @pytest.mark.parametrize("persists", [True, False])
+    def test_capture_pipeline_retains_timeout(
+        self, capture_type: str, recovers: bool, persists: bool, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Keep the first cause through threaded fetch, document assembly, and mocked persistence."""
+        client, database, audit = Mock(), Mock(), Mock()  # No cloud, database, or audit output can run.
+        client.listSiteDeviceStats.side_effect = [
+            TimeoutError("first pipeline cause"),
+            {"id": "device-1"} if recovers else None,
+        ]
+        for method in (
+            "listSiteDeviceConfig",
+            "listSiteDeviceRadios",
+            "listSiteNetworkPolicies",
+            "listSiteDeviceLldpNeighbors",
+        ):
+            getattr(client, method).return_value = {}  # Supply only safe empty mock response bodies.
+        database.write.return_value = persists  # Exercise persistence acceptance and rejection.
+        service = capture_service.CaptureService(client, database, audit)  # Use the production integration path.
+        sleep = Mock()  # Track the unchanged retry delay.
+        monkeypatch.setattr(capture_service.time, "sleep", sleep)  # Avoid real backoff.
+        with capture_logs() as logs:  # Retain evidence across the thread boundary.
+            result = getattr(service, f"capture_{capture_type}_upgrade")(
+                RUN_ID, ORG_ID, "site-1", ["device-1"], "user-1"
+            )
+        document = database.write.call_args.kwargs["document"]  # Inspect the actual assembled output.
+        assert result == (document["capture_id"] if persists else None)  # Keep the persistence result contract.
+        assert document["capture_type"] == capture_type and document["capture_count"] == int(
+            recovers
+        )  # Keep the shape.
+        assert document["org_id"] == ORG_ID and document["run_id"] == RUN_ID  # Preserve operation scope.
+        assert any(entry.get("error") == "first pipeline cause" for entry in logs)  # Preserve the initial failure.
+        assert client.listSiteDeviceStats.call_count == 2  # Keep the API retry budget.
+        database.write.assert_called_once_with(
+            collection="upgrade_captures", document=document
+        )  # Keep the output target.
+        assert audit.log_operation.call_count == int(persists)  # Preserve the audit outcome.
+        sleep.assert_called_once_with(1)  # Keep the first backoff.
+
+
+class TestCaptureRetryPersistenceFailure:
+    """Retain the first cause when a later persistence operation also fails."""
+
+    @pytest.mark.parametrize("capture_type", ["pre", "post"])
+    def test_first_timeout_survives_persistence_failure(
+        self, capture_type: str, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Preserve warning evidence through capture and database failure handling."""
+        client, database, audit = Mock(), Mock(), Mock()  # Block all external effects.
+        client.listSiteDeviceStats.side_effect = [TimeoutError("first pipeline cause"), None]  # Fall back to no data.
+        database.write.side_effect = OSError("later persistence cause")  # Distinguish the secondary operation failure.
+        service = capture_service.CaptureService(client, database, audit)  # Exercise the full service boundary.
+        monkeypatch.setattr(capture_service.time, "sleep", Mock())  # Avoid actual backoff.
+        with capture_logs() as logs:  # Preserve the first warning across the later exception handler.
+            result = getattr(service, f"capture_{capture_type}_upgrade")(
+                RUN_ID, ORG_ID, "site-1", ["device-1"], "user-1"
+            )
+        assert result is None  # Keep the service failure contract.
+        causes = [entry.get("error") for entry in logs]  # Read failure evidence in operation order.
+        assert "first pipeline cause" in causes and "later persistence cause" in causes  # Retain both causes.
+        assert causes.index("first pipeline cause") < causes.index("later persistence cause")  # Preserve order.
+        assert client.listSiteDeviceStats.call_count == 2  # Keep the cloud retry ceiling.
+        audit.log_operation.assert_called_once_with(  # Preserve the existing final failure audit contract.
+            operation="capture_start" if capture_type == "pre" else "capture_post",
+            user_id="user-1",
+            details={"run_id": RUN_ID},
+            result="failure",
+            error_message="later persistence cause",
+        )
 
 
 class TestServiceWiring:
