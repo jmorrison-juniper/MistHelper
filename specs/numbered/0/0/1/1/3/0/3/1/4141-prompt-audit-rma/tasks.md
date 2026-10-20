@@ -40,9 +40,9 @@ The shared-tool task blocks exemption removal, not independent control-path test
 - [ ] T012 Commit, rebase, push, and create the template pull request that closes #4141.
 - [ ] T013 Wait for every required check and CodeQL, enable auto-merge, and confirm the merged revision.
 
-The coordinating session directed this work to stop before a completion pull request.
+The coordinating session permits a partial pull request after local validation.
 Keep the seven exemptions and current dependency pin until the shared prerequisite becomes available.
-The independent work remains on this branch for a later continuation.
+Use `Refs #4141` in the partial pull request, because the acceptance criteria remain incomplete.
 
 ## Dependencies and Execution Order
 
