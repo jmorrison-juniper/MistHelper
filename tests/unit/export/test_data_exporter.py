@@ -129,10 +129,13 @@ class TestBuildPolyglotRouter:
 
 class TestInitRouter:
     def test_skip_when_already_initialized(self):
+        router = MagicMock()  # A router instance represents completed initialization.
+        DataExporter._router = router  # The early return must preserve the shared router.
         DataExporter._router_initialized = True
         with patch.object(DataExporter, "_polyglot_db_layer_available") as check:
-            DataExporter._init_router()
-            check.assert_not_called()
+            DataExporter._init_router()  # The initialized guard must return before dependency checks.
+            check.assert_not_called()  # A skipped guard must not query optional database support.
+            assert DataExporter._router is router  # The initialized guard must retain its router.
 
     def test_skip_when_layer_unavailable(self):
         with (
