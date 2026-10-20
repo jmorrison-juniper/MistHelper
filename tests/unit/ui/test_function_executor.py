@@ -61,10 +61,7 @@ def test_start_autofills_apisession(tui_stub) -> None:
     tui_stub.dotenv_values = {"org_id": "orgX"}  # Autofill org_id from .env
     # _api_call_with_session(mist_session, org_id) echoes its args into the result:
     FunctionExecutor(tui_stub).start({"name": "api", "object": _api_call_with_session})
-    # function_params is cleared by _reset_post_execute; verify via the echoed result:
-    assert tui_stub.last_parsed_data is not None  # Call completed successfully
-    assert tui_stub.last_parsed_data["results"][0]["org"] == "orgX"  # org_id was injected
-    assert "session" in tui_stub.last_parsed_data["results"][0]  # mist_session was injected
+    assert tui_stub.last_parsed_data == {"results": [{"session": str(sentinel), "org": "orgX"}]}
 
 
 def test_start_aborts_when_session_missing(tui_stub) -> None:
