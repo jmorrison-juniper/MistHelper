@@ -103,7 +103,7 @@ later producer batches. Lambda conversion and portal cutover remain separate.
 | `.venv/bin/python -m black --check src/mist/intelligence/reports/psk_hygiene/operation.py tests/unit/reports/psk_hygiene/test_operation.py` | Two files unchanged. |
 | `.venv/bin/python -m black --check .` | 2,472 files unchanged. |
 | `.venv/bin/python -m mypy src/mist/intelligence/reports/psk_hygiene/operation.py tests/unit/reports/psk_hygiene/test_operation.py --config-file pyproject.toml` | Success for two files. Mypy also reported unused configuration sections. |
-| `.venv/bin/python -m mypy src/ MistHelper.py wsgi.py scripts/mist_ideas_analyzer_pkg/__init__.py scripts/mist_ideas_distiller_v2_pkg/__init__.py --config-file pyproject.toml` | Success for 857 source files. Mypy reported its existing unused configuration section. |
+| `.venv/bin/python -m mypy src/ MistHelper.py wsgi.py scripts/mist_ideas_analyzer_pkg/__init__.py scripts/mist_ideas_distiller_v2_pkg/__init__.py --config-file pyproject.toml` | Success for 858 source files. Mypy reported its existing unused configuration section. |
 | `.venv/bin/bandit -c pyproject.toml -r src/mist/intelligence/reports/psk_hygiene -q` | No findings. |
 | `.venv/bin/radon cc src/mist/intelligence/reports/psk_hygiene -j \| .venv/bin/complexity-gate --max 10` | All functions within the threshold. |
 | `.venv/bin/python -m py_compile src/mist/intelligence/reports/psk_hygiene/operation.py` | No output and exit zero. |
@@ -112,9 +112,9 @@ later producer batches. Lambda conversion and portal cutover remain separate.
 | `.venv/bin/test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json --changed-from origin/main --full-gate-path .github/workflows/ci.yml --full-gate-path requirements-dev.txt` | One test file checked, zero new findings, two skipped, and zero parse errors. |
 | `git diff --check` and protected-path comparison | Passed. `MistHelper.py`, portal classification, and `.specify/feature.json` remain unchanged. |
 
-`symbol-diff` reported zero lost names and one added private alias,
-`_OperationOutcome`, which provides the handler return type. The symbol command
-returned exit one because it reports added module-level names.
+The initial symbol check found one added module-level alias, `_OperationOutcome`.
+The import now stays in the handler class scope, so it does not change module
+symbols. The exact symbol check reports zero lost and zero added names.
 
 The current inventory and remaining producer scope are in
 [research.md](design/research.md). The dedicated lambda issue and final portal
@@ -128,3 +128,8 @@ The branch was rebased onto that commit. Main later advanced to
 `e34553278301ea0715902fa905be3975b3cc8c13` before auto-merge review.
 The branch was rebased again. Focused tests, code checks, and the test-quality
 gate passed against this base at `2026-10-20T03:16:40Z`.
+
+Main later advanced to `5e465deac6c8f786e91a28ab9ac18653759cd1b5`.
+The branch was rebased onto this commit. After the class-scoped import change,
+the focused 95-test run passed, and `symbol-diff` reported no module-level
+name change.
