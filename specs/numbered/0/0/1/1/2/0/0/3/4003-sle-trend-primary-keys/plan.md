@@ -46,6 +46,8 @@ Post-design result: these constraints remain satisfied.
 Edit the existing strategy registry, endpoint exporter, SQLite writer, and Arango writer.
 Edit existing exporter, SQLite, and Arango tests.
 Place the full-table guard in an existing guardrail module.
+Regenerate the four affected menu API map pages after changing the shared identity helper.
+The map includes inferred helper references. The repair adds no API request.
 Keep `spec.md`, `plan.md`, and `tasks.md` at the feature root.
 Report the read-only analysis in the PR body.
 Keep research, data model, quickstart, and checklists under `design/`.

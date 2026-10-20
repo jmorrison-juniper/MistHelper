@@ -21,6 +21,7 @@ flowchart LR
     root --> f_sites_stats["sites/stats<br/>27 menu options"]
     root --> f_sites_devices["sites/devices<br/>14 menu options"]
     root --> f_sites_sites["sites/sites<br/>7 menu options"]
+    root --> f_sites_sle["sites/sle<br/>7 menu options"]
     root --> f_orgs_stats["orgs/stats<br/>5 menu options"]
     root --> f_sites_clients["sites/clients<br/>5 menu options"]
     root --> f_sites_mxedges["sites/mxedges<br/>5 menu options"]
@@ -28,7 +29,6 @@ flowchart LR
     root --> f_const_device_models["const/device_models<br/>4 menu options"]
     root --> f_orgs_devices["orgs/devices<br/>4 menu options"]
     root --> f_orgs_inventory["orgs/inventory<br/>4 menu options"]
-    root --> f_sites_guests["sites/guests<br/>4 menu options"]
     root --> more["173 more families"]
 ```
 
@@ -1570,7 +1570,7 @@ flowchart LR
 - Title: Run any site map endpoint with map prompts (7 operations)
 - Handler: `EndpointFamilyExporter.site_map_endpoints`
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`InputUtils`](Menu-API-Endpoints#inpututils), [`PromptUtils`](Menu-API-Endpoints#promptutils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
-- Endpoints: 8
+- Endpoints: 10
 
 ```mermaid
 flowchart LR
@@ -1583,8 +1583,11 @@ flowchart LR
     c1 --> e5["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/maps/{map_id}<br/>/discovered_assets"]
     c1 --> e6["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/maps/{map_id}<br/>/sdkclients"]
     c1 --> e7["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/maps/{map_id}<br/>/unconnected_clients"]
-    menu --> c2["APICoreFetchUtils"]
-    c2 --> e8["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
+    menu --> c2["SleTrendIdentity"]
+    c2 --> e8["GET<br/>/api/v1/sites<br/>/{site_id}/sle<br/>/{scope}/{scope_id}<br/>/metric/{metric}<br/>/classifier<br/>/{classifier}<br/>/summary-trend"]
+    c2 --> e9["GET<br/>/api/v1/sites<br/>/{site_id}/sle<br/>/{scope}/{scope_id}<br/>/metric/{metric}<br/>/summary-trend"]
+    menu --> c3["APICoreFetchUtils"]
+    c3 --> e10["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -1593,6 +1596,8 @@ flowchart LR
 | GET | `/api/v1/sites/{site_id}/maps/{map_id}/auto_orient` | [`sites.maps.getSiteApAutoOrientation`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/maps/auto-placement/get-site-ap-auto-orientation) | [`_SITE_MAP_OPS`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/endpoint_family_exporter.py) | Name |
 | GET | `/api/v1/sites/{site_id}/maps/{map_id}/auto_placement` | [`sites.maps.getSiteApAutoPlacement`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/maps/auto-placement/get-site-ap-auto-placement) | [`_SITE_MAP_OPS`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/endpoint_family_exporter.py) | Name |
 | GET | `/api/v1/sites/{site_id}/maps/{map_id}/auto_zones` | [`sites.maps.getSiteMapAutoZoneStatus`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/maps/auto-zone/get-site-map-auto-zone-status) | [`_SITE_MAP_OPS`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/endpoint_family_exporter.py) | Name |
+| GET | `/api/v1/sites/{site_id}/sle/{scope}/{scope_id}/metric/{metric}/classifier/{classifier}/summary-trend` | [`sites.sle.getSiteSleClassifierSummaryTrend`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/sles/get-site-sle-classifier-summary-trend) | [`SleTrendIdentity.fields`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/foundation/support/refactors/endpoint_primary_key_strategies.py) | Name |
+| GET | `/api/v1/sites/{site_id}/sle/{scope}/{scope_id}/metric/{metric}/summary-trend` | [`sites.sle.getSiteSleSummaryTrend`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/sles/get-site-sle-summary-trend) | [`SleTrendIdentity.fields`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/foundation/support/refactors/endpoint_primary_key_strategies.py) | Name |
 | GET | `/api/v1/sites/{site_id}/stats/maps/{map_id}/clients` | [`sites.stats.getSiteWirelessClientsStatsByMap`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/clients-wireless/get-site-wireless-clients-stats-by-map) | [`_SITE_MAP_OPS`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/endpoint_family_exporter.py) | Name |
 | GET | `/api/v1/sites/{site_id}/stats/maps/{map_id}/discovered_assets` | [`sites.stats.getSiteDiscoveredAssetByMap`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/assets/get-site-discovered-asset-by-map) | [`_SITE_MAP_OPS`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/endpoint_family_exporter.py) | Name |
 | GET | `/api/v1/sites/{site_id}/stats/maps/{map_id}/sdkclients` | [`sites.stats.getSiteSdkStatsByMap`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/clients-sdk/get-site-sdk-stats-by-map) | [`_SITE_MAP_OPS`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/endpoint_family_exporter.py) | Name |
@@ -1603,7 +1608,7 @@ flowchart LR
 - Title: Run any site detail endpoint with identifier prompts (33 operations)
 - Handler: `EndpointFamilyExporter.site_detail_endpoints`
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`InputUtils`](Menu-API-Endpoints#inpututils), [`PromptUtils`](Menu-API-Endpoints#promptutils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
-- Endpoints: 34
+- Endpoints: 36
 
 ```mermaid
 flowchart LR
@@ -1621,7 +1626,7 @@ flowchart LR
     c1 --> e10["GET<br/>/api/v1/sites<br/>/{site_id}/mxedges<br/>/{mxedge_id}"]
     c1 --> e11["GET<br/>/api/v1/sites<br/>/{site_id}/psks<br/>/{psk_id}"]
     c1 --> e12["GET<br/>/api/v1/sites<br/>/{site_id}/rfdiags<br/>/{rfdiag_id}"]
-    menu --> more["22 more endpoints in<br/>the table"]
+    menu --> more["24 more endpoints in<br/>the table"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -1644,6 +1649,8 @@ flowchart LR
 | GET | `/api/v1/sites/{site_id}/rrm/current/devices/{device_id}/band/{band}` | [`sites.rrm.getSiteCurrentRrmConsiderations`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/rrm/get-site-current-rrm-considerations) | [`_SITE_DETAIL_OPS`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/endpoint_family_exporter.py) | Name |
 | GET | `/api/v1/sites/{site_id}/rrm/neighbors/band/{band}` | [`sites.rrm.listSiteCurrentRrmNeighbors`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/rrm/list-site-current-rrm-neighbors) | [`_SITE_DETAIL_OPS`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/endpoint_family_exporter.py) | Name |
 | GET | `/api/v1/sites/{site_id}/rssizones/{rssizone_id}` | [`sites.rssizones.getSiteRssiZone`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/rssi-zones/get-site-rssi-zone) | [`_SITE_DETAIL_OPS`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/endpoint_family_exporter.py) | Name |
+| GET | `/api/v1/sites/{site_id}/sle/{scope}/{scope_id}/metric/{metric}/classifier/{classifier}/summary-trend` | [`sites.sle.getSiteSleClassifierSummaryTrend`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/sles/get-site-sle-classifier-summary-trend) | [`SleTrendIdentity.fields`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/foundation/support/refactors/endpoint_primary_key_strategies.py) | Name |
+| GET | `/api/v1/sites/{site_id}/sle/{scope}/{scope_id}/metric/{metric}/summary-trend` | [`sites.sle.getSiteSleSummaryTrend`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/sles/get-site-sle-summary-trend) | [`SleTrendIdentity.fields`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/foundation/support/refactors/endpoint_primary_key_strategies.py) | Name |
 | GET | `/api/v1/sites/{site_id}/ssr/upgrade/{upgrade_id}` | [`sites.ssr.getSiteSsrUpgrade`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/upgrade/get-site-ssr-upgrade) | [`_SITE_DETAIL_OPS`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/endpoint_family_exporter.py) | Name |
 | GET | `/api/v1/sites/{site_id}/stats/assets/{asset_id}` | [`sites.stats.getSiteAssetStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/assets/get-site-asset-stats) | [`_SITE_DETAIL_OPS`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/endpoint_family_exporter.py) | Name |
 | GET | `/api/v1/sites/{site_id}/stats/clients/{client_mac}` | [`sites.stats.getSiteWirelessClientStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/clients-wireless/get-site-wireless-client-stats) | [`_SITE_DETAIL_OPS`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/endpoint_family_exporter.py) | Name |
@@ -1666,7 +1673,7 @@ flowchart LR
 - Title: Run any org detail endpoint with identifier prompts (61 operations)
 - Handler: `EndpointFamilyExporter.org_detail_endpoints`
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`InputUtils`](Menu-API-Endpoints#inpututils), [`PromptUtils`](Menu-API-Endpoints#promptutils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
-- Endpoints: 61
+- Endpoints: 63
 
 ```mermaid
 flowchart LR
@@ -1684,7 +1691,7 @@ flowchart LR
     c1 --> e10["GET<br/>/api/v1/orgs<br/>/{org_id}/avprofiles<br/>/{avprofile_id}"]
     c1 --> e11["GET<br/>/api/v1/orgs<br/>/{org_id}<br/>/deviceprofiles<br/>/{deviceprofile_id}"]
     c1 --> e12["GET<br/>/api/v1/orgs<br/>/{org_id}/devices<br/>/last_config/search"]
-    menu --> more["49 more endpoints in<br/>the table"]
+    menu --> more["51 more endpoints in<br/>the table"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -1750,13 +1757,15 @@ flowchart LR
 | GET | `/api/v1/orgs/{org_id}/wxtags/{wxtag_id}` | [`orgs.wxtags.getOrgWxTag`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/wxtags/get-org-wx-tag) | [`_ORG_DETAIL_OPS`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/endpoint_family_exporter.py) | Name |
 | GET | `/api/v1/orgs/{org_id}/wxtags/{wxtag_id}/clients` | [`orgs.wxtags.getOrgCurrentMatchingClientsOfAWxTag`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/wxtags/get-org-current-matching-clients-of-a-wx-tag) | [`_ORG_DETAIL_OPS`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/endpoint_family_exporter.py) | Name |
 | GET | `/api/v1/orgs/{org_id}/wxtunnels/{wxtunnel_id}` | [`orgs.wxtunnels.getOrgWxTunnel`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/wxtunnels/get-org-wx-tunnel) | [`_ORG_DETAIL_OPS`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/endpoint_family_exporter.py) | Name |
+| GET | `/api/v1/sites/{site_id}/sle/{scope}/{scope_id}/metric/{metric}/classifier/{classifier}/summary-trend` | [`sites.sle.getSiteSleClassifierSummaryTrend`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/sles/get-site-sle-classifier-summary-trend) | [`SleTrendIdentity.fields`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/foundation/support/refactors/endpoint_primary_key_strategies.py) | Name |
+| GET | `/api/v1/sites/{site_id}/sle/{scope}/{scope_id}/metric/{metric}/summary-trend` | [`sites.sle.getSiteSleSummaryTrend`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/sles/get-site-sle-summary-trend) | [`SleTrendIdentity.fields`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/foundation/support/refactors/endpoint_primary_key_strategies.py) | Name |
 
 ## Menu 267
 
 - Title: Run any MSP detail endpoint with identifier prompts (10 operations)
 - Handler: `EndpointFamilyExporter.msp_detail_endpoints`
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`InputUtils`](Menu-API-Endpoints#inpututils), [`PromptUtils`](Menu-API-Endpoints#promptutils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
-- Endpoints: 11
+- Endpoints: 13
 
 ```mermaid
 flowchart LR
@@ -1772,8 +1781,10 @@ flowchart LR
     c1 --> e8["GET<br/>/api/v1/msps<br/>/{msp_id}/ssos<br/>/{sso_id}/failures"]
     c1 --> e9["GET<br/>/api/v1/msps<br/>/{msp_id}/ssos<br/>/{sso_id}/metadata"]
     c1 --> e10["GET<br/>/api/v1/msps<br/>/{msp_id}/ssos<br/>/{sso_id}<br/>/metadata.xml"]
-    menu --> c2["APICoreFetchUtils"]
-    c2 --> e11["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
+    menu --> c2["SleTrendIdentity"]
+    c2 --> e11["GET<br/>/api/v1/sites<br/>/{site_id}/sle<br/>/{scope}/{scope_id}<br/>/metric/{metric}<br/>/classifier<br/>/{classifier}<br/>/summary-trend"]
+    c2 --> e12["GET<br/>/api/v1/sites<br/>/{site_id}/sle<br/>/{scope}/{scope_id}<br/>/metric/{metric}<br/>/summary-trend"]
+    menu --> more["1 more endpoint in<br/>the table"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -1789,13 +1800,15 @@ flowchart LR
 | GET | `/api/v1/msps/{msp_id}/ssos/{sso_id}/metadata` | [`msps.ssos.getMspSamlMetadata`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/msps/sso/get-msp-saml-metadata) | [`_MSP_DETAIL_OPS`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/endpoint_family_exporter.py) | Name |
 | GET | `/api/v1/msps/{msp_id}/ssos/{sso_id}/metadata.xml` | [`msps.ssos.downloadMspSamlMetadata`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/msps/sso/download-msp-saml-metadata) | [`_MSP_DETAIL_OPS`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/endpoint_family_exporter.py) | Name |
 | GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`APICoreFetchUtils.all_sites_with_limit`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/access/api/api_core_fetch_utils.py) | Call |
+| GET | `/api/v1/sites/{site_id}/sle/{scope}/{scope_id}/metric/{metric}/classifier/{classifier}/summary-trend` | [`sites.sle.getSiteSleClassifierSummaryTrend`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/sles/get-site-sle-classifier-summary-trend) | [`SleTrendIdentity.fields`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/foundation/support/refactors/endpoint_primary_key_strategies.py) | Name |
+| GET | `/api/v1/sites/{site_id}/sle/{scope}/{scope_id}/metric/{metric}/summary-trend` | [`sites.sle.getSiteSleSummaryTrend`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/sles/get-site-sle-summary-trend) | [`SleTrendIdentity.fields`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/foundation/support/refactors/endpoint_primary_key_strategies.py) | Name |
 
 ## Menu 268
 
 - Title: Run any remaining endpoint with identifier prompts (6 operations)
 - Handler: `EndpointFamilyExporter.other_endpoints`
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`InputUtils`](Menu-API-Endpoints#inpututils), [`PromptUtils`](Menu-API-Endpoints#promptutils), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
-- Endpoints: 7
+- Endpoints: 9
 
 ```mermaid
 flowchart LR
@@ -1807,8 +1820,11 @@ flowchart LR
     c1 --> e4["GET<br/>/api/v1/self<br/>/apitokens<br/>/{apitoken_id}"]
     c1 --> e5["GET<br/>/api/v1/self/oauth<br/>/{provider}"]
     c1 --> e6["GET<br/>/api/v1/self<br/>/two_factor/token"]
-    menu --> c2["APICoreFetchUtils"]
-    c2 --> e7["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
+    menu --> c2["SleTrendIdentity"]
+    c2 --> e7["GET<br/>/api/v1/sites<br/>/{site_id}/sle<br/>/{scope}/{scope_id}<br/>/metric/{metric}<br/>/classifier<br/>/{classifier}<br/>/summary-trend"]
+    c2 --> e8["GET<br/>/api/v1/sites<br/>/{site_id}/sle<br/>/{scope}/{scope_id}<br/>/metric/{metric}<br/>/summary-trend"]
+    menu --> c3["APICoreFetchUtils"]
+    c3 --> e9["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -1820,6 +1836,8 @@ flowchart LR
 | GET | `/api/v1/self/apitokens/{apitoken_id}` | [`self.apitokens.getApiToken`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/self/api-token/get-api-token) | [`_OTHER_DETAIL_OPS`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/endpoint_family_exporter.py) | Name |
 | GET | `/api/v1/self/oauth/{provider}` | [`self.oauth.getOauth2UrlForLinking`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/self/oauth2/get-oauth2-url-for-linking) | [`_OTHER_DETAIL_OPS`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/endpoint_family_exporter.py) | Name |
 | GET | `/api/v1/self/two_factor/token` | [`self.two_factor.generateSecretFor2faVerification`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/self/mfa/generate-secret-for2fa-verification) | [`_OTHER_DETAIL_OPS`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/export/endpoint_family_exporter.py) | Name |
+| GET | `/api/v1/sites/{site_id}/sle/{scope}/{scope_id}/metric/{metric}/classifier/{classifier}/summary-trend` | [`sites.sle.getSiteSleClassifierSummaryTrend`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/sles/get-site-sle-classifier-summary-trend) | [`SleTrendIdentity.fields`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/foundation/support/refactors/endpoint_primary_key_strategies.py) | Name |
+| GET | `/api/v1/sites/{site_id}/sle/{scope}/{scope_id}/metric/{metric}/summary-trend` | [`sites.sle.getSiteSleSummaryTrend`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/sles/get-site-sle-summary-trend) | [`SleTrendIdentity.fields`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/foundation/support/refactors/endpoint_primary_key_strategies.py) | Name |
 
 ## Menu 270
 
