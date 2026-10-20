@@ -114,6 +114,23 @@ class TestMistAPIClient:
         # WHY: verify result is None
         assert result is None  # WHY: returns none on error
 
+    def test_list_sites_http_4xx_failure(self):
+        """Test sites listing when Mist rejects the request.
+
+        WHY: verify an HTTP client error returns no sites and does not cache success.
+        """
+        response = requests.Response()  # WHY: attach an actual HTTP status to the raised request error.
+        response.status_code = 403  # WHY: model a Mist permission refusal.
+        error = requests.HTTPError("HTTP 403", response=response)  # WHY: use the requests error path.
+        self.mock_mist_api.listOrgSites.side_effect = error  # WHY: make the client handle the refusal.
+        self.mock_redis.get.return_value = None  # WHY: force the client to call Mist.
+
+        result = MistAPIClient.list_sites(self.client, "org-123")  # WHY: call the source method under test directly.
+
+        assert result is None  # WHY: a refused request must not return site data.
+        self.mock_mist_api.listOrgSites.assert_called_once_with("org-123")  # WHY: prove the refusal came from Mist.
+        self.mock_redis.setex.assert_not_called()  # WHY: do not cache a refused result as success.
+
     def test_list_sites_no_cache(self):
         """Test sites listing without cache.
 
