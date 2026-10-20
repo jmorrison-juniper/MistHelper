@@ -39,8 +39,8 @@ These paths are for future implementation only. This planning PR changes none of
 
 | Purpose | Proposed path |
 |---|---|
-| Single worker and refresh queue | `src/interfaces/portals/wan_dashboard/worker.py` |
-| Existing cache and service boundary | `src/interfaces/portals/wan_dashboard/services.py` |
+| Single worker and refresh queue | `src/interfaces/portals/wan_dashboard/services/worker.py` |
+| Existing cache and service boundary | `src/interfaces/portals/wan_dashboard/services/__init__.py` |
 | Cache-only route and refresh queue endpoint | `src/interfaces/portals/wan_dashboard/routes.py` |
 | Refresh control | `src/interfaces/portals/wan_dashboard/templates/wan_dashboard/dashboard.html` and `src/interfaces/portals/wan_dashboard/static/dashboard.js` |
 | Worker unit tests | `tests/unit/wan_dashboard/test_worker.py` |

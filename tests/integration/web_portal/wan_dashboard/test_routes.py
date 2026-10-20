@@ -11,6 +11,7 @@ from flask.testing import FlaskClient
 
 from src.interfaces.portals.upgrade_portal.runtime import lock
 from src.interfaces.portals.wan_dashboard.routes import WanDashboardService, wan_dashboard_bp
+from src.interfaces.portals.wan_dashboard.services.worker import WanDashboardWorker
 
 
 class FakeDashboardService:
@@ -109,6 +110,31 @@ class FakeDashboardService:
                 "port_id": port_id,
             },
         }  # Supply local data without calling the legacy collector method.
+
+
+class FakeRefreshWorker:
+    """Return one local worker status and record explicit queue requests."""
+
+    def __init__(self) -> None:
+        """Keep status and queue outcomes local to one route test."""
+        self.queue_calls = 0  # Count queue requests without starting a thread.
+
+    def status(self) -> dict[str, object]:
+        """Return a safe synthetic status envelope."""
+        return {
+            "status": "running",
+            "current_phase": "ports",
+            "completed_pages": {"sites": 2, "gateways": 1, "ports": 3},
+            "last_complete_at": "2026-10-20T12:00:00+00:00",
+            "safe_error": None,
+            "queued_follow_up": False,
+            "redis_available": True,
+        }  # Keep route data synthetic and bounded.
+
+    def enqueue(self) -> str:
+        """Record one request and return a coalesced queue outcome."""
+        self.queue_calls += 1  # Prove the route delegates to the existing worker.
+        return "coalesced"  # Model an active run with one queued follow-up.
 
 
 def build_client(service: FakeDashboardService) -> tuple[FlaskClient, Flask]:
@@ -384,6 +410,47 @@ class TestOverviewRoutes:
         assert invalid_filter.status_code == 400  # Reject an unsafe export selection.
         assert invalid_range.status_code == 400  # Reject an unsupported hourly range.
         assert service.overview_filters == {}  # Do not create an export from invalid input.
+
+
+class TestRefreshRoutes:
+    """Prove refresh endpoints report status and queue work without Mist access."""
+
+    def test_status_returns_disabled_without_a_worker(self) -> None:
+        """A missing worker gives an explicit disabled state."""
+        service = FakeDashboardService()  # Keep dashboard service calls observable.
+        client, _app = build_client(service)  # Register the production route set.
+
+        response = client.get("/wan-dashboard/api/refresh-status")  # Read status without queueing work.
+
+        assert response.status_code == 200  # The status endpoint is safe when collection is disabled.
+        assert response.get_json()["status"] == "disabled"  # Do not imply an active collector exists.
+        assert service.legacy_reads == []  # The status route must not make a Mist request.
+
+    def test_status_and_queue_use_the_registered_worker(self) -> None:
+        """Status and Refresh requests use the same worker without a route-level SDK call."""
+        service = FakeDashboardService()  # Keep all dashboard responses synthetic.
+        client, app = build_client(service)  # Register the production routes.
+        worker = FakeRefreshWorker()  # Provide one local queue target.
+        app.extensions[WanDashboardWorker.EXTENSION_KEY] = worker  # Inject the registered worker.
+
+        status = client.get("/wan-dashboard/api/refresh-status")  # Read progress from the worker.
+        queued = client.post("/wan-dashboard/api/refresh", headers={"X-CSRFToken": "local-test-token"})
+
+        assert status.status_code == 200  # The worker status is available.
+        assert status.get_json()["current_phase"] == "ports"  # Show the active bulk read.
+        assert queued.status_code == 202  # The route accepts a coalesced follow-up.
+        assert queued.get_json()["status"] == "coalesced"  # Preserve the worker queue state.
+        assert worker.queue_calls == 1  # Use the same worker once.
+        assert service.legacy_reads == []  # Neither route calls a Mist collector.
+
+    def test_refresh_returns_unavailable_when_the_worker_is_disabled(self) -> None:
+        """A Refresh request cannot start collection without worker configuration."""
+        client, _app = build_client(FakeDashboardService())  # Register the disabled worker state.
+
+        response = client.post("/wan-dashboard/api/refresh", headers={"X-CSRFToken": "local-test-token"})
+
+        assert response.status_code == 503  # Keep the unavailable queue explicit.
+        assert response.get_json()["status"] == "disabled"  # Do not start a route-level collector.
 
 
 class TestPortalPage:

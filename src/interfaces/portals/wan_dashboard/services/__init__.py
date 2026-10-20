@@ -499,6 +499,67 @@ class WanDashboardService:
         self._remember(key, result)  # Retain a complete result for explicit stale-data responses.
         return self._result("ok" if result else "empty", result)  # Distinguish a valid empty organization.
 
+    def collect_worker_snapshot(
+        self,
+        progress: Callable[[str, int], None],
+        lease_is_valid: Callable[[], bool],
+    ) -> tuple[dict[str, Any] | None, str | None]:
+        """Read the four approved bulk datasets before shaping one complete snapshot."""
+        reads = (
+            ("sites", mistapi.api.v1.orgs.sites.listOrgSites, (self._org_id,), {"limit": self.PAGE_LIMIT}),
+            (
+                "gateways",
+                mistapi.api.v1.orgs.stats.listOrgDevicesStats,
+                (self._org_id,),
+                {"type": "gateway", "limit": self.PAGE_LIMIT},
+            ),
+            (
+                "ports",
+                mistapi.api.v1.orgs.stats.searchOrgSwOrGwPorts,
+                (self._org_id,),
+                {"limit": self.PAGE_LIMIT},
+            ),
+            (
+                "inventory",
+                mistapi.api.v1.orgs.inventory.getOrgInventory,
+                (self._org_id,),
+                {"type": "gateway", "limit": self.PAGE_LIMIT},
+            ),
+        )  # Keep the worker collection boundary explicit and bulk-only.
+        datasets: dict[str, list[dict[str, Any]]] = {}  # Hold results until every API page succeeds.
+        for phase, function, args, kwargs in reads:  # Use the existing SDK pagination path for each bulk read.
+            progress(phase, 0)  # Report the active phase before its first admitted request.
+
+            def report_page(count: int, current_phase: str = phase) -> None:
+                """Report completed pages under the active bulk-read phase."""
+                progress(current_phase, count)  # Keep the worker status phase explicit.
+
+            rows, failure = self._read_all(
+                function,
+                *args,
+                on_page=report_page,
+                before_page=lease_is_valid,
+                **kwargs,
+            )  # Keep pagination, request admission, and page validation in the shared service.
+            if failure:  # One failed dataset invalidates the full snapshot.
+                return None, failure  # Never return or publish data from earlier pages.
+            datasets[phase] = rows  # Retain this complete dataset until all four reads pass.
+        overview = self._overview_rows(
+            datasets["gateways"], datasets["ports"], datasets["inventory"], datasets["sites"], None, None, None
+        )  # Shape one organization-wide view only after complete collection.
+        snapshot = {
+            "schema_version": 1,
+            "org_id": self._org_id,
+            "collected_at": datetime.now(UTC).isoformat(),
+            "data": overview,
+        }  # Keep collection metadata beside the complete, atomic dashboard value.
+        return snapshot, None  # The worker publishes only after it confirms its lease.
+
+    def remember_worker_snapshot(self, snapshot: dict[str, Any]) -> None:
+        """Keep the worker's complete snapshot in process memory for Redis outages."""
+        key = self.CACHE_PREFIX + "overview:" + self._org_id  # Reuse the canonical overview key.
+        self._remember(key, snapshot)  # Bound the local fallback by the existing stale TTL.
+
     def get_cached_overview(
         self, site_id: str | None = None, gateway_id: str | None = None, search: str | None = None
     ) -> dict[str, Any]:
@@ -508,10 +569,13 @@ class WanDashboardService:
         result = self._cached_result(key)  # Read only the existing snapshot and local stale fallback.
         if result["status"] not in {"ok", "stale", "empty"}:  # Missing or malformed data stays unavailable.
             return result  # Do not collect data from a dashboard request.
-        if not isinstance(result["data"], list) or not all(isinstance(row, dict) for row in result["data"]):
+        rows, collected_at = self._cached_snapshot_rows(result["data"])  # Accept the current snapshot and legacy rows.
+        if rows is None:  # Reject malformed envelopes and malformed records as one unavailable snapshot.
             return self._result("unavailable", [], "The cached overview is invalid.")  # Reject the entire snapshot.
-        rows = self._filter_cached_overview(result["data"], site_id, gateway_id, search)
+        rows = self._filter_cached_overview(rows, site_id, gateway_id, search)
         result["data"] = rows  # Apply validated filters only after a complete snapshot is available.
+        if collected_at is not None:  # Worker snapshots carry a verified UTC collection timestamp.
+            result["collected_at"] = collected_at  # Let the page show snapshot age without changing row shape.
         if result["status"] == "ok":  # A legacy cache entry has no trustworthy collection timestamp.
             result["status"] = "stale"  # Never label a timestamp-free snapshot as current.
             result["stale"] = True  # Keep the state explicit for the dashboard.
@@ -696,26 +760,75 @@ class WanDashboardService:
         return self._result(insights["status"], payload)  # Preserve the successful range result.
 
     def _read_all(
-        self, function: Callable[..., Any], *args: Any, **kwargs: Any
+        self,
+        function: Callable[..., Any],
+        *args: Any,
+        on_page: Callable[[int], None] | None = None,
+        before_page: Callable[[], bool] | None = None,
+        **kwargs: Any,
     ) -> tuple[list[dict[str, Any]], str | None]:
         """Read all SDK pages and reject malformed or failed later pages."""
+        if before_page is not None and not before_page():  # A lease loss stops before the next Mist request.
+            return [], "worker_lease_lost"  # Never collect without the distributed worker lease.
         response, failure = self._request(function, *args, **kwargs)  # Start with the explicit SDK endpoint.
         if failure:  # Do not call pagination on an invalid first response.
             return [], failure  # The caller receives no partial rows.
+        return self._read_pages(response, on_page, before_page)  # Keep pagination checks below the complexity limit.
+
+    def _read_pages(
+        self,
+        response: Any,
+        on_page: Callable[[int], None] | None,
+        before_page: Callable[[], bool] | None,
+    ) -> tuple[list[dict[str, Any]], str | None]:
+        """Collect complete SDK pages while the worker keeps its lease."""
         rows: list[dict[str, Any]] = []  # Collect rows only until every page succeeds.
+        seen_next_pages: set[str] = set()  # A repeated SDK page link cannot spin or duplicate a dataset.
         while response is not None:  # Continue while the SDK provides a next URL.
             page = WanDataNormalizer.rows(getattr(response, "data", None))  # Validate the response shape.
             if page is None:  # Reject malformed data instead of treating it as no rows.
                 return [], "malformed_response"  # Do not return earlier pages as success.
             rows.extend(page)  # Add one validated page.
+            if on_page is not None:  # The worker reports only fully validated pages.
+                on_page(len(seen_next_pages) + 1)  # Keep progress local to the active bulk read.
             if not getattr(response, "next", None):  # Stop only when the response has no next URL.
                 return rows, None  # Return the complete set.
+            next_page = str(response.next)  # Keep the page marker only in process memory.
+            if next_page in seen_next_pages:  # Reject a repeated URL before it creates an unbounded loop.
+                return [], "repeated_page"  # Discard every page from this incomplete dataset.
+            seen_next_pages.add(next_page)  # Track the URL without logging or persisting it.
+            if before_page is not None and not before_page():  # Renew and verify the lease before pagination.
+                return [], "worker_lease_lost"  # Stop before the next SDK request.
             response, failure = self._request(
                 mistapi.get_next, response=response, mist_session=self._session
             )  # Each page uses the same one-pass token policy.
             if failure:  # A later error invalidates the whole paginated answer.
                 return [], failure  # Never present a partial result as complete.
         return rows, "malformed_response"  # A missing page object is an explicit failure.
+
+    def _cached_snapshot_rows(self, payload: Any) -> tuple[list[dict[str, Any]] | None, str | None]:
+        """Validate a worker envelope or the legacy list stored by the original dashboard."""
+        collected_at: str | None = None  # Legacy values do not carry a verified collection time.
+        rows = payload  # Preserve the original list shape for existing cached snapshots.
+        if isinstance(payload, dict):  # Worker snapshots include organization and UTC metadata.
+            if payload.get("schema_version") != 1 or payload.get("org_id") != self._org_id:
+                return None, None  # Reject an unknown schema or another organization's snapshot.
+            collected_at = payload.get("collected_at")  # Read the worker's collection timestamp.
+            rows = payload.get("data")  # Read the complete overview records.
+            if not isinstance(collected_at, str) or not self._valid_utc_timestamp(collected_at):
+                return None, None  # Do not accept an absent, invalid, or timezone-naive timestamp.
+        if not isinstance(rows, list) or not all(isinstance(row, dict) for row in rows):
+            return None, None  # Reject malformed rows rather than skipping records silently.
+        return rows, collected_at  # Return only complete, validated records.
+
+    @staticmethod
+    def _valid_utc_timestamp(value: str) -> bool:
+        """Check that the worker timestamp parses and includes a UTC offset."""
+        try:  # An invalid timestamp must not make the cached snapshot appear current.
+            parsed = datetime.fromisoformat(value)  # Parse the standard ISO 8601 value.
+        except ValueError:  # Reject text that is not a timestamp.
+            return False  # Keep the cache state unavailable.
+        return parsed.tzinfo is not None and parsed.utcoffset() == UTC.utcoffset(parsed)  # Require UTC.
 
     def _request(self, function: Callable[..., Any], *args: Any, **kwargs: Any) -> tuple[Any | None, str | None]:
         """Run one SDK operation and map its status to a safe internal result."""

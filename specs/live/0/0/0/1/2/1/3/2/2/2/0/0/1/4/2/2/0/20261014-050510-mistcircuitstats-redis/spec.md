@@ -120,7 +120,7 @@ An operator or reviewer uses fictional examples without Mist credentials or live
 - **FR-024**: When Redis is unavailable, show a complete process-local snapshot as stale if the serving process has one. Otherwise report unavailable data. Dashboard requests MUST NOT call Mist.
 - **FR-025**: Treat 86,400 seconds as the maximum snapshot age. After that limit, report unavailable data, including when a process-local snapshot remains in memory.
 - **FR-026**: Treat a failed lease acquisition, lease renewal, or Redis queue operation as a refresh failure. Do not start another collector or publish data without the lease.
-- **FR-027**: Keep collection disabled unless `WAN_DASHBOARD_REFRESH_ENABLED` is true and `WAN_DASHBOARD_REFRESH_INTERVAL_SECONDS` and `WAN_DASHBOARD_WORKER_LEASE_SECONDS` are positive application configuration values. Missing or invalid values MUST fail closed. Do not enable those values before T004 passes.
+- **FR-027**: Keep collection disabled unless `WAN_DASHBOARD_LOAD_TEST_APPROVED` and `WAN_DASHBOARD_REFRESH_ENABLED` are true, and `WAN_DASHBOARD_REFRESH_INTERVAL_SECONDS` and `WAN_DASHBOARD_WORKER_LEASE_SECONDS` are positive application configuration values. Missing or invalid values MUST fail closed. Do not set these values before T004 passes.
 
 ### Mist Cloud Transport Requirements *(include if feature uses Mist Cloud)*
 
@@ -159,7 +159,7 @@ Source-specific per-port Insights observations are not entities in this migratio
 - **SC-009**: Concurrent refresh requests produce no more than one active run and one queued follow-up across Gunicorn processes.
 - **SC-010**: Dashboard status exposes the refresh state, active read phase, completed page counts, timestamps, and safe error status.
 - **SC-011**: Redis outage behavior makes no Mist request and shows only an unexpired complete process-local snapshot when one is available.
-- **SC-012**: With missing or invalid worker configuration, the worker makes zero Mist API requests and reports a safe disabled state.
+- **SC-012**: Without explicit load-test approval, refresh enablement, and valid timing values, the worker makes zero Mist API requests and reports a safe disabled state.
 
 ## Assumptions
 

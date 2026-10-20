@@ -8,7 +8,7 @@ description: "Implementation tasks for the MistCircuitStats Redis dashboard migr
 
 **Prerequisites**: `plan.md`, `spec.md`, `research.md`, `data-model.md`, `contracts/`, and `quickstart.md`
 
-**Implementation status**: Cache-only dashboard reads are implemented. Keep refresh collection disabled until T004 and the worker tasks pass.
+**Implementation status**: Cache-only reads, the fail-closed worker, queue, status routes, and Refresh control are implemented. T004 remains a production-only blocker.
 
 ## Phase 1: Planning Evidence
 
@@ -23,8 +23,8 @@ description: "Implementation tasks for the MistCircuitStats Redis dashboard migr
 
 **Purpose**: Define and test the single worker boundary.
 
-- [ ] T005 [P] Add SDK contract tests for `listOrgSites`, `listOrgDevicesStats`, `searchOrgSwOrGwPorts`, and `getOrgInventory` in `tests/integration/web_portal/wan_dashboard/test_mistapi_contract.py`. Cover pagination, HTTP 4xx and 5xx responses, rate limits, timeouts, malformed responses, and secret redaction.
-- [ ] T006 [P] Test Redis lease election across Gunicorn processes, one active refresh, one coalesced follow-up, and disabled behavior with missing or invalid configuration in `tests/unit/wan_dashboard/test_worker.py`.
+- [x] T005 [P] Add SDK contract tests for `listOrgSites`, `listOrgDevicesStats`, `searchOrgSwOrGwPorts`, and `getOrgInventory` in `tests/integration/web_portal/wan_dashboard/test_mistapi_contract.py`. Cover pagination, HTTP 4xx and 5xx responses, rate limits, timeouts, malformed responses, and secret redaction.
+- [x] T006 [P] Test Redis lease election across Gunicorn processes, one active refresh, one coalesced follow-up, and disabled behavior with missing or invalid configuration in `tests/unit/wan_dashboard/test_worker.py`.
 - [x] T007 Test cache-only routes, stale process-local snapshots during Redis outage, unavailable behavior without a local snapshot, and zero Mist SDK calls in `tests/integration/web_portal/wan_dashboard/test_routes.py`.
 
 ## Phase 3: User Story 1 - Review Cached WAN Status (Priority: P1)
@@ -40,7 +40,7 @@ description: "Implementation tasks for the MistCircuitStats Redis dashboard migr
 
 ### Implementation for User Story 1
 
-- [x] T010 [US1] Change dashboard overview and detail reads to use the existing `wan-dashboard:v1:` cache in `src/interfaces/portals/wan_dashboard/services.py`. Return an explicit unavailable state when a required value is absent. Do not add a Mist SDK fallback.
+- [x] T010 [US1] Change dashboard overview and detail reads to use the existing `wan-dashboard:v1:` cache in `src/interfaces/portals/wan_dashboard/services/__init__.py`. Return an explicit unavailable state when a required value is absent. Do not add a Mist SDK fallback.
 - [x] T011 [US1] Keep dashboard routes cache-only and preserve the canonical #4252 route in `src/interfaces/portals/wan_dashboard/routes.py`.
 
 ## Phase 4: User Story 2 - Request a Safe Refresh (Priority: P1)
@@ -51,16 +51,16 @@ description: "Implementation tasks for the MistCircuitStats Redis dashboard migr
 
 ### Tests for User Story 2
 
-- [ ] T012 [P] [US2] Test bounded pagination, the 1,000-row page limit, shared request admission, completed-page progress, and complete-snapshot publication in `tests/unit/wan_dashboard/test_worker.py`.
-- [ ] T013 [P] [US2] Test that rate limits, Redis failures, failed, repeated, or incomplete pages preserve the last complete snapshot as stale, show a safe error, and publish no partial data in `tests/integration/web_portal/wan_dashboard/test_services.py`.
-- [ ] T014 [P] [US2] Test that the Refresh control queues the same worker, coalesces requests into one follow-up, exposes status, and starts no route-level SDK call in `tests/e2e/web_portal/test_wan_dashboard_refresh.py`.
+- [x] T012 [P] [US2] Test bounded pagination, the 1,000-row page limit, shared request admission, completed-page progress, and complete-snapshot publication in `tests/integration/web_portal/wan_dashboard/test_mistapi_contract.py` and `tests/unit/wan_dashboard/test_worker.py`.
+- [x] T013 [P] [US2] Test that rate limits, Redis failures, failed, repeated, or incomplete pages preserve the last complete snapshot as stale, show a safe error, and publish no partial data in `tests/integration/web_portal/wan_dashboard/test_mistapi_contract.py` and `tests/unit/wan_dashboard/test_worker.py`.
+- [x] T014 [P] [US2] Test that the Refresh control queues the same worker, coalesces requests into one follow-up, exposes status, and starts no route-level SDK call in `tests/integration/web_portal/wan_dashboard/test_routes.py` and `tests/e2e/web_portal/test_wan_dashboard_cache_only.py`.
 
 ### Implementation for User Story 2
 
-- [ ] T015 [US2] Add one worker that uses only the four approved bulk SDK reads and the shared Mist session in `src/interfaces/portals/wan_dashboard/worker.py`.
-- [ ] T016 [US2] Make the worker the sole writer of WAN snapshot values in `src/interfaces/portals/wan_dashboard/worker.py`. Preserve the current cache namespace and TTLs in `src/interfaces/portals/wan_dashboard/services.py`.
-- [ ] T017 [US2] Run the worker inside the existing web container and use a renewable Redis lease across Gunicorn processes. Keep one active run and one coalesced follow-up in `src/interfaces/portals/wan_dashboard/worker.py`. Require explicit valid application configuration and keep collection disabled until T004 passes.
-- [ ] T018 [US2] Make the Refresh control enqueue worker work and show refresh state, active read phase, completed page counts, timestamps, and safe queue errors in `src/interfaces/portals/wan_dashboard/routes.py`, `src/interfaces/portals/wan_dashboard/templates/wan_dashboard/dashboard.html`, and `src/interfaces/portals/wan_dashboard/static/dashboard.js`.
+- [x] T015 [US2] Add one worker that uses only the four approved bulk SDK reads and the shared Mist session in `src/interfaces/portals/wan_dashboard/services/worker.py`.
+- [x] T016 [US2] Make the worker the sole writer of WAN snapshot values in `src/interfaces/portals/wan_dashboard/services/worker.py`. Preserve the current cache namespace and TTLs in `src/interfaces/portals/wan_dashboard/services/__init__.py`.
+- [x] T017 [US2] Run the worker inside the existing web container and use a renewable Redis lease across Gunicorn processes. Keep one active run and one coalesced follow-up in `src/interfaces/portals/wan_dashboard/services/worker.py`. Require explicit valid application configuration and keep collection disabled until T004 passes.
+- [x] T018 [US2] Make the Refresh control enqueue worker work and show refresh state, active read phase, completed page counts, timestamps, and safe queue errors in `src/interfaces/portals/wan_dashboard/routes.py`, `src/interfaces/portals/wan_dashboard/templates/wan_dashboard/dashboard.html`, and `src/interfaces/portals/wan_dashboard/static/dashboard.js`.
 
 ## Phase 5: User Story 3 - Judge Data Freshness (Priority: P2)
 
@@ -70,13 +70,13 @@ description: "Implementation tasks for the MistCircuitStats Redis dashboard migr
 
 ### Tests for User Story 3
 
-- [ ] T019 [P] [US3] Test freshness labels, process-local stale fallback during Redis outage, safe errors, and the 86,400-second maximum age in `tests/integration/web_portal/wan_dashboard/test_services.py`.
+- [x] T019 [P] [US3] Test freshness labels, process-local stale fallback during Redis outage, safe errors, and the 86,400-second maximum age in `tests/integration/web_portal/wan_dashboard/test_services.py`.
 - [ ] T020 [P] [US3] Test synthetic labels and live-data separation in `tests/e2e/web_portal/test_wan_dashboard_cache_only.py`.
 
 ### Implementation for User Story 3
 
-- [ ] T021 [US3] Return refresh state, current bulk-read phase, completed page counts, timestamps, safe error status, and complete snapshot state from the existing cache service in `src/interfaces/portals/wan_dashboard/services.py`.
-- [ ] T022 [US3] Render progress, refresh errors, freshness, and unavailable states. Never present synthetic, expired, or stale values as current in `src/interfaces/portals/wan_dashboard/templates/wan_dashboard/dashboard.html` and `src/interfaces/portals/wan_dashboard/static/dashboard.js`.
+- [x] T021 [US3] Return refresh state, current bulk-read phase, completed page counts, timestamps, safe error status, and complete snapshot state from the existing cache service in `src/interfaces/portals/wan_dashboard/services/__init__.py` and `src/interfaces/portals/wan_dashboard/services/worker.py`.
+- [x] T022 [US3] Render progress, refresh errors, freshness, and unavailable states. Never present synthetic, expired, or stale values as current in `src/interfaces/portals/wan_dashboard/templates/wan_dashboard/dashboard.html` and `src/interfaces/portals/wan_dashboard/static/dashboard.js`.
 
 ## Phase 6: User Story 4 - Review Synthetic Examples (Priority: P3)
 
@@ -90,18 +90,18 @@ description: "Implementation tasks for the MistCircuitStats Redis dashboard migr
 
 ### Implementation for User Story 4
 
-- [ ] T024 [US4] Keep synthetic labels visible and prevent synthetic records from entering live cache values in `src/interfaces/portals/wan_dashboard/templates/wan_dashboard/dashboard.html`, `src/interfaces/portals/wan_dashboard/static/dashboard.js`, and `src/interfaces/portals/wan_dashboard/services.py`.
+- [ ] T024 [US4] Keep synthetic labels visible and prevent synthetic records from entering live cache values in `src/interfaces/portals/wan_dashboard/templates/wan_dashboard/dashboard.html`, `src/interfaces/portals/wan_dashboard/static/dashboard.js`, and `src/interfaces/portals/wan_dashboard/services/__init__.py`.
 
 ## Phase 7: Polish and Cross-Cutting Concerns
 
 **Purpose**: Check safety, source attribution, and repository constraints.
 
-- [ ] T025 Verify that only the four approved bulk SDK reads run from the worker and that per-site/per-port loops and per-port Insights calls are absent in `tests/integration/web_portal/wan_dashboard/test_mistapi_contract.py`.
-- [ ] T026 Verify that log records redact credentials and that synthetic fixtures contain no production data in `tests/unit/wan_dashboard/test_worker.py`.
-- [ ] T027 Verify that the worker lease duration and refresh interval use measured T004 results in `src/interfaces/portals/wan_dashboard/worker.py`. Keep collection disabled and both values unset until then.
-- [ ] T028 Verify that the implementation adds no application, service, Compose group, port, Redis service, database, or unapproved cache key in `compose.yml` and `specs/live/0/0/0/1/2/1/3/2/2/2/0/0/1/4/2/2/0/20261014-050510-mistcircuitstats-redis/contracts/redis-cache.md`.
-- [ ] T029 Record source attribution and license handling for every reused source artifact in `specs/live/0/0/0/1/2/1/3/2/2/2/0/0/1/4/2/2/0/20261014-050510-mistcircuitstats-redis/research.md`.
-- [ ] T030 Run the applicable tests and local quality gates from `.github/copilot-instructions.md`. Include class structure, inline comments, action logging, and documentation checks. Record exact commands and results in `specs/live/0/0/0/1/2/1/3/2/2/2/0/0/1/4/2/2/0/20261014-050510-mistcircuitstats-redis/quickstart.md`.
+- [x] T025 Verify that only the four approved bulk SDK reads run from the worker and that per-site/per-port loops and per-port Insights calls are absent in `tests/integration/web_portal/wan_dashboard/test_mistapi_contract.py`.
+- [x] T026 Verify that log records redact credentials and that synthetic fixtures contain no production data in `tests/integration/web_portal/wan_dashboard/test_mistapi_contract.py` and `tests/unit/wan_dashboard/test_worker.py`.
+- [ ] T027 Verify that the worker lease duration and refresh interval use measured T004 results in `src/interfaces/portals/wan_dashboard/services/worker.py`. Keep collection disabled and both values unset until then.
+- [x] T028 Verify that the implementation adds no application, service, Compose group, port, Redis service, database, or unapproved cache key in `compose.yml` and `specs/live/0/0/0/1/2/1/3/2/2/2/0/0/1/4/2/2/0/20261014-050510-mistcircuitstats-redis/contracts/redis-cache.md`.
+- [x] T029 Record source attribution and license handling for every reused source artifact in `specs/live/0/0/0/1/2/1/3/2/2/2/0/0/1/4/2/2/0/20261014-050510-mistcircuitstats-redis/research.md`.
+- [x] T030 Run the applicable tests and local quality gates from `.github/copilot-instructions.md`. Include class structure, inline comments, action logging, and documentation checks. Record exact commands and results in `specs/live/0/0/0/1/2/1/3/2/2/2/0/0/1/4/2/2/0/20261014-050510-mistcircuitstats-redis/quickstart.md`.
 
 ## Dependencies and Execution Order
 
