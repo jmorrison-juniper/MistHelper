@@ -873,3 +873,32 @@ def test_extract_selected_client_empty_site_becomes_empty_string() -> None:
     client = {"mac": "dd", "client_type": "wired"}
     result = PromptUtils._extract_selected_client(client, {}, None)
     assert result == ("dd", "wired", "")
+
+
+def test_fetch_site_wireless_clients_http_403_logs_refusal(caplog: pytest.LogCaptureFixture) -> None:
+    """Report HTTP 403 instead of treating refused data as a successful client search."""
+    fake_mh = _make_mh()
+    response = SimpleNamespace(status_code=403, data={"detail": "Forbidden"})
+    with (
+        patch("src.interfaces.visualization.ui.prompt_utils.SourceDependencyResolver", fake_mh),
+        patch(
+            "src.interfaces.visualization.ui.prompt_utils.mistapi.api.v1.sites.clients.searchSiteWirelessClients",
+            return_value=response,
+        ) as search,
+        patch(
+            "src.interfaces.visualization.ui.prompt_utils.mistapi.get_all",
+            return_value=[{"mac": "aa:bb:cc:dd:ee:ff"}],
+        ) as paginate,
+        caplog.at_level(logging.INFO, logger="src.interfaces.visualization.ui.prompt_utils"),
+    ):
+        result = PromptUtils._fetch_site_wireless_clients("site-1")
+    assert result == []
+    assert caplog.record_tuples == [
+        (
+            "src.interfaces.visualization.ui.prompt_utils",
+            logging.ERROR,
+            "The cloud returned HTTP 403 for site wireless clients at site site-1",
+        )
+    ]
+    search.assert_called_once_with(fake_mh.apisession, "site-1", limit=1000)
+    paginate.assert_not_called()
