@@ -319,3 +319,20 @@ gate: 0 new findings vs baseline
 ```
 
 The latest focused tests use synthetic data. No production load test, live Mist request, Redis service, or credential was used. T004 remains a production-only blocker. T020, T023, and T024 still need synthetic-data work.
+
+## CI Failure Corrections: 2026-10-20
+
+The first pull request run found that the public-symbol guard lacked the WAN dashboard service package move. The guard now maps the old module path to its package initializer.
+
+The focused guard tests passed:
+
+```text
+./.venv/bin/python -m pytest tests/guardrails/test_src_public_symbol_preservation.py -q
+20 passed in 2.45s
+./.venv/bin/python -m ruff check tests/guardrails/test_src_public_symbol_preservation.py
+All checks passed!
+./.venv/bin/python -m black --check tests/guardrails/test_src_public_symbol_preservation.py
+1 file would be left unchanged.
+```
+
+The same run found four stale generated menu API pages. This feature changes no menu operation or endpoint map source. Keep that unrelated gate open until the generated pages match the source.
