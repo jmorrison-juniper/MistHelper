@@ -111,7 +111,7 @@ class TestCombineSegmentsHappyPath:
             ]
         )
         result = combine_segments(req)
-        assert result is not None
+        assert result == {"raw": "aabbcc", "session": "sess-1", "meta": "onetwo"}
         assert result["raw"] == "aabbcc"
         assert result["session"] == "sess-1"
         assert result["meta"] == "onetwo"
