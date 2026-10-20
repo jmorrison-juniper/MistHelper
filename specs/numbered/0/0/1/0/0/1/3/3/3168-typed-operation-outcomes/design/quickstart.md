@@ -29,5 +29,9 @@ export results. They also confirm that primary fetch and export exceptions
 propagate. The exporter test confirms that empty input rows are rejected
 before a writer or database route runs.
 
+The alert digest tests cover completed, no-output, and failed results. They
+also confirm that write exceptions propagate and that wording does not change
+the state. Run `python -m pytest tests/unit/reports/alert_digest -q`.
+
 Run the committed-test quality procedure in `.github/copilot-instructions.md`
 before push. Keep the intended PR base consistent across its commands.

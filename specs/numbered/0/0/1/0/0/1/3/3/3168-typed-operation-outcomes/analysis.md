@@ -138,3 +138,20 @@ Main later advanced to `0b745c4d34f21765bc4c329a0d107018ff04430f`.
 The branch was rebased onto this commit. The focused 95-test run passed.
 `symbol-diff` reported no module-level name change. Ruff, Black, and targeted
 mypy passed.
+
+## Producer Batch 2 Verification - Alert Digest
+
+**Scope**: Part of #3168. Menu 280 only. Portal classification, menu 281, and `MistHelper.py` are unchanged.
+
+| Command | Result |
+| - | - |
+| `python -m pytest tests/unit/reports/alert_digest tests/unit/reports/psk_hygiene tests/guardrails/test_changelog_fragment_policy.py -q` | 97 passed and one skipped. The skip needs a pull request event. |
+| Mutation proof: set `no_output` to `completed`, disable the write check, or disable the empty check | Each mutation failed one test. The source was restored. |
+| `ruff check .`, `black --check .`, and mypy on `src/`, `MistHelper.py`, and `wsgi.py` | Passed. |
+| `radon cc ... \| complexity-gate --max 10` and `bandit -c pyproject.toml -r` on the package | Passed with no finding. |
+| `symbol-diff --base origin/main` on `operation.py` | No module-level name changed. |
+
+Assumption: zero alert rows return `no_output` and skip the writer. The writer
+previously produced an empty-state placeholder file. The user directed
+the coordinator to make a reasonable decision while the user was unavailable.
+The PR body states this assumption.
