@@ -166,7 +166,7 @@ Evidence for all 24 implementation tasks is recorded on this PR branch and await
 T020 records the merged Redis handover in PR #4223.
 T023 records all required feature-level validation. The repository-wide audit exits 1 on unrelated records, which remain unchanged.
 T024 records the final counts, preservation proof, old-path search, and merged PR checks in `analysis.md`.
-PR #4274 remains open and unmerged.
+PR #4274 merged on 2026-10-19.
 Issue #4263 remains open pending review.
 The user separately authorized T017 through T019 for the single #4202 move before the remaining shared-tool and migration-fixture work.
 This scoped exception does not authorize another move or complete those prerequisites.

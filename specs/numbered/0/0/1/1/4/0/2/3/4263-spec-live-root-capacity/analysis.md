@@ -272,8 +272,8 @@ Do not edit those records here.
 | `specs/numbered/0/0/1/1/2/2/0/3/4053-runtime-dependent-controls` | 1 |
 
 The #3494 record has 37 missing references.
-PR #4274 remains open and unmerged.
-Its fresh CI run has pending checks.
+On 2026-10-17, PR #4274 was open and unmerged.
+Its fresh CI run had pending checks.
 This record does not treat that PR as merged and does not change its files.
 
 ### T024 Counts and Preservation
@@ -307,5 +307,29 @@ The user reported 36 checks passed at merge.
 The current `gh pr checks 4223 --json name,state --jq 'group_by(.state) | map({state: .[0].state, count: length})'` output is `[{"count":6,"state":"SKIPPED"},{"count":39,"state":"SUCCESS"}]`.
 No failed status appears in that result.
 PR #4265 is merged.
-PR #4274 is open, based on `9ba3a7e5ca8f3c371e58887531623a249510d7df`, with fresh checks running.
+On 2026-10-17, PR #4274 was open and based on `9ba3a7e5ca8f3c371e58887531623a249510d7df`, with fresh checks running.
 No PR was merged and no auto-merge setting was enabled during this work.
+
+## Post-Rebase Evidence Refresh
+
+**Recorded**: `2026-10-20T09:09:22Z`.
+
+**Base**: `main` at `ba8bff978fc78387fdb8042f39dbe055ee17dfa5`.
+
+PR #4274 merged at `adb460c739cbe74e4647af1ec063d892bf213f01` on `2026-10-19T22:13:47Z`.
+Issue #4263 remains open pending review.
+The route suite could not confirm the earlier result because this worktree has no PowerShell executable.
+
+| Check | Command or source | Result |
+| --- | --- | --- |
+| Process folder guard | `PATH=".venv/bin:$PATH" SPECIFY_FEATURE_DIRECTORY=specs/numbered/0/0/1/1/4/0/2/3/4263-spec-live-root-capacity .venv/bin/python -B -m pytest -p no:cacheprovider -q -s tests/guardrails/test_process_folder_structure.py` | 11 passed. The guard examined 795 children, 792 grandfathered entries, 3 managed roots, 127 structural directories, and 44 feature records. |
+| Route and structure contracts | `PATH=".venv/bin:$PATH" SPECIFY_FEATURE_DIRECTORY=specs/numbered/0/0/1/1/4/0/2/3/4263-spec-live-root-capacity .venv/bin/python -B -m pytest -p no:cacheprovider -q -s tests/guardrails/test_process_folder_structure.py tests/guardrails/test_spec_route_contract.py` | 51 tests collected, 15 passed, and 36 failed because `pwsh` is unavailable. |
+| Feature prose | `git ls-files 'specs/numbered/0/0/1/1/4/0/2/3/4263-spec-live-root-capacity/*.md' 'specs/numbered/0/0/1/1/4/0/2/3/4263-spec-live-root-capacity/**/*.md' \| xargs .venv/bin/ste-linter --config .ste-linter.toml --min-score 80` | Ten files passed. Scores ranged from 94 through 97. |
+| Links | `.venv/bin/markdown-link-check --root . specs/numbered/0/0/1/1/4/0/2/3/4263-spec-live-root-capacity` | Ten tracked files scanned. Zero broken links. |
+| Canonical task audit | `.venv/bin/speckit-task-audit --verbose` | Exit 1. It examined 840 records, 363 task files, and 10,295 task markers: 6,939 checked, 3,320 unchecked, and 36 malformed. It found 140 missing references across 33 unrelated records and none in this feature. |
+
+The canonical task audit still exits 1 because other records have missing references.
+The audit did not report a missing reference in this feature.
+The local route test needs PowerShell to test the scripts.
+The earlier 51-test pass used the previous base and remains a historical result.
+The pull request checks must pass on the rebased branch before auto-merge can continue.
