@@ -74,9 +74,9 @@ def cleanup_ws_connection(ws_manager: Any, debug_mode: bool = False) -> None:
 
 
 def get_mist_credentials(apisession: Any) -> tuple[str | None, str | None]:
-    """Extract Mist host and API token from session or environment variables."""
+    """Extract the Mist host from the session or the environment, and the API token from the session only."""
     mist_host = getattr(apisession, "host", None) or os.getenv("MIST_HOST")  # WHY: Session first, env fallback.
-    mist_apitoken = getattr(apisession, "apitoken", None) or os.getenv("MIST_APITOKEN")  # WHY: Same precedence.
+    mist_apitoken = getattr(apisession, "apitoken", None) or None  # WHY: an env token can belong to another account.
     return mist_host, mist_apitoken  # WHY: Tuple contract used by callers for guard checks.
 
 
@@ -163,9 +163,9 @@ class WebSocketManager:
 
     def _resolve_auth_headers(self) -> list[str] | None:
         """Return WebSocket auth headers, or None when no API token is available."""
-        mist_apitoken = getattr(self.mist_session, "apitoken", None) or os.getenv("MIST_APITOKEN")  # WHY: Env fallback.
+        mist_apitoken = getattr(self.mist_session, "apitoken", None)  # WHY: only the session identity may authenticate.
         if not mist_apitoken:  # WHY: Fail fast — the API rejects unauthenticated streams.
-            self.logger.error("No API token found in session or environment")  # WHY: Actionable hint.
+            self.logger.error("No API token found in the session")  # WHY: Actionable hint.
             return None  # WHY: Caller converts None into a connect() failure.
         self.logger.debug("WebSocket URL: %s", self.websocket_url)  # WHY: Trace target endpoint.
         self.logger.debug("Auth token configured (length: %s chars)", len(mist_apitoken))  # WHY: Length only.

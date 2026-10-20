@@ -56,10 +56,10 @@ class ARPCommandManager:  # ARP WebSocket command manager.
 
     @staticmethod
     def _resolve_mist_ws_credentials():
-        """Resolve (host, token) from session or environment. Returns (None, None) when either is missing."""
+        """Resolve (host, token). Only the host may use the environment. Return (None, None) if missing."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         mist_host = getattr(mh.apisession, "host", None) or os.getenv("MIST_HOST")  # Session host > env
-        mist_apitoken = getattr(mh.apisession, "apitoken", None) or os.getenv("MIST_APITOKEN")  # Session token > env
+        mist_apitoken = getattr(mh.apisession, "apitoken", None) or None  # Session token only
         if not mist_host or not mist_apitoken:  # Either missing — caller bails
             return None, None
         return mist_host, mist_apitoken  # Caller streams using these
