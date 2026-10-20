@@ -4,7 +4,7 @@
 
 `Containerfile` and `Dockerfile` hold the same bytes. The repository keeps both
 names so that a Podman reader and a Docker reader each find the file they
-expect. `tests/unit/container/test_build_files_match.py` fails when the two
+expect. `tests/unit/prod_readiness/operations/exporting/container/test_build_files_match.py` fails when the two
 files differ, so edit one file and copy it over the other.
 
 Both files install with pip, keep TLS verification on, accept an optional

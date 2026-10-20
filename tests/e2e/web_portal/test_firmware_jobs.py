@@ -14,9 +14,16 @@ from flask_wtf.csrf import CSRFProtect, generate_csrf
 
 from src.operations.execution.firmware_policy.recovery.backup import PolicyBackup
 from src.operations.execution.firmware_policy.sdk import PolicyError
-from tests.unit.firmware_policy.fakes import ORG_ID, OTHER_SITE_ID, SITE_ID, SettingsSession
-from tests.unit.firmware_policy.recovery.fakes import RestoreSession
-from tests.unit.firmware_policy_jobs.test_manager import ManualExecutor
+from tests.unit.prod_readiness.operations.execution.firmware.policy.fakes import (
+    ORG_ID,
+    OTHER_SITE_ID,
+    SITE_ID,
+    SettingsSession,
+)
+from tests.unit.prod_readiness.operations.execution.firmware.policy.recovery.fakes import RestoreSession
+from tests.unit.prod_readiness.operations.execution.firmware.policy_jobs.test_manager import (
+    ManualExecutor,
+)  # Keep the helper path aligned with the moved package.
 from web_portal.routes.firmware_policy import firmware_policy_bp
 from web_portal.routes.firmware_policy.jobs.manager import JobManager
 from web_portal.routes.firmware_policy.jobs.ownership.targets import TargetWrites
