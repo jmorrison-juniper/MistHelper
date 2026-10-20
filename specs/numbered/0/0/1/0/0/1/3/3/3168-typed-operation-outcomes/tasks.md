@@ -47,3 +47,17 @@ Both stories share one model and test file. Do not edit them in parallel.
 Implement the complete small contract, then verify both stories together.
 Producer migration and portal replacement are later batches, not unchecked
 tasks that this contract PR claims to complete.
+
+## Phase 6: Serial Producer Batch 1 - PSK Hygiene
+
+**Goal**: Give menu 274 an explicit outcome without changing portal classification.
+**Independent test**: The PSK hygiene unit tests check completed, no-output, missing-input, failed export, and propagated fetch and export exceptions.
+
+- [x] T011 [US1] Record the current handler inventory and caller contracts in `design/research.md`.
+- [x] T012 [US1] Test PSK outcome states and preserved exceptions in `tests/unit/reports/psk_hygiene/test_operation.py`.
+- [x] T013 [US1] Return `OperationOutcome` from the PSK handler in `src/mist/intelligence/reports/psk_hygiene/operation.py`.
+- [x] T014 [P] [US1] Document the bounded migration in `plan.md`, `design/contracts/handler.md`, and `design/quickstart.md`.
+- [x] T015 [P] [US1] Add the PSK outcome release note in `changelog.d/issue-3168-psk-hygiene-outcome.md`.
+- [ ] T016 [US1] Record validation and the unchanged portal boundary in `analysis.md`.
+
+T011 establishes the current scope. T012 precedes T013. T014 and T015 can run beside the implementation. T016 depends on all earlier tasks.

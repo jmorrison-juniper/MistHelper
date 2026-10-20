@@ -12,19 +12,35 @@ serial producer migrations, and removal of the prose scan.
 dictionaries and a prose fallback. Neither satisfies the current decision.
 The draft remains unchanged.
 
-## Current Inventory
+## Current Main Inventory
 
-An AST scan of `MistHelper.py` at `cdc965f5f` examined one file with zero
-parse failures. It found 306 `MenuEntry` rows:
+An AST inventory of `MistHelper.py` at commit
+`531bfe42cb5cf7a9cdf9621cd4e93ab22b5e1ede` examined 306 `handler` keyword rows
+without parse failures. It counted 114 lambda expressions, 186 attribute
+references, and 6 name references.
 
-| Handler expression | Count |
-| - | - |
-| Lambda | 114 |
-| Attribute | 186 |
-| Name | 6 |
+The six name references point to named dispatch wrappers. Each wrapper has a
+`None` annotation and no return statement. An import-based scan resolved 185
+attribute handlers. A package lookup resolved the remaining
+`RogueDhcpScanOperation.run` in `operation.py`. That handler returns `None`.
 
-These are expression counts, not unique callable counts or migration readiness.
-The older 293-row and 112-lambda counts in PR #4019 are not current.
+Four attribute handlers have value-shaped results:
+
+| Menu | Handler | Return | Caller contract |
+| - | - | - | - |
+| 274 | `PskHygieneReport.run` | `bool` | The menu discards the value. Unit tests assert it. |
+| 280 | `AlertDigestOperation.run_digest` | `bool` | The digest has separate empty-result and failure paths. |
+| 276 | `OrgSecurityPostureChecklist.run` | `dict[str, int]` | Callers use the summary counts as structured data. |
+| 92 | `PromptUtils.select_site_with_logging` | `str | None` | Multiple operations use the selected site as input. |
+
+This batch migrates menu 274 only. It maps missing organization input to
+`missing_input`, empty PSK rows to `no_output`, a rejected non-empty export to
+`failed`, and a successful export to `completed`. Core fetch and export
+exceptions continue to propagate.
+
+Keep menu 92 as an input helper. Keep menus 276 and 280 for later batches.
+These counts replace the historical six-value estimate. They do not classify
+every `None` handler as migration-ready.
 
 ## Model Representation
 
