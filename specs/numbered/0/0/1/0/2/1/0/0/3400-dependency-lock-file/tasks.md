@@ -9,9 +9,9 @@
 
 ## S1 Declarations
 
-- [ ] T005 Reconcile `pyproject.toml` runtime and `dev` declarations with both requirements files.
-- [ ] T006 Enable Hatch direct references for the devtools pin.
-- [ ] T007 Add the declaration parity guard and its failing fixture.
+- [x] T005 Reconcile `pyproject.toml` runtime and `dev` declarations with both requirements files.
+- [x] T006 Enable Hatch direct references for the devtools pin.
+- [x] T007 Add the declaration parity guard and its failing fixture.
 
 ## S2 Lock
 
