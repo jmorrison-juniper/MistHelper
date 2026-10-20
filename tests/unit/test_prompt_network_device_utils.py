@@ -1063,3 +1063,29 @@ class TestPromptDeviceFailureModes:
             mistapi_mock.api.v1.sites.devices.listSiteDevices.side_effect = exception
             result = utils._fetch_and_sort_devices("site-1", "ap", "APs")
         assert result is None
+
+
+def test_switch_port_stats_http_403_rejects_refused_data(caplog: pytest.LogCaptureFixture) -> None:
+    """Reject refused port data and report the exact cloud status."""
+    import logging
+
+    from mistapi.__api_response import APIResponse
+
+    utils = _make_utils()
+    response = requests.Response()
+    response.status_code = 403
+    response._content = b'{"results":[{"port_id":"ge-0/0/0","up":true,"speed":1000}]}'
+    refused = APIResponse(response, "https://api.mist.invalid/api/v1/sites/site-1/stats/ports/search")
+    with patch("src.mist.resources.device.prompt_utils.mistapi") as mistapi_mock:
+        search = mistapi_mock.api.v1.sites.stats.searchSiteSwOrGwPorts
+        search.return_value = refused
+        result = utils._fetch_port_stats("site-1", "dev-1", "aa:bb:cc:dd:ee:ff", "switch")
+    assert result == {}
+    assert [record for record in caplog.record_tuples if record[0] == "src.mist.resources.device.prompt_utils"] == [
+        (
+            "src.mist.resources.device.prompt_utils",
+            logging.ERROR,
+            "The cloud returned HTTP 403 for switch/gateway port stats at site site-1",
+        )
+    ]
+    search.assert_called_once_with(utils._session, "site-1", mac="aa:bb:cc:dd:ee:ff", limit=1000)
