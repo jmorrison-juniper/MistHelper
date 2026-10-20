@@ -43,9 +43,32 @@ Commands ran with the worktree environment active unless an explicit interpreter
 | `ste-linter --quiet --config .ste-linter.toml --min-score 80` with the ten preparation Markdown files | Passed. Scores ranged from 87 through 98. |
 | `python -m pytest -q tests/guardrails/local_test_quality_loop/test_guidance.py::TestLiveGuides` | Passed. One test. The required post-commit preflight remains separate. |
 
-Initial Markdown link validation checked only the tracked documentation file.
-Repeat link validation after indexing the new specification artifacts.
-The committed test-quality ratchet remains required before push.
+The repeated Markdown link check examined all 11 indexed Markdown files and found zero broken links.
+The required post-commit preflight passed with four input reads and four input validations.
+The committed ratchet examined 1,198 files and 675 existing findings.
+It reported `gate: 0 new findings vs baseline`, with zero parse errors.
+The analyzer reported 49 skips. No baseline or analyzer configuration changed.
+The symbol comparison reported no module-level name changed.
+An exact comparison proved that `ci.yml` is unchanged outside the three inserted trigger lines.
+
+Required committed commands:
+
+```text
+git fetch --no-tags origin "+refs/heads/main:refs/remotes/origin/main"
+git rev-parse --verify "origin/main^{commit}"
+python -B -m pytest -p no:cacheprovider -s -q tests/guardrails/local_test_quality_loop/test_guidance.py::TestLiveGuides
+test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json --changed-from origin/main --full-gate-path .github/workflows/ci.yml --full-gate-path requirements-dev.txt
+```
+
+The comparison base resolved to `efd178c3f76e580afc0b5511734498b61f3a0090`.
+Every command succeeded.
+
+The advisory `speckit-task-audit --root .` examined 842 feature records and 365 task files.
+It reported existing unchecked tasks, malformed markers, and missing evidence elsewhere.
+This feature had no malformed marker or missing delivered file.
+Its remaining tasks require publication review and owner activation.
+Do not interpret the repository-wide advisory output as a clean task audit.
+
 Neither a local guard pass nor a successful preparation merge proves queue activation.
 
 ## Local environment repairs

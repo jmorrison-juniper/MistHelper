@@ -43,8 +43,8 @@
 ## Phase 6: Validation and Review
 
 - [x] T010 Run applicable local gates and record actual results in `analysis.md`. (delivered: analysis.md)
-- [ ] T011 Commit explicit paths and run the documented full-scope ratchet from `.github/copilot-instructions.md`.
-- [ ] T012 Create a template-based pull request and request coordinator review with exact results from `analysis.md`.
+- [x] T011 Commit explicit paths and run the documented full-scope ratchet from `.github/copilot-instructions.md`. (delivered: analysis.md)
+- [ ] T012 Create a template-based pull request and obtain coordinator review with exact results from `analysis.md`. Pending publication and coordinator approval.
 
 ## Phase 7: Owner-Controlled Acceptance
 
