@@ -1,6 +1,6 @@
 # Quickstart: MistCircuitStats Redis Dashboard Migration
 
-**Status**: Cache-only reads and the fail-closed worker are implemented. Scheduled collection remains disabled until production test T004.
+**Status**: PRs #4332 and #4337 delivered cache-only reads and the fail-closed worker. Scheduled collection remains disabled. This branch's offline synthetic-data changes are not yet validated.
 
 ## Preconditions
 
@@ -16,11 +16,11 @@
 
 1. **Site and gateway view**: Load synthetic records for two sites. Select one site and verify that no record from the other site appears.
 2. **WAN port and peer detail**: Open one gateway and verify its accepted port and peer views have one owner and one data collection path.
-3. **Freshness**: Load records with known collection times. Verify current, stale, partial, and unavailable states.
+3. **Freshness**: Load records with known collection times. Verify current, stale, unavailable, and refresh-error states. Reject partial snapshots.
 4. **Mist failure**: Return a 4xx, 5xx, timeout, rate limit, and malformed page. Verify bounded requests and no invalid snapshot publication.
-5. **Redis failure**: Fail cache reads and writes. Verify the page makes no live fallback call and reports unavailable state.
-6. **Partial refresh**: Fail one collection stage after earlier stages succeed. Verify the prior valid snapshot remains readable and the refresh reports partial or failed state.
-7. **Synthetic preview**: Disable external network access. Verify preview data is fictional and cannot satisfy a live route.
+5. **Redis failure**: Fail cache reads and writes. Verify an unexpired complete local snapshot appears as stale, or the page reports unavailable data when none exists. Make no live fallback call.
+6. **Partial refresh**: Fail one collection stage after earlier stages succeed. Verify the prior complete snapshot remains readable as stale and the refresh reports a safe error. Publish no partial snapshot.
+7. **Synthetic preview**: Disable external network access. Verify the labeled example stays separate from current, stale, unavailable, and refresh-error live states.
 8. **Secret redaction**: Use fake token strings. Verify test logs and error messages contain none of them.
 
 ## Commands
@@ -46,7 +46,7 @@ The plan lists each expected artifact. This guide does not implement or run prod
 
 Use the existing feature directory explicitly. Do not replace `.specify/feature.json`, which selects another feature. Preserve the established layout.
 
-The refresh applies specify, plan, and tasks to this record only. It updates current ownership evidence and preserves all implementation blockers. The read-only analyze phase reports findings without rewriting the historical `analysis.md`.
+The refresh applies specify, plan, and tasks to this record only. It updates current ownership evidence and preserves all implementation blockers. The read-only analyze command does not write files. Record its current findings in `analysis.md` after review.
 
 The app manages this branch. Do not run the branch-creation hook or create another feature. Optional `speckit.git.commit` hooks remain deferred until one coherent documentation commit. Disabled companion hooks do not execute.
 
@@ -89,17 +89,12 @@ The audit CLI scans the repository and has no feature selector. Report unrelated
 
 No product test, live Mist request, screenshot recreation, Redis operation, or deployment ran for this documentation refresh.
 
-## Implementation Increment: 2026-10-20
+## Cache-Only Merge: PR #4332
 
-The canonical WAN dashboard now reads its overview and detail data from the existing cache only.
-The routes make no Mist SDK requests. A missing detail value returns unavailable.
-The page disables Refresh until the background worker exists.
-The dashboard shows cached data as stale when its collection time is unknown.
-An in-memory snapshot becomes unavailable after 86,400 seconds.
-
-At this cache-only increment, the worker, Redis lease, request queue, progress display, and scheduled refresh remained unimplemented.
-Do not set refresh timing values before T004 passes.
-Per-port Insights parity remains in issue #4330.
+PR #4332 delivered cache-only overview and detail reads, stale local fallback, and unavailable detail states.
+The routes make no Mist SDK requests. PR #4337 later delivered the Redis-elected worker, queue, Refresh control, and progress status.
+Keep scheduled collection disabled until T004 passes during a scheduled maintenance window.
+Keep the refresh interval and lease unset. Per-port Insights parity remains in issue #4330.
 
 ### Validation Results
 
@@ -336,3 +331,50 @@ All checks passed!
 ```
 
 The same run found four stale generated menu API pages. This feature changes no menu operation or endpoint map source. Keep that unrelated gate open until the generated pages match the source.
+
+## Offline Synthetic-Data Revalidation: 2026-10-20
+
+This section records the completed synthetic-data increment. It replaces earlier status notes that list T020, T023, or T024 as open.
+
+The focused browser, service, and SDK-contract tests passed with Mist and GitHub tokens unset and dotenv loading disabled:
+
+```text
+env -u MIST_APITOKEN -u MIST_API_TOKEN -u GH_TOKEN -u GITHUB_TOKEN PYTHON_DOTENV_DISABLED=1 .venv/bin/python -m pytest -q tests/e2e/web_portal/test_wan_dashboard_cache_only.py tests/integration/web_portal/wan_dashboard/test_services.py tests/integration/web_portal/wan_dashboard/test_mistapi_contract.py
+52 passed in 5.58s
+```
+
+The checkout-site lock trail guard checked one trail and found zero lines before and after the test run. The tests used synthetic responses. They did not call Mist or Redis.
+
+The focused quality checks passed:
+
+```text
+.venv/bin/python -m ruff check src/interfaces/portals/wan_dashboard/services/__init__.py tests/integration/web_portal/wan_dashboard/test_services.py tests/integration/web_portal/wan_dashboard/test_mistapi_contract.py tests/e2e/web_portal/test_wan_dashboard_cache_only.py
+All checks passed!
+.venv/bin/python -m black --check src/interfaces/portals/wan_dashboard/services/__init__.py tests/integration/web_portal/wan_dashboard/test_services.py tests/integration/web_portal/wan_dashboard/test_mistapi_contract.py tests/e2e/web_portal/test_wan_dashboard_cache_only.py
+4 files would be left unchanged.
+.venv/bin/radon cc src/interfaces/portals/wan_dashboard -j | .venv/bin/complexity-gate --max 10
+All functions within complexity threshold.
+.venv/bin/python -m mypy src/interfaces/portals/wan_dashboard/services/__init__.py --config-file pyproject.toml
+Success: no issues found in 1 source file
+.venv/bin/bandit -c pyproject.toml -r src/interfaces/portals/wan_dashboard -q
+No findings. Exit code 0.
+node --check src/interfaces/portals/wan_dashboard/static/dashboard.js
+Exit code 0.
+git diff --check
+No output. Exit code 0.
+```
+
+The first Black check found one formatting change. Black applied that change. The final check passed. Pylint scored the service module at 9.74/10, above the 9.5 threshold, with existing module-size, protected-member, and complexity warnings.
+
+The first prerequisite call selected the stored #4258 feature path. It did not change `.specify/feature.json`. The final read-only call set `SPECIFY_FEATURE_DIRECTORY` to the #4220 path and used `-Json -RequireSpec -RequireTasks -IncludeTasks`. It found the required specification, plan, research, data model, contracts, quickstart, and tasks. The reviewer-owned requirements checklist remains at 16 checked items and zero unchecked items. The STE check passed eight files with scores from 94 to 96. The Markdown link scan found zero broken local links in 11 tracked files.
+
+The test-quality guide preflight passed. It read four required inputs and checked one live guide:
+
+```text
+env -u MIST_APITOKEN -u MIST_API_TOKEN -u GH_TOKEN -u GITHUB_TOKEN PYTHON_DOTENV_DISABLED=1 .venv/bin/python -B -m pytest -p no:cacheprovider -s -q tests/guardrails/local_test_quality_loop/test_guidance.py::TestLiveGuides
+1 passed in 6.30s
+```
+
+The repository-wide command `.venv/bin/speckit-task-audit --root .` exited with code 1. It examined 841 feature records, 364 task files, and 10,346 task markers: 6,970 checked, 3,340 unchecked, and 36 malformed. It lists other delivered records with open tasks. The #4220 record has two open tasks and no malformed task marker.
+
+No production load test, live Mist request, Redis service, or credential was used. T004 and T027 remain open until the approved maintenance-window test provides safe timing. Keep the worker disabled, and leave the refresh interval and lease unset. Per-port Insights parity remains separate in issue #4330.

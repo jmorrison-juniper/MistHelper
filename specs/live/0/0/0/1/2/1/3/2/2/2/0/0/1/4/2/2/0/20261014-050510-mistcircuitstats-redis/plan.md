@@ -4,7 +4,7 @@
 
 **Input**: Existing managed feature record for issue #4220.
 
-**Status**: The first worker increment is implemented. Collection remains disabled until production-scale load testing approves its timing and load-test gate.
+**Status**: PRs #4332 and #4337 delivered cache-only reads and the fail-closed worker. This increment prioritizes synthetic fixtures and offline browser journeys for stale, unavailable, and error states. Production load testing remains deferred until a scheduled maintenance window. Keep collection disabled and timing values unset.
 
 ## Summary
 
@@ -16,7 +16,7 @@ Keep collection disabled unless `WAN_DASHBOARD_LOAD_TEST_APPROVED` and `WAN_DASH
 
 When Redis is unavailable, a serving Gunicorn process may use only its own complete in-memory snapshot from an earlier successful read. Mark that snapshot stale. If the process has no complete snapshot, report unavailable data. This process-local fallback adds no file or persistent store, makes no Mist request, and cannot extend the 86,400-second maximum snapshot age.
 
-The user's production bands are 1,001–5,000 sites, 1,001–5,000 gateways, and 5,001–20,000 WAN ports. A rough estimate for four bulk reads at page size 1,000 is 12–35+ requests per full refresh, before additional non-WAN port pages. This estimate is not measured production evidence. The current documented Mist limit is 5,000 calls per hour per token. Keep the refresh interval unapproved until a production-scale load test measures total shared usage. Derive the renewable worker lease from that test.
+The user's production bands are 1,001–5,000 sites, 1,001–5,000 gateways, and 5,001–20,000 WAN ports. A rough estimate for four bulk reads at page size 1,000 is 12–35+ requests per full refresh, before additional non-WAN port pages. This estimate is not measured production evidence. The current documented Mist limit is 5,000 calls per hour per token. The user deferred production load validation until a scheduled maintenance window. Keep the refresh interval unapproved and the worker disabled until that test measures total shared usage. Derive the renewable worker lease from that test.
 
 The source owner authorized reuse with documented attribution. Record MistCircuitStats-Redis provenance and its CC BY-NC-SA 4.0 license. This PR copies no source code or assets.
 
@@ -61,7 +61,7 @@ The source owner authorized reuse with documented attribution. Record MistCircui
 - **Source rights**: The source owner authorized reuse with attribution. Preserve the CC BY-NC-SA 4.0 license and provenance.
 - **Testing**: Use mocked Mist responses and fictional data. Test pagination, shared admission, cache-only reads, worker serialization, partial failure, and secret redaction.
 
-**Gate result**: The cache-only route and fail-closed worker increments pass focused tests. Production-scale load testing remains a prerequisite for enabling collection and selecting interval and lease values. Synthetic-data labeling remains open.
+**Gate result**: Merged PRs #4332 and #4337 cover cache-only reads and the fail-closed worker. The synthetic-data and offline browser changes on this branch remain unverified. Production-scale load testing blocks collection enablement and timing selection.
 
 ### After Design
 
@@ -97,9 +97,11 @@ See [data-model.md](data-model.md), [contracts/mist-api.md](contracts/mist-api.m
 6. **Failure and progress state**: Never publish partial data. On a rate limit, failed page, incomplete dataset, Redis failure, or lease failure, retain the last complete snapshot as stale and show a safe error. Show refresh state, current read phase, completed page counts, and timestamps.
 7. **Existing cache policy**: Preserve `wan-dashboard:v1:` and the 300-, 600-, and 86,400-second TTLs. The stale TTL is the maximum snapshot age, including for process-local memory. Add no new namespace or persistent local store.
 8. **Fail-closed configuration**: Keep collection disabled unless `WAN_DASHBOARD_LOAD_TEST_APPROVED` and `WAN_DASHBOARD_REFRESH_ENABLED` are true and both timing keys hold positive application configuration values.
-9. **Unapproved timing**: The lease mechanism is approved, but its duration and the refresh interval remain unset until the production-scale load test measures full refresh time, shared request usage, and failure recovery.
+9. **Unapproved timing**: The lease mechanism is approved, but its duration and the refresh interval remain unset until the production-scale load test measures full refresh time, shared request usage, and failure recovery during a scheduled maintenance window.
 10. **Insights boundary**: Exclude source-specific per-port Insights parity. Issue #4330 owns that future contract review.
-11. **Source attribution**: Record the source repository, pinned evidence revision, owner authorization, and CC BY-NC-SA 4.0 license. Copy no source artifacts in this PR.
+11. **Synthetic example**: Keep the fictional example in a separate static panel. Mark live worker snapshots with `data_source: "live"` and reject any other explicit source marker from live cache reads. Test that stale, unavailable, and error states never expose synthetic rows as live data.
+12. **Maintenance window**: Run T004 only during a scheduled maintenance window. Keep collection disabled and both timing values unset until the test is complete.
+13. **Source attribution**: Record the source repository, pinned evidence revision, owner authorization, and CC BY-NC-SA 4.0 license. Copy no source artifacts in this PR.
 
 ## Product Paths
 

@@ -34,6 +34,9 @@ Preserve these keys and TTLs. Do not change them in this migration. Do not reser
 ## Snapshot Rules
 
 - Reuse the existing #4252 snapshot shape and keys.
+- Mark new worker snapshots with `data_source: "live"`. Accept earlier envelopes without this field, and reject an explicit unknown or synthetic source.
+- Keep the static synthetic example outside Redis snapshots and live overview rows.
+- Keep the static synthetic example separate when live data is current, stale, unavailable, or in an error state.
 - Validate organization, site, gateway, and port identity before publication.
 - Publish a complete snapshot only after all required bulk pages pass validation.
 - On a rate limit, failed page, incomplete dataset, Redis failure, or lease failure, preserve the last complete snapshot, mark it stale, show a safe refresh error, and publish no partial data.
@@ -45,7 +48,7 @@ Preserve these keys and TTLs. Do not change them in this migration. Do not reser
 
 ## Refresh Interval and Lease
 
-The Redis lease mechanism is approved. Do not select its duration or set a refresh interval in this plan. Keep `WAN_DASHBOARD_LOAD_TEST_APPROVED` false until the production-scale load test measures:
+The Redis lease mechanism is approved. Do not select its duration or set a refresh interval in this plan. Run the production-scale load test during a scheduled maintenance window. Keep `WAN_DASHBOARD_LOAD_TEST_APPROVED` false until that test measures:
 
 - All page requests for 1,001–5,000 sites, 1,001–5,000 gateways, and 5,001–20,000 WAN ports.
 - Additional non-WAN port pages.
@@ -83,4 +86,6 @@ The 12–35+ request estimate applies to four bulk reads at page size 1,000 befo
 - Prove that the page reports refresh state, read phase, page counts, timestamps, and safe errors.
 - Prove that snapshots older than 86,400 seconds are unavailable, including in process memory.
 - Prove that credentials do not enter cache values, keys, or logs.
+- Prove that a synthetic source marker cannot reach a live overview or worker snapshot.
+- Prove that stale, unavailable, and refresh-error browser states use no synthetic live rows and make no Mist request.
 - Record the lease duration and refresh interval only after the production-scale load test.

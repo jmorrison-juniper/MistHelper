@@ -7,10 +7,10 @@
 
 | ID | Category | Severity | Location(s) | Summary | Recommendation |
 |----|----------|----------|-------------|---------|----------------|
-| A1 | Implementation status | HIGH | `tasks.md` T004-T030 | The cache-only route increment is complete. The worker, queue, refresh status, browser coverage, and production load test remain open. | Keep issue #4220 open. Keep Refresh disabled and collection off until the worker and T004 pass. |
-| A2 | Validation environment | LOW | `quickstart.md` prerequisite commands | This analysis run could not start PowerShell because `pwsh` is absent. A prior worktree-specific prerequisite run passed. | Use the recorded successful run or provide PowerShell before the next prerequisite check. |
+| A1 | Production timing | HIGH | `tasks.md` T004 and T027, `contracts/redis-cache.md` | No approved production-scale load data exists. The refresh interval and worker lease remain unresolved. | Run the approved load test during a scheduled maintenance window. Keep the worker disabled and both timing values unset until that test passes. |
+| A2 | Repository task audit | LOW | Repository-wide task audit | The audit reports malformed task markers outside this feature. The #4220 task record has no malformed markers. | Keep unrelated task-record debt out of this feature. Report the repository audit result without changing unrelated records. |
 
-No requirement lacks a task. No duplicate or conflicting requirement blocks implementation.
+All 40 requirements map to tasks. No duplicate or conflicting requirement blocks the approved synthetic-data work. T004 and T027 remain the only feature blockers.
 
 ## Coverage Summary
 
@@ -55,6 +55,7 @@ No requirement lacks a task. No duplicate or conflicting requirement blocks impl
 | SC-010 | Yes | T018, T021, T022 |
 | SC-011 | Yes | T007, T019 |
 | SC-012 | Yes | T006, T017, T027 |
+| SC-013 | Yes | T020, T023, T024, T031 |
 
 ## Constitution Alignment
 
@@ -64,7 +65,9 @@ No blocking constitution conflict remains.
 - The change uses the existing dashboard, cache, Mist SDK, and web container.
 - The change adds no application, database, Redis service, or public port.
 - Tests use fictional data and do not require production credentials.
-- The worker timing remains disabled until production-scale evidence exists.
+- Collection remains disabled until a scheduled maintenance-window test provides production-scale evidence.
+- The refresh interval and renewable lease remain unset until that test provides timing data.
+- Source-specific per-port Insights parity remains separate in issue #4330.
 
 ## Unmapped Tasks
 
@@ -73,18 +76,30 @@ None. The planning, implementation, production-load, provenance, and local-gate 
 ## Metrics
 
 - **Functional requirements**: 27
-- **Buildable success criteria**: 12
-- **Total requirements**: 39
-- **Total tasks**: 30
-- **Complete tasks**: 8
-- **Open tasks**: 22
-- **Requirement coverage**: 100% (39 of 39 requirements map to one or more tasks)
+- **Buildable success criteria**: 13
+- **Total requirements**: 40
+- **Total tasks**: 32
+- **Complete tasks**: 30
+- **Open tasks**: 2
+- **Requirement coverage**: 100% (40 of 40 requirements map to one or more tasks)
 - **Ambiguity count**: 0
 - **Duplication count**: 0
 - **Critical issues**: 0
+- **Production blockers**: 2 (T004 and T027)
 
-The full task audit examined 839 feature records, 362 task files, and 10,252 task markers. It reported 36 malformed records outside this feature. This record has 22 open tasks and no malformed task marker.
+The repository task audit examined 841 feature records, 364 task files, and 10,346 task markers: 6,970 checked, 3,340 unchecked, and 36 malformed. It exited with code 1 because other delivered records have open tasks. The #4220 record has two open tasks and no malformed task marker.
+
+## Validation Results
+
+- The read-only prerequisite check selected the explicit #4220 feature directory and found the required spec, plan, research, data model, contracts, quickstart, and tasks.
+- The reviewer-owned requirements checklist has 16 checked items and zero unchecked items. The review did not change its checkboxes.
+- The cross-artifact analysis found task coverage for all 40 requirements and no duplicate, conflicting, or ambiguous requirement.
+- The repository-wide task audit reports two open #4220 tasks and 36 malformed markers across the repository. It exits with code 1 because other delivered records have open tasks. No malformed marker belongs to #4220.
+- The Markdown link check scanned 11 tracked Markdown files and found zero broken links.
+- The STE gate passed all eight feature Markdown files with scores from 94 to 96.
+
+The exact test and gate results appear in [quickstart.md](quickstart.md). T032 is complete. T004 and T027 remain open until the approved maintenance-window load test provides timing evidence.
 
 ## Next Actions
 
-Keep the Refresh control disabled until T015-T018 pass. Complete T004 with approved production-scale evidence before selecting the refresh interval or lease duration. Keep issue #4220 open until the remaining implementation and validation tasks pass.
+Keep the worker disabled. Leave the refresh interval and lease unset. Complete T004 during an approved scheduled maintenance window, then complete T027 with measured timing values. Keep issue #4220 open until both tasks pass.

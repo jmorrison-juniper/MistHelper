@@ -84,6 +84,7 @@ class TestWorkerBulkContract:
 
         assert failure is None  # All four mocked bulk reads completed.
         assert snapshot is not None and snapshot["data"] == []  # Empty synthetic organization is complete.
+        assert snapshot["data_source"] == "live"  # Mark only SDK-collected snapshots as live data.
         assert [reader.call_count for reader in readers] == [1, 1, 1, 1]  # Make one first-page call per bulk dataset.
         assert all(reader.call_args.kwargs["limit"] == 1000 for reader in readers)  # Keep the approved page size.
         assert page_reader.call_count == 1  # Use the SDK pagination helper for the second site page.
