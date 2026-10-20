@@ -15,10 +15,10 @@
 
 ## S2 Lock
 
-- [ ] T008 Capture `dependency-freeze-before.txt` from a clean install.
-- [ ] T009 Generate `uv.lock` with a baseline `--exclude-newer` date.
-- [ ] T010 Compare the lock with the freeze and explain each difference.
-- [ ] T011 Remove the `uv.lock` ignore lines and add the lock guard.
+- [x] T008 Capture `dependency-freeze-before.txt` from a clean install.
+- [x] T009 Generate `uv.lock` with a baseline `--exclude-newer` date.
+- [x] T010 Compare the lock with the freeze and explain each difference.
+- [x] T011 Remove the `uv.lock` ignore lines and add the lock guard.
 
 ## S3 Bootstrap
 
