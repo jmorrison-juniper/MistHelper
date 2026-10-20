@@ -63,6 +63,7 @@ class TestAnomalyEvents:
         fake_mh.AnomalyMetricsDiscovery.discover.return_value = []
         with patch.object(SiteAnomalyExporter, "_anomaly_resolve_site_name", return_value="Site"):
             SiteAnomalyExporter.anomaly_events()
+        fake_mh.DataExporter.write_with_format_selection.assert_not_called()  # WHY: no metrics means no export output.
 
     def test_happy_path_invokes_aggregate_and_export(self, fake_mh):
         """Aggregates metrics and writes CSV on the happy path."""
