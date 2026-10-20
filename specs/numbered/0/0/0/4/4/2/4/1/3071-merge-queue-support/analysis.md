@@ -71,6 +71,38 @@ Do not interpret the repository-wide advisory output as a clean task audit.
 
 Neither a local guard pass nor a successful preparation merge proves queue activation.
 
+## Serialized rebase validation
+
+The initial pull request head was `93b222a5b7d6c1179bc6660f1f1777d7bf40dd57`.
+Quality Gates run `39467257427` and CodeQL run `39467257440` passed.
+A separate check examined all 15 required contexts and their required application identifiers.
+All 15 contexts succeeded on that head.
+Strict protection remained enabled.
+
+After those runs completed, the coordinator authorized a rebase and another required-check run.
+The rebase used `aaab7b4541c2e578fb8c46d69da0446bfbd338a9` from current `main`.
+It completed without conflicts and added no merge commit.
+An exact comparison again proved that `ci.yml` differs only by the three queue-trigger lines.
+The #4306 historical-fetch repair, including `fetch-depth: 2`, remains unchanged.
+The current base does not contain #4208's browser evidence step.
+This change does not import or remove that separately owned step.
+
+| Repeated command | Result |
+| - | - |
+| `python -m pytest -q tests/guardrails` with the portable PowerShell directory on `PATH` | Passed. 1,060 tests and three skips in 136.59 seconds. |
+| `python -m ruff check .` | Passed. `All checks passed!` |
+| `python -m black --check --diff .` | Passed. 2,482 files unchanged. |
+| `python -m mypy src/ MistHelper.py wsgi.py scripts/mist_ideas_analyzer_pkg/__init__.py scripts/mist_ideas_distiller_v2_pkg/__init__.py --config-file pyproject.toml` | Passed. No issues in 860 source files. Existing notes remain. |
+| `python -m bandit -c pyproject.toml -r . -q` | Passed. Exit 0. |
+| `symbol-diff --base origin/main tests/guardrails/test_ci_gate_triggers.py` | Passed. No module-level name changed. |
+| `actionlint -shellcheck= -pyflakes= .github/workflows/ci.yml .github/workflows/codeql.yml` | Passed. Workflow syntax validation only. |
+| `pip-audit -r requirements.txt` with the documented local library-path repair | Passed. `No known vulnerabilities found`, exit 0. |
+
+The committed ratchet must run again before the rebased push.
+The initial remote results do not validate the rebased head.
+Merge and auto-merge remain unauthorized.
+Queue activation and operational acceptance remain incomplete.
+
 ## Local environment repairs
 
 The normal requirements audit initially aborted during temporary interpreter creation on macOS.
@@ -125,7 +157,7 @@ This branch neither imports nor removes that unmerged step.
 
 No product code, dependency manifest, baseline, repository setting, or required status changed.
 No container, Mist API, product sweep, frontend suite, or product coverage run was needed for this configuration-only change.
-GitHub must still run the required checks and CodeQL on the preparation pull request.
+GitHub must repeat the required checks and CodeQL on the rebased pull request head.
 Coordinator review is required before auto-merge or merge.
 Queue activation requires separate owner approval.
 Two live protected queued merges and resulting main checks remain unverified.
