@@ -35,6 +35,9 @@ PACKAGE_GROUPS = {  # Map every old direct package to its new domain and group.
 }  # Keep the test map identical to the approved package data model.
 MODULE_PATHS = {  # Map each old direct module to its new canonical module.
     "constants.py": "foundation/constants.py",
+    "interfaces/portals/wan_dashboard/services.py": (
+        "interfaces/portals/wan_dashboard/services/__init__.py"
+    ),  # Preserve symbols across the dashboard service package move.
     "operations/execution/firmware_policy/backup.py": ("operations/execution/firmware_policy/recovery/backup.py"),
     "foundation/persistence/db/arango_writer.py": "foundation/persistence/db/writers/arango_writer.py",
     "foundation/persistence/db/redis_writer.py": "foundation/persistence/db/writers/redis_writer.py",

@@ -41,8 +41,9 @@ This PR delivers planning documents only.
 | Source rights | No license was established. | B1 blocks reuse until permission covers the material. |
 
 Pre-design and post-design gates pass for a documentation-only change.
-Implementation authorization remains blocked by B1-B4.
-The user explicitly stops this workflow before implementation.
+Issue #4288 authorizes one independently written, offline IPv4 addressing core with synthetic tests.
+This authorization covers no source reuse, profile selection, interface, storage, cloud request, or deployment.
+B1 still blocks source reuse. B2-B4 and every profile approval remain unresolved.
 Do not invoke `speckit-implement`, merge this PR automatically, or change a running container.
 
 Existing process-folder debt includes 792 grandfathered direct children under `specs/`.
@@ -162,7 +163,7 @@ The quickstart separates current planning validation from future product tests.
 
 | ID | Condition | Owner and proof | Effect |
 | --- | --- | --- | --- |
-| B1 | Source license or reuse permission is absent. | Repository owner supplies written rights and notice rules, or approves independent implementation. | Blocks source reuse and implementation authorization. |
+| B1 | Source license or reuse permission is absent. | Repository owner supplies written rights and notice rules. Issue #4288 separately approves only independent domain development. | Blocks source reuse. |
 | B2 | Guest VLAN, Guest subnet, and Realo subnet conflict. | Network owner approves a versioned profile with matching networks, gateways, and DHCP. | Blocks output acceptance and production release. |
 | B3 | Portal ownership and secret removal need contract proof. | Portal owner approves identity integration and negative tests. | Blocks private upload and download release. |
 | B4 | Generated examples are not proof of current Mist schema acceptance. | Network owner approves synthetic schema evidence against the local Mist specification. | Blocks the claim that generated bundles are deployable. |

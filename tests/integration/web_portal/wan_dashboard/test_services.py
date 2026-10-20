@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from threading import Lock
 from unittest.mock import MagicMock
 
@@ -270,6 +271,101 @@ class TestCacheAndRateLimits:
 
         assert result["status"] == "error"  # Reject malformed content.
         assert "malformed_response" in result["notice"]  # Name the data failure.
+
+
+class TestCacheOnlyReads:
+    """Prove portal read methods use only complete cached snapshots."""
+
+    def test_cached_overview_filters_without_calling_any_approved_sdk_read(
+        self, monkeypatch: pytest.MonkeyPatch, service: tuple[WanDashboardService, FakeCache]
+    ) -> None:
+        """A dashboard cache read uses no Mist operation and preserves scoped rows."""
+        dashboard_service, cache = service  # Read the isolated service and in-memory cache.
+        key = "wan-dashboard:v1:overview:org-local:last-success"  # Use the existing complete overview key.
+        cache.values[key] = [  # Supply only fictional records from the active organization.
+            {"device_id": "gw-a", "site_id": "site-a", "name": "North gateway", "site_name": "North"},
+            {"device_id": "gw-b", "site_id": "site-b", "name": "South gateway", "site_name": "South"},
+        ]
+        sdk_reads = (  # Name the four approved bulk reads that routes must not invoke.
+            (services.mistapi.api.v1.orgs.sites, "listOrgSites"),
+            (services.mistapi.api.v1.orgs.stats, "listOrgDevicesStats"),
+            (services.mistapi.api.v1.orgs.stats, "searchOrgSwOrGwPorts"),
+            (services.mistapi.api.v1.orgs.inventory, "getOrgInventory"),
+        )
+        spies = [MagicMock(side_effect=AssertionError("cache read called Mist")) for _ in sdk_reads]
+        for (module, name), spy in zip(sdk_reads, spies, strict=True):
+            monkeypatch.setattr(module, name, spy)  # Fail if the cache-only method reaches a Mist SDK read.
+
+        result = dashboard_service.get_cached_overview(site_id="site-a", search="north")
+
+        assert result["status"] == "stale"  # Legacy cache entries have no verified collection timestamp.
+        assert result["data"] == [
+            {"device_id": "gw-a", "site_id": "site-a", "name": "North gateway", "site_name": "North"}
+        ]  # Filters apply to the cached complete organization snapshot.
+        assert all(spy.call_count == 0 for spy in spies)  # Prove that the cache read made zero Mist SDK calls.
+        assert cache.writes == []  # Read-only routes do not publish or refresh snapshots.
+
+    def test_process_local_snapshot_expires_after_the_stale_ttl(
+        self, service: tuple[WanDashboardService, FakeCache]
+    ) -> None:
+        """A process-local complete value cannot outlive the fixed maximum snapshot age."""
+        dashboard_service, _cache = service  # Use a local service without Redis.
+        key = "wan-dashboard:v1:overview:org-local"  # Match the organization overview cache key.
+        dashboard_service._last_success[key] = [{"device_id": "gw-a"}]  # Seed one complete fictional snapshot.
+        dashboard_service._last_success_at[key] = datetime.now(UTC) - timedelta(seconds=86401)
+
+        result = dashboard_service.get_cached_overview()
+
+        assert result["status"] == "unavailable"  # Expired memory data must not appear as stale or current.
+        assert result["data"] == []  # Do not return any record after the maximum age.
+        assert key not in dashboard_service._last_success  # Remove the expired value from process memory.
+
+    def test_redis_miss_uses_only_a_recent_process_local_snapshot(
+        self, service: tuple[WanDashboardService, FakeCache]
+    ) -> None:
+        """A recent complete process-local snapshot remains visible as stale during Redis loss."""
+        dashboard_service, _cache = service  # Use a cache adapter that returns no shared value.
+        key = "wan-dashboard:v1:overview:org-local"  # Match the organization overview cache key.
+        dashboard_service._last_success[key] = [{"device_id": "gw-a", "site_id": "site-a"}]
+        dashboard_service._last_success_at[key] = datetime.now(UTC) - timedelta(seconds=300)
+
+        result = dashboard_service.get_cached_overview()
+
+        assert result["status"] == "stale"  # Redis absence cannot make local data current.
+        assert result["data"] == [{"device_id": "gw-a", "site_id": "site-a"}]
+
+    def test_malformed_overview_snapshot_is_unavailable_not_partial(
+        self, service: tuple[WanDashboardService, FakeCache]
+    ) -> None:
+        """One malformed row invalidates the complete cached overview."""
+        dashboard_service, cache = service  # Use only the in-memory cache.
+        cache.values["wan-dashboard:v1:overview:org-local:last-success"] = [
+            {"device_id": "gw-a"},
+            "malformed row",
+        ]  # Model one invalid record in an otherwise valid snapshot.
+
+        result = dashboard_service.get_cached_overview()
+
+        assert result["status"] == "unavailable"  # Reject the whole cache value rather than return partial data.
+        assert result["data"] == []  # Never expose the valid-looking row beside malformed data.
+
+    def test_synthetic_snapshot_is_not_returned_as_live_overview(
+        self, service: tuple[WanDashboardService, FakeCache]
+    ) -> None:
+        """Reject a synthetic source marker before cached rows reach a live route."""
+        dashboard_service, cache = service  # Keep the check inside the isolated cache boundary.
+        cache.values["wan-dashboard:v1:overview:org-local:last-success"] = {
+            "schema_version": 1,  # Match the live envelope version.
+            "org_id": "org-local",  # Match the current test organization.
+            "data_source": "synthetic",  # Mark the envelope as fictional.
+            "collected_at": "2026-10-20T12:00:00+00:00",  # Use a fixed UTC test timestamp.
+            "data": [{"device_id": "example-gateway"}],
+        }  # Model an offline example accidentally written to the live key.
+
+        result = dashboard_service.get_cached_overview()
+
+        assert result["status"] == "unavailable"  # Do not render a synthetic cache entry as live.
+        assert result["data"] == []  # Reject the entire source envelope.
 
 
 class TestTokenRotation:

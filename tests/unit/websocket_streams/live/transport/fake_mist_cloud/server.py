@@ -203,8 +203,9 @@ class FakeMistCloud:
             path, headers = self._handshake(client)  # Complete the WebSocket opening handshake.
             connection = self._new_connection(client, path, headers)  # Record the accepted connection.
             handler = self._routes.get(path)  # Route the request path to a device.
-            if hasattr(handler, "on_connect"):  # Devices can send a banner immediately.
-                handler.on_connect(connection)  # Notify the handler after the handshake.
+            on_connect = getattr(handler, "on_connect", None)  # Devices can send a banner immediately.
+            if on_connect is not None:  # Unrouted paths and plain handlers have no hook.
+                on_connect(connection)  # Notify the handler after the handshake.
             self._read_loop(client, connection, handler)  # Process frames until the connection ends.
         except OSError:
             client.close()  # Drop incomplete connections quietly.

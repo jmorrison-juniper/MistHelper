@@ -186,5 +186,165 @@ Do not move either #189 copy or claim full issue completion without owner review
 The required committed-diff test-quality check runs after the local commit.
 Its exact result belongs in the issue and PR evidence.
 Publish this bounded increment without claiming complete issue acceptance.
-Keep issue #4263 open and PR #4223 blocked.
-Do not merge before required checks and CodeQL pass.
+This checkpoint predates the merge of PR #4223. The final evidence below supersedes it.
+At that checkpoint, do not merge before required checks and CodeQL pass.
+
+## Final Validation Evidence
+
+**Recorded**: 2026-10-17T04:54:30Z.
+
+**Base**: `main` at `9ba3a7e5ca8f3c371e58887531623a249510d7df`.
+
+This section records validation run against current main after PR #4223 merged.
+This evidence is recorded on the #4276 PR branch and is not yet part of main.
+It supersedes the earlier checkpoint that left T020, T023, and T024 open.
+Issue #4263 is open pending review.
+
+### T020 Handover
+
+PR #4223 merged at `9ba3a7e5ca8f3c371e58887531623a249510d7df`.
+Its grouped-record commit is `737deb854712e6590544dc1744255c2e3a477587`.
+That commit moved the Redis record from its direct timestamp path into the bounded route.
+It preserved nine files byte for byte.
+It changed only the internal paths in `plan.md` and `tasks.md`.
+The merge commit has first parent `d34cf32584b4023aaa0252d715c97bb6654fefa4`, which is the merged process update from PR #4272.
+The merged record has eleven files at its grouped path.
+The current-main route and structure suite passes all 51 tests.
+
+The Redis handover in `design/contracts/migration.md` records the merged status, rebase, guard result, and check counts.
+
+### T023 Validation
+
+| Check | Command or source | Result |
+| --- | --- | --- |
+| Route and structure contracts | `PATH="/tmp/misthelper-pwsh-7.6.7:$PATH" SPECIFY_FEATURE_DIRECTORY=specs/numbered/0/0/1/1/4/0/2/3/4263-spec-live-root-capacity .venv/bin/python -B -m pytest -p no:cacheprovider -q -s tests/guardrails/test_process_folder_structure.py tests/guardrails/test_spec_route_contract.py` | 51 passed in 17.06s. The guard examined 795 root children, 792 grandfathered entries, 3 managed roots, 117 structural directories, and 39 feature records. |
+| Selected feature paths | `check-prerequisites.ps1 -Json -PathsOnly` with the explicit feature path | Returned the feature directory, spec, plan, and tasks paths. |
+| Selected spec and tasks | `check-prerequisites.ps1 -Json -RequireSpec -RequireTasks -IncludeTasks` with the explicit feature path | Returned the selected feature and its available design records and tasks. |
+| Prose | `git ls-files specs/numbered/0/0/1/1/4/0/2/3/4263-spec-live-root-capacity \| grep -E '\\.md$' \| xargs .venv/bin/ste-linter --config .ste-linter.toml --min-score 80` | Ten files passed. Scores ranged from 94 through 97. |
+| Links | `.venv/bin/markdown-link-check --root . specs/numbered/0/0/1/1/4/0/2/3/4263-spec-live-root-capacity` | Ten tracked files scanned. Zero broken links. |
+| Ruff | `.venv/bin/python -m ruff check tests/guardrails/test_process_folder_structure.py tests/guardrails/test_spec_route_contract.py` | Passed. |
+| Black | `.venv/bin/python -m black --check tests/guardrails/test_process_folder_structure.py tests/guardrails/test_spec_route_contract.py` | Passed. Two files unchanged. |
+| Mypy | `.venv/bin/python -m mypy tests/guardrails/test_process_folder_structure.py tests/guardrails/test_spec_route_contract.py --config-file pyproject.toml` | Passed. No issues in two files. |
+| Bandit | `.venv/bin/python -m bandit -c pyproject.toml tests/guardrails/test_process_folder_structure.py tests/guardrails/test_spec_route_contract.py -q` | Passed with no findings. |
+| Complexity | `.venv/bin/radon cc tests/guardrails/test_process_folder_structure.py tests/guardrails/test_spec_route_contract.py -j \| .venv/bin/complexity-gate --max 10` | Reported two blocks at complexity 11. This evidence-only branch changes no code. |
+| Canonical task audit | `.venv/bin/speckit-task-audit --verbose` | Exit 1. It examined 835 feature records, 358 task files, and 10,157 task markers: 6,865 checked, 3,256 unchecked, and 36 malformed. It found 177 missing references across 34 records and 477 records without `tasks.md`. It found no missing reference in this feature. |
+
+The canonical task audit did not pass.
+The audit scanned 358 task files and checked citations in 358 task files.
+The audit found unrelated records that this change does not own.
+Do not edit those records here.
+
+| Record | Missing references |
+| --- | ---: |
+| `specs/001-mist-ops-platform` | 11 |
+| `specs/1026-ste-linter` | 29 |
+| `specs/1027-ste-dict-extractor` | 16 |
+| `specs/1028-ste-compliance-cleanup` | 3 |
+| `specs/1030-ste-src-cleanup` | 1 |
+| `specs/1704-menu-entry` | 2 |
+| `specs/1741-speckit-task-drift` | 3 |
+| `specs/1772-test-quality` | 4 |
+| `specs/1785-testinteractive` | 4 |
+| `specs/1924-failure-evidence` | 1 |
+| `specs/1988-capture-concurrency` | 3 |
+| `specs/2614-false-failure` | 1 |
+| `specs/2644-reboot-site-lock` | 1 |
+| `specs/2650-coverage-gate` | 2 |
+| `specs/2670-sysmodules-alias` | 1 |
+| `specs/2689-sdk-call-site-guard` | 2 |
+| `specs/2696-missing-edge-cases` | 7 |
+| `specs/2700-missing-failure-modes` | 5 |
+| `specs/2717-phantom-sdk-calls` | 2 |
+| `specs/2726-sdk-signature-guard` | 1 |
+| `specs/2751-success-reports` | 1 |
+| `specs/2754-hardening-junos-skill` | 1 |
+| `specs/2754-junos-hardening-skill` | 10 |
+| `specs/3256-family-prompts` | 5 |
+| `specs/3309-declared-arango-indexes` | 1 |
+| `specs/3311-compact-data-previews` | 5 |
+| `specs/3317-local-test-quality-loop` | 1 |
+| `specs/3318-bounded-database-discovery` | 1 |
+| `specs/3337-packet-length-validation` | 10 |
+| `specs/3365-map-title-contrast` | 3 |
+| `specs/3494-browser-capture-statistics` | 37 |
+| `specs/3565-nac-idp-credential-test` | 1 |
+| `specs/numbered/0/0/1/0/3/0/3/4/3519-juniper-rma-correlation` | 1 |
+| `specs/numbered/0/0/1/1/2/2/0/3/4053-runtime-dependent-controls` | 1 |
+
+The #3494 record has 37 missing references.
+On 2026-10-17, PR #4274 was open and unmerged.
+Its fresh CI run had pending checks.
+This record does not treat that PR as merged and does not change its files.
+
+### T024 Counts and Preservation
+
+| Measure | Current result |
+| --- | --- |
+| Feature artifacts | 10 files |
+| Feature task checkboxes on this PR branch | 24 total, 24 checked |
+| Live-root children | 5 |
+| Process guard scope | 795 children examined, 792 grandfathered, and 3 managed roots |
+| Structural directories | 117 |
+| Feature records | 39 |
+| Approved moved record | 9 files preserved, with 8 unchanged hashes |
+| Approved `plan.md` path replacements | 2 |
+| Final moved `plan.md` SHA-256 | `6d882df48a8911eb8077596a86fd4947a953fe3b9d7ec022e722c8ecce18dc48` |
+
+The approved moved record has the same nine files as its manifest.
+The eight unchanged files match their original SHA-256 values.
+The current `plan.md` equals the original file after exactly two approved path replacements.
+Its final hash matches the migration manifest.
+
+The old slash path for the moved control-label record appears only in the explicit source field of `design/contracts/migration.md`.
+The old Windows path has no tracked match.
+The Redis direct timestamp path had one tracked match in this task file before its instruction changed to the grouped destination.
+The updated task file has no old Redis path.
+
+### Merged Pull Request Evidence
+
+PR #4223 is merged at `9ba3a7e5ca8f3c371e58887531623a249510d7df`.
+The user reported 36 checks passed at merge.
+The current `gh pr checks 4223 --json name,state --jq 'group_by(.state) | map({state: .[0].state, count: length})'` output is `[{"count":6,"state":"SKIPPED"},{"count":39,"state":"SUCCESS"}]`.
+No failed status appears in that result.
+PR #4265 is merged.
+On 2026-10-17, PR #4274 was open and based on `9ba3a7e5ca8f3c371e58887531623a249510d7df`, with fresh checks running.
+No PR was merged and no auto-merge setting was enabled during this work.
+
+## Post-Rebase Evidence Refresh
+
+**Recorded**: `2026-10-20T09:09:22Z`.
+
+**Base**: `main` at `ba8bff978fc78387fdb8042f39dbe055ee17dfa5`.
+
+PR #4274 merged at `adb460c739cbe74e4647af1ec063d892bf213f01` on `2026-10-19T22:13:47Z`.
+Issue #4263 remains open pending review.
+The route suite could not confirm the earlier result because this worktree has no PowerShell executable.
+
+| Check | Command or source | Result |
+| --- | --- | --- |
+| Process folder guard | `PATH=".venv/bin:$PATH" SPECIFY_FEATURE_DIRECTORY=specs/numbered/0/0/1/1/4/0/2/3/4263-spec-live-root-capacity .venv/bin/python -B -m pytest -p no:cacheprovider -q -s tests/guardrails/test_process_folder_structure.py` | 11 passed. The guard examined 795 children, 792 grandfathered entries, 3 managed roots, 127 structural directories, and 44 feature records. |
+| Route and structure contracts | `PATH=".venv/bin:$PATH" SPECIFY_FEATURE_DIRECTORY=specs/numbered/0/0/1/1/4/0/2/3/4263-spec-live-root-capacity .venv/bin/python -B -m pytest -p no:cacheprovider -q -s tests/guardrails/test_process_folder_structure.py tests/guardrails/test_spec_route_contract.py` | 51 tests collected, 15 passed, and 36 failed because `pwsh` is unavailable. |
+| Feature prose | `git ls-files 'specs/numbered/0/0/1/1/4/0/2/3/4263-spec-live-root-capacity/*.md' 'specs/numbered/0/0/1/1/4/0/2/3/4263-spec-live-root-capacity/**/*.md' \| xargs .venv/bin/ste-linter --config .ste-linter.toml --min-score 80` | Ten files passed. Scores ranged from 94 through 97. |
+| Links | `.venv/bin/markdown-link-check --root . specs/numbered/0/0/1/1/4/0/2/3/4263-spec-live-root-capacity` | Ten tracked files scanned. Zero broken links. |
+| Canonical task audit | `.venv/bin/speckit-task-audit --verbose` | Exit 1. It examined 840 records, 363 task files, and 10,295 task markers: 6,939 checked, 3,320 unchecked, and 36 malformed. It found 140 missing references across 33 unrelated records and none in this feature. |
+
+The canonical task audit still exits 1 because other records have missing references.
+The audit did not report a missing reference in this feature.
+The local route test needs PowerShell to test the scripts.
+The earlier 51-test pass used the previous base and remains a historical result.
+The pull request checks must pass on the rebased branch before auto-merge can continue.
+
+## Latest Base Refresh
+
+**Recorded**: `2026-10-20T09:36:56Z`.
+
+**Base**: `main` at `fcb0fc980b9124116307ea37fefbbbd1306bce3f`.
+
+The PR branch was behind again because `main` advanced after the prior rebase.
+The branch now includes this base.
+No current-main commit changed the three feature files in this PR.
+The process-folder guard passed 11 tests.
+It examined 795 children, 792 grandfathered entries, 3 managed roots, 128 structural directories, and 45 feature records.
+The STE and link results above still apply because the feature files did not change.
+The route suite remains blocked by the missing `pwsh` executable.
+Fresh CI and CodeQL results for the latest branch commit are not yet available.

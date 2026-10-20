@@ -76,8 +76,8 @@ def test_inventory_empty_org_aborts_before_prompt_or_call(wired: dict[str, Any])
 
     OrgInventorySearchExporter.inventory()
 
-    target.assert_not_called()
-    wired["helper"].InputUtils.safe_input.assert_not_called()
+    assert target.call_args_list == []
+    assert wired["helper"].InputUtils.safe_input.call_args_list == []
 
 
 def test_inventory_api_error_is_logged(wired: dict[str, Any], caplog: pytest.LogCaptureFixture) -> None:

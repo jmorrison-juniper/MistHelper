@@ -169,6 +169,33 @@ class TestFetchSyntheticTestStatsWithRetry:
             )
         assert result == {"ok": True}
 
+    def test_first_failure_remains_visible_after_successful_fallback(
+        self, fake_mh: ModuleType, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        first_error = RuntimeError("HTTP 503 initial failure")  # WHY: identify the first failed API call.
+        endpoint = [first_error, None, {"ok": True}]  # WHY: recover after a later invalid fallback.
+        with (
+            patch("src.operations.exporting.export.gateway_test_exporter.ValidationUtils.validate_site_id"),
+            patch("src.operations.exporting.export.gateway_test_exporter.ValidationUtils.validate_device_id"),
+            patch.object(GatewayTestExporter, "_call_synthetic_endpoint", side_effect=endpoint) as api,
+            patch.object(gte.time, "sleep"),
+            caplog.at_level("INFO"),
+        ):
+            result = GatewayTestExporter.fetch_synthetic_test_stats_with_retry(
+                ("s", "d", "dn", "sn"), max_retries=2, retry_delay=0.0
+            )  # WHY: execute the retry loop with mocked API outcomes.
+        assert result == {  # WHY: preserve the existing tagged result shape.
+            "ok": True,
+            "site_id": "s",
+            "site_name": "sn",
+            "device_id": "d",
+            "device_name": "dn",
+        }
+        assert api.call_count == 3  # WHY: keep the configured retry budget after an invalid fallback.
+        assert "first failure" in caplog.text.lower()  # WHY: show the retry summary retains the first cause.
+        assert "RuntimeError" in caplog.text  # WHY: preserve the first exception type.
+        assert str(first_error) in caplog.text  # WHY: preserve the first exception message.
+
     def test_zero_retry_budget_hits_defensive_return(self, fake_mh: ModuleType) -> None:
         result = GatewayTestExporter.fetch_synthetic_test_stats_with_retry(
             ("s", "d", "dn", "sn"), max_retries=-1, retry_delay=0.0
