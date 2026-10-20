@@ -155,3 +155,20 @@ Assumption: zero alert rows return `no_output` and skip the writer. The writer
 previously produced an empty-state placeholder file. The user directed
 the coordinator to make a reasonable decision while the user was unavailable.
 The PR body states this assumption.
+
+## Producer Batch 3 Verification - Security Posture Checklist
+
+**Scope**: Part of #3168. Menu 276 only. Portal classification, menu 92, and `MistHelper.py` are unchanged.
+
+| Command | Result |
+| - | - |
+| `python -m pytest tests/unit/reports/org_security_posture tests/guardrails/test_changelog_fragment_policy.py -q` | 49 passed and one skipped. The skip needs a pull request event. |
+| Mutation proof: set `failed` to `completed`, set `missing_input` to `no_output`, or disable the export check | Each mutation failed one test. The source was restored. |
+| `ruff check .`, `black --check .`, and mypy on `src/`, `MistHelper.py`, and `wsgi.py` | Passed. |
+| `radon cc ... \| complexity-gate --max 10` | Passed. |
+| `bandit -c pyproject.toml -r` on the package | Passed with no finding. |
+| `symbol-diff --base origin/main` on `runner.py` | No module-level name changed. |
+
+Behavior change: a missing API session or organization ID and a rejected export
+no longer raise an exception. They return `missing_input` and `failed`.
+

@@ -35,3 +35,7 @@ the state. Run `python -m pytest tests/unit/reports/alert_digest -q`.
 
 Run the committed-test quality procedure in `.github/copilot-instructions.md`
 before push. Keep the intended PR base consistent across its commands.
+
+The posture checklist tests cover completed, failed, and missing-input results.
+They also confirm that collection errors propagate. Run
+`python -m pytest tests/unit/reports/org_security_posture -q`.

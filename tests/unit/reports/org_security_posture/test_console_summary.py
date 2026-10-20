@@ -15,13 +15,16 @@ def test_console_summary_counts_match_exported_rows(capsys) -> None:
         return True  # Simulate successful export.
 
     source_data = RepresentativeOrgSecurityPostureFixture.source_data()  # Use fixture data with mixed verdicts.
-    summary = OrgSecurityPostureChecklist.run(
+    outcome = OrgSecurityPostureChecklist.run(
         test_mode=True, source_data=source_data, write_fn=write_fn
     )  # Run checklist.
     output = capsys.readouterr().out  # Capture printed summary text.
-    assert f"pass: {summary['pass']}" in output  # Console pass count must match returned summary.
-    assert f"fail: {summary['fail']}" in output  # Console fail count must match returned summary.
-    assert summary["fail"] == sum(1 for row in captured_rows if row["verdict"] == "fail")  # CSV and summary must match.
+    verdicts = [row["verdict"] for row in captured_rows]  # Read each exported verdict.
+    counts = {v: verdicts.count(v) for v in ("pass", "fail", "review")}  # Count each verdict.
+    assert outcome.state == "completed"  # A successful export completes the run.
+    assert outcome.detail == f"pass: {counts['pass']}, fail: {counts['fail']}, review: {counts['review']}"  # Match CSV.
+    assert f"pass: {counts['pass']}" in output  # Console pass count must match exported rows.
+    assert f"fail: {counts['fail']}" in output  # Console fail count must match exported rows.
 
 
 def test_all_pass_summary_prints_zero_fail_and_review(capsys) -> None:
@@ -54,11 +57,11 @@ def test_all_pass_summary_prints_zero_fail_and_review(capsys) -> None:
     }
     tokens = [{"created_time": 1_700_000_000, "expire_time": 1_731_536_000}]  # Keep token lifetime within limit.
     source_data = OrganizationSecuritySourceData(settings, [], [], tokens, [{"url": "https://example.invalid/hook"}])
-    summary = OrgSecurityPostureChecklist.run(
+    outcome = OrgSecurityPostureChecklist.run(
         test_mode=True, source_data=source_data, write_fn=write_fn
     )  # Run checklist.
     output = capsys.readouterr().out  # Capture printed summary text.
-    assert summary["fail"] == 0  # All configured settings should pass.
-    assert summary["review"] == 0  # Complete fixture data should avoid review.
+    assert outcome.state == "completed"  # A successful export completes the run.
+    assert outcome.detail is not None and "fail: 0, review: 0" in outcome.detail  # Complete data has no fail or review.
     assert "fail: 0" in output  # Console summary must show zero failures.
     assert "review: 0" in output  # Console summary must show zero review rows.
