@@ -3,8 +3,9 @@
 **Input**: [Specification](spec.md), [plan](plan.md), [research](research.md), and [design](design/data-model.md).
 **Contracts**: [Preparation](design/contracts/preparation.md) and [payloads](design/contracts/payloads.md).
 
-**Status**: Future implementation tasks only. All 27 tasks remain unchecked.
-This planning PR does not authorize their execution.
+**Status**: T001-T027 remain future implementation tasks and remain unchecked.
+Issue #4288 separately authorizes only the bounded offline addressing tasks below.
+This authorization does not satisfy a profile approval or release condition.
 Tests are mandatory under the repository constitution.
 
 ## Phase 1: Setup
@@ -128,7 +129,19 @@ After explicit authorization and setup approvals, deliver US1 as the first usefu
 Validate its CSV contract before adding templates.
 Add US2, then US3, without introducing separate services.
 Use the nine source regression scenarios as behavioral evidence, not copied tests.
-This document is a future execution plan. Stop after the current planning PR.
+Issue #4288 authorizes only T028 and T029. Do not infer authorization for the other tasks.
+
+## Issue #4288: Bounded Offline Addressing Increment
+
+Use original code from approved behavior requirements and synthetic values only.
+Keep all network names, VLANs, prefixes, gateways, host offsets, and variable keys caller-supplied.
+Do not mark B1 source reuse, B2, or any profile approval as complete.
+Do not add a route, CLI command, file output, database, Redis, Compose setting, or Mist API call.
+
+- [x] T028 [US1] Add synthetic unit tests for the typed generic IPv4 addressing input and deterministic variable output in `tests/unit/dataclasses/test_mistdsw_store_addressing.py`.
+- [x] T029 [US1] Add the offline addressing model and preparer in `src/foundation/models/data/mistdsw_addressing.py` and `mistdsw_addressing_preparation.py`.
+
+T029 depends on T028. These tasks cover a domain-only increment and do not complete T006-T009.
 
 ## Requirement Coverage
 
