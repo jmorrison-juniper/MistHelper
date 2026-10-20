@@ -65,9 +65,12 @@ def test_empty_source_payloads_still_return_completed_outcome_with_check_rows() 
     outcome = OrgSecurityPostureChecklist.run(
         test_mode=True, source_data=source_data, write_fn=write_fn
     )  # Run every registered check without API access.
+    verdicts = [row["verdict"] for row in captured_rows]  # Read the verdict from each emitted check row.
+    counts = {verdict: verdicts.count(verdict) for verdict in ("pass", "fail", "review")}  # Count every outcome.
+    expected_detail = f"pass: {counts['pass']}, fail: {counts['fail']}, review: {counts['review']}"  # Match rows.
 
     assert isinstance(outcome, OperationOutcome)  # Keep menu 276 on the typed outcome contract.
     assert outcome.state == "completed"  # Empty source collections still produce checklist results.
     assert outcome.message == "The organization security posture checklist completed."  # Preserve operator text.
-    assert outcome.detail is not None  # The completed result carries the verdict summary.
+    assert outcome.detail == expected_detail  # Preserve summary counts from the exported rows.
     assert len(captured_rows) > 0  # The registered checklist emits rows even when its source collections are empty.
