@@ -113,3 +113,26 @@ def test_build_report_data_sets_requires_manual_review_by_severity() -> None:
 
     assert report_rows[0]["requires_manual_review"] == "CRITICAL"
     assert report_rows[1]["requires_manual_review"] == "No"
+
+
+def test_apply_site_settings_http_503_reports_failed_without_variable_set(monkeypatch, caplog) -> None:
+    """An HTTP 503 from updateSiteSettings leaves the variable unset and records the status."""
+    from src.mist.resources.gateway import wan2_migration_manager as module
+
+    update_settings = MagicMock(return_value=SimpleNamespace(status_code=503))
+    fake_mistapi = SimpleNamespace(
+        api=SimpleNamespace(
+            v1=SimpleNamespace(sites=SimpleNamespace(setting=SimpleNamespace(updateSiteSettings=update_settings)))
+        )
+    )
+    monkeypatch.setattr(module, "mistapi", fake_mistapi)
+    monkeypatch.setattr(module, "apisession", object())
+    result = {"variable_set": False, "status": "", "error": ""}
+
+    with caplog.at_level("ERROR", logger=module.logger.name):
+        WAN2MigrationManager._apply_site_settings("site-1", "Site One", {"vars": {}}, result)
+
+    assert update_settings.call_count == 1
+    assert result == {"variable_set": False, "status": "FAILED", "error": "API returned status 503"}
+    assert "Site One" in caplog.text
+    assert "503" in caplog.text
