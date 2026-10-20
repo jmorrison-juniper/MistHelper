@@ -660,3 +660,25 @@ Task T034 is complete.
 Tasks T004 through T026 remain incomplete where ownership or final layout acceptance prevents completion.
 This evidence does not establish full-suite execution, coverage, final five-child compliance, deployment, or merge readiness.
 The pull request must remain draft, and issue #4142 must remain open.
+
+## Historical-link deferral after the first CI run
+
+Run `39464451697` failed the root-and-contracts shard on one historical Markdown link.
+The shard passed 2,033 tests, skipped 19 tests, and reported five expected failures.
+The failing guard named `specs/3300-selective-insight-definitions/checklists/requirements.md:94`.
+That record links to `tests/unit/analytics/test_insight_metrics_utils.py`.
+FR-004 requires the historical specification to remain unchanged.
+The coordinator approved deferral of this single move.
+
+The test now remains at its original source path with the exact approved-main bytes.
+No shim or duplicate exists. The historical specification remains unchanged.
+No baseline entry names either endpoint, so this correction requires no baseline edit.
+Both endpoints were clear of other open pull requests before the move.
+
+The test, Markdown-link guard, module-move guard, and baseline guard passed all 80 tests.
+Full collection still contains 29,601 unit tests.
+The complete node-ID comparison uses 377 exact move pairs and finds no missing or added IDs.
+The baseline still contains 733 ordered entries and exactly 668 mapped path-field changes.
+Every non-path field remains unchanged.
+Targeted Ruff and Black passed, and the required quality preflight passed one test.
+Task T035 is complete. The committed and full quality gates remain required before the correction push.
