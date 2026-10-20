@@ -6,7 +6,9 @@ import json
 from typing import Any
 from unittest.mock import MagicMock
 
+import pytest
 import redis
+import requests
 
 from src.interfaces.portals.wan_dashboard.services.worker import (
     RedisWorkerStore,
@@ -283,7 +285,69 @@ class TestWanDashboardWorker:
 
         stored = json.loads(client.values["wan-dashboard:v1:overview:org-a:last-success"])
         state = store.read_status()  # Read the status written in the same Redis script.
-        assert completed  # The complete run succeeds.
+        assert completed is True  # The complete run succeeds.
         assert stored == snapshot  # Publish the full snapshot without partial rows.
         assert state is not None and state["status"] == "complete"  # Publish matching completion state.
         service.remember_worker_snapshot.assert_called_once_with(snapshot)  # Preserve the bounded local fallback.
+
+
+class TestWorkerFailureModes:
+    """Prove transport, HTTP, and body failures preserve the last complete snapshot."""
+
+    @staticmethod
+    def _worker_with_prior_snapshot() -> tuple[MemoryRedis, RedisWorkerStore, MagicMock, WanDashboardWorker, str]:
+        """Build one leased worker with a complete synthetic snapshot."""
+        client = MemoryRedis()  # Keep all failure-path data local.
+        store = RedisWorkerStore(client, "org-a")  # Use the production Redis key names.
+        store.acquire("worker-a", 30)  # Give this worker sole publication rights.
+        snapshot_key = "wan-dashboard:v1:overview:org-a:last-success"  # Reuse the canonical cache key.
+        prior = '{"schema_version":1,"org_id":"org-a","data":[{"device_id":"old"}]}'  # Keep prior data complete.
+        client.values[snapshot_key] = prior  # Seed the result that failures must preserve.
+        service = MagicMock()  # Keep every test independent from Mist.
+        worker = WanDashboardWorker(service, store, WorkerSettings(60, 30))  # Bind local test dependencies.
+        return client, store, service, worker, snapshot_key  # Give each test the same safe baseline.
+
+    @pytest.mark.parametrize("status_code", [429, 503], ids=["http-4xx", "http-5xx"])
+    def test_http_status_failure_preserves_prior_snapshot(self, status_code: int) -> None:
+        """Client and server status failures never publish a replacement snapshot."""
+        client, store, service, worker, snapshot_key = self._worker_with_prior_snapshot()
+        service.collect_worker_snapshot.return_value = (None, f"http_{status_code}")  # Model a failed API read.
+
+        completed = worker._run_refresh("worker-a")  # Run one failed collection without any network request.
+
+        status = store.read_status()  # Read the safe failure state from synthetic Redis.
+        assert completed is False  # A failed page cannot report a complete run.
+        assert client.values[snapshot_key].endswith('"data":[{"device_id":"old"}]}')  # Keep the prior rows.
+        assert status is not None and status["safe_error"] == f"http_{status_code}"  # Preserve the status family.
+
+    @pytest.mark.parametrize(
+        "transport_error",
+        [requests.ConnectionError, requests.Timeout],
+        ids=["connection-error", "timeout"],
+    )
+    def test_transport_failure_preserves_prior_snapshot(self, transport_error: type[Exception]) -> None:
+        """Connection errors and timeouts leave the complete cache unchanged."""
+        client, store, service, worker, snapshot_key = self._worker_with_prior_snapshot()
+        service.collect_worker_snapshot.side_effect = transport_error("synthetic transport failure")
+
+        completed = worker._run_refresh("worker-a")  # Let the worker map a transport failure safely.
+
+        status = store.read_status()  # Read the safe failure state from synthetic Redis.
+        assert completed is False  # A transport failure cannot report a complete run.
+        assert client.values[snapshot_key].endswith('"data":[{"device_id":"old"}]}')  # Keep the prior rows.
+        assert status is not None and status["safe_error"] == "worker_error"  # Do not expose exception text.
+
+    @pytest.mark.parametrize("response_body", [b"", "{"], ids=["empty-body", "malformed-json"])
+    def test_invalid_json_body_preserves_prior_snapshot(self, response_body: bytes | str) -> None:
+        """An empty body or malformed JSON cannot replace the complete cache."""
+        with pytest.raises(json.JSONDecodeError) as parse_error:
+            json.loads(response_body)  # Model the Mist SDK failing to decode the response body.
+        client, store, service, worker, snapshot_key = self._worker_with_prior_snapshot()
+        service.collect_worker_snapshot.side_effect = parse_error.value  # Raise the SDK decode failure.
+
+        completed = worker._run_refresh("worker-a")  # Let the worker handle the failed collection.
+
+        status = store.read_status()  # Read the safe failure state from synthetic Redis.
+        assert completed is False  # Invalid response data cannot report a complete run.
+        assert client.values[snapshot_key].endswith('"data":[{"device_id":"old"}]}')  # Keep the prior rows.
+        assert status is not None and status["safe_error"] == "worker_error"  # Hide parser details.

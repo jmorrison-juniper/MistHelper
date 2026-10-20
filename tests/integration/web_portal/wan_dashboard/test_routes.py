@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
+import requests
 from flask import Flask, render_template
 from flask.testing import FlaskClient
 
@@ -472,3 +473,49 @@ class TestPortalPage:
         assert 'id="wan-refresh"' in html  # Keep the disabled state attached to the control.
         assert "disabled" in html  # Prevent an unimplemented worker request.
         assert "Refresh unavailable" in html  # Do not imply an unimplemented worker can collect data.
+
+
+class TestCacheOnlyFailureBoundary:
+    """Prove cache-only routes do not expose Mist transport failures."""
+
+    @pytest.mark.parametrize(
+        "transport_error",
+        [requests.ConnectionError, requests.Timeout],
+        ids=["connection-error", "timeout"],
+    )
+    def test_cached_overview_never_calls_live_reader(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        transport_error: type[Exception],
+    ) -> None:
+        """A cache hit stays available even when a forbidden live read would fail."""
+        service = FakeDashboardService()  # Keep the cached response synthetic.
+        live_reader = MagicMock(side_effect=transport_error("synthetic transport failure"))
+        monkeypatch.setattr(service, "get_overview", live_reader)  # Make any route-level collection fail.
+        client, _app = build_client(service)  # Register the cache-only route boundary.
+
+        response = client.get("/wan-dashboard/api/overview")  # Read only the cached synthetic result.
+
+        assert response.status_code == 200  # Keep cached data available without Mist access.
+        live_reader.assert_not_called()  # Do not enter the configured connection-error or timeout path.
+
+    @pytest.mark.parametrize("status_code", [429, 503], ids=["http-4xx", "http-5xx"])
+    def test_cached_overview_maps_service_failure_status(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        status_code: int,
+    ) -> None:
+        """The route maps rate limits and upstream failures to explicit safe responses."""
+        service = FakeDashboardService()  # Keep all responses local.
+        service_status = "rate_limited" if status_code == 429 else "error"
+        expected_status = status_code if status_code == 429 else 502
+        monkeypatch.setattr(
+            service,
+            "get_cached_overview",
+            lambda **_filters: {"status": service_status, "data": [], "notice": "Synthetic failure."},
+        )  # Return one bounded cache-service failure state.
+        client, _app = build_client(service)  # Register the production route.
+
+        response = client.get("/wan-dashboard/api/overview")  # Request the selected local failure state.
+
+        assert response.status_code == expected_status  # Preserve the route's documented status mapping.
