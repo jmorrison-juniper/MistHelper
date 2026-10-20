@@ -53,7 +53,8 @@ class TestTagConnectionType:
         assert clients == []
 
     def test_none_noop(self):
-        PromptClientUtils._tag_connection_type(None, "Wireless")
+        result = PromptClientUtils._tag_connection_type(None, "Wireless")
+        assert result is None
 
 
 class TestLogCombinedClientCounts:
