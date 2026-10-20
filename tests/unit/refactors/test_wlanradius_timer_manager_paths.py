@@ -1293,3 +1293,32 @@ class TestContextSetup:
         ):
             manager._fetch_org_wlans()  # WHY: run the aggregate org read.
         assert templates_spy.called and assigned_spy.called and filter_spy.called
+
+
+def test_site_info_http_503_refuses_plausible_site_data(
+    manager: WLANRadiusTimerManager, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Reject refused site data before it can replace the selected site state."""
+    from types import SimpleNamespace
+
+    from mistapi.__api_response import APIResponse
+    from requests import Response
+
+    response = Response()
+    response.status_code = 503
+    response.headers["Content-Type"] = "application/json"
+    response._content = b'{"name":"Refused Site","sitetemplate_id":"refused-template"}'
+    sdk_response = APIResponse(response, "https://api.mist.com/api/v1/sites/site-1")
+    session = object()
+    before = (dict(manager.site_info), manager.site_name, manager.site_template_id)
+    caplog.clear()
+    with (
+        patch.object(wrtm, "_MH", SimpleNamespace(apisession=session)),
+        patch.object(wrtm.mistapi.api.v1.sites.sites, "getSiteInfo", return_value=sdk_response) as fetch,
+        caplog.at_level(logging.ERROR),
+    ):
+        result = WLANRadiusTimerManager._fetch_site_info(manager)
+    assert result is False
+    assert (manager.site_info, manager.site_name, manager.site_template_id) == before
+    assert caplog.record_tuples == [(wrtm.__name__, logging.ERROR, "Failed to fetch site info: HTTP 503")]
+    fetch.assert_called_once_with(session, "site-1")
