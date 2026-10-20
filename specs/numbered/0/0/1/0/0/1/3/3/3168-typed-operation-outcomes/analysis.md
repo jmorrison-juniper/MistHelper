@@ -124,5 +124,7 @@ The full test suite and live Mist validation were not run. The focused tests
 use local fakes and do not contact Mist.
 
 Main advanced to `e70e573b56284f89893657a3266d6e797821b5ea` before PR creation.
-The branch was rebased onto that commit. The focused tests, code checks, and
-test-quality gate passed again against the new base at `2026-10-20T02:30:55Z`.
+The branch was rebased onto that commit. Main later advanced to
+`e34553278301ea0715902fa905be3975b3cc8c13` before auto-merge review.
+The branch was rebased again. Focused tests, code checks, and the test-quality
+gate passed against this base at `2026-10-20T03:16:40Z`.
