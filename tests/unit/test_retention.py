@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from threading import Thread
 from unittest.mock import MagicMock, patch
 
 from arango.exceptions import ArangoError  # WHY: tests must raise the narrowed ArangoDB driver type
@@ -180,11 +181,12 @@ class TestRetentionPeriodic:
             redis_writer=MagicMock(),
         )
         manager._check_interval_hours = 1
-        manager.start_periodic()
-        assert manager._thread is not None
-        assert manager._thread.is_alive()
-        manager.stop()
-        assert manager._thread is None
+        manager.start_periodic()  # WHY: launch the sweep loop before checking its thread.
+        assert isinstance(manager._thread, Thread)  # WHY: startup must create a thread instance.
+        assert manager._thread.daemon is True  # WHY: the sweep must not block interpreter exit.
+        assert manager._thread.is_alive()  # WHY: startup must launch the sweep loop.
+        manager.stop()  # WHY: stop the background thread before this test ends.
+        assert manager._thread is None  # WHY: stop must clear its thread reference.
 
     def test_start_idempotent(self) -> None:
         from src.foundation.persistence.db.retention import RetentionManager
@@ -206,4 +208,5 @@ class TestRetentionPeriodic:
             arango_writer=MagicMock(),
             redis_writer=MagicMock(),
         )
-        manager.stop()  # should not raise
+        manager.stop()  # WHY: stop must remain safe before startup.
+        assert manager._thread is None  # WHY: a stopped manager must hold no thread.
