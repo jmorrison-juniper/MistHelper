@@ -18,12 +18,13 @@ Each stub module must restore sys.modules directly after its import.
 from __future__ import annotations
 
 import sys
+from types import ModuleType
 
 
 def test_mistapi_in_sys_modules_is_the_real_package() -> None:
     """Fail if collection left a stub in place of the real mistapi package."""
     module = sys.modules.get("mistapi")  # Whatever collection left behind.
-    assert module is not None, "mistapi is absent from sys.modules. A test module removed it."
+    assert isinstance(module, ModuleType), "mistapi is absent or is not a module in sys.modules."
 
     # A MagicMock stub has no __path__, so lazy subpackage imports fail.
     assert hasattr(module, "__path__"), (
