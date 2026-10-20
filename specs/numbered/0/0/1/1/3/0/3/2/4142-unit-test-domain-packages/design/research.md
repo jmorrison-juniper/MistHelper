@@ -601,3 +601,62 @@ The report source root now has three direct children: PSK hygiene and the two wi
 Those paths retain their previous ownership holds until their owners release them.
 The destination report root has five direct children.
 No direct unit-root child was added.
+
+## Approved-base rebase after PR #4353
+
+The coordinator approved base `efd178c3f76e580afc0b5511734498b61f3a0090`.
+Preservation commit `e7e9cf4644f723aea000e04555b1562534dcb0e5` retained the complete work before rebase.
+The rebase produced commit `20b200389124433e2737eb3b666805a7c738862e`, whose parent is the approved base.
+
+Git stopped because main added `org_security_posture/test_operation_outcome.py` while this branch split its directory.
+The test now occupies the fifth position in the mapped `contracts/` group.
+Its fixture import uses `org_security_posture.fixtures.representative`.
+The focused posture run verified this import and main's typed-outcome behavior.
+No textual conflict required a large resolution.
+
+The earlier ownership check missed old rename paths.
+The corrected check reads `git diff --name-only --no-renames` and both API rename endpoints.
+It found the earlier Arango move intersected PR #4350.
+The entire five-file Arango package now remains at its original source.
+Every file matches the approved main byte for byte.
+The contract and discovery callers also retain main's exact imports.
+This move remains deferred in the map and task T005.
+
+The first full collection found one missed discovery caller of the returned Arango helper.
+Restoring that caller's original import resolved the collection error.
+The first style run reported that same import. The final style run passed.
+
+The live scan checked all eight open pull requests: #4350, #4327, #4322, #4318, #4317, #4316, #4226, and #4208.
+Their complete file lists included previous filenames.
+The corrected branch scan found no shared source or destination path.
+
+### Post-rebase evidence
+
+The approved-main snapshot came from `git archive` in ignored `.venv/tmp/4142-exact-main/`.
+Both trees collected exactly 29,601 unit tests.
+The recorder retained every complete node ID, including parameter values.
+The deterministic comparison used 374 Git rename pairs and four explicit filename changes already recorded in the map.
+The complete node-ID multisets matched after these 378 exact path changes.
+No test was missing or added.
+
+The baseline retained 733 entries in their original order.
+Exactly 668 `file_path` or `related_source` values changed through the verified move map.
+Every changed target exists. No other baseline field changed.
+
+The focused Arango, contract, posture, and path-guard run passed 135 tests, with one existing optional-runtime skip.
+The ten moved modules also changed on main passed 267 tests.
+These modules cover prompt input, retention, Redis output, SDK isolation, address handling, digest output, and posture outcomes.
+Ruff passed for all 397 changed Python files.
+Black reported that all 397 files need no change.
+`python -m py_compile MistHelper.py` passed.
+The required `TestLiveGuides` preflight passed one test and read all four required inputs.
+The restored discovery caller passed all 27 tests.
+The managed-record and baseline guards passed all 25 tests.
+The five updated Spec Kit records passed the STE threshold with scores from 93 through 97.
+The explicit feature prerequisite check passed with `-RequireTasks -IncludeTasks -RequireSpec`.
+The optional commit hook requires no action. The companion hook is disabled.
+
+Task T034 is complete.
+Tasks T004 through T026 remain incomplete where ownership or final layout acceptance prevents completion.
+This evidence does not establish full-suite execution, coverage, final five-child compliance, deployment, or merge readiness.
+The pull request must remain draft, and issue #4142 must remain open.
