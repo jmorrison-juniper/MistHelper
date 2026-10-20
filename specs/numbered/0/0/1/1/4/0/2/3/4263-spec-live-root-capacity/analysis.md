@@ -333,3 +333,18 @@ The audit did not report a missing reference in this feature.
 The local route test needs PowerShell to test the scripts.
 The earlier 51-test pass used the previous base and remains a historical result.
 The pull request checks must pass on the rebased branch before auto-merge can continue.
+
+## Latest Base Refresh
+
+**Recorded**: `2026-10-20T09:36:56Z`.
+
+**Base**: `main` at `fcb0fc980b9124116307ea37fefbbbd1306bce3f`.
+
+The PR branch was behind again because `main` advanced after the prior rebase.
+The branch now includes this base.
+No current-main commit changed the three feature files in this PR.
+The process-folder guard passed 11 tests.
+It examined 795 children, 792 grandfathered entries, 3 managed roots, 128 structural directories, and 45 feature records.
+The STE and link results above still apply because the feature files did not change.
+The route suite remains blocked by the missing `pwsh` executable.
+Fresh CI and CodeQL results for the latest branch commit are not yet available.
