@@ -39,8 +39,8 @@ class DashboardServiceProvider:
             return configured  # Do not replace the injected service.
         session = current_app.config.get("APISESSION")  # Use only MistHelper's configured Mist session.
         org_id = current_app.config.get("ORG_ID")  # Keep reads scoped to the active organization.
-        if session is None or not isinstance(org_id, str) or not org_id.strip():
-            return None  # The route reports the missing shared session as 503.
+        if not isinstance(org_id, str) or not org_id.strip():
+            return None  # Cache reads still require a valid organization scope.
         service = current_app.extensions.get(cls.EXTENSION_KEY)  # Reuse the worker-local service and cooldowns.
         if service is not None:  # The portal app already built its feature service.
             return service  # Avoid one Redis connection attempt per request.
@@ -75,12 +75,12 @@ class DashboardReadRoutes:
         gateway_id = DashboardReadRoutes._query_value("gateway_id")  # Validate optional exact gateway selection.
         search = DashboardReadRoutes._query_value("search", maximum=120)  # Bound operator search text.
         invalid = next((value for value in (site_id, gateway_id, search) if value is False), None)
-        if invalid is False:  # Reject malformed query values before the Mist SDK call.
+        if invalid is False:  # Reject malformed query values before the cache lookup.
             return DashboardReadRoutes._json({"status": "invalid", "data": [], "notice": "Filter is invalid."}, 400)
-        service = DashboardServiceProvider.get()  # Resolve the existing session and Redis client.
-        if service is None:  # No configured shared session can read organization data.
+        service = DashboardServiceProvider.get()  # Resolve the organization scope and Redis client.
+        if service is None:  # The cache cannot be scoped without an active organization.
             return DashboardReadRoutes._unavailable()
-        result = service.get_overview(site_id=site_id, gateway_id=gateway_id, search=search)
+        result = service.get_cached_overview(site_id=site_id, gateway_id=gateway_id, search=search)
         return DashboardReadRoutes._result(result)  # Keep status semantics consistent across reads.
 
     @staticmethod
@@ -88,36 +88,36 @@ class DashboardReadRoutes:
         """Return details only for a gateway in the active authorized organization."""
         if not WanDataNormalizer.identifier(gateway_id):  # Reject a malformed path identifier.
             return DashboardReadRoutes._invalid()  # Stop before data collection.
-        service = DashboardServiceProvider.get()  # Use the worker's shared service.
-        if service is None:  # The page can render, but live data cannot load.
+        service = DashboardServiceProvider.get()  # Use the process-local cache service.
+        if service is None:  # The cache cannot be scoped without an active organization.
             return DashboardReadRoutes._unavailable()
-        return DashboardReadRoutes._result(service.get_gateway_ports(gateway_id))
+        return DashboardReadRoutes._result(service.get_cached_gateway_ports(gateway_id))
 
     @staticmethod
     def traffic(gateway_id: str, port_id: str) -> tuple[Any, int] | Any:
         """Return traffic samples for one supported range."""
         time_range = request.args.get("range", "24h")  # Keep the source dashboard's default period.
         if not WanDataNormalizer.identifier(gateway_id) or not WanDataNormalizer.identifier(port_id, port=True):
-            return DashboardReadRoutes._invalid()  # Reject malformed path values before cloud access.
+            return DashboardReadRoutes._invalid()  # Reject malformed path values before the cache lookup.
         if time_range not in WanDataNormalizer.TRAFFIC_SECONDS:  # Use only the four published options.
             return DashboardReadRoutes._invalid("Traffic range is invalid.")  # Do not pass arbitrary intervals.
-        service = DashboardServiceProvider.get()  # Use the existing shared portal session.
-        if service is None:  # Report the missing dependency instead of empty data.
+        service = DashboardServiceProvider.get()  # Resolve the process-local cache service.
+        if service is None:  # Report the missing organization scope instead of empty data.
             return DashboardReadRoutes._unavailable()
-        return DashboardReadRoutes._result(service.get_traffic(gateway_id, port_id, time_range))
+        return DashboardReadRoutes._result(service.get_cached_traffic(gateway_id, port_id, time_range))
 
     @staticmethod
     def insights(gateway_id: str, port_id: str) -> tuple[Any, int] | Any:
         """Return WAN Insights for one supported range."""
         time_range = request.args.get("range", "24h")  # Keep the source dashboard's default period.
         if not WanDataNormalizer.identifier(gateway_id) or not WanDataNormalizer.identifier(port_id, port=True):
-            return DashboardReadRoutes._invalid()  # Reject malformed path values before cloud access.
+            return DashboardReadRoutes._invalid()  # Reject malformed path values before the cache lookup.
         if time_range not in WanDataNormalizer.INSIGHT_SECONDS:  # Use only the five published options.
             return DashboardReadRoutes._invalid("Insights range is invalid.")  # Do not pass arbitrary intervals.
-        service = DashboardServiceProvider.get()  # Use the existing shared portal session.
-        if service is None:  # Report the missing dependency instead of empty data.
+        service = DashboardServiceProvider.get()  # Resolve the process-local cache service.
+        if service is None:  # Report the missing organization scope instead of empty data.
             return DashboardReadRoutes._unavailable()
-        return DashboardReadRoutes._result(service.get_insights(gateway_id, port_id, time_range))
+        return DashboardReadRoutes._result(service.get_cached_insights(gateway_id, port_id, time_range))
 
     @staticmethod
     def _query_value(name: str, maximum: int = 128) -> str | None | bool:
@@ -136,7 +136,13 @@ class DashboardReadRoutes:
         """Map explicit service states to safe HTTP status codes."""
         status = result.get("status")  # Read the service state, not the payload shape.
         status_key = status if isinstance(status, str) else ""  # Use a safe key for unknown service results.
-        code = {"invalid": 400, "forbidden": 404, "rate_limited": 429, "error": 502}.get(status_key, 200)
+        code = {
+            "invalid": 400,
+            "forbidden": 404,
+            "rate_limited": 429,
+            "error": 502,
+            "unavailable": 503,
+        }.get(status_key, 200)
         return DashboardReadRoutes._json(result, code)  # Partial and stale views remain visible at 200.
 
     @staticmethod
@@ -152,9 +158,9 @@ class DashboardReadRoutes:
 
     @staticmethod
     def _unavailable() -> tuple[Any, int]:
-        """Return an explicit missing-session response."""
+        """Return an explicit missing-organization response."""
         return DashboardReadRoutes._json(
-            {"status": "error", "data": [], "notice": "The shared Mist session is unavailable."},
+            {"status": "error", "data": [], "notice": "The active organization is unavailable."},
             503,
         )
 
@@ -165,8 +171,8 @@ class DashboardExportRoutes:
     @staticmethod
     def gateways() -> tuple[Any, int] | Any:
         """Export only overview rows selected by the current filters."""
-        service = DashboardServiceProvider.get()  # Use the existing shared session and service.
-        if service is None:  # A missing session is an unavailable service, not an empty CSV.
+        service = DashboardServiceProvider.get()  # Use the existing organization-scoped cache service.
+        if service is None:  # A missing organization is unavailable, not an empty CSV.
             return DashboardReadRoutes._unavailable()
         filters = {
             "site_id": DashboardReadRoutes._query_value("site_id"),
@@ -175,7 +181,7 @@ class DashboardExportRoutes:
         }  # Keep the export selection aligned with the visible table.
         if False in filters.values():  # Reject the same unsafe filters as the overview.
             return DashboardReadRoutes._invalid("Export filter is invalid.")
-        result = service.export_gateways(**filters)  # Read the selected rows through the feature service.
+        result = service.export_cached_gateways(**filters)  # Read only the selected cached overview rows.
         if result.get("status") not in {"ok", "empty"}:  # Do not export a failed or stale response as current.
             return DashboardReadRoutes._result(result)  # Preserve the explicit service state.
         content = CsvExporter.gateway_csv(result["data"])  # Neutralize formulas and quote cells.
@@ -186,13 +192,13 @@ class DashboardExportRoutes:
         """Export the canonical twelve-column hourly port view."""
         time_range = request.args.get("range", "24h")  # Keep the source default.
         if not WanDataNormalizer.identifier(gateway_id) or not WanDataNormalizer.identifier(port_id, port=True):
-            return DashboardReadRoutes._invalid()  # Validate route data before the SDK call.
+            return DashboardReadRoutes._invalid()  # Validate route data before the cache lookup.
         if time_range not in WanDataNormalizer.INSIGHT_SECONDS:  # Use one documented range.
             return DashboardReadRoutes._invalid("Insights range is invalid.")  # Reject arbitrary periods.
-        service = DashboardServiceProvider.get()  # Resolve the portal's shared session.
-        if service is None:  # Do not send an empty file for missing credentials.
+        service = DashboardServiceProvider.get()  # Resolve the portal's shared cache service.
+        if service is None:  # Do not send an empty file for a missing organization.
             return DashboardReadRoutes._unavailable()
-        result = service.get_hourly_export(gateway_id, port_id, time_range)
+        result = service.get_cached_hourly_export(gateway_id, port_id, time_range)
         if result.get("status") not in {"ok", "empty"}:  # Do not export failed or stale data as current.
             return DashboardReadRoutes._result(result)  # Preserve the explicit service state.
         content = CsvExporter.hourly_csv(result["data"])  # Preserve the source's twelve-column layout.

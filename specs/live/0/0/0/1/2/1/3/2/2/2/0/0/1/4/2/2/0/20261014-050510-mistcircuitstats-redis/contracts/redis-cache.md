@@ -1,82 +1,86 @@
 # Redis Cache Contract: MistCircuitStats Redis Dashboard Migration
 
-**Status**: Proposed contract. Do not implement until #4195 and #4200 ownership and existing Redis conventions are reviewed.
+**Status**: Reuse the existing #4252 cache. Do not add a second cache policy.
 
-## Existing Dashboard Baseline
+## Existing Cache Baseline
 
-Merged PR #4252 uses `RedisDashboardCache` with the existing shared Redis client in `src/interfaces/portals/wan_dashboard/services.py`.
+Merged PR #4252 uses `RedisDashboardCache` with the shared Redis client in `src/interfaces/portals/wan_dashboard/services.py`.
 
 | Setting | Existing value | Scope |
 |---|---|---|
 | `CACHE_PREFIX` | `wan-dashboard:v1:` | Existing dashboard keys |
 | `SITE_TTL` | 300 seconds | Site data |
 | `ENTITY_TTL` | 600 seconds | Entity data |
-| `STALE_TTL` | 86400 seconds | Last-success data |
+| `STALE_TTL` | 86,400 seconds | Last-success data |
 
-These values describe existing behavior only. They do not approve a #4220 cache, writer, TTL, lease, or outage policy. Do not alter existing keys during planning.
+Preserve these keys and TTLs. Do not change them in this migration. Do not reserve or create the historical `misthelper:wan:mcsr:v1:` candidate prefix.
 
-## Resource Boundary
+## Ownership
 
-- Use the existing MistHelper Redis service only.
-- Do not add a Redis service, database, port, or Compose group.
-- Use Redis only for transient dashboard snapshots and approved refresh coordination.
-- Do not treat Redis TTL as durable history or source retention.
-- Do not reuse a key owned by another MistHelper feature.
+- One background worker is the sole Mist API collector and sole writer of WAN snapshot values.
+- Run the worker inside the existing web container. Use a renewable Redis lease to elect one active worker across Gunicorn processes.
+- Do not collect Mist data or write WAN snapshots when the process does not hold the lease.
+- Keep collection disabled unless `WAN_DASHBOARD_REFRESH_ENABLED` is true and `WAN_DASHBOARD_REFRESH_INTERVAL_SECONDS` and `WAN_DASHBOARD_WORKER_LEASE_SECONDS` hold positive application configuration values.
+- Missing or invalid timing configuration must prevent worker startup and all Mist requests.
+- Scheduled refreshes and operator refresh requests use the same worker.
+- Keep one active run and at most one queued follow-up. Coalesce further Refresh requests into that follow-up.
+- Dashboard routes read the existing cache only. They do not call Mist when a value is absent or unreadable.
+- A route may use only its own complete process-local memory snapshot when Redis is unavailable. Mark it stale and enforce the 86,400-second maximum age.
+- Do not add local file storage or another persistent store for snapshots.
+- Use the existing shared Redis client. Add no Redis service, database, port, or Compose group.
+- Keep request-admission keys and other feature state under their existing owners.
+- Do not add a second snapshot namespace.
 
-## Namespace and Ownership
+## Snapshot Rules
 
-Historical candidate only. This prefix is not reserved or approved:
+- Reuse the existing #4252 snapshot shape and keys.
+- Validate organization, site, gateway, and port identity before publication.
+- Publish a complete snapshot only after all required bulk pages pass validation.
+- On a rate limit, failed page, incomplete dataset, Redis failure, or lease failure, preserve the last complete snapshot, mark it stale, show a safe refresh error, and publish no partial data.
+- If no unexpired complete snapshot is available, report unavailable data.
+- After 86,400 seconds, stop showing the snapshot, including from process-local memory.
+- Display refresh state, the current bulk-read phase, completed page counts, timestamps, and a safe error status.
+- Store no credentials, authorization headers, raw request objects, or secrets.
+- Reject malformed or unknown-version values. Report unavailable data rather than using a silent default.
 
-```text
-misthelper:wan:mcsr:v1:<org_id>:<site_id>:<record_type>:<record_id>
-```
+## Refresh Interval and Lease
 
-- `mcsr` identifies this migration namespace.
-- `v1` identifies the payload schema version.
-- The organization and site identifiers isolate tenant data.
-- Each key has one named writer. Dashboard routes read the key and do not write snapshots.
-- A refresh owner may publish only after it validates the organization, key owner, schema, and complete record set.
-- Organization-scoped peer records must use a documented organization scope instead of an empty site identifier.
-- The prefix and key parts require review against existing MistHelper Redis keys before implementation.
-- Prefer the existing canonical cache when it meets an approved requirement. Do not create a second namespace without an explicit unique-scope decision.
+The Redis lease mechanism is approved. Do not select its duration or set a refresh interval in this plan. The production-scale load test must measure:
 
-## Serialization
+- All page requests for 1,001–5,000 sites, 1,001–5,000 gateways, and 5,001–20,000 WAN ports.
+- Additional non-WAN port pages.
+- Total shared token usage against the current 5,000-calls-per-hour limit.
+- Full refresh duration, overlapping queue requests, and recovery after worker failure.
 
-- Encode payloads as UTF-8 JSON with a documented top-level schema version.
-- Do not use pickle or another executable serialization format.
-- Validate the decoded version and required fields before use.
-- Treat malformed or unknown-version data as unavailable. Do not silently substitute defaults.
-- Keep credentials, authorization headers, raw API request objects, and secrets out of values and keys.
+Select the refresh interval only after the test records shared request headroom and freshness needs. Derive the renewable lease from measured refresh duration and failure recovery. Do not guess either value.
 
-## Expiry and Refresh
-
-- The source guide documents a 300-second interval and a TTL of three intervals. The implementation review reports a 300-second interval and a 31-day TTL.
-- Treat both TTL values as source evidence, not an approved MistHelper policy. The long implementation TTL conflicts with the guide and can retain stale data.
-- Before implementation, verify the source interval, TTL calculation, freshness threshold, and maximum allowed MistHelper request rate.
-- Select a target TTL from MistHelper freshness and outage requirements. Do not copy a source TTL multiplier without an approved reason.
-- A refresh must stage and validate a complete replacement before publishing it.
-- A failed or partial refresh must preserve the last valid snapshot and record a safe failure state.
-- A scheduler or worker must prove single ownership before requesting Mist data. If ownership cannot be established, skip the refresh.
-- An interrupted owner must release or expire its lease. Verify that the current project has a suitable coordination pattern before selecting a lock.
+The 12–35+ request estimate applies to four bulk reads at page size 1,000 before extra non-WAN port pages. It is not a measured result.
 
 ## Outage Behavior
 
 | Condition | Required result |
 |---|---|
-| Redis read fails | Show an explicit unavailable state. Do not make a fallback Mist request from the page. |
-| Redis write fails | Keep any reachable previous snapshot. Mark refresh as failed and do not report new data as saved. |
-| Value is malformed | Reject the value, log a safe error, and report unavailable or stale data. |
-| Cache key belongs to another owner | Refuse the write and report an ownership conflict. |
-| Mist API fails | Preserve the last valid snapshot and mark its age and failure state. |
-| Cache expires during a Mist outage | Report unavailable data. Do not label fixtures as live. |
+| Redis read fails | Report unavailable data. Do not make a fallback Mist request from a route. |
+| Redis read fails, local complete snapshot exists | Show that process-local snapshot as stale while it is no more than 86,400 seconds old. Do not make a fallback Mist request. |
+| Redis read fails, no local complete snapshot exists | Report unavailable data. Do not make a Mist request. |
+| Redis write fails | Keep the last complete snapshot, mark it stale, and report refresh failure. |
+| Value is malformed | Reject it and report unavailable data. |
+| Mist page is rate limited, fails, or returns incomplete data | Preserve the last complete snapshot, mark it stale, show a safe refresh error, and publish no partial data. |
+| Worker lease cannot be acquired or renewed | Stop collection and publication. Report a safe refresh error. |
+| Another refresh is active | Keep one active run and one queued follow-up. Coalesce all further requests into that follow-up. |
+| Snapshot exceeds 86,400 seconds | Report unavailable data. Do not label synthetic data as live. |
+| Redis queue operation fails | Reject the request and show a safe queue error. Do not call Mist from the route. |
 
 ## Required Tests
 
-- Prove that keys for two organizations, sites, and record types do not collide.
-- Prove the key version and payload version are checked.
-- Prove that the selected TTL meets the approved freshness limit and cannot exceed its maximum.
-- Prove that malformed values, wrong owners, and unknown versions fail safely.
-- Prove that partial refresh does not replace the previous valid snapshot.
-- Prove that a Redis outage causes no page-triggered Mist request.
-- Prove that a worker without an ownership lease skips collection.
-- Prove logs redact tokens and do not include secret payloads.
+- Prove that the worker is the only writer of WAN snapshot values.
+- Prove that portal routes make no Mist request on cache failure.
+- Prove that existing keys and 300-, 600-, and 86,400-second TTLs remain unchanged.
+- Prove that rate limits, failed pages, and incomplete datasets preserve the last complete snapshot as stale and publish no partial data.
+- Prove that only one leased worker runs across Gunicorn processes.
+- Prove that multiple Refresh requests during one run produce one queued follow-up.
+- Prove that Redis outage uses only an unexpired process-local snapshot and makes no Mist request.
+- Prove that the page reports refresh state, read phase, page counts, timestamps, and safe errors.
+- Prove that snapshots older than 86,400 seconds are unavailable, including in process memory.
+- Prove that credentials do not enter cache values, keys, or logs.
+- Record the lease duration and refresh interval only after the production-scale load test.

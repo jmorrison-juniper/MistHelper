@@ -606,7 +606,6 @@
     });
     elements.trafficRange.addEventListener("change", loadTraffic);
     elements.insightRange.addEventListener("change", loadInsights);
-    document.getElementById("wan-refresh").addEventListener("click", loadOverview);
     document.getElementById("wan-modal-close").addEventListener("click", () => {
         elements.chartModal.hidden = true;
     });

@@ -14,7 +14,8 @@
             <p class="wan-description">Review gateway health, WAN ports, traffic, and native WAN Insights.</p>
         </div>
         <div class="wan-header-actions">
-            <button id="wan-refresh" class="btn btn-outline-primary" type="button">Refresh data</button>
+            <button id="wan-refresh" class="btn btn-outline-primary" type="button" disabled
+                    title="Refresh is unavailable until the background worker is configured.">Refresh unavailable</button>
             <a id="wan-gateway-export" class="btn btn-primary" data-testid="wan-gateway-export"
                href="{{ url_for('wan_dashboard.gateway_export') }}">Export gateways</a>
         </div>
