@@ -1,0 +1,209 @@
+"""Unit tests for the writer of the session configuration file, issue #2181.
+
+Why:
+    `compose.yml` supplies the credentials through `env_file`, which fills the
+    environment of the container process and writes no file. The SSH daemon
+    starts each session with a fresh environment, so no credential reached an
+    SSH session. MistHelper then refused five times in a row, and the operator
+    read a login loop.
+
+    `container/scripts/write-session-env.sh` closes that gap. The entrypoint
+    runs it as root at container start, and the session script reads the file
+    that it writes.
+
+    The file holds the Mist API token and two database passwords, so these
+    tests also guard the mode and the allowlist. A wider mode exposes these
+    credentials to other accounts. A blind copy of the environment would write
+    the SSH password to disk.
+
+Scope:
+    The writer script only. No test starts a container, and no test reaches the
+    Mist cloud.
+"""
+
+from __future__ import annotations  # Postponed annotations keep every hint a plain string.
+
+import getpass  # The test must request a valid owner on this host.
+import logging  # Record action counts without configuration values.
+import os  # The writer reads its values from the environment.
+import secrets  # Create fixture credentials that never name a real account.
+import subprocess  # The test runs a shell script.
+from pathlib import Path  # Every path in this module is a Path.
+
+import pytest  # The test framework of the project.
+
+from tests.unit.prod_readiness.operations.exporting.container.bash_support import (
+    BASH_PATH,  # Keep the shell that can open the script.
+    BASH_SKIP_REASON,
+    windows_system_variables,
+)
+from tests.unit.prod_readiness.operations.exporting.container.owner_only import assert_owner_only
+
+# Find the repository root, because pytest moves the working directory.
+REPO_ROOT = Path(__file__).resolve().parents[6]  # The moved package adds three parent levels.
+# Point at the script under test.
+WRITER_SCRIPT = REPO_ROOT / "container" / "scripts" / "write-session-env.sh"
+# Stop a runaway script, because a hang must fail the test and not the suite.
+HARNESS_TIMEOUT_SECONDS = 30
+
+# Skip the module when no bash can open the script. A bash that refuses a
+# Windows path reaches this guard too, because the presence of bash proves
+# nothing on Windows. Read tests/unit/prod_readiness/operations/exporting/container/bash_support.py for the reason.
+pytestmark = pytest.mark.skipif(BASH_SKIP_REASON is not None, reason=BASH_SKIP_REASON or "")
+
+# Request the current valid account, so a local test proves the actual owner.
+OWNER_NAME = getpass.getuser()
+
+
+def _run_writer(target: Path, values: dict[str, str]) -> subprocess.CompletedProcess[str]:
+    """Run the writer with a fixed environment and return the finished process.
+
+    Args:
+        target: The path of the file that the writer builds.
+        values: The variables that the writer may read.
+
+    Returns:
+        The finished process, which carries the status and the output.
+    """
+    env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin")}  # Start clean, so no real token reaches the file.
+    env.update(windows_system_variables())  # Windows children need the folder names to start Winsock.
+    env.update(values)  # Apply the values that this test states.
+    logging.info("Writing one fixture session file with %d configuration names", len(values))
+    result = subprocess.run(
+        [str(BASH_PATH), WRITER_SCRIPT.as_posix(), OWNER_NAME, target.as_posix()],
+        capture_output=True,  # Keep the report line for the assertions.
+        text=True,  # Decode the output for the message.
+        timeout=HARNESS_TIMEOUT_SECONDS,  # Apply the hard timeout, because a hang must not stop the suite.
+        env=env,  # Pass the fixed environment.
+        check=False,  # Keep the status, because one test proves a clean status.
+    )
+    logging.debug("Checked 1 session file. Writer exit status: %d", result.returncode)
+    return result
+
+
+def test_the_script_parses_under_bash() -> None:
+    """A syntax fault would stop every container start."""
+    result = subprocess.run(
+        [str(BASH_PATH), "-n", WRITER_SCRIPT.as_posix()],  # Ask bash to parse the script without a run.
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr  # A non-zero status names the line of the fault.
+
+
+def test_the_writer_carries_the_token_and_the_host(tmp_path: Path) -> None:
+    """The preflight reads both names, so both must reach the session."""
+    target = tmp_path / "session.env"
+    _run_writer(target, {"MIST_APITOKEN": "a-token", "MIST_HOST": "api.mist.com"})
+
+    written = target.read_text(encoding="utf-8")
+    assert "MIST_APITOKEN=a-token" in written  # The token reaches the file.
+    assert "MIST_HOST=api.mist.com" in written  # The host reaches the file.
+
+
+def test_the_finished_file_is_readable_by_its_owner_alone(tmp_path: Path) -> None:
+    """The file holds the API token, so no other account of the container reads it."""
+    target = tmp_path / "session.env"
+    _run_writer(target, {"MIST_APITOKEN": "a-token"})
+
+    assert target.is_file(), "The writer must create the session file before its protection is checked."
+    assert_owner_only(target)  # Owner alone on POSIX, read-only on Windows, so no other account writes the token.
+
+
+def test_a_variable_outside_the_allowlist_never_reaches_the_file(tmp_path: Path) -> None:
+    """A blind copy of the environment would write the SSH password to disk."""
+    target = tmp_path / "session.env"
+    _run_writer(
+        target,
+        {
+            "MIST_APITOKEN": "a-token",
+            "MISTHELPER_SSH_PASSWORD": "the-ssh-password",  # A real secret of the container.
+            "AWS_SECRET_ACCESS_KEY": "an-unrelated-secret",  # A secret of another system.
+        },
+    )
+
+    written = target.read_text(encoding="utf-8")
+    assert "the-ssh-password" not in written  # The SSH password stays out of the file.
+    assert "an-unrelated-secret" not in written  # Every unrelated secret stays out as well.
+
+
+def test_an_empty_variable_never_reaches_the_file(tmp_path: Path) -> None:
+    """An empty value would override a default that MistHelper would otherwise use."""
+    target = tmp_path / "session.env"
+    _run_writer(target, {"MIST_APITOKEN": "a-token", "MIST_ORG_ID": ""})
+
+    assert "MIST_ORG_ID" not in target.read_text(encoding="utf-8")  # The empty name stays out.
+
+
+def test_the_report_names_the_variables_and_prints_no_value(tmp_path: Path) -> None:
+    """The report reaches the log file, which every reader of the data volume opens."""
+    target = tmp_path / "session.env"
+    names = (
+        "MIST_HOST",
+        "MIST_APITOKEN",
+        "ARANGO_HOST",
+        "ARANGO_DATABASE",
+        "ARANGO_USERNAME",
+        "ARANGO_ROOT_PASSWORD",
+        "REDIS_HOST",
+        "REDIS_PORT",
+        "REDIS_PASSWORD",
+    )
+    values = {name: secrets.token_hex(24) for name in names}
+    result = _run_writer(target, values)
+    expected = "[SSH] Carried 9 configuration name(s) into the session file: " + " ".join(names) + "\n"
+    assert result.returncode == 0
+    assert result.stdout == expected
+    assert result.stderr == ""
+    exposed = any(value in result.stdout + result.stderr for value in values.values())
+    assert exposed is False
+
+
+def test_a_value_with_a_space_and_a_quotation_mark_reads_back_whole(tmp_path: Path) -> None:
+    """A lost character would send a broken token to the Mist cloud."""
+    target = tmp_path / "session.env"
+    awkward = 'tok en"with$specials'  # A space, a quotation mark, and a dollar sign together.
+    _run_writer(target, {"MIST_APITOKEN": awkward})
+
+    # Read the value back the way the session script does, which is a source
+    # under `set -a`. A test that read the raw line would prove nothing about
+    # the shell that consumes it.
+    read_back = subprocess.run(
+        [str(BASH_PATH), "-c", f'set -a; source "{target.as_posix()}"; printf "%s" "$MIST_APITOKEN"'],
+        capture_output=True,
+        text=True,
+        timeout=HARNESS_TIMEOUT_SECONDS,
+        check=False,
+    )
+    assert read_back.stdout == awkward, read_back.stdout  # The value survives the round trip.
+
+
+def test_a_second_run_replaces_every_earlier_value(tmp_path: Path) -> None:
+    """A stale token from an earlier container start must never survive a restart."""
+    target = tmp_path / "session.env"
+    _run_writer(target, {"MIST_APITOKEN": "the-first-token"})
+    _run_writer(target, {"MIST_APITOKEN": "the-second-token"})
+
+    written = target.read_text(encoding="utf-8")
+    assert "the-first-token" not in written  # The earlier value is gone.
+    assert "the-second-token" in written  # The current value stands alone.
+
+
+def test_the_writer_builds_a_missing_directory(tmp_path: Path) -> None:
+    """The container holds no /etc/misthelper directory before the first start."""
+    target = tmp_path / "absent" / "misthelper" / "session.env"
+    result = _run_writer(target, {"MIST_APITOKEN": "a-token"})
+
+    assert result.returncode == 0, result.stderr  # The writer reports success.
+    assert target.exists()  # The file reached the new directory.
+
+
+def test_a_run_with_no_named_variable_writes_an_empty_file(tmp_path: Path) -> None:
+    """A container with no configuration must still leave a readable file."""
+    target = tmp_path / "session.env"
+    result = _run_writer(target, {})
+
+    assert result.returncode == 0, result.stderr  # The writer never fails on an empty environment.
+    assert target.read_text(encoding="utf-8") == ""  # The file holds nothing, so the session refuses later.
+    assert "Carried 0 configuration name(s)" in result.stdout  # The report names the count, so the operator sees it.

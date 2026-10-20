@@ -5,9 +5,9 @@ declaration from ``MistHelper.py``. No test read that module global, so no gate
 reported the loss. The flag then raised ``NameError`` at runtime.
 
 These tests read the module global on ``MistHelper`` itself. They never read a
-test double, per requirement FR-015. The two existing references in
-``tests/unit/serial_cc/test_switch_vc_stats.py`` set an attribute on a deps
-object, and neither one caught the defect.
+test double, per requirement FR-015. The two existing references in the
+telemetry test set an attribute on a deps object, and neither one caught the
+defect.
 """
 
 from __future__ import annotations  # Postponed annotations keep the type hints light.

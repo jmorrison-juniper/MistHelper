@@ -13,8 +13,8 @@ import pytest
 from requests import Request, Response
 
 from src.operations.execution.firmware_policy.sdk import PolicyApi, PolicyError
-from tests.unit.firmware_policy.fakes import ORG_ID
-from tests.unit.firmware_policy.recovery.fakes import RestoreSession
+from tests.unit.prod_readiness.operations.execution.firmware.policy.fakes import ORG_ID
+from tests.unit.prod_readiness.operations.execution.firmware.policy.recovery.fakes import RestoreSession
 
 
 @pytest.mark.parametrize("status", [400, 403, 429, 500, 503])
