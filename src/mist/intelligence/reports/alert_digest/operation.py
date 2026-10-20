@@ -84,6 +84,8 @@ class AlertDigestPromptResolver:
 class AlertDigestOperation:
     """Run menu 280 and menu 281 alert workflows."""
 
+    from src.foundation.models.operation_outcome import OperationOutcome  # Keep the contract class-scoped.
+
     def __init__(
         self,
         client: Any | None = None,
@@ -98,20 +100,20 @@ class AlertDigestOperation:
         self._input_utils = input_utils or self._resolver.InputUtils  # Store EOF-safe input helpers.
 
     @classmethod
-    def run(cls) -> bool:
+    def run(cls) -> OperationOutcome:
         """Run the safe digest path as the default action."""
         logger.info("Running the default alert digest action")  # Log before dispatch.
         result = cls.run_digest()  # Dispatch to the safe menu 280 behavior.
         logger.debug("The default alert digest action returned %s", result)  # Log result.
-        return result  # Return the digest outcome.
+        return result  # Return the explicit digest outcome.
 
     @classmethod
-    def run_digest(cls) -> bool:
+    def run_digest(cls) -> OperationOutcome:
         """Create the alert digest outputs for menu 280."""
         logger.info("Menu #280: Starting the alert digest handler")  # Log the menu entry point.
         result = cls().execute_digest()  # Build live dependencies and run the safe workflow.
         logger.debug("Menu #280 alert digest handler returned %s", result)  # Log the handler result.
-        return result  # Return the operation result for dashboards.
+        return result  # Return the explicit outcome for the menu caller.
 
     @classmethod
     def run_acknowledge(cls, dry_run: bool | None = None) -> bool:
@@ -124,17 +126,36 @@ class AlertDigestOperation:
         logger.debug("Menu #281 alert acknowledgement handler returned %s", result)  # Log the handler result.
         return result  # Return the operation result for dashboards.
 
-    def execute_digest(self) -> bool:
+    def execute_digest(self) -> OperationOutcome:
         """Create the alert digest outputs for the shared lookback window."""
         logger.info("Starting the alert digest operation")  # Log before the workflow starts.
         context = self._load_context()  # Resolve lookback, client, and rows.
         if context is None:  # Invalid lookback or API failure stops the digest safely.
-            return False  # Return a failed operation.
+            return self.OperationOutcome(
+                state="failed",
+                message="The alert digest could not read the alarm data.",
+            )  # Report the stopped workflow without a Boolean marker.
+        if not context["records"]:  # The digest has no alarm rows to report.
+            logger.info("The alert digest found no alarm rows")  # Explain the empty result.
+            echo("  Alert digest found no alarms in the lookback window.")  # Tell the operator why no file exists.
+            return self.OperationOutcome(
+                state="no_output",
+                message="The alert digest found no alarms in the lookback window.",
+            )  # Skip the writer so no placeholder file counts as output.
         groups = AlertDigestModel.group_records(context["records"])  # Group alarms by category, type, and site.
         output_ok = self._writer.write_digest(groups)  # Write CSV and Markdown outputs.
-        echo("  Alert digest wrote %d grouped row(s).", len(groups))  # Tell the operator what was produced.
         logger.debug("The alert digest operation completed with output_ok=%s", output_ok)  # Log result.
-        return output_ok  # Return the write result.
+        if not output_ok:  # The writer returned failure evidence.
+            logger.error("The alert digest could not write %d grouped rows", len(groups))  # Record the count.
+            return self.OperationOutcome(
+                state="failed",
+                message="The alert digest could not write its output.",
+            )  # Report the rejected write.
+        echo("  Alert digest wrote %d grouped row(s).", len(groups))  # Tell the operator what was produced.
+        return self.OperationOutcome(
+            state="completed",
+            message="The alert digest completed.",
+        )  # Report completion only after both files were written.
 
     def execute_acknowledge(self, dry_run: bool = False) -> bool:
         """Acknowledge unacknowledged alarms after exact operator confirmation."""

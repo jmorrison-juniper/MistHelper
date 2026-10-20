@@ -82,6 +82,10 @@ and successful exports to explicit states. It preserves primary fetch and
 export exceptions. The exporter rejects empty rows, so the handler skips that
 write and returns `no_output`.
 
+Batch 2 migrates menu 280, `AlertDigestOperation.run_digest`, and its default
+`run` action. Zero alert rows return `no_output` without a writer call. Menu 281
+and `MistHelper.py` stay unchanged.
+
 Keep `MistHelper.py`, portal classification, menu 92 site selection, menu 276
 summary data, and menu 280 digest status unchanged. Migrate other named
 producers in later serial batches. Lambda conversion remains a separate

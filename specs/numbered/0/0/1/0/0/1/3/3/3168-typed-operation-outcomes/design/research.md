@@ -38,6 +38,15 @@ This batch migrates menu 274 only. It maps missing organization input to
 `failed`, and a successful export to `completed`. Core fetch and export
 exceptions continue to propagate.
 
+Menu 274 was migrated in PR #4323. Menu 280 is the second bounded batch. It
+maps zero alert rows to `no_output` and skips the digest writer. This is a
+recorded assumption: the writer previously created an empty-state placeholder
+file, and the typed state now reports that no result records exist. A failed
+lookback or alarm search and a rejected write map to `failed`. Fetch and
+write exceptions propagate. The shared client resolver has no missing-input
+signal, so this batch maps no `missing_input` path. Menu 281 keeps its Boolean
+return because it is destructive and a separate batch owns it.
+
 Keep menu 92 as an input helper. Keep menus 276 and 280 for later batches.
 These counts replace the historical six-value estimate. They do not classify
 every `None` handler as migration-ready.

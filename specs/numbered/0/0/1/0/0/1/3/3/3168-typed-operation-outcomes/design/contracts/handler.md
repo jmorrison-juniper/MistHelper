@@ -43,6 +43,14 @@ The exporter rejects empty input rows. Skip its call when the report has no
 rows. Let primary fetch and export exceptions propagate. Do not change
 `MistHelper.py` or portal classification in this batch.
 
+### Second bounded migration: alert digest
+
+Menu 280 returns `OperationOutcome` from `AlertDigestOperation.run_digest` and
+`run`. Return `failed` for an invalid lookback, a failed alarm search, or a
+rejected write. Return `no_output` for zero alarm rows and skip the writer.
+Return `completed` after both files are written. Let write exceptions propagate.
+Menu 281 `run_acknowledge` keeps its Boolean contract.
+
 Keep menu 92 site selection unchanged because its return supplies input to
 multiple operations. Migrate menu 276 summary data and menu 280 digest status
 in later serial batches.

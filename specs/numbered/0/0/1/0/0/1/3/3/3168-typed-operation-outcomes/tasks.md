@@ -61,3 +61,17 @@ tasks that this contract PR claims to complete.
 - [x] T016 [US1] Record validation and the unchanged portal boundary in `analysis.md`.
 
 T011 establishes the current scope. T012 precedes T013. T014 and T015 can run beside the implementation. T016 depends on all earlier tasks.
+
+## Phase 7: Serial Producer Batch 2 - Alert Digest
+
+**Goal**: Give menu 280 an explicit outcome without changing menu 281 or portal classification.
+**Independent test**: The alert digest tests check completed, no-output, failed, and propagated write exceptions.
+
+- [x] T017 [US1] Record the menu 280 mapping and assumptions in `design/research.md`.
+- [x] T018 [US1] Test digest states and preserved exceptions in `tests/unit/reports/alert_digest/test_alert_digest_operation.py`.
+- [x] T019 [US1] Return `OperationOutcome` from the digest handler in `src/mist/intelligence/reports/alert_digest/operation.py`.
+- [x] T020 [P] [US1] Document the batch in `plan.md`, `design/contracts/handler.md`, and `design/quickstart.md`.
+- [x] T021 [P] [US1] Add the release note in `changelog.d/issue-3168-alert-digest-outcome.md`.
+- [x] T022 [US1] Record validation and the unchanged portal boundary in `analysis.md`.
+
+T018 precedes T019. T022 depends on all earlier tasks.
