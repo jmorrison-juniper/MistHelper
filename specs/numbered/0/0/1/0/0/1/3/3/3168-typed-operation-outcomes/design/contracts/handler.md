@@ -74,3 +74,11 @@ The preserved migration sequence is in
 [PR #4019](https://github.com/jmorrison-juniper/MistHelper/pull/4019).
 Its inventory is historical. Use the current measurement in
 [research.md](../research.md) as the starting point.
+
+### Third bounded migration: security posture checklist
+
+Menu 276 returns `OperationOutcome` from `OrgSecurityPostureChecklist.run`.
+Return `missing_input` when the API session or organization ID is absent. Return
+`failed` for a rejected export, and `completed` after a successful export. The
+`detail` text holds the pass, fail, and review counts. Let errors from the Mist source reads
+propagate.

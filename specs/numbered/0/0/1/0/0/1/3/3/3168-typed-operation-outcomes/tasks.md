@@ -75,3 +75,17 @@ T011 establishes the current scope. T012 precedes T013. T014 and T015 can run be
 - [x] T022 [US1] Record validation and the unchanged portal boundary in `analysis.md`.
 
 T018 precedes T019. T022 depends on all earlier tasks.
+
+## Phase 8: Serial Producer Batch 3 - Security Posture Checklist
+
+**Goal**: Give menu 276 an explicit outcome without changing portal classification or `MistHelper.py`.
+**Independent test**: The posture tests check completed, failed, missing-input, and propagated collection errors.
+
+- [x] T023 [US1] Record the menu 276 mapping in `design/research.md`.
+- [x] T024 [US1] Test the states in `tests/unit/reports/org_security_posture/test_operation_outcome.py`.
+- [x] T025 [US1] Return `OperationOutcome` from `src/mist/intelligence/reports/org_security_posture/runner.py`.
+- [x] T026 [P] [US1] Document the batch in `plan.md`, `design/contracts/handler.md`, and `design/quickstart.md`.
+- [x] T027 [P] [US1] Add the release note in `changelog.d/issue-3168-posture-outcome.md`.
+- [x] T028 [US1] Record validation and the unchanged portal boundary in `analysis.md`.
+
+T024 precedes T025. T028 depends on all earlier tasks.

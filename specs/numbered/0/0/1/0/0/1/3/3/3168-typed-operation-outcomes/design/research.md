@@ -73,3 +73,13 @@ decision.
 
 **Alternatives considered**: A partial portal replacement and a temporary
 fallback were rejected. The coordinator authorized the contract-only batch.
+
+### Third bounded migration: security posture checklist
+
+Menu 276 returned a dictionary of pass, fail, and review counts. Only tests read
+it. `OrgSecurityPostureChecklist.run` now returns `OperationOutcome`. A missing
+API session or organization ID returns `missing_input`, and a rejected export
+returns `failed`. A successful export returns `completed`, and the `detail`
+field holds the verdict counts. Both previous exceptions for these two cases
+are gone. Errors from the Mist source reads still propagate. The registry always yields
+rows, so this batch maps no `no_output` path.

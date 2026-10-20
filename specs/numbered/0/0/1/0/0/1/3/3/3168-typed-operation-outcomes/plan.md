@@ -86,8 +86,11 @@ Batch 2 migrates menu 280, `AlertDigestOperation.run_digest`, and its default
 `run` action. Zero alert rows return `no_output` without a writer call. Menu 281
 and `MistHelper.py` stay unchanged.
 
-Keep `MistHelper.py`, portal classification, menu 92 site selection, menu 276
-summary data, and menu 280 digest status unchanged. Migrate other named
+Batch 3 migrates menu 276, `OrgSecurityPostureChecklist.run`. It maps missing
+context to `missing_input`, a rejected export to `failed`, and success to
+`completed` with the verdict counts in `detail`.
+
+Keep `MistHelper.py`, portal classification, and menu 92 site selection unchanged. Migrate other named
 producers in later serial batches. Lambda conversion remains a separate
 exclusive `MistHelper.py` batch.
 No producer batch changes portal classification. The final batch adds no
