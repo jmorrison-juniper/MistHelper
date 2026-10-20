@@ -48,7 +48,7 @@ class TestRedisJSONWriterInit:
         writer = RedisJSONWriter(config)
         mock_redis["client_cls"].assert_called_once()
         mock_redis["client"].module_list.assert_called_once()
-        assert writer is not None
+        assert isinstance(writer, RedisJSONWriter)
 
     def test_raises_if_json_module_missing(self, config, mock_redis):
         from src.foundation.persistence.db.writers.redis_writer import RedisJSONWriter
