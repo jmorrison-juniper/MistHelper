@@ -35,7 +35,7 @@ The coordinator must release the PR hold after #4353 before any pull request ope
 
 ### Implementation for User Story 1
 
-- [ ] T005 [US1] Move unowned foundation packages, including `bootstrap` and the contents of the existing `config` container, into their mapped groups. Split each moved package by test topic when its destination would exceed five children. Keep the completed `serial_cc`, `audit`, and `auth` moves. Defer `dataclasses`, `db_discovery`, and every other package with a current claim.
+- [ ] T005 [US1] Move unowned foundation packages, including `bootstrap` and the contents of the existing `config` container, into their mapped groups. Split each moved package by test topic when its destination would exceed five children. Keep the completed `serial_cc`, `audit`, and `auth` moves. Defer `arango_indexes`, `dataclasses`, `db_discovery`, and every other package with a current claim.
 - [ ] T006 [US1] Move unowned Mist packages, including the contents of the existing `marvis` container, into their mapped groups. Split each moved package by test topic when its destination would exceed five children. Keep the root `marvis` container. Defer `api`, `org`, `websocket_streams`, and every other package with a current claim.
 - [ ] T007 [US1] Move unowned operations packages, including packet capture, firmware policy, and MIB generator tests, into their exact topic groups. Keep each group at five children or fewer. Keep the root `prod_readiness` container. Defer `export`, `ssh`, and every other package with a current claim.
 - [ ] T008 [US1] Move unowned interface packages, including the contents of the existing `maps` container, into their mapped groups. Split each moved package by test topic when its destination would exceed five children. Keep the root `maps` container. Defer `scripts`, `upgrade_portal`, and each other reserved or workflow-selected path.
@@ -48,6 +48,7 @@ The coordinator must release the PR hold after #4353 before any pull request ope
 - [X] T031 [US1] Move the four unclaimed assurance report packages into the exact bounded map. Preserve fixtures and update the AP support-file root. Verify focused tests, full node IDs, the unchanged baseline, and applicable guards.
 - [X] T032 [US1] Move the four unclaimed certificate, subscription, rogue-evidence, and client-census packages into the mapped audit groups. Update helper imports and repository-root references. Verify tests, full node IDs, the baseline, and applicable guards.
 - [X] T033 [US1] Move and split the three remaining unowned audit-report packages through the exact bounded map. Keep PSK and wired-client reports deferred. Verify helper imports, tests, full node IDs, the baseline, and applicable guards.
+- [X] T034 [US2] Preserve the complete move commit and rebase onto the coordinator-approved main after PR #4353. Restore the held Arango package and its callers to main. Retain main's new posture outcome test and verify its fixture import. Compare both rename endpoints against all open pull requests. Verify focused tests, full node IDs, baseline fields, and changed-file style. Record results in `design/research.md`.
 
 ## Phase 4: User Story 2 - Run the existing unit tests (Priority: P1)
 

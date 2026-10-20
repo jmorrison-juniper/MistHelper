@@ -20,9 +20,7 @@ from src.foundation.persistence.db.writers import arango_writer
 from src.foundation.persistence.db.writers.arango_writer import ArangoDBWriter
 from src.foundation.persistence.db.writers.redis_writer import RedisTimeSeriesWriter
 from src.foundation.support.refactors.endpoint_primary_key_strategies import ENDPOINT_PRIMARY_KEY_STRATEGIES
-from tests.unit.config.foundation.persistence.storage.arango_indexes.fakes import (
-    ArangoIndexWriterHarness,
-)
+from tests.unit.arango_indexes.fakes import ArangoIndexWriterHarness
 from tests.unit.db_discovery.fakes import ControlledPreflightCall, ControlledSockets, ResolverHarness
 
 
