@@ -442,6 +442,43 @@ def test_shell_unexpected_sink_exception_fails_plainly() -> None:
     assert session.reason == "The terminal failed. Read the portal log for the cause."  # User text is plain.
 
 
+class ShellLogAssertions:
+    """Keep every shell log assertion separate from the native shell run."""
+
+    @staticmethod
+    def assert_secret_exclusion(log_text: str, base_ws_url: str) -> None:
+        """Reject addresses, paths, input, and output in captured logs."""
+        assert base_ws_url not in log_text  # Logs must not hold the shell address.
+        assert "/shell/default" not in log_text  # Logs must not hold the URL path.
+        assert "SECRET-TYPED" not in log_text  # Logs must not hold typed text.
+        assert "SECRET-OUTPUT" not in log_text  # Logs must not hold output text.
+
+    @staticmethod
+    def assert_event_coverage(payloads: list[dict[str, object]]) -> None:
+        """Require the original count of distinct shell action events."""
+        assert len({payload["event"] for payload in payloads}) == 21  # Require every distinct shell action event.
+
+    @staticmethod
+    def assert_safe_fields(payloads: list[dict[str, object]]) -> None:
+        """Reject fields outside the structured logger allowlist."""
+        assert all(set(payload) <= {"event", "redacted", *SAFE_FIELDS} for payload in payloads)  # Reject unsafe fields.
+
+    @staticmethod
+    def assert_event_lengths(payloads: list[dict[str, object]]) -> None:
+        """Keep every event name within the configured bound."""
+        assert all(len(str(payload["event"])) <= MAX_EVENT_LENGTH for payload in payloads)  # Bound event names.
+
+    @staticmethod
+    def assert_field_lengths(payloads: list[dict[str, object]]) -> None:
+        """Keep every safe string within the configured bound."""
+        assert all(
+            len(value) <= MAX_FIELD_LENGTH
+            for payload in payloads  # Check every captured payload.
+            for value in payload.values()  # Check every original field.
+            if isinstance(value, str)  # Apply the length bound to strings only.
+        )  # Bound every safe string field.
+
+
 def test_shell_logs_do_not_hold_address_input_or_output(caplog: pytest.LogCaptureFixture) -> None:
     """Shell logs omit the URL path, typed text, and output text."""
     caplog.set_level(logging.DEBUG)  # Capture debug logs to check high-frequency records.
@@ -459,18 +496,43 @@ def test_shell_logs_do_not_hold_address_input_or_output(caplog: pytest.LogCaptur
         runner.stop()  # Stop the shell.
         _wait_for_state(session, {SessionState.STOPPED})  # Wait for shutdown.
         ShellLogCompletion.wait(caplog)  # STOPPED precedes the reader's final outcome log.
-    assert cloud.base_ws_url not in caplog.text  # Logs must not hold the shell address.
-    assert "/shell/default" not in caplog.text  # Logs must not hold the URL path.
-    assert "SECRET-TYPED" not in caplog.text  # Logs must not hold typed text.
-    assert "SECRET-OUTPUT" not in caplog.text  # Logs must not hold output text.
+    ShellLogAssertions.assert_secret_exclusion(caplog.text, cloud.base_ws_url)  # Check the same captured secrets.
     records = [record for record in caplog.records if ".runners.shell." in record.name]  # Select package records.
     payloads = [json.loads(record.message) for record in records]  # Require valid JSON for each package record.
-    assert len({payload["event"] for payload in payloads}) == 21  # Require every distinct shell action event.
-    assert all(set(payload) <= {"event", "redacted", *SAFE_FIELDS} for payload in payloads)  # Allow safe fields only.
-    assert all(len(str(payload["event"])) <= MAX_EVENT_LENGTH for payload in payloads)  # Bound event names.
-    assert all(
-        len(value) <= MAX_FIELD_LENGTH for payload in payloads for value in payload.values() if isinstance(value, str)
-    )  # Bound every safe string field.
+    ShellLogAssertions.assert_event_coverage(payloads)  # Keep the original distinct-event count.
+    ShellLogAssertions.assert_safe_fields(payloads)  # Keep the original field allowlist.
+    ShellLogAssertions.assert_event_lengths(payloads)  # Keep the original event-name bound.
+    ShellLogAssertions.assert_field_lengths(payloads)  # Keep the original string-field bound.
+
+
+@pytest.mark.parametrize("secret", ("ws://127.0.0.1:9600", "/shell/default", "SECRET-TYPED", "SECRET-OUTPUT"))
+def test_shell_log_assertions_reject_each_secret(secret: str) -> None:
+    """Prove that every original secret-exclusion assertion can fail."""
+    with pytest.raises(AssertionError):  # Each secret must fail its own retained condition.
+        ShellLogAssertions.assert_secret_exclusion(secret, "ws://127.0.0.1:9600")  # Use no live server.
+
+
+@pytest.mark.parametrize("event_count", (0, 20, 22))
+def test_shell_log_assertions_reject_wrong_event_counts(event_count: int) -> None:
+    """Reject missing or extra distinct events without weakening the original count."""
+    payloads: list[dict[str, object]] = [{"event": str(index)} for index in range(event_count)]  # Vary distinct events.
+    with pytest.raises(AssertionError):  # Every count other than 21 must fail.
+        ShellLogAssertions.assert_event_coverage(payloads)  # Exercise the extracted condition directly.
+
+
+def test_shell_log_assertions_preserve_field_and_length_boundaries() -> None:
+    """Accept exact limits and reject unsafe fields or strings above either limit."""
+    ShellLogAssertions.assert_safe_fields([{"event": "safe", "redacted": True}])  # Retain accepted field names.
+    ShellLogAssertions.assert_event_lengths([{"event": "x" * MAX_EVENT_LENGTH}])  # Accept the exact event limit.
+    ShellLogAssertions.assert_field_lengths([{"event": "x" * MAX_FIELD_LENGTH, "redacted": True}])  # Keep nonstrings.
+    with pytest.raises(AssertionError):  # Unknown field names must still fail.
+        ShellLogAssertions.assert_safe_fields([{"event": "safe", "unexpected": "value"}])  # Supply an unsafe field.
+    with pytest.raises(AssertionError):  # Event names above the exact bound must fail.
+        ShellLogAssertions.assert_event_lengths([{"event": "x" * (MAX_EVENT_LENGTH + 1)}])  # Exceed the event bound.
+    with pytest.raises(AssertionError):  # Every string value remains subject to the field bound.
+        ShellLogAssertions.assert_field_lengths(
+            [{"event": "safe", "redacted": "x" * (MAX_FIELD_LENGTH + 1)}]
+        )  # Exceed the string-field bound.
 
 
 def test_shell_history_preserves_raw_control_and_split_utf8_bytes() -> None:
