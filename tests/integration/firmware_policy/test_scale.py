@@ -16,7 +16,7 @@ from src.operations.execution.firmware_policy.recovery.bundle import BundleFiles
 from src.operations.execution.firmware_policy.recovery.workflow import RestoreWorkflow
 from src.operations.execution.firmware_policy.sdk import PolicyApi, PolicyError
 from src.operations.execution.firmware_policy.workflow import PolicyWorkflow
-from tests.unit.firmware_policy.fakes import SettingsSession
+from tests.unit.prod_readiness.operations.execution.firmware.policy.fakes import SettingsSession
 
 
 class LargeSession(SettingsSession):

@@ -264,13 +264,13 @@ known-first-party = ["src"]
 #   tests/unit/*.py -- test-module bootstrapping (sys.path/os.environ
 #     manipulation) before importing the module under test.
 "MistHelper.py" = ["E402"]
-"tests/unit/test_bulk_switch_upgrader.py" = ["E402"]
+"tests/unit/prod_readiness/standalone/operations/execution/firmware/test_bulk_switch_upgrader.py" = ["E402"]
 "tests/unit/test_csv_comparator.py" = ["E402"]
-"tests/unit/test_device_utility_commands.py" = ["E402"]
+"tests/unit/marvis/standalone/mist/resources/device/test_device_utility_commands.py" = ["E402"]
 "tests/unit/test_routing_utils.py" = ["E402"]
-"tests/unit/test_site_auto_upgrade.py" = ["E402"]
-"tests/unit/test_template_config.py" = ["E402"]
-"tests/unit/test_wan2_variable.py" = ["E402"]
+"tests/unit/config/standalone/foundation/support/quality/cross_domain/test_site_auto_upgrade.py" = ["E402"]
+"tests/unit/marvis/standalone/mist/resources/gateway/test_template_config.py" = ["E402"]
+"tests/unit/marvis/standalone/mist/resources/gateway/test_wan2_variable.py" = ["E402"]
 "tests/unit/test_zone_analyzer.py" = ["E402"]
 
 [tool.mypy]

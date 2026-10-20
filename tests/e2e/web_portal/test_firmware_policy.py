@@ -19,7 +19,7 @@ from src.foundation.support.utils.rate_limiting import RateLimitingUtils
 from src.operations.execution.firmware_policy.recovery.backup import PolicyBackup
 from src.operations.execution.firmware_policy.sdk import PolicyError, PolicyResponse
 from tests.e2e.web_portal.firmware_restore.evidence import BrowserEvidence
-from tests.unit.firmware_policy.fakes import ORG_ID, SITE_ID, SettingsSession
+from tests.unit.prod_readiness.operations.execution.firmware.policy.fakes import ORG_ID, SITE_ID, SettingsSession
 from web_portal.app import WebPortalApp
 
 
