@@ -58,6 +58,6 @@ tasks that this contract PR claims to complete.
 - [x] T013 [US1] Return `OperationOutcome` from the PSK handler in `src/mist/intelligence/reports/psk_hygiene/operation.py`.
 - [x] T014 [P] [US1] Document the bounded migration in `plan.md`, `design/contracts/handler.md`, and `design/quickstart.md`.
 - [x] T015 [P] [US1] Add the PSK outcome release note in `changelog.d/issue-3168-psk-hygiene-outcome.md`.
-- [ ] T016 [US1] Record validation and the unchanged portal boundary in `analysis.md`.
+- [x] T016 [US1] Record validation and the unchanged portal boundary in `analysis.md`.
 
 T011 establishes the current scope. T012 precedes T013. T014 and T015 can run beside the implementation. T016 depends on all earlier tasks.

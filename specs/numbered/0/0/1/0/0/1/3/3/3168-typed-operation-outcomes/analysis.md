@@ -75,6 +75,42 @@ No Mist credential, request, destructive operation, container, or dependency
 manifest change was needed. Live validation and the complete test suite
 were not run.
 
-The next batch inventories current named handlers and their callers, then
-migrates existing value-return handlers. The dedicated lambda issue and
-final portal replacement remain prerequisites for closing #3168.
+## Producer Migration Batch 1
+
+**Recorded**: `2026-10-20T02:22:31Z`
+**Scope**: Menu 274, `PskHygieneReport.run`. This batch is part of #3168.
+
+Menu 274 returns `missing_input` when no organization ID exists. It returns
+`no_output` for empty rows and skips the exporter. A false export result
+returns `failed`. A successful non-empty export returns `completed`.
+Primary fetch and export exceptions still propagate.
+
+The tests cover all four states, both exception paths, and the exporter
+contract for empty input. This batch does not change `MistHelper.py` or
+`web_portal/services/operation.py`. The portal prose defect remains unresolved.
+
+Menu 92 remains an input helper and is excluded. Menus 276 and 280 remain
+later producer batches. Lambda conversion and portal cutover remain separate.
+
+## Producer Migration Validation
+
+| Check | Result |
+| - | - |
+| `.venv/bin/python -m pytest tests/unit/reports/psk_hygiene/test_operation.py tests/unit/export/test_data_exporter.py -q` | 95 passed. |
+| `.venv/bin/python -m ruff check src/mist/intelligence/reports/psk_hygiene/operation.py tests/unit/reports/psk_hygiene/test_operation.py` | All checks passed. |
+| `.venv/bin/python -m black --check src/mist/intelligence/reports/psk_hygiene/operation.py tests/unit/reports/psk_hygiene/test_operation.py` | Two files unchanged. |
+| `.venv/bin/python -m mypy src/mist/intelligence/reports/psk_hygiene/operation.py tests/unit/reports/psk_hygiene/test_operation.py --config-file pyproject.toml` | Success for two files. Mypy also reported unused configuration sections. |
+| `.venv/bin/bandit -c pyproject.toml -r src/mist/intelligence/reports/psk_hygiene -q` | No findings. |
+| `.venv/bin/radon cc src/mist/intelligence/reports/psk_hygiene -j \| .venv/bin/complexity-gate --max 10` | All functions within the threshold. |
+| `.venv/bin/python -m py_compile src/mist/intelligence/reports/psk_hygiene/operation.py` | No output and exit zero. |
+| `.venv/bin/ste-linter --config .ste-linter.toml --min-score 80` on the seven changed Markdown files | Passed. Scores ranged from 95 through 99. |
+| `.venv/bin/test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json --changed-from origin/main --full-gate-path .github/workflows/ci.yml --full-gate-path requirements-dev.txt` | One test file checked, zero new findings, two skipped, and zero parse errors. |
+| `git diff --check` and protected-path comparison | Passed. `MistHelper.py`, portal classification, and `.specify/feature.json` remain unchanged. |
+
+`symbol-diff` reported zero lost names and one added private alias,
+`_OperationOutcome`, which provides the handler return type. The symbol command
+returned exit one because it reports added module-level names.
+
+The current inventory and remaining producer scope are in
+[research.md](design/research.md). The dedicated lambda issue and final portal
+replacement remain prerequisites for closing #3168.
