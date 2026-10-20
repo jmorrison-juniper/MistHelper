@@ -20,7 +20,7 @@
 - [x] T005 [US1] Add complete request dimensions. (delivered: src/operations/exporting/export/endpoint_family_exporter.py)
 - [x] T006 [US1] Define both complete composite strategies. (delivered: src/foundation/support/refactors/endpoint_primary_key_strategies.py)
 - [x] T007 [US1] Use complete SLE identities without changing unrelated keys. (delivered: src/foundation/persistence/db/writers/arango_writer.py)
-- [x] T008 [US1] Update exact strategy and real SDK export assertions. (delivered: tests/unit/export/test_endpoint_family_exporter.py)
+- [x] T008 [US1] Update exact strategy and real SDK export assertions. Prove empty-body and JSON decoder failures cannot write rows. (delivered: tests/unit/export/test_endpoint_family_exporter.py)
 - [x] T009 [US1] Prove repeated and distinct windows. (delivered: tests/unit/arango_indexes/test_preservation.py)
 
 ## Phase 4: User Story 2 - Preserve existing records
@@ -43,7 +43,7 @@
 ## Phase 6: Final validation and delivery
 
 - [x] T015 Document the existing-data decision. (delivered: changelog.d/issue-4003-sle-trend-primary-keys.md)
-- [x] T016 Run applicable focused tests and local gates from `design/quickstart.md`. Results: 1,556 tests passed, 96.54 percent changed-module coverage, and no lost symbols.
+- [x] T016 Run applicable focused tests and local gates from `design/quickstart.md`. Results: 1,560 tests passed, 96.65 percent changed-module coverage, and no lost symbols.
 - [x] T017 Run read-only Spec Kit analysis and report the result in the PR body. All 17 requirements and success criteria have task coverage. No unresolved finding remains.
 - [x] T018 Prepare the complete PR text using `.github/PULL_REQUEST_TEMPLATE.md` with exact validation evidence and the existing-data assumption. The session artifact holds the prepared body.
 
