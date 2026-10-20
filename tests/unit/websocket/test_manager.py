@@ -189,12 +189,12 @@ def test_get_mist_credentials_prefers_session_attributes() -> None:
     assert got == ("sess-host", "sess-tok")
 
 
-def test_get_mist_credentials_falls_back_to_env_when_session_missing() -> None:
-    """Missing session attributes fall back to MIST_HOST / MIST_APITOKEN env vars."""
+def test_get_mist_credentials_host_only_falls_back_to_env() -> None:
+    """Missing session attributes fall back to MIST_HOST only, never to the env token."""
     sess = MagicMock(spec=[])  # No host/apitoken attributes.
     with patch.dict(manager_mod.os.environ, {"MIST_HOST": "env-host", "MIST_APITOKEN": "env-tok"}, clear=True):
         got = manager_mod.get_mist_credentials(sess)
-    assert got == ("env-host", "env-tok")
+    assert got == ("env-host", None)
 
 
 def test_get_mist_credentials_returns_none_when_neither_source_has_value() -> None:
@@ -385,13 +385,13 @@ def test_resolve_auth_headers_uses_session_token() -> None:
     assert m._resolve_auth_headers() == ["Authorization: Token TOK"]
 
 
-def test_resolve_auth_headers_falls_back_to_env_token() -> None:
-    """No session.apitoken → MIST_APITOKEN env var is used."""
+def test_resolve_auth_headers_ignores_env_token() -> None:
+    """No session.apitoken returns None even when MIST_APITOKEN is set."""
     sess = MagicMock(spec=["host"])
     sess.host = "api.mist.com"
     with patch.dict(manager_mod.os.environ, {"MIST_APITOKEN": "ENVTOK"}, clear=True):
         m = WebSocketManager(sess)
-        assert m._resolve_auth_headers() == ["Authorization: Token ENVTOK"]
+        assert m._resolve_auth_headers() is None
 
 
 # ---------- WebSocketManager._start_websocket_thread ----------
