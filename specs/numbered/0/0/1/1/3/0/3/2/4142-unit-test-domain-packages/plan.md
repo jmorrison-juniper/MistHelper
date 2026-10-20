@@ -142,6 +142,10 @@ Keep the issue open for incomplete tasks. Do not merge or enable auto-merge.
 Compare both rename endpoints with every open pull request before publication.
 Keep `tests/unit/analytics/test_insight_metrics_utils.py` at its original path.
 The historical specification for issue #3300 links to that path, and FR-004 prohibits changes to historical records.
+After PR #4357 merged, the coordinator approved rebase onto current main `aaab7b4541c2e578fb8c46d69da0446bfbd338a9`.
+Preserve its UI test change and the historical-link deferral.
+The moved MSP test fixture must preserve SDK module identities across test order.
+Use scoped parent bindings instead of removing the SDK import cache.
 
 ### Juniper RMA grouping correction
 

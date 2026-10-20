@@ -682,3 +682,56 @@ The baseline still contains 733 ordered entries and exactly 668 mapped path-fiel
 Every non-path field remains unchanged.
 Targeted Ruff and Black passed, and the required quality preflight passed one test.
 Task T035 is complete. The committed and full quality gates remain required before the correction push.
+
+## Current-main rebase and SDK test isolation
+
+Both required quality gates passed after commit `c0063b9d22d80d088160a85dcee087597e08d3e2`.
+Each checked 1,198 files and 671 findings, with zero new findings and zero parse errors.
+The final ownership scan found no intersection across 794 raw paths and 11 other open pull requests.
+The correction push replaced the failed revision deliberately.
+
+Run `39467158622` passed the historical-link guard and the root-and-contracts shard.
+Its root-unit shard reported 26 failures, 24,809 passes, and 24 skips.
+The coverage aggregator failed because that shard failed.
+These failures did not establish green CI.
+
+The six affected test modules passed 371 tests when run together.
+Adding the moved MSP privilege module before those modules reproduced all 26 failures, with 380 passes.
+Its autouse fixture removed every `mistapi` module from `sys.modules` before each test.
+Other collected modules retained references to the previous SDK objects.
+Later patches therefore changed different objects from the objects used by those modules.
+The new test order exposed this existing fixture defect.
+
+The fixture now imports its two endpoint modules without removing cached SDK modules.
+It uses `monkeypatch` for temporary parent bindings and restores those bindings after each test.
+The same seven-module command now passes all 406 tests.
+No production code or held test changed.
+
+After the corrected-head run finished, the coordinator approved rebase onto current main.
+Published commit `c0063b9d22d80d088160a85dcee087597e08d3e2` preserves the complete correction remotely.
+Rebase onto `aaab7b4541c2e578fb8c46d69da0446bfbd338a9` completed without conflicts or a merge commit.
+Its head before the fixture repair was `696a905cbe03a9a66e687c953b8d5a4402f8aba4`.
+
+Current main and the rebased branch each collect 29,602 unit tests.
+The complete node-ID multisets match through 377 exact moves, with zero missing or added IDs.
+The baseline retains 733 ordered entries, 668 mapped path-field changes, and no other changes.
+The merged UI package, deferred insight test, and historical specification match current main exactly.
+The UI tests, deferred test, and applicable guards passed 181 tests, with one optional-runtime skip.
+Ruff passed all 396 changed Python files. Black reported that all 396 files need no change.
+The entry-point compile passed.
+
+The complete local root-unit shard passed 24,836 tests and skipped 24 tests.
+It reported 76 warnings and completed in 706.43 seconds.
+The command was:
+
+```bash
+COVERAGE_FILE=.venv/tmp/4142-local-root-units.coverage .venv/bin/python -m pytest tests/unit --ignore=tests/unit/upgrade_portal --ignore=tests/e2e --cov=src --cov-report= --cov-fail-under=0 --timeout=120
+```
+
+This command uses the CI shard selection and its per-test timeout.
+The zero coverage threshold matches this individual shard, not the combined coverage gate.
+The existing combined gate still requires 80 percent.
+The local run establishes that the fixture repair removes all 26 full-shard failures.
+The feature prerequisites and quality-input preflight passed again.
+The revised records passed STE with scores from 93 through 97.
+Task T036 is complete. The committed and full quality gates remain required before publication.
