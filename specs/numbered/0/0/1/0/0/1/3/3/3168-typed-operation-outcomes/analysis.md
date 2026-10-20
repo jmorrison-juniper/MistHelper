@@ -133,3 +133,8 @@ Main later advanced to `5e465deac6c8f786e91a28ab9ac18653759cd1b5`.
 The branch was rebased onto this commit. After the class-scoped import change,
 the focused 95-test run passed, and `symbol-diff` reported no module-level
 name change.
+
+Main later advanced to `0b745c4d34f21765bc4c329a0d107018ff04430f`.
+The branch was rebased onto this commit. The focused 95-test run passed.
+`symbol-diff` reported no module-level name change. Ruff, Black, and targeted
+mypy passed.
