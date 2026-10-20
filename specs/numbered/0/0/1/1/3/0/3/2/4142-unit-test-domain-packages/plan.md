@@ -140,6 +140,8 @@ Refresh exact file lists before each batch. Keep these paths unchanged until the
 PR #4353 merged. The coordinator authorized the exact-base rebase and a pull request for completed, unowned moves.
 Keep the issue open for incomplete tasks. Do not merge or enable auto-merge.
 Compare both rename endpoints with every open pull request before publication.
+Keep `tests/unit/analytics/test_insight_metrics_utils.py` at its original path.
+The historical specification for issue #3300 links to that path, and FR-004 prohibits changes to historical records.
 
 ### Juniper RMA grouping correction
 
