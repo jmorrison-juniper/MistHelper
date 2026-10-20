@@ -15,6 +15,7 @@ from pathlib import Path  # Build every output path in a portable way.
 
 from src.mist.intelligence.juniper_docs.acquire.catalog_client import JvdCatalogClient, is_transient_error  # Client.
 from src.mist.intelligence.juniper_docs.acquire.pdf_paths import PdfPathAllocator  # Collision-safe path policy.
+from src.mist.intelligence.juniper_docs.harvest.content_index import CorpusContentIndex  # Content identity.
 
 _LOGGER = logging.getLogger(__name__)  # Module logger for every download.
 
@@ -56,6 +57,7 @@ class CorpusDownloader(JvdDownloader):
         """Store the client, the output directory, and the collision-safe allocator."""
         super().__init__(client, out_dir)  # Reuse the base client and output directory.
         self._allocator = allocator  # Choose a unique path so no write destroys a file.
+        self._content_index = CorpusContentIndex(out_dir)  # Find identical bytes under any name.
 
     def download_document(self, pdf_url: str, category_dir: Path) -> tuple[str, str | None, int | None, str | None]:
         """Return the outcome, the local path, the size, and a failure reason."""
@@ -72,6 +74,10 @@ class CorpusDownloader(JvdDownloader):
         payload, reason = self._fetch_valid(pdf_url)  # Fetch the bytes and check the structure.
         if payload is None:  # The read failed or the body is not a PDF.
             return "failed", None, None, reason  # A bad response reports its reason.
+        canonical = self._content_index.find(payload)  # Identical bytes under any name or category.
+        if canonical is not None:  # The corpus already holds this document.
+            _LOGGER.info("Identical content already stored at %s", canonical)  # Report the reuse.
+            return "skipped", str(canonical), canonical.stat().st_size, None  # Keep one canonical file.
         final, write = self._allocator.plan_bytes(target, pdf_url, payload)  # Resolve the path.
         write = write or final == invalid_reuse  # Replace an invalid same-URL file in place.
         return self._store_payload(final, payload, write)  # Write or reuse, then report it.
@@ -80,6 +86,7 @@ class CorpusDownloader(JvdDownloader):
         """Write the payload when needed, then report the outcome, path, and size."""
         if write:  # The resolved path is free, so this is a fresh distinct document.
             self._atomic_write(final, payload)  # Write to a temp file, then rename onto it.
+            self._content_index.register(final, payload)  # Make it the canonical copy of its bytes.
             _LOGGER.debug("Downloaded %s (%d bytes)", final.name, len(payload))  # Report size.
             return "downloaded", str(final), len(payload), None  # Count it as a fresh download.
         _LOGGER.debug("Reused identical %s (%d bytes)", final.name, final.stat().st_size)  # Dedup.
