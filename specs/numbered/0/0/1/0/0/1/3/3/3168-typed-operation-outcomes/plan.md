@@ -7,8 +7,9 @@
 
 ## Summary
 
-Add an immutable `OperationOutcome` model and validate its contract without
-connecting it to the portal. Keep #3168 open.
+Add an immutable `OperationOutcome` model and migrate eligible producers in
+serial batches. Keep the portal classifier unchanged until producer migration
+finishes. Keep #3168 open.
 
 The preserved specification in
 [PR #4019](https://github.com/jmorrison-juniper/MistHelper/pull/4019)
@@ -66,35 +67,24 @@ specs/numbered/0/0/1/0/0/1/3/3/3168-typed-operation-outcomes/
 ## Delivery Order
 
 1. Deliver this model, its tests, and the contract documentation.
-2. Inventory current named handlers and their callers. Migrate existing
-   value-return handlers first, preserving each caller's return meaning.
-3. Migrate the remaining named handlers in serial operation-family batches.
-4. Use a separate issue and exclusive `MistHelper.py` batch for lambda conversion.
-5. Replace portal classification only after all supported producers return
+2. Migrate existing value-return handlers first, preserving each caller's
+   return meaning. Menus 274, 280, and 276 now return `OperationOutcome`.
+3. Refresh the current named-handler inventory. No un-migrated value-return
+   operation handler remains. Keep menu 92 as a site-selection input helper.
+4. Migrate the remaining named handlers in serial operation-family batches.
+5. Use a separate issue and exclusive `MistHelper.py` batch for lambda conversion.
+6. Replace portal classification only after all supported producers return
    the type. Delete all marker tuples, prose readers, and dependent tests.
 
-The current batch applies step 2. It begins with the current-main inventory in
-[research.md](design/research.md), then migrates menu 274,
-`PskHygieneReport.run`.
+Menus 274, 280, and 276 now return `OperationOutcome`. The research record
+contains their state mappings and caller contracts. The current inventory
+found no un-migrated value-return operation handler.
 
-The PSK report maps missing organization input, empty rows, rejected exports,
-and successful exports to explicit states. It preserves primary fetch and
-export exceptions. The exporter rejects empty rows, so the handler skips that
-write and returns `no_output`.
-
-Batch 2 migrates menu 280, `AlertDigestOperation.run_digest`, and its default
-`run` action. Zero alert rows return `no_output` without a writer call. Menu 281
-and `MistHelper.py` stay unchanged.
-
-Batch 3 migrates menu 276, `OrgSecurityPostureChecklist.run`. It maps missing
-context to `missing_input`, a rejected export to `failed`, and success to
-`completed` with the verdict counts in `detail`.
-
-Keep `MistHelper.py`, portal classification, and menu 92 site selection unchanged. Migrate other named
-producers in later serial batches. Lambda conversion remains a separate
-exclusive `MistHelper.py` batch.
-No producer batch changes portal classification. The final batch adds no
-compatibility fallback.
+Menu 92 remains a site-selection input helper. Do not change its string result.
+The next producer batch must select a named operation family whose handlers
+currently return `None`. Keep `MistHelper.py` lambda registrations, portal
+classification, and final marker removal unchanged until their separate
+batches. No producer batch adds a compatibility fallback.
 
 ## Validation
 
