@@ -1,6 +1,6 @@
 # Data Model: MistCircuitStats Redis Dashboard Migration
 
-**Status**: Proposed contract for planning. Confirm fields with source implementation and the accepted Mist API contracts before writing product code.
+**Status**: Planning model for the existing #4252 dashboard and cache.
 
 ## Entities
 
@@ -8,121 +8,115 @@
 
 | Field | Type | Rule |
 |---|---|---|
-| `org_id` | Mist organization identifier | Required. Resolve from the existing MistHelper organization context. |
-| `display_name` | Text | Optional. Use only a value returned by an authorized source. |
+| `org_id` | Mist organization identifier | Required. Use the active MistHelper organization. |
+| `display_name` | Text | Optional. Use a value returned by an authorized source. |
 
-An organization owns sites and refresh state. A client request cannot select an organization outside the current MistHelper authorization context.
+An organization owns sites, gateways, and refresh state. A request cannot select an organization outside the active MistHelper context.
 
 ### Site
 
 | Field | Type | Rule |
 |---|---|---|
-| `site_id` | Mist site identifier | Required. Must belong to the selected organization. |
-| `org_id` | Mist organization identifier | Required. Must match the owning organization. |
-| `display_name` | Text | Optional. Use only a value returned by Mist. |
+| `site_id` | Mist site identifier | Required. Must belong to the active organization. |
+| `org_id` | Mist organization identifier | Required. Must match the active organization. |
+| `display_name` | Text | Optional. Use a value returned by Mist. |
 
-An organization has zero or more sites. Site discovery uses the verified SDK contract for `listOrgSites`.
+The worker reads sites through the existing `listOrgSites` SDK operation.
 
 ### Gateway
 
 | Field | Type | Rule |
 |---|---|---|
 | `gateway_id` | Mist device identifier | Required. Use the stable identifier returned by Mist. |
-| `site_id` | Mist site identifier | Required. Must match the gateway's returned site. |
+| `site_id` | Mist site identifier | Required when returned. Must match the gateway record. |
+| `org_id` | Mist organization identifier | Required. Must match the active organization. |
 | `display_name` | Text | Optional. Do not substitute a MAC address for the gateway identifier. |
 | `device_type` | Text | Required when returned. Must identify an eligible gateway. |
 
-A site has zero or more eligible gateways. Verify that the source uses `listSiteDevices` or another exact SDK operation and confirm its device-type filter.
+The worker reads gateway statistics and inventory through the existing bulk SDK operations.
 
 ### WAN Port Observation
 
 | Field | Type | Rule |
 |---|---|---|
-| `org_id` | Mist organization identifier | Required for cache isolation and authorization. |
-| `site_id` | Mist site identifier | Required. Must match the gateway. |
-| `gateway_id` | Mist device identifier | Required. Must match the observation source. |
-| `port_id` | Mist port identifier | Required when the source returns one. Do not infer a port from display text. |
-| `metric_name` | Text | Required. Must match an accepted source metric. |
+| `org_id` | Mist organization identifier | Required for authorization and organization isolation. |
+| `site_id` | Mist site identifier | Required when returned. Must match the gateway. |
+| `gateway_id` | Mist device identifier | Required when returned. Must match the source gateway. |
+| `port_id` | Mist port identifier | Required when returned. Do not infer it from display text. |
+| `metric_name` | Text | Required when returned. Preserve the source field name. |
 | `value` | Number or missing | Preserve missing values as unknown. Do not replace them with zero. |
-| `unit` | Text or missing | Preserve the source unit. Verify it against the API contract. |
-| `observed_at` | UTC timestamp or missing | Keep the source timestamp. Do not invent a timestamp for an untimestamped value. |
-| `collected_at` | UTC timestamp | Required. Set when the worker collects the record. |
+| `unit` | Text or missing | Preserve the source unit. Do not infer a unit. |
+| `observed_at` | UTC timestamp or missing | Preserve a source timestamp. Do not invent one. |
+| `collected_at` | UTC timestamp | Required. Record when the worker collects the data. |
 
-### Peer Path Observation
-
-| Field | Type | Rule |
-|---|---|---|
-| `org_id` | Mist organization identifier | Required for cache isolation and authorization. |
-| `site_id` | Mist site identifier or missing | Preserve the source value. |
-| `peer_id` | Stable Mist peer identifier or missing | Use only the identifier returned by a verified API contract. |
-| `peer_label` | Text or missing | Display data only. Do not use as the natural key. |
-| `metric_name` | Text | Required. Must match an accepted source metric. |
-| `value` | Number or missing | Preserve unknown values. |
-| `observed_at` | UTC timestamp or missing | Preserve the source timestamp. Do not imply history when the API returns a point-in-time value. |
-| `collected_at` | UTC timestamp | Required. Set when the worker collects the record. |
-
-Use source and API contracts to infer peer history, latency, jitter, or state transitions. Require timestamped samples.
-
-### Gateway Insight
-
-| Field | Type | Rule |
-|---|---|---|
-| `org_id` | Mist organization identifier | Required for cache isolation and authorization. |
-| `site_id` | Mist site identifier | Required. |
-| `gateway_id` | Mist device identifier | Required. |
-| `metric_name` | Text | Required. Must match the verified metric catalog. |
-| `value` | Number or missing | Preserve absent values as unknown. |
-| `unit` | Text or missing | Preserve the verified source unit. |
-| `observed_at` | UTC timestamp or missing | Preserve the API timestamp. |
-| `collected_at` | UTC timestamp | Required. Set when the worker collects the record. |
+The worker reads port records through the existing organization-wide paginated `searchOrgSwOrGwPorts` operation. It selects WAN rows after it reads the bulk pages.
 
 ### Snapshot
 
 | Field | Type | Rule |
 |---|---|---|
-| `schema_version` | Integer | Required. Begin at version 1 only after contract approval. |
-| `owner` | Text | Required. Identifies the single feature or collector allowed to write the key. |
+| `schema_version` | Integer | Use the existing #4252 cache schema. Do not create a second versioned namespace. |
 | `org_id` | Mist organization identifier | Required. |
-| `site_id` | Mist site identifier or organization scope | Required. State the scope in the key and payload. |
-| `record_type` | Enumerated text | Required. Use a bounded observation type. |
-| `record_id` | Mist natural identifier or stable tuple | Required. Never use a generated random ID. |
-| `state` | Enumerated text | Required. One of `complete`, `partial`, `stale`, or `unavailable`. Synthetic preview state is separate. |
-| `collected_at` | UTC timestamp | Required for a live snapshot. |
-| `expires_at` | UTC timestamp | Required. Must match the approved Redis TTL. |
-| `records` | List of observations | Required. Validate shape before publication. |
+| `site_id` | Mist site identifier or organization scope | Preserve the existing cache key scope. |
+| `record_type` | Existing cache type | Use the current dashboard cache contract. |
+| `record_id` | Mist natural identifier or stable tuple | Use the source identifier. Do not generate a random identifier. |
+| `state` | Enumerated text | Use the existing state contract for current, stale, unavailable, or synthetic data. Never publish a partial snapshot. |
+| `collected_at` | UTC timestamp | Required for live data. |
+| `expires_at` | UTC timestamp | Preserve the existing 300-, 600-, or 86,400-second TTL by record type. |
+| `records` | List of observations | Validate shape and ownership before publication. |
 
-Historical Redis candidate: `misthelper:wan:mcsr:v1:<org_id>:<site_id>:<record_type>:<record_id>`. This prefix is not reserved or approved. Review the existing cache in [contracts/redis-cache.md](contracts/redis-cache.md) before selecting any target model. Every write requires one approved owner and TTL. No #4220 write path has approval.
+The cache uses `wan-dashboard:v1:`. Do not add the historical `misthelper:wan:mcsr:v1:` candidate prefix. The worker may retain a complete process-local memory snapshot for Redis outage reads. It must mark that snapshot stale and enforce the 86,400-second maximum age. Do not add local file storage.
+
+### Refresh Request
+
+| Field | Type | Rule |
+|---|---|---|
+| `org_id` | Mist organization identifier | Required. Use the active organization. |
+| `requested_at` | UTC timestamp | Required. Set when the route queues the request. |
+| `requested_by` | Existing authenticated operator identity | Use the current session identity when available. Do not add a new identity store. |
+| `state` | Enumerated text | `disabled`, `queued`, `running`, `complete`, `failed`, or `skipped`. |
+| `coalesced_request_count` | Non-negative integer | Count requests merged into the single queued follow-up. |
+| `worker_id` | Worker identity | Required when a worker claims the request. Do not expose secrets. |
+
+The Refresh control queues work for the single worker. The route does not make a Mist request or write a snapshot.
 
 ### Refresh Result
 
 | Field | Type | Rule |
 |---|---|---|
 | `org_id` | Mist organization identifier | Required. |
-| `started_at` | UTC timestamp | Required. |
-| `finished_at` | UTC timestamp or missing | Missing if the process stops before completion. |
-| `state` | Enumerated text | One of `complete`, `partial`, `failed`, or `skipped`. |
-| `reason` | Safe text or code | Required for non-complete state. Must not contain credentials or raw sensitive responses. |
-| `request_count` | Non-negative integer | Required. Count admitted Mist SDK attempts only. |
-| `published_snapshot_ids` | List of natural key references | Required. Empty when no complete snapshot was published. |
+| `started_at` | UTC timestamp | Required when a worker claims the request. |
+| `finished_at` | UTC timestamp or missing | Missing if work stops before completion. |
+| `state` | Enumerated text | `complete`, `failed`, or `skipped`. |
+| `reason` | Safe text or code | Required for a non-complete state. Do not include credentials or raw responses. |
+| `request_count` | Non-negative integer | Count requests admitted through the shared Mist request path. |
+| `current_phase` | Bulk-read name or missing | Show the active approved read without raw response data. |
+| `completed_pages` | Map of bulk-read name to non-negative integer | Count validated pages completed for each approved read. |
+| `last_complete_at` | UTC timestamp or missing | Time of the last complete snapshot. |
+| `published_snapshot_ids` | List of natural key references | Empty when no complete snapshot was published. |
 
 ## Relationships
 
 - One organization owns many sites.
 - One site owns many gateways.
-- One gateway supplies zero or more WAN port observations and gateway insights.
-- An organization or site may own peer-path observations, depending on the verified API response.
-- A snapshot contains observations for exactly one organization and one declared scope.
-- A refresh result may publish zero or more complete snapshots.
+- One gateway may have zero or more WAN port observations.
+- One snapshot contains validated records for one organization and its declared scope.
+- One refresh request is handled by the single worker.
+- One refresh result may publish zero or more complete snapshots.
 
 ## Validation and State Rules
 
-1. Validate organization, site, gateway, port, and peer identifiers before cache key construction or API calls.
-2. Confirm that site and gateway ownership matches the current MistHelper organization context.
-3. Enforce bounded pagination and deduplicate records by source natural keys.
-4. Preserve missing metrics as unknown. Do not convert missing values to zero.
-5. Publish a snapshot only after its structure and ownership pass validation.
-6. Keep the previous valid snapshot when refresh fails or returns invalid partial data.
-7. Mark data stale by the approved source threshold. Do not choose a threshold from undocumented behavior.
-8. Set expiry to the agreed cache TTL. The source guide describes 900 seconds at the default interval, while the implementation review reports 31 days. Do not adopt either value without a target freshness decision.
-9. Encode cache values as a documented JSON format. Do not use executable serialization formats.
-10. A Redis outage must not trigger an unadmitted Mist request from a portal read.
+1. Validate identifiers before they enter cache keys or SDK arguments.
+2. Confirm that each site and gateway belongs to the active organization.
+3. Use only the four approved bulk reads and the shared pagination path.
+4. Deduplicate records by source natural keys.
+5. Preserve missing values as unknown.
+6. Publish only after all required pages pass validation.
+7. On a rate limit, failed page, incomplete dataset, Redis error, or lease error, preserve the last complete snapshot as stale, show a safe error, and publish no partial data.
+8. Keep one active refresh and at most one queued follow-up. Coalesce further requests into that follow-up.
+9. Keep portal reads cache-only. On Redis outage, use only an unexpired complete process-local snapshot as stale when available. Otherwise report unavailable data. Do not make a fallback Mist request.
+10. Show refresh state, current bulk-read phase, completed page counts, timestamps, and safe error status.
+11. Enforce 86,400 seconds as the maximum age, including for process-local memory.
+12. Preserve the existing cache namespace and TTLs.
+13. Keep per-port Insights parity out of this model. Issue #4330 tracks that work.
+14. Keep the refresh interval and renewable worker lease duration unset until the production-scale load test.

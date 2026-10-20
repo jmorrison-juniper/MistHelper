@@ -449,6 +449,7 @@ class WanDashboardService:
         self._cache = cache if cache is not None else RedisDashboardCache(None)  # No local Redis service is started.
         self._runner = MistSessionRunner(session, org_id, self._cache)  # Enforce per-token cooldown policy.
         self._last_success: dict[str, Any] = {}  # Keep a bounded per-worker stale result as a Redis fallback.
+        self._last_success_at: dict[str, datetime] = {}  # Bound memory snapshots by their successful collection time.
         self._stale_guard = threading.Lock()  # Protect last-success data across Flask request threads.
 
     def get_sites(self) -> dict[str, Any]:
@@ -498,11 +499,72 @@ class WanDashboardService:
         self._remember(key, result)  # Retain a complete result for explicit stale-data responses.
         return self._result("ok" if result else "empty", result)  # Distinguish a valid empty organization.
 
+    def get_cached_overview(
+        self, site_id: str | None = None, gateway_id: str | None = None, search: str | None = None
+    ) -> dict[str, Any]:
+        """Return an existing complete overview without making a Mist request."""
+        key = self.CACHE_PREFIX + "overview:" + self._org_id  # Keep reads under the established organization key.
+        logger.info("wan dashboard cached overview read started")  # Record the cache action without operator data.
+        result = self._cached_result(key)  # Read only the existing snapshot and local stale fallback.
+        if result["status"] not in {"ok", "stale", "empty"}:  # Missing or malformed data stays unavailable.
+            return result  # Do not collect data from a dashboard request.
+        if not isinstance(result["data"], list) or not all(isinstance(row, dict) for row in result["data"]):
+            return self._result("unavailable", [], "The cached overview is invalid.")  # Reject the entire snapshot.
+        rows = self._filter_cached_overview(result["data"], site_id, gateway_id, search)
+        result["data"] = rows  # Apply validated filters only after a complete snapshot is available.
+        if result["status"] == "ok":  # A legacy cache entry has no trustworthy collection timestamp.
+            result["status"] = "stale"  # Never label a timestamp-free snapshot as current.
+            result["stale"] = True  # Keep the state explicit for the dashboard.
+            result["notice"] = "Showing cached data without a verified collection time."
+        logger.debug("wan dashboard cached overview read completed with %s rows", len(rows))  # Report only a count.
+        return result  # Return only cached complete rows.
+
+    def get_cached_gateway_ports(self, gateway_id: str) -> dict[str, Any]:
+        """Report unavailable detail because the approved bulk snapshot has no port detail cache."""
+        return self._cached_detail_unavailable(gateway_id, "gateway ports")  # Do not request a gateway endpoint.
+
+    def get_cached_traffic(self, gateway_id: str, port_id: str, time_range: str) -> dict[str, Any]:
+        """Read existing traffic history without making a per-port Mist request."""
+        key = self._traffic_key(gateway_id, port_id, time_range)  # Reuse the existing traffic cache key.
+        return self._cached_detail(key, "traffic", list)  # Require a list from the existing traffic cache.
+
+    def get_cached_insights(self, gateway_id: str, port_id: str, time_range: str) -> dict[str, Any]:
+        """Read existing insight history without making a per-port Mist request."""
+        key = self._insight_key(gateway_id, port_id, time_range)  # Reuse the existing insight cache key.
+        return self._cached_detail(key, "Insights", dict)  # Require an object from the existing insight cache.
+
+    def get_cached_hourly_export(self, gateway_id: str, port_id: str, time_range: str) -> dict[str, Any]:
+        """Return an hourly export only when its existing complete insight cache is available."""
+        overview = self.get_cached_overview()  # Resolve gateway labels from the cached organization snapshot.
+        if overview["status"] not in {"ok", "stale", "empty"}:  # Do not export missing or malformed overview data.
+            return overview  # Preserve the explicit unavailable state.
+        gateway = next((row for row in overview["data"] if row.get("device_id") == gateway_id), None)
+        if gateway is None:  # Do not expose a gateway outside the cached organization view.
+            return self._result("forbidden", {}, "Gateway is not in the active organization.")
+        insights = self.get_cached_insights(gateway_id, port_id, time_range)  # Read the existing cache only.
+        if insights["status"] not in {"ok", "stale", "empty"}:  # Do not export unavailable insight data.
+            return insights  # Preserve the missing data state.
+        payload = {  # Keep the existing source-compatible export fields.
+            "site_name": gateway.get("site_name", ""),
+            "gateway_hostname": gateway.get("name", ""),
+            "port_id": port_id,
+            "hourly": insights["data"].get("hourly", []),
+        }
+        return self._result(  # Preserve the cached snapshot's stale state in the export envelope.
+            insights["status"], payload, insights.get("notice"), stale=insights["status"] == "stale"
+        )
+
     def export_gateways(
         self, site_id: str | None = None, gateway_id: str | None = None, search: str | None = None
     ) -> dict[str, Any]:
         """Return the same selected overview rows and status used by the browser."""
         return self.get_overview(site_id=site_id, gateway_id=gateway_id, search=search)
+
+    def export_cached_gateways(
+        self, site_id: str | None = None, gateway_id: str | None = None, search: str | None = None
+    ) -> dict[str, Any]:
+        """Return selected overview rows from cache without collecting Mist data."""
+        return self.get_cached_overview(site_id=site_id, gateway_id=gateway_id, search=search)
 
     def get_gateway_ports(self, gateway_id: str) -> dict[str, Any]:
         """Return configuration, counters, and peer paths for one in-scope gateway."""
@@ -698,7 +760,7 @@ class WanDashboardService:
         cached = self._cache.get(key + ":last-success")  # Prefer the shared prior result across workers.
         if cached is None:  # The cache may be absent or unreachable.
             with self._stale_guard:  # Protect local last-success values across requests.
-                cached = copy.deepcopy(self._last_success.get(key))  # Read only this worker's saved value.
+                cached = self._local_snapshot(key)  # Read only this worker's unexpired saved value.
         if cached is not None:  # A previous complete value remains useful.
             return self._result("stale", cached, self._notice(failure), stale=True)
         status = "rate_limited" if failure == "rate_limited" else "error"  # Keep failure classes distinct.
@@ -1062,6 +1124,69 @@ class WanDashboardService:
         """Save a deep copy of one complete result for this worker."""
         with self._stale_guard:  # Prevent one request from exposing a changing payload.
             self._last_success[key] = copy.deepcopy(value)  # Store data without a secret or API response object.
+            self._last_success_at[key] = datetime.now(UTC)  # Enforce the stale age limit for process memory.
+
+    def _local_snapshot(self, key: str) -> Any | None:
+        """Return a process-local snapshot only while its collection age remains valid."""
+        collected_at = self._last_success_at.get(key)  # Read the matching collection timestamp under the lock.
+        if collected_at is None or (datetime.now(UTC) - collected_at).total_seconds() > self.STALE_TTL:
+            self._last_success.pop(key, None)  # Remove an expired value so later reads cannot revive it.
+            self._last_success_at.pop(key, None)  # Remove the expired timestamp with its data.
+            return None  # Report unavailable after the fixed maximum snapshot age.
+        return copy.deepcopy(self._last_success.get(key))  # Return an isolated copy of the complete snapshot.
+
+    def _cached_result(self, key: str) -> dict[str, Any]:
+        """Return only a valid cached list or object, with stale state for legacy entries."""
+        logger.info("wan dashboard cached value read started")  # Record each data access without key values.
+        cached = self._cache.get(key + ":last-success")  # Use the existing complete-snapshot key.
+        if cached is None:  # Redis may be absent or may not hold this record.
+            with self._stale_guard:  # Protect process-local snapshots during concurrent requests.
+                cached = self._local_snapshot(key)  # Use only an unexpired complete value from this process.
+        if isinstance(cached, (list, dict)):  # Reject scalars and malformed cache values.
+            result = self._result("stale", cached, "Showing the last complete cached data.", stale=True)
+        else:  # A scalar or missing value cannot represent a complete snapshot.
+            result = self._result("unavailable", [], "No complete cached snapshot is available.")
+        logger.debug("wan dashboard cached value read completed with %s", result["status"])  # Report only state.
+        return result  # Keep the cache result explicit for every route.
+
+    def _cached_detail(self, key: str, label: str, expected_type: type[Any]) -> dict[str, Any]:
+        """Return cached detail when present or a safe unavailable response."""
+        result = self._cached_result(key)  # Read the existing cache without invoking the Mist SDK.
+        if result["status"] != "unavailable" and isinstance(result["data"], expected_type):
+            return result  # Do not replace available history with a new request.
+        if result["status"] != "unavailable":  # Reject cached data that cannot form a complete detail view.
+            return self._result("unavailable", [], label + " cache data is invalid.")
+        return self._result("unavailable", [], label + " data is not in the cached snapshot.")
+
+    def _cached_detail_unavailable(self, gateway_id: str, label: str) -> dict[str, Any]:
+        """Report bulk-snapshot detail as unavailable without issuing a device request."""
+        if not WanDataNormalizer.identifier(gateway_id):  # Retain identifier validation at the service boundary.
+            return self._result("invalid", [], "Gateway identifier is invalid.")
+        return self._result("unavailable", [], label + " data is not in the cached snapshot.")
+
+    @classmethod
+    def _filter_cached_overview(
+        cls, rows: Any, site_id: str | None, gateway_id: str | None, search: str | None
+    ) -> list[dict[str, Any]]:
+        """Filter validated cached overview rows without changing their organization scope."""
+        if not isinstance(rows, list):  # Reject malformed complete-snapshot shapes.
+            return []  # The caller reports unavailable data for malformed cache values.
+        valid_rows = [row for row in rows if isinstance(row, dict)]  # Ignore malformed records without exposing them.
+        return [row for row in valid_rows if cls._cached_overview_matches(row, site_id, gateway_id, search)]
+
+    @staticmethod
+    def _cached_overview_matches(
+        row: dict[str, Any], site_id: str | None, gateway_id: str | None, search: str | None
+    ) -> bool:
+        """Match one cached row against the optional site, gateway, and text filters."""
+        matches_site = site_id is None or row.get("site_id") == site_id  # Keep optional site selection exact.
+        matches_gateway = gateway_id is None or row.get("device_id") == gateway_id  # Keep gateway selection exact.
+        if not matches_site or not matches_gateway:  # Stop before building search text for unrelated rows.
+            return False  # Exclude rows that fail an exact identity filter.
+        if search is None:  # An absent search term matches every row with valid identities.
+            return True  # Preserve the row without a text filter.
+        searchable = " ".join(str(row.get(field, "")) for field in ("name", "model", "site_name"))
+        return search.casefold() in searchable.casefold()  # Match the operator term without case sensitivity.
 
     def _traffic_key(self, gateway_id: str, port_id: str, time_range: str) -> str:
         """Return a namespaced stale-data key for one traffic view."""
