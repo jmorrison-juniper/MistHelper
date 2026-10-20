@@ -136,6 +136,20 @@ class TestDeviceAnomalyEvents:
         ):
             SiteAnomalyExporter.device_anomaly_events()
 
+        assert agg.call_args.args == (  # WHY: the entry point must pass the selected device and all metric names.
+            "site-1",
+            "Site",
+            "aa:bb",
+            "AP1",
+            ["ap_availability", "throughput", "capacity"],
+        )
+        assert exp.call_args.args == (  # WHY: the entry point must export the aggregated rows with the device identity.
+            [{"x": 1}],
+            "SiteDeviceAnomalyEvents_Site_AP1.csv",
+            "device anomaly event",
+            1,
+            "AP1",
+        )
         agg.assert_called_once()
         exp.assert_called_once()
 
@@ -650,6 +664,9 @@ class TestClientAnomalyEvents:
         ):
             SiteAnomalyExporter.client_anomaly_events()
 
+        assert (
+            fake_mh.DataExporter.write_with_format_selection.call_count == 0
+        )  # WHY: cancellation must not write a CSV.
         suppress.assert_not_called()
 
     def test_happy_path_restores_loggers(self, fake_mh):
