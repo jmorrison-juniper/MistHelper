@@ -194,6 +194,57 @@ git pull origin main
 
 Run [the quality gates](quality-gates.md) before every commit.
 
+### Editor imports in a worktree
+
+Issue #4126 records editor errors `E0401` and `E0611` caused by a different checkout root.
+The repository Pylint configuration adds its current working directory to the import search path.
+An editor window that uses the main checkout can therefore report missing imports for worktree files.
+Repository configuration cannot change the folder of an active editor window.
+
+For Visual Studio Code with the Microsoft Python and Pylint extensions, use these steps:
+
+1. In a new editor window, select **File: Open Folder** and open the active worktree root.
+   Open the folder that contains `MistHelper.py` and `pyproject.toml`, not the main checkout or its parent.
+   Use a single-folder window for this check.
+2. In that folder, create the environment with the bootstrap command in Step 2.
+   Select **Python: Select Interpreter**, then **Enter interpreter path**, and select that worktree's interpreter.
+   On Windows, select `.venv\Scripts\python.exe`. On macOS or Linux, select `.venv/bin/python`.
+   Changing `python.defaultInterpreterPath` does not replace an interpreter selection that the editor already saved.
+3. Select **Preferences: Open Workspace Settings (JSON)**.
+   Preserve existing settings and apply these Pylint values at the workspace scope:
+
+   ```json
+   {
+     "pylint.cwd": "${workspaceFolder}",
+     "pylint.interpreter": [],
+     "pylint.path": ["${interpreter}", "-m", "pylint"]
+   }
+   ```
+
+   The empty interpreter list uses the selected Python interpreter.
+   The explicit command uses Pylint from that environment, not a global executable or the extension's bundled copy.
+   These are local settings. Do not change user settings or commit an absolute interpreter path.
+4. Run **Pylint: Restart Server**, then save each affected file to request new diagnostics.
+   Open **View: Output** and select **Pylint**.
+   Check that the interpreter and working directory refer to this worktree.
+   If necessary, use **Developer: Set Log Level...** and select **Pylint** to inspect its extension logs.
+5. In the worktree terminal, activate `.venv` and run the commands below.
+
+```console
+python -c "import sys; from pathlib import Path; print('root:', Path.cwd()); print('interpreter:', sys.executable); print('environment:', sys.prefix)"
+python -c "import src, requests.adapters, mistapi.api.v1.sites.devices; print(src.__file__); print(requests.adapters.__file__); print(mistapi.api.v1.sites.devices.__file__)"
+python -m pylint --disable=all --enable=E0401,E0611 --reports=n --score=n MistHelper.py
+```
+
+The root, interpreter, environment, and module paths must belong to the active worktree.
+No Pylint output and exit code `0` mean that this command found neither import error in `MistHelper.py`.
+Repeat the Pylint command for each affected file, using its current path after any module move.
+Then confirm that the editor reports neither code for every affected file.
+A terminal result alone does not verify the editor result or clear all 534 findings from issue #4126.
+Do not change production imports or disable diagnostics to correct an editor root or interpreter selection.
+
+The [Pylint extension reference](https://github.com/microsoft/vscode-pylint#settings) describes these settings and their precedence.
+
 ## Run the browser tests
 
 The tests under `tests/e2e/` drive a real browser. The bootstrap installs the
