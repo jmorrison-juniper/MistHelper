@@ -246,6 +246,9 @@ def test_synthetic_overview_response_is_rejected_from_live_table(page: Any, dash
 
     page.goto(f"{dashboard_url}/wan-dashboard", wait_until="networkidle", timeout=15000)  # Open the local page.
 
+    assert page.get_by_test_id("wan-status").inner_text() == (
+        "Synthetic data cannot appear as live dashboard data."
+    )  # Require a stable status value in the rejected-source journey.
     expect(page.get_by_test_id("wan-status")).to_have_text(
         "Synthetic data cannot appear as live dashboard data."
     )  # Report the rejected source safely.
@@ -269,6 +272,7 @@ def test_refresh_error_keeps_stale_live_rows_and_separates_example(
 
     page.goto(f"{dashboard_url}/wan-dashboard", wait_until="networkidle", timeout=15000)  # Load the local portal.
 
+    assert "rate_limited" in page.get_by_test_id("wan-refresh-error").inner_text()  # Require the safe failure code.
     expect(page.get_by_test_id("wan-status")).to_have_text("Showing cached gateway data.")  # Keep the snapshot stale.
     expect(page.get_by_test_id("wan-refresh-error")).to_have_text(
         "Refresh failed (rate_limited). The last complete snapshot remains stale."
@@ -292,6 +296,7 @@ def test_offline_example_stays_separate_from_current_live_rows(page: Any, dashbo
 
     page.goto(f"{dashboard_url}/wan-dashboard", wait_until="networkidle", timeout=15000)  # Load the local portal.
 
+    assert page.get_by_test_id("wan-synthetic-example").is_visible()  # Keep the example panel visible.
     expect(page.get_by_test_id("wan-gateway-row")).to_contain_text("Gateway A")  # Show current live data.
     expect(page.locator("#wan-gateway-rows")).not_to_contain_text("Example Gateway")  # Exclude example rows.
     expect(page.get_by_test_id("wan-synthetic-example-row")).to_contain_text("Example Gateway")  # Keep example visible.
