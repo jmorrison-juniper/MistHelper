@@ -73,8 +73,19 @@ specs/numbered/0/0/1/0/0/1/3/3/3168-typed-operation-outcomes/
 5. Replace portal classification only after all supported producers return
    the type. Delete all marker tuples, prose readers, and dependent tests.
 
-The next batch is step 2. Its first action is a current-main inventory.
-Do not reuse the old six-handler count without verification.
+The current batch applies step 2. It begins with the current-main inventory in
+[research.md](design/research.md), then migrates menu 274,
+`PskHygieneReport.run`.
+
+The PSK report maps missing organization input, empty rows, rejected exports,
+and successful exports to explicit states. It preserves primary fetch and
+export exceptions. The exporter rejects empty rows, so the handler skips that
+write and returns `no_output`.
+
+Keep `MistHelper.py`, portal classification, menu 92 site selection, menu 276
+summary data, and menu 280 digest status unchanged. Migrate other named
+producers in later serial batches. Lambda conversion remains a separate
+exclusive `MistHelper.py` batch.
 No producer batch changes portal classification. The final batch adds no
 compatibility fallback.
 

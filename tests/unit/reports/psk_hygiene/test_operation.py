@@ -27,6 +27,9 @@ class _FakeDataExporter:
     rows: list[dict[str, str | int | bool]] = []  # Store exported rows for tests.
     filename = ""  # Store the export file name for tests.
     api_function_name = ""  # Store the API function name for tests.
+    fieldnames: list[str] = []  # Store the exported column order for tests.
+    write_result = True  # Control the exporter result for outcome tests.
+    write_error: Exception | None = None  # Control exporter exceptions for propagation tests.
 
     @classmethod
     def write_with_format_selection(
@@ -35,12 +38,15 @@ class _FakeDataExporter:
         filename: str,
         api_function_name: str,
         fieldnames: list[str] | None = None,
-    ) -> None:
+    ) -> bool:
         """Capture a sanitized export call."""
         cls.rows = rows  # Save the exported rows for contract checks.
         cls.filename = filename  # Save the filename for contract checks.
         cls.api_function_name = api_function_name  # Save the source name for contract checks.
         cls.fieldnames = fieldnames or []  # Save column order for contract checks.
+        if cls.write_error is not None:  # Preserve exporter exceptions as exceptions.
+            raise cls.write_error  # Prove the handler does not invent a result state.
+        return cls.write_result  # Return the configured writer result.
 
 
 class _FakeResolver:
@@ -109,6 +115,22 @@ class _UnavailableWlanClient(_FakeClient):
         raise RuntimeError("wlan read failed")  # Force the operation to mark WLAN match as unknown.
 
 
+class _EmptyPskClient(_FakeClient):
+    """Provide an empty PSK response without network access."""
+
+    def fetch_psks(self) -> list[dict[str, Any]]:
+        """Return no PSK records."""
+        return []  # Exercise the explicit no-output path.
+
+
+class _UnavailablePskClient(_FakeClient):
+    """Raise a primary input error without network access."""
+
+    def fetch_psks(self) -> list[dict[str, Any]]:
+        """Raise the primary PSK fetch error."""
+        raise RuntimeError("psk read failed")  # Prove core fetch errors still propagate.
+
+
 @pytest.fixture(autouse=True)
 def _operation_seams() -> Iterator[None]:
     """Replace operation seams without changing the no-argument handler."""
@@ -116,6 +138,10 @@ def _operation_seams() -> Iterator[None]:
     original_resolver = PskHygieneReport.DEPENDENCY_RESOLVER  # Save the production dependency seam.
     original_output = PskHygieneReport.OUTPUT  # Save the production console seam.
     _FakeDataExporter.rows = []  # Clear rows before each test.
+    _FakeDataExporter.filename = ""  # Clear the export marker before each test.
+    _FakeDataExporter.api_function_name = ""  # Clear the source marker before each test.
+    _FakeDataExporter.write_result = True  # Restore a successful write before each test.
+    _FakeDataExporter.write_error = None  # Restore a successful write before each test.
     PskHygieneReport.CLIENT_CLASS = _FakeClient  # Use fake client inputs.
     PskHygieneReport.DEPENDENCY_RESOLVER = _FakeResolver  # Use fake runtime dependencies.
     PskHygieneReport.OUTPUT = lambda line: None  # Default tests do not need console text.
@@ -129,7 +155,15 @@ def test_run_does_not_prompt(monkeypatch: Any) -> None:
     """The operation runs without calling input."""
     monkeypatch.setattr(builtins, "input", lambda prompt="": (_ for _ in ()).throw(AssertionError("prompt")))  # Fail.
     result = PskHygieneReport.run()  # Run the no-argument menu handler with fake seams.
-    assert result is True  # The operation should return a menu-test success value.
+    assert result.state == "completed"  # A successful export must report its typed state.
+
+
+def test_empty_psk_records_return_no_output_without_export() -> None:
+    """The operation skips the exporter when no PSK rows exist."""
+    PskHygieneReport.CLIENT_CLASS = _EmptyPskClient  # Return no PSK rows from the fake client.
+    result = PskHygieneReport.run()  # Run the no-argument menu handler.
+    assert result.state == "no_output"  # An empty report must have an explicit state.
+    assert _FakeDataExporter.filename == ""  # The exporter must not receive rejected empty rows.
 
 
 def test_export_contract_columns() -> None:
@@ -198,7 +232,7 @@ def test_unavailable_wlan_scope_marks_wlan_match_unknown() -> None:
     PskHygieneReport.CLIENT_CLASS = _UnavailableWlanClient  # Simulate a WLAN endpoint failure.
     result = PskHygieneReport.run()  # Run the no-argument menu handler.
     row = _FakeDataExporter.rows[0]  # Read the captured export row.
-    assert result is True  # The PSK report should still export with unknown WLAN scope.
+    assert result.state == "completed"  # Optional WLAN failure must not fail the PSK report.
     assert row["wlan_match"] == "unknown"  # The match state must show incomplete scope.
     assert "orphan_ssid" not in str(row["findings"])  # Unknown scope must not create a false orphan finding.
 
@@ -218,5 +252,26 @@ def test_missing_org_id_fails_closed_without_prompt(monkeypatch: Any) -> None:
     monkeypatch.delenv("ORG_ID", raising=False)  # Remove uppercase environment fallback.
     PskHygieneReport.DEPENDENCY_RESOLVER = _NoOrgResolver  # Use the no-org dependency seam.
     result = PskHygieneReport.run()  # Run the no-argument handler.
-    assert result is False  # The operation must fail closed.
+    assert result.state == "missing_input"  # Missing organization context must remain explicit.
     assert _FakeDataExporter.rows == []  # The operation must not export without an organization.
+
+
+def test_export_failure_returns_failed_outcome() -> None:
+    """The handler reports the exporter's false result."""
+    _FakeDataExporter.write_result = False  # Make the fake exporter reject the non-empty write.
+    result = PskHygieneReport.run()  # Run the no-argument menu handler.
+    assert result.state == "failed"  # A rejected write must not report completion.
+
+
+def test_primary_psk_fetch_exception_still_propagates() -> None:
+    """The handler does not convert a primary fetch exception into a result."""
+    PskHygieneReport.CLIENT_CLASS = _UnavailablePskClient  # Raise during the primary PSK fetch.
+    with pytest.raises(RuntimeError, match="psk read failed"):  # Preserve existing exception handling.
+        PskHygieneReport.run()  # Run the no-argument handler.
+
+
+def test_export_exception_still_propagates() -> None:
+    """The handler does not convert an export exception into a result."""
+    _FakeDataExporter.write_error = RuntimeError("export write failed")  # Raise during export.
+    with pytest.raises(RuntimeError, match="export write failed"):  # Preserve existing exception handling.
+        PskHygieneReport.run()  # Run the no-argument handler.
