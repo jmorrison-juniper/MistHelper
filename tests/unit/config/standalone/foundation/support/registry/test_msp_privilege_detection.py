@@ -20,12 +20,11 @@ attribute pointing at the real submodule. Sibling test modules also replace
 which can defeat ``patch("mistapi.a.b.c.func")`` string-target patches when
 the whole suite is collected in the wrong order.
 
-To defeat both failure modes we use an autouse fixture that force-loads the
-real mistapi submodules AND restores the parent-package attribute chain
-before each test. Individual tests then use ``_stub_callable`` to swap in a
-``MagicMock`` for the exact function they exercise; ``_stub_callable`` also
-sets the attribute on the parent package so the lazy-import alias
-resolves to the stub.
+The autouse fixture imports the two endpoint modules without removing SDK
+modules from the import cache. It temporarily binds each endpoint to its parent
+package. Pytest restores these bindings after each test.
+Individual tests use ``_stub_callable`` to replace and restore the endpoint
+function. Other collected modules retain their original SDK object references.
 """
 
 from __future__ import annotations
@@ -55,39 +54,13 @@ _MISTAPI_MSPS = "mistapi.api.v1.msps.msps"
 
 
 @pytest.fixture(autouse=True)
-def _restore_real_mistapi_modules() -> None:
-    """Force real mistapi submodules to be present before each test.
-
-    Sibling tests in this suite (e.g. ``test_csv_comparator``,
-    ``test_wan2_variable``, ``test_routing_utils``, ``test_bulk_switch_upgrader``,
-    ``test_ssid_template_consolidation``, ``test_device_utility_commands``,
-    ``test_template_config``) install ``sys.modules['mistapi'] = MagicMock()``
-    at MODULE-IMPORT time. Once that's in place, ``importlib.import_module
-    ('mistapi.api.v1.msps.msps')`` simply walks attributes off the MagicMock
-    and returns another MagicMock -- not the real module.
-
-    The only reliable fix is to clear the ENTIRE mistapi subtree from
-    ``sys.modules`` and force a fresh import. This runs before every one of
-    OUR tests, so we never observe MagicMock-polluted state at the SUT's lazy
-    imports. We deliberately do NOT restore the polluted state afterwards --
-    leaving the real modules in place is strictly safer for downstream tests
-    than reinstating a broken MagicMock.
-    """
-    # Purge any mistapi.* entries so importlib does a full re-import from disk.
-    for key in [k for k in sys.modules if k == "mistapi" or k.startswith("mistapi.")]:
-        del sys.modules[key]
-
-    # Reimport the two lazy-import targets the SUT uses. This also populates
-    # every ancestor package as a real module in sys.modules along the way.
+def _restore_real_mistapi_modules(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Bind endpoint aliases without invalidating another test's SDK references."""
     for dotted in (_MISTAPI_SELF, _MISTAPI_MSPS):
         real = importlib.import_module(dotted)
-        # Belt-and-braces: also re-bind the leaf submodule as an attribute of
-        # its parent package, since ``import a.b.c as alias`` reads ``alias``
-        # from the parent's attributes.
         parent_path, _, leaf = dotted.rpartition(".")
-        parent = sys.modules.get(parent_path)
-        if parent is not None:
-            setattr(parent, leaf, real)
+        parent = importlib.import_module(parent_path)
+        monkeypatch.setattr(parent, leaf, real)
 
 
 # ---------------------------------------------------------------------------
