@@ -735,3 +735,32 @@ The local run establishes that the fixture repair removes all 26 full-shard fail
 The feature prerequisites and quality-input preflight passed again.
 The revised records passed STE with scores from 93 through 97.
 Task T036 is complete. The committed and full quality gates remain required before publication.
+
+## Rebase after PR #4361
+
+Both quality gates passed for commit `aead58f70015778e229c99311a9242ceb9c271a3`.
+Each checked 1,198 files and 670 findings, with zero new findings and zero parse errors.
+Its CI completed with 36 passed checks, seven intentional skips, and zero failed or pending checks.
+Run `39473235677` passed the complete root-unit shard and combined coverage gate.
+The combined coverage report measured 93 percent against the unchanged 80-percent requirement.
+
+Main then advanced through PR #4361.
+The coordinator approved another rebase onto `57d718be98ab2716127578d33b80326c641e64af`.
+The green commit remains preserved on the remote branch before this rebase.
+The clean rebase completed without a merge commit and retained both fixes.
+The only main change adds one credential-preflight test with a mocked HTTP 503 response.
+
+The new credential tests and seven-module SDK isolation regression passed all 426 tests.
+The UI tests, deferred insight test, and applicable guards passed 181 tests, with one optional-runtime skip.
+Current main and the rebased branch each collect 29,603 unit tests.
+Their complete node-ID multisets match through 377 exact moves, with zero missing or added IDs.
+The baseline retains 733 ordered entries, 668 mapped path-field changes, and no other changes.
+The merged credential and UI tests, deferred insight test, and historical specification match current main exactly.
+The final ownership scan found zero intersections across 794 raw paths and 11 other open pull requests.
+Ruff and Black passed all 396 changed Python files.
+The entry-point compile and required quality-input preflight passed.
+
+The previous local full root-unit result remains evidence for the identical fixture repair.
+This rebase reruns the changed main test and the exact shared-state regression locally.
+CI must rerun its complete unchanged gate set for the new head.
+Task T037 is complete. The committed and full quality gates remain required before the rebase push.
