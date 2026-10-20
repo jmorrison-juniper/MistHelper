@@ -43,7 +43,7 @@
 ## Phase 6: Final validation and delivery
 
 - [x] T015 Document the existing-data decision. (delivered: changelog.d/issue-4003-sle-trend-primary-keys.md)
-- [x] T016 Run applicable focused tests and local gates from `design/quickstart.md`. Results: 1,560 tests passed, 96.65 percent changed-module coverage, and no lost symbols.
+- [x] T016 Run applicable focused tests and local gates from `design/quickstart.md`. Focused tests pass, changed-module coverage exceeds 96 percent, and no symbol is lost.
 - [x] T017 Run read-only Spec Kit analysis and report the result in the PR body. All 17 requirements and success criteria have task coverage. No unresolved finding remains.
 - [x] T018 Prepare the complete PR text using `.github/PULL_REQUEST_TEMPLATE.md` with exact validation evidence and the existing-data assumption. The session artifact holds the prepared body.
 
