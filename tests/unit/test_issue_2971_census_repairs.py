@@ -153,3 +153,40 @@ def test_webhook_deliveries_503_suppresses_no_data_and_writes_no_file(caplog: py
     assert _has_status_at_problem_level(caplog)  # WHY: the operator must see the exact 503 status.
     assert "! No webhook delivery data found" not in caplog.text  # WHY: this empty-result line would be false.
     writer.assert_not_called()  # WHY: an outage must not produce a valid empty export.
+
+
+class _RefusedResponse:
+    """Response object for a 403 with plausible guest data."""
+
+    status_code = 403  # WHY: simulate a refused cloud request with a concrete client status.
+    data: list[Any] = [{"id": "guest-1", "name": "Blocked Guest"}]  # WHY: ensure failed data looks usable.
+
+
+def test_guest_authorizations_403_rejects_plausible_data(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A guest authorization 403 must reject plausible data before pagination."""
+    writer = MagicMock()  # WHY: a refused response must not create an export.
+    refused_rows = [{"id": "guest-1", "name": "Blocked Guest"}]  # WHY: failed data must look valid.
+    with patch.object(guest_module, "SourceDependencyResolver", _resolver(writer)):  # WHY: avoid live app state.
+        with patch.object(
+            guest_module.mistapi, "get_all", return_value=refused_rows
+        ) as get_all:  # WHY: detect parsing.
+            with patch.object(
+                guest_module.mistapi.api.v1.sites.guests,  # WHY: patch the SDK namespace used by the exporter.
+                "searchSiteGuestAuthorization",  # WHY: replace the real cloud request.
+                return_value=_RefusedResponse(),  # WHY: return a real-shaped refused response.
+            ):
+                with caplog.at_level(logging.INFO, logger=guest_module.logger.name):  # WHY: capture operator output.
+                    result = SiteGuestAuthorizationExporter.guest_authorizations()  # WHY: drive the real product path.
+    assert result is None, "A refused guest response must not return a successful result."  # WHY: require refusal.
+    get_all.assert_not_called()  # WHY: refused payloads must not enter the pagination helper.
+    assert any(  # WHY: the operator needs the exact refused status.
+        record.levelno == logging.ERROR  # WHY: refusal must use the visible error level.
+        and record.getMessage() == "The cloud returned HTTP 403 for site guest authorization at site site-1"
+        for record in caplog.records  # WHY: inspect the emitted records.
+    ), "The error log must name HTTP 403 and the selected site."  # WHY: require actionable failure evidence.
+    assert (
+        "! No guest authorization data found for this site" not in caplog.text
+    ), "A refusal is not empty data."  # WHY: reject false success.
+    writer.assert_not_called()  # WHY: refused data must not be exported.
