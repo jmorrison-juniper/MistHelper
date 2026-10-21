@@ -4,6 +4,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+import requests
 
 from src.foundation.runtime.config.source_dependency_resolver import SourceDependencyResolver
 from src.foundation.support.utils.address_utils import AddressUtils
@@ -69,6 +70,78 @@ def test_ap_profile_fallback_rejects_a_missing_http_status(monkeypatch: pytest.M
     )
 
     with pytest.raises(RuntimeError, match="HTTP status None"):
+        APProfileMigrationManager._fetch_and_sort_ap_profiles(object(), "org")
+
+
+def test_ap_profile_fallback_rejects_an_empty_body(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Reject an empty response body rather than report zero profiles."""
+    response = SimpleNamespace(data="", status_code=200)
+    monkeypatch.setattr(ap_module._mist_deviceprofiles, "listOrgDeviceProfiles", lambda *_: response)
+    monkeypatch.setattr(
+        ap_module.mistapi,
+        "get_all",
+        lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("pagination failed")),
+    )
+
+    with pytest.raises(ValueError, match="response.data"):
+        APProfileMigrationManager._fetch_and_sort_ap_profiles(object(), "org")
+
+
+def test_ap_profile_fallback_rejects_malformed_json_payload(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Reject malformed text payloads before the profile list is consumed."""
+    response = SimpleNamespace(data="{not-json", status_code=200)
+    monkeypatch.setattr(ap_module._mist_deviceprofiles, "listOrgDeviceProfiles", lambda *_: response)
+    monkeypatch.setattr(
+        ap_module.mistapi,
+        "get_all",
+        lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("pagination failed")),
+    )
+
+    with pytest.raises(ValueError, match="response.data"):
+        APProfileMigrationManager._fetch_and_sort_ap_profiles(object(), "org")
+
+
+@pytest.mark.parametrize(
+    ("status_code", "status_group"),
+    [(401, "4xx"), (503, "5xx")],
+)
+def test_ap_profile_fallback_rejects_http_error_responses(
+    status_code: int,
+    status_group: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Reject client and server errors instead of reporting no profiles."""
+    response = SimpleNamespace(data=[], status_code=status_code)
+    monkeypatch.setattr(ap_module._mist_deviceprofiles, "listOrgDeviceProfiles", lambda *_: response)
+    monkeypatch.setattr(
+        ap_module.mistapi,
+        "get_all",
+        lambda **_kwargs: (_ for _ in ()).throw(RuntimeError(f"HTTP {status_group}")),
+    )
+
+    with pytest.raises(RuntimeError, match=f"HTTP status {status_code}"):
+        APProfileMigrationManager._fetch_and_sort_ap_profiles(object(), "org")
+
+
+@pytest.mark.parametrize(
+    "pagination_error",
+    [requests.exceptions.ConnectionError("offline"), requests.exceptions.Timeout("timeout")],
+    ids=["connection-error", "connection-timeout"],
+)
+def test_ap_profile_fallback_rejects_missing_data_after_connection_failures(
+    pagination_error: Exception,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Keep connection failures visible when the fallback body lacks records."""
+    response = SimpleNamespace(status_code=200, data=None)
+    monkeypatch.setattr(ap_module._mist_deviceprofiles, "listOrgDeviceProfiles", lambda *_: response)
+    monkeypatch.setattr(
+        ap_module.mistapi,
+        "get_all",
+        lambda **_kwargs: (_ for _ in ()).throw(pagination_error),
+    )
+
+    with pytest.raises(ValueError, match="response.data"):
         APProfileMigrationManager._fetch_and_sort_ap_profiles(object(), "org")
 
 

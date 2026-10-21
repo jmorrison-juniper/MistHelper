@@ -2309,8 +2309,8 @@ def test_check_reassign_response_ignores_an_unreadable_status() -> None:
         A caller may hand back ``None`` or a stub. The check reports a failure
         only when it reads a real error status, so it never invents one.
     """
-    APProfileMigrationManager._check_reassign_response(None, "dev-4")
-    APProfileMigrationManager._check_reassign_response(object(), "dev-5")
+    assert APProfileMigrationManager._check_reassign_response(None, "dev-4") is None
+    assert APProfileMigrationManager._check_reassign_response(object(), "dev-5") is None
 
 
 def test_interrupted_migration_still_writes_the_audit_row(fake_mh: Any, tmp_path: Path) -> None:

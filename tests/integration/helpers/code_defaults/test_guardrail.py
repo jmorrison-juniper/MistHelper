@@ -125,6 +125,14 @@ def test_new_non_high_candidate_requires_a_reviewed_disposition() -> None:
     assert "lacks a reviewed disposition" in result.message
 
 
+def test_empty_inventory_passes_with_zero_accepted_candidates() -> None:
+    """Keep a complete empty scan valid when its reviewed baseline is empty."""
+    result = GuardPolicy().evaluate(_inventory(()), _baseline([]))
+
+    assert result.status == "passed"
+    assert result.accepted_total == 0
+
+
 def test_cli_guard_rejects_an_unsafe_default_in_a_tracked_repository(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
@@ -153,6 +161,23 @@ def test_cli_guard_rejects_an_unsafe_default_in_a_tracked_repository(
     assert output["parsed_files"] == 5
     assert output["candidate_count"] == 1
     assert output["new_high"] == ["src/mist/resources/device/ap_profile_migration_manager.py|choose|attribute|data|0"]
+
+
+def test_cli_guard_rejects_a_null_baseline(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Reject JSON null instead of accepting it as a baseline object."""
+    root = Path(__file__).resolve().parents[4]
+    baseline_path = tmp_path / "null.json"
+    baseline_path.write_text("null", encoding="utf-8")
+
+    status = main(["guard", "--root", str(root), "--baseline", str(baseline_path)])
+    output = json.loads(capsys.readouterr().out)
+
+    assert status == 2
+    assert output["status"] == "invalid_input"
+    assert "baseline must be a JSON object" in output["message"]
 
 
 def test_unknown_scoped_candidate_is_invalid() -> None:

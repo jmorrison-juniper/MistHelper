@@ -102,6 +102,28 @@ def test_parse_errors_are_reported_and_unknown_roots_fail(tmp_path: Path) -> Non
         raise AssertionError("a missing Git worktree must fail")
 
 
+def test_empty_source_has_no_candidates(tmp_path: Path) -> None:
+    """Treat an empty tracked Python file as a valid empty inventory."""
+    root = _repository(tmp_path, "")
+
+    result = InventoryScanner(root).scan()
+
+    assert result.discovered_files == 1
+    assert result.parsed_files == 1
+    assert result.candidates == ()
+    assert result.parse_failures == ()
+
+
+def test_none_default_is_not_an_empty_default_candidate(tmp_path: Path) -> None:
+    """Do not classify a None default as an empty string or collection."""
+    root = _repository(tmp_path, "def choose(record):\n    return record.get('id', None)\n")
+
+    result = InventoryScanner(root).scan()
+
+    assert result.parsed_files == 1
+    assert result.candidates == ()
+
+
 def test_scan_reports_counts_and_separate_classification_totals(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],

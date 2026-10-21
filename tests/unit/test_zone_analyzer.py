@@ -827,6 +827,11 @@ class TestExportHelpersBranches:
         }
         _export_dwell_configs(engagement, "20250101", save_fn)
         save_fn.assert_called_once()
+        rows = save_fn.call_args.args[0]
+        assert len(rows) == 1
+        assert rows[0]["configuration"] == "k1"
+        assert rows[0]["passerby"] == "1-300"
+        assert rows[0]["sample_sites"] == "S1"
 
     def test_export_occupancy_configs(self) -> None:
         from src.mist.intelligence.analytics.zone_analyzer import _export_occupancy_configs
@@ -845,6 +850,11 @@ class TestExportHelpersBranches:
         }
         _export_occupancy_configs(occupancy, "20250101", save_fn)
         save_fn.assert_called_once()
+        rows = save_fn.call_args.args[0]
+        assert len(rows) == 1
+        assert rows[0]["configuration"] == "k1"
+        assert rows[0]["min_duration"] == 180
+        assert rows[0]["sample_sites"] == "S1"
 
 
 class TestExportResults:
@@ -1001,6 +1011,7 @@ class TestAnalyzeIntegration:
         ZoneConfigurationAnalyzer.analyze(**mock_deps)
         # Should have stopped early without processing any sites
         zone_mock.assert_not_called()
+        assert mock_deps["check_stop_fn"].call_count == 2
 
 
 class TestCollectAllSiteZones:
@@ -1185,6 +1196,7 @@ class TestExportEarlyReturns:
 
         save_fn = MagicMock()  # spy on whether the save function is ever called
         _export_all_zones({}, "20250101", save_fn)  # empty site_zones dict
+        assert save_fn.call_count == 0  # Empty zone input must skip the save callback.
         save_fn.assert_not_called()  # early return before save reached
 
     def test_export_dwell_configs_empty_input(self) -> None:
@@ -1193,6 +1205,7 @@ class TestExportEarlyReturns:
 
         save_fn = MagicMock()  # spy on whether the save function is ever called
         _export_dwell_configs({}, "20250101", save_fn)  # no dwell_tag_configs key in dict
+        assert save_fn.call_count == 0  # Empty dwell input must skip the save callback.
         save_fn.assert_not_called()  # early return before save reached
 
     def test_export_occupancy_configs_empty_input(self) -> None:
@@ -1200,5 +1213,6 @@ class TestExportEarlyReturns:
         from src.mist.intelligence.analytics.zone_analyzer import _export_occupancy_configs  # private fn
 
         save_fn = MagicMock()  # spy on whether the save function is ever called
-        _export_occupancy_configs({}, "20250101", save_fn)  # no occupancy_configs key in dict
+        _export_occupancy_configs({}, "20250101", save_fn)  # no occupancy_configs key
+        assert save_fn.call_count == 0  # Empty occupancy input must skip the save callback. in dict
         save_fn.assert_not_called()  # early return before save reached
