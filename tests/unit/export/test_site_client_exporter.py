@@ -204,6 +204,7 @@ class TestClients:
         # WHY: no listSiteWirelessClientsStats call after resolver aborts.
         wired_deps["mistapi"].api.v1.sites.stats.listSiteWirelessClientsStats.assert_not_called()
         wired_deps["mistapi"].get_all.assert_not_called()  # WHY: no pagination.
+        assert wired_deps["DataExporter"].mock_calls == []  # WHY: cancellation must not write an export.
 
     def test_happy_path_fetch_paginate_persist(self, wired_deps: dict[str, Any]) -> None:
         """Happy path fetches wireless client stats, paginates, then persists per-site CSV."""
