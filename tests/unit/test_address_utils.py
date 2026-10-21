@@ -1223,3 +1223,29 @@ def test_geocode_address_rejects_http_429() -> None:
         timeout=validator.timeout,
         verify=True,
     )
+
+
+def test_geocode_address_rejects_http_503() -> None:
+    """Reject server failure data before it supplies coordinates to the caller."""
+    response = address_mod.requests.Response()
+    response.status_code = 503
+    response._content = json.dumps(
+        [{"lat": "39.78", "lon": "-89.65", "importance": 0.6, "display_name": "Springfield"}]
+    ).encode()
+    validator = NominatimValidator()
+    with patch.object(address_mod.requests, "get", return_value=response) as request:
+        result = validator._geocode_address({"address": "123 Main", "city": "Springfield"}, "mist")
+    assert result == {
+        "valid": False,
+        "confidence": 0.0,
+        "lat": None,
+        "lon": None,
+        "error": "HTTP 503",
+    }
+    request.assert_called_once_with(
+        validator.NOMINATIM_URL,
+        params={"format": "json", "q": "123 Main, Springfield", "limit": 1, "addressdetails": 1},
+        headers={"User-Agent": validator.USER_AGENT},
+        timeout=validator.timeout,
+        verify=True,
+    )
