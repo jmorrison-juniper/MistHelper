@@ -9,8 +9,10 @@ from __future__ import annotations
 
 import logging  # Capture the comparator's refusal message without exposing response data.
 import re
+import sys  # Isolate the lazy SDK import from suite-global module stubs.
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from types import SimpleNamespace  # Build a minimal SDK namespace without external imports.
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -112,7 +114,23 @@ def _build_org_lookup_comparator() -> InventoryCSVComparator:
     return comparator  # Return the real comparator methods with only their required state.
 
 
-def test_org_name_lookup_rejects_http_403_payload(caplog: pytest.LogCaptureFixture) -> None:
+def _install_org_lookup_sdk(monkeypatch: pytest.MonkeyPatch, mocked_get_org: MagicMock) -> None:
+    """Give the lazy Mist SDK import a test-owned organization endpoint."""
+    mistapi_stub = SimpleNamespace(  # Keep the dynamic import independent of suite-global SDK stubs.
+        api=SimpleNamespace(  # Match the SDK module path that the comparator resolves at call time.
+            v1=SimpleNamespace(  # Preserve the SDK version namespace expected by the endpoint.
+                orgs=SimpleNamespace(  # Preserve the organization endpoint namespace.
+                    orgs=SimpleNamespace(getOrg=mocked_get_org)  # Bind the test-owned HTTP boundary.
+                )
+            )
+        )
+    )
+    monkeypatch.setitem(sys.modules, "mistapi", mistapi_stub)  # Restore the prior SDK entry after each test.
+
+
+def test_org_name_lookup_rejects_http_403_payload(
+    caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """A refused Mist organization response must not supply a name to validation."""
     import requests  # Build a native HTTP response for Mist SDK parsing.
     from mistapi.__api_response import APIResponse  # Keep Mist API imports out of module scope.
@@ -126,12 +144,10 @@ def test_org_name_lookup_rejects_http_403_payload(caplog: pytest.LogCaptureFixtu
 
     assert api_response.status_code == 403  # Confirm the SDK response preserves the refusal status.
     assert api_response.data == {"name": "refused-organization"}  # Confirm the refused body looks usable.
+    mocked_get_org = MagicMock(return_value=api_response)  # Keep the refused response at the outbound boundary.
+    _install_org_lookup_sdk(monkeypatch, mocked_get_org)  # Isolate lazy imports from other test modules.
     with caplog.at_level(logging.WARNING, logger="src.mist.resources.inventory.csv_comparator"):
-        with patch(
-            "mistapi.api.v1.orgs.orgs.getOrg",
-            return_value=api_response,
-        ) as mocked_get_org:  # Replace only the outbound SDK boundary.
-            org_name = comparator._get_org_name_for_validation()  # Run the real status and data checks.
+        org_name = comparator._get_org_name_for_validation()  # Run the real status and data checks.
 
     assert org_name is None  # Reject plausible organization data from the refused response.
     mocked_get_org.assert_called_once_with(comparator._api, "org-uuid-1")  # Preserve the exact SDK call.
@@ -143,17 +159,17 @@ def test_org_name_lookup_rejects_http_403_payload(caplog: pytest.LogCaptureFixtu
     assert status_warnings == ["Failed to retrieve org info: HTTP 403"]  # Preserve exact refusal evidence.
 
 
-def test_org_name_lookup_handles_connection_error(caplog: pytest.LogCaptureFixture) -> None:
+def test_org_name_lookup_handles_connection_error(
+    caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """A connection refusal must not stop validation or produce an organization name."""
     import requests  # Raise a native transport error at the mocked SDK boundary.
 
     comparator = _build_org_lookup_comparator()  # Exercise the same real organization lookup path.
+    mocked_get_org = MagicMock(side_effect=requests.ConnectionError("connection refused"))  # Block network access.
+    _install_org_lookup_sdk(monkeypatch, mocked_get_org)  # Isolate lazy imports from other test modules.
     with caplog.at_level(logging.WARNING):
-        with patch(
-            "mistapi.api.v1.orgs.orgs.getOrg",
-            side_effect=requests.ConnectionError("connection refused"),
-        ) as mocked_get_org:  # Prevent the test from opening a network connection.
-            org_name = comparator._get_org_name_for_validation()  # Run the real exception handler.
+        org_name = comparator._get_org_name_for_validation()  # Run the real exception handler.
 
     assert org_name is None  # A connection error must not provide an organization hint.
     mocked_get_org.assert_called_once_with(comparator._api, "org-uuid-1")  # Preserve the exact SDK call.
@@ -162,17 +178,17 @@ def test_org_name_lookup_handles_connection_error(caplog: pytest.LogCaptureFixtu
     ]  # Preserve the failure reason.
 
 
-def test_org_name_lookup_handles_connection_timeout(caplog: pytest.LogCaptureFixture) -> None:
+def test_org_name_lookup_handles_connection_timeout(
+    caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """A connection timeout must not stop validation or produce an organization name."""
     import requests  # Raise a native timeout at the mocked SDK boundary.
 
     comparator = _build_org_lookup_comparator()  # Exercise the same real organization lookup path.
+    mocked_get_org = MagicMock(side_effect=requests.Timeout("connection timed out"))  # Block network access.
+    _install_org_lookup_sdk(monkeypatch, mocked_get_org)  # Isolate lazy imports from other test modules.
     with caplog.at_level(logging.WARNING):
-        with patch(
-            "mistapi.api.v1.orgs.orgs.getOrg",
-            side_effect=requests.Timeout("connection timed out"),
-        ) as mocked_get_org:  # Prevent the test from opening a network connection.
-            org_name = comparator._get_org_name_for_validation()  # Run the real exception handler.
+        org_name = comparator._get_org_name_for_validation()  # Run the real exception handler.
 
     assert org_name is None  # A connection timeout must not provide an organization hint.
     mocked_get_org.assert_called_once_with(comparator._api, "org-uuid-1")  # Preserve the exact SDK call.
