@@ -504,6 +504,31 @@ class TestExtractCreatedId:
 class TestCreateWithoutIdentifier:
     """Cover the create loop when the response lacks the new identifier."""
 
+    def test_http_403_create_records_failure_without_remapping(
+        self, manager: OrgConfigMigrationManager, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """A refused network create must not report success or map a source identifier."""
+        from mistapi.__api_response import APIResponse
+        from requests import Response
+
+        raw_response = Response()
+        raw_response.status_code = 403
+        raw_response._content = b'{"detail": "Forbidden"}'
+        response = APIResponse(raw_response, "https://api.mist.com/api/v1/orgs/org-1/networks")
+        manager.org_id = "org-1"
+        results: list[dict[str, Any]] = []
+        reason = "Create response has no object id, so cross-references cannot be remapped"
+        with patch.object(ocm.mistapi.api.v1.orgs.networks, "createOrgNetwork", return_value=response) as create:
+            OrgConfigMigrationManager._create_and_record(
+                manager, manager.CONFIG_TYPES[0], {"name": "Corp-LAN"}, "Corp-LAN", "src-1", results
+            )
+        assert results == [{"type": "networks", "name": "Corp-LAN", "status": "failed", "reason": reason}]
+        assert manager._remap_table == {}
+        assert ("root", 40, f"Failed to create networks 'Corp-LAN': {reason}") in caplog.record_tuples
+        assert ("root", 40, f"      FAIL: Corp-LAN - {reason}") in caplog.record_tuples
+        assert "      OK: Corp-LAN" not in caplog.messages
+        create.assert_called_once_with(manager.session, "org-1", body={"name": "Corp-LAN"})
+
     def test_a_create_without_an_identifier_is_recorded_as_failed(self, manager: OrgConfigMigrationManager) -> None:
         """A silent success would leave every later reference unmapped."""
         response = MagicMock()  # WHY: stand in for the SDK response wrapper.
