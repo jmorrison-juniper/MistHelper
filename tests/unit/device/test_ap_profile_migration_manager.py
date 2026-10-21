@@ -2284,6 +2284,24 @@ def test_error_status_response_reaches_the_429_pacing_check() -> None:
     assert APProfileMigrationManager._is_429(err) is True, "a 429 response MUST pace the run"
 
 
+@pytest.mark.parametrize("data", [None, "", "   ", {}, 7, [None]])
+def test_profile_pagination_fallback_rejects_invalid_response_data(
+    data: object,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Reject incomplete profile response data rather than report zero profiles."""
+    response = types.SimpleNamespace(data=data, status_code=200)
+    monkeypatch.setattr(apm_mod._mist_deviceprofiles, "listOrgDeviceProfiles", lambda *_args: response)
+    monkeypatch.setattr(
+        apm_mod.mistapi,
+        "get_all",
+        lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("pagination failed")),
+    )
+
+    with pytest.raises(ValueError, match="response.data"):
+        APProfileMigrationManager._fetch_and_sort_ap_profiles(object(), "org")
+
+
 def test_check_reassign_response_ignores_an_unreadable_status() -> None:
     """A response without an integer status MUST NOT raise.
 

@@ -382,6 +382,17 @@ class TestBuildSummaryRows:
         rows = _build_summary_rows({}, {}, {}, {}, {})
         assert rows == []
 
+    def test_empty_analysis_maps_keep_a_valid_zero_result(self) -> None:
+        """Empty analysis maps must not invent deviations for a valid site."""
+        site_zones = {"s1": {"site_name": "Site", "zone_count": 0, "zone_names": set()}}
+        site_settings = {"s1": {"site_name": "Site", "engagement": {}, "occupancy": {}, "analytic": {}}}
+
+        rows = _build_summary_rows(site_zones, site_settings, {}, {}, {})
+
+        assert rows[0]["zone_deviation"] == "No"
+        assert rows[0]["dwell_deviation"] == "No"
+        assert rows[0]["occupancy_deviation"] == "No"
+
     def test_sorts_by_deviation(self) -> None:
         site_zones = {
             "s1": {"site_name": "A", "zone_count": 5, "zone_names": set()},

@@ -334,6 +334,16 @@ class TestCompareWithThreshold:
         assert result["is_match"] is False
         assert result["overall_similarity"] == 0.0
 
+    def test_missing_primary_address_cannot_match(self) -> None:
+        """The comparison boundary rejects a missing street despite equal helper inputs."""
+        address = {"address": "", "city": "Springfield", "state": "IL", "zip": "62701"}
+
+        result = AddressUtils.compare_with_threshold(address, address, threshold=70.0)
+
+        assert result["is_match"] is False
+        assert result["overall_similarity"] == 0.0
+        assert result["parse_status"]["mist_parseable"] is False
+
     def test_identical_addresses(self):
         addr = {"address": "123 Main St", "city": "Springfield", "state": "IL", "zip": "62701"}
         result = AddressUtils.compare_with_threshold(addr, addr, threshold=70.0)

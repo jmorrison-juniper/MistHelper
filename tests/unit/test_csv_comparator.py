@@ -362,6 +362,18 @@ class TestLookupBuilding:
         }
         assert comp._get_comparison_address("SN123") is None
 
+    def test_blank_serial_rows_do_not_create_comparison_keys(self) -> None:
+        """A missing serial cannot create a blank comparison identity."""
+        comp = _make_comparator()
+        comp.serial_field = "Serial"
+        comp.zip_field = "Zip"
+        comp.comparison_data = [{"Serial": "", "Zip": "62701"}]
+
+        comp._build_lookup_dictionaries()
+
+        assert comp.comparison_serials == {}
+        assert comp.comparison_address_lookup == {}
+
 
 # ================================================================
 # Duplicate detection tests
