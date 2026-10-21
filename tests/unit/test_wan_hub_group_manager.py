@@ -636,3 +636,33 @@ class TestFallbackInput:
     def test_keyboard_interrupt_returns_empty(self, mock_input):
         result = WanHubGroupNumberManager._fallback_input("prompt: ")
         assert result == ""
+
+
+def _refused_response():
+    """Build a fake mistapi response for an HTTP 403 refusal."""
+    response = MagicMock()
+    response.status_code = 403
+    response.data = {"detail": "You do not have permission to perform this action."}
+    response.next = None
+    return response
+
+
+class TestFetchRefusedByApi:
+    """HTTP 403 refusals must yield empty results, never error bodies as records."""
+
+    @patch("src.operations.wan.wan_hub_group_manager.mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles")
+    def test_profiles_http_403_returns_no_profiles(self, mock_list):
+        mock_list.return_value = _refused_response()
+        refused_manager = WanHubGroupNumberManager(MagicMock(), "org-1", safe_input_func=MagicMock())
+        result = refused_manager._fetch_profiles()
+        assert result == []
+        assert mock_list.call_count == 1
+
+    @patch("src.operations.wan.wan_hub_group_manager.mistapi.api.v1.orgs.vpns.listOrgVpns")
+    def test_vpns_http_403_returns_no_vpns(self, mock_list):
+        mock_list.return_value = _refused_response()
+        refused_manager = WanHubGroupNumberManager(MagicMock(), "org-1", safe_input_func=MagicMock())
+        hub_spoke, all_vpns = refused_manager._fetch_hub_spoke_vpns()
+        assert hub_spoke == []
+        assert all_vpns == []
+        assert mock_list.call_count == 1

@@ -22,6 +22,10 @@ logger = logging.getLogger(__name__)
 class OrgSecurityPostureChecklist:
     """Static menu handler for the organization security posture checklist."""
 
+    from src.foundation.models.operation_outcome import (
+        OperationOutcome as _OperationOutcome,  # Keep the contract class-scoped.
+    )
+
     @staticmethod
     def run(
         *,
@@ -30,19 +34,23 @@ class OrgSecurityPostureChecklist:
         test_mode: bool = False,
         source_data: OrganizationSecuritySourceData | None = None,
         write_fn: Callable[..., bool] | None = None,
-    ) -> dict[str, int]:
-        """Run the checklist and return the summary counts."""
+    ) -> _OperationOutcome:
+        """Run the checklist and return its explicit result."""
         logging.info("Starting organization security posture checklist")  # Log the operator action start.
         runner = OrgSecurityPostureRunner(
             api_session, org_id, test_mode, source_data, write_fn
         )  # Build the coordinator.
-        summary = runner.run()  # Execute the same flow for normal mode and test mode.
-        logging.debug("Finished organization security posture checklist with summary %s", summary)  # Log result counts.
-        return summary  # Return counts for tests and deferred integration.
+        outcome = runner.run()  # Execute the same flow for normal mode and test mode.
+        logging.debug("Finished organization security posture checklist with state %s", outcome.state)  # Log state.
+        return outcome  # Return the explicit result for callers.
 
 
 class OrgSecurityPostureRunner:
     """Coordinate source collection, evaluation, export, and summary."""
+
+    from src.foundation.models.operation_outcome import (
+        OperationOutcome as _OperationOutcome,  # Keep the contract class-scoped.
+    )
 
     def __init__(
         self,
@@ -59,10 +67,16 @@ class OrgSecurityPostureRunner:
         self.source_data = source_data  # Store injected source data for tests.
         self.exporter = OrgSecurityPostureExporter(write_fn)  # Store the exporter dependency.
 
-    def run(self) -> dict[str, int]:
-        """Run all checklist phases."""
+    def run(self) -> _OperationOutcome:
+        """Run all checklist phases and return the explicit result."""
         logging.info("Preparing organization security posture source data")  # Log before source data resolution.
         source_data = self._build_source_data()  # Resolve fixture, injected, or live API data.
+        if source_data is None:  # Normal mode needs both context values before any API call.
+            logging.error("Organization security posture needs an API session and organization ID")  # Explain stop.
+            return self._OperationOutcome(
+                state="missing_input",
+                message="An API session and organization ID are required for the security posture checklist.",
+            )  # Report the missing context without an exception.
         logging.debug("Prepared organization security posture source data")  # Log after source data resolution.
         logging.info("Evaluating organization security posture checks")  # Log before check evaluation.
         results = self._evaluate(source_data)  # Run all registered checks.
@@ -72,15 +86,23 @@ class OrgSecurityPostureRunner:
         exported = self.exporter.export(rows)  # Persist rows through DataExporter.
         logging.debug("Exported organization security posture rows: %s", exported)  # Log export status.
         if not exported:  # A successful run must not claim success when the CSV write fails.
-            raise RuntimeError("Organization security posture export failed.")
+            logging.error("Organization security posture export failed for %d rows", len(rows))  # Record row count.
+            return self._OperationOutcome(
+                state="failed",
+                message="The organization security posture checklist could not write its output.",
+            )  # Report the rejected write.
         logging.info("Summarizing organization security posture verdicts")  # Log before summary aggregation.
         summary = self._summarize(rows)  # Count pass, fail, and review rows.
         logging.debug("Organization security posture summary counts: %s", summary)  # Log summary counts.
         self._print_summary(summary)  # Print operator-facing counts.
-        return summary  # Return counts for tests and callers.
+        return self._OperationOutcome(
+            state="completed",
+            message="The organization security posture checklist completed.",
+            detail=f"pass: {summary['pass']}, fail: {summary['fail']}, review: {summary['review']}",
+        )  # Report completion and the verdict counts.
 
-    def _build_source_data(self) -> OrganizationSecuritySourceData:
-        """Return source data for this run."""
+    def _build_source_data(self) -> OrganizationSecuritySourceData | None:
+        """Return source data for this run, or None when required context is missing."""
         if self.source_data is not None:  # Tests can inject source data without network access.
             return self.source_data
         if self.test_mode:  # Test mode must not prompt or call the network.
@@ -88,7 +110,7 @@ class OrgSecurityPostureRunner:
         api_session = self.api_session or SourceDependencyResolver.apisession  # Read the shared menu API session.
         org_id = self.org_id or self._resolve_org_id()  # Read the shared organization context when needed.
         if not api_session or not org_id:  # Normal mode needs both context values.
-            raise ValueError("Organization security posture requires an API session and organization ID.")
+            return None  # The caller maps missing context to the missing_input state.
         client = OrgSecurityPostureSourceClient(api_session, str(org_id))  # Build the live source client.
         return client.collect()  # Collect each required Mist source once.
 

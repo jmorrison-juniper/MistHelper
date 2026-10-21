@@ -60,9 +60,13 @@ def test_build_heatmap_trace_fallback_indices() -> None:
     renderer = PlotlyCoverageHeatmapRenderer(logger=logging.getLogger("test"))
     payload = {
         "result_def": ["foo", "bar"],
-        "results": [[0.0, 0.0, 36, 20, -55, -60]],
+        "results": [[1.0, 2.0, 99, 99, -55, -60]],
         "gridsize": 1,
     }
 
     trace = renderer.build_heatmap_trace(payload, ppm=10, map_width=1000, map_height=500)
-    assert trace is not None
+
+    assert isinstance(trace, go.Heatmap)
+    assert tuple(trace.x) == (10.0,)  # Default column 0 is x, scaled by ppm.
+    assert tuple(trace.y) == (20.0,)  # Default column 1 is y, scaled by ppm.
+    assert [list(row) for row in trace.z] == [[-55]]  # Default column 4 is max_rssi.

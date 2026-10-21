@@ -89,6 +89,68 @@ and no signal reports the loss.
 CodeQL runs in a separate workflow, `.github/workflows/codeql.yml`. A code pull
 request must wait for CodeQL before it takes the `auto-merge` label.
 
+## Merge queue preparation and activation
+
+Issue #3071 separates workflow preparation from queue activation.
+The preparation change enables `merge_group.checks_requested` in `ci.yml`
+and `codeql.yml`. It changes no repository setting.
+Both workflows measure the queue candidate commit and retain the required
+check names. Queue references keep candidate runs in separate concurrency
+groups. Only a superseded pull request run can cancel an earlier run.
+
+The trigger guard checks both workflows and the 14 required CI context names.
+Code scanning supplies the fifteenth required context, `CodeQL`.
+Local contracts cannot prove that GitHub reports that application-owned
+context. The owner must verify it on a live queue commit.
+
+The original issue names
+`.github/instructions/git-flow-multi-agent.instructions.md`, which no longer
+exists. The user approved this section as the documentation location.
+This is an explicit exception to that issue acceptance criterion.
+
+### Preparation
+
+1. Merge the workflow preparation pull request after coordinator review and
+   successful required checks, including CodeQL.
+2. Confirm that normal pull request and `main` validation still work.
+3. Retain the serialized merge process until the owner verifies queue operation.
+
+The preparation pull request must use `Refs #3071`, not an automatic closing
+reference. A workflow-file pull request can require a manual merge when the
+existing automation cannot merge it.
+
+### Owner activation and verification
+
+Warning: if the owner enables the queue before the workflow changes land,
+required checks can remain absent and prevent every merge.
+
+Queue settings require separate owner approval. An agent must not change
+branch protection, required statuses, or queue settings as part of this change.
+The owner chooses queue enrollment and batching separately.
+Keep strict up-to-date protection, linear history, and all 15 required context
+names unchanged.
+
+After owner activation, verify two low-risk candidates before replacing the
+serialized merge process.
+
+1. Confirm that both required workflows start from a `merge_group` event.
+2. Confirm that all 15 required contexts succeed on the queue candidate SHA.
+3. Confirm that the candidate merges without a manual rebase loop.
+4. Confirm that the resulting `main` checks and post-merge dispatch mechanism work.
+5. Record the queue commit, checks, merge, and `main` run evidence on #3071.
+
+Repeat these checks for the second candidate.
+Treat cancelled, timed-out, stale, and skipped required results as unresolved,
+not successful. Do not bypass protection to complete verification.
+Keep #3071 open until the owner records the operational acceptance evidence.
+
+### Recovery
+
+If queue validation fails, the owner can disable the queue rule and retain
+strict protection and the existing required checks.
+Return to the serialized merge process while the workflow defect receives a
+separate repair. Do not remove candidate branches or commits to repair the queue.
+
 The `quality_gate_issues` job keeps one issue for each failed gate. It calls
 the shared `reusable-quality-gate-issues.yml` workflow of `misthelper-devtools`
 with `scope: all` (issue #3487).

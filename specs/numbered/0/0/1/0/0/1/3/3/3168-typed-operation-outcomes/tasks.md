@@ -47,3 +47,61 @@ Both stories share one model and test file. Do not edit them in parallel.
 Implement the complete small contract, then verify both stories together.
 Producer migration and portal replacement are later batches, not unchecked
 tasks that this contract PR claims to complete.
+
+## Phase 6: Serial Producer Batch 1 - PSK Hygiene
+
+**Goal**: Give menu 274 an explicit outcome without changing portal classification.
+**Independent test**: The PSK hygiene unit tests check completed, no-output, missing-input, failed export, and propagated fetch and export exceptions.
+
+- [x] T011 [US1] Record the current handler inventory and caller contracts in `design/research.md`.
+- [x] T012 [US1] Test PSK outcome states and preserved exceptions in `tests/unit/reports/psk_hygiene/test_operation.py`.
+- [x] T013 [US1] Return `OperationOutcome` from the PSK handler in `src/mist/intelligence/reports/psk_hygiene/operation.py`.
+- [x] T014 [P] [US1] Document the bounded migration in `plan.md`, `design/contracts/handler.md`, and `design/quickstart.md`.
+- [x] T015 [P] [US1] Add the PSK outcome release note in `changelog.d/issue-3168-psk-hygiene-outcome.md`.
+- [x] T016 [US1] Record validation and the unchanged portal boundary in `analysis.md`.
+
+T011 establishes the current scope. T012 precedes T013. T014 and T015 can run beside the implementation. T016 depends on all earlier tasks.
+
+## Phase 7: Serial Producer Batch 2 - Alert Digest
+
+**Goal**: Give menu 280 an explicit outcome without changing menu 281 or portal classification.
+**Independent test**: The alert digest tests check completed, no-output, failed, and propagated write exceptions.
+
+- [x] T017 [US1] Record the menu 280 mapping and assumptions in `design/research.md`.
+- [x] T018 [US1] Test digest states and preserved exceptions in `tests/unit/reports/alert_digest/test_alert_digest_operation.py`.
+- [x] T019 [US1] Return `OperationOutcome` from the digest handler in `src/mist/intelligence/reports/alert_digest/operation.py`.
+- [x] T020 [P] [US1] Document the batch in `plan.md`, `design/contracts/handler.md`, and `design/quickstart.md`.
+- [x] T021 [P] [US1] Add the release note in `changelog.d/issue-3168-alert-digest-outcome.md`.
+- [x] T022 [US1] Record validation and the unchanged portal boundary in `analysis.md`.
+
+T018 precedes T019. T022 depends on all earlier tasks.
+
+## Phase 8: Serial Producer Batch 3 - Security Posture Checklist
+
+**Goal**: Give menu 276 an explicit outcome without changing portal classification or `MistHelper.py`.
+**Independent test**: The posture tests check completed, failed, missing-input, and propagated collection errors.
+
+- [x] T023 [US1] Record the menu 276 mapping in `design/research.md`.
+- [x] T024 [US1] Test the states in `tests/unit/reports/org_security_posture/test_operation_outcome.py`.
+- [x] T025 [US1] Return `OperationOutcome` from `src/mist/intelligence/reports/org_security_posture/runner.py`.
+- [x] T026 [P] [US1] Document the batch in `plan.md`, `design/contracts/handler.md`, and `design/quickstart.md`.
+- [x] T027 [P] [US1] Add the release note in `changelog.d/issue-3168-posture-outcome.md`.
+- [x] T028 [US1] Record validation and the unchanged portal boundary in `analysis.md`.
+
+T024 precedes T025. T028 depends on all earlier tasks.
+
+## Phase 9: Current-Main Handler Inventory
+
+**Goal**: Record the current named-handler inventory and identify eligible
+value-return producers without changing lambda registrations or portal logic.
+**Independent test**: Parse the current menu registry and verify handler counts
+and return contracts against the source and current tests.
+
+- [x] T029 Refresh the named-handler counts, callers, and value-return table in `design/research.md`.
+- [x] T030 Update the serial migration order in `plan.md` and preserve the menu 92 input-helper boundary.
+- [x] T031 Record inventory evidence and validation in `analysis.md`.
+
+The inventory found no un-migrated value-return operation handler. The next
+producer migration must select a named operation family whose handlers return
+`None`. This inventory phase is complete. Issue #3168 remains open for later
+producer migration, lambda conversion, and portal replacement.

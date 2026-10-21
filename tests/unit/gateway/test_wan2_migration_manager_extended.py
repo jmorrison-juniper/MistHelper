@@ -1009,3 +1009,29 @@ def test_find_subinterface_ip_configs_yields_records_when_present() -> None:
     records = manager._find_subinterface_ip_configs(row)
     assert len(records) == 1
     assert records[0]["port_identifier"] == "ge-0/0/1.100"
+
+
+def test_apply_site_settings_http_403_rejects_success_data(caplog: pytest.LogCaptureFixture) -> None:
+    """A native refused update must record failure without a successful variable assignment."""
+    import logging
+
+    from mistapi.__api_response import APIResponse
+    from requests import Response
+
+    _, mocks = _wire()
+    response = Response()
+    response.status_code = 403
+    response._content = b'{"vars": {"wan2_interface": "ge-0/0/1"}}'
+    endpoint = mocks["mistapi"].api.v1.sites.setting.updateSiteSettings
+    endpoint.return_value = APIResponse(response, "https://mist.invalid/site/settings")
+    settings = {"vars": {"wan2_interface": "ge-0/0/1"}}
+    result: dict[str, Any] = {"variable_set": False, "status": "", "error": ""}
+
+    with caplog.at_level(logging.INFO, logger=module.logger.name):
+        WAN2MigrationManager._apply_site_settings("s1", "S1", settings, result)
+
+    assert result == {"variable_set": False, "status": "FAILED", "error": "API returned status 403"}
+    endpoint.assert_called_once_with(module.apisession, "s1", body=settings)
+    assert [
+        (record.levelno, record.getMessage()) for record in caplog.records if record.name == module.logger.name
+    ] == [(logging.ERROR, "Failed to set variable for site S1: status 403")]

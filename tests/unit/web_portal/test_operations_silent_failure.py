@@ -19,6 +19,8 @@ import logging
 import sys
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 # Import the helpers directly so the tests do not need a running Flask app.
 from web_portal.routes.operations import (
     _fetch_org_sites,
@@ -207,3 +209,37 @@ class TestFetchWiredClientsSilentFailure:
             assert len(caplog.records) > 0, (
                 "result is [] and no log record exists -- " "the failure is invisible to the caller."
             )
+
+
+class TestFetchOrgSitesHttpRefusal:
+    """Reject a native HTTP refusal before its parsed body reaches a site picker."""
+
+    def test_http_403_does_not_return_plausible_site_data(self, caplog: pytest.LogCaptureFixture) -> None:
+        """Keep a refused site list distinct from a successful site response."""
+        import requests  # WHY: build a concrete refused response without network access.
+        from mistapi.__api_response import APIResponse  # WHY: preserve the SDK status and body parsing behavior.
+
+        apisession = _fake_apisession()  # WHY: reach the SDK boundary with no production credential.
+        response = requests.Response()  # WHY: model the transport response from Mist.
+        response.status_code = 403  # WHY: exercise the client-refusal branch.
+        response.url = "https://api.mist.invalid/api/v1/orgs/org-403/sites"  # WHY: identify the mocked endpoint.
+        response.headers["Content-Type"] = "application/json"  # WHY: parse plausible refused site data.
+        response._content = b'[{"id":"site-403","name":"Refused Site"}]'  # WHY: ensure data cannot disguise refusal.
+        api_response = APIResponse(response, response.url)  # WHY: use the real installed SDK response parser.
+        with (
+            patch("mistapi.api.v1.orgs.sites.listOrgSites", return_value=api_response) as list_sites,
+            patch(
+                "web_portal.routes.operations.EmptySiteFilter.apply",
+                return_value=([{"id": "site-403", "name": "Refused Site"}], 0),
+            ) as filter_sites,
+            caplog.at_level(logging.ERROR, logger="web_portal.routes.operations"),
+        ):
+            result = _fetch_org_sites(apisession, "org-403")  # WHY: run the real site-list refusal guard.
+
+        assert result == [], "a refused site list must not return parsed site rows"  # WHY: prevent refused data use.
+        assert result.reason == "The portal could not reach the Mist API. Try again."  # WHY: distinguish failure.
+        assert [record.getMessage() for record in caplog.records if record.name == "web_portal.routes.operations"] == [
+            "Failed Mist API pick-list read for listOrgSites target org-403 with status 403"
+        ]  # WHY: require the exact status evidence.
+        list_sites.assert_called_once_with(apisession, "org-403")  # WHY: prove one bounded mocked SDK call.
+        filter_sites.assert_not_called()  # WHY: stop refused data before downstream site filtering.

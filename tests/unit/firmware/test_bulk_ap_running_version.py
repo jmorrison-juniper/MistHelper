@@ -132,6 +132,30 @@ class TestAStaleReadingNeverBecomesAVersion:
         assert answer != _STALE_VERSION, "a configured version must never reach a firmware verdict"
         assert answer == UNKNOWN_VERSION, "a stale reading must read as unknown"
 
+    def test_http_503_stats_response_has_no_running_versions(self, caplog: pytest.LogCaptureFixture) -> None:
+        """A server error MUST not make plausible stats look like running versions."""
+        import requests  # WHY: build a concrete response for the installed Mist SDK parser.
+        from mistapi.__api_response import APIResponse  # WHY: preserve native status and body parsing.
+
+        session = MagicMock()  # WHY: provide a non-network session to the injected SDK boundary.
+        response = requests.Response()  # WHY: model the HTTP response that the Mist SDK receives.
+        response.status_code = 503  # WHY: exercise the server-error refusal branch.
+        response.url = "https://api.mist.invalid/api/v1/sites/site-1/stats/devices"  # WHY: identify the request.
+        response._content = b'[{"id":"device-1","version":"0.14.29695"}]'  # WHY: plausible data must not bypass status.
+        api_response = APIResponse(response, response.url)  # WHY: use the real SDK parser without network access.
+        stats_call = MagicMock(return_value=api_response)  # WHY: return the native refusal at the SDK boundary.
+        resolver = RunningFirmwareVersionResolver(session, stats_fn=stats_call)  # WHY: run the production reader.
+        caplog.set_level(logging.ERROR, logger="src.operations.execution.firmware.running_version")
+        result = resolver.fetch_site_running_versions("site-1")  # WHY: exercise the real status guard.
+
+        assert result == {}, "a server error must not supply a running firmware version"
+        stats_call.assert_called_once_with(session, "site-1", type="all", limit=1000)
+        assert [
+            record.getMessage()
+            for record in caplog.records
+            if record.name == "src.operations.execution.firmware.running_version"
+        ] == ["The listSiteDevicesStats call for site site-1 returned 503"]
+
 
 class TestAnUnknownVersionStaysInTheUpgradeBucket:
     """A device the portal cannot read must never look like a finished one."""

@@ -603,8 +603,7 @@ def test_mac_table_idle_timeout_hits_when_all_conditions_met() -> None:
     outputs = [_seg("x")] * 10
     with patch.object(cd_mod.time, "time", return_value=104.0):
         got = _make_detector()._mac_table_idle_timeout(outputs, last_activity=100.0, entry_count=15)
-    assert got is not None
-    assert "idle timeout: 15 entries" in got and "4.0s idle" in got
+    assert got == "mac table completion (idle timeout: 15 entries, 4.0s idle)"
 
 
 def test_log_mac_idle_hit_silent_when_debug_off(caplog: pytest.LogCaptureFixture) -> None:

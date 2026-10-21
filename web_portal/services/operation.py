@@ -16,6 +16,7 @@ from concurrent.futures import wait as wait_for_futures
 from pathlib import Path  # Resolve output names against the data directory safely.
 from typing import Any
 
+from src.foundation.models.operation_outcome import OperationOutcome  # Use handler state before log fallback.
 from src.foundation.support.utils.operation_registry import OperationRegistry
 from web_portal.services.output_scan import OutputFileScanner
 
@@ -933,6 +934,7 @@ class OperationExecutor:
         self._runs = {}
         self._lock = threading.Lock()
         self._sequence = 0  # A rising number orders the runs when the clock repeats a value.
+        self._legacy_no_output_fallback_count = 0  # Count handlers that still use empty-result log markers.
         self._shutdown_done = False  # Guards shutdown(), so a repeat call is a safe no-op.
         self._configure_limits()  # Read the caps once, so every run shares one setting.
         cpu_count = os.cpu_count() or 2
@@ -1313,6 +1315,7 @@ class OperationExecutor:
             # The counter covers both stores, so the operator sees the total loss.
             "dropped_log_count": 0,
             "error_message": None,
+            "handler_outcome": None,  # Hold the handler result only until terminal classification.
             # A bounded deque keeps the newest name, so a per-site export cannot grow the record.
             "output_files": deque(maxlen=self._output_files_max),
             # The counter reports the output file names the cap discarded.
@@ -1366,28 +1369,30 @@ class OperationExecutor:
 
     def _run_operation_for_owner(self, run: dict, parameters: dict) -> None:
         """Run the operation and assess its result while this run owns the worker."""
-        from web_portal.services.input_hook import web_input_context
+        from web_portal.services.input_hook import web_input_context  # Keep submitted answers scoped to this worker.
 
-        self._update_status(run, "running", 0)
-        input_answers = parameters.get("input_answers", [])
-        context_answers = parameters.get("input_context_answers")
-        try:
+        self._update_status(run, "running", 0)  # Publish the active state before the handler starts.
+        input_answers = parameters.get("input_answers", [])  # Read the submitted operator answers.
+        context_answers = parameters.get("input_context_answers")  # Read the optional answer context.
+        try:  # Convert handler failures into the portal's terminal result.
             func = self._menu_actions[run["menu_number"]].handler  # Use the named menu row for execution.
-            if input_answers or context_answers is not None:
-                with web_input_context(input_answers, context_answers):
-                    self._capture_and_run(run, func)
-            else:
-                self._capture_and_run(run, func)
-            if not run.get("_stop_requested"):
+            if input_answers or context_answers is not None:  # Scope supplied answers to this handler.
+                with web_input_context(input_answers, context_answers):  # Prevent answer leakage across runs.
+                    run["handler_outcome"] = self._capture_and_run(run, func)  # Keep explicit handler evidence.
+            else:  # Keep a no-input run outside the answer context.
+                run["handler_outcome"] = self._capture_and_run(run, func)  # Keep explicit handler evidence.
+            if not run.get("_stop_requested"):  # Do not finish a handler that the operator stopped.
                 self._finish_successful_operation(run)  # Assess result evidence before the portal reports success.
-        except (EOFError, SystemExit):
-            if not run.get("_stop_requested"):
-                self._handle_failure(run, "Operation requires interactive input (not available in web portal)")
-        except Exception as exc:
-            if not run.get("_stop_requested"):
-                self._handle_failure(run, str(exc))
+        except (EOFError, SystemExit):  # Convert missing web input into a visible failure.
+            if not run.get("_stop_requested"):  # Preserve an intentional stop state.
+                self._handle_failure(
+                    run, "Operation requires interactive input (not available in web portal)"
+                )  # Explain the unsupported prompt.
+        except Exception as exc:  # Convert unexpected handler errors into the run record.
+            if not run.get("_stop_requested"):  # Preserve an intentional stop state.
+                self._handle_failure(run, str(exc))  # Show the handler's failure reason.
 
-    def _capture_and_run(self, run: dict, func) -> None:
+    def _capture_and_run(self, run: dict, func) -> Any:
         """Run function with log capture via a logging handler.
 
         Captures logging output from the operation function and publishes
@@ -1404,24 +1409,29 @@ class OperationExecutor:
         handler.activate()  # Permit ownerless helper-thread records only while this run is active.
         scanner = OutputFileScanner(owner_id=run["run_id"])  # Attribute writable opens to this run context.
         scanner_started = False  # Avoid a scan when snapshot setup failed before registration.
-        try:
+        handler_outcome = None  # Keep the handler result apart from the scanner evidence.
+        try:  # Capture the result while output evidence is active.
             scanner.snapshot()  # Record the pre-run state, so a new file is visible later.
             scanner_started = True  # Permit final evidence collection after successful setup.
-            func()  # Run the legacy operation without a global serialization lock.
-        finally:
+            handler_outcome = func()  # Run the handler and retain its optional result value.
+        finally:  # Release every capture resource after return or error.
             root_logger.removeHandler(handler)  # Stop this run's log capture on return or exception.
             handler.deactivate()  # Remove this run from the ownerless helper-thread fallback.
-            try:
+            try:  # Collect output evidence only after a successful snapshot.
                 if scanner_started:  # Collect and finalize only after snapshot registration succeeded.
                     self._record_scanned_files(run, scanner)  # Report a file even when no log line named it.
                     self._finalize_output_files(run, scanner.root)  # Remove phantom names and order results.
-            finally:
+            finally:  # Always remove scanner ownership before the worker accepts another run.
                 scanner.close()  # Remove partial or completed scanner registration without a leak.
                 OutputFileScanner.reset_owner(owner_token)  # Clear ownership before this worker accepts another run.
+        return handler_outcome  # Give terminal classification the handler's explicit result.
 
     def _finish_successful_operation(self, run: dict) -> None:
         """Mark a returned handler as complete only when the result is honest."""
         logger.info("Assessing operation %s result evidence", run["menu_number"])  # Log before the evidence check.
+        handler_outcome = run.pop("handler_outcome", None)  # Consume explicit evidence before consulting log text.
+        if self._finish_handler_outcome(run, handler_outcome):  # Prefer a migrated handler's typed result.
+            return  # Keep all marker inference on the legacy path.
         missing_input = self._missing_input_reason(run)  # Read the log for a required answer that never arrived.
         if missing_input:  # A required missing answer means the operation did not really run.
             logger.debug("Operation %s missed required input: %s", run["menu_number"], missing_input)  # Result trace.
@@ -1439,10 +1449,31 @@ class OperationExecutor:
             logger.debug("Operation %s produced no output evidence", run["menu_number"])  # Result trace.
             self._handle_failure(run, "Operation finished without an output file or a no-data message.")
             return
+        self._complete_operation(run, completion_message)  # Publish the honest result message and terminal state.
+
+    def _finish_handler_outcome(self, run: dict, handler_outcome: Any) -> bool:
+        """Apply an explicit handler result without reading its log wording."""
+        if not isinstance(handler_outcome, OperationOutcome):  # Keep legacy handlers on marker classification.
+            return False  # No typed result means the old checks still decide the run state.
+        logger.info("Applying the typed outcome for operation %s", run["menu_number"])  # Log before state mapping.
+        if handler_outcome.state in ("failed", "missing_input"):  # A typed failure cannot report completion.
+            self._handle_failure(run, handler_outcome.message)  # Preserve the handler's reason for the operator.
+            return True  # Stop before any log marker can change the typed result.
+        if handler_outcome.state == "no_output":  # An explicit empty result does not need marker prose.
+            completion_message = (
+                f"Operation completed with no output file: {handler_outcome.message}"  # Show its reason.
+            )
+        else:  # A completed handler supplies its own operator-facing message.
+            completion_message = handler_outcome.message  # Keep the message supplied by a completed handler.
+        self._complete_operation(run, completion_message)  # Publish the result selected by the handler.
+        return True  # Prevent the legacy marker scan from changing this result.
+
+    def _complete_operation(self, run: dict, completion_message: str) -> None:
+        """Store and publish a successful result message."""
         run["completion_message"] = completion_message  # Store the message for REST replay and SSE completion.
         logger.debug("Operation %s completion message: %s", run["menu_number"], completion_message)  # Result trace.
-        self._update_status(run, "completed", 100)  # Mark completion only after the evidence check passes.
-        self._publish_complete(run)  # Publish the complete event with the honest result message.
+        self._update_status(run, "completed", 100)  # Mark completion after the result evidence passes.
+        self._publish_complete(run)  # Publish the complete event with the selected result message.
 
     def _completion_message(self, run: dict) -> str | None:
         """Return a completion message that names a file or an empty-result reason."""
@@ -1450,8 +1481,20 @@ class OperationExecutor:
             return "Operation completed"  # Keep the established success message when a result exists.
         reason = self._no_output_reason(run)  # Read the main log for the empty-result explanation.
         if reason:  # A readable no-data line is an honest completed result.
-            return f"Operation completed with no output file: {reason}"
+            self._record_legacy_no_output_fallback(run)  # Count this handler's dependence on marker prose.
+            return f"Operation completed with no output file: {reason}"  # Show the legacy handler's reason.
         return None  # No file and no explanation must not become a silent success.
+
+    def _record_legacy_no_output_fallback(self, run: dict) -> None:
+        """Log the cumulative number of empty results classified from legacy markers."""
+        with self._lock:  # Serialize increments because several operations can finish together.
+            self._legacy_no_output_fallback_count += 1  # Count one legacy handler use.
+            fallback_count = self._legacy_no_output_fallback_count  # Snapshot the count before releasing the lock.
+        logger.info(  # Record the menu and count so operators can measure remaining migrations.
+            "Legacy no-output marker fallback used for menu %s; count=%d",
+            run["menu_number"],  # Identify which handler still uses marker prose.
+            fallback_count,  # Measure remaining legacy handlers cumulatively.
+        )
 
     def _missing_input_reason(self, run: dict) -> str | None:
         """Return the first log line that says a required input was missing."""
