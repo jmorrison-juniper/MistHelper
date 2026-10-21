@@ -1,6 +1,6 @@
 # Validation Guide: Code Defaults First Batch
 
-These are future implementation commands. They were not executed during planning.
+These commands define the bounded implementation checks. Planning did not run them.
 Run them from the repository root. Use controlled responses and no production credentials.
 
 ## Prerequisites
@@ -47,7 +47,7 @@ python -m src.foundation.support.code_defaults guard --root .
 
 Expected: deterministic inventory output, explicit parsed-file counts, and an unchanged or decreased accepted high-severity baseline.
 The guard tests must also prove failure for regressions and invalid inputs.
-The scanner and baseline do not exist during planning.
+The scanner and baseline did not exist during planning.
 
 ## Source Gates
 
@@ -97,3 +97,49 @@ That scan is not the full pytest suite.
 Record exact commands, exit statuses, parsed-file counts, candidate dispositions, and baseline changes.
 Use [contracts/audit.md](contracts/audit.md) for the required positive and negative cases.
 Report absent evidence as absent. Do not claim the larger issue is complete.
+
+## Recorded Implementation Results
+
+The latest paginated ownership check examined 11 open pull requests and 553 file records.
+It found no overlap with the approved file manifest.
+
+The full scan completed at revision `40f69666f1c3a4f711805d968e210923a216fd7f`.
+It discovered and parsed 1,059 tracked Python files. It found 2,410 candidates and zero parse
+failures. It classified 2,213 candidates as outside this batch. The 99 candidates associated
+with #2862 remain excluded.
+
+The five-file scan parsed all five expected files and found 197 candidates:
+
+| Classification | Count |
+| --- | ---: |
+| Already validated | 70 |
+| Valid optional | 56 |
+| Display only | 66 |
+| Excluded under #2863 ownership | 5 |
+| **Accepted high-severity** | **0** |
+
+The baseline records every current candidate and has `accepted_high: []` and
+`accepted_total: 0`. It records source revision `ca55339958143c96b60df549ae07b274e89dec2a`.
+The guard passed, parsed all five files, and reported no new or removed high identities.
+A repeated full scan returned identical content before the baseline-only commit.
+
+The exact eight-module assessment test command passed 557 tests.
+`python -m pytest tests/integration/helpers/code_defaults` passed 43 tests.
+The three documented structural guards passed 35 tests.
+The controlled new-candidate and count-neutral regression tests passed two cases.
+Failing-before and mutation evidence remains in the Copilot session artifacts.
+
+The required test-quality preflight passed. The analyzer checked eight test files and reported
+`gate: 0 new findings vs baseline`. It reported two skipped files and no parse errors.
+
+The following source gates passed: Ruff, Black, Mypy, the documented `src` complexity gate,
+Bandit, symbol compatibility, pydocstyle, Vulture, Interrogate, Pylint, and `py_compile`.
+Mypy reported no issues across 864 source files. Black left 2,490 files unchanged.
+Interrogate reported 99.7 percent coverage. Pylint scored 9.92 out of 10.
+The feature Markdown passed `ste-linter` with a minimum score of 92.
+A local relative-link check examined eight Markdown files and found no missing links.
+
+An exploratory complexity command included two out-of-scope script packages and failed on six
+existing functions there. The documented `src`-only complexity command passed.
+`markdown-link-check` was not installed. No full test suite, `MistHelper.py --test`, cloud request,
+or device action ran.

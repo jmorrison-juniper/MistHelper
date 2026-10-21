@@ -77,12 +77,19 @@ network sections, the #2863 source organization identifier, and the created-obje
 already delivered by #4310. Existing tests prove failure rows, no blank mapping, and retained
 results. No organization source repair was justified.
 
-The current working-tree scan selected and parsed all five files. It found 197 candidates:
-70 already validated, 56 valid optional, 66 display-only, and 5 excluded by #2863 ownership.
-The accepted high-severity total is zero. This is a reviewed current scanner result, not the
-historical total of 59. A separate repository-wide scan found 2,409 candidates across 1,058
-tracked Python files, with zero parse failures. Its 2,212 outside-batch candidates do not change
-the accepted scope.
+The current scan selected and parsed all five files. It found 197 candidates: 70 already
+validated, 56 valid optional, 66 display-only, and 5 excluded by #2863 ownership. The accepted
+high-severity total is zero. This is a reviewed current scanner result, not the historical total
+of 59. The committed repository-wide scan at `40f69666f1c3a4f711805d968e210923a216fd7f` found
+2,410 candidates across 1,059 tracked Python files, with zero parse failures. Its 2,213
+outside-batch candidates do not change the accepted scope. Three candidates in the scanner's own
+policy module use empty mapping fallbacks. The full scan reports them as `outside_batch`.
+
+The reviewed baseline in `src/foundation/support/code_defaults/baseline.json` contains all 197
+current in-scope dispositions. It records source revision
+`ca55339958143c96b60df549ae07b274e89dec2a`, the exact five-file scope, no accepted high
+identities, and the derived total zero. The 99 upgrade-input candidates associated with #2862
+and every other out-of-batch finding remain outside this baseline.
 
 The current five-file classification totals by source are:
 
@@ -104,6 +111,30 @@ The complete implementation manifest remains the five source files, eight specif
 files, the scanner package, its four test files, these design artifacts, and one issue-specific
 changelog fragment. The new tests use temporary Git repositories or controlled API responses.
 They make no cloud request.
+
+## Implementation Verification
+
+The complete paginated PR file check was repeated before further implementation work. It
+examined 11 open PRs and 553 file records and found no overlap with the approved manifest.
+
+The exact eight-module assessment command passed 557 tests. The scanner and workflow package
+passed 43 tests. The three structural guards passed 35 tests. The test-quality preflight passed,
+and the ratchet checked eight test files with zero new findings. A focused run of the two
+controlled high-candidate regression cases passed. Its output is preserved in the session
+artifacts with the failing-before AP cases.
+
+The source gates passed for Ruff, Black, Mypy, the `src` complexity scope, Bandit, symbol
+compatibility, pydocstyle, Vulture, Interrogate, Pylint, and Python compilation. Interrogate
+reported 99.7 percent coverage. Pylint reported 9.92 out of 10. The package, process-folder, and
+module-move structural guards passed. The feature Markdown files passed the STE threshold with
+a minimum score of 92.
+A local link check examined eight Markdown files and found no missing relative links.
+
+One exploratory complexity command also included two script packages outside the documented
+`src` scope. It failed on six existing functions in those packages. The documented `src`-only
+complexity gate passed. `markdown-link-check` was not installed, so only the local relative-link
+check ran. The full test suite and `MistHelper.py --test` were not run. No production credential,
+cloud request, or device action was used.
 
 ## Decision 1: Validate at the Consumption Boundary
 
@@ -178,5 +209,6 @@ Placing feature tooling in an unrelated existing module would obscure its purpos
 The active plan and checklist templates resolve to `.specify/templates/`.
 The planning setup command cannot run because `pwsh` is absent.
 The existing feature directory and template were resolved directly without changing `.specify/feature.json`.
-`ste-linter` is also absent. No automated writing score is claimed.
-These limitations do not justify modifying repository tools, templates, or dependency manifests.
+At planning time, `ste-linter` was not on `PATH`. The bootstrapped environment later supplied
+`.venv/bin/ste-linter`, and the feature Markdown passed with a minimum score of 92.
+`markdown-link-check` remains unavailable. No repository tool, template, or dependency manifest changed.
