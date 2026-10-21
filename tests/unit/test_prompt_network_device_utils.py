@@ -1089,3 +1089,38 @@ def test_switch_port_stats_http_403_rejects_refused_data(caplog: pytest.LogCaptu
         )
     ]
     search.assert_called_once_with(utils._session, "site-1", mac="aa:bb:cc:dd:ee:ff", limit=1000)
+
+
+def test_switch_port_stats_http_503_rejects_refused_data(caplog: pytest.LogCaptureFixture) -> None:
+    """Reject unavailable port data and report the exact cloud status."""
+    import logging  # WHY: compare the refusal record at its exact severity.
+
+    from mistapi.__api_response import APIResponse  # WHY: parse the native HTTP response shape.
+
+    utils = _make_utils()  # WHY: use the real port-stat refusal path with a controlled session.
+    response = requests.Response()  # WHY: model the concrete response that the Mist SDK parses.
+    response.status_code = 503  # WHY: represent a native server failure.
+    response._content = b'{"results":[{"port_id":"ge-0/0/0","up":true,"speed":1000}]}'  # WHY: prove bad status wins.
+    refused = APIResponse(  # WHY: retain the SDK's real status and payload parsing behavior.
+        response, "https://api.mist.invalid/api/v1/sites/site-1/stats/ports/search"
+    )
+    with patch("src.mist.resources.device.prompt_utils.mistapi") as mistapi_mock:  # WHY: prevent a live API call.
+        search = mistapi_mock.api.v1.sites.stats.searchSiteSwOrGwPorts  # WHY: check the exact SDK boundary.
+        search.return_value = refused  # WHY: return the native refusal without network access.
+        result = utils._fetch_port_stats(  # WHY: exercise the production decision path.
+            "site-1", "dev-1", "aa:bb:cc:dd:ee:ff", "switch"
+        )
+    logger_name = "src.mist.resources.device.prompt_utils"  # WHY: scope the check to the refusal source.
+    error_records = [  # WHY: exclude unrelated records from the observable refusal contract.
+        record for record in caplog.record_tuples if record[0] == logger_name
+    ]
+    expected_error = (  # WHY: require the exact operator-facing status and site.
+        logger_name,
+        logging.ERROR,
+        "The cloud returned HTTP 503 for switch/gateway port stats at site site-1",
+    )
+    assert result == {}  # WHY: refused response data must not reach the port selector.
+    assert error_records == [expected_error]  # WHY: the operator must see the exact failure status.
+    search.assert_called_once_with(  # WHY: preserve the SDK request arguments on the refusal path.
+        utils._session, "site-1", mac="aa:bb:cc:dd:ee:ff", limit=1000
+    )
