@@ -456,12 +456,17 @@ class SettleGateService:
                 return self._ping_once(device_id)  # WHY: single attempt
 
             except Exception as e:  # WHY: catch errors
+                from src.interfaces.portals.upgrade_portal.audit.masker import (
+                    SecretMasker,
+                )  # Load redaction only for a failed ping diagnostic.
+
                 # WHY: log attempt error
-                logger.debug(
-                    "settle_ping_error",  # WHY: debug event
+                logger.warning(  # Preserve evidence at the normal operator level before another attempt.
+                    "settle_ping_error",  # Identify the failed ping operation.
                     device_id=device_id,  # WHY: device identifier
                     attempt=attempt + 1,  # WHY: attempt number
-                    error=str(e),  # WHY: error detail
+                    error=SecretMasker().mask_dict({"error": str(e)})["error"],  # Keep credentials out of diagnostics.
+                    exception_type=type(e).__name__,  # Preserve the original cause after a later result.
                 )  # WHY: error logged
 
                 # WHY: if last attempt, raise exception
