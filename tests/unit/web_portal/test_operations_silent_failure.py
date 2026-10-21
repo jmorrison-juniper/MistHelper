@@ -23,6 +23,8 @@ import pytest
 
 # Import the helpers directly so the tests do not need a running Flask app.
 from web_portal.routes.operations import (
+    API_ERROR_REASON,
+    PickList,
     _fetch_org_sites,
     _fetch_site_devices,
     _fetch_wired_clients,
@@ -150,6 +152,31 @@ class TestFetchSiteDevicesSilentFailure:
 
 class TestFetchWirelessClientsSilentFailure:
     """The wireless-client helper swallows the exception without logging."""
+
+    def test_rejects_http_503_with_nonempty_payload(self, caplog):
+        """A failed HTTP response must not expose its wireless-client payload."""
+        mistapi_mock = MagicMock()
+        payload_row = {"mac": "00:11:22:33:44:55", "name": "Example client"}
+        response = MagicMock(status_code=503, data={"results": [payload_row]})
+        search_wireless_clients = mistapi_mock.api.v1.sites.clients.searchSiteWirelessClients
+        search_wireless_clients.return_value = response
+        apisession = _fake_apisession()
+
+        with caplog.at_level(logging.ERROR, logger="web_portal.routes.operations"):
+            result = _fetch_wireless_clients(mistapi_mock, apisession, "site-xyz")
+
+        assert isinstance(result, PickList)
+        assert result == []
+        assert result.reason == API_ERROR_REASON
+        assert payload_row not in result
+        assert len(caplog.records) == 1
+        record = caplog.records[0]
+        assert record.name == "web_portal.routes.operations"
+        assert record.levelno == logging.ERROR
+        assert record.getMessage() == (
+            "Failed Mist API pick-list read for searchSiteWirelessClients target site-xyz with status 503"
+        )
+        search_wireless_clients.assert_called_once_with(apisession, "site-xyz")
 
     def test_logs_exception_on_api_failure(self, caplog):
         """A Mist API exception must produce an ERROR log."""
