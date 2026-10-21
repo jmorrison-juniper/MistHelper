@@ -67,7 +67,22 @@ def test_add_zones_adds_polygon_and_annotation() -> None:
 
     assert len(fig.data) == 1
     assert fig.data[0].name == "Zone: Zone A"
-    assert fig.layout.annotations is not None
+    assert [annotation.to_plotly_json() for annotation in fig.layout.annotations] == [
+        {
+            "x": 10,
+            "y": 10,
+            "text": "<b>Zone A</b>",
+            "showarrow": False,
+            "font": {"size": 14, "color": "white", "family": "Arial Black"},
+            "bgcolor": "rgba(255,165,0,0.9)",
+            "bordercolor": "white",
+            "borderwidth": 2,
+            "borderpad": 4,
+            "xanchor": "left",
+            "yanchor": "top",
+            "name": "Zone Label",
+        }
+    ]
     assert len(fig.layout.annotations) == 1
 
 
