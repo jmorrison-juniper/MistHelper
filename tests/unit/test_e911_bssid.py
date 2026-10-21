@@ -509,9 +509,9 @@ class TestCheckpoint:
         E911BSSIDReportGenerator._clear_checkpoint()
         assert not os.path.exists(E911BSSIDReportGenerator.CHECKPOINT_FILE)
 
-    def test_clear_nonexistent(self):
-        """Clearing when no file exists does not raise."""
-        E911BSSIDReportGenerator._clear_checkpoint()
+    def test_clear_nonexistent(self, monkeypatch):
+        monkeypatch.setattr(os, "remove", lambda path: pytest.fail(f"unexpected remove {path}"))
+        assert E911BSSIDReportGenerator._clear_checkpoint() is None
 
     def test_load_corrupt_json(self):
         """Corrupt JSON returns None."""
