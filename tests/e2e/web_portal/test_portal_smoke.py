@@ -190,15 +190,9 @@ class TestDashboardPage:
                 "ports": [{"port_id": "wan0", "up": True, "enabled": True}],
             },
         ]  # Supply the same three-gateway, six-port fixture used by the local comparison.
-        overview_calls = 0  # Separate the first successful response from the refresh limit.
 
         def overview(route: Any) -> None:
-            nonlocal overview_calls  # Keep the refresh counter local to this browser journey.
-            overview_calls += 1  # Count each overview request before choosing its response.
-            if overview_calls == 1:  # The first page load supplies the complete synthetic list.
-                route.fulfill(json={"status": "ok", "data": gateways, "notice": None})
-                return
-            route.fulfill(status=429, json={"status": "rate_limited", "data": [], "notice": "Mist rate limit reached."})
+            route.fulfill(json={"status": "ok", "data": gateways, "notice": None})  # Return the full synthetic view.
 
         page.route("**/wan-dashboard/api/overview", overview)  # Keep the browser away from live Mist.
         page.route(
@@ -311,13 +305,12 @@ class TestDashboardPage:
         assert rows.count() == 1  # Keep only the matching gateway.
         page.get_by_test_id("wan-gateway-search").fill("missing")  # Exercise the empty result state.
         assert page.locator("#wan-empty-state").is_visible()  # Tell the operator when no rows match.
-        page.get_by_test_id("wan-gateway-search").fill("")  # Clear the search before refreshing.
+        page.get_by_test_id("wan-gateway-search").fill("")  # Clear the search before reviewing the full list.
         page.get_by_test_id("wan-site-filter").select_option("")  # Restore the full organization list.
         with page.expect_download():  # Verify the gateway export starts a browser download.
             page.get_by_test_id("wan-gateway-export").click()  # Download the selected gateway table.
-        page.get_by_role("button", name="Refresh data").click()  # Trigger the synthetic rate-limit response.
-        page.get_by_test_id("wan-status").get_by_text("Mist rate limit reached.").wait_for()  # Expose the API limit.
-        assert rows.count() == 3  # Preserve the last successful gateway rows after the limit.
+        assert page.locator("#wan-refresh").is_disabled()  # Keep refresh unavailable until its worker exists.
+        assert rows.count() == 3  # Preserve the complete synthetic overview without a refresh request.
         rows.first.get_by_role("button", name="Details").click()  # Expand the first gateway.
         page.get_by_role("button", name="Peer paths (1)").wait_for()  # Wait for the detail response.
         page.get_by_role("button", name="Peer paths (1)").click()  # Open its VPN path view.

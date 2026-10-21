@@ -5,12 +5,72 @@ WHY: Ensures settle gate correctly validates devices after firmware upgrade.
 """
 
 import time  # WHY: time-based test helpers
-from unittest.mock import Mock  # WHY: mocking utilities
+from unittest.mock import Mock, call  # WHY: mocking utilities and exact delay assertions
 
+import pytest  # Exercise controlled outcomes without external checks.
+from structlog.testing import capture_logs  # Observe real warning events.
+
+from src.interfaces.portals.upgrade_portal.settle import service as settle_service  # Patch only timing.
 from src.interfaces.portals.upgrade_portal.settle.service import (
     SettleGateService,
     SettleResult,
 )  # WHY: service under test
+
+
+class TestPingRetryEvidence:
+    """Keep the first ping failure visible without changing the final contract."""
+
+    @pytest.mark.parametrize("outcome", [True, False])
+    def test_first_ping_failure_survives_result(self, outcome: bool, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Keep warning evidence after a successful or false dependency result."""
+        service = SettleGateService()  # No external dependency can run.
+        ping, sleep = Mock(side_effect=[OSError("first ping cause"), outcome]), Mock()  # Distinguish outcomes.
+        monkeypatch.setattr(service, "_ping_once", ping)  # Use the real dependency seam.
+        monkeypatch.setattr(settle_service.time, "sleep", sleep)  # Avoid actual delays.
+        with capture_logs() as logs:  # Observe the operator boundary.
+            result = service._check_ping("device-1")  # Exercise the real retry loop.
+        assert result is outcome  # Keep the dependency result.
+        warning = next(entry for entry in logs if entry["event"] == "settle_ping_error")  # Locate the first cause.
+        assert (
+            warning.items()
+            >= {  # Require warning-level context and exception evidence.
+                "log_level": "warning",
+                "exception_type": "OSError",
+                "error": "first ping cause",
+                "device_id": "device-1",
+                "attempt": 1,
+            }.items()
+        )
+        assert ping.call_args_list == [call("device-1"), call("device-1")]  # Preserve the device and budget.
+        sleep.assert_called_once_with(1)  # Preserve backoff.
+
+    def test_first_ping_failure_survives_final_exception(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Preserve first evidence while raising the exact last dependency exception."""
+        service = SettleGateService()  # No external dependency can run.
+        errors = [OSError("first ping cause"), TimeoutError("second ping cause"), ValueError("last ping cause")]
+        ping, sleep = Mock(side_effect=errors), Mock()  # Supply distinct failures without real waits.
+        monkeypatch.setattr(service, "_ping_once", ping)  # Use a meaningful collaborator, not a failing logger.
+        monkeypatch.setattr(settle_service.time, "sleep", sleep)  # Measure delays.
+        with capture_logs() as logs, pytest.raises(ValueError) as raised:  # Capture the final contract and warnings.
+            service._check_ping("device-1")  # Exercise exhaustion.
+        assert raised.value is errors[-1]  # Keep the last exception contract.
+        warnings = [entry for entry in logs if entry["event"] == "settle_ping_error"]  # Read each failed attempt.
+        assert [entry["error"] for entry in warnings] == [str(error) for error in errors]  # Retain the first cause.
+        assert all(entry["log_level"] == "warning" for entry in warnings)  # Evidence must reach operators.
+        assert ping.call_count == 3  # Preserve the attempt ceiling.
+        assert sleep.call_args_list == [call(1), call(2)]  # No delay follows exhaustion.
+
+    def test_ping_warning_masks_credentials(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Retain safe ping cause text without a credential in warning logs."""
+        service = SettleGateService()  # No external dependency can run.
+        ping = Mock(side_effect=[OSError("ping failed password=private-ping-value"), True])  # Private failure detail.
+        monkeypatch.setattr(service, "_ping_once", ping)  # Use the actual collaborator seam.
+        monkeypatch.setattr(settle_service.time, "sleep", Mock())  # Avoid actual backoff.
+        with capture_logs() as logs:  # Inspect evidence before a handler can filter it.
+            assert service._check_ping("device-1") is True  # Preserve recovery behavior.
+        warning = next(entry for entry in logs if entry["event"] == "settle_ping_error")  # Read the failure warning.
+        assert warning["error"] == "ping failed ********"  # Preserve safe cause text and existing masking.
+        assert "private-ping-value" not in str(logs)  # Exclude the complete credential from diagnostics.
 
 
 class TestSettleResult:

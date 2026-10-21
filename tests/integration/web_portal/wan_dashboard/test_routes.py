@@ -6,11 +6,17 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
+import requests
 from flask import Flask, render_template
 from flask.testing import FlaskClient
 
 from src.interfaces.portals.upgrade_portal.runtime import lock
-from src.interfaces.portals.wan_dashboard.routes import WanDashboardService, wan_dashboard_bp
+from src.interfaces.portals.wan_dashboard.routes import (
+    DashboardReadRoutes,
+    WanDashboardService,
+    wan_dashboard_bp,
+)
+from src.interfaces.portals.wan_dashboard.services.worker import WanDashboardWorker
 
 
 class FakeDashboardService:
@@ -20,32 +26,72 @@ class FakeDashboardService:
         """Create predictable local responses for route tests."""
         self.overview_filters: dict[str, object] = {}  # Record the filters sent by the route.
         self.traffic_selection: tuple[str, str, str] | None = None  # Record one chart request.
+        self.legacy_reads: list[str] = []  # Prove routes use only the new cache-only service boundary.
 
     def get_overview(self, **filters: object) -> dict[str, object]:
         """Return one successful synthetic overview."""
+        self.legacy_reads.append("overview")  # Record a forbidden route-level collector call.
         self.overview_filters = filters  # Preserve the supplied filters for the route assertion.
         return {"status": "ok", "data": [{"device_id": "gw-a"}], "notice": None}  # Return local rows.
 
+    def get_cached_overview(self, **filters: object) -> dict[str, object]:
+        """Return one cached synthetic overview."""
+        self.overview_filters = filters  # Preserve the supplied filters for the route assertion.
+        return {"status": "stale", "data": [{"device_id": "gw-a"}], "notice": "Synthetic cached data."}  # Keep state.
+
     def get_gateway_ports(self, gateway_id: str) -> dict[str, object]:
         """Return one successful synthetic gateway result."""
+        self.legacy_reads.append("gateway_ports")  # Record a forbidden route-level collector call.
         return {"status": "ok", "data": [{"gateway_id": gateway_id}], "notice": None}  # Echo local input.
+
+    def get_cached_gateway_ports(self, gateway_id: str) -> dict[str, object]:
+        """Return an explicit unavailable cached detail result."""
+        return {"status": "unavailable", "data": [], "notice": "No cached gateway detail."}  # Avoid a live read.
 
     def get_traffic(self, gateway_id: str, port_id: str, time_range: str) -> dict[str, object]:
         """Return one successful synthetic traffic response."""
+        self.legacy_reads.append("traffic")  # Record a forbidden route-level collector call.
         self.traffic_selection = (gateway_id, port_id, time_range)  # Record the URL-decoded source selection.
         return {"status": "ok", "data": [], "range": time_range, "notice": None}  # Keep result shape stable.
 
+    def get_cached_traffic(self, gateway_id: str, port_id: str, time_range: str) -> dict[str, object]:
+        """Return an explicit unavailable cached traffic result."""
+        self.traffic_selection = (gateway_id, port_id, time_range)  # Record the validated cached lookup.
+        return {  # Keep missing traffic explicit.
+            "status": "unavailable",
+            "data": [],
+            "range": time_range,
+            "notice": "No cached traffic.",
+        }
+
     def get_insights(self, gateway_id: str, port_id: str, time_range: str) -> dict[str, object]:
         """Return one successful synthetic insight response."""
+        self.legacy_reads.append("insights")  # Record a forbidden route-level collector call.
         return {"status": "ok", "data": [], "range": time_range, "notice": None}  # Keep result shape stable.
+
+    def get_cached_insights(self, gateway_id: str, port_id: str, time_range: str) -> dict[str, object]:
+        """Return an explicit unavailable cached insight result."""
+        return {  # Keep missing Insights explicit.
+            "status": "unavailable",
+            "data": [],
+            "range": time_range,
+            "notice": "No cached Insights.",
+        }
 
     def export_gateways(self, **filters: object) -> dict[str, object]:
         """Return one selected gateway row for a CSV request."""
+        self.legacy_reads.append("export_gateways")  # Record a forbidden route-level collector call.
+        self.overview_filters = filters  # Reuse the filter record for export checks.
+        return {"status": "ok", "data": [{"device_id": "gw-a", "name": "Gateway A"}]}  # Keep rows synthetic.
+
+    def export_cached_gateways(self, **filters: object) -> dict[str, object]:
+        """Return one selected cached gateway row for a CSV request."""
         self.overview_filters = filters  # Reuse the filter record for export checks.
         return {"status": "ok", "data": [{"device_id": "gw-a", "name": "Gateway A"}]}  # Keep rows synthetic.
 
     def get_hourly_export(self, gateway_id: str, port_id: str, time_range: str) -> dict[str, object]:
         """Return the source's hourly export response shape."""
+        self.legacy_reads.append("hourly_export")  # Record a forbidden route-level collector call.
         return {
             "status": "ok",
             "data": {
@@ -56,6 +102,44 @@ class FakeDashboardService:
                 "port_id": port_id,
             },
         }  # Supply one row with UTC time.
+
+    def get_cached_hourly_export(self, gateway_id: str, port_id: str, time_range: str) -> dict[str, object]:
+        """Return one cached hourly export response."""
+        return {
+            "status": "ok",
+            "data": {
+                "site_name": "Site A",
+                "gateway_hostname": gateway_id,
+                "hourly": [{"timestamp": 1, "hour_iso": "1970-01-01T00:00:00Z"}],
+                "range": time_range,
+                "port_id": port_id,
+            },
+        }  # Supply local data without calling the legacy collector method.
+
+
+class FakeRefreshWorker:
+    """Return one local worker status and record explicit queue requests."""
+
+    def __init__(self) -> None:
+        """Keep status and queue outcomes local to one route test."""
+        self.queue_calls = 0  # Count queue requests without starting a thread.
+
+    def status(self) -> dict[str, object]:
+        """Return a safe synthetic status envelope."""
+        return {
+            "status": "running",
+            "current_phase": "ports",
+            "completed_pages": {"sites": 2, "gateways": 1, "ports": 3},
+            "last_complete_at": "2026-10-20T12:00:00+00:00",
+            "safe_error": None,
+            "queued_follow_up": False,
+            "redis_available": True,
+        }  # Keep route data synthetic and bounded.
+
+    def enqueue(self) -> str:
+        """Record one request and return a coalesced queue outcome."""
+        self.queue_calls += 1  # Prove the route delegates to the existing worker.
+        return "coalesced"  # Model an active run with one queued follow-up.
 
 
 def build_client(service: FakeDashboardService) -> tuple[FlaskClient, Flask]:
@@ -135,20 +219,37 @@ class TestOverviewRoutes:
     """Prove that overview inputs and errors are handled explicitly."""
 
     def test_overview_passes_valid_filters_to_the_service(self) -> None:
-        """Valid query filters reach the service unchanged."""
+        """Valid query filters reach the cache-only service unchanged."""
         service = FakeDashboardService()  # Build one local service stub.
         client, _app = build_client(service)  # Register the production routes.
 
         response = client.get("/wan-dashboard/api/overview?site_id=site-a&search=gw")  # Send safe filters.
 
         assert response.status_code == 200  # A valid overview request succeeds.
-        assert response.get_json()["status"] == "ok"  # Preserve explicit result status.
+        assert response.get_json()["status"] == "stale"  # Do not label timestamp-free cached data as current.
         assert service.overview_filters == {"site_id": "site-a", "gateway_id": None, "search": "gw"}  # Keep filters.
+        assert service.legacy_reads == []  # Prove the route did not enter the Mist collector path.
+
+    def test_dashboard_data_routes_never_call_legacy_collector_methods(self) -> None:
+        """Overview and detail routes read cache-only service methods."""
+        service = FakeDashboardService()  # Keep every response synthetic and offline.
+        client, _app = build_client(service)  # Register the production route set.
+        paths = (
+            "/wan-dashboard/api/overview",
+            "/wan-dashboard/api/gateways/gw-a/ports",
+            "/wan-dashboard/api/gateways/gw-a/ports/wan0/traffic",
+            "/wan-dashboard/api/gateways/gw-a/ports/wan0/insights",
+        )  # Exercise overview and every supported detail read.
+
+        responses = [client.get(path) for path in paths]  # Run each request without a live SDK session.
+
+        assert [response.status_code for response in responses] == [200, 503, 503, 503]  # Preserve safe states.
+        assert service.legacy_reads == []  # Prove no route reached a collector method.
 
     def test_unknown_gateway_is_not_authorized(self) -> None:
         """A service access failure does not disclose gateway data."""
         service = FakeDashboardService()  # Build a local service stub.
-        service.get_gateway_ports = lambda _gateway_id: {  # Model an unauthorized gateway.
+        service.get_cached_gateway_ports = lambda _gateway_id: {  # Model an unauthorized cached gateway.
             "status": "forbidden",
             "data": [],
             "notice": "Gateway is not in the active organization.",
@@ -170,16 +271,19 @@ class TestOverviewRoutes:
         assert response.status_code == 400  # Reject an unsupported range.
         assert response.get_json()["status"] == "invalid"  # Identify an input error.
 
-    def test_api_session_absence_returns_service_unavailable(self) -> None:
-        """The route does not treat a missing shared Mist session as empty data."""
+    def test_api_session_absence_still_allows_cache_only_reads(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Cached dashboard reads do not depend on a Mist SDK session."""
         client, app = build_client(FakeDashboardService())  # Build a local service client.
-        app.config.pop("WAN_DASHBOARD_SERVICE")  # Require the route to resolve the shared session.
-        app.config["APISESSION"] = None  # Model an unavailable Mist session.
+        app.config.pop("WAN_DASHBOARD_SERVICE")  # Require production dependency resolution.
+        app.config["APISESSION"] = None  # Model a portal without Mist credentials.
+        app.config["ORG_ID"] = "org-local"  # Keep the cached data scoped to one active organization.
+        monkeypatch.setattr(lock, "connect_lock_store", lambda: None)  # Model unavailable Redis without networking.
 
-        response = client.get("/wan-dashboard/api/overview")  # Request live data without credentials.
+        response = client.get("/wan-dashboard/api/overview")  # Request cached data without a Mist session.
 
-        assert response.status_code == 503  # Report unavailable service state.
-        assert response.get_json()["status"] == "error"  # Do not return success with no rows.
+        assert response.status_code == 503  # Report that no complete cache snapshot exists.
+        assert response.get_json()["status"] == "unavailable"  # Distinguish missing cache data from Mist failure.
+        assert "wan_dashboard_service" in app.extensions  # Prove the cache-only service was still constructed.
 
     def test_invalid_overview_filters_are_rejected_before_service_call(self) -> None:
         """Unsafe and overlong filter values do not reach the service."""
@@ -198,7 +302,7 @@ class TestOverviewRoutes:
         service = FakeDashboardService()  # Keep this response isolated from Mist.
         monkeypatch.setattr(
             service,
-            "get_overview",
+            "get_cached_overview",
             lambda **_filters: {"status": "error", "data": [], "notice": "Synthetic failure."},
         )  # Supply a service failure envelope.
         client, _app = build_client(service)  # Register the production route.
@@ -221,7 +325,7 @@ class TestOverviewRoutes:
         monkeypatch.setattr(lock, "connect_lock_store", lambda: cache)  # Reuse the local cache object.
         monkeypatch.setattr(
             WanDashboardService,
-            "get_overview",
+            "get_cached_overview",
             MagicMock(return_value={"status": "ok", "data": [], "notice": None}),
         )  # Prevent external SDK calls in the provider test.
 
@@ -229,7 +333,7 @@ class TestOverviewRoutes:
         stored_service = app.extensions["wan_dashboard_service"]  # Read the worker-local service.
         second = client.get("/wan-dashboard/api/overview")  # Reuse the existing feature service.
 
-        assert first.status_code == 200  # The shared dependencies allow the first read.
+        assert first.status_code == 200  # The shared dependencies allow the first cache read.
         assert second.status_code == 200  # The stored service supports later reads.
         assert app.extensions["wan_dashboard_service"] is stored_service  # Keep one worker-local service.
 
@@ -250,7 +354,7 @@ class TestOverviewRoutes:
         service = FakeDashboardService()  # Keep this response independent from Mist.
         monkeypatch.setattr(
             service,
-            "get_overview",
+            "get_cached_overview",
             lambda **_filters: {
                 "status": "rate_limited",
                 "data": [{"device_id": "gw-a"}],
@@ -271,22 +375,22 @@ class TestOverviewRoutes:
 
         response = client.get("/wan-dashboard/api/gateways/gw-a/ports/wan%2F0/traffic?range=1h")
 
-        assert response.status_code == 200  # The route accepts an encoded port name.
+        assert response.status_code == 503  # The route accepts the input but has no cached detail.
         assert service.traffic_selection == ("gw-a", "wan/0", "1h")  # Preserve the source port identifier.
 
-    def test_documented_traffic_and_insight_ranges_are_accepted(self) -> None:
-        """The route supports every traffic and WAN Insights range from the source."""
+    def test_documented_ranges_pass_validation_and_report_missing_cached_detail(self) -> None:
+        """Supported ranges do not trigger a per-port Mist request when cache data is absent."""
         client, _app = build_client(FakeDashboardService())  # Register local route dependencies.
         for time_range in ("1h", "6h", "24h", "7d"):
             traffic = client.get(
                 f"/wan-dashboard/api/gateways/gw-a/ports/wan0/traffic?range={time_range}"
             )  # Exercise each supported traffic range.
-            assert traffic.status_code == 200  # Accept the documented traffic range.
+            assert traffic.status_code == 503  # Keep missing cached detail explicit.
         for time_range in ("1h", "6h", "24h", "3d", "7d"):
             insights = client.get(
                 f"/wan-dashboard/api/gateways/gw-a/ports/wan0/insights?range={time_range}"
             )  # Exercise each supported insights range.
-            assert insights.status_code == 200  # Accept the documented WAN Insights range.
+            assert insights.status_code == 503  # Keep missing cached insight data explicit.
 
     def test_malformed_identifiers_are_rejected(self) -> None:
         """Malformed gateway and port path values fail before the service call."""
@@ -313,6 +417,47 @@ class TestOverviewRoutes:
         assert service.overview_filters == {}  # Do not create an export from invalid input.
 
 
+class TestRefreshRoutes:
+    """Prove refresh endpoints report status and queue work without Mist access."""
+
+    def test_status_returns_disabled_without_a_worker(self) -> None:
+        """A missing worker gives an explicit disabled state."""
+        service = FakeDashboardService()  # Keep dashboard service calls observable.
+        client, _app = build_client(service)  # Register the production route set.
+
+        response = client.get("/wan-dashboard/api/refresh-status")  # Read status without queueing work.
+
+        assert response.status_code == 200  # The status endpoint is safe when collection is disabled.
+        assert response.get_json()["status"] == "disabled"  # Do not imply an active collector exists.
+        assert service.legacy_reads == []  # The status route must not make a Mist request.
+
+    def test_status_and_queue_use_the_registered_worker(self) -> None:
+        """Status and Refresh requests use the same worker without a route-level SDK call."""
+        service = FakeDashboardService()  # Keep all dashboard responses synthetic.
+        client, app = build_client(service)  # Register the production routes.
+        worker = FakeRefreshWorker()  # Provide one local queue target.
+        app.extensions[WanDashboardWorker.EXTENSION_KEY] = worker  # Inject the registered worker.
+
+        status = client.get("/wan-dashboard/api/refresh-status")  # Read progress from the worker.
+        queued = client.post("/wan-dashboard/api/refresh", headers={"X-CSRFToken": "local-test-token"})
+
+        assert status.status_code == 200  # The worker status is available.
+        assert status.get_json()["current_phase"] == "ports"  # Show the active bulk read.
+        assert queued.status_code == 202  # The route accepts a coalesced follow-up.
+        assert queued.get_json()["status"] == "coalesced"  # Preserve the worker queue state.
+        assert worker.queue_calls == 1  # Use the same worker once.
+        assert service.legacy_reads == []  # Neither route calls a Mist collector.
+
+    def test_refresh_returns_unavailable_when_the_worker_is_disabled(self) -> None:
+        """A Refresh request cannot start collection without worker configuration."""
+        client, _app = build_client(FakeDashboardService())  # Register the disabled worker state.
+
+        response = client.post("/wan-dashboard/api/refresh", headers={"X-CSRFToken": "local-test-token"})
+
+        assert response.status_code == 503  # Keep the unavailable queue explicit.
+        assert response.get_json()["status"] == "disabled"  # Do not start a route-level collector.
+
+
 class TestPortalPage:
     """Prove that the integrated page renders in the shared shell."""
 
@@ -329,3 +474,62 @@ class TestPortalPage:
         assert 'data-testid="wan-gateway-table"' in html  # Expose the overview table selector.
         assert 'data-testid="wan-traffic-range"' in html  # Expose traffic range controls.
         assert 'data-testid="wan-insights-range"' in html  # Expose WAN Insights controls.
+        assert 'id="wan-refresh"' in html  # Keep the disabled state attached to the control.
+        assert "disabled" in html  # Prevent an unimplemented worker request.
+        assert "Refresh unavailable" in html  # Do not imply an unimplemented worker can collect data.
+
+
+class TestCacheOnlyFailureBoundary:
+    """Prove cache-only routes do not expose Mist transport failures."""
+
+    @pytest.mark.parametrize(
+        "transport_error",
+        [requests.ConnectionError, requests.Timeout],
+        ids=["connection-error", "timeout"],
+    )
+    def test_cached_overview_never_calls_live_reader(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        transport_error: type[Exception],
+    ) -> None:
+        """A cache hit stays available even when a forbidden live read would fail."""
+        service = FakeDashboardService()  # Keep the cached response synthetic.
+        live_reader = MagicMock(side_effect=transport_error("synthetic transport failure"))
+        monkeypatch.setattr(service, "get_overview", live_reader)  # Make any route-level collection fail.
+        client, app = build_client(service)  # Register the cache-only route boundary.
+
+        response = client.get("/wan-dashboard/api/overview")  # Read only the cached synthetic result.
+        with app.test_request_context():
+            _json_response, mapped_status = DashboardReadRoutes._result(
+                {"status": "error", "data": [], "notice": "Synthetic failure."}
+            )  # Exercise source status mapping beside the forbidden transport path.
+
+        assert response.status_code == 200  # Keep cached data available without Mist access.
+        assert mapped_status == 502  # Map a server failure to the documented route result.
+        live_reader.assert_not_called()  # Do not enter the configured connection-error or timeout path.
+
+    @pytest.mark.parametrize("status_code", [429, 503], ids=["http-4xx", "http-5xx"])
+    def test_cached_overview_maps_service_failure_status(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        status_code: int,
+    ) -> None:
+        """The route maps rate limits and upstream failures to explicit safe responses."""
+        service = FakeDashboardService()  # Keep all responses local.
+        service_status = "rate_limited" if status_code == 429 else "error"
+        expected_status = status_code if status_code == 429 else 502
+        monkeypatch.setattr(
+            service,
+            "get_cached_overview",
+            lambda **_filters: {"status": service_status, "data": [], "notice": "Synthetic failure."},
+        )  # Return one bounded cache-service failure state.
+        client, app = build_client(service)  # Register the production route.
+
+        response = client.get("/wan-dashboard/api/overview")  # Request the selected local failure state.
+        with app.test_request_context():
+            _json_response, mapped_status = DashboardReadRoutes._result(
+                {"status": service_status, "data": [], "notice": "Synthetic failure."}
+            )  # Exercise the source boundary with the selected HTTP status family.
+
+        assert response.status_code == expected_status  # Preserve the route's documented status mapping.
+        assert mapped_status == expected_status  # Keep the direct source decision consistent.

@@ -416,6 +416,37 @@ def test_gw_retry_one_item_succeeds_on_second_attempt() -> None:
     sleep.assert_called_once()
 
 
+def test_gw_retry_one_item_preserves_first_failure_after_fallback(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A later successful response does not hide the first request failure."""
+    sem = threading.Semaphore(1)  # WHY: provide the serialization guard used by each fetch.
+    first_error = requests.HTTPError("HTTP 403 initial denial")  # WHY: identify the original request failure.
+    responses = [  # WHY: model the first error, empty fallback, and successful retry.
+        first_error,  # WHY: retain the initial request error in the retry history.
+        SimpleNamespace(data={}),  # WHY: model an empty fallback without an exception.
+        SimpleNamespace(data={"foo": "bar"}),  # WHY: recover on the final permitted attempt.
+    ]
+    sleep = ThreadScopedSleepSpy()  # WHY: verify the existing retry delay remains bounded.
+    with (
+        patch(
+            "src.mist.access.api.api_fetch_utils.mistapi.api.v1.sites.devices.getSiteDevice",
+            side_effect=responses,
+        ) as api,
+        patch("src.mist.access.api.api_fetch_utils.time.sleep", new=sleep),
+        caplog.at_level("INFO"),
+    ):
+        result = APIFetchUtils._gw_retry_one_item(
+            MagicMock(), ("s1", "d1", "SiteOne"), sem, max_retries=2
+        )  # WHY: run the actual helper against mocked API results.
+    assert result == {"foo": "bar", "site_name": "SiteOne", "site_id": "s1"}  # WHY: preserve the existing output.
+    assert api.call_count == 3  # WHY: keep the configured retry budget after an empty fallback.
+    assert "first failure" in caplog.text.lower()  # WHY: show the retry summary retains the first cause.
+    assert "HTTPError" in caplog.text  # WHY: preserve the first exception type.
+    assert str(first_error) in caplog.text  # WHY: preserve the first exception message.
+    assert sleep.call_count == 2  # WHY: keep the existing backoff count.
+
+
 def test_gw_retry_one_item_returns_none_after_exhausting_attempts() -> None:
     """All attempts return None -> function returns None after max_retries+1 tries."""
     sem = threading.Semaphore(1)

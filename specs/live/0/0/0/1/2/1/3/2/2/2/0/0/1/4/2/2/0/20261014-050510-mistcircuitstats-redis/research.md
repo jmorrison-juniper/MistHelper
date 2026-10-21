@@ -1,151 +1,146 @@
 # Research: MistCircuitStats Redis Dashboard Migration
 
-**Date**: 2026-10-14
-**Status**: Planning evidence. Source implementation and license compatibility remain unverified.
+**Date**: 2026-10-20
+**Status**: Planning decisions are approved. Product implementation may proceed, but the user deferred production load validation until a scheduled maintenance window. Keep the worker disabled and timing values unset until that test.
 
-## Current-State Review: 2026-10-18
+## Current State
 
-- [Planning PR #4223](https://github.com/jmorrison-juniper/MistHelper/pull/4223) merged on 2026-10-17. [Issue #4220](https://github.com/jmorrison-juniper/MistHelper/issues/4220) remains open.
-- [PR #4252](https://github.com/jmorrison-juniper/MistHelper/pull/4252) merged on 2026-10-16 and closed #4195. Its dashboard and cache exist on `main`.
-- [Draft PR #4208](https://github.com/jmorrison-juniper/MistHelper/pull/4208) and [issue #4200](https://github.com/jmorrison-juniper/MistHelper/issues/4200) remain open. Their proposed package is not merged behavior.
-- The source default branch is `main`, at commit `61153fcb8dc51c6c7ff41a46179ef376d9da7601`. Its latest merged change is [jmorrison-juniper/MistCircuitStats-Redis#35](https://github.com/jmorrison-juniper/MistCircuitStats-Redis/pull/35).
-- GitHub reports the source license as `NOASSERTION`. The source [LICENSE](https://github.com/jmorrison-juniper/MistCircuitStats-Redis/blob/61153fcb8dc51c6c7ff41a46179ef376d9da7601/LICENSE) explicitly declares CC BY-NC-SA 4.0. No explicit reuse approval was found.
+- Issue #4220 remains open. Planning PR #4223 merged on 2026-10-17.
+- PR #4252 merged on 2026-10-16. It delivered the canonical WAN dashboard, shared SDK collection, and Redis cache, and closed #4195.
+- Issue #4200 remains open. Draft PR #4208 remains a proposal. Do not edit its files or treat its code as merged behavior.
+- The source repository is `jmorrison-juniper/MistCircuitStats-Redis`. The reviewed source revision is `61153fcb8dc51c6c7ff41a46179ef376d9da7601`.
+- The source `LICENSE` declares CC BY-NC-SA 4.0. The source owner authorized reuse with documented attribution. Keep the source identity, revision, and license with every reused artifact.
+- This planning PR contains no copied source code, tests, fixtures, screenshots, or assets.
 
-The issue comments contain historical states. The 2026-10-17 comment calls #4223 open. The live PR state overrides that comment.
+## Evidence from the Merged Dashboard
 
-The source worker still defines four workers, a 300-second interval, a 600-second stale threshold, and a 31-day TTL. These are source facts, not approved target settings. The source review does not establish complete behavior or test coverage.
+The existing service is `src/interfaces/portals/wan_dashboard/services/__init__.py`. Its organization overview uses these four bulk SDK reads with pagination:
 
-The existing dashboard uses the shared Redis client through `RedisDashboardCache`. Its namespace and TTL values appear in [contracts/redis-cache.md](contracts/redis-cache.md). Its SDK test checks 17 method signatures and the supported SDK version. That test does not establish source Insights parameter or response parity.
+| SDK method | Use |
+|---|---|
+| `listOrgSites` | Read organization sites |
+| `listOrgDevicesStats` | Read gateway status and statistics |
+| `searchOrgSwOrGwPorts` | Read organization port records before filtering WAN rows |
+| `getOrgInventory` | Read gateway profile and template references |
 
-No unique behavior, product path, Redis policy, or source reuse rights gained approval during this review. No product task starts from this refresh. [analysis.md](analysis.md) remains the historical 2026-10-14 analysis. The refresh uses a new read-only analysis without rewriting that report.
+The existing code also has detail methods that make additional SDK calls. The #4220 refresh worker will use only the four bulk reads above. It will not port source per-site or per-port request loops. Source-specific per-port Insights parity is excluded and tracked in [issue #4330](https://github.com/jmorrison-juniper/MistHelper/issues/4330).
 
-## Decision 1: Treat the source behavior as documented, not proven
+Merged PR #4252 uses the existing `wan-dashboard:v1:` cache. Its TTLs are 300 seconds for site data, 600 seconds for entity data, and 86,400 seconds for stale data. Keep these values and keys unchanged.
 
-**Decision**: Use the source README, operations guide, and implementation review as evidence with separate confidence. Record conflicts instead of choosing the guide or code value without review.
+## Load and Rate Evidence
 
-**Rationale**: The source guide describes a 300-second worker interval and a cache TTL of three intervals. The implementation review reports a 300-second interval and a 31-day TTL. The guide and implementation therefore disagree on cache expiry.
+Current Mist API documentation states a limit of 5,000 API calls per hour per token. This is a shared limit. Other MistHelper work also uses the token, so the worker must use shared request admission.
 
-## Verified Source Implementation Facts
+The user's production bands are:
 
-The source `worker.py` implementation review reports these values and behaviors:
+| Dataset | Production band |
+|---|---:|
+| Sites | 1,001–5,000 |
+| Gateways | 1,001–5,000 |
+| WAN ports | 5,001–20,000 |
 
-| Item | Guide | Implementation review | Target decision |
-|---|---|---|---|
-| `WORKER_INTERVAL` | 300 seconds by default | 300 seconds by default | Verify the target refresh interval against shared API admission. |
-| `PARALLEL_WORKERS` | Default 5 | Default 4 | Do not copy either value without a bounded-concurrency review. |
-| Cache TTL | Three worker intervals, or 900 seconds at the default interval | 31 days | Do not adopt either value until freshness and outage needs set a target TTL. |
-| `STALE_THRESHOLD` | Documented source setting | 600 seconds | Treat as a source value, not a MistHelper policy. |
-| Incremental refresh | Documented source behavior | Implemented | Verify record replacement and partial-failure semantics before reuse. |
-| Cached on startup | Documented source behavior | Implemented | Verify which cache states the application accepts at startup. |
+The user's rough estimate is 12–35+ requests per full refresh for the four bulk reads at a page size of 1,000. Additional non-WAN port pages may increase this count. This is an estimate, not a measured production result.
 
-The source insight path uses direct `requests.get` calls, extracts token headers manually, and requests `rx_bps` and `tx_bps` by `port_id` with `interval=3600` over a seven-day window. Do not port this transport. The Mist SDK request and response contract remains unproven, and the insight response mismatch blocks implementation.
+Do not select a refresh interval from this estimate. During a scheduled maintenance window, run a production-scale load test that measures all pages, shared token usage, complete refresh time, concurrent request behavior, and failure recovery. Derive the renewable worker lease from measured refresh and recovery times. Record the test result before selecting either value.
 
-The review does not establish the implementation status of `SKIP_ENRICHMENT`, token rotation, API host settings, organization settings, or every pagination and enrichment path. Keep those items open in T001.
+## Lab Evidence and Limitation
 
-**Alternatives considered**:
+A read-only development lab query returned 67 port rows, 7 WAN rows, and 2 gateway MACs. This response is useful for a basic data-shape review. It does not represent the stated production bands.
 
-- Treat each documented setting as working behavior. Rejected because the issue explicitly requires implementation verification.
-- Drop source behavior from scope. Rejected because it would remove the reason for the migration.
+The SDK logged a token-validation error during startup even though an endpoint returned a successful response. Do not treat that response as proof that SDK token validation works. Resolve or explain this diagnostic before using the lab to assess authentication behavior. This record includes no credentials or device identifiers.
 
-**Bounded investigation**: Before implementation, compare each source setting and worker path with its source code, tests, and operations guide. Record whether it is implemented, tested, incomplete, or a TODO.
+## Source Settings and License
 
-## Decision 2: Use one owner for overlapping WAN views
+The source guide describes a 300-second worker interval and a cache TTL equal to three intervals. The reviewed worker sets four parallel workers, a 300-second interval, a 600-second stale threshold, and a 31-day TTL. These are source values only. They do not set MistHelper's refresh interval, lease, concurrency, or TTL.
 
-**Decision**: Use one canonical portal view and one collection owner for each gateway, port, peer, and insight data set. Reuse a landed #4195 or #4200 feature when it satisfies the requirement. Add only verified gaps.
+The source owner authorized reuse with documented attribution. Preserve the source repository, reviewed revision, and CC BY-NC-SA 4.0 license. Check the license obligations for each reused code or asset. Keep new MistHelper implementation independently written unless a specific source artifact is approved for reuse. Do not copy source tests, fixtures, screenshots, or assets as part of this planning work.
 
-**Rationale**: PR #4252 delivered #4195 WAN views and closed that issue. Issue #4200 and open draft PR #4208 propose overlapping views, collection, request admission, and history. Use the existing dashboard as the baseline. Do not assume #4208 will merge unchanged.
+## Decisions
 
-**Alternatives considered**:
+### Decision 1: Keep PR #4252 as the canonical dashboard
 
-- Build another complete WAN dashboard and collector. Rejected because it duplicates pages and Mist API requests.
-- Assume PR #4208 will merge unchanged. Rejected because its implementation is not on `main` and its acceptance may change.
+**Decision**: Reuse the #4252 dashboard, shared SDK collection, and existing Redis cache. Add no second WAN dashboard or collector.
 
-**Bounded investigation**: At implementation start, compare the source workflows with the accepted and landed scope of #4195 and #4200. Write one ownership table for each view and each Mist API data set. Stop if two owners remain.
+**Rationale**: #4252 merged and closed #4195. #4208 is still a draft proposal.
 
-## Decision 3: Reuse the existing Redis service only for transient state
+**Alternative rejected**: Build a second dashboard or assume #4208 will merge unchanged. Both choices create duplicate ownership.
 
-**Decision**: Add no Redis service or duplicate cache. Review the existing dashboard namespace before any cache change. The earlier `misthelper:wan:mcsr:v1:` proposal has no reservation or approval. Record an approved owner, path, and policy before implementation.
+### Decision 2: Use one worker and cache-only dashboard reads
 
-**Rationale**: MistHelper already has Redis in its Compose group. The source guide and implementation review report different TTLs, so neither value sets the target cache policy. A second service or database would violate issue #4220.
+**Decision**: One background worker is the sole Mist API collector and the sole WAN snapshot writer. Dashboard routes read the existing cache only. The Refresh control queues the same worker.
 
-**Alternatives considered**:
+**Rationale**: Page reads and refresh controls must not make independent Mist requests or race to write snapshots.
 
-- Add a source-specific Redis container. Rejected because MistHelper must keep one Compose group and Redis service.
-- Store snapshots in a second database. Rejected because the feature must use existing application storage.
-- Reuse keys without a feature namespace. Rejected because another writer could overwrite values or apply a different TTL.
+**Alternative rejected**: Let each request collect or cache data. That creates duplicate calls and multiple writers.
 
-**Bounded investigation**: Before implementation, verify Redis module support, existing retention behavior, payload limits, namespace conventions, and which component owns refresh locks. Confirm that snapshot cache data is not treated as durable history.
+### Decision 3: Reuse only the four existing bulk reads
 
-## Decision 4: Keep portal reads separate from live collection
+**Decision**: Use `listOrgSites`, `listOrgDevicesStats`, `searchOrgSwOrGwPorts`, and `getOrgInventory` with the existing paginated SDK path. Use a page size of 1,000.
 
-**Decision**: Portal reads use an accepted cache or existing stored snapshot. They do not make fallback Mist calls when a cache read fails. A worker or explicit operator action may refresh data only through shared MistHelper request admission.
+**Rationale**: These are the four bulk reads already used by the #4252 overview. The source's per-site and per-port request loops are not part of this migration.
 
-**Rationale**: This prevents page views from multiplying API calls and avoids hidden requests that bypass shared rate limits. It also keeps failures visible.
+**Alternative rejected**: Copy the source request fan-out. It would increase calls and bypass the accepted collection design.
 
-**Alternatives considered**:
+### Decision 4: Preserve the existing Redis policy
 
-- Fetch live data from each page request. Rejected because multiple users could create duplicate requests and exceed the shared request budget.
-- Silently show synthetic data on a live-path failure. Rejected because operators could mistake example data for live telemetry.
+**Decision**: Keep the existing `wan-dashboard:v1:` namespace and 300-, 600-, and 86,400-second TTLs. Add no new namespace or database.
 
-**Bounded investigation**: Confirm the project's worker scheduling and Redis lease patterns. Define how one worker owns a refresh, how an interrupted refresh is recorded, and how stale data is presented.
+**Rationale**: The values belong to the merged #4252 cache. This migration does not need another cache policy.
 
-## Decision 5: Use current SDK contracts as candidates only
+**Alternative rejected**: Add a feature-specific key namespace or copy the source TTL. Either choice duplicates ownership.
 
-**Decision**: Use the current repository OpenAPI file to create a candidate request map. Verify each method against the source implementation and the installed `mistapi` signatures before implementation.
+### Decision 5: Leave the refresh interval and lease unapproved
 
-**Rationale**: OpenAPI 3.1.0 version 2609.1.0, dated 2026-09-07, contains candidate operations for org sites, site devices, gateway metrics, gateway insights, and peer-path statistics. An operation's presence does not prove that it matches the source's actual request.
+**Decision**: Select no scheduled refresh interval or renewable worker lease until the production-scale load test records request usage, refresh duration, and failure recovery.
 
-**Candidate operations found**:
+**Rationale**: The API limit applies across features. The 12–35+ request estimate does not include every non-WAN port page or other shared token use.
 
-| SDK operation ID | OpenAPI method and path | Known parameters from current document |
-|---|---|---|
-| `listOrgSites` | `GET /api/v1/orgs/{org_id}/sites` | `limit`, `page` references |
-| `listSiteDevices` | `GET /api/v1/sites/{site_id}/devices` | `type`, `name`, `limit`, `page` |
-| `getSiteGatewayMetrics` | `GET /api/v1/sites/{site_id}/stats/gateways/metrics` | No operation-level parameters listed |
-| `getSiteInsightMetricsForGateway` | `GET /api/v1/sites/{site_id}/insights/gateway/{device_id}/stats` | `metrics`, `port_id`, time window, interval, and pagination references |
-| `countOrgPeerPathStats` | `GET /api/v1/orgs/{org_id}/stats/vpn_peers/count` | `distinct`, time window, and limit references |
-| `searchOrgPeerPathStats` | `GET /api/v1/orgs/{org_id}/stats/vpn_peers/search` | `mac`, `site_id`, `type`, time window, sort, and pagination references |
+**Alternative rejected**: Convert the rough estimate into a fixed interval or lease. It is not measured evidence.
 
-**Alternatives considered**:
+### Decision 6: Move per-port Insights parity to a separate issue
 
-- Call undocumented routes directly. Rejected because MistHelper requires a working SDK method when one exists.
-- Select API methods from operation names alone. Rejected because request arguments, output fields, and source parity are not proven.
+**Decision**: Exclude source-specific per-port Insights parity from #4220. Track it in issue #4330.
 
-**Bounded investigation**: Verify the resolved OpenAPI parameter references, response schemas, SDK signatures, pagination behavior, and source call arguments for each accepted journey. Remove candidates that the source does not use.
+**Rationale**: The source uses a per-port request pattern that this migration must not add. The SDK field and response contract also needs its own review.
 
-## Decision 6: Preserve source provenance and avoid code transfer
+**Alternative rejected**: Add direct HTTP or per-port calls to this worker. The user excluded both paths from this migration.
 
-**Decision**: Record source and CC BY-NC-SA 4.0 provenance. Write new code. Reuse code only after maintainers approve license terms, attribution, and ShareAlike obligations.
+### Decision 7: Preserve source attribution
 
-**Rationale**: The source license may conflict with MistHelper distribution terms. A README or operations guide does not grant permission to copy code or assets.
+**Decision**: Record the source repository, reviewed revision, owner authorization, and CC BY-NC-SA 4.0 license.
 
-**Alternatives considered**:
+**Rationale**: The user owns the source and authorized reuse with documented attribution. The license still governs reused material.
 
-- Copy source code or screenshots before review. Rejected because rights and license compatibility are not confirmed.
-- Omit source attribution. Rejected because it loses provenance and does not resolve license obligations.
+**Alternative rejected**: Omit source attribution or assume authorization removes license obligations.
 
-**Bounded investigation**: Ask the repository maintainers to decide whether any source code, assets, or screenshots may be reused. Until then, copy none of them.
+### Decision 8: Use one leased worker and safe refresh status
 
-## Decision 7: Keep synthetic preview data isolated
+**Decision**: Run the worker inside the existing web container. A renewable Redis lease elects one active collector across Gunicorn processes. Keep one active run and at most one queued follow-up. Coalesce further Refresh requests into that follow-up. On failure, keep the last complete snapshot as stale, show a safe error, and publish no partial data. Show the refresh state, current bulk-read phase, completed page counts, and timestamps.
 
-**Decision**: Retain only independently created fictional test records and screenshots. Label every offline preview as synthetic and ensure live requests never fall back to that data.
+**Rationale**: Multiple Gunicorn processes must not become competing collectors or cache writers. Operators need visible progress and safe failure information.
 
-**Rationale**: The issue identifies screenshot data as fictional offline data. The distinction must remain visible in tests and UI behavior.
+**Alternative rejected**: Let each process start an independent collector or publish partially completed reads. These choices can duplicate API use or misrepresent incomplete data.
 
-**Alternatives considered**:
+### Decision 9: Use a bounded process-local fallback during Redis outage
 
-- Reuse source screenshots as live examples. Rejected because they contain fictional data and may have separate license restrictions.
-- Use production exports for test fixtures. Rejected because tests must not use production credentials or data.
+**Decision**: When Redis is unavailable, show a complete snapshot held by the serving process as stale only when it is no more than 86,400 seconds old. Otherwise report unavailable data. Make no Mist request and add no local persistent store.
 
-**Bounded investigation**: Inspect source preview artifacts only to identify expected behavior. Do not copy image files or fixture payloads without approval.
+**Rationale**: The user approved a last complete local snapshot fallback without authorizing another persistent data store.
 
-## Unresolved Evidence
+**Assumption**: "Local snapshot" means a complete in-memory snapshot that the serving Gunicorn process already holds. Another process may not hold a copy. No file or database fallback is added.
 
-- Exact source SDK methods, arguments, response fields, and pagination are not established by the supplied summary.
-- The implementation review confirms selected worker facts, but does not verify `SKIP_ENRICHMENT`, token rotation, API host settings, organization settings, or every pagination and enrichment path.
-- PR #4252 supplies the existing WAN dashboard. Draft PR #4208 remains open with overlapping proposed behavior. Owners must approve one unique #4220 behavior and path before implementation.
-- The status of the source license's compatibility with MistHelper remains unknown.
-- The source worker's refresh lease, startup cache selection, and partial-refresh rules are not established.
-- The source insight call uses a direct HTTP path. The selected SDK method's response does not yet prove the expected `rx_bps`, `tx_bps`, `port_id`, interval, and seven-day window contract.
-- Redis namespace, serialization, refresh lock, payload size, target TTL, and outage details need confirmation against current MistHelper Redis policy.
-- Source screenshot fidelity remains blocked without explicit reuse rights. Do not recreate source screenshots or adapt source tests and fixtures without those rights.
+**Alternative rejected**: Call Mist from a dashboard route or show expired in-memory data. Both choices violate the cache-only and maximum-age requirements.
+
+### Decision 10: Keep offline examples separate from all live states
+
+**Decision**: Use fictional records only in a labeled static example panel. Cover current, stale, unavailable, and refresh-error states with offline browser tests. Reject synthetic or unknown explicit source markers from live overview data.
+
+**Rationale**: Operators and reviewers need safe examples without Mist credentials or network access. Synthetic values must never appear to be live data.
+
+**Alternative rejected**: Use example records as fallback data when live data is missing. That would hide unavailable or failed live data.
+
+## Remaining Production-Only Blocker
+
+Run the approved production-scale load test during a scheduled maintenance window before setting the worker schedule or lease. The test must measure the shared token budget across the production bands and include all non-WAN port pages. Until it passes, the worker remains disabled and the refresh interval and renewable lease stay unset.
+
+The SDK startup token-validation diagnostic is a separate lab caveat. Resolve or explain it before treating the lab response as authentication evidence.

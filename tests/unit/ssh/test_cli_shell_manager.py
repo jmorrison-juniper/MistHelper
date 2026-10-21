@@ -524,3 +524,65 @@ class TestRunInteractive:
 
         m_ws_mod.enableTrace.assert_called_once_with(True)
         assert "wakeup" in caplog.text.lower()
+
+
+class TestCreateSessionHttpRefusals:
+    """Cover HTTP 4xx and 5xx refusals in ``CLIShellManager._create_session``."""
+
+    @staticmethod
+    def _refused_response(status_code: int) -> MagicMock:
+        """Build an SDK response with a refusal status and a tempting URL in the body."""
+        response = MagicMock()
+        response.status_code = status_code  # The cloud refused the request with this HTTP status.
+        response.data = {"url": "wss://shell/must-not-be-used"}  # A refused call must not leak a usable URL.
+        return response
+
+    def test_http_403_refusal_returns_none_and_logs_status(self, fake_mh, caplog):
+        """An HTTP 403 response yields None and an ERROR that names the status and device."""
+        response = self._refused_response(403)  # Client error: the account may not open a shell.
+        with patch("src.operations.execution.ssh.cli_shell_manager.mistapi") as m_mistapi:
+            m_mistapi.api.v1.sites.devices.createSiteDeviceShellSession.return_value = response
+            result = CLIShellManager._create_session("s-1", "d-1")
+
+        assert result is None
+        errors = [record for record in caplog.records if record.levelno == logging.ERROR]
+        assert len(errors) == 1
+        assert "HTTP 403" in errors[0].getMessage()
+        assert "d-1" in errors[0].getMessage()
+
+    def test_http_503_refusal_returns_none_and_logs_status(self, fake_mh, caplog):
+        """An HTTP 503 response yields None and an ERROR that names the status and device."""
+        response = self._refused_response(503)  # Server error: the cloud cannot open a shell now.
+        with patch("src.operations.execution.ssh.cli_shell_manager.mistapi") as m_mistapi:
+            m_mistapi.api.v1.sites.devices.createSiteDeviceShellSession.return_value = response
+            result = CLIShellManager._create_session("s-1", "d-1")
+
+        assert result is None
+        errors = [record for record in caplog.records if record.levelno == logging.ERROR]
+        assert len(errors) == 1
+        assert "HTTP 503" in errors[0].getMessage()
+        assert "d-1" in errors[0].getMessage()
+
+    def test_http_200_control_returns_url_without_error(self, fake_mh, caplog):
+        """An HTTP 200 response returns the URL and logs no ERROR."""
+        response = self._refused_response(200)  # Control case: same body, success status.
+        response.data = {"url": "wss://shell/ok"}
+        with patch("src.operations.execution.ssh.cli_shell_manager.mistapi") as m_mistapi:
+            m_mistapi.api.v1.sites.devices.createSiteDeviceShellSession.return_value = response
+            result = CLIShellManager._create_session("s-1", "d-1")
+
+        assert result == "wss://shell/ok"
+        assert not [record for record in caplog.records if record.levelno == logging.ERROR]
+
+    def test_launch_does_not_start_shell_after_http_503(self, fake_mh):
+        """A refused session creation must not start the interactive shell."""
+        response = self._refused_response(503)  # Server error with a tempting body URL.
+        fake_mh.PromptClientUtils.select_site_and_device_ids.return_value = ("s-1", "d-1")  # Skip the prompts.
+        with (
+            patch("src.operations.execution.ssh.cli_shell_manager.mistapi") as m_mistapi,
+            patch.object(CLIShellManager, "_run_interactive") as m_run,
+        ):
+            m_mistapi.api.v1.sites.devices.createSiteDeviceShellSession.return_value = response
+            CLIShellManager.launch("s-1", "d-1")
+
+        assert m_run.call_count == 0  # The shell must never start after a refusal.

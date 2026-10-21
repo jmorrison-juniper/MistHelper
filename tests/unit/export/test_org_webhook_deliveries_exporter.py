@@ -91,17 +91,21 @@ class TestWebhookExport:
         )  # WHY: use the selected identifiers.
         persist_call.assert_called_once_with([{"id": "delivery-1"}], "Alarms")  # WHY: pass all returned rows.
 
-    def test_sdk_error_stays_inside_the_menu(self, mist_helper: MagicMock) -> None:
+    def test_sdk_error_stays_inside_the_menu(self, mist_helper: MagicMock, caplog: pytest.LogCaptureFixture) -> None:
         """Log an SDK failure without raising it to the menu loop."""
         mist_helper.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org-1"  # WHY: reach the API call.
+        writer = mist_helper.DataExporter.write_with_format_selection
         with (
             patch.object(OrgWebhookDeliveriesExporter, "_select_webhook_id", return_value=("wh-1", "Alarms")),
             patch(
                 f"{_MODULE}.mistapi.api.v1.orgs.webhooks.searchOrgWebhooksDeliveries", side_effect=RuntimeError("boom")
-            ),
+            ) as search_call,
+            caplog.at_level("ERROR"),
         ):
             OrgWebhookDeliveriesExporter.deliveries()
-        mist_helper.DataExporter.write_with_format_selection.assert_not_called()  # WHY: failed calls write nothing.
+        search_call.assert_called_once_with(mist_helper.apisession, "org-1", "wh-1")
+        assert caplog.record_tuples == [("root", 40, "Error fetching organization webhook deliveries: boom")]
+        assert writer.call_args_list == []
 
     @pytest.mark.parametrize("status_code", [404, 503])
     def test_webhook_http_status_sdk_error_is_logged(

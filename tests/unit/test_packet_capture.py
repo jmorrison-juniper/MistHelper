@@ -2592,3 +2592,52 @@ class TestReadStreamPackets:
         manager._read_stream_packets(5, "cap-1")
         captured = capsys.readouterr()
         assert "stopped by user" in captured.out
+
+
+def test_native_http_503_refuses_site_capture_without_follow_up(
+    caplog: pytest.LogCaptureFixture,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A native HTTP 503 must refuse capture data and stop follow-up work."""
+    import requests  # WHY: create the real HTTP response that the SDK parses.
+    from mistapi.__api_response import APIResponse  # WHY: exercise the installed SDK response boundary.
+
+    session = MagicMock()  # WHY: keep the SDK call local while testing the production manager.
+    manager = PacketCaptureManager(session, org_id="site-123")  # WHY: make the source call visible to the analyzer.
+    response = requests.Response()  # WHY: build a native response rather than a status-only mock.
+    response.status_code = 503  # WHY: model a cloud server failure.
+    response.url = "https://api.mist.invalid/api/v1/sites/site-123/pcaps"  # WHY: provide the SDK response URL.
+    response._content = (  # WHY: include valid-looking data so the status guard must reject it.
+        b'{"id":"capture-503","format":"pcap","duration":60}'
+    )
+    refused = APIResponse(response, response.url)  # WHY: preserve native status and body parsing.
+    payload = {"type": "client"}  # WHY: record the exact single capture request.
+    logger_name = "src.operations.execution.capture._packet_capture_exec"  # WHY: scope the failure check.
+    caplog.set_level(logging.ERROR, logger=logger_name)  # WHY: capture the operator-facing refusal record.
+
+    with patch("src.operations.execution.capture.packet_capture.mistapi") as mistapi_mock:
+        api_call = mistapi_mock.api.v1.sites.pcaps.startSitePacketCapture  # WHY: inspect the one API boundary.
+        api_call.return_value = refused  # WHY: return the native server failure without a live request.
+        with (
+            patch.object(manager, "_wait_and_download_pcap") as download,
+            patch.object(manager, "_subscribe_to_site_capture_stream") as subscribe,
+            patch.object(manager, "_export_capture_info_to_csv") as export,
+        ):
+            result = manager._execute_site_capture("site-123", payload)  # WHY: drive the real refusal branch.
+
+    error_records = [  # WHY: exclude unrelated logs from the exact failure contract.
+        (record.name, record.levelno, record.getMessage()) for record in caplog.records if record.name == logger_name
+    ]
+    expected_error = (  # WHY: require a visible failure with the actual status and refused data.
+        logger_name,
+        logging.ERROR,
+        "Capture failed: 503 - {'id': 'capture-503', 'format': 'pcap', 'duration': 60}",
+    )
+    assert result is None, "a refused capture must not return a success value"
+    assert "Failed to start capture: 503" in capsys.readouterr().out
+    assert error_records == [expected_error]
+    api_call.assert_called_once_with(session, "site-123", payload)
+    mistapi_mock.get_all.assert_not_called()
+    download.assert_not_called()
+    subscribe.assert_not_called()
+    export.assert_not_called()

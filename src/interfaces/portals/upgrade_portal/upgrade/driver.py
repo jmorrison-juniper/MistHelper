@@ -872,10 +872,18 @@ def _tracker_text(path: Path) -> str | None:
     """
     for attempt in range(_READ_ATTEMPTS):  # A refusal during a rename clears in a few milliseconds
         try:
-            return path.read_text(encoding="utf-8")
-        except OSError:  # The rename window, a lost handle, or a real permission fault
+            return path.read_text(encoding="utf-8")  # Preserve the exact file text for the existing parser.
+        except OSError as error:  # Retain the cause before a later read replaces its evidence.
+            if not isinstance(error, FileNotFoundError):  # A fresh checkout without a tracker remains silent.
+                logger.warning(  # Record each real failure without exposing the tracker contents.
+                    "The portal could not read the upgrade tracker at %s on attempt %s: %s: %s",
+                    path,
+                    attempt + 1,
+                    type(error).__name__,
+                    error,
+                )
             if attempt + 1 >= _READ_ATTEMPTS:  # Every attempt failed, so the caller must hear about it
-                return None
+                return None  # Preserve the existing empty-result contract.
             time.sleep(_READ_RETRY_SECONDS)  # Give the rename time to finish
     return None  # Unreachable, and it keeps the return type honest for the type checker
 
@@ -1016,10 +1024,25 @@ def _replace_tracker(path: Path, rows: Sequence[Mapping[str, Any]]) -> None:
         try:
             scratch.replace(path)  # One rename inside one directory, which the operating system makes atomic
             return  # The tracker landed whole
-        except OSError:  # A reader holds the target, or the directory refused the rename
+        except OSError as error:  # Preserve each failure before a later rename or cleanup changes the outcome.
+            logger.warning(  # Keep the first cause visible even when replacement later succeeds.
+                "The portal could not replace the upgrade tracker at %s on attempt %s: %s: %s",
+                path,
+                attempt + 1,
+                type(error).__name__,
+                error,
+            )
             if attempt + 1 >= _WRITE_ATTEMPTS:  # Every attempt failed, so the caller owns the fault
-                scratch.unlink(missing_ok=True)  # Leave no half-written neighbor behind
-                raise
+                try:  # Cleanup must not replace the final rename exception.
+                    scratch.unlink(missing_ok=True)  # Remove only this writer's scratch file.
+                except OSError as cleanup_error:  # Report cleanup failure without hiding the rename failure.
+                    logger.error(  # Explain why the scratch file remains.
+                        "The portal could not remove the upgrade tracker scratch file at %s: %s: %s",
+                        scratch,
+                        type(cleanup_error).__name__,
+                        cleanup_error,
+                    )
+                raise  # Preserve the final replacement exception and its traceback.
             time.sleep(_READ_RETRY_SECONDS)  # Give the reader time to close the target
 
 

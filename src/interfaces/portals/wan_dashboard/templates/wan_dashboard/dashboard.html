@@ -14,11 +14,24 @@
             <p class="wan-description">Review gateway health, WAN ports, traffic, and native WAN Insights.</p>
         </div>
         <div class="wan-header-actions">
-            <button id="wan-refresh" class="btn btn-outline-primary" type="button">Refresh data</button>
+            <button id="wan-refresh" class="btn btn-outline-primary" type="button"
+                    data-testid="wan-refresh"
+                    {% if not refresh_enabled %}disabled
+                    title="Refresh is unavailable until the worker has approved timing values."{% endif %}>
+                {% if refresh_enabled %}Refresh data{% else %}Refresh unavailable{% endif %}
+            </button>
             <a id="wan-gateway-export" class="btn btn-primary" data-testid="wan-gateway-export"
                href="{{ url_for('wan_dashboard.gateway_export') }}">Export gateways</a>
         </div>
     </header>
+
+    <section class="wan-refresh-panel" aria-label="Refresh status" data-testid="wan-refresh-panel">
+        <p>Refresh state: <strong id="wan-refresh-state" data-testid="wan-refresh-state">Checking</strong></p>
+        <p>Current read: <strong id="wan-refresh-phase" data-testid="wan-refresh-phase">Unavailable</strong></p>
+        <p>Completed pages: <strong id="wan-refresh-pages" data-testid="wan-refresh-pages">None</strong></p>
+        <p>Last complete snapshot: <strong id="wan-refresh-time" data-testid="wan-refresh-time">Unavailable</strong></p>
+        <p id="wan-refresh-error" role="status" aria-live="polite" data-testid="wan-refresh-error"></p>
+    </section>
 
     <div id="wan-status" class="wan-status" role="status" aria-live="polite" data-testid="wan-status">
         Loading gateway data.
@@ -84,6 +97,37 @@
         </div>
         <p id="wan-empty-state" class="wan-empty" hidden>No gateways match these filters.</p>
     </div>
+
+    <section class="wan-panel" aria-labelledby="wan-synthetic-title" data-testid="wan-synthetic-example">
+        <div class="wan-panel-heading">
+            <div>
+                <h2 id="wan-synthetic-title">Offline example (synthetic data)</h2>
+                <p>This fictional record is separate from live data and never replaces a live result.</p>
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="table wan-table">
+                <thead>
+                    <tr>
+                        <th scope="col">Site</th>
+                        <th scope="col">Gateway</th>
+                        <th scope="col">Model</th>
+                        <th scope="col">Status</th>
+                        <th scope="col">Data source</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr data-testid="wan-synthetic-example-row" data-source="synthetic">
+                        <td>Example Site</td>
+                        <td>Example Gateway</td>
+                        <td>Fictional Model</td>
+                        <td>Example only</td>
+                        <td>Synthetic</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
 
     <section id="wan-chart-modal" class="wan-modal" role="dialog" aria-modal="true"
              aria-labelledby="wan-chart-title" hidden>

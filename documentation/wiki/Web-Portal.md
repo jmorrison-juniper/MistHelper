@@ -33,6 +33,9 @@ answering.
 - **Themes**: Brand Magenta, Dark, Light, and High Contrast themes with instant switching (persisted in localStorage). Brand Magenta is the default and matches the upgrade capture portal.
 - **Branding**: Customize the title, the logo, and the accent color with environment variables.
 
+The Operations page reports an empty result from the handler outcome. A handler
+that does not return an outcome keeps the legacy log-marker behavior.
+
 ## Firmware policies and recovery
 
 Open **Operations**, then expand **Firmware Policies & Recovery**.

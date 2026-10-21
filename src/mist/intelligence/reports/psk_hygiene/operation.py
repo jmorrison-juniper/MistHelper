@@ -37,6 +37,10 @@ class PskHygieneClientProtocol(Protocol):
 class PskHygieneReport:
     """Run the PSK hygiene report without prompts."""
 
+    from src.foundation.models.operation_outcome import (
+        OperationOutcome as _OperationOutcome,  # Keep the contract class-scoped.
+    )
+
     API_NAME = "psk_hygiene_report"  # Give DataExporter a stable report source name.
     FILENAME = "PskHygiene.csv"  # Keep the output file name aligned with the contract.
     CLIENT_CLASS: ClassVar[Any] = PskHygieneClient  # Allow tests to replace the client without changing run().
@@ -44,19 +48,37 @@ class PskHygieneReport:
     OUTPUT: ClassVar[Callable[[str], None]] = echo  # Allow tests to capture console summary lines.
 
     @classmethod
-    def run(cls) -> bool:
-        """Run the PSK hygiene report and return success."""
+    def run(cls) -> _OperationOutcome:
+        """Run the PSK hygiene report and return its explicit result."""
         logger.info("Resolving PSK hygiene report dependencies")  # Log before reading runtime dependencies.
         apisession = cls.DEPENDENCY_RESOLVER.apisession  # Reuse the authenticated Mist session from the app context.
         org_id = cls._resolve_org_id(cls.DEPENDENCY_RESOLVER)  # Resolve org id without any interactive prompt.
         if not org_id:  # Stop before any API call when non-interactive org resolution fails.
-            return False  # Signal failure to menu test handling without prompting.
+            return cls._OperationOutcome(
+                state="missing_input",
+                message="An organization ID is required to run the PSK hygiene report.",
+            )  # Preserve the missing-context result without a Boolean marker.
         report_client = cls.CLIENT_CLASS(apisession, org_id)  # Build the read-only client through the testable seam.
         logger.debug("Resolved PSK hygiene dependencies for one organization")  # Avoid logging the organization ID.
         rows, summary = cls._build_report(report_client)  # Fetch, sanitize, and score report data.
         cls._write_summary(summary, cls.OUTPUT)  # Print and log sanitized summary counts.
-        cls._export_rows(cls.DEPENDENCY_RESOLVER, rows)  # Export sanitized rows through the configured backend.
-        return True  # Signal success to menu test handling.
+        if not rows:  # The exporter rejects empty input, so no export can produce result records.
+            logger.info("PSK hygiene report produced no output rows")  # Explain the empty report result.
+            return cls._OperationOutcome(
+                state="no_output",
+                message="The PSK hygiene report found no records.",
+            )  # Report the empty result without calling the exporter.
+        if not cls._export_rows(cls.DEPENDENCY_RESOLVER, rows):  # Use the exporter result as explicit failure evidence.
+            logger.error("PSK hygiene report export failed for %d rows", len(rows))  # Record the failed write count.
+            return cls._OperationOutcome(
+                state="failed",
+                message="The PSK hygiene report could not write its output.",
+            )  # Report a failure that the exporter returned.
+        logger.debug("Completed PSK hygiene report with %d output rows", len(rows))  # Log the successful record count.
+        return cls._OperationOutcome(
+            state="completed",
+            message="The PSK hygiene report completed.",
+        )  # Report completion only after a successful export.
 
     @staticmethod
     def _resolve_org_id(resolver: Any) -> str | None:
@@ -130,13 +152,18 @@ class PskHygieneReport:
         )  # Log only counts.
 
     @staticmethod
-    def _export_rows(resolver: Any, rows: list[dict[str, str | int | bool]]) -> None:
-        """Export sanitized rows through DataExporter."""
+    def _export_rows(resolver: Any, rows: list[dict[str, str | int | bool]]) -> bool:
+        """Export sanitized rows and return the exporter result."""
         logger.info("Exporting PSK hygiene rows")  # Log before the export write.
-        resolver.DataExporter.write_with_format_selection(
+        exported = resolver.DataExporter.write_with_format_selection(
             rows,
             PskHygieneReport.FILENAME,
             api_function_name=PskHygieneReport.API_NAME,
             fieldnames=PskHygieneRow.column_names(),
         )  # Write only sanitized rows through the configured backend.
-        logger.debug("Exported %d PSK hygiene rows", len(rows))  # Log only the safe exported row count.
+        logger.debug(
+            "Exported %d PSK hygiene rows with success=%s",
+            len(rows),
+            exported,
+        )  # Log only the safe row count and exporter result.
+        return exported  # Let the handler report a failed write explicitly.

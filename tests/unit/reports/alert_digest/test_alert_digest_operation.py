@@ -62,9 +62,11 @@ class FakeWriter:
 
     digest_groups: list[Any] = field(default_factory=list)  # Store digest groups passed by the operation.
     ack_results: list[Any] = field(default_factory=list)  # Store acknowledgement rows passed by the operation.
+    digest_calls: int = 0  # Count write_digest invocations, including empty lists.
 
     def write_digest(self, groups: list[Any]) -> bool:
         """Record digest groups."""
+        self.digest_calls += 1  # Prove whether the operation called the writer.
         self.digest_groups = list(groups)  # Preserve groups for assertions.
         return True  # Simulate a successful write.
 
@@ -111,7 +113,7 @@ def test_run_digest_writes_grouped_outputs_without_prompt(monkeypatch: Any) -> N
     monkeypatch.delenv("ALERT_DIGEST_HOURS", raising=False)  # Use the default lookback.
     client = FakeClient(alarms=[alarm(1), alarm(2, count=2)])  # Provide grouped alarm data.
     writer = FakeWriter()  # Capture output rows.
-    assert operation(client, writer).execute_digest() is True  # Run the digest path.
+    assert operation(client, writer).execute_digest().state == "completed"  # Run the digest path.
     assert len(writer.digest_groups) == 1  # Confirm grouping by type and site.
     assert client.searched_hours == [24]  # Confirm default lookback.
 
@@ -132,7 +134,7 @@ def test_run_digest_uses_site_name_and_not_reported_ack_state(monkeypatch: Any) 
     live_alarm = alarm(1, site_id=site_id, site=site_id, site_name=None, acked=None)  # Match the live search shape.
     client = FakeClient(sites=[{"id": site_id, "name": "Morrison House Site"}], alarms=[live_alarm])  # Site map.
     writer = FakeWriter()  # Capture digest groups without file I/O.
-    assert operation(client, writer).execute_digest() is True  # Run the digest path.
+    assert operation(client, writer).execute_digest().state == "completed"  # Run the digest path.
     assert writer.digest_groups[0].site == "Morrison House Site"  # Verify the CSV and Markdown site value.
     assert writer.digest_groups[0].acknowledged_state == "not_reported"  # Verify absent acked state wording.
 
@@ -158,10 +160,97 @@ def test_run_digest_handles_normal_volume_under_local_budget(monkeypatch: Any) -
     client = FakeClient(alarms=rows)  # Provide the bounded normal volume.
     writer = FakeWriter()  # Capture output rows without file I/O.
     started = perf_counter()  # Start a local end-to-end timing guard.
-    assert operation(client, writer).execute_digest() is True  # Run the digest workflow.
+    assert operation(client, writer).execute_digest().state == "completed"  # Run the digest workflow.
     elapsed = perf_counter() - started  # Stop the local timing guard.
     assert len(writer.digest_groups) == 5  # Confirm the full digest path grouped the volume.
     assert elapsed < 1.0  # Confirm local work preserves the 60 second operation budget.
+
+
+@dataclass
+class RaisingWriter(FakeWriter):
+    """Fake writer that raises or rejects the digest write."""
+
+    result: bool = True  # Configure the returned write result.
+    error: Exception | None = None  # Configure an exception to raise.
+
+    def write_digest(self, groups: list[Any]) -> bool:
+        """Raise the configured error or return the configured result."""
+        self.digest_calls += 1  # Count the attempt.
+        if self.error is not None:  # Simulate an exporter exception.
+            raise self.error  # Propagate it to the caller.
+        return self.result  # Simulate a rejected write.
+
+
+def test_zero_alarm_rows_return_no_output_without_write(monkeypatch: Any) -> None:
+    """Menu 280 reports no_output and skips the writer when no alarm exists."""
+    monkeypatch.delenv("ALERT_DIGEST_HOURS", raising=False)  # Use the default lookback.
+    writer = FakeWriter()  # Capture any write attempt.
+    outcome = operation(FakeClient(alarms=[]), writer).execute_digest()  # Run with zero rows.
+    assert outcome.state == "no_output"  # The empty result is explicit.
+    assert writer.digest_calls == 0  # The writer was never called, even with an empty list.
+
+
+def test_alarm_search_failure_returns_failed(monkeypatch: Any) -> None:
+    """A failed alarm search returns a failed outcome and writes nothing."""
+    monkeypatch.delenv("ALERT_DIGEST_HOURS", raising=False)  # Use the default lookback.
+    client = FakeClient(alarms=[alarm(1)])  # Provide a row that must not be written.
+    client.search_alarms = lambda hours: AlertDigestListResult([], 500, False, "HTTP 500")  # type: ignore[method-assign]
+    writer = FakeWriter()  # Capture any write attempt.
+    assert operation(client, writer).execute_digest().state == "failed"  # HTTP 5xx fails closed.
+    assert writer.digest_groups == []  # Nothing was written.
+
+
+def test_client_error_search_failure_returns_failed(monkeypatch: Any) -> None:
+    """An HTTP 4xx alarm search returns a failed outcome."""
+    monkeypatch.delenv("ALERT_DIGEST_HOURS", raising=False)  # Use the default lookback.
+    client = FakeClient(alarms=[alarm(1)])  # Provide a row that must not be written.
+    client.search_alarms = lambda hours: AlertDigestListResult([], 403, False, "HTTP 403")  # type: ignore[method-assign]
+    assert operation(client, FakeWriter()).execute_digest().state == "failed"  # HTTP 4xx fails closed.
+
+
+def test_invalid_lookback_returns_failed(monkeypatch: Any) -> None:
+    """An invalid lookback returns a failed outcome before any search."""
+    monkeypatch.setenv("ALERT_DIGEST_HOURS", "bad")  # Set an invalid override.
+    client = FakeClient(alarms=[alarm(1)])  # Provide a row that must not be read.
+    assert operation(client, FakeWriter()).execute_digest().state == "failed"  # Invalid input fails.
+    assert client.searched_hours == []  # No search ran.
+
+
+def test_rejected_write_returns_failed_without_success_message(monkeypatch: Any, capsys: Any) -> None:
+    """A writer that returns False yields a failed outcome and no success message."""
+    monkeypatch.delenv("ALERT_DIGEST_HOURS", raising=False)  # Use the default lookback.
+    writer = RaisingWriter(result=False)  # Reject the write.
+    outcome = operation(FakeClient(alarms=[alarm(1)]), writer).execute_digest()  # Run the digest.
+    assert outcome.state == "failed"  # Not completed.
+    assert outcome.message == "The alert digest could not write its output."  # Failure text is explicit.
+    assert writer.digest_calls == 1  # The writer was attempted once.
+    assert "wrote" not in capsys.readouterr().out  # No success line for a rejected write.
+
+
+def test_write_exception_still_propagates(monkeypatch: Any) -> None:
+    """The handler does not convert an export exception into an outcome."""
+    monkeypatch.delenv("ALERT_DIGEST_HOURS", raising=False)  # Use the default lookback.
+    writer = RaisingWriter(error=RuntimeError("export write failed"))  # Raise during write.
+    with pytest.raises(RuntimeError, match="export write failed"):  # Preserve existing exception handling.
+        operation(FakeClient(alarms=[alarm(1)]), writer).execute_digest()  # Run the digest path.
+
+
+def test_state_ignores_failure_wording_in_messages(monkeypatch: Any, caplog: Any) -> None:
+    """Failure words in logs or alarm text do not change a completed state."""
+    monkeypatch.delenv("ALERT_DIGEST_HOURS", raising=False)  # Use the default lookback.
+    rows = [alarm(1, type="failed to connect")]  # Put marker words in the alarm data.
+    with caplog.at_level("INFO"):  # Capture log text.
+        outcome = operation(FakeClient(alarms=rows), FakeWriter()).execute_digest()  # Run the digest.
+    assert outcome.state == "completed"  # Wording does not decide the state.
+
+
+def test_menu_handlers_return_outcomes(monkeypatch: Any) -> None:
+    """The class handlers return the outcome from the digest path."""
+    monkeypatch.delenv("ALERT_DIGEST_HOURS", raising=False)  # Use the default lookback.
+    expected = operation(FakeClient(alarms=[]), FakeWriter()).execute_digest()  # Build a no_output outcome.
+    monkeypatch.setattr(AlertDigestOperation, "execute_digest", lambda self: expected)  # Stub the workflow.
+    assert AlertDigestOperation.run_digest() is expected  # Menu 280 returns it unchanged.
+    assert AlertDigestOperation.run() is expected  # The default action forwards it.
 
 
 def test_wrong_confirmation_cancels_without_request(monkeypatch: Any, caplog: Any) -> None:

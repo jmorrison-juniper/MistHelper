@@ -15,6 +15,12 @@
     };
 
     const elements = {
+        refresh: document.getElementById("wan-refresh"),
+        refreshState: document.getElementById("wan-refresh-state"),
+        refreshPhase: document.getElementById("wan-refresh-phase"),
+        refreshPages: document.getElementById("wan-refresh-pages"),
+        refreshTime: document.getElementById("wan-refresh-time"),
+        refreshError: document.getElementById("wan-refresh-error"),
         status: document.getElementById("wan-status"),
         rows: document.getElementById("wan-gateway-rows"),
         siteFilter: document.getElementById("wan-site-filter"),
@@ -45,20 +51,72 @@
         return element;
     }
 
-    async function requestJson(url) {
-        const response = await fetch(url, { headers: { Accept: "application/json" } });
-        let payload;
+    async function requestJson(url, options = {}) {
+        const response = await fetch(url, {
+            ...options, // Preserve a queue method and its body.
+            headers: { Accept: "application/json", ...(options.headers || {}) }, // Keep JSON as the response contract.
+        }); // Send one portal request without adding Mist access.
+        let payload; // Hold the response before checking its status.
         try {
-            payload = await response.json();
+            payload = await response.json(); // Parse the route's response envelope.
         } catch {
-            throw new Error("The portal returned an invalid response.");
+            throw new Error("The portal returned an invalid response."); // Reject malformed status responses.
         }
         if (!response.ok) {
-            const error = new Error(payload.notice || `Request failed with status ${response.status}.`);
-            error.status = response.status;
-            throw error;
+            const error = new Error(payload.notice || `Request failed with status ${response.status}.`); // Use safe route text.
+            error.status = response.status; // Preserve the HTTP code for existing callers.
+            throw error; // Stop before rendering an invalid result.
         }
-        return payload;
+        return payload; // Give the caller the validated response envelope.
+    }
+
+    function displayTimestamp(value) {
+        if (!value) return "Unavailable"; // Missing timestamps must not appear current.
+        const parsed = new Date(value); // Parse the UTC timestamp for local display.
+        return Number.isNaN(parsed.getTime()) ? "Unavailable" : parsed.toLocaleString(); // Reject invalid date text.
+    }
+
+    async function loadRefreshStatus() {
+        try {
+            const result = await requestJson("/wan-dashboard/api/refresh-status"); // Read worker state without Mist.
+            const status = result.status || "unavailable"; // Use a safe state when the route omits one.
+            const pages = result.completed_pages || {}; // Keep page progress optional.
+            const pageSummary = Object.entries(pages)
+                .map(([phase, count]) => `${phase}: ${count}`)
+                .join(", "); // Keep one bounded display value for completed pages.
+            elements.refreshState.textContent = result.queued_follow_up && status === "running"
+                ? "Running, one follow-up queued"
+                : status; // Distinguish an active run with pending follow-up work.
+            elements.refreshPhase.textContent = result.current_phase || "Idle"; // Show the current bulk read.
+            elements.refreshPages.textContent = pageSummary || "None"; // Show only validated page counts.
+            elements.refreshTime.textContent = displayTimestamp(result.last_complete_at); // Show the latest full snapshot.
+            elements.refreshError.textContent = result.safe_error
+                ? `Refresh failed (${result.safe_error}). The last complete snapshot remains stale.`
+                : result.notice || ""; // Keep errors bounded to the worker status contract.
+        } catch {
+            elements.refreshState.textContent = "Unavailable"; // Do not imply a status read succeeded.
+            elements.refreshPhase.textContent = "Unavailable"; // Do not infer an active phase.
+            elements.refreshPages.textContent = "Unavailable"; // Do not infer page progress.
+            elements.refreshTime.textContent = "Unavailable"; // Do not infer snapshot age.
+            elements.refreshError.textContent = "Refresh status is unavailable."; // Show a safe status-read error.
+        }
+    }
+
+    async function queueRefresh() {
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || ""; // Reuse portal CSRF state.
+        elements.refresh.disabled = true; // Prevent duplicate browser requests during the response.
+        try {
+            await requestJson("/wan-dashboard/api/refresh", {
+                method: "POST", // Queue work through the existing worker.
+                headers: { "Content-Type": "application/json", "X-CSRFToken": csrfToken }, // Protect the action.
+                body: "{}", // Keep the request free of caller-selected scope.
+            }); // The route never collects Mist data.
+            await loadRefreshStatus(); // Show the accepted queue state.
+        } catch (error) {
+            elements.refreshError.textContent = error.message; // Show the route's safe queue error.
+        } finally {
+            elements.refresh.disabled = false; // Allow another request after the worker reply.
+        }
     }
 
     function setStatus(message, status = "ok") {
@@ -167,6 +225,9 @@
         setStatus("Loading gateway data.");
         try {
             const result = await requestJson("/wan-dashboard/api/overview");
+            if (result.data_source !== undefined && result.data_source !== "live") { // Reject any explicit non-live source marker.
+                throw new Error("Synthetic data cannot appear as live dashboard data."); // Keep synthetic rows out of live views.
+            }
             state.gateways = Array.isArray(result.data) ? result.data : [];
             populateSites();
             renderGateways();
@@ -596,6 +657,7 @@
         if (button?.dataset.action === "insights") showInsights(button);
         if (button?.dataset.action === "peers") showPeerPaths(button);
     });
+    elements.refresh.addEventListener("click", queueRefresh); // Send Refresh requests to the worker queue.
     elements.siteFilter.addEventListener("change", () => {
         renderGateways();
         updateExportLink();
@@ -606,7 +668,6 @@
     });
     elements.trafficRange.addEventListener("change", loadTraffic);
     elements.insightRange.addEventListener("change", loadInsights);
-    document.getElementById("wan-refresh").addEventListener("click", loadOverview);
     document.getElementById("wan-modal-close").addEventListener("click", () => {
         elements.chartModal.hidden = true;
     });
@@ -625,4 +686,6 @@
     });
 
     loadOverview();
+    loadRefreshStatus(); // Render worker state after page load.
+    window.setInterval(loadRefreshStatus, 5000); // Keep progress visible during long collections.
 })();

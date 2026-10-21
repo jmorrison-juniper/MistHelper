@@ -10,8 +10,60 @@ from typing import Any  # Type the shared Flask client fixture.
 
 import pytest  # Use the typed monkeypatch fixture.
 
+from src.foundation.models.operation_outcome import OperationOutcome  # Exercise the explicit handler result path.
 from web_portal.services.event_bus import PortalEventBus  # Exercise the real completion event path.
 from web_portal.services.operation import OperationExecutor  # Execute the mocked operation through production logic.
+
+
+def _empty_result_handler() -> OperationOutcome:
+    """Return an explicit empty result with log wording outside the legacy markers."""
+    logging.getLogger("test.issue_3168").info(
+        "The handler found no current alarms for this report."
+    )  # WHY: avoid marker prose.
+    return OperationOutcome("no_output", "The report found no current alarms.")  # WHY: provide the stable result value.
+
+
+def _build_outcome_executor(client: Any, monkeypatch: pytest.MonkeyPatch) -> tuple[OperationExecutor, PortalEventBus]:
+    """Build the portal executor with one handler that returns an explicit result."""
+    from web_portal.menu_registry import build_static_menu_actions  # Reuse the registered safe menu metadata.
+
+    menu_actions = build_static_menu_actions()  # Keep the production menu setup.
+    menu_actions["93"] = replace(menu_actions["93"], handler=_empty_result_handler)  # Mock only the API handler.
+    event_bus = PortalEventBus()  # Keep completion events on the production path.
+    executor = OperationExecutor(menu_actions, None, None, event_bus)  # Use the real portal executor.
+    monkeypatch.setitem(
+        client.application.config, "OPERATION_EXECUTOR", executor
+    )  # Route Flask requests to the executor.
+    monkeypatch.setitem(client.application.config, "EVENT_BUS", event_bus)  # Share events with the same bus.
+    return executor, event_bus  # Return both resources for test assertions and cleanup.
+
+
+def _read_csrf_token(client: Any) -> str:
+    """Read the CSRF token from the real operations page."""
+    page = client.get("/operations")  # Render the real page before the protected request.
+    token_match = re.search(
+        r'<meta name="csrf-token" content="([^"]+)">', page.get_data(as_text=True)
+    )  # WHY: read the token from the real page markup.
+    if token_match is None:  # Stop if the page does not provide its request token.
+        raise AssertionError("The operations page did not return a CSRF token.")  # Identify the setup failure.
+    return token_match.group(1)  # Use the token returned by the page.
+
+
+def _start_test_operation(client: Any, csrf_token: str) -> str:
+    """Start menu 93 through the protected Flask route."""
+    response = client.post(
+        "/api/operations/run",
+        json={"menu_number": "93", "parameters": {}},
+        headers={"X-CSRFToken": csrf_token},
+    )  # Start the operation through the production route.
+    assert response.status_code == 202  # Require the portal to accept the mocked run.
+    response_data = response.get_json()  # Read the JSON response from the production route.
+    if not isinstance(response_data, dict):  # Reject a response with the wrong shape.
+        raise AssertionError("The run route did not return a JSON object.")  # Name the blocked test setup.
+    run_id = response_data.get("run_id")  # Read the identifier from the route response.
+    if not isinstance(run_id, str):  # Reject a missing or invalid run identifier.
+        raise AssertionError("The run route did not return a string run identifier.")  # Name the blocked test setup.
+    return run_id  # Return the run identity created by Flask.
 
 
 def test_menu_93_database_warning_keeps_inventory_in_completed_result(
@@ -64,5 +116,28 @@ def test_menu_93_database_warning_keeps_inventory_in_completed_result(
         assert result["output_files"] == ["SiteInventory.csv"]  # Keep the inventory visible in the result.
         assert (tmp_path / "SiteInventory.csv").is_file()  # Confirm the listed output exists in the test data root.
     finally:  # Release the worker and event bus after the route assertions.
+        executor.shutdown(10)  # Drain the operation worker and remove its process-wide capture hooks.
+        event_bus.stop()  # Clear event subscribers and release the test bus.
+
+
+def test_explicit_empty_result_controls_flask_run_status(
+    client: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:  # Exercise the returned outcome through the no-browser web route.
+    """A typed empty result must control the status response despite unrelated log wording."""
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))  # Keep scanner state inside the test directory.
+    executor, event_bus = _build_outcome_executor(client, monkeypatch)  # Use the real portal route and executor.
+    try:  # Keep executor cleanup active for every assertion path.
+        csrf_token = _read_csrf_token(client)  # Read the form token required by the protected route.
+        run_id = _start_test_operation(client, csrf_token)  # Start the safe mocked handler.
+        executor._runs[run_id]["_future"].result(timeout=10)  # Wait for terminal classification to finish.
+        response = client.get(f"/api/operations/status/{run_id}")  # Read the result through the real status route.
+        result = response.get_json()  # Decode the status payload used by the browser.
+        assert response.status_code == 200  # Require a valid status response.
+        assert result["status"] == "completed"  # Require the handler outcome to control the terminal state.
+        assert result["completion_message"] == (  # Keep the exact explicit reason visible to the operator.
+            "Operation completed with no output file: The report found no current alarms."
+        )
+        assert result["output_files"] == []  # Confirm the no-output response has no discovered file.
+    finally:  # Release the executor and event bus after the route assertions.
         executor.shutdown(10)  # Drain the operation worker and remove its process-wide capture hooks.
         event_bus.stop()  # Clear event subscribers and release the test bus.
