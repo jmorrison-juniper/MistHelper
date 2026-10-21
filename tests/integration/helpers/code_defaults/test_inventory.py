@@ -10,6 +10,21 @@ import pytest
 from src.foundation.support.code_defaults.__main__ import main
 from src.foundation.support.code_defaults.inventory import InventoryScanner
 
+_EMPTY_DEFAULT_SOURCE = (
+    "import os\n"
+    "def choose(mapping, client):\n"
+    "    mapping.get('first', '')\n"
+    "    mapping.pop('second', [])\n"
+    "    os.getenv('THIRD', '')\n"
+    "    getattr(client, 'fourth', {})\n"
+    "    mapping.get('safe', [1])\n"
+    "    def nested(value=(), *, extra=set()):\n"
+    "        return value\n"
+    "    def positional_only(value=(), /):\n"
+    "        return value\n"
+    "    return nested\n"
+)
+
 
 def _repository(tmp_path: Path, source: str) -> Path:
     """Create a local tracked repository with one Python source file."""
@@ -24,30 +39,22 @@ def _repository(tmp_path: Path, source: str) -> Path:
     return root
 
 
-def test_discovers_five_empty_shapes_and_ignores_untracked_and_tests(tmp_path: Path) -> None:
-    """Find only tracked non-test Python inputs with empty defaults."""
-    source = (
-        "import os\n"
-        "def choose(mapping, client):\n"
-        "    mapping.get('first', '')\n"
-        "    mapping.pop('second', [])\n"
-        "    os.getenv('THIRD', '')\n"
-        "    getattr(client, 'fourth', {})\n"
-        "    mapping.get('safe', [1])\n"
-        "    def nested(value=(), *, extra=set()):\n"
-        "        return value\n"
-        "    def positional_only(value=(), /):\n"
-        "        return value\n"
-        "    return nested\n"
-    )
-    root = _repository(tmp_path, source)
+@pytest.fixture
+def empty_defaults_repository(tmp_path: Path) -> Path:
+    """Create all discovery inputs before assertions inspect the inventory."""
+    root = _repository(tmp_path, _EMPTY_DEFAULT_SOURCE)
     (root / "untracked.py").write_text("value.get('ignored', '')\n", encoding="utf-8")
     (root / "tests").mkdir()
     (root / "tests" / "test_hidden.py").write_text("value.get('ignored', '')\n", encoding="utf-8")
     (root / "example_test.py").write_text("value.get('ignored', '')\n", encoding="utf-8")
     subprocess.run(["git", "-C", str(root), "add", "tests/test_hidden.py", "example_test.py"], check=True)
     subprocess.run(["git", "-C", str(root), "commit", "-m", "add tracked test files"], check=True, capture_output=True)
+    return root
 
+
+def test_discovers_five_empty_shapes_and_ignores_untracked_and_tests(empty_defaults_repository: Path) -> None:
+    """Find only tracked non-test Python inputs with empty defaults."""
+    root = empty_defaults_repository
     result = InventoryScanner(root).scan()
 
     assert result.discovered_files == 1

@@ -240,8 +240,9 @@ def test_org_create_failure_preserves_earlier_result_and_adds_no_mapping() -> No
     assert manager._remap_table == {}
 
 
-def test_missing_address_is_reported_as_a_comparison_conflict() -> None:
-    """Carry a missing primary address through comparison into the conflict report."""
+@pytest.fixture
+def address_comparator() -> InventoryCSVComparator:
+    """Prepare a comparison against a complete reference address."""
     comparator = InventoryCSVComparator.__new__(InventoryCSVComparator)
     comparator._address_utils = AddressUtils
     comparator.address_threshold = 70.0
@@ -256,6 +257,12 @@ def test_missing_address_is_reported_as_a_comparison_conflict() -> None:
     }
     comparator.counters = SimpleNamespace(mismatches_found=0, perfect_matches=0)
     comparator.all_conflicts = []
+    return comparator
+
+
+def test_missing_address_is_reported_as_a_comparison_conflict(address_comparator: InventoryCSVComparator) -> None:
+    """Carry a missing primary address through comparison into the conflict report."""
+    comparator = address_comparator
     device = {
         "street": "",
         "city": "Springfield",

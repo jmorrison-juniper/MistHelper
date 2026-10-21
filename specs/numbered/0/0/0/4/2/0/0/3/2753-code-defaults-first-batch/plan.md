@@ -11,7 +11,8 @@ Deliver a committed candidate scanner and a baseline guard with observable failu
 Reconcile the historical 59 candidates before accepting a current baseline.
 Preserve the organization-migration repair from #4310.
 
-This document authorizes no implementation or live operation.
+The approved bounded implementation is complete. Validation results are recorded in [design/quickstart.md](design/quickstart.md).
+The branch remains unpublished. No live operation is authorized.
 The larger inventory, sibling scopes, and #2862 ownership remain excluded.
 
 ## Technical Context
@@ -38,12 +39,12 @@ They are review targets, not accepted current baseline values.
 
 ## Constitution Check
 
-*Before research and after design: the bounded design passes the applicable checks below. Implementation gates remain unexecuted.*
+*The bounded design passed review. Implementation gates ran as recorded in [design/quickstart.md](design/quickstart.md).*
 
 | Check | Decision and evidence |
 | --- | --- |
 | Managed process records | Use the existing numeric route. Feature root has four planned children, including `design/`. That directory has five. |
-| New package capacity | Add `code_defaults/` under `src/foundation/support/`, which currently has three children. Add tests under `tests/integration/helpers/`, which has one. |
+| New package capacity | Added `code_defaults/` under `src/foundation/support/` and `tests/integration/helpers/`. Both parents remain within five children. |
 | Existing structural debt | Edit existing modules only. Do not add children to their overfull parents or add module-level helpers to overfull modules. |
 | Functions and classes | New code uses typed classes, at most five parameters and logical blocks, and functions no longer than 25 lines. |
 | Safety | Use controlled responses. Preserve typed migration confirmations, backup verification, and the existing failed-row contract. |
@@ -52,7 +53,7 @@ They are review targets, not accepted current baseline values.
 | Cloud transport | No new transport or endpoint. Existing SDK calls remain unchanged. Verification replaces external calls. |
 | Output locations | Runtime product outputs remain under `data/`. Tests use `tmp_path`. Audit output goes to standard output, not a new product store. |
 | Tests and gates | Use [design/quickstart.md](design/quickstart.md). Prove that the guard fails. Do not modify quality baselines to conceal findings. |
-| Git lifecycle | A later implementation requires a Conventional Commit and applicable repository review rules. This planning task creates no commit or pull request. |
+| Git lifecycle | Implementation uses local Conventional Commits. No push, pull request, issue closure, or deployment is authorized. |
 
 ### Existing Debt and Incremental Action
 

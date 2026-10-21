@@ -134,11 +134,9 @@ def test_empty_inventory_passes_with_zero_accepted_candidates() -> None:
     assert result.accepted_total == 0
 
 
-def test_cli_guard_rejects_an_unsafe_default_in_a_tracked_repository(
-    tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    """Scan all five tracked files and report a new unsafe identity."""
+@pytest.fixture
+def unsafe_guard_repository(tmp_path: Path) -> Path:
+    """Prepare all five tracked files with one unsafe candidate."""
     root = tmp_path / "repository"
     root.mkdir()
     subprocess.run(["git", "init", str(root)], check=True, capture_output=True)
@@ -151,10 +149,19 @@ def test_cli_guard_rejects_an_unsafe_default_in_a_tracked_repository(
         source.write_text(content, encoding="utf-8")
     subprocess.run(["git", "-C", str(root), "add", *_SCOPE], check=True)
     subprocess.run(["git", "-C", str(root), "commit", "-m", "create guard fixture"], check=True, capture_output=True)
+    return root
+
+
+def test_cli_guard_rejects_an_unsafe_default_in_a_tracked_repository(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    unsafe_guard_repository: Path,
+) -> None:
+    """Scan all five tracked files and report a new unsafe identity."""
     baseline_path = tmp_path / "baseline.json"
     baseline_path.write_text(json.dumps(_baseline(["old"])), encoding="utf-8")
 
-    status = main(["guard", "--root", str(root), "--baseline", str(baseline_path)])
+    status = main(["guard", "--root", str(unsafe_guard_repository), "--baseline", str(baseline_path)])
     output = json.loads(capsys.readouterr().out)
 
     assert status == 1

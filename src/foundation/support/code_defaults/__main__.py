@@ -4,6 +4,7 @@ import argparse
 import json
 import logging
 import sys
+from collections import Counter
 from pathlib import Path
 
 from src.foundation.support.code_defaults.inventory import Candidate, InventoryScanner
@@ -64,20 +65,9 @@ def _run_scan(root: Path) -> int:
     inventory = InventoryScanner(root).scan()
     policy = GuardPolicy()
     records = [_candidate_record(candidate, policy) for candidate in inventory.candidates]
-    counts: dict[str, int] = {}
-    severity_counts: dict[str, int] = {}
-    for record in records:
-        category = str(record["classification"])
-        counts[category] = counts.get(category, 0) + 1
-        if category == "high":
-            severity = "high"
-        elif category == "outside_batch":
-            severity = "outside_batch"
-        elif category == "unclassified":
-            severity = "unresolved"
-        else:
-            severity = "non_high"
-        severity_counts[severity] = severity_counts.get(severity, 0) + 1
+    counts = Counter(str(record["classification"]) for record in records)
+    severity_names = {"high": "high", "outside_batch": "outside_batch", "unclassified": "unresolved"}
+    severity_counts = Counter(severity_names.get(str(record["classification"]), "non_high") for record in records)
     invalid = bool(inventory.parse_failures) or "unclassified" in counts or not inventory.parsed_files
     document = {
         "revision": inventory.revision,
