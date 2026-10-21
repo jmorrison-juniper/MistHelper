@@ -519,7 +519,9 @@ class TestCreateWithoutIdentifier:
         results: list[dict[str, Any]] = []
         reason = "Create response has no object id, so cross-references cannot be remapped"
         with patch.object(ocm.mistapi.api.v1.orgs.networks, "createOrgNetwork", return_value=response) as create:
-            manager._create_and_record(manager.CONFIG_TYPES[0], {"name": "Corp-LAN"}, "Corp-LAN", "src-1", results)
+            OrgConfigMigrationManager._create_and_record(
+                manager, manager.CONFIG_TYPES[0], {"name": "Corp-LAN"}, "Corp-LAN", "src-1", results
+            )
         assert results == [{"type": "networks", "name": "Corp-LAN", "status": "failed", "reason": reason}]
         assert manager._remap_table == {}
         assert ("root", 40, f"Failed to create networks 'Corp-LAN': {reason}") in caplog.record_tuples
