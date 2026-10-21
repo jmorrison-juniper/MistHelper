@@ -82,7 +82,8 @@ def test_export_data_returns_early_when_no_site_selected() -> None:
 
     exporter._export_data(api_call=_ApiCallWithLimit(), data_type="test data")
 
-    exporter_mock.assert_not_called()
+    assert exporter.mistapi.get_all.mock_calls == []
+    assert exporter_mock.mock_calls == []
 
 
 def test_export_data_sorts_and_writes_output() -> None:
