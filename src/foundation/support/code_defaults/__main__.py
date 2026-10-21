@@ -4,7 +4,6 @@ import argparse
 import json
 import logging
 import sys
-from collections import Counter
 from pathlib import Path
 
 from src.foundation.support.code_defaults.inventory import Candidate, InventoryScanner
@@ -62,6 +61,8 @@ def _candidate_record(candidate: Candidate, policy: GuardPolicy) -> dict[str, ob
 
 def _run_scan(root: Path) -> int:
     """Print a deterministic repository-wide inventory."""
+    from collections import Counter
+
     inventory = InventoryScanner(root).scan()
     policy = GuardPolicy()
     records = [_candidate_record(candidate, policy) for candidate in inventory.candidates]
