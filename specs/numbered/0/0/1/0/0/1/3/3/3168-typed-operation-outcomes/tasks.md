@@ -89,3 +89,19 @@ T018 precedes T019. T022 depends on all earlier tasks.
 - [x] T028 [US1] Record validation and the unchanged portal boundary in `analysis.md`.
 
 T024 precedes T025. T028 depends on all earlier tasks.
+
+## Phase 9: Current-Main Handler Inventory
+
+**Goal**: Record the current named-handler inventory and identify eligible
+value-return producers without changing lambda registrations or portal logic.
+**Independent test**: Parse the current menu registry and verify handler counts
+and return contracts against the source and current tests.
+
+- [x] T029 Refresh the named-handler counts, callers, and value-return table in `design/research.md`.
+- [x] T030 Update the serial migration order in `plan.md` and preserve the menu 92 input-helper boundary.
+- [x] T031 Record inventory evidence and validation in `analysis.md`.
+
+The inventory found no un-migrated value-return operation handler. The next
+producer migration must select a named operation family whose handlers return
+`None`. This inventory phase is complete. Issue #3168 remains open for later
+producer migration, lambda conversion, and portal replacement.

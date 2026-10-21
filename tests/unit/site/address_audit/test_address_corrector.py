@@ -5,9 +5,12 @@ filter, the per-site review/confirm loop, the fetch-modify-PUT update, and the
 fail-soft behavior on permission/API errors.
 """
 
+import logging
 from dataclasses import replace
 from pathlib import Path
 from unittest.mock import MagicMock, Mock
+
+import pytest
 
 from src.mist.resources.site.address_audit import address_corrector as corr_mod
 from src.mist.resources.site.address_audit.address_corrector import AddressCorrector
@@ -127,6 +130,28 @@ class TestUpdateSiteAddress:
         monkeypatch.setattr(corr_mod.mistapi.api.v1.sites, "sites", sites)
         assert AddressCorrector(MagicMock())._update_site_address("s1", "NEW") is False
         sites.updateSiteInfo.assert_not_called()
+
+    def test_http_503_push_is_failed_outcome(
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """An HTTP 503 update produces a failed outcome without a success message."""
+        record = {"id": "s1", "address": "OLD", "latlng": {"lat": 1, "lng": 2}, "timezone": "X"}
+        sites = MagicMock()
+        sites.getSiteInfo.return_value = MagicMock(data=record.copy())
+        sites.updateSiteInfo.return_value = MagicMock(status_code=503)
+        monkeypatch.setattr(corr_mod.mistapi.api.v1.sites, "sites", sites)
+        api = MagicMock()
+        with caplog.at_level(logging.INFO, logger=corr_mod.__name__):
+            outcome = AddressCorrector(api)._push("Store 181", "s1", "OLD", "NEW")
+        assert outcome.action == "failed"
+        assert outcome.error == "update rejected"
+        assert (outcome.site_name, outcome.site_id, outcome.before, outcome.after) == ("Store 181", "s1", "OLD", "NEW")
+        assert [entry for entry in caplog.record_tuples if entry[1] == logging.WARNING] == [
+            (corr_mod.__name__, logging.WARNING, "  FAILED: Mist rejected the update (check token permissions).")
+        ]
+        assert not any("PUSHED" in message for message in caplog.messages)
+        sites.getSiteInfo.assert_called_once_with(api, "s1")
+        sites.updateSiteInfo.assert_called_once_with(api, "s1", record | {"address": "NEW"})
 
 
 class TestReviewAndApply:

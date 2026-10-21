@@ -1,6 +1,6 @@
 # Data Model: MistCircuitStats Redis Dashboard Migration
 
-**Status**: Planning model for the existing #4252 dashboard and cache.
+**Status**: Model for the existing #4252 dashboard, cache, and fail-closed worker.
 
 ## Entities
 
@@ -61,39 +61,38 @@ The worker reads port records through the existing organization-wide paginated `
 | `record_type` | Existing cache type | Use the current dashboard cache contract. |
 | `record_id` | Mist natural identifier or stable tuple | Use the source identifier. Do not generate a random identifier. |
 | `state` | Enumerated text | Use the existing state contract for current, stale, unavailable, or synthetic data. Never publish a partial snapshot. |
+| `data_source` | Enumerated text | New worker snapshots use `live`. A synthetic example is not a cache snapshot. |
 | `collected_at` | UTC timestamp | Required for live data. |
 | `expires_at` | UTC timestamp | Preserve the existing 300-, 600-, or 86,400-second TTL by record type. |
 | `records` | List of observations | Validate shape and ownership before publication. |
 
-The cache uses `wan-dashboard:v1:`. Do not add the historical `misthelper:wan:mcsr:v1:` candidate prefix. The worker may retain a complete process-local memory snapshot for Redis outage reads. It must mark that snapshot stale and enforce the 86,400-second maximum age. Do not add local file storage.
+The worker publishes one schema-versioned envelope at `wan-dashboard:v1:overview:<org_id>:last-success`. The envelope holds the complete overview and its UTC collection time. The worker uses one atomic Redis operation to update the snapshot and matching status. Do not add the historical `misthelper:wan:mcsr:v1:` candidate prefix. The worker may retain a complete process-local memory snapshot for Redis outage reads. It must mark that snapshot stale and enforce the 86,400-second maximum age. Do not add local file storage.
 
 ### Refresh Request
 
 | Field | Type | Rule |
 |---|---|---|
 | `org_id` | Mist organization identifier | Required. Use the active organization. |
-| `requested_at` | UTC timestamp | Required. Set when the route queues the request. |
-| `requested_by` | Existing authenticated operator identity | Use the current session identity when available. Do not add a new identity store. |
-| `state` | Enumerated text | `disabled`, `queued`, `running`, `complete`, `failed`, or `skipped`. |
-| `coalesced_request_count` | Non-negative integer | Count requests merged into the single queued follow-up. |
-| `worker_id` | Worker identity | Required when a worker claims the request. Do not expose secrets. |
+| `queued` | Boolean | One Redis queue key represents at most one pending follow-up. |
+| `requested_at` | UTC timestamp or missing | Set when the queue accepts a new request. Coalesced requests do not add entries. |
 
-The Refresh control queues work for the single worker. The route does not make a Mist request or write a snapshot.
+The Refresh control queues work for the single worker. The route does not make a Mist request or write a snapshot. The queue key has a bounded expiry and uses the existing cache namespace.
 
-### Refresh Result
+### Worker Status
 
 | Field | Type | Rule |
 |---|---|---|
-| `org_id` | Mist organization identifier | Required. |
-| `started_at` | UTC timestamp | Required when a worker claims the request. |
-| `finished_at` | UTC timestamp or missing | Missing if work stops before completion. |
-| `state` | Enumerated text | `complete`, `failed`, or `skipped`. |
-| `reason` | Safe text or code | Required for a non-complete state. Do not include credentials or raw responses. |
-| `request_count` | Non-negative integer | Count requests admitted through the shared Mist request path. |
+| `status` | Enumerated text | `disabled`, `unavailable`, `queued`, `running`, `complete`, `stale`, or `failed`. |
 | `current_phase` | Bulk-read name or missing | Show the active approved read without raw response data. |
 | `completed_pages` | Map of bulk-read name to non-negative integer | Count validated pages completed for each approved read. |
+| `requested_at` | UTC timestamp or missing | Show the most recent queue request accepted by this process. |
+| `started_at` | UTC timestamp or missing | Show the most recent worker start time. |
+| `finished_at` | UTC timestamp or missing | Show the most recent successful or failed run time. |
 | `last_complete_at` | UTC timestamp or missing | Time of the last complete snapshot. |
-| `published_snapshot_ids` | List of natural key references | Empty when no complete snapshot was published. |
+| `next_scheduled_at` | UTC timestamp or missing | Set from the unapproved interval only when the worker is enabled. |
+| `safe_error` | Safe code or missing | Use a bounded status code. Never include credentials or raw responses. |
+| `stale` | Boolean | True during failure or Redis outage. |
+| `queued_follow_up` | Boolean | True when one follow-up is pending. |
 
 ## Relationships
 
@@ -119,4 +118,5 @@ The Refresh control queues work for the single worker. The route does not make a
 11. Enforce 86,400 seconds as the maximum age, including for process-local memory.
 12. Preserve the existing cache namespace and TTLs.
 13. Keep per-port Insights parity out of this model. Issue #4330 tracks that work.
-14. Keep the refresh interval and renewable worker lease duration unset until the production-scale load test.
+14. Keep `WAN_DASHBOARD_LOAD_TEST_APPROVED` false, and leave the refresh interval and renewable worker lease unset until the production-scale load test.
+15. Run the production-scale load test during a scheduled maintenance window. Keep collection disabled before that test.

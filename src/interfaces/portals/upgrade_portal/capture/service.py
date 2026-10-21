@@ -545,11 +545,12 @@ class CaptureService:
 
                 return capture  # WHY: return capture on success
 
-            except TimeoutError:  # WHY: catch timeout errors
+            except TimeoutError as error:  # Keep the cause before a later attempt returns a different result.
                 # WHY: compute backoff or signal exhaustion
                 backoff = self._timeout_backoff(  # WHY: delegate timeout handling
                     attempt=attempt,  # WHY: current attempt
                     device_id=device_id,  # WHY: device context
+                    error=error,  # Preserve the failed attempt in the existing operator warning.
                 )  # WHY: backoff result
 
                 # WHY: increment retry counter
@@ -661,21 +662,29 @@ class CaptureService:
         self,
         attempt: int,  # WHY: current attempt index
         device_id: str,  # WHY: device context
+        error: TimeoutError,  # Preserve the timeout cause before the next attempt.
     ) -> float | None:  # WHY: backoff seconds or None when exhausted
         """Compute the backoff delay for a timed-out fetch attempt.
 
         Args:
             attempt: Zero-based attempt index that just failed.
             device_id: Device ID for log context.
+            error: Timeout that caused this retry decision.
 
         Returns:
             Backoff seconds to sleep, or None when retries are exhausted.
         """
+        from src.interfaces.portals.upgrade_portal.audit.masker import (
+            SecretMasker,
+        )  # Load failure redaction only at the diagnostic boundary.
+
         # WHY: log timeout
         logger.warning(
             "device_fetch_timeout",  # WHY: event type
             device_id=device_id,  # WHY: device context
             attempt=attempt + 1,  # WHY: attempt number
+            exception_type=type(error).__name__,  # Identify the original failure even after recovery.
+            error=SecretMasker().mask_dict({"error": str(error)})["error"],  # Exclude credentials from diagnostics.
         )  # WHY: timeout event
 
         # WHY: check if retries remain

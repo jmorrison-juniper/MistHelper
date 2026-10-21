@@ -2,13 +2,15 @@
 
 from __future__ import annotations  # WHY: keep annotations cheap and consistent with project style.
 
+import logging  # WHY: inspect fallback telemetry and capture handler prose.
 from pathlib import Path  # WHY: create unrelated output inside the scanner root.
 from types import SimpleNamespace  # WHY: model a non-raising Mist API response with a real status integer.
-from typing import NamedTuple  # WHY: carry the classifier answer in a typed record, not three loose booleans.
+from typing import Any, Literal, NamedTuple  # WHY: type test records and every valid result state.
 from unittest.mock import MagicMock, patch  # WHY: isolate the prompt, Mist call, and output root.
 
 import pytest  # WHY: exercise both HTTP error status families without duplicate setup.
 
+from src.foundation.models.operation_outcome import OperationOutcome  # WHY: use the existing typed handler contract.
 from src.foundation.support.refactors import (
     device_data_fetcher as fetcher_module,
 )  # WHY: patch the real fetcher's dependency resolver.
@@ -25,6 +27,9 @@ from src.interfaces.visualization.ui import (
 from src.interfaces.visualization.ui.interactive_display_utils import (
     InteractiveDisplayUtils,
 )  # WHY: Menu 95 uses this real handler.
+from src.mist.intelligence.reports.alert_digest.operation import (
+    AlertDigestOperation,
+)  # WHY: menu 280 already returns typed operation outcomes.
 from web_portal.services import operation as operation_module  # WHY: replace only the scanner root in the executor.
 from web_portal.services.operation import PARAMETER_REGISTRY, OperationExecutor  # WHY: test the portal run contract.
 from web_portal.services.output_scan import OutputFileScanner  # WHY: retain the real output scanner behavior.
@@ -42,6 +47,24 @@ REQUIRED_CONTROL_NAMES = {  # WHY: each site or identifier row must offer these 
 NO_DATA_LINE = "! No data found for this operation"  # WHY: the honest empty-result line that a handler logs.
 NO_DATA_COMPLETION = f"Operation completed with no output file: {NO_DATA_LINE}"  # WHY: the exact operator message.
 MISSING_ORG_LINE = "No org_id available. Exiting."  # WHY: the tracked issue #3168 message that reported Complete.
+LEGACY_EMPTY_RESULT_MESSAGES = {  # WHY: bind each fallback marker to real handler wording.
+    "not found": (  # WHY: this lookup result uses the first legacy marker.
+        "src/mist/intelligence/reports/e911_bssid.py",
+        "Map ID not found",
+    ),
+    "returned no data": (  # WHY: this beacon export uses the second legacy marker.
+        "src/operations/exporting/export/site_client_exporter.py",
+        "getSiteBeacon returned no data for site_id=%s beacon_id=%s",
+    ),
+    "skipping": (  # WHY: this API fetch path uses the third legacy marker.
+        "src/mist/access/api/api_data_fetcher.py",
+        "No data returned from API for %s. Skipping.",
+    ),
+    "0 ": (  # WHY: this template export uses the fourth legacy marker.
+        "src/operations/exporting/export/org_template_exporter.py",
+        "0 AP templates exported to OrgApTemplates.csv",
+    ),
+}
 EXPECTED_COMPLETION_GUARD_SCOPE = 8  # WHY: measured count of the issue #3144 completion rows on 2026-10-06.
 EXPECTED_PARAMETER_GUARD_SCOPE = 7  # WHY: measured count of the issue #3320 control rows on 2026-10-06.
 
@@ -69,9 +92,9 @@ class _EventBus:
     """Collect published events without starting a browser or SSE stream."""
 
     def __init__(self) -> None:
-        self.events: list[tuple[str, dict]] = []  # WHY: preserve event type and payload for assertions.
+        self.events: list[tuple[str, dict[str, Any]]] = []  # WHY: preserve event type and payload for assertions.
 
-    def publish(self, event_type: str, data: dict) -> None:
+    def publish(self, event_type: str, data: dict[str, Any]) -> None:
         self.events.append((event_type, data))  # WHY: record the exact event the executor would stream.
 
 
@@ -101,6 +124,21 @@ def _build_menu_95_executor() -> OperationExecutor:
             category="interactive_safe",  # WHY: match the registered operation category.
             destructive=False,  # WHY: the operation reads synthetic test results.
             supports_fast=False,  # WHY: this single-device path has no fast-mode contract.
+        )
+    }
+    return OperationExecutor(menu_actions, None, None, _EventBus())  # WHY: capture terminal events without a server.
+
+
+def _build_alert_digest_executor() -> OperationExecutor:
+    """Build an executor that runs the migrated menu 280 handler."""
+    menu_actions = {  # WHY: one production handler proves the typed result path.
+        "280": MenuEntry(  # WHY: match the production menu row shape.
+            menu_id="280",  # WHY: retain the affected menu number in the run.
+            handler=AlertDigestOperation.run_digest,  # WHY: menu 280 already returns OperationOutcome.
+            title="Export the alert digest handover report",  # WHY: use the production operator label.
+            category="safe",  # WHY: the alert digest only reads and exports data.
+            destructive=False,  # WHY: this test must not exercise a Mist mutation.
+            supports_fast=False,  # WHY: fast-mode metadata is irrelevant here.
         )
     }
     return OperationExecutor(menu_actions, None, None, _EventBus())  # WHY: capture terminal events without a server.
@@ -230,7 +268,7 @@ def _write_unrelated_output(root: Path, name: str) -> str:
     return ""  # WHY: the real prompt seam reports that no site was resolved.
 
 
-def _run_messages(run: dict) -> list[str]:
+def _run_messages(run: dict[str, Any]) -> list[str]:
     """Return captured operator messages from one portal run."""
     return [str(entry.get("message", "")) for entry in run["log_messages"]]  # WHY: inspect the captured text.
 
@@ -266,5 +304,121 @@ def test_empty_result_line_still_classifies_as_no_output() -> None:
         result = _classify(executor, NO_DATA_LINE)  # WHY: read the typed answer for an honest empty result.
         assert result.no_output is True, f"{NO_DATA_LINE!r} classified as {result!r}."  # WHY: keep the empty result.
         assert result.missing_input is False, f"{NO_DATA_LINE!r} classified as {result!r}."  # WHY: no wider marker.
+    finally:
+        executor.shutdown(0)  # WHY: release the executor thread pool created for the test.
+
+
+def test_legacy_markers_match_current_handler_wording() -> None:
+    """Keep each legacy empty-result marker tied to current handler wording."""
+    markers = set(operation_module.NO_OUTPUT_REASON_MARKERS)  # WHY: compare each current fallback phrase.
+    assert set(LEGACY_EMPTY_RESULT_MESSAGES) == markers  # WHY: cover every marker with a handler example.
+    executor = _build_executor()  # WHY: apply the production classifier to each known message.
+    try:
+        for marker, (source_name, message) in LEGACY_EMPTY_RESULT_MESSAGES.items():  # WHY: check every known handler.
+            source_path = Path(__file__).resolve().parents[3] / source_name  # WHY: inspect the tracked handler source.
+            source_text = source_path.read_text(encoding="utf-8")  # WHY: fail if handler wording changes.
+            assert (
+                message in source_text
+            ), f"{source_name} no longer contains {message!r}."  # WHY: lock current wording.
+            result = _classify(executor, message)  # WHY: prove the configured fallback accepts current wording.
+            assert result.no_output is True, f"Marker {marker!r} rejected {message!r}."  # WHY: detect stale markers.
+    finally:
+        executor.shutdown(0)  # WHY: release the executor thread pool created for the test.
+
+
+@pytest.mark.parametrize(
+    ("state", "expected_status"),
+    [
+        ("no_output", "completed"),
+        ("completed", "completed"),
+        ("missing_input", "failed"),
+        ("failed", "failed"),
+    ],
+)
+def test_typed_outcome_controls_run_state_without_marker(
+    state: Literal["no_output", "completed", "missing_input", "failed"], expected_status: str
+) -> None:
+    """A typed handler result controls state even when no legacy marker exists."""
+    executor = _build_executor()  # WHY: use the production terminal classifier.
+    try:
+        run = executor._build_run_record("210")  # WHY: use the normal portal record shape.
+        run["handler_outcome"] = OperationOutcome(state, "The result wording changed.")  # WHY: supply typed evidence.
+        if state == "no_output":  # WHY: keep scanned files visible when the handler gives an explicit empty result.
+            run["output_files"].append("digest.csv")  # WHY: model a file discovered before final classification.
+        run["log_messages"].append(  # WHY: rewording must not become a classifier input.
+            {"message": "The report found an empty collection.", "level": "info"}
+        )
+        executor._finish_successful_operation(run)  # WHY: classify through the production completion path.
+        assert run["status"] == expected_status, f"Typed {state!r} outcome reported {run['status']!r}."
+        if state == "no_output":  # WHY: an empty result remains complete with its explicit reason.
+            assert run["completion_message"] == ("Operation completed with no output file: The result wording changed.")
+            assert list(run["output_files"]) == [
+                "digest.csv"
+            ], "The explicit outcome hid a discovered file."  # WHY: retain evidence.
+        if state in ("failed", "missing_input"):  # WHY: typed failures retain their handler explanation.
+            assert run["error_message"] == "The result wording changed."
+    finally:
+        executor.shutdown(0)  # WHY: release the executor thread pool created for the test.
+
+
+def test_migrated_alert_digest_ignores_reworded_log(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, tmp_path: Path
+) -> None:
+    """Menu 280 uses its returned empty-result outcome instead of marker prose."""
+
+    def execute_digest(self: AlertDigestOperation) -> OperationOutcome:
+        operation_module.logger.info("The digest has zero current matches.")  # WHY: use prose outside legacy markers.
+        return OperationOutcome("no_output", "The alert digest found no alarms.")  # WHY: provide the stable result.
+
+    class _TmpDirScanner(OutputFileScanner):
+        """Keep the production scanner inside the test directory."""
+
+        def __init__(self, data_dir: str | None = None, owner_id: str | None = None) -> None:
+            super().__init__(str(tmp_path), owner_id=owner_id)  # WHY: do not scan the product data directory.
+
+    executor = _build_alert_digest_executor()  # WHY: use the existing migrated portal handler.
+    run = executor._build_run_record("280")  # WHY: use the portal run record for menu 280.
+    monkeypatch.setattr(AlertDigestOperation, "execute_digest", execute_digest)  # WHY: avoid API and file writes.
+    try:
+        with caplog.at_level(logging.INFO):  # WHY: capture the handler prose while it runs.
+            with patch.object(operation_module, "OutputFileScanner", _TmpDirScanner):  # WHY: confine file scans.
+                executor._run_operation_for_owner(run, {})  # WHY: capture, execute, and classify one portal run.
+        assert run["status"] == "completed", "The reworded handler log changed the typed run state."
+        assert run["completion_message"] == (
+            "Operation completed with no output file: The alert digest found no alarms."
+        )
+        assert "The digest has zero current matches." in _run_messages(run)
+    finally:
+        executor.shutdown(0)  # WHY: release the executor thread pool created for the test.
+
+
+def test_legacy_marker_fallback_logs_cumulative_count(caplog: pytest.LogCaptureFixture) -> None:
+    """Each legacy empty-result marker fallback reports its cumulative count."""
+    executor = _build_executor()  # WHY: use the production marker fallback and its counter.
+    try:
+        with caplog.at_level(logging.INFO, logger=operation_module.__name__):  # WHY: read fallback telemetry.
+            for menu in ("209", "210"):  # WHY: count two independent unmigrated handlers.
+                run = executor._build_run_record(menu)  # WHY: use a fresh portal record for each handler.
+                run["log_messages"].append({"message": NO_DATA_LINE, "level": "info"})  # WHY: trigger the fallback.
+                executor._finish_successful_operation(run)  # WHY: classify through the production path.
+        fallback_records = [
+            record.getMessage()
+            for record in caplog.records
+            if "Legacy no-output marker fallback" in record.getMessage()
+        ]  # WHY: isolate only the legacy migration count records.
+        assert len(fallback_records) == 2, f"Expected two fallback records, found {fallback_records!r}."
+        assert "menu 209" in fallback_records[0] and "count=1" in fallback_records[0]
+        assert "menu 210" in fallback_records[1] and "count=2" in fallback_records[1]
+    finally:
+        executor.shutdown(0)  # WHY: release the executor thread pool created for the test.
+
+
+def test_legacy_handler_without_output_or_marker_still_fails() -> None:
+    """An unmigrated handler without result evidence keeps the existing failure state."""
+    executor = _build_executor()  # WHY: exercise the existing legacy completion contract.
+    try:
+        run = executor._build_run_record("210")  # WHY: use the usual no-output run shape.
+        executor._finish_successful_operation(run)  # WHY: no marker or file exists.
+        assert run["status"] == "failed", "A legacy handler without result evidence reported Complete."
     finally:
         executor.shutdown(0)  # WHY: release the executor thread pool created for the test.

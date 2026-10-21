@@ -4,7 +4,7 @@
 
 **Input**: Existing managed feature record for issue #4220.
 
-**Status**: The approved design is ready for implementation. This PR may include a safe product increment. Production-scale load testing must set the refresh interval and worker lease duration before scheduled collection is enabled.
+**Status**: PRs #4332 and #4337 delivered cache-only reads and the fail-closed worker. This increment prioritizes synthetic fixtures and offline browser journeys for stale, unavailable, and error states. Production load testing remains deferred until a scheduled maintenance window. Keep collection disabled and timing values unset.
 
 ## Summary
 
@@ -12,11 +12,11 @@ Keep the dashboard from merged PR #4252 as the canonical MistCircuitStats WAN da
 
 The worker reuses only #4252's four bulk, paginated SDK reads: `listOrgSites`, `listOrgDevicesStats`, `searchOrgSwOrGwPorts`, and `getOrgInventory`. It uses the existing `mistapi` session, shared request admission, Redis client, namespace, and TTLs. It does not add per-site or per-port request loops. Source-specific per-port Insights parity is outside this migration and is tracked by issue #4330.
 
-Keep collection disabled unless `WAN_DASHBOARD_REFRESH_ENABLED` is true and `WAN_DASHBOARD_REFRESH_INTERVAL_SECONDS` and `WAN_DASHBOARD_WORKER_LEASE_SECONDS` are positive application configuration values. Missing or invalid configuration fails closed. Do not set these values before the production load test. Allow one active refresh and at most one queued follow-up. Coalesce additional Refresh requests into that follow-up. If a rate limit, API failure, incomplete page, Redis failure, or lease failure stops a refresh, keep the last complete snapshot, mark it stale, show a safe refresh error, and publish no partial data. Dashboard status shows the refresh state, current bulk-read phase, completed page counts, timestamps, and safe error status.
+Keep collection disabled unless `WAN_DASHBOARD_LOAD_TEST_APPROVED` and `WAN_DASHBOARD_REFRESH_ENABLED` are true, and both timing values are positive. Missing or invalid configuration fails closed. Do not set these values before the production load test. Allow one active refresh and at most one queued follow-up. Coalesce additional Refresh requests into that follow-up. If a rate limit, API failure, incomplete page, Redis failure, or lease failure stops a refresh, keep the last complete snapshot, mark it stale, show a safe refresh error, and publish no partial data. Dashboard status shows the refresh state, current bulk-read phase, completed page counts, timestamps, and safe error status.
 
 When Redis is unavailable, a serving Gunicorn process may use only its own complete in-memory snapshot from an earlier successful read. Mark that snapshot stale. If the process has no complete snapshot, report unavailable data. This process-local fallback adds no file or persistent store, makes no Mist request, and cannot extend the 86,400-second maximum snapshot age.
 
-The user's production bands are 1,001–5,000 sites, 1,001–5,000 gateways, and 5,001–20,000 WAN ports. A rough estimate for four bulk reads at page size 1,000 is 12–35+ requests per full refresh, before additional non-WAN port pages. This estimate is not measured production evidence. The current documented Mist limit is 5,000 calls per hour per token. Keep the refresh interval unapproved until a production-scale load test measures total shared usage. Derive the renewable worker lease from that test.
+The user's production bands are 1,001–5,000 sites, 1,001–5,000 gateways, and 5,001–20,000 WAN ports. A rough estimate for four bulk reads at page size 1,000 is 12–35+ requests per full refresh, before additional non-WAN port pages. This estimate is not measured production evidence. The current documented Mist limit is 5,000 calls per hour per token. The user deferred production load validation until a scheduled maintenance window. Keep the refresh interval unapproved and the worker disabled until that test measures total shared usage. Derive the renewable worker lease from that test.
 
 The source owner authorized reuse with documented attribution. Record MistCircuitStats-Redis provenance and its CC BY-NC-SA 4.0 license. This PR copies no source code or assets.
 
@@ -50,7 +50,7 @@ The source owner authorized reuse with documented attribution. Record MistCircui
 - **API access**: Use the existing `mistapi` session and shared request admission. Do not add direct HTTP or another token store.
 - **Collection owner**: One background worker performs the four approved bulk reads and writes WAN snapshots. Routes make no Mist API calls.
 - **Worker election**: Run the worker in the existing web container. Use a renewable Redis lease to elect one collector across Gunicorn processes.
-- **Fail-closed configuration**: Keep collection disabled unless `WAN_DASHBOARD_REFRESH_ENABLED` is true and both timing keys hold positive application configuration values. Missing or invalid values prevent worker startup and Mist requests.
+- **Fail-closed configuration**: Keep collection disabled unless `WAN_DASHBOARD_LOAD_TEST_APPROVED` and `WAN_DASHBOARD_REFRESH_ENABLED` are true and both timing keys hold positive application configuration values. Missing or invalid values prevent worker startup and Mist requests.
 - **Refresh coalescing**: Keep one active refresh and at most one queued follow-up. Coalesce additional operator requests into the queued follow-up.
 - **Failure safety**: A rate limit, failed read, incomplete dataset, Redis error, or lost lease keeps the last complete snapshot, marks it stale, shows a safe error, and publishes no partial data.
 - **Refresh status**: Show refresh state, active bulk-read phase, completed page counts, timestamps, and a safe error status.
@@ -61,7 +61,7 @@ The source owner authorized reuse with documented attribution. Record MistCircui
 - **Source rights**: The source owner authorized reuse with attribution. Preserve the CC BY-NC-SA 4.0 license and provenance.
 - **Testing**: Use mocked Mist responses and fictional data. Test pagination, shared admission, cache-only reads, worker serialization, partial failure, and secret redaction.
 
-**Gate result**: The approved planning and cache-only route increment pass. The background worker, queue, status display, and browser coverage remain open. Production-scale load testing remains a prerequisite for interval and lease selection.
+**Gate result**: Merged PRs #4332 and #4337 cover cache-only reads and the fail-closed worker. The synthetic-data and offline browser changes on this branch remain unverified. Production-scale load testing blocks collection enablement and timing selection.
 
 ### After Design
 
@@ -96,10 +96,12 @@ See [data-model.md](data-model.md), [contracts/mist-api.md](contracts/mist-api.m
 5. **Cache-only portal**: Dashboard routes read the shared cache or an unexpired process-local complete snapshot marked stale. They make no Mist request. Report unavailable data when neither snapshot is available.
 6. **Failure and progress state**: Never publish partial data. On a rate limit, failed page, incomplete dataset, Redis failure, or lease failure, retain the last complete snapshot as stale and show a safe error. Show refresh state, current read phase, completed page counts, and timestamps.
 7. **Existing cache policy**: Preserve `wan-dashboard:v1:` and the 300-, 600-, and 86,400-second TTLs. The stale TTL is the maximum snapshot age, including for process-local memory. Add no new namespace or persistent local store.
-8. **Fail-closed configuration**: Keep collection disabled unless `WAN_DASHBOARD_REFRESH_ENABLED` is true and both timing keys hold positive application configuration values.
-9. **Unapproved timing**: The lease mechanism is approved, but its duration and the refresh interval remain unset until the production-scale load test measures full refresh time, shared request usage, and failure recovery.
+8. **Fail-closed configuration**: Keep collection disabled unless `WAN_DASHBOARD_LOAD_TEST_APPROVED` and `WAN_DASHBOARD_REFRESH_ENABLED` are true and both timing keys hold positive application configuration values.
+9. **Unapproved timing**: The lease mechanism is approved, but its duration and the refresh interval remain unset until the production-scale load test measures full refresh time, shared request usage, and failure recovery during a scheduled maintenance window.
 10. **Insights boundary**: Exclude source-specific per-port Insights parity. Issue #4330 owns that future contract review.
-11. **Source attribution**: Record the source repository, pinned evidence revision, owner authorization, and CC BY-NC-SA 4.0 license. Copy no source artifacts in this PR.
+11. **Synthetic example**: Keep the fictional example in a separate static panel. Mark live worker snapshots with `data_source: "live"` and reject any other explicit source marker from live cache reads. Test that stale, unavailable, and error states never expose synthetic rows as live data.
+12. **Maintenance window**: Run T004 only during a scheduled maintenance window. Keep collection disabled and both timing values unset until the test is complete.
+13. **Source attribution**: Record the source repository, pinned evidence revision, owner authorization, and CC BY-NC-SA 4.0 license. Copy no source artifacts in this PR.
 
 ## Product Paths
 
@@ -108,8 +110,9 @@ These paths define the approved implementation boundary. Reuse the existing #425
 ```text
 src/interfaces/portals/wan_dashboard/
 ├── routes.py
-├── services.py
-├── worker.py
+├── services/
+│   ├── __init__.py
+│   └── worker.py
 ├── static/dashboard.js
 └── templates/wan_dashboard/dashboard.html
 
@@ -118,10 +121,10 @@ tests/integration/web_portal/wan_dashboard/
 tests/e2e/web_portal/
 ```
 
-`worker.py` will run inside the existing web container. A renewable Redis lease will elect one Gunicorn process to own the worker and shared refresh queue. `routes.py` and the dashboard page will read snapshots and queue refresh requests. Preserve the existing Redis cache and the #4252 SDK operations. Tests will use mocked Mist responses and synthetic records.
+`services/worker.py` runs inside the existing web container. A renewable Redis lease elects one Gunicorn process to own the worker and shared refresh queue. `routes.py` and the dashboard page read snapshots and queue refresh requests. Preserve the existing Redis cache and the #4252 SDK operations. Tests use mocked Mist responses and synthetic records.
 
 ## Complexity Tracking
 
 | Violation | Why Needed | Simpler Alternative Rejected Because |
 |-----------|------------|-------------------------------------|
-| Cache-only dashboard increment | Routes stop collecting Mist data and serve only complete cached snapshots. The Refresh control stays disabled until its worker exists. | Keeping route-level collection would violate the single-worker design. No second dashboard, cache, service, or database is required. |
+| Cache-only dashboard increment | Routes stop collecting Mist data and serve only complete cached snapshots. The Refresh control stays disabled until production load approval and valid timing configuration exist. | Keeping route-level collection would violate the single-worker design. No second dashboard, cache, service, or database is required. |

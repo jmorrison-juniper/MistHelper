@@ -18,6 +18,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
+from unittest.mock import call, patch  # Control file failures without a live device.
 
 import pytest
 
@@ -43,6 +44,88 @@ _TRACKER_THREAD_COUNT = 6
 _TRACKER_BARRIER_SECONDS = 5.0  # A broken barrier must fail in seconds, not hang the suite
 _TRACKER_WRITE_ROUNDS = 40  # Enough writes to meet a reader, few enough to stay fast
 _TRACKER_READ_PAUSE_SECONDS = 0.001  # Keeps the reader off a hot loop, which would starve the writer
+
+
+class TestTrackerRetryEvidence:
+    """Retain file failure causes through recovery, exhaustion, and cleanup."""
+
+    @pytest.mark.parametrize("recovers", [True, False])
+    def test_first_read_failure_survives_fallback(
+        self, recovers: bool, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Keep the first read cause without logging private tracker contents."""
+        path = tmp_path / driver.TRACKER_FILENAME  # Keep every file inside this test.
+        private_text = '[{"run_id": "private-tracker-body"}]'  # Detect accidental content logging.
+        path.write_text(private_text, encoding="utf-8")  # Preserve the existing-file branch.
+        outcomes = [PermissionError("first tracker cause")] + (  # Distinguish the initial error.
+            [private_text] if recovers else [OSError("later tracker cause")] * 4
+        )
+        with patch.object(Path, "read_text", side_effect=outcomes) as read, patch.object(driver.time, "sleep") as sleep:
+            with caplog.at_level(logging.WARNING, logger=driver.__name__):  # Require normal operator visibility.
+                rows = driver._read_tracker(path)  # Exercise read fallback through its caller.
+        assert rows == ([{"run_id": "private-tracker-body"}] if recovers else [])  # Preserve result shape.
+        assert "PermissionError" in caplog.text and "first tracker cause" in caplog.text  # Retain the first cause.
+        assert private_text not in caplog.text and "private-tracker-body" not in caplog.text  # Keep rows private.
+        assert read.call_count == (2 if recovers else 5)  # Keep the read attempt ceiling.
+        assert sleep.call_args_list == [call(0.004)] * (1 if recovers else 4)  # Keep retry timing.
+
+    def test_missing_tracker_remains_silent(self, tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+        """Treat a fresh checkout without a tracker as the existing normal state."""
+        with patch.object(driver.time, "sleep") as sleep:  # Avoid the normal short rename waits.
+            rows = driver._read_tracker(tmp_path / driver.TRACKER_FILENAME)  # Use real missing-file failures.
+        assert rows == []  # Keep absent-file behavior.
+        assert caplog.records == []  # Absence alone must not become a warning.
+        assert sleep.call_args_list == [call(0.004)] * 4  # Preserve the existing absence retry budget.
+
+    @pytest.mark.parametrize("recovers", [True, False])
+    def test_first_replacement_failure_survives_fallback(
+        self, recovers: bool, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Keep replacement evidence and atomic results through a real rename."""
+        path = tmp_path / driver.TRACKER_FILENAME  # Isolate the tracker from production files.
+        path.write_text("[]", encoding="utf-8")  # Preserve the previous complete file on failure.
+        errors = [PermissionError("first replacement cause")] + ([] if recovers else [OSError("last rename cause")] * 9)
+        final_error, original_replace = errors[-1], Path.replace  # Retain identity and the native atomic operation.
+        rows = [{"run_id": "private-replacement-body"}]  # Detect accidental content logging.
+
+        def replace(scratch: Path, target: Path) -> Path:
+            """Fail the configured attempts, then use the native atomic replacement."""
+            if errors:  # Admit native replacement only after controlled failures.
+                raise errors.pop(0)  # Preserve distinct initial and final failures.
+            return original_replace(scratch, target)  # Prove the successful file is complete.
+
+        with patch.object(Path, "replace", autospec=True, side_effect=replace) as rename:  # Preserve path binding.
+            with patch.object(driver.time, "sleep") as sleep:  # Measure delays without waiting.
+                if recovers:  # Recovery must still write the complete rows.
+                    driver._replace_tracker(path, rows)  # Use the real atomic writer.
+                else:  # Exhaustion must still raise the final replacement exception.
+                    with pytest.raises(OSError) as raised:  # Observe exact exception identity.
+                        driver._replace_tracker(path, rows)  # Use ten distinct attempts.
+                    assert raised.value is final_error  # Preserve the last exception contract.
+        assert "PermissionError" in caplog.text and "first replacement cause" in caplog.text  # Retain first evidence.
+        assert "private-replacement-body" not in caplog.text  # Never disclose tracker rows.
+        assert json.loads(path.read_text(encoding="utf-8")) == (rows if recovers else [])  # Preserve atomic contents.
+        assert rename.call_count == (2 if recovers else 10)  # Keep the replacement budget.
+        assert sleep.call_args_list == [call(0.004)] * (1 if recovers else 9)  # Keep retry timing.
+        assert list(tmp_path.glob("*.part")) == []  # Recovery or cleanup must remove the scratch file.
+
+    def test_cleanup_failure_does_not_replace_final_failure(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Report cleanup failure separately and raise the final replacement exception."""
+        path = tmp_path / driver.TRACKER_FILENAME  # Keep the only output inside the temporary directory.
+        first, final = PermissionError("first replacement cause"), OSError(
+            "final replacement cause"
+        )  # Distinct causes.
+        with patch.object(Path, "replace", side_effect=[first] + [final] * 9) as rename:  # Exhaust replacement.
+            with patch.object(Path, "unlink", side_effect=PermissionError("cleanup cause")) as cleanup:
+                with patch.object(driver.time, "sleep"), pytest.raises(OSError) as raised:  # Avoid real waits.
+                    driver._replace_tracker(path, [])  # Exercise the real failure and cleanup path.
+        assert raised.value is final  # Cleanup must not mask the replacement contract.
+        assert rename.call_count == 10  # Preserve the bounded retry budget.
+        cleanup.assert_called_once_with(missing_ok=True)  # Attempt exactly the existing safe cleanup.
+        assert "first replacement cause" in caplog.text and "cleanup cause" in caplog.text  # Retain both causes.
+        assert len(list(tmp_path.glob("*.part"))) == 1  # Report the real retained scratch file, not false success.
 
 
 class FixedClock:

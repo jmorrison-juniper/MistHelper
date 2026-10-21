@@ -1,7 +1,7 @@
 # Research: MistCircuitStats Redis Dashboard Migration
 
 **Date**: 2026-10-20
-**Status**: Planning decisions are approved. Product implementation may proceed with a fail-closed refresh schedule and lease duration.
+**Status**: Planning decisions are approved. Product implementation may proceed, but the user deferred production load validation until a scheduled maintenance window. Keep the worker disabled and timing values unset until that test.
 
 ## Current State
 
@@ -14,7 +14,7 @@
 
 ## Evidence from the Merged Dashboard
 
-The existing service is `src/interfaces/portals/wan_dashboard/services.py`. Its organization overview uses these four bulk SDK reads with pagination:
+The existing service is `src/interfaces/portals/wan_dashboard/services/__init__.py`. Its organization overview uses these four bulk SDK reads with pagination:
 
 | SDK method | Use |
 |---|---|
@@ -41,7 +41,7 @@ The user's production bands are:
 
 The user's rough estimate is 12–35+ requests per full refresh for the four bulk reads at a page size of 1,000. Additional non-WAN port pages may increase this count. This is an estimate, not a measured production result.
 
-Do not select a refresh interval from this estimate. Run a production-scale load test that measures all pages, shared token usage, complete refresh time, concurrent request behavior, and failure recovery. Derive the renewable worker lease from measured refresh and recovery times. Record the test result before selecting either value.
+Do not select a refresh interval from this estimate. During a scheduled maintenance window, run a production-scale load test that measures all pages, shared token usage, complete refresh time, concurrent request behavior, and failure recovery. Derive the renewable worker lease from measured refresh and recovery times. Record the test result before selecting either value.
 
 ## Lab Evidence and Limitation
 
@@ -131,8 +131,16 @@ The source owner authorized reuse with documented attribution. Preserve the sour
 
 **Alternative rejected**: Call Mist from a dashboard route or show expired in-memory data. Both choices violate the cache-only and maximum-age requirements.
 
+### Decision 10: Keep offline examples separate from all live states
+
+**Decision**: Use fictional records only in a labeled static example panel. Cover current, stale, unavailable, and refresh-error states with offline browser tests. Reject synthetic or unknown explicit source markers from live overview data.
+
+**Rationale**: Operators and reviewers need safe examples without Mist credentials or network access. Synthetic values must never appear to be live data.
+
+**Alternative rejected**: Use example records as fallback data when live data is missing. That would hide unavailable or failed live data.
+
 ## Remaining Production-Only Blocker
 
-Run the approved production-scale load test before setting the worker schedule or lease. The test must measure the shared token budget across the production bands and include all non-WAN port pages. Until it passes, the refresh interval and renewable lease stay unset.
+Run the approved production-scale load test during a scheduled maintenance window before setting the worker schedule or lease. The test must measure the shared token budget across the production bands and include all non-WAN port pages. Until it passes, the worker remains disabled and the refresh interval and renewable lease stay unset.
 
 The SDK startup token-validation diagnostic is a separate lab caveat. Resolve or explain it before treating the lab response as authentication evidence.

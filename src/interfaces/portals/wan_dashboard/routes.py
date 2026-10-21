@@ -15,6 +15,7 @@ from src.interfaces.portals.wan_dashboard.services import (
     WanDashboardService,
     WanDataNormalizer,
 )
+from src.interfaces.portals.wan_dashboard.services.worker import WanDashboardWorker
 
 logger = logging.getLogger(__name__)  # Keep feature route records under one module name.
 wan_dashboard_bp = Blueprint(
@@ -29,7 +30,7 @@ wan_dashboard_bp = Blueprint(
 class DashboardServiceProvider:
     """Resolve one feature service from the portal's shared dependencies."""
 
-    EXTENSION_KEY = "wan_dashboard_service"
+    EXTENSION_KEY = WanDashboardWorker.SERVICE_EXTENSION_KEY
 
     @classmethod
     def get(cls) -> Any | None:
@@ -60,9 +61,38 @@ class DashboardPageRoutes:
     def page() -> str:
         """Render the source workflow with shared portal navigation and security."""
         logger.info("wan dashboard page requested")  # Mark the page action without logging user data.
-        response = render_template("wan_dashboard/dashboard.html")  # Avoid collisions with portal dashboard templates.
+        worker_ready = WanDashboardWorker.EXTENSION_KEY in current_app.extensions
+        response = render_template(
+            "wan_dashboard/dashboard.html", refresh_enabled=worker_ready
+        )  # Keep Refresh unavailable until its leased worker starts.
         logger.debug("wan dashboard page rendered")  # Confirm the page result.
         return response  # The base template supplies portal security and theme assets.
+
+
+class DashboardRefreshRoutes:
+    """Expose worker status and queue requests without collecting Mist data."""
+
+    @staticmethod
+    def status() -> Any:
+        """Return shared worker progress or an explicit disabled state."""
+        worker = current_app.extensions.get(WanDashboardWorker.EXTENSION_KEY)
+        if worker is not None:
+            return jsonify(worker.status())  # Read only status and queue state from Redis.
+        status = current_app.extensions.get(
+            WanDashboardWorker.DISABLED_STATUS_KEY, WanDashboardWorker.disabled_status()
+        )
+        return jsonify(status)  # A missing worker cannot trigger a Mist request.
+
+    @staticmethod
+    def enqueue() -> tuple[Any, int]:
+        """Queue one worker refresh and return without a Mist API call."""
+        worker = current_app.extensions.get(WanDashboardWorker.EXTENSION_KEY)
+        if worker is None:
+            return jsonify({"status": "disabled", "notice": "Refresh is not configured."}), 503
+        outcome = worker.enqueue()  # Redis coalesces requests into one pending follow-up.
+        if outcome == "unavailable":
+            return jsonify({"status": "error", "notice": "The refresh queue is unavailable."}), 503
+        return jsonify({"status": outcome, "notice": "Refresh request accepted."}), 202
 
 
 class DashboardReadRoutes:
@@ -241,3 +271,8 @@ wan_dashboard_bp.add_url_rule(
     endpoint="hourly_export",
     view_func=DashboardExportRoutes.hourly,
 )
+wan_dashboard_bp.add_url_rule("/api/refresh-status", endpoint="refresh_status", view_func=DashboardRefreshRoutes.status)
+wan_dashboard_bp.add_url_rule(
+    "/api/refresh", endpoint="refresh", view_func=DashboardRefreshRoutes.enqueue, methods=["POST"]
+)
+wan_dashboard_bp.record_once(WanDashboardWorker.on_blueprint_registered)  # Start only the configured in-process worker.

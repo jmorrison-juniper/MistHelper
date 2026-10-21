@@ -109,6 +109,35 @@ def test_latest_pypi_version_reports_404_status(
     assert "PyPI returned status 404 for missing" in caplog.text  # The log must report the exact status.
 
 
+def test_latest_pypi_version_rejects_native_503_response(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The PyPI reader must reject a native server error without parsing or retrying."""
+    import requests  # Use the same response type that the HTTP client returns.
+
+    response = requests.Response()  # Build a real HTTP response instead of a status-shaped mock.
+    response.status_code = 503  # Model a server failure that carries a plausible success body.
+    response.url = "https://pypi.org/pypi/requests/json"  # Give the native response its request URL.
+    response._content = b'{"info":{"version":"9.9.9"}}'  # Ensure an ignored error body could look successful.
+    monkeypatch.setattr(response, "json", MagicMock(wraps=response.json))  # Track parsing without changing its result.
+    requests_stub = SimpleNamespace(get=MagicMock(return_value=response))  # Supply the native response to the lookup.
+    original_import = builtins.__import__  # Keep the real importer for all other modules.
+
+    def fake_import(name: str, *args: object, **kwargs: object) -> object:
+        return requests_stub if name == "requests" else original_import(name, *args, **kwargs)  # Stub only requests.
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)  # Route the deferred requests import to the stub.
+    caplog.set_level("DEBUG", logger=MistHelper.logger.name)  # Capture the product status and failure logs.
+    assert MistHelper._get_latest_pypi_version("requests") == ""  # A server error keeps the latest version unknown.
+    requests_stub.get.assert_called_once_with(  # Prove the lookup makes one request with its bounded timeout.
+        "https://pypi.org/pypi/requests/json",
+        timeout=5,
+    )
+    response.json.assert_not_called()  # Do not parse a server-error body as a version.
+    assert "PyPI returned status 503 for requests" in caplog.text  # Report the exact server status.
+
+
 def test_latest_pypi_version_catches_empty_json_body(monkeypatch: pytest.MonkeyPatch) -> None:
     """The PyPI reader treats an empty JSON body as an unknown latest version."""
     response = MagicMock(status_code=200)  # Model a successful HTTP response with a bad body.
@@ -175,11 +204,16 @@ def test_parse_requirements_file_rejects_unexpected_error(monkeypatch: pytest.Mo
         MistHelper._parse_requirements_file(target)  # Execute the narrowed handler site.
 
 
-def test_fallback_load_dotenv_catches_decode_error(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_fallback_load_dotenv_catches_decode_error(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     """The fallback dotenv loader catches decode failures."""
     error = UnicodeDecodeError("utf-8", b"x", 0, 1, "bad")  # Build the precise file decode failure.
     monkeypatch.setattr(builtins, "open", MagicMock(side_effect=error))  # Simulate a damaged dotenv file.
+    caplog.set_level("DEBUG")  # Capture the safe file-error diagnostic.
     MistHelper._fallback_load_dotenv()  # The loader must stay non-fatal during startup.
+    assert "Error loading .env file:" in caplog.text  # Confirm the damaged file is reported.
 
 
 def test_fallback_load_dotenv_rejects_unexpected_error(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -222,11 +256,14 @@ def test_collect_import_result_rejects_unexpected_error() -> None:
 def test_wire_mistapi_module_catches_runtime_shape_error(monkeypatch: pytest.MonkeyPatch) -> None:
     """The mistapi wire step catches expected SDK shape failures."""
     manager = MistHelper.GlobalImportManager()  # Use the real manager to test the method surface.
-    manager.imports["mistapi"] = object()  # Provide a placeholder module object.
-    monkeypatch.setattr(manager, "_verify_mistapi_api_structure", MagicMock(side_effect=RuntimeError("shape")))  # SDK.
+    module_placeholder = object()  # Provide a stable placeholder for the SDK module.
+    manager.imports["mistapi"] = module_placeholder  # Provide a placeholder module object.
+    verify_structure = MagicMock(side_effect=RuntimeError("shape"))  # Simulate an expected SDK shape error.
+    monkeypatch.setattr(manager, "_verify_mistapi_api_structure", verify_structure)  # Replace the structural check.
     original_mistapi = getattr(MistHelper, "mistapi", None)  # Preserve the SDK global for later tests.
     try:
         manager._wire_mistapi_module()  # The optional SDK wiring must stay non-fatal.
+        verify_structure.assert_called_once_with(module_placeholder)  # Confirm the guarded structure check ran.
     finally:
         MistHelper.mistapi = original_mistapi  # Restore the SDK global without monkeypatch finalizer drift.
 
@@ -251,6 +288,7 @@ def test_org_picker_catches_sdk_error(monkeypatch: pytest.MonkeyPatch) -> None:
     picker = MagicMock(side_effect=OSError("offline"))  # Simulate a network-backed SDK picker error.
     monkeypatch.setattr(MistHelper, "mistapi", SimpleNamespace(cli=SimpleNamespace(select_org=picker)))  # Stub SDK.
     MistHelper._invoke_mistapi_org_picker_and_apply()  # The login flow must stay controlled.
+    picker.assert_called_once_with(MistHelper.MainEntrypoint.context.apisession)  # Confirm the SDK picker was called.
 
 
 def test_org_picker_rejects_unexpected_error(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -299,10 +337,15 @@ def test_introspect_apisession_rejects_unexpected_error(monkeypatch: pytest.Monk
         MistHelper._introspect_apisession_class(SimpleNamespace(APISession=object))  # Execute handler site.
 
 
-def test_log_session_attempt_traceback_catches_format_error(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_log_session_attempt_traceback_catches_format_error(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     """The traceback logger catches secondary formatting failures."""
     monkeypatch.setattr("traceback.format_exception", MagicMock(side_effect=TypeError("bad trace")))  # Bad formatter.
+    caplog.set_level("WARNING")  # Capture the warning that explains the discarded traceback.
     MistHelper._log_session_attempt_traceback(ValueError("primary"))  # Secondary trace failure must be non-fatal.
+    assert "Failed to log traceback: bad trace" in caplog.text  # Confirm the secondary failure is visible.
 
 
 def test_log_session_attempt_traceback_rejects_unexpected_error(monkeypatch: pytest.MonkeyPatch) -> None:

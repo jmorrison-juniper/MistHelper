@@ -6,7 +6,7 @@
 
 **Reviewed**: 2026-10-20
 
-**Status**: Planning decisions are approved, and product implementation is in scope. The refresh interval and worker lease duration remain unapproved until production-scale load testing.
+**Status**: Partly delivered. PRs #4332 and #4337 delivered cache-only reads and the fail-closed worker. The current increment covers synthetic fixtures and offline browser states. T004 remains deferred until a scheduled maintenance window. Keep the refresh interval and worker lease unset.
 
 **Input**: Migrate the read-only MistCircuitStats-Redis dashboard into MistHelper. Preserve its useful workflows without adding another application, database, or duplicate WAN views.
 
@@ -56,6 +56,7 @@ An operator checks the collection time and state of cached data.
 3. **Given** Redis is unavailable, **When** an operator opens the dashboard, **Then** the page shows a complete process-local snapshot as stale when one is available, or reports unavailable data, and makes no Mist API request.
 4. **Given** refresh work is queued or running, **When** an operator views the dashboard, **Then** the page shows the refresh state, current bulk-read phase, completed page counts, timestamps, and a safe error status.
 5. **Given** a complete snapshot is more than 24 hours old, **When** an operator opens the dashboard, **Then** the page reports unavailable data and does not show the expired snapshot.
+6. **Given** a refresh fails and no complete snapshot exists, **When** an operator opens the dashboard, **Then** the page reports unavailable data and shows a safe refresh error.
 
 ### User Story 4 - Review Synthetic Examples (Priority: P3)
 
@@ -63,12 +64,14 @@ An operator or reviewer uses fictional examples without Mist credentials or live
 
 **Why this priority**: Synthetic data supports safe review and automated tests.
 
-**Independent Test**: Disable network access. Verify that the existing offline example remains labeled synthetic and cannot satisfy a live request.
+**Independent Test**: Use only fictional data. Verify that the offline example remains labeled synthetic and cannot satisfy a live request.
 
 **Acceptance Scenarios**:
 
 1. **Given** the offline example, **When** an operator opens it, **Then** the page identifies every record as synthetic.
 2. **Given** a live request without Mist access, **When** the request fails, **Then** the page does not substitute synthetic records.
+3. **Given** live data is current, stale, unavailable, or in an error state, **When** the page shows the offline example, **Then** no synthetic record appears in a live overview or live detail view.
+4. **Given** automated tests use synthetic responses, **When** live dashboard routes serve their result, **Then** the synthetic response cannot satisfy the live request.
 
 ### Edge Cases
 
@@ -108,7 +111,7 @@ An operator or reviewer uses fictional examples without Mist credentials or live
 - **FR-012**: Treat the 12–35+ request estimate per full refresh as unmeasured. Include additional non-WAN port pages in the load test.
 - **FR-013**: A rate-limited, failed, or incomplete refresh MUST preserve the last complete snapshot, mark it stale, show a safe refresh error, and publish no partial data.
 - **FR-014**: The dashboard MUST distinguish current, stale, synthetic, and unavailable data. It MUST NOT expose a partial snapshot.
-- **FR-015**: Synthetic records MUST remain visibly separate from live data. A failed live request MUST NOT use synthetic records as a fallback.
+- **FR-015**: A static, fictional example MUST remain visibly separate from live data in current, stale, unavailable, and error states. It MUST NOT enter the live cache or satisfy a live request.
 - **FR-016**: Preserve MistCircuitStats-Redis provenance and its CC BY-NC-SA 4.0 license. The repository owner has authorized reuse with documented attribution.
 - **FR-017**: Add no application, service, Compose group, public port, Redis service, or application database.
 - **FR-018**: Record lab evidence and its limits. A lab query returned 67 port rows, 7 WAN rows, and 2 gateway MACs. This is not production evidence.
@@ -120,7 +123,7 @@ An operator or reviewer uses fictional examples without Mist credentials or live
 - **FR-024**: When Redis is unavailable, show a complete process-local snapshot as stale if the serving process has one. Otherwise report unavailable data. Dashboard requests MUST NOT call Mist.
 - **FR-025**: Treat 86,400 seconds as the maximum snapshot age. After that limit, report unavailable data, including when a process-local snapshot remains in memory.
 - **FR-026**: Treat a failed lease acquisition, lease renewal, or Redis queue operation as a refresh failure. Do not start another collector or publish data without the lease.
-- **FR-027**: Keep collection disabled unless `WAN_DASHBOARD_REFRESH_ENABLED` is true and `WAN_DASHBOARD_REFRESH_INTERVAL_SECONDS` and `WAN_DASHBOARD_WORKER_LEASE_SECONDS` are positive application configuration values. Missing or invalid values MUST fail closed. Do not enable those values before T004 passes.
+- **FR-027**: Keep collection disabled unless `WAN_DASHBOARD_LOAD_TEST_APPROVED` and `WAN_DASHBOARD_REFRESH_ENABLED` are true, and `WAN_DASHBOARD_REFRESH_INTERVAL_SECONDS` and `WAN_DASHBOARD_WORKER_LEASE_SECONDS` are positive application configuration values. Missing or invalid values MUST fail closed. Do not set these values before T004 passes during a scheduled maintenance window.
 
 ### Mist Cloud Transport Requirements *(include if feature uses Mist Cloud)*
 
@@ -159,7 +162,8 @@ Source-specific per-port Insights observations are not entities in this migratio
 - **SC-009**: Concurrent refresh requests produce no more than one active run and one queued follow-up across Gunicorn processes.
 - **SC-010**: Dashboard status exposes the refresh state, active read phase, completed page counts, timestamps, and safe error status.
 - **SC-011**: Redis outage behavior makes no Mist request and shows only an unexpired complete process-local snapshot when one is available.
-- **SC-012**: With missing or invalid worker configuration, the worker makes zero Mist API requests and reports a safe disabled state.
+- **SC-012**: Without explicit load-test approval, refresh enablement, and valid timing values, the worker makes zero Mist API requests and reports a safe disabled state.
+- **SC-013**: Offline browser tests cover stale, unavailable, and refresh-error states with fictional data and make zero Mist API requests.
 
 ## Assumptions
 
@@ -173,5 +177,6 @@ Source-specific per-port Insights observations are not entities in this migratio
 - The SDK logged a token-validation error during startup despite a successful endpoint response. Resolve or explain this diagnostic before treating the lab as authentication evidence.
 - The MistCircuitStats-Redis owner authorized reuse with documented attribution. Preserve the source provenance and CC BY-NC-SA 4.0 constraints.
 - Issue #4330 tracks source-specific per-port Insights parity outside this migration. Do not add its request path here.
-- The refresh interval and renewable worker lease remain unapproved until production-scale load testing.
+- The refresh interval and renewable worker lease remain unapproved until T004 runs during a scheduled maintenance window.
 - A process-local memory snapshot is the only Redis-outage fallback in this plan. The serving Gunicorn process uses it only when it holds a complete snapshot from an earlier successful read. No local file or new persistent store is added.
+- The offline example is fixed fictional presentation content. It is not an API response, cache value, or fallback for live data.

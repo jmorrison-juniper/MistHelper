@@ -349,6 +349,24 @@ class TestCacheOnlyReads:
         assert result["status"] == "unavailable"  # Reject the whole cache value rather than return partial data.
         assert result["data"] == []  # Never expose the valid-looking row beside malformed data.
 
+    def test_synthetic_snapshot_is_not_returned_as_live_overview(
+        self, service: tuple[WanDashboardService, FakeCache]
+    ) -> None:
+        """Reject a synthetic source marker before cached rows reach a live route."""
+        dashboard_service, cache = service  # Keep the check inside the isolated cache boundary.
+        cache.values["wan-dashboard:v1:overview:org-local:last-success"] = {
+            "schema_version": 1,  # Match the live envelope version.
+            "org_id": "org-local",  # Match the current test organization.
+            "data_source": "synthetic",  # Mark the envelope as fictional.
+            "collected_at": "2026-10-20T12:00:00+00:00",  # Use a fixed UTC test timestamp.
+            "data": [{"device_id": "example-gateway"}],
+        }  # Model an offline example accidentally written to the live key.
+
+        result = dashboard_service.get_cached_overview()
+
+        assert result["status"] == "unavailable"  # Do not render a synthetic cache entry as live.
+        assert result["data"] == []  # Reject the entire source envelope.
+
 
 class TestTokenRotation:
     """Prove one-pass token rotation and cooldown behavior."""
