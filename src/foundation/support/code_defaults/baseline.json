@@ -1,0 +1,1198 @@
+{
+  "accepted_high": [],
+  "accepted_total": 0,
+  "criterion_version": "1",
+  "dispositions": [
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/foundation/support/utils/address_utils.py|AddressUtils._build_scourgify_result|mapping_get|address_line_1|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/foundation/support/utils/address_utils.py|AddressUtils._build_scourgify_result|mapping_get|address_line_1|1",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "valid_optional",
+      "evidence": "The consumer permits this optional value or explicit empty collection.",
+      "identity": "src/foundation/support/utils/address_utils.py|AddressUtils._build_scourgify_result|mapping_get|address_line_2|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/foundation/support/utils/address_utils.py|AddressUtils._build_scourgify_result|mapping_get|city|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/foundation/support/utils/address_utils.py|AddressUtils._build_scourgify_result|mapping_get|postal_code|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/foundation/support/utils/address_utils.py|AddressUtils._build_scourgify_result|mapping_get|state|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "valid_optional",
+      "evidence": "The consumer permits this optional value or explicit empty collection.",
+      "identity": "src/foundation/support/utils/address_utils.py|AddressUtils.apply_business_context_rules|mapping_get|place_type|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "valid_optional",
+      "evidence": "The consumer permits this optional value or explicit empty collection.",
+      "identity": "src/foundation/support/utils/address_utils.py|AddressUtils.apply_business_context_rules|mapping_get|place_type|1",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "valid_optional",
+      "evidence": "The consumer permits this optional value or explicit empty collection.",
+      "identity": "src/foundation/support/utils/address_utils.py|NominatimValidator._address_detail_boost|mapping_get|address|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/foundation/support/utils/address_utils.py|NominatimValidator._apply_org_name_tiebreaker|mapping_get|display_name|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/foundation/support/utils/address_utils.py|NominatimValidator._apply_org_name_tiebreaker|mapping_get|display_name|1",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/foundation/support/utils/address_utils.py|NominatimValidator._build_address_string|mapping_get|<dynamic>|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/foundation/support/utils/address_utils.py|NominatimValidator._calculate_confidence|mapping_get|display_name|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "valid_optional",
+      "evidence": "The consumer permits this optional value or explicit empty collection.",
+      "identity": "src/foundation/support/utils/address_utils.py|NominatimValidator._create_address_key|mapping_get|address|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/foundation/support/utils/address_utils.py|NominatimValidator._create_address_key|mapping_get|city|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/foundation/support/utils/address_utils.py|NominatimValidator._create_address_key|mapping_get|state|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/foundation/support/utils/address_utils.py|NominatimValidator._create_address_key|mapping_get|zip|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "valid_optional",
+      "evidence": "The consumer permits this optional value or explicit empty collection.",
+      "identity": "src/foundation/support/utils/address_utils.py|NominatimValidator._parse_geocode_response|mapping_get|address|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/foundation/support/utils/address_utils.py|NominatimValidator._parse_geocode_response|mapping_get|class|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/foundation/support/utils/address_utils.py|NominatimValidator._parse_geocode_response|mapping_get|display_name|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/foundation/support/utils/address_utils.py|NominatimValidator._parse_geocode_response|mapping_get|type|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/foundation/support/utils/address_utils.py|NominatimValidator._place_type_boost|mapping_get|class|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/foundation/support/utils/address_utils.py|NominatimValidator._place_type_boost|mapping_get|type|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/foundation/support/utils/address_utils.py|_check_parse_status|mapping_get|<dynamic>|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/foundation/support/utils/address_utils.py|_check_parse_status|mapping_get|<dynamic>|1",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/foundation/support/utils/address_utils.py|_compare_fields|mapping_get|<dynamic>|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/foundation/support/utils/address_utils.py|_compare_fields|mapping_get|<dynamic>|1",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "valid_optional",
+      "evidence": "The consumer permits this optional value or explicit empty collection.",
+      "identity": "src/foundation/support/utils/address_utils.py|_comparison_fields_from_dict|mapping_get|address|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/foundation/support/utils/address_utils.py|_comparison_fields_from_dict|mapping_get|city|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/foundation/support/utils/address_utils.py|_comparison_fields_from_dict|mapping_get|state|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/foundation/support/utils/address_utils.py|_comparison_fields_from_dict|mapping_get|zip|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "valid_optional",
+      "evidence": "The consumer permits this optional value or explicit empty collection.",
+      "identity": "src/foundation/support/utils/address_utils.py|_skip_entry_from_dict|mapping_get|Skip_Address|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "valid_optional",
+      "evidence": "The consumer permits this optional value or explicit empty collection.",
+      "identity": "src/foundation/support/utils/address_utils.py|_skip_entry_from_dict|mapping_get|Skip_City|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "valid_optional",
+      "evidence": "The consumer permits this optional value or explicit empty collection.",
+      "identity": "src/foundation/support/utils/address_utils.py|_skip_entry_from_dict|mapping_get|Skip_State|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "valid_optional",
+      "evidence": "The consumer permits this optional value or explicit empty collection.",
+      "identity": "src/foundation/support/utils/address_utils.py|_skip_entry_from_dict|mapping_get|Skip_Zip|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "valid_optional",
+      "evidence": "The consumer permits this optional value or explicit empty collection.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|ZoneConfigurationAnalyzer._display_results|mapping_get|engagement|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "valid_optional",
+      "evidence": "The consumer permits this optional value or explicit empty collection.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|ZoneConfigurationAnalyzer._display_results|mapping_get|occupancy|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "valid_optional",
+      "evidence": "The consumer permits this optional value or explicit empty collection.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|ZoneConfigurationAnalyzer._display_results|mapping_get|zones|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|ZoneConfigurationAnalyzer._display_zone_section|mapping_get|zone_count_stats|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "valid_optional",
+      "evidence": "The consumer permits this optional value or explicit empty collection.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|ZoneConfigurationAnalyzer._export_results|mapping_get|engagement|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "valid_optional",
+      "evidence": "The consumer permits this optional value or explicit empty collection.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|ZoneConfigurationAnalyzer._export_results|mapping_get|occupancy|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "valid_optional",
+      "evidence": "The consumer permits this optional value or explicit empty collection.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|ZoneConfigurationAnalyzer._export_results|mapping_get|zones|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_base_summary_row|mapping_get|zone_names|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_build_all_zone_rows|mapping_get|site_name|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "valid_optional",
+      "evidence": "The consumer permits this optional value or explicit empty collection.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_build_all_zone_rows|mapping_get|zones|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_build_dwell_config_rows|mapping_get|bounce|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "valid_optional",
+      "evidence": "The consumer permits this optional value or explicit empty collection.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_build_dwell_config_rows|mapping_get|dwell_tags|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_build_dwell_config_rows|mapping_get|engaged|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_build_dwell_config_rows|mapping_get|passerby|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_build_dwell_config_rows|mapping_get|stationed|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_build_occupancy_config_rows|mapping_get|assets_enabled|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_build_occupancy_config_rows|mapping_get|clients_enabled|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_build_occupancy_config_rows|mapping_get|min_duration|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "valid_optional",
+      "evidence": "The consumer permits this optional value or explicit empty collection.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_build_occupancy_config_rows|mapping_get|occupancy|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_build_occupancy_config_rows|mapping_get|sdkclients_enabled|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_build_occupancy_config_rows|mapping_get|unconnected_clients_enabled|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "valid_optional",
+      "evidence": "The consumer permits this optional value or explicit empty collection.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_build_one_summary_row|mapping_get|analytic|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "valid_optional",
+      "evidence": "The consumer permits this optional value or explicit empty collection.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_build_one_summary_row|mapping_get|engagement|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "valid_optional",
+      "evidence": "The consumer permits this optional value or explicit empty collection.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_build_one_summary_row|mapping_get|occupancy|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "valid_optional",
+      "evidence": "The consumer permits this optional value or explicit empty collection.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_build_settings_entry|mapping_get|analytic|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "valid_optional",
+      "evidence": "The consumer permits this optional value or explicit empty collection.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_build_settings_entry|mapping_get|dwell_tag_names|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "valid_optional",
+      "evidence": "The consumer permits this optional value or explicit empty collection.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_build_settings_entry|mapping_get|dwell_tags|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "valid_optional",
+      "evidence": "The consumer permits this optional value or explicit empty collection.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_build_settings_entry|mapping_get|engagement|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "valid_optional",
+      "evidence": "The consumer permits this optional value or explicit empty collection.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_build_settings_entry|mapping_get|hours|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "valid_optional",
+      "evidence": "The consumer permits this optional value or explicit empty collection.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_build_settings_entry|mapping_get|occupancy|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_derive_row_flags|mapping_get|<dynamic>|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_derive_row_flags|mapping_get|missing_zones|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_derive_row_flags|mapping_get|sites_missing_common_zones|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_derive_row_flags|mapping_get|sites_with_dwell_deviations|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_derive_row_flags|mapping_get|sites_with_occupancy_deviations|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_derive_row_flags|mapping_get|zone_count_deviations|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_display_business_hours|mapping_get|sites_with_business_hours|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_display_common_zones|mapping_get|common_zones|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_display_common_zones|mapping_get|zone_frequency|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_display_custom_names|mapping_get|custom_names|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_display_custom_names|mapping_get|sites_with_custom_names|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_display_dwell_configs|mapping_get|dwell_tag_configs|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "valid_optional",
+      "evidence": "The consumer permits this optional value or explicit empty collection.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_display_dwell_configs|mapping_get|dwell_tags|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_display_dwell_deviations|mapping_get|current_config|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_display_dwell_deviations|mapping_get|sites_with_dwell_deviations|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_display_missing_zones|mapping_get|sites_missing_common_zones|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_display_occupancy_configs|mapping_get|min_duration_values|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_display_occupancy_configs|mapping_get|occupancy_configs|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_display_occupancy_deviations|mapping_get|current_config|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_display_occupancy_deviations|mapping_get|sites_with_occupancy_deviations|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_display_zone_deviations|mapping_get|zone_count_deviations|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_dwell_row_fields|mapping_get|bounce|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_dwell_row_fields|mapping_get|bounce|1",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "valid_optional",
+      "evidence": "The consumer permits this optional value or explicit empty collection.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_dwell_row_fields|mapping_get|dwell_tag_names|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "valid_optional",
+      "evidence": "The consumer permits this optional value or explicit empty collection.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_dwell_row_fields|mapping_get|dwell_tags|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_dwell_row_fields|mapping_get|engaged|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_dwell_row_fields|mapping_get|engaged|1",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_dwell_row_fields|mapping_get|passerby|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_dwell_row_fields|mapping_get|passerby|1",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_dwell_row_fields|mapping_get|stationed|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_dwell_row_fields|mapping_get|stationed|1",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_export_zone_frequency|mapping_get|common_zones|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_export_zone_frequency|mapping_get|zone_count_stats|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_occupancy_row_fields|mapping_get|assets_enabled|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_occupancy_row_fields|mapping_get|clients_enabled|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_occupancy_row_fields|mapping_get|enabled|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_occupancy_row_fields|mapping_get|min_duration|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_occupancy_row_fields|mapping_get|sdkclients_enabled|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_occupancy_row_fields|mapping_get|unconnected_clients_enabled|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "valid_optional",
+      "evidence": "The consumer permits this optional value or explicit empty collection.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_print_dominant_occupancy|mapping_get|occupancy|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "valid_optional",
+      "evidence": "The consumer permits this optional value or explicit empty collection.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_process_engagement_site|mapping_get|dwell_tag_names|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "valid_optional",
+      "evidence": "The consumer permits this optional value or explicit empty collection.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_process_engagement_site|mapping_get|dwell_tags|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "valid_optional",
+      "evidence": "The consumer permits this optional value or explicit empty collection.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_process_engagement_site|mapping_get|engagement|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "valid_optional",
+      "evidence": "The consumer permits this optional value or explicit empty collection.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_process_engagement_site|mapping_get|hours|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "valid_optional",
+      "evidence": "The consumer permits this optional value or explicit empty collection.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_process_occupancy_site|mapping_get|analytic|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "valid_optional",
+      "evidence": "The consumer permits this optional value or explicit empty collection.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_process_occupancy_site|mapping_get|occupancy|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_zone_row|mapping_get|created_time|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_zone_row|mapping_get|id|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_zone_row|mapping_get|map_id|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_zone_row|mapping_get|modified_time|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_zone_row|mapping_get|name|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/mist/intelligence/analytics/zone_analyzer.py|_zone_row|mapping_get|vertices|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/mist/resources/device/ap_profile_migration_manager.py|APProfileMigrationManager._backup_filename|mapping_get|migration_timestamp_utc|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/mist/resources/device/ap_profile_migration_manager.py|APProfileMigrationManager._backup_filename|mapping_get|source_profile_id|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/mist/resources/device/ap_profile_migration_manager.py|APProfileMigrationManager._backup_filename|mapping_get|target_profile_id|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "excluded_ownership",
+      "evidence": "Issue #2863 owns this identifier outside this batch.",
+      "identity": "src/mist/resources/device/ap_profile_migration_manager.py|APProfileMigrationManager._discover_aps_on_source_profile|mapping_get|id|0",
+      "ownership": "issue-2863"
+    },
+    {
+      "classification": "excluded_ownership",
+      "evidence": "Issue #2863 owns this identifier outside this batch.",
+      "identity": "src/mist/resources/device/ap_profile_migration_manager.py|APProfileMigrationManager._discover_aps_on_source_profile|mapping_get|id|1",
+      "ownership": "issue-2863"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/mist/resources/device/ap_profile_migration_manager.py|APProfileMigrationManager._discover_aps_on_source_profile|mapping_get|mac|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/mist/resources/device/ap_profile_migration_manager.py|APProfileMigrationManager._discover_aps_on_source_profile|mapping_get|name|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/mist/resources/device/ap_profile_migration_manager.py|APProfileMigrationManager._fetch_and_sort_ap_profiles|mapping_get|name|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/mist/resources/device/ap_profile_migration_manager.py|APProfileMigrationManager._load_and_validate_backup|mapping_get|aps_reassigned|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/mist/resources/device/ap_profile_migration_manager.py|APProfileMigrationManager._pick_ap_device_profile|mapping_get|name|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/mist/resources/device/ap_profile_migration_manager.py|APProfileMigrationManager._planned_device_ids|mapping_get|device_id|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/mist/resources/device/ap_profile_migration_manager.py|APProfileMigrationManager._print_migration_summary|mapping_get|aps_planned|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/mist/resources/device/ap_profile_migration_manager.py|APProfileMigrationManager._print_migration_summary|mapping_get|aps_reassigned|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/mist/resources/device/ap_profile_migration_manager.py|APProfileMigrationManager.migrate_aps_between_device_profiles|mapping_get|aps_reassigned|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/mist/resources/device/ap_profile_migration_manager.py|APProfileMigrationManager.migrate_aps_between_device_profiles|mapping_get|aps_reassigned|1",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/mist/resources/device/ap_profile_migration_manager.py|APProfileMigrationManager.revert_ap_profile_migration|mapping_get|aps_planned|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/mist/resources/device/ap_profile_migration_manager.py|APProfileMigrationManager.revert_ap_profile_migration|mapping_get|aps_planned|1",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/mist/resources/device/ap_profile_migration_manager.py|APProfileMigrationManager.revert_ap_profile_migration|mapping_get|aps_reassigned|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/mist/resources/device/ap_profile_migration_manager.py|APProfileMigrationManager.revert_ap_profile_migration|mapping_get|aps_reassigned|1",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "valid_optional",
+      "evidence": "The consumer permits this optional value or explicit empty collection.",
+      "identity": "src/mist/resources/device/ap_profile_migration_manager.py|APProfileMigrationManager.revert_ap_profile_migration|mapping_get|source_profile_snapshot|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/mist/resources/inventory/csv_comparator.py|InventoryCSVComparator._build_mist_site_addresses|mapping_get|city|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/mist/resources/inventory/csv_comparator.py|InventoryCSVComparator._build_mist_site_addresses|mapping_get|site_name|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/mist/resources/inventory/csv_comparator.py|InventoryCSVComparator._build_mist_site_addresses|mapping_get|state|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "valid_optional",
+      "evidence": "The consumer permits this optional value or explicit empty collection.",
+      "identity": "src/mist/resources/inventory/csv_comparator.py|InventoryCSVComparator._build_mist_site_addresses|mapping_get|street|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/mist/resources/inventory/csv_comparator.py|InventoryCSVComparator._build_mist_site_addresses|mapping_get|zip_code|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/mist/resources/inventory/csv_comparator.py|InventoryCSVComparator._build_validator|mapping_get|site_name|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/mist/resources/inventory/csv_comparator.py|InventoryCSVComparator._common_report_fields|mapping_get|model|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/mist/resources/inventory/csv_comparator.py|InventoryCSVComparator._common_report_fields|mapping_get|site_name|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/mist/resources/inventory/csv_comparator.py|InventoryCSVComparator._count_devices_for_validation|mapping_get|serial|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/mist/resources/inventory/csv_comparator.py|InventoryCSVComparator._extract_address_from_row|mapping_get|<dynamic>|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/mist/resources/inventory/csv_comparator.py|InventoryCSVComparator._extract_address_from_row|mapping_get|<dynamic>|1",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/mist/resources/inventory/csv_comparator.py|InventoryCSVComparator._extract_address_from_row|mapping_get|<dynamic>|2",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/mist/resources/inventory/csv_comparator.py|InventoryCSVComparator._extract_address_from_row|mapping_get|<dynamic>|3",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "valid_optional",
+      "evidence": "The consumer permits this optional value or explicit empty collection.",
+      "identity": "src/mist/resources/inventory/csv_comparator.py|InventoryCSVComparator._extract_ref_site_entry|mapping_get|Address|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "valid_optional",
+      "evidence": "The consumer permits this optional value or explicit empty collection.",
+      "identity": "src/mist/resources/inventory/csv_comparator.py|InventoryCSVComparator._extract_ref_site_entry|mapping_get|City|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "valid_optional",
+      "evidence": "The consumer permits this optional value or explicit empty collection.",
+      "identity": "src/mist/resources/inventory/csv_comparator.py|InventoryCSVComparator._extract_ref_site_entry|mapping_get|State|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/mist/resources/inventory/csv_comparator.py|InventoryCSVComparator._extract_ref_site_entry|mapping_get|Zip|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/mist/resources/inventory/csv_comparator.py|InventoryCSVComparator._extract_ref_site_entry|mapping_get|serial|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/mist/resources/inventory/csv_comparator.py|InventoryCSVComparator._extract_ref_site_entry|mapping_get|site_name|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/mist/resources/inventory/csv_comparator.py|InventoryCSVComparator._get_comparison_address|mapping_get|<dynamic>|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "valid_optional",
+      "evidence": "The consumer permits this optional value or explicit empty collection.",
+      "identity": "src/mist/resources/inventory/csv_comparator.py|InventoryCSVComparator._get_comparison_address|mapping_get|Address|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "valid_optional",
+      "evidence": "The consumer permits this optional value or explicit empty collection.",
+      "identity": "src/mist/resources/inventory/csv_comparator.py|InventoryCSVComparator._get_comparison_address|mapping_get|City|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "valid_optional",
+      "evidence": "The consumer permits this optional value or explicit empty collection.",
+      "identity": "src/mist/resources/inventory/csv_comparator.py|InventoryCSVComparator._get_comparison_address|mapping_get|State|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/mist/resources/inventory/csv_comparator.py|InventoryCSVComparator._get_comparison_address|mapping_get|Zip|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/mist/resources/inventory/csv_comparator.py|InventoryCSVComparator._get_component_address|mapping_get|city|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/mist/resources/inventory/csv_comparator.py|InventoryCSVComparator._get_component_address|mapping_get|state|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "valid_optional",
+      "evidence": "The consumer permits this optional value or explicit empty collection.",
+      "identity": "src/mist/resources/inventory/csv_comparator.py|InventoryCSVComparator._get_component_address|mapping_get|street|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/mist/resources/inventory/csv_comparator.py|InventoryCSVComparator._get_component_address|mapping_get|zip_code|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/mist/resources/inventory/csv_comparator.py|InventoryCSVComparator._ingest_lookup_row|mapping_get|<dynamic>|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/mist/resources/inventory/csv_comparator.py|InventoryCSVComparator._ingest_lookup_row|mapping_get|<dynamic>|1",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/mist/resources/inventory/csv_comparator.py|InventoryCSVComparator._initialize_config|environment|END_CUSTOMER_ACCOUNT_ID|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/mist/resources/inventory/csv_comparator.py|InventoryCSVComparator._initialize_config|environment|END_CUSTOMER_NAME|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "valid_optional",
+      "evidence": "The consumer permits this optional value or explicit empty collection.",
+      "identity": "src/mist/resources/inventory/csv_comparator.py|InventoryCSVComparator._parse_mist_address|mapping_get|site_address|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/mist/resources/inventory/csv_comparator.py|InventoryCSVComparator._parse_org_response|mapping_get|name|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/mist/resources/inventory/csv_comparator.py|InventoryCSVComparator._print_conflict_item|mapping_get|Comparison_Address|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/mist/resources/inventory/csv_comparator.py|InventoryCSVComparator._print_conflict_item|mapping_get|Comparison_City|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/mist/resources/inventory/csv_comparator.py|InventoryCSVComparator._print_conflict_item|mapping_get|Comparison_State|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/mist/resources/inventory/csv_comparator.py|InventoryCSVComparator._print_conflict_item|mapping_get|Mist_Address_Line_1|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/mist/resources/inventory/csv_comparator.py|InventoryCSVComparator._print_conflict_item|mapping_get|Mist_City|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/mist/resources/inventory/csv_comparator.py|InventoryCSVComparator._print_conflict_item|mapping_get|Mist_State|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/mist/resources/inventory/csv_comparator.py|InventoryCSVComparator._process_device_in_loop|mapping_get|name|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/mist/resources/inventory/csv_comparator.py|InventoryCSVComparator._process_device_in_loop|mapping_get|serial|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/mist/resources/inventory/csv_comparator.py|InventoryCSVComparator._record_device_parse_failure|mapping_get|id|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "valid_optional",
+      "evidence": "The consumer permits this optional value or explicit empty collection.",
+      "identity": "src/mist/resources/inventory/csv_comparator.py|InventoryCSVComparator._record_device_parse_failure|mapping_get|site_address|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "excluded_ownership",
+      "evidence": "Issue #2863 owns this identifier outside this batch.",
+      "identity": "src/mist/resources/inventory/csv_comparator.py|InventoryCSVComparator._record_device_parse_failure|mapping_get|site_id|0",
+      "ownership": "issue-2863"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/mist/resources/inventory/csv_comparator.py|InventoryCSVComparator._record_device_parse_failure|mapping_get|site_name|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/mist/resources/inventory/csv_comparator.py|InventoryCSVComparator._record_mist_parse_failure|mapping_get|id|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "excluded_ownership",
+      "evidence": "Issue #2863 owns this identifier outside this batch.",
+      "identity": "src/mist/resources/inventory/csv_comparator.py|InventoryCSVComparator._record_mist_parse_failure|mapping_get|site_id|0",
+      "ownership": "issue-2863"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/mist/resources/inventory/csv_comparator.py|InventoryCSVComparator._record_mist_parse_failure|mapping_get|site_name|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "valid_optional",
+      "evidence": "The consumer permits this optional value or explicit empty collection.",
+      "identity": "src/mist/resources/org/org_config_migration_manager.py|OrgConfigMigrationManager._address_overlaps_service|mapping_get|addresses|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "valid_optional",
+      "evidence": "The consumer permits this optional value or explicit empty collection.",
+      "identity": "src/mist/resources/org/org_config_migration_manager.py|OrgConfigMigrationManager._check_service_address_overlap|mapping_get|addresses|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/mist/resources/org/org_config_migration_manager.py|OrgConfigMigrationManager._detect_conflicts|mapping_get|<dynamic>|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/mist/resources/org/org_config_migration_manager.py|OrgConfigMigrationManager._display_bundle_preview|mapping_get|object_counts|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "already_validated",
+      "evidence": "The consumer validates the field or rejects missing data before use.",
+      "identity": "src/mist/resources/org/org_config_migration_manager.py|OrgConfigMigrationManager._execute_import|mapping_get|<dynamic>|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "valid_optional",
+      "evidence": "The consumer permits this optional value or explicit empty collection.",
+      "identity": "src/mist/resources/org/org_config_migration_manager.py|OrgConfigMigrationManager._fetch_config_type|mapping_get|list_kwargs|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "display_only",
+      "evidence": "The value fills a report, display, or descriptive result.",
+      "identity": "src/mist/resources/org/org_config_migration_manager.py|OrgConfigMigrationManager._print_report_section|mapping_get|reason|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "excluded_ownership",
+      "evidence": "Issue #2863 owns this identifier outside this batch.",
+      "identity": "src/mist/resources/org/org_config_migration_manager.py|OrgConfigMigrationManager._process_import_object|mapping_get|id|0",
+      "ownership": "issue-2863"
+    },
+    {
+      "classification": "valid_optional",
+      "evidence": "The consumer permits this optional value or explicit empty collection.",
+      "identity": "src/mist/resources/org/org_config_migration_manager.py|OrgConfigMigrationManager._remap_gateway_template_refs|mapping_get|networks|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "valid_optional",
+      "evidence": "The consumer permits this optional value or explicit empty collection.",
+      "identity": "src/mist/resources/org/org_config_migration_manager.py|OrgConfigMigrationManager._remap_service_policy_refs|mapping_get|services|0",
+      "ownership": "issue-2753"
+    },
+    {
+      "classification": "valid_optional",
+      "evidence": "The consumer permits this optional value or explicit empty collection.",
+      "identity": "src/mist/resources/org/org_config_migration_manager.py|OrgConfigMigrationManager._remap_vpn_networks|mapping_get|networks|0",
+      "ownership": "issue-2753"
+    }
+  ],
+  "reviewed_revision": "ca55339958143c96b60df549ae07b274e89dec2a",
+  "schema_version": 1,
+  "scope": [
+    "src/mist/resources/device/ap_profile_migration_manager.py",
+    "src/mist/intelligence/analytics/zone_analyzer.py",
+    "src/mist/resources/inventory/csv_comparator.py",
+    "src/foundation/support/utils/address_utils.py",
+    "src/mist/resources/org/org_config_migration_manager.py"
+  ]
+}
