@@ -228,7 +228,7 @@ class TestSelectSiteAndDevice:
             return_value={"type": "ap", "status": "disconnected"},
         ):
             result = duc._select_site_and_device("traceroute")
-            assert result is not None
+            assert result == ("site-1", "dev-1", "ap")  # An offline warning must preserve the complete selection.
             assert "WARNING" in caplog.text
 
 
