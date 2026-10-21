@@ -7,13 +7,15 @@ so in the log.
 
 from __future__ import annotations
 
+import logging  # Capture the comparator's refusal message without exposing response data.
 import re
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from src.foundation.support.utils.tls_policy import SKIP_VERIFY_ENV_VAR, TLSVerificationPolicy
-from src.mist.resources.inventory.csv_comparator import ComparatorFlags
+from src.mist.resources.inventory.csv_comparator import ComparatorFlags, InventoryCSVComparator
 from src.mist.resources.site.address_audit.audit_engine import AddressAuditEngine
 
 REPO_ROOT = Path(__file__).resolve().parents[3]  # Repository root, for the source sweep test.
@@ -99,3 +101,81 @@ class TestNoBypassReturns:
         """A guarded script must not disable certificate verification."""
         source = (REPO_ROOT / relative_path).read_text(encoding="utf-8")  # Read the tracked file.
         assert not BYPASS_TOKENS.search(source), f"{relative_path} reintroduced a TLS bypass"
+
+
+def _build_org_lookup_comparator() -> InventoryCSVComparator:
+    """Build the minimum comparator state that the organization lookup reads."""
+    comparator = InventoryCSVComparator.__new__(InventoryCSVComparator)  # Avoid unrelated CSV setup for this seam.
+    comparator.debug = True  # Enable the warning that identifies the rejected response status.
+    comparator._api = MagicMock(name="mist_session")  # Give the SDK call a stable session argument.
+    comparator._get_org_id = lambda: "org-uuid-1"  # Supply a fixed organization without prompting or I/O.
+    return comparator  # Return the real comparator methods with only their required state.
+
+
+def test_org_name_lookup_rejects_http_403_payload(caplog: pytest.LogCaptureFixture) -> None:
+    """A refused Mist organization response must not supply a name to validation."""
+    import requests  # Build a native HTTP response for Mist SDK parsing.
+    from mistapi.__api_response import APIResponse  # Keep Mist API imports out of module scope.
+
+    comparator = _build_org_lookup_comparator()  # Exercise the real organization lookup method.
+    response = requests.Response()  # Create a native response without making a network request.
+    response.status_code = 403  # Model the refused organization request.
+    response._content = b'{"name":"refused-organization"}'  # Add plausible data that must remain rejected.
+    response.headers["Content-Type"] = "application/json"  # Let APIResponse parse the refused body as JSON.
+    api_response = APIResponse(response, "https://mist.invalid/api/v1/orgs/org-uuid-1")  # Parse the native response.
+
+    assert api_response.status_code == 403  # Confirm the SDK response preserves the refusal status.
+    assert api_response.data == {"name": "refused-organization"}  # Confirm the refused body looks usable.
+    with caplog.at_level(logging.WARNING, logger="src.mist.resources.inventory.csv_comparator"):
+        with patch(
+            "mistapi.api.v1.orgs.orgs.getOrg",
+            return_value=api_response,
+        ) as mocked_get_org:  # Replace only the outbound SDK boundary.
+            org_name = comparator._get_org_name_for_validation()  # Run the real status and data checks.
+
+    assert org_name is None  # Reject plausible organization data from the refused response.
+    mocked_get_org.assert_called_once_with(comparator._api, "org-uuid-1")  # Preserve the exact SDK call.
+    status_warnings = [
+        record.getMessage()
+        for record in caplog.records
+        if record.name == "src.mist.resources.inventory.csv_comparator" and record.levelno == logging.WARNING
+    ]
+    assert status_warnings == ["Failed to retrieve org info: HTTP 403"]  # Preserve exact refusal evidence.
+
+
+def test_org_name_lookup_handles_connection_error(caplog: pytest.LogCaptureFixture) -> None:
+    """A connection refusal must not stop validation or produce an organization name."""
+    import requests  # Raise a native transport error at the mocked SDK boundary.
+
+    comparator = _build_org_lookup_comparator()  # Exercise the same real organization lookup path.
+    with caplog.at_level(logging.WARNING):
+        with patch(
+            "mistapi.api.v1.orgs.orgs.getOrg",
+            side_effect=requests.ConnectionError("connection refused"),
+        ) as mocked_get_org:  # Prevent the test from opening a network connection.
+            org_name = comparator._get_org_name_for_validation()  # Run the real exception handler.
+
+    assert org_name is None  # A connection error must not provide an organization hint.
+    mocked_get_org.assert_called_once_with(comparator._api, "org-uuid-1")  # Preserve the exact SDK call.
+    assert [record.getMessage() for record in caplog.records if record.name == "root"] == [
+        "Could not retrieve organization name: connection refused"
+    ]  # Preserve the failure reason.
+
+
+def test_org_name_lookup_handles_connection_timeout(caplog: pytest.LogCaptureFixture) -> None:
+    """A connection timeout must not stop validation or produce an organization name."""
+    import requests  # Raise a native timeout at the mocked SDK boundary.
+
+    comparator = _build_org_lookup_comparator()  # Exercise the same real organization lookup path.
+    with caplog.at_level(logging.WARNING):
+        with patch(
+            "mistapi.api.v1.orgs.orgs.getOrg",
+            side_effect=requests.Timeout("connection timed out"),
+        ) as mocked_get_org:  # Prevent the test from opening a network connection.
+            org_name = comparator._get_org_name_for_validation()  # Run the real exception handler.
+
+    assert org_name is None  # A connection timeout must not provide an organization hint.
+    mocked_get_org.assert_called_once_with(comparator._api, "org-uuid-1")  # Preserve the exact SDK call.
+    assert [record.getMessage() for record in caplog.records if record.name == "root"] == [
+        "Could not retrieve organization name: connection timed out"
+    ]  # Preserve the failure reason.
