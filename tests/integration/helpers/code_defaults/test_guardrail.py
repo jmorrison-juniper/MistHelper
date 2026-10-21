@@ -2,6 +2,7 @@
 
 import json
 import subprocess
+import sys
 from dataclasses import replace
 from pathlib import Path
 
@@ -166,18 +167,32 @@ def test_cli_guard_rejects_an_unsafe_default_in_a_tracked_repository(
 def test_cli_guard_rejects_a_null_baseline(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Reject JSON null instead of accepting it as a baseline object."""
     root = Path(__file__).resolve().parents[4]
     baseline_path = tmp_path / "null.json"
     baseline_path.write_text("null", encoding="utf-8")
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["code-defaults", "guard", "--root", str(root), "--baseline", str(baseline_path)],
+    )
 
-    status = main(["guard", "--root", str(root), "--baseline", str(baseline_path)])
+    status = main(None)
     output = json.loads(capsys.readouterr().out)
 
     assert status == 2
     assert output["status"] == "invalid_input"
     assert "baseline must be a JSON object" in output["message"]
+
+
+def test_empty_cli_arguments_require_a_subcommand() -> None:
+    """Reject an empty explicit argument list with argparse's usage error."""
+    with pytest.raises(SystemExit) as error:
+        main([])
+
+    assert error.value.code == 2
 
 
 def test_unknown_scoped_candidate_is_invalid() -> None:

@@ -1,5 +1,6 @@
 """Test local workflows with controlled responses and no cloud access."""
 
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -25,6 +26,17 @@ def test_ap_backup_rejects_a_missing_required_plan_before_work(tmp_path: Path) -
 
     with pytest.raises(ValueError, match="aps_planned"):
         APProfileMigrationManager._load_and_validate_backup(str(backup))
+
+
+def test_ap_backup_reports_malformed_json_cause(tmp_path: Path) -> None:
+    """Preserve the JSON decoder error when an operator backup is malformed."""
+    backup = tmp_path / "malformed.json"
+    backup.write_text("{not-json", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="not valid JSON") as error:
+        APProfileMigrationManager._load_and_validate_backup(str(backup))
+
+    assert isinstance(error.value.__cause__, json.JSONDecodeError)
 
 
 @pytest.mark.parametrize("data", [None, "", "   ", {}, 7, [None]])

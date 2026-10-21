@@ -2,6 +2,7 @@
 
 import json
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -127,11 +128,13 @@ def test_none_default_is_not_an_empty_default_candidate(tmp_path: Path) -> None:
 def test_scan_reports_counts_and_separate_classification_totals(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Emit parse and severity counts with reversible deterministic JSON."""
     root = _repository(tmp_path, "def choose(record):\n    return record.get('id', '')\n")
+    monkeypatch.setattr(sys, "argv", ["code-defaults", "scan", "--root", str(root)])
 
-    status = main(["scan", "--root", str(root)])
+    status = main(None)
     output = json.loads(capsys.readouterr().out)
 
     assert status == 0
@@ -140,3 +143,11 @@ def test_scan_reports_counts_and_separate_classification_totals(
     assert output["parsed_files"] == 1
     assert output["classification_totals"] == {"outside_batch": 1}
     assert output["severity_totals"] == {"outside_batch": 1}
+
+
+def test_empty_cli_arguments_require_a_subcommand() -> None:
+    """Reject an empty explicit argument list with argparse's usage error."""
+    with pytest.raises(SystemExit) as error:
+        main([])
+
+    assert error.value.code == 2
