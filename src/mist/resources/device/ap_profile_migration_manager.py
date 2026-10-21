@@ -1129,10 +1129,9 @@ class APProfileMigrationManager:  # Preserve the existing behavior during the co
             profiles = mistapi.get_all(
                 response=response, mist_session=session
             )  # Preserve the existing behavior during the compliance refactor.
-        except Exception:  # WHY: fallback for mocked responses.
-            profiles = (
-                getattr(response, "data", []) or []
-            )  # Preserve the existing behavior during the compliance refactor.
+        except Exception as error:  # WHY: tests may provide a response without pagination metadata.
+            _LOGGER.warning("Profile pagination failed. Validating response data: %s", error)
+            profiles = APProfileMigrationManager._require_response_records(response, "listOrgDeviceProfiles")
 
         ap_profiles = [
             p for p in profiles if p.get("type") == "ap"
@@ -1147,6 +1146,22 @@ class APProfileMigrationManager:  # Preserve the existing behavior during the co
             key=lambda p: str(p.get("name", "")).lower()
         )  # Preserve the existing behavior during the compliance refactor.
         return ap_profiles  # Preserve the existing behavior during the compliance refactor.
+
+    @staticmethod
+    def _require_response_records(
+        response: Any,
+        endpoint: str,
+    ) -> list[dict[str, Any]]:
+        """Require a successful API response with a list of object records."""
+        status = getattr(response, "status_code", None)
+        if not isinstance(status, int) or not 200 <= status < 300:
+            raise RuntimeError(f"{endpoint} failed with HTTP status {status!r}")
+        records = getattr(response, "data", None)
+        if not isinstance(records, list) or any(not isinstance(record, dict) for record in records):
+            _LOGGER.error("%s response data is not a list of objects", endpoint)
+            raise ValueError(f"{endpoint} response.data must be a list of objects")
+        _LOGGER.debug("%s returned %d validated records", endpoint, len(records))
+        return records
 
     @staticmethod
     def _pick_ap_device_profile(
@@ -1212,8 +1227,12 @@ class APProfileMigrationManager:  # Preserve the existing behavior during the co
                 continue  # Preserve the existing behavior during the compliance refactor.
             if 1 <= index <= count:  # Preserve the existing behavior during the compliance refactor.
                 picked = ap_profiles[index - 1]  # Preserve the existing behavior during the compliance refactor.
+                profile_id = picked.get("id")
+                if not isinstance(profile_id, str) or not profile_id.strip():
+                    _LOGGER.error("Selected AP profile has no required id")
+                    raise RuntimeError("Selected AP profile is missing its required profile id.")
                 return (  # Preserve the existing behavior during the compliance refactor.
-                    str(picked.get("id", "")),
+                    profile_id.strip(),
                     str(picked.get("name", "")),
                     dict(picked),
                 )
@@ -1253,10 +1272,9 @@ class APProfileMigrationManager:  # Preserve the existing behavior during the co
             sites = mistapi.get_all(
                 response=sites_response, mist_session=session
             )  # Preserve the existing behavior during the compliance refactor.
-        except Exception:  # Preserve the existing behavior during the compliance refactor.
-            sites = (
-                getattr(sites_response, "data", []) or []
-            )  # Preserve the existing behavior during the compliance refactor.
+        except Exception as error:  # WHY: tests may provide a response without pagination metadata.
+            _LOGGER.warning("Site pagination failed. Validating response data: %s", error)
+            sites = APProfileMigrationManager._require_response_records(sites_response, "listOrgSites")
 
         records: list[dict[str, Any]] = []  # Preserve the existing behavior during the compliance refactor.
         for site in sites:  # Preserve the existing behavior during the compliance refactor.
