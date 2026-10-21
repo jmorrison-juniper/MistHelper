@@ -550,6 +550,7 @@ class WanDashboardService:
         snapshot = {
             "schema_version": 1,
             "org_id": self._org_id,
+            "data_source": "live",  # Mark SDK collection so a synthetic example cannot appear as live data.
             "collected_at": datetime.now(UTC).isoformat(),
             "data": overview,
         }  # Keep collection metadata beside the complete, atomic dashboard value.
@@ -574,6 +575,7 @@ class WanDashboardService:
             return self._result("unavailable", [], "The cached overview is invalid.")  # Reject the entire snapshot.
         rows = self._filter_cached_overview(rows, site_id, gateway_id, search)
         result["data"] = rows  # Apply validated filters only after a complete snapshot is available.
+        result["data_source"] = "live"  # Keep legacy live cache rows distinct from the static synthetic example.
         if collected_at is not None:  # Worker snapshots carry a verified UTC collection timestamp.
             result["collected_at"] = collected_at  # Let the page show snapshot age without changing row shape.
         if result["status"] == "ok":  # A legacy cache entry has no trustworthy collection timestamp.
@@ -811,8 +813,14 @@ class WanDashboardService:
         collected_at: str | None = None  # Legacy values do not carry a verified collection time.
         rows = payload  # Preserve the original list shape for existing cached snapshots.
         if isinstance(payload, dict):  # Worker snapshots include organization and UTC metadata.
-            if payload.get("schema_version") != 1 or payload.get("org_id") != self._org_id:
-                return None, None  # Reject an unknown schema or another organization's snapshot.
+            if any(
+                (  # Validate all envelope identity fields in one branch.
+                    payload.get("schema_version") != 1,  # Reject unknown schema versions.
+                    payload.get("org_id") != self._org_id,  # Reject snapshots from another organization.
+                    payload.get("data_source", "live") != "live",  # Reject explicit synthetic or unknown sources.
+                )
+            ):
+                return None, None  # Reject invalid or non-live snapshot envelopes.
             collected_at = payload.get("collected_at")  # Read the worker's collection timestamp.
             rows = payload.get("data")  # Read the complete overview records.
             if not isinstance(collected_at, str) or not self._valid_utc_timestamp(collected_at):

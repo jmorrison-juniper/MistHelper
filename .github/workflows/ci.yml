@@ -14,6 +14,9 @@ on:
   # checks, which a reviewer reads as clean rather than unmeasured. Issue #1952
   # records that gap.
   pull_request:
+  # Queue candidates need the same required checks on the proposed merge result.
+  merge_group:
+    types: [checks_requested]
   push:
     # The push trigger stays pinned to main. A push run on every branch would
     # repeat the pull request run and add cost with no added signal.

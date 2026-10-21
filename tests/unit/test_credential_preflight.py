@@ -242,6 +242,25 @@ class TestTokenPreviewCarriesNoSecret:
         assert "HTTP 429" in caplog.text  # The log must distinguish rate limiting from other 4xx responses.
         assert self._RAW_TOKEN not in caplog.text  # The log must not expose the token.
 
+    def test_rate_limit_probe_marks_503_token_unavailable(
+        self, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A token probe 503 response must mark the token unavailable."""
+        response = MagicMock(status_code=503)  # Model a Mist service-unavailable response.
+        get_request = MagicMock(return_value=response)  # Keep the response local and prevent network access.
+        monkeypatch.setattr("requests.get", get_request)  # Drive the real probe status branch.
+        caplog.set_level(logging.WARNING)  # Capture the warning that identifies the rejected status.
+
+        result = MistHelper._check_token_rate_limit(self._RAW_TOKEN, "api.mist.com", "1/1")
+
+        assert result is True  # An unexpected server response must not mark the token as usable.
+        assert "Token 1/1 returned unexpected status 503" in caplog.text  # Preserve observable refusal evidence.
+        get_request.assert_called_once_with(
+            "https://api.mist.com/api/v1/self",
+            headers={"Authorization": f"Token {self._RAW_TOKEN}"},
+            timeout=5,
+        )  # Verify the refusal came from the mocked Mist probe.
+
     def test_availability_loop_logs_a_distinct_label_per_token(self, caplog, monkeypatch):
         """An operator must still tell one token from another in the log."""
         monkeypatch.setattr(MistHelper, "_check_token_rate_limit", lambda *_args: False)  # Report every token usable

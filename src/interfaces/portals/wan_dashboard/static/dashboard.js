@@ -225,6 +225,9 @@
         setStatus("Loading gateway data.");
         try {
             const result = await requestJson("/wan-dashboard/api/overview");
+            if (result.data_source !== undefined && result.data_source !== "live") { // Reject any explicit non-live source marker.
+                throw new Error("Synthetic data cannot appear as live dashboard data."); // Keep synthetic rows out of live views.
+            }
             state.gateways = Array.isArray(result.data) ? result.data : [];
             populateSites();
             renderGateways();

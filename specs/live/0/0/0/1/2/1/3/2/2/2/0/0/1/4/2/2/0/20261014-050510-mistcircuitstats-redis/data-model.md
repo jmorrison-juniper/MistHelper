@@ -61,6 +61,7 @@ The worker reads port records through the existing organization-wide paginated `
 | `record_type` | Existing cache type | Use the current dashboard cache contract. |
 | `record_id` | Mist natural identifier or stable tuple | Use the source identifier. Do not generate a random identifier. |
 | `state` | Enumerated text | Use the existing state contract for current, stale, unavailable, or synthetic data. Never publish a partial snapshot. |
+| `data_source` | Enumerated text | New worker snapshots use `live`. A synthetic example is not a cache snapshot. |
 | `collected_at` | UTC timestamp | Required for live data. |
 | `expires_at` | UTC timestamp | Preserve the existing 300-, 600-, or 86,400-second TTL by record type. |
 | `records` | List of observations | Validate shape and ownership before publication. |
@@ -118,3 +119,4 @@ The Refresh control queues work for the single worker. The route does not make a
 12. Preserve the existing cache namespace and TTLs.
 13. Keep per-port Insights parity out of this model. Issue #4330 tracks that work.
 14. Keep `WAN_DASHBOARD_LOAD_TEST_APPROVED` false, and leave the refresh interval and renewable worker lease unset until the production-scale load test.
+15. Run the production-scale load test during a scheduled maintenance window. Keep collection disabled before that test.

@@ -212,3 +212,50 @@ class TestDeviceUpdateHttpStatus:
             (record.levelno, record.getMessage()) for record in records
         ]
         assert not any(record.levelno >= logging.ERROR for record in records)
+
+    def test_http_403_records_failed_update(self, monkeypatch, caplog) -> None:
+        """A client refusal must retain its status and must not report success."""
+        from requests import Response
+
+        response = Response()
+        response.status_code = 403
+        response._content = b'{"id": "dev-1"}'
+        with caplog.at_level(logging.DEBUG):
+            update = self._prepare_update(response, monkeypatch)
+            result = WANProbeDeviceOverrideManager._update_single_device(update.manager, update.device, dry_run=False)
+
+        assert result == {
+            "device_name": "gw-1",
+            "device_id": "dev-1",
+            "site_name": "site-a",
+            "site_id": "site-1",
+            "template_name": "Template-A",
+            "ports_updated": ["ge-0/0/0"],
+            "status": "FAILED",
+            "error": "API returned status 403",
+        }
+        update.endpoints.getSiteDevice.assert_called_once_with(update.session, "site-1", "dev-1")
+        update.endpoints.updateSiteDevice.assert_called_once_with(
+            update.session,
+            "site-1",
+            "dev-1",
+            body={
+                "port_config": {
+                    "ge-0/0/0": {
+                        "wan_probe_override": {
+                            "ips": update.manager.probe_ips,
+                            "probe_profile": update.manager.probe_profile,
+                        }
+                    }
+                }
+            },
+        )
+        records = [
+            record
+            for record in caplog.records
+            if record.name == "src.mist.resources.gateway.wan_probe_device_override_manager"
+        ]
+        assert [(record.levelno, record.getMessage()) for record in records if record.levelno >= logging.ERROR] == [
+            (logging.ERROR, "Failed to update device gw-1: 403")
+        ]
+        assert not any("Successfully updated" in record.getMessage() for record in records)

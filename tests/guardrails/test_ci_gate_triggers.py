@@ -112,6 +112,25 @@ class TestPullRequestTrigger:
         # A filter of main alone reproduces the defect, so reject that exact case.
         assert branches != ["main"], "A filter of main alone reproduces issue #1952."
 
+    @pytest.mark.parametrize("workflow_name", ["ci.yml", "codeql.yml"])
+    @pytest.mark.parametrize("mutation", [None, "missing", "wrong-type", "filtered", "cancel", "group"])
+    def test_merge_group_contract(self, workflow_name: str, mutation: str | None) -> None:
+        """Reject missing queue events and unsafe candidate concurrency."""
+        candidate = _parse(CI_WORKFLOW.with_name(workflow_name))  # Read each required workflow, not a substitute.
+        if mutation == "missing":
+            candidate[TRIGGER_KEY].pop("merge_group", None)
+        elif mutation == "wrong-type":
+            candidate[TRIGGER_KEY]["merge_group"] = {"types": ["destroyed"]}
+        elif mutation == "filtered":
+            candidate[TRIGGER_KEY]["merge_group"] = {"types": ["checks_requested"], "paths": ["src/**"]}
+        elif mutation == "cancel":
+            candidate["concurrency"]["cancel-in-progress"] = True
+        elif mutation == "group":
+            candidate["concurrency"]["group"] = "shared-queue-group"
+        blockers = CancellableJobAudit.queue_blockers(candidate)  # Apply the same decision to real and mutated inputs.
+        print(f"Checked 1 of 2 required workflows: {workflow_name}, mutation={mutation}, blockers={blockers}.")
+        assert (blockers == []) is (mutation is None), f"Invalid merge queue contract: {workflow_name}: {blockers}"
+
 
 class TestPushTrigger:
     """Check the push event, which must stay narrow."""
@@ -123,6 +142,81 @@ class TestPushTrigger:
 
         # A push run on every branch repeats the pull request run and adds cost.
         assert push["branches"] == ["main"], "The push trigger must stay on main."
+
+    @pytest.mark.parametrize(
+        "required_check",
+        [
+            ("ruff", "Ruff (lint)"),
+            ("black", "Black (format check)"),
+            ("mypy", "mypy (strict)"),
+            ("pytest", "pytest (coverage gate)"),
+            ("bandit", "Bandit (security)"),
+            ("pip_audit", "pip-audit (CVE scan)"),
+            ("pylint", "Pylint (score gate)"),
+            ("radon", "Radon (complexity)"),
+            ("vulture", "Vulture (dead code)"),
+            ("pydocstyle", "pydocstyle (docstring style)"),
+            ("interrogate", "Interrogate (docstring coverage)"),
+            ("diagram_lint", "Diagram reference lint"),
+            ("playwright", "E2E smoke tests"),
+            ("ops_platform_pytest", "pytest (ops platform)"),
+        ],
+    )
+    @pytest.mark.parametrize("mutation", [None, "missing", "renamed"])
+    def test_required_check_names(
+        self, workflow: dict[str, Any], required_check: tuple[str, str], mutation: str | None
+    ) -> None:
+        """Keep every required CI job ID and context name stable."""
+        from copy import deepcopy
+
+        job_id, expected_name = required_check  # Pin protection names independently of the YAML under test.
+        jobs = deepcopy(workflow["jobs"])  # Keep module-scoped fixtures intact for later tests.
+        if mutation == "missing":
+            del jobs[job_id]
+        elif mutation == "renamed":
+            jobs[job_id]["name"] = "renamed-required-check"
+        actual_name = jobs.get(job_id, {}).get("name")  # Missing jobs must fail the same comparison as renamed jobs.
+        print(f"Checked 1 of 14 required CI contexts: {job_id}={actual_name!r}, mutation={mutation}.")
+        assert (actual_name == expected_name) is (mutation is None), f"Required context changed: {job_id}"
+
+    @pytest.mark.parametrize("mutation", [None, "main", "pr-head", "missing-sha"])
+    def test_queue_checkout_contract(self, workflow: dict[str, Any], mutation: str | None) -> None:
+        """Every CI checkout must retain the merge-group event commit."""
+        from copy import deepcopy
+
+        candidate = deepcopy(workflow)  # Prevent one checkout mutation from contaminating another scenario.
+        checkout = candidate["jobs"]["test_quality_gate"]["steps"][0]  # This is the only explicit checkout reference.
+        if mutation is not None:
+            checkout["with"]["ref"] = {
+                "main": "main",
+                "pr-head": "${{ github.head_ref }}",
+                "missing-sha": "${{ github.event.pull_request.head.sha }}",
+            }[mutation]
+        references = [
+            step.get("with", {}).get("ref")
+            for job in candidate["jobs"].values()
+            for step in job.get("steps", [])
+            if step.get("uses", "").startswith("actions/checkout@")
+        ]
+        blockers = [
+            ref for ref in references if ref not in (None, "${{ github.event.pull_request.head.sha || github.sha }}")
+        ]
+        print(f"Checked {len(references)} CI checkout references, mutation={mutation}, blockers={len(blockers)}.")
+        assert len(references) >= 14, "The checkout audit must not accept an empty or incomplete workflow."
+        assert (blockers == []) is (mutation is None), f"Queue checkouts must use the candidate commit: {blockers}"
+
+    @pytest.mark.parametrize(
+        ("source", "error"),
+        [(None, FileNotFoundError), ("on: [", yaml.YAMLError), ("[]", AssertionError)],
+    )
+    def test_parser_fails_on_unreadable_input(self, tmp_path: Path, source: str | None, error: type[Exception]) -> None:
+        """Missing, malformed, and non-mapping workflow inputs must fail."""
+        path = tmp_path / "workflow.yml"  # Never replace a real workflow to prove an error decision.
+        if source is not None:
+            path.write_text(source, encoding="utf-8")
+        print(f"Checked 1 invalid workflow input, expected={error.__name__}.")
+        with pytest.raises(error):
+            _parse(path)
 
 
 class TestConcurrency:
@@ -210,6 +304,17 @@ class CancellableJobAudit:
         jobs = workflow.get("jobs", {})  # Read every job, because each one needs a cancel-aware condition.
         return sorted(name for name, job in jobs.items() if "!cancelled()" in str(job.get("if", "")))  # Count them.
 
+    @staticmethod
+    def queue_blockers(workflow: dict[str, Any]) -> list[str]:
+        """Identify event and concurrency settings that block queue validation."""
+        concurrency = workflow["concurrency"]  # Missing configuration must fail instead of assuming isolation.
+        contracts = {
+            "event": workflow[TRIGGER_KEY].get("merge_group") == {"types": ["checks_requested"]},
+            "group": "github.event.pull_request.number || github.ref" in concurrency["group"],
+            "cancellation": concurrency["cancel-in-progress"] == "${{ github.event_name == 'pull_request' }}",
+        }
+        return sorted(name for name, valid in contracts.items() if not valid)  # Give the rejected contract names.
+
 
 class TestCancelledRunStops:
     """Check that a cancelled quality gate run stops each job (issue #3926)."""
@@ -233,14 +338,38 @@ class TestCancelledRunStops:
         synthetic = {"jobs": {"mypy": {"if": "${{ always() }}"}, "ruff": {}}}  # Model the issue #3926 workflow.
         assert CancellableJobAudit.uncancellable_jobs(synthetic) == ["mypy"]  # The audit names the blocker.
 
+    @pytest.mark.parametrize("workflow_name", ["ci.yml", "codeql.yml"])
+    def test_event_concurrency_isolation(self, workflow_name: str) -> None:
+        """Exercise candidate, main, and pull request grouping without evaluating arbitrary expressions."""
+        concurrency = _parse(CI_WORKFLOW.with_name(workflow_name))["concurrency"]  # Read the actual workflow condition.
+        expression = "${{ github.event.pull_request.number || github.ref }}"  # Support this bounded expression only.
+        assert concurrency["group"].endswith(expression), "Unrecognized group expression cannot prove queue isolation."
+        assert concurrency["cancel-in-progress"] == "${{ github.event_name == 'pull_request' }}"
+        contexts = [
+            ("merge_group", "", "refs/heads/gh-readonly-queue/main/pr-1-first"),
+            ("merge_group", "", "refs/heads/gh-readonly-queue/main/pr-2-second"),
+            ("push", "", "refs/heads/main"),
+            ("pull_request", "1", "refs/pull/1/merge"),
+        ]
+        groups = [concurrency["group"].replace(expression, number or ref) for _, number, ref in contexts]
+        cancellations = [event == "pull_request" for event, _, _ in contexts]  # Evaluate only the pinned comparison.
+        print(f"Checked {len(contexts)} event contexts in {workflow_name}, isolated groups={len(set(groups))}.")
+        assert len(set(groups)) == 4, "Queue candidates, main, and pull requests must not share a group."
+        assert cancellations == [False, False, False, True]
+
 
 class TestCodeqlTrigger:
     """Check the events that start the CodeQL scan, a required check."""
 
-    def test_codeql_workflow_exists(self) -> None:
+    def test_codeql_workflow_exists(self, codeql: dict[str, Any]) -> None:
         """The CodeQL workflow must exist, because it reports a required check."""
         # A missing file means no scan reports, and every merge then blocks.
         assert CODEQL_WORKFLOW.is_file(), f"Missing workflow: {CODEQL_WORKFLOW}"
+        job = codeql["jobs"]["codeql"]  # Keep the caller identity that code scanning uses for the required context.
+        print("Checked 1 CodeQL analysis identity and 1 application-owned required context.")
+        assert job["uses"].startswith("jmorrison-juniper/misthelper-devtools/.github/workflows/reusable-codeql.yml@")
+        assert job["with"]["languages"] == '["python"]'
+        assert job["with"]["config-file"] == "./.github/codeql/codeql-config.yml"
 
     def test_pull_request_has_no_branch_filter(self, codeql: dict[str, Any]) -> None:
         """Every pull request must run the scan, whatever its base branch."""

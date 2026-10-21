@@ -7,6 +7,9 @@ on:
   # #1952 records that gap for the Quality Gates workflow, and the same trap
   # applied here.
   pull_request:
+  # Code scanning must report its required context on each queue candidate.
+  merge_group:
+    types: [checks_requested]
   push:
     branches: [main]
   schedule:
@@ -22,7 +25,8 @@ permissions: {}
 
 concurrency:
   group: codeql-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  # Main and queue candidates must finish even when another run starts.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   # The shared workflow runs the analysis in its job named analyze. Code

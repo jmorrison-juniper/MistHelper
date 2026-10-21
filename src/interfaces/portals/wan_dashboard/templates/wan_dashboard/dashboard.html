@@ -98,6 +98,37 @@
         <p id="wan-empty-state" class="wan-empty" hidden>No gateways match these filters.</p>
     </div>
 
+    <section class="wan-panel" aria-labelledby="wan-synthetic-title" data-testid="wan-synthetic-example">
+        <div class="wan-panel-heading">
+            <div>
+                <h2 id="wan-synthetic-title">Offline example (synthetic data)</h2>
+                <p>This fictional record is separate from live data and never replaces a live result.</p>
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="table wan-table">
+                <thead>
+                    <tr>
+                        <th scope="col">Site</th>
+                        <th scope="col">Gateway</th>
+                        <th scope="col">Model</th>
+                        <th scope="col">Status</th>
+                        <th scope="col">Data source</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr data-testid="wan-synthetic-example-row" data-source="synthetic">
+                        <td>Example Site</td>
+                        <td>Example Gateway</td>
+                        <td>Fictional Model</td>
+                        <td>Example only</td>
+                        <td>Synthetic</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
     <section id="wan-chart-modal" class="wan-modal" role="dialog" aria-modal="true"
              aria-labelledby="wan-chart-title" hidden>
         <div class="wan-modal-card">
