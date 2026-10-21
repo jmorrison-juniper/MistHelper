@@ -366,3 +366,36 @@ class TestSessionStoreBehavior:
         assert record is not None
         assert record.privileges_are_fresh() is True
         assert record.privileges_are_fresh(now=record.verified_at + 400) is False
+
+
+def _refused_self_response() -> Any:
+    """Parse a refused response with plausible privileges through the native SDK."""
+    import requests
+    from mistapi.__api_response import APIResponse
+
+    response = requests.Response()
+    response.status_code = 503
+    response._content = b'{"email":"operator@example.com","privileges":[{"scope":"msp"}]}'
+    return APIResponse(response, "https://api.mist.com/api/v1/self")
+
+
+def test_privilege_lookup_refuses_http_503_data(caplog: pytest.LogCaptureFixture) -> None:
+    """A refused self response must not grant its plausible privileges."""
+    import logging
+    from unittest.mock import patch
+
+    session = object()
+    with (
+        patch("mistapi.APISession", return_value=session) as session_factory,
+        patch("mistapi.api.v1.self.self.getSelf", return_value=_refused_self_response()) as get_self,
+        caplog.at_level(logging.WARNING),
+        pytest.raises(MistApiUnavailableError, match=r"^Mist API returned status 503$"),
+    ):
+        AuthService().validate_token(TEST_TOKEN)
+    get_self.assert_called_once_with(session)
+    session_factory.assert_called_once_with(host="api.mist.com", apitoken=TEST_TOKEN)
+    assert (
+        "src.shared.services.auth",
+        logging.WARNING,
+        "The Mist privilege lookup failed with status 503.",
+    ) in caplog.record_tuples
