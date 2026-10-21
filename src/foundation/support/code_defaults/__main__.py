@@ -12,21 +12,6 @@ from src.foundation.support.code_defaults.policy import FIRST_BATCH_SCOPE, Guard
 _LOGGER = logging.getLogger(__name__)
 
 
-def _build_parser() -> argparse.ArgumentParser:
-    """Build the scan and guard command interface."""
-    parser = argparse.ArgumentParser(description="Inventory empty defaults in tracked Python source.")
-    commands = parser.add_subparsers(dest="command", required=True)
-    for name in ("scan", "guard"):
-        command = commands.add_parser(name)
-        command.add_argument("--root", type=Path, default=Path("."))
-    commands.choices["guard"].add_argument(
-        "--baseline",
-        type=Path,
-        default=Path(__file__).with_name("baseline.json"),
-    )
-    return parser
-
-
 def _load_baseline(path: Path) -> dict[str, object]:
     """Read a JSON baseline and reject malformed or unreadable content."""
     try:
@@ -112,7 +97,17 @@ def _run_guard(root: Path, baseline_path: Path) -> int:
 def main(arguments: list[str] | None = None) -> int:
     """Dispatch the local command and convert invalid inputs to exit status two."""
     logging.basicConfig(level=logging.INFO, stream=sys.stderr, format="%(levelname)s %(message)s")
-    options = _build_parser().parse_args(arguments)
+    parser = argparse.ArgumentParser(description="Inventory empty defaults in tracked Python source.")
+    commands = parser.add_subparsers(dest="command", required=True)
+    for name in ("scan", "guard"):
+        command = commands.add_parser(name)
+        command.add_argument("--root", type=Path, default=Path("."))
+    commands.choices["guard"].add_argument(
+        "--baseline",
+        type=Path,
+        default=Path(__file__).with_name("baseline.json"),
+    )
+    options = parser.parse_args(arguments)
     try:
         if options.command == "scan":
             return _run_scan(options.root)
