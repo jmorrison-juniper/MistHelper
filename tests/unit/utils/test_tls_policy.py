@@ -159,6 +159,32 @@ def test_org_name_lookup_rejects_http_403_payload(
     assert status_warnings == ["Failed to retrieve org info: HTTP 403"]  # Preserve exact refusal evidence.
 
 
+def test_org_name_lookup_rejects_http_503_payload(
+    caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An unavailable Mist organization response must not supply a validation name."""
+    import requests  # WHY: model the HTTP boundary without a live request.
+    from mistapi.__api_response import APIResponse  # WHY: preserve the SDK response parsing contract.
+
+    comparator = _build_org_lookup_comparator()  # WHY: keep the real lookup and status guard under test.
+    response = requests.Response()  # WHY: supply a native HTTP response to the SDK parser.
+    response.status_code = 503  # WHY: exercise the live missing HTTP 5xx failure mode.
+    response._content = b'{"name":"untrusted-organization"}'  # WHY: plausible failed data must remain rejected.
+    response.headers["Content-Type"] = "application/json"  # WHY: make the failed body available to a faulty guard.
+    api_response = APIResponse(response, "https://mist.invalid/api/v1/orgs/org-uuid-1")  # WHY: retain status and data.
+    mocked_get_org = MagicMock(return_value=api_response)  # WHY: replace only the external SDK boundary.
+    _install_org_lookup_sdk(monkeypatch, mocked_get_org)  # WHY: restore the lazy SDK import after the test.
+    caplog.clear()  # WHY: separate SDK fixture parsing logs from the real lookup result.
+    with caplog.at_level(logging.WARNING, logger="src.mist.resources.inventory.csv_comparator"):
+        org_name = comparator._get_org_name_for_validation()  # WHY: drive the real client and response handler.
+
+    assert org_name is None  # WHY: unavailable organization data must not affect validation.
+    mocked_get_org.assert_called_once_with(comparator._api, "org-uuid-1")  # WHY: prevent retries or wrong scope.
+    assert caplog.record_tuples == [  # WHY: require the exact refusal status and no success report.
+        ("src.mist.resources.inventory.csv_comparator", logging.WARNING, "Failed to retrieve org info: HTTP 503")
+    ]
+
+
 def test_org_name_lookup_handles_connection_error(
     caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
