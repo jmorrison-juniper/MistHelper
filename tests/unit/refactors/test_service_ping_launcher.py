@@ -16,6 +16,9 @@ from unittest.mock import MagicMock  # WHY: FR-008 mandates MagicMock(spec=...) 
 
 import pytest  # WHY: monkeypatch/caplog fixtures.
 
+from src.foundation.runtime.config.source_dependency_resolver import (  # WHY: verify canonical resolver identity.
+    SourceDependencyResolver,  # WHY: compare the actual source-owned resolver object.
+)
 from src.foundation.support.refactors.service_ping_launcher import (  # WHY: SUT + helper direct imports.
     ServicePingLauncher,
     _resolve_runtime_dependencies,
@@ -79,9 +82,9 @@ class TestResolveRuntimeDependencies:
     """`_resolve_runtime_dependencies` bundles MistHelper module handle."""
 
     def test_returns_bundle_with_misthelper_module(self) -> None:
-        """The returned SimpleNamespace exposes the live MistHelper module."""
+        """The returned bundle exposes the canonical source dependency resolver."""
         deps = _resolve_runtime_dependencies()  # WHY: exercise helper directly.
-        assert deps.misthelper_module is not None  # WHY: module resolved.
+        assert deps.misthelper_module is SourceDependencyResolver  # WHY: reject an unrelated non-None object.
         assert deps.misthelper_module.__name__ == "MistHelper"  # WHY: identity check on module name.
 
 
