@@ -161,7 +161,7 @@ def test_org_name_lookup_rejects_http_403_payload(
 
 def test_org_name_lookup_rejects_http_503_payload(
     caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
-) -> None:
+) -> None:  # WHY: protect validation from organization data returned with an HTTP failure.
     """An unavailable Mist organization response must not supply a validation name."""
     import requests  # WHY: model the HTTP boundary without a live request.
     from mistapi.__api_response import APIResponse  # WHY: preserve the SDK response parsing contract.
@@ -175,7 +175,9 @@ def test_org_name_lookup_rejects_http_503_payload(
     mocked_get_org = MagicMock(return_value=api_response)  # WHY: replace only the external SDK boundary.
     _install_org_lookup_sdk(monkeypatch, mocked_get_org)  # WHY: restore the lazy SDK import after the test.
     caplog.clear()  # WHY: separate SDK fixture parsing logs from the real lookup result.
-    with caplog.at_level(logging.WARNING, logger="src.mist.resources.inventory.csv_comparator"):
+    with caplog.at_level(  # WHY: capture the real lookup refusal without unrelated SDK setup logs.
+        logging.WARNING, logger="src.mist.resources.inventory.csv_comparator"
+    ):
         org_name = comparator._get_org_name_for_validation()  # WHY: drive the real client and response handler.
 
     assert org_name is None  # WHY: unavailable organization data must not affect validation.
