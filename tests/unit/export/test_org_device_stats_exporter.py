@@ -381,11 +381,13 @@ class TestLogFirstSiteSample:
 
         OrgDeviceStatsExporter._log_first_site_sample([("s1", "n1"), ("s2", "n2")])
 
-    def test_empty(self, fake_mh):
+    def test_empty(self, fake_mh: ModuleType, caplog: pytest.LogCaptureFixture) -> None:
         """Empty list still logs a placeholder without raising."""
         from src.operations.exporting.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
+        caplog.set_level(logging.DEBUG, logger=OrgDeviceStatsExporter.__module__)
         OrgDeviceStatsExporter._log_first_site_sample([])
+        assert caplog.messages == ["First site sample: No sites, type: N/A"]
 
 
 class TestLoadSitesFromCachedCsv:
