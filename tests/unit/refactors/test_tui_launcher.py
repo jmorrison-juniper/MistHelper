@@ -22,13 +22,16 @@ class TestResolveRuntimeDependencies:
     """`_resolve_runtime_dependencies` returns a SimpleNamespace bundling the MistHelper module."""
 
     def test_returns_bundle_with_misthelper_module(self) -> None:
-        """The returned SimpleNamespace exposes the live MistHelper module under `misthelper_module`."""
+        """The bundle exposes the canonical resolver under `misthelper_module`."""
+        from src.foundation.runtime.config.source_dependency_resolver import (
+            SourceDependencyResolver,
+        )
         from src.foundation.support.refactors.tui_launcher import (
             _resolve_runtime_dependencies,
         )  # WHY: import inside test for isolation.
 
         deps = _resolve_runtime_dependencies()  # WHY: exercise the helper directly.
-        assert deps.misthelper_module is not None  # WHY: the module attribute must be resolved, not None.
+        assert deps.misthelper_module is SourceDependencyResolver
         assert deps.misthelper_module.__name__ == "MistHelper"  # WHY: identity check on the imported module name.
 
 
