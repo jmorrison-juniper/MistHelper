@@ -701,3 +701,25 @@ def test_org_name_lookup_unexpected_error_propagates() -> None:
     _reset_dependencies(mistapi_module=mistapi_dep)  # Inject the endpoint that raises unexpectedly.
     with pytest.raises(ValueError, match="bad org name"):
         OrgDeviceInventorySummaryCore._lookup_org_name_from_api("org-1")  # The handler must propagate.
+
+
+def test_switch_page_http_503_stops_pagination(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A server refusal must stop switch pagination and report the HTTP status."""
+    from src.mist.resources.inventory import org_device_inventory_summary as summary_module
+
+    response = requests.Response()
+    response.status_code = 503
+    response.reason = "Service Unavailable"
+    response.url = "https://api.mist.com/api/v1/orgs/org-1/devices/search?start=1000"
+    with pytest.raises(requests.HTTPError) as refusal:
+        response.raise_for_status()
+    session = SimpleNamespace(mist_get=MagicMock(side_effect=refusal.value))
+    monkeypatch.setattr(summary_module, "apisession", session)
+
+    result = OrgDeviceInventorySummaryCore._search_switch_page("org-1", response.url)
+
+    assert result is None
+    assert caplog.record_tuples == [("root", logging.ERROR, f"searchOrgDevices switch page failed: {refusal.value}")]
+    session.mist_get.assert_called_once_with(response.url)
