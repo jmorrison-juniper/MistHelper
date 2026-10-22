@@ -287,3 +287,30 @@ def test_gateway_inventory_http_503_returns_empty(caplog: pytest.LogCaptureFixtu
     inventory_endpoint.assert_called_once_with(  # WHY: ensure the failure came from the expected API request.
         summary_module.apisession, "org-1", type="gateway", vc=True, limit=1000
     )
+
+
+def test_switch_inventory_http_403_stops_pagination(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A refused first switch page must stop pagination and report the HTTP error."""
+    from src.mist.resources.inventory import org_device_inventory_summary as summary_module
+
+    response = requests.Response()
+    response.status_code = 403
+    response.reason = "Forbidden"
+    response.url = "https://api.mist.com/api/v1/orgs/org-1/devices/search"
+    with pytest.raises(requests.HTTPError) as http_error:
+        response.raise_for_status()
+    sdk = MagicMock()
+    endpoint = sdk.api.v1.orgs.devices.searchOrgDevices
+    endpoint.side_effect = http_error.value
+    session = MagicMock()
+    monkeypatch.setattr(summary_module, "mistapi", sdk)
+    monkeypatch.setattr(summary_module, "apisession", session)
+
+    assert OrgDeviceInventorySummaryCore._fetch_switch_physical_inventory("org-1") == []
+    assert caplog.record_tuples == [
+        ("root", 40, f"searchOrgDevices switch page failed: 403 Client Error: Forbidden for url: {response.url}")
+    ]
+    endpoint.assert_called_once_with(session, "org-1", type="switch", limit=1000)
+    session.mist_get.assert_not_called()
