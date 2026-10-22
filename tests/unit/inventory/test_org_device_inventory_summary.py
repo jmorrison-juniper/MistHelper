@@ -264,3 +264,26 @@ def test_gateway_inventory_connection_failures_return_empty(exception: requests.
     summary_module.mistapi.api.v1.orgs.inventory.getOrgInventory.side_effect = exception
     result = OrgDeviceInventorySummaryCore._fetch_gateway_physical_inventory("org-1")
     assert result == []
+
+
+def test_gateway_inventory_http_503_returns_empty(caplog: pytest.LogCaptureFixture) -> None:
+    """A Mist server refusal must stop the gateway inventory fetch."""
+    _configure_dependencies()  # WHY: isolate the API boundary from the live cloud.
+    from src.mist.resources.inventory import org_device_inventory_summary as summary_module  # WHY: inject the refusal.
+
+    response = requests.Response()  # WHY: model the HTTP response used by the Mist SDK.
+    response.status_code = 503  # WHY: exercise a server-side refusal with a concrete status.
+    response.reason = "Service Unavailable"  # WHY: preserve the operator-facing failure context.
+    response.url = "https://api.mist.com/api/v1/orgs/org-1/inventory"  # WHY: identify the mocked request.
+    with pytest.raises(requests.HTTPError) as http_error:  # WHY: match the SDK response error path.
+        response.raise_for_status()  # WHY: create the same exception as an unsuccessful HTTP response.
+    inventory_endpoint = summary_module.mistapi.api.v1.orgs.inventory.getOrgInventory  # WHY: inspect the API call.
+    inventory_endpoint.side_effect = http_error.value  # WHY: return the refusal through the production handler.
+
+    result = OrgDeviceInventorySummaryCore._fetch_gateway_physical_inventory("org-1")  # WHY: run the guarded fetch.
+
+    assert result == []  # WHY: prevent a refused response from becoming inventory data.
+    assert "503 Server Error" in caplog.text  # WHY: retain the server status for operator diagnosis.
+    inventory_endpoint.assert_called_once_with(  # WHY: ensure the failure came from the expected API request.
+        summary_module.apisession, "org-1", type="gateway", vc=True, limit=1000
+    )
