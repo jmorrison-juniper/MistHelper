@@ -208,7 +208,7 @@ class TestAnUnknownVersionStaysInTheUpgradeBucket:
         assert at_target == [], "the stale value must not skip the device"
 
 
-def test_http_403_stats_response_has_no_running_versions(caplog: pytest.LogCaptureFixture) -> None:
+def test_http_403_stats_response_has_no_running_versions(caplog: pytest.LogCaptureFixture) -> None:  # WHY: reject 403.
     """An access refusal must not supply a running firmware version."""
     import requests  # WHY: provide a concrete HTTP response without a network request.
     from mistapi.__api_response import APIResponse  # WHY: exercise the installed SDK response parser.
@@ -221,14 +221,16 @@ def test_http_403_stats_response_has_no_running_versions(caplog: pytest.LogCaptu
     api_response = APIResponse(response, response.url)  # WHY: parse the refusal through the native SDK.
     stats_call = MagicMock(return_value=api_response)  # WHY: replace only the external request boundary.
     resolver = RunningFirmwareVersionResolver(session, stats_fn=stats_call)  # WHY: retain the production status check.
-    caplog.set_level(logging.ERROR, logger="src.operations.execution.firmware.running_version")
+    caplog.set_level(logging.ERROR, logger="src.operations.execution.firmware.running_version")  # WHY: capture refusal.
 
     result = resolver.fetch_site_running_versions("site-1")  # WHY: exercise the complete read and index path.
 
-    assert result == {}, "an access refusal must not supply a running firmware version"
-    stats_call.assert_called_once_with(session, "site-1", type="all", limit=1000)
-    assert [
-        (record.levelname, record.getMessage())
-        for record in caplog.records
-        if record.name == "src.operations.execution.firmware.running_version"
-    ] == [("ERROR", "The listSiteDevicesStats call for site site-1 returned 403")]
+    assert result == {}, "an access refusal must not supply a running firmware version"  # WHY: reject refused data.
+    stats_call.assert_called_once_with(session, "site-1", type="all", limit=1000)  # WHY: prevent extra requests.
+    assert [  # WHY: require the exact operator diagnostic.
+        (record.levelname, record.getMessage())  # WHY: verify severity and status together.
+        for record in caplog.records  # WHY: inspect every captured diagnostic.
+        if record.name == "src.operations.execution.firmware.running_version"  # WHY: exclude SDK parser diagnostics.
+    ] == [
+        ("ERROR", "The listSiteDevicesStats call for site site-1 returned 403")  # WHY: preserve refusal context.
+    ]  # WHY: preserve refusal context.
