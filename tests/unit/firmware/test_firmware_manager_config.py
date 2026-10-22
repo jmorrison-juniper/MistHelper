@@ -286,3 +286,31 @@ class TestFirmwareManagerInit:
         assert caplog.record_tuples == [
             (fm_mod.__name__, logging.ERROR, "Failed to access organization ORG-503: 503"),
         ]
+
+    def test_org_validation_refuses_http_403(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """An access refusal must reject plausible organization data and report the HTTP status."""
+        response = types.SimpleNamespace(status_code=403, data={"name": "Untrusted organization"})
+        get_org = Mock(return_value=response)
+        monkeypatch.setattr(fm_mod.mistapi.api.v1.orgs.orgs, "getOrg", get_org)
+        for name in ("apisession", "org_id", "msp_privileges", "PROGRESS_EMITTER"):
+            monkeypatch.setattr(fm_mod, name, getattr(fm_mod, name))
+        session = object()
+        manager = FirmwareManager(_make_config(apisession=session, org_id="ORG-403"))
+        caplog.clear()
+
+        with caplog.at_level(logging.DEBUG, logger=fm_mod.__name__):
+            result = manager._validate_org_for_ssr_upgrade()
+
+        assert result == ("", {"error": "Organization access failed"})
+        get_org.assert_called_once_with(session, "ORG-403")
+        assert capsys.readouterr().out == (
+            "\n-> Validating organization access...\nX  Error accessing organization: 403\n"
+        )
+        assert caplog.record_tuples == [
+            (fm_mod.__name__, logging.ERROR, "Failed to access organization ORG-403: 403"),
+        ]
