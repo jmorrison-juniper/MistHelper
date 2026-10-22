@@ -99,6 +99,7 @@ def test_submit_runs_executor_when_last_param_collected(tui_stub) -> None:
     collector = _make_collector(tui_stub)  # Build
     collector.submit()  # Final param
     collector._executor.execute.assert_called_once()  # Executor fired
+    assert tui_stub.function_params == {"x": "value"}
 
 
 def test_submit_debug_mode_logs_redacted_secret(tui_stub, caplog: pytest.LogCaptureFixture) -> None:
