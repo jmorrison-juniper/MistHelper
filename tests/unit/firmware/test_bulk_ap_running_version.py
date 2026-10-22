@@ -206,3 +206,29 @@ class TestAnUnknownVersionStaysInTheUpgradeBucket:
         assert upgrader.ap_versions[_DEVICE_ID] == UNKNOWN_VERSION, "the stale value must not be recorded"
         assert needing == [access_point], "the device must stay in the upgrade bucket"
         assert at_target == [], "the stale value must not skip the device"
+
+
+def test_http_403_stats_response_has_no_running_versions(caplog: pytest.LogCaptureFixture) -> None:
+    """An access refusal must not supply a running firmware version."""
+    import requests  # WHY: provide a concrete HTTP response without a network request.
+    from mistapi.__api_response import APIResponse  # WHY: exercise the installed SDK response parser.
+
+    session = MagicMock()  # WHY: isolate the reader from the live Mist cloud.
+    response = requests.Response()  # WHY: preserve the real HTTP status and payload behavior.
+    response.status_code = 403  # WHY: exercise the access-refusal branch rather than a server error.
+    response.url = "https://api.mist.invalid/api/v1/sites/site-1/stats/devices"  # WHY: identify the refused request.
+    response._content = b'[{"id":"device-1","version":"0.14.29695"}]'  # WHY: plausible data must not bypass status.
+    api_response = APIResponse(response, response.url)  # WHY: parse the refusal through the native SDK.
+    stats_call = MagicMock(return_value=api_response)  # WHY: replace only the external request boundary.
+    resolver = RunningFirmwareVersionResolver(session, stats_fn=stats_call)  # WHY: retain the production status check.
+    caplog.set_level(logging.ERROR, logger="src.operations.execution.firmware.running_version")
+
+    result = resolver.fetch_site_running_versions("site-1")  # WHY: exercise the complete read and index path.
+
+    assert result == {}, "an access refusal must not supply a running firmware version"
+    stats_call.assert_called_once_with(session, "site-1", type="all", limit=1000)
+    assert [
+        (record.levelname, record.getMessage())
+        for record in caplog.records
+        if record.name == "src.operations.execution.firmware.running_version"
+    ] == [("ERROR", "The listSiteDevicesStats call for site site-1 returned 403")]
