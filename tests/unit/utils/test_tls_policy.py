@@ -176,14 +176,19 @@ def test_org_name_lookup_rejects_http_503_payload(
     _install_org_lookup_sdk(monkeypatch, mocked_get_org)  # WHY: restore the lazy SDK import after the test.
     caplog.clear()  # WHY: separate SDK fixture parsing logs from the real lookup result.
     with caplog.at_level(  # WHY: capture the real lookup refusal without unrelated SDK setup logs.
-        logging.WARNING, logger="src.mist.resources.inventory.csv_comparator"
+        logging.WARNING,  # WHY: retain refusal warnings without success traces.
+        logger="src.mist.resources.inventory.csv_comparator",  # WHY: capture the real comparator status report.
     ):
         org_name = comparator._get_org_name_for_validation()  # WHY: drive the real client and response handler.
 
     assert org_name is None  # WHY: unavailable organization data must not affect validation.
     mocked_get_org.assert_called_once_with(comparator._api, "org-uuid-1")  # WHY: prevent retries or wrong scope.
     assert caplog.record_tuples == [  # WHY: require the exact refusal status and no success report.
-        ("src.mist.resources.inventory.csv_comparator", logging.WARNING, "Failed to retrieve org info: HTTP 503")
+        (  # WHY: require the complete warning identity rather than a partial text match.
+            "src.mist.resources.inventory.csv_comparator",  # WHY: reject warnings from an unrelated handler.
+            logging.WARNING,  # WHY: preserve the operator-visible refusal severity.
+            "Failed to retrieve org info: HTTP 503",  # WHY: identify the exact failed HTTP response.
+        )
     ]
 
 
