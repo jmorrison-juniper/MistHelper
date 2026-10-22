@@ -311,6 +311,28 @@ class TestMistRoutes:
         assert response.get_json()["devices"][0]["firmware_version"] == "12.3.4"  # WHY: payload is preserved.
         self.mock_mist_client.list_site_devices.assert_called_once_with("site-123", "all")  # WHY: seam call used.
 
+    def test_get_sites_http_503_refuses_result_without_cache_write(self) -> None:
+        """An upstream HTTP 503 must produce a route error without cached success."""
+        upstream = Mock()  # WHY: isolate the external Mist request.
+        cache = Mock()  # WHY: observe cache access without Redis.
+        upstream_response = requests.Response()  # WHY: retain native HTTP error semantics.
+        upstream_response.status_code = 503  # WHY: model an unavailable Mist service.
+        upstream.listOrgSites.side_effect = requests.HTTPError(  # WHY: exercise the handled transport failure.
+            "HTTP 503", response=upstream_response
+        )
+        cache.get.return_value = None  # WHY: require the real client to request fresh sites.
+        mist_client = MistAPIClient(mist_api_client=upstream, redis_cache=cache)  # WHY: use real refusal logic.
+        app = Flask(__name__)  # WHY: exercise the route with the real client.
+        app.register_blueprint(create_mist_routes(mist_client=mist_client))  # WHY: connect both production layers.
+
+        response = app.test_client().get("/api/sites", query_string={"org_id": "org-123"})  # WHY: request sites.
+
+        assert response.status_code == 502  # WHY: an upstream refusal must not become an empty success.
+        assert response.get_json() == {"error": "Failed to retrieve sites from Mist"}  # WHY: require the exact error.
+        upstream.listOrgSites.assert_called_once_with("org-123")  # WHY: verify the failing request scope.
+        cache.get.assert_called_once_with("sites:org-123")  # WHY: verify the real cache-miss path.
+        cache.setex.assert_not_called()  # WHY: a refused result must never enter the success cache.
+
 
 if __name__ == "__main__":
     # WHY: run tests
