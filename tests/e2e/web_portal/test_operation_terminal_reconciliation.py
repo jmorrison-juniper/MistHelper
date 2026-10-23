@@ -218,7 +218,10 @@ def test_output_deduplication_preserves_two_distinct_file_paths(page: Any) -> No
     ]
 
 
-def test_empty_terminal_output_clears_a_stale_loading_preview(page: Any) -> None:
+@pytest.mark.parametrize(
+    "message", ["Operation completed with no output file", "Site selection completed. No output file is required."]
+)
+def test_empty_terminal_output_clears_a_stale_loading_preview(page: Any, message: str) -> None:
     """A no-output terminal state must close a stale result preview."""
     _load_operation_shell(page)  # Build the isolated browser state.
     page.evaluate("""
@@ -232,16 +235,21 @@ def test_empty_terminal_output_clears_a_stale_loading_preview(page: Any) -> None
         """)  # Reproduce a preview that still reads Loading when terminal state arrives.
     assert page.locator("#resultsSummary").inner_text() == "Loading the results..."  # Prove the stale state exists.
 
-    page.evaluate("""
-        () => window.__eventSource.emit("complete", {
+    page.evaluate(
+        """
+        (message) => window.__eventSource.emit("complete", {
           run_id: "run-4032-empty",
-          message: "Operation completed with no output file",
+          message,
           output_files: []
         })
-        """)  # Deliver the no-output terminal state through SSE.
+        """,
+        message,
+    )  # Deliver either an empty export or a successful selection through SSE.
 
     assert page.locator("#resultsPanel").is_hidden()  # The terminal empty set must close the stale preview.
     assert page.evaluate("window.__resultCalls.at(-1)") == []  # The result helper must receive the empty set.
+    assert page.locator("#statusBadge").inner_text() == "Complete"  # Selection completion is not an export failure.
+    assert page.locator("#statusMessage").inner_text() == message  # Preserve the server's selection explanation.
 
 
 OPERATION_SHELL = """
