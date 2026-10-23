@@ -7,6 +7,7 @@ and SSE event streaming for real-time progress updates.
 import json
 import logging
 import os
+import threading
 import time
 
 from flask import (
@@ -33,6 +34,9 @@ DEFAULT_STREAM_MAX_SECONDS = 300.0
 
 # Seconds the poll waits for one event before it writes a heartbeat.
 STREAM_POLL_TIMEOUT_SECONDS = 5
+
+# Only initialization holds this lock. Operation execution and streams remain independent.
+_EXECUTOR_INIT_LOCK = threading.Lock()
 
 
 def _stream_max_seconds() -> float:
@@ -308,15 +312,19 @@ def _get_executor():
     """Retrieve or create the OperationExecutor singleton."""
     executor = current_app.config.get("OPERATION_EXECUTOR")
     if executor is None:
-        from web_portal.services.operation import OperationExecutor
+        with _EXECUTOR_INIT_LOCK:
+            # A different request may have initialized this application while we waited.
+            executor = current_app.config.get("OPERATION_EXECUTOR")
+            if executor is None:
+                from web_portal.services.operation import OperationExecutor
 
-        executor = OperationExecutor(
-            menu_actions=current_app.config.get("MENU_ACTIONS", {}),
-            apisession=current_app.config.get("APISESSION"),
-            org_id=current_app.config.get("ORG_ID"),
-            event_bus=current_app.config.get("EVENT_BUS"),
-        )
-        current_app.config["OPERATION_EXECUTOR"] = executor
+                executor = OperationExecutor(
+                    menu_actions=current_app.config.get("MENU_ACTIONS", {}),
+                    apisession=current_app.config.get("APISESSION"),
+                    org_id=current_app.config.get("ORG_ID"),
+                    event_bus=current_app.config.get("EVENT_BUS"),
+                )
+                current_app.config["OPERATION_EXECUTOR"] = executor
     return executor
 
 
