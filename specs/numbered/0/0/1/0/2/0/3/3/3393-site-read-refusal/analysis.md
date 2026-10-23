@@ -72,7 +72,7 @@ This is not a full-suite coverage result.
 `.venv/bin/python -m vulture src/ MistHelper.py wsgi.py web_portal --min-confidence 70` exited 0.
 The STE check passed for the specification, plan, tasks, design records, and release fragment.
 The first link scan found no tracked input because the new records were not staged.
-A tracked-input scan remains part of the commit verification.
+After staging, the link scan checked ten tracked Markdown files and found zero broken links.
 
 ## Boundaries
 
@@ -84,5 +84,24 @@ The change adds no dependency, menu operation, or container configuration.
 
 ## Commit verification
 
-The committed-input preflight and comparison run after the feature commit.
-The task record remains open until those commands finish.
+The feature commit is `3d2e538`.
+The final ownership check examined 14 open pull requests and found no matching path.
+The base remained `9991d30a187e5d215462eefac60a09a57e5f99e5`.
+
+```text
+git fetch --no-tags origin '+refs/heads/main:refs/remotes/origin/main'
+Passed.
+
+git rev-parse --verify 'origin/main^{commit}'
+9991d30a187e5d215462eefac60a09a57e5f99e5
+
+.venv/bin/python -B -m pytest -p no:cacheprovider -s -q tests/guardrails/local_test_quality_loop/test_guidance.py::TestLiveGuides
+1 passed. All four required inputs were read and validated.
+
+.venv/bin/test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json --changed-from origin/main --full-gate-path .github/workflows/ci.yml --full-gate-path requirements-dev.txt --log-level WARNING
+gate_scope: 2 files checked, 0 findings checked
+gate: 0 new findings vs baseline
+```
+
+All 11 tasks are complete.
+Human review, remote publication, CI, merge, and deployment remain outside this local implementation handoff.
