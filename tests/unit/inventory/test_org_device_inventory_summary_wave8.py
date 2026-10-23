@@ -723,3 +723,25 @@ def test_switch_page_http_503_stops_pagination(
     assert result is None
     assert caplog.record_tuples == [("root", logging.ERROR, f"searchOrgDevices switch page failed: {refusal.value}")]
     session.mist_get.assert_called_once_with(response.url)
+
+
+def test_switch_page_http_403_stops_pagination(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A refused continuation page must stop pagination and report the HTTP status."""
+    from src.mist.resources.inventory import org_device_inventory_summary as summary_module
+
+    response = requests.Response()
+    response.status_code = 403
+    response.reason = "Forbidden"
+    response.url = "https://api.mist.com/api/v1/orgs/org-1/devices/search?start=1000"
+    with pytest.raises(requests.HTTPError) as refusal:
+        response.raise_for_status()
+    session = SimpleNamespace(mist_get=MagicMock(side_effect=refusal.value))
+    monkeypatch.setattr(summary_module, "apisession", session)
+
+    result = OrgDeviceInventorySummaryCore._search_switch_page("org-1", response.url)
+
+    assert result is None
+    assert caplog.record_tuples == [("root", logging.ERROR, f"searchOrgDevices switch page failed: {refusal.value}")]
+    session.mist_get.assert_called_once_with(response.url)
