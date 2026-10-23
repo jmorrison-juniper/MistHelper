@@ -11,7 +11,7 @@ Check the returned HTTP status before beacon payload normalization. Raise a stat
 - **Language/Version**: Python 3.13.
 - **Primary Dependencies**: mistapi 0.64.1, pytest, requests response doubles.
 - **Storage**: Existing exporter backends remain unchanged.
-- **Testing**: Existing exporter unit module plus an installed SDK response contract check.
+- **Testing**: Existing exporter unit module plus SDK call compatibility checks.
 - **Target Platform**: Windows, macOS, Linux.
 - **Project Type**: CLI and portal operation.
 - **Performance Goals**: No extra requests or delays.

@@ -57,7 +57,7 @@ An operator exports a valid beacon. A temporary rate limit uses the existing bou
 ### Mist Cloud Transport Requirements
 
 The operation uses `mistapi.api.v1.sites.beacons.getSiteBeacon` with the existing session and explicit identifiers.
-Tests use local response doubles and the installed SDK response class. No test calls the Mist cloud.
+Tests use local response doubles. The installed SDK source defines the response contract. No test calls the Mist cloud.
 The repair adds no transport, authentication path, or payload logging.
 
 ### Key Entities
