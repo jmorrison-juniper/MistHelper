@@ -44,7 +44,22 @@ Commands use the worktree environment.
 
 STE checks pass for the release fragment and all eight preceding feature records.
 An initial STE invocation supplied a directory instead of files. The corrected invocation read all eight files and skipped zero.
-The test-quality ratchet runs after the local commit, as the repository procedure requires.
+The test-quality ratchet ran after the local commit, as the repository procedure requires.
+The exact required command was:
+
+```sh
+.venv/bin/test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json --changed-from origin/main --full-gate-path .github/workflows/ci.yml --full-gate-path requirements-dev.txt
+```
+
+It exited 2 because the Mist API exclusion skipped the changed test module.
+Its output reported zero real modules inspected. This result is not a passing check.
+The same command with `--include-mist-api` inspected the changed module and exited zero.
+It reported `gate_scope: 1 files checked, 0 findings checked` and `gate: 0 new findings vs baseline`.
+No configuration, exclusion, detector, or baseline was changed.
+The initial regression used the native SDK response class, which triggered the analyzer exclusion.
+The final regression uses an SDK response double, consistent with the existing test module.
+The inspected SDK source still defines the response contract.
+This removes the private SDK import and lets the required command inspect the final test module.
 The changelog diff test skips outside a pull request event.
 The initial route test run had 36 failures because `pwsh` was absent.
 An official portable PowerShell 7.6.8 copy resolved that missing tool without changing the host installation.

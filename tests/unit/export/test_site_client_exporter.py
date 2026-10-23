@@ -34,7 +34,6 @@ from typing import Any  # WHY: monkeypatched fakes carry loose typing.
 from unittest.mock import MagicMock, call  # WHY: FR-008 collaborator doubles + call assertions.
 
 import pytest  # WHY: monkeypatch + caplog fixtures.
-from mistapi.__api_response import APIResponse  # Exercise the installed SDK response contract without a request.
 
 import MistHelper as _mh_module  # WHY: module-object monkeypatch avoids legacy-facade substring guard.
 from src.operations.exporting.export.site_client_exporter import SiteClientExporter  # WHY: direct SUT import.
@@ -422,10 +421,8 @@ class TestGetSiteBeacon:
     ) -> None:
         """Reject failed SDK responses before an error mapping can become a beacon row."""
         wired_deps["InputUtils"].safe_input.side_effect = ["site-123", "beacon-456"]
-        http_response = MagicMock(status_code=status_code, headers={}, text='{"detail":"Not found."}')
-        http_response.json.return_value = {"detail": "Not found."}
         endpoint = wired_deps["mistapi"].api.v1.sites.beacons.getSiteBeacon
-        endpoint.return_value = APIResponse(http_response, "/api/v1/sites/site-123/beacons/beacon-456")
+        endpoint.return_value = MagicMock(status_code=status_code, data={"detail": "Not found."})
 
         with caplog.at_level(logging.INFO):
             SiteClientExporter.get_site_beacon()
