@@ -2932,8 +2932,7 @@ def _parse_api_tokens() -> tuple[str, list[str]]:  # Preserve the existing behav
         tokens: list[str] = []  # Prevent downstream callers from using either conflicting credential.
         logger.debug("Conflicting Mist token variables detected; values hidden")  # Record only the safe failure state.
     else:  # Matching or single-variable configuration remains valid during migration.
-        raw_token_env = token_env or legacy_token_env  # Prefer the canonical value and retain the migration path.
-        tokens = _split_env_tokens(raw_token_env)  # Parse tokens without exposing credential material.
+        tokens = current_tokens or legacy_tokens  # Ignore empty delimiters and prefer usable canonical tokens.
     if tokens:  # Log a redacted preview so operators can confirm presence without exposing secrets
         logger.debug("Token(s) discovered for initialization (redacted): %s", _redact_tokens(tokens))  # Safe preview
     else:  # No tokens discovered in environment
