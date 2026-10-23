@@ -20,6 +20,7 @@ from src.foundation.models.data.data_processing_utils import (
 from src.foundation.runtime.config.source_dependency_resolver import (
     SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
 )
+from src.foundation.support.refactors.endpoint_primary_key_strategies import SleTrendIdentity
 from src.foundation.support.utils.input_utils import InputUtils  # WHY: MSP selection must use the EOF-safe prompt.
 from src.operations.exporting.export.endpoint_catalog import (
     menu_text,
@@ -662,7 +663,7 @@ class EndpointFamilyExporter:
         return [{"value": rawdata}]
 
     @staticmethod
-    def _persist(rawdata: Any, filename: str, operation: str) -> int:
+    def _persist(rawdata: Any, filename: str, operation: str, arguments: dict[str, str] | None = None) -> int:
         """Flatten and persist endpoint rows through the shared exporter."""
         mh = EndpointFamilyExporter._mist_helper()  # Load the shared DataExporter only when needed.
         rows = EndpointFamilyExporter._normalize(rawdata)  # Convert single-object responses to one row.
@@ -671,6 +672,7 @@ class EndpointFamilyExporter:
             logger.info("! No %s data found", operation)  # Empty read results are valid.
             return 0
         flattened_data = DataProcessingUtils.flatten_nested_fields(rows)  # Flatten nested JSON for tabular output.
+        flattened_data = EndpointFamilyExporter._identify_trend_rows(flattened_data, operation, arguments)
         sanitized_data = DataProcessingUtils.escape_multiline(flattened_data)  # Keep line breaks safe in CSV cells.
         write_succeeded = mh.DataExporter.write_with_format_selection(
             sanitized_data, filename, api_function_name=operation
@@ -682,6 +684,21 @@ class EndpointFamilyExporter:
             logger.error("! %s write failed after receiving %d records", operation, len(rows))  # Expose a write loss.
         logger.debug("%s persisted %d rows to %s", operation, written_count, filename)  # Record the write result.
         return written_count
+
+    @staticmethod
+    def _identify_trend_rows(
+        rows: list[dict[str, Any]], operation: str, arguments: dict[str, str] | None
+    ) -> list[dict[str, Any]]:
+        """Add and validate complete identities before any trend output is written."""
+        fields = SleTrendIdentity.fields(operation)
+        if not fields:
+            return rows
+        logger.info("Preparing SLE window identities for %s", operation)
+        identified = [SleTrendIdentity.enrich(row, arguments or {}) for row in rows]
+        for row in identified:
+            SleTrendIdentity.key(row, list(fields))
+        logger.debug("Prepared %d complete SLE window identities for %s", len(identified), operation)
+        return identified
 
     @staticmethod
     def _recover_unpaginated_object(response: Any, rawdata: Any, operation: _EndpointFamilyOp) -> Any:
@@ -737,7 +754,7 @@ class EndpointFamilyExporter:
             filename = f"{operation.operation}_{arguments.label.replace(' ', '_')}.csv"  # Build a readable export name.
             received_count = len(EndpointFamilyExporter._normalize(rawdata))  # Count records before persistence.
             written_count = EndpointFamilyExporter._persist(
-                rawdata, filename, operation.operation
+                rawdata, filename, operation.operation, dict(zip(operation.required, arguments.values, strict=True))
             )  # Write the selected output format.
             if received_count != written_count:
                 logger.error(

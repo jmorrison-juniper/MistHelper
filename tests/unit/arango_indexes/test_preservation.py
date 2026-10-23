@@ -9,7 +9,10 @@ from hypothesis import given, settings
 from hypothesis import strategies as hypothesis_strategies
 
 from src.foundation.persistence.db.writers.arango_writer import IMPORT_BATCH_SIZE
-from src.foundation.support.refactors.endpoint_primary_key_strategies import ENDPOINT_PRIMARY_KEY_STRATEGIES
+from src.foundation.support.refactors.endpoint_primary_key_strategies import (
+    ENDPOINT_PRIMARY_KEY_STRATEGIES,
+    SleTrendIdentity,
+)
 from tests.unit.arango_indexes.fakes import ArangoIndexWriterHarness
 
 
@@ -119,3 +122,87 @@ class TestPayloadValues:
             assert (result.success, result.records_written, result.records_failed) == (True, 1, 0)
         finally:
             harness.close()
+
+
+class TestSleWindowIdentity:
+    """Retain legacy documents while enforcing complete new window identities."""
+
+    @pytest.fixture(params=("getSiteSleSummaryTrend", "getSiteSleClassifierSummaryTrend"))
+    def window(self, request: pytest.FixtureRequest) -> tuple[str, dict[str, Any]]:
+        """Supply complete identifiers without production credentials or network calls."""
+        return request.param, {
+            "site_id": "site-1",
+            "scope": "site",
+            "scope_id": "scope-1",
+            "metric": "coverage",
+            "classifier_name": "low-rssi",
+            "start": 100,
+            "end": 200,
+            "value": "old",
+        }
+
+    @pytest.mark.parametrize("change", ({"start": 200, "end": 300}, {"site_id": "site-2"}, {"metric": "capacity"}))
+    def test_repeat_replaces_new_document_and_retains_legacy(
+        self, window: tuple[str, dict[str, Any]], writer_harness: ArangoIndexWriterHarness, change: dict[str, Any]
+    ) -> None:
+        """Preserve a UUID legacy record, replace a repeated window, and retain a distinct window."""
+        operation, row = window
+        writer = writer_harness.writer()
+        legacy_strategy = {"type": "auto_increment_with_unique", "primary_key": ["misthelper_internal_id"]}
+        assert writer.write([row], operation, legacy_strategy).records_written == 1
+        documents = writer_harness.database.collections[operation].state.documents
+        legacy = deepcopy(documents)
+        strategy = ENDPOINT_PRIMARY_KEY_STRATEGIES[operation]
+        for value in ("first", "second"):
+            assert writer.write([{**row, "value": value}], operation, strategy).records_written == 1
+        assert len(documents) == 2
+        assert {key: documents[key] for key in legacy} == legacy
+        key = SleTrendIdentity.key(row, strategy["primary_key"])
+        assert documents[key]["value"] == "second"
+        assert writer.write([{**row, **change}], operation, strategy).records_written == 1
+        assert len(documents) == 3
+        assert row["value"] == "old"
+
+    @pytest.mark.parametrize("field", ("site_id", "scope", "scope_id", "metric", "start", "end"))
+    def test_missing_identity_prevents_any_document_import(
+        self, window: tuple[str, dict[str, Any]], writer_harness: ArangoIndexWriterHarness, field: str
+    ) -> None:
+        """A missing component must not produce a partial key or random UUID."""
+        operation, row = window
+        row.pop(field)
+        with pytest.raises(ValueError, match="SLE"):
+            writer_harness.writer().write([row], operation, ENDPOINT_PRIMARY_KEY_STRATEGIES[operation])
+        collection = writer_harness.database.collections[operation]
+        assert collection.state.documents == {}
+        collection.handle.import_bulk.assert_not_called()
+
+    @pytest.mark.parametrize("boundary", (None, True, -1, float("nan"), float("inf"), "", "not-a-number"))
+    def test_invalid_boundary_fails(self, boundary: Any) -> None:
+        """Reject malformed window boundaries without generating an identity."""
+        row = {
+            "site_id": "site",
+            "scope": "site",
+            "scope_id": "scope",
+            "metric": "coverage",
+            "start": boundary,
+            "end": 200,
+        }
+        with pytest.raises(ValueError, match="SLE"):
+            SleTrendIdentity.key(row, list(SleTrendIdentity.fields("getSiteSleSummaryTrend")))
+
+    def test_numeric_equivalence_and_classifier_isolation(self) -> None:
+        """Canonical timestamps must agree while distinct classifier values must differ."""
+        fields = list(SleTrendIdentity.fields("getSiteSleClassifierSummaryTrend"))
+        row = {
+            "site_id": "a_b",
+            "scope": "site",
+            "scope_id": "c",
+            "metric": "coverage",
+            "classifier_name": "low-rssi",
+            "start": 100,
+            "end": 200,
+        }
+        key = SleTrendIdentity.key(row, fields)
+        assert SleTrendIdentity.key({**row, "start": 100.0, "end": "200.00"}, fields) == key
+        assert SleTrendIdentity.key({**row, "classifier_name": "other"}, fields) != key
+        assert SleTrendIdentity.key({**row, "site_id": "a", "scope_id": "b_c"}, fields) != key
