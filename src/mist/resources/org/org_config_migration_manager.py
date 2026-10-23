@@ -148,17 +148,29 @@ class OrgConfigMigrationManager:  # Org config migration manager.
     # ------------------------------------------------------------------
 
     def _get_org_name(self) -> str:  # Resolve the org name.
-        """Fetch organization name from the API."""
+        """Accept validated organization metadata without logging response contents."""
         logger.info("Fetching org name for org %s", self.org_id)  # Log before API call
         try:
             response = mistapi.api.v1.orgs.orgs.getOrg(self.session, self.org_id)  # Query Mist API for org details
-            if hasattr(response, "data") and response.data:  # Verify response has data attribute
-                name = response.data.get("name", "Unknown")  # Extract org name from response
-                logger.debug("Org name resolved: %s", name)  # Log resolved name
-                return name  # type: ignore[no-any-return] # Return org name string
-        except Exception as error:  # Catch network/auth errors gracefully
-            logging.warning("Could not fetch org name: %s", error)  # Log warning with error details
-        return "Unknown"  # Fallback when API call fails
+        except (OSError, RuntimeError) as error:  # Retain nonfatal SDK transport and rate-limit failures.
+            logger.error("Org name request failed for org %s (%s)", self.org_id, type(error).__name__)
+            return "Unknown"  # Exception text can contain sensitive response contents.
+        status = getattr(response, "status_code", None)  # Missing status must not imply success.
+        if not isinstance(status, int) or not 200 <= status < 300:  # Refused metadata cannot identify an export.
+            safe_status = status if isinstance(status, int) and not isinstance(status, bool) else "unavailable"
+            logger.warning("Org name request failed for org %s: HTTP %s", self.org_id, safe_status)
+            return "Unknown"  # Preserve the explicit unknown label after refusal.
+        logger.debug("Org name request completed for org %s: HTTP %s", self.org_id, status)
+        data = getattr(response, "data", None)  # Read metadata only after successful HTTP validation.
+        if not isinstance(data, dict) or "error" in data:  # Error objects are not organization metadata.
+            logger.warning("Org name metadata is invalid for org %s", self.org_id)
+            return "Unknown"  # Do not inspect or log an invalid body.
+        name = data.get("name")  # A valid object can still lack a usable name.
+        if not isinstance(name, str) or not name.strip():  # Export labels require nonblank text.
+            logger.warning("Org name is unavailable for org %s", self.org_id)
+            return "Unknown"  # Keep missing names explicit without exposing metadata.
+        logger.debug("Org name resolved for org %s", self.org_id)  # Report completion without the name.
+        return name  # Preserve the exact successful label.
 
     def _resolve_api_fn(self, dotted_path: str):  # Resolve an API function.
         """Resolve a dotted string like 'mistapi.api.v1.orgs.networks.listOrgNetworks' to a callable."""
