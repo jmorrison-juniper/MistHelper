@@ -30,7 +30,7 @@
 
 - [x] T009 Add the release fragment and run the focused regression tests and applicable local gates. (delivered: changelog.d/issue-3393-site-read-refusal.md, analysis.md)
 - [x] T010 Analyze requirement coverage and record the result. (delivered: analysis.md)
-- [ ] T011 Commit the explicit manifest and run the documented test-quality comparison.
+- [x] T011 Commit the explicit manifest and run the documented test-quality comparison. (delivered: analysis.md, feature commit `3d2e538`)
 
 ## Dependencies
 
