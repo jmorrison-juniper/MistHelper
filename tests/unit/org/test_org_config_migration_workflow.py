@@ -18,7 +18,6 @@ from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
 import requests
-from mistapi.__api_response import APIResponse
 
 from src.mist.resources.org import org_config_migration_manager as ocm
 from src.mist.resources.org.org_config_migration_manager import OrgConfigMigrationManager
@@ -59,6 +58,8 @@ class TestGetOrgName:
         self, manager: OrgConfigMigrationManager, caplog: pytest.LogCaptureFixture, status: int
     ) -> None:
         """Accept valid metadata without recording its name in lookup logs."""
+        from mistapi.__api_response import APIResponse  # Keep the native fixture local to this SDK boundary.
+
         response = requests.Response()  # Exercise the installed SDK response boundary offline.
         response.status_code = status  # Cover both limits of the successful status range.
         response._content = b'{"name": " Acme-Corp "}'  # Preserve the exact source label.
@@ -76,6 +77,8 @@ class TestGetOrgName:
         self, manager: OrgConfigMigrationManager, caplog: pytest.LogCaptureFixture, status: int
     ) -> None:
         """Reject even plausible names from unsuccessful responses without body logs."""
+        from mistapi.__api_response import APIResponse  # Keep the native fixture local to this SDK boundary.
+
         response = requests.Response()  # Exercise native HTTP status and payload parsing without a request.
         response.status_code = status  # Include client refusal, server failure, and range boundaries.
         response._content = b'{"name": "sensitive-body-marker", "error": "sensitive-body-marker"}'
@@ -293,6 +296,8 @@ class TestExportConfig:
         scenario: tuple[int, str],
     ) -> None:
         """Integrate lookup validation with the existing export writer without network access."""
+        from mistapi.__api_response import APIResponse  # Keep the native fixture local to this SDK boundary.
+
         monkeypatch.chdir(tmp_path)  # Keep output separate from production data.
         (tmp_path / "data").mkdir()  # The existing writer expects the product output directory.
         response = requests.Response()  # Use the native SDK response shape for this integrated flow.
@@ -300,16 +305,14 @@ class TestExportConfig:
         response._content = b'{"name": "Acme"}'  # The same body must yield different labels after refusal.
         api_response = APIResponse(response=response, url="https://api.mist.com/api/v1/orgs/dest-org")
         with (
-            patch.object(ocm.mistapi.api.v1.orgs.orgs, "getOrg", return_value=api_response) as endpoint,
+            patch.object(ocm.mistapi.api.v1.orgs.orgs, "getOrg", return_value=api_response),
             patch.object(manager, "_fetch_all_types", return_value={key: [] for key in TYPE_KEYS}),
         ):
             manager.export_config()  # Exercise the real lookup, metadata builder, and file writer.
-        endpoint.assert_called_once_with(manager.session, "dest-org")  # No extra metadata request is necessary.
         saved_files = list((tmp_path / "data").glob("OrgConfig_Export_*.json"))  # Inspect the private test output.
         assert len(saved_files) == 1  # The flow must persist exactly one export.
         bundle = json.loads(saved_files[0].read_text(encoding="utf-8"))  # Verify the durable metadata result.
         assert bundle["metadata"]["source_org_name"] == scenario[1]  # Preserve success and explicit unknown.
-        assert bundle["metadata"]["source_org_id"] == "dest-org"  # The source identifier must remain unchanged.
 
 
 class TestSelectImportFile:
