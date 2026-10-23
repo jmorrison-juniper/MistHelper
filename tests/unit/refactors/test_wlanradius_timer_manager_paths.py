@@ -1322,3 +1322,34 @@ def test_site_info_http_503_refuses_plausible_site_data(
     assert (manager.site_info, manager.site_name, manager.site_template_id) == before
     assert caplog.record_tuples == [(wrtm.__name__, logging.ERROR, "Failed to fetch site info: HTTP 503")]
     fetch.assert_called_once_with(session, "site-1")
+
+
+def test_site_info_http_403_preserves_selected_site(
+    manager: WLANRadiusTimerManager, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Refuse forbidden site data instead of replacing the selected site."""
+    from types import SimpleNamespace
+
+    from mistapi.__api_response import APIResponse
+    from requests import Response
+
+    response = Response()
+    response.status_code = 403
+    response.headers["Content-Type"] = "application/json"
+    response._content = b'{"name":"Forbidden Site","sitetemplate_id":"forbidden-template"}'
+    sdk_response = APIResponse(response, "https://api.mist.com/api/v1/sites/site-1")
+    session = object()
+    manager.site_info = {"name": "Selected Site", "sitetemplate_id": "selected-template"}
+    manager.site_name, manager.site_template_id = "Selected Site", "selected-template"
+    before = (dict(manager.site_info), manager.site_name, manager.site_template_id)
+    caplog.clear()
+    with (
+        patch.object(wrtm, "_MH", SimpleNamespace(apisession=session)),
+        patch.object(wrtm.mistapi.api.v1.sites.sites, "getSiteInfo", return_value=sdk_response) as fetch,
+        caplog.at_level(logging.ERROR),
+    ):
+        result = WLANRadiusTimerManager._fetch_site_info(manager)
+    assert result is False
+    assert (manager.site_info, manager.site_name, manager.site_template_id) == before
+    assert caplog.record_tuples == [(wrtm.__name__, logging.ERROR, "Failed to fetch site info: HTTP 403")]
+    fetch.assert_called_once_with(session, "site-1")
