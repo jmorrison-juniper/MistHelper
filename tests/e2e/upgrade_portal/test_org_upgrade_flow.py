@@ -47,6 +47,34 @@ def expect_device(page: Any, mac: str, cells: dict[str, str]) -> None:
 class TestOrganizationUpgradeBrowserFlow:
     """Drive the organization mode from site selection through cancellation."""
 
+    def test_cloud_read_refusal_keeps_each_entered_option(self, page: Any) -> None:
+        """Issue #3393: the asynchronous save keeps every form value after a cloud refusal."""
+        page.goto(MODE_PATH, wait_until="domcontentloaded")
+        page.get_by_test_id("mode-multi-site").check()
+        page.get_by_test_id("mode-continue").click()
+        page.get_by_test_id(f"site-select-{SITE_ID}").check()
+        page.get_by_test_id(f"site-select-{SECOND_SITE_ID}").check()
+        page.get_by_test_id("multi-site-continue").click()
+        ModelVersionPicker(page).select("0.15.1", 6)
+        page.get_by_test_id("org-strategy-canary").check()
+        page.get_by_test_id("org-upgrade-canary-phases").fill("1,10,50,100")
+        page.get_by_test_id("org-upgrade-max-failures").fill("7")
+        form = page.locator("#org-upgrade-options-form")
+        snapshot = "(form) => Array.from(new FormData(form).entries())"
+        before = form.evaluate(snapshot)
+        refusal = {
+            "error": {"code": "org_upgrade_site_read_failed", "message": "The Mist cloud site read failed. Try again."}
+        }
+        page.route(
+            "**/api/org-upgrades/options",
+            lambda route: route.fulfill(status=503, content_type="application/json", body=json.dumps(refusal)),
+        )
+        page.get_by_test_id("org-upgrade-review").click()
+        sync_api.expect(page.get_by_test_id("flash-message")).to_contain_text(refusal["error"]["message"])
+        sync_api.expect(page.get_by_test_id("org-upgrade-review")).to_be_enabled()
+        assert form.evaluate(snapshot) == before
+        assert page.url.endswith("/upgrade/org/options")
+
     def test_a_refused_option_set_stays_in_the_page(self, page: Any) -> None:
         """A refused organization request shows an error inside the page."""
         page.goto(MODE_PATH, wait_until="domcontentloaded")
