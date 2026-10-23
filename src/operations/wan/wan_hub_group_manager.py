@@ -532,10 +532,27 @@ class WanHubGroupNumberManager:  # WHY: single public surface consumed by Menu 1
             if key in paths:  # WHY: skip stale keys defensively.
                 paths[key]["pod"] = new_pod  # WHY: overwrite pod value in-place.
                 count += 1  # WHY: increment mutation count.
-        mistapi.api.v1.orgs.vpns.updateOrgVpn(
+        logger.info(
+            "Sending VPN update for '%s' with %d path changes", vpn_id, count
+        )  # WHY: show the operator which API update starts.
+        update_response = mistapi.api.v1.orgs.vpns.updateOrgVpn(
             self.apisession, self.org_id, vpn_id, body=vpn_copy
         )  # WHY: push the whole VPN back per Mist API semantics.
+        self._require_successful_vpn_update(
+            update_response.status_code, vpn_id
+        )  # WHY: reject an unconfirmed SDK response before reporting success.
         return count  # WHY: caller aggregates counts across VPNs.
+
+    @staticmethod
+    def _require_successful_vpn_update(status_code: int | None, vpn_id: str) -> None:
+        """Reject a VPN update when Mist does not return a successful HTTP status."""
+        logger.debug(
+            "VPN update for '%s' returned HTTP status %s", vpn_id, status_code
+        )  # WHY: record the result without exposing response content.
+        if status_code is None or not 200 <= status_code < 300:
+            raise RuntimeError(
+                f"Mist rejected VPN '{vpn_id}' update with HTTP status {status_code}"
+            )  # WHY: route every non-2xx result through the existing failure handler.
 
     # ------------------------------------------------------------------
     # Utility helpers
