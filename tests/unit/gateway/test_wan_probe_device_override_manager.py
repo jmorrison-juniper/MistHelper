@@ -122,11 +122,17 @@ class TestDeviceUpdateHttpStatus:
     def _prepare_update(response, monkeypatch) -> SimpleNamespace:
         """Prepare the manager and controlled SDK calls for one HTTP response."""
         from mistapi.__api_response import APIResponse
+        from requests import Response
 
         from src.mist.resources.gateway import wan_probe_device_override_manager as module
 
         sdk = MagicMock()
-        sdk.api.v1.sites.devices.getSiteDevice.return_value = SimpleNamespace(data={"port_config": {"ge-0/0/0": {}}})
+        device_response = Response()  # WHY: model the successful SDK request without network access.
+        device_response.status_code = 200  # WHY: valid configuration reads use HTTP 200.
+        device_response._content = b'{"port_config": {"ge-0/0/0": {}}}'  # WHY: provide one valid WAN port.
+        sdk.api.v1.sites.devices.getSiteDevice.return_value = APIResponse(
+            device_response, "https://mist.invalid/device"
+        )  # WHY: use the native SDK response contract for device reads.
         sdk.api.v1.sites.devices.updateSiteDevice.return_value = APIResponse(response, "https://mist.invalid/device")
         session = object()
         monkeypatch.setattr(module, "mistapi", sdk)
@@ -141,6 +147,53 @@ class TestDeviceUpdateHttpStatus:
             "overridden_wan_ports": [{"port_name": "ge-0/0/0"}],
         }
         return SimpleNamespace(device=device, endpoints=sdk.api.v1.sites.devices, session=session, manager=manager)
+
+    def test_http_403_device_config_rejects_plausible_body(self, monkeypatch, caplog) -> None:
+        """A client refusal must reject plausible config and stop before the device update."""
+        from mistapi.__api_response import APIResponse
+        from requests import Response
+
+        response = Response()  # WHY: model a refused SDK request without network access.
+        response.status_code = 403  # WHY: reproduce the rejected configuration read.
+        response._content = b'{"port_config": {"ge-0/0/0": {}}}'  # WHY: retain plausible error-body data.
+        device_response = APIResponse(response, "https://mist.invalid/device")  # WHY: verify SDK body parsing.
+        assert device_response.data == {"port_config": {"ge-0/0/0": {}}}  # WHY: prove the 403 body looks valid.
+        update_response = Response()  # WHY: keep the write response successful if the bad read passes.
+        update_response.status_code = 200  # WHY: isolate the failure to the configuration read.
+        update_response._content = b'{"id": "dev-1"}'  # WHY: provide a plausible successful write body.
+        with caplog.at_level(logging.DEBUG):
+            update = self._prepare_update(update_response, monkeypatch)  # WHY: prepare the ordinary update path.
+            update.endpoints.getSiteDevice.return_value = device_response  # WHY: inject the rejected native response.
+            result = WANProbeDeviceOverrideManager._update_single_device(
+                update.manager, update.device, dry_run=False
+            )  # WHY: run the complete flow and verify the write is blocked.
+
+        assert result == {
+            "device_name": "gw-1",
+            "device_id": "dev-1",
+            "site_name": "site-a",
+            "site_id": "site-1",
+            "template_name": "Template-A",
+            "ports_updated": [],
+            "status": "FAILED",
+            "error": "API returned status 403",
+        }
+        update.endpoints.getSiteDevice.assert_called_once_with(update.session, "site-1", "dev-1")
+        update.endpoints.updateSiteDevice.assert_not_called()
+
+    def test_http_200_device_config_accepts_valid_body(self, monkeypatch) -> None:
+        """A successful device configuration response remains available to the update flow."""
+        from requests import Response
+
+        response = Response()  # WHY: model a successful SDK request without network access.
+        response.status_code = 200  # WHY: valid configuration reads use HTTP 200.
+        response._content = b'{"port_config": {"ge-0/0/0": {}}}'  # WHY: provide one valid WAN port.
+        update = self._prepare_update(response, monkeypatch)  # WHY: prepare the native SDK response double.
+        result: dict[str, str] = {"status": "", "error": ""}  # WHY: hold the read outcome.
+        device_config = WANProbeDeviceOverrideManager._fetch_device_config(update.device, result)
+
+        assert device_config == {"port_config": {"ge-0/0/0": {}}}
+        assert result == {"status": "", "error": ""}
 
     def test_http_503_records_failed_update(self, monkeypatch, caplog) -> None:
         """A server refusal must retain its status and must not report success."""
