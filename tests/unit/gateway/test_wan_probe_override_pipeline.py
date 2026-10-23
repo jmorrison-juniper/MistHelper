@@ -105,6 +105,7 @@ def wired(tmp_path: Any) -> Any:
         """Build a listSiteDevices response double with a data attribute."""
         response = MagicMock()  # WHY: the reader only reads the data attribute.
         response.data = devices  # WHY: the scan loop iterates this list.
+        response.status_code = 200  # WHY: device configuration checks require a successful SDK status.
         return response  # WHY: the test assigns it to the endpoint double.
 
     state.list_devices = MagicMock(return_value=_device_response([]))  # WHY: default empty scan.
