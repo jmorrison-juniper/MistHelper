@@ -375,14 +375,28 @@ def test_gw_fetch_one_config_missing_data_attr_returns_none() -> None:
         assert APIFetchUtils._gw_fetch_one_config(MagicMock(), ("s1", "d1", "SiteOne"), sem) is None
 
 
-def test_gw_fetch_one_config_exception_returns_none() -> None:
-    """Exception in API call -> return None (logged, not raised)."""
-    sem = threading.Semaphore(1)
-    with patch(
-        "src.mist.access.api.api_fetch_utils.mistapi.api.v1.sites.devices.getSiteDevice",
-        side_effect=requests.HTTPError("bad"),
+def test_gw_fetch_one_config_exception_returns_none(caplog: pytest.LogCaptureFixture) -> None:
+    """A native HTTP 503 refusal returns None and logs the status."""
+    apisession = MagicMock()  # WHY: keep the request boundary local to this test.
+    sem = threading.Semaphore(1)  # WHY: use the same guard as a production fetch.
+    response = requests.Response()  # WHY: retain native requests status and error behavior.
+    response.status_code = 503  # WHY: reproduce the server refusal that the handler must contain.
+    response.url = "https://api.mist.example/api/v1/sites/s1/devices/d1"  # WHY: preserve useful failure context.
+    with pytest.raises(requests.HTTPError) as refusal:  # WHY: obtain the error that the SDK raises for this response.
+        response.raise_for_status()  # WHY: create a native HTTPError linked to the 503 response.
+    with (
+        patch(  # WHY: mock only the external SDK boundary with the native refusal.
+            "src.mist.access.api.api_fetch_utils.mistapi.api.v1.sites.devices.getSiteDevice",
+            side_effect=refusal.value,
+        ) as api_call,
+        caplog.at_level("ERROR"),  # WHY: verify the failure remains visible to the operator.
     ):
-        assert APIFetchUtils._gw_fetch_one_config(MagicMock(), ("s1", "d1", "SiteOne"), sem) is None
+        result = APIFetchUtils._gw_fetch_one_config(
+            apisession, ("s1", "d1", "SiteOne"), sem
+        )  # WHY: exercise the existing refusal path.
+    api_call.assert_called_once_with(apisession, "s1", "d1")  # WHY: keep the refused request scope exact.
+    assert result is None  # WHY: skip one refused device without aborting its batch.
+    assert "503 Server Error" in caplog.text  # WHY: prevent a 200 response from satisfying this refusal test.
 
 
 def test_gw_fetch_one_config_non_transport_exception_propagates() -> None:
