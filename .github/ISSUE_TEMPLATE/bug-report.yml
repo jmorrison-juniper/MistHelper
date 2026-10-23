@@ -15,7 +15,7 @@ body:
     id: version
     attributes:
       label: MistHelper Version
-      description: "Run `python MistHelper.py --version` or check the changelog."
+      description: "Read the changelog to learn the MistHelper version."
       placeholder: "e.g. 25.04.08.12.00"
     validations:
       required: true
