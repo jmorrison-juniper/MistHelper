@@ -2917,24 +2917,31 @@ def _redact_tokens(tokens: list[str]) -> str:  # Describe discovered tokens with
 def _parse_api_tokens() -> tuple[str, list[str]]:  # Preserve the existing behavior during the compliance refactor.
     """Read API host and tokens from environment variables.
 
-    Reads MIST_HOST (default: api.mist.com) and MIST_APITOKEN or MIST_API_TOKEN.
-    Multiple tokens may be newline- or comma-separated in the env var value.
+    Reads MIST_HOST and one Mist token variable, rejecting conflicting migration values.
+    Multiple tokens may be newline- or comma-separated in either token variable.
 
     Returns:
         A tuple of (host, tokens) where tokens is a list of stripped token strings.
     """
     host = os.getenv("MIST_HOST", "api.mist.com")  # Read host from env or use Mist cloud default
-    raw_token_env = os.getenv("MIST_APITOKEN") or os.getenv("MIST_API_TOKEN")  # Accept both env var names
-    tokens = _split_env_tokens(raw_token_env)  # Parse into individual non-empty tokens (empty list when unset)
+    legacy_token_env = os.getenv("MIST_APITOKEN")  # Keep the legacy name only during migration.
+    token_env = os.getenv("MIST_API_TOKEN")  # Prefer the canonical token variable for new deployments.
+    legacy_tokens = _split_env_tokens(legacy_token_env)  # Normalize the migration value without logging it.
+    current_tokens = _split_env_tokens(token_env)  # Normalize the canonical value without logging it.
+    if legacy_tokens and current_tokens and legacy_tokens != current_tokens:  # Refuse ambiguous credentials early.
+        tokens: list[str] = []  # Prevent downstream callers from using either conflicting credential.
+        logger.debug("Conflicting Mist token variables detected; values hidden")  # Record only the safe failure state.
+    else:  # Matching or single-variable configuration remains valid during migration.
+        raw_token_env = token_env or legacy_token_env  # Prefer the canonical value and retain the migration path.
+        tokens = _split_env_tokens(raw_token_env)  # Parse tokens without exposing credential material.
     if tokens:  # Log a redacted preview so operators can confirm presence without exposing secrets
         logger.debug("Token(s) discovered for initialization (redacted): %s", _redact_tokens(tokens))  # Safe preview
     else:  # No tokens discovered in environment
         logger.debug("No tokens discovered in environment; will rely on env_file or mistapi.Session fallback")  # Note
     return host, tokens  # Return host string and parsed token list to caller
 
-    # Feature 1020: config values shipped in deploy/.env.example that must never be treated as real credentials.
 
-
+# Feature 1020: config values shipped in deploy/.env.example must never count as real credentials.
 _CREDENTIAL_PLACEHOLDER_MARKERS = ("your_", "_here", "changeme", "example.com", "<", ">")  # Copy-paste sentinels
 
 
@@ -2972,8 +2979,16 @@ def _collect_credential_problems(
     require_token: bool,
 ) -> list[str]:  # Preserve the existing behavior during the compliance refactor.
     """Return every host/token configuration problem so the operator sees all fixes in one pass."""
+    legacy_token_env = os.getenv("MIST_APITOKEN")  # Read the migration variable only for safe conflict detection.
+    token_env = os.getenv("MIST_API_TOKEN")  # Read the canonical variable without logging either value.
     host, tokens = _parse_api_tokens()  # Reuse the canonical host/token reader (env only, no network).
     problems: list[str] = []  # Collect all issues so the operator sees every fix in one pass.
+    legacy_tokens = _split_env_tokens(legacy_token_env)  # Normalize the migration value without logging it.
+    current_tokens = _split_env_tokens(token_env)  # Normalize the canonical value without logging it.
+    if legacy_tokens and current_tokens and legacy_tokens != current_tokens:  # Refuse ambiguity in every login mode.
+        problems.append(
+            "MIST_APITOKEN and MIST_API_TOKEN have conflicting values - unset one or set both to the same value"
+        )  # Name the invalid settings without exposing either secret.
     if _looks_like_placeholder(host):  # Blank/placeholder host makes mistapi build malformed URLs.
         problems.append(
             "MIST_HOST is blank or a placeholder - set a real host (e.g. api.mist.com)"

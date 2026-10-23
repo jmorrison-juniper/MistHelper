@@ -73,6 +73,44 @@ class TestCredentialPreflight:
         # No SystemExit expected: the call should return None and continue.
         assert MistHelper._preflight_verify_credentials() is None
 
+    @pytest.mark.parametrize("variable_name", ("MIST_APITOKEN", "MIST_API_TOKEN"))
+    def test_either_token_variable_passes_alone(self, monkeypatch, variable_name):
+        """Each supported token variable remains valid when the other is absent."""
+        _clear_credential_env(monkeypatch)
+        monkeypatch.setenv("MIST_HOST", "api.mist.com")
+        monkeypatch.setenv(variable_name, "A1B2C3D4E5F60718")
+
+        assert MistHelper._preflight_verify_credentials() is None
+
+    def test_equal_token_variables_pass_during_migration(self, monkeypatch):
+        """Matching token values remain valid while operators migrate to MIST_API_TOKEN."""
+        _clear_credential_env(monkeypatch)
+        monkeypatch.setenv("MIST_HOST", "api.mist.com")
+        monkeypatch.setenv("MIST_APITOKEN", "A1B2C3D4E5F60718")
+        monkeypatch.setenv("MIST_API_TOKEN", "A1B2C3D4E5F60718")
+
+        assert MistHelper._preflight_verify_credentials() is None
+
+    def test_conflicting_token_variables_fail_without_secret_logs(self, monkeypatch, caplog):
+        """Different migration values fail locally and keep both secrets out of failure logs."""
+        _clear_credential_env(monkeypatch)
+        monkeypatch.setenv("MIST_HOST", "api.mist.com")
+        legacy_secret = "A1B2C3D4E5F60718"
+        current_secret = "9876543210FEDCBA"
+        monkeypatch.setenv("MIST_APITOKEN", legacy_secret)
+        monkeypatch.setenv("MIST_API_TOKEN", current_secret)
+        caplog.set_level(logging.ERROR)
+
+        with pytest.raises(SystemExit) as exc_info:
+            MistHelper._preflight_verify_credentials()
+
+        assert exc_info.value.code == 1
+        assert "MIST_APITOKEN and MIST_API_TOKEN have conflicting values" in caplog.text
+        assert legacy_secret not in caplog.text
+        assert current_secret not in caplog.text
+        assert legacy_secret[:4] not in caplog.text
+        assert current_secret[:4] not in caplog.text
+
     def test_login_mode_does_not_require_token(self, monkeypatch):
         """require_token=False (interactive --login) -> a valid host alone passes with no token set."""
         _clear_credential_env(monkeypatch)
