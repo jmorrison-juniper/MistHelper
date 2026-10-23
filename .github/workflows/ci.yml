@@ -857,6 +857,14 @@ jobs:
             test-artifacts/issue-4229-*.png
             test-artifacts/issue-4229-browser/
           if-no-files-found: error
+      - name: Upload WAN Performance browser evidence
+        # Issue #4200: retain synthetic captures without credentials or live data.
+        if: ${{ !cancelled() && matrix.shard == 'web-portal' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: wan-performance-browser-evidence
+          path: test-artifacts/wan-performance/*.png
+          if-no-files-found: error
       - name: Upload shard diagnostics
         # Issue #4250: a failed or cancelled shard keeps its pytest output, its
         # phase trail, and each retained trace and screenshot.

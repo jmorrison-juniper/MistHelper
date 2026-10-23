@@ -1,0 +1,375 @@
+.wan-performance {
+    --wan-background: #1a1a1b;
+    --wan-panel: #292a2b;
+    --wan-border: #3c3d3e;
+    --wan-accent: #ff087f;
+    --wan-cyan: #20b8c8;
+    --wan-muted: #a7aaad;
+    color: #f1f1f1;
+}
+
+.wan-performance h1 {
+    font-size: clamp(1.8rem, 3vw, 2.6rem);
+    font-weight: 650;
+    margin: 0;
+}
+
+.wan-performance h2 {
+    font-size: 1rem;
+    font-weight: 650;
+    margin: 0;
+}
+
+.wan-performance a {
+    color: var(--wan-accent);
+}
+
+.wan-page-heading {
+    align-items: flex-start;
+    display: flex;
+    gap: 1rem;
+    justify-content: space-between;
+    margin: 1.1rem 0 1.5rem;
+}
+
+.wan-page-heading p {
+    color: var(--wan-muted);
+    margin: 0.4rem 0 0;
+}
+
+.wan-breadcrumbs {
+    display: flex;
+    gap: 0.7rem;
+    margin: 0.4rem 0 1rem;
+}
+
+.wan-status {
+    background: var(--wan-panel);
+    border: 1px solid var(--wan-accent);
+    border-radius: 0.35rem;
+    color: var(--wan-muted);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.2rem;
+    padding: 0.65rem 1rem;
+}
+
+.wan-status strong {
+    color: var(--wan-cyan);
+}
+
+.wan-kpi-grid {
+    display: grid;
+    gap: 0.8rem;
+    grid-template-columns: repeat(6, minmax(7.5rem, 1fr));
+    margin: 1rem 0 1.5rem;
+}
+
+.wan-kpi-card {
+    align-items: center;
+    background: var(--wan-panel);
+    border: 1px solid var(--wan-border);
+    border-radius: 0.35rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 4.6rem;
+    padding: 0.5rem;
+    text-align: center;
+}
+
+.wan-kpi-card strong {
+    color: var(--wan-cyan);
+    font-size: 1.35rem;
+    font-weight: 500;
+}
+
+.wan-kpi-card span {
+    color: var(--wan-muted);
+    font-size: 0.84rem;
+}
+
+.wan-dashboard-grid,
+.wan-chart-grid,
+.wan-gauge-grid {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.wan-chart-grid--single {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.wan-overview-layout {
+    align-items: start;
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.wan-overview-stack {
+    align-content: start;
+    display: grid;
+    gap: 1rem;
+}
+
+.wan-overview-stack > .wan-chart-grid {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.wan-gauge-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    margin: 1rem 0;
+}
+
+.wan-panel {
+    background: var(--wan-panel);
+    border: 1px solid var(--wan-border);
+    border-radius: 0.35rem;
+    min-width: 0;
+}
+
+.wan-panel-heading {
+    border-bottom: 2px solid var(--wan-accent);
+    padding: 0.6rem 0.8rem;
+}
+
+.wan-panel-heading p {
+    color: var(--wan-muted);
+    display: inline;
+    font-size: 0.85rem;
+    margin: 0 0 0 0.4rem;
+}
+
+.wan-table {
+    color: #f1f1f1;
+    margin: 0;
+}
+
+.wan-table th {
+    border-bottom: 2px solid var(--wan-accent);
+    white-space: nowrap;
+}
+
+.wan-table td,
+.wan-table th {
+    border-color: var(--wan-border);
+    vertical-align: middle;
+}
+
+.wan-chart-panel {
+    margin: 0;
+    padding-bottom: 0.5rem;
+}
+
+.wan-chart {
+    background: #111213;
+    display: block;
+    height: 14rem;
+    margin: 0.8rem;
+    width: calc(100% - 1.6rem);
+}
+
+.wan-chart-gridline {
+    fill: none;
+    stroke: #323638;
+    stroke-width: 1;
+}
+
+.wan-chart-series {
+    fill: none;
+    stroke: var(--wan-series-color);
+    stroke-width: 3;
+}
+
+.wan-chart-point {
+    fill: var(--wan-series-color);
+}
+
+.wan-chart-label {
+    fill: var(--wan-muted);
+    font-size: 10px;
+    text-anchor: middle;
+}
+
+.wan-chart-axis-label,
+.wan-chart-reference-label {
+    fill: var(--wan-muted);
+    font-size: 9px;
+    text-anchor: end;
+}
+
+.wan-chart-reference {
+    stroke: var(--wan-series-color);
+    stroke-dasharray: 7 5;
+    stroke-width: 1.5;
+}
+
+.wan-chart-empty-label {
+    fill: var(--wan-muted);
+    font-size: 11px;
+    text-anchor: middle;
+}
+
+.wan-chart-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.8rem;
+    padding: 0 0.8rem;
+}
+
+.wan-chart-legend i {
+    background: var(--wan-series-color);
+    display: inline-block;
+    height: 0.18rem;
+    margin-right: 0.35rem;
+    vertical-align: middle;
+    width: 1rem;
+}
+
+.wan-chart-empty {
+    color: var(--wan-muted);
+    min-height: 13rem;
+    padding: 5rem 1rem;
+    text-align: center;
+}
+
+.wan-gauge-card {
+    padding-bottom: 0.7rem;
+    text-align: center;
+}
+
+.wan-gauge-card h2 {
+    border-bottom: 2px solid var(--wan-accent);
+    padding: 0.6rem;
+}
+
+.wan-gauge {
+    display: block;
+    height: 8.5rem;
+    margin: 1rem auto 0;
+    max-width: 100%;
+    width: 17rem;
+}
+
+.wan-gauge-track,
+.wan-gauge-low,
+.wan-gauge-mid,
+.wan-gauge-high {
+    fill: none;
+    stroke-width: 22;
+}
+
+.wan-gauge-track {
+    stroke: #414447;
+}
+
+.wan-gauge-low {
+    stroke: #31ad52;
+    stroke-dasharray: 64.4 193.2;
+}
+
+.wan-gauge-mid {
+    stroke: #f2c230;
+    stroke-dasharray: 128.8 128.8;
+    stroke-dashoffset: -64.4;
+}
+
+.wan-gauge-high {
+    stroke: #f04454;
+    stroke-dasharray: 64.4 193.2;
+    stroke-dashoffset: -193.2;
+}
+
+.wan-gauge-needle {
+    stroke: #f04454;
+    stroke-width: 2;
+}
+
+.wan-gauge-center {
+    fill: #f04454;
+}
+
+.wan-gauge-label {
+    fill: #f1f1f1;
+    font-size: 1rem;
+}
+
+.wan-chart-bar {
+    fill: var(--wan-series-color);
+}
+
+.wan-detail-layout {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin: 1rem 0;
+}
+
+.wan-port-summary {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    margin: 1rem 0;
+}
+
+.wan-port-summary .wan-gauge-grid {
+    grid-template-columns: minmax(0, 1fr);
+    margin: 0;
+}
+
+.wan-detail-layout .wan-panel {
+    overflow: hidden;
+}
+
+.wan-data-note {
+    color: var(--wan-muted);
+    margin: 0.7rem 0;
+}
+
+.wan-site-controls {
+    align-items: center;
+    background: var(--wan-panel);
+    border: 1px solid var(--wan-border);
+    border-top: 2px solid var(--wan-accent);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin: 1rem 0;
+    padding: 0.8rem;
+}
+
+@media (max-width: 1100px) {
+    .wan-kpi-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 760px) {
+    .wan-dashboard-grid,
+    .wan-overview-layout,
+    .wan-chart-grid,
+    .wan-detail-layout,
+    .wan-port-summary {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .wan-gauge-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .wan-kpi-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 480px) {
+    .wan-kpi-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .wan-page-heading {
+        flex-direction: column;
+    }
+}

@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+{% block title %}WAN Performance - {{ config.PORTAL.title }}{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/wan_performance.css') }}">
+{% endblock %}
+{% block content %}
+<section class="container-fluid wan-performance" data-testid="wan-live-{{ kind }}">
+    <h1>WAN Performance{% if kind != "overview" %}: {{ kind }}{% endif %}</h1>
+    <p data-testid="wan-live-data-state">Live snapshot{% if stale %} — stale{% endif %}.
+        These are latest observations, not full-hour measurements.
+        Unknown values do not mean healthy service.</p>
+    {% if instant %}<p>Collected at {{ instant.isoformat() }} UTC.</p>{% endif %}
+    {% if partial %}<div role="alert">Partial results. A fixed page cap excluded records or link-event history.</div>{% endif %}
+    {% if error %}<div class="alert alert-warning" role="alert" data-testid="wan-live-error">{{ error }}</div>{% endif %}
+    <form method="post" action="{{ url_for('wan_performance.live.refresh') }}">
+        {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
+        {% if kind == "gateway" and filters %}
+        <input type="hidden" name="gateway_id" value="{{ filters.gateway_id }}">
+        <input type="hidden" name="site_id" value="{{ filters.site_id }}">
+        {% elif kind == "overview" %}
+        <fieldset class="mb-3">
+            <legend class="h6">Optional selected gateway</legend>
+            <label for="wan-live-gateway-site">Site ID</label>
+            <input id="wan-live-gateway-site" data-testid="wan-live-gateway-site" name="site_id" type="text">
+            <label for="wan-live-gateway-mac">Gateway MAC</label>
+            <input id="wan-live-gateway-mac" data-testid="wan-live-gateway-mac" name="gateway_id" type="text">
+            <p>Leave both fields empty for port and peer snapshots. Supply both fields to refresh any gateway in the selected organization.</p>
+        </fieldset>
+        {% endif %}
+        <button class="btn btn-primary" type="submit" data-testid="wan-live-refresh">{% if kind == "gateway" %}Refresh selected gateway and current snapshots{% else %}Refresh current snapshots{% endif %}</button>
+    </form>
+    {% if kind == "port" and filters %}
+    <form class="mt-3" method="post" action="{{ url_for('wan_performance.live.refresh_port') }}">
+        {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
+        <input type="hidden" name="gateway_id" value="{{ filters.gateway_id }}">
+        <input type="hidden" name="site_id" value="{{ filters.site_id }}">
+        <input type="hidden" name="port_name" value="{{ filters.port_name }}">
+        <button class="btn btn-secondary" type="submit" data-testid="wan-live-port-history-refresh">Collect selected port insight hour</button>
+        <p>This separate refresh permits at most nine SDK requests for one completed UTC hour.
+            It stores six aligned 10-minute rate samples, raw utilization percentages, average loss, jitter, and latency.
+            It also stores event-derived up and down minutes and link transitions.
+            It does not replace the current snapshot or claim complete historical coverage.</p>
+    </form>
+    {% endif %}
+    {% if kind == "peer" and records|length == 1 and records[0].identity.peer_mac is defined %}
+    {% set peer = records[0].identity %}
+    <form class="mt-3" method="post" action="{{ url_for('wan_performance.live.refresh_peer') }}">
+        {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
+        <input type="hidden" name="gateway_id" value="{{ peer.gateway.gateway_id }}">
+        <input type="hidden" name="site_id" value="{{ peer.gateway.site.site_id }}">
+        <input type="hidden" name="port_name" value="{{ peer.port_name }}">
+        <input type="hidden" name="peer_port_id" value="{{ peer.peer_port_id }}">
+        <input type="hidden" name="peer_mac" value="{{ peer.peer_mac }}">
+        <input type="hidden" name="tunnel_identity" value="{{ peer.tunnel_identity }}">
+        <button class="btn btn-secondary" type="submit" data-testid="wan-live-peer-history-refresh">Collect selected peer quality hour</button>
+        <p>This request reads at most two hourly source samples for the selected peer path.
+            It uses shared API admission and does not replace the current snapshot.</p>
+    </form>
+    {% endif %}
+    <p>No automatic refresh runs. Overview refresh permits two SDK requests. Selected gateway refresh permits at most six.
+        One refresh per organization is permitted every five minutes.
+        The common session transport also accounts for normal, paginated, and fast-mode API attempts.</p>
+    {% if kind == "overview" %}
+    <details data-testid="wan-live-gateway-list">
+        <summary>Gateways in the cached pages</summary>
+        <ul>{% for gateway in gateways %}
+            <li><a href="{{ url_for('wan_performance.live.gateway', gateway_id=gateway.gateway_id, site_id=gateway.site.site_id) }}">{{ gateway.site.site_id }} / {{ gateway.gateway_id }}</a></li>
+            {% else %}<li>No gateways appear in the cached pages.</li>{% endfor %}</ul>
+        <p>This list reflects bounded pages, not a complete organization inventory. Use the optional fields for another known gateway.</p>
+    </details>
+    {% endif %}
+    <div class="row g-3 mt-3">
+        <article class="col-sm-4 portal-card" data-testid="wan-live-utilization"><h2 class="h6">Utilization</h2><p>Directional point-in-time samples appear below. Mbps link speed supplies capacity. Missing or invalid values remain unknown.</p></article>
+        <article class="col-sm-4 portal-card"><h2 class="h6">Congestion duration</h2><p>Summaries count complete 10-minute sample intervals above each threshold. Missing samples remain unknown.</p></article>
+        <article class="col-sm-4 portal-card"><h2 class="h6">Availability</h2><p>Summaries use link events. Time before the first event remains unknown. A no-event hour uses the current cached state for the full hour.</p></article>
+    </div>
+    <section class="mt-4">
+        <h2>Gateways, WAN ports, and VPN paths</h2>
+        <div class="table-responsive">
+        <table class="table" data-testid="wan-live-records">
+            <thead><tr><th>Site</th><th>Gateway</th><th>Port</th><th>Peer</th><th>Measurements</th></tr></thead>
+            <tbody>
+            {% for record in records %}
+            {% set gateway = record.identity.gateway if record.identity.gateway is defined else record.identity %}
+            <tr>
+                <td>{{ gateway.site.site_id }}</td>
+                <td><a data-testid="wan-live-gateway-link" href="{{ url_for('wan_performance.live.gateway', gateway_id=gateway.gateway_id, site_id=gateway.site.site_id) }}">{{ gateway.gateway_id }}</a></td>
+                {% if record.identity.port_name is defined %}
+                <td><a data-testid="wan-live-port-link" href="{{ url_for('wan_performance.live.port', site_id=record.identity.gateway.site.site_id, port_name=record.identity.port_name, gateway_id=record.identity.gateway.gateway_id) }}">{{ record.identity.port_name }}</a></td>
+                {% else %}<td data-testid="wan-live-gateway-insights">Gateway insight hour: {{ record.hour_start_utc.isoformat() }}</td>{% endif %}
+                <td>{% if record.identity.peer_mac is defined %}
+                    <a data-testid="wan-live-peer-link" href="{{ url_for('wan_performance.live.peer', site_id=record.identity.gateway.site.site_id, peer_mac=record.identity.peer_mac, path_key=record.identity.tunnel_identity) }}">{{ record.identity.peer_mac }}</a>
+                    <small>Path key {{ record.identity.tunnel_identity }}</small>
+                    {% else %}Not a VPN path{% endif %}</td>
+                <td>{% for name, metric in record.metrics.items() %}
+                    <div>{{ name }}: {% if metric.value is not none %}{{ metric.value }} {{ metric.unit }}{% else %}Unknown{% if metric.missing_reason %}: {{ metric.missing_reason }}{% endif %}{% endif %}</div>
+                    {% endfor %}
+                    {% if states.get(record.natural_key) %}
+                    <div data-testid="wan-live-current-state">
+                        {% for name, value in states[record.natural_key].items() %}<div>{{ name }}: {{ value }}</div>{% endfor %}
+                        <small>Current cached state does not establish availability duration.</small>
+                    </div>
+                    {% endif %}</td>
+            </tr>
+            {% else %}<tr><td colspan="5">No cached observations are available. No live call ran for this page.</td></tr>{% endfor %}
+            </tbody>
+        </table>
+        </div>
+    </section>
+    {% if kind in ["gateway", "port", "peer"] %}
+    <details data-testid="wan-live-history">
+        <summary>Persisted observation summaries</summary>
+        <p>Port and peer hours retain the last observation. Gateway hours use catalog-validated insight samples.
+            These are not full-hour averages.
+            Rolling 3-hour, 12-hour, and 24-hour windows end at the latest retained observation.
+            The utilization p95 uses raw samples within each hour. Weekly and monthly p95 use the maximum daily p95.
+            Congestion duration uses complete 10-minute sample intervals.
+            Link availability excludes unknown time before the first event.</p>
+        {% if history_error %}<p role="alert">{{ history_error }}</p>{% endif %}
+        {% for summary in summaries %}
+            <h3>{{ summary.period.kind }}: {{ summary.period.start.isoformat() }} to {{ summary.period.end.isoformat() }}</h3>
+            <p>{{ summary.observed_hours }} observed hours of {{ summary.period.expected_hours }}.</p>
+            {% for name, values in summary.metrics.items() %}<p>{{ name }}: mean {{ values[0] }}, maximum {{ values[1] }}, observed p95 {{ values[2] }} {{ values[3] }}</p>{% endfor %}
+            {% if summary.congestion_durations %}
+            <div data-testid="wan-live-congestion-duration">
+                <h4>Sample-based congestion duration</h4>
+                <p>Each counted sample represents 10 minutes above the threshold.
+                    Hours with missing samples do not contribute a duration.</p>
+                {% for duration in summary.congestion_durations %}
+                <p>Above {{ duration.threshold_percent }}%: {{ duration.minutes }} minutes across
+                    {{ duration.complete_hours }} complete hours of {{ duration.expected_hours }} expected hours.</p>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% if summary.link_event_summary %}
+            <div data-testid="wan-live-link-event-summary">
+                <h4>Link-event availability</h4>
+                <p>{{ summary.link_event_summary.complete_hours }} complete event windows of
+                    {{ summary.link_event_summary.expected_hours }} expected hours.
+                    Known state covers {{ summary.link_event_summary.up_minutes + summary.link_event_summary.down_minutes }} minutes
+                    in {{ summary.link_event_summary.known_hours }} hours.
+                    Up: {{ summary.link_event_summary.up_minutes }} minutes.
+                    Down: {{ summary.link_event_summary.down_minutes }} minutes.
+                    Matching transitions: {{ summary.link_event_summary.flap_count }}.
+                    Up percentage of known minutes:
+                    {{ summary.link_event_summary.observed_up_percent if summary.link_event_summary.observed_up_percent is not none else "Unknown" }}.</p>
+                <p>Time before the first event remains unknown.
+                    If no event occurs, the current cached status represents the full hour.
+                    A page-capped event search remains unknown.</p>
+            </div>
+            {% endif %}
+            {% if summary.threshold_observations %}
+            <div data-testid="wan-live-threshold-observations">
+                <h4>Observed-hour threshold counts</h4>
+                <p>These are retained snapshot counts, not measured congestion duration.
+                    Missing, unknown, and non-exceeding hours break a run. Equality does not exceed a threshold.</p>
+                {% for entry in summary.threshold_observations %}
+                <p>{{ entry.metric_name }} above {{ entry.threshold_percent }}%:
+                    {{ entry.above_hours }} observations, longest adjacent run {{ entry.longest_run }};
+                    {{ entry.valid_hours }} valid hourly observations of {{ summary.period.expected_hours }} expected hours.</p>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% if summary.state_observations %}
+            <div data-testid="wan-live-state-observations">
+                <h4>Observed link-state summary</h4>
+                <p>{{ summary.state_observations.up_hours }} up and {{ summary.state_observations.down_hours }} down
+                    observations of {{ summary.state_observations.valid_hours }} known states across
+                    {{ summary.state_observations.expected_hours }} expected hours.
+                    Observed up percentage: {{ summary.state_observations.observed_up_percent }}%.
+                    Observed changes between adjacent hours: {{ summary.state_observations.observed_transitions }}.
+                    This is sampled state, not measured availability or a complete flap count.</p>
+            </div>
+            {% endif %}
+        {% else %}{% if not history_error %}<p>No persisted observations exist in the previous thirteen calendar months.</p>{% endif %}{% endfor %}
+    </details>
+    {% endif %}
+    <a data-testid="wan-live-back-link" href="{{ url_for('wan_performance.live.overview') }}">Return to the WAN overview</a>
+    <a data-testid="wan-offline-link" href="{{ url_for('wan_performance.overview') }}">Open the isolated synthetic preview</a>
+</section>
+{% endblock %}
