@@ -326,11 +326,12 @@ class TestSetPod:
         assert "connection failed" in caplog.text  # WHY: preserve the exception details for diagnosis.
         assert "Updated 3 paths" not in caplog.text  # WHY: prevent a false success report.
 
-    def test_no_matching_paths(self, manager):
-        profile = {"id": "uuid-x", "name": "NONEXISTENT"}
-        vpn_data = {"NONEXISTENT": []}
-        manager.set_pod(profile, vpn_data, 42)
-        # Should print message but not crash
+    def test_no_matching_paths(self, manager, caplog: pytest.LogCaptureFixture):
+        caplog.set_level(logging.WARNING)  # WHY: capture the no-op reason for the operator.
+        profile = {"id": "uuid-x", "name": "NONEXISTENT"}  # WHY: select a profile without VPN paths.
+        vpn_data = {"NONEXISTENT": []}  # WHY: model an empty path match.
+        manager.set_pod(profile, vpn_data, 42)  # WHY: exercise the no-match guard.
+        assert "No VPN paths found for profile 'NONEXISTENT'" in caplog.text  # WHY: require visible no-op feedback.
 
     @patch("src.operations.wan.wan_hub_group_manager.mistapi.api.v1.orgs.vpns.updateOrgVpn")
     @patch("src.operations.wan.wan_hub_group_manager.mistapi.api.v1.orgs.vpns.getOrgVpn")
@@ -345,7 +346,10 @@ class TestSetPod:
         vpn_data = manager._build_vpn_data([profile], sample_vpns)  # WHY: select its VPN paths.
         manager.set_pod(profile, vpn_data, 128)  # WHY: verify the existing accepted-update path.
 
-        mock_update.assert_called_once()  # WHY: confirm that one VPN update was requested.
+        assert mock_update.call_count == 1  # WHY: require one API update for the selected VPN.
+        updated_body = mock_update.call_args.kwargs["body"]  # WHY: inspect the submitted VPN state.
+        assert updated_body["paths"]["CHARLIE-HE_WAN1"]["pod"] == 128  # WHY: verify the requested pod value.
+        assert updated_body["paths"]["CHARLIE-HE_WAN2"]["pod"] == 128  # WHY: verify every matching path changed.
 
 
 class TestPromptSetPod:
@@ -408,12 +412,12 @@ class TestClearPod:
         mock_set.assert_called_once_with(profile, vpn_data, 1)
 
     def test_cancelled_by_user(self, manager, sample_vpns):
-        profile = {"id": "uuid-charlie", "name": "CHARLIE"}
-        vpn_data = manager._build_vpn_data([profile], sample_vpns)
-        manager._safe_input = MagicMock(return_value="n")
-        with patch.object(WanHubGroupNumberManager, "set_pod") as mock_set:
-            manager.clear_pod(profile, vpn_data)
-            mock_set.assert_not_called()
+        profile = {"id": "uuid-charlie", "name": "CHARLIE"}  # WHY: select paths that need a reset.
+        vpn_data = manager._build_vpn_data([profile], sample_vpns)  # WHY: prepare the profile path matches.
+        manager._safe_input = MagicMock(return_value="n")  # WHY: model an operator cancellation.
+        with patch.object(WanHubGroupNumberManager, "set_pod") as mock_set:  # WHY: detect any unintended update.
+            manager.clear_pod(profile, vpn_data)  # WHY: exercise the reset confirmation.
+            assert mock_set.call_count == 0  # WHY: confirm cancellation sends no update.
 
 
 # ---------------------------------------------------------------------------
@@ -425,9 +429,9 @@ class TestModuleArchitecture:
     """Test clean import and instantiation."""
 
     def test_module_imports(self):
-        from src.operations.wan.wan_hub_group_manager import WanHubGroupNumberManager
-
-        assert WanHubGroupNumberManager is not None
+        assert (
+            WanHubGroupNumberManager.__module__ == "src.operations.wan.wan_hub_group_manager"
+        )  # WHY: verify the public class resolves from its expected module.
 
     def test_class_instantiates(self, mock_session):
         manager = WanHubGroupNumberManager(mock_session, "org-1")
@@ -435,11 +439,11 @@ class TestModuleArchitecture:
         assert manager.org_id == "org-1"
 
     def test_execute_calls_run(self, mock_session):
-        mock_get_org = MagicMock(return_value="org-1")
-        mock_input = MagicMock(return_value="q")
-        with patch.object(WanHubGroupNumberManager, "run") as mock_run:
-            WanHubGroupNumberManager.execute(mock_session, mock_get_org, mock_input)
-            mock_run.assert_called_once()
+        mock_get_org = MagicMock(return_value="org-1")  # WHY: provide an organization without a cloud call.
+        mock_input = MagicMock(return_value="q")  # WHY: prevent an interactive prompt.
+        with patch.object(WanHubGroupNumberManager, "run") as mock_run:  # WHY: observe the orchestration call.
+            WanHubGroupNumberManager.execute(mock_session, mock_get_org, mock_input)  # WHY: run the public entry point.
+            assert mock_run.call_count == 1  # WHY: require one workflow start.
 
     def test_execute_exits_on_no_org(self, mock_session, caplog: pytest.LogCaptureFixture):
         caplog.set_level(logging.WARNING)
@@ -502,11 +506,12 @@ class TestRunWorkflow:
         manager,
         caplog: pytest.LogCaptureFixture,
     ):
-        caplog.set_level(logging.WARNING)
-        mock_profiles.return_value = [{"name": "P1"}]
-        mock_vpns.return_value = ([], [{"type": "mesh"}])
-        manager.run()
-        mock_display.assert_not_called()
+        caplog.set_level(logging.WARNING)  # WHY: capture the empty hub-spoke explanation.
+        mock_profiles.return_value = [{"name": "P1"}]  # WHY: continue beyond the profile guard.
+        mock_vpns.return_value = ([], [{"type": "mesh"}])  # WHY: model only non-hub-spoke VPN data.
+        manager.run()  # WHY: exercise the VPN type filter.
+        assert mock_display.call_count == 0  # WHY: prevent selection when no hub-spoke VPN exists.
+        assert "No hub-spoke VPN definitions found" in caplog.text  # WHY: require a visible operator reason.
 
     @patch.object(WanHubGroupNumberManager, "_prompt_action")
     @patch.object(WanHubGroupNumberManager, "_prompt_profile_selection")
@@ -529,13 +534,13 @@ class TestRunWorkflow:
     def test_full_workflow_calls_action(
         self, mock_profiles, mock_vpns, mock_display, mock_select, mock_action, manager
     ):
-        profile = {"name": "HUB1"}
-        mock_profiles.return_value = [profile]
-        vpn = {"type": "hub_spoke", "paths": {"HUB1-WAN1": {"pod": 1}}}
-        mock_vpns.return_value = ([vpn], [vpn])
-        mock_select.return_value = profile
-        manager.run()
-        mock_action.assert_called_once()
+        profile = {"name": "HUB1"}  # WHY: select the available hub profile.
+        mock_profiles.return_value = [profile]  # WHY: provide one profile without a cloud call.
+        vpn = {"type": "hub_spoke", "paths": {"HUB1-WAN1": {"pod": 1}}}  # WHY: provide one matching VPN path.
+        mock_vpns.return_value = ([vpn], [vpn])  # WHY: satisfy the filtered and total VPN results.
+        mock_select.return_value = profile  # WHY: model a valid operator selection.
+        manager.run()  # WHY: exercise the complete orchestration path.
+        assert mock_action.call_count == 1  # WHY: require one action prompt for the selected profile.
 
 
 # ---------------------------------------------------------------------------
@@ -595,19 +600,19 @@ class TestPromptAction:
 
     @patch.object(WanHubGroupNumberManager, "_prompt_set_pod")
     def test_action_1_calls_set_pod(self, mock_set, manager, sample_vpns):
-        profile = {"name": "ALPHA"}
-        vpn_data = manager._build_vpn_data([profile], sample_vpns)
-        manager._safe_input = MagicMock(return_value="1")
-        manager._prompt_action(profile, vpn_data)
-        mock_set.assert_called_once()
+        profile = {"name": "ALPHA"}  # WHY: select a profile with matching VPN paths.
+        vpn_data = manager._build_vpn_data([profile], sample_vpns)  # WHY: prepare the action path matches.
+        manager._safe_input = MagicMock(return_value="1")  # WHY: select the set action without a prompt.
+        manager._prompt_action(profile, vpn_data)  # WHY: dispatch the selected action.
+        assert mock_set.call_count == 1  # WHY: require one set operation.
 
     @patch.object(WanHubGroupNumberManager, "clear_pod")
     def test_action_2_calls_clear(self, mock_clear, manager, sample_vpns):
-        profile = {"name": "ALPHA"}
-        vpn_data = manager._build_vpn_data([profile], sample_vpns)
-        manager._safe_input = MagicMock(return_value="2")
-        manager._prompt_action(profile, vpn_data)
-        mock_clear.assert_called_once()
+        profile = {"name": "ALPHA"}  # WHY: select a profile with matching VPN paths.
+        vpn_data = manager._build_vpn_data([profile], sample_vpns)  # WHY: prepare the action path matches.
+        manager._safe_input = MagicMock(return_value="2")  # WHY: select the clear action without a prompt.
+        manager._prompt_action(profile, vpn_data)  # WHY: dispatch the selected action.
+        assert mock_clear.call_count == 1  # WHY: require one clear operation.
 
     def test_action_3_cancels(self, manager, sample_vpns, caplog: pytest.LogCaptureFixture):
         caplog.set_level(logging.WARNING)
