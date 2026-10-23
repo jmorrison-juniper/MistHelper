@@ -12,11 +12,13 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
 import requests
+from mistapi.__api_response import APIResponse
 
 from src.mist.resources.org import org_config_migration_manager as ocm
 from src.mist.resources.org.org_config_migration_manager import OrgConfigMigrationManager
@@ -52,40 +54,106 @@ def _valid_bundle() -> dict[str, Any]:
 class TestGetOrgName:
     """Cover the org name lookup that labels every export bundle."""
 
-    def test_the_name_is_read_from_the_response(self, manager: OrgConfigMigrationManager) -> None:
-        """The operator identifies a bundle by the source org name in the filename."""
-        response = MagicMock()  # WHY: stand in for the SDK response wrapper.
-        response.data = {"name": "Acme-Corp"}  # WHY: the documented reply shape.
-        with patch.object(ocm.mistapi.api.v1.orgs.orgs, "getOrg", return_value=response):
-            assert manager._get_org_name() == "Acme-Corp"
+    @pytest.mark.parametrize("status", [200, 201, 299])
+    def test_the_name_is_read_from_the_response(
+        self, manager: OrgConfigMigrationManager, caplog: pytest.LogCaptureFixture, status: int
+    ) -> None:
+        """Accept valid metadata without recording its name in lookup logs."""
+        response = requests.Response()  # Exercise the installed SDK response boundary offline.
+        response.status_code = status  # Cover both limits of the successful status range.
+        response._content = b'{"name": " Acme-Corp "}'  # Preserve the exact source label.
+        api_response = APIResponse(response=response, url="https://api.mist.com/api/v1/orgs/dest-org")
+        caplog.set_level("DEBUG", logger=ocm.__name__)  # Capture successful diagnostics as well as warnings.
+        caplog.clear()  # Limit the assertion to lookup logs, not fixture construction.
+        with patch.object(ocm.mistapi.api.v1.orgs.orgs, "getOrg", return_value=api_response) as endpoint:
+            assert manager._get_org_name() == " Acme-Corp "
+        endpoint.assert_called_once_with(manager.session, manager.org_id)  # Preserve the endpoint arguments.
+        assert "Acme-Corp" not in caplog.text  # A valid name must not enter the diagnostic log.
+        assert not [record for record in caplog.records if record.levelno >= 30]  # Success must not warn.
 
-    def test_a_missing_name_falls_back(self, manager: OrgConfigMigrationManager) -> None:
-        """A blank filename would hide which org an export came from."""
-        response = MagicMock()  # WHY: stand in for the SDK response wrapper.
-        response.data = {"id": "src-org"}  # WHY: the name field is absent.
+    @pytest.mark.parametrize("status", [199, 300, 401, 403, 404, 429, 500, 503])
+    def test_a_refused_http_result_returns_unknown(
+        self, manager: OrgConfigMigrationManager, caplog: pytest.LogCaptureFixture, status: int
+    ) -> None:
+        """Reject even plausible names from unsuccessful responses without body logs."""
+        response = requests.Response()  # Exercise native HTTP status and payload parsing without a request.
+        response.status_code = status  # Include client refusal, server failure, and range boundaries.
+        response._content = b'{"name": "sensitive-body-marker", "error": "sensitive-body-marker"}'
+        api_response = APIResponse(response=response, url="https://api.mist.com/api/v1/orgs/dest-org")
+        manager.org_id = "dest-org"  # Verify that the warning identifies the affected organization.
+        caplog.set_level("DEBUG", logger=ocm.__name__)  # Detect leaks at every lookup log level.
+        caplog.clear()  # Exclude the SDK fixture construction from lookup diagnostics.
+        with (
+            patch.object(ocm.mistapi.api.v1.orgs.orgs, "getOrg", return_value=api_response) as endpoint,
+            patch.object(APIResponse, "data", new_callable=PropertyMock, create=True) as metadata,
+        ):
+            metadata.side_effect = AssertionError("Refused metadata must not be read")  # Prove validation order.
+            assert manager._get_org_name() == "Unknown"
+        metadata.assert_not_called()  # Reject status before inspecting even a plausible name.
+        endpoint.assert_called_once_with(manager.session, "dest-org")  # Refusal must not trigger another request.
+        assert f"HTTP {status}" in caplog.text  # Report the exact refusal status.
+        assert "dest-org" in caplog.text  # Keep enough context to diagnose the failed lookup.
+        assert "sensitive-body-marker" not in caplog.text  # Never record the refusal body or supplied name.
+        assert any(record.levelno == 30 for record in caplog.records)  # The refusal must be visible.
+
+    @pytest.mark.parametrize(
+        "data",
+        [
+            None,
+            [],
+            ["sensitive-body-marker"],
+            {},
+            {"id": "dest-org"},
+            {"name": None},
+            {"name": 42},
+            {"name": ""},
+            {"name": "   "},
+            {"error": "sensitive-body-marker", "name": "sensitive-body-marker"},
+            {"error": "", "name": "sensitive-body-marker"},
+        ],
+    )
+    def test_invalid_metadata_returns_unknown(
+        self, manager: OrgConfigMigrationManager, caplog: pytest.LogCaptureFixture, data: object
+    ) -> None:
+        """Reject malformed metadata and error objects even with HTTP 200."""
+        response = SimpleNamespace(status_code=200, data=data)  # Isolate external payload shape validation.
+        caplog.set_level("DEBUG", logger=ocm.__name__)  # Include debug records in the privacy assertion.
         with patch.object(ocm.mistapi.api.v1.orgs.orgs, "getOrg", return_value=response):
             assert manager._get_org_name() == "Unknown"
+        assert any(record.levelno == 30 for record in caplog.records)  # Invalid metadata must not fail silently.
+        assert "sensitive-body-marker" not in caplog.text  # Never log invalid metadata contents.
 
-    def test_an_empty_payload_falls_back(self, manager: OrgConfigMigrationManager) -> None:
-        """An empty payload must not raise inside the export flow."""
-        response = MagicMock()  # WHY: stand in for the SDK response wrapper.
-        response.data = {}  # WHY: reproduce the empty reply.
-        with patch.object(ocm.mistapi.api.v1.orgs.orgs, "getOrg", return_value=response):
+    @pytest.mark.parametrize("status", [None, "sensitive-status-marker", 200.0, True, False])
+    def test_an_invalid_status_is_rejected_before_data(
+        self, manager: OrgConfigMigrationManager, caplog: pytest.LogCaptureFixture, status: object
+    ) -> None:
+        """Do not read metadata until an integer successful status is present."""
+        response = MagicMock(spec=["data"])  # An absent status attribute must not imply success.
+        if status is not None:  # Also exercise explicit invalid statuses.
+            response.status_code = status
+        caplog.set_level("DEBUG", logger=ocm.__name__)  # Detect interpolation of invalid external status text.
+        with (
+            patch.object(ocm.mistapi.api.v1.orgs.orgs, "getOrg", return_value=response),
+            patch.object(type(response), "data", new_callable=PropertyMock, create=True) as metadata,
+        ):
+            metadata.side_effect = AssertionError("Invalid status must not read metadata")  # Prove early exit.
             assert manager._get_org_name() == "Unknown"
+        metadata.assert_not_called()  # Attribute access itself must wait for HTTP validation.
+        assert "HTTP unavailable" in caplog.text  # Invalid status values need a fixed, safe diagnostic.
+        assert any(record.levelno == 30 for record in caplog.records)  # A missing status needs a visible warning.
+        assert "sensitive-status-marker" not in caplog.text  # Invalid status objects must not enter logs.
 
-    def test_an_http_401_response_falls_back(self, manager: OrgConfigMigrationManager) -> None:
-        """An HTTP 401 response must not abandon an export that would otherwise work."""
-        from mistapi.__api_response import APIResponse  # WHY: drive the installed SDK response boundary.
-
-        response = requests.Response()  # WHY: build the real HTTP response passed to mistapi.
-        response.status_code = 401  # WHY: reproduce the authentication failure from the cloud.
-        response.url = "https://api.mist.com/api/v1/orgs/dest-org"  # WHY: provide the SDK response URL.
-        response._content = b'{"error": "401 denied"}'  # WHY: preserve the error payload returned by Mist.
-        api_response = APIResponse(response=response, url=response.url)  # WHY: exercise the native SDK boundary.
-        with patch.object(ocm.mistapi.api.v1.orgs.orgs, "getOrg", return_value=api_response):
+    @pytest.mark.parametrize("error_type", [requests.Timeout, ConnectionError, RuntimeError])
+    def test_request_errors_do_not_expose_exception_text(
+        self, manager: OrgConfigMigrationManager, caplog: pytest.LogCaptureFixture, error_type: type[Exception]
+    ) -> None:
+        """Retain the unknown label without exposing exception response text."""
+        caplog.set_level("DEBUG", logger=ocm.__name__)  # Exception messages can contain an entire response.
+        with patch.object(ocm.mistapi.api.v1.orgs.orgs, "getOrg", side_effect=error_type("sensitive-body-marker")):
             assert manager._get_org_name() == "Unknown"
-        assert api_response.status_code == 401  # WHY: prove that the fallback consumed an HTTP 401 response.
-        assert api_response.data == {"error": "401 denied"}  # WHY: verify the logged HTTP error body.
+        assert error_type.__name__ in caplog.text  # Report the failure category without its message.
+        assert "sensitive-body-marker" not in caplog.text  # Exception tracebacks can expose sensitive text.
+        assert any(record.levelno == 40 for record in caplog.records)  # Request exceptions need an error log.
 
 
 class TestBuildExportBundle:
@@ -215,6 +283,33 @@ class TestExportConfig:
         ):
             manager.export_config()  # WHY: drive the whole menu 176 flow.
         assert manager.org_id == "dest-org"  # WHY: the resolver value must reach the instance.
+
+    @pytest.mark.parametrize("scenario", [(200, "Acme"), (403, "Unknown"), (503, "Unknown")])
+    def test_validated_metadata_reaches_the_saved_bundle(
+        self,
+        manager: OrgConfigMigrationManager,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        scenario: tuple[int, str],
+    ) -> None:
+        """Integrate lookup validation with the existing export writer without network access."""
+        monkeypatch.chdir(tmp_path)  # Keep output separate from production data.
+        (tmp_path / "data").mkdir()  # The existing writer expects the product output directory.
+        response = requests.Response()  # Use the native SDK response shape for this integrated flow.
+        response.status_code = scenario[0]  # Prove that status overrides a plausible body name.
+        response._content = b'{"name": "Acme"}'  # The same body must yield different labels after refusal.
+        api_response = APIResponse(response=response, url="https://api.mist.com/api/v1/orgs/dest-org")
+        with (
+            patch.object(ocm.mistapi.api.v1.orgs.orgs, "getOrg", return_value=api_response) as endpoint,
+            patch.object(manager, "_fetch_all_types", return_value={key: [] for key in TYPE_KEYS}),
+        ):
+            manager.export_config()  # Exercise the real lookup, metadata builder, and file writer.
+        endpoint.assert_called_once_with(manager.session, "dest-org")  # No extra metadata request is necessary.
+        saved_files = list((tmp_path / "data").glob("OrgConfig_Export_*.json"))  # Inspect the private test output.
+        assert len(saved_files) == 1  # The flow must persist exactly one export.
+        bundle = json.loads(saved_files[0].read_text(encoding="utf-8"))  # Verify the durable metadata result.
+        assert bundle["metadata"]["source_org_name"] == scenario[1]  # Preserve success and explicit unknown.
+        assert bundle["metadata"]["source_org_id"] == "dest-org"  # The source identifier must remain unchanged.
 
 
 class TestSelectImportFile:
