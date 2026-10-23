@@ -34,6 +34,7 @@ from typing import Any  # WHY: monkeypatched fakes carry loose typing.
 from unittest.mock import MagicMock, call  # WHY: FR-008 collaborator doubles + call assertions.
 
 import pytest  # WHY: monkeypatch + caplog fixtures.
+from mistapi.__api_response import APIResponse  # Exercise the installed SDK response contract without a request.
 
 import MistHelper as _mh_module  # WHY: module-object monkeypatch avoids legacy-facade substring guard.
 from src.operations.exporting.export.site_client_exporter import SiteClientExporter  # WHY: direct SUT import.
@@ -414,6 +415,73 @@ class TestBeacons:
 
 class TestGetSiteBeacon:
     """Cover prompt, success, empty-response, and retry/error branches of get_site_beacon."""
+
+    @pytest.mark.parametrize("status_code", [199, 300, 302, 400, 401, 403, 404, 500, 503])
+    def test_returned_http_failure_never_exports_error_body(
+        self, wired_deps: dict[str, Any], caplog: pytest.LogCaptureFixture, status_code: int
+    ) -> None:
+        """Reject failed SDK responses before an error mapping can become a beacon row."""
+        wired_deps["InputUtils"].safe_input.side_effect = ["site-123", "beacon-456"]
+        http_response = MagicMock(status_code=status_code, headers={}, text='{"detail":"Not found."}')
+        http_response.json.return_value = {"detail": "Not found."}
+        endpoint = wired_deps["mistapi"].api.v1.sites.beacons.getSiteBeacon
+        endpoint.return_value = APIResponse(http_response, "/api/v1/sites/site-123/beacons/beacon-456")
+
+        with caplog.at_level(logging.INFO):
+            SiteClientExporter.get_site_beacon()
+
+        endpoint.assert_called_once_with(wired_deps["apisession"], site_id="site-123", beacon_id="beacon-456")
+        wired_deps["DataExporter"].write_with_format_selection.assert_not_called()
+        wired_deps["RateLimitingUtils"].get_rate_limited_delay.assert_not_called()
+        assert f"! Error fetching site beacon detail: getSiteBeacon returned HTTP {status_code}" in caplog.text
+        assert "Persisting" not in caplog.text
+        assert "Exported site beacon detail" not in caplog.text
+
+    @pytest.mark.parametrize("status_code", [200, 299])
+    def test_returned_http_success_preserves_export(self, wired_deps: dict[str, Any], status_code: int) -> None:
+        """Keep the existing rows, filename, and metadata for successful SDK responses."""
+        wired_deps["InputUtils"].safe_input.side_effect = ["site-123", "beacon-456"]
+        rows = {"id": "beacon-456", "site_id": "site-123"}
+        wired_deps["mistapi"].api.v1.sites.beacons.getSiteBeacon.return_value = MagicMock(
+            status_code=status_code, data=rows
+        )
+
+        SiteClientExporter.get_site_beacon()
+
+        wired_deps["DataExporter"].write_with_format_selection.assert_called_once_with(
+            [rows], "SiteBeacon_site_123_beacon_456.csv", api_function_name="getSiteBeacon"
+        )
+        wired_deps["RateLimitingUtils"].get_rate_limited_delay.assert_not_called()
+
+    @pytest.mark.parametrize("final_status", [200, 429])
+    def test_returned_rate_limit_obeys_retry_limit(
+        self, wired_deps: dict[str, Any], monkeypatch: pytest.MonkeyPatch, final_status: int
+    ) -> None:
+        """Returned rate limits use the existing delay and stop at the configured retry limit."""
+        wired_deps["InputUtils"].safe_input.side_effect = ["site-123", "beacon-456"]
+        rows = {"id": "beacon-456", "site_id": "site-123"}
+        endpoint = wired_deps["mistapi"].api.v1.sites.beacons.getSiteBeacon
+        endpoint.side_effect = [
+            MagicMock(status_code=429, data={"detail": "Too many requests."}),
+            MagicMock(status_code=final_status, data=rows),
+        ]
+        wired_deps["RateLimitingUtils"].get_rate_limited_delay.return_value = (0.25, 0.5)
+        sleep_spy = MagicMock()
+        monkeypatch.setattr("src.operations.exporting.export.site_client_exporter.time.sleep", sleep_spy)
+
+        SiteClientExporter.get_site_beacon()
+
+        assert endpoint.call_count == 2
+        wired_deps["RateLimitingUtils"].get_rate_limited_delay.assert_called_once_with(
+            None, wired_deps["apisession"], wired_deps["api_usage_cache"]
+        )
+        sleep_spy.assert_called_once_with(0.5)
+        if final_status == 200:
+            wired_deps["DataExporter"].write_with_format_selection.assert_called_once_with(
+                [rows], "SiteBeacon_site_123_beacon_456.csv", api_function_name="getSiteBeacon"
+            )
+        else:
+            wired_deps["DataExporter"].write_with_format_selection.assert_not_called()
 
     def test_happy_path_prompts_fetches_and_persists(self, wired_deps: dict[str, Any]) -> None:
         """Validated identifiers trigger one SDK call and one DataExporter write_with_format_selection call."""
