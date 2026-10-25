@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import inspect
+from collections.abc import Callable
+from typing import Any
 from unittest.mock import Mock
 
 import pytest
@@ -134,6 +136,34 @@ def test_upgrade_status_route_uses_request_service(monkeypatch: pytest.MonkeyPat
     assert response.get_json() == {"devices": []}  # Keep the status response shape.
     dependencies.mutation_services.resolve.assert_called_once_with(upgrade.UPGRADE_SERVICE_KEY)  # Use the provider.
     service.get_upgrade_status.assert_called_once_with("run-1")  # Read the requested run once.
+
+
+@pytest.mark.parametrize(
+    ("handler", "path", "method"),
+    [
+        (upgrade.upgrade_status_via_service, "/api/runs/run-1/upgrade/status", "GET"),
+        (upgrade.cancel_upgrade_via_service, "/api/runs/run-1/upgrade/cancel", "POST"),
+    ],
+)
+def test_upgrade_status_and_cancel_refuse_without_request_service(
+    monkeypatch: pytest.MonkeyPatch,
+    handler: Callable[..., Any],
+    path: str,
+    method: str,
+) -> None:
+    """Status and cancel routes must refuse when request dependencies are missing."""
+    dependency_provider = Mock(
+        side_effect=upgrade.PortalDependencyError("provider unavailable")
+    )  # Refuse service construction.
+    application = Flask(__name__)  # Build a route context without production startup.
+    monkeypatch.setattr(upgrade, "request_dependencies", dependency_provider)  # Inject the missing provider.
+
+    with application.test_request_context(path, method=method):  # Supply the route's Flask request.
+        response, status = unwrapped(handler)("run-1")  # Exercise the undecorated route.
+
+    assert status == 503  # Refuse the route without a mutation service.
+    assert response.get_json()["error"]["code"] == "service_unavailable"  # Do not report success.
+    dependency_provider.assert_called_once()  # Resolve the provider only once.
 
 
 def test_upgrade_start_refusal_precedes_request_service_resolution(monkeypatch: pytest.MonkeyPatch) -> None:
