@@ -104,6 +104,7 @@ UPGRADE_SERVICE_KEY = "UPGRADE_SERVICE"  # The seam that holds the UpgradeServic
 SETTLE_GATE_SERVICE_KEY = "SETTLE_GATE_SERVICE"  # The seam that holds SettleGateService.
 COMPARISON_SERVICE_KEY = "COMPARISON_SERVICE"  # The seam that holds ComparisonService.
 PORTAL_DEPENDENCY_PROVIDER_KEY = "PORTAL_DEPENDENCY_PROVIDER"  # Holds lazy request resource construction.
+ACTION_STORE_RESOLVER_KEY = "RUN_ACTION_STORE_RESOLVER"  # Holds the shared action-store access boundary.
 
 POST_CHECK_ORDINAL = 2  # The second capture of a run. `driver.post_check_request` sends this value.
 
@@ -244,12 +245,16 @@ class PortalRequestDependencies:
     mutation_services: PortalRequestMutationServices  # Lazily bind mutation paths to this request.
 
 
-class PortalDependencyProvider:
-    """Construct request resources and expose shared action storage."""
+class ActionStoreResolver:
+    """Resolve the shared actor-scoped action repository for one request."""
 
-    def resolve_action_store(self) -> Any:
-        """Return the shared durable action repository through the request provider."""
-        return current_app.config.get("RUN_ACTION_STORE")  # The actor-scoped repository holds no Mist session.
+    def resolve(self) -> Any:
+        """Return the durable action repository without opening a request router."""
+        return current_app.config.get("RUN_ACTION_STORE")  # The repository holds no operator cloud session.
+
+
+class PortalDependencyProvider:
+    """Construct one authenticated resource graph when a request first needs it."""
 
     def resolve(self) -> PortalRequestDependencies:
         """Return one cached resource graph for the active request."""
@@ -310,12 +315,12 @@ def request_dependencies() -> PortalRequestDependencies:
 
 
 def request_action_store() -> Any:
-    """Resolve the shared durable action repository through the installed provider."""
-    provider = current_app.config.get(PORTAL_DEPENDENCY_PROVIDER_KEY)  # Keep route code outside Flask configuration.
-    if not isinstance(provider, PortalDependencyProvider):  # Missing wiring must refuse before an action starts.
-        logger.error("wiring: the request action-store provider is unavailable")  # Name the failed boundary.
+    """Resolve the shared durable action repository through the request boundary."""
+    resolver = current_app.config.get(ACTION_STORE_RESOLVER_KEY)  # Keep route code outside Flask configuration.
+    if not isinstance(resolver, ActionStoreResolver):  # Missing wiring must refuse before an action starts.
+        logger.error("wiring: the request action-store resolver is unavailable")  # Name the failed boundary.
         raise PortalDependencyError("The portal request resources are unavailable.")  # Refuse an invalid setup.
-    return provider.resolve_action_store()  # Reuse durable storage without opening an unrelated request router.
+    return resolver.resolve()  # Reuse durable storage without opening an unrelated request router.
 
 
 # WHY: `capture/store.connect_database` answers None whenever ArangoDB is
@@ -2109,9 +2114,9 @@ def install_seams(  # Install production defaults or one complete isolated depen
         for key, value in values.items():  # Install each value before blueprint registration.
             app.config[key] = value  # An explicit E2E value must replace every default.
         app.config.setdefault(
-            PORTAL_DEPENDENCY_PROVIDER_KEY,
-            PortalDependencyProvider(),
-        )  # E2E routes need the same lazy boundary without production resource construction.
+            ACTION_STORE_RESOLVER_KEY,
+            ActionStoreResolver(),
+        )  # E2E routes need shared action access without production resource construction.
         logger.debug("wiring: installed %s E2E dependency values", len(values))  # Report a safe count.
         return  # Do not construct production services or start production storage.
     app.config.setdefault(RUN_STORE_KEY, DocumentRunStore())  # Replaces the memory store of the route module.
@@ -2123,6 +2128,7 @@ def install_seams(  # Install production defaults or one complete isolated depen
         PortalDependencyProvider(),
     )  # Store construction rules only, after the existing run seams.
     _install_action_repository(app)  # Bind atomic run actions to ArangoDB with no fallback.
+    app.config.setdefault(ACTION_STORE_RESOLVER_KEY, ActionStoreResolver())  # Resolve the store without a new router.
     # Phase 2 T-006: Wire CaptureService for pre/post-upgrade device capture capture
     _install_capture_service(app)  # Inject CaptureService into Flask config seam
     # Phase 2 T-008/T-009: Wire UpgradeService for firmware upgrade orchestration

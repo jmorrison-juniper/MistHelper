@@ -124,6 +124,7 @@ def _install_request_fakes(
     monkeypatch.setattr(wiring, "load_module", lambda name: modules.get(name))  # Supply fake services only.
     application = Flask(__name__)  # Create a portal without production startup installers.
     application.config[wiring.PORTAL_DEPENDENCY_PROVIDER_KEY] = wiring.PortalDependencyProvider()  # Install provider.
+    application.config[wiring.ACTION_STORE_RESOLVER_KEY] = wiring.ActionStoreResolver()  # Install store access.
     application.config["RUN_ACTION_STORE"] = action_store  # Keep the durable store fake.
     return application  # Return the isolated test app.
 
