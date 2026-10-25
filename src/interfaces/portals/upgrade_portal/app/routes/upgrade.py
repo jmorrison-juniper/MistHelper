@@ -84,6 +84,10 @@ from src.interfaces.portals.upgrade_portal.app.routes.select import (  # Import 
 from src.interfaces.portals.upgrade_portal.app.seam_shapes import (
     check_stand_in,
 )  # Issue #1991: compare each stand-in against the real callee.
+from src.interfaces.portals.upgrade_portal.app.wiring import (
+    PortalDependencyError,
+    request_dependencies,
+)  # Bind mutation services to the authenticated request.
 from src.interfaces.portals.upgrade_portal.runtime import identity  # The real session guard. No copy of it lives here.
 from src.interfaces.portals.upgrade_portal.runtime.runs import (  # Import the moved dependency.
     RunRecordBuilder,
@@ -2296,11 +2300,6 @@ def start_upgrade_via_service(run_id: str) -> tuple[Response, int]:
     Returns:
         JSON response with upgrade status, or error refusal.
     """
-    # WHY: Fetch the UpgradeService from Flask config seam; returns None if not wired yet
-    upgrade_service = current_app.config.get(UPGRADE_SERVICE_KEY)
-    if upgrade_service is None:  # UpgradeService not wired, cannot proceed with upgrade
-        logger.error("upgrade: UpgradeService not wired for run %s", run_id)  # Name the missing dependency
-        return json_error(SERVER_ERROR_STATUS, "service_unavailable", "UpgradeService not available")
     refusal = operator_write_refusal()  # The service route also sends firmware, so it needs the same guard.
     if refusal is not None:  # A reserved operator domain cannot answer for the write.
         return refusal  # Refuse before the service can start a cloud change.
@@ -2320,6 +2319,18 @@ def start_upgrade_via_service(run_id: str) -> tuple[Response, int]:
     site_id = str(body.get("site_id", "")).strip()  # The service needs the site scope for device upgrades.
     if not org_id or not site_id:  # Missing scope cannot safely start a firmware change.
         return json_error(BAD_REQUEST_STATUS, "invalid_parameters", "org_id and site_id are required for upgrade start")
+
+    try:  # Build request resources only after the existing mutation guards pass.
+        upgrade_service = request_dependencies().mutation_services.resolve(
+            UPGRADE_SERVICE_KEY
+        )  # Read the request service.
+    except PortalDependencyError as fault:  # Missing resources must refuse before a cloud change.
+        logger.error(
+            "upgrade: request service unavailable for start of run %s (%s)", run_id, type(fault).__name__
+        )  # Log safe fault details.
+        return json_error(
+            UNAVAILABLE_STATUS, "service_unavailable", "UpgradeService not available"
+        )  # Refuse firmware work.
 
     try:  # UpgradeService call may fail due to validation, API, or transient errors
         logger.info(
@@ -2378,13 +2389,17 @@ def upgrade_status_via_service(run_id: str) -> tuple[Response, int]:
     Returns:
         JSON response with upgrade status and device details, or error refusal.
     """
-    # WHY: Fetch the UpgradeService from Flask config seam; returns None if not wired yet
-    upgrade_service = current_app.config.get(UPGRADE_SERVICE_KEY)
-    if upgrade_service is None:  # UpgradeService not wired, cannot fetch status
+    try:  # Resolve the service from this authenticated request.
+        upgrade_service = request_dependencies().mutation_services.resolve(
+            UPGRADE_SERVICE_KEY
+        )  # Read the request service.
+    except PortalDependencyError as fault:  # Missing resources cannot return a success-shaped response.
         logger.error(
-            "upgrade: UpgradeService not wired for status poll of run %s", run_id
-        )  # Name the missing dependency
-        return json_error(SERVER_ERROR_STATUS, "service_unavailable", "UpgradeService not available")
+            "upgrade: request service unavailable for status of run %s (%s)", run_id, type(fault).__name__
+        )  # Log safe fault details.
+        return json_error(
+            UNAVAILABLE_STATUS, "service_unavailable", "UpgradeService not available"
+        )  # Refuse status reads.
 
     try:  # UpgradeService call may fail due to database or transient errors
         logger.debug("upgrade: poll status for run %s", run_id)  # BEFORE service call
@@ -2421,11 +2436,17 @@ def cancel_upgrade_via_service(run_id: str) -> tuple[Response, int]:
     Returns:
         JSON response with cancel result and new status, or error refusal.
     """
-    # WHY: Fetch the UpgradeService from Flask config seam; returns None if not wired yet
-    upgrade_service = current_app.config.get(UPGRADE_SERVICE_KEY)
-    if upgrade_service is None:  # UpgradeService not wired, cannot cancel upgrade
-        logger.error("upgrade: UpgradeService not wired for cancel of run %s", run_id)  # Name the missing dependency
-        return json_error(SERVER_ERROR_STATUS, "service_unavailable", "UpgradeService not available")
+    try:  # Resolve the service from this authenticated request.
+        upgrade_service = request_dependencies().mutation_services.resolve(
+            UPGRADE_SERVICE_KEY
+        )  # Read the request service.
+    except PortalDependencyError as fault:  # Missing resources must refuse before a cancel operation.
+        logger.error(
+            "upgrade: request service unavailable for cancel of run %s (%s)", run_id, type(fault).__name__
+        )  # Log safe fault details.
+        return json_error(
+            UNAVAILABLE_STATUS, "service_unavailable", "UpgradeService not available"
+        )  # Refuse cancellation.
 
     try:  # UpgradeService call may fail due to API, database, or transient errors
         logger.info("upgrade: cancel upgrade for run %s", run_id)  # BEFORE service call
