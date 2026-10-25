@@ -221,18 +221,35 @@ def test_comparison_approval_refuses_when_request_provider_is_missing() -> None:
 def test_run_control_action_store_comes_from_the_request_graph(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Run-control routes must retain the configured durable repository."""
+    """Run-control routes must resolve durable storage without opening a request router."""
     action_store = _durable_action_store()  # Keep a process-owned repository.
     application = _install_request_fakes(monkeypatch, _operator("operator@example.com"), action_store)  # Install fakes.
 
     with application.test_request_context("/"):  # Use the provider inside one authenticated request.
         assert run_control_routes._action_store() is action_store  # Return the durable repository.
+    assert FakeDatabaseRouter.instances == []  # The shared store does not require a request router.
 
 
 def test_run_control_action_store_refuses_when_request_provider_is_missing() -> None:
     """Run-control routes must refuse when request resources are not installed."""
     application = Flask(__name__)  # Omit the provider to exercise the fail-closed path.
+    application.config["RUN_ACTION_STORE"] = _durable_action_store()  # A global store must not bypass the provider.
 
     with application.test_request_context("/"):  # Supply the Flask request required by the route helper.
         with pytest.raises(run_control_routes.ActionStoreUnavailable):  # Require a typed refusal.
             run_control_routes._action_store()  # Do not proceed without durable action storage.
+
+
+def test_e2e_dependency_installation_keeps_the_request_provider(monkeypatch: pytest.MonkeyPatch) -> None:
+    """E2E overrides must expose their fake action store through the request provider."""
+    FakeDatabaseRouter.instances.clear()  # Isolate the no-router assertion from earlier tests.
+    action_store = _durable_action_store()  # Keep the test repository isolated from production storage.
+    overrides = SimpleNamespace(config_values=lambda: {"RUN_ACTION_STORE": action_store})  # Supply only fake seams.
+    application = Flask(__name__)  # Create an app with no production startup.
+    monkeypatch.setattr(wiring, "prepare_storage", lambda: pytest.fail("E2E installation opened production storage"))
+
+    wiring.install_seams(application, overrides)  # Install the same provider used by production routes.
+
+    with application.test_request_context("/"):  # Resolve dependencies only inside one fake request.
+        assert wiring.request_action_store() is action_store  # Return the configured fake repository.
+    assert FakeDatabaseRouter.instances == []  # E2E action access must not construct a production router.

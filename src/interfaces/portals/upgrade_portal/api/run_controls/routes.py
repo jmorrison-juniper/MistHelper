@@ -22,7 +22,7 @@ from src.interfaces.portals.upgrade_portal.app.factory import json_error
 from src.interfaces.portals.upgrade_portal.app.routes.select import SELECTED_ORG_KEY, session_lock_record
 from src.interfaces.portals.upgrade_portal.app.wiring import (
     PortalDependencyError,
-    request_dependencies,
+    request_action_store,
 )  # Resolve the durable action store through the request provider.
 from src.interfaces.portals.upgrade_portal.capture.devices import guard_page_count, read_every_page
 from src.interfaces.portals.upgrade_portal.persistence.actions import (
@@ -246,9 +246,9 @@ def _actor() -> DurableActorScope | None:
 
 
 def _action_store() -> Any:
-    """Return the durable action repository held by the authenticated request graph."""
+    """Return the durable action repository through the authenticated request provider."""
     try:
-        store = request_dependencies().mutation_services.action_store  # Keep the process-owned durable repository.
+        store = request_action_store()  # Keep the process-owned durable repository.
     except PortalDependencyError as fault:
         logger.error(
             "run_controls: request action store unavailable (%s)", type(fault).__name__

@@ -245,7 +245,11 @@ class PortalRequestDependencies:
 
 
 class PortalDependencyProvider:
-    """Construct one authenticated resource graph when a request first needs it."""
+    """Construct request resources and expose shared action storage."""
+
+    def resolve_action_store(self) -> Any:
+        """Return the shared durable action repository through the request provider."""
+        return current_app.config.get("RUN_ACTION_STORE")  # The actor-scoped repository holds no Mist session.
 
     def resolve(self) -> PortalRequestDependencies:
         """Return one cached resource graph for the active request."""
@@ -303,6 +307,15 @@ def request_dependencies() -> PortalRequestDependencies:
         logger.error("wiring: the request dependency provider is unavailable")  # Name the failed boundary.
         raise PortalDependencyError("The portal request resources are unavailable.")  # Refuse an invalid setup.
     return provider.resolve()  # Construction and caching stay inside one lifecycle owner.
+
+
+def request_action_store() -> Any:
+    """Resolve the shared durable action repository through the installed provider."""
+    provider = current_app.config.get(PORTAL_DEPENDENCY_PROVIDER_KEY)  # Keep route code outside Flask configuration.
+    if not isinstance(provider, PortalDependencyProvider):  # Missing wiring must refuse before an action starts.
+        logger.error("wiring: the request action-store provider is unavailable")  # Name the failed boundary.
+        raise PortalDependencyError("The portal request resources are unavailable.")  # Refuse an invalid setup.
+    return provider.resolve_action_store()  # Reuse durable storage without opening an unrelated request router.
 
 
 # WHY: `capture/store.connect_database` answers None whenever ArangoDB is
@@ -2095,6 +2108,10 @@ def install_seams(  # Install production defaults or one complete isolated depen
         values = overrides.config_values()  # Build one explicit map of every required seam.
         for key, value in values.items():  # Install each value before blueprint registration.
             app.config[key] = value  # An explicit E2E value must replace every default.
+        app.config.setdefault(
+            PORTAL_DEPENDENCY_PROVIDER_KEY,
+            PortalDependencyProvider(),
+        )  # E2E routes need the same lazy boundary without production resource construction.
         logger.debug("wiring: installed %s E2E dependency values", len(values))  # Report a safe count.
         return  # Do not construct production services or start production storage.
     app.config.setdefault(RUN_STORE_KEY, DocumentRunStore())  # Replaces the memory store of the route module.
