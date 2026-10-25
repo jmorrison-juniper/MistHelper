@@ -103,7 +103,7 @@ dev = [
     "black==26.10.1",
     "mypy==2.4.0",
     "types-requests==2.33.0.20261006",
-    "types-paramiko==5.0.0.20260724",
+    "types-paramiko==5.0.0.20261021",
     "types-tqdm==4.70.0.20260906",
     "pytest==9.1.1",
     "pytest-cov==7.1.0",
