@@ -26,7 +26,7 @@ import pytest
 from src.operations.hardware.mib_generator.document import OpenApiDocument
 from src.operations.hardware.mib_generator.runner import DEFAULT_OPENAPI
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[6]  # The moved package adds three parent levels.
+REPOSITORY_ROOT = Path(__file__).resolve().parents[7]  # The topic group adds one parent before the repository root.
 DOCKERIGNORE = REPOSITORY_ROOT / ".dockerignore"
 # Podman prefers `Containerfile` and Docker prefers `Dockerfile`. Both files
 # exist here, so a copy rule that lands in one and not the other repairs only

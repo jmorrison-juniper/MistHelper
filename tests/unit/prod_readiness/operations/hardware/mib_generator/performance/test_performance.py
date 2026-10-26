@@ -16,7 +16,7 @@ import pytest
 
 from src.operations.hardware.mib_generator.runner import MibGeneratorRunner
 
-REPO_ROOT = Path(__file__).resolve().parents[6]  # The grouped test path needs six parents to reach the repository root.
+REPO_ROOT = Path(__file__).resolve().parents[7]  # The topic group adds one parent before the repository root.
 OPENAPI = REPO_ROOT / "documentation" / "mist-api-openapi31json.json"  # The 16 MB file that Mist ships.
 ALLOWLIST = REPO_ROOT / "data" / "mib_generator" / "allowlist.json"  # The checked-in endpoint selection.
 LEDGER = REPO_ROOT / "data" / "mib_generator" / "oid_assignments.json"  # The checked-in number of each field.

@@ -10,7 +10,7 @@ from pathlib import Path  # Build paths from this test file.
 
 import pytest  # Mark the bash tests with a skip condition.
 
-START_SCRIPT = Path(__file__).resolve().parents[6] / "container" / "scripts" / "start.sh"  # Follow the moved package.
+START_SCRIPT = Path(__file__).resolve().parents[7] / "container" / "scripts" / "start.sh"  # Follow the topic group.
 ACCESS_LOG_FORMAT = (
     'ACCESS_LOG_FORMAT=\'%(h)s %(l)s %(u)s %(t)s "%(r)s" '
     "status=%(s)s bytes=%(b)s response_time_us=%(D)s "

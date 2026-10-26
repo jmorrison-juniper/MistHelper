@@ -15,7 +15,7 @@ from typing import Any
 from unittest.mock import patch
 
 from src.foundation.persistence.db import DatabaseConfig, WriteResult
-from tests.unit.prod_readiness.operations.exporting.container.bash_support import (
+from tests.unit.prod_readiness.operations.exporting.container.build_support.bash_support import (
     BASH_PATH,
     BASH_SKIP_REASON,
     windows_system_variables,

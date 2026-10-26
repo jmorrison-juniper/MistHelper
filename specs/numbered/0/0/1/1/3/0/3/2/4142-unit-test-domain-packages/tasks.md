@@ -6,6 +6,13 @@
 
 **Status rule**: A checked task means all its work is complete. Leave a task unchecked while any part remains.
 
+**Resume status, 2026-10-26**: Tasks T039 through T041 complete three independent bounded splits.
+Keep T004 and the final acceptance tasks open.
+The existing branch also overlaps PR #4415 at rename source `tests/unit/test_wan_hub_group_manager.py`.
+PRs #4471, #4438, and #4436 overlap the existing `pyproject.toml` changes.
+Do not publish or rebase this scope before the coordinator resolves these ownership conflicts.
+The draft, merge hold, historical-link deferral, and previous path reservations remain unchanged.
+
 **Current holds**: PR #4350 reserves `tests/unit/arango_indexes/test_preservation.py`,
 `tests/unit/export/test_endpoint_family_exporter.py`, and `tests/unit/refactors/test_sqlite_database_writer.py`.
 Keep the PR #4208 workflow and test paths deferred.
@@ -53,6 +60,9 @@ The coordinator must release the PR hold after #4353 before any pull request ope
 - [X] T036 [US2] Rebase onto the coordinator-approved current main after PR #4357. Preserve the published correction and the merged UI test. Repair the moved MSP fixture's shared SDK mutation. Verify the failing seven-module order, the complete root-unit shard, node IDs, baseline fields, ownership, style, and required quality gates. Publish only after local validation.
 - [X] T037 [US2] After the green current-main checks, preserve that remote head and rebase onto the coordinator-approved main after PR #4361. Verify the merged credential test, both fixes, node IDs, baseline fields, ownership, style, and required quality gates. Keep the pull request draft with auto-merge disabled.
 - [X] T038 [US2] Preserve the green published head and rebase onto exact coordinated main `1c089ed07ba865a7e505df4774a79751c72187cf`. Verify merged WAN service tests, both fixes, complete node IDs, baseline fields, ownership, style, prerequisites, and quality gates. Keep the pull request draft without auto-merge.
+- [X] T039 [US1] Split the unclaimed MIB generator tests into the mapped CLI, generator, and performance groups. Move the JSON fixture with its reader. Verify focused tests, complete node IDs, unchanged baseline fields, group sizes, path guards, and style.
+- [X] T040 [US1] Split the unclaimed firmware policy tests into changes, recovery bundles, and recovery selection groups. Keep shared fixtures and helpers at their current paths. Verify focused tests, complete node IDs, unchanged baseline fields, group sizes, path guards, and style.
+- [X] T041 [US1] Split the unclaimed container tests into mapped build-support and runtime groups. Update helper imports, repository-root depths, and the current container guide. Verify focused tests, complete node IDs, unchanged baseline fields, group sizes, path guards, and style.
 
 ## Phase 4: User Story 2 - Run the existing unit tests (Priority: P1)
 
