@@ -134,13 +134,17 @@ class UtilityExecution:
                 execution_error = error
         finally:
             try:
-                logger.emit(logging.INFO, "utility_cleanup_start")
+                logger.emit(logging.INFO, "utility_cleanup_start", {"action": self._context.request.key})
                 self._close()
-                logger.emit(logging.DEBUG, "utility_cleanup_complete")
+                logger.emit(logging.DEBUG, "utility_cleanup_complete", {"action": self._context.request.key})
             except Exception as error:
                 cleanup_error = error
         if cleanup_error is not None:
-            logger.emit(logging.ERROR, "utility_cleanup_failed", {"detail": type(cleanup_error).__name__})
+            logger.emit(
+                logging.ERROR,
+                "utility_cleanup_failed",
+                {"action": self._context.request.key, "detail": type(cleanup_error).__name__},
+            )
             self._finisher.failure("The utility cleanup failed. Read the portal log for the cause.")
         elif execution_error is not None:
             self._finisher.error(execution_error)

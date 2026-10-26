@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import threading
 from dataclasses import replace
@@ -206,3 +207,36 @@ class TestTriggerFailureCompletion:
         assert case.sink.finished == [(SessionState.FAILED, reason)]  # Retain the safe connection reason.
         case.client.close.assert_called_once_with()  # Cleanup must precede terminal failure.
         assert [(call.method, call.uri) for call in case.api.calls] == [("POST", f"{case.path}/capture")]
+
+    @pytest.mark.parametrize("data", ["bad json", b""], ids=["malformed-json", "empty-body"])
+    def test_invalid_trigger_body_closes_before_notification(
+        self, monkeypatch: pytest.MonkeyPatch, data: object
+    ) -> None:
+        """Reject non-mapping trigger bodies without reporting cleanup success early."""
+        case = self._case(monkeypatch)  # Keep the real sender validation and lifecycle.
+        case.api.add_override("/pcaps/capture", status_code=200, data=data)  # Model an invalid SDK response body.
+        UtilityExecution(case.context).run()  # A body error must still close the allocated stream.
+        assert case.sink.finished == [(SessionState.FAILED, "The utility failed with status 200.")]
+        case.client.close.assert_called_once_with()  # The existing close callback checks notification ordering.
+        assert case.context.state.answer is None  # An invalid body cannot establish capture ownership.
+        assert [(call.method, call.uri) for call in case.api.calls] == [("POST", f"{case.path}/capture")]
+
+    @pytest.mark.parametrize("cleanup_fails", [False, True])
+    def test_cleanup_events_identify_action(
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, cleanup_fails: bool
+    ) -> None:
+        """Retain the utility action on both successful and failed cleanup events."""
+        case = self._case(monkeypatch)  # Use the real sender to enter lifecycle cleanup.
+        case.api.add_override("/pcaps/capture", status_code=400)  # End startup without a live monitor.
+        if cleanup_fails:  # Verify the failure event as well as successful cleanup completion.
+            case.client.close.side_effect = RuntimeError("controlled cleanup failure")
+        with caplog.at_level(logging.DEBUG):  # Completion events use the existing debug level.
+            UtilityExecution(case.context).run()
+        events = [
+            json.loads(record.message)
+            for record in caplog.records
+            if record.name == UtilityExecution.__module__ and "utility_cleanup_" in record.message
+        ]  # Inspect the serialized records after the transport logging boundary.
+        final_event = "utility_cleanup_failed" if cleanup_fails else "utility_cleanup_complete"
+        assert [event["event"] for event in events] == ["utility_cleanup_start", final_event]
+        assert [event["action"] for event in events] == [case.context.request.key] * 2

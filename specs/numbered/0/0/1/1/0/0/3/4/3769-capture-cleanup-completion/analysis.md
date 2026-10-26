@@ -71,3 +71,15 @@ The user prohibits merge and auto-merge.
 Therefore, this session stops at the verified pull request and does not run deployment.
 The full repository test and coverage suites remain for CI.
 The committed test-quality comparison runs before push.
+
+## Selected survivor revision
+
+The coordinator selected PR #4465 and authorized only two additions from the comparison.
+Cleanup start, completion, and failure records now include the utility action.
+New tests reject malformed JSON and empty trigger response bodies through the real sender.
+Log tests check the serialized action fields on successful and failed cleanup.
+The original deterministic barrier remains unchanged.
+No duplicate barrier from PR #4464 enters this branch.
+The revised focused run reported `105 passed in 18.92s`, including 24 regression cases.
+Execution-module coverage remains 99.07 percent.
+Ruff, Black, compile, mypy, complexity, Bandit, Pylint, docstrings, symbols, and the writing gate pass.
