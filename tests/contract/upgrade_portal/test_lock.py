@@ -22,6 +22,7 @@ Fixtures:
 from __future__ import annotations  # Postponed annotations keep every hint a plain string.
 
 import json  # The stored lock value is JSON text, so a seeded record is built the same way.
+import logging  # Captured records prove the route logs structured refusal fields.
 from collections.abc import Iterator  # The signed-in fixtures yield and then clean up.
 from datetime import UTC, datetime, timedelta  # A quiet lock needs a timestamp in the past.
 from pathlib import Path  # The audit trail of a takeover needs a directory of its own.
@@ -450,18 +451,29 @@ def refuse_audit_line(document: dict[str, str]) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_take_a_free_site(lock_client: FlaskClient) -> None:
+def test_take_a_free_site(lock_client: FlaskClient, caplog: pytest.LogCaptureFixture) -> None:
     """`POST /api/sites/<site_id>/lock` answers 200 with a token and the life of the lock.
 
     Args:
         lock_client: The signed-in client.
     """
+    caplog.set_level(
+        logging.DEBUG, logger="src.interfaces.portals.upgrade_portal.app.routes.select"
+    )  # Enable the route result record.
     response = take_lock(lock_client)  # The site is free, so the store decides the race and this caller wins.
 
     assert response.status_code == OK_STATUS  # `contracts/http-api.md:129` fixes this status.
     body = response.get_json()
     assert body["lock_token"]  # The contract names this field and fixes no shape for the value.
     assert body["expires_in"] == LOCK_TTL_SECONDS  # `contracts/site-lock.md:23` fixes 3600 seconds.
+    route_records = [
+        record for record in caplog.records if record.name.endswith("app.routes.select")
+    ]  # Keep route records only.
+    assert len(route_records) == 2  # One action record and one result record cover the take.
+    assert route_records[0].levelno == logging.INFO  # The route records the action before the take.
+    assert route_records[1].levelno == logging.DEBUG  # The route records the result after the take.
+    assert SITE_ID in route_records[0].args  # The action record names the requested site.
+    assert "acquired" in route_records[1].args  # The result record names the lock state.
 
 
 def test_take_names_the_state_acquired(lock_client: FlaskClient) -> None:
@@ -499,6 +511,7 @@ def test_another_operator_is_refused_while_the_holder_is_active(
     lock_client: FlaskClient,
     other_owner: identity.SessionOwner,
     lock_store: FakeLockStore,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     """An active holder refuses a different operator with `site_locked`.
 
@@ -507,12 +520,22 @@ def test_another_operator_is_refused_while_the_holder_is_active(
         other_owner: The operator that already holds the site.
         lock_store: The stand-in lock store.
     """
+    caplog.set_level(logging.DEBUG)  # Capture both route and lock-module records.
     seed_lock(lock_store, other_owner, ACTIVE_AGE_SECONDS)  # A holder that beat 10 seconds ago is active.
 
     response = take_lock(lock_client)  # The second operator asks for the same site.
 
     assert response.status_code == CONFLICT_STATUS  # `contracts/http-api.md:132` fixes this status.
     assert read_error_code(response) == "site_locked"  # The contract fixes this code.
+    route_refusals = [
+        record
+        for record in caplog.records
+        if record.name.endswith("app.routes.select") and "site_locked" in record.args
+    ]  # Match values, not prose.
+    assert len(route_refusals) == 1  # The HTTP refusal has one route record.
+    assert route_refusals[0].levelno == logging.WARNING  # Active contention needs attention.
+    assert SITE_ID in route_refusals[0].args  # The record names the site.
+    assert CONFLICT_STATUS in route_refusals[0].args  # The record names the response status.
 
 
 def test_the_refusal_names_the_holder_and_the_wait(
@@ -544,6 +567,7 @@ def test_a_quiet_holder_asks_a_different_operator_for_a_word(
     lock_client: FlaskClient,
     other_owner: identity.SessionOwner,
     lock_store: FakeLockStore,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     """A quiet holder answers `confirmation_required` instead of `site_locked`.
 
@@ -552,12 +576,22 @@ def test_a_quiet_holder_asks_a_different_operator_for_a_word(
         other_owner: The operator that went quiet.
         lock_store: The stand-in lock store.
     """
+    caplog.set_level(logging.DEBUG)  # Capture the route record at INFO.
     seed_lock(lock_store, other_owner, QUIET_AGE_SECONDS)  # Past the 300-second cooldown.
 
     response = take_lock(lock_client)  # The second operator asks with no typed word.
 
     assert response.status_code == BAD_REQUEST_STATUS  # `contracts/http-api.md:131` fixes this status.
     assert read_error_code(response) == "confirmation_required"  # The contract fixes this code.
+    route_refusals = [
+        record
+        for record in caplog.records
+        if record.name.endswith("app.routes.select") and "confirmation_required" in record.args
+    ]  # Match values, not prose.
+    assert len(route_refusals) == 1  # The route records one confirmation refusal.
+    assert route_refusals[0].levelno == logging.INFO  # A typed word request is an expected action.
+    assert SITE_ID in route_refusals[0].args  # The record names the site.
+    assert BAD_REQUEST_STATUS in route_refusals[0].args  # The record names the response status.
 
 
 def test_the_word_for_a_different_operator_is_confirm(
@@ -730,18 +764,32 @@ def test_a_refused_audit_sink_refuses_the_takeover(
 # ---------------------------------------------------------------------------
 
 
-def test_a_beat_extends_the_lock(lock_client: FlaskClient) -> None:
+def test_a_beat_extends_the_lock(lock_client: FlaskClient, caplog: pytest.LogCaptureFixture) -> None:
     """`POST /api/sites/<site_id>/lock/heartbeat` answers 200 with the fresh life.
 
     Args:
         lock_client: The signed-in client.
     """
+    caplog.set_level(
+        logging.DEBUG, logger="src.interfaces.portals.upgrade_portal.app.routes.select"
+    )  # Capture both action and result records.
     token = take_lock(lock_client).get_json()["lock_token"]  # The browser holds this token.
+    caplog.clear()  # Keep only records from the beat request.
 
     response = lock_client.post(BEAT_PATH, json={"lock_token": token})  # The beat the browser sends every 60 seconds.
 
     assert response.status_code == OK_STATUS  # `contracts/http-api.md:152` fixes this status.
     assert response.get_json()["expires_in"] == LOCK_TTL_SECONDS  # The lock lives another 3600 seconds.
+    route_records = [
+        record for record in caplog.records if record.name.endswith("app.routes.select")
+    ]  # Keep route records only.
+    assert len(route_records) == 2  # One action and one result record cover the beat.
+    assert route_records[0].levelno == logging.INFO  # The route records the action before the beat.
+    assert route_records[1].levelno == logging.DEBUG  # The route records the result after the beat.
+    assert SITE_ID in route_records[0].args  # The action record names the site.
+    assert SITE_ID in route_records[1].args  # The result record names the site.
+    assert LOCK_TTL_SECONDS in route_records[1].args  # The result record names the lock life.
+    assert token not in repr(route_records)  # The route never records the lock token.
 
 
 def test_a_beat_with_a_wrong_token_is_refused(lock_client: FlaskClient) -> None:
@@ -758,16 +806,24 @@ def test_a_beat_with_a_wrong_token_is_refused(lock_client: FlaskClient) -> None:
     assert read_error_code(response) == "lock_lost"  # The contract fixes this code.
 
 
-def test_a_beat_without_a_lock_is_refused(lock_client: FlaskClient) -> None:
+def test_a_beat_without_a_lock_is_refused(lock_client: FlaskClient, caplog: pytest.LogCaptureFixture) -> None:
     """A beat from a browser that took no lock answers `lock_lost`.
 
     Args:
         lock_client: The signed-in client.
     """
+    caplog.set_level(logging.WARNING)  # Capture the route refusal.
     response = lock_client.post(BEAT_PATH, json={"lock_token": "never-granted"})  # No take ran before this beat.
 
     assert response.status_code == CONFLICT_STATUS  # The same refusal as a moved lock.
     assert read_error_code(response) == "lock_lost"  # One code covers every way a lock can be gone.
+    route_refusals = [
+        record for record in caplog.records if record.name.endswith("app.routes.select") and "lock_lost" in record.args
+    ]  # Match values, not prose.
+    assert len(route_refusals) == 1  # The route records one lost-lock refusal.
+    assert route_refusals[0].levelno == logging.WARNING  # A lost lock needs attention.
+    assert SITE_ID in route_refusals[0].args  # The record names the site.
+    assert CONFLICT_STATUS in route_refusals[0].args  # The record names the response status.
 
 
 def test_a_beat_after_a_takeover_is_refused(
@@ -818,20 +874,35 @@ def test_a_down_store_refuses_the_beat(lock_client: FlaskClient, lock_store: Fak
 # ---------------------------------------------------------------------------
 
 
-def test_a_release_frees_the_site(lock_client: FlaskClient, lock_store: FakeLockStore) -> None:
+def test_a_release_frees_the_site(
+    lock_client: FlaskClient, lock_store: FakeLockStore, caplog: pytest.LogCaptureFixture
+) -> None:
     """`DELETE /api/sites/<site_id>/lock` answers 200 and clears the stored lock.
 
     Args:
         lock_client: The signed-in client.
         lock_store: The stand-in lock store.
     """
+    caplog.set_level(
+        logging.DEBUG, logger="src.interfaces.portals.upgrade_portal.app.routes.select"
+    )  # Capture both action and result records.
     token = take_lock(lock_client).get_json()["lock_token"]  # The browser holds this token.
+    caplog.clear()  # Keep only records from the release request.
 
     response = lock_client.delete(LOCK_PATH, json={"lock_token": token})
 
     assert response.status_code == OK_STATUS  # `contracts/http-api.md:160` fixes this status.
     assert response.get_json()["released"] is True  # The contract fixes this field and this value.
     assert SITE_KEY not in lock_store.values  # The site is free, so the next operator waits no cooldown.
+    route_records = [
+        record for record in caplog.records if record.name.endswith("app.routes.select")
+    ]  # Keep route records only.
+    assert len(route_records) == 2  # One action and one result record cover the release.
+    assert route_records[0].levelno == logging.INFO  # The route records the action before the release.
+    assert route_records[1].levelno == logging.DEBUG  # The route records the result after the release.
+    assert SITE_ID in route_records[0].args  # The action record names the site.
+    assert SITE_ID in route_records[1].args  # The result record names the site.
+    assert token not in repr(route_records)  # The route never records the lock token.
 
 
 def test_a_release_with_a_wrong_token_is_refused(lock_client: FlaskClient, lock_store: FakeLockStore) -> None:
@@ -915,6 +986,8 @@ def test_no_log_line_holds_the_lock_token(
     """
     with caplog.at_level("DEBUG"):  # The lowest level, so no record escapes the check.
         first = take_lock(lock_client).get_json()["lock_token"]  # The take logs.
+        refused = take_lock(other_client)  # The active holder refuses another operator.
+        assert read_error_code(refused) == "site_locked"  # The refusal record is part of this privacy check.
         lock_client.post(BEAT_PATH, json={"lock_token": first})  # The beat logs.
         age_the_lock(lock_store)  # The holder goes quiet.
         second = take_lock(other_client, TAKEOVER_WORD).get_json()["lock_token"]  # The takeover logs.
