@@ -508,8 +508,8 @@ class TestCreateWithoutIdentifier:
         self, manager: OrgConfigMigrationManager, caplog: pytest.LogCaptureFixture
     ) -> None:
         """A refused network create must not report success or map a source identifier."""
-        from mistapi.__api_response import APIResponse
-        from requests import Response
+        from mistapi.__api_response import APIResponse  # WHY: parse the native SDK response.
+        from requests import Response  # WHY: create a native HTTP response.
 
         raw_response = Response()
         raw_response.status_code = 403
@@ -528,6 +528,47 @@ class TestCreateWithoutIdentifier:
         assert ("root", 40, f"      FAIL: Corp-LAN - {reason}") in caplog.record_tuples
         assert "      OK: Corp-LAN" not in caplog.messages
         create.assert_called_once_with(manager.session, "org-1", body={"name": "Corp-LAN"})
+
+    def test_http_503_create_records_failure_without_remapping(
+        self, manager: OrgConfigMigrationManager, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """A server refusal must not report success or map a source identifier."""
+        from mistapi.__api_response import APIResponse
+        from requests import Response
+
+        raw_response = Response()  # WHY: give the SDK a native HTTP response.
+        raw_response.status_code = 503  # WHY: model a server refusal.
+        raw_response._content = b'{"detail": "Service unavailable"}'  # WHY: provide an HTTP error body.
+        request_url = "https://api.mist.com/api/v1/orgs/org-1/networks"  # WHY: match the SDK endpoint path.
+        response = APIResponse(raw_response, request_url)  # WHY: parse the refusal with the SDK.
+        assert response.status_code == 503  # WHY: confirm that the SDK preserved the refusal status.
+        manager.org_id = "org-1"  # WHY: target the mocked organization.
+        results: list[dict[str, Any]] = []  # WHY: capture the real create result.
+        reason = "Create response has no object id, so cross-references cannot be remapped"  # WHY: no id exists.
+        with patch.object(
+            ocm.mistapi.api.v1.orgs.networks, "createOrgNetwork", return_value=response
+        ) as create:  # WHY: isolate the external API call.
+            OrgConfigMigrationManager._create_and_record(
+                manager, manager.CONFIG_TYPES[0], {"name": "Corp-LAN"}, "Corp-LAN", "src-1", results
+            )  # WHY: exercise the create failure path with only the external endpoint mocked.
+        expected_result = {
+            "type": "networks",
+            "name": "Corp-LAN",
+            "status": "failed",
+            "reason": reason,
+        }  # WHY: define the expected failure.
+        assert results == [expected_result]  # WHY: preserve the refusal as a failed item.
+        assert manager._remap_table == {}  # WHY: a refused create must not create a downstream identifier.
+        assert (
+            "root",
+            40,
+            f"Failed to create networks 'Corp-LAN': {reason}",
+        ) in caplog.record_tuples  # WHY: retain error context.
+        assert ("root", 40, f"      FAIL: Corp-LAN - {reason}") in caplog.record_tuples  # WHY: report the failed item.
+        assert "      OK: Corp-LAN" not in caplog.messages  # WHY: the refusal must not appear as success.
+        create.assert_called_once_with(
+            manager.session, "org-1", body={"name": "Corp-LAN"}
+        )  # WHY: verify the intended API request.
 
     def test_a_create_without_an_identifier_is_recorded_as_failed(self, manager: OrgConfigMigrationManager) -> None:
         """A silent success would leave every later reference unmapped."""
