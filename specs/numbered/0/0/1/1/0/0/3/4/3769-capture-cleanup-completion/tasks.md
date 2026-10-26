@@ -29,8 +29,8 @@
 ## Phase 5: Verification and publication
 
 - [x] T007 [P] Add the release-note fragment. (delivered: changelog.d/issue-3769-capture-cleanup-completion.md)
-- [ ] T008 Run the focused tests and applicable gates, then record exact results in `analysis.md`.
-- [ ] T009 Prepare the explicit file manifest and PR evidence in `analysis.md` using `.github/PULL_REQUEST_TEMPLATE.md`.
+- [x] T008 Run the focused tests and applicable gates, then record exact results. (delivered: analysis.md)
+- [x] T009 Prepare the explicit file manifest and PR evidence using `.github/PULL_REQUEST_TEMPLATE.md`. (delivered: analysis.md)
 
 ## Dependencies
 
