@@ -41,7 +41,7 @@ class MistSessionConfigurator:
     @classmethod
     def configure_shared_admission(cls, session: Any, org_id: str | None = None) -> None:
         """Install configured shared admission on the existing portal session."""
-        from src.interfaces.portals.wan_performance.collection.request_admission import RequestLedger
+        from src.interfaces.wan_performance.collection.request_admission import RequestLedger
 
         try:
             if RequestLedger.enabled():
@@ -66,7 +66,7 @@ class MistSessionConfigurator:
         """Install a default timeout on the wrapped requests session when it exists."""
         inner_session = getattr(session, "_session", None)  # Keep private access in this one guarded seam.
         if inner_session is None:  # New mistapi versions can hide the transport.
-            from src.interfaces.portals.wan_performance.collection.request_admission import RequestLedger
+            from src.interfaces.wan_performance.collection.request_admission import RequestLedger
 
             if RequestLedger.enabled():
                 raise ConnectionError("Shared API admission requires an accessible SDK session transport.")
@@ -82,7 +82,7 @@ class MistSessionConfigurator:
     @staticmethod
     def _build_timeout_adapter(default_timeout: int, org_id: str | None = None) -> HTTPAdapter:
         """Build the adapter that injects the timeout and safe read retry policy."""
-        from src.interfaces.portals.wan_performance.collection.request_admission import AdmittedAdapter, RequestLedger
+        from src.interfaces.wan_performance.collection.request_admission import AdmittedAdapter, RequestLedger
 
         if RequestLedger.enabled():
             return AdmittedAdapter(RequestLedger.connect(org_id), default_timeout)

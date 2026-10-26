@@ -192,7 +192,7 @@ class WebPortalApp:
         from src.interfaces.portals.wan_dashboard import (
             wan_dashboard_bp,  # Reuse the existing portal for read-only WAN data.
         )
-        from src.interfaces.portals.wan_performance.presentation.routes import wan_performance_bp
+        from src.interfaces.wan_performance.presentation.routes import wan_performance_bp
         from src.mist.realtime.websocket_streams.web.blueprint.registry import (
             WebSocketBlueprint,  # Keep the existing live-stream route factory.
         )
@@ -318,7 +318,7 @@ class WebPortalApp:
         if app.config.get("APISESSION") is None:
             logger.info("WAN background refresh is disabled because no Mist session exists.")
             return
-        from src.interfaces.portals.wan_performance.background_refresh import (
+        from src.interfaces.wan_performance.background_refresh import (
             WanBackgroundRefreshWorker,
         )
 
@@ -332,8 +332,8 @@ class WebPortalApp:
     @staticmethod
     def _get_wan_refresh_service(app: Flask) -> Any | None:
         """Return a live service only when the existing shared admission and history work."""
-        from src.interfaces.portals.wan_performance.collection.request_admission import RequestLedger
-        from src.interfaces.portals.wan_performance.presentation.live_routes import LivePages
+        from src.interfaces.wan_performance.collection.request_admission import RequestLedger
+        from src.interfaces.wan_performance.presentation.live_routes import LivePages
 
         try:
             if not RequestLedger.enabled():

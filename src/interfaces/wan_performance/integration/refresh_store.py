@@ -9,7 +9,7 @@ from redis.backoff import NoBackoff
 from redis.retry import Retry
 
 from src.foundation.persistence.db import DatabaseConfig
-from src.interfaces.portals.wan_performance.domain.identity import IdentityValidator
+from src.interfaces.wan_performance.domain.identity import IdentityValidator
 
 logger = logging.getLogger(__name__)
 

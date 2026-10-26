@@ -5,8 +5,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.interfaces.portals.wan_performance.collection.peer_insights import PeerQualityInsights
-from src.interfaces.portals.wan_performance.domain.identity import GatewayIdentity, PeerPathIdentity, SiteIdentity
+from src.interfaces.wan_performance.collection.peer_insights import PeerQualityInsights
+from src.interfaces.wan_performance.domain.identity import GatewayIdentity, PeerPathIdentity, SiteIdentity
 
 TARGET = PeerPathIdentity(
     GatewayIdentity(SiteIdentity("org-one", "site-one"), "aabbccddeeff"),

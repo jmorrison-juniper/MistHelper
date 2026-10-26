@@ -6,9 +6,9 @@ from typing import Protocol
 
 from src.foundation.persistence.db import DatabaseConfig
 from src.foundation.runtime.config.source_dependency_resolver import SourceDependencyResolver
-from src.interfaces.portals.wan_performance.domain.measurement import HourlyMeasurement, MeasurementIdentity
-from src.interfaces.portals.wan_performance.integration.arango_history import ArangoHistory
-from src.interfaces.portals.wan_performance.integration.sqlite_history import SQLiteHistory
+from src.interfaces.wan_performance.domain.measurement import HourlyMeasurement, MeasurementIdentity
+from src.interfaces.wan_performance.integration.arango_history import ArangoHistory
+from src.interfaces.wan_performance.integration.sqlite_history import SQLiteHistory
 
 
 class HistoryRepository(Protocol):

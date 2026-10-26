@@ -9,7 +9,7 @@ import pytest
 from playwright.sync_api import Page, expect
 from werkzeug.serving import make_server
 
-from src.interfaces.portals.wan_performance.collection.live_service import LiveService
+from src.interfaces.wan_performance.collection.live_service import LiveService
 
 
 @pytest.fixture
@@ -91,7 +91,7 @@ def test_unknown_gateway_returns_not_found(client, live_service):
 
 def test_second_gateway_refresh_keeps_selected_site_and_gateway(client, live_service):
     """The gateway journey can refresh another cached gateway rather than the first discovered device."""
-    from src.interfaces.portals.wan_performance.domain.identity import GatewayIdentity, SiteIdentity
+    from src.interfaces.wan_performance.domain.identity import GatewayIdentity, SiteIdentity
 
     snapshot = live_service.store.cached.return_value
     snapshot["ports"].append({**snapshot["ports"][0], "site_id": "site-two", "mac": "112233445566"})
@@ -111,7 +111,7 @@ def test_second_gateway_refresh_keeps_selected_site_and_gateway(client, live_ser
 
 def test_overview_can_select_a_gateway_outside_the_cached_port_page(client, live_service):
     """Use exact organization-scoped discovery for a known gateway that the capped cache does not contain."""
-    from src.interfaces.portals.wan_performance.domain.identity import GatewayIdentity, SiteIdentity
+    from src.interfaces.wan_performance.domain.identity import GatewayIdentity, SiteIdentity
 
     page = client.get("/wan-performance/live/").get_data(as_text=True)
     assert 'data-testid="wan-live-gateway-site"' in page
@@ -264,7 +264,7 @@ def test_browser_live_journeys(page: Page, live_browser_url: str, detail: str):
 
 def test_browser_scoped_gateway_selector(page: Page, live_browser_url: str, live_service):
     """Submit the real CSRF-protected form and retain its exact selected gateway journey."""
-    from src.interfaces.portals.wan_performance.domain.identity import GatewayIdentity, SiteIdentity
+    from src.interfaces.wan_performance.domain.identity import GatewayIdentity, SiteIdentity
 
     page.goto(f"{live_browser_url}/wan-performance/live/")
     page.get_by_test_id("wan-live-gateway-site").fill("site-one")
@@ -322,7 +322,7 @@ def test_port_history_refresh_errors_are_explicit_without_snapshot_change(client
 
 def test_browser_selected_port_history_refresh(page: Page, live_browser_url: str, live_service):
     """Submit the actual port form without refreshing organization snapshot pages."""
-    from src.interfaces.portals.wan_performance.domain.identity import CircuitIdentity, GatewayIdentity, SiteIdentity
+    from src.interfaces.wan_performance.domain.identity import CircuitIdentity, GatewayIdentity, SiteIdentity
 
     target = CircuitIdentity(GatewayIdentity(SiteIdentity("org-one", "site-one"), "aabbccddeeff"), "ge-0/0/0")
     page.goto(f"{live_browser_url}/wan-performance/live/port/site-one/ge-0/0/0?gateway_id=aabbccddeeff")
@@ -335,7 +335,7 @@ def test_browser_selected_port_history_refresh(page: Page, live_browser_url: str
 
 def test_browser_selected_peer_history_refresh(page: Page, live_browser_url: str, live_service):
     """Submit a peer history request with the exact cached path identifiers."""
-    from src.interfaces.portals.wan_performance.collection.snapshot_records import SnapshotRecords
+    from src.interfaces.wan_performance.collection.snapshot_records import SnapshotRecords
 
     target = SnapshotRecords.build(live_service.store.cached.return_value)[1].identity
     page.goto(
@@ -405,7 +405,7 @@ def test_foreign_org_service_is_rejected(client, live_service):
 
 def test_persisted_observations_render_calendar_summaries(client, live_service):
     """Exercise actual domain summaries rather than an empty mock result."""
-    from src.interfaces.portals.wan_performance.collection.snapshot_records import SnapshotRecords
+    from src.interfaces.wan_performance.collection.snapshot_records import SnapshotRecords
 
     records = SnapshotRecords.build(live_service.store.cached.return_value)
     live_service.history.read.return_value = (records[0],)
@@ -419,7 +419,7 @@ def test_selected_port_quality_metrics_render_in_history(client, live_service):
     """Show persisted hourly link-health metrics on the selected-port detail page."""
     from datetime import UTC, datetime
 
-    from src.interfaces.portals.wan_performance.collection.snapshot_records import SnapshotRecords
+    from src.interfaces.wan_performance.collection.snapshot_records import SnapshotRecords
 
     snapshot = live_service.store.cached.return_value
     gateway = {key: snapshot["ports"][0][key] for key in ("org_id", "site_id", "mac")}
@@ -464,7 +464,7 @@ def test_selected_port_quality_metrics_render_in_history(client, live_service):
 
 def test_threshold_history_displays_observation_counts_not_duration(client, live_service):
     """Keep sparse hourly threshold evidence distinct from measured congestion hours."""
-    from src.interfaces.portals.wan_performance.collection.snapshot_records import SnapshotRecords
+    from src.interfaces.wan_performance.collection.snapshot_records import SnapshotRecords
 
     live_service.store.cached.return_value["ports"][0].update(speed=100, rx_bps=80000000, tx_bps=90000000)
     records = SnapshotRecords.build(live_service.store.cached.return_value)
@@ -480,7 +480,7 @@ def test_threshold_history_displays_observation_counts_not_duration(client, live
 
 def test_status_history_displays_sampled_state_not_availability(client, live_service):
     """Show persisted status evidence without claiming complete availability."""
-    from src.interfaces.portals.wan_performance.collection.snapshot_records import SnapshotRecords
+    from src.interfaces.wan_performance.collection.snapshot_records import SnapshotRecords
 
     live_service.store.cached.return_value["ports"][0]["up"] = True
     records = SnapshotRecords.build(live_service.store.cached.return_value)

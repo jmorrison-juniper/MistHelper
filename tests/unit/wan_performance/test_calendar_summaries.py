@@ -5,14 +5,14 @@ from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
 
-from src.interfaces.portals.wan_performance.domain.calendar import CalendarPeriod, CalendarWindow
-from src.interfaces.portals.wan_performance.domain.measurement import MetricMeasurement
-from src.interfaces.portals.wan_performance.domain.summary import (
+from src.interfaces.wan_performance.domain.calendar import CalendarPeriod, CalendarWindow
+from src.interfaces.wan_performance.domain.measurement import MetricMeasurement
+from src.interfaces.wan_performance.domain.summary import (
     CalendarSummaries,
     LinkEventSummary,
     StateObservationSummary,
 )
-from src.interfaces.portals.wan_performance.presentation.offline_preview import OfflinePreviewFactory
+from src.interfaces.wan_performance.presentation.offline_preview import OfflinePreviewFactory
 
 
 @pytest.mark.parametrize(

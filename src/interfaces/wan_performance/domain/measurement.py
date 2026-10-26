@@ -6,8 +6,8 @@ from datetime import UTC, datetime
 from types import MappingProxyType
 from typing import Literal
 
-from src.interfaces.portals.wan_performance.domain.identity import CircuitIdentity, GatewayIdentity, PeerPathIdentity
-from src.interfaces.portals.wan_performance.domain.metric_validation import (
+from src.interfaces.wan_performance.domain.identity import CircuitIdentity, GatewayIdentity, PeerPathIdentity
+from src.interfaces.wan_performance.domain.metric_validation import (
     validate_coverage_fraction,
     validate_sample_count,
     validate_unit,

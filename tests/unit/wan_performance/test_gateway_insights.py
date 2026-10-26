@@ -7,10 +7,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.interfaces.portals.wan_performance.collection.snapshot_client import GatewayInsights
-from src.interfaces.portals.wan_performance.collection.snapshot_records import SnapshotRecords
-from src.interfaces.portals.wan_performance.domain.identity import GatewayIdentity, SiteIdentity
-from src.interfaces.portals.wan_performance.integration.record_codec import RecordCodec
+from src.interfaces.wan_performance.collection.snapshot_client import GatewayInsights
+from src.interfaces.wan_performance.collection.snapshot_records import SnapshotRecords
+from src.interfaces.wan_performance.domain.identity import GatewayIdentity, SiteIdentity
+from src.interfaces.wan_performance.integration.record_codec import RecordCodec
 
 DEVICE_ID = "00000000-0000-0000-0000-000000000001"
 TARGET = GatewayIdentity(SiteIdentity("org-one", "site-one"), "aabbccddeeff")
@@ -19,7 +19,7 @@ TARGET = GatewayIdentity(SiteIdentity("org-one", "site-one"), "aabbccddeeff")
 @pytest.fixture(autouse=True)
 def device_quality_response():
     """Keep selected-port device insight tests on bounded synthetic responses."""
-    from src.interfaces.portals.wan_performance.collection import snapshot_client
+    from src.interfaces.wan_performance.collection import snapshot_client
 
     end = datetime.now(UTC).replace(minute=0, second=0, microsecond=0)
     start = end - timedelta(hours=1)
@@ -48,22 +48,22 @@ def device_quality_response():
 
 def test_selected_port_insights_collect_rates_and_quality_with_bounded_calls(device_quality_response):
     """Collect source-compatible rates and link health for one exact port and hour."""
-    from src.interfaces.portals.wan_performance.domain.identity import CircuitIdentity
+    from src.interfaces.wan_performance.domain.identity import CircuitIdentity
 
     target = CircuitIdentity(TARGET, "ge-0/0/1")
     device, metadata, series = responses("10m")
     session, admission = MagicMock(), MagicMock()
     with (
         patch(
-            "src.interfaces.portals.wan_performance.collection.snapshot_client.listOrgDevicesStats",
+            "src.interfaces.wan_performance.collection.snapshot_client.listOrgDevicesStats",
             return_value=SimpleNamespace(status_code=200, data=[device]),
         ) as discovery,
         patch(
-            "src.interfaces.portals.wan_performance.collection.snapshot_client.listInsightMetrics",
+            "src.interfaces.wan_performance.collection.snapshot_client.listInsightMetrics",
             return_value=SimpleNamespace(status_code=200, data=metadata),
         ) as catalog,
         patch(
-            "src.interfaces.portals.wan_performance.collection.snapshot_client.getSiteInsightMetricsForGateway",
+            "src.interfaces.wan_performance.collection.snapshot_client.getSiteInsightMetricsForGateway",
             return_value=series,
         ) as metrics,
     ):
@@ -112,22 +112,22 @@ def test_selected_port_insights_collect_rates_and_quality_with_bounded_calls(dev
 
 def test_selected_port_accepts_response_array_named_for_requested_metric():
     """Map the API's explicit one-metric response key without guessing series order."""
-    from src.interfaces.portals.wan_performance.domain.identity import CircuitIdentity
+    from src.interfaces.wan_performance.domain.identity import CircuitIdentity
 
     device, metadata, series = responses("10m")
     series.data["rx_bps"] = [None] * 6
     series.data["tx_bps"] = ["12"] * 6
     with (
         patch(
-            "src.interfaces.portals.wan_performance.collection.snapshot_client.listOrgDevicesStats",
+            "src.interfaces.wan_performance.collection.snapshot_client.listOrgDevicesStats",
             return_value=SimpleNamespace(status_code=200, data=[device]),
         ) as discovery,
         patch(
-            "src.interfaces.portals.wan_performance.collection.snapshot_client.listInsightMetrics",
+            "src.interfaces.wan_performance.collection.snapshot_client.listInsightMetrics",
             return_value=SimpleNamespace(status_code=200, data=metadata),
         ),
         patch(
-            "src.interfaces.portals.wan_performance.collection.snapshot_client.getSiteInsightMetricsForGateway",
+            "src.interfaces.wan_performance.collection.snapshot_client.getSiteInsightMetricsForGateway",
             return_value=series,
         ) as metrics,
     ):
@@ -204,7 +204,7 @@ def test_event_search_paginates_and_matches_only_the_selected_port():
         SimpleNamespace(status_code=200, data={"results": []}),
     ]
     with patch(
-        "src.interfaces.portals.wan_performance.collection.snapshot_client.searchOrgDeviceEvents",
+        "src.interfaces.wan_performance.collection.snapshot_client.searchOrgDeviceEvents",
         side_effect=pages,
     ) as request:
         result = GatewayInsights(MagicMock(), MagicMock())._status_events(device, "ge-0/0/1", start, end, None)
@@ -236,7 +236,7 @@ def test_event_search_page_cap_marks_status_unknown():
     start = datetime(2024, 1, 1, 12, tzinfo=UTC)
     next_page = SimpleNamespace(status_code=200, data={"results": [], "next": "/events?search_after=next"})
     with patch(
-        "src.interfaces.portals.wan_performance.collection.snapshot_client.searchOrgDeviceEvents",
+        "src.interfaces.wan_performance.collection.snapshot_client.searchOrgDeviceEvents",
         return_value=next_page,
     ) as request:
         result = GatewayInsights(MagicMock(), MagicMock())._status_events(
@@ -254,7 +254,7 @@ def test_event_search_http_errors_stop_the_port_history(status):
     device, _, _ = responses()
     start = datetime(2024, 1, 1, 12, tzinfo=UTC)
     with patch(
-        "src.interfaces.portals.wan_performance.collection.snapshot_client.searchOrgDeviceEvents",
+        "src.interfaces.wan_performance.collection.snapshot_client.searchOrgDeviceEvents",
         return_value=SimpleNamespace(status_code=status, data={}),
     ):
         with pytest.raises(ConnectionError, match=str(status)):
@@ -268,7 +268,7 @@ def test_event_search_timeout_is_not_converted_to_empty_status():
     device, _, _ = responses()
     start = datetime(2024, 1, 1, 12, tzinfo=UTC)
     with patch(
-        "src.interfaces.portals.wan_performance.collection.snapshot_client.searchOrgDeviceEvents",
+        "src.interfaces.wan_performance.collection.snapshot_client.searchOrgDeviceEvents",
         side_effect=TimeoutError("read timed out"),
     ):
         with pytest.raises(TimeoutError, match="read timed out"):
@@ -280,7 +280,7 @@ def test_event_search_timeout_is_not_converted_to_empty_status():
 @pytest.mark.parametrize("violation", ["scope", "unit", "max_age", "interval", "alignment", "ambiguous_mapping"])
 def test_selected_port_refuses_unverified_insight_contract(violation):
     """Do not assign an hourly port rate when catalog or returned alignment disagrees."""
-    from src.interfaces.portals.wan_performance.domain.identity import CircuitIdentity
+    from src.interfaces.wan_performance.domain.identity import CircuitIdentity
 
     device, metadata, series = responses("10m")
     if violation == "scope":
@@ -297,15 +297,15 @@ def test_selected_port_refuses_unverified_insight_contract(violation):
         series.data["rt"] = [datetime.now(UTC).isoformat()]
     with (
         patch(
-            "src.interfaces.portals.wan_performance.collection.snapshot_client.listOrgDevicesStats",
+            "src.interfaces.wan_performance.collection.snapshot_client.listOrgDevicesStats",
             return_value=SimpleNamespace(status_code=200, data=[device]),
         ),
         patch(
-            "src.interfaces.portals.wan_performance.collection.snapshot_client.listInsightMetrics",
+            "src.interfaces.wan_performance.collection.snapshot_client.listInsightMetrics",
             return_value=SimpleNamespace(status_code=200, data=metadata),
         ),
         patch(
-            "src.interfaces.portals.wan_performance.collection.snapshot_client.getSiteInsightMetricsForGateway",
+            "src.interfaces.wan_performance.collection.snapshot_client.getSiteInsightMetricsForGateway",
             return_value=series,
         ),
     ):
@@ -318,7 +318,7 @@ def test_selected_port_refuses_unverified_insight_contract(violation):
 @pytest.mark.parametrize("failure", ["http_400", "http_500", "quota", "truncation"])
 def test_selected_port_stops_on_request_failure_or_partial_hour(failure):
     """A rejected or paginated response cannot become complete persisted port history."""
-    from src.interfaces.portals.wan_performance.domain.identity import CircuitIdentity
+    from src.interfaces.wan_performance.domain.identity import CircuitIdentity
 
     device, metadata, series = responses("10m")
     admission = MagicMock()
@@ -330,15 +330,15 @@ def test_selected_port_stops_on_request_failure_or_partial_hour(failure):
         series.status_code = int(failure.removeprefix("http_"))
     with (
         patch(
-            "src.interfaces.portals.wan_performance.collection.snapshot_client.listOrgDevicesStats",
+            "src.interfaces.wan_performance.collection.snapshot_client.listOrgDevicesStats",
             return_value=SimpleNamespace(status_code=200, data=[device]),
         ),
         patch(
-            "src.interfaces.portals.wan_performance.collection.snapshot_client.listInsightMetrics",
+            "src.interfaces.wan_performance.collection.snapshot_client.listInsightMetrics",
             return_value=SimpleNamespace(status_code=200, data=metadata),
         ),
         patch(
-            "src.interfaces.portals.wan_performance.collection.snapshot_client.getSiteInsightMetricsForGateway",
+            "src.interfaces.wan_performance.collection.snapshot_client.getSiteInsightMetricsForGateway",
             return_value=series,
         ),
     ):
@@ -351,9 +351,9 @@ def test_selected_port_stops_on_request_failure_or_partial_hour(failure):
 @pytest.mark.parametrize("empty", [False, True])
 def test_selected_port_insights_persist_to_existing_sqlite_without_snapshot_change(tmp_path, empty):
     """Connect the bounded collector to actual configured-history serialization."""
-    from src.interfaces.portals.wan_performance.collection.live_service import LiveService
-    from src.interfaces.portals.wan_performance.domain.identity import CircuitIdentity
-    from src.interfaces.portals.wan_performance.integration.sqlite_history import SQLiteHistory
+    from src.interfaces.wan_performance.collection.live_service import LiveService
+    from src.interfaces.wan_performance.domain.identity import CircuitIdentity
+    from src.interfaces.wan_performance.integration.sqlite_history import SQLiteHistory
 
     path = tmp_path / "application.db"
     sqlite3.connect(path).close()
@@ -372,15 +372,15 @@ def test_selected_port_insights_persist_to_existing_sqlite_without_snapshot_chan
     }
     with (
         patch(
-            "src.interfaces.portals.wan_performance.collection.snapshot_client.listOrgDevicesStats",
+            "src.interfaces.wan_performance.collection.snapshot_client.listOrgDevicesStats",
             return_value=SimpleNamespace(status_code=200, data=[device]),
         ),
         patch(
-            "src.interfaces.portals.wan_performance.collection.snapshot_client.listInsightMetrics",
+            "src.interfaces.wan_performance.collection.snapshot_client.listInsightMetrics",
             return_value=SimpleNamespace(status_code=200, data=metadata),
         ),
         patch(
-            "src.interfaces.portals.wan_performance.collection.snapshot_client.getSiteInsightMetricsForGateway",
+            "src.interfaces.wan_performance.collection.snapshot_client.getSiteInsightMetricsForGateway",
             return_value=series,
         ),
     ):
@@ -413,21 +413,21 @@ def test_selected_port_insights_persist_to_existing_sqlite_without_snapshot_chan
 @pytest.mark.parametrize("status", [400, 403, 429, 500, 503])
 def test_port_quality_http_errors_are_not_stored_as_empty_success(device_quality_response, status):
     """Stop a selected-port refresh when the quality request fails."""
-    from src.interfaces.portals.wan_performance.domain.identity import CircuitIdentity
+    from src.interfaces.wan_performance.domain.identity import CircuitIdentity
 
     device, metadata, series = responses("10m")
     device_quality_response.return_value.status_code = status
     with (
         patch(
-            "src.interfaces.portals.wan_performance.collection.snapshot_client.listOrgDevicesStats",
+            "src.interfaces.wan_performance.collection.snapshot_client.listOrgDevicesStats",
             return_value=SimpleNamespace(status_code=200, data=[device]),
         ),
         patch(
-            "src.interfaces.portals.wan_performance.collection.snapshot_client.listInsightMetrics",
+            "src.interfaces.wan_performance.collection.snapshot_client.listInsightMetrics",
             return_value=SimpleNamespace(status_code=200, data=metadata),
         ),
         patch(
-            "src.interfaces.portals.wan_performance.collection.snapshot_client.getSiteInsightMetricsForGateway",
+            "src.interfaces.wan_performance.collection.snapshot_client.getSiteInsightMetricsForGateway",
             return_value=series,
         ),
     ):
@@ -439,21 +439,21 @@ def test_port_quality_http_errors_are_not_stored_as_empty_success(device_quality
 
 def test_port_quality_timeout_is_not_stored_as_empty_success(device_quality_response):
     """Propagate a device insight timeout instead of writing missing metrics."""
-    from src.interfaces.portals.wan_performance.domain.identity import CircuitIdentity
+    from src.interfaces.wan_performance.domain.identity import CircuitIdentity
 
     device, metadata, series = responses("10m")
     device_quality_response.side_effect = TimeoutError("read timed out")
     with (
         patch(
-            "src.interfaces.portals.wan_performance.collection.snapshot_client.listOrgDevicesStats",
+            "src.interfaces.wan_performance.collection.snapshot_client.listOrgDevicesStats",
             return_value=SimpleNamespace(status_code=200, data=[device]),
         ),
         patch(
-            "src.interfaces.portals.wan_performance.collection.snapshot_client.listInsightMetrics",
+            "src.interfaces.wan_performance.collection.snapshot_client.listInsightMetrics",
             return_value=SimpleNamespace(status_code=200, data=metadata),
         ),
         patch(
-            "src.interfaces.portals.wan_performance.collection.snapshot_client.getSiteInsightMetricsForGateway",
+            "src.interfaces.wan_performance.collection.snapshot_client.getSiteInsightMetricsForGateway",
             return_value=series,
         ),
     ):
@@ -465,7 +465,7 @@ def test_port_quality_timeout_is_not_stored_as_empty_success(device_quality_resp
 
 def test_port_quality_missing_arrays_remain_unknown(device_quality_response):
     """Persist missing quality values as unknown without inventing zero samples."""
-    from src.interfaces.portals.wan_performance.domain.identity import CircuitIdentity
+    from src.interfaces.wan_performance.domain.identity import CircuitIdentity
 
     device, metadata, series = responses("10m")
     response = device_quality_response.return_value
@@ -473,15 +473,15 @@ def test_port_quality_missing_arrays_remain_unknown(device_quality_response):
     response.data.update(avg_loss=[], avg_jitter=[], avg_latency=[])
     with (
         patch(
-            "src.interfaces.portals.wan_performance.collection.snapshot_client.listOrgDevicesStats",
+            "src.interfaces.wan_performance.collection.snapshot_client.listOrgDevicesStats",
             return_value=SimpleNamespace(status_code=200, data=[device]),
         ),
         patch(
-            "src.interfaces.portals.wan_performance.collection.snapshot_client.listInsightMetrics",
+            "src.interfaces.wan_performance.collection.snapshot_client.listInsightMetrics",
             return_value=SimpleNamespace(status_code=200, data=metadata),
         ),
         patch(
-            "src.interfaces.portals.wan_performance.collection.snapshot_client.getSiteInsightMetricsForGateway",
+            "src.interfaces.wan_performance.collection.snapshot_client.getSiteInsightMetricsForGateway",
             return_value=series,
         ),
     ):
@@ -538,15 +538,15 @@ def test_insights_use_actual_device_uuid_catalog_and_named_metric_arrays():
     session, admission = MagicMock(), MagicMock()
     with (
         patch(
-            "src.interfaces.portals.wan_performance.collection.snapshot_client.listOrgDevicesStats",
+            "src.interfaces.wan_performance.collection.snapshot_client.listOrgDevicesStats",
             return_value=SimpleNamespace(status_code=200, data=[device], next=None),
         ) as devices,
         patch(
-            "src.interfaces.portals.wan_performance.collection.snapshot_client.listInsightMetrics",
+            "src.interfaces.wan_performance.collection.snapshot_client.listInsightMetrics",
             return_value=SimpleNamespace(status_code=200, data=metadata),
         ),
         patch(
-            "src.interfaces.portals.wan_performance.collection.snapshot_client.getSiteInsightMetricsForGateway",
+            "src.interfaces.wan_performance.collection.snapshot_client.getSiteInsightMetricsForGateway",
             return_value=series,
         ) as metrics,
     ):
@@ -580,7 +580,7 @@ def test_insights_use_actual_device_uuid_catalog_and_named_metric_arrays():
 def test_gateway_insight_http_errors_are_not_empty_success(status):
     """Refuse malformed or rejected discovery before additional SDK calls."""
     with patch(
-        "src.interfaces.portals.wan_performance.collection.snapshot_client.listOrgDevicesStats",
+        "src.interfaces.wan_performance.collection.snapshot_client.listOrgDevicesStats",
         return_value=SimpleNamespace(status_code=status),
     ):
         with pytest.raises(ConnectionError, match=str(status)):
@@ -589,7 +589,7 @@ def test_gateway_insight_http_errors_are_not_empty_success(status):
 
 def test_selected_gateway_discovery_uses_exact_site_mac_and_returned_uuid():
     """Support a second selected gateway without deriving its UUID or increasing the request bound."""
-    from src.interfaces.portals.wan_performance.domain.identity import SiteIdentity
+    from src.interfaces.wan_performance.domain.identity import SiteIdentity
 
     device, metadata, series = responses("1h")
     device.update(id="00000000-0000-0000-0000-000000000002", site_id="site-two", mac="112233445566")
@@ -597,15 +597,15 @@ def test_selected_gateway_discovery_uses_exact_site_mac_and_returned_uuid():
     session, admission = MagicMock(), MagicMock()
     with (
         patch(
-            "src.interfaces.portals.wan_performance.collection.snapshot_client.listOrgDevicesStats",
+            "src.interfaces.wan_performance.collection.snapshot_client.listOrgDevicesStats",
             return_value=SimpleNamespace(status_code=200, data=[device]),
         ) as discovery,
         patch(
-            "src.interfaces.portals.wan_performance.collection.snapshot_client.listInsightMetrics",
+            "src.interfaces.wan_performance.collection.snapshot_client.listInsightMetrics",
             return_value=SimpleNamespace(status_code=200, data=metadata),
         ),
         patch(
-            "src.interfaces.portals.wan_performance.collection.snapshot_client.getSiteInsightMetricsForGateway",
+            "src.interfaces.wan_performance.collection.snapshot_client.getSiteInsightMetricsForGateway",
             return_value=series,
         ) as metrics,
     ):
@@ -623,7 +623,7 @@ def test_selected_gateway_discovery_uses_exact_site_mac_and_returned_uuid():
 @pytest.mark.parametrize("rows", ["wrong_site", "wrong_mac", "duplicate", "absent"])
 def test_selected_gateway_rejects_ambiguous_or_mismatched_discovery(rows):
     """Never select another gateway after a scoped discovery mismatch."""
-    from src.interfaces.portals.wan_performance.domain.identity import SiteIdentity
+    from src.interfaces.wan_performance.domain.identity import SiteIdentity
 
     device, _, _ = responses()
     target = GatewayIdentity(SiteIdentity("org-one", "site-one"), device["mac"])
@@ -634,10 +634,10 @@ def test_selected_gateway_rejects_ambiguous_or_mismatched_discovery(rows):
     data = [] if rows == "absent" else [device, device] if rows == "duplicate" else [device]
     with (
         patch(
-            "src.interfaces.portals.wan_performance.collection.snapshot_client.listOrgDevicesStats",
+            "src.interfaces.wan_performance.collection.snapshot_client.listOrgDevicesStats",
             return_value=SimpleNamespace(status_code=200, data=data),
         ),
-        patch("src.interfaces.portals.wan_performance.collection.snapshot_client.listInsightMetrics") as catalog,
+        patch("src.interfaces.wan_performance.collection.snapshot_client.listInsightMetrics") as catalog,
     ):
         with pytest.raises(ValueError):
             GatewayInsights(MagicMock(), MagicMock()).collect("org-one", target)
@@ -646,19 +646,19 @@ def test_selected_gateway_rejects_ambiguous_or_mismatched_discovery(rows):
 
 def test_overview_refresh_is_two_pages_without_gateway_discovery():
     """Keep overview requests bounded and retain explicit port-page truncation."""
-    from src.interfaces.portals.wan_performance.collection.snapshot_client import SnapshotClient
+    from src.interfaces.wan_performance.collection.snapshot_client import SnapshotClient
 
     admission = MagicMock()
     with (
         patch(
-            "src.interfaces.portals.wan_performance.collection.snapshot_client.searchOrgSwOrGwPorts",
+            "src.interfaces.wan_performance.collection.snapshot_client.searchOrgSwOrGwPorts",
             return_value=SimpleNamespace(status_code=200, data={"results": [], "total": 200}),
         ),
         patch(
-            "src.interfaces.portals.wan_performance.collection.snapshot_client.searchOrgPeerPathStats",
+            "src.interfaces.wan_performance.collection.snapshot_client.searchOrgPeerPathStats",
             return_value=SimpleNamespace(status_code=200, data={"results": []}),
         ),
-        patch("src.interfaces.portals.wan_performance.collection.snapshot_client.listOrgDevicesStats") as discovery,
+        patch("src.interfaces.wan_performance.collection.snapshot_client.listOrgDevicesStats") as discovery,
     ):
         result = SnapshotClient(MagicMock(), admission).collect("org-one")
     assert result["partial"] is True
@@ -670,7 +670,7 @@ def test_overview_refresh_is_two_pages_without_gateway_discovery():
 @pytest.mark.parametrize("failure", ["http_400", "http_500", "admission"])
 def test_selected_gateway_stops_on_metric_errors_or_lost_admission(failure):
     """Keep scoped metric requests under the same admission and HTTP failure contracts."""
-    from src.interfaces.portals.wan_performance.domain.identity import SiteIdentity
+    from src.interfaces.wan_performance.domain.identity import SiteIdentity
 
     device, metadata, series = responses()
     target = GatewayIdentity(SiteIdentity("org-one", "site-one"), device["mac"])
@@ -681,15 +681,15 @@ def test_selected_gateway_stops_on_metric_errors_or_lost_admission(failure):
         series.status_code = int(failure.removeprefix("http_"))
     with (
         patch(
-            "src.interfaces.portals.wan_performance.collection.snapshot_client.listOrgDevicesStats",
+            "src.interfaces.wan_performance.collection.snapshot_client.listOrgDevicesStats",
             return_value=SimpleNamespace(status_code=200, data=[device]),
         ),
         patch(
-            "src.interfaces.portals.wan_performance.collection.snapshot_client.listInsightMetrics",
+            "src.interfaces.wan_performance.collection.snapshot_client.listInsightMetrics",
             return_value=SimpleNamespace(status_code=200, data=metadata),
         ),
         patch(
-            "src.interfaces.portals.wan_performance.collection.snapshot_client.getSiteInsightMetricsForGateway",
+            "src.interfaces.wan_performance.collection.snapshot_client.getSiteInsightMetricsForGateway",
             return_value=series,
         ) as metrics,
     ):
@@ -710,10 +710,8 @@ def test_gateway_discovery_rejects_empty_body_and_malformed_json(body):
     response._content = body
     parsed = APIResponse(response, "https://api.invalid/api/v1/orgs/org-one/stats/devices")
     with (
-        patch(
-            "src.interfaces.portals.wan_performance.collection.snapshot_client.listOrgDevicesStats", return_value=parsed
-        ),
-        patch("src.interfaces.portals.wan_performance.collection.snapshot_client.listInsightMetrics") as catalog,
+        patch("src.interfaces.wan_performance.collection.snapshot_client.listOrgDevicesStats", return_value=parsed),
+        patch("src.interfaces.wan_performance.collection.snapshot_client.listInsightMetrics") as catalog,
     ):
         with pytest.raises(ValueError, match="array"):
             GatewayInsights(MagicMock(), MagicMock()).collect("org-one", TARGET)
@@ -737,15 +735,15 @@ def test_gateway_insights_reject_unverified_contracts(change):
         metadata["rx_bps"]["intervals"]["1h"]["max_age"] = 0
     with (
         patch(
-            "src.interfaces.portals.wan_performance.collection.snapshot_client.listOrgDevicesStats",
+            "src.interfaces.wan_performance.collection.snapshot_client.listOrgDevicesStats",
             return_value=SimpleNamespace(status_code=200, data=[device], next=None),
         ),
         patch(
-            "src.interfaces.portals.wan_performance.collection.snapshot_client.listInsightMetrics",
+            "src.interfaces.wan_performance.collection.snapshot_client.listInsightMetrics",
             return_value=SimpleNamespace(status_code=200, data=metadata),
         ),
         patch(
-            "src.interfaces.portals.wan_performance.collection.snapshot_client.getSiteInsightMetricsForGateway",
+            "src.interfaces.wan_performance.collection.snapshot_client.getSiteInsightMetricsForGateway",
             return_value=series,
         ),
     ):
@@ -757,9 +755,9 @@ def test_gateway_insights_reject_unverified_contracts(change):
 @pytest.mark.parametrize("second_gateway", [False, True])
 def test_bounded_refresh_persists_gateway_history_before_cache_publication(tmp_path, empty_metrics, second_gateway):
     """Connect the real collector, domain model, and existing-file SQLite repository."""
-    from src.interfaces.portals.wan_performance.collection.live_service import LiveService
-    from src.interfaces.portals.wan_performance.domain.identity import SiteIdentity
-    from src.interfaces.portals.wan_performance.integration.sqlite_history import SQLiteHistory
+    from src.interfaces.wan_performance.collection.live_service import LiveService
+    from src.interfaces.wan_performance.domain.identity import SiteIdentity
+    from src.interfaces.wan_performance.integration.sqlite_history import SQLiteHistory
 
     path = tmp_path / "application.db"
     sqlite3.connect(path).close()
@@ -791,23 +789,23 @@ def test_bounded_refresh_persists_gateway_history_before_cache_publication(tmp_p
     store = MagicMock()
     with (
         patch(
-            "src.interfaces.portals.wan_performance.collection.snapshot_client.searchOrgSwOrGwPorts",
+            "src.interfaces.wan_performance.collection.snapshot_client.searchOrgSwOrGwPorts",
             return_value=SimpleNamespace(status_code=200, data={"results": [port]}),
         ),
         patch(
-            "src.interfaces.portals.wan_performance.collection.snapshot_client.searchOrgPeerPathStats",
+            "src.interfaces.wan_performance.collection.snapshot_client.searchOrgPeerPathStats",
             return_value=SimpleNamespace(status_code=200, data={"results": [peer]}),
         ),
         patch(
-            "src.interfaces.portals.wan_performance.collection.snapshot_client.listOrgDevicesStats",
+            "src.interfaces.wan_performance.collection.snapshot_client.listOrgDevicesStats",
             return_value=SimpleNamespace(status_code=200, data=[device], next=None),
         ),
         patch(
-            "src.interfaces.portals.wan_performance.collection.snapshot_client.listInsightMetrics",
+            "src.interfaces.wan_performance.collection.snapshot_client.listInsightMetrics",
             return_value=SimpleNamespace(status_code=200, data=metadata),
         ),
         patch(
-            "src.interfaces.portals.wan_performance.collection.snapshot_client.getSiteInsightMetricsForGateway",
+            "src.interfaces.wan_performance.collection.snapshot_client.getSiteInsightMetricsForGateway",
             return_value=metric_response,
         ),
     ):

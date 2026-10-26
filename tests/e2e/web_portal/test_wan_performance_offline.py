@@ -12,7 +12,7 @@ from flask.testing import FlaskClient
 from playwright.sync_api import Page, expect
 from werkzeug.serving import make_server
 
-from src.interfaces.portals.wan_performance.presentation.offline_preview import OfflinePreviewFactory
+from src.interfaces.wan_performance.presentation.offline_preview import OfflinePreviewFactory
 
 logger = logging.getLogger(__name__)  # Keep route test records on the module logger.
 SITE_ID = "11111111-1111-1111-1111-111111111111"

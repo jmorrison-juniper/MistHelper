@@ -5,15 +5,15 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.interfaces.portals.wan_performance.collection.snapshot_client import SnapshotClient
-from src.interfaces.portals.wan_performance.domain.identity import GatewayIdentity, SiteIdentity
+from src.interfaces.wan_performance.collection.snapshot_client import SnapshotClient
+from src.interfaces.wan_performance.domain.identity import GatewayIdentity, SiteIdentity
 
 
 @pytest.fixture(autouse=True)
 def isolated_gateway_insights():
     """Keep these port/peer tests isolated from the separately tested gateway SDK calls."""
     with patch(
-        "src.interfaces.portals.wan_performance.collection.snapshot_client.GatewayInsights.collect",
+        "src.interfaces.wan_performance.collection.snapshot_client.GatewayInsights.collect",
         return_value={"samples": [], "partial": False},
     ):
         yield
@@ -26,10 +26,10 @@ def test_http_errors_stop_collection(status):
     admission = MagicMock()
     with (
         patch(
-            "src.interfaces.portals.wan_performance.collection.snapshot_client.searchOrgSwOrGwPorts",
+            "src.interfaces.wan_performance.collection.snapshot_client.searchOrgSwOrGwPorts",
             return_value=SimpleNamespace(status_code=status),
         ),
-        patch("src.interfaces.portals.wan_performance.collection.snapshot_client.searchOrgPeerPathStats") as peers,
+        patch("src.interfaces.wan_performance.collection.snapshot_client.searchOrgPeerPathStats") as peers,
     ):
         with pytest.raises(ConnectionError, match=str(status)):
             SnapshotClient(session, admission).collect("org-one")
@@ -44,11 +44,11 @@ def test_fixed_two_calls_and_truncated_results():
     peers = SimpleNamespace(status_code=200, data={"results": [], "total": 0})
     with (
         patch(
-            "src.interfaces.portals.wan_performance.collection.snapshot_client.searchOrgSwOrGwPorts",
+            "src.interfaces.wan_performance.collection.snapshot_client.searchOrgSwOrGwPorts",
             return_value=ports,
         ) as port_call,
         patch(
-            "src.interfaces.portals.wan_performance.collection.snapshot_client.searchOrgPeerPathStats",
+            "src.interfaces.wan_performance.collection.snapshot_client.searchOrgPeerPathStats",
             return_value=peers,
         ) as peer_call,
     ):
@@ -69,11 +69,11 @@ def test_selected_pages_use_exact_sdk_filters(site_id, mac):
     response = SimpleNamespace(status_code=200, data={"results": [row]})
     with (
         patch(
-            "src.interfaces.portals.wan_performance.collection.snapshot_client.searchOrgSwOrGwPorts",
+            "src.interfaces.wan_performance.collection.snapshot_client.searchOrgSwOrGwPorts",
             return_value=response,
         ) as ports,
         patch(
-            "src.interfaces.portals.wan_performance.collection.snapshot_client.searchOrgPeerPathStats",
+            "src.interfaces.wan_performance.collection.snapshot_client.searchOrgPeerPathStats",
             return_value=response,
         ) as peers,
     ):
@@ -106,14 +106,14 @@ def test_selected_pages_refuse_mismatched_returned_identity(field):
     row = {"site_id": "site-one", "mac": "aabbccddeeff", field: "different"}
     with (
         patch(
-            "src.interfaces.portals.wan_performance.collection.snapshot_client.searchOrgSwOrGwPorts",
+            "src.interfaces.wan_performance.collection.snapshot_client.searchOrgSwOrGwPorts",
             return_value=SimpleNamespace(status_code=200, data={"results": [row]}),
         ),
         patch(
-            "src.interfaces.portals.wan_performance.collection.snapshot_client.searchOrgPeerPathStats",
+            "src.interfaces.wan_performance.collection.snapshot_client.searchOrgPeerPathStats",
             return_value=SimpleNamespace(status_code=200, data={"results": []}),
         ),
-        patch("src.interfaces.portals.wan_performance.collection.snapshot_client.GatewayInsights.collect") as insights,
+        patch("src.interfaces.wan_performance.collection.snapshot_client.GatewayInsights.collect") as insights,
     ):
         with pytest.raises(ValueError, match="selected site and gateway"):
             SnapshotClient(MagicMock(), MagicMock()).collect("org-one", target)
@@ -124,7 +124,7 @@ def test_admission_failure_makes_zero_calls():
     """Refuse uncoordinated work when the shared lease is absent or expired."""
     admission = MagicMock()
     admission.check.side_effect = ConnectionError("lease unavailable")
-    with patch("src.interfaces.portals.wan_performance.collection.snapshot_client.searchOrgSwOrGwPorts") as call:
+    with patch("src.interfaces.wan_performance.collection.snapshot_client.searchOrgSwOrGwPorts") as call:
         with pytest.raises(ConnectionError, match="lease unavailable"):
             SnapshotClient(MagicMock(), admission).collect("org-one")
     call.assert_not_called()
@@ -133,7 +133,7 @@ def test_admission_failure_makes_zero_calls():
 def test_malformed_result_is_not_empty_success():
     """Reject invalid SDK payloads instead of hiding response errors."""
     with patch(
-        "src.interfaces.portals.wan_performance.collection.snapshot_client.searchOrgSwOrGwPorts",
+        "src.interfaces.wan_performance.collection.snapshot_client.searchOrgSwOrGwPorts",
         return_value=SimpleNamespace(status_code=200, data={"results": "invalid"}),
     ):
         with pytest.raises(ValueError, match="results"):

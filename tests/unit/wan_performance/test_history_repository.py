@@ -8,11 +8,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 from arango.cursor import Cursor
 
-from src.interfaces.portals.wan_performance.domain.calendar import MAX_HISTORY_RECORDS, MAX_HISTORY_WINDOW_DAYS
-from src.interfaces.portals.wan_performance.integration.arango_history import ArangoHistory
-from src.interfaces.portals.wan_performance.integration.history_repository import HistorySelection
-from src.interfaces.portals.wan_performance.integration.sqlite_history import SQLiteHistory
-from src.interfaces.portals.wan_performance.presentation.offline_preview import OfflinePreviewFactory
+from src.interfaces.wan_performance.domain.calendar import MAX_HISTORY_RECORDS, MAX_HISTORY_WINDOW_DAYS
+from src.interfaces.wan_performance.integration.arango_history import ArangoHistory
+from src.interfaces.wan_performance.integration.history_repository import HistorySelection
+from src.interfaces.wan_performance.integration.sqlite_history import SQLiteHistory
+from src.interfaces.wan_performance.presentation.offline_preview import OfflinePreviewFactory
 
 
 @pytest.fixture
@@ -149,7 +149,7 @@ def test_arango_read_failure_is_explicit():
 def test_arango_connect_uses_existing_database_and_finite_timeout():
     """Use the public driver boundary without creating another application database."""
     config = MagicMock(standalone_mode=False, arango_host="http://existing.invalid", arango_database="misthelper")
-    with patch("src.interfaces.portals.wan_performance.integration.arango_history.ArangoClient") as client:
+    with patch("src.interfaces.wan_performance.integration.arango_history.ArangoClient") as client:
         database = client.return_value.db.return_value
         database.has_collection.return_value = True
         repository = ArangoHistory.connect(config)
@@ -162,9 +162,7 @@ def test_arango_connect_uses_existing_database_and_finite_timeout():
 def test_selected_sqlite_path_does_not_open_arango(tmp_path):
     """Follow DataExporter's active primary selection without a database mirror."""
     with (
-        patch(
-            "src.interfaces.portals.wan_performance.integration.history_repository.SourceDependencyResolver"
-        ) as resolver,
+        patch("src.interfaces.wan_performance.integration.history_repository.SourceDependencyResolver") as resolver,
         patch.object(ArangoHistory, "connect") as connect,
     ):
         resolver.OUTPUT_FORMAT = "sqlite"
@@ -178,12 +176,8 @@ def test_selected_sqlite_path_does_not_open_arango(tmp_path):
 def test_selected_csv_uses_existing_configured_arango():
     """Use the configured application document store, never another SQLite file."""
     with (
-        patch(
-            "src.interfaces.portals.wan_performance.integration.history_repository.SourceDependencyResolver"
-        ) as resolver,
-        patch(
-            "src.interfaces.portals.wan_performance.integration.history_repository.DatabaseConfig.from_env"
-        ) as config,
+        patch("src.interfaces.wan_performance.integration.history_repository.SourceDependencyResolver") as resolver,
+        patch("src.interfaces.wan_performance.integration.history_repository.DatabaseConfig.from_env") as config,
         patch.object(ArangoHistory, "connect") as connect,
     ):
         resolver.OUTPUT_FORMAT = "csv"
@@ -196,14 +190,12 @@ def test_selected_csv_uses_existing_configured_arango():
 def test_csv_standalone_refuses_history_without_opening_arango():
     """CSV-only output cannot appear to have durable history."""
     with (
+        patch("src.interfaces.wan_performance.integration.history_repository.SourceDependencyResolver") as resolver,
         patch(
-            "src.interfaces.portals.wan_performance.integration.history_repository.SourceDependencyResolver"
-        ) as resolver,
-        patch(
-            "src.interfaces.portals.wan_performance.integration.history_repository.DatabaseConfig.from_env",
+            "src.interfaces.wan_performance.integration.history_repository.DatabaseConfig.from_env",
             return_value=MagicMock(standalone_mode=True),
         ),
-        patch("src.interfaces.portals.wan_performance.integration.arango_history.ArangoClient") as client,
+        patch("src.interfaces.wan_performance.integration.arango_history.ArangoClient") as client,
     ):
         resolver.OUTPUT_FORMAT = "csv"
         with pytest.raises(ConnectionError, match="CSV-only"):
@@ -213,9 +205,7 @@ def test_csv_standalone_refuses_history_without_opening_arango():
 
 def test_unsupported_output_format_has_no_store_fallback():
     """Reject invalid selection rather than silently choosing a durable backend."""
-    with patch(
-        "src.interfaces.portals.wan_performance.integration.history_repository.SourceDependencyResolver"
-    ) as resolver:
+    with patch("src.interfaces.wan_performance.integration.history_repository.SourceDependencyResolver") as resolver:
         resolver.OUTPUT_FORMAT = "unsupported"
         with pytest.raises(ValueError, match="output selection"):
             HistorySelection.open()
@@ -223,7 +213,7 @@ def test_unsupported_output_format_has_no_store_fallback():
 
 def test_arango_reads_bind_full_identity_and_close_cursor():
     """Verify query isolation and revalidated round-trip data through public AQL."""
-    from src.interfaces.portals.wan_performance.integration.record_codec import RecordCodec
+    from src.interfaces.wan_performance.integration.record_codec import RecordCodec
 
     record = live_record()
     cursor = MagicMock(spec=Cursor)
@@ -241,7 +231,7 @@ def test_arango_reads_bind_full_identity_and_close_cursor():
 
 def test_arango_history_read_binds_thirteen_month_record_limit():
     """Keep the requested record count fixed and prevent an unbounded AQL read."""
-    from src.interfaces.portals.wan_performance.integration.record_codec import RecordCodec
+    from src.interfaces.wan_performance.integration.record_codec import RecordCodec
 
     record = live_record()
     cursor = MagicMock(spec=Cursor)

@@ -10,21 +10,21 @@ from redis.exceptions import RedisError
 from werkzeug.wrappers import Response
 
 from src.foundation.persistence.db import DatabaseConfig
-from src.interfaces.portals.wan_performance.collection.live_service import LiveService
-from src.interfaces.portals.wan_performance.collection.request_admission import AdmittedAdapter
-from src.interfaces.portals.wan_performance.collection.snapshot_records import SnapshotRecords, SnapshotStates
-from src.interfaces.portals.wan_performance.domain.calendar import CalendarWindow
-from src.interfaces.portals.wan_performance.domain.identity import (
+from src.interfaces.wan_performance.collection.live_service import LiveService
+from src.interfaces.wan_performance.collection.request_admission import AdmittedAdapter
+from src.interfaces.wan_performance.collection.snapshot_records import SnapshotRecords, SnapshotStates
+from src.interfaces.wan_performance.domain.calendar import CalendarWindow
+from src.interfaces.wan_performance.domain.identity import (
     CircuitIdentity,
     GatewayIdentity,
     IdentityValidator,
     PeerPathIdentity,
     SiteIdentity,
 )
-from src.interfaces.portals.wan_performance.domain.measurement import HourlyMeasurement
-from src.interfaces.portals.wan_performance.domain.summary import CalendarSummaries, PeriodSummary
-from src.interfaces.portals.wan_performance.integration.history_repository import HistoryRepository, HistorySelection
-from src.interfaces.portals.wan_performance.integration.refresh_store import RefreshStore
+from src.interfaces.wan_performance.domain.measurement import HourlyMeasurement
+from src.interfaces.wan_performance.domain.summary import CalendarSummaries, PeriodSummary
+from src.interfaces.wan_performance.integration.history_repository import HistoryRepository, HistorySelection
+from src.interfaces.wan_performance.integration.refresh_store import RefreshStore
 
 logger = logging.getLogger(__name__)
 live_bp = Blueprint("live", __name__, url_prefix="/live")

@@ -4,8 +4,8 @@ import json
 
 import pytest
 
-from src.interfaces.portals.wan_performance.collection.snapshot_records import SnapshotRecords
-from src.interfaces.portals.wan_performance.integration.record_codec import RecordCodec
+from src.interfaces.wan_performance.collection.snapshot_records import SnapshotRecords
+from src.interfaces.wan_performance.integration.record_codec import RecordCodec
 
 
 def snapshot():
@@ -145,7 +145,7 @@ def test_invalid_port_rate_remains_unknown_without_discarding_other_direction(re
 
 def test_current_peer_state_keeps_boolean_and_epoch_semantics():
     """Render current state and reported uptime without calculating availability minutes."""
-    from src.interfaces.portals.wan_performance.collection.snapshot_records import SnapshotStates
+    from src.interfaces.wan_performance.collection.snapshot_records import SnapshotStates
 
     data = snapshot()
     data["ports"][0]["up"] = False
@@ -174,7 +174,7 @@ def test_current_peer_state_keeps_boolean_and_epoch_semantics():
 )
 def test_unknown_or_invalid_peer_state_does_not_become_healthy(values):
     """Keep absent and invalid metadata unknown rather than interpreting truthy values."""
-    from src.interfaces.portals.wan_performance.collection.snapshot_records import SnapshotStates
+    from src.interfaces.wan_performance.collection.snapshot_records import SnapshotStates
 
     data = snapshot()
     data["peers"][0].update(values)
