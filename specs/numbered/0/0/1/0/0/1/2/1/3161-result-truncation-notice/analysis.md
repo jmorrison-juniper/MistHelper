@@ -57,6 +57,8 @@ The issue artifact list endpoint returned HTTP 404.
 The historical sample, its timing, and the previous private snapshot remain unavailable.
 This verification does not execute menu 55 against Mist.
 Browser screenshots, traces, and video remain disabled as requested.
+The fixture creates and closes its own browser context without artifact capture.
+This context does not inherit the shared CI screenshot, trace, or video options.
 
 The documented requirements audit failed while its isolated interpreter ran `ensurepip` and received `SIGABRT`.
 The no-dependency audit alternative rejected the unpinned `mistapi` requirement.

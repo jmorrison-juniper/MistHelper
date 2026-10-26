@@ -42,6 +42,7 @@ Preserve the existing sort warning and result operations.
 - Optional commit hooks remain deferred until the feature passes local checks.
 - Use a Conventional Commit and complete the existing pull request template.
 - The user prohibits browser screenshots, traces, and video. Keep those outputs disabled.
+- Give the new browser tests their own context so shared CI artifact options cannot enable capture.
 
 ## Project Structure
 
