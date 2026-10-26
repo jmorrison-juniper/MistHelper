@@ -91,7 +91,8 @@ class TestBootstrapComposeProvider:
             else [uv_path, "pip", "install", "--python", interpreter]
         )
         expected = [
-            [*prefix, "-r", str(REPOSITORY_ROOT / name)] for name in ("requirements.txt", "requirements-dev.txt")
+            [*prefix, "pip>=26.2.2", "-r", str(REPOSITORY_ROOT / name)]
+            for name in ("requirements.txt", "requirements-dev.txt")
         ]
         LOGGER.debug("The Windows bootstrap issued %d install commands", len(commands))
         print(f"The Windows bootstrap guard checked {len(commands)} install commands.")
