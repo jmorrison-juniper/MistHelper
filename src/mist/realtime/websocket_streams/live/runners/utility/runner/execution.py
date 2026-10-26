@@ -124,18 +124,33 @@ class UtilityExecution:
 
     def run(self) -> None:
         """Execute the complete utility lifecycle."""
+        started = time.monotonic()
         try:
-            self._execute(time.monotonic())
+            try:
+                self._execute(started)
+            except Exception as error:
+                failure: Exception | None = error
+            else:
+                failure = None
+            finally:
+                self._close()
         except Exception as error:
-            self._finisher.error(error)
-        finally:
-            self._close()
+            logger.emit(
+                logging.ERROR,
+                "utility_cleanup_failed",
+                {"action": self._context.request.key, "detail": type(error).__name__, "status": "failed"},
+            )
+            self._finisher.failure("The utility cleanup failed. Read the portal log for the cause.")
+        else:
+            if failure is None:
+                self._finisher.finish(started)
+            else:
+                self._finisher.error(failure)
 
     def _execute(self, started: float) -> None:
-        """Start, monitor, and finish one utility."""
+        """Start and monitor one utility before cleanup."""
         client, trigger, filterer = self._starter.start()
         self._monitor.read(client, trigger.listen.timing, filterer, started)
-        self._finisher.finish(started)
 
     def _close(self) -> None:
         """Close the stream and stop a matching capture when required."""
