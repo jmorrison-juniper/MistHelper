@@ -84,6 +84,33 @@ Open issue #4008 names `tests/unit/marvis/actions/`.
 Issue #2752 is closed, but the other issue owners and PR #4208 retain their independent holds.
 Keep these groups deferred rather than infer a handover.
 
+### Committed quality evidence
+
+The implementation commit is `177559d8d6c2d94110136b90be6561115e5ee227`.
+The preserved earlier commit remains `01a97580539fb9dbb21ec2ed51d807b45a348ed0`.
+The worktree was clean before each analyzer command.
+The required fetch resolved `origin/main` to `8e44db09dddfdc15ff73d7247b6501b0943351ad`.
+This updated comparison reference did not rebase or change the branch.
+
+The required input preflight passed one test and validated all four inputs:
+
+```bash
+.venv/bin/python -B -m pytest -p no:cacheprovider -s -q tests/guardrails/local_test_quality_loop/test_guidance.py::TestLiveGuides
+```
+
+Both commands passed with 1,198 files checked, 669 findings checked, zero parse errors, and zero new findings:
+
+```bash
+.venv/bin/test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json --changed-from origin/main --full-gate-path .github/workflows/ci.yml --full-gate-path requirements-dev.txt
+.venv/bin/test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json
+```
+
+The three revised feature documents passed STE with scores of 95, 97, and 93.
+The optional implementation commit hooks require no further action.
+No rebase, push, pull request edit, auto-merge action, merge, or deployment occurred.
+The published draft still points to `63faa487ad441c27b348911aaf34c04ae1ad3244`.
+The final issue acceptance remains incomplete because reserved paths cannot move.
+
 ## Independent bounded splits, 2026-10-26
 
 The coordinator authorized continued independent work while the partial pull request remains draft.
