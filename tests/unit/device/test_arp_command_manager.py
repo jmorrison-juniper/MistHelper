@@ -94,12 +94,12 @@ class TestResolveMistWsCredentials:
         monkeypatch.setenv("MIST_APITOKEN", "env-tok")
         assert ARPCommandManager._resolve_mist_ws_credentials() == ("sess.host", "sess-tok")
 
-    def test_falls_back_to_env_when_session_empty(self, fake_mh, monkeypatch):
-        """Empty session attributes trigger environment lookup."""
+    def test_env_token_never_used_when_session_token_empty(self, fake_mh, monkeypatch):
+        """An environment token is ignored, so the request cannot use another account."""
         fake_mh.apisession = types.SimpleNamespace(host=None, apitoken=None)
         monkeypatch.setenv("MIST_HOST", "env.host")
         monkeypatch.setenv("MIST_APITOKEN", "env-tok")
-        assert ARPCommandManager._resolve_mist_ws_credentials() == ("env.host", "env-tok")
+        assert ARPCommandManager._resolve_mist_ws_credentials() == (None, None)
 
     def test_returns_nones_when_host_missing(self, fake_mh, monkeypatch):
         """Missing host returns (None, None) regardless of token."""
@@ -139,7 +139,7 @@ class TestExecute:
     def test_aborts_when_trigger_returns_none(self, fake_mh, monkeypatch):
         """Skip listener when REST trigger fails to return a session id."""
         monkeypatch.setenv("MIST_HOST", "h")
-        monkeypatch.setenv("MIST_APITOKEN", "t")
+        fake_mh.apisession = types.SimpleNamespace(host=None, apitoken="t")
         with (
             patch.object(ARPCommandManager, "_trigger_command", return_value=None) as trigger,
             patch.object(ARPCommandManager, "_listen_for_output") as listen,
@@ -151,7 +151,7 @@ class TestExecute:
     def test_happy_path_streams_via_listener(self, fake_mh, monkeypatch):
         """Successful trigger dispatches to _listen_for_output with a target bundle."""
         monkeypatch.setenv("MIST_HOST", "api.mist.example")
-        monkeypatch.setenv("MIST_APITOKEN", "tok")
+        fake_mh.apisession = types.SimpleNamespace(host=None, apitoken="tok")
         with (
             patch.object(ARPCommandManager, "_trigger_command", return_value="sess-9"),
             patch.object(ARPCommandManager, "_listen_for_output") as listen,

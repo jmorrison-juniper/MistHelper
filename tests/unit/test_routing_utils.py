@@ -1942,7 +1942,7 @@ class TestExecuteShowSsrRoutesHappyPath:
 class TestExecuteForwardingTableCommandEnvFallback:
     """Cover environment variable fallback for host/token."""
 
-    def test_env_fallback(self, ru: RoutingUtils) -> None:
+    def test_env_token_is_ignored(self, ru: RoutingUtils) -> None:
         ru.apisession.host = None
         ru.apisession.apitoken = None
         mock_resp = MagicMock()
@@ -1954,13 +1954,14 @@ class TestExecuteForwardingTableCommandEnvFallback:
         ):
             mock_req.post.return_value = mock_resp
             result = ru._execute_forwarding_table_command("site-1", "dev-1", {}, False)
-        assert result == "env-sess"
+        assert result is None
+        mock_req.post.assert_not_called()
 
 
 class TestExecuteRoutingTableCommandEnvFallback:
     """Cover environment variable fallback for routing command."""
 
-    def test_env_fallback(self, ru: RoutingUtils) -> None:
+    def test_env_token_is_ignored(self, ru: RoutingUtils) -> None:
         ru.apisession.host = None
         ru.apisession.apitoken = None
         mock_resp = MagicMock()
@@ -1972,7 +1973,8 @@ class TestExecuteRoutingTableCommandEnvFallback:
         ):
             mock_req.post.return_value = mock_resp
             result = ru._execute_routing_table_command("site-1", "dev-1", {}, False)
-        assert result == "env-sess-r"
+        assert result is None
+        mock_req.post.assert_not_called()
 
     def test_no_host_no_env(self, ru: RoutingUtils, capsys: pytest.CaptureFixture[str]) -> None:
         ru.apisession.host = None
