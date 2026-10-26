@@ -131,6 +131,16 @@ Use the tested source imports to select a standalone test group. For a test with
 
 ### Current ownership holds
 
+On 2026-10-26, the coordinator cleared the mapped MIB generator, firmware policy, and container test splits.
+The exact-path scan checked 42 other open pull requests and 316 file records, including previous filenames.
+The 21 new moves and their helper and document changes had no ownership overlap.
+The existing branch now overlaps PR #4415 at rename source `tests/unit/test_wan_hub_group_manager.py`.
+PRs #4471, #4438, and #4436 also own `pyproject.toml`, which the existing branch changes.
+Keep these paths unchanged and request coordination before publication or rebase.
+The local batches do not establish full acceptance or remove the draft hold.
+Current main is `ef0e7e5991950aec9b8f094e32e47fc3f68b4d2f`.
+The published branch head remains `63faa487ad441c27b348911aaf34c04ae1ad3244`.
+
 At the approved base `efd178c3f76e580afc0b5511734498b61f3a0090`, PR #4350 owns three planned source paths.
 Defer `tests/unit/arango_indexes/test_preservation.py`, `tests/unit/export/test_endpoint_family_exporter.py`, and `tests/unit/refactors/test_sqlite_database_writer.py`.
 Defer the entire five-file Arango package because its tests share helpers.
