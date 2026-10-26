@@ -586,3 +586,28 @@ class TestCreateSessionHttpRefusals:
             CLIShellManager.launch("s-1", "d-1")
 
         assert m_run.call_count == 0  # The shell must never start after a refusal.
+
+    def test_native_http_403_does_not_start_shell(self, fake_mh, caplog):
+        """A native HTTP 403 response must not pass its URL to the shell."""
+        import requests  # WHY: build a concrete response for the installed SDK parser.
+        from mistapi.__api_response import APIResponse  # WHY: use the real SDK response boundary.
+
+        response = requests.Response()  # WHY: create the native response consumed by mistapi.
+        response.status_code = 403  # WHY: model the cloud refusal as an actual HTTP status.
+        response.url = "https://api.example.test/shell"  # WHY: set the request URL.
+        response._content = b'{"url":"wss://shell/must-not-be-used"}'  # WHY: provide tempting success data.
+        api_response = APIResponse(response=response, url=response.url)  # WHY: parse the status and body natively.
+        fake_mh.PromptClientUtils.select_site_and_device_ids.return_value = ("s-1", "d-1")  # WHY: fix the target.
+        with (
+            patch("src.operations.execution.ssh.cli_shell_manager.mistapi") as mistapi_mock,
+        ):  # WHY: keep the SDK request local.
+            sdk_call = mistapi_mock.api.v1.sites.devices.createSiteDeviceShellSession  # WHY: name the SDK boundary.
+            sdk_call.return_value = api_response  # WHY: return the native refusal through the mocked boundary.
+            result = CLIShellManager._create_session("s-1", "d-1")  # WHY: drive the real session creation path.
+
+        assert api_response.data == {"url": "wss://shell/must-not-be-used"}  # WHY: preserve the tempting body.
+        assert result is None  # WHY: a refused response must not return its URL.
+        refusal_message = "The cloud returned HTTP 403 for the device shell session at device d-1"  # WHY: name it.
+        assert refusal_message in caplog.text  # WHY: operators must see the refusal instead of a success result.
+        assert "CLI shell session URL present" not in caplog.text  # WHY: do not log success for a refused response.
+        sdk_call.assert_called_once_with(fake_mh.apisession, "s-1", "d-1", body={})  # WHY: verify exact request.
