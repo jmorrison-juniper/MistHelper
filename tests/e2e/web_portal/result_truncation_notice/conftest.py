@@ -7,7 +7,7 @@ from collections.abc import Iterator
 
 import pytest
 from flask import Flask
-from playwright.sync_api import Page
+from playwright.sync_api import Browser, Page
 from werkzeug.serving import make_server
 
 from web_portal.app import WebPortalApp
@@ -49,14 +49,16 @@ def notice_url(notice_app: Flask) -> Iterator[str]:
 
 
 @pytest.fixture
-def notice_page(page: Page, notice_url: str) -> Iterator[Page]:
-    """Open the real operations page with artifact capture disabled by the runner."""
-    errors: list[str] = []
-    page.on("pageerror", lambda error: errors.append(str(error)))
-    page.goto(f"{notice_url}/operations", wait_until="networkidle")
-    page.wait_for_selector(".op-item", state="attached")
-    page.evaluate("OperationResults.showForRun(['Adjacency.csv', 'Short.csv'])")
-    page.locator("#resultsBody tr").first.wait_for()
-    yield page
-    page.evaluate("OperationResults.reset()")
-    assert errors == [], errors
+def notice_page(browser: Browser, notice_url: str) -> Iterator[Page]:
+    """Use a private context so CI capture options cannot record result artifacts."""
+    with browser.new_context() as context:
+        page = context.new_page()
+        errors: list[str] = []
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        page.goto(f"{notice_url}/operations", wait_until="networkidle")
+        page.wait_for_selector(".op-item", state="attached")
+        page.evaluate("OperationResults.showForRun(['Adjacency.csv', 'Short.csv'])")
+        page.locator("#resultsBody tr").first.wait_for()
+        yield page
+        page.evaluate("OperationResults.reset()")
+        assert errors == [], errors
