@@ -146,3 +146,42 @@ class TestCaptureCleanupCompletion:
             api.release.set()
             assert sink.wait_finished()[0] == SessionState.STOPPED
         assert len(sink.finished) == 1
+
+
+class TestUtilityFailureCompletion:
+    """Keep trigger failures explicit after the stream cleanup boundary."""
+
+    @pytest.mark.parametrize(
+        ("status_code", "data", "exception", "reason"),
+        [
+            (403, {}, None, "The utility failed with status 403."),
+            (503, {}, None, "The utility failed with status 503."),
+            (200, "malformed json", None, "The utility failed with status 200."),
+            (200, "", None, "The utility failed with status 200."),
+            (200, {}, ConnectionError("private connection detail"), "The portal could not connect to the Mist cloud."),
+            (
+                200,
+                {},
+                TimeoutError("private timeout detail"),
+                "The Mist cloud did not answer the WebSocket connection in time.",
+            ),
+        ],
+    )
+    def test_trigger_failure_finishes_after_close(
+        self, status_code: int, data: object, exception: Exception | None, reason: str
+    ) -> None:
+        """Preserve safe HTTP, body, connection, and timeout failure outcomes."""
+        with FakeMistCloud() as cloud:
+            cloud.register("/api-ws/v1/stream", StreamDevice())
+            api = FakeApiSession(cloud)
+            api.add_override("/pcaps/capture", status_code=status_code, data=data, exception=exception)
+            runner, sink = utility_tests._build_runner(
+                cloud, api, utility_tests._request("ex.remotePcap", "packets"), utility_tests._fast_table()
+            )
+            runner.start()
+            assert sink.wait_finished() == (SessionState.FAILED, reason)
+            assert runner._context.state.client is None
+        assert sink.finished == [(SessionState.FAILED, reason)]
+        assert [(call.method, call.uri) for call in api.calls] == [
+            ("POST", f"/api/v1/sites/{utility_tests.SITE_ID}/pcaps/capture")
+        ]
