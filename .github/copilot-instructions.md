@@ -477,6 +477,24 @@ job opens a `quality-gate` issue when a gate fails on `main`, closes it when the
 titles the issue `... failed (PR #<number>)` for a pull request. Wait for CodeQL before you add
 the `auto-merge` label, because the check takes two to three minutes after the other gates.
 
+### Serial validation and merge queues
+
+Until the repository owner activates and validates a merge queue, use one serial merge slot.
+
+1. Select one pull request and pause other merges until it lands.
+2. Update its branch from current `main`, then wait until every required check passes.
+3. Before merge, confirm the branch remains current and every required check passes on its latest commit.
+4. If `main` advances, update the branch and rerun the required checks.
+
+Do not bypass protection, disable strict up-to-date checks, or treat auto-merge as a queue.
+Keep every required status name unchanged.
+
+After owner activation, use the queue only when every required status passes on the exact merge-group candidate commit.
+Keep strict protection and linear history enabled.
+Treat canceled, skipped, stale, or timed-out results as unresolved.
+Replace serial merging only after the owner verifies two low-risk queued merges and their post-merge `main` checks.
+See [the merge queue procedure](../documentation/quality-gates.md#merge-queue-preparation-and-activation) for activation, verification, and recovery.
+
 ### Pull request titles
 
 The `Pull request title` workflow reports the `Conventional Commits PR title` check. The check
