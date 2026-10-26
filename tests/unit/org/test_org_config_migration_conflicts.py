@@ -508,8 +508,8 @@ class TestCreateWithoutIdentifier:
         self, manager: OrgConfigMigrationManager, caplog: pytest.LogCaptureFixture
     ) -> None:
         """A refused network create must not report success or map a source identifier."""
-        from mistapi.__api_response import APIResponse  # WHY: parse the native SDK response.
-        from requests import Response  # WHY: create a native HTTP response.
+        from mistapi.__api_response import APIResponse
+        from requests import Response
 
         raw_response = Response()
         raw_response.status_code = 403
@@ -533,8 +533,8 @@ class TestCreateWithoutIdentifier:
         self, manager: OrgConfigMigrationManager, caplog: pytest.LogCaptureFixture
     ) -> None:
         """A server refusal must not report success or map a source identifier."""
-        from mistapi.__api_response import APIResponse
-        from requests import Response
+        from mistapi.__api_response import APIResponse  # WHY: parse the native SDK response.
+        from requests import Response  # WHY: create a native HTTP response.
 
         raw_response = Response()  # WHY: give the SDK a native HTTP response.
         raw_response.status_code = 503  # WHY: model a server refusal.
