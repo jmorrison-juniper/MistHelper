@@ -81,4 +81,5 @@ The notice must describe the current table only.
 - Controlled local CSV results exercise the current renderer without a live Mist request.
 - The repair addresses horizontal cell clipping, not missing export records or sorted total counts.
 - The managed numeric route replaces the historical flat specification reservation.
+- The user approved `tests/e2e/web_portal/result_truncation_notice/` so the existing CI shard collects the new browser tests.
 - The current app-managed branch already exists. No branch-creation hook may replace it.

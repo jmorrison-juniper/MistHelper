@@ -8,7 +8,7 @@
 
 ## Phase 2: Foundational
 
-- [x] T002 Measure current clipping with a failing regression. (delivered: tests/e2e/result_truncation_notice/test_notice.py)
+- [x] T002 Measure current clipping with a failing regression. (delivered: tests/e2e/web_portal/result_truncation_notice/test_notice.py)
 
 ## Phase 3: User Story 1
 
@@ -16,7 +16,7 @@
 
 **Independent test**: Compare rendered cell widths, open row details, focus Output Files, and verify the download.
 
-- [x] T003 [US1] Add the short control and complete-value browser cases. (delivered: tests/e2e/result_truncation_notice/test_notice.py)
+- [x] T003 [US1] Add the short control and complete-value browser cases. (delivered: tests/e2e/web_portal/result_truncation_notice/test_notice.py)
 - [x] T004 [US1] Implement the notice controller. (delivered: web_portal/static/js/operation_results.js)
 
 ## Phase 4: User Story 2
@@ -26,7 +26,7 @@
 **Independent test**: Change pages, filters, files, order, and width, then reset with pending work.
 
 - [x] T005 [US2] Add lifecycle checks. (delivered: tests/unit/web_portal/result_truncation_notice/test_lifecycle.py)
-- [x] T006 [US2] Add layout, paging, and combined-warning cases. (delivered: tests/e2e/result_truncation_notice/test_notice.py)
+- [x] T006 [US2] Add layout, paging, and combined-warning cases. (delivered: tests/e2e/web_portal/result_truncation_notice/test_notice.py)
 - [x] T007 [US2] Cancel stale work and preserve sort warnings. (delivered: web_portal/static/js/operation_results.js)
 
 ## Phase 5: Validation and delivery
@@ -34,6 +34,7 @@
 - [x] T008 Add the release note. (delivered: changelog.d/issue-3161-result-truncation-notice.md)
 - [x] T009 Run relevant regressions and applicable gates. (delivered: analysis.md)
 - [x] T010 Verify the explicit file set and `main` base before publication. (delivered: analysis.md)
+- [x] T011 Move the new browser files to the user-approved shard namespace and verify collection. (delivered: tests/e2e/web_portal/result_truncation_notice/test_notice.py)
 
 ## Dependencies
 
