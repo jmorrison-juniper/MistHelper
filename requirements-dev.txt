@@ -30,7 +30,7 @@
 podman-compose==1.6.0
 
 # Lint and format
-ruff==0.17.1
+ruff==0.17.2
 black==26.10.1
 
 # Type checking
