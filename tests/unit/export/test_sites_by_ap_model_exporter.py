@@ -316,7 +316,8 @@ class TestExportSitesByApModel:
         )
         SitesByAPModelExporter.export_sites_by_ap_model()
 
-        fake_mh.APICoreFetchUtils.all_sites_with_limit.assert_not_called()
+        site_fetcher = fake_mh.APICoreFetchUtils.all_sites_with_limit  # WHY: inspect the canceled site lookup.
+        assert site_fetcher.call_args_list == []  # WHY: cancellation must stop site data retrieval.
 
     def test_no_matching_rows_returns_early(self, fake_mh, caplog, monkeypatch):
         """Prompt returns model but no sites match -> notice + no CSV write."""
