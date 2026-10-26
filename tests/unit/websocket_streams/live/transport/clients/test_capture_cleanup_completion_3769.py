@@ -40,7 +40,6 @@ class CleanupCase:
         self.client = Mock(spec=StreamClient)  # Isolate stream I/O from the cleanup-order proof.
         state.client = self.client  # Exercise production stream closure before capture cleanup.
         self.context = RunContext(self.api, MistStreamEndpoint(self.api), request, self.sink, table, state)
-        self.execution = UtilityExecution(self.context)  # Keep production exception and finalization paths.
         self.path = trigger.path.removesuffix("/capture")  # Use the actual scope from the trigger.
         self.api.add_override("/pcaps?limit=1", data=[{"id": "owned-capture"}])  # Match this capture only.
         opened = (self.client, trigger, UtilityMessageFilter(trigger.listen.channel))
@@ -77,7 +76,7 @@ class TestCaptureCleanupCompletion:
         if execution_error:  # Exercise the execution-error finalization path as well.
             monkeypatch.setattr(UtilityStreamMonitor, "read", Mock(side_effect=RuntimeError("monitor failed")))
         entered, release = case.barrier(monkeypatch)  # Stop cleanup before its request record exists.
-        worker = threading.Thread(target=case.execution.run)  # Keep explicit worker ownership for teardown.
+        worker = threading.Thread(target=UtilityExecution(case.context).run)  # Own the production worker explicitly.
         worker.start()  # Run the unmodified production lifecycle on another thread.
         try:
             assert entered.wait(3.0), "The worker did not reach capture cleanup."
@@ -103,7 +102,7 @@ class TestCaptureCleanupCompletion:
         case.api.overrides.clear()  # Replace the owned match with the selected boundary response.
         rows = [] if capture_id is None else [{"id": capture_id}]  # Model absent and different captures.
         case.api.add_override("/pcaps?limit=1", data=rows)  # Keep production capture inspection active.
-        case.execution.run()  # Complete cleanup before inspecting terminal state.
+        UtilityExecution(case.context).run()  # Complete cleanup before inspecting terminal state.
         assert [(call.method, call.uri) for call in case.api.calls] == [("GET", f"{case.path}?limit=1")]
         assert case.sink.finished == [(SessionState.STOPPED, "The operator stopped the session.")]
         case.client.close.assert_called_once_with()  # Close the owned stream even without a matching capture.
@@ -121,7 +120,7 @@ class TestCaptureCleanupCompletion:
             method = "mist_get" if stage == "GET" else "mist_delete"
             monkeypatch.setattr(case.api, method, Mock(side_effect=failure))
         with caplog.at_level(logging.ERROR):  # Require an explicit diagnostic rather than a thread exception.
-            case.execution.run()
+            UtilityExecution(case.context).run()
         assert case.sink.finished == [
             (SessionState.FAILED, "The utility cleanup failed. Read the portal log for the cause.")
         ]
@@ -145,7 +144,7 @@ class TestCaptureCleanupCompletion:
         case.client.close.side_effect = lambda: case.sink.finished == [] or pytest.fail(
             "Terminal state preceded close."
         )  # Observe notification order inside the cleanup call.
-        case.execution.run()  # Keep startup failure and normal finalization on the same cleanup path.
+        UtilityExecution(case.context).run()  # Keep startup failure and finalization on the same cleanup path.
         assert len(case.sink.finished) == 1  # Each run produces exactly one terminal notification.
         assert case.sink.finished[0][0] == expected  # Cleanup must not change the execution classification.
         case.client.close.assert_called_once_with()  # Even startup failure closes an allocated stream.
@@ -159,7 +158,7 @@ class TestCaptureCleanupCompletion:
         case = CleanupCase(monkeypatch, "ex.remotePcap")  # Keep the existing finally-block safety contract.
         monkeypatch.setattr(UtilityStarter, "start", Mock(side_effect=interrupt))
         with pytest.raises(interrupt):  # Process-control exceptions must not become ordinary execution failures.
-            case.execution.run()
+            UtilityExecution(case.context).run()
         case.client.close.assert_called_once_with()  # An interrupt must still release the owned stream.
         assert [call.method for call in case.api.calls] == ["GET", "DELETE"]  # Preserve matching cleanup.
         assert case.sink.finished == []  # Do not report success for an unclassified process interrupt.
@@ -188,7 +187,7 @@ class TestTriggerFailureCompletion:
         """Keep HTTP client and server errors explicit after stream closure."""
         case = self._case(monkeypatch)  # Exercise the real startup, trigger, cleanup, and finisher.
         case.api.add_override("/pcaps/capture", status_code=status_code)  # Return a controlled HTTP failure.
-        case.execution.run()  # Reject the trigger before any capture identifier exists.
+        UtilityExecution(case.context).run()  # Reject the trigger before any capture identifier exists.
         assert case.sink.finished == [(SessionState.FAILED, f"The utility failed with status {status_code}.")]
         case.client.close.assert_called_once_with()  # The opened stream must close before failure notification.
         assert [(call.method, call.uri) for call in case.api.calls] == [("POST", f"{case.path}/capture")]
@@ -203,7 +202,7 @@ class TestTriggerFailureCompletion:
         """Preserve safe timeout and connection-error reasons after cleanup."""
         case = self._case(monkeypatch)  # Keep the real failure classification path.
         case.api.add_override("/pcaps/capture", exception=error_type("controlled trigger failure"))
-        case.execution.run()  # A failed external request must still release its allocated stream.
+        UtilityExecution(case.context).run()  # A failed request must still release its allocated stream.
         assert case.sink.finished == [(SessionState.FAILED, reason)]  # Retain the safe connection reason.
         case.client.close.assert_called_once_with()  # Cleanup must precede terminal failure.
         assert [(call.method, call.uri) for call in case.api.calls] == [("POST", f"{case.path}/capture")]
