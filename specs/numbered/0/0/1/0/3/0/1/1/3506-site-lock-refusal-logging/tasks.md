@@ -48,7 +48,7 @@ description: "Task list for site lock refusal logging"
 **Purpose**: Validate the complete behavior and publish the issue note.
 
 - [x] T008 [P] Add the issue release note in `changelog.d/issue-3506-site-lock-refusal-logging.md`.
-- [ ] T009 Run the documented tests and applicable lint, format, type, complexity, symbol, and security gates.
+- [x] T009 Run the documented tests and applicable lint, format, type, complexity, symbol, and security gates.
 - [ ] T010 Track a separate issue to reduce the existing direct-file count in `changelog.d/` after release processing.
 - [ ] T011 Complete the remote deployment pipeline only after the user authorizes remote and production actions.
 
