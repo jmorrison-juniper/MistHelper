@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Cisco Configuration Preview{% endblock %}
+{% block content %}
+<section data-testid="cisco-converter">
+    <h1>Cisco Configuration Preview</h1>
+    <p>Convert global IPv4 DNS commands. This tool does not change Mist.</p>
+    <form id="cisco-upload" data-testid="cisco-upload">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label for="cisco-file">Configuration file</label>
+        <input id="cisco-file" name="file" type="file" accept=".txt,.conf,.cfg,.ios,.config,.log"
+               required data-testid="cisco-file">
+        <label for="cisco-name">Template name</label>
+        <input id="cisco-name" name="name" maxlength="120" required data-testid="cisco-name">
+        <label for="cisco-type">Template type</label>
+        <select id="cisco-type" name="type" data-testid="cisco-type">
+            <option value="standalone">Standalone</option>
+            <option value="spoke">Spoke</option>
+        </select>
+        <button type="submit" data-testid="cisco-preview">Preview</button>
+    </form>
+    <p id="cisco-status" role="status" aria-live="polite" data-testid="cisco-status"></p>
+    <pre id="cisco-proposal" data-testid="cisco-proposal"></pre>
+    <button id="cisco-review" type="button" disabled data-testid="cisco-review">Review proposal</button>
+    <button id="cisco-export" type="button" disabled data-testid="cisco-export">Export reviewed JSON</button>
+</section>
+{% endblock %}
+{% block extra_scripts %}
+<script src="{{ url_for('cisco_converter.static', filename='converter.js') }}" defer></script>
+{% endblock %}
