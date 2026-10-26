@@ -34,7 +34,7 @@ This record preserves its result after the analysis.
 
 ## Implementation evidence
 
-The focused run reported `97 passed in 18.18s`.
+The final focused run reported `101 passed in 18.08s`.
 Execution-module coverage reached 99.07 percent.
 The policy guard run reported `35 passed, 1 skipped`.
 The skipped changelog diff guard requires a pull request event.
@@ -46,6 +46,12 @@ The changed module passed compilation, complexity, Bandit, and docstring checks.
 Pylint scored 9.90/10 with its existing public-method-count warning.
 Vulture returned no findings on the documented paths.
 The symbol comparison found no module-level name change.
+The first committed test-quality comparison required four additional network-failure cases.
+The regression now covers HTTP 400, HTTP 503, connection failure, and timeout through the real trigger sender.
+No baseline or detector setting changed.
+The advisory task audit returned 1 for existing repository-wide record debt.
+It examined 845 feature records and 10,393 task markers.
+This feature has eight completed tasks.
 
 ## Limits and decisions
 

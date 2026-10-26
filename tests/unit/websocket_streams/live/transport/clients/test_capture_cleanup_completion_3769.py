@@ -10,12 +10,16 @@ from unittest.mock import Mock
 import pytest
 
 from src.mist.realtime.websocket_streams.live.runners.utility.filters.message_filter import UtilityMessageFilter
-from src.mist.realtime.websocket_streams.live.runners.utility.runner.execution import UtilityExecution, UtilityStarter
+from src.mist.realtime.websocket_streams.live.runners.utility.runner.execution import (
+    UtilityExecution,
+    UtilityStarter,
+    UtilityStreamOpener,
+)
 from src.mist.realtime.websocket_streams.live.runners.utility.runner.monitoring import UtilityStreamMonitor
 from src.mist.realtime.websocket_streams.live.runners.utility.runner.utility_runner import RunContext, RunnerState
 from src.mist.realtime.websocket_streams.live.runners.utility.triggers.table import UtilityTriggerTable
 from src.mist.realtime.websocket_streams.live.sessions.record.state import SessionState
-from src.mist.realtime.websocket_streams.live.transport.endpoint import MistStreamEndpoint
+from src.mist.realtime.websocket_streams.live.transport.endpoint import ConnectFailure, MistStreamEndpoint
 from src.mist.realtime.websocket_streams.live.transport.stream_client import StreamClient
 from tests.unit.websocket_streams.live.runners.utility.test_ws_utility_runner import FakeSink, _request
 from tests.unit.websocket_streams.live.transport.fake_mist_cloud.api import FakeApiSession
@@ -159,3 +163,47 @@ class TestCaptureCleanupCompletion:
         case.client.close.assert_called_once_with()  # An interrupt must still release the owned stream.
         assert [call.method for call in case.api.calls] == ["GET", "DELETE"]  # Preserve matching cleanup.
         assert case.sink.finished == []  # Do not report success for an unclassified process interrupt.
+
+
+class TestTriggerFailureCompletion:
+    """Keep cleanup and terminal failure ordering for rejected capture triggers."""
+
+    @staticmethod
+    def _case(monkeypatch: pytest.MonkeyPatch) -> CleanupCase:
+        """Use the real starter and fake only the stream connection."""
+        case = CleanupCase(monkeypatch, "ex.remotePcap")  # Retain the controlled API and sink.
+        monkeypatch.undo()  # Restore the real starter and monitor for failure-path integration.
+        monkeypatch.setattr(UtilityStreamOpener, "_client", Mock(return_value=case.client))
+        case.context.state.stopping.clear()  # Trigger errors must retain their failure classification.
+        case.context.state.answer = None  # A failed trigger never supplies a capture identifier.
+        case.client.close.side_effect = lambda: case.sink.finished == [] or pytest.fail(
+            "Terminal state preceded close."
+        )  # Inspect ordering at the actual cleanup boundary.
+        return case  # Let each failure reach the real sender and execution handler.
+
+    @pytest.mark.parametrize("status_code", [400, 503])
+    def test_http_trigger_failure_closes_before_notification(
+        self, monkeypatch: pytest.MonkeyPatch, status_code: int
+    ) -> None:
+        """Keep HTTP client and server errors explicit after stream closure."""
+        case = self._case(monkeypatch)  # Exercise the real startup, trigger, cleanup, and finisher.
+        case.api.add_override("/pcaps/capture", status_code=status_code)  # Return a controlled HTTP failure.
+        case.execution.run()  # Reject the trigger before any capture identifier exists.
+        assert case.sink.finished == [(SessionState.FAILED, f"The utility failed with status {status_code}.")]
+        case.client.close.assert_called_once_with()  # The opened stream must close before failure notification.
+        assert [(call.method, call.uri) for call in case.api.calls] == [("POST", f"{case.path}/capture")]
+
+    @pytest.mark.parametrize(
+        ("error_type", "reason"),
+        [(TimeoutError, ConnectFailure.TIMEOUT_TEXT), (ConnectionError, ConnectFailure.NETWORK_TEXT)],
+    )
+    def test_connection_failure_closes_before_notification(
+        self, monkeypatch: pytest.MonkeyPatch, error_type: type[Exception], reason: str
+    ) -> None:
+        """Preserve safe timeout and connection-error reasons after cleanup."""
+        case = self._case(monkeypatch)  # Keep the real failure classification path.
+        case.api.add_override("/pcaps/capture", exception=error_type("controlled trigger failure"))
+        case.execution.run()  # A failed external request must still release its allocated stream.
+        assert case.sink.finished == [(SessionState.FAILED, reason)]  # Retain the safe connection reason.
+        case.client.close.assert_called_once_with()  # Cleanup must precede terminal failure.
+        assert [(call.method, call.uri) for call in case.api.calls] == [("POST", f"{case.path}/capture")]
