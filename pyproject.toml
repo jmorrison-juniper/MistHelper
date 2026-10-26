@@ -99,7 +99,7 @@ dev = [
     # Each pin equals the pin in requirements-dev.txt (issue #3400). The guard
     # tests/guardrails/test_dependency_declaration_parity.py compares the two.
     "podman-compose==1.6.0",
-    "ruff==0.17.1",
+    "ruff==0.17.2",
     "black==26.10.1",
     "mypy==2.4.0",
     "types-requests==2.33.0.20261006",
