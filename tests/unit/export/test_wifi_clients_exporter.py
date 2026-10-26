@@ -53,6 +53,7 @@ def test_execute_aborts_when_no_site_selected() -> None:
     exporter.execute(site_id=None)
 
     data_exporter.write_with_format_selection.assert_not_called()
+    assert _mistapi.mock_calls == []  # Cancellation must prevent every SDK request, not only the export write.
 
 
 def test_execute_exports_merged_records() -> None:
