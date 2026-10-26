@@ -93,3 +93,13 @@ The unchanged fixture reproduced the same `AttributeError` locally with one fail
 The correction supplies `request.key` without changing assertions or production code.
 The combined SDK contract and focused utility selection reported `117 passed in 18.91s`.
 Execution-module coverage remains 99.07 percent.
+
+## Structural limit correction
+
+The root-unit shard rejected the 28-line `UtilityExecution.run()` method after the action-field revision.
+The unchanged structural guard reproduced the failure locally with one failure and two passes.
+The correction reuses one action-field dictionary across the three cleanup events.
+The method now has exactly 25 lines, with no lifecycle or exception-policy change.
+All live WebSocket unit tests and SDK contracts reported `316 passed in 26.81s`.
+Execution-module coverage remains 99.07 percent.
+Repository Ruff, Black, and documented mypy paths pass.

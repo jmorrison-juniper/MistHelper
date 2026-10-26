@@ -125,6 +125,7 @@ class UtilityExecution:
     def run(self) -> None:
         """Publish a terminal result only after cleanup completes."""
         started = time.monotonic()
+        log_fields = {"action": self._context.request.key}
         execution_error: Exception | None = None
         cleanup_error: Exception | None = None
         try:
@@ -134,17 +135,13 @@ class UtilityExecution:
                 execution_error = error
         finally:
             try:
-                logger.emit(logging.INFO, "utility_cleanup_start", {"action": self._context.request.key})
+                logger.emit(logging.INFO, "utility_cleanup_start", log_fields)
                 self._close()
-                logger.emit(logging.DEBUG, "utility_cleanup_complete", {"action": self._context.request.key})
+                logger.emit(logging.DEBUG, "utility_cleanup_complete", log_fields)
             except Exception as error:
                 cleanup_error = error
         if cleanup_error is not None:
-            logger.emit(
-                logging.ERROR,
-                "utility_cleanup_failed",
-                {"action": self._context.request.key, "detail": type(cleanup_error).__name__},
-            )
+            logger.emit(logging.ERROR, "utility_cleanup_failed", log_fields | {"detail": type(cleanup_error).__name__})
             self._finisher.failure("The utility cleanup failed. Read the portal log for the cause.")
         elif execution_error is not None:
             self._finisher.error(execution_error)
