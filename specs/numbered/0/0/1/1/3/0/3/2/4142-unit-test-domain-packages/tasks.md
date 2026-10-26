@@ -6,7 +6,7 @@
 
 **Status rule**: A checked task means all its work is complete. Leave a task unchecked while any part remains.
 
-**Resume status, 2026-10-26**: Tasks T039 through T041 complete three independent bounded splits.
+**Resume status, 2026-10-26**: Tasks T039 through T043 complete four independent bounded splits and one cleared root move.
 Keep T004 and the final acceptance tasks open.
 The existing branch also overlaps PR #4415 at rename source `tests/unit/test_wan_hub_group_manager.py`.
 PRs #4471, #4438, and #4436 overlap the existing `pyproject.toml` changes.
@@ -63,6 +63,8 @@ The coordinator must release the PR hold after #4353 before any pull request ope
 - [X] T039 [US1] Split the unclaimed MIB generator tests into the mapped CLI, generator, and performance groups. Move the JSON fixture with its reader. Verify focused tests, complete node IDs, unchanged baseline fields, group sizes, path guards, and style.
 - [X] T040 [US1] Split the unclaimed firmware policy tests into changes, recovery bundles, and recovery selection groups. Keep shared fixtures and helpers at their current paths. Verify focused tests, complete node IDs, unchanged baseline fields, group sizes, path guards, and style.
 - [X] T041 [US1] Split the unclaimed container tests into mapped build-support and runtime groups. Update helper imports, repository-root depths, and the current container guide. Verify focused tests, complete node IDs, unchanged baseline fields, group sizes, path guards, and style.
+- [X] T042 [US1] Apply the bounded troubleshooting map to core tests, credential tests, SMS tests, synthetic tests, and RF diagnostics. Update the standalone consumer import and RF manifest root. Preserve all baseline non-path fields. Verify focused tests, full node-ID parity, group sizes, declarations, path guards, and style.
+- [X] T043 [US1] Move the cleared `tests/unit/test_fast_mode_flag.py` to its mapped startup group without a content change. Verify focused tests, full node-ID parity, the root reduction, target group size, active references, path guards, and style. Keep all other claimed root files deferred.
 
 ## Phase 4: User Story 2 - Run the existing unit tests (Priority: P1)
 

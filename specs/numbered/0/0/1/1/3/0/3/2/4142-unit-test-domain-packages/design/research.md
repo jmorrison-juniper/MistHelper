@@ -2,6 +2,88 @@
 
 **Date**: 2026-10-20
 
+## Bounded troubleshooting split, 2026-10-26
+
+Task T042 applies the existing troubleshooting map without a grouping change.
+The coordinator confirmed no active session claim for either package path, its standalone consumer, or the baseline.
+The exact-path scan checked 42 other open pull requests and 316 file records, including previous filenames.
+No source, destination, consumer, or baseline path overlapped another pull request.
+The required explicit-feature prerequisite check passed again.
+The fully checked requirements checklist remains unchanged.
+
+The split moves 22 Python files into the mapped core, credential, SMS, synthetic, and RF diagnostic groups.
+It updates the existing standalone test consumer import and one repository-root depth for the RF manifest test.
+Each resulting directory has five children or fewer.
+No production behavior, historical record, workflow, or dependency manifest changes.
+
+The before-move command passed 251 tests with two existing collection warnings:
+
+```bash
+.venv/bin/python -m pytest -q tests/unit/marvis/mist/intelligence/troubleshooting tests/unit/config/standalone/foundation/runtime/startup/test_standalone_interactive_test_runner.py
+```
+
+The after-move command passed 311 tests and skipped one optional-runtime check, with the same two collection warnings:
+
+```bash
+.venv/bin/python -m pytest -q tests/unit/marvis/mist/intelligence/troubleshooting tests/unit/config/standalone/foundation/runtime/startup/test_standalone_interactive_test_runner.py tests/guardrails/test_markdown_links.py tests/guardrails/test_process_folder_structure.py tests/guardrails/test_quality_ratchet_files.py tests/guardrails/test_move_module_guidance.py tests/guardrails/test_portal_operation_coverage.py
+```
+
+The before and after collection-finish hooks each saved 29,603 complete unit-test node IDs.
+Mapping the 22 exact moves gives zero missing IDs and zero added IDs.
+An AST comparison checked all 22 moved modules and found no lost module-level function or class declaration.
+The baseline keeps all 733 entries in order and changes only 54 verified path fields.
+The initial estimate of 60 fields was incorrect.
+The pre-write assertion rejected that estimate before changing the file.
+The corrected check verified all 54 target files and every non-path field before writing.
+The ignored backup is `.venv/tmp/4142-before-troubleshooting-baseline.json`.
+
+Ruff passed and Black reported 24 files unchanged:
+
+```bash
+.venv/bin/python -m ruff check tests/unit/marvis/mist/intelligence/troubleshooting tests/unit/config/standalone/foundation/runtime/startup/test_standalone_interactive_test_runner.py
+.venv/bin/python -m black --check tests/unit/marvis/mist/intelligence/troubleshooting tests/unit/config/standalone/foundation/runtime/startup/test_standalone_interactive_test_runner.py
+```
+
+The remaining root candidates require ownership clearance.
+Open issue #2746 names `tests/unit/test_issue_2971_census_repairs.py`.
+Open issues #4133 and #4126 name `tests/unit/test_menu_entry_metadata.py`.
+The utility package cannot move while the reserved workflow selects `tests/unit/utils/test_zscaler_catalogue.py`.
+Keep these files unchanged and keep the final acceptance tasks open.
+Do not rebase, push, edit the draft, or enable auto-merge while whole-branch ownership conflicts remain.
+
+### Cleared fast-mode root move
+
+The coordinator found no active session or pull request reservation for `tests/unit/test_fast_mode_flag.py`.
+The prior external-edit hold no longer applies to the clean committed file.
+Task T043 moves it without a content change to `tests/unit/config/standalone/foundation/runtime/startup/test_fast_mode_flag.py`.
+No active consumer, workflow selector, baseline entry, lint override, or historical Markdown link requires another edit.
+The destination contains four tracked files, and the unit root decreases from 40 tracked direct children to 39.
+The existing source-aligned map remains unchanged.
+
+The before-move command passed all four tests:
+
+```bash
+.venv/bin/python -m pytest -q tests/unit/test_fast_mode_flag.py
+```
+
+The combined after-move command passed 315 tests, skipped one optional-runtime check, and retained the two existing collection warnings:
+
+```bash
+.venv/bin/python -m pytest -q tests/unit/config/standalone/foundation/runtime/startup/test_fast_mode_flag.py tests/unit/config/standalone/foundation/runtime/startup/test_standalone_interactive_test_runner.py tests/unit/marvis/mist/intelligence/troubleshooting tests/guardrails/test_markdown_links.py tests/guardrails/test_process_folder_structure.py tests/guardrails/test_quality_ratchet_files.py tests/guardrails/test_move_module_guidance.py tests/guardrails/test_portal_operation_coverage.py
+```
+
+The combined 23-move node-ID comparison again contains 29,603 tests with zero missing IDs and zero added IDs.
+Ruff passed for the troubleshooting and startup packages.
+Black reported 27 files unchanged.
+Compile and both whitespace checks passed.
+
+The remaining oversized groups have unresolved issue owners.
+Issues #2746, #2747, and #2753 name address-audit paths.
+Issue #2746 names rogue-DHCP paths.
+Open issue #4008 names `tests/unit/marvis/actions/`.
+Issue #2752 is closed, but the other issue owners and PR #4208 retain their independent holds.
+Keep these groups deferred rather than infer a handover.
+
 ## Independent bounded splits, 2026-10-26
 
 The coordinator authorized continued independent work while the partial pull request remains draft.
