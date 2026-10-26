@@ -53,11 +53,12 @@ The design directory contains research, data model, quickstart, contracts, and t
 ### Source Code (repository root)
 
 - `web_portal/static/js/operation_results.js`
-- `tests/e2e/result_truncation_notice/`
+- `tests/e2e/web_portal/result_truncation_notice/`
 - `tests/unit/web_portal/result_truncation_notice/`
 - `changelog.d/issue-3161-result-truncation-notice.md`
 
 **Structure Decision**: Keep new tests within the released namespaces. Leave existing tests and fixtures unchanged.
+The user approved the nested browser-test namespace after the current shard guard rejected the earlier top-level namespace.
 
 ## Design
 

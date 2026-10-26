@@ -11,7 +11,7 @@
 | FR-005 | T003, T006 | Native pagination, complete download, and existing result regressions. |
 | FR-006 | T001, T008, T010 | Explicit bounded file set and unchanged shared files. |
 
-Six requirements map to ten tasks. No requirement lacks coverage.
+Six requirements map to eleven tasks. No requirement lacks coverage.
 No unresolved specification ambiguity or behavior conflict remains.
 
 ## Current reproduction
@@ -28,6 +28,8 @@ No test calls Mist or a production store.
 ## Validation
 
 - Relevant browser, native preview, lifecycle, and fragment checks: 80 passed and one skipped.
+- After the approved namespace correction, the combined regression and structure checks report 106 passed and one skipped.
+- The corrected run includes all 15 CI shard partition checks.
 - Final issue-scoped checks: eight passed, including the one-second notice assertions.
 - The skipped fragment check requires a pull request event.
 - Managed process-folder checks: 11 passed.
@@ -76,3 +78,15 @@ The branch starts at current `main`.
 The feature changes one production JavaScript file, four test files, nine specification records, and one release fragment.
 The source diff removes 14 non-comment lines and two comment lines.
 No deployment, merge, automatic merge, policy change, or production action is authorized.
+
+## Approved CI namespace correction
+
+The current CI shard guard rejected `tests/e2e/result_truncation_notice/` because that directory belongs to no shard.
+Its local check reported one failure and 14 passes.
+The user then approved the new namespace `tests/e2e/web_portal/result_truncation_notice/`.
+Only the two new browser-test files moved. Existing tests, shared fixtures, and workflows remain unchanged.
+The partition guard now passes, and the existing web-portal shard collects the new tests.
+
+The first published CI run also reported unrelated high-level npm audit failures for `undici` and `zod`.
+Issue #4417 already tracks the Zod audit condition.
+The npm dependency files remain unchanged and outside this repair.
