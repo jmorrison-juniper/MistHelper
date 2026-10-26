@@ -134,6 +134,9 @@ ste-linter = [
     # without it through the standard-library heuristic backend.
     # After install, download the model: python -m spacy download en_core_web_sm
     "spacy>=3.7.0,<4.0.0",
+    # preshed 3.0.14 rejects hash keys at or above 2**63, so spaCy cannot load
+    # the en_core_web_sm tokenizer (issue #4468). preshed 3.0.15 repairs it.
+    "preshed!=3.0.14",
     # pdfplumber reads a PDF by word position and by font size. Two tools need it.
     # misthelper-devtools reads the licensed ASD-STE100 PDF to
     # build the local dictionary. scripts/pdf_to_markdown.py converts a Juniper
