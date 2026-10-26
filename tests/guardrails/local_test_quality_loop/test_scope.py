@@ -2,6 +2,7 @@
 
 from __future__ import annotations  # Keep test annotations safe during collection.
 
+import json  # Supply controlled reports for direct evidence-decoder regression tests.
 import logging  # Record controlled history and content changes.
 import os  # Assert fixture subprocess configuration without changing global settings.
 import sys  # Require the active isolated interpreter in each real invocation.
@@ -14,6 +15,7 @@ from .fixtures import (  # Use genuine isolated processes rather than substitute
     FixtureEnvironment,
     FixtureRepository,
     GuidanceFixture,
+    ScopeObservation,
 )  # Use real offline support.
 from .guard import CiGateContract, GuideGuard, SectionCommands  # Pair semantic drift with direct guard failures.
 
@@ -669,3 +671,25 @@ class TestFixtureSafety:  # Prove repository isolation and fresh-process observa
             "misthelper_devtools.test_quality_analyzer",
         )
         assert first.process.revisions == second.process.revisions  # Tie result changes to current content only.
+
+    @pytest.mark.parametrize("trace_path", ("tests/nested/test_changed.py", r"tests\nested\test_changed.py"))
+    @pytest.mark.parametrize("report_mode", ("matching", "absent", "different"))
+    def test_detector_trace_separators(self, tmp_path: Path, trace_path: str, report_mode: str) -> None:
+        """Compare separator forms without accepting different paths or changing raw evidence."""
+        outputs = (tmp_path / "report.json", tmp_path / "report.md")
+        stderr = f"Weak-assertion finding count for {trace_path}: 0\n"
+        process = ScopeObservation.Process(0, "", stderr, (), (None, None, "fixture-head"))
+        expected = frozenset({"tests/nested/test_changed.py"})
+        if report_mode != "absent":
+            report_path = "tests/nested/test_changed.py" if report_mode == "matching" else "tests/other/test_changed.py"
+            outputs[0].write_text(json.dumps({"analyzed_files": [report_path], "findings": []}), encoding="utf-8")
+        if report_mode == "different":
+            with pytest.raises(AssertionError, match="Report paths differ from completed detector paths"):
+                ScopeObservation.Decoder.decode(process, outputs)
+            return
+        evidence = ScopeObservation.Decoder.decode(process, outputs)
+        assert evidence.analyzed == expected
+        assert process.stderr == stderr
+        assert evidence.reports == (report_mode == "matching", False)
+        assert evidence.findings == (frozenset() if report_mode == "matching" else None)
+        assert ("finding_identities" in evidence.unavailable) == (report_mode == "absent")

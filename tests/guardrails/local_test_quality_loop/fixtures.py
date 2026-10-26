@@ -258,12 +258,14 @@ class ScopeObservation:  # Separate raw process evidence from measured results.
         def decode(  # Preserve completed detector evidence after reporting errors.
             cls, process: ScopeObservation.Process, outputs: tuple[Path, Path]
         ) -> ScopeObservation.Evidence:
-            """Preserve detector evidence when baseline errors prevent reports."""
+            """Compare trace paths as POSIX paths and preserve evidence when reports are absent."""
             counts = cls.counts(process)  # Measure only completed installed output.
             analyzed, findings = cls.report(outputs[0])  # Read only this invocation's unique report.
             logging.info("Measuring completed weak-detector traces")  # Announce fallback evidence inspection.
             matches = re.findall(r"Weak-assertion finding count for ([^\n]+): \d+", process.stderr)  # Completed traces.
-            traces = frozenset(matches) if matches else None  # Do not invent paths when no detector completed.
+            traces = (
+                frozenset(path.replace("\\", "/") for path in matches) if matches else None
+            )  # The detector logs native separators, but reports use POSIX separators.
             if analyzed is None:  # An input error can stop reporting after the full scan.
                 analyzed = traces  # Retain genuine completed detector paths when available.
             elif traces is not None:  # Successful scans must agree across independent evidence channels.
