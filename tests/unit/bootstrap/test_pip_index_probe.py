@@ -265,10 +265,10 @@ class TestInstallEnvironment:
                     prefix = [executable, "pip", "install", "--python", target]  # Keep the target explicit.
                 names = ["requirements.txt", "requirements-dev.txt"]  # Assert file order independently of the source.
                 expected = [[target, "-m", "pip", "config", "list"]]  # Permit discovery but no pip installation retry.
-                expected.extend(prefix + ["-r", str(offline.root / name)] for name in names)  # Preserve full paths.
+                expected.extend(prefix + ["pip>=26.2.2", "-r", str(offline.root / name)] for name in names)
                 installed = offline.bootstrapper.install_requirements()  # Exercise real selection and dispatch.
                 logging.debug("Recorded %s install attempts.", len(offline.environments))  # Report only the count.
-                assert offline.calls == expected  # Reject extra probes, version commands, upgrades, or uv installation.
+                assert offline.calls == expected  # Require safe pip without extra processes or installer retries.
                 assert offline.options[1:] == [{"check": False}, {"check": False}]  # Require visible shell-free output.
                 assert offline.discoveries == ["uv"]  # One discovery result must serve both files.
                 assert installed == names  # Record only successfully installed files in their original order.
