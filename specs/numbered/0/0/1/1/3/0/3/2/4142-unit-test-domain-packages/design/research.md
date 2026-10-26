@@ -2,6 +2,82 @@
 
 **Date**: 2026-10-20
 
+## Independent bounded splits, 2026-10-26
+
+The coordinator authorized continued independent work while the partial pull request remains draft.
+The supported prerequisite command passed:
+
+```bash
+SPECIFY_FEATURE_DIRECTORY="$PWD/specs/numbered/0/0/1/1/3/0/3/2/4142-unit-test-domain-packages" .venv/tools/pwsh/pwsh -NoLogo -NoProfile -File .specify/scripts/powershell/check-prerequisites.ps1 -Json -RequireTasks -IncludeTasks -RequireSpec
+```
+
+The requirements checklist has 16 checked items and zero unchecked items.
+The optional before-implementation commit hook needed no action because the worktree was clean.
+An initial prerequisite invocation used unsupported `-FeatureDir` and failed before execution.
+The supported environment override above resolved that invocation error without a file change.
+
+Tasks T039 through T041 apply the existing exact map to three unclaimed packages.
+The coordinator confirmed no matching session reservation.
+The pull request scan checked 42 other open pull requests and 316 file records, including previous filenames.
+Both current and original package paths were clear.
+The 21 moves and related helper and document changes have zero intersection with that inventory.
+
+The MIB split retains its marker and introduces CLI, generator, and performance groups.
+Its fixture remains beside the generator test.
+The firmware policy split retains shared fixtures and helpers, and introduces changes, bundles, and selection groups.
+The container split retains its marker, output-defaults group, and session-database group.
+Its new build-support group holds shared helpers and build tests, while the runtime group holds script tests.
+Every directory in these three packages has five children or fewer.
+No new direct child enters `tests/unit/`, which still has 40 tracked direct children.
+
+The before-move MIB command passed 54 tests:
+
+```bash
+.venv/bin/python -m pytest -q tests/unit/prod_readiness/operations/hardware/mib_generator
+```
+
+The after-move command passed 114 tests and skipped one optional-runtime check:
+
+```bash
+.venv/bin/python -m pytest -q tests/unit/prod_readiness/operations/hardware/mib_generator tests/guardrails/test_markdown_links.py tests/guardrails/test_process_folder_structure.py tests/guardrails/test_quality_ratchet_files.py tests/guardrails/test_move_module_guidance.py tests/guardrails/test_portal_operation_coverage.py
+```
+
+The before-move policy and container command passed 462 tests:
+
+```bash
+.venv/bin/python -m pytest -q tests/unit/prod_readiness/operations/execution/firmware/policy tests/unit/prod_readiness/operations/exporting/container
+```
+
+The after-move command passed 522 tests and skipped one optional-runtime check:
+
+```bash
+.venv/bin/python -m pytest -q tests/unit/prod_readiness/operations/execution/firmware/policy tests/unit/prod_readiness/operations/exporting/container tests/guardrails/test_markdown_links.py tests/guardrails/test_process_folder_structure.py tests/guardrails/test_quality_ratchet_files.py tests/guardrails/test_move_module_guidance.py tests/guardrails/test_portal_operation_coverage.py
+```
+
+Collection used `pytest.main(['--collect-only', '-q', 'tests/unit'], plugins=[Recorder()])`.
+The collection-finish hook saved each complete node ID, including parameters, before and after each batch.
+Both full collections contain 29,603 node IDs.
+Mapping the exact 21 file moves gives zero missing IDs and zero added IDs.
+The baseline remains byte-identical to the published head and retains all 733 ordered entries.
+None of these three packages has a baseline path field.
+No historical specification, dependency manifest, workflow, production source, or held test changed in these batches.
+
+Ruff initially reported one long helper import after the container move.
+Its import formatter corrected that line.
+The final commands passed, and Black reported 36 files unchanged:
+
+```bash
+.venv/bin/python -m ruff check tests/unit/prod_readiness/operations/hardware/mib_generator tests/unit/prod_readiness/operations/execution/firmware/policy tests/unit/prod_readiness/operations/exporting/container
+.venv/bin/python -m black --check tests/unit/prod_readiness/operations/hardware/mib_generator tests/unit/prod_readiness/operations/execution/firmware/policy tests/unit/prod_readiness/operations/exporting/container
+```
+
+The whole-branch ownership scan found a new conflict at rename source `tests/unit/test_wan_hub_group_manager.py`, owned by PR #4415.
+Existing `pyproject.toml` changes also overlap PRs #4471, #4438, and #4436.
+The coordinator received these exact blockers.
+Keep the existing draft and auto-merge state unchanged.
+Do not publish or rebase this scope until the ownership conflicts clear.
+The older green CI does not validate current main or these local changes.
+
 ## Decision: Reuse four existing root containers
 
 **Decision**: Keep `config`, `marvis`, `maps`, and `prod_readiness` as the four root containers. Put the source-aligned domain groups under those existing directories, as shown in [plan.md](../plan.md).

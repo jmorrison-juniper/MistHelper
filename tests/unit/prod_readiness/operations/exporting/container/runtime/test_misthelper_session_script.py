@@ -20,10 +20,13 @@ from pathlib import Path
 
 import pytest
 
-from tests.unit.prod_readiness.operations.exporting.container.bash_support import BASH_PATH, BASH_SKIP_REASON
+from tests.unit.prod_readiness.operations.exporting.container.build_support.bash_support import (
+    BASH_PATH,
+    BASH_SKIP_REASON,
+)
 
 # Find the repository root, because pytest moves the working directory.
-REPO_ROOT = Path(__file__).resolve().parents[6]  # The moved package adds three parent levels.
+REPO_ROOT = Path(__file__).resolve().parents[7]  # The topic group adds one parent before the repository root.
 # Point at the script under test.
 SESSION_SCRIPT = REPO_ROOT / "container" / "scripts" / "misthelper-session.sh"
 # Stop a runaway loop, because a lost limit must fail the test and not hang it.
@@ -31,7 +34,7 @@ HARNESS_TIMEOUT_SECONDS = 60
 
 # Skip the module when no bash can open the script. A bash that refuses a
 # Windows path reaches this guard too, because the presence of bash proves
-# nothing on Windows. Read tests/unit/prod_readiness/operations/exporting/container/bash_support.py for the reason.
+# nothing on Windows. The build_support/bash_support.py module explains the capability check.
 pytestmark = pytest.mark.skipif(BASH_SKIP_REASON is not None, reason=BASH_SKIP_REASON or "")
 
 # The token that every loop test carries. Issue #2181 makes the script refuse a

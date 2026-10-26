@@ -32,15 +32,15 @@ from pathlib import Path  # Every path in this module is a Path.
 
 import pytest  # The test framework of the project.
 
-from tests.unit.prod_readiness.operations.exporting.container.bash_support import (
+from tests.unit.prod_readiness.operations.exporting.container.build_support.bash_support import (
     BASH_PATH,  # Keep the shell that can open the script.
     BASH_SKIP_REASON,
     windows_system_variables,
 )
-from tests.unit.prod_readiness.operations.exporting.container.owner_only import assert_owner_only
+from tests.unit.prod_readiness.operations.exporting.container.build_support.owner_only import assert_owner_only
 
 # Find the repository root, because pytest moves the working directory.
-REPO_ROOT = Path(__file__).resolve().parents[6]  # The moved package adds three parent levels.
+REPO_ROOT = Path(__file__).resolve().parents[7]  # The topic group adds one parent before the repository root.
 # Point at the script under test.
 WRITER_SCRIPT = REPO_ROOT / "container" / "scripts" / "write-session-env.sh"
 # Stop a runaway script, because a hang must fail the test and not the suite.
@@ -48,7 +48,7 @@ HARNESS_TIMEOUT_SECONDS = 30
 
 # Skip the module when no bash can open the script. A bash that refuses a
 # Windows path reaches this guard too, because the presence of bash proves
-# nothing on Windows. Read tests/unit/prod_readiness/operations/exporting/container/bash_support.py for the reason.
+# nothing on Windows. The build_support/bash_support.py module explains the capability check.
 pytestmark = pytest.mark.skipif(BASH_SKIP_REASON is not None, reason=BASH_SKIP_REASON or "")
 
 # Request the current valid account, so a local test proves the actual owner.

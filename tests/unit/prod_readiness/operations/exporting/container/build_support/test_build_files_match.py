@@ -32,7 +32,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[6]  # The moved package adds three parent levels.
+REPOSITORY_ROOT = Path(__file__).resolve().parents[7]  # The topic group adds one parent before the repository root.
 DOCKERFILE = REPOSITORY_ROOT / "Dockerfile"
 CONTAINERFILE = REPOSITORY_ROOT / "Containerfile"
 WORKFLOW_DIR = REPOSITORY_ROOT / ".github" / "workflows"

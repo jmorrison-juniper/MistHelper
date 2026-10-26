@@ -28,7 +28,7 @@ from src.operations.hardware.mib_generator.mib import MibObject, MibWriter, Snmp
 from src.operations.hardware.mib_generator.runner import MibGeneratorRunner
 from src.operations.hardware.mib_generator.schema import SchemaFlattener
 
-REPO_ROOT = Path(__file__).resolve().parents[6]  # The grouped test path needs six parents to reach the repository root.
+REPO_ROOT = Path(__file__).resolve().parents[7]  # The topic group adds one parent before the repository root.
 FIXTURE = Path(__file__).parent / "fixtures" / "mini_openapi.json"  # The small OpenAPI file the unit tests read.
 REAL_OPENAPI = REPO_ROOT / "documentation" / "mist-api-openapi31json.json"  # The 16 MB file that Mist ships.
 ALLOWLIST = REPO_ROOT / "data" / "mib_generator" / "allowlist.json"  # The checked-in endpoint selection.

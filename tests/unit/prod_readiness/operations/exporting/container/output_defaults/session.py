@@ -17,7 +17,7 @@ from pathlib import Path  # Confine every operational path to tmp_path.
 from types import TracebackType  # Type cleanup of an owned process lifetime.
 from typing import Any, BinaryIO, cast  # Type JSON records and the captured output handle.
 
-from tests.unit.prod_readiness.operations.exporting.container.bash_support import (
+from tests.unit.prod_readiness.operations.exporting.container.build_support.bash_support import (
     BASH_PATH,  # Reuse the read-only capability result.
     BASH_SKIP_REASON,
     windows_system_variables,

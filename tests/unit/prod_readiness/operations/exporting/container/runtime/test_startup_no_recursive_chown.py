@@ -12,7 +12,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[6]  # The moved package adds three parent levels.
+REPOSITORY_ROOT = Path(__file__).resolve().parents[7]  # The topic group adds one parent before the repository root.
 START_SCRIPT = REPOSITORY_ROOT / "container" / "scripts" / "start.sh"
 
 # A session writes these paths, so the startup script may own them.

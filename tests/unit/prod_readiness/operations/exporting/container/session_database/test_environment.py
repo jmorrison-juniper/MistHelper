@@ -10,8 +10,8 @@ from pathlib import Path
 
 import pytest
 
-from tests.unit.prod_readiness.operations.exporting.container.bash_support import windows_system_variables
-from tests.unit.prod_readiness.operations.exporting.container.owner_only import assert_owner_only
+from tests.unit.prod_readiness.operations.exporting.container.build_support.bash_support import windows_system_variables
+from tests.unit.prod_readiness.operations.exporting.container.build_support.owner_only import assert_owner_only
 
 from .harness import DatabaseSettingsFixture, SessionEnvironmentHarness
 
