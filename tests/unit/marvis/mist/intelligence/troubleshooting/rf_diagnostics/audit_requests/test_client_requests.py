@@ -149,7 +149,7 @@ def test_confirmation_accepts_only_y() -> None:
 
 def test_wiring_manifest_lists_deferred_integration_files() -> None:
     """The wiring manifest carries the exact deferred integration files."""
-    repo_root = Path(__file__).resolve().parents[7]  # WHY: the grouped path adds three parent directories.
+    repo_root = Path(__file__).resolve().parents[8]  # The topic group adds one parent before the repository root.
     text = (repo_root / "specs" / "3570-spectrum-rfdiag" / "wiring.md").read_text(
         encoding="utf-8"
     )  # WHY: read manifest.
