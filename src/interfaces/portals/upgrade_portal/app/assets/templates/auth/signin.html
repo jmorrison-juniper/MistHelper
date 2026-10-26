@@ -278,19 +278,6 @@
             Sign in with a token for this browser session
           </label>
         </div>
-        <label class="form-label" for="signin-browser-token">Mist API token</label>
-        <input type="password"
-               id="signin-browser-token"
-               name="token"
-               class="form-control"
-               data-testid="signin-browser-token"
-               autocomplete="off"
-               spellcheck="false"
-               aria-describedby="signin-browser-token-note">
-        <p class="portal-card-note" id="signin-browser-token-note">
-          The portal sends this token to Mist for this browser session. The
-          portal does not store, show, or log the token value.
-        </p>
       {% endif %}
 
       <p class="bubble-option-hint">
@@ -304,6 +291,37 @@
         {% endif %}
       </p>
     </fieldset>
+
+    {% if browser_token_allowed %}
+      {#
+        Keep the token controls below the mode choices. The selected mode
+        controls their visibility and whether the form can submit the field.
+      #}
+      <div class="signin-token-group"
+           id="signin-browser-token-group"
+           data-testid="signin-browser-token-group"
+           role="group"
+           aria-labelledby="signin-browser-token-label"
+           hidden>
+        <label class="form-label"
+               id="signin-browser-token-label"
+               data-testid="signin-browser-token-label"
+               for="signin-browser-token">Mist API token</label>
+        <input type="password"
+               id="signin-browser-token"
+               name="token"
+               class="form-control"
+               data-testid="signin-browser-token"
+               autocomplete="off"
+               spellcheck="false"
+               aria-describedby="signin-browser-token-note"
+               disabled>
+        <p class="portal-card-note" id="signin-browser-token-note">
+          The portal sends this token to Mist for this browser session. The
+          portal does not store, show, or log the token value.
+        </p>
+      </div>
+    {% endif %}
 
     <button type="submit"
             class="portal-button portal-button-primary"

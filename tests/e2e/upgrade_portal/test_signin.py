@@ -53,6 +53,9 @@ SIGNIN_ERROR_ID = "signin-error"
 SIGNIN_MODE_PROVIDER_ID = "signin-mode-provider"
 SIGNIN_MODE_TOKEN_ID = "signin-mode-token"
 SIGNIN_MODE_BROWSER_TOKEN_ID = "signin-mode-browser-token"
+SIGNIN_BROWSER_TOKEN_GROUP_ID = "signin-browser-token-group"
+SIGNIN_BROWSER_TOKEN_LABEL_ID = "signin-browser-token-label"
+SIGNIN_BROWSER_TOKEN_ID = "signin-browser-token"
 
 # The credential modes, in the order the page paints them. A portal hides a mode
 # when it holds no such credential, so a test reads the count before it presses.
@@ -550,6 +553,72 @@ class TestSignInControlsAnswerAPlainPress:
         boxes = signin_page.get_by_test_id(SIGNIN_SUBMIT_ID).evaluate(STABLE_BOX_READER)
         assert boxes["dx"] == 0, f"The submit button moved {boxes['dx']} across the page in one frame."
         assert boxes["dy"] == 0, f"The submit button moved {boxes['dy']} down the page in one frame."
+
+
+class TestBrowserTokenCredentialLayout:
+    """The browser-token controls follow the selected mode and remain readable."""
+
+    def test_the_token_label_sits_above_and_aligns_with_its_field(self, signin_page: Any) -> None:
+        """The token label stays above the field instead of beside the mode choices.
+
+        Args:
+            signin_page: The page that shows the sign-in form.
+        """
+        mode = signin_page.get_by_test_id(SIGNIN_MODE_BROWSER_TOKEN_ID)  # Select the issue's browser-token mode.
+        assert mode.count() == 1, "The test portal does not offer browser-token sign-in."
+        mode.check()  # Show the token group through the real mode control.
+        group = signin_page.get_by_test_id(SIGNIN_BROWSER_TOKEN_GROUP_ID)  # Read the active token group.
+        assert group.is_visible(), "The token group stays hidden after its mode is selected."
+        label = signin_page.get_by_test_id(SIGNIN_BROWSER_TOKEN_LABEL_ID)  # Read the named field label.
+        field = signin_page.get_by_test_id(SIGNIN_BROWSER_TOKEN_ID)  # Read the field below the label.
+        label_box = label.bounding_box()  # Measure the rendered label position.
+        field_box = field.bounding_box()  # Measure the rendered field position.
+        if label_box is None:  # A missing box prevents a useful position comparison.
+            pytest.fail("The token label has no visible position.")
+        if field_box is None:  # A missing box prevents a useful position comparison.
+            pytest.fail("The token field has no visible position.")
+        label_bottom = label_box["y"] + label_box["height"]  # Measure the label's lower edge.
+        assert label_bottom <= field_box["y"], "The token label is not above its field."
+        assert abs(label_box["x"] - field_box["x"]) <= 1, "The token label does not align with its field."
+
+    def test_the_token_field_is_hidden_until_keyboard_selection(self, signin_page: Any) -> None:
+        """A keyboard operator can select token mode and focus its enabled field.
+
+        Args:
+            signin_page: The page that shows the sign-in form.
+        """
+        group = signin_page.get_by_test_id(SIGNIN_BROWSER_TOKEN_GROUP_ID)  # Read the inactive token group.
+        field = signin_page.get_by_test_id(SIGNIN_BROWSER_TOKEN_ID)  # Read the initially inactive field.
+        assert group.is_hidden(), "The token group shows in provider mode."
+        assert field.is_disabled(), "The token field is active in provider mode."
+        mode = signin_page.get_by_test_id(SIGNIN_MODE_BROWSER_TOKEN_ID)  # Use the actual keyboard mode control.
+        assert mode.count() == 1, "The test portal does not offer browser-token sign-in."
+        mode.focus()  # Place keyboard focus on the browser-token radio.
+        signin_page.keyboard.press("Space")  # Select the mode through a keyboard action.
+        assert mode.is_checked(), "The keyboard did not select browser-token mode."
+        assert group.is_visible(), "Keyboard selection did not show the token group."
+        assert not field.is_disabled(), "Keyboard selection did not enable the token field."
+        signin_page.keyboard.press("Tab")  # Move from the radio to the next active form control.
+        has_focus = field.evaluate("node => document.activeElement === node")  # Read the active field directly.
+        assert has_focus is True, "The token field is not reachable after keyboard mode selection."
+
+    def test_signin_warning_prefix_matches_the_error_page_weight(self, signin_page: Any) -> None:
+        """The warning prefix has the same weight on both pages.
+
+        Args:
+            signin_page: The page that shows the sign-in form.
+        """
+        signin_warning = signin_page.get_by_test_id(SIGNIN_ERROR_ID)  # Read the sign-in warning region.
+        signin_weight = signin_warning.evaluate("node => getComputedStyle(node, '::before').fontWeight")
+        answer = signin_page.goto("/issue-3295-missing-layout-route")  # Open the existing not-found page.
+        if answer is None:  # A missing response means the not-found page did not load.
+            pytest.fail("The not-found page returned no browser response.")
+        assert answer.status == NOT_FOUND_STATUS, f"The missing route answered {answer.status}, not 404."
+        error_warning = signin_page.get_by_test_id("error-message")  # Read the error-page warning region.
+        error_weight = error_warning.evaluate("node => getComputedStyle(node, '::before').fontWeight")
+        assert (
+            signin_weight == error_weight == "700"
+        ), f"The sign-in warning weight {signin_weight} differs from the bold error-page weight {error_weight}."
 
 
 class TestSecondFactorForm:

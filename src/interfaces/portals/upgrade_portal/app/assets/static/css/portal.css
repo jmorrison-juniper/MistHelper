@@ -196,6 +196,15 @@
     font-size: 0.85rem;
 }
 
+/* Keep the credential label above its field and below the mode choices. */
+.signin-token-group {
+    margin-top: 0.75rem;
+}
+
+.signin-token-group > .form-label {
+    display: block;
+}
+
 /* ==========================================================================
  * 4. Tables
  * ========================================================================== */
@@ -1205,9 +1214,9 @@
  * Each prefix ends with one space. portal.js writes an alert sentence as plain
  * text with no leading space, so a prefix without the space touches the first
  * word. Issue #3277 records the sign-in alert "Warning:The portal could not
- * sign you in". A browser removes a space at the end of a line, so a flex item
- * and a block prefix keep the same look. */
-.flash-item::before {
+ * sign you in". Apply the same bold prefix to both alert layouts. */
+.flash-item::before,
+.flash-danger.alert::before {
     font-weight: 700;
     white-space: nowrap;
 }
