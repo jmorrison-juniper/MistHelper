@@ -6954,10 +6954,10 @@
   {
     "category": "weak_assertion",
     "explanation": "Test function 'test_client_connectivity_returns_when_no_client_selected' contains no assertions.",
-    "file_path": "tests/unit/marvis/mist/intelligence/troubleshooting/test_marvis_troubleshoot_utils.py",
+    "file_path": "tests/unit/marvis/mist/intelligence/troubleshooting/core/test_marvis_troubleshoot_utils.py",
     "heuristic": false,
     "line_number": 70,
-    "related_source": "tests/unit/marvis/mist/intelligence/troubleshooting/test_marvis_troubleshoot_utils.py",
+    "related_source": "tests/unit/marvis/mist/intelligence/troubleshooting/core/test_marvis_troubleshoot_utils.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
     "severity": "medium"
@@ -6965,10 +6965,10 @@
   {
     "category": "weak_assertion",
     "explanation": "Test function 'test_view_insights_fetches_org_and_attempts_insights' contains no assertions.",
-    "file_path": "tests/unit/marvis/mist/intelligence/troubleshooting/test_marvis_troubleshoot_utils.py",
+    "file_path": "tests/unit/marvis/mist/intelligence/troubleshooting/core/test_marvis_troubleshoot_utils.py",
     "heuristic": false,
     "line_number": 89,
-    "related_source": "tests/unit/marvis/mist/intelligence/troubleshooting/test_marvis_troubleshoot_utils.py",
+    "related_source": "tests/unit/marvis/mist/intelligence/troubleshooting/core/test_marvis_troubleshoot_utils.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
     "severity": "medium"
@@ -6976,10 +6976,10 @@
   {
     "category": "weak_assertion",
     "explanation": "Test function 'test_invoke_client_troubleshoot_success_dispatches' contains no assertions.",
-    "file_path": "tests/unit/marvis/mist/intelligence/troubleshooting/test_marvis_troubleshoot_utils_extended.py",
+    "file_path": "tests/unit/marvis/mist/intelligence/troubleshooting/core/test_marvis_troubleshoot_utils_extended.py",
     "heuristic": false,
     "line_number": 384,
-    "related_source": "tests/unit/marvis/mist/intelligence/troubleshooting/test_marvis_troubleshoot_utils_extended.py",
+    "related_source": "tests/unit/marvis/mist/intelligence/troubleshooting/core/test_marvis_troubleshoot_utils_extended.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
     "severity": "medium"
@@ -6987,10 +6987,10 @@
   {
     "category": "weak_assertion",
     "explanation": "Test function 'test_invoke_device_troubleshoot_success' contains no assertions.",
-    "file_path": "tests/unit/marvis/mist/intelligence/troubleshooting/test_marvis_troubleshoot_utils_extended.py",
+    "file_path": "tests/unit/marvis/mist/intelligence/troubleshooting/core/test_marvis_troubleshoot_utils_extended.py",
     "heuristic": false,
     "line_number": 408,
-    "related_source": "tests/unit/marvis/mist/intelligence/troubleshooting/test_marvis_troubleshoot_utils_extended.py",
+    "related_source": "tests/unit/marvis/mist/intelligence/troubleshooting/core/test_marvis_troubleshoot_utils_extended.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
     "severity": "medium"
@@ -6998,10 +6998,10 @@
   {
     "category": "weak_assertion",
     "explanation": "Test function 'test_invoke_network_troubleshoot_success' contains no assertions.",
-    "file_path": "tests/unit/marvis/mist/intelligence/troubleshooting/test_marvis_troubleshoot_utils_extended.py",
+    "file_path": "tests/unit/marvis/mist/intelligence/troubleshooting/core/test_marvis_troubleshoot_utils_extended.py",
     "heuristic": false,
     "line_number": 432,
-    "related_source": "tests/unit/marvis/mist/intelligence/troubleshooting/test_marvis_troubleshoot_utils_extended.py",
+    "related_source": "tests/unit/marvis/mist/intelligence/troubleshooting/core/test_marvis_troubleshoot_utils_extended.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
     "severity": "medium"
@@ -7009,10 +7009,10 @@
   {
     "category": "weak_assertion",
     "explanation": "Test function 'test_client_connectivity_runs_when_client_selected' contains no assertions.",
-    "file_path": "tests/unit/marvis/mist/intelligence/troubleshooting/test_marvis_troubleshoot_utils_extended.py",
+    "file_path": "tests/unit/marvis/mist/intelligence/troubleshooting/core/test_marvis_troubleshoot_utils_extended.py",
     "heuristic": false,
     "line_number": 455,
-    "related_source": "tests/unit/marvis/mist/intelligence/troubleshooting/test_marvis_troubleshoot_utils_extended.py",
+    "related_source": "tests/unit/marvis/mist/intelligence/troubleshooting/core/test_marvis_troubleshoot_utils_extended.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
     "severity": "medium"
@@ -7020,10 +7020,10 @@
   {
     "category": "weak_assertion",
     "explanation": "Test function 'test_device_performance_no_site_selected_returns_early' contains no assertions.",
-    "file_path": "tests/unit/marvis/mist/intelligence/troubleshooting/test_marvis_troubleshoot_utils_extended.py",
+    "file_path": "tests/unit/marvis/mist/intelligence/troubleshooting/core/test_marvis_troubleshoot_utils_extended.py",
     "heuristic": false,
     "line_number": 465,
-    "related_source": "tests/unit/marvis/mist/intelligence/troubleshooting/test_marvis_troubleshoot_utils_extended.py",
+    "related_source": "tests/unit/marvis/mist/intelligence/troubleshooting/core/test_marvis_troubleshoot_utils_extended.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
     "severity": "medium"
@@ -7031,10 +7031,10 @@
   {
     "category": "weak_assertion",
     "explanation": "Test function 'test_device_performance_no_device_selected_returns_early' contains no assertions.",
-    "file_path": "tests/unit/marvis/mist/intelligence/troubleshooting/test_marvis_troubleshoot_utils_extended.py",
+    "file_path": "tests/unit/marvis/mist/intelligence/troubleshooting/core/test_marvis_troubleshoot_utils_extended.py",
     "heuristic": false,
     "line_number": 472,
-    "related_source": "tests/unit/marvis/mist/intelligence/troubleshooting/test_marvis_troubleshoot_utils_extended.py",
+    "related_source": "tests/unit/marvis/mist/intelligence/troubleshooting/core/test_marvis_troubleshoot_utils_extended.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
     "severity": "medium"
@@ -7042,10 +7042,10 @@
   {
     "category": "weak_assertion",
     "explanation": "Test function 'test_device_performance_lookup_returns_none_skips_api' contains no assertions.",
-    "file_path": "tests/unit/marvis/mist/intelligence/troubleshooting/test_marvis_troubleshoot_utils_extended.py",
+    "file_path": "tests/unit/marvis/mist/intelligence/troubleshooting/core/test_marvis_troubleshoot_utils_extended.py",
     "heuristic": false,
     "line_number": 483,
-    "related_source": "tests/unit/marvis/mist/intelligence/troubleshooting/test_marvis_troubleshoot_utils_extended.py",
+    "related_source": "tests/unit/marvis/mist/intelligence/troubleshooting/core/test_marvis_troubleshoot_utils_extended.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
     "severity": "medium"
@@ -7053,10 +7053,10 @@
   {
     "category": "weak_assertion",
     "explanation": "Test function 'test_device_performance_full_flow' contains no assertions.",
-    "file_path": "tests/unit/marvis/mist/intelligence/troubleshooting/test_marvis_troubleshoot_utils_extended.py",
+    "file_path": "tests/unit/marvis/mist/intelligence/troubleshooting/core/test_marvis_troubleshoot_utils_extended.py",
     "heuristic": false,
     "line_number": 495,
-    "related_source": "tests/unit/marvis/mist/intelligence/troubleshooting/test_marvis_troubleshoot_utils_extended.py",
+    "related_source": "tests/unit/marvis/mist/intelligence/troubleshooting/core/test_marvis_troubleshoot_utils_extended.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
     "severity": "medium"
@@ -7064,10 +7064,10 @@
   {
     "category": "weak_assertion",
     "explanation": "Test function 'test_network_connectivity_no_site_selected_returns_early' contains no assertions.",
-    "file_path": "tests/unit/marvis/mist/intelligence/troubleshooting/test_marvis_troubleshoot_utils_extended.py",
+    "file_path": "tests/unit/marvis/mist/intelligence/troubleshooting/core/test_marvis_troubleshoot_utils_extended.py",
     "heuristic": false,
     "line_number": 512,
-    "related_source": "tests/unit/marvis/mist/intelligence/troubleshooting/test_marvis_troubleshoot_utils_extended.py",
+    "related_source": "tests/unit/marvis/mist/intelligence/troubleshooting/core/test_marvis_troubleshoot_utils_extended.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
     "severity": "medium"
@@ -7075,10 +7075,10 @@
   {
     "category": "weak_assertion",
     "explanation": "Test function 'test_network_connectivity_full_flow' contains no assertions.",
-    "file_path": "tests/unit/marvis/mist/intelligence/troubleshooting/test_marvis_troubleshoot_utils_extended.py",
+    "file_path": "tests/unit/marvis/mist/intelligence/troubleshooting/core/test_marvis_troubleshoot_utils_extended.py",
     "heuristic": false,
     "line_number": 519,
-    "related_source": "tests/unit/marvis/mist/intelligence/troubleshooting/test_marvis_troubleshoot_utils_extended.py",
+    "related_source": "tests/unit/marvis/mist/intelligence/troubleshooting/core/test_marvis_troubleshoot_utils_extended.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
     "severity": "medium"
@@ -7086,10 +7086,10 @@
   {
     "category": "weak_assertion",
     "explanation": "Test function 'test_view_insights_org_none_returns_early' contains no assertions.",
-    "file_path": "tests/unit/marvis/mist/intelligence/troubleshooting/test_marvis_troubleshoot_utils_extended.py",
+    "file_path": "tests/unit/marvis/mist/intelligence/troubleshooting/core/test_marvis_troubleshoot_utils_extended.py",
     "heuristic": false,
     "line_number": 569,
-    "related_source": "tests/unit/marvis/mist/intelligence/troubleshooting/test_marvis_troubleshoot_utils_extended.py",
+    "related_source": "tests/unit/marvis/mist/intelligence/troubleshooting/core/test_marvis_troubleshoot_utils_extended.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
     "severity": "medium"
@@ -7097,10 +7097,10 @@
   {
     "category": "weak_assertion",
     "explanation": "Test function 'test_fetch_org_insights_exception_prints_warning' contains no assertions.",
-    "file_path": "tests/unit/marvis/mist/intelligence/troubleshooting/test_marvis_troubleshoot_utils_extended.py",
+    "file_path": "tests/unit/marvis/mist/intelligence/troubleshooting/core/test_marvis_troubleshoot_utils_extended.py",
     "heuristic": false,
     "line_number": 637,
-    "related_source": "tests/unit/marvis/mist/intelligence/troubleshooting/test_marvis_troubleshoot_utils_extended.py",
+    "related_source": "tests/unit/marvis/mist/intelligence/troubleshooting/core/test_marvis_troubleshoot_utils_extended.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
     "severity": "medium"
@@ -7108,10 +7108,10 @@
   {
     "category": "weak_assertion",
     "explanation": "Test function 'test_persist_insight_csv_handles_none_rows' contains no assertions.",
-    "file_path": "tests/unit/marvis/mist/intelligence/troubleshooting/test_marvis_troubleshoot_utils_extended.py",
+    "file_path": "tests/unit/marvis/mist/intelligence/troubleshooting/core/test_marvis_troubleshoot_utils_extended.py",
     "heuristic": false,
     "line_number": 742,
-    "related_source": "tests/unit/marvis/mist/intelligence/troubleshooting/test_marvis_troubleshoot_utils_extended.py",
+    "related_source": "tests/unit/marvis/mist/intelligence/troubleshooting/core/test_marvis_troubleshoot_utils_extended.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
     "severity": "medium"
@@ -7119,10 +7119,10 @@
   {
     "category": "weak_assertion",
     "explanation": "Test function 'test_log_endpoint_error_classifies_404_403_generic' contains no assertions.",
-    "file_path": "tests/unit/marvis/mist/intelligence/troubleshooting/test_marvis_troubleshoot_utils_extended.py",
+    "file_path": "tests/unit/marvis/mist/intelligence/troubleshooting/core/test_marvis_troubleshoot_utils_extended.py",
     "heuristic": false,
     "line_number": 749,
-    "related_source": "tests/unit/marvis/mist/intelligence/troubleshooting/test_marvis_troubleshoot_utils_extended.py",
+    "related_source": "tests/unit/marvis/mist/intelligence/troubleshooting/core/test_marvis_troubleshoot_utils_extended.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
     "severity": "medium"
@@ -7130,10 +7130,10 @@
   {
     "category": "weak_assertion",
     "explanation": "Test function 'test_client_connectivity_delegates' contains no assertions.",
-    "file_path": "tests/unit/marvis/mist/intelligence/troubleshooting/test_troubleshoot_utils.py",
+    "file_path": "tests/unit/marvis/mist/intelligence/troubleshooting/core/test_troubleshoot_utils.py",
     "heuristic": false,
     "line_number": 69,
-    "related_source": "tests/unit/marvis/mist/intelligence/troubleshooting/test_troubleshoot_utils.py",
+    "related_source": "tests/unit/marvis/mist/intelligence/troubleshooting/core/test_troubleshoot_utils.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
     "severity": "medium"
@@ -7141,10 +7141,10 @@
   {
     "category": "weak_assertion",
     "explanation": "Test function 'test_device_performance_delegates' contains no assertions.",
-    "file_path": "tests/unit/marvis/mist/intelligence/troubleshooting/test_troubleshoot_utils.py",
+    "file_path": "tests/unit/marvis/mist/intelligence/troubleshooting/core/test_troubleshoot_utils.py",
     "heuristic": false,
     "line_number": 73,
-    "related_source": "tests/unit/marvis/mist/intelligence/troubleshooting/test_troubleshoot_utils.py",
+    "related_source": "tests/unit/marvis/mist/intelligence/troubleshooting/core/test_troubleshoot_utils.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
     "severity": "medium"
@@ -7152,10 +7152,10 @@
   {
     "category": "weak_assertion",
     "explanation": "Test function 'test_network_connectivity_delegates' contains no assertions.",
-    "file_path": "tests/unit/marvis/mist/intelligence/troubleshooting/test_troubleshoot_utils.py",
+    "file_path": "tests/unit/marvis/mist/intelligence/troubleshooting/core/test_troubleshoot_utils.py",
     "heuristic": false,
     "line_number": 77,
-    "related_source": "tests/unit/marvis/mist/intelligence/troubleshooting/test_troubleshoot_utils.py",
+    "related_source": "tests/unit/marvis/mist/intelligence/troubleshooting/core/test_troubleshoot_utils.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
     "severity": "medium"
@@ -7163,10 +7163,10 @@
   {
     "category": "weak_assertion",
     "explanation": "Test function 'test_view_insights_delegates' contains no assertions.",
-    "file_path": "tests/unit/marvis/mist/intelligence/troubleshooting/test_troubleshoot_utils.py",
+    "file_path": "tests/unit/marvis/mist/intelligence/troubleshooting/core/test_troubleshoot_utils.py",
     "heuristic": false,
     "line_number": 81,
-    "related_source": "tests/unit/marvis/mist/intelligence/troubleshooting/test_troubleshoot_utils.py",
+    "related_source": "tests/unit/marvis/mist/intelligence/troubleshooting/core/test_troubleshoot_utils.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
     "severity": "medium"
@@ -7174,10 +7174,10 @@
   {
     "category": "weak_assertion",
     "explanation": "Test function 'test_display_usage_guide_delegates' contains no assertions.",
-    "file_path": "tests/unit/marvis/mist/intelligence/troubleshooting/test_troubleshoot_utils.py",
+    "file_path": "tests/unit/marvis/mist/intelligence/troubleshooting/core/test_troubleshoot_utils.py",
     "heuristic": false,
     "line_number": 85,
-    "related_source": "tests/unit/marvis/mist/intelligence/troubleshooting/test_troubleshoot_utils.py",
+    "related_source": "tests/unit/marvis/mist/intelligence/troubleshooting/core/test_troubleshoot_utils.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
     "severity": "medium"
@@ -7185,10 +7185,10 @@
   {
     "category": "weak_assertion",
     "explanation": "Test function 'test_invoke_client_connectivity' contains no assertions.",
-    "file_path": "tests/unit/marvis/mist/intelligence/troubleshooting/test_troubleshoot_utils.py",
+    "file_path": "tests/unit/marvis/mist/intelligence/troubleshooting/core/test_troubleshoot_utils.py",
     "heuristic": false,
     "line_number": 118,
-    "related_source": "tests/unit/marvis/mist/intelligence/troubleshooting/test_troubleshoot_utils.py",
+    "related_source": "tests/unit/marvis/mist/intelligence/troubleshooting/core/test_troubleshoot_utils.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
     "severity": "medium"
@@ -7196,10 +7196,10 @@
   {
     "category": "weak_assertion",
     "explanation": "Test function 'test_invoke_device_performance' contains no assertions.",
-    "file_path": "tests/unit/marvis/mist/intelligence/troubleshooting/test_troubleshoot_utils.py",
+    "file_path": "tests/unit/marvis/mist/intelligence/troubleshooting/core/test_troubleshoot_utils.py",
     "heuristic": false,
     "line_number": 122,
-    "related_source": "tests/unit/marvis/mist/intelligence/troubleshooting/test_troubleshoot_utils.py",
+    "related_source": "tests/unit/marvis/mist/intelligence/troubleshooting/core/test_troubleshoot_utils.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
     "severity": "medium"
@@ -7207,10 +7207,10 @@
   {
     "category": "weak_assertion",
     "explanation": "Test function 'test_invoke_network_connectivity' contains no assertions.",
-    "file_path": "tests/unit/marvis/mist/intelligence/troubleshooting/test_troubleshoot_utils.py",
+    "file_path": "tests/unit/marvis/mist/intelligence/troubleshooting/core/test_troubleshoot_utils.py",
     "heuristic": false,
     "line_number": 126,
-    "related_source": "tests/unit/marvis/mist/intelligence/troubleshooting/test_troubleshoot_utils.py",
+    "related_source": "tests/unit/marvis/mist/intelligence/troubleshooting/core/test_troubleshoot_utils.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
     "severity": "medium"
@@ -7218,10 +7218,10 @@
   {
     "category": "weak_assertion",
     "explanation": "Test function 'test_invoke_view_insights' contains no assertions.",
-    "file_path": "tests/unit/marvis/mist/intelligence/troubleshooting/test_troubleshoot_utils.py",
+    "file_path": "tests/unit/marvis/mist/intelligence/troubleshooting/core/test_troubleshoot_utils.py",
     "heuristic": false,
     "line_number": 130,
-    "related_source": "tests/unit/marvis/mist/intelligence/troubleshooting/test_troubleshoot_utils.py",
+    "related_source": "tests/unit/marvis/mist/intelligence/troubleshooting/core/test_troubleshoot_utils.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
     "severity": "medium"
@@ -7229,10 +7229,10 @@
   {
     "category": "weak_assertion",
     "explanation": "Test function 'test_valid_choices_dispatch' contains no assertions.",
-    "file_path": "tests/unit/marvis/mist/intelligence/troubleshooting/test_troubleshoot_utils.py",
+    "file_path": "tests/unit/marvis/mist/intelligence/troubleshooting/core/test_troubleshoot_utils.py",
     "heuristic": false,
     "line_number": 145,
-    "related_source": "tests/unit/marvis/mist/intelligence/troubleshooting/test_troubleshoot_utils.py",
+    "related_source": "tests/unit/marvis/mist/intelligence/troubleshooting/core/test_troubleshoot_utils.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
     "severity": "medium"
@@ -7240,10 +7240,10 @@
   {
     "category": "weak_assertion",
     "explanation": "Test function 'test_launch_strips_whitespace_from_input' contains no assertions.",
-    "file_path": "tests/unit/marvis/mist/intelligence/troubleshooting/test_troubleshoot_utils.py",
+    "file_path": "tests/unit/marvis/mist/intelligence/troubleshooting/core/test_troubleshoot_utils.py",
     "heuristic": false,
     "line_number": 179,
-    "related_source": "tests/unit/marvis/mist/intelligence/troubleshooting/test_troubleshoot_utils.py",
+    "related_source": "tests/unit/marvis/mist/intelligence/troubleshooting/core/test_troubleshoot_utils.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
     "severity": "medium"

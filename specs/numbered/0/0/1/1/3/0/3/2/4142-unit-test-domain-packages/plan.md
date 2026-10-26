@@ -138,6 +138,16 @@ The existing branch now overlaps PR #4415 at rename source `tests/unit/test_wan_
 PRs #4471, #4438, and #4436 also own `pyproject.toml`, which the existing branch changes.
 Keep these paths unchanged and request coordination before publication or rebase.
 The local batches do not establish full acceptance or remove the draft hold.
+The coordinator also cleared the existing troubleshooting map and its baseline path-only update.
+That split moves 22 files, updates one existing consumer import, and changes 54 baseline path fields.
+Keep `tests/unit/test_issue_2971_census_repairs.py` deferred because open issue #2746 names it.
+Keep `tests/unit/test_menu_entry_metadata.py` deferred for open issues #4133 and #4126.
+The utility package remains deferred because the reserved workflow selects `tests/unit/utils/test_zscaler_catalogue.py`.
+The coordinator cleared the previous external-edit hold on `tests/unit/test_fast_mode_flag.py`.
+Its content-identical move reduces the tracked unit root from 40 children to 39.
+Keep oversized address-audit groups deferred for issues #2746, #2747, and #2753.
+Keep the rogue-DHCP group deferred for issue #2746 and the Marvis actions group deferred for issue #4008.
+Issue #2752 is now closed, but this does not clear other owners or the PR #4208 workflow hold.
 Current main is `ef0e7e5991950aec9b8f094e32e47fc3f68b4d2f`.
 The published branch head remains `63faa487ad441c27b348911aaf34c04ae1ad3244`.
 
