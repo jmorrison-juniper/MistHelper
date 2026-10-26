@@ -6,13 +6,13 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from types import MappingProxyType
 
-from src.interfaces.portals.wan_performance.domain.identity import (
+from src.interfaces.wan_performance.domain.identity import (
     CircuitIdentity,
     GatewayIdentity,
     PeerPathIdentity,
     SiteIdentity,
 )
-from src.interfaces.portals.wan_performance.domain.measurement import HourlyMeasurement, MetricMeasurement
+from src.interfaces.wan_performance.domain.measurement import HourlyMeasurement, MetricMeasurement
 
 logger = logging.getLogger(__name__)  # Keep offline preview records on the feature logger.
 

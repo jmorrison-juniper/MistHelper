@@ -68,6 +68,9 @@ This boundary makes no API call and is not connected to the preview.
 
 ## Live integration limits
 
+The feature package is `src/interfaces/wan_performance/`, beside the shared portal package.
+This placement keeps the portal package within the repository's five-child limit.
+
 The portal tab opens live snapshots.
 Live pages use the existing portal authorization and server-selected organization.
 Page reads use the recent snapshot cache, without a Mist request.

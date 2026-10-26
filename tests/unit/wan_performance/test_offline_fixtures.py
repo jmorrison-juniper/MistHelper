@@ -4,7 +4,7 @@ import ast  # Inspect the preview module for live-client dependencies.
 from inspect import getsourcefile  # Locate the fixture code without importing other modules.
 from pathlib import Path  # Read the fixture module through a platform-safe path.
 
-from src.interfaces.portals.wan_performance.presentation.offline_preview import (
+from src.interfaces.wan_performance.presentation.offline_preview import (
     OfflinePreviewFactory,  # Reuse the production preview factory.
 )
 

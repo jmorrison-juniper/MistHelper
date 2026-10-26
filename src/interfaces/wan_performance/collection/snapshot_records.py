@@ -8,13 +8,13 @@ from datetime import UTC, datetime
 from types import MappingProxyType
 from typing import Any
 
-from src.interfaces.portals.wan_performance.domain.identity import (
+from src.interfaces.wan_performance.domain.identity import (
     CircuitIdentity,
     GatewayIdentity,
     PeerPathIdentity,
     SiteIdentity,
 )
-from src.interfaces.portals.wan_performance.domain.measurement import HourlyMeasurement, MetricMeasurement
+from src.interfaces.wan_performance.domain.measurement import HourlyMeasurement, MetricMeasurement
 
 logger = logging.getLogger(__name__)
 

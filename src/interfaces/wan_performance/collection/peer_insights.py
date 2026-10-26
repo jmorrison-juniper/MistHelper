@@ -6,9 +6,9 @@ from typing import Any, Protocol
 
 from mistapi.__api_response import APIResponse
 
-from src.interfaces.portals.wan_performance.collection.snapshot_records import PeerSnapshotMetrics
-from src.interfaces.portals.wan_performance.domain.identity import PeerPathIdentity
-from src.interfaces.portals.wan_performance.domain.measurement import HourlyMeasurement
+from src.interfaces.wan_performance.collection.snapshot_records import PeerSnapshotMetrics
+from src.interfaces.wan_performance.domain.identity import PeerPathIdentity
+from src.interfaces.wan_performance.domain.measurement import HourlyMeasurement
 
 logger = logging.getLogger(__name__)
 PEER_METRIC = "vpn_peer-metrics"

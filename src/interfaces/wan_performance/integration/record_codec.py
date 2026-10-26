@@ -3,13 +3,13 @@
 import json
 from datetime import datetime
 
-from src.interfaces.portals.wan_performance.domain.identity import (
+from src.interfaces.wan_performance.domain.identity import (
     CircuitIdentity,
     GatewayIdentity,
     PeerPathIdentity,
     SiteIdentity,
 )
-from src.interfaces.portals.wan_performance.domain.measurement import HourlyMeasurement, MetricMeasurement
+from src.interfaces.wan_performance.domain.measurement import HourlyMeasurement, MetricMeasurement
 
 
 class RecordCodec:

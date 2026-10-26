@@ -8,8 +8,8 @@ from datetime import datetime, timedelta
 from statistics import fmean
 from types import MappingProxyType
 
-from src.interfaces.portals.wan_performance.domain.calendar import CalendarPeriod
-from src.interfaces.portals.wan_performance.domain.measurement import HourlyMeasurement, MeasurementIdentity
+from src.interfaces.wan_performance.domain.calendar import CalendarPeriod
+from src.interfaces.wan_performance.domain.measurement import HourlyMeasurement, MeasurementIdentity
 
 logger = logging.getLogger(__name__)
 
