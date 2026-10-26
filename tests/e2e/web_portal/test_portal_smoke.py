@@ -5,9 +5,71 @@ and contain expected data-testid markers and structural elements.
 Uses the Flask test client (fast, no browser dependency).
 """
 
+import json
+from collections.abc import Iterator
+from threading import Thread
 from typing import Any
 
+import pytest
+from playwright.sync_api import Page, expect
+from werkzeug.serving import make_server
+
 from tests.e2e.web_portal.test_operations_panel_workflow import portal_url as portal_url
+from tests.integration.web_portal.cisco_config_converter import test_routes as cisco_routes
+
+cisco_client = cisco_routes.client
+
+
+class TestCiscoOfflinePreview:
+    """Verify the isolated converter UI while shared registration remains blocked."""
+
+    @pytest.fixture
+    def cisco_url(self, cisco_client: Any) -> Iterator[str]:
+        """Serve the CSRF-protected blueprint on a bounded local test server."""
+        server = make_server("127.0.0.1", 0, cisco_client.application)
+        worker = Thread(target=server.serve_forever, daemon=True)
+        worker.start()
+        try:
+            yield f"http://127.0.0.1:{server.server_port}"
+        finally:
+            server.shutdown()
+            worker.join(timeout=5)
+            server.server_close()
+
+    def test_upload_review_export(self, page: Page, cisco_url: str) -> None:
+        """Download the reviewed JSON through the actual page controls."""
+        page.goto(cisco_url + "/cisco-config-converter/")
+        page.get_by_test_id("cisco-file").set_input_files(
+            {"name": "original.cfg", "mimeType": "text/plain", "buffer": b"ip name-server 192.0.2.1\nhostname branch"}
+        )
+        page.get_by_test_id("cisco-name").fill("Browser Branch")
+        page.get_by_test_id("cisco-type").select_option("spoke")
+        page.get_by_test_id("cisco-preview").click()
+        expect(page.get_by_test_id("cisco-review")).to_be_enabled()
+        expect(page.get_by_test_id("cisco-proposal")).to_contain_text("192.0.2.1")
+        page.get_by_test_id("cisco-review").click()
+        expect(page.get_by_test_id("cisco-export")).to_be_enabled()
+        with page.expect_download() as download:
+            page.get_by_test_id("cisco-export").click()
+        content = json.loads(download.value.path().read_text())
+        assert content["gateway_template"] == {"name": "Browser Branch", "type": "spoke", "dns_servers": ["192.0.2.1"]}
+        assert len(content["unsupported_items"]) == 1
+        assert len(content["known_gaps"]) == 3
+        assert page.evaluate("localStorage.length + sessionStorage.length") == 0
+
+    def test_changed_form_requires_new_preview(self, page: Page, cisco_url: str) -> None:
+        """Invalidate page approval when an input changes."""
+        page.goto(cisco_url + "/cisco-config-converter/")
+        page.get_by_test_id("cisco-file").set_input_files(
+            {"name": "original.cfg", "mimeType": "text/plain", "buffer": b"ip name-server 192.0.2.1"}
+        )
+        page.get_by_test_id("cisco-name").fill("Branch")
+        page.get_by_test_id("cisco-preview").click()
+        expect(page.get_by_test_id("cisco-review")).to_be_enabled()
+        page.get_by_test_id("cisco-name").fill("Changed")
+        expect(page.get_by_test_id("cisco-review")).to_be_disabled()
+        expect(page.get_by_test_id("cisco-export")).to_be_disabled()
+        assert page.get_by_test_id("cisco-proposal").text_content() == ""
 
 
 class TestDashboardPage:

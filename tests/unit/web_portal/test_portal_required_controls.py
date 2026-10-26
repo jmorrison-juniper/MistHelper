@@ -19,6 +19,7 @@ find is a prompt the operation really reaches.
 """
 
 import sys
+from copy import deepcopy
 from pathlib import Path
 
 import pytest
@@ -140,6 +141,118 @@ def _declared_types(menu: str) -> list[str]:
     if entry is None:
         return []
     return [parameter.get("param_type", "") for parameter in entry.get("parameters", [])]
+
+
+class ControlPaths:
+    """Expand selectable controls so dependent identifiers retain their prompt positions."""
+
+    @classmethod
+    def expand(cls, parameters: list[dict]) -> list[list[dict]]:
+        """Return each selectable path, with dependent controls immediately after their chooser."""
+        paths: list[list[dict]] = [[]]
+        for parameter in parameters:
+            dependent = parameter.get("dynamic_parameters")
+            branches = (
+                [
+                    branch
+                    for option in parameter["options"]
+                    for branch in cls.expand(dependent.get(str(option["value"]), []))
+                ]
+                if dependent is not None
+                else [[]]
+            )
+            paths = [[*path, parameter, *branch] for path in paths for branch in branches]
+        return paths
+
+    @classmethod
+    def for_menu(cls, menu: str) -> list[list[dict]]:
+        """Return the complete control paths for one menu, including the empty path."""
+        entry = PARAMETER_REGISTRY.get(menu) or {}
+        return cls.expand(entry.get("parameters", []))
+
+
+@pytest.mark.parametrize(
+    "menu,count", [("294", 2), ("295", 2), ("296", 3), ("297", 3), ("300", 2), ("303", 3), ("304", 1)]
+)
+def test_juniper_controls_match_documented_prompt_counts(menu, count):
+    """Count every selectable control against the prompt order established by the browser tests."""
+    paths = ControlPaths.for_menu(menu)
+    assert len(paths) == (2 if menu in {"295", "297", "303"} else 1), f"menu {menu} lost a selectable control path"
+    assert all(len(path) == count for path in paths), f"menu {menu} controls do not match its {count} prompts"
+
+
+@pytest.mark.parametrize("menu,trailing", [("295", []), ("297", ["note_id"]), ("303", ["rma_number"])])
+def test_juniper_dependent_controls_keep_prompt_order(menu, trailing):
+    """Both key choices insert exactly one matching identifier before any later prompt."""
+    names = [[parameter["name"] for parameter in path] for path in ControlPaths.for_menu(menu)]
+    assert names == [["key_kind", "request_number", *trailing], ["key_kind", "case_number", *trailing]]
+
+
+@pytest.mark.parametrize(
+    "parameters,expected",
+    [
+        ([], [[]]),
+        (
+            [
+                {
+                    "name": "choice",
+                    "options": [{"value": "1"}, {"value": "2"}],
+                    "dynamic_parameters": {"2": [{"name": "id"}]},
+                }
+            ],
+            [["choice"], ["choice", "id"]],
+        ),
+        (
+            [
+                {
+                    "name": "outer",
+                    "options": [{"value": "1"}],
+                    "dynamic_parameters": {
+                        "1": [
+                            {
+                                "name": "inner",
+                                "options": [{"value": "a"}, {"value": "b"}],
+                                "dynamic_parameters": {"a": [{"name": "first"}], "b": [{"name": "second"}]},
+                            }
+                        ],
+                        "unused": [{"name": "hidden"}],
+                    },
+                },
+                {"name": "last"},
+            ],
+            [["outer", "inner", "first", "last"], ["outer", "inner", "second", "last"]],
+        ),
+    ],
+)
+def test_control_paths_expand_only_selectable_branches(parameters, expected):
+    """Empty, missing, nested, and unused branches preserve the controls a browser can show."""
+    names = [[parameter["name"] for parameter in path] for path in ControlPaths.expand(parameters)]
+    assert names == expected
+
+
+def test_control_paths_return_an_empty_path_without_a_registry_row(monkeypatch):
+    """An operation without a registry row has one path with no controls."""
+    monkeypatch.delitem(PARAMETER_REGISTRY, "303")
+    assert ControlPaths.for_menu("303") == [[]]
+
+
+@pytest.mark.parametrize("mutation", ["missing", "extra", "misplaced"])
+def test_juniper_control_comparison_detects_broken_paths(mutation, monkeypatch):
+    """Missing, extra, or misplaced identifiers change the expanded browser control sequence."""
+    entry = deepcopy(PARAMETER_REGISTRY["303"])
+    dependent = entry["parameters"][0]["dynamic_parameters"]["2"]
+    if mutation == "missing":
+        dependent.clear()
+    elif mutation == "extra":
+        dependent.append({"name": "unused", "param_type": "text"})
+    else:
+        identifier = dependent.pop()
+        entry["parameters"].append(identifier)
+    monkeypatch.setitem(PARAMETER_REGISTRY, "303", entry)
+    names = [[parameter["name"] for parameter in path] for path in ControlPaths.for_menu("303")]
+    if mutation != "misplaced":
+        assert names[0] == ["key_kind", "request_number", "rma_number"]
+    assert names[1] != ["key_kind", "case_number", "rma_number"], f"the comparison missed the {mutation} control"
 
 
 def _is_cli_only(menu: str) -> bool:
