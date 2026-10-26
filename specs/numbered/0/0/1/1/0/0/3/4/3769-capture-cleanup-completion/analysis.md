@@ -83,3 +83,13 @@ No duplicate barrier from PR #4464 enters this branch.
 The revised focused run reported `105 passed in 18.92s`, including 24 regression cases.
 Execution-module coverage remains 99.07 percent.
 Ruff, Black, compile, mypy, complexity, Bandit, Pylint, docstrings, symbols, and the writing gate pass.
+
+## SDK contract fixture correction
+
+The revised CI shard reported one failure, 2,098 passes, 19 skips, and five expected failures.
+The action field exposed an incomplete offline context in `test_ws_sdk_contract.py`.
+The context held `state` but lacked the `request` that every real `RunContext` supplies.
+The unchanged fixture reproduced the same `AttributeError` locally with one failure and seven passes.
+The correction supplies `request.key` without changing assertions or production code.
+The combined SDK contract and focused utility selection reported `117 passed in 18.91s`.
+Execution-module coverage remains 99.07 percent.
