@@ -156,8 +156,8 @@ class TestUtilityFailureCompletion:
         [
             (403, {}, None, "The utility failed with status 403."),
             (503, {}, None, "The utility failed with status 503."),
-            (200, "malformed json", None, "The utility failed with status 200."),
-            (200, "", None, "The utility failed with status 200."),
+            (200, "bad json", None, "The utility failed with status 200."),
+            (200, b"", None, "The utility failed with status 200."),
             (200, {}, ConnectionError("private connection detail"), "The portal could not connect to the Mist cloud."),
             (
                 200,
