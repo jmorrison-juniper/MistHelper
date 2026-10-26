@@ -13,8 +13,8 @@ from mistapi.api.v1.orgs.devices import searchOrgDeviceEvents
 from mistapi.api.v1.orgs.stats import listOrgDevicesStats, searchOrgPeerPathStats, searchOrgSwOrGwPorts
 from mistapi.api.v1.sites.insights import getSiteInsightMetricsForDevice, getSiteInsightMetricsForGateway
 
-from src.interfaces.portals.wan_performance.domain.identity import CircuitIdentity, GatewayIdentity, IdentityValidator
-from src.interfaces.portals.wan_performance.domain.measurement import MetricMeasurement
+from src.interfaces.wan_performance.domain.identity import CircuitIdentity, GatewayIdentity, IdentityValidator
+from src.interfaces.wan_performance.domain.measurement import MetricMeasurement
 
 logger = logging.getLogger(__name__)
 STATUS_EVENT_TYPES = "GW_PORT_UP,GW_PORT_DOWN,GW_WAN_UP,GW_WAN_DOWN"

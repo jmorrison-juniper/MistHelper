@@ -7,9 +7,9 @@ from contextlib import closing
 from datetime import UTC, datetime
 from pathlib import Path
 
-from src.interfaces.portals.wan_performance.domain.calendar import MAX_HISTORY_RECORDS, MAX_HISTORY_WINDOW_DAYS
-from src.interfaces.portals.wan_performance.domain.measurement import HourlyMeasurement, MeasurementIdentity
-from src.interfaces.portals.wan_performance.integration.record_codec import RecordCodec
+from src.interfaces.wan_performance.domain.calendar import MAX_HISTORY_RECORDS, MAX_HISTORY_WINDOW_DAYS
+from src.interfaces.wan_performance.domain.measurement import HourlyMeasurement, MeasurementIdentity
+from src.interfaces.wan_performance.integration.record_codec import RecordCodec
 
 logger = logging.getLogger(__name__)
 

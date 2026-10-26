@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.interfaces.portals.wan_performance.collection.live_service import LiveService
+from src.interfaces.wan_performance.collection.live_service import LiveService
 
 
 def test_refresh_commits_history_before_cache():
@@ -24,7 +24,7 @@ def test_refresh_commits_history_before_cache():
     order.attach_mock(history.upsert, "write")
     order.attach_mock(store.publish, "publish")
     with patch(
-        "src.interfaces.portals.wan_performance.collection.live_service.SnapshotClient.collect",
+        "src.interfaces.wan_performance.collection.live_service.SnapshotClient.collect",
         return_value=snapshot,
     ):
         assert service.refresh() == snapshot
@@ -46,7 +46,7 @@ def test_history_failure_preserves_previous_cache():
         "peers": [],
     }
     with patch(
-        "src.interfaces.portals.wan_performance.collection.live_service.SnapshotClient.collect",
+        "src.interfaces.wan_performance.collection.live_service.SnapshotClient.collect",
         return_value=snapshot,
     ):
         with pytest.raises(ConnectionError, match="history unavailable"):
@@ -58,7 +58,7 @@ def test_shared_admission_failure_has_no_sdk_call():
     """Check the Redis owner before constructing any outgoing data request."""
     store = MagicMock()
     store.acquire.side_effect = ConnectionError("cooldown")
-    with patch("src.interfaces.portals.wan_performance.collection.live_service.SnapshotClient.collect") as collect:
+    with patch("src.interfaces.wan_performance.collection.live_service.SnapshotClient.collect") as collect:
         with pytest.raises(ConnectionError, match="cooldown"):
             LiveService(MagicMock(), "org-one", store, MagicMock()).refresh()
     collect.assert_not_called()
@@ -75,9 +75,7 @@ def test_expired_collection_lease_cannot_write_history_or_cache():
         "ports": [],
         "peers": [],
     }
-    with patch(
-        "src.interfaces.portals.wan_performance.collection.live_service.SnapshotClient.collect", return_value=snapshot
-    ):
+    with patch("src.interfaces.wan_performance.collection.live_service.SnapshotClient.collect", return_value=snapshot):
         with pytest.raises(ConnectionError, match="expired"):
             LiveService(MagicMock(), "org-one", store, history).refresh()
     history.upsert.assert_not_called()
@@ -86,11 +84,11 @@ def test_expired_collection_lease_cannot_write_history_or_cache():
 
 def test_cross_organization_gateway_target_stops_before_admission():
     """Never reserve quota or call the API for a target from another organization."""
-    from src.interfaces.portals.wan_performance.domain.identity import GatewayIdentity, SiteIdentity
+    from src.interfaces.wan_performance.domain.identity import GatewayIdentity, SiteIdentity
 
     store = MagicMock()
     target = GatewayIdentity(SiteIdentity("another-org", "site-one"), "112233445566")
-    with patch("src.interfaces.portals.wan_performance.collection.live_service.SnapshotClient.collect") as collect:
+    with patch("src.interfaces.wan_performance.collection.live_service.SnapshotClient.collect") as collect:
         with pytest.raises(ValueError, match="organization"):
             LiveService(MagicMock(), "org-one", store, MagicMock()).refresh(target)
     store.acquire.assert_not_called()
@@ -100,7 +98,7 @@ def test_cross_organization_gateway_target_stops_before_admission():
 @pytest.mark.parametrize("failure", ["missing_port", "cross_org", "no_store", "quota", "expired", "storage"])
 def test_port_history_refuses_invalid_scope_or_failed_ownership(failure):
     """Never publish a snapshot or claim persistence after a rejected port refresh."""
-    from src.interfaces.portals.wan_performance.domain.identity import CircuitIdentity, GatewayIdentity, SiteIdentity
+    from src.interfaces.wan_performance.domain.identity import CircuitIdentity, GatewayIdentity, SiteIdentity
 
     store, history = MagicMock(), MagicMock()
     store.cached.return_value = {
@@ -121,7 +119,7 @@ def test_port_history_refuses_invalid_scope_or_failed_ownership(failure):
     elif failure == "storage":
         history.upsert.side_effect = ConnectionError("storage")
     with patch(
-        "src.interfaces.portals.wan_performance.collection.live_service.GatewayInsights.collect_for_port",
+        "src.interfaces.wan_performance.collection.live_service.GatewayInsights.collect_for_port",
         return_value={"samples": [], "partial": False},
     ) as collect:
         with pytest.raises((ValueError, ConnectionError)):
@@ -134,7 +132,7 @@ def test_port_history_refuses_invalid_scope_or_failed_ownership(failure):
 
 def test_port_history_refresh_writes_before_return_without_replacing_snapshot():
     """Use configured history and shared organization ownership for the selected port."""
-    from src.interfaces.portals.wan_performance.domain.identity import CircuitIdentity, GatewayIdentity, SiteIdentity
+    from src.interfaces.wan_performance.domain.identity import CircuitIdentity, GatewayIdentity, SiteIdentity
 
     store, history = MagicMock(), MagicMock()
     target = CircuitIdentity(GatewayIdentity(SiteIdentity("org-one", "site-one"), "aabbccddeeff"), "ge-0/0/0")
@@ -147,7 +145,7 @@ def test_port_history_refresh_writes_before_return_without_replacing_snapshot():
     }
     store.cached.return_value = snapshot
     with patch(
-        "src.interfaces.portals.wan_performance.collection.live_service.GatewayInsights.collect_for_port",
+        "src.interfaces.wan_performance.collection.live_service.GatewayInsights.collect_for_port",
         return_value={"samples": [], "partial": False},
     ) as collect:
         assert LiveService(MagicMock(), "org-one", store, history).refresh_port(target) == 0
@@ -162,8 +160,8 @@ def test_peer_history_refresh_uses_cached_path_and_shared_admission():
     """Collect and persist one peer series only for a validated cached path."""
     from datetime import UTC, datetime, timedelta
 
-    from src.interfaces.portals.wan_performance.collection.snapshot_records import SnapshotRecords
-    from src.interfaces.portals.wan_performance.domain.measurement import HourlyMeasurement, MetricMeasurement
+    from src.interfaces.wan_performance.collection.snapshot_records import SnapshotRecords
+    from src.interfaces.wan_performance.domain.measurement import HourlyMeasurement, MetricMeasurement
 
     snapshot = {
         "org_id": "org-one",
@@ -200,7 +198,7 @@ def test_peer_history_refresh_uses_cached_path_and_shared_admission():
         "live",
     )
     with patch(
-        "src.interfaces.portals.wan_performance.collection.live_service.PeerQualityInsights.collect",
+        "src.interfaces.wan_performance.collection.live_service.PeerQualityInsights.collect",
         return_value=(sample,),
     ) as collect:
         count = LiveService(MagicMock(), "org-one", store, history).refresh_peer(target)
@@ -215,7 +213,7 @@ def test_peer_history_refresh_uses_cached_path_and_shared_admission():
 
 def test_peer_history_refresh_rejects_uncached_path_before_admission():
     """Refuse peer identifiers that do not match the selected cached snapshot."""
-    from src.interfaces.portals.wan_performance.collection.snapshot_records import SnapshotRecords
+    from src.interfaces.wan_performance.collection.snapshot_records import SnapshotRecords
 
     snapshot = {
         "org_id": "org-one",
@@ -243,7 +241,7 @@ def test_peer_history_refresh_rejects_uncached_path_before_admission():
             ],
         }
     )[0].identity
-    with patch("src.interfaces.portals.wan_performance.collection.live_service.PeerQualityInsights.collect") as collect:
+    with patch("src.interfaces.wan_performance.collection.live_service.PeerQualityInsights.collect") as collect:
         with pytest.raises(ValueError, match="absent from the cached organization"):
             LiveService(MagicMock(), "org-one", store, MagicMock()).refresh_peer(target)
     store.acquire.assert_not_called()
@@ -254,7 +252,7 @@ def test_peer_history_refresh_stops_when_cached_snapshot_is_unavailable():
     """Do not query or write peer history when Redis cannot provide the path identity."""
     store, history = MagicMock(), MagicMock()
     store.cached.side_effect = ConnectionError("cache unavailable")
-    from src.interfaces.portals.wan_performance.domain.identity import (
+    from src.interfaces.wan_performance.domain.identity import (
         GatewayIdentity,
         PeerPathIdentity,
         SiteIdentity,
@@ -268,7 +266,7 @@ def test_peer_history_refresh_stops_when_cached_snapshot_is_unavailable():
         "path-key-1",
     )
 
-    with patch("src.interfaces.portals.wan_performance.collection.live_service.PeerQualityInsights.collect") as collect:
+    with patch("src.interfaces.wan_performance.collection.live_service.PeerQualityInsights.collect") as collect:
         with pytest.raises(ConnectionError, match="cache unavailable"):
             LiveService(MagicMock(), "org-one", store, history).refresh_peer(target)
 

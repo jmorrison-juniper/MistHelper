@@ -12,7 +12,7 @@ from arango.exceptions import ArangoError
 from redis.exceptions import RedisError
 from requests.exceptions import RequestException
 
-from src.interfaces.portals.wan_performance.collection.live_service import LiveService
+from src.interfaces.wan_performance.collection.live_service import LiveService
 
 logger = logging.getLogger(__name__)
 

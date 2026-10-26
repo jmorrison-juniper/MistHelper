@@ -6,11 +6,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 from flask import Flask
 
-from src.interfaces.portals.wan_performance.background_refresh import (
+from src.interfaces.wan_performance.background_refresh import (
     WanBackgroundRefreshWorker,
 )
-from src.interfaces.portals.wan_performance.collection.request_admission import RequestLedger
-from src.interfaces.portals.wan_performance.presentation.live_routes import LivePages
+from src.interfaces.wan_performance.collection.request_admission import RequestLedger
+from src.interfaces.wan_performance.presentation.live_routes import LivePages
 from web_portal.app import WebPortalApp
 
 
@@ -105,7 +105,7 @@ def test_portal_shutdown_stops_the_configured_worker() -> None:
 
 def test_portal_starts_worker_with_shared_admission_and_history(monkeypatch: pytest.MonkeyPatch) -> None:
     """Start the worker only after existing portal services pass their gates."""
-    from src.interfaces.portals.wan_performance.background_refresh import (
+    from src.interfaces.wan_performance.background_refresh import (
         WanBackgroundRefreshWorker,
     )
 

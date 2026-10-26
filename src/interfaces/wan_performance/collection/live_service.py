@@ -4,17 +4,17 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
-from src.interfaces.portals.wan_performance.collection.peer_insights import PeerQualityInsights
-from src.interfaces.portals.wan_performance.collection.snapshot_client import GatewayInsights, SnapshotClient
-from src.interfaces.portals.wan_performance.collection.snapshot_records import SnapshotRecords
-from src.interfaces.portals.wan_performance.domain.identity import (
+from src.interfaces.wan_performance.collection.peer_insights import PeerQualityInsights
+from src.interfaces.wan_performance.collection.snapshot_client import GatewayInsights, SnapshotClient
+from src.interfaces.wan_performance.collection.snapshot_records import SnapshotRecords
+from src.interfaces.wan_performance.domain.identity import (
     CircuitIdentity,
     GatewayIdentity,
     IdentityValidator,
     PeerPathIdentity,
 )
-from src.interfaces.portals.wan_performance.integration.history_repository import HistoryRepository
-from src.interfaces.portals.wan_performance.integration.refresh_store import RefreshStore
+from src.interfaces.wan_performance.integration.history_repository import HistoryRepository
+from src.interfaces.wan_performance.integration.refresh_store import RefreshStore
 
 logger = logging.getLogger(__name__)
 

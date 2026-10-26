@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from requests import PreparedRequest, Response
 
-from src.interfaces.portals.wan_performance.collection.request_admission import AdmittedAdapter, RequestLedger
+from src.interfaces.wan_performance.collection.request_admission import AdmittedAdapter, RequestLedger
 
 
 def request():

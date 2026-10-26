@@ -7,13 +7,13 @@ from typing import Literal, cast  # Pass malformed runtime inputs through typed 
 
 import pytest  # Check invalid domain inputs without external services.
 
-from src.interfaces.portals.wan_performance.domain.identity import (  # Import the feature-owned identity types.
+from src.interfaces.wan_performance.domain.identity import (  # Import the feature-owned identity types.
     CircuitIdentity,
     GatewayIdentity,
     PeerPathIdentity,
     SiteIdentity,
 )
-from src.interfaces.portals.wan_performance.domain.measurement import (  # Import the feature-owned metric records.
+from src.interfaces.wan_performance.domain.measurement import (  # Import the feature-owned metric records.
     HourlyMeasurement,
     MetricMeasurement,
 )

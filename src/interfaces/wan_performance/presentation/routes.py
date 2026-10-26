@@ -5,17 +5,17 @@ from typing import Protocol, runtime_checkable
 
 from flask import Blueprint, abort, render_template, request
 
-from src.interfaces.portals.wan_performance.domain.identity import (
+from src.interfaces.wan_performance.domain.identity import (
     CircuitIdentity,
     GatewayIdentity,
     IdentityValidator,
     PeerPathIdentity,
     SiteIdentity,
 )
-from src.interfaces.portals.wan_performance.domain.measurement import HourlyMeasurement
-from src.interfaces.portals.wan_performance.domain.summary import CalendarSummaries
-from src.interfaces.portals.wan_performance.presentation.live_routes import live_bp
-from src.interfaces.portals.wan_performance.presentation.offline_preview import OfflinePreviewFactory
+from src.interfaces.wan_performance.domain.measurement import HourlyMeasurement
+from src.interfaces.wan_performance.domain.summary import CalendarSummaries
+from src.interfaces.wan_performance.presentation.live_routes import live_bp
+from src.interfaces.wan_performance.presentation.offline_preview import OfflinePreviewFactory
 
 logger = logging.getLogger(__name__)  # Keep portal records on the feature logger.
 wan_performance_bp = Blueprint(

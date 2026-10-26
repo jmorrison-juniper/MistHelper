@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 import pytest
 from redis.exceptions import ConnectionError as RedisConnectionError
 
-from src.interfaces.portals.wan_performance.integration.refresh_store import RefreshLease, RefreshStore
+from src.interfaces.wan_performance.integration.refresh_store import RefreshLease, RefreshStore
 
 
 def test_only_one_org_refresh_wins():
