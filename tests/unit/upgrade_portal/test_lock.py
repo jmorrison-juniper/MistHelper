@@ -90,6 +90,26 @@ AUDIT_FAULT_MESSAGE = "redis://portal:not-a-real-password@203.0.113.1:6379/0 ref
 SEEDED_TOKEN = "seeded-lock-token"
 
 
+def assert_lock_refusal_record(
+    caplog: pytest.LogCaptureFixture,
+    site_id: str,
+    code: str,
+    level: int,
+    owner_digest: str,
+) -> None:
+    """Check a refusal record by its safe fields and logger level."""
+    records = [
+        record
+        for record in caplog.records
+        if record.name == lock_module.__name__
+        and record.levelno == level
+        and any(site_id in value for value in record.args if isinstance(value, str))
+        and code in record.args
+    ]  # Match the site ID or its lock key.
+    assert len(records) == 1  # One refusal branch emits one matching record.
+    assert owner_digest in records[0].args  # The record uses the digest rather than the address.
+
+
 def test_lock_record_from_empty_body_returns_none() -> None:
     """A zero-byte lock payload must read as no active lock."""
     empty_body = b"".decode()  # WHY: model a Redis value with no JSON bytes.
@@ -516,7 +536,10 @@ def test_the_stored_value_holds_the_six_contract_fields(store: ScriptedLockStore
     assert tuple(sorted(json.loads(store.values[SITE_KEY]))) == CONTRACT_FIELDS
 
 
-def test_a_held_site_refuses_a_second_operator(store: ScriptedLockStore) -> None:
+def test_a_held_site_refuses_a_second_operator(
+    store: ScriptedLockStore,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     """An active holder blocks a different operator.
 
     Why:
@@ -526,6 +549,7 @@ def test_a_held_site_refuses_a_second_operator(store: ScriptedLockStore) -> None
     Args:
         store: The lock store double.
     """
+    caplog.set_level(logging.WARNING, logger=lock_module.__name__)  # Ignore the grant record from the first take.
     acquire_site_lock(build_request(FIRST_OWNER), client=store)
 
     with pytest.raises(SiteLockedError) as refusal:
@@ -533,6 +557,9 @@ def test_a_held_site_refuses_a_second_operator(store: ScriptedLockStore) -> None
 
     assert refusal.value.code == "site_locked"
     assert stored_record(store).owner == FIRST_OWNER
+    assert_lock_refusal_record(
+        caplog, SITE_ID, "site_locked", logging.WARNING, SECOND_OWNER.email_digest
+    )  # Check the safe refusal fields.
 
 
 def test_a_different_operator_just_under_the_cooldown_still_waits(store: ScriptedLockStore) -> None:
@@ -607,7 +634,10 @@ def test_a_second_computer_of_one_operator_is_a_different_holder(store: Scripted
     assert refusal.value.code == "site_locked"
 
 
-def test_a_different_operator_after_the_cooldown_must_type_confirm(store: ScriptedLockStore) -> None:
+def test_a_different_operator_after_the_cooldown_must_type_confirm(
+    store: ScriptedLockStore,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     """A quiet holder yields only after the new operator types the word.
 
     Why:
@@ -617,12 +647,16 @@ def test_a_different_operator_after_the_cooldown_must_type_confirm(store: Script
     Args:
         store: The lock store double.
     """
+    caplog.set_level(logging.INFO, logger=lock_module.__name__)  # Capture the expected confirmation request.
     seed_lock(store, FIRST_OWNER, COOLDOWN_SECONDS + 1)
 
     with pytest.raises(ConfirmationRequiredError) as refusal:
         acquire_site_lock(build_request(SECOND_OWNER), client=store)
 
     assert refusal.value.code == "confirmation_required"
+    assert_lock_refusal_record(
+        caplog, SITE_ID, "confirmation_required", logging.INFO, SECOND_OWNER.email_digest
+    )  # Check the safe refusal fields.
     assert refusal.value.needed_text == TAKEOVER_CONFIRMATION_TEXT
     assert stored_record(store).owner == FIRST_OWNER
 
@@ -940,7 +974,10 @@ def test_an_absolute_audit_directory_stands_as_written(tmp_path: Path, monkeypat
     assert path == tmp_path / lock_module.AUDIT_FILE_NAME
 
 
-def test_the_same_operator_after_the_cooldown_types_continue(store: ScriptedLockStore) -> None:
+def test_the_same_operator_after_the_cooldown_types_continue(
+    store: ScriptedLockStore,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     """A quiet session of one operator asks that operator for `continue`.
 
     Why:
@@ -951,6 +988,7 @@ def test_the_same_operator_after_the_cooldown_types_continue(store: ScriptedLock
     Args:
         store: The lock store double.
     """
+    caplog.set_level(logging.INFO, logger=lock_module.__name__)  # Capture the expected confirmation request.
     seed_lock(store, FIRST_OWNER, COOLDOWN_SECONDS + 1)
 
     with pytest.raises(ConfirmationRequiredError) as refusal:
@@ -958,6 +996,9 @@ def test_the_same_operator_after_the_cooldown_types_continue(store: ScriptedLock
 
     assert refusal.value.code == "confirmation_required"
     assert refusal.value.needed_text == RESUME_CONFIRMATION_TEXT
+    assert_lock_refusal_record(
+        caplog, SITE_ID, "confirmation_required", logging.INFO, FIRST_OWNER.email_digest
+    )  # Check the safe refusal fields.
 
 
 def test_the_typed_continue_returns_the_quiet_session(store: ScriptedLockStore) -> None:
@@ -1003,7 +1044,10 @@ def test_the_word_continue_still_works_one_second_before_the_lease_ends(store: S
     assert stored_record(store).owner == FIRST_OWNER
 
 
-def test_a_racing_takeover_loses_to_the_operator_that_wrote_first(store: ScriptedLockStore) -> None:
+def test_a_racing_takeover_loses_to_the_operator_that_wrote_first(
+    store: ScriptedLockStore,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     """Two operators who both type the word do not both win.
 
     Why:
@@ -1014,6 +1058,7 @@ def test_a_racing_takeover_loses_to_the_operator_that_wrote_first(store: Scripte
     Args:
         store: The lock store double.
     """
+    caplog.set_level(logging.WARNING, logger=lock_module.__name__)  # Capture the lost compare-and-set refusal.
     seed_lock(store, FIRST_OWNER, COOLDOWN_SECONDS + 1)
     winner = LockRecord(
         owner=FIRST_OWNER_SECOND_COMPUTER,
@@ -1029,6 +1074,28 @@ def test_a_racing_takeover_loses_to_the_operator_that_wrote_first(store: Scripte
 
     assert refusal.value.code == "site_locked"
     assert stored_record(store).lock_token == "a-different-token"
+    assert_lock_refusal_record(
+        caplog, SITE_ID, "site_locked", logging.WARNING, SECOND_OWNER.email_digest
+    )  # Check the safe refusal fields.
+
+
+def test_acquisition_exhaustion_logs_the_refusal(
+    store: ScriptedLockStore,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A retry loop that cannot read a holder records its final refusal."""
+    caplog.set_level(logging.WARNING, logger=lock_module.__name__)  # Capture the final refusal record.
+    monkeypatch.setattr(lock_module, "_write_new_lock", lambda *_arguments: False)  # Force each atomic write to lose.
+    monkeypatch.setattr(lock_module, "_read_record", lambda *_arguments: None)  # Force each read to find no holder.
+
+    with pytest.raises(SiteLockedError) as refusal:  # The bounded retry path still refuses the take.
+        acquire_site_lock(build_request(FIRST_OWNER), client=store)
+
+    assert refusal.value.code == "site_locked"  # The lock contract keeps the same code.
+    assert_lock_refusal_record(
+        caplog, SITE_ID, "site_locked", logging.WARNING, FIRST_OWNER.email_digest
+    )  # Check the safe refusal fields.
 
 
 def test_a_heartbeat_extends_the_lock_the_caller_holds(store: ScriptedLockStore) -> None:
@@ -1138,7 +1205,10 @@ def test_the_takeover_cooldown_reaches_zero_at_the_run_life_bound(store: Scripte
     assert stored_record(store).owner == SECOND_OWNER  # The store must move only after the typed word.
 
 
-def test_a_heartbeat_after_a_takeover_reports_the_lock_lost(store: ScriptedLockStore) -> None:
+def test_a_heartbeat_after_a_takeover_reports_the_lock_lost(
+    store: ScriptedLockStore,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     """A beat cannot extend a lock that changed hands.
 
     Why:
@@ -1148,6 +1218,7 @@ def test_a_heartbeat_after_a_takeover_reports_the_lock_lost(store: ScriptedLockS
     Args:
         store: The lock store double.
     """
+    caplog.set_level(logging.WARNING, logger=lock_module.__name__)  # Capture the compare failure.
     stale = seed_lock(store, FIRST_OWNER, COOLDOWN_SECONDS + 1)
     acquire_site_lock(build_request(SECOND_OWNER, TAKEOVER_CONFIRMATION_TEXT), client=store)
 
@@ -1156,6 +1227,9 @@ def test_a_heartbeat_after_a_takeover_reports_the_lock_lost(store: ScriptedLockS
 
     assert refusal.value.code == "lock_lost"
     assert stored_record(store).owner == SECOND_OWNER
+    assert_lock_refusal_record(
+        caplog, SITE_ID, "lock_lost", logging.WARNING, FIRST_OWNER.email_digest
+    )  # Check the safe refusal fields.
 
 
 def test_a_heartbeat_on_a_free_site_reports_the_lock_lost(store: ScriptedLockStore) -> None:
