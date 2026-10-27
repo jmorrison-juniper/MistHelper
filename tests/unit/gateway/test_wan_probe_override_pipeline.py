@@ -105,6 +105,7 @@ def wired(tmp_path: Any) -> Any:
         """Build a listSiteDevices response double with a data attribute."""
         response = MagicMock()  # WHY: the reader only reads the data attribute.
         response.data = devices  # WHY: the scan loop iterates this list.
+        response.status_code = 200  # WHY: device configuration checks require a successful SDK status.
         return response  # WHY: the test assigns it to the endpoint double.
 
     state.list_devices = MagicMock(return_value=_device_response([]))  # WHY: default empty scan.
@@ -218,8 +219,8 @@ def test_cancel_at_confirmation_stops_the_apply_phase(wired: Any) -> None:
     devices = manager._find_devices_with_overrides()  # WHY: the scan finds the override.
     manager._finalise_run(devices, dry_run=False)  # WHY: the cancel gate stops the run.
 
-    wired.update_device.assert_not_called()  # WHY: a cancel must not write.
-    wired.exporter.assert_not_called()  # WHY: a cancel must not report.
+    assert wired.update_device.call_count == 0  # WHY: a cancel must block the device write.
+    assert wired.exporter.call_count == 0  # WHY: a cancel must block the report.
 
 
 def test_site_match_rejects_excluded_site() -> None:
@@ -636,8 +637,8 @@ def test_execute_stops_when_the_prepare_gate_fails(wired: Any) -> None:
 
     WANProbeDeviceOverrideManager().configure(dry_run=True)  # WHY: the entry point must bail.
 
-    wired.list_devices.assert_not_called()  # WHY: a failed gate must not scan.
-    wired.exporter.assert_not_called()  # WHY: a failed gate must not report.
+    assert wired.list_devices.call_count == 0  # WHY: a failed gate must block the scan.
+    assert wired.exporter.call_count == 0  # WHY: a failed gate must block the report.
 
 
 def test_execute_stops_when_the_scan_finds_no_devices(wired: Any) -> None:
@@ -646,8 +647,8 @@ def test_execute_stops_when_the_scan_finds_no_devices(wired: Any) -> None:
 
     WANProbeDeviceOverrideManager().configure(dry_run=True)  # WHY: the entry point must bail.
 
-    wired.update_device.assert_not_called()  # WHY: an empty scan must not write.
-    wired.exporter.assert_not_called()  # WHY: an empty scan must not report.
+    assert wired.update_device.call_count == 0  # WHY: an empty scan must block the write.
+    assert wired.exporter.call_count == 0  # WHY: an empty scan must block the report.
 
 
 def test_prepare_run_stops_when_the_data_load_fails(wired: Any, tmp_path: Any) -> None:
