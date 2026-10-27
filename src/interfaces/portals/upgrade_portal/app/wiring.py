@@ -40,6 +40,9 @@ from src.interfaces.portals.upgrade_portal.api.run_controls import (
 from src.interfaces.portals.upgrade_portal.app.config import (
     read_post_check_mode,
 )  # Reads the environment at call time, so an import opens nothing.
+from src.interfaces.portals.upgrade_portal.audit.logger import (
+    AuditLogger,
+)  # Bind audit writes to the request-owned database router.
 from src.interfaces.portals.upgrade_portal.persistence.actions import (
     ActionRepository,
 )  # Keep run actions in the authoritative document store.
@@ -101,6 +104,7 @@ UPGRADE_SERVICE_KEY = "UPGRADE_SERVICE"  # The seam that holds the UpgradeServic
 SETTLE_GATE_SERVICE_KEY = "SETTLE_GATE_SERVICE"  # The seam that holds SettleGateService.
 COMPARISON_SERVICE_KEY = "COMPARISON_SERVICE"  # The seam that holds ComparisonService.
 PORTAL_DEPENDENCY_PROVIDER_KEY = "PORTAL_DEPENDENCY_PROVIDER"  # Holds lazy request resource construction.
+ACTION_STORE_RESOLVER_KEY = "RUN_ACTION_STORE_RESOLVER"  # Holds the shared action-store access boundary.
 
 POST_CHECK_ORDINAL = 2  # The second capture of a run. `driver.post_check_request` sends this value.
 
@@ -163,6 +167,74 @@ class PortalAuthenticationError(PortalDependencyError):
     """Report that the request has no usable authenticated Mist session."""
 
 
+class PortalRequestMutationServices:
+    """Build and cache mutation services with one request's authenticated resources."""
+
+    def __init__(self, cloud_session: Any, database_router: DatabaseRouter, action_store: Any) -> None:
+        """Keep borrowed cloud, owned database, and durable action boundaries."""
+        self._cloud_session = cloud_session  # The identity registry retains ownership of this client.
+        self._database_router = database_router  # Flask request teardown closes this router.
+        self.action_store = action_store  # The process-owned repository retains durable action history.
+        self._services: dict[str, Any] = {}  # A service cannot escape its request graph.
+
+    def resolve(self, service_key: str) -> Any:
+        """Return one supported mutation service or refuse an unknown service."""
+        if service_key in self._services:  # Reuse one service within this request.
+            return self._services[service_key]  # Keep its cloud session and router stable.
+        logger.info("wiring: construct request mutation service %s", service_key)  # Record construction.
+        try:  # Convert construction faults into a fail-closed dependency response.
+            if service_key == UPGRADE_SERVICE_KEY:  # Firmware work needs the signed-in Mist session.
+                service = self._build_upgrade_service()  # Bind firmware writes to this request.
+            elif service_key == COMPARISON_SERVICE_KEY:  # Approval needs request-owned persistence.
+                service = self._build_comparison_service()  # Bind comparison writes to this request.
+            else:  # No route may request an unregistered mutation service.
+                raise PortalDependencyError("The requested portal mutation service is unavailable.")
+        except PortalDependencyError:  # Keep the typed refusal for routes to map to HTTP 503.
+            raise  # The route will refuse before a mutation.
+        except Exception as fault:  # Report constructor failures without exposing a token or payload.
+            logger.error("wiring: request mutation service construction failed (%s)", type(fault).__name__)
+            raise PortalDependencyError("The portal mutation service is unavailable.") from fault
+        self._services[service_key] = service  # Cache only after successful construction.
+        logger.debug("wiring: constructed request mutation service %s", service_key)  # Confirm the cache entry.
+        return service  # The caller receives only the service for this request.
+
+    def _build_upgrade_service(self) -> Any:
+        """Create the firmware service with request-bound cloud, storage, and audit resources."""
+        service_type = self._service_type(UPGRADE_SERVICE_MODULE, "UpgradeService")  # Load the service lazily.
+        audit_logger = AuditLogger(db_router=self._database_router)  # Keep firmware audit writes request-bound.
+        return service_type(  # The service owns firmware calls and durable run updates.
+            mist_client=self._cloud_session,  # Never borrow a process-wide Mist client.
+            db_router=self._database_router,  # Never reuse another request's database router.
+            audit_logger=audit_logger,  # Preserve durable audit records.
+        )
+
+    def _build_comparison_service(self) -> Any:
+        """Create comparison approval dependencies from this request's database router."""
+        settle_type = self._service_type(SETTLE_GATE_SERVICE_MODULE, "SettleGateService")  # Load its prerequisite.
+        service_type = self._service_type(COMPARISON_SERVICE_MODULE, "ComparisonService")  # Load comparison logic.
+        audit_logger = AuditLogger(db_router=self._database_router)  # Keep approval audit writes request-bound.
+        settle_service = settle_type(  # Preserve the existing settle-gate dependency.
+            mist_client=self._cloud_session,  # Use the authenticated request's Mist session.
+            db_router=self._database_router,  # Share only this request's database router.
+            audit_logger=audit_logger,  # Preserve settle-gate audit writes.
+        )
+        return service_type(  # The approval route reads its audit dependency from this service.
+            settle_gate_service=settle_service,  # Keep the existing comparison prerequisite.
+            db_router=self._database_router,  # Keep comparison reads and writes request-bound.
+            audit_logger=audit_logger,  # Preserve durable approval audit records.
+        )
+
+    @staticmethod
+    def _service_type(module_name: str, class_name: str) -> Any:
+        """Return one lazily imported service class or raise a safe dependency error."""
+        module = load_module(module_name)  # Import only after an authenticated request asks for the service.
+        service_type = getattr(module, class_name, None) if module is not None else None  # Read the named class.
+        if not callable(service_type):  # A missing class cannot authorize a mutation.
+            logger.error("wiring: request service class %s is unavailable", class_name)  # Name the failed seam.
+            raise PortalDependencyError("The portal mutation service is unavailable.")  # Refuse the mutation.
+        return service_type  # The caller constructs the service with request-owned dependencies.
+
+
 @dataclass(frozen=True, slots=True)
 class PortalRequestDependencies:
     """Hold one authenticated operator and its request-owned database router."""
@@ -170,6 +242,15 @@ class PortalRequestDependencies:
     operator: Any  # Keep the validated operator record for future request integrations.
     cloud_session: Any  # Borrow the registry-owned Mist session without taking ownership.
     database_router: DatabaseRouter  # Own one real router until Flask request teardown.
+    mutation_services: PortalRequestMutationServices  # Lazily bind mutation paths to this request.
+
+
+class ActionStoreResolver:
+    """Resolve the shared actor-scoped action repository for one request."""
+
+    def resolve(self) -> Any:
+        """Return the durable action repository without opening a request router."""
+        return current_app.config.get("RUN_ACTION_STORE")  # The repository holds no operator cloud session.
 
 
 class PortalDependencyProvider:
@@ -207,6 +288,11 @@ class PortalDependencyProvider:
             operator=operator,
             cloud_session=cloud_session,
             database_router=database_router,
+            mutation_services=PortalRequestMutationServices(
+                cloud_session=cloud_session,
+                database_router=database_router,
+                action_store=current_app.config.get("RUN_ACTION_STORE"),
+            ),  # Keep the durable action store while binding services to request-owned resources.
         )  # Bind the borrowed and owned resources in one immutable record.
         logger.debug("wiring: constructed one request database router")  # Confirm one owned resource.
         return dependencies  # The caller publishes ownership only after construction succeeds.
@@ -226,6 +312,15 @@ def request_dependencies() -> PortalRequestDependencies:
         logger.error("wiring: the request dependency provider is unavailable")  # Name the failed boundary.
         raise PortalDependencyError("The portal request resources are unavailable.")  # Refuse an invalid setup.
     return provider.resolve()  # Construction and caching stay inside one lifecycle owner.
+
+
+def request_action_store() -> Any:
+    """Resolve the shared durable action repository through the request boundary."""
+    resolver = current_app.config.get(ACTION_STORE_RESOLVER_KEY)  # Keep route code outside Flask configuration.
+    if not isinstance(resolver, ActionStoreResolver):  # Missing wiring must refuse before an action starts.
+        logger.error("wiring: the request action-store resolver is unavailable")  # Name the failed boundary.
+        raise PortalDependencyError("The portal request resources are unavailable.")  # Refuse an invalid setup.
+    return resolver.resolve()  # Reuse durable storage without opening an unrelated request router.
 
 
 # WHY: `capture/store.connect_database` answers None whenever ArangoDB is
@@ -2018,6 +2113,10 @@ def install_seams(  # Install production defaults or one complete isolated depen
         values = overrides.config_values()  # Build one explicit map of every required seam.
         for key, value in values.items():  # Install each value before blueprint registration.
             app.config[key] = value  # An explicit E2E value must replace every default.
+        app.config.setdefault(
+            ACTION_STORE_RESOLVER_KEY,
+            ActionStoreResolver(),
+        )  # E2E routes need shared action access without production resource construction.
         logger.debug("wiring: installed %s E2E dependency values", len(values))  # Report a safe count.
         return  # Do not construct production services or start production storage.
     app.config.setdefault(RUN_STORE_KEY, DocumentRunStore())  # Replaces the memory store of the route module.
@@ -2029,6 +2128,7 @@ def install_seams(  # Install production defaults or one complete isolated depen
         PortalDependencyProvider(),
     )  # Store construction rules only, after the existing run seams.
     _install_action_repository(app)  # Bind atomic run actions to ArangoDB with no fallback.
+    app.config.setdefault(ACTION_STORE_RESOLVER_KEY, ActionStoreResolver())  # Resolve the store without a new router.
     # Phase 2 T-006: Wire CaptureService for pre/post-upgrade device capture capture
     _install_capture_service(app)  # Inject CaptureService into Flask config seam
     # Phase 2 T-008/T-009: Wire UpgradeService for firmware upgrade orchestration
