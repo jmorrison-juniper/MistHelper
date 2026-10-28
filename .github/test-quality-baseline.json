@@ -3236,10 +3236,10 @@
   {
     "category": "missing_failure_mode",
     "explanation": "No HTTP 4xx failure mode is exercised.",
-    "file_path": "tests/unit/refactors/test_wlanradius_timer_manager_paths.py",
+    "file_path": "tests/unit/config/foundation/support/refactors/network/configuration/test_wlanradius_timer_manager_paths.py",
     "heuristic": false,
     "line_number": 1,
-    "related_source": "tests/unit/refactors/test_wlanradius_timer_manager_paths.py",
+    "related_source": "tests/unit/config/foundation/support/refactors/network/configuration/test_wlanradius_timer_manager_paths.py",
     "remediation": "Add a test whose fake response has a 4xx status_code (e.g. 400, 404).",
     "rule_id": "missing_fm_http_4xx",
     "severity": "medium"
@@ -3247,10 +3247,10 @@
   {
     "category": "missing_failure_mode",
     "explanation": "No HTTP 5xx failure mode is exercised.",
-    "file_path": "tests/unit/refactors/test_wlanradius_timer_manager_paths.py",
+    "file_path": "tests/unit/config/foundation/support/refactors/network/configuration/test_wlanradius_timer_manager_paths.py",
     "heuristic": false,
     "line_number": 1,
-    "related_source": "tests/unit/refactors/test_wlanradius_timer_manager_paths.py",
+    "related_source": "tests/unit/config/foundation/support/refactors/network/configuration/test_wlanradius_timer_manager_paths.py",
     "remediation": "Add a test whose fake response has a 5xx status_code (e.g. 500, 503).",
     "rule_id": "missing_fm_http_5xx",
     "severity": "medium"
@@ -3258,10 +3258,10 @@
   {
     "category": "weak_assertion",
     "explanation": "Test function 'test_a_site_without_a_template_skips_the_template_read' contains no assertions.",
-    "file_path": "tests/unit/refactors/test_wlanradius_timer_manager_paths.py",
+    "file_path": "tests/unit/config/foundation/support/refactors/network/configuration/test_wlanradius_timer_manager_paths.py",
     "heuristic": false,
     "line_number": 351,
-    "related_source": "tests/unit/refactors/test_wlanradius_timer_manager_paths.py",
+    "related_source": "tests/unit/config/foundation/support/refactors/network/configuration/test_wlanradius_timer_manager_paths.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
     "severity": "medium"
@@ -3269,10 +3269,10 @@
   {
     "category": "weak_assertion",
     "explanation": "Test function 'test_an_api_failure_is_contained' contains no assertions.",
-    "file_path": "tests/unit/refactors/test_wlanradius_timer_manager_paths.py",
+    "file_path": "tests/unit/config/foundation/support/refactors/network/configuration/test_wlanradius_timer_manager_paths.py",
     "heuristic": false,
     "line_number": 694,
-    "related_source": "tests/unit/refactors/test_wlanradius_timer_manager_paths.py",
+    "related_source": "tests/unit/config/foundation/support/refactors/network/configuration/test_wlanradius_timer_manager_paths.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
     "severity": "medium"
@@ -3280,10 +3280,10 @@
   {
     "category": "weak_assertion",
     "explanation": "Test function 'test_a_missing_template_identifier_stops_the_write' contains no assertions.",
-    "file_path": "tests/unit/refactors/test_wlanradius_timer_manager_paths.py",
+    "file_path": "tests/unit/config/foundation/support/refactors/network/configuration/test_wlanradius_timer_manager_paths.py",
     "heuristic": false,
     "line_number": 729,
-    "related_source": "tests/unit/refactors/test_wlanradius_timer_manager_paths.py",
+    "related_source": "tests/unit/config/foundation/support/refactors/network/configuration/test_wlanradius_timer_manager_paths.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
     "severity": "medium"
@@ -3291,10 +3291,10 @@
   {
     "category": "weak_assertion",
     "explanation": "Test function 'test_a_missing_wlan_identifier_stops_the_write' contains no assertions.",
-    "file_path": "tests/unit/refactors/test_wlanradius_timer_manager_paths.py",
+    "file_path": "tests/unit/config/foundation/support/refactors/network/configuration/test_wlanradius_timer_manager_paths.py",
     "heuristic": false,
     "line_number": 737,
-    "related_source": "tests/unit/refactors/test_wlanradius_timer_manager_paths.py",
+    "related_source": "tests/unit/config/foundation/support/refactors/network/configuration/test_wlanradius_timer_manager_paths.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
     "severity": "medium"
@@ -3302,10 +3302,10 @@
   {
     "category": "weak_assertion",
     "explanation": "Test function 'test_a_wlan_missing_from_the_template_skips_the_write' contains no assertions.",
-    "file_path": "tests/unit/refactors/test_wlanradius_timer_manager_paths.py",
+    "file_path": "tests/unit/config/foundation/support/refactors/network/configuration/test_wlanradius_timer_manager_paths.py",
     "heuristic": false,
     "line_number": 807,
-    "related_source": "tests/unit/refactors/test_wlanradius_timer_manager_paths.py",
+    "related_source": "tests/unit/config/foundation/support/refactors/network/configuration/test_wlanradius_timer_manager_paths.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
     "severity": "medium"
@@ -3313,10 +3313,10 @@
   {
     "category": "weak_assertion",
     "explanation": "Test function 'test_a_failed_template_read_inside_the_update_stops_the_write' contains no assertions.",
-    "file_path": "tests/unit/refactors/test_wlanradius_timer_manager_paths.py",
+    "file_path": "tests/unit/config/foundation/support/refactors/network/configuration/test_wlanradius_timer_manager_paths.py",
     "heuristic": false,
     "line_number": 817,
-    "related_source": "tests/unit/refactors/test_wlanradius_timer_manager_paths.py",
+    "related_source": "tests/unit/config/foundation/support/refactors/network/configuration/test_wlanradius_timer_manager_paths.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
     "severity": "medium"
@@ -3324,10 +3324,10 @@
   {
     "category": "weak_assertion",
     "explanation": "Test function 'test_a_missing_wlan_identifier_stops_the_write' contains no assertions.",
-    "file_path": "tests/unit/refactors/test_wlanradius_timer_manager_paths.py",
+    "file_path": "tests/unit/config/foundation/support/refactors/network/configuration/test_wlanradius_timer_manager_paths.py",
     "heuristic": false,
     "line_number": 841,
-    "related_source": "tests/unit/refactors/test_wlanradius_timer_manager_paths.py",
+    "related_source": "tests/unit/config/foundation/support/refactors/network/configuration/test_wlanradius_timer_manager_paths.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
     "severity": "medium"

@@ -1383,3 +1383,34 @@ The required input preflight reported one passed.
 The three feature records passed STE with scores of 97, 96, and 93.
 The link check found zero broken links.
 The held actions and analytics paths, fixtures, markers, and pytest settings remain unchanged.
+
+## Network configuration test relocation, 2026-10-28
+
+The preceding head `05e90edc2fd344e0270df7ecb0c7d2f6758a8e4b` passed all 36 checks.
+Seven automation checks skipped. The worktree was clean.
+Main remained `a0fac53c5b5d5f57e6d05ff2d6225570cda07691`.
+Exact open pull request and issue searches found no external claims for this batch.
+The existing map assigns these three files to `network/configuration/`.
+
+| Source file | Destination file |
+| - | - |
+| `tests/unit/refactors/test_device_config_template_cloner_manager.py` | `tests/unit/config/foundation/support/refactors/network/configuration/test_device_config_template_cloner_manager.py` |
+| `tests/unit/refactors/test_wanprobe_config_manager.py` | `tests/unit/config/foundation/support/refactors/network/configuration/test_wanprobe_config_manager.py` |
+| `tests/unit/refactors/test_wlanradius_timer_manager_paths.py` | `tests/unit/config/foundation/support/refactors/network/configuration/test_wlanradius_timer_manager_paths.py` |
+
+All three files retain every byte.
+The focused configuration tests and narrow structure, move, and baseline guards report 273 passed.
+The complete unit collection retains 29,836 node IDs.
+An explicit path mapping produces identical node-ID multisets without duplicate IDs.
+The baseline retains 733 records, their order, and all non-path fields.
+Only 18 path fields change across nine existing WLAN RADIUS findings.
+The historical changelog, performance inventory, and test-quality triage remain unchanged.
+The source group decreases from 15 to 12 tracked direct children.
+The network group increases from one to two children.
+The new configuration group has three children.
+Higher mapped ancestors retain two or four children.
+Ruff, Black, and compilation pass.
+The committed test-quality result follows after the local commit.
+The separate WAN override test and its quickstart consumer remain unchanged.
+This exclusion bounds the batch and does not assert an ownership block.
+The held actions and analytics paths, fixtures, markers, and pytest settings remain unchanged.
