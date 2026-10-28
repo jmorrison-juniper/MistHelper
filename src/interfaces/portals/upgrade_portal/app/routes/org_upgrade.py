@@ -224,6 +224,8 @@ SUBMISSION_CLAIMED_STATE = "submission_claimed"  # Issue #3242: a first start ho
 BAD_GATEWAY_STATUS = 502
 CONFLICT_STATUS = 409
 SERVICE_UNAVAILABLE_STATUS = 503
+SITE_READ_FAILED = "org_upgrade_site_read_failed"
+SITE_READ_FAILED_MESSAGE = "The Mist cloud site read failed. Try again."
 
 
 @dataclass(frozen=True, slots=True)
@@ -1137,7 +1139,11 @@ def options_page() -> str | tuple[Response, int]:
     if context is None:  # The page belongs to the multi-site mode.
         return json_error(BAD_REQUEST_STATUS, MODE_REQUIRED, MODE_REQUIRED_MESSAGE)
     org_id, site_ids = context  # Use only the validated active context.
-    rows = selected_rows(org_id, site_ids)  # Recheck site ownership before display.
+    try:
+        rows = selected_rows(org_id, site_ids)  # Recheck site ownership before display.
+    except RequestException as error:
+        logger.error("The options site read failed for organization %s (%s)", org_id, type(error).__name__)
+        return json_error(SERVICE_UNAVAILABLE_STATUS, SITE_READ_FAILED, SITE_READ_FAILED_MESSAGE)
     if not rows:  # Show no device of a missing or foreign site.
         return json_error(NOT_FOUND_STATUS, SITES_REQUIRED, SITES_REQUIRED_MESSAGE)
     retry = current_retry_plan()  # Issue #3247: a retry keeps only the devices that need a second attempt.
@@ -1215,6 +1221,9 @@ def save_options() -> Response | tuple[Response, int]:
         return json_error(NOT_FOUND_STATUS, SITES_REQUIRED, str(error))  # Reuse the site picker refusal contract.
     except BadOptionError as error:  # Issue #3273: every refusal names a control that this page paints.
         return json_error(BAD_REQUEST_STATUS, OPTIONS_INVALID, str(OrgOptionRefusal.translate(error)))
+    except RequestException as error:
+        logger.error("The options save cloud read failed for organization %s (%s)", org_id, type(error).__name__)
+        return json_error(SERVICE_UNAVAILABLE_STATUS, SITE_READ_FAILED, SITE_READ_FAILED_MESSAGE)
     except (TypeError, ValueError, OverflowError, RuntimeError) as error:
         return json_error(BAD_REQUEST_STATUS, OPTIONS_INVALID, str(error))
     session[OPTIONS_SESSION_KEY] = options  # Keep the validated display options in the signed session.
@@ -1304,7 +1313,11 @@ def confirm_page() -> str | tuple[Response, int]:
     if context is None or not options:  # Require a complete confirmed context.
         return json_error(BAD_REQUEST_STATUS, OPTIONS_INVALID, "Save valid upgrade options before confirmation.")
     org_id, site_ids = context  # Use only the validated active context.
-    rows = selected_rows(org_id, site_ids)  # Recheck site ownership before display.
+    try:
+        rows = selected_rows(org_id, site_ids)  # Recheck site ownership before display.
+    except RequestException as error:
+        logger.error("The confirmation site read failed for organization %s (%s)", org_id, type(error).__name__)
+        return json_error(SERVICE_UNAVAILABLE_STATUS, SITE_READ_FAILED, SITE_READ_FAILED_MESSAGE)
     if not rows:  # Do not show an operation for missing or foreign sites.
         return json_error(NOT_FOUND_STATUS, SITES_REQUIRED, SITES_REQUIRED_MESSAGE)
     operation = _saved_operation(options)  # Read the durable plan one time for every value of the page.
