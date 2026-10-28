@@ -26,7 +26,7 @@ Keep the empty-analysis return and accepted dictionaries unchanged.
 
 **Constraints**: Exactly one production validation repair. No cloud requests or export changes.
 
-**Scale/Scope**: One source method, one test method, one release note, and this bounded record.
+**Scale/Scope**: One source method, one new test method, preserved test assertions, one release note, and this bounded record.
 
 ## Constitution Check
 
@@ -67,7 +67,10 @@ Pull request #4358 contains no analyzer test relocation.
 
 The prior specification owner released the non-overlapping addition under `TestDisplayResults`.
 Their 27-line test change remains preserved on branch `jmorrison-juniper-code-defaults-specification` at `482c5d64c`.
-This change neither copies nor removes that work.
+The committed test-quality gate initially reported six existing weak tests after the new method changed their line numbers.
+The prior owner and coordinator then released the exact preserved test change for this repair.
+Its stable patch identifier matches: `eb360d7ba9aca0796ea1d557bbfa4ea5819d663b`.
+The transfer adds the existing assertions without removing or changing their source branch.
 
 ## Validation Strategy
 
@@ -81,3 +84,21 @@ Run applicable compile, Ruff, Black, mypy, complexity, Bandit, docstring, symbol
 Run the test-quality comparison only after the intended tests are committed.
 Use `Refs #2753` in the pull request because this change does not complete the campaign.
 Do not merge until the exact acceptance and every required check pass.
+
+## Local Results
+
+- The 16 new refusal cases failed before repair. The final focused run passes all 140 tests.
+- Analyzer coverage is 99.08 percent. Three accepted-output comparisons match the original exactly.
+- The analyzer has 77 empty `.get` defaults, compared with 78 before this repair.
+- Ruff and Black pass for the repository. Mypy passes for all 864 documented source files.
+- The source complexity and Bandit gates pass. Pylint reports 9.92 out of 10.
+- Vulture and pydocstyle pass for their documented scopes. Interrogate reports 99.7 percent.
+- Symbol comparison reports no lost or added module-level names.
+- Eight committed Markdown files have no broken local link. All eight pass the STE threshold.
+- Process and changelog guards report 28 passed and one expected skip because this is not a pull request event.
+- The test-quality preflight reads and validates all four required inputs.
+- Both committed test-quality scopes report zero new findings without a baseline change.
+
+The standard `pip-audit -r requirements.txt` command hit the macOS temporary-environment failure recorded in issue #4359.
+A complete UV resolution followed by the supported strict, no-dependency-resolution audit reports no known vulnerabilities.
+No dependency manifest or interpreter configuration changed.

@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-28
 
-**Status**: Implemented, publication checks pending
+**Status**: Implemented and locally verified
 
 **Input**: Repair exactly one unsafe default in the zone analyzer for issue #2753.
 

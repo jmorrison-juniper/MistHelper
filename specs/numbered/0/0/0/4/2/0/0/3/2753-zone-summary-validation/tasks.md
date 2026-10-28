@@ -18,13 +18,18 @@
 
 - [x] T003 [US1] Add one parameterized test under `TestDisplayResults` in `tests/unit/test_zone_analyzer.py`. All 16 cases failed before repair. (delivered: tests/unit/test_zone_analyzer.py)
 - [x] T004 [US1] Validate the required dictionary in `_display_zone_section`. One empty-default read was removed. (delivered: src/mist/intelligence/analytics/zone_analyzer.py)
-- [x] T005 [US1] Confirm the refusal and compare accepted output. All 139 focused tests pass. Three original-output comparisons match exactly. (delivered: tests/unit/test_zone_analyzer.py)
+- [x] T005 [US1] Confirm the refusal and compare accepted output. All 140 focused tests pass. Three original-output comparisons match exactly. (delivered: tests/unit/test_zone_analyzer.py)
 
 ## Phase 4: Evidence and Publication
 
 - [x] T006 Add the release note and run local source gates. Ruff, Black, mypy, complexity, Bandit, docstring, symbol, and prose checks pass. (delivered: changelog.d/issue-2753-zone-summary-validation.md)
 - [x] T007 Compare `spec.md`, `plan.md`, and `tasks.md`, then commit the exact feature manifest. Nine requirements have task coverage. (delivered: plan.md)
-- [ ] T008 Run the committed test-quality comparison, then publish the bounded pull request with `Refs #2753`.
+- [x] T008 Run the committed test-quality comparison. The changed-module and full checks both report zero new findings. (delivered: tests/unit/test_zone_analyzer.py)
+
+The changed-module check examined one file and zero findings.
+The full check examined 1,209 files and 611 accepted findings.
+The baseline remains unchanged.
+Publication requires the final evidence commit and the pull request with `Refs #2753`.
 
 ## Dependencies
 
