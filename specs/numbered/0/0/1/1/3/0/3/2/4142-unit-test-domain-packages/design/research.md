@@ -1163,5 +1163,8 @@ The focused command
 passed 164 tests.
 Ruff passed, Black left seven files unchanged, compilation passed, and both diff checks passed.
 Full unit collection matched the explicit path mapping with zero missing or added node IDs.
-The required committed test-quality gate remains to be run after this batch commit.
+The test-quality input preflight passed one test.
+The committed changed-from gate checked 1,209 files and 613 findings.
+It skipped 52 files, reported zero parse errors, and found zero new findings.
+The three changed Markdown files passed the STE score threshold and link scan.
 Keep every other `db_discovery`, workflow, and portal path deferred.
