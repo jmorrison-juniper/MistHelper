@@ -1175,6 +1175,11 @@ passed 61 tests.
 The test-quality guide preflight passed one test.
 Ruff passed, Black left three files unchanged, compilation passed, and the diff check passed.
 The complete node-ID comparison found zero differences after the explicit mapping.
+The full test-quality gate checked 1,209 files and 613 findings.
+It skipped 52 files, found zero parse errors, and reported zero new findings.
+The committed changed-from gate passed with the same counts and zero new findings.
+The Markdown link scan found zero broken links.
+The STE checks scored 97 and 93, and both files passed.
 
 The only content edits replace the moved package's helper imports and the two approved external imports.
 The `fakes.py` file retains its captured SHA-256 value.
