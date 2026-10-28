@@ -1249,6 +1249,6 @@ class TestExportEarlyReturns:
         from src.mist.intelligence.analytics.zone_analyzer import _export_occupancy_configs  # private fn
 
         save_fn = MagicMock()  # spy on whether the save function is ever called
-        _export_occupancy_configs({}, "20250101", save_fn)  # no occupancy_configs key
-        assert save_fn.call_count == 0  # Empty occupancy input must skip the save callback. in dict
+        _export_occupancy_configs({}, "20250101", save_fn)  # no occupancy_configs key in dict
+        assert save_fn.call_count == 0  # Empty occupancy input must skip the save callback.
         save_fn.assert_not_called()  # early return before save reached
