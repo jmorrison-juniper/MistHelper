@@ -4,7 +4,7 @@ from collections.abc import Iterator
 
 import pytest
 
-from tests.unit.arango_indexes.fakes import ArangoIndexWriterHarness
+from tests.unit.config.foundation.persistence.storage.arango_indexes.fakes import ArangoIndexWriterHarness
 
 
 @pytest.fixture

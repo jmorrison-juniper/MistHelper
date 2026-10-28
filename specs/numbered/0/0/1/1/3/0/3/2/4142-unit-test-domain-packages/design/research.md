@@ -1124,8 +1124,44 @@ The exact command was
 
 The PR #4350 owner also released `tests/unit/export/test_endpoint_family_exporter.py`.
 That test remains outside T046 for a later ownership review.
-The PR #4208 owner separately approved a later batch for the five Arango tests.
-That handoff permits only helper-reference changes in
+The PR #4208 owner approved the five Arango tests for T047.
+That handoff permits internal helper-reference changes in the moved package and changes to
 `tests/unit/db_discovery/test_probe.py` and `tests/contract/test_arango_declared_indexes.py`.
-This batch changed none of those paths.
+No other `db_discovery`, workflow, or portal path is included.
+
+## Arango storage test relocation, 2026-10-28
+
+The PR #4208 owner approved these five files and the two external helper references listed above.
+The immediate ownership refresh found no newer conflicting path claim.
+The move changed no test behavior.
+
+| Source file | Destination file | Pre-move SHA-256 |
+| - | - | - |
+| `tests/unit/arango_indexes/conftest.py` | `tests/unit/config/foundation/persistence/storage/arango_indexes/conftest.py` | `0009fa3905ad1ee9739314ea06330953b76622d3ec2e55160cf10a5bb416bafb` |
+| `tests/unit/arango_indexes/fakes.py` | `tests/unit/config/foundation/persistence/storage/arango_indexes/fakes.py` | `0c1ee8bfefd74bb563c94a8c54c2a8bb9d5500e1b0bc9e7c9234e65c0887d7c6` |
+| `tests/unit/arango_indexes/test_declared_indexes.py` | `tests/unit/config/foundation/persistence/storage/arango_indexes/test_declared_indexes.py` | `45fe998b3df66d351d3f5b876aa81b669648a6636ffe901d2fceff75d3f9a19b` |
+| `tests/unit/arango_indexes/test_preservation.py` | `tests/unit/config/foundation/persistence/storage/arango_indexes/test_preservation.py` | `984d5bc36aa5a5386e2c724126c46aeb233383ee6179d4b05581d9fd7177420c` |
+| `tests/unit/arango_indexes/test_retry_concurrency.py` | `tests/unit/config/foundation/persistence/storage/arango_indexes/test_retry_concurrency.py` | `d197533ccc6e5ac37eeccfd7d0edea0d358d3a7563676ddaf78be44558974969` |
+
+The only content edits replace the moved package's helper imports and the two approved external imports.
+The `fakes.py` file retains its captured SHA-256 value.
+The unit root has 38 tracked direct children after the move, one fewer than before this batch.
+The destination package has five tracked direct children.
+Its `storage` parent has three tracked direct children.
+The process-folder and module-move guards passed.
+
+The complete unit collection has 29,836 node IDs before and after the move.
+The explicit mapping covers 75 Arango node IDs.
+The multiset comparison found zero missing and zero added IDs.
+The quality baseline retains 733 records and its original SHA-256 value,
+`f738363caa5d2d8b42e54c38ccca0252cc51e57d30791c81bf1e272a396a2af0`.
+No baseline path record names the source or destination.
+The active-reference scan found no old import or path outside specification history.
+
+The focused command
+`.venv/bin/python -m pytest -q -p no:cacheprovider --tb=short tests/unit/config/foundation/persistence/storage/arango_indexes tests/unit/db_discovery/test_probe.py tests/contract/test_arango_declared_indexes.py tests/guardrails/test_move_module_guidance.py tests/guardrails/test_process_folder_structure.py tests/guardrails/test_quality_ratchet_files.py`
+passed 164 tests.
+Ruff passed, Black left seven files unchanged, compilation passed, and both diff checks passed.
+Full unit collection matched the explicit path mapping with zero missing or added node IDs.
+The required committed test-quality gate remains to be run after this batch commit.
 Keep every other `db_discovery`, workflow, and portal path deferred.

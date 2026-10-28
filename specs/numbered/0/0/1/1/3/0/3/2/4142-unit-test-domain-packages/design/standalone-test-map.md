@@ -14,7 +14,7 @@ Pytest first imported the moved `site` tests as the standard-library `site` modu
 |---|---|---:|---|
 | `tests/unit/analytics/` | `tests/unit/marvis/mist/intelligence/analytics/` | 5 | Defer `test_insight_metrics_utils.py` because a historical specification links to its source path. Keep that file at source until the historical-link constraint changes |
 | `tests/unit/api/` | `tests/unit/marvis/mist/access/api/` | 4 | PR #4313 merged; issue #2752 retains API and record claims |
-| `tests/unit/arango_indexes/` | `tests/unit/config/foundation/persistence/storage/arango_indexes/` | 5 | Deferred for PR #4350. Restore the package and helper imports to main until its owner releases the claim |
+| `tests/unit/arango_indexes/` | `tests/unit/config/foundation/persistence/storage/arango_indexes/` | 5 | Moved under the PR #4208 owner's approved handoff in T047 |
 | `tests/unit/audit/` | `tests/unit/marvis/mist/access/audit/` | 4 (1 marker) | |
 | `tests/unit/auth/` | `tests/unit/marvis/mist/access/auth/` | 4 (1 marker) | |
 | `tests/unit/benchmarks/` | `tests/unit/config/foundation/support/benchmarks/` | 1 | |

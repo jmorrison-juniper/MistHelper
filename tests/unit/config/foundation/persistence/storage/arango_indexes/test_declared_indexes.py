@@ -6,7 +6,7 @@ from unittest.mock import call
 import pytest
 
 from src.foundation.support.refactors.endpoint_primary_key_strategies import ENDPOINT_PRIMARY_KEY_STRATEGIES
-from tests.unit.arango_indexes.fakes import ArangoIndexWriterHarness
+from tests.unit.config.foundation.persistence.storage.arango_indexes.fakes import ArangoIndexWriterHarness
 
 INDEX_APIS = (
     "listOrgSites",

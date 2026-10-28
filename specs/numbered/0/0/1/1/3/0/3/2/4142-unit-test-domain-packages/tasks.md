@@ -16,8 +16,8 @@ The draft, merge hold, historical-link deferral, and previous path reservations 
 **Current holds for later batches**: PR #4350 released
 `tests/unit/refactors/test_sqlite_database_writer.py` and
 `tests/unit/export/test_endpoint_family_exporter.py`. T046 uses only the SQLite writer test.
-The PR #4208 owner approved the five Arango tests and two named helper references for a later batch.
-Keep those paths out of T046. Defer every other PR #4208 workflow and test path.
+T047 applies the PR #4208 handoff for the five Arango tests and two named helper references.
+Defer every other PR #4208 workflow and test path.
 The latest T046 ownership scan found no exact PR, issue, or session claim.
 Refresh ownership before each later batch.
 PR #4226 merged. Its owner released the Cisco test path for T044.
@@ -46,7 +46,7 @@ The coordinator must release the PR hold after #4353 before any pull request ope
 
 ### Implementation for User Story 1
 
-- [ ] T005 [US1] Move unowned foundation packages, including `bootstrap` and the contents of the existing `config` container, into their mapped groups. Split each moved package by test topic when its destination would exceed five children. Keep the completed `serial_cc`, `audit`, and `auth` moves. Defer `arango_indexes`, `dataclasses`, `db_discovery`, and every other package with a current claim.
+- [ ] T005 [US1] Move unowned foundation packages, including `bootstrap` and the contents of the existing `config` container, into their mapped groups. Split each moved package by test topic when its destination would exceed five children. Keep the completed `serial_cc`, `audit`, and `auth` moves. Defer `dataclasses`, `db_discovery`, and every other package with a current claim.
 - [ ] T006 [US1] Move unowned Mist packages, including the contents of the existing `marvis` container, into their mapped groups. Split each moved package by test topic when its destination would exceed five children. Keep the root `marvis` container. Defer `api`, `org`, `websocket_streams`, and every other package with a current claim.
 - [ ] T007 [US1] Move unowned operations packages, including packet capture, firmware policy, and MIB generator tests, into their exact topic groups. Keep each group at five children or fewer. Keep the root `prod_readiness` container. Defer `export`, `ssh`, and every other package with a current claim.
 - [ ] T008 [US1] Move unowned interface packages, including the contents of the existing `maps` container, into their mapped groups. Split each moved package by test topic when its destination would exceed five children. Keep the root `maps` container. Defer `scripts`, `upgrade_portal`, and each other reserved or workflow-selected path.
@@ -72,6 +72,7 @@ The coordinator must release the PR hold after #4353 before any pull request ope
 - [X] T044 [US1] Move the released Cisco test into its mapped group. Preserve its canonical content and five-child limit. Verify node IDs, tests, guards, style, compilation, and the quality baseline. (completed: see `design/research.md`)
 - [X] T045 [US1] Move the released CSV-import test package into its mapped inventory group. Update only active scratch paths. Verify node IDs, tests, guards, group counts, baseline semantics, style, and compilation. (completed: see `design/research.md`)
 - [X] T046 [US1] Move the four released device-replacement tests and the released SQLite writer test to their mapped groups. Preserve file bytes and all node IDs. Verify ownership, hierarchy, active references, baseline semantics, focused tests, guards, style, compilation, and committed test-quality gates. Record evidence in `design/research.md`.
+- [ ] T047 [US1] Move the five released Arango tests to their mapped storage group. Update only their internal helper imports and the approved imports in `tests/unit/db_discovery/test_probe.py` and `tests/contract/test_arango_declared_indexes.py`. Preserve all other file content and test behavior. Verify current ownership, hierarchy, active references, baseline semantics, the complete mapped unit collection, focused tests, guards, style, compilation, and committed test-quality gates. Record evidence in `design/research.md`.
 
 ## Phase 4: User Story 2 - Run the existing unit tests (Priority: P1)
 
