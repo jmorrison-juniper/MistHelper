@@ -1239,7 +1239,11 @@ The Markdown link scan finds zero broken links.
 The baseline retains 733 records and two findings for these moved tests.
 Only the four approved path fields changed.
 All other finding fields, record order, and record count remain unchanged.
-The committed changed-from test-quality gate remains pending.
+The committed changed-from gate checked 1,209 files and 613 findings.
+It skipped 52 files and reported zero parse errors.
+It found zero new findings against the baseline.
+The gate passed after commit `78f15231fe239b615a2a581706d7eddc4af16f95`.
+The preceding PR check run reported 36 passed, zero failed, and seven skipped or cancelled checks.
 The three changed Markdown files passed the STE score threshold and link scan.
 Keep every other `db_discovery`, workflow, and portal path deferred.
 
