@@ -1029,3 +1029,40 @@ The live ownership scan found zero intersections across 794 raw paths and ten ot
 Ruff and Black passed all 396 changed Python files.
 The compile, feature prerequisites, and required quality-input preflight passed.
 Task T038 is complete. The committed and full quality gates remain required before publication.
+
+## CSV-import test relocation
+
+The approved base remains `a0fac53c5b5d5f57e6d05ff2d6225570cda07691`.
+PR #4358 was open and draft at `1ca0e9c6c78e7163a418311818b2ace4375a6839`.
+Auto-merge remained disabled.
+Fresh CI reported 36 successful checks, seven intentional skips, and zero failures.
+CodeQL and the coverage gate passed.
+The live `main` branch still matched the approved base.
+
+The open-PR scan inspected five pull requests and found no source or destination overlap.
+The seven-day session-file scan found no claim on either path.
+The source group had four tracked files, and the destination did not exist.
+The four files moved to `tests/unit/marvis/mist/resources/inventory/csv_imports/`.
+Two tests now create scratch files under the moved package.
+No other active path reference used the old test path.
+The full quality baseline kept 733 ordered entries and no reference to either test path.
+The baseline blob remained unchanged.
+
+The full unit collection had 29,836 node IDs before and after the move.
+An explicit path mapping covered all 17 CSV-import node IDs.
+The comparison found zero missing and zero added IDs.
+The root retained 39 direct children.
+The `inventory` group fell from nine direct children to eight.
+The `resources` group rose from four children to five.
+The new `inventory` group has one child, and `csv_imports` has four.
+Each checked group remains within the five-child limit.
+
+The focused command `python -m pytest tests/unit/marvis/mist/resources/inventory/csv_imports tests/guardrails/test_move_module_guidance.py tests/guardrails/test_process_folder_structure.py -q` passed 43 tests.
+Ruff passed for the four moved files.
+Black left all four files unchanged.
+Compilation and `git diff --check` passed.
+The test-quality input preflight passed one test and read and validated all four required inputs.
+The full analyzer checked 1,209 files and 613 findings.
+It skipped 52 files, reported zero parse errors, and found zero new findings.
+The baseline retained its original 733 entries.
+The source directory is absent.

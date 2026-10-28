@@ -67,6 +67,7 @@ The coordinator must release the PR hold after #4353 before any pull request ope
 - [X] T042 [US1] Apply the bounded troubleshooting map to core tests, credential tests, SMS tests, synthetic tests, and RF diagnostics. Update the standalone consumer import and RF manifest root. Preserve all baseline non-path fields. Verify focused tests, full node-ID parity, group sizes, declarations, path guards, and style.
 - [X] T043 [US1] Move the cleared `tests/unit/test_fast_mode_flag.py` to its mapped startup group without a content change. Verify focused tests, full node-ID parity, the root reduction, target group size, active references, path guards, and style. Keep all other claimed root files deferred.
 - [X] T044 [US1] Move the released Cisco test into its mapped group. Preserve its canonical content and five-child limit. Verify node IDs, tests, guards, style, compilation, and the quality baseline. (completed: see `design/research.md`)
+- [X] T045 [US1] Move the released CSV-import test package into its mapped inventory group. Update only active scratch paths. Verify node IDs, tests, guards, group counts, baseline semantics, style, and compilation. (completed: see `design/research.md`)
 
 ## Phase 4: User Story 2 - Run the existing unit tests (Priority: P1)
 

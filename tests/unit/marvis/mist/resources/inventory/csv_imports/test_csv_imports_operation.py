@@ -14,7 +14,9 @@ from src.mist.resources.inventory.csv_imports.operation import (
     CsvImportOptions,
 )
 
-RUNTIME_DIR = Path("tests") / "unit" / "inventory" / "csv_imports" / "_runtime_data"  # WHY: avoid temp dirs.
+RUNTIME_DIR = Path(  # WHY: keep the test scratch location platform-independent.
+    "tests/unit/marvis/mist/resources/inventory/csv_imports/_runtime_data"  # WHY: match the moved test package.
+)
 
 
 class ResponseDouble:
