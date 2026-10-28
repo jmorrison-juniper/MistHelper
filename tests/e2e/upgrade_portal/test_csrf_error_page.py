@@ -16,6 +16,11 @@ The two journeys:
        sign-in in another tab. The link back opens the form, and the form then
        works.
 
+Warning check:
+    Issue #4494 records a snapshot that read the paragraph before its generated
+    prefix. The retrying assertion requires both the warning and the recovery
+    sentence. A delayed stylesheet proves that the check waits for both.
+
 Identifier contract:
     Every locator reads a ``data-testid`` attribute, as rule 4 of
     ``contracts/ui-testids.md`` states.
@@ -96,8 +101,8 @@ def _read_refusal_page(page: Any, response: Any) -> None:
     sync_api.expect(message).to_contain_text(RECOVERY_SENTENCE)  # The sentence names the recovery.
     sync_api.expect(page.get_by_test_id("error-back-link")).to_have_attribute("href", FORM_PATH)  # The form page.
     sync_api.expect(page.get_by_test_id("error-site-list-link")).to_be_visible()  # The second way out stays.
-    spoken = message.aria_snapshot()  # The signal word and the sentence, as a screen reader reads them.
-    assert "Warning:" in spoken and RECOVERY_SENTENCE in spoken, f"The alert reads {spoken!r}."
+    expected = rf"- paragraph: /Warning:.*{re.escape(RECOVERY_SENTENCE)}/"
+    sync_api.expect(message).to_match_aria_snapshot(expected)  # Wait for the generated prefix in the accessible text.
     assert STALE_TOKEN not in page.content(), "The page shows the refused token."  # The page hides the token.
 
 
@@ -142,3 +147,25 @@ def test_a_stale_token_in_a_live_session_recovers_through_the_link_back(page: An
     page.wait_for_url(SITE_LIST_URL, timeout=GATE_TIMEOUT_MS)  # The portal accepted the fresh form.
     page.screenshot(path=str(tmp_path / "fresh-form-accepted.png"), full_page=True)  # The next page.
     assert page.get_by_test_id("error-page").count() == 0, "The fresh form reached the error page."
+
+
+def test_the_refusal_check_waits_for_the_generated_warning(page: Any) -> None:
+    """Keep the warning check active when the stylesheet applies after the paragraph."""
+    _open_mode_form(page)  # Use a real form and the isolated operator session.
+    page.get_by_test_id("mode-picker").locator("input[name=csrf_token]").evaluate(
+        "(field, value) => { field.value = value; }", STALE_TOKEN
+    )
+    response = _send_single_site(page)  # The real token check renders the shared error template.
+    page.wait_for_load_state("load")  # Keep the existing stylesheet loaded before the timing probe.
+    page.evaluate("""() => {
+            const stylesheet = document.querySelector('link[href$="/css/portal.css"]');
+            stylesheet.media = "not all";
+        }""")
+    message = page.get_by_test_id("error-message")
+    assert RECOVERY_SENTENCE in message.aria_snapshot()
+    assert "Warning:" not in message.aria_snapshot()
+    page.evaluate("""() => {
+            const stylesheet = document.querySelector('link[href$="/css/portal.css"]');
+            setTimeout(() => { stylesheet.media = "all"; }, 1000);
+        }""")
+    _read_refusal_page(page, response)  # The same check must wait without losing the warning requirement.
