@@ -1510,6 +1510,36 @@ Both quality gates examine 1,209 files and 613 findings.
 Each reports 52 skipped files, zero parse errors, and zero new findings against the baseline.
 These results apply to the move commit `a23bc00bb`.
 
+## Interactive session test relocation, 2026-10-28
+
+The preceding head `b0589d00c6d35090f424899fee2989fe41719cd2` has 36 successful checks and seven skipped checks.
+Main remains `a0fac53c5b5d5f57e6d05ff2d6225570cda07691`.
+The worktree started clean.
+The refreshed six-PR file inventory has no external exact-path overlap.
+Exact open issue searches found no claim for either moved test.
+
+| Source file | Destination file |
+| - | - |
+| `tests/unit/refactors/test_initialize_mist_session_interactive_wave9.py` | `tests/unit/config/foundation/support/refactors/runtime/session/test_initialize_mist_session_interactive_wave9.py` |
+| `tests/unit/refactors/test_switch_to_interactive_login.py` | `tests/unit/config/foundation/support/refactors/runtime/session/test_switch_to_interactive_login.py` |
+
+Both files retain every byte.
+The source group decreases from nine to seven tracked direct children.
+The runtime group increases from two to three children.
+The new session group has two children.
+Higher mapped ancestors retain two or four children.
+Neither test has an active path consumer outside the direct feature map.
+The baseline, historical changelog, specifications, and performance inventory files remain unchanged.
+The full collection retains 29,838 node IDs with exact mapped parity and no duplicates.
+The unmoved focused control reports 16 passed.
+Mapped refactors, remaining refactors, affected consumers, and narrow guards report 780 passed after this move.
+Ruff, Black, compilation, and whitespace checks pass.
+The application-context and session initializer tests stay outside this bounded batch.
+The #4008 actions, analytics history, and separate unpublished HTTP 403 commit remain unchanged.
+PR #4358 stays a draft with auto-merge disabled.
+Publication requires the remaining documentation and committed quality gates plus the exact preceding-head lease.
+Another batch requires green CI on the published head.
+
 ## Network configuration test relocation, 2026-10-28
 
 The preceding head `05e90edc2fd344e0270df7ecb0c7d2f6758a8e4b` passed all 36 checks.
