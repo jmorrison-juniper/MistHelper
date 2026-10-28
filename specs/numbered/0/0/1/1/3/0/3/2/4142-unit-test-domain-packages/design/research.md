@@ -1579,6 +1579,37 @@ Both quality gates examine 1,209 files and 613 findings.
 Each reports 52 skipped files, zero parse errors, and zero new findings against the baseline.
 These results apply to the move commit `8995c8631`.
 
+## Inventory pivot-renderer package relocation, 2026-10-28
+
+The preceding head `44e05f37b93e22aa5ca95b054140b812e3b9d171` has 36 successful checks and seven skipped checks.
+Main remains `a0fac53c5b5d5f57e6d05ff2d6225570cda07691`.
+The worktree started clean.
+The six open PR manifests have no external exact-path overlap.
+The exact issue search found no claim.
+Move `tests/unit/inventory/inventory_summary/` to
+`tests/unit/marvis/mist/resources/inventory/inventory_summary/`.
+The package contains only the pivot-renderer test and its existing empty marker.
+Both files retain every byte.
+The existing map supplies the destination.
+Only the direct feature map consumes the current test path.
+The historical changelog remains unchanged under FR-004.
+No import uses the old test package.
+The tests use only standard pytest fixtures and restore their patched exporter.
+No package-local fixture or depth-dependent path requires a change.
+The unchanged control reports 14 passed.
+The inventory tests and narrow guards report 252 passed.
+The complete collection retains 29,838 node IDs with exact mapped parity and no duplicates.
+The baseline remains unchanged.
+The source inventory group decreases from six to five tracked direct children.
+The destination inventory parent has four children.
+The moved package retains two children.
+Every mapped ancestor remains within five children.
+Ruff, Black, compilation, and whitespace checks pass.
+All ownership reservations, shared fixtures, application-context hold, historical records, #4008 actions, analytics paths, and separate #2746 work remain unchanged.
+Publication requires the documentation checks, committed quality gates, and exact preceding-head lease.
+PR #4358 remains a draft with auto-merge disabled.
+Another batch requires green CI on the published head.
+
 ## Inventory versioning test relocation, 2026-10-28
 
 The preceding head `0d40624524aa033bf32d24471dff6e15d1e05180` has 36 successful checks and seven skipped checks.

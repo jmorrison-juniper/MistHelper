@@ -96,6 +96,7 @@ The coordinator must release the PR hold after #4353 before any pull request ope
 - [X] T063 [US1] Move the independent device-prompt rename guard into mapped `interfaces/ui/interaction/dispatch/`. Adjust only its repository-root depth and four baseline path fields. Verify the exact source scan, negative control, node IDs, baseline semantics, fixture preservation, ownership, scoped tests, style, documentation, and committed quality gates.
 - [X] T064 [US1] Move the independent interactive-display test into mapped `interfaces/ui/interaction/dispatch/`. Preserve test bytes and shared fixtures. Update only four baseline path fields. Verify ownership, resolver-sensitive test order, full collection parity, baseline semantics, hierarchy, style, documentation, and committed quality gates.
 - [X] T065 [US1] Move the unowned inventory versioning test into mapped `inventory/support/versioning/`. Preserve every test byte, shared fixtures, baseline, and historical specifications. Verify ownership, inventory tests, collection parity, hierarchy, style, documentation, and committed quality gates.
+- [X] T066 [US1] Move the unowned inventory pivot-renderer package and its existing marker into mapped `inventory/inventory_summary/`. Preserve every file byte, baseline, fixtures, and historical records. Verify ownership, inventory tests, collection parity, hierarchy, style, documentation, and committed quality gates.
 
 ## Phase 4: User Story 2 - Run the existing unit tests (Priority: P1)
 
