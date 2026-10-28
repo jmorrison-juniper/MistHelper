@@ -1573,6 +1573,11 @@ The #4008 actions, analytics history, and separate unpublished HTTP 403 commit r
 PR #4358 stays a draft with auto-merge disabled.
 Publication requires the remaining documentation and committed quality gates plus the exact preceding-head lease.
 Another batch requires green CI on the published head.
+The three feature records pass STE and contain zero broken local links.
+The committed input preflight reports one passed.
+Both quality gates examine 1,209 files and 613 findings.
+Each reports 52 skipped files, zero parse errors, and zero new findings against the baseline.
+These results apply to the move commit `8995c8631`.
 
 ## Network configuration test relocation, 2026-10-28
 
