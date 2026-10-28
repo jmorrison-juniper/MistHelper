@@ -1117,7 +1117,10 @@ The test-quality input preflight passed one test.
 Ruff passed, Black left four files unchanged, compilation passed, and both diff checks passed.
 The full analyzer checked 1,209 files and 613 findings.
 It skipped 52 files, reported zero parse errors, and found zero new findings.
-The required committed changed-from test-quality gate remains pending.
+The required committed changed-from gate passed with zero new findings.
+It checked 1,209 files and 613 findings, skipped 52 files, and reported zero parse errors.
+The exact command was
+`.venv/bin/test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json --changed-from origin/main --full-gate-path .github/workflows/ci.yml --full-gate-path requirements-dev.txt`.
 
 The PR #4350 owner also released `tests/unit/export/test_endpoint_family_exporter.py`.
 That test remains outside T046 for a later ownership review.
