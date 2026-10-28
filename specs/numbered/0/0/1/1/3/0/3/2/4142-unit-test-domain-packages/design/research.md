@@ -1579,6 +1579,33 @@ Both quality gates examine 1,209 files and 613 findings.
 Each reports 52 skipped files, zero parse errors, and zero new findings against the baseline.
 These results apply to the move commit `8995c8631`.
 
+## Display-utils test relocation, 2026-10-28
+
+The preceding head `96f03f0b45b41d50ef42ee32388f4654beec4147` has 36 successful checks and seven skipped checks.
+Main remains `a0fac53c5b5d5f57e6d05ff2d6225570cda07691`.
+The worktree started clean.
+The six open PR manifests have no external exact-path overlap.
+The exact issue search found no active claim.
+Move `tests/unit/ui/test_display_utils.py` to
+`tests/unit/maps/interfaces/ui/display/test_display_utils.py`.
+The existing deterministic map supplies the destination.
+Only the direct feature map consumes the old path.
+The file retains every byte.
+The test uses only the standard `caplog` fixture.
+The production helpers use neither stdin nor the environment variables cleared by the original UI fixtures.
+The shared UI fixture file remains unchanged.
+The source group decreases from 18 to 17 tracked direct children.
+The display group increases from one to two children.
+Every mapped ancestor remains within five children.
+The unchanged control reports 25 passed.
+The moved UI tests and narrow guards report 399 passed.
+The full collection retains 29,838 node IDs with exact mapped parity and no duplicates.
+Ruff, Black, compilation, and whitespace checks pass.
+The baseline, historical records, application-context hold, #4008 actions, analytics paths, and separate #2746 change remain unchanged.
+Publication requires the documentation checks, committed quality gates, and exact preceding-head lease.
+PR #4358 remains a draft with auto-merge disabled.
+Another batch requires green CI on the published head.
+
 ## Output-formatter test relocation, 2026-10-28
 
 The preceding head `2874f0d1af59bd52597b86ca9f108dbcb2707619` has 36 successful checks and seven skipped checks.
