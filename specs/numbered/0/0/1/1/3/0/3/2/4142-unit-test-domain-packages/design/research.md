@@ -1066,3 +1066,63 @@ The full analyzer checked 1,209 files and 613 findings.
 It skipped 52 files, reported zero parse errors, and found zero new findings.
 The baseline retained its original 733 entries.
 The source directory is absent.
+
+## Device-replacement and SQLite test relocation, 2026-10-28
+
+The coordinator approved this batch after every check on `feaf7f331b7d33f3405e7468441cb42386e612de` completed.
+The check report had 36 successes, seven skips, and zero failures.
+CodeQL and coverage passed.
+The live `main` and the branch base both remained `a0fac53c5b5d5f57e6d05ff2d6225570cda07691`.
+PR #4358 remained open and draft, with auto-merge disabled.
+
+The final ownership refresh checked five open pull requests.
+It found no exact source or destination path claim.
+The seven-day session-file search found no claim on these paths.
+Issue searches found #2753 and #3824 for related source-package work, but no exact test-path claim.
+The SQLite writer issue search returned no result.
+PR #4350 released the SQLite writer test for this batch.
+
+The four device-replacement files moved to the mapped inventory group.
+The SQLite writer test moved to the mapped storage group.
+The five SHA-256 values match the files at their old paths.
+
+| Destination file | SHA-256 |
+| - | - |
+| `tests/unit/marvis/mist/resources/inventory/device_replace/__init__.py` | `8bb8b7e1433b56a44e7805156336d5f26a9b9c13a77205809f092785e679b560` |
+| `tests/unit/marvis/mist/resources/inventory/device_replace/test_rma_device_replace_client.py` | `c3a8cd847ee56f273acee5aaaefe3889dc3f4383e6b820ce4e4813c9c7a1735c` |
+| `tests/unit/marvis/mist/resources/inventory/device_replace/test_rma_device_replace_model.py` | `f498cf230c675ed8224e8edeb76d7c7e65595d126985cbb203678c5756f8f647` |
+| `tests/unit/marvis/mist/resources/inventory/device_replace/test_rma_device_replace_operation.py` | `28845f2a2f312df6c4f4cc684d932c540e810f62ee2cd672b32b97dd9548b3ba` |
+| `tests/unit/config/foundation/support/refactors/data/storage/test_sqlite_database_writer.py` | `ce12a486daf1b964b2bf0420d81593c65a373e0bde689c36341e741534286140` |
+
+The tracked root retains 39 children.
+The `resources` group retains five children.
+The inventory group now has two children, and the device-replacement group has four.
+The `config`, `foundation`, and `support` groups have two, four, and four children.
+The refactors, data, and storage groups have one child each.
+Every affected group remains within the five-child limit.
+The old source package and SQLite test path are absent.
+
+The full unit collection has 29,836 node IDs before and after the move.
+An explicit path mapping covers 14 device-replacement IDs and 55 SQLite-writer IDs.
+The multiset comparison found zero missing and zero added IDs.
+The quality baseline retains 733 records and its original SHA-256 value.
+Its SHA-256 value is `f738363caa5d2d8b42e54c38ccca0252cc51e57d30791c81bf1e272a396a2af0`.
+It has no source or destination path record.
+The active-reference scan found no old test path outside the specification map and history.
+
+The focused command
+`.venv/bin/python -m pytest -q -p no:cacheprovider --tb=short tests/unit/marvis/mist/resources/inventory/device_replace tests/unit/config/foundation/support/refactors/data/storage tests/guardrails/test_move_module_guidance.py tests/guardrails/test_process_folder_structure.py tests/guardrails/test_quality_ratchet_files.py`
+passed 109 tests.
+The test-quality input preflight passed one test.
+Ruff passed, Black left four files unchanged, compilation passed, and both diff checks passed.
+The full analyzer checked 1,209 files and 613 findings.
+It skipped 52 files, reported zero parse errors, and found zero new findings.
+The required committed changed-from test-quality gate remains pending.
+
+The PR #4350 owner also released `tests/unit/export/test_endpoint_family_exporter.py`.
+That test remains outside T046 for a later ownership review.
+The PR #4208 owner separately approved a later batch for the five Arango tests.
+That handoff permits only helper-reference changes in
+`tests/unit/db_discovery/test_probe.py` and `tests/contract/test_arango_declared_indexes.py`.
+This batch changed none of those paths.
+Keep every other `db_discovery`, workflow, and portal path deferred.

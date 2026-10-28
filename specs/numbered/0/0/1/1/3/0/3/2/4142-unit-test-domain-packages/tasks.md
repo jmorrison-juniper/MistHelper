@@ -13,10 +13,13 @@ PRs #4471, #4438, and #4436 overlap the existing `pyproject.toml` changes.
 Do not publish or rebase this scope before the coordinator resolves these ownership conflicts.
 The draft, merge hold, historical-link deferral, and previous path reservations remain unchanged.
 
-**Current holds**: PR #4350 reserves `tests/unit/arango_indexes/test_preservation.py`,
-`tests/unit/export/test_endpoint_family_exporter.py`, and `tests/unit/refactors/test_sqlite_database_writer.py`.
-Keep the PR #4208 workflow and test paths deferred.
-Other current PR holds include #4317, #4316, and #4327.
+**Current holds for later batches**: PR #4350 released
+`tests/unit/refactors/test_sqlite_database_writer.py` and
+`tests/unit/export/test_endpoint_family_exporter.py`. T046 uses only the SQLite writer test.
+The PR #4208 owner approved the five Arango tests and two named helper references for a later batch.
+Keep those paths out of T046. Defer every other PR #4208 workflow and test path.
+The latest T046 ownership scan found no exact PR, issue, or session claim.
+Refresh ownership before each later batch.
 PR #4226 merged. Its owner released the Cisco test path for T044.
 Tasks T005 through T021 remain incomplete while these paths or other active claims remain reserved.
 The coordinator must release the PR hold after #4353 before any pull request opens or changes.
@@ -68,6 +71,7 @@ The coordinator must release the PR hold after #4353 before any pull request ope
 - [X] T043 [US1] Move the cleared `tests/unit/test_fast_mode_flag.py` to its mapped startup group without a content change. Verify focused tests, full node-ID parity, the root reduction, target group size, active references, path guards, and style. Keep all other claimed root files deferred.
 - [X] T044 [US1] Move the released Cisco test into its mapped group. Preserve its canonical content and five-child limit. Verify node IDs, tests, guards, style, compilation, and the quality baseline. (completed: see `design/research.md`)
 - [X] T045 [US1] Move the released CSV-import test package into its mapped inventory group. Update only active scratch paths. Verify node IDs, tests, guards, group counts, baseline semantics, style, and compilation. (completed: see `design/research.md`)
+- [ ] T046 [US1] Move the four released device-replacement tests and the released SQLite writer test to their mapped groups. Preserve file bytes and all node IDs. Verify ownership, hierarchy, active references, baseline semantics, focused tests, guards, style, compilation, and committed test-quality gates. Record evidence in `design/research.md`.
 
 ## Phase 4: User Story 2 - Run the existing unit tests (Priority: P1)
 

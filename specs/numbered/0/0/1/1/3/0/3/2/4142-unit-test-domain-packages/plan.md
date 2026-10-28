@@ -151,12 +151,14 @@ Issue #2752 is now closed, but this does not clear other owners or the PR #4208 
 Current main is `ef0e7e5991950aec9b8f094e32e47fc3f68b4d2f`.
 The published branch head remains `63faa487ad441c27b348911aaf34c04ae1ad3244`.
 
-At the approved base `efd178c3f76e580afc0b5511734498b61f3a0090`, PR #4350 owns three planned source paths.
-Defer `tests/unit/arango_indexes/test_preservation.py`, `tests/unit/export/test_endpoint_family_exporter.py`, and `tests/unit/refactors/test_sqlite_database_writer.py`.
-Defer the entire five-file Arango package because its tests share helpers.
-Restore every Arango file and its contract and discovery imports to the exact approved base.
-PR #4208 still owns its workflow and test paths. Other holds remain with PRs #4317, #4316, #4327, and #4226.
-Refresh exact file lists before each batch. Keep these paths unchanged until their owners release them.
+PR #4350 released `tests/unit/refactors/test_sqlite_database_writer.py` and
+`tests/unit/export/test_endpoint_family_exporter.py`. T046 uses only the SQLite writer test.
+Keep the exporter test out of T046 for a later ownership review.
+The PR #4208 owner approved the five Arango tests and only their helper references in
+`tests/unit/db_discovery/test_probe.py` and `tests/contract/test_arango_declared_indexes.py`
+for a later batch. Keep them out of T046.
+Defer all other `db_discovery` paths and the PR #4208 workflow and portal paths.
+Refresh exact file lists before each batch.
 PR #4353 merged. The coordinator authorized the exact-base rebase and a pull request for completed, unowned moves.
 Keep the issue open for incomplete tasks. Do not merge or enable auto-merge.
 Compare both rename endpoints with every open pull request before publication.
