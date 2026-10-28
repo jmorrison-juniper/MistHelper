@@ -1206,3 +1206,39 @@ The committed changed-from gate checked 1,209 files and 613 findings.
 It skipped 52 files, reported zero parse errors, and found zero new findings.
 The three changed Markdown files passed the STE score threshold and link scan.
 Keep every other `db_discovery`, workflow, and portal path deferred.
+
+## Entrypoint test relocation, 2026-10-28
+
+The approved batch moves these two tests to the mapped runtime entrypoint group.
+The source and destination paths had no exact overlap with open pull requests.
+
+| Source file | Destination file | Pre-move SHA-256 |
+| - | - | - |
+| `tests/unit/refactors/test_help_invocation_side_effect_free.py` | `tests/unit/config/foundation/support/refactors/runtime/entrypoint/test_help_invocation_side_effect_free.py` | `07ba8a2725aaa7fb7464d37a39bdefdd39394cf234030017821863f260c9dc3a` |
+| `tests/unit/refactors/test_run_interactive_test.py` | `tests/unit/config/foundation/support/refactors/runtime/entrypoint/test_run_interactive_test.py` | `684eead3bec9e20ae9148281c4c14371b1732895bc923757748f3c0f6de4a7f2` |
+
+Both post-move hashes match their pre-move values.
+Git reports each move as a content-identical rename.
+The entrypoint group has two tracked children.
+Its ancestors have one to four tracked children, except the existing unit root.
+The unit root has 38 tracked children, and this batch does not increase that count.
+
+The complete unit collection has 29,836 node IDs before and after the move.
+An explicit path mapping produces zero missing and zero added IDs.
+Neither collection has duplicate node IDs.
+The 733-record quality baseline has no path record for either moved test.
+The historical test inventory artifact remains unchanged.
+
+The two focused tests pass: 20 passed.
+The module-move guidance guard passes: 15 passed.
+Ruff, Black, compilation, and the diff check pass.
+The test-quality input preflight passed one test.
+
+The full guardrail command
+`.venv/bin/python -m pytest -p no:cacheprovider tests/guardrails -q`
+exited with code 1 after 103.87 seconds.
+It reported 1,054 passed, 3 skipped, and 36 failed.
+Every failure came from `tests/guardrails/test_spec_route_contract.py`.
+Each failure reported that PowerShell must be installed to verify feature commands.
+The environment has no `pwsh`, so no retry was made.
+The full guardrail result remains failed and is not reported as a pass.
