@@ -14,9 +14,9 @@ Historical callsites in ``src/foundation/persistence/db/database_schema_utils.py
 src.foundation.support.refactors.endpoint_primary_key_strategies import
 ENDPOINT_PRIMARY_KEY_STRATEGIES``.
 
-Bare module-level dict per spec: no wrapper class, no facade, no shim.
-The analyzer's ``EndpointPrimaryKeyStrategiesManager`` naming hint is
-intentionally ignored -- this is a data catalog, not behavior.
+The catalog remains a bare dictionary without a wrapper or compatibility shim.
+``SleTrendIdentity`` validates and constructs the complete keys for the two SLE
+summary-trend strategies. Other endpoint key behavior stays unchanged.
 
 Strategy schema (each value): {
     "type": "natural_pk" | "composite_pk" | "auto_pk" | "time_series",
@@ -26,6 +26,68 @@ Strategy schema (each value): {
     "description": human-readable one-liner,
 }
 """
+
+import hashlib
+import json
+from decimal import Decimal, InvalidOperation
+from typing import Any
+
+
+class SleTrendIdentity:
+    """Validate complete SLE window identities without changing unrelated endpoint keys."""
+
+    @staticmethod
+    def fields(operation: str) -> tuple[str, ...]:
+        """Return the ordered identity columns for supported SLE trend operations."""
+        identifiers = ("site_id", "scope", "scope_id", "metric")
+        if operation == "getSiteSleClassifierSummaryTrend":
+            return (*identifiers, "classifier_name", "start", "end")
+        if operation == "getSiteSleSummaryTrend":
+            return (*identifiers, "start", "end")
+        return ()
+
+    @staticmethod
+    def matches(primary_keys: list[str]) -> bool:
+        """Restrict the new document-key contract to the two complete SLE strategies."""
+        return tuple(primary_keys) in (
+            SleTrendIdentity.fields("getSiteSleSummaryTrend"),
+            SleTrendIdentity.fields("getSiteSleClassifierSummaryTrend"),
+        )
+
+    @staticmethod
+    def enrich(row: dict[str, Any], arguments: dict[str, str]) -> dict[str, Any]:
+        """Use selected request identifiers rather than untrusted response dimensions."""
+        dimensions = {name: value for name, value in arguments.items() if name != "classifier"}
+        if "classifier" in arguments:
+            dimensions["classifier_name"] = arguments["classifier"]
+        return {**row, **dimensions}
+
+    @staticmethod
+    def key(row: dict[str, Any], primary_keys: list[str]) -> str:
+        """Build an unambiguous stable key and reject incomplete or invalid windows."""
+        values = [SleTrendIdentity._value(name, row.get(name)) for name in primary_keys]
+        if Decimal(values[-1]) < Decimal(values[-2]):
+            raise ValueError("SLE window end precedes start")
+        payload = json.dumps(values, ensure_ascii=True, separators=(",", ":")).encode("ascii")
+        return "sle_" + hashlib.sha256(payload).hexdigest()
+
+    @staticmethod
+    def _value(name: str, value: Any) -> str:
+        """Normalize numeric boundaries and require nonempty string identifiers."""
+        if name not in ("start", "end"):
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError(f"Missing or invalid SLE identity field: {name}")
+            return value
+        if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+            raise ValueError(f"Missing or invalid SLE window field: {name}")
+        try:
+            number = Decimal(str(value))
+        except InvalidOperation as error:
+            raise ValueError(f"Invalid SLE window field: {name}") from error
+        if not number.is_finite() or number < 0:
+            raise ValueError(f"Invalid SLE window field: {name}")
+        return format(number.normalize(), "f")
+
 
 # This configuration determines how each API endpoint's data should be stored in Redis/SQLite
 # with proper primary keys to eliminate artificial api_id fields and enable efficient queries
@@ -4083,9 +4145,9 @@ for _endpoint_family_operation, _endpoint_family_strategy in {  # Add missing st
         "description": "Endpoint family export for getSiteSdkStatsByMap",
     },
     "getSiteSleClassifierSummaryTrend": {
-        "type": "auto_increment_with_unique",
-        "primary_key": ["misthelper_internal_id"],
-        "indexes": ["site_id", "scope", "scope_id", "metric", "classifier"],
+        "type": "composite_pk",
+        "primary_key": ["site_id", "scope", "scope_id", "metric", "classifier_name", "start", "end"],
+        "indexes": ["site_id", "scope", "scope_id", "metric", "classifier_name"],
         "unique_constraints": [],
         "description": "Endpoint family export for getSiteSleClassifierSummaryTrend",
     },
@@ -4104,8 +4166,8 @@ for _endpoint_family_operation, _endpoint_family_strategy in {  # Add missing st
         "description": "Endpoint family export for getSiteSleImpactSummary",
     },
     "getSiteSleSummaryTrend": {
-        "type": "auto_increment_with_unique",
-        "primary_key": ["misthelper_internal_id"],
+        "type": "composite_pk",
+        "primary_key": ["site_id", "scope", "scope_id", "metric", "start", "end"],
         "indexes": ["site_id", "scope", "scope_id", "metric"],
         "unique_constraints": [],
         "description": "Endpoint family export for getSiteSleSummaryTrend",

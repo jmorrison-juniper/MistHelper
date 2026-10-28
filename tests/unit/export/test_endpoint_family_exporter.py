@@ -4,11 +4,18 @@ from __future__ import annotations
 
 import importlib
 import inspect
+import json
+import sqlite3
+from contextlib import closing
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock, patch
 
 import pytest
 
+from src.foundation.models.data.data_processing_utils import DataProcessingUtils
+from src.foundation.persistence.db.database_schema_utils import DatabaseSchemaUtils
+from src.foundation.support.refactors import sqlite_database_writer
 from src.foundation.support.refactors.endpoint_primary_key_strategies import ENDPOINT_PRIMARY_KEY_STRATEGIES
 from src.operations.exporting.export.endpoint_family_exporter import (
     _MSP_DETAIL_OPS,
@@ -52,6 +59,80 @@ GROUPS = {
     "MSP_DETAIL": _MSP_DETAIL_OPS,
     "OTHER_DETAIL": _OTHER_DETAIL_OPS,
 }
+
+
+class TestSlePrimaryKeyExport:
+    """Exercise the export-to-SQLite path alongside the SDK failure-mode tests."""
+
+    @pytest.fixture
+    def export_environment(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, MagicMock]:
+        """Connect the actual exporter to the real SQLite writer in an isolated directory."""
+        database = tmp_path / "windows.db"
+        host = SimpleNamespace(DATABASE_PATH=str(database))
+        dependencies = SimpleNamespace(
+            DatabaseSchemaUtils=DatabaseSchemaUtils, DataProcessingUtils=DataProcessingUtils, misthelper_module=host
+        )
+        monkeypatch.setattr(sqlite_database_writer, "_resolve_runtime_dependencies", lambda: dependencies)
+        writer = MagicMock()
+        writer.write_with_format_selection.side_effect = (
+            lambda rows, filename, api_function_name: sqlite_database_writer.SQLiteDatabaseWriter(
+                rows, "trend", api_function_name
+            ).write()
+        )
+        monkeypatch.setattr(EndpointFamilyExporter, "_mist_helper", lambda: SimpleNamespace(DataExporter=writer))
+        return database, writer
+
+    @pytest.mark.parametrize("operation", ("getSiteSleSummaryTrend", "getSiteSleClassifierSummaryTrend"))
+    def test_primary_key_reexport_replaces_one_window(
+        self, operation: str, export_environment: tuple[Path, MagicMock]
+    ) -> None:
+        """A second complete export updates one stored window with the latest response."""
+        database, writer = export_environment
+        arguments = dict(site_id="site-1", scope="site", scope_id="scope-1", metric="coverage", classifier="low-rssi")
+        for value in ("first", "second"):
+            assert (
+                EndpointFamilyExporter._persist(
+                    {"start": 100, "end": 200, "value": value}, "window.csv", operation, arguments
+                )
+                == 1
+            )
+        with closing(sqlite3.connect(database)) as connection:
+            assert connection.execute("SELECT site_id, start, end, value FROM trend").fetchall() == [
+                ("site-1", "100", "200", "second")
+            ]
+        assert writer.write_with_format_selection.call_count == 2
+
+    @pytest.mark.parametrize("operation", ("getSiteSleSummaryTrend", "getSiteSleClassifierSummaryTrend"))
+    def test_trend_empty_body_skips_output(self, operation: str) -> None:
+        """An empty SDK body cannot create a partial identity or an output row."""
+        host = _fake_mist_helper()
+        with patch.object(EndpointFamilyExporter, "_mist_helper", return_value=host):
+            assert EndpointFamilyExporter._persist(None, "window.csv", operation) == 0
+        host.DataExporter.write_with_format_selection.assert_not_called()
+
+    @pytest.mark.parametrize("operation", ("getSiteSleSummaryTrend", "getSiteSleClassifierSummaryTrend"))
+    @pytest.mark.parametrize("body", (b"", b"{"), ids=("empty-body", "malformed-json"))
+    def test_trend_malformed_json_sdk_error_is_visible(
+        self, operation: str, body: bytes, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Empty or malformed response bytes produce visible decoder failures without output."""
+        host = _fake_mist_helper()
+        with pytest.raises(json.JSONDecodeError) as failure:
+            json.loads(body)
+        sdk_call = MagicMock(side_effect=failure.value)
+        entry = next(row for row in _SITE_SLE_OPS if row.operation == operation)
+        arguments = MagicMock(values=tuple("selected" for _field in entry.required), label="window")
+        with (
+            patch.object(EndpointFamilyExporter, "_mist_helper", return_value=host),
+            patch.object(EndpointFamilyExporter, "_resolve", return_value=sdk_call),
+            patch.object(EndpointFamilyExporter, "_collect_arguments", return_value=arguments),
+            caplog.at_level("ERROR"),
+        ):
+            EndpointFamilyExporter._run(entry)
+        sdk_call.assert_called_once_with(host.apisession, *arguments.values)
+        host.DataExporter.write_with_format_selection.assert_not_called()
+        assert operation in caplog.text
+        assert str(failure.value) in caplog.text
 
 
 def _fake_mist_helper() -> Any:
@@ -369,16 +450,63 @@ def test_retained_trend_rows_and_keys_are_exact(
     row = next(entry for entry in _SITE_SLE_OPS if entry.operation == operation)
     assert row == _EndpointFamilyOp(operation, "mistapi.api.v1.sites.sle", required, (issue,))
     assert ENDPOINT_CATALOG[operation] == EndpointInfo(description, INTERACTIVE_SAFE)
+    identifiers = [name if name != "classifier" else "classifier_name" for name in required]
     assert ENDPOINT_PRIMARY_KEY_STRATEGIES[operation] == {
-        "type": "auto_increment_with_unique",
-        "primary_key": ["misthelper_internal_id"],
-        "indexes": list(required),
+        "type": "composite_pk",
+        "primary_key": [*identifiers, "start", "end"],
+        "indexes": identifiers,
         "unique_constraints": [],
         "description": "Endpoint family export for " + operation,
     }
 
 
 LOCAL_TREND_HOST = "https://api.issue3335.test"
+
+
+@pytest.mark.parametrize("operation", ("getSiteSleSummaryTrend", "getSiteSleClassifierSummaryTrend"))
+def test_trend_request_dimensions_override_response_dimensions(operation: str) -> None:
+    """Persist the selected request identity without mutating the response object."""
+    host = _fake_mist_helper()
+    arguments = dict(
+        site_id="selected-site", scope="site", scope_id="selected-scope", metric="coverage", classifier="low-rssi"
+    )
+    response = dict(
+        site_id="wrong-site",
+        scope="wrong-scope",
+        metric="wrong-metric",
+        classifier={"name": "wrong-classifier"},
+        start=100,
+        end=200,
+    )
+    with patch.object(EndpointFamilyExporter, "_mist_helper", return_value=host):
+        assert EndpointFamilyExporter._persist(response, "window.csv", operation, arguments) == 1
+    row = host.DataExporter.write_with_format_selection.call_args.args[0][0]
+    assert (row["site_id"], row["scope"], row["scope_id"], row["metric"], row["classifier_name"]) == tuple(
+        arguments.values()
+    )
+    assert response["site_id"] == "wrong-site"
+    assert response["classifier"] == {"name": "wrong-classifier"}
+
+
+@pytest.mark.parametrize("operation", ("getSiteSleSummaryTrend", "getSiteSleClassifierSummaryTrend"))
+def test_invalid_trend_row_prevents_partial_export(operation: str) -> None:
+    """Reject the complete batch before any output when one returned row lacks a window."""
+    host = _fake_mist_helper()
+    arguments = {
+        "site_id": "site",
+        "scope": "site",
+        "scope_id": "scope",
+        "metric": "coverage",
+        "classifier": "low-rssi",
+    }
+    with patch.object(EndpointFamilyExporter, "_mist_helper", return_value=host):
+        with pytest.raises(ValueError, match="SLE window field: end"):
+            EndpointFamilyExporter._persist(
+                [{"start": 100, "end": 200}, {"start": 100}], "window.csv", operation, arguments
+            )
+    host.DataExporter.write_with_format_selection.assert_not_called()
+
+
 LOCAL_SITE_URL = LOCAL_TREND_HOST + "/api/v1/orgs/org-3335/sites?limit=1000"
 LOCAL_TREND_ENV_KEYS = (
     "MIST_HOST",
@@ -545,6 +673,8 @@ def trend_payloads(
     url = LOCAL_TREND_HOST + uri
     first: dict[str, object] = {"summary": {"value": 42}, "note": "first\nsecond\r\nthird"}
     second: dict[str, object] = {"summary": {"value": 43}, "note": "next\rpage"}
+    first.update(start=100, end=200)
+    second.update(start=200, end=300)
     body: list[dict[str, object]] | dict[str, object] = {"results": [first]} if "results" in shape else [first]
     headers = {"X-Page-Total": "2", "X-Page-Limit": "1", "X-Page-Page": "1"} if shape == "paged-list" else {}
     if shape == "paged-results":
@@ -561,6 +691,16 @@ def trend_payloads(
         responses[next_url] = _trend_response(next_url, {"results": [second]} if "results" in shape else [second])
         expected.append({"summary_value": 43, "note": "nextpage"})
         urls.append(next_url)
+    dimensions: dict[str, object] = {
+        "site_id": "site-3335",
+        "scope": "site",
+        "scope_id": "scope-3335",
+        "metric": "coverage",
+    }
+    if _operation == "getSiteSleClassifierSummaryTrend":
+        dimensions["classifier_name"] = "low-rssi"
+    for index, row in enumerate(expected):
+        row.update(dimensions, start=100 + index * 100, end=200 + index * 100)
     return responses, expected, urls
 
 
@@ -647,10 +787,17 @@ def test_real_trend_documented_object_exports_one_record(
     row = writer.call_args.args[0][0]
     assert row["start"] == documented_trend_body["start"]
     assert row["end"] == documented_trend_body["end"]
+    assert {name: row[name] for name in ("site_id", "scope", "scope_id", "metric")} == {
+        "site_id": "site-3335",
+        "scope": "site",
+        "scope_id": "scope-3335",
+        "metric": "coverage",
+    }
     if _operation == "getSiteSleSummaryTrend":
         assert row["sle_samples_value"] == "42"
     else:
         assert row["metric"] == "coverage"
+        assert row["classifier_name"] == "low-rssi"
         assert row["classifier_samples_duration"] == "42"
 
 
