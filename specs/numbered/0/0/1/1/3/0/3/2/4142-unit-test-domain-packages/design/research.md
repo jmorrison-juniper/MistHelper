@@ -1603,6 +1603,11 @@ The new versioning group and support parent each have one child.
 The inventory parent has three children.
 Every mapped ancestor remains within five children.
 Ruff, Black, compilation, and whitespace checks pass.
+The three changed feature records pass STE and contain zero broken local links.
+The committed input preflight reports one passed.
+Both quality gates examine 1,209 files and 613 findings.
+Each reports 52 skipped files, zero parse errors, and zero new findings against the baseline.
+These results apply to the move commit `3987216a1`.
 The UI fixture-dependent tests and explicit parameter-collector and prompt-utils reservations remain unmoved.
 The firmware running-version test also remains unmoved because #2746 retains an explicit reservation.
 The application-context hold, historical records, #4008 actions, analytics paths, and separate #2746 HTTP 403 change remain unchanged.
