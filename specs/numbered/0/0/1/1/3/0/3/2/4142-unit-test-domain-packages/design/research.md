@@ -1343,5 +1343,10 @@ The entrypoint group increases from two to three children.
 The higher mapped ancestors retain two or four children.
 The focused test and narrow structure, move, and baseline guards report 55 passed.
 Ruff, Black, and compilation pass.
-The committed test-quality result follows after the local commit.
+The committed test-quality check examined 1,209 files and 613 findings.
+It skipped 52 files and reported zero parse errors.
+It found zero new findings against the baseline after commit `7baa0b5d3`.
+The required input preflight reported one passed.
+The four Markdown files passed STE with scores of 94, 97, 96, and 93.
+The link check found zero broken links.
 The unsupported-flag test, actions, analytics, fixtures, and pytest settings remain unchanged.
