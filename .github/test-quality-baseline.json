@@ -3170,10 +3170,10 @@
   {
     "category": "weak_assertion",
     "explanation": "assert x is not None only verifies non-None state.",
-    "file_path": "tests/unit/refactors/test_maps_manager_launcher.py",
+    "file_path": "tests/unit/config/foundation/support/refactors/network/launchers/test_maps_manager_launcher.py",
     "heuristic": false,
     "line_number": 76,
-    "related_source": "tests/unit/refactors/test_maps_manager_launcher.py",
+    "related_source": "tests/unit/config/foundation/support/refactors/network/launchers/test_maps_manager_launcher.py",
     "remediation": "Assert on the actual value / type / structure you expect.",
     "rule_id": "weak_is_not_none",
     "severity": "medium"
@@ -3225,10 +3225,10 @@
   {
     "category": "weak_assertion",
     "explanation": "assert x is not None only verifies non-None state.",
-    "file_path": "tests/unit/refactors/test_wan2_migration_launcher.py",
+    "file_path": "tests/unit/config/foundation/support/refactors/network/launchers/test_wan2_migration_launcher.py",
     "heuristic": false,
     "line_number": 96,
-    "related_source": "tests/unit/refactors/test_wan2_migration_launcher.py",
+    "related_source": "tests/unit/config/foundation/support/refactors/network/launchers/test_wan2_migration_launcher.py",
     "remediation": "Assert on the actual value / type / structure you expect.",
     "rule_id": "weak_is_not_none",
     "severity": "medium"

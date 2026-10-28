@@ -1204,6 +1204,42 @@ Full unit collection matched the explicit path mapping with zero missing or adde
 The test-quality input preflight passed one test.
 The committed changed-from gate checked 1,209 files and 613 findings.
 It skipped 52 files, reported zero parse errors, and found zero new findings.
+
+## Launcher test relocation, 2026-10-28
+
+The ownership scan found no open pull request or issue claim on these source or destination paths.
+At the scan, `origin/main` was `a0fac53c5b5d5f57e6d05ff2d6225570cda07691`.
+The branch head was `f6ec876def65851f043a415b7972fa9c631704e2`.
+PR #4358 remained open and draft. Auto-merge remained disabled.
+
+| Source file | Destination file | Pre-move SHA-256 |
+| - | - | - |
+| `tests/unit/refactors/test_connection_pool_executor.py` | `tests/unit/config/foundation/support/refactors/network/launchers/test_connection_pool_executor.py` | `ab4c28df28d74ce94d5e8e1a4c23213080fb6327ce2362adc69bcfd966ae3c6f` |
+| `tests/unit/refactors/test_maps_manager_launcher.py` | `tests/unit/config/foundation/support/refactors/network/launchers/test_maps_manager_launcher.py` | `0844cdc162e297cf2118cf34d297c9ed526d246f7e6e572cbfcd30e451c67a2b` |
+| `tests/unit/refactors/test_wan2_migration_launcher.py` | `tests/unit/config/foundation/support/refactors/network/launchers/test_wan2_migration_launcher.py` | `0f7b2e8015a9588686be768c32623f092c23ae5280234a79203c0c8b02a5458b` |
+
+Each destination hash matches its source hash.
+The source group has 18 tracked direct children.
+The mapped refactors parent has four tracked direct children.
+The network group has one tracked direct child.
+The launcher group has three tracked direct children.
+The historical performance inventory remains unchanged.
+
+The full unit collection has 29,836 node IDs before and after the move.
+The explicit path mapping produces zero missing or added IDs.
+Neither collection has duplicate IDs.
+The three focused test files pass: 50 passed.
+The package structure and move guidance guards pass: 24 passed.
+The baseline guard passes: 14 passed.
+The test-quality input preflight passes: one passed.
+Ruff and Black pass. Compilation succeeds for all three files.
+The three feature records score 97, 96, and 93 for STE.
+The Markdown link scan finds zero broken links.
+
+The baseline retains 733 records and two findings for these moved tests.
+Only the four approved path fields changed.
+All other finding fields, record order, and record count remain unchanged.
+The committed changed-from test-quality gate remains pending.
 The three changed Markdown files passed the STE score threshold and link scan.
 Keep every other `db_discovery`, workflow, and portal path deferred.
 
