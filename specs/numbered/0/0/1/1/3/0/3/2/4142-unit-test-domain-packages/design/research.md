@@ -1312,5 +1312,9 @@ An explicit source-to-destination mapping produces identical node-ID multisets w
 The focused test and narrow structure, move, and baseline guards report 47 passed.
 The required test-quality input preflight reports one passed.
 Ruff, Black, compilation, and whitespace checks pass.
-The committed test-quality result follows after the local commit.
+The committed test-quality check examined 1,209 files and 613 findings.
+It skipped 52 files and reported zero parse errors.
+It found zero new findings against the baseline after commit `f8d486a8d`.
+The three feature records passed STE with scores of 97, 96, and 93.
+The Markdown link check found zero broken links.
 The held actions and analytics paths remain unchanged.
