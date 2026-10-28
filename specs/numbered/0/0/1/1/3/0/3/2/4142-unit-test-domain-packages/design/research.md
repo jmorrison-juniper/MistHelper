@@ -968,6 +968,35 @@ The final ownership scan found zero intersections across 794 raw paths and 11 ot
 Ruff and Black passed all 396 changed Python files.
 The entry-point compile and required quality-input preflight passed.
 
+## Cisco converter test relocation (2026-10-28)
+
+PR #4226 merged at `14ac97942f1e575edd7dbf8c4bbfb517ef58fad3`.
+Its owner released the Cisco test path for this move.
+The open-PR scan checked five pull requests. It found no source or destination path conflict.
+
+Move only `tests/unit/gateway/overrides/test_cisco_config_converter.py` to
+`tests/unit/marvis/mist/resources/gateway/overrides/test_cisco_config_converter.py`.
+The moved file matches approved blob `31a84e3795665ebea1a9346fd835fffc619a9fe7`.
+That blob has 99 lines. Do not copy the separate untracked test from the old PR worktree.
+The old source path is absent. The destination has five direct children, including `__init__.py`.
+
+The base and candidate each collect 29,836 unit tests.
+The full node-ID multisets match after mapping the 29 Cisco node IDs to the destination path.
+The comparison reports zero missing and zero added IDs.
+The focused Cisco test collects 29 tests. The converter route tests pass 14 tests.
+The converter tests and move and structure guards pass 55 tests.
+
+Ruff passes the moved test. Black reports that it would leave the file unchanged.
+Python compilation passes. The STE linter and test-quality preflight pass.
+The full test-quality gate checks 1,209 files and 613 findings.
+It skips 52 files, reports zero parse errors, and finds zero new baseline findings.
+The baseline keeps 733 ordered entries. It has no reference to either test path.
+Its blob is unchanged by this move.
+
+The current Cisco quickstart commands now use the destination path.
+The earlier implementation command remains unchanged as historical evidence.
+No other main content, historical record, or policy changed.
+
 The previous local full root-unit result remains evidence for the identical fixture repair.
 This rebase reruns the changed main test and the exact shared-state regression locally.
 CI must rerun its complete unchanged gate set for the new head.

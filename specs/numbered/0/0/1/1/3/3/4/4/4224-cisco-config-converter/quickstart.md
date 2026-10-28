@@ -18,7 +18,7 @@ live Mist organization.
 Run the parser and conversion unit tests:
 
 ```sh
-.venv/bin/python -m pytest tests/unit/gateway/overrides/test_cisco_config_converter.py
+.venv/bin/python -m pytest tests/unit/marvis/mist/resources/gateway/overrides/test_cisco_config_converter.py
 ```
 
 Expected result: supported IPv4 DNS commands produce `dns_servers`. Malformed directives remain
@@ -53,7 +53,7 @@ journey. It does not prove shared navigation registration.
 Run the converter tests with the existing portal browser suite:
 
 ```sh
-.venv/bin/python -m pytest tests/unit/gateway/overrides/test_cisco_config_converter.py tests/integration/web_portal/cisco_config_converter tests/e2e/web_portal -q
+.venv/bin/python -m pytest tests/unit/marvis/mist/resources/gateway/overrides/test_cisco_config_converter.py tests/integration/web_portal/cisco_config_converter tests/e2e/web_portal -q
 ```
 
 Expected result: converter and existing portal tests pass. The feature adds no service, volume,
@@ -66,6 +66,7 @@ before publishing implementation changes.
 
 On 2026-10-18, the combined parser, route, and portal smoke command passed 63 tests.
 Feature coverage was 100 percent:
+The command below records the original test path. Use the current path listed under Parser and Conversion.
 
 ```sh
 .venv/bin/python -m pytest tests/unit/gateway/overrides/test_cisco_config_converter.py tests/integration/web_portal/cisco_config_converter/test_routes.py tests/e2e/web_portal/test_portal_smoke.py --cov=src/interfaces/portals/cisco_config_converter --cov-report=term-missing --cov-fail-under=80 -q --screenshot=only-on-failure --output=test-artifacts/cisco-browser

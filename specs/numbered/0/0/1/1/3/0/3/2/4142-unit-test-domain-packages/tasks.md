@@ -16,7 +16,8 @@ The draft, merge hold, historical-link deferral, and previous path reservations 
 **Current holds**: PR #4350 reserves `tests/unit/arango_indexes/test_preservation.py`,
 `tests/unit/export/test_endpoint_family_exporter.py`, and `tests/unit/refactors/test_sqlite_database_writer.py`.
 Keep the PR #4208 workflow and test paths deferred.
-Other current PR holds include #4317, #4316, #4327, and #4226.
+Other current PR holds include #4317, #4316, and #4327.
+PR #4226 merged. Its owner released the Cisco test path for T044.
 Tasks T005 through T021 remain incomplete while these paths or other active claims remain reserved.
 The coordinator must release the PR hold after #4353 before any pull request opens or changes.
 
@@ -65,6 +66,7 @@ The coordinator must release the PR hold after #4353 before any pull request ope
 - [X] T041 [US1] Split the unclaimed container tests into mapped build-support and runtime groups. Update helper imports, repository-root depths, and the current container guide. Verify focused tests, complete node IDs, unchanged baseline fields, group sizes, path guards, and style.
 - [X] T042 [US1] Apply the bounded troubleshooting map to core tests, credential tests, SMS tests, synthetic tests, and RF diagnostics. Update the standalone consumer import and RF manifest root. Preserve all baseline non-path fields. Verify focused tests, full node-ID parity, group sizes, declarations, path guards, and style.
 - [X] T043 [US1] Move the cleared `tests/unit/test_fast_mode_flag.py` to its mapped startup group without a content change. Verify focused tests, full node-ID parity, the root reduction, target group size, active references, path guards, and style. Keep all other claimed root files deferred.
+- [X] T044 [US1] Move the released Cisco test into its mapped group. Preserve its canonical content and five-child limit. Verify node IDs, tests, guards, style, compilation, and the quality baseline. (completed: see `design/research.md`)
 
 ## Phase 4: User Story 2 - Run the existing unit tests (Priority: P1)
 
@@ -89,7 +91,7 @@ The coordinator must release the PR hold after #4353 before any pull request ope
 
 ### Implementation for User Story 3
 
-- [ ] T017 [US3] Move `api`, `dataclasses`, `db_discovery`, `export`, `gateway`, `org`, and `ssh` only after each related pull request, issue, and session claim clears. Split each released package by test topic when its destination would exceed five children. Move `db_discovery` only after `tests/unit/upgrade_portal/test_store.py` is released, PR #4208 accepts the handoff, issue #2752 receives human review, and its owner clears related claims. Current holds include PR #4226, PR #4287, issue #2746, issue #2747, and issue #2752.
+- [ ] T017 [US3] Move `api`, `dataclasses`, `db_discovery`, `export`, `gateway`, `org`, and `ssh` only after each related pull request, issue, and session claim clears. Split each released package by test topic when its destination would exceed five children. Move `db_discovery` only after `tests/unit/upgrade_portal/test_store.py` is released, PR #4208 accepts the handoff, issue #2752 receives human review, and its owner clears related claims. The Cisco converter test moved under T044 after PR #4226 merged. Remaining holds include PR #4287, issue #2746, issue #2747, and issue #2752.
 - [ ] T018 [US3] Move `tests/unit/websocket_streams/` only after PR #4208 merges, its owner accepts the handoff, and each active session claim clears. PRs #4308 and #4315 have merged.
 - [ ] T019 [US3] Move `tests/unit/wan_performance/` to `tests/unit/maps/interfaces/portals/wan_performance/` only after PR #4208 merges and its owner accepts the handoff.
 - [ ] T020 [US3] Move `tests/unit/scripts/` after PR #4208 merges and its owner accepts the handoff. Move `tests/unit/upgrade_portal/` after PR #4208 merges, issue #2752 work receives human review, and its owner clears all related claims. Do not enable auto-merge for portal work. Then update the CI selectors.

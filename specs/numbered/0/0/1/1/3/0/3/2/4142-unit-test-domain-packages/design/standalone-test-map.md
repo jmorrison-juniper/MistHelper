@@ -32,7 +32,7 @@ Pytest first imported the moved `site` tests as the standard-library `site` modu
 | `tests/unit/firmware/` | `tests/unit/prod_readiness/operations/execution/firmware/upgraders/` | 18 (1 marker), split into three groups | Issues #2746 and #2747 claim `test_running_version.py`; recheck each candidate before moving |
 | `tests/unit/firmware_policy/` | `tests/unit/prod_readiness/operations/execution/firmware/policy/` | 8, split into policy and recovery groups | |
 | `tests/unit/firmware_policy_jobs/` | `tests/unit/prod_readiness/operations/execution/firmware/policy_jobs/` | 3 (1 marker) | |
-| `tests/unit/gateway/` | `tests/unit/marvis/mist/resources/gateway/` | 14 | WAN override, exporter, override, and SSR tests moved to topic groups. PR #4226 owns the Cisco converter. Issues #2746 and #2747 claim other gateway tests |
+| `tests/unit/gateway/` | `tests/unit/marvis/mist/resources/gateway/` | 14 | WAN override, exporter, override, and SSR tests moved to topic groups. The Cisco converter test moved after PR #4226 merged and its owner released the path. Issues #2746 and #2747 claim other gateway tests |
 | `tests/unit/helpers/` | `tests/unit/config/foundation/support/helpers/` | 1 | |
 | `tests/unit/input/` | `tests/unit/config/foundation/runtime/core/input/` | 1 | |
 | `tests/unit/inventory/` | `tests/unit/marvis/mist/resources/inventory/` | 9, split into five groups | `test_org_device_inventory_summary.py` was a prior #2746 candidate; recheck before moving |
@@ -81,11 +81,14 @@ Keep the gateway high-availability and statistics exporters together.
 
 #### Gateway overrides
 
-Keep the override reader, classifier, and report writer together. Leave the Cisco converter at its source path until PR #4226 merges.
+Keep the override reader, classifier, report writer, and released Cisco converter test together. PR #4226 merged, and its owner released the Cisco test for the move.
 
 | Destination group | Source files |
 | - | - |
 | `tests/unit/marvis/mist/resources/gateway/overrides/` | `tests/unit/gateway/overrides/__init__.py`, `tests/unit/gateway/overrides/test_device_data_fetcher.py`, `tests/unit/gateway/overrides/test_override_classifier.py`, `tests/unit/gateway/overrides/test_override_report_writer.py` |
+
+The Cisco converter test now resides at `tests/unit/marvis/mist/resources/gateway/overrides/test_cisco_config_converter.py`.
+The group has five direct children, including its package marker.
 
 #### Gateway SSR registration
 
