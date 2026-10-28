@@ -1545,6 +1545,35 @@ Both quality gates examine 1,209 files and 613 findings.
 Each reports 52 skipped files, zero parse errors, and zero new findings against the baseline.
 These results apply to the move commit `3bbcadacd`.
 
+## Fast-mode seam test relocation, 2026-10-28
+
+The preceding head `48ea4e7e81e79882d90dafc7122b87e55ba92829` has 36 successful checks and seven skipped checks.
+Main remains `a0fac53c5b5d5f57e6d05ff2d6225570cda07691`.
+The worktree started clean.
+The refreshed six-PR file inventory has no external exact-path overlap.
+Exact open issue searches found only campaign inventory references in #2746 and #2747.
+All 103 campaign comments were examined.
+Four comments mention this filename, with no active file reservation.
+Move `tests/unit/refactors/test_fast_mode_small_seams.py` to
+`tests/unit/config/foundation/support/refactors/runtime/console/test_fast_mode_small_seams.py`.
+The file retains every byte, including its existing environment and module teardown.
+
+The source group decreases from seven to six tracked direct children.
+The console group increases from two to three children.
+The runtime group retains three children.
+Higher mapped ancestors retain two or four children.
+The baseline retains 733 records, their order, and all non-path fields.
+Only four path fields change across two existing findings.
+Historical specifications, changelog, and performance inventory files remain unchanged.
+The full collection retains 29,838 node IDs with exact mapped parity and no duplicates.
+The unmoved focused control reports 40 passed.
+Mapped refactors, remaining refactors, affected consumers, and narrow guards report 780 passed after this move.
+Ruff, Black, compilation, and whitespace checks pass.
+The #4008 actions, analytics history, and separate unpublished HTTP 403 commit remain unchanged.
+PR #4358 stays a draft with auto-merge disabled.
+Publication requires the remaining documentation and committed quality gates plus the exact preceding-head lease.
+Another batch requires green CI on the published head.
+
 ## Network configuration test relocation, 2026-10-28
 
 The preceding head `05e90edc2fd344e0270df7ecb0c7d2f6758a8e4b` passed all 36 checks.
