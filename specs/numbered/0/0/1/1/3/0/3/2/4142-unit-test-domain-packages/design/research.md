@@ -1427,6 +1427,16 @@ The user then explicitly authorized the remaining gates and publication of this 
 The #4008 actions and analytics holds remain unchanged.
 Publication requires the scoped gates and an exact remote-head lease.
 Another batch requires green CI on the published repair head.
+Final local validation reports 504 passed and a clean Ruff, Black, compilation, and whitespace check.
+The symbol comparison finds no lost names and the single intended regression function addition.
+Its exit code is 1 because it reports that intended addition.
+The Markdown link check finds zero broken links across two files.
+STE reports scores of 97 and 93 for the task and research records.
+The committed input preflight reports one passed with four validated inputs.
+Both quality gates examine 1,209 files and 613 findings.
+Each reports 52 skipped files, zero parse errors, and zero new findings against the baseline.
+These committed results apply to `ec79d064a6dc62530771ba70e80ec30dd7c16d85`.
+The full guardrail suite remains excluded because its previously recorded PowerShell failures require unavailable tooling.
 
 ## Network configuration test relocation, 2026-10-28
 
