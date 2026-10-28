@@ -71,10 +71,14 @@ class JuniperPromptWalker(PromptWalker):
             if plain in prompt_audit.RAW_INPUT_NAMES:
                 found.append("raw")  # Every call site is one prompt, including a repeat.
                 continue
-            target = self.index.lookup(name) if name else None
-            if target is not None:
-                parts = name.split(".")
-                self._follow(target, parts[-2] if len(parts) > 1 else owner, found, stack + (id(node),))
+            self._descend(name, owner, found, stack + (id(node),))
+
+    def _descend(self, name: str | None, owner: str, found: list[str], stack: tuple[int, ...]) -> None:
+        """Follow a call into its function when the index resolves the name."""
+        target = self.index.lookup(name) if name else None
+        if target is not None:
+            parts = name.split(".")
+            self._follow(target, parts[-2] if len(parts) > 1 else owner, found, stack)
 
     def _resolved_name(self, call: ast.Call, owner: str) -> str | None:
         """Return the qualified name of a call, resolving self, cls, and a constructed object."""
