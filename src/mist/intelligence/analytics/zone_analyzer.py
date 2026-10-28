@@ -248,7 +248,11 @@ class ZoneConfigurationAnalyzer:
         """Display zone analysis section."""
         if not zone_analysis:  # WHY: nothing to render when zone analysis is missing/empty
             return  # WHY: leave the console untouched
-        stats = zone_analysis.get("zone_count_stats", {})  # WHY: pull the summary stats for the header
+        stats = zone_analysis.get("zone_count_stats")
+        if not isinstance(stats, dict):
+            message = "_display_zone_section requires zone_count_stats to be a dictionary."
+            logger.error(message)
+            raise ValueError(message)
         _print_zone_header(stats)  # WHY: emit the fixed-format zone summary lines
         _display_common_zones(zone_analysis, stats)  # WHY: list common zones and coverage
         _display_missing_zones(zone_analysis)  # WHY: list sites missing common zones

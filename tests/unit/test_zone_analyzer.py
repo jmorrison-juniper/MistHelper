@@ -534,6 +534,42 @@ class TestAnalyzeOccupancyPatterns:
 class TestDisplayResults:
     """Tests for display methods (smoke tests)."""
 
+    @pytest.mark.parametrize(
+        "analysis",
+        [
+            {"common_zones": set()},
+            {"zone_count_stats": None},
+            {"zone_count_stats": []},
+            {"zone_count_stats": ""},
+            {"zone_count_stats": "private-statistics-value"},
+            {"zone_count_stats": False},
+            {"zone_count_stats": 0},
+            {"zone_count_stats": ()},
+        ],
+        ids=["missing", "null", "list", "blank", "text", "boolean", "number", "tuple"],
+    )
+    @pytest.mark.parametrize("combined", [False, True], ids=["direct", "combined"])
+    def test_zone_statistics_contract(
+        self,
+        analysis: dict[str, Any],
+        combined: bool,
+        capsys: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Refuse invalid statistics before an incomplete report can claim zero sites."""
+        message = "_display_zone_section requires zone_count_stats to be a dictionary."
+        with pytest.raises(ValueError, match=message):
+            if combined:
+                ZoneConfigurationAnalyzer._display_results({"zones": analysis})
+            else:
+                ZoneConfigurationAnalyzer._display_zone_section(analysis)
+        output = capsys.readouterr().out
+        assert "[ZONE ANALYSIS]" not in output
+        assert "Total sites scanned" not in output
+        assert "[ENGAGEMENT ANALYSIS]" not in output
+        assert (ZoneConfigurationAnalyzer.__module__, 40, message) in caplog.record_tuples
+        assert "private-statistics-value" not in caplog.text
+
     def test_display_results_empty(self, capsys: pytest.CaptureFixture[str]) -> None:
         ZoneConfigurationAnalyzer._display_results({})
         out = capsys.readouterr().out
