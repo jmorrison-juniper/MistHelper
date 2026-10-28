@@ -1242,3 +1242,7 @@ Every failure came from `tests/guardrails/test_spec_route_contract.py`.
 Each failure reported that PowerShell must be installed to verify feature commands.
 The environment has no `pwsh`, so no retry was made.
 The full guardrail result remains failed and is not reported as a pass.
+
+The test-quality input preflight passed one test.
+The committed changed-from gate checked 1,209 files and 613 findings.
+It skipped 52 files, reported zero parse errors, and found zero new findings.

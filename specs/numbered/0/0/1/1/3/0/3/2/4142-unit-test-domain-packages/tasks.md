@@ -75,7 +75,7 @@ The coordinator must release the PR hold after #4353 before any pull request ope
 - [X] T047 [US1] Move the five released Arango tests to their mapped storage group. Update only their internal helper imports and the approved imports in `tests/unit/db_discovery/test_probe.py` and `tests/contract/test_arango_declared_indexes.py`. Preserve all other file content and test behavior. Verify current ownership, hierarchy, active references, baseline semantics, the complete mapped unit collection, focused tests, guards, style, compilation, and committed test-quality gates. Record evidence in `design/research.md`.
 
 - [X] T048 [US1] Move the two inventory utility tests and the anomaly metrics discovery test to their mapped refactor groups. Preserve file bytes and all node IDs. Verify ownership, hierarchy, active references, baseline semantics, focused tests, guards, style, compilation, and committed test-quality gates. Record evidence in `design/research.md`.
-- [ ] T049 [US1] Move the two entrypoint tests to their mapped runtime entrypoint group. Preserve file bytes and all node IDs. Verify ownership, hierarchy, active references, baseline semantics, focused tests, guards, style, compilation, and committed test-quality gates. Record evidence in `design/research.md`.
+- [X] T049 [US1] Move the two entrypoint tests to their mapped runtime entrypoint group. Preserve file bytes and all node IDs. Verify ownership, hierarchy, active references, baseline semantics, focused tests, guards, style, compilation, and committed test-quality gates. Record evidence in `design/research.md`.
 
 ## Phase 4: User Story 2 - Run the existing unit tests (Priority: P1)
 
