@@ -1606,6 +1606,11 @@ The source group decreases from 15 to 14 tracked direct children.
 The dispatch group and its interaction parent each have two children.
 Every mapped ancestor remains within five children.
 Ruff, Black, compilation, and whitespace checks pass.
+The three changed feature records pass STE and contain zero broken local links.
+The committed input preflight reports one passed.
+Both quality gates examine 1,209 files and 613 findings.
+Each reports 52 skipped files, zero parse errors, and zero new findings against the baseline.
+These results apply to the move commit `920acec39`.
 The parameter-collector reservation, application-context hold, historical records, #4008 actions, analytics paths, and separate #2746 HTTP 403 change remain unchanged.
 Publication requires the documentation checks, committed quality gates, and exact preceding-head lease.
 PR #4358 remains a draft with auto-merge disabled.
