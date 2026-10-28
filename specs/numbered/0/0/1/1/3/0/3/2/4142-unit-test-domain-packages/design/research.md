@@ -1603,6 +1603,11 @@ The new TUI group and its interaction parent each have one child.
 The UI parent has two children.
 Every mapped ancestor remains within five children.
 Ruff, Black, compilation, and whitespace checks pass.
+The three changed feature records pass STE and contain zero broken local links.
+The committed input preflight reports one passed.
+Both quality gates examine 1,209 files and 613 findings.
+Each reports 52 skipped files, zero parse errors, and zero new findings against the baseline.
+These results apply to the move commit `f06b335c7`.
 The baseline remains unchanged.
 Historical references in the changelog, feature 1017, and feature 2573 remain unchanged under FR-004.
 No current selector, import, workflow, or operator quickstart names this test.
