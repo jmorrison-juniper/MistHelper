@@ -1579,6 +1579,36 @@ Both quality gates examine 1,209 files and 613 findings.
 Each reports 52 skipped files, zero parse errors, and zero new findings against the baseline.
 These results apply to the move commit `8995c8631`.
 
+## Output-formatter test relocation, 2026-10-28
+
+The preceding head `2874f0d1af59bd52597b86ca9f108dbcb2707619` has 36 successful checks and seven skipped checks.
+Main remains `a0fac53c5b5d5f57e6d05ff2d6225570cda07691`.
+The worktree started clean.
+The user explicitly retained the application-context test and its historical quickstart.
+Both remain unchanged.
+The refreshed six-PR file inventory has no external exact-path overlap for the formatter test.
+The exact open issue search found no formatter test claim.
+Move `tests/unit/ui/test_output_formatter.py` to
+`tests/unit/maps/interfaces/ui/display/test_output_formatter.py`.
+The file retains every byte.
+Its only tracked path consumer is the direct feature map.
+
+The test requests no local fixtures.
+The formatter reads neither stdin nor the environment variables cleared by the original UI autouse fixtures.
+The original UI `conftest.py` remains unchanged for its existing consumers.
+The source group decreases from 19 to 18 tracked direct children.
+The new display group and its UI parent each have one child.
+Higher mapped ancestors retain two or three children.
+The baseline, historical changelog, specifications, and performance inventory files remain unchanged.
+The full collection retains 29,838 node IDs with exact mapped parity and no duplicates.
+The unmoved focused control reports 13 passed.
+The moved formatter, existing UI tests, and narrow guards report 399 passed.
+Ruff, Black, compilation, and whitespace checks pass.
+The #4008 actions, analytics history, and separate unpublished HTTP 403 commit remain unchanged.
+PR #4358 stays a draft with auto-merge disabled.
+Publication requires the remaining documentation and committed quality gates plus the exact preceding-head lease.
+Another batch requires green CI on the published head.
+
 ## Network configuration test relocation, 2026-10-28
 
 The preceding head `05e90edc2fd344e0270df7ecb0c7d2f6758a8e4b` passed all 36 checks.
