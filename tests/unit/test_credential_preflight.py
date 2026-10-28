@@ -73,6 +73,69 @@ class TestCredentialPreflight:
         # No SystemExit expected: the call should return None and continue.
         assert MistHelper._preflight_verify_credentials() is None
 
+    @pytest.mark.parametrize("variable_name", ("MIST_APITOKEN", "MIST_API_TOKEN"))
+    def test_either_token_variable_passes_alone(self, monkeypatch, variable_name):
+        """Each supported token variable remains valid when the other is absent."""
+        _clear_credential_env(monkeypatch)
+        monkeypatch.setenv("MIST_HOST", "api.mist.com")
+        monkeypatch.setenv(variable_name, "A1B2C3D4E5F60718")
+
+        assert MistHelper._preflight_verify_credentials() is None
+
+    def test_equal_token_variables_pass_during_migration(self, monkeypatch):
+        """Matching token values remain valid while operators migrate to MIST_API_TOKEN."""
+        _clear_credential_env(monkeypatch)
+        monkeypatch.setenv("MIST_HOST", "api.mist.com")
+        monkeypatch.setenv("MIST_APITOKEN", "A1B2C3D4E5F60718")
+        monkeypatch.setenv("MIST_API_TOKEN", "A1B2C3D4E5F60718")
+
+        assert MistHelper._preflight_verify_credentials() is None
+
+    def test_empty_canonical_tokens_do_not_hide_legacy_tokens(self, monkeypatch):
+        """Delimiter-only canonical input acts as absent and preserves usable legacy tokens."""
+        _clear_credential_env(monkeypatch)
+        monkeypatch.setenv("MIST_HOST", "api.mist.com")
+        monkeypatch.setenv("MIST_APITOKEN", "A1B2C3D4E5F60718")
+        monkeypatch.setenv("MIST_API_TOKEN", " , \n ")
+
+        assert MistHelper._parse_api_tokens()[1] == ["A1B2C3D4E5F60718"]
+        assert MistHelper._preflight_verify_credentials() is None
+
+    def test_conflicting_token_variables_fail_without_secret_logs(self, monkeypatch, caplog):
+        """Different migration values fail locally and keep both secrets out of failure logs."""
+        _clear_credential_env(monkeypatch)
+        monkeypatch.setenv("MIST_HOST", "api.mist.com")
+        legacy_secret = "A1B2C3D4E5F60718"
+        current_secret = "9876543210FEDCBA"
+        monkeypatch.setenv("MIST_APITOKEN", legacy_secret)
+        monkeypatch.setenv("MIST_API_TOKEN", current_secret)
+        caplog.set_level(logging.ERROR)
+
+        with pytest.raises(SystemExit) as exc_info:
+            MistHelper._preflight_verify_credentials()
+
+        assert exc_info.value.code == 1
+        assert "MIST_APITOKEN and MIST_API_TOKEN have conflicting values" in caplog.text
+        assert MistHelper._parse_api_tokens()[1] == []
+        assert legacy_secret not in caplog.text
+        assert current_secret not in caplog.text
+        assert legacy_secret[:4] not in caplog.text
+        assert current_secret[:4] not in caplog.text
+
+    def test_conflicting_token_variables_fail_in_login_mode(self, monkeypatch, caplog):
+        """Credential ambiguity fails even when the selected login mode does not require a token."""
+        _clear_credential_env(monkeypatch)
+        monkeypatch.setenv("MIST_HOST", "api.mist.com")
+        monkeypatch.setenv("MIST_APITOKEN", "A1B2C3D4E5F60718")
+        monkeypatch.setenv("MIST_API_TOKEN", "9876543210FEDCBA")
+        caplog.set_level(logging.ERROR)
+
+        with pytest.raises(SystemExit) as exc_info:
+            MistHelper._preflight_verify_credentials(require_token=False)
+
+        assert exc_info.value.code == 1
+        assert "have conflicting values" in caplog.text
+
     def test_login_mode_does_not_require_token(self, monkeypatch):
         """require_token=False (interactive --login) -> a valid host alone passes with no token set."""
         _clear_credential_env(monkeypatch)
@@ -117,6 +180,25 @@ class TestCredentialPreflight:
 
         assert exc_info.value.code == 1
         session_initializer.assert_not_called()  # WHY: the fail-closed rule remains before network work.
+
+    def test_systematic_conflicting_tokens_stop_before_org_or_session_calls(self, monkeypatch):
+        """Conflicting tokens stop systematic startup before org lookup or SDK construction."""
+        _clear_credential_env(monkeypatch)
+        monkeypatch.setenv("MIST_HOST", "api.mist.com")
+        monkeypatch.setenv("MIST_APITOKEN", "A1B2C3D4E5F60718")
+        monkeypatch.setenv("MIST_API_TOKEN", "9876543210FEDCBA")
+        org_preflight = MagicMock()
+        session_initializer = MagicMock()
+        monkeypatch.setattr(MistHelper.ConfigUtils, "get_cached_or_prompted_org_id", org_preflight)
+        monkeypatch.setattr(MistHelper.MistSessionInitializer, "initialize", session_initializer)
+        args = argparse.Namespace(login=False, capture_portal=False, test=True, testinteractive=False)
+
+        with pytest.raises(SystemExit) as exc_info:
+            MistHelper._establish_mist_session(args)
+
+        assert exc_info.value.code == 1
+        org_preflight.assert_not_called()
+        session_initializer.assert_not_called()
 
     def test_preflight_never_imports_network_libraries(self):
         """SC-004: the preflight helper's source imports neither requests nor mistapi (structural zero-HTTP)."""
