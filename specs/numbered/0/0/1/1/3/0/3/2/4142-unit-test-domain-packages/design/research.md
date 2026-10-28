@@ -1476,6 +1476,35 @@ Both quality gates examine 1,209 files and 613 findings.
 Each reports 52 skipped files, zero parse errors, and zero new findings against the baseline.
 These results apply to the move commit `0e58da626`.
 
+## Service-ping test relocation, 2026-10-28
+
+The preceding head `7427a6ff49e7ec1c20ab7d8aefa70fc8f4855524` has 36 successful checks and seven skipped checks.
+Main remains `a0fac53c5b5d5f57e6d05ff2d6225570cda07691`.
+The worktree started clean.
+The refreshed six-PR file inventory has no external exact-path overlap.
+Exact open issue searches found no external service-ping test claim.
+Move `tests/unit/refactors/test_service_ping_launcher.py` to
+`tests/unit/config/foundation/support/refactors/network/clients/test_service_ping_launcher.py`.
+The file retains every byte.
+The other two mapped client tests stay outside this batch because they have separate quickstart references.
+This exclusion bounds the batch and does not assert an ownership block.
+
+The source group decreases from ten to nine tracked direct children.
+The network group increases from two to three children.
+The new client group has one child.
+Higher mapped ancestors retain two or four children.
+The baseline retains 733 records, their order, and all non-path fields.
+Only two service-ping baseline path fields change.
+Historical changelog, specifications, and performance inventory files remain unchanged.
+The full collection retains 29,838 node IDs with exact mapped parity and no duplicates.
+The three unmoved client tests report 34 passed before this move.
+Mapped refactors, remaining refactors, affected consumers, and narrow guards report 780 passed after this move.
+Ruff, Black, compilation, and whitespace checks pass.
+The #4008 actions, analytics history, and separate unpublished HTTP 403 commit remain unchanged.
+PR #4358 stays a draft with auto-merge disabled.
+Publication requires the remaining documentation and committed quality gates plus the exact preceding-head lease.
+Another batch requires green CI on the published head.
+
 ## Network configuration test relocation, 2026-10-28
 
 The preceding head `05e90edc2fd344e0270df7ecb0c7d2f6758a8e4b` passed all 36 checks.
