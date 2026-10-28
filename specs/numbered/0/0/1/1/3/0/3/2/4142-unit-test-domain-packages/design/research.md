@@ -1318,3 +1318,30 @@ It found zero new findings against the baseline after commit `f8d486a8d`.
 The three feature records passed STE with scores of 97, 96, and 93.
 The Markdown link check found zero broken links.
 The held actions and analytics paths remain unchanged.
+
+## Main entrypoint test relocation, 2026-10-28
+
+The user directly approved this one-file batch and publication.
+Move `tests/unit/refactors/test_main_entrypoint.py` to
+`tests/unit/config/foundation/support/refactors/runtime/entrypoint/test_main_entrypoint.py`.
+The ownership scan found no external exact-path pull request or open issue claim.
+The branch started clean at `ac5c3716e5856d5d5321aeb50c81fddafb4a844f`.
+Main remained `a0fac53c5b5d5f57e6d05ff2d6225570cda07691`.
+The preceding head had 36 successful checks and seven skipped checks.
+
+The test file retains every byte.
+The complete unit collection retains 29,836 node IDs.
+An explicit path mapping produces identical node-ID multisets without duplicate IDs.
+The baseline retains 733 records, their order, and all non-path fields.
+Only four baseline path fields change.
+The older quickstart changes only three approved command path tokens.
+The historical changelog, performance inventory, and other historical specifications remain unchanged.
+
+The source group decreases from 17 to 16 tracked direct children.
+The runtime group retains one child.
+The entrypoint group increases from two to three children.
+The higher mapped ancestors retain two or four children.
+The focused test and narrow structure, move, and baseline guards report 55 passed.
+Ruff, Black, and compilation pass.
+The committed test-quality result follows after the local commit.
+The unsupported-flag test, actions, analytics, fixtures, and pytest settings remain unchanged.

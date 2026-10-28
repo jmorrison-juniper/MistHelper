@@ -58,7 +58,7 @@ obsolete `.events.search` lookup is not used.
 ### #1640 — unsupported flag UX
 
 ```powershell
-python -m pytest tests/unit/refactors/test_main_entrypoint.py -v
+python -m pytest tests/unit/config/foundation/support/refactors/runtime/entrypoint/test_main_entrypoint.py -v
 python -m pytest tests/unit -v -k "testinteractive or test_interactive"
 ```
 
@@ -68,7 +68,7 @@ Expected: `--test-interactive` exits non-zero with a suggestion, while
 ### #1641 — side-effect-free help
 
 ```powershell
-python -m pytest tests/unit/refactors/test_main_entrypoint.py -v
+python -m pytest tests/unit/config/foundation/support/refactors/runtime/entrypoint/test_main_entrypoint.py -v
 python -m py_compile MistHelper.py
 ```
 
@@ -80,7 +80,7 @@ calling deferred import/dependency/session/dispatch seams.
 Before submitting each single-issue PR:
 
 ```powershell
-python -m pytest tests/unit/troubleshooting/test_interactive_test_runner.py tests/unit/analytics/test_telemetry_emitter.py tests/unit/refactors/test_main_entrypoint.py -v
+python -m pytest tests/unit/troubleshooting/test_interactive_test_runner.py tests/unit/analytics/test_telemetry_emitter.py tests/unit/config/foundation/support/refactors/runtime/entrypoint/test_main_entrypoint.py -v
 python -m py_compile MistHelper.py
 ```
 
