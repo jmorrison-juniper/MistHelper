@@ -1384,6 +1384,50 @@ The three feature records passed STE with scores of 97, 96, and 93.
 The link check found zero broken links.
 The held actions and analytics paths, fixtures, markers, and pytest settings remain unchanged.
 
+## Configuration relocation fixture repair, 2026-10-28
+
+CI run `40692675966` failed on head `d53e5626f381d6ce1d8024859a9cffa91e072e69`.
+The root unit shard reported 21 failed, 25,017 passed, and 24 skipped.
+The dependent coverage check also failed.
+The E2E shards and CodeQL passed.
+This is a test-order regression, not a transient runner failure.
+
+The relocated WLAN fixture bound a mock resolver host without teardown.
+Earlier execution exposed that retained mock to later exporters, inventory tests, session initialization, and TUI tests.
+The same six downstream modules reproduced all 21 failures locally with 417 passed.
+The WLAN module alone followed by two representative consumers reported two failed and 169 passed.
+No whole-shard retry occurred.
+
+The authorized repair changes only the moved WLAN test fixture and adds two regression cases.
+The fixture uses `patch.object` to restore the exact previous `_root_module` object.
+The existing module patch still restores `sys.modules`.
+Both regression cases fail with the original fixture.
+They pass after the repair for normal teardown and an exception.
+The full targeted sequence reports 440 passed.
+The configuration tests, affected consumers, and narrow structure, move, and input guards report 504 passed.
+The full collection retains all 29,836 original node IDs.
+It adds exactly two regression cases, for 29,838 total, without duplicates.
+No production code, shared fixture, pytest setting, baseline record, or historical artifact changes.
+The original committed test content remains identical outside the two authorized fixture lines and appended regression.
+The committed HTTP 503 test remains unchanged.
+
+The refreshed five-PR file inventory has no external exact-path overlap.
+Main remains `a0fac53c5b5d5f57e6d05ff2d6225570cda07691`.
+The remote branch remains `d53e5626f381d6ce1d8024859a9cffa91e072e69`.
+PR #4358 remains a draft with auto-merge disabled.
+
+Issue #2746 retains an unpublished 31-line HTTP 403 append on `jmorrison-juniper-http-4xx-test-local-slice`.
+Its source path is `tests/unit/refactors/test_wlanradius_timer_manager_paths.py`.
+Later integration must use `tests/unit/config/foundation/support/refactors/network/configuration/test_wlanradius_timer_manager_paths.py`.
+This repair neither imports that append nor changes its branch or hold.
+The owner released the fixture and mapped-path repair through an explicit session handoff.
+Commit `4f25cf00a74a41095e487af7836cae49d4f9f12e` must remain intact and unpublished.
+Later integration must preserve the fixture repair and must not duplicate the HTTP 403 test.
+The user then explicitly authorized the remaining gates and publication of this fixture repair.
+The #4008 actions and analytics holds remain unchanged.
+Publication requires the scoped gates and an exact remote-head lease.
+Another batch requires green CI on the published repair head.
+
 ## Network configuration test relocation, 2026-10-28
 
 The preceding head `05e90edc2fd344e0270df7ecb0c7d2f6758a8e4b` passed all 36 checks.

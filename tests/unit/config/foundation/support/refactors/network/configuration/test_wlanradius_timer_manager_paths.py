@@ -42,8 +42,8 @@ def fake_mh() -> Any:
     fake.InputUtils = MagicMock()  # WHY: the prompts call InputUtils.safe_input.
     fake.InputUtils.safe_input = MagicMock(return_value="")  # WHY: a real string supports strip.
     with patch.dict(sys.modules, {"MistHelper": fake}):  # WHY: the proxy imports by name.
-        _MH.bind_root_module(fake)  # WHY: source packages read the injected host instead of importing it.
-        yield fake  # WHY: the test body runs with the fake in place.
+        with patch.object(_MH, "_root_module", fake):  # WHY: restore the exact prior host when this fixture ends.
+            yield fake  # WHY: the test body runs with both host references isolated.
 
 
 @pytest.fixture
@@ -1322,3 +1322,20 @@ def test_site_info_http_503_refuses_plausible_site_data(
     assert (manager.site_info, manager.site_name, manager.site_template_id) == before
     assert caplog.record_tuples == [(wrtm.__name__, logging.ERROR, "Failed to fetch site info: HTTP 503")]
     fetch.assert_called_once_with(session, "site-1")
+
+
+@pytest.mark.parametrize("raise_error", [False, True])
+def test_fake_host_restores_resolver_state(raise_error: bool) -> None:
+    """Keep the original resolver host after normal and failed fixture teardown."""
+    previous_host = _MH._root_module  # WHY: preserve identity, including an unbound host.
+    previous_module = sys.modules.get("MistHelper")  # WHY: verify the module patch also restores its original value.
+    fixture = fake_mh.__wrapped__()  # WHY: drive this fixture directly to inspect its teardown boundary.
+    fake = next(fixture)  # WHY: enter the same fixture used by the manager tests.
+    assert _MH._root_module is fake  # WHY: prove that the fixture activated its resolver host.
+    if raise_error:  # WHY: a test exception must not retain a mock host.
+        with pytest.raises(RuntimeError, match="fixture test failure"):  # WHY: retain the original failure.
+            fixture.throw(RuntimeError("fixture test failure"))  # WHY: simulate a failure at the fixture yield.
+    else:
+        fixture.close()  # WHY: simulate normal fixture teardown.
+    assert _MH._root_module is previous_host  # WHY: no subsequent test may inherit the temporary host.
+    assert sys.modules.get("MistHelper") is previous_module  # WHY: both dependency references must agree again.

@@ -85,6 +85,7 @@ The coordinator must release the PR hold after #4353 before any pull request ope
 - [X] T053 [US1] Move `test_reject_unsupported_flag_variants.py` to its mapped runtime entrypoint group. Adjust only its repository-root depth and four baseline path fields. Preserve historical evidence and node IDs. Verify ownership, hierarchy, tests, guards, style, compilation, links, and committed test-quality checks.
 
 - [X] T054 [US1] Move the template cloner, WAN probe configuration, and WLAN RADIUS timer tests to mapped `network/configuration/`. Preserve file bytes, historical evidence, baseline semantics, and node IDs. Verify ownership, hierarchy, tests, guards, style, compilation, links, and committed test-quality checks.
+- [X] T055 [US1] Repair the relocated WLAN fixture teardown for issue #4492. Restore the exact previous resolver host. Prove normal and exception teardown, then run the affected downstream tests. Preserve the unpublished #2746 HTTP 403 append for later integration from `tests/unit/refactors/test_wlanradius_timer_manager_paths.py` into `tests/unit/config/foundation/support/refactors/network/configuration/test_wlanradius_timer_manager_paths.py`. Do not import that separate change or alter its branch. Require green exact-head CI before another batch.
 
 ## Phase 4: User Story 2 - Run the existing unit tests (Priority: P1)
 
