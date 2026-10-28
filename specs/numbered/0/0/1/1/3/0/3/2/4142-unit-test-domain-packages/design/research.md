@@ -1579,6 +1579,42 @@ Both quality gates examine 1,209 files and 613 findings.
 Each reports 52 skipped files, zero parse errors, and zero new findings against the baseline.
 These results apply to the move commit `8995c8631`.
 
+## TUI orchestrator test relocation, 2026-10-28
+
+The preceding head `9533e74240eb736289ead77b8cec6272f2373296` has 36 successful checks and seven skipped checks.
+Main remains `a0fac53c5b5d5f57e6d05ff2d6225570cda07691`.
+The worktree started clean.
+The six open PR manifests have no external UI path overlap.
+The exact issue search found no active claim for the orchestrator test.
+Move `tests/unit/ui/test_tui.py` to
+`tests/unit/maps/interfaces/ui/interaction/tui/test_tui.py`.
+The deterministic map supplies the destination.
+The file retains every byte.
+Its construction helper mocks all collaborators and platform modules.
+It requests only the standard `caplog` fixture.
+It does not depend on the old UI stdin or environment fixtures.
+Those fixtures remain unchanged for their existing consumers.
+
+The unchanged control reports 30 passed.
+The moved UI tests and narrow guards report 399 passed.
+The complete collection retains 29,838 node IDs with exact mapped parity and no duplicates.
+The source group decreases from 17 to 16 tracked direct children.
+The new TUI group and its interaction parent each have one child.
+The UI parent has two children.
+Every mapped ancestor remains within five children.
+Ruff, Black, compilation, and whitespace checks pass.
+The baseline remains unchanged.
+Historical references in the changelog, feature 1017, and feature 2573 remain unchanged under FR-004.
+No current selector, import, workflow, or operator quickstart names this test.
+The issue #2711 comments reserve `tests/unit/ui/test_parameter_collector.py` for local-only assertion work.
+Keep that path and the shared UI fixture file unchanged.
+The earlier TUI runner claim was released, but that test still requires the shared fixtures and stays unmoved.
+The remaining collaborator tests also retain their fixture scope.
+The application-context hold, #4008 actions, analytics paths, and separate #2746 change remain unchanged.
+Publication requires the documentation checks, committed quality gates, and exact preceding-head lease.
+PR #4358 remains a draft with auto-merge disabled.
+Another batch requires green CI on the published head.
+
 ## Display-utils test relocation, 2026-10-28
 
 The preceding head `96f03f0b45b41d50ef42ee32388f4654beec4147` has 36 successful checks and seven skipped checks.

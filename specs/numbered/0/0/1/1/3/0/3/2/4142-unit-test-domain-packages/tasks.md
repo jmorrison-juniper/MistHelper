@@ -92,6 +92,7 @@ The coordinator must release the PR hold after #4353 before any pull request ope
 - [X] T059 [US1] Move the unowned fast-mode seam test into mapped `runtime/console/`. Preserve test bytes, node IDs, historical records, and baseline semantics. Change only four baseline path fields. Verify ownership, hierarchy, affected test order, guards, style, compilation, links, and committed quality gates.
 - [X] T060 [US1] Move the unowned output-formatter test into mapped `interfaces/ui/display/`. Preserve test bytes, node IDs, historical records, shared fixtures, and the unchanged baseline. Verify ownership, fixture independence, hierarchy, UI tests, guards, style, compilation, links, and committed quality gates. Preserve the application-context test and historical quickstart under the explicit user hold.
 - [X] T061 [US1] Move the unowned display-utils test into mapped `interfaces/ui/display/`. Preserve test bytes, node IDs, shared fixtures, baseline, and historical records. Verify ownership, fixture independence, hierarchy, UI tests, narrow guards, style, compilation, documentation, and committed quality gates.
+- [X] T062 [US1] Move the independent TUI orchestrator test into mapped `interfaces/ui/interaction/tui/`. Preserve test bytes, node IDs, historical references, shared fixtures, and the baseline. Keep the #2711 parameter-collector reservation unchanged. Verify ownership, UI tests, narrow guards, collection parity, style, compilation, documentation, and committed quality gates.
 
 ## Phase 4: User Story 2 - Run the existing unit tests (Priority: P1)
 
