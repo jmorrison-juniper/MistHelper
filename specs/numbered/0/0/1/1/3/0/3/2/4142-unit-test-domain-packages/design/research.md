@@ -1605,6 +1605,11 @@ The destination inventory parent has four children.
 The moved package retains two children.
 Every mapped ancestor remains within five children.
 Ruff, Black, compilation, and whitespace checks pass.
+The three changed feature records pass STE and contain zero broken local links.
+The committed input preflight reports one passed.
+Both quality gates examine 1,209 files and 613 findings.
+Each reports 52 skipped files, zero parse errors, and zero new findings against the baseline.
+These results apply to the move commit `bb90a2085`.
 All ownership reservations, shared fixtures, application-context hold, historical records, #4008 actions, analytics paths, and separate #2746 work remain unchanged.
 Publication requires the documentation checks, committed quality gates, and exact preceding-head lease.
 PR #4358 remains a draft with auto-merge disabled.
