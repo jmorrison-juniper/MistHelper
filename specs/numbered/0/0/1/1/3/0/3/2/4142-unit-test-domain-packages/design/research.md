@@ -1143,6 +1143,39 @@ The move changed no test behavior.
 | `tests/unit/arango_indexes/test_preservation.py` | `tests/unit/config/foundation/persistence/storage/arango_indexes/test_preservation.py` | `984d5bc36aa5a5386e2c724126c46aeb233383ee6179d4b05581d9fd7177420c` |
 | `tests/unit/arango_indexes/test_retry_concurrency.py` | `tests/unit/config/foundation/persistence/storage/arango_indexes/test_retry_concurrency.py` | `d197533ccc6e5ac37eeccfd7d0edea0d358d3a7563676ddaf78be44558974969` |
 
+## Refactor test relocation, 2026-10-28
+
+The approved batch moved these three tests to the mapped groups.
+The open-PR scan checked every paginated file list and found no source or destination overlap.
+Issue comments and recent local session messages contain no exact claim for these paths.
+
+| Source file | Destination file | Pre-move SHA-256 |
+| - | - | - |
+| `tests/unit/refactors/test_inventory_csvcomparator.py` | `tests/unit/config/foundation/support/refactors/data/inventory/test_inventory_csvcomparator.py` | `37c3c29b439a6325694ce361b31f2c7383a05e8630402959ed7d81b79f6dc35d` |
+| `tests/unit/refactors/test_marvis_data_utils.py` | `tests/unit/config/foundation/support/refactors/data/inventory/test_marvis_data_utils.py` | `9a602dd13a5b99f3e30eb2e4918c777503d8b0301d20336cf4bd09d8838ff24d` |
+| `tests/unit/refactors/test_anomaly_metrics_discovery.py` | `tests/unit/config/foundation/support/refactors/telemetry/test_anomaly_metrics_discovery.py` | `e0a3f521a6730b6fe99810c63d1f4a7ba8224d19acaacd87a73c1542bd7009ee` |
+
+The three file hashes still match after the move.
+Git reports each move as a content-identical rename.
+The unit root retains 38 tracked children, and the source group drops from 26 to 23.
+The destination parent groups change from one to two children.
+The inventory group has two children, and the telemetry group has one.
+Every affected group remains within the five-child limit.
+
+The full unit collection has 29,836 node IDs before and after the move.
+An explicit path mapping produces zero missing and zero added IDs.
+The quality baseline retains 733 records and its original SHA-256 value,
+`f738363caa5d2d8b42e54c38ccca0252cc51e57d30791c81bf1e272a396a2af0`.
+No baseline record names any source or destination.
+The historical Python inventory artifact remains unchanged.
+
+The focused command
+`.venv/bin/python -m pytest -q -p no:cacheprovider --tb=short tests/unit/config/foundation/support/refactors/data/inventory/test_inventory_csvcomparator.py tests/unit/config/foundation/support/refactors/data/inventory/test_marvis_data_utils.py tests/unit/config/foundation/support/refactors/telemetry/test_anomaly_metrics_discovery.py tests/guardrails/test_move_module_guidance.py tests/guardrails/test_process_folder_structure.py tests/guardrails/test_quality_ratchet_files.py`
+passed 61 tests.
+The test-quality guide preflight passed one test.
+Ruff passed, Black left three files unchanged, compilation passed, and the diff check passed.
+The complete node-ID comparison found zero differences after the explicit mapping.
+
 The only content edits replace the moved package's helper imports and the two approved external imports.
 The `fakes.py` file retains its captured SHA-256 value.
 The unit root has 38 tracked direct children after the move, one fewer than before this batch.
