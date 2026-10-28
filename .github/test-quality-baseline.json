@@ -7284,10 +7284,10 @@
   {
     "category": "missing_failure_mode",
     "explanation": "No HTTP 4xx failure mode is exercised.",
-    "file_path": "tests/unit/ui/test_interactive_display_utils.py",
+    "file_path": "tests/unit/maps/interfaces/ui/interaction/dispatch/test_interactive_display_utils.py",
     "heuristic": false,
     "line_number": 1,
-    "related_source": "tests/unit/ui/test_interactive_display_utils.py",
+    "related_source": "tests/unit/maps/interfaces/ui/interaction/dispatch/test_interactive_display_utils.py",
     "remediation": "Add a test whose fake response has a 4xx status_code (e.g. 400, 404).",
     "rule_id": "missing_fm_http_4xx",
     "severity": "medium"
@@ -7295,10 +7295,10 @@
   {
     "category": "missing_failure_mode",
     "explanation": "No HTTP 5xx failure mode is exercised.",
-    "file_path": "tests/unit/ui/test_interactive_display_utils.py",
+    "file_path": "tests/unit/maps/interfaces/ui/interaction/dispatch/test_interactive_display_utils.py",
     "heuristic": false,
     "line_number": 1,
-    "related_source": "tests/unit/ui/test_interactive_display_utils.py",
+    "related_source": "tests/unit/maps/interfaces/ui/interaction/dispatch/test_interactive_display_utils.py",
     "remediation": "Add a test whose fake response has a 5xx status_code (e.g. 500, 503).",
     "rule_id": "missing_fm_http_5xx",
     "severity": "medium"

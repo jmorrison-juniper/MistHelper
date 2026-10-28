@@ -1579,6 +1579,38 @@ Both quality gates examine 1,209 files and 613 findings.
 Each reports 52 skipped files, zero parse errors, and zero new findings against the baseline.
 These results apply to the move commit `8995c8631`.
 
+## Interactive-display test relocation, 2026-10-28
+
+The preceding head `2492043d693dccad5e297bdd474cddc01882af5b` has 36 successful checks and seven skipped checks.
+Main remains `a0fac53c5b5d5f57e6d05ff2d6225570cda07691`.
+The worktree started clean.
+The six open PR manifests have no external exact-path overlap.
+The exact issue search names only the #2746 and #2747 campaigns.
+Their complete reviewed comments list the test in inventories, not in an active reservation.
+The #2746 assessment identifies dispatcher wiring with injected fetchers rather than HTTP behavior.
+
+Move `tests/unit/ui/test_interactive_display_utils.py` to
+`tests/unit/maps/interfaces/ui/interaction/dispatch/test_interactive_display_utils.py`.
+The existing map supplies the destination.
+Every test byte remains unchanged.
+Only the direct feature map and quality baseline consume the old path.
+The test requests only the standard `caplog` fixture.
+Its fake host and collaborators prevent stdin reads and environment-dependent parameter selection.
+The shared UI fixtures remain unchanged.
+The unchanged control reports five passed.
+The UI tests, resolver-sensitive sequence, downstream consumers, and narrow guards report 1,115 passed.
+The complete collection retains 29,838 node IDs with exact mapped parity and no duplicates.
+Only four baseline path fields change across two existing findings.
+All 733 records retain their order and non-path fields.
+The source group decreases from 15 to 14 tracked direct children.
+The dispatch group and its interaction parent each have two children.
+Every mapped ancestor remains within five children.
+Ruff, Black, compilation, and whitespace checks pass.
+The parameter-collector reservation, application-context hold, historical records, #4008 actions, analytics paths, and separate #2746 HTTP 403 change remain unchanged.
+Publication requires the documentation checks, committed quality gates, and exact preceding-head lease.
+PR #4358 remains a draft with auto-merge disabled.
+Another batch requires green CI on the published head.
+
 ## Device-prompt rename guard relocation, 2026-10-28
 
 The preceding head `ffb111375fa32b7f45286862e9e6b7a32aa3fc7f` has 36 successful checks and seven skipped checks.
