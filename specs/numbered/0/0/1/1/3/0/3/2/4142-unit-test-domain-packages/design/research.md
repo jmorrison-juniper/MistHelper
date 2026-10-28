@@ -1601,6 +1601,11 @@ The unchanged control reports 25 passed.
 The moved UI tests and narrow guards report 399 passed.
 The full collection retains 29,838 node IDs with exact mapped parity and no duplicates.
 Ruff, Black, compilation, and whitespace checks pass.
+The three changed feature records pass STE and contain zero broken local links.
+The committed input preflight reports one passed.
+Both quality gates examine 1,209 files and 613 findings.
+Each reports 52 skipped files, zero parse errors, and zero new findings against the baseline.
+These results apply to the move commit `61ef712df`.
 The baseline, historical records, application-context hold, #4008 actions, analytics paths, and separate #2746 change remain unchanged.
 Publication requires the documentation checks, committed quality gates, and exact preceding-head lease.
 PR #4358 remains a draft with auto-merge disabled.
