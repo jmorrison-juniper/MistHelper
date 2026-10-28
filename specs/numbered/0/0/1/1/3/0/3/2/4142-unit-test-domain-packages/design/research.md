@@ -1579,6 +1579,40 @@ Both quality gates examine 1,209 files and 613 findings.
 Each reports 52 skipped files, zero parse errors, and zero new findings against the baseline.
 These results apply to the move commit `8995c8631`.
 
+## Device-prompt rename guard relocation, 2026-10-28
+
+The preceding head `ffb111375fa32b7f45286862e9e6b7a32aa3fc7f` has 36 successful checks and seven skipped checks.
+Main remains `a0fac53c5b5d5f57e6d05ff2d6225570cda07691`.
+The worktree started clean.
+The six open PR manifests have no external exact-path overlap.
+The campaign review reads all 54 comments on #2746 and all 49 comments on #2747.
+Both name this guard only in historical inventories.
+The #2746 assessment explicitly identifies it as a source guard without HTTP calls.
+Neither campaign reserves this file.
+
+Move `tests/unit/ui/test_device_prompt_rename_guard.py` to
+`tests/unit/maps/interfaces/ui/interaction/dispatch/test_device_prompt_rename_guard.py`.
+The existing map supplies the destination.
+Change its repository-root depth from `parents[3]` to `parents[7]`.
+Every other test byte remains unchanged.
+The resolved root equals the worktree root.
+The scan examines exactly the 919 Python files under `src/` and `web_portal/`.
+A temporary source with a removed `select_device` call makes the guard fail.
+The unchanged control reports four passed.
+The moved UI tests and narrow guards report 399 passed.
+The complete collection retains 29,838 node IDs with exact mapped parity and no duplicates.
+Only four baseline path fields change across two existing findings.
+All 733 records retain their order and non-path fields.
+The source group decreases from 16 to 15 tracked direct children.
+The new dispatch group has one child, and the interaction parent has two children.
+Every mapped ancestor remains within five children.
+Ruff, Black, compilation, and whitespace checks pass.
+The shared UI fixtures, parameter-collector reservation, application-context hold, and historical records remain unchanged.
+The #4008 actions, analytics paths, and separate #2746 HTTP 403 change remain unchanged.
+Publication requires the documentation checks, committed quality gates, and exact preceding-head lease.
+PR #4358 remains a draft with auto-merge disabled.
+Another batch requires green CI on the published head.
+
 ## TUI orchestrator test relocation, 2026-10-28
 
 The preceding head `9533e74240eb736289ead77b8cec6272f2373296` has 36 successful checks and seven skipped checks.

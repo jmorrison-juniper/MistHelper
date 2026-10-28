@@ -320,7 +320,7 @@ Keep the existing package marker and `conftest.py`. The destination root has two
 | `tests/unit/maps/interfaces/ui/display/` | `tests/unit/ui/test_debug_saver.py`, `tests/unit/maps/interfaces/ui/display/test_display_utils.py`, `tests/unit/ui/test_layout_builder.py`, `tests/unit/maps/interfaces/ui/display/test_output_formatter.py`, `tests/unit/ui/test_results_grid_builder.py` |
 | `tests/unit/maps/interfaces/ui/interaction/` | `tests/unit/maps/interfaces/ui/interaction/input/`, `tests/unit/maps/interfaces/ui/interaction/dispatch/`, `tests/unit/maps/interfaces/ui/interaction/tui/` |
 | `tests/unit/maps/interfaces/ui/interaction/input/` | `tests/unit/ui/test_dotenv_loader.py`, `tests/unit/ui/test_key_poller.py`, `tests/unit/ui/test_keyboard_dispatch.py`, `tests/unit/ui/test_parameter_collector.py`, `tests/unit/ui/test_prompt_utils.py` |
-| `tests/unit/maps/interfaces/ui/interaction/dispatch/` | `tests/unit/ui/test_device_prompt_rename_guard.py`, `tests/unit/ui/test_function_executor.py`, `tests/unit/ui/test_interactive_display_utils.py`, `tests/unit/ui/test_item_executor.py`, `tests/unit/ui/test_level_discoverer.py` |
+| `tests/unit/maps/interfaces/ui/interaction/dispatch/` | `tests/unit/maps/interfaces/ui/interaction/dispatch/test_device_prompt_rename_guard.py`, `tests/unit/ui/test_function_executor.py`, `tests/unit/ui/test_interactive_display_utils.py`, `tests/unit/ui/test_item_executor.py`, `tests/unit/ui/test_level_discoverer.py` |
 | `tests/unit/maps/interfaces/ui/interaction/tui/` | `tests/unit/maps/interfaces/ui/interaction/tui/test_tui.py`, `tests/unit/ui/test_tui_runner.py` |
 
 #### Utilities
