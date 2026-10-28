@@ -15,7 +15,7 @@ import sys
 from concurrent.futures import Future
 from types import ModuleType, SimpleNamespace
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, call, patch
 
 import pytest
 
@@ -114,9 +114,13 @@ class TestEmitSyntheticComplete:
         fake_mh.ProgressContext.assert_not_called()  # type: ignore[attr-defined]
 
     def test_emitter_present_calls_complete(self, fake_mh: ModuleType) -> None:
+        """Require the complete event payload so incorrect progress cannot pass."""
         emitter = MagicMock()
-        GatewayTestExporter._emit_synthetic_complete(emitter, 0.0, ["d1"], ["r1"])
-        emitter.emit_progress_complete.assert_called_once()
+        with patch.object(gte.time, "time", return_value=12.5):
+            GatewayTestExporter._emit_synthetic_complete(emitter, 10.0, ["d1", "d2"], ["r1"])
+        assert emitter.emit_progress_complete.call_args_list == [
+            call(("ctx", ("16", "synthetic_tests", 2), {}), 1, False, 2.5)
+        ]
 
 
 # ---------------------------------------------------------------------------
