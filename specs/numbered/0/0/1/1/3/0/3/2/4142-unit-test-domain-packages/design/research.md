@@ -1410,7 +1410,12 @@ The network group increases from one to two children.
 The new configuration group has three children.
 Higher mapped ancestors retain two or four children.
 Ruff, Black, and compilation pass.
-The committed test-quality result follows after the local commit.
+The committed test-quality check examined 1,209 files and 613 findings.
+It skipped 52 files and reported zero parse errors.
+It found zero new findings against the baseline after commit `ba2d97d9f`.
+The required input preflight reported one passed.
+The three feature records passed STE with scores of 97, 96, and 93.
+The link check found zero broken links.
 The separate WAN override test and its quickstart consumer remain unchanged.
 This exclusion bounds the batch and does not assert an ownership block.
 The held actions and analytics paths, fixtures, markers, and pytest settings remain unchanged.

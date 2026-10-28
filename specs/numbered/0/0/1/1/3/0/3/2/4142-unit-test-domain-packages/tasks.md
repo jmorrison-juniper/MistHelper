@@ -84,7 +84,7 @@ The coordinator must release the PR hold after #4353 before any pull request ope
 
 - [X] T053 [US1] Move `test_reject_unsupported_flag_variants.py` to its mapped runtime entrypoint group. Adjust only its repository-root depth and four baseline path fields. Preserve historical evidence and node IDs. Verify ownership, hierarchy, tests, guards, style, compilation, links, and committed test-quality checks.
 
-- [ ] T054 [US1] Move the template cloner, WAN probe configuration, and WLAN RADIUS timer tests to mapped `network/configuration/`. Preserve file bytes, historical evidence, baseline semantics, and node IDs. Verify ownership, hierarchy, tests, guards, style, compilation, links, and committed test-quality checks.
+- [X] T054 [US1] Move the template cloner, WAN probe configuration, and WLAN RADIUS timer tests to mapped `network/configuration/`. Preserve file bytes, historical evidence, baseline semantics, and node IDs. Verify ownership, hierarchy, tests, guards, style, compilation, links, and committed test-quality checks.
 
 ## Phase 4: User Story 2 - Run the existing unit tests (Priority: P1)
 
