@@ -54,6 +54,7 @@ class TestSnmpBaseOidDefaults:
         """The shipped startup fallback matches the responder constant."""
         assignment = self._assignment()
         self._compare_defaults(assignment.group(1), DEFAULT_BASE_OID)
+        assert assignment.group(1) == DEFAULT_BASE_OID, "The container fallback must match the responder default."
 
     @pytest.mark.parametrize(
         ("container_default", "responder_default"),
