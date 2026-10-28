@@ -266,13 +266,13 @@ class WorktreeBootstrapper:
                 LOGGER.debug("Mapped %s source. Configured: %s.", name, bool(source))  # Report only source presence.
 
         def install(self, interpreter: Path, path: Path, environment: dict[str, str]) -> None:
-            """Install one requirement file and report its attempted duration."""
+            """Install safe pip and one requirement file, then report the duration."""
             LOGGER.info("Installing %s packages from %s.", self.installer, path.name)
             started = time.monotonic()
             command = [str(interpreter), "-m", "pip", "install"]
             if self.uv_path is not None:
                 command = [self.uv_path, "pip", "install", "--python", str(interpreter)]
-            command.extend(["-r", str(path)])
+            command.extend(["pip>=26.2.2", "-r", str(path)])
             LOGGER.debug("Prepared %s arguments for %s.", len(command), self.installer)
             try:
                 self._run(path, command, environment)
