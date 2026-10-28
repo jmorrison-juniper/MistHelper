@@ -1350,3 +1350,31 @@ The required input preflight reported one passed.
 The four Markdown files passed STE with scores of 94, 97, 96, and 93.
 The link check found zero broken links.
 The unsupported-flag test, actions, analytics, fixtures, and pytest settings remain unchanged.
+
+## Unsupported-flag test relocation, 2026-10-28
+
+The user directly authorized continued bounded batches with green checks between publications.
+This batch completes the four-test mapped runtime entrypoint group.
+Move `tests/unit/refactors/test_reject_unsupported_flag_variants.py` to
+`tests/unit/config/foundation/support/refactors/runtime/entrypoint/test_reject_unsupported_flag_variants.py`.
+The ownership scan found no external exact-path pull request or open issue claim.
+The branch started clean at `f4ecb4648f9d07716f9ec84039efc83b1972119d`.
+Main remained `a0fac53c5b5d5f57e6d05ff2d6225570cda07691`.
+The preceding head had 36 successful checks and seven skipped checks.
+
+The test changes only its repository-root line.
+The destination requires `parents[8]` instead of `parents[3]`.
+A direct path comparison verifies that the new value resolves to this worktree.
+The full entrypoint group and narrow structure, move, and baseline guards report 78 passed.
+This includes the fresh-interpreter passive-import test that requires the correct working directory.
+The complete unit collection retains 29,836 node IDs.
+An explicit path mapping produces identical node-ID multisets without duplicate IDs.
+The baseline retains 733 records, their order, and all non-path fields.
+Only four baseline path fields change.
+The historical changelog, performance inventory, and completed feature 1701 records remain unchanged.
+The source group decreases from 16 to 15 tracked direct children.
+The entrypoint group increases from three to four children.
+The mapped ancestors retain one, two, or four children.
+Ruff, Black, and compilation pass.
+The committed test-quality result follows after the local commit.
+The held actions and analytics paths, fixtures, markers, and pytest settings remain unchanged.

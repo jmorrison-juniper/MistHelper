@@ -15,7 +15,7 @@ from src.foundation.support.refactors.main_entrypoint import (
     ApplicationBootstrap,
 )  # WHY: Exercise the new bootstrap seam directly.
 
-_REPOSITORY_ROOT = Path(__file__).resolve().parents[3]  # WHY: Locate the worktree root from this nested test file.
+_REPOSITORY_ROOT = Path(__file__).resolve().parents[8]  # WHY: Locate the worktree root from the mapped test group.
 
 
 def test_import_misthelper_has_no_startup_side_effects() -> None:
