@@ -20,6 +20,10 @@ from src.interfaces.portals.upgrade_portal.api.run_controls.services import (
 )
 from src.interfaces.portals.upgrade_portal.app.factory import json_error
 from src.interfaces.portals.upgrade_portal.app.routes.select import SELECTED_ORG_KEY, session_lock_record
+from src.interfaces.portals.upgrade_portal.app.wiring import (
+    PortalDependencyError,
+    request_action_store,
+)  # Resolve the durable action store through the request provider.
 from src.interfaces.portals.upgrade_portal.capture.devices import guard_page_count, read_every_page
 from src.interfaces.portals.upgrade_portal.persistence.actions import (
     ActionRequestConflict,
@@ -242,12 +246,28 @@ def _actor() -> DurableActorScope | None:
 
 
 def _action_store() -> Any:
-    """Return the configured durable action repository."""
-    store = current_app.config.get(ACTION_STORE_KEY)
-    required = ("initialize", "find_request", "read", "claim_item", "write_outcome", "commit_success", "finalize")
+    """Return the durable action repository through the authenticated request provider."""
+    try:
+        store = request_action_store()  # Keep the process-owned durable repository.
+    except PortalDependencyError as fault:
+        logger.error(
+            "run_controls: request action store unavailable (%s)", type(fault).__name__
+        )  # Report safe fault type.
+        raise ActionStoreUnavailable("The ArangoDB action store is unavailable.") from fault  # Refuse the action.
+    required = (  # Keep the durable action contract explicit.
+        "initialize",
+        "find_request",
+        "read",
+        "claim_item",
+        "write_outcome",
+        "commit_success",
+        "finalize",
+    )
     if store is None or any(not callable(getattr(store, name, None)) for name in required):
-        raise ActionStoreUnavailable("The ArangoDB action store is unavailable.")
-    return store
+        logger.error("run_controls: durable action store contract is incomplete")  # Name the failed boundary.
+        raise ActionStoreUnavailable("The ArangoDB action store is unavailable.")  # Refuse before action work.
+    logger.debug("run_controls: request durable action store is available")  # Confirm the validated dependency.
+    return store  # Keep actor-scoped actions in durable storage.
 
 
 def _run_reader() -> Any:

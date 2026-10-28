@@ -1,0 +1,105 @@
+# Specification Analysis Report
+
+The read-only analysis compared the specification, plan, tasks, and implementation evidence.
+This record preserves its result after the analysis.
+
+| ID | Category | Severity | Summary |
+| --- | --- | --- | --- |
+| None | Consistency | None | No unresolved requirement or behavior gap remains. |
+
+## Coverage Summary
+
+| Requirement | Tasks | Evidence |
+| --- | --- | --- |
+| FR-001 | T002, T003 | Four deterministic barrier cases |
+| FR-002 | T003, T006 | Existing outcome tests and unchanged live utility tests |
+| FR-003 | T005, T006 | Three cleanup exception cases and explicit error records |
+| FR-004 | T004 | Site and organization matching, different, and absent capture cases |
+| FR-005 | T004, T007 | Read-only diff checks for existing tests, cleanup, monitoring, and timing |
+| FR-006 | T002 | Four failures before the production edit |
+| SC-001 | T002, T003 | No terminal result at the held DELETE barrier |
+| SC-002 | T003, T006 | Exactly one terminal result after ordinary cleanup |
+| SC-003 | T005, T006 | Failed result and cleanup error log |
+| SC-004 | T004 | No DELETE for different or absent capture identities |
+
+## Metrics
+
+- Requirements: 10.
+- Tasks: 8.
+- Requirement coverage: 100 percent.
+- Unmapped tasks: 0.
+- Unresolved ambiguities: 0.
+- Duplicate requirements: 0.
+- Critical behavior issues: 0.
+
+## Implementation evidence
+
+The final focused run reported `101 passed in 28.22s`.
+Execution-module coverage reached 99.07 percent.
+The policy guard run reported `35 passed, 1 skipped`.
+The skipped changelog diff guard requires a pull request event.
+The managed directory guard reported `11 passed`.
+
+Ruff passed. Black checked 2,483 files without a change.
+mypy reported no issues in 860 source files.
+The changed module passed compilation, complexity, Bandit, and docstring checks.
+Pylint scored 9.90/10 with its existing public-method-count warning.
+Vulture returned no findings on the documented paths.
+The symbol comparison found no module-level name change.
+The first committed test-quality comparison required four additional network-failure cases.
+The regression now covers HTTP 400, HTTP 503, connection failure, and timeout through the real trigger sender.
+Each test directly constructs `UtilityExecution` so the analyzer can verify the production call.
+No baseline or detector setting changed.
+The advisory task audit returned 1 for existing repository-wide record debt.
+It examined 845 feature records and 10,393 task markers.
+This feature has eight completed tasks.
+
+## Limits and decisions
+
+The repair changes one production class and adds no transport or SDK path.
+The existing bounded structured logger records exception type rather than private exception text.
+This choice preserves the transport logging boundary.
+The original live utility test, capture identity checks, and #3575 timing behavior remain unchanged.
+No UI, container, dependency, menu, or production-cloud action changes.
+
+The app-managed branch takes precedence over the branch-creation hook.
+The command-scoped feature selector leaves the shared feature pointer unchanged.
+Optional commit hooks remain deferred to the verified feature commit.
+Disabled companion hooks do not run.
+
+The user prohibits merge and auto-merge.
+Therefore, this session stops at the verified pull request and does not run deployment.
+The full repository test and coverage suites remain for CI.
+The committed test-quality comparison runs before push.
+
+## Selected survivor revision
+
+The coordinator selected PR #4465 and authorized only two additions from the comparison.
+Cleanup start, completion, and failure records now include the utility action.
+New tests reject malformed JSON and empty trigger response bodies through the real sender.
+Log tests check the serialized action fields on successful and failed cleanup.
+The original deterministic barrier remains unchanged.
+No duplicate barrier from PR #4464 enters this branch.
+The revised focused run reported `105 passed in 18.92s`, including 24 regression cases.
+Execution-module coverage remains 99.07 percent.
+Ruff, Black, compile, mypy, complexity, Bandit, Pylint, docstrings, symbols, and the writing gate pass.
+
+## SDK contract fixture correction
+
+The revised CI shard reported one failure, 2,098 passes, 19 skips, and five expected failures.
+The action field exposed an incomplete offline context in `test_ws_sdk_contract.py`.
+The context held `state` but lacked the `request` that every real `RunContext` supplies.
+The unchanged fixture reproduced the same `AttributeError` locally with one failure and seven passes.
+The correction supplies `request.key` without changing assertions or production code.
+The combined SDK contract and focused utility selection reported `117 passed in 18.91s`.
+Execution-module coverage remains 99.07 percent.
+
+## Structural limit correction
+
+The root-unit shard rejected the 28-line `UtilityExecution.run()` method after the action-field revision.
+The unchanged structural guard reproduced the failure locally with one failure and two passes.
+The correction reuses one action-field dictionary across the three cleanup events.
+The method now has exactly 25 lines, with no lifecycle or exception-policy change.
+All live WebSocket unit tests and SDK contracts reported `316 passed in 26.81s`.
+Execution-module coverage remains 99.07 percent.
+Repository Ruff, Black, and documented mypy paths pass.

@@ -99,7 +99,7 @@ dev = [
     # Each pin equals the pin in requirements-dev.txt (issue #3400). The guard
     # tests/guardrails/test_dependency_declaration_parity.py compares the two.
     "podman-compose==1.6.0",
-    "ruff==0.17.1",
+    "ruff==0.17.2",
     "black==26.10.1",
     "mypy==2.4.0",
     "types-requests==2.33.0.20261006",
@@ -108,7 +108,7 @@ dev = [
     "pytest==9.1.1",
     "pytest-cov==7.1.0",
     "pytest-timeout==2.4.0",
-    "hypothesis==6.170.1",
+    "hypothesis==6.170.8",
     "playwright==1.64.0",      # supplies the browser driver
     "pytest-playwright==0.10.0",  # supplies the `page` fixture; playwright alone has no pytest plugin
     "bandit[toml]==1.9.4",

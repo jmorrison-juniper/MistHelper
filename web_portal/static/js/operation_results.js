@@ -36,8 +36,90 @@ var OperationResults = (function() {
         sortDir: 'asc',
         openRow: -1,      // The row index that shows its detail, or -1 for none.
         rows: [],
-        searchTimer: null
+        searchTimer: null,
+        requestGeneration: 0
     };
+
+    /** Keep the notice tied to the visible cells and release pending layout work. */
+    class ResultClippingNotice {
+        /** Observe only the active result table, including font and viewport changes. */
+        start(data) {
+            this.scheduleChange = this.scheduleChange || this.schedule.bind(this);
+            this.stop();
+            this.sortText = data.sort_truncated ?
+                'This file holds more rows than one sort can cover, so the order reads the first ' +
+                (data.sort_limit || 0) + ' rows only. Filter the rows to narrow the result.' : '';
+            var notice = document.getElementById('resultsTruncated');
+            notice.setAttribute('role', 'status');
+            notice.setAttribute('aria-live', 'polite');
+            this.observer = new ResizeObserver(this.scheduleChange);
+            this.observer.observe(document.getElementById('resultsTable'));
+            this.observer.observe(document.getElementById('resultsTableWrap'));
+            window.addEventListener('resize', this.scheduleChange);
+            document.fonts.addEventListener('loadingdone', this.scheduleChange);
+            this.schedule();
+        }
+
+        /** Cancel old layout work before data changes or the result panel closes. */
+        stop() {
+            if (this.frame != null) cancelAnimationFrame(this.frame);
+            if (this.observer) this.observer.disconnect();
+            this.frame = null;
+            this.observer = null;
+            window.removeEventListener('resize', this.scheduleChange);
+            document.fonts.removeEventListener('loadingdone', this.scheduleChange);
+            var notice = document.getElementById('resultsTruncated');
+            if (notice) notice.textContent = '';
+            show('resultsTruncated', false);
+        }
+
+        /** Combine repeated layout events into one measurement after layout. */
+        schedule() {
+            if (!this.observer || this.frame !== null) return;
+            this.frame = requestAnimationFrame(() => {
+                this.frame = null;
+                this.render();
+            });
+        }
+
+        /** Preserve the sort warning and identify the first row with hidden text. */
+        render() {
+            var rows = Array.from(document.querySelectorAll('#resultsBody tr[data-row]'));
+            var clippedRow = rows.findIndex(row => Array.from(row.cells).some(cell =>
+                cell.clientWidth > 0 && cell.scrollWidth > cell.clientWidth));
+            var html = escapeHtml(this.sortText);
+            if (clippedRow >= 0) {
+                html += (html ? ' ' : '') + 'Some cell text is clipped to fit the table. ' +
+                    '<button type="button" class="btn btn-link btn-sm p-0" data-testid="results-clipped-row">' +
+                    'Open row details for the first clipped row</button> to read its complete values. ' +
+                    '<a href="#outputFiles" data-testid="results-complete-output">Output Files</a>' +
+                    ' provides the complete output.';
+            }
+            var notice = document.getElementById('resultsTruncated');
+            if (notice.innerHTML !== html) notice.innerHTML = html;
+            show('resultsTruncated', Boolean(html));
+            this.bindControls(notice, clippedRow);
+        }
+
+        /** Focus existing complete-value destinations without repeated event handlers. */
+        bindControls(notice, clippedRow) {
+            var details = notice.querySelector('[data-testid="results-clipped-row"]');
+            if (details) details.onclick = () => {
+                if (state.openRow !== clippedRow) toggleRow(clippedRow);
+                var detail = document.querySelector('#resultsBody .result-detail-inner');
+                detail.tabIndex = -1;
+                detail.focus();
+            };
+            var output = notice.querySelector('[data-testid="results-complete-output"]');
+            if (output) output.onclick = () => {
+                var files = document.getElementById('outputFiles');
+                files.tabIndex = -1;
+                files.focus();
+            };
+        }
+    }
+
+    var clippingNotice = new ResultClippingNotice();
 
     // -----------------------------------------------------------------------
     // Visibility
@@ -69,7 +151,7 @@ var OperationResults = (function() {
         var tabular = (files || []).filter(isPreviewable);  // A log file belongs in the log panel.
         state.files = tabular;
         if (tabular.length === 0) {  // A run with no table has no result to show here.
-            show('resultsPanel', false);
+            reset();
             return;
         }
         buildFileSelect(tabular);
@@ -90,6 +172,8 @@ var OperationResults = (function() {
      * @param {string} path The file to show.
      */
     function selectFile(path) {
+        clearTimeout(state.searchTimer);
+        state.searchTimer = null;
         state.path = path;
         state.page = 1;
         state.search = '';
@@ -117,17 +201,23 @@ var OperationResults = (function() {
     }
 
     function load() {
+        var generation = ++state.requestGeneration;
+        clippingNotice.stop();
         setSummary('Loading the results...');
         fetch(buildUrl())
             .then(readJsonAnswer)
             .then(function(data) {
+                if (generation !== state.requestGeneration) return;
                 if (data.error) { renderError(data.error); return; }
                 render(data);
             })
-            .catch(function(err) { renderError(err.message); });
+            .catch(function(err) {
+                if (generation === state.requestGeneration) renderError(err.message);
+            });
     }
 
     function renderError(message) {
+        clippingNotice.stop();
         document.getElementById('resultsHead').innerHTML = '';
         document.getElementById('resultsBody').innerHTML = '';
         setSummary('');
@@ -158,14 +248,14 @@ var OperationResults = (function() {
                 '<tr><td class="text-muted">No row matches this filter.</td></tr>';
             setSummary('The result holds no row.');
             show('resultsPagination', false);
-            renderTruncationNotice(data);
+            clippingNotice.start(data);
             return;
         }
 
         renderHead();
         renderBody();
         setSummary(summaryText());
-        renderTruncationNotice(data);
+        clippingNotice.start(data);
         renderPagination();
     }
 
@@ -175,17 +265,6 @@ var OperationResults = (function() {
         var text = 'Showing ' + first + ' to ' + last + ' of ' + state.totalRows + ' rows.';
         if (state.search) text += ' The filter "' + state.search + '" selected them.';
         return text + ' Select a column heading to sort. Select a row to open it.';
-    }
-
-    function renderTruncationNotice(data) {
-        var visible = Boolean(data.sort_truncated);
-        show('resultsTruncated', visible);
-        if (!visible) return;
-        // Never let a partial order look complete. That silence is the defect
-        // that issue #3047 repaired, and it must not return in another form.
-        document.getElementById('resultsTruncated').textContent =
-            'This file holds more rows than one sort can cover, so the order reads the first ' +
-            (data.sort_limit || 0) + ' rows only. Filter the rows to narrow the result.';
     }
 
     function renderHead() {
@@ -276,11 +355,13 @@ var OperationResults = (function() {
     function toggleRow(idx) {
         state.openRow = state.openRow === idx ? -1 : idx;  // A second click closes the detail.
         renderBody();
+        clippingNotice.schedule();
     }
 
     function onSearchInput(value) {
         if (state.searchTimer) clearTimeout(state.searchTimer);  // One request for each pause, not for each key.
         state.searchTimer = setTimeout(function() {
+            state.searchTimer = null;
             state.search = value.trim();
             state.page = 1;  // A new filter starts at the first page.
             load();
@@ -306,6 +387,10 @@ var OperationResults = (function() {
     }
 
     function reset() {
+        state.requestGeneration += 1;
+        clearTimeout(state.searchTimer);
+        state.searchTimer = null;
+        clippingNotice.stop();
         state.files = [];
         state.path = null;
         state.rows = [];

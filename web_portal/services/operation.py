@@ -1453,6 +1453,8 @@ class OperationExecutor:
 
     def _finish_handler_outcome(self, run: dict, handler_outcome: Any) -> bool:
         """Apply an explicit handler result without reading its log wording."""
+        if run["menu_number"] == "92" and isinstance(handler_outcome, str) and handler_outcome.strip():
+            handler_outcome = OperationOutcome("completed", "Site selection completed. No output file is required.")
         if not isinstance(handler_outcome, OperationOutcome):  # Keep legacy handlers on marker classification.
             return False  # No typed result means the old checks still decide the run state.
         logger.info("Applying the typed outcome for operation %s", run["menu_number"])  # Log before state mapping.

@@ -175,7 +175,7 @@ class _OwnedOrderingHarness:
         execution = UtilityExecution.__new__(UtilityExecution)  # Build without network collaborators.
         execution.__dict__.update(
             {
-                "_context": SimpleNamespace(state=self._state),
+                "_context": SimpleNamespace(state=self._state, request=SimpleNamespace(key="ex.ping")),
                 "_starter": SimpleNamespace(
                     start=lambda: (
                         self._open_stream(self._trigger),

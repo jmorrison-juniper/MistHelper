@@ -275,6 +275,9 @@ class SiteClientExporter:
                     site_id=site_id,  # WHY: endpoint path parameter selecting the site container.
                     beacon_id=beacon_id,  # WHY: endpoint path parameter selecting the specific beacon resource.
                 )
+                status_code = getattr(response, "status_code", None)
+                if isinstance(status_code, int) and not 200 <= status_code < 300:
+                    raise RuntimeError(f"getSiteBeacon returned HTTP {status_code}")
                 payload = getattr(response, "data", response)  # WHY: support object and dict responses.
                 rows = SiteClientExporter._normalize_site_beacon_payload(payload)  # WHY: normalize to list rows.
                 logger.debug(

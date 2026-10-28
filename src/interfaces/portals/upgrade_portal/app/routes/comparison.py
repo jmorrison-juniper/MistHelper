@@ -16,6 +16,14 @@ from flask import (  # WHY: Flask routing and request handling.
     request,
 )
 
+from src.interfaces.portals.upgrade_portal.app.wiring import (
+    COMPARISON_SERVICE_KEY,
+    PortalAuthenticationError,
+    PortalDependencyError,
+    request_dependencies,
+)
+from src.interfaces.portals.upgrade_portal.runtime import identity
+
 logger = structlog.get_logger(__name__)  # WHY: module-scoped logger
 
 
@@ -185,12 +193,11 @@ def create_comparison_routes(
         logger.info("approve_comparison_request", run_id=run_id)  # WHY: request event
 
         try:
-            active_comparison_service = comparison_service or current_app.config.get(
-                "COMPARISON_SERVICE"
-            )  # Use the configured service for the module-level blueprint.
-            active_db_router = db_router or current_app.config.get(
-                "DB_ROUTER"
-            )  # Use the configured database boundary for the registered route.
+            active_comparison_service = comparison_service  # Keep explicit test dependencies when provided.
+            active_db_router = db_router  # Keep an explicit database boundary when provided.
+            active_audit_logger = audit_logger  # Keep an explicit audit boundary when provided.
+            request_graph = None  # Only production wiring supplies a request-owned identity here.
+            user_id = "system"  # Ensure failures before actor resolution never use an untrusted header.
             # WHY: validate run_id format
             if not run_id or not isinstance(run_id, str) or len(run_id) == 0:
                 # WHY: bad request
@@ -230,6 +237,29 @@ def create_comparison_routes(
                     400,
                 )  # WHY: return error
 
+            if active_comparison_service is None or active_db_router is None:  # Production uses the request provider.
+                try:  # Resolve authenticated request dependencies after request validation.
+                    request_graph = request_dependencies()  # Authenticate before opening mutation resources.
+                    if active_comparison_service is None:  # Use the request-bound service when no test seam exists.
+                        active_comparison_service = request_graph.mutation_services.resolve(
+                            COMPARISON_SERVICE_KEY
+                        )  # Keep the comparison service request-scoped.
+                    if active_db_router is None:  # Use the same request-owned router for approval writes.
+                        active_db_router = request_graph.database_router  # Use the request's router.
+                except PortalAuthenticationError:  # Keep the portal's standard unauthenticated response.
+                    logger.warning("comparison: refused approval without an authenticated operator")  # Record refusal.
+                    return identity.not_authenticated_response()  # Return the shared 401 envelope.
+                except PortalDependencyError as fault:  # Missing dependencies must refuse before any write.
+                    logger.error(
+                        "comparison: request dependencies unavailable (%s)", type(fault).__name__
+                    )  # Name fault type.
+                    return jsonify({"error": "Comparison service not available"}), 503  # Refuse approval.
+
+            if active_audit_logger is None:  # The service owns the request-scoped audit logger.
+                active_audit_logger = getattr(
+                    active_comparison_service, "audit_logger", None
+                )  # Use the service audit boundary.
+
             # WHY: check if comparison service available
             if not active_comparison_service:  # WHY: no service
                 # WHY: service unavailable
@@ -247,6 +277,26 @@ def create_comparison_routes(
                     jsonify({"error": "Database service not available"}),
                     503,
                 )  # WHY: return error
+
+            required_methods = ("get_comparison", "update_comparison", "update_run")  # Require every approval write.
+            if any(
+                not callable(getattr(active_db_router, name, None)) for name in required_methods
+            ):  # Refuse partial routers.
+                logger.error("comparison: request database router is incomplete")  # Report the missing methods.
+                return jsonify({"error": "Database service not available"}), 503  # Refuse before any write.
+            if not callable(getattr(active_audit_logger, "log_operation", None)):  # Require durable audit capability.
+                logger.error("comparison: request audit logger is unavailable")  # Report the missing audit seam.
+                return jsonify({"error": "Audit service not available"}), 503  # Refuse before any write.
+
+            if request_graph is not None:  # Production actor identity comes from the validated provider.
+                owner = getattr(request_graph.operator, "owner", None)  # Read the provider-verified owner.
+                authenticated_user = getattr(owner, "actor_email", None)  # Do not trust an HTTP identity header.
+                if not isinstance(authenticated_user, str) or not authenticated_user.strip():
+                    logger.error("comparison: authenticated actor is unavailable")  # Report the missing actor.
+                    return jsonify({"error": "Comparison service not available"}), 503  # Refuse approval.
+                user_id = authenticated_user.strip()  # Store the authenticated actor.
+            else:  # The explicit injection path serves isolated route tests.
+                user_id = request.headers.get("X-User-ID", "anonymous")  # Preserve explicit test injection behavior.
 
             # WHY: fetch comparison from database
             logger.info("db_router_get_comparison_for_approval", run_id=run_id)  # WHY: pre-call log
@@ -268,9 +318,6 @@ def create_comparison_routes(
                     jsonify({"error": "Comparison already approved"}),
                     400,
                 )  # WHY: return error
-
-            # WHY: get current user from token (would be extracted from JWT middleware)
-            user_id = request.headers.get("X-User-ID", "anonymous")  # WHY: extract user from headers
 
             # WHY: create approval record
             approval_record = {
@@ -314,18 +361,18 @@ def create_comparison_routes(
 
             # WHY: log approval to audit trail
             logger.debug("comparison_approval_stored", run_id=run_id, user_id=user_id)  # WHY: result summary
-            if audit_logger:  # WHY: check audit logger available
+            if active_audit_logger:  # WHY: check audit logger available
                 # WHY: audit the approval
-                audit_logger.log_operation(
-                    operation="approve_comparison",
-                    user_id=user_id,
-                    run_id=run_id,
-                    success=True,
+                active_audit_logger.log_operation(
+                    operation="approve_comparison",  # Name the audit event.
+                    user_id=user_id,  # Attribute the event to the signed-in actor.
                     details={
-                        "approved_items_count": len(approved_items),
-                        "rejected_items_count": len(rejected_items),
-                        "approved_all": approve_all,
-                    },
+                        "run_id": run_id,  # Link the event to its run.
+                        "approved_items_count": len(approved_items),  # Record the approved item count.
+                        "rejected_items_count": len(rejected_items),  # Record the rejected item count.
+                        "approved_all": approve_all,  # Record the approval mode.
+                    },  # Keep audit details free of device payloads.
+                    result="success",  # Record the completed decision.
                 )  # WHY: audit operation
 
             # WHY: return approval confirmation
@@ -349,15 +396,21 @@ def create_comparison_routes(
                 exception_type=type(e).__name__,
             )  # WHY: exception log
             # WHY: log to audit trail
-            if audit_logger:  # WHY: check audit logger available
+            if active_audit_logger:  # WHY: check audit logger available
                 # WHY: audit the failure
-                audit_logger.log_operation(
-                    operation="approve_comparison",
-                    user_id="system",
-                    run_id=run_id,
-                    success=False,
-                    details={"error": str(e)},
-                )  # WHY: audit operation
+                try:
+                    active_audit_logger.log_operation(
+                        operation="approve_comparison",
+                        user_id=user_id,
+                        details={"run_id": run_id, "error": str(e)},
+                        result="failure",
+                        error_message=str(e),
+                    )  # WHY: audit operation
+                except Exception as audit_fault:  # Report audit failure without masking the route response.
+                    logger.error(
+                        "comparison: approval failure audit failed (%s)",
+                        type(audit_fault).__name__,
+                    )  # Name the safe exception type.
             # WHY: return error
             return (
                 jsonify({"error": "Failed to approve comparison"}),

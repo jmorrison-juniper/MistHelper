@@ -257,9 +257,11 @@ class _RoutingUtilsPayload:  # WHY: cluster wrapper matching the parsing/display
         return self._parse_command_response(response)  # WHY: uniform (session, error) tuple projection
 
     def _resolve_credentials(self) -> tuple[str | None, str | None]:
-        """Return (host, token) from the apisession or the environment."""
+        """Return (host, token). Only the host may use the environment."""
         host = getattr(self._ru.apisession, "host", None) or os.getenv("MIST_HOST")  # WHY: fall-thru
-        token = getattr(self._ru.apisession, "apitoken", None) or os.getenv("MIST_APITOKEN")  # WHY:
+        token = (
+            getattr(self._ru.apisession, "apitoken", None) or None
+        )  # WHY: an env token can belong to another account
         return host, token  # WHY: caller validates both halves before continuing
 
     @staticmethod

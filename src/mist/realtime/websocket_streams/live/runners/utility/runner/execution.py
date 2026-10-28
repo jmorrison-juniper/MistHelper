@@ -123,19 +123,35 @@ class UtilityExecution:
         self._monitor = UtilityStreamMonitor(context, self._output)
 
     def run(self) -> None:
-        """Execute the complete utility lifecycle."""
+        """Publish a terminal result only after cleanup completes."""
+        started = time.monotonic()
+        log_fields = {"action": self._context.request.key}
+        execution_error: Exception | None = None
+        cleanup_error: Exception | None = None
         try:
-            self._execute(time.monotonic())
-        except Exception as error:
-            self._finisher.error(error)
+            try:
+                self._execute(started)
+            except Exception as error:
+                execution_error = error
         finally:
-            self._close()
+            try:
+                logger.emit(logging.INFO, "utility_cleanup_start", log_fields)
+                self._close()
+                logger.emit(logging.DEBUG, "utility_cleanup_complete", log_fields)
+            except Exception as error:
+                cleanup_error = error
+        if cleanup_error is not None:
+            logger.emit(logging.ERROR, "utility_cleanup_failed", log_fields | {"detail": type(cleanup_error).__name__})
+            self._finisher.failure("The utility cleanup failed. Read the portal log for the cause.")
+        elif execution_error is not None:
+            self._finisher.error(execution_error)
+        else:
+            self._finisher.finish(started)
 
     def _execute(self, started: float) -> None:
-        """Start, monitor, and finish one utility."""
+        """Start and monitor one utility without a terminal notification."""
         client, trigger, filterer = self._starter.start()
         self._monitor.read(client, trigger.listen.timing, filterer, started)
-        self._finisher.finish(started)
 
     def _close(self) -> None:
         """Close the stream and stop a matching capture when required."""

@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import inspect
+from collections.abc import Callable
+from typing import Any
 from unittest.mock import Mock
 
+import pytest
 from flask import Flask
 
 from src.interfaces.portals.upgrade_portal.app import factory, wiring
@@ -58,11 +61,14 @@ def test_capture_route_passes_service_contract(monkeypatch) -> None:
     )
 
 
-def test_upgrade_start_route_passes_service_contract(monkeypatch) -> None:
+def test_upgrade_start_route_passes_service_contract(monkeypatch: pytest.MonkeyPatch) -> None:
     """The upgrade start route must pass scope and operator identity."""
     service = Mock(start_upgrade=Mock(return_value="run-1"))
+    dependencies = Mock()
+    dependencies.mutation_services.resolve.return_value = service
     application = Flask(__name__)
-    application.config["UPGRADE_SERVICE"] = service
+    application.config["UPGRADE_SERVICE"] = Mock()
+    monkeypatch.setattr(upgrade, "request_dependencies", Mock(return_value=dependencies))
     monkeypatch.setattr(upgrade, "actor_address", lambda: "operator@example.com")
     monkeypatch.setattr(upgrade, "operator_write_refusal", lambda: None)
 
@@ -82,6 +88,7 @@ def test_upgrade_start_route_passes_service_contract(monkeypatch) -> None:
 
     assert status == 202
     assert response.get_json()["status"] == "pending"
+    dependencies.mutation_services.resolve.assert_called_once_with(upgrade.UPGRADE_SERVICE_KEY)
     service.start_upgrade.assert_called_once_with(
         run_id="run-1",
         org_id="org-1",
@@ -94,11 +101,14 @@ def test_upgrade_start_route_passes_service_contract(monkeypatch) -> None:
     )
 
 
-def test_upgrade_cancel_route_passes_operator_identity(monkeypatch) -> None:
+def test_upgrade_cancel_route_passes_operator_identity(monkeypatch: pytest.MonkeyPatch) -> None:
     """The upgrade cancel route must pass the operator identity."""
     service = Mock(cancel_upgrade=Mock(return_value=True))
+    dependencies = Mock()
+    dependencies.mutation_services.resolve.return_value = service
     application = Flask(__name__)
-    application.config["UPGRADE_SERVICE"] = service
+    application.config["UPGRADE_SERVICE"] = Mock()
+    monkeypatch.setattr(upgrade, "request_dependencies", Mock(return_value=dependencies))
     monkeypatch.setattr(upgrade, "actor_address", lambda: "operator@example.com")
 
     with application.test_request_context("/api/runs/run-1/upgrade/cancel", method="POST"):
@@ -106,7 +116,112 @@ def test_upgrade_cancel_route_passes_operator_identity(monkeypatch) -> None:
 
     assert status == 200
     assert response.get_json()["status"] == "cancelled"
+    dependencies.mutation_services.resolve.assert_called_once_with(upgrade.UPGRADE_SERVICE_KEY)
     service.cancel_upgrade.assert_called_once_with("run-1", user_id="operator@example.com")
+
+
+def test_upgrade_status_route_uses_request_service(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The status route must resolve its service from the active request."""
+    service = Mock(get_upgrade_status=Mock(return_value={"devices": []}))  # Supply a safe status stand-in.
+    dependencies = Mock()  # Hold the fake request service factory.
+    dependencies.mutation_services.resolve.return_value = service  # Return the status stand-in.
+    application = Flask(__name__)  # Build a route context without production startup.
+    application.config["UPGRADE_SERVICE"] = Mock()  # Ensure the legacy global seam is ignored.
+    monkeypatch.setattr(upgrade, "request_dependencies", Mock(return_value=dependencies))  # Use request wiring.
+
+    with application.test_request_context("/api/runs/run-1/upgrade/status"):  # Keep the request context active.
+        response, status = unwrapped(upgrade.upgrade_status_via_service)("run-1")  # Exercise the undecorated route.
+
+    assert status == 200  # Return the request service result.
+    assert response.get_json() == {"devices": []}  # Keep the status response shape.
+    dependencies.mutation_services.resolve.assert_called_once_with(upgrade.UPGRADE_SERVICE_KEY)  # Use the provider.
+    service.get_upgrade_status.assert_called_once_with("run-1")  # Read the requested run once.
+
+
+@pytest.mark.parametrize(
+    ("handler", "path", "method"),
+    [
+        (upgrade.upgrade_status_via_service, "/api/runs/run-1/upgrade/status", "GET"),
+        (upgrade.cancel_upgrade_via_service, "/api/runs/run-1/upgrade/cancel", "POST"),
+    ],
+)
+def test_upgrade_status_and_cancel_refuse_without_request_service(
+    monkeypatch: pytest.MonkeyPatch,
+    handler: Callable[..., Any],
+    path: str,
+    method: str,
+) -> None:
+    """Status and cancel routes must refuse when request dependencies are missing."""
+    dependency_provider = Mock(
+        side_effect=upgrade.PortalDependencyError("provider unavailable")
+    )  # Refuse service construction.
+    application = Flask(__name__)  # Build a route context without production startup.
+    monkeypatch.setattr(upgrade, "request_dependencies", dependency_provider)  # Inject the missing provider.
+
+    with application.test_request_context(path, method=method):  # Supply the route's Flask request.
+        response, status = unwrapped(handler)("run-1")  # Exercise the undecorated route.
+
+    assert status == 503  # Refuse the route without a mutation service.
+    assert response.get_json()["error"]["code"] == "service_unavailable"  # Do not report success.
+    dependency_provider.assert_called_once()  # Resolve the provider only once.
+
+
+def test_upgrade_start_refusal_precedes_request_service_resolution(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A refused firmware request must not construct mutation dependencies."""
+    dependencies = Mock()  # Detect any request-service construction.
+    application = Flask(__name__)  # Build a route context without production startup.
+    monkeypatch.setattr(upgrade, "request_dependencies", Mock(return_value=dependencies))  # Track provider access.
+    monkeypatch.setattr(
+        upgrade,
+        "operator_write_refusal",
+        lambda: (upgrade.jsonify({"error": "refused"}), 403),
+    )  # Refuse before service construction.
+
+    with application.test_request_context(  # Supply a valid request that reaches the authorization gate.
+        "/api/runs/run-1/upgrade/start",
+        method="POST",
+        json={
+            "org_id": "org-1",
+            "site_id": "site-1",
+            "device_ids": ["device-1"],
+            "firmware_version": "1.2.3",
+            "strategy": "serial",
+            "rollback_enabled": True,
+        },
+    ):
+        response, status = unwrapped(upgrade.start_upgrade_via_service)("run-1")  # Exercise the undecorated route.
+
+    assert status == 403  # Preserve the existing authorization refusal.
+    assert response.get_json() == {"error": "refused"}  # Keep the refusal response.
+    upgrade.request_dependencies.assert_not_called()  # Do not build mutation resources after refusal.
+
+
+def test_upgrade_start_refuses_when_request_service_is_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A missing request service must stop the firmware route before a write."""
+    application = Flask(__name__)  # Build a route context without production startup.
+    monkeypatch.setattr(upgrade, "operator_write_refusal", lambda: None)  # Pass the existing write guard.
+    monkeypatch.setattr(
+        upgrade,
+        "request_dependencies",
+        Mock(side_effect=upgrade.PortalDependencyError("provider unavailable")),
+    )  # Make the request dependency boundary fail closed.
+
+    with application.test_request_context(  # Supply a valid upgrade request without a production service.
+        "/api/runs/run-1/upgrade/start",
+        method="POST",
+        json={
+            "org_id": "org-1",
+            "site_id": "site-1",
+            "device_ids": ["device-1"],
+            "firmware_version": "1.2.3",
+            "strategy": "serial",
+            "rollback_enabled": True,
+        },
+    ):
+        response, status = unwrapped(upgrade.start_upgrade_via_service)("run-1")  # Exercise the undecorated route.
+
+    assert status == 503  # Refuse the request because its service is absent.
+    assert response.get_json()["error"]["code"] == "service_unavailable"  # Do not claim an upgrade started.
 
 
 def test_phase_services_install_without_legacy_mistapi(monkeypatch) -> None:

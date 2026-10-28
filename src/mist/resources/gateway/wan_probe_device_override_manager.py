@@ -521,10 +521,21 @@ class WANProbeDeviceOverrideManager:  # WHY: encapsulates Menu #167 destructive 
     @staticmethod
     def _fetch_device_config(device: dict[str, Any], result: dict[str, Any]) -> dict[str, Any] | None:
         """Fetch device config from Mist and verify it has a usable port_config."""
-        logger.debug("Fetching device config for %s", device["device_name"])  # WHY: pre-call log.
+        logger.info("Fetching device config for %s", device["device_name"])  # WHY: record the API read.
         resp = mistapi.api.v1.sites.devices.getSiteDevice(  # WHY: full device config from Mist.
             apisession, device["site_id"], device["device_id"]
         )
+        status_code = resp.status_code  # WHY: SDK parses error bodies but preserves the HTTP result.
+        logger.debug(
+            "Fetched device config for %s with status %s", device["device_name"], status_code
+        )  # WHY: record the response status.
+        if status_code != HTTP_OK:  # WHY: error bodies cannot provide trusted device configuration.
+            result["status"] = "FAILED"  # WHY: keep the existing API failure result.
+            result["error"] = f"API returned status {status_code}"  # WHY: expose the rejected status.
+            logger.error(
+                "Failed to fetch device config for %s: %s", device["device_name"], status_code
+            )  # WHY: identify the failed read.
+            return None  # WHY: prevent a rejected body from reaching the update path.
         device_config = resp.data if hasattr(resp, "data") else {}  # WHY: defensive — response may lack .data.
         if not isinstance(device_config, dict):  # WHY: Mist returned non-dict body — unusable.
             result["status"] = "SKIPPED"  # WHY: record skipped outcome.

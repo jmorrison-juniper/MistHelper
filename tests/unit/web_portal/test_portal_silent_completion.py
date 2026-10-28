@@ -3,6 +3,7 @@
 from __future__ import annotations  # WHY: keep annotations cheap and consistent with project style.
 
 import logging  # WHY: inspect fallback telemetry and capture handler prose.
+from collections.abc import Iterator  # Type the fixture that releases its executor.
 from pathlib import Path  # WHY: create unrelated output inside the scanner root.
 from types import SimpleNamespace  # WHY: model a non-raising Mist API response with a real status integer.
 from typing import Any, Literal, NamedTuple  # WHY: type test records and every valid result state.
@@ -27,6 +28,7 @@ from src.interfaces.visualization.ui import (
 from src.interfaces.visualization.ui.interactive_display_utils import (
     InteractiveDisplayUtils,
 )  # WHY: Menu 95 uses this real handler.
+from src.interfaces.visualization.ui.prompt_utils import PromptUtils  # Exercise the unchanged menu 92 selector.
 from src.mist.intelligence.reports.alert_digest.operation import (
     AlertDigestOperation,
 )  # WHY: menu 280 already returns typed operation outcomes.
@@ -142,6 +144,101 @@ def _build_alert_digest_executor() -> OperationExecutor:
         )
     }
     return OperationExecutor(menu_actions, None, None, _EventBus())  # WHY: capture terminal events without a server.
+
+
+@pytest.fixture
+def site_selection_executor(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> Iterator[tuple[OperationExecutor, _EventBus]]:
+    """Isolate menu 92's real selector, cached input, output scan, and terminal events."""
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))  # Keep every scanner inside the temporary directory.
+    csv_path = tmp_path / "SiteList.csv"  # Provide a cache without a Mist API request.
+    csv_path.write_text("name,id\nLab,site-1\n", encoding="utf-8")  # Supply both index and name selection.
+    event_bus = _EventBus()  # Observe the terminal event without a running server.
+    actions = {  # Use the production menu 92 handler and a separate export control.
+        menu: MenuEntry(menu, PromptUtils.select_site_with_logging, "Select a site", "interactive_safe", False, False)
+        for menu in ("92", "93")  # A different menu must not accept an identifier as export evidence.
+    }
+    executor = OperationExecutor(actions, None, None, event_bus)  # Use the real terminal assessment.
+    with (
+        patch("src.interfaces.visualization.ui.prompt_utils.CacheUtils.check_and_generate_csv"),
+        patch("src.interfaces.visualization.ui.prompt_utils.FilePathUtils.get_csv_path", return_value=str(csv_path)),
+        patch("src.interfaces.visualization.ui.prompt_utils.SourceDependencyResolver", MagicMock()),
+    ):  # Replace cloud and global state while retaining actual CSV selection.
+        try:
+            yield executor, event_bus  # Give each test a separate run registry and event history.
+        finally:
+            executor.shutdown(0)  # Release the thread pool even when a regression fails.
+
+
+@pytest.mark.parametrize(
+    ("menu", "outcome", "status"),
+    [
+        ("92", "site-1", "completed"),
+        ("92", None, "failed"),
+        ("92", "", "failed"),
+        ("92", "   ", "failed"),
+        ("92", True, "failed"),
+        ("92", {"id": "site-1"}, "failed"),
+        ("93", "site-1", "failed"),
+    ],
+)
+def test_site_selection_result_is_scoped_and_nonblank(
+    site_selection_executor: tuple[OperationExecutor, _EventBus], menu: str, outcome: Any, status: str
+) -> None:
+    """Only a nonblank menu-92 identifier proves selection without export evidence."""
+    executor, event_bus = site_selection_executor  # Use the isolated production executor.
+    run = executor._build_run_record(menu)  # Build the actual bounded run record.
+    run["handler_outcome"] = outcome  # Supply the selector's returned result independently of log wording.
+    executor._finish_successful_operation(run)  # Assess the same evidence used after a real handler.
+    assert run["status"] == status  # Invalid and foreign results must not report successful selection.
+    assert list(run["output_files"]) == []  # No file can conceal the original defect.
+    if status == "completed":  # Verify the message and terminal event, not only a state flag.
+        assert run["completion_message"] == "Site selection completed. No output file is required."
+        assert event_bus.events[-1][0] == "complete"  # The browser must receive a successful terminal event.
+        assert event_bus.events[-1][1]["output_files"] == []  # A selection must not invent an export file.
+    else:
+        assert run["error_message"] == "Operation finished without an output file or a no-data message."
+        assert event_bus.events[-1][0] == "error_event"  # Existing failures must keep their terminal behavior.
+
+
+@pytest.mark.parametrize(
+    ("answer", "status"), [("0", "completed"), ("Lab", "completed"), ("999", "failed"), ("Missing", "failed")]
+)
+def test_real_site_selection_completes_without_an_export(
+    site_selection_executor: tuple[OperationExecutor, _EventBus],
+    caplog: pytest.LogCaptureFixture,
+    answer: str,
+    status: str,
+) -> None:
+    """Run the actual CSV selector, web input context, scanner, and terminal assessment."""
+    executor, event_bus = site_selection_executor  # Keep production execution with controlled input.
+    run = executor._build_run_record("92")  # Match the actual registered menu.
+    with caplog.at_level(logging.INFO):  # Retain the selection log from the reported reproduction.
+        executor._execute_operation(
+            run, {"input_context_answers": {"site_selection": answer}}
+        )  # Exercise the complete portal handler path with the actual prompt context.
+    assert run["status"] == status  # Both selection forms must succeed while unresolved choices fail.
+    assert list(run["output_files"]) == []  # The pre-existing cache is not a new export.
+    if status == "completed":
+        assert run["completion_message"] == "Site selection completed. No output file is required."
+        assert run["error_message"] is None  # Do not retain the false export failure.
+        assert event_bus.events[-1][1]["message"] == run["completion_message"]  # Preserve the result through SSE.
+    else:
+        assert event_bus.events[-1][0] == "error_event"  # An invalid selection must not report completion.
+
+
+def test_site_selection_exception_remains_failed(
+    site_selection_executor: tuple[OperationExecutor, _EventBus],
+) -> None:
+    """A selector exception must retain its failure reason instead of reporting completion."""
+    executor, event_bus = site_selection_executor  # Exercise production exception handling.
+    run = executor._build_run_record("92")  # Target the menu that gains selection completion.
+    with patch.object(PromptUtils, "select_site_id_from_csv", side_effect=ValueError("The site list is invalid.")):
+        executor._execute_operation(run, {})  # Raise from inside the real handler rather than its classifier.
+    assert run["status"] == "failed"  # A selector failure cannot prove success.
+    assert run["error_message"] == "The site list is invalid."  # Preserve the concrete cause.
+    assert event_bus.events[-1][0] == "error_event"  # Keep the failure terminal event.
 
 
 def test_issue_3144_controls_cover_site_and_identifier_prompts() -> None:
