@@ -1376,5 +1376,10 @@ The source group decreases from 16 to 15 tracked direct children.
 The entrypoint group increases from three to four children.
 The mapped ancestors retain one, two, or four children.
 Ruff, Black, and compilation pass.
-The committed test-quality result follows after the local commit.
+The committed test-quality check examined 1,209 files and 613 findings.
+It skipped 52 files and reported zero parse errors.
+It found zero new findings against the baseline after commit `00319c526`.
+The required input preflight reported one passed.
+The three feature records passed STE with scores of 97, 96, and 93.
+The link check found zero broken links.
 The held actions and analytics paths, fixtures, markers, and pytest settings remain unchanged.

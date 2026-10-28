@@ -82,7 +82,7 @@ The coordinator must release the PR hold after #4353 before any pull request ope
 
 - [X] T052 [US1] Move `test_main_entrypoint.py` to its mapped runtime entrypoint group. Preserve file bytes and node IDs. Update four baseline path fields and three active quickstart command paths. Verify ownership, hierarchy, historical evidence, tests, guards, style, compilation, links, and committed test-quality checks.
 
-- [ ] T053 [US1] Move `test_reject_unsupported_flag_variants.py` to its mapped runtime entrypoint group. Adjust only its repository-root depth and four baseline path fields. Preserve historical evidence and node IDs. Verify ownership, hierarchy, tests, guards, style, compilation, links, and committed test-quality checks.
+- [X] T053 [US1] Move `test_reject_unsupported_flag_variants.py` to its mapped runtime entrypoint group. Adjust only its repository-root depth and four baseline path fields. Preserve historical evidence and node IDs. Verify ownership, hierarchy, tests, guards, style, compilation, links, and committed test-quality checks.
 
 ## Phase 4: User Story 2 - Run the existing unit tests (Priority: P1)
 
