@@ -1286,3 +1286,31 @@ The full guardrail result remains failed and is not reported as a pass.
 The test-quality input preflight passed one test.
 The committed changed-from gate checked 1,209 files and 613 findings.
 It skipped 52 files, reported zero parse errors, and found zero new findings.
+
+## Filesystem test relocation, 2026-10-28
+
+The user approved this one-file move and publication directly.
+Move `tests/unit/refactors/test_data_directory_checker.py` to
+`tests/unit/config/foundation/support/refactors/data/filesystem/test_data_directory_checker.py`.
+The pre-edit scan found no external exact-path claim in five open pull requests.
+The open-issue body and comment search returned zero matching issues.
+The worktree was clean before the move.
+The live main commit was `a0fac53c5b5d5f57e6d05ff2d6225570cda07691`.
+The preceding branch commit was `1cf3d4bcda5e0bb078cd5936956e8b7068abba82`.
+Its checks reported 36 successful checks and seven skipped checks.
+
+The moved file retains every byte.
+The baseline, historical changelog, and historical performance inventory retain every byte.
+The source group decreases from 18 to 17 tracked direct children.
+The mapped data group increases from two to three children.
+The new filesystem group has one child.
+The other mapped ancestors retain two or four children.
+No package marker, fixture, runtime file, or pytest setting changes.
+
+The complete unit collection retains 29,836 node IDs.
+An explicit source-to-destination mapping produces identical node-ID multisets without duplicate IDs.
+The focused test and narrow structure, move, and baseline guards report 47 passed.
+The required test-quality input preflight reports one passed.
+Ruff, Black, compilation, and whitespace checks pass.
+The committed test-quality result follows after the local commit.
+The held actions and analytics paths remain unchanged.

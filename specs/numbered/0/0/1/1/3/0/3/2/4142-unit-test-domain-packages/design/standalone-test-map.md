@@ -307,7 +307,7 @@ Keep the existing package marker. The destination root has four topic groups.
 | `tests/unit/config/foundation/support/refactors/data/` | `tests/unit/config/foundation/support/refactors/data/inventory/`, `tests/unit/config/foundation/support/refactors/data/storage/`, `tests/unit/config/foundation/support/refactors/data/filesystem/` |
 | `tests/unit/config/foundation/support/refactors/data/inventory/` | `tests/unit/refactors/test_inventory_csvcomparator.py`, `tests/unit/refactors/test_marvis_data_utils.py` |
 | `tests/unit/config/foundation/support/refactors/data/storage/` | `tests/unit/refactors/test_sqlite_database_writer.py` |
-| `tests/unit/config/foundation/support/refactors/data/filesystem/` | `tests/unit/refactors/test_data_directory_checker.py` |
+| `tests/unit/config/foundation/support/refactors/data/filesystem/` | `tests/unit/config/foundation/support/refactors/data/filesystem/test_data_directory_checker.py` |
 | `tests/unit/config/foundation/support/refactors/telemetry/` | `tests/unit/refactors/test_anomaly_metrics_discovery.py` |
 
 #### User interface
