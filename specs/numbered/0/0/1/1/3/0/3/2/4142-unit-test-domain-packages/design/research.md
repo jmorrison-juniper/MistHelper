@@ -1579,6 +1579,37 @@ Both quality gates examine 1,209 files and 613 findings.
 Each reports 52 skipped files, zero parse errors, and zero new findings against the baseline.
 These results apply to the move commit `8995c8631`.
 
+## Inventory versioning test relocation, 2026-10-28
+
+The preceding head `0d40624524aa033bf32d24471dff6e15d1e05180` has 36 successful checks and seven skipped checks.
+Main remains `a0fac53c5b5d5f57e6d05ff2d6225570cda07691`.
+The worktree started clean.
+The six open PR manifests have no external exact-path overlap.
+The exact issue search found no claim.
+Move `tests/unit/inventory/test_version_per_model_fetcher_wave3.py` to
+`tests/unit/marvis/mist/resources/inventory/support/versioning/test_version_per_model_fetcher_wave3.py`.
+The existing map supplies the destination.
+Every test byte remains unchanged.
+The file uses only standard pytest fixtures and restores every patched parent hook.
+It has no package-local fixture or depth-dependent path.
+Only the direct feature map consumes its current path.
+The historical feature 887 specification records remain unchanged under FR-004.
+The unchanged control reports 27 passed.
+The inventory tests and narrow guards report 252 passed.
+The complete collection retains 29,838 node IDs with exact mapped parity and no duplicates.
+The baseline remains unchanged.
+The source group decreases from seven to six tracked direct children.
+The new versioning group and support parent each have one child.
+The inventory parent has three children.
+Every mapped ancestor remains within five children.
+Ruff, Black, compilation, and whitespace checks pass.
+The UI fixture-dependent tests and explicit parameter-collector and prompt-utils reservations remain unmoved.
+The firmware running-version test also remains unmoved because #2746 retains an explicit reservation.
+The application-context hold, historical records, #4008 actions, analytics paths, and separate #2746 HTTP 403 change remain unchanged.
+Publication requires the documentation checks, committed quality gates, and exact preceding-head lease.
+PR #4358 remains a draft with auto-merge disabled.
+Another batch requires green CI on the published head.
+
 ## Interactive-display test relocation, 2026-10-28
 
 The preceding head `2492043d693dccad5e297bdd474cddc01882af5b` has 36 successful checks and seven skipped checks.

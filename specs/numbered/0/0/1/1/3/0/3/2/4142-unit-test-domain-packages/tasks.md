@@ -95,6 +95,7 @@ The coordinator must release the PR hold after #4353 before any pull request ope
 - [X] T062 [US1] Move the independent TUI orchestrator test into mapped `interfaces/ui/interaction/tui/`. Preserve test bytes, node IDs, historical references, shared fixtures, and the baseline. Keep the #2711 parameter-collector reservation unchanged. Verify ownership, UI tests, narrow guards, collection parity, style, compilation, documentation, and committed quality gates.
 - [X] T063 [US1] Move the independent device-prompt rename guard into mapped `interfaces/ui/interaction/dispatch/`. Adjust only its repository-root depth and four baseline path fields. Verify the exact source scan, negative control, node IDs, baseline semantics, fixture preservation, ownership, scoped tests, style, documentation, and committed quality gates.
 - [X] T064 [US1] Move the independent interactive-display test into mapped `interfaces/ui/interaction/dispatch/`. Preserve test bytes and shared fixtures. Update only four baseline path fields. Verify ownership, resolver-sensitive test order, full collection parity, baseline semantics, hierarchy, style, documentation, and committed quality gates.
+- [X] T065 [US1] Move the unowned inventory versioning test into mapped `inventory/support/versioning/`. Preserve every test byte, shared fixtures, baseline, and historical specifications. Verify ownership, inventory tests, collection parity, hierarchy, style, documentation, and committed quality gates.
 
 ## Phase 4: User Story 2 - Run the existing unit tests (Priority: P1)
 

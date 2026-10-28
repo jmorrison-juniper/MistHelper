@@ -287,7 +287,7 @@ The destination root has five topic groups. Keep the three existing subpackages 
 | `tests/unit/marvis/mist/resources/inventory/inventory_summary/` | `tests/unit/inventory/inventory_summary/__init__.py`, `tests/unit/inventory/inventory_summary/test_pivot_renderer.py` |
 | `tests/unit/marvis/mist/resources/inventory/support/` | `tests/unit/marvis/mist/resources/inventory/support/comparison/`, `tests/unit/marvis/mist/resources/inventory/support/versioning/` |
 | `tests/unit/marvis/mist/resources/inventory/support/comparison/` | `tests/unit/inventory/test_csv_comparator_broad_handlers.py` |
-| `tests/unit/marvis/mist/resources/inventory/support/versioning/` | `tests/unit/inventory/test_version_per_model_fetcher_wave3.py` |
+| `tests/unit/marvis/mist/resources/inventory/support/versioning/` | `tests/unit/marvis/mist/resources/inventory/support/versioning/test_version_per_model_fetcher_wave3.py` |
 
 #### Refactors
 
