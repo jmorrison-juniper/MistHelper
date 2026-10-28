@@ -1607,6 +1607,11 @@ The source group decreases from 16 to 15 tracked direct children.
 The new dispatch group has one child, and the interaction parent has two children.
 Every mapped ancestor remains within five children.
 Ruff, Black, compilation, and whitespace checks pass.
+The three changed feature records pass STE and contain zero broken local links.
+The committed input preflight reports one passed.
+Both quality gates examine 1,209 files and 613 findings.
+Each reports 52 skipped files, zero parse errors, and zero new findings against the baseline.
+These results apply to the move commit `fed90555d`.
 The shared UI fixtures, parameter-collector reservation, application-context hold, and historical records remain unchanged.
 The #4008 actions, analytics paths, and separate #2746 HTTP 403 change remain unchanged.
 Publication requires the documentation checks, committed quality gates, and exact preceding-head lease.
