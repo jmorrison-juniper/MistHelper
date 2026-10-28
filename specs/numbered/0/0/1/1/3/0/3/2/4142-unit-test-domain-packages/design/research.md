@@ -1438,6 +1438,39 @@ Each reports 52 skipped files, zero parse errors, and zero new findings against 
 These committed results apply to `ec79d064a6dc62530771ba70e80ec30dd7c16d85`.
 The full guardrail suite remains excluded because its previously recorded PowerShell failures require unavailable tooling.
 
+## Console test relocation, 2026-10-28
+
+The preceding repair head `67481845b8d3bbeab6f606243e9ef805bf2ffdf9` has 36 successful checks and seven skipped checks.
+Main remains `a0fac53c5b5d5f57e6d05ff2d6225570cda07691`.
+The worktree started clean.
+The refreshed five-PR file inventory has no external exact-path overlap.
+Exact open issue searches found no keyboard test claim.
+The TUI test appears only in this batch's resolved fixture incident, issue #4492.
+The fast-mode test stays outside this bounded batch.
+No HTTP 403 test is applied.
+
+| Source file | Destination file |
+| - | - |
+| `tests/unit/refactors/test_keyboard_listener.py` | `tests/unit/config/foundation/support/refactors/runtime/console/test_keyboard_listener.py` |
+| `tests/unit/refactors/test_tui_launcher.py` | `tests/unit/config/foundation/support/refactors/runtime/console/test_tui_launcher.py` |
+
+Both files retain every byte.
+The source group decreases from 12 to ten tracked direct children.
+The new console group has two children.
+Its runtime parent has two children.
+Higher mapped ancestors retain two or four children.
+The baseline retains 733 records, their order, and all non-path fields.
+Only two TUI baseline path fields change.
+Historical changelog and performance inventory files remain unchanged.
+The full collection retains 29,838 node IDs with exact mapped parity and no duplicates.
+The unmoved focused control reports 24 passed.
+Mapped refactors, remaining refactors, affected consumers, and narrow guards report 780 passed.
+Ruff, Black, compilation, and whitespace checks pass.
+The #4008 actions, analytics history, and separate unpublished HTTP 403 commit remain unchanged.
+PR #4358 stays a draft with auto-merge disabled.
+Publication requires the remaining documentation and committed quality gates plus the exact preceding-head lease.
+Another batch requires green CI on the published head.
+
 ## Network configuration test relocation, 2026-10-28
 
 The preceding head `05e90edc2fd344e0270df7ecb0c7d2f6758a8e4b` passed all 36 checks.
