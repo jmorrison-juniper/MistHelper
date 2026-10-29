@@ -156,9 +156,8 @@ class MistHelperTUI:  # WHY: public TUI entrypoint composing all collaborators
         """Return available rows for table data after subtracting UI chrome."""
         try:
             console_height = self.console.size.height  # Rich detects current terminal height
-        except Exception as error:  # Detection can fail in containers
-            if self.debug_mode:  # Optional debug trace only in verbose mode
-                logging.debug("TUI_DEBUG: terminal-height detection failed: %s", error)  # Trace fallback path
+        except OSError as error:  # Rich reports missing terminal dimensions as an operating-system error.
+            logger.debug("TUI_DEBUG: terminal-height detection failed: %s", error)  # Trace the conservative fallback.
             return 20  # Conservative fallback
         return max(10, console_height - UI_OVERHEAD_ROWS)  # Floor at 10 rows
 

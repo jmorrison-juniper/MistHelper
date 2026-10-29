@@ -12,15 +12,19 @@ Why:
 
 from __future__ import annotations
 
+import logging  # WHY: capture warnings from expected Mist SDK failures.
+
 # WHY (#886 Phase 2): PromptUtils now emits via logging.warning instead of print, so tests capture via caplog.
-import logging
-from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from collections.abc import Callable  # WHY: type the parameterized fetch functions.
+from types import SimpleNamespace  # WHY: provide lightweight Mist API response objects.
+from typing import Any  # WHY: describe the mixed fetch return values.
+from unittest.mock import MagicMock, patch  # WHY: isolate Mist SDK calls.
 
-import pytest
-from prettytable import PrettyTable
+import pytest  # WHY: verify fetch error behavior.
+from prettytable import PrettyTable  # WHY: verify client table output.
+from requests.exceptions import RequestException  # WHY: model Mist SDK transport failures.
 
-from src.interfaces.visualization.ui.prompt_utils import PromptUtils
+from src.interfaces.visualization.ui.prompt_utils import PromptUtils  # WHY: test the client prompt helpers.
 
 
 def _make_mh(**extra):
@@ -432,17 +436,21 @@ def test_fetch_site_wireless_clients_get_all_none_returns_empty() -> None:
         assert PromptUtils._fetch_site_wireless_clients("site-1") == []
 
 
-def test_fetch_site_wireless_clients_exception_returns_empty() -> None:
-    """Fetch exceptions are swallowed and yield an empty list."""
-    fake_mh = _make_mh()
-    with (
+def test_fetch_site_wireless_clients_exception_returns_empty(
+    caplog: pytest.LogCaptureFixture,
+) -> None:  # Capture the expected Mist SDK failure.
+    """A Mist API request failure yields an empty list."""
+    fake_mh = _make_mh()  # Provide a lazy Mist API session.
+    caplog.set_level(logging.WARNING)  # Capture the expected Mist SDK failure.
+    with (  # Replace the API dependency with a transport failure.
         patch(
             "src.interfaces.visualization.ui.prompt_utils.mistapi.api.v1.sites.clients.searchSiteWirelessClients",
-            side_effect=RuntimeError("boom"),
-        ),
-        patch("src.interfaces.visualization.ui.prompt_utils.SourceDependencyResolver", fake_mh),
+            side_effect=RequestException("offline"),
+        ),  # Model a failed client request.
+        patch("src.interfaces.visualization.ui.prompt_utils.SourceDependencyResolver", fake_mh),  # Inject the session.
     ):
-        assert PromptUtils._fetch_site_wireless_clients("site-1") == []
+        assert PromptUtils._fetch_site_wireless_clients("site-1") == []  # Return no clients after the failure.
+    assert "offline" in caplog.text  # Verify that the exception detail is visible.
 
 
 # ---------- _fetch_site_wired_clients ----------
@@ -465,17 +473,21 @@ def test_fetch_site_wired_clients_success() -> None:
     assert result[0]["source_site_id"] == "site-1"
 
 
-def test_fetch_site_wired_clients_exception_returns_empty() -> None:
-    """Fetch failure yields an empty list."""
-    fake_mh = _make_mh()
-    with (
+def test_fetch_site_wired_clients_exception_returns_empty(
+    caplog: pytest.LogCaptureFixture,
+) -> None:  # Capture the expected Mist SDK failure.
+    """A Mist API request failure yields an empty list."""
+    fake_mh = _make_mh()  # Provide a lazy Mist API session.
+    caplog.set_level(logging.WARNING)  # Capture the expected Mist SDK failure.
+    with (  # Replace the API dependency with a rate-limit failure.
         patch(
             "src.interfaces.visualization.ui.prompt_utils.mistapi.api.v1.sites.wired_clients.searchSiteWiredClients",
             side_effect=RuntimeError("boom"),
-        ),
-        patch("src.interfaces.visualization.ui.prompt_utils.SourceDependencyResolver", fake_mh),
+        ),  # Model a failed client request.
+        patch("src.interfaces.visualization.ui.prompt_utils.SourceDependencyResolver", fake_mh),  # Inject the session.
     ):
-        assert PromptUtils._fetch_site_wired_clients("site-1") == []
+        assert PromptUtils._fetch_site_wired_clients("site-1") == []  # Return no clients after the failure.
+    assert "boom" in caplog.text  # Verify that the exception detail is visible.
 
 
 # ---------- _fetch_org_wireless_clients ----------
@@ -498,17 +510,21 @@ def test_fetch_org_wireless_clients_success() -> None:
     assert "source_site_id" not in result[0]
 
 
-def test_fetch_org_wireless_clients_exception_returns_empty() -> None:
-    """Fetch failure yields an empty list."""
-    fake_mh = _make_mh()
-    with (
+def test_fetch_org_wireless_clients_exception_returns_empty(
+    caplog: pytest.LogCaptureFixture,
+) -> None:  # Capture the expected Mist SDK failure.
+    """A Mist API request failure yields an empty list."""
+    fake_mh = _make_mh()  # Provide a lazy Mist API session.
+    caplog.set_level(logging.WARNING)  # Capture the expected Mist SDK failure.
+    with (  # Replace the API dependency with a rate-limit failure.
         patch(
             "src.interfaces.visualization.ui.prompt_utils.mistapi.api.v1.orgs.clients.searchOrgWirelessClients",
             side_effect=RuntimeError("boom"),
-        ),
-        patch("src.interfaces.visualization.ui.prompt_utils.SourceDependencyResolver", fake_mh),
+        ),  # Model a failed client request.
+        patch("src.interfaces.visualization.ui.prompt_utils.SourceDependencyResolver", fake_mh),  # Inject the session.
     ):
-        assert PromptUtils._fetch_org_wireless_clients("org-1") == []
+        assert PromptUtils._fetch_org_wireless_clients("org-1") == []  # Return no clients after the failure.
+    assert "boom" in caplog.text  # Verify that the exception detail is visible.
 
 
 # ---------- _fetch_org_wired_clients ----------
@@ -530,17 +546,21 @@ def test_fetch_org_wired_clients_success() -> None:
     assert result[0]["client_type"] == "wired"
 
 
-def test_fetch_org_wired_clients_exception_returns_empty() -> None:
-    """Fetch failure yields an empty list."""
-    fake_mh = _make_mh()
-    with (
+def test_fetch_org_wired_clients_exception_returns_empty(
+    caplog: pytest.LogCaptureFixture,
+) -> None:  # Capture the expected Mist SDK failure.
+    """A Mist API request failure yields an empty list."""
+    fake_mh = _make_mh()  # Provide a lazy Mist API session.
+    caplog.set_level(logging.WARNING)  # Capture the expected Mist SDK failure.
+    with (  # Replace the API dependency with a rate-limit failure.
         patch(
             "src.interfaces.visualization.ui.prompt_utils.mistapi.api.v1.orgs.wired_clients.searchOrgWiredClients",
             side_effect=RuntimeError("boom"),
-        ),
-        patch("src.interfaces.visualization.ui.prompt_utils.SourceDependencyResolver", fake_mh),
+        ),  # Model a failed client request.
+        patch("src.interfaces.visualization.ui.prompt_utils.SourceDependencyResolver", fake_mh),  # Inject the session.
     ):
-        assert PromptUtils._fetch_org_wired_clients("org-1") == []
+        assert PromptUtils._fetch_org_wired_clients("org-1") == []  # Return no clients after the failure.
+    assert "boom" in caplog.text  # Verify that the exception detail is visible.
 
 
 # ---------- _fetch_all_clients ----------
@@ -596,13 +616,70 @@ def test_load_sites_cache_success(caplog: pytest.LogCaptureFixture) -> None:
     assert "Loading site information" in caplog.text
 
 
-def test_load_sites_cache_exception_returns_empty() -> None:
-    """Fetch failure yields an empty cache."""
-    with patch(
+def test_load_sites_cache_exception_returns_empty(caplog: pytest.LogCaptureFixture) -> None:  # Capture the failure.
+    """A Mist API request failure yields an empty cache."""
+    caplog.set_level(logging.WARNING)  # Capture the expected Mist SDK failure.
+    with patch(  # Replace the site-list API request with a rate-limit failure.
         "src.interfaces.visualization.ui.prompt_utils.APICoreFetchUtils.all_sites_with_limit",
         side_effect=RuntimeError("boom"),
     ):
-        assert PromptUtils._load_sites_cache("org-1") == {}
+        assert PromptUtils._load_sites_cache("org-1") == {}  # Return an empty cache after the failure.
+    assert "boom" in caplog.text  # Verify that the exception detail is visible.
+
+
+@pytest.mark.parametrize(
+    ("fetcher", "api_method", "identifier"),
+    [
+        (  # Preserve the site wireless fetch path.
+            PromptUtils._fetch_site_wireless_clients,  # Select the client wrapper.
+            (
+                "src.interfaces.visualization.ui.prompt_utils." "mistapi.api.v1.sites.clients.searchSiteWirelessClients"
+            ),  # Patch target.
+            "site-1",  # Required site identifier.
+        ),  # Keep the correct site identifier.
+        (  # Preserve the site wired fetch path.
+            PromptUtils._fetch_site_wired_clients,  # Select the wired-client wrapper.
+            (
+                "src.interfaces.visualization.ui.prompt_utils."
+                "mistapi.api.v1.sites.wired_clients.searchSiteWiredClients"
+            ),  # Patch target.
+            "site-1",  # Required site identifier.
+        ),  # Keep the correct site identifier.
+        (  # Preserve the organization wireless fetch path.
+            PromptUtils._fetch_org_wireless_clients,  # Select the client wrapper.
+            (
+                "src.interfaces.visualization.ui.prompt_utils." "mistapi.api.v1.orgs.clients.searchOrgWirelessClients"
+            ),  # Patch target.
+            "org-1",  # Required organization identifier.
+        ),  # Keep the correct organization identifier.
+        (  # Preserve the organization wired fetch path.
+            PromptUtils._fetch_org_wired_clients,  # Select the wired-client wrapper.
+            (
+                "src.interfaces.visualization.ui.prompt_utils."
+                "mistapi.api.v1.orgs.wired_clients.searchOrgWiredClients"
+            ),  # Patch target.
+            "org-1",  # Required organization identifier.
+        ),  # Keep the correct organization identifier.
+        (  # Preserve the site-label cache fetch path.
+            PromptUtils._load_sites_cache,  # Select the cache wrapper.
+            ("src.interfaces.visualization.ui.prompt_utils." "APICoreFetchUtils.all_sites_with_limit"),  # Patch target.
+            "org-1",  # Required organization identifier.
+        ),  # Keep the organization identifier.
+    ],  # Cover each narrowed API boundary.
+)
+def test_api_fetchers_propagate_programming_errors(
+    fetcher: Callable[[str], Any],
+    api_method: str,
+    identifier: str,
+) -> None:  # Do not hide malformed API calls.
+    """A programming error during a Mist API call reaches the caller."""
+    fake_mh = _make_mh()  # Provide the lazy Mist API session.
+    with (  # Replace the API call with an unexpected programming error.
+        patch(api_method, side_effect=TypeError("invalid API call")),  # Model an unexpected call defect.
+        patch("src.interfaces.visualization.ui.prompt_utils.SourceDependencyResolver", fake_mh),  # Inject the session.
+    ):
+        with pytest.raises(TypeError, match="invalid API call"):  # Require the defect to reach the caller.
+            fetcher(identifier)  # Run the selected fetch path.
 
 
 # ---------- _print_client_type_summary ----------

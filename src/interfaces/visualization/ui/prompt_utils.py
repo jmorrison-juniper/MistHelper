@@ -15,6 +15,7 @@ from typing import Any, Literal
 
 import mistapi
 from prettytable import PrettyTable
+from requests.exceptions import RequestException  # WHY: identify Mist SDK transport failures.
 
 from src.foundation.models.data.data_processing_utils import DataProcessingUtils
 from src.foundation.persistence.cache.cache_utils import CacheUtils
@@ -297,7 +298,10 @@ class PromptUtils:  # General prompt helpers.
                 client["source_site_id"] = site_id  # Record source site id.
             logger.info("Found %s wireless clients in site", len(clients))  # Log wireless client count.
             return clients  # Return wireless clients.
-        except Exception as exception:  # Catch fetch errors.
+        except (
+            RequestException,
+            RuntimeError,
+        ) as exception:  # Mist SDK calls report transport and rate-limit failures.
             logging.warning("Could not fetch wireless clients for site: %s", exception)  # Log fetch failure.
             return []  # Return empty on error.
 
@@ -321,7 +325,10 @@ class PromptUtils:  # General prompt helpers.
                 client["source_site_id"] = site_id  # Record source site id.
             logger.info("Found %s wired clients in site", len(clients))  # Log wired client count.
             return clients  # Return wired clients.
-        except Exception as exception:  # Catch fetch errors.
+        except (
+            RequestException,
+            RuntimeError,
+        ) as exception:  # Mist SDK calls report transport and rate-limit failures.
             logging.warning("Could not fetch wired clients for site: %s", exception)  # Log fetch failure.
             return []  # Return empty on error.
 
@@ -344,7 +351,10 @@ class PromptUtils:  # General prompt helpers.
                 client["client_type"] = "wireless"  # Mark as wireless type.
             logger.info("Found %s wireless clients in organization", len(clients))  # Log wireless client count.
             return clients  # Return wireless clients.
-        except Exception as exception:  # Catch fetch errors.
+        except (
+            RequestException,
+            RuntimeError,
+        ) as exception:  # Mist SDK calls report transport and rate-limit failures.
             logging.warning("Could not fetch wireless clients for org: %s", exception)  # Log fetch failure.
             return []  # Return empty on error.
 
@@ -367,7 +377,10 @@ class PromptUtils:  # General prompt helpers.
                 client["client_type"] = "wired"  # Mark as wired type.
             logger.info("Found %s wired clients in organization", len(clients))  # Log wired client count.
             return clients  # Return wired clients.
-        except Exception as exception:  # Catch fetch errors.
+        except (
+            RequestException,
+            RuntimeError,
+        ) as exception:  # Mist SDK calls report transport and rate-limit failures.
             logging.warning("Could not fetch wired clients for org: %s", exception)  # Log fetch failure.
             return []  # Return empty on error.
 
@@ -382,7 +395,10 @@ class PromptUtils:  # General prompt helpers.
             cache = {site["id"]: site["name"] for site in sites}  # Build id-to-name map.
             logger.info("Cached %s sites for client display", len(cache))  # Log cached site count.
             return cache  # Return the cache.
-        except Exception as exception:  # Catch fetch errors.
+        except (
+            RequestException,
+            RuntimeError,
+        ) as exception:  # Mist SDK calls report transport and rate-limit failures.
             logging.warning("Could not fetch sites for display: %s", exception)  # Log fetch failure.
             return {}  # Return empty cache on error.
 
