@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 
 import pytest
@@ -112,8 +113,12 @@ def test_serializer_falls_back_to_str() -> None:
     assert _Serializer.to_jsonable(_NoDict()) == "no-dict-instance"
 
 
-def test_serializer_skips_attribute_access_errors() -> None:
-    """An attribute that raises on access is skipped without aborting."""
+@pytest.mark.parametrize("error_type", [AttributeError, RuntimeError, ValueError])
+def test_serializer_skips_attribute_access_errors(
+    error_type: type[Exception], caplog: pytest.LogCaptureFixture
+) -> None:
+    """Report descriptor failures without losing readable attributes."""
+    error = error_type("descriptor unavailable")
 
     class _Raising:
         def __init__(self) -> None:
@@ -121,8 +126,50 @@ def test_serializer_skips_attribute_access_errors() -> None:
 
         @property
         def boom(self) -> int:
-            raise RuntimeError("nope")  # Always raises
+            raise error
 
-    out = _Serializer.to_jsonable(_Raising())  # Should not raise
-    assert out["ok"] == 1  # Clean attribute preserved
-    assert "boom" not in out  # Raising one skipped
+    with caplog.at_level(logging.ERROR):
+        out = _Serializer.to_jsonable(_Raising())
+    assert out == {"__type__": "_Raising", "ok": 1}
+    assert len(caplog.records) == 1
+    record = caplog.records[0]
+    assert record.name == "src.interfaces.visualization.ui.execution.debug_saver"
+    assert record.levelno == logging.ERROR
+    assert record.getMessage() == "TUI_DEBUG: Cannot read attribute boom on _Raising: descriptor unavailable"
+    if record.exc_info is None:
+        pytest.fail("The descriptor failure must include a traceback.")
+    assert record.exc_info[1] is error
+
+
+def test_save_preserves_output_after_descriptor_failure(tui_stub, _isolated_cwd: Path) -> None:
+    """Save readable response data when an optional descriptor fails."""
+
+    class _Response:
+        ok = 7
+
+        @property
+        def boom(self) -> int:
+            raise RuntimeError("descriptor unavailable")
+
+    tui_stub.function_params = {}
+    DebugResultSaver(tui_stub).save("readDevice", _Response(), {"parsed": True})
+    files = list((_isolated_cwd / DEBUG_DIR).glob("readDevice_*.json"))
+    assert len(files) == 1
+    payload = json.loads(files[0].read_text(encoding="utf-8"))
+    assert payload["raw_response"] == {"__type__": "_Response", "ok": 7}
+    assert payload["parsed_data"] == {"parsed": True}
+
+
+@pytest.mark.parametrize("error_type", [KeyboardInterrupt, SystemExit])
+def test_serializer_preserves_interrupts(error_type: type[BaseException]) -> None:
+    """Do not convert an operator interrupt into a partial response."""
+    error = error_type("stop serialization")
+
+    class _Response:
+        @property
+        def boom(self) -> int:
+            raise error
+
+    with pytest.raises(error_type, match="stop serialization") as caught:
+        _Serializer.to_jsonable(_Response())
+    assert caught.value is error
