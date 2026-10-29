@@ -136,7 +136,8 @@ def test_serializer_skips_attribute_access_errors(
     assert record.name == "src.interfaces.visualization.ui.execution.debug_saver"
     assert record.levelno == logging.ERROR
     assert record.getMessage() == "TUI_DEBUG: Cannot read attribute boom on _Raising: descriptor unavailable"
-    assert record.exc_info is not None
+    if record.exc_info is None:
+        pytest.fail("The descriptor failure must include a traceback.")
     assert record.exc_info[1] is error
 
 
