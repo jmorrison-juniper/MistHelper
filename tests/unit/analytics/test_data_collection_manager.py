@@ -192,6 +192,66 @@ def test_execute_collection_cycle_logs_and_backs_off_on_exception(caplog: pytest
     assert call(5) in sleep.call_args_list
 
 
+@pytest.mark.parametrize("failure_type", [NameError, TypeError, AttributeError])
+def test_collection_boundary_reports_programming_error(
+    failure_type: type[Exception], caplog: pytest.LogCaptureFixture
+) -> None:
+    """The menu boundary records the error type and frame before it stops."""
+    failure = failure_type("collection defect")
+    with patch.object(DataCollectionManager, "_check_stop_signal", side_effect=failure):
+        DataCollectionManager.continuous_loop()
+    records = [record for record in caplog.records if "Fatal error" in record.getMessage()]
+    assert len(records) == 1
+    assert records[0].name == _LOGGER_NAME
+    assert records[0].exc_info is not None
+    assert records[0].exc_info[1] is failure
+    assert "collection defect" in records[0].getMessage()
+
+
+@pytest.mark.parametrize("failure_type", [NameError, TypeError, AttributeError])
+def test_collection_cycle_reports_error_and_recovers_next_cycle(
+    failure_type: type[Exception], caplog: pytest.LogCaptureFixture
+) -> None:
+    """A failed exporter retains its traceback and permits the next collection cycle."""
+    failure = failure_type("exporter defect")
+    exporter = MagicMock(side_effect=[failure, None])
+    following_exporter = MagicMock()
+    sleep = ThreadScopedSleepSpy()
+    with (
+        patch.object(
+            DataCollectionManager,
+            "_collection_cycle_steps",
+            return_value=[("first", exporter), ("next", following_exporter)],
+        ),
+        patch("src.mist.intelligence.analytics.data_collection_manager.time.sleep", new=sleep),
+    ):
+        DataCollectionManager._execute_collection_cycle(1)
+        following_exporter.assert_not_called()
+        DataCollectionManager._execute_collection_cycle(2)
+    assert exporter.call_count == 2
+    following_exporter.assert_called_once_with()
+    assert sleep.call_args_list == [call(5), call(0.75), call(0.75)]
+    records = [record for record in caplog.records if "Error in collection cycle" in record.getMessage()]
+    assert len(records) == 1
+    assert records[0].name == _LOGGER_NAME
+    assert records[0].exc_info is not None
+    assert records[0].exc_info[1] is failure
+
+
+@pytest.mark.parametrize(
+    "operation", [DataCollectionManager.continuous_loop, DataCollectionManager._execute_collection_cycle]
+)
+def test_collection_boundaries_do_not_swallow_system_exit(operation) -> None:
+    """A process exit must not enter collection recovery."""
+    with (
+        patch.object(DataCollectionManager, "_check_stop_signal", return_value=False),
+        patch.object(DataCollectionManager, "_collection_cycle_steps", side_effect=SystemExit(2)),
+        pytest.raises(SystemExit) as caught,
+    ):
+        operation() if operation == DataCollectionManager.continuous_loop else operation(1)
+    assert caught.value.code == 2
+
+
 # ---------- generate_support_packages ----------
 
 

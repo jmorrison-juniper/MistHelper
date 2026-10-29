@@ -93,8 +93,8 @@ class InsightMetricsUtils:  # Insight-metrics helpers.
                 "Found %s metrics for scope '%s': %s", len(metrics_for_scope), target_scope, metrics_for_scope
             )
             return metrics_for_scope  # Return the metrics.
-        except Exception as exception:  # Read failed.
-            logging.error("Error reading ConstInsightMetrics.csv: %s", exception)  # Log the error.
+        except (OSError, UnicodeError, csv.Error) as exception:  # Recover only from file, encoding, and CSV failures.
+            logger.exception("Error reading ConstInsightMetrics.csv: %s", exception)  # Keep the failing read frame.
             return []  # Return empty.
 
     @staticmethod
@@ -124,6 +124,9 @@ class InsightMetricsUtils:  # Insight-metrics helpers.
     def parse_to_normalized_data(metric_data: dict, org_id: str) -> dict[str, list]:  # type: ignore[type-arg]
         """Parse one insight metric into 'summary'/'time_series'/'results'/'sites_data' lists."""
         normalized_data: dict[str, list] = {"summary": [], "time_series": [], "results": [], "sites_data": []}  # type: ignore[type-arg]
+        if not isinstance(metric_data, dict):  # Reject absent or malformed payloads without hiding extractor defects.
+            logger.error("Invalid insight metric data type: %s", type(metric_data).__name__)  # Report absent data.
+            return normalized_data  # Preserve empty buckets for an invalid payload.
         try:
             metric_type = metric_data.get("metric_type", "unknown")  # Read the metric type.
             normalized_data["summary"].append(  # Add summary record.
@@ -135,9 +138,8 @@ class InsightMetricsUtils:  # Insight-metrics helpers.
             normalized_data["results"] = InsightMetricsUtils._extract_results(metric_data, org_id, metric_type)
             normalized_data["sites_data"] = InsightMetricsUtils._extract_sites_data(metric_data, org_id, metric_type)
             InsightMetricsUtils._log_normalization_summary(metric_type, normalized_data)  # Trace counts.
-        except Exception as exception:  # Parse failed.
-            logging.error("Error parsing insight metric data: %s", exception)  # Log the error.
-            logging.debug("Failed metric data structure: %s", metric_data)  # Trace the structure.
+        except ValueError as exception:  # Numeric result indexes can contain digits that int cannot convert.
+            logger.exception("Error parsing insight metric data: %s", exception)  # Keep the conversion failure detail.
         return normalized_data  # Return normalized data.
 
     SUMMARY_SCALAR_FIELDS = (  # Scalar fields copied verbatim from the raw metric payload.
