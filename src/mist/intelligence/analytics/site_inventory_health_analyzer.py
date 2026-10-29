@@ -7,6 +7,8 @@ from dataclasses import dataclass  # WHY: frozen slotted deps container
 from datetime import UTC, datetime  # WHY: timestamp for CSV export filenames
 from typing import Any  # WHY: generic hints for opaque mistapi payloads
 
+from requests.exceptions import RequestException  # The Mist SDK uses requests for transport failures.
+
 logger = logging.getLogger(__name__)  # WHY: keep log records tied to this module.
 
 
@@ -107,8 +109,8 @@ class SiteInventoryHealthAnalyzer:  # WHY: namespace for the analyzer entry poin
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.info("  Found %d sites", len(sites))
             return sites  # WHY: hand off list to caller for grouping
-        except Exception as error:  # Mist SDK raises bare Exception subclasses
-            logging.error("Failed to fetch sites: %s", error)  # WHY: capture root cause for support
+        except RequestException as error:  # Recover only from transport failures in the Mist site fetcher.
+            logger.exception("Failed to fetch sites: %s", error)  # Preserve the failing request for support.
             return []  # WHY: empty list triggers downstream fetch-failure path
 
     @staticmethod
@@ -125,8 +127,8 @@ class SiteInventoryHealthAnalyzer:  # WHY: namespace for the analyzer entry poin
             logger.debug("Fetched %d devices from organization inventory", len(devices))  # WHY: post-action log
             SiteInventoryHealthAnalyzer._print_device_summary(devices)  # WHY: type/connected breakdown
             return devices  # WHY: hand off list to caller for grouping
-        except Exception as error:  # Mist SDK raises bare Exception subclasses
-            logging.error("Failed to fetch devices: %s", error)  # WHY: capture root cause for support
+        except RequestException as error:  # Recover only from inventory request or pagination transport failures.
+            logger.exception("Failed to fetch devices: %s", error)  # Preserve the failing page for support.
             return []  # WHY: empty list triggers downstream fetch-failure path
 
     @staticmethod

@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
+from requests.exceptions import ConnectionError, HTTPError, Timeout
 
 from src.mist.intelligence.analytics.site_inventory_health_analyzer import (
     SiteInventoryHealthAnalyzer,
@@ -114,3 +115,45 @@ def test_analyze_happy_path_exports_reports() -> None:
     SiteInventoryHealthAnalyzer.analyze(deps)
 
     assert deps.save_data_fn.call_count >= 1
+
+
+@pytest.mark.parametrize("stage", ["sites", "inventory", "pagination"])
+@pytest.mark.parametrize("failure_type", [ConnectionError, Timeout, HTTPError])
+def test_inventory_transport_failure_logs_and_prevents_export(
+    stage: str, failure_type: type[Exception], caplog: pytest.LogCaptureFixture
+) -> None:
+    """A failed request prevents an empty report from representing a healthy inventory."""
+    deps = _build_deps()
+    deps.all_sites_fn.return_value = [{"id": "site-1", "name": "Site One"}]
+    deps.mistapi.get_all.return_value = [{"site_id": "site-1", "type": "ap"}]
+    targets = {
+        "sites": deps.all_sites_fn,
+        "inventory": deps.mistapi.api.v1.orgs.inventory.getOrgInventory,
+        "pagination": deps.mistapi.get_all,
+    }
+    failure = failure_type("inventory unavailable")
+    targets[stage].side_effect = failure
+    SiteInventoryHealthAnalyzer.analyze(deps)
+    deps.save_data_fn.assert_not_called()
+    assert "Failed to fetch required data" in caplog.text
+    record = next(record for record in caplog.records if record.exc_info)
+    assert record.name == _MODULE_LOGGER
+    assert record.exc_info[1] is failure
+    assert "inventory unavailable" in record.getMessage()
+
+
+@pytest.mark.parametrize("stage", ["sites", "inventory", "pagination"])
+@pytest.mark.parametrize("failure_type", [NameError, TypeError, AttributeError, RuntimeError])
+def test_inventory_programming_error_propagates(stage: str, failure_type: type[Exception]) -> None:
+    """A defective fetch or pagination call must reach the analyzer caller."""
+    deps = _build_deps()
+    deps.all_sites_fn.return_value = [{"id": "site-1", "name": "Site One"}]
+    targets = {
+        "sites": deps.all_sites_fn,
+        "inventory": deps.mistapi.api.v1.orgs.inventory.getOrgInventory,
+        "pagination": deps.mistapi.get_all,
+    }
+    targets[stage].side_effect = failure_type("inventory defect")
+    with pytest.raises(failure_type, match="inventory defect"):
+        SiteInventoryHealthAnalyzer.analyze(deps)
+    deps.save_data_fn.assert_not_called()

@@ -26,6 +26,7 @@ Covers every static method on ``src.mist.intelligence.analytics.insight_metrics_
 
 from __future__ import annotations
 
+import csv
 import logging
 from pathlib import Path
 from types import SimpleNamespace
@@ -203,9 +204,7 @@ def test_get_by_scope_missing_file_returns_empty() -> None:
 
 def test_get_by_scope_exception_returns_empty() -> None:
     """Read failure -> empty list."""
-    with (
-        patch("src.mist.intelligence.analytics.insight_metrics_utils.os.path.exists", side_effect=RuntimeError("boom")),
-    ):
+    with (patch("src.mist.intelligence.analytics.insight_metrics_utils.os.path.exists", side_effect=OSError("boom")),):
         assert InsightMetricsUtils.get_by_scope("site") == []
 
 
@@ -263,10 +262,70 @@ def test_parse_to_normalized_data_assembles_all_four_buckets() -> None:
 
 
 def test_parse_to_normalized_data_exception_returns_empty_buckets() -> None:
-    """Exception in extractors -> initialized-empty buckets returned."""
-    # metric_data.get raises AttributeError when it's not a dict.
+    """An absent payload retains the explicit empty-bucket result."""
     result = InsightMetricsUtils.parse_to_normalized_data(None, "org-1")  # type: ignore[arg-type]
     assert result == {"summary": [], "time_series": [], "results": [], "sites_data": []}
+
+
+@pytest.mark.parametrize(
+    "failure", [OSError("read denied"), UnicodeError("invalid encoding"), csv.Error("invalid CSV")]
+)
+def test_scope_read_failure_logs_empty_result(failure: Exception, caplog: pytest.LogCaptureFixture) -> None:
+    """Expected CSV failures retain the empty result and traceback evidence."""
+    with (
+        patch("src.mist.intelligence.analytics.insight_metrics_utils.os.path.exists", return_value=True),
+        patch("builtins.open", side_effect=failure),
+    ):
+        assert InsightMetricsUtils.get_by_scope("site") == []
+    records = [record for record in caplog.records if "Error reading" in record.getMessage()]
+    assert len(records) == 1
+    assert str(failure) in records[0].getMessage()
+    assert records[0].exc_info[1] is failure
+
+
+def test_scope_invalid_utf8_logs_empty_result(tmp_path: Path, monkeypatch, caplog: pytest.LogCaptureFixture) -> None:
+    """An actual invalid CSV encoding must follow the logged read recovery path."""
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "data").mkdir()
+    (tmp_path / "data" / "ConstInsightMetrics.csv").write_bytes(b"metric_name,scopes\n\xff,site\n")
+    assert InsightMetricsUtils.get_by_scope("site") == []
+    assert "Error reading ConstInsightMetrics.csv" in caplog.text
+
+
+@pytest.mark.parametrize("failure_type", [NameError, TypeError, AttributeError, RuntimeError])
+def test_scope_programming_error_propagates(failure_type: type[Exception]) -> None:
+    """A defective scope filter must not masquerade as an empty metric definition."""
+    with (
+        patch("src.mist.intelligence.analytics.insight_metrics_utils.os.path.exists", return_value=True),
+        patch("builtins.open"),
+        patch.object(InsightMetricsUtils, "_collect_metrics_for_scope", side_effect=failure_type("scope defect")),
+        pytest.raises(failure_type, match="scope defect"),
+    ):
+        InsightMetricsUtils.get_by_scope("site")
+
+
+def test_normalization_invalid_numeric_index_preserves_partial_result(caplog: pytest.LogCaptureFixture) -> None:
+    """Unicode numeric characters can pass isdigit but fail the integer conversion."""
+    result = InsightMetricsUtils.parse_to_normalized_data(
+        {"metric_type": "coverage", "results_\u00b2_name": "AP"}, "org-1"
+    )
+    assert len(result["summary"]) == 1
+    assert result["summary"][0]["metric_type"] == "coverage"
+    assert result["results"] == []
+    assert result["sites_data"] == []
+    records = [record for record in caplog.records if "Error parsing insight" in record.getMessage()]
+    assert len(records) == 1
+    assert records[0].exc_info[0] is ValueError
+
+
+@pytest.mark.parametrize("failure_type", [NameError, TypeError, AttributeError, RuntimeError])
+def test_normalization_programming_error_propagates(failure_type: type[Exception]) -> None:
+    """Unexpected extractor defects must reach the export caller."""
+    with (
+        patch.object(InsightMetricsUtils, "_extract_summary", side_effect=failure_type("extractor defect")),
+        pytest.raises(failure_type, match="extractor defect"),
+    ):
+        InsightMetricsUtils.parse_to_normalized_data({"metric_type": "coverage"}, "org-1")
 
 
 # ---------- _build_summary_base ----------

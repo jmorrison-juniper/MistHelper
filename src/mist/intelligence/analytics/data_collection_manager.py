@@ -61,10 +61,8 @@ class DataCollectionManager:
         except KeyboardInterrupt:  # User pressed Ctrl+C.
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("\n  Continuous data collection loop stopped by user.")
-        except Exception as e:  # Unexpected failure.
-            logging.error("Fatal error in continuous loop: %s", e)  # Log the error.
-            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-            logger.error("! Fatal error in continuous loop: %s", e)
+        except Exception as error:  # Keep: the menu boundary must report failures from arbitrary exporters before exit.
+            logger.exception("! Fatal error in continuous loop: %s", error)  # Preserve the type and failing frame.
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info(" Continuous data collection loop ended.")
 
@@ -99,10 +97,10 @@ class DataCollectionManager:
             logger.info("  Loop %d completed successfully", loop_count)
         except KeyboardInterrupt:  # Propagate Ctrl+C.
             raise  # Re-raise to outer handler
-        except Exception as e:  # Cycle failed.
-            logging.error("Error in collection cycle %s: %s", loop_count, e)  # Log the error.
+        except Exception as error:  # Keep: independent exporters must not stop continuous collection after one failure.
+            logger.exception("Error in collection cycle %s: %s", loop_count, error)  # Preserve the failing exporter.
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-            logger.warning("  Error in loop %d: %s", loop_count, e)
+            logger.warning("  Error in loop %d: %s", loop_count, error)
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("  Continuing to next iteration...")
             time.sleep(5)  # Back off then retry.
