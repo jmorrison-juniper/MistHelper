@@ -203,7 +203,6 @@ def test_collection_boundary_reports_programming_error(
     records = [record for record in caplog.records if "Fatal error" in record.getMessage()]
     assert len(records) == 1
     assert records[0].name == _LOGGER_NAME
-    assert records[0].exc_info is not None
     assert records[0].exc_info[1] is failure
     assert "collection defect" in records[0].getMessage()
 
@@ -234,7 +233,6 @@ def test_collection_cycle_reports_error_and_recovers_next_cycle(
     records = [record for record in caplog.records if "Error in collection cycle" in record.getMessage()]
     assert len(records) == 1
     assert records[0].name == _LOGGER_NAME
-    assert records[0].exc_info is not None
     assert records[0].exc_info[1] is failure
 
 
@@ -377,6 +375,7 @@ def test_generate_site_packages_skips_sites_without_alarms_or_events() -> None:
     with patch("src.mist.intelligence.analytics.data_collection_manager.SourceDependencyResolver", fake_mh):
         DataCollectionManager._generate_site_packages(data_sources)
     fake_mh.CacheUtils.write_support_data_to_csv.assert_not_called()
+    assert fake_mh.CacheUtils.write_support_data_to_csv.call_count == 0
 
 
 def test_generate_site_packages_writes_package_for_site_with_alarms() -> None:

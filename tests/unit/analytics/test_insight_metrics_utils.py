@@ -280,7 +280,6 @@ def test_scope_read_failure_logs_empty_result(failure: Exception, caplog: pytest
     records = [record for record in caplog.records if "Error reading" in record.getMessage()]
     assert len(records) == 1
     assert str(failure) in records[0].getMessage()
-    assert records[0].exc_info is not None
     assert records[0].exc_info[1] is failure
 
 
@@ -307,14 +306,15 @@ def test_scope_programming_error_propagates(failure_type: type[Exception]) -> No
 
 def test_normalization_invalid_numeric_index_preserves_partial_result(caplog: pytest.LogCaptureFixture) -> None:
     """Unicode numeric characters can pass isdigit but fail the integer conversion."""
-    result = InsightMetricsUtils.parse_to_normalized_data({"metric_type": "coverage", "results_²_name": "AP"}, "org-1")
+    result = InsightMetricsUtils.parse_to_normalized_data(
+        {"metric_type": "coverage", "results_\u00b2_name": "AP"}, "org-1"
+    )
     assert len(result["summary"]) == 1
     assert result["summary"][0]["metric_type"] == "coverage"
     assert result["results"] == []
     assert result["sites_data"] == []
     records = [record for record in caplog.records if "Error parsing insight" in record.getMessage()]
     assert len(records) == 1
-    assert records[0].exc_info is not None
     assert records[0].exc_info[0] is ValueError
 
 
