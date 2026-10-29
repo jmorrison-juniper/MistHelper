@@ -264,33 +264,44 @@ class TestGetTerminalHeight:
         tui.console = SimpleNamespace(size=SimpleNamespace(height=5))
         assert tui._get_terminal_height() == 10
 
-    def test_returns_fallback_when_detection_fails(self):
-        """Detection exception returns the conservative 20-row fallback."""
-        tui = _construct()
+    def test_returns_fallback_when_detection_fails(self):  # Keep a safe size when no terminal exists.
+        """A missing terminal size returns the conservative 20-row fallback."""
+        tui = _construct()  # Build a TUI without opening a terminal.
 
-        class _Bad:
+        class _Bad:  # Mimic a Rich console with no terminal size.
             @property
-            def size(self):
-                raise RuntimeError("no tty")
+            def size(self):  # Fail only when the size is read.
+                raise OSError("no tty")  # Model a missing terminal.
 
-        tui.console = _Bad()
-        assert tui._get_terminal_height() == 20
+        tui.console = _Bad()  # Inject the missing terminal size.
+        assert tui._get_terminal_height() == 20  # Keep the conservative row count.
 
-    def test_debug_mode_logs_fallback_trace(self, caplog):
-        """debug_mode=True logs the fallback-path trace."""
-        import logging as _lg
+    def test_terminal_size_failure_logs_fallback_trace(self, caplog):  # Keep the terminal diagnostic visible.
+        """The fallback diagnostic includes the terminal error at debug level."""
+        tui = _construct(debug=False)  # Verify logging does not depend on debug mode.
 
-        tui = _construct(debug=True)
-
-        class _Bad:
+        class _Bad:  # Mimic a Rich console with no terminal size.
             @property
-            def size(self):
-                raise RuntimeError("no tty")
+            def size(self):  # Fail only when the size is read.
+                raise OSError("no tty")  # Model a missing terminal.
 
-        tui.console = _Bad()
-        with caplog.at_level(_lg.DEBUG):
-            tui._get_terminal_height()
-        assert any("terminal-height detection failed" in rec.getMessage() for rec in caplog.records)
+        tui.console = _Bad()  # Inject the missing terminal size.
+        with caplog.at_level(logging.DEBUG):  # Capture the fallback diagnostic.
+            tui._get_terminal_height()  # Read the terminal size.
+        assert any("no tty" in rec.getMessage() for rec in caplog.records)  # Check the exception detail.
+
+    def test_programming_error_propagates(self):  # Do not hide terminal-size defects.
+        """An unexpected terminal-size defect reaches the caller."""
+        tui = _construct()  # Build a TUI without opening a terminal.
+
+        class _Broken:  # Mimic a broken Rich size property.
+            @property
+            def size(self):  # Fail only when the size is read.
+                raise TypeError("invalid size")  # Model a programming defect.
+
+        tui.console = _Broken()  # Inject the broken size property.
+        with pytest.raises(TypeError, match="invalid size"):  # Require the error to propagate.
+            tui._get_terminal_height()  # Read the invalid size.
 
 
 # ---------------------------------------------------------------------------

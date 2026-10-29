@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import logging  # WHY: capture the pagination fallback diagnostic.
 from typing import Any
 from unittest.mock import MagicMock
+
+import pytest  # WHY: verify that programming errors propagate.
+from requests.exceptions import RequestException  # WHY: model Mist SDK transport failures.
 
 from src.interfaces.visualization.ui.execution.function_executor import FunctionExecutor, _redact
 
@@ -145,6 +149,36 @@ def test_execute_paginates_via_next_cursor(tui_stub) -> None:
     ids = [row["id"] for row in tui_stub.last_parsed_data["results"]]
     assert ids == ["a", "b"]
     session.mist_get.assert_called_once_with("/next-url")  # Pagination call made
+
+
+@pytest.mark.parametrize(
+    "api_error",
+    [
+        RequestException("offline"),  # Model a Mist transport failure.
+        RuntimeError("rate limited"),  # Model the SDK rate-limit response.
+    ],
+)
+def test_fetch_next_page_logs_mist_failure(
+    tui_stub,
+    caplog: pytest.LogCaptureFixture,
+    api_error: RequestException | RuntimeError,
+) -> None:  # Preserve the first page on failure.
+    """A Mist SDK transport failure stops pagination and logs its detail."""
+    session = MagicMock()  # Mimic the Mist API session.
+    session.mist_get.side_effect = api_error  # Model the selected Mist SDK failure.
+    first_page = MagicMock()  # Preserve the already parsed first page.
+    caplog.set_level(logging.DEBUG)  # Capture the expected pagination diagnostic.
+    page_result = FunctionExecutor(tui_stub)._fetch_next_page(first_page, session, 2, [])  # Fetch the next page.
+    assert page_result == (first_page, None, True)  # Keep the first page and stop the loop.
+    assert any(str(api_error) in record.getMessage() for record in caplog.records)  # Check the exception detail.
+
+
+def test_fetch_next_page_propagates_programming_error(tui_stub) -> None:  # Do not hide a malformed call.
+    """A programming error from the session call reaches the execution boundary."""
+    session = MagicMock()  # Mimic the Mist API session.
+    session.mist_get.side_effect = TypeError("invalid cursor")  # Model a programming defect.
+    with pytest.raises(TypeError, match="invalid cursor"):  # Require the unexpected error to propagate.
+        FunctionExecutor(tui_stub)._fetch_next_page(MagicMock(), session, 2, [])  # Fetch the next page.
 
 
 def test_execute_returns_early_when_no_current_function(tui_stub) -> None:

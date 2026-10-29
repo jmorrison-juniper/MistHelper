@@ -76,7 +76,7 @@ class ItemExecutor:  # WHY: extracted from MistHelperTUI to own the synchronous 
             self._run_selection(selection)  # WHY: collect params, invoke, and render preview
         except KeyboardInterrupt:  # WHY: Ctrl-C during input() cancels cleanly
             self._on_cancel(selection.name)  # WHY: banner + action-log cancellation
-        except Exception as error:  # WHY: any other failure surfaces as last_error and banner
+        except Exception as error:  # Keep arbitrary API failures visible and restore the interactive prompt.
             self._on_error(selection.name, error)  # WHY: expose error and log traceback
         finally:
             self._wait_and_restore_raw()  # WHY: always restore raw mode for the TUI

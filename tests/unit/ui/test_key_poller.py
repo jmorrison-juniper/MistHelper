@@ -146,10 +146,32 @@ def test_keypoller_facade_picks_platform(tui_stub) -> None:
     assert isinstance(KeyPoller(tui_stub)._impl, _UnixKeyPoller)
 
 
-def test_keypoller_facade_swallows_implementation_errors(tui_stub) -> None:
-    """A raising platform poller is swallowed and returns None."""
+@pytest.mark.parametrize(
+    "terminal_error",
+    [
+        OSError("closed terminal"),  # Model a terminal that closed during input.
+        ValueError("invalid terminal handle"),  # Model an invalid terminal descriptor.
+    ],
+)
+def test_keypoller_facade_handles_terminal_io_errors(
+    tui_stub,
+    caplog: pytest.LogCaptureFixture,
+    terminal_error: OSError | ValueError,
+) -> None:  # Keep terminal read failures recoverable.
+    """A terminal I/O failure returns None and logs its detail."""
     tui_stub.IS_WINDOWS = True  # Pick Windows so we can override its mock
     poller = KeyPoller(tui_stub)  # Build façade
     poller._impl = MagicMock()  # Replace with raising stub
-    poller._impl.poll.side_effect = RuntimeError("kaboom")  # Force error
-    assert poller.poll() is None  # Swallowed -> None
+    poller._impl.poll.side_effect = terminal_error  # Model the selected terminal failure.
+    assert poller.poll() is None  # Return no key after terminal failure.
+    assert any(str(terminal_error) in record.getMessage() for record in caplog.records)  # Check the error detail.
+
+
+def test_keypoller_facade_propagates_programming_errors(tui_stub) -> None:  # Do not hide defects in the poller.
+    """A programming error from a platform poller reaches its caller."""
+    tui_stub.IS_WINDOWS = True  # Pick Windows so we can override its mock.
+    poller = KeyPoller(tui_stub)  # Build the façade.
+    poller._impl = MagicMock()  # Replace the platform poller with a stub.
+    poller._impl.poll.side_effect = RuntimeError("broken poller")  # Model an unexpected defect.
+    with pytest.raises(RuntimeError, match="broken poller"):  # Require the unexpected error to propagate.
+        poller.poll()  # Poll without hiding the programming error.

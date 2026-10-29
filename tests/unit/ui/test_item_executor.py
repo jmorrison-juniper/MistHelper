@@ -107,17 +107,23 @@ def test_execute_handles_keyboard_interrupt(tui_stub, make_item, monkeypatch: py
     assert tui_stub.last_result is None  # No result captured
 
 
-def test_execute_handles_generic_exception(tui_stub, make_item, monkeypatch: pytest.MonkeyPatch) -> None:
-    """A raising API call surfaces last_error and a stdout banner."""
+def test_execute_handles_generic_exception(
+    tui_stub,
+    make_item,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:  # Keep arbitrary API failures visible.
+    """A raising API call surfaces last_error and logs the exception detail."""
 
     def _broken():  # zero-arg so no prompts run
-        raise RuntimeError("boom")
+        raise RuntimeError("boom")  # Model a failed API operation.
 
     tui_stub.current_items = [make_item("function", "broken", object=_broken)]
     tui_stub.current_selection = 0
     _patch_keypress(monkeypatch)
     ItemExecutor(tui_stub).execute()  # Trigger
     assert tui_stub.last_error == "boom"  # Error captured
+    assert any("boom" in record.getMessage() for record in caplog.records)  # Confirm error detail reaches the log.
 
 
 def test_execute_autofills_apisession(tui_stub, make_item, monkeypatch: pytest.MonkeyPatch) -> None:

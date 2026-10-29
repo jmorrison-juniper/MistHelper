@@ -10,6 +10,8 @@ import inspect  # WHY: probe callable signatures for parameter discovery
 import logging  # WHY: action-log start/execute/error transitions
 from typing import Any  # WHY: TUI back-ref + parsed payloads are opaque
 
+from requests.exceptions import RequestException  # WHY: identify Mist SDK transport failures.
+
 logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
 
 _SECRET_TOKENS = ("pass", "token", "key", "secret")  # Substrings that flag secret-like names
@@ -192,7 +194,10 @@ class FunctionExecutor:  # WHY: extracted from MistHelperTUI to own Live-mode ex
         tui = self._tui  # Local alias
         try:
             result = session.mist_get(result.next)  # Fetch next page via shared session
-        except Exception as error:  # Tolerate transient pagination errors
+        except (
+            RequestException,
+            RuntimeError,
+        ) as error:  # Mist SDK pagination reports transport or rate-limit failures.
             logging.debug("TUI: pagination error on page %s - %s, stopping", page_count, error)
             return result, None, True  # WHY: signal caller to break out of the loop
         parsed_data = tui._api_parser.parse(result)  # Re-parse the wrapper via the parser collaborator

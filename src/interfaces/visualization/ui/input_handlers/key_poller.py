@@ -152,6 +152,6 @@ class KeyPoller:
         try:
             result: str | None = self._impl.poll()  # Delegate to platform implementation
             return result
-        except Exception as error:  # Preserve original error-tolerant shape
-            logging.debug("TUI_MODE: Keyboard input error - %s", error)
+        except (OSError, ValueError) as error:  # Closed terminals and invalid descriptors are expected input failures.
+            logger.error("TUI_MODE: Keyboard input error - %s", error)  # Report failed terminal reads to the operator.
             return None
