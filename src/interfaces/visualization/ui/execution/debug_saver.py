@@ -103,7 +103,8 @@ class _Serializer:  # Internal utility: recursive JSON-safe conversion.
                 continue
             try:
                 attr_value = getattr(obj, attr_name)  # Attempt attribute read
-            except Exception:  # nosec B112 — defensive guard against descriptor errors
+            except Exception as error:  # Any descriptor failure must preserve the other attributes.
+                logger.exception("TUI_DEBUG: Cannot read attribute %s on %s: %s", attr_name, type(obj).__name__, error)
                 continue  # Skip unreadable attribute
             if callable(attr_value):  # Skip methods
                 continue
