@@ -398,7 +398,8 @@ def _close_quietly(conn: HTTPConnection) -> None:  # Preserve the existing behav
     """Close a connection without letting a cleanup error mask the result."""
     try:
         conn.close()  # Release the socket as soon as the response is read.
-    except Exception:  # pragma: no cover - best-effort cleanup
+    except Exception as cleanup_error:  # Keep broad because close failures must not hide an earlier probe result.
+        logger.debug("zscaler_probe: connection cleanup failed: %s", cleanup_error)
         pass  # nosec B110 - The block is a best-effort cleanup that must not mask the original result.
 
 
@@ -461,7 +462,14 @@ def _do_http(  # Preserve the existing behavior during the compliance refactor.
         return None, f"ssl:{exc}"  # Preserve the existing behavior during the compliance refactor.
     except OSError as exc:  # Connection refused, DNS failure, and similar transport faults.
         return None, f"{type(exc).__name__}: {exc}"  # Preserve the existing behavior during the compliance refactor.
-    except Exception as exc:  # pragma: no cover - defensive
+    except Exception as exc:  # Keep broad so unexpected probe errors reach the report with their cause.
+        logger.debug(
+            "zscaler_probe: unexpected HTTP probe failure for %s:%d: %s: %s",
+            host,  # Identify the endpoint that produced the unexpected failure.
+            port,  # Identify the service port that the probe contacted.
+            type(exc).__name__,  # Name the error class for triage.
+            exc,  # Preserve the specific error detail for diagnostics.
+        )  # Keep the unexpected failure visible while returning its report value.
         return None, f"{type(exc).__name__}: {exc}"  # Preserve the existing behavior during the compliance refactor.
 
 
@@ -881,7 +889,7 @@ def _run_probes(  # Preserve the existing behavior during the compliance refacto
         ):  # Preserve the existing behavior during the compliance refactor.
             try:
                 results.append(fut.result())  # Preserve the existing behavior during the compliance refactor.
-            except Exception as exc:  # pragma: no cover - defensive
+            except Exception as exc:  # Keep broad so one worker failure becomes a report row, not a batch failure.
                 fqdn = futures[fut]  # Preserve the existing behavior during the compliance refactor.
                 stub = ProbeResult(  # Preserve the existing behavior during the compliance refactor.
                     fqdn=fqdn,

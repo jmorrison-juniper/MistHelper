@@ -331,13 +331,7 @@ class AddressUtils:
             result["parse_reason"] = reason  # WHY: record why we bailed
             return result  # WHY: no further parsing attempted
         cleaned_input = str(address_string).strip()  # WHY: normalized input for the heuristic parser
-        try:  # WHY: the heuristic parser can raise on pathological input
-            return _parse_address_parts(cleaned_input, result, debug)  # WHY: main heuristic path
-        except Exception as exception:  # WHY: record the failure reason instead of propagating
-            result["parse_reason"] = f"exception: {exception!s}"  # WHY: expose the reason to callers
-            if debug:  # WHY: surface the exception detail when debugging
-                logging.warning("PARSE_ADDRESS: Exception during parsing: %s", exception)
-            return result  # WHY: degrade gracefully with the empty skeleton
+        return _parse_address_parts(cleaned_input, result, debug)  # The parser handles known input shapes directly.
 
     @staticmethod
     def _empty_parse_result(address_string: str | None) -> dict[str, Any]:
@@ -382,7 +376,9 @@ class AddressUtils:
                 logger.debug("USADDRESS_PARSE: Attempting for: '%s'", address_string)
             parsed = normalize_address_record(address_string)  # WHY: normalize via the optional library
             return AddressUtils._build_scourgify_result(parsed, address_string)  # WHY: shape into result dict
-        except Exception as error:  # nosec B110  # WHY: any library error degrades to the heuristic parser
+        except (
+            Exception
+        ) as error:  # nosec B110 - Keep broad because optional scourgify errors need the heuristic fallback.
             logger.debug(
                 "Optional address normalization failed: %s: %s", type(error).__name__, error
             )  # WHY: name the fallback cause for diagnostics
@@ -423,7 +419,9 @@ class AddressUtils:
         if fuzz is not None:  # WHY: rapidfuzz path is preferred when installed
             try:  # WHY: fuzz can throw on odd unicode
                 return float(fuzz.token_sort_ratio(norm1, norm2))  # WHY: rapidfuzz already returns 0-100
-            except Exception as error:  # nosec B110  # WHY: on any fuzz failure, fall through to SequenceMatcher
+            except (
+                Exception
+            ) as error:  # nosec B110 - Keep broad because optional rapidfuzz errors need the difflib fallback.
                 logger.debug(
                     "Optional rapidfuzz comparison failed: %s: %s", type(error).__name__, error
                 )  # WHY: name the fallback cause for diagnostics
@@ -958,7 +956,7 @@ class NominatimValidator:
                 timeout=timeout,
                 verify=verify_ssl,
             )
-        except Exception as error:  # WHY: catch-all so a bad response does not kill validation
+        except requests.exceptions.RequestException as error:  # Only transport failures need retry handling.
             self._last_nominatim_error = error  # WHY: outer loop reports the first failed attempt after exhaustion.
             logger.warning("Nominatim attempt %s failed: %s", attempt + 1, error)  # WHY: operator-visible attempt.
             if attempt < self.MAX_RETRIES:  # WHY: sleep only when another attempt remains
@@ -1088,7 +1086,18 @@ class NominatimValidator:
             if response is None:  # WHY: all retries failed
                 return self._create_empty_result("No response received")  # WHY: canonical no-response error
             return self._parse_geocode_response(response, parts)  # WHY: shape the successful body
-        except Exception as exc:  # WHY: never let a geocode bubble kill validation
+        except (
+            AttributeError,
+            KeyError,
+            TypeError,
+            ValueError,
+        ) as exc:  # Malformed address or response data is expected.
+            logger.warning(
+                "Geocode failed for %s (%s): %s",
+                source,
+                type(exc).__name__,
+                exc,
+            )  # Keep the failure visible while returning the established error result.
             if self.debug:  # WHY: only log full traceback in debug mode
                 logging.debug("GEOCODE [%s]: %s", source, exc)
                 logging.debug("GEOCODE [%s]: %s", source, traceback.format_exc())
