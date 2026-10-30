@@ -107,3 +107,28 @@ UPGRADE_PORTAL_JOURNEYS=1 .venv/bin/python -m pytest -q -p no:cacheprovider test
 
 **Result**: 2 passed. The report ranks read-only page and API samples by p95.
 See [performance-report.md](performance-report.md).
+
+## CI journey job
+
+The CI job waits for the shared E2E gate. It runs the full isolated journey
+harness with one worker and a 30-minute job limit.
+
+```sh
+python -m tests.e2e.upgrade_portal.journeys.run_journeys --parallel 1
+```
+
+The job installs Chromium and uploads the complete
+`test-artifacts/upgrade-portal-journeys/` directory as
+`upgrade-portal-journeys`. The upload fails when the directory has no files.
+The harness uses loopback services and simulated cloud data. It needs no
+Mist credential or production store.
+
+The guard checks the job settings, the evidence upload, and failure reporting.
+It also runs the adjacent browser gate contracts.
+
+```sh
+.venv/bin/python -m pytest -q tests/guardrails/test_upgrade_portal_journey_ci.py tests/guardrails/test_ci_gate_triggers.py::TestCancelledRunStops tests/guardrails/test_e2e_shard_partition.py
+```
+
+Result: 25 passed in 0.85 seconds. Ruff and Black also pass on both changed
+Python test files.

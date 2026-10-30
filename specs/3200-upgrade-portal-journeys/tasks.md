@@ -93,7 +93,7 @@
 
 **Purpose**: Publish a validated stage and keep the remaining work visible.
 
-- [ ] T020 Add a bounded journey job to `.github/workflows/ci.yml` after PR #4208 releases that file. Blocked because open PR #4208 owns the file.
+- [x] T020 Add a bounded journey job to `.github/workflows/ci.yml`. Run the isolated harness after the shared browser gate, then upload its reports and screenshots.
 - [x] T021 Run the targeted gates and record exact results in `specs/3200-upgrade-portal-journeys/quickstart.md` and `changelog.d/issue-3200-upgrade-portal-e2e-parity.md`.
 
 ## Dependencies and execution order
@@ -103,7 +103,7 @@
 - User Story 3 can run beside User Stories 1 and 2.
 - User Story 7 can run beside User Story 3 because it changes separate files.
 - User Stories 4, 5, and 8 depend on their test fixtures and issue records.
-- Polish work follows the selected user stories. T020 waits for PR #4208 to release the CI file.
+- Polish work follows the selected user stories. T020 runs after the shared browser gate.
 
 ## Parallel opportunities
 
@@ -117,7 +117,7 @@
 2. Deliver User Stories 1 and 2 as the minimum journey proof.
 3. Refresh the parity and performance evidence.
 4. Complete fault and cross-cutting checks.
-5. Add CI wiring only after the file conflict ends.
+5. Add the bounded CI job after the shared browser gate.
 
 ## Notes
 
