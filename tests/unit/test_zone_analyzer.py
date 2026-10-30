@@ -382,6 +382,17 @@ class TestBuildSummaryRows:
         rows = _build_summary_rows({}, {}, {}, {}, {})
         assert rows == []
 
+    def test_empty_analysis_maps_keep_a_valid_zero_result(self) -> None:
+        """Empty analysis maps must not invent deviations for a valid site."""
+        site_zones = {"s1": {"site_name": "Site", "zone_count": 0, "zone_names": set()}}
+        site_settings = {"s1": {"site_name": "Site", "engagement": {}, "occupancy": {}, "analytic": {}}}
+
+        rows = _build_summary_rows(site_zones, site_settings, {}, {}, {})
+
+        assert rows[0]["zone_deviation"] == "No"
+        assert rows[0]["dwell_deviation"] == "No"
+        assert rows[0]["occupancy_deviation"] == "No"
+
     def test_sorts_by_deviation(self) -> None:
         site_zones = {
             "s1": {"site_name": "A", "zone_count": 5, "zone_names": set()},
@@ -533,6 +544,42 @@ class TestAnalyzeOccupancyPatterns:
 
 class TestDisplayResults:
     """Tests for display methods (smoke tests)."""
+
+    @pytest.mark.parametrize(
+        "analysis",
+        [
+            {"common_zones": set()},
+            {"zone_count_stats": None},
+            {"zone_count_stats": []},
+            {"zone_count_stats": ""},
+            {"zone_count_stats": "private-statistics-value"},
+            {"zone_count_stats": False},
+            {"zone_count_stats": 0},
+            {"zone_count_stats": ()},
+        ],
+        ids=["missing", "null", "list", "blank", "text", "boolean", "number", "tuple"],
+    )
+    @pytest.mark.parametrize("combined", [False, True], ids=["direct", "combined"])
+    def test_zone_statistics_contract(
+        self,
+        analysis: dict[str, Any],
+        combined: bool,
+        capsys: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Refuse invalid statistics before an incomplete report can claim zero sites."""
+        message = "_display_zone_section requires zone_count_stats to be a dictionary."
+        with pytest.raises(ValueError, match=message):
+            if combined:
+                ZoneConfigurationAnalyzer._display_results({"zones": analysis})
+            else:
+                ZoneConfigurationAnalyzer._display_zone_section(analysis)
+        output = capsys.readouterr().out
+        assert "[ZONE ANALYSIS]" not in output
+        assert "Total sites scanned" not in output
+        assert "[ENGAGEMENT ANALYSIS]" not in output
+        assert (ZoneConfigurationAnalyzer.__module__, 40, message) in caplog.record_tuples
+        assert "private-statistics-value" not in caplog.text
 
     def test_display_results_empty(self, capsys: pytest.CaptureFixture[str]) -> None:
         ZoneConfigurationAnalyzer._display_results({})
@@ -816,6 +863,11 @@ class TestExportHelpersBranches:
         }
         _export_dwell_configs(engagement, "20250101", save_fn)
         save_fn.assert_called_once()
+        rows = save_fn.call_args.args[0]
+        assert len(rows) == 1
+        assert rows[0]["configuration"] == "k1"
+        assert rows[0]["passerby"] == "1-300"
+        assert rows[0]["sample_sites"] == "S1"
 
     def test_export_occupancy_configs(self) -> None:
         from src.mist.intelligence.analytics.zone_analyzer import _export_occupancy_configs
@@ -834,6 +886,11 @@ class TestExportHelpersBranches:
         }
         _export_occupancy_configs(occupancy, "20250101", save_fn)
         save_fn.assert_called_once()
+        rows = save_fn.call_args.args[0]
+        assert len(rows) == 1
+        assert rows[0]["configuration"] == "k1"
+        assert rows[0]["min_duration"] == 180
+        assert rows[0]["sample_sites"] == "S1"
 
 
 class TestExportResults:
@@ -990,6 +1047,7 @@ class TestAnalyzeIntegration:
         ZoneConfigurationAnalyzer.analyze(**mock_deps)
         # Should have stopped early without processing any sites
         zone_mock.assert_not_called()
+        assert mock_deps["check_stop_fn"].call_count == 2
 
 
 class TestCollectAllSiteZones:
@@ -1174,6 +1232,7 @@ class TestExportEarlyReturns:
 
         save_fn = MagicMock()  # spy on whether the save function is ever called
         _export_all_zones({}, "20250101", save_fn)  # empty site_zones dict
+        assert save_fn.call_count == 0  # Empty zone input must skip the save callback.
         save_fn.assert_not_called()  # early return before save reached
 
     def test_export_dwell_configs_empty_input(self) -> None:
@@ -1182,6 +1241,7 @@ class TestExportEarlyReturns:
 
         save_fn = MagicMock()  # spy on whether the save function is ever called
         _export_dwell_configs({}, "20250101", save_fn)  # no dwell_tag_configs key in dict
+        assert save_fn.call_count == 0  # Empty dwell input must skip the save callback.
         save_fn.assert_not_called()  # early return before save reached
 
     def test_export_occupancy_configs_empty_input(self) -> None:
@@ -1190,4 +1250,5 @@ class TestExportEarlyReturns:
 
         save_fn = MagicMock()  # spy on whether the save function is ever called
         _export_occupancy_configs({}, "20250101", save_fn)  # no occupancy_configs key in dict
+        assert save_fn.call_count == 0  # Empty occupancy input must skip the save callback.
         save_fn.assert_not_called()  # early return before save reached
