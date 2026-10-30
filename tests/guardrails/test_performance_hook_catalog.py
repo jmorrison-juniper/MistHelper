@@ -25,6 +25,17 @@ _LOGGER = logging.getLogger(__name__)  # Share one logger for this guard module.
 _REPO_ROOT = Path(__file__).resolve().parents[2]  # Locate the repository root from tests/guardrails.
 _ARTIFACT_ROOT = _REPO_ROOT / "specs" / "2448-misthelper-performance-monitoring" / "artifacts"  # Locate artifacts.
 _INVENTORY_SOURCE_REVISION = "7c4e57f3db93afda4c93ef0aec1e73c35fb7774e"  # Pin the historical inventory source.
+_HISTORICAL_PATH_MOVES = {  # Resolve immutable catalog entries through approved source moves.
+    "src/mist/intelligence/analytics/site_analytics_configurator.py": (  # Keep the catalog path unchanged.
+        "src/mist/intelligence/analytics/site/site_analytics_configurator.py"  # Resolve to the canonical file.
+    ),
+    "src/mist/intelligence/analytics/site_inventory_health_analyzer.py": (  # Keep the catalog path unchanged.
+        "src/mist/intelligence/analytics/site/site_inventory_health_analyzer.py"  # Resolve to the canonical file.
+    ),
+    "src/mist/intelligence/analytics/zone_analyzer.py": (  # Keep the catalog path unchanged.
+        "src/mist/intelligence/analytics/site/zone_analyzer.py"  # Resolve to the canonical file.
+    ),
+}
 
 
 def missing_catalog_paths(catalog_paths: set[str], source_paths: set[str]) -> list[str]:
@@ -38,7 +49,10 @@ def row_resolves(row: dict[str, str], symbol_index: dict[str, list[SymbolRecord]
     Why:
         A moved file keeps its symbols, and a lost symbol must still fail the guard.
     """
-    symbols = symbol_index.get(row["file_path"], [])  # Read symbols at the active catalog path.
+    current_path = _HISTORICAL_PATH_MOVES.get(
+        row["file_path"], row["file_path"]  # Keep unchanged paths when no approved move exists.
+    )  # Resolve immutable catalog paths against the moved source tree.
+    symbols = symbol_index.get(current_path, [])  # Read symbols at the active source path.
     names = {symbol.name for symbol in symbols}  # Build a local-name lookup for class rows.
     qualified_names = {symbol.qualified_name for symbol in symbols}  # Build a qualified-name lookup.
     symbol_name = row["symbol_or_class"]  # Read the symbol that the hook row names.
@@ -286,6 +300,25 @@ class TestCatalogContractFailures:
         failures = unresolved_hook_rows(hook_rows, {})
         print("Checked 1 synthetic active hook row against 0 indexed symbols.")
         assert failures == ["hook-test src/removed.py RemovedSymbol"]
+
+    def test_historical_site_path_resolves_to_moved_symbol(self) -> None:
+        """Prove that a historical site path resolves through the approved move."""
+        row = {
+            "hook_id": "site-analytics",  # Identify one preserved catalog row.
+            "file_path": "src/mist/intelligence/analytics/zone_analyzer.py",  # Keep its historical path.
+            "symbol_or_class": "ZoneConfigurationAnalyzer",  # Require the preserved class symbol.
+        }  # Build the immutable catalog row.
+        symbol = SymbolRecord(  # Model the class at its canonical source path.
+            "ClassDef",
+            "ZoneConfigurationAnalyzer",
+            "ZoneConfigurationAnalyzer",
+            0,
+        )  # Keep the expected symbol record explicit.
+        symbol_index = {  # Index the class only at the moved module path.
+            "src/mist/intelligence/analytics/site/zone_analyzer.py": [symbol],  # Match the canonical source.
+        }  # Complete the controlled AST index.
+        print("Checked 1 historical site path against 1 canonical symbol.")  # Report the tested scope.
+        assert row_resolves(row, symbol_index)  # Require the historical row to resolve.
 
     def test_inventory_source_revision_is_documented(self) -> None:
         quickstart_path = _REPO_ROOT / "specs" / "2448-misthelper-performance-monitoring" / "quickstart.md"

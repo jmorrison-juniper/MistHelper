@@ -8,7 +8,13 @@ from unittest.mock import MagicMock
 import pytest
 from requests.exceptions import ConnectionError, HTTPError, Timeout
 
-from src.mist.intelligence.analytics.site_analytics_configurator import (
+from src.mist.intelligence.analytics import (
+    SiteAnalyticsConfigurator as RootSiteAnalyticsConfigurator,
+)
+from src.mist.intelligence.analytics import (
+    SiteAnalyticsConfiguratorDeps as RootSiteAnalyticsConfiguratorDeps,
+)
+from src.mist.intelligence.analytics.site.site_analytics_configurator import (
     SiteAnalyticsConfigurator,
     SiteAnalyticsConfiguratorDeps,
 )
@@ -42,6 +48,12 @@ def _build_deps() -> SiteAnalyticsConfiguratorDeps:
         save_data_fn=MagicMock(),
         tqdm_fn=_identity_tqdm,
     )
+
+
+def test_analytics_root_exports_configurator_classes() -> None:
+    """Issue #3992 keeps the canonical configurator classes at the analytics root."""
+    assert RootSiteAnalyticsConfigurator is SiteAnalyticsConfigurator
+    assert RootSiteAnalyticsConfiguratorDeps is SiteAnalyticsConfiguratorDeps
 
 
 def test_compare_settings_detects_missing_and_mismatch() -> None:
