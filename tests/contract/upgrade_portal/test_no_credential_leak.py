@@ -389,7 +389,7 @@ def test_a_refused_signin_answers_no_credential(leak_client: FlaskClient, leak_a
         leak_app: The portal application.
     """
     leak_app.config["CLOUD_LOGIN"] = QuietLogin([CLOUD_REFUSED])
-    answer = post_signin(leak_client)
+    assert (answer := post_signin(leak_client)).status_code == 400  # WHY: Refusal must not look successful.
     assert_no_secret(response_surfaces(answer), "the refused sign-in answer")
 
 
