@@ -42,7 +42,7 @@ import subprocess
 import tempfile
 import threading
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from types import SimpleNamespace
@@ -51,6 +51,7 @@ from urllib.parse import urlencode  # Issue #3438: the query of page one of a lo
 
 import flask
 import pytest
+import requests
 from flask.sessions import SecureCookieSessionInterface
 
 from src.interfaces.portals.upgrade_portal.api.run_controls import (
@@ -183,6 +184,127 @@ else:  # The parent test process allocates one unique server resource set.
     SERVER_LOG_PATH = E2E_RESOURCES.log_path  # Keep one log inside this server artifact directory.
     SERVER_OWNER_PATH = E2E_RESOURCES.process_owner_path  # Keep the owner record unique to this server.
 BASE_URL = f"http://{LOOPBACK_HOST}:{CAPTURE_PORT}"  # Point every browser request at this server only.
+SIMULATED_CLOUD_STATUS_PATH = ARTIFACT_DIRECTORY / "simulated-cloud-status.json"  # Share control with the WSGI child.
+
+
+class SimulatedCloudStatusControl:
+    """Share safe cloud outcomes between the browser test and its server process."""
+
+    def __init__(self, path: Path) -> None:
+        """Keep the one process-shared control file."""
+        self._path = path  # The parent and child resolve this same temporary path.
+        self._guard = threading.Lock()  # One writer keeps each JSON update whole.
+
+    def reset(self) -> None:
+        """Restore running cloud states and remove every armed fault."""
+        self._update(lambda state: state.update(self._default_state()))  # Each test starts from a known cloud state.
+
+    def complete_multi_site(self) -> None:
+        """Make every selected multi-site child report completion."""
+        self._update(  # The aggregate reads both service states from this one file.
+            lambda state: state.update({"organization_status": "completed", "device_status": "completed"})
+        )
+
+    def complete_run(self, run_id: str) -> None:
+        """Set one single-site run to the terminal state that the fake driver applies."""
+        self._update(  # The run identifier scopes this result to one browser journey.
+            lambda state: state["run_states"].__setitem__(run_id, "complete")
+        )
+
+    def arm_site_list_fault(self) -> None:
+        """Fail the next site-list read after the server clears its read cache."""
+        self._update(  # The before-request hook clears the cached result on the next browser request.
+            lambda state: state.update({"clear_site_cache": True, "site_list_fault": True})
+        )
+
+    def organization_status(self) -> str:
+        """Return the current simulated organization job state."""
+        return str(self._read()["organization_status"])  # The cloud service reads no external system.
+
+    def device_status(self) -> str:
+        """Return the current simulated site child state."""
+        return str(self._read()["device_status"])  # The cloud service reads no external system.
+
+    def run_state(self, run_id: str) -> str:
+        """Return the requested simulated run state, or an empty value."""
+        return str(self._read()["run_states"].get(run_id, ""))  # No run completes without an explicit request.
+
+    def consume_site_cache_clear(self) -> bool:
+        """Consume the one request that clears cached site rows."""
+        return self._consume_flag("clear_site_cache")  # The control cannot clear a later journey's cache.
+
+    def consume_site_list_fault(self) -> bool:
+        """Consume the one armed site-list transport fault."""
+        return self._consume_flag("site_list_fault")  # The same fault cannot affect another request.
+
+    @staticmethod
+    def _default_state() -> dict[str, Any]:
+        """Build fresh running states for one test process."""
+        return {  # The default cloud keeps jobs active until a journey changes them.
+            "organization_status": "inprogress",
+            "device_status": "running",
+            "run_states": {},
+            "clear_site_cache": False,
+            "site_list_fault": False,
+        }
+
+    def _read(self) -> dict[str, Any]:
+        """Read a complete control record under the process-local lock."""
+        with self._guard:  # Prevent an in-process read from racing a write.
+            return self._read_unlocked()  # Return only a validated JSON object.
+
+    def _read_unlocked(self) -> dict[str, Any]:
+        """Read and validate the shared JSON control record."""
+        if not self._path.is_file():  # A server that starts before the first fixture uses safe defaults.
+            return self._default_state()  # The stand-in cloud stays active.
+        state = self._default_state()  # Fill new control fields for older temporary files.
+        stored: Any = json.loads(self._path.read_text(encoding="utf-8"))  # Read only local test data.
+        if not isinstance(stored, dict):  # A malformed control record must fail visibly.
+            raise ValueError("The simulated cloud status file must contain an object.")
+        state.update(stored)  # Keep the latest values from the parent test.
+        if not isinstance(state["run_states"], dict):  # The run map must support a keyed status lookup.
+            raise ValueError("The simulated cloud run states must contain an object.")
+        return state  # Return the validated state.
+
+    def _update(self, update: Callable[[dict[str, Any]], None]) -> None:
+        """Apply one complete state change and replace the file atomically."""
+        with self._guard:  # Keep each read-modify-write sequence indivisible in this process.
+            state = self._read_unlocked()  # Preserve values that another control method already wrote.
+            update(state)  # Apply the requested test state.
+            self._path.parent.mkdir(parents=True, exist_ok=True)  # Keep all control data outside product storage.
+            with tempfile.NamedTemporaryFile(  # Use a unique sibling so replacement is atomic.
+                mode="w",
+                encoding="utf-8",
+                dir=self._path.parent,
+                prefix=f".{self._path.name}.",
+                delete=False,
+            ) as output:
+                json.dump(state, output, sort_keys=True)  # Store only deterministic test state.
+                temporary_path = Path(output.name)  # Retain the completed file for replacement.
+            temporary_path.replace(self._path)  # The child sees either the old or the complete new state.
+
+    def _consume_flag(self, name: str) -> bool:
+        """Read and clear one one-shot control flag."""
+        with self._guard:  # Keep two server threads from consuming the same fault.
+            state = self._read_unlocked()  # Read the current control state.
+            armed = bool(state.get(name, False))  # Preserve a false value for an absent control.
+            if armed:  # Clear only an armed action.
+                state[name] = False  # The action applies once.
+                self._path.parent.mkdir(parents=True, exist_ok=True)  # Keep the replacement beside the source.
+                with tempfile.NamedTemporaryFile(  # Use a unique sibling so replacement is atomic.
+                    mode="w",
+                    encoding="utf-8",
+                    dir=self._path.parent,
+                    prefix=f".{self._path.name}.",
+                    delete=False,
+                ) as output:
+                    json.dump(state, output, sort_keys=True)  # Store the consumed state.
+                    temporary_path = Path(output.name)  # Retain the completed file for replacement.
+                temporary_path.replace(self._path)  # The next request sees the consumed flag.
+            return armed  # The caller acts only on the first read.
+
+
+SIMULATED_CLOUD_STATUS = SimulatedCloudStatusControl(SIMULATED_CLOUD_STATUS_PATH)  # One control per WSGI process.
 
 # WHY: The settings file sits beside this module. A path load is the only way
 # to read a file whose name holds a dot.
@@ -1316,8 +1438,38 @@ class E2EOrgUpgradeService:
         if upgrade_id == CANCEL_AP_JOB_ID:  # Issue #3246: the seeded job names one rebooting access point.
             answer = OrgCancelSeeds.status_data(upgrade_id, CancelledJobs.holds(upgrade_id))  # The nested shape.
             return OrgUpgradeResult(org_id, upgrade_id, 200, answer, None)  # A valid answer of the stand-in cloud.
-        state = "cancelled" if CancelledJobs.holds(upgrade_id) else "inprogress"  # A real cloud ends a cancelled job.
-        site_state = "cancelled" if state == "cancelled" else "running"  # Each site follows the job.
+        state = "cancelled" if CancelledJobs.holds(upgrade_id) else SIMULATED_CLOUD_STATUS.organization_status()
+        if state == "completed":  # A completed cloud job proves each selected access point.
+            site_upgrades = [
+                {
+                    "site_id": STAND_IN_SITE_ID,
+                    "id": "55555555-5555-5555-5555-555555555555",
+                    "status": "completed",
+                    "targets": {"total": 1, "upgraded": [UPGRADED_SITE_AP_MAC], "failed": []},
+                },
+                {
+                    "site_id": SECOND_SITE_ID,
+                    "id": "66666666-6666-6666-6666-666666666666",
+                    "status": "completed",
+                    "targets": {"total": 1, "upgraded": [FAILED_SITE_AP_MAC], "failed": []},
+                },
+            ]  # Both site jobs report their one selected target as upgraded.
+        else:  # Preserve the running and cancellation behavior of the existing journeys.
+            site_state = "cancelled" if state == "cancelled" else "running"  # Each site follows the root job.
+            site_upgrades = [
+                {
+                    "site_id": STAND_IN_SITE_ID,
+                    "id": "55555555-5555-5555-5555-555555555555",
+                    "status": site_state,
+                    "targets": {"total": 2, "upgraded": [UPGRADED_SITE_AP_MAC], "failed": []},
+                },
+                {
+                    "site_id": SECOND_SITE_ID,
+                    "id": "66666666-6666-6666-6666-666666666666",
+                    "status": site_state,
+                    "targets": {"total": 2, "upgraded": [], "failed": [FAILED_SITE_AP_MAC]},
+                },
+            ]  # Running jobs retain the existing mixed target evidence.
         return OrgUpgradeResult(
             org_id,
             upgrade_id,
@@ -1325,20 +1477,7 @@ class E2EOrgUpgradeService:
             {
                 "id": upgrade_id,
                 "status": state,
-                "site_upgrades": [
-                    {
-                        "site_id": STAND_IN_SITE_ID,
-                        "id": "55555555-5555-5555-5555-555555555555",
-                        "status": site_state,
-                        "targets": {"total": 2, "upgraded": [UPGRADED_SITE_AP_MAC], "failed": []},  # Issue #3249.
-                    },
-                    {
-                        "site_id": SECOND_SITE_ID,
-                        "id": "66666666-6666-6666-6666-666666666666",
-                        "status": site_state,
-                        "targets": {"total": 2, "upgraded": [], "failed": [FAILED_SITE_AP_MAC]},  # Issue #3249.
-                    },
-                ],
+                "site_upgrades": site_upgrades,
             },
             None,
         )
@@ -1420,13 +1559,18 @@ class E2EDeviceUpgradeService:
     """Return deterministic site child results without a Mist call."""
 
     ACCEPTED_STATUS = (200, 202)  # Match the production service contract.
+    _target_macs: ClassVar[dict[str, tuple[str, ...]]] = {}  # One job keeps its own selected devices.
+    _target_guard: ClassVar[threading.Lock] = threading.Lock()  # The WSGI server reads jobs on several threads.
 
     @staticmethod
     def invoke_upgrade(cloud_session: Any, plan: Any) -> UpgradeSubmission:
         """Accept one site child with a new job identifier."""
         del cloud_session  # The stand-in reads no credential.
+        upgrade_id = StandInJobIds.child_job(plan.targets[0].device_type)  # A cancel ends only this child.
+        with E2EDeviceUpgradeService._target_guard:  # Keep the target map stable across server threads.
+            E2EDeviceUpgradeService._target_macs[upgrade_id] = tuple(target.mac for target in plan.targets)
         return UpgradeSubmission(
-            StandInJobIds.child_job(plan.targets[0].device_type),  # A cancel of one job never ends a later job.
+            upgrade_id,
             plan.scope,
             tuple(target.mac for target in plan.targets),
             (),
@@ -1442,13 +1586,20 @@ class E2EDeviceUpgradeService:
         family: Any,
     ) -> dict[str, Any]:
         """Return one running child status, or the end state of a cancelled child."""
-        del cloud_session, scope, identifier, family  # The fixed answer needs no request value.
+        del cloud_session, scope, identifier, family  # The stand-in does not send an external request.
+        with E2EDeviceUpgradeService._target_guard:  # Read the selected devices of this child job.
+            target_macs = E2EDeviceUpgradeService._target_macs.get(upgrade_id, ())
+        state = "cancelled" if CancelledJobs.holds(upgrade_id) else SIMULATED_CLOUD_STATUS.device_status()
         return {
             "upgrade_id": upgrade_id,
             "raw_status": 200,
-            "status": "cancelled" if CancelledJobs.holds(upgrade_id) else "running",  # A cancel ends the child.
+            "status": state,
             "status_known": True,
-            "targets": {},
+            "targets": {
+                "total": len(target_macs),
+                "upgraded": list(target_macs) if state == "completed" else [],
+                "failed": [],
+            },
         }
 
     @staticmethod
@@ -1490,6 +1641,7 @@ def stand_in_cloud_read(name: str, **parameters: Any) -> list[dict[str, Any]] | 
     Returns:
         The records of the named read, or an empty list for any other name.
         A real-walk organization gets the records and the partial reasons.
+        A journey may arm one local transport fault after it clears the site cache.
     """
     if parameters.get("org_id") in (LOST_PAGE_ORG_ID, LATER_CHECK_ORG_ID):  # Issues #3438 and #3439: real walks.
         from src.interfaces.portals.upgrade_portal.app.routes import (
@@ -1504,6 +1656,8 @@ def stand_in_cloud_read(name: str, **parameters: Any) -> list[dict[str, Any]] | 
         logger.debug("The real-walk read %s holds %s record(s)", name, len(read.records))  # Log the count only.
         return read  # The records and the partial reasons of the read.
     del parameters  # Every other organization answers the fixed records below.
+    if name == "listOrgSites" and SIMULATED_CLOUD_STATUS.consume_site_list_fault():  # Issue #3393: one local fault.
+        raise requests.exceptions.ConnectionError("The simulated cloud did not answer the site-list read.")
     if name == "listOrgSites":  # The name and the identifier of each site.
         return [
             {"id": STAND_IN_SITE_ID, "name": STAND_IN_SITE_NAME},  # The default site of the single-site tests.
@@ -1857,19 +2011,52 @@ def stand_in_stamp() -> str:
 
 
 def stand_in_run_launcher(record: dict[str, Any]) -> None:
-    """Take one started run and drive no device at all.
+    """Keep normal runs inactive and complete only a run that its test controls.
 
     Why:
         `install_seams` binds the shipped driver, which opens threads, reads the
         Mist cloud, and writes firmware to hardware. A browser test may do none
         of those. The start route writes the state `upgrade_submitting` and
-        stores the record before it calls this seam, so the run still reads as
-        started and the progress poll still answers.
+        stores the record before it calls this seam. A test can request a local
+        terminal result, which `SimulatedRunCompleter` writes without a cloud call.
 
     Args:
         record: The run record, already in the state `upgrade_submitting`.
     """
-    logger.info("The stand-in launcher took the run %s and sent nothing", record.get("run_id", ""))
+    run_id = str(record.get("run_id", ""))  # The shared file scopes completion to one run.
+    if SIMULATED_CLOUD_STATUS.run_state(run_id) != "complete":  # Existing journeys keep the run active.
+        logger.info("The stand-in launcher took the run %s and sent nothing", run_id)  # No cloud action occurs.
+        return  # The progress page continues to show the submitted state.
+    SimulatedRunCompleter.complete(record)  # Apply the locally controlled outcome through the run store.
+    logger.info("The stand-in launcher completed the simulated run %s", run_id)  # Record the local result.
+
+
+class SimulatedRunCompleter:
+    """Write a completed single-site result through the test run store."""
+
+    @staticmethod
+    def complete(record: dict[str, Any]) -> None:
+        """Advance one submitted run and settle each target without cloud access."""
+        from src.interfaces.portals.upgrade_portal.app.routes import upgrade as upgrade_routes
+        from src.interfaces.portals.upgrade_portal.runtime.runs import PhaseState, RunState, RunStateMachine
+
+        machine = RunStateMachine()  # The same transition rules guard production run states.
+        first_state = machine.CHAIN.index(RunState.UPGRADE_SUBMITTING) + 1  # Start at the next legal state.
+        for state in machine.CHAIN[first_state:]:  # Advance through the normal completion sequence.
+            machine.advance(record, state)  # Reject any invalid transition.
+        for target in record.get("targets", []):  # Complete each selected device in the stored plan.
+            if not isinstance(target, dict):  # Ignore malformed rows without changing the run outcome.
+                continue
+            target["state"] = "upgraded"  # The simulated cloud reports a successful target.
+            target["version_after"] = target.get("version_target")  # The running version matches the plan.
+        for phase in record.get("phases", []):  # Settle the four displayed phases.
+            if not isinstance(phase, dict):  # Ignore malformed phase rows.
+                continue
+            total = int(phase.get("total", 0))  # Keep the existing phase target count.
+            phase["settled"] = total  # Every target has returned in this local result.
+            phase["state"] = PhaseState.SETTLED.value if total else PhaseState.SKIPPED.value
+        if not upgrade_routes.save_run(record):  # The page must read the stored terminal record.
+            raise RuntimeError("The simulated run store refused the completed run.")
 
 
 def stand_in_stop_runner(run_id: str) -> None:
@@ -2420,6 +2607,17 @@ def _start_ready_run_record() -> dict[str, Any]:
     record["run_id"] = START_READY_RUN_ID  # Give the start test its own record so order cannot change another test.
     record["site_id"] = START_READY_SITE_ID  # Give the start test its own site so no live-run guard hides the path.
     record["message"] = "The stand-in plan is ready for a measured firmware start."  # State the test purpose.
+    record["targets"] = [  # Use the canonical target fields that the progress table reads.
+        {
+            "device_id": "e2e-gateway-0001",  # Give the stored target a stable device key.
+            "mac": "000000000099",  # Bind the row and its version check to one device.
+            "name": "E2E gateway",  # Give the operator journey a readable target name.
+            "model": "SRX-1500",  # Keep the model consistent with the prepared run.
+            "device_type": "gateway",  # Select the gateway stage of the upgrade.
+            "version_before": "23.4R2-S5.5",  # Record the version before the simulated write.
+            "version_target": "23.4R2-S6.1",  # Give the stand-in driver a requested version.
+        }
+    ]
     return record  # Return a mutable copy that the start route may advance.
 
 
@@ -2571,6 +2769,14 @@ def _build_factory_overrides() -> E2EFactoryOverrides:  # Assemble one complete 
     return overrides  # The factory validates this value before blueprint registration.
 
 
+@pytest.fixture
+def simulated_cloud_status_control() -> Iterator[SimulatedCloudStatusControl]:
+    """Reset the process-shared control before and after one browser journey."""
+    SIMULATED_CLOUD_STATUS.reset()  # Remove every prior simulated outcome and fault.
+    yield SIMULATED_CLOUD_STATUS  # The journey changes only its own stand-in result.
+    SIMULATED_CLOUD_STATUS.reset()  # Leave a shared server in its default active state.
+
+
 def build_stand_in_app() -> Any:  # Build one fully isolated browser test application.
     """Build the portal with two signed-in operators and no cloud reach.
 
@@ -2614,8 +2820,14 @@ def build_stand_in_app() -> Any:  # Build one fully isolated browser test applic
     AuditTrailIsolation(ARTIFACT_DIRECTORY, checkout_trail).place()  # The move stays for the whole life of the child.
     overrides = _build_factory_overrides()  # Build every required process-owned dependency before routes.
     built = create_app(overrides)  # Validate and install overrides before blueprint registration.
-    from src.interfaces.portals.upgrade_portal.app.routes import org_upgrade
+    from src.interfaces.portals.upgrade_portal.app.routes import org_upgrade, select
     from src.interfaces.portals.upgrade_portal.app.routes import upgrade as upgrade_routes
+
+    @built.before_request
+    def clear_simulated_site_cache() -> None:
+        """Clear cached site rows when a local fault journey requests a fresh read."""
+        if SIMULATED_CLOUD_STATUS.consume_site_cache_clear():  # Apply only an explicitly armed test control.
+            select.CLOUD_READ_CACHE.clear()  # The next site read reaches the stand-in cloud seam.
 
     # WHY: Issue #2615 reads the Mist account before a firmware write. The
     # browser suite must open no socket at all, so this seam answers a fixed

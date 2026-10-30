@@ -62,6 +62,42 @@ def test_selected_target_rows_keep_each_device_version() -> None:
     assert rows == options["targets"]  # No family-wide version can replace either model choice.
 
 
+@pytest.mark.xfail(strict=True, reason="#3394: a checked family with no version is omitted from the stored plan")
+def test_checked_switch_with_empty_version_stays_in_the_durable_plan(
+    org_upgrade_client: FlaskClient,
+) -> None:
+    """Issue #3394: keep a checked switch in the stored plan when its target version is empty."""
+    store = AggregateStoreStandIn()  # Read the durable plan without a database.
+    org_upgrade_client.application.config[org_upgrade.OPTIONS_VIEW_CONFIG_KEY] = family_view
+
+    def build_record(session: Any, org_id: str, site_id: str, body: dict[str, Any]) -> dict[str, Any]:
+        """Build target rows only from the choices that the route retained."""
+        del session, org_id  # The test reads no cloud service.
+        versions = {row["mac"]: row["version_target"] for row in body["targets"]}
+        targets = [
+            {**device, "version_before": "old", "version_target": versions[device["mac"]], "site_id": site_id}
+            for device in FAMILY_VIEW_ROWS
+            if device["mac"] in versions
+        ]
+        return {"targets": targets, "options": {"strategy": "big_bang"}}
+
+    boundary = AggregateBoundaryStandIn()  # Build a durable plan without a cloud write.
+    org_upgrade_client.application.config[org_upgrade.OPTIONS_BUILDER_CONFIG_KEY] = build_record
+    org_upgrade_client.application.config[org_upgrade.AGGREGATE_SERVICE_CONFIG_KEY] = boundary
+    org_upgrade_client.application.config["RUN_STORE"] = store
+    answer = org_upgrade_client.post(
+        ORG_OPTIONS_API,
+        json={"selected_types": ["ap", "switch"], "version_ap": "0.15.1", "version_switch": ""},
+    )
+    assert answer.status_code == 200  # A valid AP target lets the mixed-family plan persist.
+    with org_upgrade_client.session_transaction() as browser_session:
+        operation_id = browser_session["org_upgrade_options"]["operation_id"]
+    operation = store.read_run(operation_id)
+    assert operation is not None
+    switch_child = next(child for child in operation["children"] if child["device_family"] == "switch")
+    assert switch_child["target_ids"] == [FAMILY_VIEW_ROWS[1]["mac"]]  # Keep the checked switch in the plan.
+
+
 def test_confirmation_summary_names_each_model_version() -> None:
     """Issue #3204: confirmation must show every distinct model choice."""
     operation = {  # Model two children that hold three explicit target records.

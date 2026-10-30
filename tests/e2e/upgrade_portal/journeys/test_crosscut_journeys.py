@@ -38,7 +38,9 @@ HISTORY_PATH = "/history"  # The history page path.
 COMPARE_PATH = "/compare"  # The comparison picker path.
 OK = 200  # A rendered page answers this status.
 BAD_REQUEST = 400  # A CSRF refusal answers this status.
+CONFLICT = 409  # An organization job that this browser did not start answers this status.
 NOT_FOUND = 404  # A missing route or record answers this status.
+ORG_JOB_NOT_OWNED = "org_upgrade_job_not_owned"  # The refusal hides the job record.
 GATE_TIMEOUT_MS = 7000  # The browser scripts should settle quickly.
 VIEWPORTS = ((390, 844), (1024, 768))  # The narrow and tablet sizes from the mission.
 MAIN_NAV = ("Sites", "History", "Compare")  # The signed-in navigation links.
@@ -134,6 +136,7 @@ def assert_labeled_inputs(page: Any) -> None:
             if (node.getAttribute('aria-label')) return false;
             if (node.getAttribute('aria-labelledby')) return false;
             if (node.id && document.querySelector(`label[for="${CSS.escape(node.id)}"]`)) return false;
+            if (node.labels && node.labels.length) return false; // Native labels include labels that wrap the control.
             return true;
         }).map(node => node.getAttribute('data-testid') || node.id || node.name || node.tagName)
         """)  # Ask the browser to use its DOM labels.
@@ -172,16 +175,22 @@ def assert_focus_visible(page: Any) -> None:
 
 def assert_no_horizontal_scroll(page: Any) -> None:
     """Require the document to fit the viewport width."""
-    fits = page.evaluate(
-        "() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1"
-    )  # Compare widths.
-    assert fits is True, "The page has horizontal document scroll."  # Forms must fit a narrow viewport.
+    dimensions = page.evaluate(
+        "() => ({scroll: document.documentElement.scrollWidth, viewport: document.documentElement.clientWidth})"
+    )  # Read both widths so a failure names the overflow.
+    fits = dimensions["scroll"] <= dimensions["viewport"] + 1  # Allow one pixel of browser rounding.
+    assert fits is True, (
+        f"{page.url} has horizontal document scroll: {dimensions['scroll']}px "
+        f"for a {dimensions['viewport']}px viewport."
+    )  # Name the page and measured widths.
 
 
 def assert_signed_in_nav(page: Any) -> None:
     """Require the signed-in navigation options to be visible."""
     for label in MAIN_NAV:  # Check each shared menu option.
-        expect(page.get_by_role("link", name=label)).to_be_visible(timeout=GATE_TIMEOUT_MS)  # The nav link is visible.
+        expect(page.get_by_role("link", name=label, exact=True)).to_be_visible(
+            timeout=GATE_TIMEOUT_MS
+        )  # The nav link is visible.
     expect(page.get_by_test_id("theme-select")).to_be_visible(timeout=GATE_TIMEOUT_MS)  # The theme switch is visible.
     expect(page.get_by_test_id("signout-button")).to_be_visible(timeout=GATE_TIMEOUT_MS)  # Sign out is visible.
 
@@ -414,12 +423,20 @@ def test_history_comparison_errors_and_viewports(page: Any, signed_out_page: Any
         ):  # Main pages.
             page.goto(path, wait_until="domcontentloaded")  # Open the page at this size.
             shots.step(f"viewport {width}x{height} {label}")  # Capture the layout.
-            assert_no_horizontal_scroll(page)  # Forms and cards must not force body scroll.
+            if not (path == SIGNIN_PATH and width == 390):  # Issue #4539 has its own strict regression check.
+                assert_no_horizontal_scroll(page)  # Forms and cards must not force body scroll.
 
 
-@pytest.mark.xfail(
-    strict=True, reason="F-upj-crosscut-01: missing run returns status 200 and renders JSON instead of an error page"
-)
+@pytest.mark.xfail(strict=True, reason="#4539: the sign-in document is 400px wide at a 390px viewport.")
+def test_sign_in_page_fits_narrow_viewport(signed_out_page: Any) -> None:
+    """Keep the sign-in page overflow visible until issue #4539 is fixed."""
+    page = signed_out_page  # Use a clean browser context for the sign-in page.
+    page.set_viewport_size({"width": 390, "height": 844})  # Reproduce the reported narrow viewport.
+    shots = StepShots(page, "signin-narrow-viewport")  # Record the focused regression journey.
+    goto(page, shots, SIGNIN_PATH, "sign in page at 390px")  # Open the local stand-in sign-in page.
+    assert_no_horizontal_scroll(page)  # The page must fit without horizontal document scroll.
+
+
 def test_missing_run_error_page_offers_back_link(page: Any) -> None:
     """A missing run must render the shared error page."""
     shots = StepShots(page, "missing-run-error-page")  # Record the defect proof.
@@ -430,18 +447,15 @@ def test_missing_run_error_page_offers_back_link(page: Any) -> None:
     assert page.get_by_role("link", name="Go to the site list").count() == 1  # The error page offers recovery.
 
 
-@pytest.mark.xfail(strict=True, reason="F-upj-crosscut-02: missing org job renders JSON instead of an error page")
-def test_missing_org_job_error_page_offers_back_link(page: Any) -> None:
-    """A missing organization job must render the shared error page."""
-    shots = StepShots(page, "missing-org-job-error-page")  # Record the defect proof.
-    goto(page, shots, "/upgrade/org/jobs/not-a-real-job", "missing org job", NOT_FOUND)  # Open the missing job.
-    expect(page.get_by_role("link", name="Go to the site list")).to_be_visible(
-        timeout=GATE_TIMEOUT_MS
-    )  # Recovery link.
-    assert page.get_by_role("link", name="Go to the site list").count() == 1  # The error page offers recovery.
+def test_unowned_org_job_is_refused(page: Any) -> None:
+    """An organization job that this browser did not start must be refused."""
+    shots = StepShots(page, "unowned-org-job-refused")  # Record the access refusal.
+    answer = goto(page, shots, "/upgrade/org/jobs/not-a-real-job", "unowned org job", CONFLICT)  # Open an unowned job.
+    envelope = answer.json()  # Read the structured refusal instead of expecting a page.
+    assert envelope["error"]["code"] == ORG_JOB_NOT_OWNED  # Preserve the owner-check contract of issue #3241.
+    assert "not-a-real-job" not in envelope["error"]["message"]  # Do not disclose whether the job exists.
 
 
-@pytest.mark.xfail(strict=True, reason="F-upj-crosscut-03: unknown URL renders JSON instead of an error page")
 def test_unknown_url_error_page_offers_back_link(page: Any) -> None:
     """An unknown URL must render the shared error page."""
     shots = StepShots(page, "unknown-url-error-page")  # Record the defect proof.
@@ -452,9 +466,12 @@ def test_unknown_url_error_page_offers_back_link(page: Any) -> None:
     assert page.get_by_role("link", name="Go to the site list").count() == 1  # The error page offers recovery.
 
 
-@pytest.mark.xfail(strict=True, reason="F-upj-crosscut-04: CSRF POST returns JSON without a recovery link")
 def test_csrf_post_error_response_offers_back_link(page: Any) -> None:
     """A CSRF refusal must offer a way back."""
-    answer = page.request.post(MODE_PATH, data={"mode": "single_site"})  # Send no CSRF token.
+    answer = page.request.post(
+        MODE_PATH,
+        data={"mode": "single_site"},
+        headers={"Accept": "text/html"},
+    )  # Ask for the browser page, as issue #3275 requires.
     assert answer.status == BAD_REQUEST, f"CSRF refusal answered {answer.status}."  # The guard must fail closed.
     assert "Go to the site list" in answer.text(), "The CSRF error offers no way back."  # Recovery link.
