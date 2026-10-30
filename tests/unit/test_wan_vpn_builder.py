@@ -578,3 +578,33 @@ class TestDisplayProfileList:
         builder._display_profile_list(profiles)
         output = caplog.text
         assert "No WAN interfaces" in output
+
+
+class TestFetchProfilesHttpRefusal:
+    """Test that a Mist refusal does not supply gateway profiles."""
+
+    def test_http_403_response_returns_no_profiles(self):
+        """A native Mist refusal must not enter the gateway profile inventory."""
+        import sys  # WHY: access the SDK module imported by the system under test.
+
+        import requests  # WHY: construct the native HTTP response consumed by the Mist SDK.
+
+        builder = WanVpnBuilder(MagicMock(), "org-1")  # WHY: tie status evidence to the imported source class.
+        response = requests.Response()  # WHY: the Mist SDK reads its status and body.
+        response.status_code = 403  # WHY: model an explicit permission refusal.
+        response.url = "https://api.mist.com/api/v1/orgs/org-1/deviceprofiles"  # WHY: identify the mocked endpoint.
+        response.reason = "Forbidden"  # WHY: preserve the native HTTP refusal detail.
+        response.headers["Content-Type"] = "application/json"  # WHY: use the Mist error response format.
+        response._content = b'{"detail":"forbidden"}'  # WHY: give APIResponse a valid refusal body.
+        source_module = sys.modules[WanVpnBuilder.__module__]  # WHY: reuse the SDK import already under test.
+        response_module = getattr(source_module.mistapi, "__api_response")  # WHY: access the SDK response type.
+        api_response = response_module.APIResponse(  # WHY: retain native refusal semantics.
+            response=response, url=response.url
+        )
+        with patch(
+            "src.operations.wan.wan_vpn_builder.mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles",
+            return_value=api_response,
+        ) as mocked_list:
+            profiles = builder._fetch_profiles()  # WHY: run the real profile refusal boundary.
+        assert profiles == []  # WHY: a refused read must not supply profiles to the workflow.
+        mocked_list.assert_called_once_with(builder.apisession, "org-1", type="gateway")  # WHY: verify SDK scope.
