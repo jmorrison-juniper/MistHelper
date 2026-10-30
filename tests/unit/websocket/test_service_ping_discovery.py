@@ -315,13 +315,16 @@ def test_fetch_device_config_swallows_exception_and_prints_warning(capsys) -> No
 def test_fetch_device_config_success_path_populates_device_lists(capsys) -> None:
     """_fetch_device_config: happy path pulls tenants/services from config and stats."""
     device_resp = SimpleNamespace(
+        status_code=200,
         data={
             "service_policies": [{"tenant": "tconf", "services": [{"name": "sconf"}]}],
             "routing_instances": [{"name": "rt-a"}, {"name": "_system"}],
             "router": {"tenants": [{"name": "rt-b"}], "services": [{"name": "rt-svc"}]},
-        }
+        },
     )
-    stats_resp = SimpleNamespace(data={"service_stat": [{"name": "sstats"}]})
+    stats_resp = SimpleNamespace(
+        status_code=200, data={"service_stat": [{"name": "sstats"}, {"name": "sconf"}, {"name": "_system"}]}
+    )
     _configure_discovery(
         getSiteDevice=MagicMock(return_value=device_resp),
         getSiteDeviceStats=MagicMock(return_value=stats_resp),
@@ -330,20 +333,97 @@ def test_fetch_device_config_success_path_populates_device_lists(capsys) -> None
     harness.device_tenants = []
     harness.device_services = []
     harness._fetch_device_config()
-    assert "tconf" in harness.device_tenants
-    assert "rt-a" in harness.device_tenants
-    assert "rt-b" in harness.device_tenants
-    assert "_system" not in harness.device_tenants
-    assert "sconf" in harness.device_services
-    assert "rt-svc" in harness.device_services
-    assert "sstats" in harness.device_services
+    assert harness.device_tenants == ["rt-a", "rt-b", "tconf"]
+    assert harness.device_services == ["rt-svc", "sconf", "sstats"]
     out = capsys.readouterr().out
     assert "Found 3 tenants from device configuration" in out
 
 
+@pytest.mark.parametrize("status_code", [302, 400, 401, 403, 404, 429, 500, 502, 503, None])
+def test_fetch_device_config_rejects_http_error_data(
+    status_code: int | None, caplog: pytest.LogCaptureFixture, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Failed SDK responses must not replace accepted configuration caches."""
+    response = SimpleNamespace(
+        status_code=status_code,
+        data={
+            "service_policies": [{"tenant": "refused-tenant", "services": ["refused-service"]}],
+            "detail": "private-response-body",
+        },
+    )
+    _, get_device, get_stats = _configure_discovery(getSiteDevice=MagicMock(return_value=response))
+    harness = _DiscoveryHarness()
+    harness._fetch_device_config()
+    assert harness.device_tenants == ["device-a"]
+    assert harness.device_services == ["svc-b"]
+    get_device.assert_called_once_with(spd.apisession, "site-1", "device-1")
+    get_stats.assert_not_called()
+    assert "Cannot retrieve device configuration" in capsys.readouterr().out
+    assert "getSiteDevice" in caplog.text
+    assert "site-1" in caplog.text and "device-1" in caplog.text
+    assert "private-response-body" not in caplog.text
+
+
+@pytest.mark.parametrize("status_code", [302, 400, 401, 403, 404, 429, 500, 502, 503, None])
+def test_fetch_device_config_preserves_config_when_stats_http_fails(
+    status_code: int | None, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Failed statistics must not add error names or remove valid configuration."""
+    response = SimpleNamespace(
+        status_code=status_code,
+        data={"service_stat": [{"name": "refused-stats-service"}], "detail": "private-response-body"},
+    )
+    _, get_device, get_stats = _configure_discovery(
+        getSiteDevice=MagicMock(
+            return_value=SimpleNamespace(
+                status_code=200, data={"service_policies": [{"tenant": "accepted", "services": ["valid"]}]}
+            )
+        ),
+        getSiteDeviceStats=MagicMock(return_value=response),
+    )
+    harness = _DiscoveryHarness()
+    harness._fetch_device_config()
+    assert harness.device_tenants == ["accepted"]
+    assert harness.device_services == ["valid"]
+    get_device.assert_called_once_with(spd.apisession, "site-1", "device-1")
+    get_stats.assert_called_once_with(spd.apisession, "site-1", "device-1")
+    assert "getSiteDeviceStats" in caplog.text
+    assert "site-1" in caplog.text and "device-1" in caplog.text
+    assert "private-response-body" not in caplog.text
+
+
+@pytest.mark.parametrize("reader", ["_retrieve_device_config", "_retrieve_device_stats"])
+@pytest.mark.parametrize("status_code", [200, 404, 503])
+def test_device_readers_validate_status_before_payload(reader: str, status_code: int) -> None:
+    """Direct readers return successful data and reject HTTP failures explicitly."""
+    response = SimpleNamespace(status_code=status_code, data={} if status_code == 200 else object())
+    _configure_discovery(
+        getSiteDevice=MagicMock(return_value=response),
+        getSiteDeviceStats=MagicMock(return_value=response),
+    )
+    harness = _DiscoveryHarness()
+    if status_code == 200:
+        assert getattr(harness, reader)() == {}
+    else:
+        with pytest.raises(ValueError, match=f"HTTP {status_code}"):
+            getattr(harness, reader)()
+
+
+@pytest.mark.parametrize("reader", ["_retrieve_device_config", "_retrieve_device_stats"])
+@pytest.mark.parametrize("response", [object(), SimpleNamespace(status_code="200"), SimpleNamespace(status_code=200.0)])
+def test_device_readers_reject_missing_or_invalid_status(reader: str, response: object) -> None:
+    """Absent and non-integer statuses must fail without reading response data."""
+    _configure_discovery(
+        getSiteDevice=MagicMock(return_value=response),
+        getSiteDeviceStats=MagicMock(return_value=response),
+    )
+    with pytest.raises(ValueError, match="HTTP unknown"):
+        getattr(_DiscoveryHarness(), reader)()
+
+
 def test_retrieve_device_config_tolerates_missing_data_attribute() -> None:
     """_retrieve_device_config: getattr default kicks in when response has no .data."""
-    _configure_discovery(getSiteDevice=MagicMock(return_value=object()))
+    _configure_discovery(getSiteDevice=MagicMock(return_value=SimpleNamespace(status_code=200)))
     harness = _DiscoveryHarness()
     result = harness._retrieve_device_config()
     assert result == {}
@@ -456,7 +536,7 @@ def test_service_stat_name_filters_bad_shapes_and_system_names() -> None:
 
 def test_retrieve_device_stats_tolerates_missing_data_attribute() -> None:
     """_retrieve_device_stats: getattr default kicks in when response has no .data."""
-    _configure_discovery(getSiteDeviceStats=MagicMock(return_value=object()))
+    _configure_discovery(getSiteDeviceStats=MagicMock(return_value=SimpleNamespace(status_code=200)))
     harness = _DiscoveryHarness()
     result = harness._retrieve_device_stats()
     assert result == {}
