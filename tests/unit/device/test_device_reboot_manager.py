@@ -103,11 +103,11 @@ class TestByGatewayTemplateList:
                 "_load_and_validate_reboot_targets",
                 return_value=[_target()],
             ),
-            patch.object(DeviceRebootManager, "_confirm_reboot_operation", return_value=False),
+            patch.object(DeviceRebootManager, "_confirm_reboot_operation", return_value=False) as confirm,  # Mock.
             patch.object(DeviceRebootManager, "_execute_reboots") as execute,
         ):
             DeviceRebootManager.by_gateway_template_list()
-        execute.assert_not_called()
+        assert confirm.call_args == (([_target()],), {}) and execute.assert_not_called() is None  # Check both outcomes.
 
     def test_runs_end_to_end_on_confirm(self, fake_mh: Any) -> None:
         """Execute reboots and export results when confirmed."""
