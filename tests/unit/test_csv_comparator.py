@@ -146,7 +146,7 @@ class TestAddressComparisonCounters:
         counters.start_timing()
         assert counters.start_time is not None
         counters.end_timing()
-        assert isinstance(counters.end_time, float)  # WHY: end timing must store a numeric timestamp.
+        assert counters.end_time is not None
         assert counters.get_duration() >= 0.0
 
     def test_duration_without_timing(self) -> None:

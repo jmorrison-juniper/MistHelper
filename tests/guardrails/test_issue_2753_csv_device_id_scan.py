@@ -18,6 +18,22 @@ class TestMissingDeviceIdDefaultScanner:
         candidates = scanner.find_empty_defaults('device_id = device.get("id", "")\n')  # WHY: model regression.
         assert candidates == [1]  # WHY: the mutation must create one finding.
 
+    def test_run_fails_with_a_controlled_empty_id_default(
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """A candidate in a controlled source must fail the full scan command."""
+        source_path = tmp_path / "candidate.py"  # WHY: isolate the candidate from repository source.
+        source_path.write_text('device_id = device.get("id", "")\n', encoding="utf-8")  # WHY: inject one regression.
+        scanner = MissingDeviceIdDefaultScanner(source_path)  # WHY: scan only the controlled source.
+        exit_code = scanner.run()  # WHY: exercise the command's nonzero candidate path.
+        captured = capsys.readouterr()  # WHY: inspect the measured scan result.
+        assert exit_code == 1  # WHY: a detected candidate must fail the guard.
+        assert "Scanned 1 source file; found 1 empty device ID defaults." in captured.out  # WHY: verify counts.
+        assert "Candidate at line 1." in captured.out  # WHY: report the candidate location.
+        assert captured.err == ""  # WHY: a valid scan must not report an input error.
+
     def test_selected_source_has_no_empty_id_default(self, capsys: pytest.CaptureFixture[str]) -> None:
         """The guard reports one parsed file and requires zero selected candidates."""
         scanner = MissingDeviceIdDefaultScanner()  # WHY: scan the selected production module.

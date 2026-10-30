@@ -25,7 +25,7 @@
 ### Tests
 
 - [x] T005 Prove the scan detects the empty-string device ID default in `scripts/scan_2753.py`. (delivered: synthetic AST mutation test)
-- [x] T006 Prove the guard reports its file count and fails on a controlled default reintroduction in `tests/guardrails/test_issue_2753_csv_device_id_scan.py`. (delivered: guard mutation test detects a reintroduced default)
+- [x] T006 Prove the guard reports its file count and fails on a controlled default reintroduction in `tests/guardrails/test_issue_2753_csv_device_id_scan.py`. (delivered: controlled source run returns 1 and reports one file and one candidate)
 
 ### Implementation
 
@@ -35,8 +35,8 @@
 
 ## Phase 4: Polish and Cross-Cutting Concerns
 
-- [x] T010 Run the focused tests and the controlled scan mutation described in `specs/numbered/0/0/0/4/2/0/0/3/2753-csv-device-id-validation/design/quickstart.md`. (delivered: 124 focused tests passed; the synthetic mutation was detected)
-- [x] T011 Run applicable local gates and both test-quality ratchets without changing `.github/test-quality-baseline.json`. (delivered: 124 tests passed, module coverage is 93%, all applicable gates passed, and both ratchets reported zero new findings)
+- [x] T010 Run the focused tests and the controlled scan mutation described in `specs/numbered/0/0/0/4/2/0/0/3/2753-csv-device-id-validation/design/quickstart.md`. (delivered: 125 focused tests passed; the synthetic mutation was detected)
+- [ ] T011 Run applicable local gates and both test-quality ratchets without changing `.github/test-quality-baseline.json`.
 - [x] T012 Analyze `specs/numbered/0/0/0/4/2/0/0/3/2753-csv-device-id-validation/spec.md`, `plan.md`, and `tasks.md`. (delivered: manual review found complete requirement coverage and no conflicts; the prerequisite script could not run because `pwsh` is unavailable)
 
 ## Dependencies and Execution Order
