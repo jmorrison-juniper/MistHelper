@@ -96,7 +96,7 @@ class TestSitesListApi:
         fake_mh.APICoreFetchUtils.all_sites_with_limit.assert_not_called()
         fake_mh.DataExporter.write_with_format_selection.assert_not_called()
 
-    def test_empty_sites_returns_early(self, fake_mh):
+    def test_empty_sites_returns_early(self, fake_mh, caplog: pytest.LogCaptureFixture) -> None:
         """Empty site list logs + returns without writing."""
         from src.operations.exporting.export.org_site_exporter import OrgSiteExporter
 
@@ -105,6 +105,9 @@ class TestSitesListApi:
             OrgSiteExporter.sites_list_api()
 
         fake_mh.DataExporter.write_with_format_selection.assert_not_called()
+        assert [(record.levelname, record.message) for record in caplog.records] == [
+            ("WARNING", " No sites returned from API.")
+        ]  # An empty site result must remain visible as an operator warning.
 
     def test_happy_path_writes_output(self, fake_mh):
         """Non-empty list flows through flatten/escape/write."""
