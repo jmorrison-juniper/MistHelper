@@ -938,7 +938,7 @@ class InventoryCSVComparator:  # pylint: disable=too-many-instance-attributes
         failure_record = {
             "site_id": device.get("site_id", ""),  # WHY: cross-reference to Mist site.
             "site_name": device.get("site_name", ""),  # WHY: readable name.
-            "device_id": device.get("id", ""),  # WHY: device pk.
+            "device_id": self._require_failure_device_id(device),  # WHY: failure rows need an exact device key.
             "device_serial": device_serial,  # WHY: primary key.
             "device_name": device_identifier,  # WHY: label.
             "original_address": raw_address,  # WHY: preserve input verbatim.
@@ -948,6 +948,16 @@ class InventoryCSVComparator:  # pylint: disable=too-many-instance-attributes
         }
         self.parse_failures.append(failure_record)  # WHY: rows for CSV output.
         self.counters.increment_parse_failure(parsed_result["parse_reason"])  # WHY: histogram bump.
+
+    def _require_failure_device_id(self, device: dict[str, Any]) -> str:
+        """Validate the device identity before adding a failure row."""
+        logger.info("Validating device identity for an inventory failure record")  # WHY: trace required record input.
+        device_id = device.get("id")  # WHY: do not replace a missing identity with an empty value.
+        if not isinstance(device_id, str) or not device_id.strip():  # WHY: Mist IDs must be nonblank strings.
+            logger.error("Inventory failure record has a missing or invalid device id")  # WHY: expose data failure.
+            raise ValueError("device id is required for inventory failure records")  # WHY: stop before row creation.
+        logger.debug("Validated device identity for an inventory failure record")  # WHY: record validation result.
+        return device_id  # WHY: preserve the source identifier without modification.
 
     def _record_device_parse_failure(
         self,
@@ -960,7 +970,7 @@ class InventoryCSVComparator:  # pylint: disable=too-many-instance-attributes
         failure_record = {
             "site_id": device.get("site_id", ""),  # WHY: cross-reference to Mist site.
             "site_name": device.get("site_name", ""),  # WHY: readable name.
-            "device_id": device.get("id", ""),  # WHY: device pk.
+            "device_id": self._require_failure_device_id(device),  # WHY: failure rows need an exact device key.
             "device_serial": device_serial,  # WHY: primary key.
             "device_name": device_identifier,  # WHY: label.
             "original_address": str(device.get("site_address", "")),  # WHY: verbatim input.
