@@ -26,4 +26,7 @@ def test_device_events_exporter_handles_empty_results(tmp_path, monkeypatch) -> 
         logger=MagicMock(),
     )
     exporter.export()
-    data_exporter.write_with_format_selection.assert_called_once()
+    data_exporter.write_with_format_selection.assert_called_once_with(
+        [], "OrgDeviceEvents_52w.csv", api_function_name="searchOrgDeviceEvents"
+    )
+    assert data_exporter.write_with_format_selection.call_args.args[0] == []
