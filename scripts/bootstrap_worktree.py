@@ -11,7 +11,7 @@ Usage:
     python scripts/bootstrap_worktree.py
     python scripts/bootstrap_worktree.py --recreate
 
-The script works on Windows and on Linux. The script prints the path of the
+The script works on Windows, macOS, and Linux. The script prints the path of the
 interpreter that it created.
 
 The script also protects the install against an unreachable pip index. It reads
@@ -30,7 +30,7 @@ import logging
 import os
 import shutil
 import socket
-import subprocess  # nosec B404 - the script starts pip with a fixed argument list.
+import subprocess  # nosec B404 - the script starts pip and uv with fixed argument lists.
 import sys
 import time
 import venv
@@ -41,13 +41,12 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 
 LOGGER = logging.getLogger("bootstrap_worktree")
 
-# The requirement files that the script installs, in this order. The script
-# skips a file that the worktree does not hold.
+# The generated exports remain available to contributors who use pip manually.
 REQUIREMENT_FILES: tuple[str, ...] = ("requirements.txt", "requirements-dev.txt")
 
 # The browser that the tests under `tests/e2e/` drive. Chromium is the only
 # browser those tests name, so the bootstrap downloads that one and no other.
-# Issue #2241: the `playwright` package ships no browser, so a pip install alone
+# Issue #2241: the `playwright` package ships no browser, so a locked sync alone
 # leaves every browser test unable to start one.
 PLAYWRIGHT_BROWSER = "chromium"
 
@@ -201,56 +200,58 @@ class WorktreeBootstrapper:
         self.venv_dir = root / venv_name  # Build the environment path with pathlib, so both platforms work.
         self.index_override: str | None = None  # Hold the index that this run uses when the configured one fails.
 
-    class InstallationPolicy:  # Own installer-only decisions without changing browser or account helpers.
-        """Apply one invocation's selected installer and effective package-source policy."""
+    class InstallationPolicy:  # Own sync decisions without changing browser or account helpers.
+        """Apply one invocation's locked sync command and package-source policy."""
 
         def __init__(
-            self, uv_path: str | None, sources: dict[str, str], override: str | None
+            self, uv_path: str | None, sources: dict[str, str], override: str | None, bootstrap_python: str
         ) -> None:  # Keep selected tools and sources local to one invocation.
-            """Store a private snapshot and report the selected installer."""
-            LOGGER.info("Preparing the installation policy.")  # Trace before copying source state.
+            """Store the UV command and source snapshot for one locked sync."""
+            LOGGER.info("Preparing the locked sync policy.")  # Trace before copying source state.
             self.uv_path = uv_path  # Retain the exact discovery result without another lookup.
+            self.bootstrap_python = bootstrap_python  # Keep the host interpreter outside the managed environment.
+            self.command_prefix = [uv_path] if uv_path else [bootstrap_python, "-m", "uv"]  # Support user installs.
             self.sources = dict(sources)  # Do not share mutable configuration state with another invocation.
             self.override = override  # Keep the existing probe's public decision authoritative.
-            self.installer = "uv" if uv_path is not None else "pip"  # Use only a safe tool name in reports.
             LOGGER.debug(  # Keep source values private.
-                "Prepared %s source settings for %s.", len(self.sources), self.installer  # Report only a count.
+                "Prepared %s package-source settings for UV.", len(self.sources)  # Report only a count.
             )
             if uv_path is None:  # Tool absence remains the only automatic pip-selection reason.
-                LOGGER.info("uv is absent. Using pip for dependency installation.")  # Explain tool absence.
-            else:  # A resolved uv failure must never change this choice.
-                LOGGER.info("Using uv for dependency installation.")  # Identify the selected tool.
+                LOGGER.info("uv is absent. The bootstrap will install it for this user.")  # Explain the next action.
+            else:  # A resolved executable remains the selected tool.
+                LOGGER.info("Using uv for locked dependency synchronization.")  # Identify the selected tool.
 
         def apply(self, environment: dict[str, str]) -> None:  # Change only the fresh installation child.
             """Normalize sources and configuration controls for the selected installer."""
             LOGGER.info("Applying the installation source policy.")  # Trace before child-only changes.
-            if self.uv_path is not None or self.override:  # Public pip fallback must also remove uv source aliases.
-                for name in (  # Clear every competing source alias.
-                    "UV_INDEX",  # Remove current extra-index settings.
-                    "UV_DEFAULT_INDEX",  # Remove current primary-index settings.
-                    "UV_INDEX_URL",  # Remove legacy primary-index settings.
-                    "UV_EXTRA_INDEX_URL",  # Remove legacy extra-index settings.
-                ):
-                    environment.pop(name, None)  # Prevent restoration of the failed mirror.
-            if self.uv_path is None:  # Ordinary pip keeps its existing file configuration behavior.
-                if self.override:  # Saved pip extras must not defeat the exclusive public fallback.
-                    environment["PIP_CONFIG_FILE"] = os.devnull  # Suppress file settings only for this installation.
-            else:  # uv needs explicit storage, trust, and source settings.
-                environment.update(  # Keep storage and system trust explicit for every uv attempt.
-                    {"UV_LINK_MODE": "copy", "UV_NATIVE_TLS": "1", "UV_SYSTEM_CERTS": "1", "UV_NO_CONFIG": "1"}
-                )
-                environment.pop("UV_CONFIG_FILE", None)  # Prevent saved uv settings from replacing pip source choices.
-                self._effective_sources(environment)  # Map primary and extra sources separately.
-            LOGGER.debug(  # Confirm the child-only source decision.
-                "Applied %s source policy. Public override: %s.", self.installer, bool(self.override)
-            )  # Confirm safe decisions without caller values.
+            for name in (  # Clear every competing source alias before mapping pip settings.
+                "UV_INDEX",  # Remove current extra-index settings.
+                "UV_DEFAULT_INDEX",  # Remove current primary-index settings.
+                "UV_INDEX_URL",  # Remove legacy primary-index settings.
+                "UV_EXTRA_INDEX_URL",  # Remove legacy extra-index settings.
+            ):
+                environment.pop(name, None)  # Prevent restoration of a failed mirror.
+            environment.update(  # Keep storage, retries, and system trust explicit for each UV operation.
+                {
+                    "UV_LINK_MODE": "copy",
+                    "UV_NATIVE_TLS": "1",
+                    "UV_SYSTEM_CERTS": "1",
+                    "UV_NO_CONFIG": "1",
+                    "UV_HTTP_RETRIES": PIP_RETRIES,
+                    "UV_HTTP_TIMEOUT": PIP_TIMEOUT,
+                }
+            )
+            environment.pop("UV_CONFIG_FILE", None)  # Prevent saved UV settings from replacing pip source choices.
+            self._effective_sources(environment)  # Map primary and extra sources separately.
+            if self.override:  # The bootstrap pip install must use the same public fallback.
+                environment["PIP_INDEX_URL"] = self.override  # Point this run at the public index.
+                environment.pop("PIP_EXTRA_INDEX_URL", None)  # Drop a saved extra index that may also be unreachable.
+                environment["PIP_CONFIG_FILE"] = os.devnull  # Prevent file settings from restoring the failed mirror.
+            LOGGER.debug("Applied the UV source policy. Public override: %s.", bool(self.override))
 
         def _effective_sources(self, environment: dict[str, str]) -> None:  # Preserve working pip source precedence.
             """Apply bounded uv transport and map the selected pip sources."""
             LOGGER.info("Mapping pip installation settings into uv.")
-            environment.update(  # uv does not read pip's transport controls.
-                {"UV_HTTP_RETRIES": PIP_RETRIES, "UV_HTTP_TIMEOUT": PIP_TIMEOUT}
-            )
             for name in ("INDEX_URL", "EXTRA_INDEX_URL"):  # Preserve independent primary and extra-source decisions.
                 key = name.lower().replace("_", "-")  # Match pip's existing configuration-key spelling.
                 if self.override:  # Public fallback replaces both primary and extra sources.
@@ -265,45 +266,41 @@ class WorktreeBootstrapper:
                     environment["UV_" + name] = source  # Preserve extra-index order.
                 LOGGER.debug("Mapped %s source. Configured: %s.", name, bool(source))  # Report only source presence.
 
-        def install(self, interpreter: Path, path: Path, environment: dict[str, str]) -> None:
-            """Install safe pip and one requirement file, then report the duration."""
-            LOGGER.info("Installing %s packages from %s.", self.installer, path.name)
-            started = time.monotonic()
-            command = [str(interpreter), "-m", "pip", "install"]
-            if self.uv_path is not None:
-                command = [self.uv_path, "pip", "install", "--python", str(interpreter)]
-            command.extend(["pip>=26.2.2", "-r", str(path)])
-            LOGGER.debug("Prepared %s arguments for %s.", len(command), self.installer)
-            try:
-                self._run(path, command, environment)
-            finally:
-                elapsed = time.monotonic() - started
-                LOGGER.info("The %s install of %s took %.1f seconds.", self.installer, path.name, elapsed)
-                LOGGER.debug("Finished the %s attempt for %s in %.1f seconds.", self.installer, path.name, elapsed)
+        def install_uv(self, environment: dict[str, str]) -> None:
+            """Install UV outside the managed project environment when the command is missing."""
+            if self.uv_path is not None:  # An existing executable needs no installation.
+                return  # Keep the existing UV installation unchanged.
+            environment.pop("PYTHONNOUSERSITE", None)  # Let the module runner find UV in the user package site.
+            command = [self.bootstrap_python, "-m", "pip", "install", "--user", "uv"]  # Keep UV outside .venv.
+            LOGGER.info("Installing uv in the current user's Python environment.")  # Trace before pip runs.
+            LOGGER.debug("Prepared %s arguments for the UV tool installation.", len(command))  # Report command size.
+            self._run(command, environment, "The uv tool installation")  # Stop if UV cannot be installed.
 
-        def _run(
-            self, path: Path, command: list[str], environment: dict[str, str]
-        ) -> None:  # Propagate installation and launch errors without switching installers.
-            """Run one installation with visible output and safe failure context."""
-            context = f"The {self.installer} install of {path.name}"  # Include only a tool name and declared file name.
-            LOGGER.info("Starting the %s installation of %s.", self.installer, path.name)  # Trace before execution.
-            try:  # A discovered executable can disappear or lose permission before it starts.
+        def sync(self, root: Path, environment: dict[str, str]) -> None:
+            """Synchronize the project from its locked manifest and development extra."""
+            command = [*self.command_prefix, "sync", "--locked", "--extra", "dev"]  # Enforce the committed lock.
+            LOGGER.info("Synchronizing project dependencies from uv.lock.")  # Trace before the package operation.
+            LOGGER.debug("Prepared %s arguments for the locked sync.", len(command))  # Report command size.
+            self._run(command, environment, "The locked UV sync", root)  # Use the project root and stop on failure.
+
+        def _run(self, command: list[str], environment: dict[str, str], context: str, root: Path | None = None) -> None:
+            """Run one tool command and stop when its process fails."""
+            started = time.monotonic()  # Measure the command so a slow tool remains visible.
+            try:
                 result = subprocess.run(  # nosec B603 - the argument list holds no shell input.
-                    command, check=False, env=environment  # Keep installer output visible and the environment isolated.
+                    command, check=False, env=environment, cwd=root  # Preserve visible output and the project root.
                 )
-            except OSError as error:  # A launch error is not executable absence.
-                LOGGER.error(  # Keep raw launch-error values private.
-                    "%s could not start (%s).",
-                    context,
-                    type(error).__name__,
-                    exc_info=(OSError, OSError("The installer could not start."), error.__traceback__),
-                )
-                LOGGER.debug("Recorded a failed %s launch.", self.installer)  # Confirm failure without credentials.
-                raise RuntimeError(f"{context} could not start ({type(error).__name__}).") from error  # Stop setup.
-            LOGGER.debug("%s returned code %s.", context, result.returncode)  # Report the actual subprocess result.
-            if result.returncode != 0:  # A failed file must stop every later installation and setup action.
-                LOGGER.error("%s failed with code %s.", context, result.returncode)  # Report explicit failure context.
-                raise RuntimeError(f"{context} failed with code {result.returncode}.")  # Never retry through pip.
+            except OSError as error:  # A launch failure must stop setup with a safe error context.
+                LOGGER.error("%s could not start (%s).", context, type(error).__name__)  # Report the safe error type.
+                raise RuntimeError(f"{context} could not start ({type(error).__name__}).") from error
+            finally:  # Report duration whether the command started or failed.
+                elapsed = time.monotonic() - started
+                LOGGER.info("%s took %.1f seconds.", context, elapsed)  # Report action duration.
+                LOGGER.debug("Finished %s in %.1f seconds.", context.lower(), elapsed)  # Confirm completion.
+            LOGGER.debug("%s returned code %s.", context, result.returncode)  # Report the subprocess result.
+            if result.returncode != 0:  # Do not continue after a failed locked install.
+                LOGGER.error("%s failed with code %s.", context, result.returncode)  # Surface command failure.
+                raise RuntimeError(f"{context} failed with code {result.returncode}.")  # Stop the bootstrap.
 
     @property
     def interpreter(self) -> Path:
@@ -328,37 +325,29 @@ class WorktreeBootstrapper:
         )  # Build the environment with pip and a portable interpreter path.
         LOGGER.debug("Created the virtual environment")
 
-    def install_requirements(self) -> list[str]:  # Keep installer selection local to this invocation.
-        """Install each requirement file that the worktree holds."""
-        LOGGER.info("Selecting the dependency installer.")  # Trace before executable discovery.
-        uv_path = shutil.which("uv")  # Select pip only when executable discovery reports absence.
+    def sync_dependencies(self) -> None:  # Keep installer selection local to this invocation.
+        """Synchronize the locked project and its development dependencies."""
+        LOGGER.info("Selecting the UV command.")  # Trace before executable discovery.
+        uv_path = shutil.which("uv")  # Use the installed command when discovery reports it.
         LOGGER.debug("uv is available: %s.", uv_path is not None)  # Report availability without caller paths.
-        installed: list[str] = []  # Record each file that the script installed, so the caller can report it.
         self.index_override = None  # Clear an earlier public decision before the new configuration read.
         probe = PipIndexProbe(self.interpreter)  # Own a fresh source snapshot for this invocation.
         self.index_override = probe.fallback_index()  # Retain one existing index decision for both files.
-        policy = self.InstallationPolicy(uv_path, probe.source_settings, self.index_override)  # Keep run state local.
-        started = time.monotonic()  # Start the clock, so a slow install is visible rather than silent.
-        for name in REQUIREMENT_FILES:  # Install the files in the declared order.
-            path = self.root / name  # Build the file path under the worktree root.
-            if not path.is_file():  # A worktree without the file needs no action.
-                LOGGER.info("Skipping %s, because the worktree does not hold this file", name)  # Skip absent files.
-                continue  # Move to the next file in the list.
-            environment = self._install_environment(policy)
-            policy.install(self.interpreter, path, environment)
-            LOGGER.info("Recording the completed requirement file %s.", name)  # Trace before recording success.
-            installed.append(name)  # Add the file to the report list.
-            LOGGER.debug("Recorded %s completed requirement files.", len(installed))  # Confirm successful attempts.
-        LOGGER.info("The install took %.1f seconds.", time.monotonic() - started)  # Report the total wall time.
-        LOGGER.debug("Installed %s requirement files.", len(installed))  # Confirm only successful file results.
-        return installed  # Give the caller the list of the installed files.
+        bootstrap_python = getattr(sys, "_base_executable", sys.executable)  # Keep UV outside the project environment.
+        policy = self.InstallationPolicy(  # Keep the source settings and tool command local to this run.
+            uv_path, probe.source_settings, self.index_override, bootstrap_python
+        )
+        environment = self._install_environment(policy)  # Keep caller settings and index choices local to the child.
+        policy.install_uv(environment)  # Install UV only when executable discovery reports absence.
+        policy.sync(self.root, environment)  # Install exactly the locked project and development extra.
+        LOGGER.debug("Completed one locked dependency sync.")
 
     def install_browser_driver(self) -> bool:
         """Download the browser that the tests under `tests/e2e/` drive.
 
         Why:
             Issue #2241. The `playwright` package ships no browser. Without the
-            download every browser test fails to start one. A pip install alone
+            download every browser test fails to start one.             A locked dependency sync alone
             therefore leaves the worktree unable to run the browser gate.
 
         Returns:
@@ -367,7 +356,7 @@ class WorktreeBootstrapper:
         """
         LOGGER.info("Downloading the %s browser for the browser tests", PLAYWRIGHT_BROWSER)
         command = [str(self.interpreter), "-m", "playwright", "install", PLAYWRIGHT_BROWSER]
-        started = time.monotonic()  # Time the download, because it is the slowest step after pip.
+        started = time.monotonic()  # Time the download, because it is the slowest step after synchronization.
         result = subprocess.run(  # nosec B603 - the argument list holds no shell input.
             command, check=False, env=self._browser_environment()
         )
@@ -412,7 +401,7 @@ class WorktreeBootstrapper:
     ) -> dict[str, str]:  # Preserve the browser's zero-argument behavior.
         """Build a separate child environment without changing caller settings."""
         LOGGER.info("Preparing the child environment.")  # Trace before copying caller settings.
-        environment = dict(os.environ)  # Copy the caller environment, because pip needs the rest of it.
+        environment = dict(os.environ)  # Copy the caller environment, because child tools need the rest of it.
         environment["PIP_RETRIES"] = PIP_RETRIES  # Cut the retry count, so a dead index costs seconds, not minutes.
         environment["PIP_TIMEOUT"] = PIP_TIMEOUT  # Bound the socket wait of each attempt.
         if self.index_override:  # An override applies only when the probe found the configured index unreachable.
@@ -452,11 +441,12 @@ def build_parser() -> argparse.ArgumentParser:
     return parser  # Give the caller the ready parser.
 
 
-def report_result(bootstrapper: WorktreeBootstrapper, installed: list[str], browser_ready: bool = True) -> None:
+def report_result(bootstrapper: WorktreeBootstrapper, browser_ready: bool = True) -> None:
     """Print the interpreter path and the activation command for this platform."""
     activate = ".venv\\Scripts\\Activate.ps1" if sys.platform == "win32" else "source .venv/bin/activate"
     LOGGER.info("The environment is ready.")
-    LOGGER.info("Installed requirement files: %s", ", ".join(installed) or "none")
+    LOGGER.info("Installed dependencies with uv sync --locked --extra dev.")
+    LOGGER.info("Pip exports remain available: %s", ", ".join(REQUIREMENT_FILES))  # Keep manual pip use visible.
     LOGGER.info("Interpreter: %s", bootstrapper.interpreter)
     LOGGER.info("To activate the environment, run: %s", activate)
     LOGGER.info("To run the tests, run: python -m pytest -q")
@@ -658,13 +648,13 @@ def main(argv: list[str] | None = None) -> int:
     StaleSourceSweeper(root).sweep()  # Remove the orphaned package directories that a branch switch left behind.
     try:  # Report a failed step as one clear message, because the user reads the console.
         bootstrapper.create_environment(recreate=args.recreate)  # Create the environment first.
-        installed = bootstrapper.install_requirements()  # Install the declared dependencies.
+        bootstrapper.sync_dependencies()  # Install the locked project and development dependencies.
     except (OSError, RuntimeError) as error:  # A file error or a failed install stops the script.
         LOGGER.error("The bootstrap failed: %s", error)
         return 1  # Report the failure to the shell.
     bootstrapper.check_environment_health()  # Warn about corrupt package records without blocking setup.
     browser_ready = bootstrapper.install_browser_driver()  # Download the browser the e2e tests drive.
-    report_result(bootstrapper, installed, browser_ready)  # Tell the user which interpreter to activate.
+    report_result(bootstrapper, browser_ready)  # Tell the user which interpreter to activate.
     account_checker = GitHubAccountChecker()  # Build the checker that owns repository credential setup.
     account_checker.configure_git_username(root)  # Pin the local Git username before the account probe.
     account_checker.warn_on_mismatch()  # Warn before the user pushes with the wrong account.

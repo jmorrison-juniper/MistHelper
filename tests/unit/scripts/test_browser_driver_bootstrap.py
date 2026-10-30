@@ -116,7 +116,7 @@ def test_the_report_names_the_repair_when_the_download_failed(tmp_path: Path, ca
     logger.info("Checking the repair line of the report")  # Report the plan before the work.
     caplog.set_level(logging.WARNING, logger="bootstrap_worktree")  # Capture the warning lines.
 
-    report_result(WorktreeBootstrapper(tmp_path), ["requirements.txt"], browser_ready=False)
+    report_result(WorktreeBootstrapper(tmp_path), browser_ready=False)
 
     assert PLAYWRIGHT_INSTALL_HINT in caplog.text, "the report must name the download command"
     assert "skip reads as a pass" in caplog.text, "the report must state why a skip is dangerous"
@@ -127,22 +127,20 @@ def test_the_report_names_the_browser_suite_on_success(tmp_path: Path, caplog: p
     logger.info("Checking the success line of the report")  # Report the plan before the work.
     caplog.set_level(logging.INFO, logger="bootstrap_worktree")  # Capture the information lines.
 
-    report_result(WorktreeBootstrapper(tmp_path), ["requirements.txt"], browser_ready=True)
+    report_result(WorktreeBootstrapper(tmp_path), browser_ready=True)
 
     assert "tests/e2e/upgrade_portal" in caplog.text, "the report must name the browser suite"
     assert PLAYWRIGHT_INSTALL_HINT not in caplog.text, "a ready browser needs no repair line"
 
 
-def test_the_report_names_no_requirement_files_for_empty_install_list(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture
-) -> None:
-    """An empty install list MUST report `none` instead of a blank field."""
-    logger.info("Checking the empty install report")  # Report the plan before the work.
+def test_the_report_names_the_locked_sync_on_success(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    """A successful bootstrap MUST report its locked dependency command."""
+    logger.info("Checking the locked sync report")  # Report the plan before the work.
     caplog.set_level(logging.INFO, logger="bootstrap_worktree")  # Capture the information lines.
 
-    report_result(WorktreeBootstrapper(tmp_path), [], browser_ready=True)  # Exercise the empty install edge case.
+    report_result(WorktreeBootstrapper(tmp_path), browser_ready=True)
 
-    assert "Installed requirement files: none" in caplog.text  # The report must name the empty state.
+    assert "Installed dependencies with uv sync --locked --extra dev." in caplog.text
 
 
 def _completed(code: int) -> object:
