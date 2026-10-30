@@ -125,19 +125,21 @@ Mist credential or production store.
 
 The guards check the job settings, the evidence upload, failure reporting, and
 the quality-gate inventory. They also test browser shard contracts and the
-single-site completion journey.
+single-site completion and multi-site refusal journeys.
 
 ```sh
-UPGRADE_PORTAL_JOURNEYS=1 .venv/bin/python -B -m pytest -q -p no:cacheprovider tests/guardrails/test_quality_gate_close_scope.py tests/guardrails/test_upgrade_portal_journey_ci.py tests/guardrails/test_ci_gate_triggers.py::TestCancelledRunStops tests/guardrails/test_e2e_shard_partition.py tests/e2e/upgrade_portal/journeys/test_upj_single_site_journeys.py::TestSingleSiteJourneys::test_start_reaches_a_completed_run
+UPGRADE_PORTAL_JOURNEYS=1 .venv/bin/python -B -m pytest -q -p no:cacheprovider tests/guardrails/test_quality_gate_close_scope.py tests/guardrails/test_upgrade_portal_journey_ci.py tests/guardrails/test_ci_gate_triggers.py::TestCancelledRunStops tests/guardrails/test_e2e_shard_partition.py tests/e2e/upgrade_portal/journeys/test_upj_single_site_journeys.py::TestSingleSiteJourneys::test_start_reaches_a_completed_run tests/e2e/upgrade_portal/journeys/test_upj_multisite_journeys.py::TestMultiSiteOptionsJourneys::test_default_form_refusal_is_in_view
 ```
 
-Result: 34 passed in 4.18 seconds. Ruff and Black pass on the four changed
-Python test files.
+Result: 35 passed in 5.33 seconds. Ruff and Black pass on the changed Python
+test file.
 
 Run the complete journey suite with this command.
 
 ```sh
-.venv/bin/python -m tests.e2e.upgrade_portal.journeys.run_journeys --parallel 1
+UPGRADE_PORTAL_JOURNEYS=1 .venv/bin/python -m tests.e2e.upgrade_portal.journeys.run_journeys --parallel 1
 ```
+
+Result: 37 passed and 3 expected failures.
 
 Result: 37 passed and 3 xfailed.
