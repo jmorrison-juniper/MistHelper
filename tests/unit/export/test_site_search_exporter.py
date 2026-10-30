@@ -149,12 +149,18 @@ class TestMenuBindings:
 class TestSharedBehavior:
     """Cover the branches of the shared helper once."""
 
-    def test_empty_result_writes_nothing(self, wired: dict[str, Any]) -> None:
+    def test_empty_result_writes_nothing(self, wired: dict[str, Any], caplog: pytest.LogCaptureFixture) -> None:
         """An empty search must report the fact and skip the export."""
         wired["mistapi"].api.v1.sites.alarms.searchSiteAlarms.return_value = []
 
-        SiteSearchExporter.alarms()
+        with caplog.at_level(logging.INFO):
+            SiteSearchExporter.alarms()
 
+        assert (
+            "src.operations.exporting.export.site_search_exporter",
+            logging.INFO,
+            "! No alarm data found for this site",
+        ) in caplog.record_tuples
         wired["DataExporter"].write_with_format_selection.assert_not_called()
 
     def test_api_error_is_logged_and_does_not_raise(
