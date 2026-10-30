@@ -2,9 +2,9 @@
 
 Why:
     A screenshot of a double shows the double, and not the portal. The browser tests therefore
-    run the real Juniper workflows. Only the Juniper gateway is replaced. The replacement answers
-    each call from the synthetic replies in tests/unit/juniper_rma/fixtures, so no test reaches
-    Juniper or Mist.
+    run the real Juniper workflows. Only the Juniper gateway is replaced. The replacement uses
+    synthetic replies from `tests/unit/prod_readiness/operations/exporting/juniper_rma/fixtures`.
+    No test reaches Juniper or Mist.
 
 Scope:
     The replies contain no customer value. Every e-mail address uses the example.com domain, and
@@ -21,6 +21,7 @@ from pathlib import Path  # WHY: the screenshot folder is computed from this fil
 from types import SimpleNamespace  # WHY: the session stand-in that the Juniper workflows read.
 from typing import Any  # WHY: the synthetic bodies are loosely typed JSON.
 
+from src.foundation.support.utils.menu_entry import MenuEntry  # WHY: the row shape that the portal lists and runs.
 from src.operations.exporting.juniper_rma.api.gateway import (
     JuniperTransportError,
 )  # WHY: the failure that a test can queue.
@@ -49,9 +50,10 @@ from src.operations.exporting.juniper_rma.workflows.reference_reads import (  # 
     LovWorkflow,
     SoftwareVersionWorkflow,
 )
-from src.foundation.support.utils.menu_entry import MenuEntry  # WHY: the row shape that the portal lists and runs.
-from tests.unit.juniper_rma.fixtures import read_replies as replies  # WHY: the synthetic replies of the live shape.
-from tests.unit.juniper_rma.fixtures.fake_gateway import (  # WHY: the gateway double and its helpers.
+from tests.unit.prod_readiness.operations.exporting.juniper_rma.fixtures import (
+    read_replies as replies,
+)  # WHY: the synthetic replies of the live shape.
+from tests.unit.prod_readiness.operations.exporting.juniper_rma.fixtures.fake_gateway import (  # WHY: fixtures.
     FakeCall,
     FakeGateway,
     build_session,

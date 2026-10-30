@@ -77,6 +77,10 @@ files. Do not add a database or Redis service.
 **Rationale**: These locations keep feature tests in named directories and avoid adding direct
 children to overfull test directories.
 
+**Current path update, 2026-10-28**: After PR #4226 merged, its owner released the parser test
+for relocation to `tests/unit/marvis/mist/resources/gateway/overrides/test_cisco_config_converter.py`.
+The original path above records the initial implementation location.
+
 **Alternatives considered**:
 
 - Add test modules directly under `tests/unit/` or `tests/e2e/web_portal/`. Rejected because
