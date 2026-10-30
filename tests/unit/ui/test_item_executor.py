@@ -124,6 +124,7 @@ def test_execute_handles_generic_exception(
     ItemExecutor(tui_stub).execute()  # Trigger
     assert tui_stub.last_error == "boom"  # Error captured
     assert any("boom" in record.getMessage() for record in caplog.records)  # Confirm error detail reaches the log.
+    assert any(record.exc_info for record in caplog.records)  # Confirm the handler logs traceback details.
 
 
 def test_execute_autofills_apisession(tui_stub, make_item, monkeypatch: pytest.MonkeyPatch) -> None:
