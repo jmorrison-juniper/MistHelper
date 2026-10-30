@@ -1,16 +1,19 @@
 # Feature Specification: Required token resolution
 
-**Feature Branch**: `jmorrison-juniper-required-token-resolution`
+**Feature Branch**: `jmorrison-juniper-2861-credential-token-slice`
 
 **Created**: 2026-10-01
 
-**Status**: Verified locally. Publication requires the parent grant.
+**Status**: Publication authorized. Current-base validation precedes publication. Human review is required.
 
 **Input**: Repair one required-token slice. Part of [#2861](https://github.com/jmorrison-juniper/MistHelper/issues/2861).
 
-The campaign contains 31 candidates. This slice does not complete the campaign.
+The owner-approved baseline contains 64 candidates. This slice does not complete the campaign.
 Publication position 36 follows the read-only retry slice for issue #2752.
-The parent must grant a full verified-main SHA before publication or task-delivery completion.
+The parent granted publication against main SHA `76f976358f6217a9e7df48e3e5d4c4b6d63c5d14` on 2026-10-29.
+The grant does not authorize a merge or automatic merge.
+The separate `2861-token-conflict` record covers the CLI environment-variable conflict repair.
+This record covers only the backend session factory.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -106,4 +109,4 @@ This slice adds no persistent entity, schema, setting, or dependency.
 - Only `mist-ops-platform/src/shared/mist/session.py` requires a production change.
 - Existing provider methods remain the source boundaries. This slice adds no wrapper, adapter, alias, or class.
 - The primary CLI, settings, middleware, manifests, governance, and other owners' files remain read-only.
-- A local commit preserves the repair. Publication remains blocked until the parent grants the verified base.
+- The recovery branch preserves the original repair. Publication requires current-base validation and human review.
