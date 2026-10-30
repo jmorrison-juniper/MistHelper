@@ -93,7 +93,7 @@ The menu 64 filename concern is outside this change and remains separate from #3
 
 - [x] T021 Apply the saved implementation after refreshing main to `d30ef1690e9c00698e0e462f54de793c7a2093b9`.
 - [x] T022 Move the feature record to its managed numbered route.
-- [ ] T023 Run the required issue-scope tests and applicable local gates on current main.
+- [x] T023 Run the required issue-scope tests and applicable local gates on current main.
 - [ ] T024 Commit the verified files and open a pull request for coordinator review.
 
 ## Parallel Opportunities
