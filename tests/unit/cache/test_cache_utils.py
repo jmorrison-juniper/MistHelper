@@ -136,14 +136,45 @@ class TestRunCsvGenerator:
         assert CacheUtils._run_csv_generator(_gen, "out.csv") is True
         assert called["n"] == 1
 
-    def test_generator_exception_returns_false(self):
-        """Generator that raises must be swallowed and reported as failure."""
+    @pytest.mark.parametrize("error_type", [RuntimeError, NameError])
+    def test_generator_exception_returns_false(
+        self, error_type: type[Exception], caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Preserve the failure result and identify the callback error."""
+        error = error_type("generator failed")
 
-        def _gen():
-            raise RuntimeError("kaboom")
+        def _gen() -> None:
+            """Raise the callback error without an external request."""
+            raise error
 
         _gen.__name__ = "boom_gen"
-        assert CacheUtils._run_csv_generator(_gen, "out.csv") is False
+        with caplog.at_level(logging.ERROR):
+            assert CacheUtils._run_csv_generator(_gen, "out.csv") is False
+        assert len(caplog.records) == 1
+        record = caplog.records[0]
+        assert record.name == "src.foundation.persistence.cache.cache_utils"
+        assert record.msg == "Failed to generate %s using %s: %s"
+        assert record.args == ("out.csv", "boom_gen", error)
+        assert record.exc_info is not None
+        assert record.exc_info[0] is error_type
+        assert record.exc_info[1] is error
+        assert record.exc_info[2] is not None
+
+    @pytest.mark.parametrize("error_type", [KeyboardInterrupt, SystemExit, GeneratorExit])
+    def test_process_control_exception_propagates(
+        self, error_type: type[BaseException], caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Do not convert a process-control signal into a cache failure."""
+        error = error_type("stop generation")
+
+        def _gen() -> None:
+            """Stop the callback without a file or cloud change."""
+            raise error
+
+        with caplog.at_level(logging.ERROR), pytest.raises(error_type) as caught:
+            CacheUtils._run_csv_generator(_gen, "out.csv")
+        assert caught.value is error
+        assert caplog.records == []
 
 
 # ---------------------------------------------------------------------------
@@ -179,14 +210,42 @@ class TestCheckAndGenerateCsv:
         assert CacheUtils.check_and_generate_csv("missing.csv", gen, freshness_minutes=60) is True
         gen.assert_called_once()
 
-    def test_returns_false_when_generator_fails(self, fake_mh):
-        """Generator that raises causes a False return."""
+    @pytest.mark.parametrize("error_type", [ValueError, NameError])
+    def test_returns_false_when_generator_fails(
+        self, fake_mh: _FakeMH, tmp_path: Path, error_type: type[Exception], caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Preserve stale cache content and report the callback traceback."""
+        path = tmp_path / "nope.csv"
+        path.write_text("site_id\nprevious\n", encoding="utf-8")
+        os.utime(path, (0, 0))
+        error = error_type("refresh failed")
 
-        def _gen():
-            raise ValueError("nope")
+        def _gen() -> None:
+            """Fail before a callback can replace the cached file."""
+            raise error
 
         _gen.__name__ = "bad_gen"
-        assert CacheUtils.check_and_generate_csv("nope.csv", _gen, freshness_minutes=60) is False
+        with caplog.at_level(logging.ERROR):
+            assert CacheUtils.check_and_generate_csv("nope.csv", _gen, freshness_minutes=60) is False
+        assert path.read_text(encoding="utf-8") == "site_id\nprevious\n"
+        assert len(caplog.records) == 1
+        record = caplog.records[0]
+        assert record.name == "src.foundation.persistence.cache.cache_utils"
+        assert record.args == ("nope.csv", "bad_gen", error)
+        assert record.exc_info is not None
+        assert record.exc_info[1] is error
+        assert record.exc_info[2] is not None
+
+    def test_generator_writes_missing_cache(self, fake_mh: _FakeMH, tmp_path: Path) -> None:
+        """Retain the successful file result through the freshness dispatcher."""
+        path = tmp_path / "created.csv"
+
+        def _gen() -> None:
+            """Write only inside the test directory."""
+            path.write_text("site_id\ncreated\n", encoding="utf-8")
+
+        assert CacheUtils.check_and_generate_csv("created.csv", _gen, freshness_minutes=60) is True
+        assert path.read_text(encoding="utf-8") == "site_id\ncreated\n"
 
 
 # ---------------------------------------------------------------------------

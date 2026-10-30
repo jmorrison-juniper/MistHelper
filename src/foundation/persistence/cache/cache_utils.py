@@ -96,12 +96,15 @@ class CacheUtils:
     def _run_csv_generator(generate_function: Callable, file_name: str) -> bool:  # type: ignore[type-arg]  # Run generator
         """Invoke the generate_function to produce the CSV. Return True on success, False on failure."""
         logger.info("* Running %s to generate %s...", generate_function.__name__, file_name)  # Log before generating
-        try:  # The generator may raise. Never let that crash the caller
+        try:  # Callback failures must preserve the Boolean result expected by cache callers.
             generate_function()  # Produce or refresh the CSV file
             logger.info("! %s generated or refreshed.", file_name)  # Confirm success to operator
+            logger.debug("CSV generator completed for %s", file_name)  # Confirm that the callback returned normally.
             return True  # Generation succeeded
-        except Exception as error:  # Generation failed for any reason
-            logging.error("Failed to generate %s using %s: %s", file_name, generate_function.__name__, error)  # Log it
+        except Exception as error:  # Keep: callbacks share no exception type and callers expect False on failure.
+            logger.exception(  # Preserve the callback error type, traceback, and module for diagnosis.
+                "Failed to generate %s using %s: %s", file_name, generate_function.__name__, error
+            )
             return False  # Generation failed
 
     @staticmethod
