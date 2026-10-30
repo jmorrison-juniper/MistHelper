@@ -34,7 +34,7 @@ It adds no reader join, production scheduling hook, or native test dependency.
 | Portable ownership schedule | Three failures | Three passes |
 | Expanded portable lifecycle checks | Not used as before-repair proof | 12 passes |
 | Existing live transport tests | Earlier baseline run passed | 307 passes |
-| Complete affected unit and contract trees | Not used as before-repair proof | 484 passes before nine additional edge cases |
+| Complete affected unit and contract trees | Not used as before-repair proof | 493 passes |
 | Complete unit suite | Prior runs had inconsistent outcomes | 29924 passed, 25 skipped, 5 warnings |
 
 The expanded checks cover closure without receive, repeated close, concurrent close, and abort failure.
@@ -54,7 +54,7 @@ All commands use the isolated environment.
 | Command | Result |
 | - | - |
 | `.venv/bin/python -m pytest tests/unit/websocket_streams/live/transport/runtime/lifetime --no-cov -q` | 12 passed in 0.65 seconds |
-| `.venv/bin/python -m pytest tests/unit/websocket_streams tests/contract/websocket_streams --no-cov -q` | 484 passed in 26.73 seconds before nine additional edge cases |
+| `.venv/bin/python -m pytest tests/unit/websocket_streams tests/contract/websocket_streams --no-cov -q` | 493 passed in 26.55 seconds |
 | `.venv/bin/python -m pytest tests/unit --no-cov -q --tb=long` | 29924 passed, 25 skipped, 5 warnings in 745.98 seconds |
 | `.venv/bin/python -m pytest tests/contract/websocket_streams -q --no-cov` | 12 passed in 0.23 seconds |
 | `.venv/bin/python -m ruff check .` | All checks passed |
@@ -110,19 +110,26 @@ Publication and deployment remain excluded by the explicit user instruction.
 
 ## Scope and committed-test check
 
-One complete unit run passed with the repaired code.
+One complete unit run passed with the repaired production code and all 12 lifecycle checks.
 The run used no native interposer or socket-method replacement.
 Its complete output, including warnings, is `full-unit-after.log`.
 The original native reproduction remains separate diagnostic evidence.
 
-The committed-test quality procedure requires a local commit first.
-Its preflight and comparison results belong in the session validation logs.
-The check must report zero new findings before any future publication.
-This investigation does not authorize publication.
+The first committed-test quality comparison checked three files and reported four new HTTP failure-mode findings.
+The lifetime fixture unnecessarily imported an HTTP API fake through a runner helper.
+The fixture now constructs connection settings directly. It still exercises the same runtime and connection methods.
+This removes an unrelated HTTP client from a socket-lifetime test without changing assertions or the quality baseline.
+The final affected selection passes 493 tests after this fixture-only change.
+Production code remains identical to the full-suite-tested repair.
 
 After the full run, `main` advanced to `0c84e9f536204d17ec2e40fa98d101b329240957`.
 That commit changes only `mist-ops-platform/tests/unit/api/test_auth.py`.
 It changes no root unit test, transport source, or shared test configuration.
-The local branch can rebase onto that commit without repeating the unchanged root unit suite.
+The local branch rebased onto that commit.
+The affected tests and structure checks passed after the rebase.
+The committed-test quality procedure must run again after the fixture commit.
+Its preflight and comparison results belong in the session validation logs.
+The check must report zero new findings before any future publication.
+This investigation does not authorize publication.
 
 Dependency audit, container checks, and generated menu checks do not apply to this transport-only change.
