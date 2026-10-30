@@ -1,4 +1,4 @@
-"""Preserve required values, selector reasons, and keyboard recovery for menu 63."""
+"""Preserve menu 63 values, selector reasons, and keyboard recovery in the web-portal shard."""
 
 import json
 

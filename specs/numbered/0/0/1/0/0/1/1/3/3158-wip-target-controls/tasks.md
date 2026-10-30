@@ -27,7 +27,7 @@
 **Independent Test**: Select three WIP rows, then one normal row. Remove warning metadata and require acceptance to fail.
 
 - [x] T007 [US1] Add category and safety proofs. (delivered: tests/unit/web_portal/wip_target_controls/test_metadata.py)
-- [x] T008 [US1] Add caution browser proofs. (delivered: tests/e2e/wip_target_controls/test_controls.py)
+- [x] T008 [US1] Add caution browser proofs. (delivered: tests/e2e/web_portal/wip_target_controls/test_controls.py)
 - [x] T009 [US1] Derive WIP presentation metadata. (delivered: web_portal/services/operation.py)
 - [x] T010 [US1] Render and reset the caution. (delivered: web_portal/static/js/operations.js, web_portal/templates/operations.html)
 
@@ -38,7 +38,7 @@
 **Independent Test**: Select a site and switch, run menu 63, and count exactly one virtual chassis call.
 
 - [x] T011 [US2] Add the real handler output contract. (delivered: tests/contract/web_portal/wip_target_controls/test_handler_outputs.py)
-- [x] T012 [US2] Add target, keyboard, failure, stale selection, and recovery proofs. (delivered: tests/e2e/wip_target_controls/test_failure_recovery.py)
+- [x] T012 [US2] Add target, keyboard, failure, stale selection, and recovery proofs. (delivered: tests/e2e/web_portal/wip_target_controls/test_failure_recovery.py)
 - [x] T013 [US2] Complete menu 63 descriptors. (delivered: web_portal/services/operation.py)
 - [x] T014 [US2] Preserve required Run gates and reset stale targets. (delivered: web_portal/static/js/operations.js)
 
@@ -49,12 +49,12 @@
 **Independent Test**: Run menus 64 and 65 through actual CLI handler and local writer boundaries.
 
 - [x] T015 [US3] Prove both actual client exports. (delivered: tests/contract/web_portal/wip_target_controls/test_handler_outputs.py)
-- [x] T016 [US3] Prove single Site controls and non-WIP recovery. (delivered: tests/e2e/wip_target_controls/test_controls.py)
+- [x] T016 [US3] Prove single Site controls and non-WIP recovery. (delivered: tests/e2e/web_portal/wip_target_controls/test_controls.py)
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
 - [x] T017 Add the bounded release note. (delivered: changelog.d/issue-3158-wip-target-controls.md)
-- [x] T018 Run the combined native, route, browser, safety, refusal, empty-reason, and logging selectors. (delivered: tests/e2e/wip_target_controls/test_controls.py)
+- [x] T018 Run the combined native, route, browser, safety, refusal, empty-reason, and logging selectors. (delivered: tests/e2e/web_portal/wip_target_controls/test_controls.py)
 - [x] T019 Run applicable local gates and direct negative guards without baseline or exclusion changes. (delivered: tests/unit/web_portal/wip_target_controls/test_metadata.py)
 - [x] T020 Verify owned cleanup and record honest private template evidence before the local commit. (delivered: specs/3158-wip-target-controls/tasks.md)
 
