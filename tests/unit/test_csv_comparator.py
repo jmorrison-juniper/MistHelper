@@ -732,6 +732,32 @@ class TestSkipFilters:
 class TestParseFailures:
     """Tests for parse failure recording."""
 
+    FAILURE_CASES: list[tuple[str, dict[str, object]]] = [
+        (
+            "_record_mist_parse_failure",
+            {
+                "device_serial": "SN1",
+                "device_identifier": "Dev1",
+                "raw_address": "bad address",
+                "parsed_result": {"parse_reason": "missing_state"},
+            },
+        ),  # WHY: cover Mist parse failure records.
+        (
+            "_record_device_parse_failure",
+            {
+                "device_serial": "SN2",
+                "device_identifier": "Dev2",
+                "error_msg": "connection timeout",
+            },
+        ),  # WHY: cover device processing failure records.
+    ]  # WHY: apply each invalid ID shape to both failure paths.
+    INVALID_DEVICES: list[dict[str, object]] = [
+        {"site_id": "s1", "site_name": "Site1"},
+        {"site_id": "s1", "site_name": "Site1", "id": ""},
+        {"site_id": "s1", "site_name": "Site1", "id": " "},
+        {"site_id": "s1", "site_name": "Site1", "id": 42},
+    ]  # WHY: cover missing, blank, whitespace-only, and non-string IDs.
+
     def test_record_mist_parse_failure(self) -> None:
         """Records Mist parse failure with details."""
         comp = _make_comparator()
@@ -744,6 +770,7 @@ class TestParseFailures:
         )
         assert len(comp.parse_failures) == 1
         assert comp.parse_failures[0]["failure_reason"] == "missing_state"
+        assert comp.parse_failures[0]["device_id"] == "d1"
         assert comp.counters.parse_failures == 1
 
     def test_record_device_parse_failure(self) -> None:
@@ -756,8 +783,24 @@ class TestParseFailures:
             error_msg="connection timeout",
         )
         assert len(comp.parse_failures) == 1
+        assert comp.parse_failures[0]["device_id"] == "d1"
         assert "connection timeout" in comp.parse_failures[0]["failure_reason"]
         assert comp.counters.parse_failures == 1
+
+    def test_failure_records_reject_invalid_device_ids(self) -> None:
+        """Both failure paths reject missing, blank, whitespace-only, and non-string IDs."""
+        for failure_method, failure_args in self.FAILURE_CASES:  # WHY: check each record path.
+            for device in self.INVALID_DEVICES:  # WHY: check every invalid ID shape.
+                comparator = _make_comparator()  # WHY: isolate each rejected record.
+                try:
+                    getattr(comparator, failure_method)(  # WHY: select and call the record path.
+                        device=device, **failure_args  # WHY: submit one invalid device.
+                    )
+                except ValueError as error:
+                    assert "device id is required" in str(error).lower()  # WHY: preserve the operator error.
+                else:
+                    raise AssertionError("Invalid device ID did not fail.")  # WHY: fail when validation is bypassed.
+                assert comparator.parse_failures == []  # WHY: do not append an unidentified failure.
 
 
 # ================================================================

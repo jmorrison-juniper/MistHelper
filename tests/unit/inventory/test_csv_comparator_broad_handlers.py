@@ -66,7 +66,11 @@ class TestNarrowedCsvComparatorExceptions:
         comp.comparison_serials = {"SN1": "12345"}  # Force the device through comparison processing.
         comp._compare_and_record = MagicMock(side_effect=RuntimeError("bad row"))  # Model one bad device row.
         with caplog.at_level("WARNING"):
-            comp._process_single_device({"serial": "SN1", "site_address": "1 Main"}, "SN1", "AP-1")
+            comp._process_single_device(
+                {"id": "device-1", "serial": "SN1", "site_address": "1 Main"},
+                "SN1",
+                "AP-1",
+            )
         assert "RuntimeError" in caplog.text  # Broad handler must include the exception type.
         assert comp.counters.comparison_failures == 1  # The batch continues with a failure signal.
 
