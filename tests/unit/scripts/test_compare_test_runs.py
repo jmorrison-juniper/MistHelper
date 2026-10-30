@@ -2,6 +2,7 @@
 
 import json
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 
@@ -37,7 +38,7 @@ def test_loads_result_event_with_menu_option(tmp_path: Path) -> None:
 def test_empty_event_file_has_no_results(tmp_path: Path) -> None:
     """Keep a valid empty input distinct from a missing result selector."""
     event_file = tmp_path / "events.jsonl"
-    event_file.write_text("", encoding="utf-8")
+    event_file.write_bytes(b"")
 
     loaded_events = TestComparator().load_events(event_file)
 
@@ -45,10 +46,16 @@ def test_empty_event_file_has_no_results(tmp_path: Path) -> None:
     assert loaded_events["summary"] is None
 
 
-def test_malformed_json_is_reported_and_skipped(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_malformed_json_is_reported_and_skipped(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Report malformed records without treating them as result events."""
     event_file = tmp_path / "events.jsonl"
     event_file.write_text("{invalid json}\n", encoding="utf-8")
+    parse_error = json.JSONDecodeError("invalid", "", 0)
+    monkeypatch.setattr(json, "loads", Mock(side_effect=parse_error))
 
     loaded_events = TestComparator().load_events(event_file)
 
