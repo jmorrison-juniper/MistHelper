@@ -62,6 +62,10 @@ OPTIONS_URL = re.compile(r".*/upgrade/org/options$")  # The options page.
 CONFIRM_URL = re.compile(r".*/upgrade/org/confirm$")  # The confirm page.
 JOB_URL = re.compile(r".*/upgrade/org/jobs/[^/?#]+$")  # The progress page of one operation.
 FLASH = "flash-message"  # The in-page message of a refused request.
+IN_VIEW_SCRIPT = (  # True when the whole element box sits inside the viewport.
+    "element => { const box = element.getBoundingClientRect();"
+    " return box.top >= 0 && box.bottom <= window.innerHeight; }"
+)
 
 pytestmark = pytest.mark.journey  # Every test of this file is an operator journey.
 
@@ -317,6 +321,8 @@ class TestMultiSiteOptionsJourneys:
         reader.page.get_by_test_id("org-upgrade-review").scroll_into_view_if_needed()  # The operator scrolls down.
         reader.review(expect_confirm=False)  # All families selected and no version.
         expect(reader.page.get_by_test_id(FLASH)).to_be_in_viewport(ratio=1)  # Wait for the whole message to appear.
+        in_view = reader.page.get_by_test_id(FLASH).evaluate(IN_VIEW_SCRIPT)  # The browser checks the full message.
+        assert in_view is True  # The message fills the viewport after the scroll completes.
 
     def test_unknown_version_names_the_control(self, reader: MultiSiteJourney) -> None:
         """The selects refuse an unavailable version, and an empty plan names the device heading."""
