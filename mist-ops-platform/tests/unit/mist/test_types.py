@@ -69,6 +69,7 @@ class TestMistEndpointOptionalFields:
             raise AssertionError("Should be frozen")
         except AttributeError:
             pass
+        assert endpoint.entity_type == "test"
 
     def test_list_method_defaults_none(self) -> None:
         endpoint = MistEndpoint(
