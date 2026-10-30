@@ -604,6 +604,7 @@ class TestEmitArpTable:
         ARPCommandManager._emit_arp_table(table, 3, True)
         # Just verify the debug branch was taken.
         table.get_string.assert_called_once()
+        assert caplog.records[-1].getMessage() == "\nTABLE"  # Require the full rendered table text.
 
     def test_non_debug_reports_row_count(self, caplog):
         """debug=False emits a summary line only."""
