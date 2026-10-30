@@ -782,7 +782,9 @@ function updateDependentField(param, parentValue) {
     var group = document.getElementById('param-group-' + param.name);
     var control = document.getElementById('param-' + param.name);
     if (!group || !control) return;
-    control.value = '';
+    if (param.param_type === 'device' || param.param_type === 'client') {
+        control.value = '';  // A new parent target must not retain an old device or client selection.
+    }
 
     if (!parentValue) {
         group.style.display = 'none';
