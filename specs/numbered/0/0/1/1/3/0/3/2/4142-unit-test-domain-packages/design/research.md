@@ -1400,6 +1400,11 @@ The before-and-after collections contain 154 node IDs each.
 The IDs match after the source path changes to the mapped destination.
 Ruff, Black, compilation, and `git diff --check` pass.
 No test-quality baseline entry or Ruff path override names this test.
+The test-quality input preflight passed one test and validated four inputs.
+The committed changed-from test-quality gate passed.
+It checked 1,209 files and 609 findings.
+It skipped 52 files and reported zero parse errors.
+It reported `gate: 0 new findings vs baseline`.
 The issue remains open, and the pull request remains a draft.
 
 ## Configuration relocation fixture repair, 2026-10-28
