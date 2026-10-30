@@ -78,7 +78,7 @@ def test_msp_org_selector_skip_calls_fallback() -> None:
 
     selector.select()  # Run the MSP/org selection workflow
 
-    select_org.assert_called_once()  # Fallback must be invoked exactly once on skip
+    assert select_org.call_count == 1  # Fallback must be invoked exactly once on skip
 
 
 def test_msp_org_selector_updates_org_id() -> None:
