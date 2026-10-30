@@ -28,6 +28,7 @@ from __future__ import annotations
 import dataclasses
 import logging
 from collections.abc import Iterator
+from http import HTTPStatus
 from typing import Any
 
 import pytest
@@ -381,15 +382,14 @@ def test_a_refused_signin_answers_no_credential(leak_client: FlaskClient, leak_a
     """A refused sign-in answers no body, header, or cookie that holds a value.
 
     Why:
-        A refusal is the answer that an attacker sees most often, because a
-        wrong guess produces one every time.
+        Attackers most often see a refusal because each wrong guess produces one.
 
     Args:
         leak_client: The test client.
         leak_app: The portal application.
     """
     leak_app.config["CLOUD_LOGIN"] = QuietLogin([CLOUD_REFUSED])
-    assert (answer := post_signin(leak_client)).status_code == 400  # WHY: Refusal must not look successful.
+    assert (answer := post_signin(leak_client)).status_code == HTTPStatus.BAD_REQUEST  # WHY: Refusal is not success.
     assert_no_secret(response_surfaces(answer), "the refused sign-in answer")
 
 
