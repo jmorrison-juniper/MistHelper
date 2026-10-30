@@ -30,8 +30,8 @@ python scripts/bootstrap_worktree.py
 ```
 
 On macOS or Linux, run `python3 scripts/bootstrap_worktree.py`, then `source .venv/bin/activate`.
-The bootstrap installs `requirements.txt` and `requirements-dev.txt`, downloads the Chromium
-browser for the browser tests, and sets the git credential account to `jmorrison-juniper`.
+The bootstrap runs `uv sync --locked --extra dev`, downloads Chromium for the browser tests, and
+sets the git credential account to `jmorrison-juniper`.
 
 The `misthelper-devtools` package in `requirements-dev.txt` supplies the shared commands:
 `test-quality-analyzer`, `complexity-gate`, `check-citations`, `speckit-task-audit`,

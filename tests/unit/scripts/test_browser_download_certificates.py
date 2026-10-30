@@ -105,25 +105,22 @@ def test_the_browser_download_adds_the_option_one_time(
     assert options.count(SYSTEM_CA_OPTION) == 1  # WHY: A second copy adds nothing and hides the caller value.
 
 
-def test_the_pip_install_gets_no_node_option(
+def test_the_locked_uv_sync_gets_no_node_option(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, recorded_run: _RecordedRun
 ) -> None:
-    """FR-004: the pip subprocess gets no new Node option."""
-    logger.info("Checking the environment of the pip install")  # WHY: Report the plan before the work.
+    """FR-004: the UV sync subprocess gets no new Node option."""
+    logger.info("Checking the environment of the UV sync")  # WHY: Report the plan before the work.
     monkeypatch.delenv("NODE_OPTIONS", raising=False)  # WHY: Start from a caller that set no Node option.
-    monkeypatch.setattr("scripts.bootstrap_worktree.shutil.which", lambda name: None)  # Keep host uv out of this case.
+    monkeypatch.setattr("scripts.bootstrap_worktree.shutil.which", lambda name: "/tools/uv")
     monkeypatch.setattr("scripts.bootstrap_worktree.PipIndexProbe.fallback_index", lambda self: None)  # WHY: No probe.
-    logger.debug("Prepared the pip-only test environment.")  # Confirm the local selection without caller values.
-    logger.info("Writing the local requirement fixture.")  # Trace before the temporary file write.
-    (tmp_path / "requirements.txt").write_text("", encoding="utf-8")  # WHY: Give the bootstrap one file.
-    logger.debug("Wrote one local requirement fixture.")  # Report the write count.
+    logger.debug("Prepared the UV sync test environment.")  # Confirm the local selection without caller values.
 
-    logger.info("Running the local pip installation test.")  # Trace before the simulated install.
-    WorktreeBootstrapper(tmp_path).install_requirements()  # WHY: Run the pip install against the recorder.
-    logger.debug("Recorded %s pip install commands.", len(recorded_run.commands))  # Report no environment values.
+    logger.info("Running the local locked sync test.")  # Trace before the simulated sync.
+    WorktreeBootstrapper(tmp_path).sync_dependencies()  # WHY: Run the locked sync against the recorder.
+    logger.debug("Recorded %s UV commands.", len(recorded_run.commands))  # Report no environment values.
 
-    assert recorded_run.commands[0][1:3] == ["-m", "pip"]  # WHY: The recorded run is the pip install.
-    assert "NODE_OPTIONS" not in recorded_run.environments[0]  # WHY: pip starts no Node runtime.
+    assert recorded_run.commands[0] == ["/tools/uv", "sync", "--locked", "--extra", "dev"]  # Verify the locked tool.
+    assert "NODE_OPTIONS" not in recorded_run.environments[0]  # UV must not inherit browser-only options.
 
 
 def test_the_browser_download_keeps_the_caller_proxy(
@@ -173,20 +170,20 @@ def test_the_report_prints_the_repair_command_with_the_option(tmp_path: Path, ca
     logger.info("Checking the final report of a failed download")  # WHY: Report the plan before the work.
     caplog.set_level(logging.WARNING, logger="bootstrap_worktree")  # WHY: Capture the warning lines.
 
-    report_result(WorktreeBootstrapper(tmp_path), ["requirements.txt"], browser_ready=False)  # WHY: Print it.
+    report_result(WorktreeBootstrapper(tmp_path), browser_ready=False)  # WHY: Print it.
 
     assert SYSTEM_CA_OPTION in caplog.text  # WHY: The printed repair must work behind the proxy.
     assert PLAYWRIGHT_INSTALL_HINT in caplog.text  # WHY: FR-007 keeps the download command in the line.
 
 
-def test_a_report_with_no_installed_file_still_prints_the_repair_command(
+def test_a_failed_browser_report_keeps_the_locked_sync_summary(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """FR-005 edge case: a report with an empty file list still names the repair command."""
-    logger.info("Checking the final report when no requirement file installed")  # WHY: Report the plan first.
+    """A browser failure does not hide the completed dependency sync."""
+    logger.info("Checking the final report after the browser failure")  # WHY: Report the plan first.
     caplog.set_level(logging.INFO, logger="bootstrap_worktree")  # WHY: Capture the file line and the warnings.
 
-    report_result(WorktreeBootstrapper(tmp_path), [], browser_ready=False)  # WHY: A worktree with no file.
+    report_result(WorktreeBootstrapper(tmp_path), browser_ready=False)  # WHY: The browser still needs a repair hint.
 
-    assert "Installed requirement files: none" in caplog.text  # WHY: The empty list prints a plain word.
+    assert "Installed dependencies with uv sync --locked --extra dev." in caplog.text
     assert SYSTEM_CA_OPTION in caplog.text  # WHY: The repair line does not depend on the file list.
