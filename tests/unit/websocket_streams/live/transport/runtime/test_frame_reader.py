@@ -12,6 +12,7 @@ from websocket import ABNF  # Tests use concrete opcode values.
 
 from src.mist.realtime.websocket_streams.live.transport.runtime.reader.contracts import ConnectionClosed, FrameRead
 from src.mist.realtime.websocket_streams.live.transport.runtime.reader.frame_reader import FrameReader
+from src.mist.realtime.websocket_streams.live.transport.runtime.reader.socket_runtime import SocketRuntime
 
 
 class FrameSocket:
@@ -75,7 +76,9 @@ class QuietSocket(FrameSocket):
 @pytest.mark.parametrize("payload, expected", [(b"", 1005), ((1000).to_bytes(2, "big"), 1000)])
 def test_close_frame_preserves_status_behavior(payload: bytes, expected: int) -> None:
     """Map empty and populated close frames to their expected status."""
-    reader = FrameReader(FrameSocket(ABNF.OPCODE_CLOSE, payload), threading.Event(), lambda: 1.0, 20.0)  # Build.
+    reader = FrameReader(
+        SocketRuntime(FrameSocket(ABNF.OPCODE_CLOSE, payload)), threading.Event(), lambda: 1.0, 20.0
+    )  # Share explicit runtime ownership.
     with pytest.raises(ConnectionClosed) as caught:  # A close frame must end the read.
         reader.read(0.1)  # Read the configured close frame.
     assert caught.value.code == expected  # Preserve RFC 6455 and normal close-code behavior.
@@ -83,8 +86,12 @@ def test_close_frame_preserves_status_behavior(payload: bytes, expected: int) ->
 
 def test_data_and_control_frames_preserve_behavior() -> None:
     """Return application data and suppress control frames."""
-    data_reader = FrameReader(FrameSocket(ABNF.OPCODE_BINARY, b"value"), threading.Event(), lambda: 1.0, 20.0)  # Data.
-    pong_reader = FrameReader(FrameSocket(ABNF.OPCODE_PONG, b""), threading.Event(), lambda: 1.0, 20.0)  # Control.
+    data_reader = FrameReader(
+        SocketRuntime(FrameSocket(ABNF.OPCODE_BINARY, b"value")), threading.Event(), lambda: 1.0, 20.0
+    )  # Application data uses the shared runtime.
+    pong_reader = FrameReader(
+        SocketRuntime(FrameSocket(ABNF.OPCODE_PONG, b"")), threading.Event(), lambda: 1.0, 20.0
+    )  # Control frames use the same runtime contract.
     assert data_reader.read(0.1) == FrameRead(ABNF.OPCODE_BINARY, b"value")  # Return raw application bytes.
     assert pong_reader.read(0.1) is None  # Keep control frames out of application output.
 
@@ -95,7 +102,7 @@ def test_keepalive_pings_then_closes_after_two_intervals() -> None:
     idle_socket, peer_socket = socketpair()  # The peer stays silent for both keepalive decisions.
     with idle_socket, peer_socket:  # Close both real sockets after the test.
         socket = QuietSocket(idle_socket)  # Select sees no readable network data.
-        reader = FrameReader(socket, threading.Event(), lambda: next(moments), 10.0)  # Inject the quiet clock.
+        reader = FrameReader(SocketRuntime(socket), threading.Event(), lambda: next(moments), 10.0)  # Quiet clock.
         assert reader.read(0.0) is None  # The first quiet interval sends a ping and returns no data.
         with pytest.raises(ConnectionClosed) as caught:  # The second quiet interval closes the dead peer.
             reader.read(0.0)  # Run the second keepalive decision.
@@ -107,7 +114,7 @@ def test_tls_buffer_reads_without_network_wait() -> None:
     idle_socket, peer_socket = socketpair()  # The peer sends no new kernel data.
     with idle_socket, peer_socket:  # Close both sockets after the test.
         reader = FrameReader(
-            TlsBufferedSocket(PendingRawSocket(idle_socket, 9)), threading.Event(), time.monotonic, 20.0
+            SocketRuntime(TlsBufferedSocket(PendingRawSocket(idle_socket, 9))), threading.Event(), time.monotonic, 20.0
         )
         started = time.monotonic()  # Measure the operator-visible wait.
         frame = reader.read(3.0)  # Read the frame that TLS already holds.
@@ -121,6 +128,6 @@ def test_empty_tls_buffer_waits_for_socket_timeout() -> None:
     idle_socket, peer_socket = socketpair()  # The peer sends no data.
     with idle_socket, peer_socket:  # Close both sockets after the test.
         reader = FrameReader(
-            TlsBufferedSocket(PendingRawSocket(idle_socket, 0)), threading.Event(), time.monotonic, 20.0
+            SocketRuntime(TlsBufferedSocket(PendingRawSocket(idle_socket, 0))), threading.Event(), time.monotonic, 20.0
         )
         assert reader.read(0.05) is None  # A quiet socket returns no frame.

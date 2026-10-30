@@ -4,7 +4,10 @@ from __future__ import annotations  # Keep annotations lazy for Python 3.13.
 
 import logging  # Socket actions use the shared structured logger.
 import select  # Read waits must not change the shared socket timeout.
+import threading  # Receive and close must preserve the same descriptor lifetime.
 from typing import Any  # websocket-client is partly untyped.
+
+import websocket  # Closed reads use the existing transport exception contract.
 
 from src.mist.realtime.websocket_streams.live.transport.runtime.logging.structured_logger import (
     StructuredTransportLogger,
@@ -65,15 +68,20 @@ class SocketRuntime:
     def __init__(self, socket: Any) -> None:
         """Store the caller-owned websocket-client socket."""
         self._socket = socket  # The transport client controls socket lifetime.
+        self._receiving = threading.Lock()  # Close must retain descriptors used by native receive.
+        self._closed = threading.Event()  # Refuse reads that arrive after abort starts.
 
     def receive(self, timeout: float) -> tuple[int, object] | None:
         """Receive one frame when the socket becomes ready."""
-        if not SocketReadiness.ready(self._socket, timeout):  # Keep waits independent of socket timeout.
-            return None  # Let the frame reader apply keepalive behavior.
-        logger.emit(logging.DEBUG, "socket_receive_started")  # Log before receiving a frame.
-        opcode, payload = self._socket.recv_data(control_frame=True)  # Receive data and control frames.
-        logger.emit(logging.DEBUG, "socket_receive_completed", {"code": int(opcode)})  # Log safe metadata.
-        return int(opcode), payload  # Return the normalized opcode and unlogged payload.
+        with self._receiving:  # Keep readiness and native receive inside one descriptor lifetime.
+            if self._closed.is_set():  # A queued reader must not use a descriptor after abort.
+                raise websocket.WebSocketConnectionClosedException("The WebSocket connection is closed.")
+            if not SocketReadiness.ready(self._socket, timeout):  # Keep waits independent of socket timeout.
+                return None  # Let the frame reader apply keepalive behavior.
+            logger.emit(logging.DEBUG, "socket_receive_started")  # Log before receiving a frame.
+            opcode, payload = self._socket.recv_data(control_frame=True)  # Receive data and control frames.
+            logger.emit(logging.DEBUG, "socket_receive_completed", {"code": int(opcode)})  # Log safe metadata.
+            return int(opcode), payload  # Return the normalized opcode and unlogged payload.
 
     def ping(self) -> None:
         """Send one WebSocket ping control frame."""
@@ -82,9 +90,11 @@ class SocketRuntime:
     def close(self) -> None:
         """Abort, close, and shut down the socket."""
         logger.emit(logging.DEBUG, "socket_close_started")  # Log before the close sequence.
+        self._closed.set()  # Prevent another receive from entering after the active receive exits.
         if hasattr(self._socket, "abort"):  # websocket-client abort wakes a blocked reader.
             self._socket.abort()  # Abort before close so recv_data stops promptly.
-        self._socket.close()  # Ask websocket-client to process close state.
-        if hasattr(self._socket, "shutdown"):  # websocket-client shutdown handles CLOSE_WAIT sockets.
-            self._socket.shutdown()  # Shutdown is safe after close.
+        with self._receiving:  # Native poll can retain the descriptor until receive returns.
+            self._socket.close()  # Release the descriptor only after its active reader exits.
+            if hasattr(self._socket, "shutdown"):  # websocket-client shutdown handles CLOSE_WAIT sockets.
+                self._socket.shutdown()  # Shutdown is safe after close.
         logger.emit(logging.DEBUG, "socket_close_completed", {"status": "closed"})  # Log completion.
