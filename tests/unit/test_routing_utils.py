@@ -970,10 +970,12 @@ class TestErrorHandling:
         ru._cleanup_websocket(ws_mgr, False)
         ws_mgr.disconnect.assert_called_once()
 
-    def test_cleanup_websocket_error(self, ru: RoutingUtils) -> None:
+    def test_cleanup_websocket_error(self, ru: RoutingUtils, caplog: pytest.LogCaptureFixture) -> None:
+        """Require the cleanup warning so a disconnect failure stays visible."""
         ws_mgr = MagicMock()
         ws_mgr.disconnect.side_effect = RuntimeError("cleanup fail")
         ru._cleanup_websocket(ws_mgr, False)  # should not raise
+        assert caplog.record_tuples == [("root", logging.WARNING, "WebSocket cleanup error: cleanup fail")]
 
 
 # ===================================================================
