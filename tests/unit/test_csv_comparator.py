@@ -732,6 +732,32 @@ class TestSkipFilters:
 class TestParseFailures:
     """Tests for parse failure recording."""
 
+    FAILURE_CASES: list[tuple[str, dict[str, object]]] = [
+        (
+            "_record_mist_parse_failure",
+            {
+                "device_serial": "SN1",
+                "device_identifier": "Dev1",
+                "raw_address": "bad address",
+                "parsed_result": {"parse_reason": "missing_state"},
+            },
+        ),  # WHY: cover Mist parse failure records.
+        (
+            "_record_device_parse_failure",
+            {
+                "device_serial": "SN2",
+                "device_identifier": "Dev2",
+                "error_msg": "connection timeout",
+            },
+        ),  # WHY: cover device processing failure records.
+    ]  # WHY: apply each invalid ID shape to both failure paths.
+    INVALID_DEVICES: list[dict[str, object]] = [
+        {"site_id": "s1", "site_name": "Site1"},
+        {"site_id": "s1", "site_name": "Site1", "id": ""},
+        {"site_id": "s1", "site_name": "Site1", "id": " "},
+        {"site_id": "s1", "site_name": "Site1", "id": 42},
+    ]  # WHY: cover missing, blank, whitespace-only, and non-string IDs.
+
     def test_record_mist_parse_failure(self) -> None:
         """Records Mist parse failure with details."""
         comp = _make_comparator()
@@ -762,37 +788,14 @@ class TestParseFailures:
         assert comp.counters.parse_failures == 1
 
     def test_failure_records_reject_invalid_device_ids(self) -> None:
-        """Both failure paths reject missing, blank, and non-string device IDs."""
-        failure_cases: list[tuple[str, dict[str, object]]] = [
-            (
-                "_record_mist_parse_failure",
-                {
-                    "device_serial": "SN1",
-                    "device_identifier": "Dev1",
-                    "raw_address": "bad address",
-                    "parsed_result": {"parse_reason": "missing_state"},
-                },
-            ),
-            (
-                "_record_device_parse_failure",
-                {
-                    "device_serial": "SN2",
-                    "device_identifier": "Dev2",
-                    "error_msg": "connection timeout",
-                },
-            ),
-        ]  # WHY: cover both failure-record entry points.
-        invalid_devices: list[dict[str, object]] = [
-            {"site_id": "s1", "site_name": "Site1"},
-            {"site_id": "s1", "site_name": "Site1", "id": ""},
-            {"site_id": "s1", "site_name": "Site1", "id": 42},
-        ]  # WHY: cover absent, blank, and non-string IDs.
-        for failure_method, failure_args in failure_cases:  # WHY: check each record path.
-            for device in invalid_devices:  # WHY: check every invalid ID shape.
+        """Both failure paths reject missing, blank, whitespace-only, and non-string IDs."""
+        for failure_method, failure_args in self.FAILURE_CASES:  # WHY: check each record path.
+            for device in self.INVALID_DEVICES:  # WHY: check every invalid ID shape.
                 comparator = _make_comparator()  # WHY: isolate each rejected record.
-                recorder = getattr(comparator, failure_method)  # WHY: select the tested path.
                 try:
-                    recorder(device=device, **failure_args)  # WHY: submit one invalid device.
+                    getattr(comparator, failure_method)(  # WHY: select and call the record path.
+                        device=device, **failure_args  # WHY: submit one invalid device.
+                    )
                 except ValueError as error:
                     assert "device id is required" in str(error).lower()  # WHY: preserve the operator error.
                 else:

@@ -14,7 +14,7 @@
 ## Phase 2: Foundational
 
 - [x] T003 Add scanner detection tests and a guard test in `tests/guardrails/test_issue_2753_csv_device_id_scan.py`. (delivered: `tests/guardrails/test_issue_2753_csv_device_id_scan.py`)
-- [x] T004 Add missing, blank, non-string, and valid device ID behavior tests in `tests/unit/test_csv_comparator.py`. (delivered: `tests/unit/test_csv_comparator.py`)
+- [x] T004 Add missing, blank, whitespace-only, non-string, and valid device ID tests in `tests/unit/test_csv_comparator.py`. (delivered: `tests/unit/test_csv_comparator.py`)
 
 ## Phase 3: User Story 1 - Identify every failed device record (Priority: P1)
 
@@ -36,7 +36,7 @@
 ## Phase 4: Polish and Cross-Cutting Concerns
 
 - [x] T010 Run the focused tests and the controlled scan mutation described in `specs/numbered/0/0/0/4/2/0/0/3/2753-csv-device-id-validation/design/quickstart.md`. (delivered: 120 focused tests passed; the synthetic mutation was detected)
-- [x] T011 Run applicable local gates and both test-quality ratchets without changing `.github/test-quality-baseline.json`. (delivered: 120 tests passed, 93% module coverage, applicable gates passed, and both ratchets reported zero new findings)
+- [ ] T011 Run applicable local gates and both test-quality ratchets without changing `.github/test-quality-baseline.json`.
 - [x] T012 Analyze `specs/numbered/0/0/0/4/2/0/0/3/2753-csv-device-id-validation/spec.md`, `plan.md`, and `tasks.md`. (delivered: manual review found complete requirement coverage and no conflicts; the prerequisite script could not run because `pwsh` is unavailable)
 
 ## Dependencies and Execution Order
