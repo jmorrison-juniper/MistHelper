@@ -38,6 +38,7 @@ class ShellConnection:
 
     _socket: Any | None  # The socket exists only after open.
     _reader: FrameReader | None  # The reader follows the socket lifetime.
+    _runtime: SocketRuntime | None  # Close and receive share descriptor ownership.
 
     def __init__(
         self,
@@ -51,15 +52,18 @@ class ShellConnection:
         self._factory, self._clock = factory, clock  # Store the socket factory and clock.
         self._closed, self._lock = threading.Event(), threading.Lock()  # Coordinate close and state access.
         self._socket, self._reader = None, None  # Create empty connection references.
+        self._runtime = None  # Open creates the shared descriptor owner.
         self._log = StructuredTransportLogger(logging.getLogger(__name__))  # Emit bounded JSON records.
 
     def open(self, url: str) -> None:
         """Validate, open, and publish one shell socket."""
         socket = self._create(url)  # Validate the address and build the configured socket.
+        runtime = SocketRuntime(socket)  # One owner protects both receive and close.
         with self._lock:  # Publish both connection objects together.
             self._socket = socket  # Writers can now use the connection.
+            self._runtime = runtime  # Close retains this owner after connection detachment.
             self._closed.clear()  # A new open starts with a live read state.
-            self._reader = FrameReader(socket, self._closed, self._clock, self._endpoint.profile.read_timeout_seconds)
+            self._reader = FrameReader(runtime, self._closed, self._clock, self._endpoint.profile.read_timeout_seconds)
         self._log.emit(logging.DEBUG, "shell_open_ready", {"status": "open"})  # Log safe readiness.
 
     def _create(self, url: str) -> Any:
@@ -86,11 +90,12 @@ class ShellConnection:
         self._log.emit(logging.INFO, "shell_close_start", {"action": "close"})  # Log before changing state.
         self._closed.set()  # Wake all bounded read loops.
         with self._lock:  # Detach both connection objects together.
-            socket = self._socket  # Copy the socket for closure outside the lock.
+            runtime = self._runtime  # Preserve the active receive owner outside the connection lock.
             self._socket = None  # Future writes report not_open.
             self._reader = None  # Future reads report a local close.
-        if socket is not None:  # Closing before open remains harmless.
-            SocketRuntime(socket).close()  # Abort, close, and shutdown the socket.
+            self._runtime = None  # Only the detached owner can release this descriptor.
+        if runtime is not None:  # Closing before open remains harmless.
+            runtime.close()  # Abort and retain the descriptor until its active receive exits.
         self._log.emit(logging.DEBUG, "shell_close_ready", {"status": "closed"})  # Log safe completion.
 
     def resource(self, kind: str) -> Any:
