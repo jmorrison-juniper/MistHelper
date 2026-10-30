@@ -9,14 +9,15 @@ from collections.abc import Callable
 import pytest
 import websocket
 
-from src.mist.realtime.websocket_streams.live.transport.endpoint import ShellAddressPolicy
+from src.mist.realtime.websocket_streams.live.transport.endpoint import (
+    MistStreamEndpoint,
+    ShellAddressPolicy,
+    TransportProfile,
+)
 from src.mist.realtime.websocket_streams.live.transport.runtime.reader.contracts import ConnectionClosed
 from src.mist.realtime.websocket_streams.live.transport.runtime.reader.socket_runtime import SocketRuntime
 from src.mist.realtime.websocket_streams.live.transport.shell_client import ShellConnection
 from src.mist.realtime.websocket_streams.live.transport.stream_client import StreamConnection
-from tests.unit.websocket_streams.live.runners.test_ws_shell_runner import _endpoint
-from tests.unit.websocket_streams.live.transport.fake_mist_cloud.api import FakeApiSession
-from tests.unit.websocket_streams.live.transport.fake_mist_cloud.server import FakeMistCloud
 
 
 class PausedSocket:
@@ -64,7 +65,9 @@ class ConnectionSchedule:
         if kind == "runtime":  # Unit coverage isolates the lifetime mechanism.
             runtime = SocketRuntime(self.socket)  # Receive and close must share this owner.
             return lambda: runtime.receive(0.1), runtime.close  # Use normal runtime entry points.
-        endpoint = _endpoint(FakeApiSession(FakeMistCloud()))  # Reuse the offline endpoint contract.
+        endpoint = MistStreamEndpoint(
+            object(), TransportProfile(stream_url="ws://127.0.0.1:9600/stream", allow_loopback=True)
+        )  # Socket ownership needs connection settings, not an HTTP API client.
 
         def factory(*_args: object, **_options: object) -> PausedSocket:
             """Supply the controlled socket without network access."""
