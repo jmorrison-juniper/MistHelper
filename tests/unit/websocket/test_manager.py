@@ -769,7 +769,7 @@ def test_on_error_logs_error() -> None:
     m = WebSocketManager(_make_session())
     with patch.object(m.logger, "error") as mock_err, patch.object(m.logger, "debug"):
         m._on_error(MagicMock(), RuntimeError("boom"))
-    mock_err.assert_called_once()
+    assert [entry.args[0] for entry in mock_err.call_args_list] == ["WebSocket error: %s"]  # WHY: pin one error record.
 
 
 def test_on_close_sets_connected_false_and_logs() -> None:
