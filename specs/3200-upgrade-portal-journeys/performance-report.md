@@ -13,28 +13,28 @@ The p95 value is the 95th percentile.
 
 | Rank | Page | p95 (ms) |
 | - | - | -: |
-| 1 | History | 53.268 |
-| 2 | Capture | 51.173 |
-| 3 | Options | 40.769 |
-| 4 | Run | 40.711 |
-| 5 | Confirm | 40.339 |
+| 1 | Capture | 52.653 |
+| 2 | History | 46.888 |
+| 3 | Confirm | 39.801 |
+| 4 | Run | 39.787 |
+| 5 | Options | 39.462 |
 
 ## Slowest API calls
 
 | Rank | API call | p95 (ms) |
 | - | - | -: |
-| 1 | Sites | 5.480 |
-| 2 | Inventory | 5.105 |
-| 3 | Run versions | 3.176 |
-| 4 | Run status | 2.963 |
-| 5 | Capture status | 2.550 |
+| 1 | Inventory | 3.512 |
+| 2 | Sites | 3.419 |
+| 3 | Run versions | 2.494 |
+| 4 | Capture status | 2.377 |
+| 5 | Run status | 2.108 |
 
 ## Polling cost
 
 | API call | Cost per minute (ms) |
 | - | -: |
-| Capture status | 42.040 |
-| Run status | 3.954 |
+| Capture status | 38.280 |
+| Run status | 3.490 |
 
 Each sampled page and API call returned status 200. The browser reported zero
 faults and no long tasks. The measurements describe this local run only. They
