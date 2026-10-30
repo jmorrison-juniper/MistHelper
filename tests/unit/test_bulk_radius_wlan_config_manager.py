@@ -243,10 +243,10 @@ def test_already_configured_false() -> None:
 
 def test_log_classification_no_op_when_debug_off() -> None:
     """Debug-off path returns without logging (branch coverage)."""
-    manager = _make_manager()
-    fake = _make_mh(debug=False)
-    with patch.object(brwcm, "SourceDependencyResolver", fake):
-        manager._log_radius_wlan_classification("COMPLIANT", {"ssid": "X"})
+    manager, fake, fake_logger = _make_manager(), _make_mh(debug=False), MagicMock()  # WHY: isolate and observe.
+    with patch.multiple(brwcm, SourceDependencyResolver=fake, logger=fake_logger):  # WHY: isolate both dependencies.
+        manager._log_radius_wlan_classification("COMPLIANT", {"ssid": "X"})  # WHY: exercise debug-off behavior.
+    assert fake_logger.debug.call_count == 0  # WHY: disabled debug mode must emit no classification record.
 
 
 def test_log_classification_emits_when_debug_on() -> None:
