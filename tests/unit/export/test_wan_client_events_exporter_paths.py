@@ -238,14 +238,20 @@ class TestFinalizeExport:
 class TestExecute:
     """Cover the public entry point, its abort guard, and its error handler."""
 
-    def test_a_cancelled_site_writes_nothing(self, exporter: WanClientEventsExporter) -> None:
+    def test_a_cancelled_site_writes_nothing(
+        self, exporter: WanClientEventsExporter, caplog: pytest.LogCaptureFixture
+    ) -> None:
         """A cancelled site selection must abort before any API call."""
+        caplog.set_level("ERROR")  # Require the cancellation error even when no export occurs.
         exporter.prompt_utils.select_site_id_from_csv.return_value = ""  # WHY: an empty pick cancels.
         exporter.execute()  # WHY: drive the abort guard with no supplied site.
         endpoint = exporter.mistapi_module.api.v1.sites.wan_clients.searchSiteWanClientEvents
         endpoint.assert_not_called()  # WHY: no site means no endpoint to query.
         # WHY: an aborted run must leave the output directory untouched.
         exporter.data_exporter.write_with_format_selection.assert_not_called()
+        assert caplog.record_tuples == [  # Require the exact error so a hidden cancellation cannot pass.
+            ("src.operations.exporting.export.wan_client_events_exporter", 40, " No site selected.")
+        ]
 
     def test_an_empty_result_writes_the_placeholder_not_the_dataset(
         self, exporter: WanClientEventsExporter, tmp_path: Path
