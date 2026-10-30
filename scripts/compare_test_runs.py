@@ -73,9 +73,14 @@ class TestComparator:
                     summary = event
                     continue
                 if event_type in ("test_pass", "test_fail", "test_skip"):
-                    option = event.get("menu_option", "")
-                    if option:
-                        events[option] = event
+                    option = event.get("menu_option")
+                    if not option:
+                        print(
+                            f"Error: Missing menu_option in {event_type} event at " f"{file_path}:{line_num}",
+                            file=sys.stderr,
+                        )
+                        sys.exit(1)
+                    events[option] = event
 
         result = {"events": events, "summary": summary}
         return result
