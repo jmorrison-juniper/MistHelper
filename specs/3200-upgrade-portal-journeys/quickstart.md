@@ -123,12 +123,21 @@ The job installs Chromium and uploads the complete
 The harness uses loopback services and simulated cloud data. It needs no
 Mist credential or production store.
 
-The guard checks the job settings, the evidence upload, and failure reporting.
-It also runs the adjacent browser gate contracts.
+The guards check the job settings, the evidence upload, failure reporting, and
+the quality-gate inventory. They also test browser shard contracts and the
+single-site completion journey.
 
 ```sh
-.venv/bin/python -m pytest -q tests/guardrails/test_upgrade_portal_journey_ci.py tests/guardrails/test_ci_gate_triggers.py::TestCancelledRunStops tests/guardrails/test_e2e_shard_partition.py
+UPGRADE_PORTAL_JOURNEYS=1 .venv/bin/python -B -m pytest -q -p no:cacheprovider tests/guardrails/test_quality_gate_close_scope.py tests/guardrails/test_upgrade_portal_journey_ci.py tests/guardrails/test_ci_gate_triggers.py::TestCancelledRunStops tests/guardrails/test_e2e_shard_partition.py tests/e2e/upgrade_portal/journeys/test_upj_single_site_journeys.py::TestSingleSiteJourneys::test_start_reaches_a_completed_run
 ```
 
-Result: 25 passed in 0.85 seconds. Ruff and Black also pass on both changed
+Result: 34 passed in 4.18 seconds. Ruff and Black pass on the four changed
 Python test files.
+
+Run the complete journey suite with this command.
+
+```sh
+.venv/bin/python -m tests.e2e.upgrade_portal.journeys.run_journeys --parallel 1
+```
+
+Result: 37 passed and 3 xfailed.
