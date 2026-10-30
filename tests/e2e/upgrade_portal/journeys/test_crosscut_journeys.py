@@ -434,7 +434,11 @@ def test_sign_in_page_fits_narrow_viewport(signed_out_page: Any) -> None:
     page.set_viewport_size({"width": 390, "height": 844})  # Reproduce the reported narrow viewport.
     shots = StepShots(page, "signin-narrow-viewport")  # Record the focused regression journey.
     goto(page, shots, SIGNIN_PATH, "sign in page at 390px")  # Open the local stand-in sign-in page.
-    assert_no_horizontal_scroll(page)  # The page must fit without horizontal document scroll.
+    document_width = page.evaluate("() => document.documentElement.scrollWidth")  # Measure the sign-in document.
+    viewport_width = page.evaluate("() => window.innerWidth")  # Read the active narrow viewport width.
+    assert document_width <= viewport_width, (  # Require the sign-in document to fit the viewport.
+        f"Document width {document_width}px exceeds viewport width {viewport_width}px."
+    )
 
 
 def test_missing_run_error_page_offers_back_link(page: Any) -> None:

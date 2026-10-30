@@ -93,7 +93,7 @@ def test_checked_switch_with_empty_version_stays_in_the_durable_plan(
     with org_upgrade_client.session_transaction() as browser_session:
         operation_id = browser_session["org_upgrade_options"]["operation_id"]
     operation = store.read_run(operation_id)
-    assert operation is not None
+    assert operation and operation["children"], "The stored plan has no child records."
     switch_child = next(child for child in operation["children"] if child["device_family"] == "switch")
     assert switch_child["target_ids"] == [FAMILY_VIEW_ROWS[1]["mac"]]  # Keep the checked switch in the plan.
 
