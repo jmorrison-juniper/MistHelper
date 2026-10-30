@@ -106,7 +106,7 @@ def test_the_export_sends_flat_rows(stub_resolver: Any) -> None:
 def test_an_empty_result_writes_nothing(stub_resolver: Any) -> None:
     """FR-024. A clean organization must not leave an empty file behind."""
     run_with_result(stub_resolver, build_result([]))
-    stub_resolver.DataExporter.write_with_format_selection.assert_not_called()
+    assert stub_resolver.DataExporter.write_with_format_selection.call_count == 0  # WHY: no empty export.
 
 
 def test_an_empty_result_states_the_clean_outcome(stub_resolver: Any, caplog: Any) -> None:
