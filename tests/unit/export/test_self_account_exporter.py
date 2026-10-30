@@ -177,6 +177,8 @@ class TestVerifyEmailMenu:
             SelfAccountExporter.verify_email()
 
         mist_helper.DataExporter.write_with_format_selection.assert_called_once()
+        row = mist_helper.DataExporter.write_with_format_selection.call_args.args[0][0]
+        assert (row["status_code"], row["detail"]) == (400, "invalid token")
 
     def test_a_503_records_the_status_and_writes(self, mist_helper: MagicMock) -> None:
         """A 503 response records the server failure as an audit row."""
