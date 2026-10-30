@@ -834,6 +834,7 @@ def test_lookup_device_record_exception_logs_and_returns_none(capsys, caplog) ->
     out = capsys.readouterr().out
     assert "Proceeding with standard ARP command" in out
     assert any("Could not verify device compatibility" in r.message for r in caplog.records)
+    assert any("kaboom" in r.message for r in caplog.records)  # WHY: Keep the caught API failure diagnosable.
 
 
 def test_lookup_device_record_exception_debug_on_prints_debug_line(capsys) -> None:

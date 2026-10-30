@@ -95,7 +95,7 @@ class MessageRouter:  # WHY: Public API preserved for WebSocketManager collabora
                 handler(message_data)  # WHY: Invoke matched closure handler.
                 return  # WHY: Successful dispatch exits the try block.
             ctx.logger.debug("Unhandled message event type: %s", event)  # WHY: Unknown event.
-        except Exception as message_error:  # WHY: Match original broad except.
+        except Exception as message_error:  # WHY: Callback errors must not stop routing, so log error and payload.
             _log_route_error(ctx, message, message_error)  # WHY: Preserve verbatim error trace.
         ctx.logger.debug("Routing complete")  # WHY: Post-action log preserved.
 

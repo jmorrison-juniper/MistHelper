@@ -92,6 +92,7 @@ def test_route_broad_except_logs_error(caplog) -> None:
     with caplog.at_level(logging.ERROR, logger="test.message_router"):
         router.route({"event": "data"})
     assert any("Error processing WebSocket message" in r.message for r in caplog.records)
+    assert any("boom" in r.message for r in caplog.records)  # WHY: Verify callback failures retain their detail.
 
 
 # ---------------------------------------------------------------------------

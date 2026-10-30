@@ -69,7 +69,7 @@ def cleanup_ws_connection(ws_manager: Any, debug_mode: bool = False) -> None:
             if debug_mode:  # WHY: Extra diagnostic breadcrumb only for debug runs.
                 # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
                 logger.debug("[DEBUG] WebSocket cleanup completed")  # WHY: Marks end of teardown.
-    except Exception as cleanup_error:  # WHY: Broad catch — teardown must be resilient.
+    except Exception as cleanup_error:  # WHY: Socket close errors vary, so warn and preserve caller cleanup.
         logging.warning("WebSocket cleanup error: %s", cleanup_error)  # WHY: Warn but do not fail.
 
 
@@ -211,7 +211,7 @@ class WebSocketManager:
                 return False  # WHY: Timeout means the caller should abort.
             self.logger.info("WebSocket connection established successfully")  # WHY: Success trace.
             return True  # WHY: Manager is now usable for subscribe/command flows.
-        except Exception as connection_error:  # WHY: Broad guard — never leak library exceptions.
+        except Exception as connection_error:  # WHY: Auth and socket errors vary, so return workflow failure.
             self.logger.error("WebSocket connection failed: %s", connection_error)  # WHY: Diagnosable log.
             return False  # WHY: Convert any raised error into a False return.
 
@@ -259,7 +259,7 @@ class WebSocketManager:
             self.subscribed_channels.add(channel_path)  # WHY: Track locally for teardown / diagnostics.
             self.logger.debug("Subscribed to channel: %s", channel_path)  # WHY: Trace success.
             return True  # WHY: Frame accepted by client library.
-        except Exception as subscription_error:  # WHY: Broad guard — do not leak library errors.
+        except Exception as subscription_error:  # WHY: Socket errors vary, so return failure for caller cleanup.
             self.logger.error("Channel subscription failed: %s", subscription_error)  # WHY: Diagnose.
             return False  # WHY: Signal failure to caller.
 

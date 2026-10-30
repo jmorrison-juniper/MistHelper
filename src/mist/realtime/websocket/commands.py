@@ -43,7 +43,7 @@ class MacTableCommand:  # WHY: Namespace grouping the show_mac_table workflow he
         websocket_manager: WebSocketManager | None = None  # WHY: Pre-declare so `finally` cleanup always has binding.
         try:
             websocket_manager = MacTableCommand._run_workflow(deps, debug_mode)  # WHY: Body isolated for CC budget.
-        except Exception as mac_table_error:  # WHY: Broad catch preserves legacy operator-facing error banner.
+        except Exception as mac_table_error:  # WHY: Prompt, HTTP, and socket errors vary, so log detail and clean up.
             error_message = f"WebSocket show MAC table operation failed: {mac_table_error}"  # WHY: Legacy text.
             log_ws_error(error_message, debug_mode)  # WHY: Route through shared WS error formatter.
             logging.debug("EXIT: show_mac_table_websocket - error")  # WHY: Preserve legacy exit-trace marker.

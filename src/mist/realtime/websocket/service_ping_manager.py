@@ -156,7 +156,7 @@ class ServicePingManager(ServicePingDiscoveryMixin):  # WHY: define ServicePingM
                 None,
             )
             logger.debug("Device lookup complete for %s, found=%s", self.device_id, self.device_info is not None)
-        except Exception as error:  # WHY: swallow api errors and drop to unknown-device prompt.
+        except Exception as error:  # WHY: API and payload errors vary, so ask the unknown-device question.
             logging.warning("Could not retrieve device details: %s", error)  # WHY: warn on failure.
             self._debug_print(f"Device details error: {error}")  # WHY: surface exception in debug.
             return False  # WHY: caller must fall through to unknown-device confirmation.
@@ -407,7 +407,7 @@ class ServicePingManager(ServicePingDiscoveryMixin):  # WHY: define ServicePingM
             if self.websocket_manager is not None:  # WHY: only disconnect when transport exists.
                 self.websocket_manager.disconnect()  # WHY: release the websocket connection.
                 print("-> WebSocket connection closed")  # WHY: confirm teardown to operator.
-        except Exception as error:  # WHY: log-and-swallow any disconnect exception.
+        except Exception as error:  # WHY: Socket close errors vary, so warn and preserve workflow cleanup.
             logging.warning("WebSocket cleanup error: %s", error)  # WHY: warn on cleanup failure.
 
     def _preflight(self) -> bool:  # WHY: execute uses this to prep site/device before running.
@@ -464,7 +464,7 @@ class ServicePingManager(ServicePingDiscoveryMixin):  # WHY: define ServicePingM
         except KeyboardInterrupt:  # WHY: operator abort is a normal termination path.
             print("\nOperation cancelled by user")  # WHY: acknowledge cancellation.
             logging.info("Service ping operation cancelled by user")  # WHY: log the cancel path.
-        except Exception as error:  # WHY: log and surface any unexpected workflow failure.
+        except Exception as error:  # WHY: Varied workflow errors need reporting before final cleanup.
             print(f"Error during Service Ping operation: {error}")  # WHY: user-visible error.
             logging.error("Service ping error: %s", error)  # WHY: log for post-mortem.
         finally:  # WHY: always run cleanup regardless of success or failure.

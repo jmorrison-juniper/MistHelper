@@ -582,6 +582,7 @@ def test_execute_swallows_exception_and_cleans_up(capsys) -> None:
     ):
         PingDeviceExecutor().execute(deps)
     err_log.assert_called_once()
+    assert "boom" in err_log.call_args.args[0]  # WHY: Verify the caught workflow error remains visible.
     cleaner.assert_called_once()
 
 
