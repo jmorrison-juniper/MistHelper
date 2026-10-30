@@ -53,6 +53,12 @@ def visit(page: Any, recorder: JourneyRecorder, path: str, name: str) -> None:
     assert answer is not None and answer.status == OK_STATUS, f"{path} answered {answer and answer.status}"
 
 
+def start_ready_run(page: Any) -> None:
+    """Start the seeded run and wait for its progress page before recording."""
+    page.get_by_test_id("upgrade-start-button").click()  # Submit the confirmed upgrade.
+    page.wait_for_url(re.compile(rf".*/runs/{START_READY_RUN_ID}$"))  # Wait for the navigation to finish.
+
+
 @pytest.fixture
 def reader(page: Any, journey_recorder: Callable[..., JourneyRecorder]) -> tuple[Any, JourneyRecorder]:
     """Return the read-only operator page and its recorder."""
@@ -109,8 +115,7 @@ class TestSingleSiteJourneys:
         page.get_by_test_id("upgrade-confirm-input").fill("CONFIRM")  # The exact word.
         expect(page.get_by_test_id("upgrade-start-button")).to_be_enabled()  # The word opens the button.
         simulated_cloud_status_control.complete_run(START_READY_RUN_ID)  # The stand-in driver completes this run.
-        recorder.step("start", lambda: page.get_by_test_id("upgrade-start-button").click())  # Start the run.
-        page.wait_for_url(re.compile(rf".*/runs/{START_READY_RUN_ID}$"))  # The progress page of the run.
+        recorder.step("start", lambda: start_ready_run(page))  # Start the run and wait for its destination.
         recorder.step("progress page")  # Record the first progress view.
         assert page.url.endswith(f"/runs/{START_READY_RUN_ID}")  # The journey ended on the run page.
         expect(page.get_by_test_id("upgrade-state")).to_have_text("complete")  # The durable run reached completion.
