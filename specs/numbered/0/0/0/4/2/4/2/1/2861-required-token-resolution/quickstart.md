@@ -1,13 +1,14 @@
 # Required token resolution: Local verification
 
-Part of [#2861](https://github.com/jmorrison-juniper/MistHelper/issues/2861). The 31-candidate campaign remains open.
+Part of [#2861](https://github.com/jmorrison-juniper/MistHelper/issues/2861). The owner-approved 64-candidate campaign remains open.
 
 ## Safety boundary
 
 Use only controlled provider values and a mocked SDK constructor.
 Do not supply a real token.
 Do not contact Redis, Vault, Mist, SMTP, or a production container.
-Do not publish before the parent grants the full verified-main SHA for position 36.
+The parent granted publication against main SHA `76f976358f6217a9e7df48e3e5d4c4b6d63c5d14` for position 36.
+Do not merge or enable automatic merge. Human review is required.
 
 ## Isolated setup
 
@@ -39,7 +40,75 @@ The complete coverage denominator remains `src`.
 Required token tests must not skip.
 Record existing optional-SDK skips by name and reason.
 
-## Evidence record
+## Publication candidate: 2026-10-29
+
+The approved base is `76f976358f6217a9e7df48e3e5d4c4b6d63c5d14`.
+The recovery commit is `6cea98a9794d87e0ed3738bf331afff51280f76c`.
+The rebase reported no conflict.
+The production file and all four test files retain the recovery content.
+No exception handler, setting, baseline, exclusion, or dependency manifest changed.
+
+The approved base has no `2861-credential-defaults` record.
+Its `2861-token-conflict` record covers a different CLI repair.
+This record uses the same managed numeric route and a distinct slice name.
+The route check inspected ten directories and found no capacity violation.
+The publication difference adds no direct child under `specs/`.
+
+The following commands use the owned root interpreter unless the scope says backend.
+Backend commands run from `mist-ops-platform` with its separate interpreter.
+
+| Scope | Command | Result |
+| - | - | - |
+| Syntax | `rtk proxy .venv/bin/python -m py_compile MistHelper.py mist-ops-platform/src/shared/mist/session.py mist-ops-platform/tests/unit/mist/token_resolution/conftest.py mist-ops-platform/tests/unit/mist/token_resolution/test_provider_contracts.py mist-ops-platform/tests/unit/mist/token_resolution/test_required_resolution.py mist-ops-platform/tests/unit/mist/token_resolution/test_session_boundary.py` | Passed. |
+| Root lint | `rtk proxy .venv/bin/python -m ruff check .` | Passed. |
+| Owned lint | `rtk proxy .venv/bin/python -m ruff check MistHelper.py mist-ops-platform/src/shared/mist/session.py mist-ops-platform/tests/unit/mist/token_resolution` | Passed. |
+| Root format | `rtk proxy .venv/bin/python -m black --check --diff .` | Passed for 2,503 files. |
+| Backend correctness | `rtk proxy .venv/bin/python -m ruff check . --select F,B,E9 --ignore F401,B008,B905 --output-format=concise` | Passed. |
+| Backend new tests | `rtk proxy .venv/bin/python -m pytest tests/unit/mist/token_resolution -q --tb=short --timeout=120` | 134 passed. No skips. |
+| Backend auth and rate limit | `rtk proxy .venv/bin/python -m pytest tests/unit/mist/token_resolution tests/unit/mist/test_rate_limit.py tests/unit/api/test_auth.py -q --tb=short --timeout=120 --cov=src.shared.mist.session --cov-report=term-missing --cov-fail-under=80` | 153 tests passed. The added whole-module coverage condition failed at 70.63 percent. |
+| Backend collection | The session-only offline runner with `--collect-only -q` | 644 tests collected. Zero transport attempts. The required floor is 390. |
+| Complete backend | The session-only offline runner with `--cov=src --cov-fail-under=56 --timeout=120 -q -rs --tb=short` | 612 passed. 32 existing optional-method skips. Coverage is 63.02 percent. Zero transport attempts. |
+| Root types | `rtk proxy .venv/bin/python -m mypy src/ MistHelper.py wsgi.py scripts/mist_ideas_analyzer_pkg/__init__.py scripts/mist_ideas_distiller_v2_pkg/__init__.py --config-file pyproject.toml` | Passed for 864 source files. |
+| Backend strict types | `rtk proxy .venv/bin/python -m mypy src/shared/mist/session.py tests/unit/mist/token_resolution --config-file pyproject.toml` | Four existing provider errors. No resolver or new-test errors. |
+| Base type comparison | The same backend command with `--shadow-file src/shared/mist/session.py` and the approved base file | The same four provider errors. |
+| Factory security lint | `rtk proxy .venv/bin/python -m bandit -r mist-ops-platform/src/shared/mist/session.py -q` | Passed. Existing annotation warnings remain. |
+| Root security lint | `rtk proxy .venv/bin/python -m bandit -c pyproject.toml -r . -q` | Passed. Existing annotation warnings remain. |
+| Factory complexity | `rtk proxy .venv/bin/python -m radon cc mist-ops-platform/src/shared/mist/session.py -j \| rtk proxy .venv/bin/complexity-gate --max 10` | Passed. |
+| SDK contract | `rtk proxy .venv/bin/python -B -m pytest -p no:cacheprovider -q tests/integration/test_mistapi_sdk_compatibility.py --timeout=120` | Eight passed. No known signature failure. |
+| Required-input preflight | `rtk proxy .venv/bin/python -B -m pytest -p no:cacheprovider -s -q tests/guardrails/local_test_quality_loop/test_guidance.py::TestLiveGuides` | Passed. Four inputs and one active guide checked. |
+| Full test-quality check | `rtk proxy .venv/bin/test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json` | 1,212 files checked. 614 accepted findings. Zero new findings. |
+| Explicit new-test check | The same analyzer command with `--roots mist-ops-platform/tests/unit/mist/token_resolution` | Three files checked. Zero findings. |
+| Runtime audit | `rtk proxy .venv/bin/python -m pip_audit -r requirements.txt --progress-spinner off` | Blocked by the existing macOS `ensurepip` abort from issue #3701. |
+| Recovered runtime audit | `pip_audit --path` against an owned UV-seeded environment installed from `requirements.txt` | Passed. No known vulnerability. |
+| Backend audit | `rtk proxy .venv/bin/python -m pip_audit --path mist-ops-platform/.venv/lib/python3.13/site-packages --progress-spinner off` | No known vulnerability. The editable local project is unavailable on PyPI. |
+
+Coverage inspection found all 15 resolver statements and all six branch outcomes covered.
+The whole-module coverage miss concerns unchanged provider constructors.
+The configured complete-backend coverage gate passes without a threshold change.
+The 32 optional skips remain in `tests/unit/mist/test_registry_validation.py`.
+Eight skips concern absent read methods, six concern absent write methods, and eighteen concern absent list methods.
+
+The offline runner remains a session artifact, not a production or test-suite change.
+It blocks socket connections and fails if any test attempts one.
+For the existing organization-scope probes, it supplies a controlled Redis client to the real API rate limiter.
+The separate rate-limit tests retain their existing mocked and in-memory clients.
+The new token tests independently block live connections.
+
+The SDK contract reports ten unresolved call sites and 364 unverifiable signatures.
+The strict backend type errors remain outside this repair.
+No full-backend type certification is claimed.
+The direct requirements audit remains unavailable through its standard macOS command.
+The recovered requirements-only audit does not use a vulnerability ignore.
+
+The post-commit changed-scope test-quality check precedes the push.
+The pull request records that final command and its result.
+Human review remains required. Issue #2861 remains open.
+No merge or automatic merge is authorized by this record.
+
+## Historical evidence record
+
+The measurements below belong to the preserved 2026-10-01 recovery commit.
+They do not certify the current publication candidate.
 
 The original source base is `644037dcc1eee0e43fac0d40b1186ff1cb6e322e`.
 The parent proof used an extracted method. This slice requires the imported factory and real session boundary.

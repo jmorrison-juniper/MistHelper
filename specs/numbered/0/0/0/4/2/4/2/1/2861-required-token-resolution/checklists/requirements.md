@@ -35,4 +35,5 @@
 
 The feature is a defect repair, not a new API or menu operation.
 The plan contains the internal provider contract. No separate schema or external contract document is necessary.
-Publication and task-delivery completion require a separate parent grant.
+The parent granted publication against main SHA `76f976358f6217a9e7df48e3e5d4c4b6d63c5d14`.
+Current-base validation remains required. Human review must precede any merge.

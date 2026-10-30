@@ -6,14 +6,14 @@
 
 ## Phase 1: Setup
 
-- [x] T001 Reserve the exact source, tests, feature documents, and fragment in the issue claim. (delivered: specs/2861-required-token-resolution/plan.md)
-- [x] T002 Create the bounded specification and plan without shared SpecKit changes. (delivered: specs/2861-required-token-resolution/spec.md)
-- [x] T003 Prepare isolated backend and root environments for `mist-ops-platform/tests/unit/mist/token_resolution/`. (delivered: specs/2861-required-token-resolution/quickstart.md)
+- [x] T001 Reserve the exact source, tests, feature documents, and fragment in the issue claim. (delivered: plan.md)
+- [x] T002 Create the bounded specification and plan without shared SpecKit changes. (delivered: spec.md)
+- [x] T003 Prepare isolated backend and root environments for `mist-ops-platform/tests/unit/mist/token_resolution/`. (delivered: quickstart.md)
 
 ## Phase 2: Foundational
 
 - [x] T004 Create controlled provider and SDK fixtures in `mist-ops-platform/tests/unit/mist/token_resolution/conftest.py`. (delivered: mist-ops-platform/tests/unit/mist/token_resolution/conftest.py)
-- [x] T005 Prove three red original cases in `mist-ops-platform/tests/unit/mist/token_resolution/test_required_resolution.py`. (delivered: specs/2861-required-token-resolution/quickstart.md)
+- [x] T005 Prove three red original cases in `mist-ops-platform/tests/unit/mist/token_resolution/test_required_resolution.py`. (delivered: quickstart.md)
 
 ## Phase 3: User Story 1 - Use the next usable source
 
@@ -45,14 +45,19 @@
 
 ## Phase 6: Local evidence
 
-- [x] T013 Measure focused and complete backend checks for `mist-ops-platform/src/shared/mist/session.py`. Record existing type limits. Covers FR-011, FR-012, and SC-001 through SC-005. (delivered: specs/2861-required-token-resolution/quickstart.md)
-- [x] T014 Measure applicable root checks and the unchanged full test-quality ratchet. Record commands and capability limits in `specs/2861-required-token-resolution/quickstart.md`. Covers SC-006. (delivered: specs/2861-required-token-resolution/quickstart.md)
+- [x] T013 Measure focused and complete backend checks for `mist-ops-platform/src/shared/mist/session.py`. Record existing type limits. Covers FR-011, FR-012, and SC-001 through SC-005. (delivered: quickstart.md)
+- [x] T014 Measure applicable root checks and the unchanged full test-quality ratchet. Record commands and capability limits in `quickstart.md`. Covers SC-006. (delivered: quickstart.md)
 - [x] T015 Add `changelog.d/issue-2861-required-token-resolution.md` and preserve the 23-item PR template in an offline session artifact. (delivered: changelog.d/issue-2861-required-token-resolution.md)
-- [x] T016 Prepare the verified feature manifest for one local commit with the required coauthor. Record the resulting SHA and clean-state proof outside the commit. (delivered: specs/2861-required-token-resolution/quickstart.md)
+- [x] T016 Prepare the verified feature manifest for one local commit with the required coauthor. Record the resulting SHA and clean-state proof outside the commit. (delivered: quickstart.md)
 
 ## Phase 7: Protected publication
 
-- [ ] T017 Obtain the parent's full verified-main SHA grant for position 36 before publication or task-delivery completion. This condition requires the parent.
+- [x] T017 Obtain the parent's full verified-main SHA grant for position 36 before publication. The grant names `76f976358f6217a9e7df48e3e5d4c4b6d63c5d14`. (delivered: spec.md)
+- [x] T018 Repeat current-base local validation and the full test-quality check. Record the unchanged provider type errors. (delivered: quickstart.md)
+- [ ] T019 Publish a pull request for human review. Keep issue #2861 open. Do not merge or enable automatic merge.
+
+T019 requires the post-commit changed-scope check.
+The pull request and issue record publication after this prepublication snapshot.
 
 ## Dependencies & Execution Order
 
@@ -63,7 +68,7 @@ T006 and T009 define the guard matrix for T007.
 T008 and T010 through T012 prove the repaired behavior.
 T013 follows all implementation and test tasks.
 T014 and T015 precede T016.
-T017 remains a separate authorization condition.
+T017 remains a separate authorization condition. T018 and T019 follow that grant.
 The post-commit changed-scope ratchet also precedes any future publication.
 
 ## Parallel Opportunities
@@ -79,4 +84,4 @@ Add only the necessary guards.
 Verify every reserved behavior with controlled values.
 Record partial capabilities without a full-certification claim.
 Preserve the repair in one clean local commit.
-Do not publish without the parent grant.
+Do not publish without the parent grant and current-base validation.

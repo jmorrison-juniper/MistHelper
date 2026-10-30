@@ -1,8 +1,8 @@
 # Implementation Plan: Required token resolution
 
-**Branch**: `jmorrison-juniper-required-token-resolution` | **Date**: 2026-10-01 | **Spec**: [spec.md](spec.md)
+**Branch**: `jmorrison-juniper-2861-credential-token-slice` | **Date**: 2026-10-01 | **Spec**: [spec.md](spec.md)
 
-**Input**: Feature specification from `specs/2861-required-token-resolution/spec.md`.
+**Input**: [Managed feature specification](spec.md).
 
 ## Summary
 
@@ -12,7 +12,9 @@ Use `strip()` only to test usability. Return each accepted token without modific
 Keep the existing no-token exception message. Add secret-free diagnostics with checked-source counts.
 
 Part of [#2861](https://github.com/jmorrison-juniper/MistHelper/issues/2861). The campaign remains open.
-Prepare one local commit. Do not publish before the parent grants the full verified-main SHA for position 36.
+The parent granted publication against main SHA `76f976358f6217a9e7df48e3e5d4c4b6d63c5d14` for position 36.
+Repeat the applicable checks against that base. Keep the pull request open for human review.
+Do not merge or enable automatic merge. Pull request #4497 retains the next serial merge position.
 
 ## Technical Context
 
@@ -75,7 +77,7 @@ The final `RuntimeError` keeps its exact current message.
 ### Documentation (this feature)
 
 ```text
-specs/2861-required-token-resolution/
+specs/numbered/0/0/0/4/2/4/2/1/2861-required-token-resolution/
   spec.md
   plan.md
   tasks.md
@@ -121,7 +123,11 @@ Preserve the complete 23-item PR template in an offline draft.
 Keep whole-campaign, remote CI, verified-main, deployment, and publication items incomplete where applicable.
 Use `Part of #2861`, never an issue-closing keyword.
 
-### Measured limits
+### Historical measured limits
+
+The following measurements belong to the preserved 2026-10-01 recovery work.
+They do not certify the current publication candidate.
+The current results appear in [quickstart.md](quickstart.md).
 
 The strict backend check reports 176 existing findings across 31 files.
 The original-source shadow check reports the same 176 findings.
