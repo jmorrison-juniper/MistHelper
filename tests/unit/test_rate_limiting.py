@@ -787,7 +787,7 @@ class TestEdgeCases:
             assert cache["initialized"] is True
             assert cache["used"] == 500
 
-    def test_refresh_api_usage_real_exception(self):
+    def test_refresh_api_usage_real_exception(self, caplog):
         """Refresh handles missing mistapi gracefully."""
         cache = {
             "used": 100,
@@ -796,9 +796,29 @@ class TestEdgeCases:
             "perceived_requests": 0,
             "initialized": True,
         }
-        with patch.dict(sys.modules, {"mistapi": None}):
+        with (
+            patch.dict(sys.modules, {"mistapi": None}),
+            caplog.at_level(logging.WARNING),
+        ):
             RateLimitingUtils._refresh_api_usage(None, cache, time.time())
         assert cache["used"] == 100
+        assert "Failed to refresh API usage data" in caplog.text
+        assert "mistapi" in caplog.text
+
+    def test_pipeline_failure_logs_cause_and_uses_fallback(self, caplog):
+        """A PID failure must keep the API operation moving with the safe delay."""
+        with (
+            patch.object(
+                RateLimitingUtils,
+                "_run_pid_pipeline",
+                side_effect=RuntimeError("synthetic PID failure"),
+            ),
+            caplog.at_level(logging.ERROR),
+        ):
+            smoothed, delay = RateLimitingUtils._try_pipeline_or_fallback(None, {}, {}, 0.25)
+        assert smoothed == 0.25
+        assert delay == 0.5
+        assert "synthetic PID failure" in caplog.text
 
     def test_hour_boundary_resets_integral(self):
         """Hour boundary crossing halves the delay integral."""

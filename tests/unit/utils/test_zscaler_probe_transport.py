@@ -656,6 +656,14 @@ class TestRunProbes:
             results = zp._run_probes(entries, 3.0, workers=2)
         assert len(results) == 3  # WHY: one result for each submitted entry.
 
+    def test_worker_exception_is_recorded_in_its_result(self) -> None:
+        """One endpoint failure must retain its cause without aborting the probe batch."""
+        entries = [("a.zscaler.net", {"role": "zen"})]
+        with patch.object(zp, "_probe_fqdn", side_effect=RuntimeError("worker failed")):
+            results = zp._run_probes(entries, 3.0, workers=1)
+        assert len(results) == 1
+        assert "probe crashed: RuntimeError: worker failed" in results[0].notes
+
     def test_the_output_is_sorted_by_role_and_then_by_name(self) -> None:
         """An unsorted report changes order between runs and hides a real diff."""
         entries = [
@@ -691,3 +699,19 @@ class TestRunProbes:
     def test_an_empty_entry_list_returns_no_results(self) -> None:
         """An empty catalogue must return cleanly, not hang on the pool."""
         assert zp._run_probes([], 3.0, workers=4) == []  # WHY: the pool must still close.
+
+
+class TestUnexpectedHttpFailure:
+    """Verify that unexpected HTTP probe errors remain visible in logs and reports."""
+
+    def test_an_unexpected_failure_is_logged_and_returned(self, caplog: pytest.LogCaptureFixture) -> None:
+        """A caught programming error must keep its cause in both outputs."""
+        with (
+            patch.object(zp, "_request_head_or_get", side_effect=RuntimeError("probe defect")),
+            caplog.at_level("DEBUG", logger=zp.logger.name),
+        ):  # Capture the debug message from the real probe logger.
+            response, error = zp._do_http("gateway.zscaler.net", 443, 3.0, tls=True)
+        assert response is None  # The failed request has no HTTP response.
+        assert error == "RuntimeError: probe defect"  # The report keeps the exception detail.
+        assert "unexpected HTTP probe failure" in caplog.text  # The diagnostic log records the failure.
+        assert "probe defect" in caplog.text  # The diagnostic log keeps the exception message.

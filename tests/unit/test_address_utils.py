@@ -182,6 +182,14 @@ class TestParseComponents:
         result = AddressUtils._parse_components("123 Main St, Springfield, IL", debug=True)
         assert result["is_parseable"] is True
 
+    def test_unexpected_parser_errors_propagate(self):
+        with patch(
+            "src.foundation.support.utils.address_utils._parse_address_parts",
+            side_effect=RuntimeError("parser defect"),
+        ):
+            with pytest.raises(RuntimeError, match="parser defect"):
+                AddressUtils._parse_components("123 Main St, Springfield, IL")
+
 
 # ============================================================================
 # AddressUtils.enhanced_parse
@@ -803,15 +811,18 @@ class TestNominatimValidatorAPI:
 
     def test_make_api_request_retry_then_success(self):
         mock_resp = MagicMock()
-        with patch("src.foundation.support.utils.address_utils.requests") as mock_req:
-            mock_req.get.side_effect = [Exception("timeout"), mock_resp]
+        with patch.object(address_mod.requests, "get") as mock_get:
+            mock_get.side_effect = [
+                address_mod.requests.exceptions.Timeout("timeout"),
+                mock_resp,
+            ]
             with patch("time.sleep"):
                 result = self.validator._make_api_request("123 Main")  # WHY: source left the signature
                 assert result is mock_resp
 
     def test_make_api_request_all_retries_fail(self):
-        with patch("src.foundation.support.utils.address_utils.requests") as mock_req:
-            mock_req.get.side_effect = Exception("timeout")
+        with patch.object(address_mod.requests, "get") as mock_get:
+            mock_get.side_effect = address_mod.requests.exceptions.Timeout("timeout")
             with patch("time.sleep"):
                 result = self.validator._make_api_request("123 Main")  # WHY: source left the signature
                 assert result is None
@@ -820,10 +831,10 @@ class TestNominatimValidatorAPI:
         self, caplog: pytest.LogCaptureFixture
     ) -> None:
         """All failed Nominatim attempts must log the first failure, not only the final one."""
-        with patch("src.foundation.support.utils.address_utils.requests") as mock_req:
-            mock_req.get.side_effect = [
-                Exception("auth failed"),
-                Exception("connection closed"),
+        with patch.object(address_mod.requests, "get") as mock_get:
+            mock_get.side_effect = [
+                address_mod.requests.exceptions.HTTPError("auth failed"),
+                address_mod.requests.exceptions.ConnectionError("connection closed"),
             ]  # WHY: distinct failures prove which attempt survives.
             with (
                 patch("time.sleep"),
@@ -839,13 +850,20 @@ class TestNominatimValidatorAPI:
         )  # WHY: every retry failure must remain visible in the log.
         assert any("first error: auth failed" in message for message in messages)  # WHY: final log names first cause.
 
+    def test_unexpected_request_errors_propagate(self):
+        with patch.object(address_mod.requests, "get", side_effect=RuntimeError("request code defect")):
+            with pytest.raises(RuntimeError, match="request code defect"):
+                self.validator._try_request_attempt(
+                    {"format": "json", "q": "123 Main", "limit": 1},
+                    {"User-Agent": self.validator.USER_AGENT},
+                    True,
+                    self.validator.MAX_RETRIES,
+                )
+
     def test_try_request_attempt_returns_none_on_timeout(self):
         """A Nominatim timeout must return no response for the retry loop."""
         timeout = address_mod.requests.exceptions.Timeout("synthetic timeout")  # Use the transport timeout type.
-        with patch(
-            "src.foundation.support.utils.address_utils.requests"
-        ) as mock_requests:  # Replace the HTTP client only.
-            mock_requests.get.side_effect = timeout  # Force the product HTTP call to time out.
+        with patch.object(address_mod.requests, "get", side_effect=timeout) as mock_get:  # Replace the HTTP call only.
             result = self.validator._try_request_attempt(  # Drive the real per-attempt request method.
                 {"format": "json", "q": "123 Main", "limit": 1},  # Supply the expected query fields.
                 {"User-Agent": self.validator.USER_AGENT},  # Supply the required Nominatim header.
@@ -853,7 +871,7 @@ class TestNominatimValidatorAPI:
                 self.validator.MAX_RETRIES,  # Use final attempt so the test does not sleep.
             )
         assert result is None  # The retry loop must receive a no-response signal after a timeout.
-        mock_requests.get.assert_called_once_with(  # The timeout must come from the real product call.
+        mock_get.assert_called_once_with(  # The timeout must come from the real product call.
             self.validator.NOMINATIM_URL,
             params={"format": "json", "q": "123 Main", "limit": 1},
             headers={"User-Agent": self.validator.USER_AGENT},
@@ -864,10 +882,7 @@ class TestNominatimValidatorAPI:
     def test_try_request_attempt_returns_none_on_connection_error(self):
         """A Nominatim connection error must return no response for the retry loop."""
         error = address_mod.requests.exceptions.ConnectionError("synthetic connection error")  # Transport error.
-        with patch(
-            "src.foundation.support.utils.address_utils.requests"
-        ) as mock_requests:  # Replace the HTTP client only.
-            mock_requests.get.side_effect = error  # Force the product HTTP call to fail before response.
+        with patch.object(address_mod.requests, "get", side_effect=error) as mock_get:  # Replace the HTTP call only.
             result = self.validator._try_request_attempt(  # Drive the real per-attempt request method.
                 {"format": "json", "q": "123 Main", "limit": 1},  # Supply the expected query fields.
                 {"User-Agent": self.validator.USER_AGENT},  # Supply the required Nominatim header.
@@ -875,7 +890,7 @@ class TestNominatimValidatorAPI:
                 self.validator.MAX_RETRIES,  # Use final attempt so the test does not sleep.
             )
         assert result is None  # The retry loop must receive a no-response signal after a connection error.
-        mock_requests.get.assert_called_once_with(  # The connection error must come from the real product call.
+        mock_get.assert_called_once_with(  # The connection error must come from the real product call.
             self.validator.NOMINATIM_URL,
             params={"format": "json", "q": "123 Main", "limit": 1},
             headers={"User-Agent": self.validator.USER_AGENT},
@@ -961,16 +976,26 @@ class TestNominatimValidatorAPI:
             )
             assert result["valid"] is False
 
-    def test_geocode_address_exception(self):
-        with patch.object(self.validator, "_build_address_string", side_effect=Exception("boom")):
+    def test_geocode_address_expected_error_is_logged(self, caplog: pytest.LogCaptureFixture):
+        with (
+            patch.object(self.validator, "_build_address_string", side_effect=ValueError("bad address")),
+            caplog.at_level(logging.WARNING, logger=address_mod.logger.name),
+        ):
             result = self.validator._geocode_address({"address": "123"}, "test")
-            assert result["valid"] is False
+        assert result["valid"] is False
+        assert result["error"] == "bad address"
+        assert "Geocode failed for test (ValueError): bad address" in caplog.text
 
     def test_geocode_address_exception_debug(self):
         self.validator.debug = True
-        with patch.object(self.validator, "_build_address_string", side_effect=Exception("boom")):
+        with patch.object(self.validator, "_build_address_string", side_effect=ValueError("boom")):
             result = self.validator._geocode_address({"address": "123"}, "test")
             assert result["valid"] is False
+
+    def test_geocode_address_unexpected_errors_propagate(self):
+        with patch.object(self.validator, "_build_address_string", side_effect=RuntimeError("code defect")):
+            with pytest.raises(RuntimeError, match="code defect"):
+                self.validator._geocode_address({"address": "123"}, "test")
 
 
 class TestNominatimValidatorRecommendation:
