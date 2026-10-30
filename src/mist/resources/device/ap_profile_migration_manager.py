@@ -1253,10 +1253,10 @@ class APProfileMigrationManager:  # Preserve the existing behavior during the co
             sites = mistapi.get_all(
                 response=sites_response, mist_session=session
             )  # Preserve the existing behavior during the compliance refactor.
-        except Exception:  # Preserve the existing behavior during the compliance refactor.
-            sites = (
-                getattr(sites_response, "data", []) or []
-            )  # Preserve the existing behavior during the compliance refactor.
+        except Exception:  # WHY: Report incomplete discovery without replacing the original failure.
+            _LOGGER.exception("Failed to read organization sites for AP discovery (org_id=%s)", org_id)
+            raise
+        _LOGGER.debug("Read %d organization sites for AP discovery", len(sites))
 
         records: list[dict[str, Any]] = []  # Preserve the existing behavior during the compliance refactor.
         for site in sites:  # Preserve the existing behavior during the compliance refactor.
