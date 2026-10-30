@@ -95,3 +95,10 @@ def journey_recorder(request: pytest.FixtureRequest) -> Iterator[Callable[[Any, 
     outcome = getattr(request.node, OUTCOME_ATTRIBUTE, "unknown")  # The outcome that the hook stored.
     for recorder in built:  # Write one report for each page.
         recorder.finish(str(outcome))  # A failed journey keeps its evidence too.
+
+
+@pytest.fixture(autouse=True)
+def reset_simulated_cloud_status(simulated_cloud_status_control: Any) -> Iterator[None]:
+    """Reset shared stand-in outcomes before each journey and after its evidence is saved."""
+    del simulated_cloud_status_control  # The root fixture resets the shared file before this fixture yields.
+    yield  # The journey may change only its local simulated cloud state.

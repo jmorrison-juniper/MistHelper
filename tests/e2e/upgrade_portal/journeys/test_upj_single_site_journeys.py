@@ -98,16 +98,33 @@ class TestSingleSiteJourneys:
         assert page.get_by_test_id("upgrade-start-button").is_disabled() is True  # The same rule as a comparison.
 
     @pytest.mark.fresh_server
-    def test_start_reaches_the_progress_page(self, operator: tuple[Any, JourneyRecorder]) -> None:
-        """A firmware operator starts a ready run and reads the progress page."""
+    def test_start_reaches_a_completed_run(
+        self,
+        operator: tuple[Any, JourneyRecorder],
+        simulated_cloud_status_control: Any,
+    ) -> None:
+        """A firmware operator starts a ready run and reads its completed targets."""
         page, recorder = operator  # The operator that may start firmware.
         visit(page, recorder, f"/runs/{START_READY_RUN_ID}/confirm", "confirm page")  # The typed confirmation.
         page.get_by_test_id("upgrade-confirm-input").fill("CONFIRM")  # The exact word.
         expect(page.get_by_test_id("upgrade-start-button")).to_be_enabled()  # The word opens the button.
+        simulated_cloud_status_control.complete_run(START_READY_RUN_ID)  # The stand-in driver completes this run.
         recorder.step("start", lambda: page.get_by_test_id("upgrade-start-button").click())  # Start the run.
         page.wait_for_url(re.compile(rf".*/runs/{START_READY_RUN_ID}$"))  # The progress page of the run.
         recorder.step("progress page")  # Record the first progress view.
         assert page.url.endswith(f"/runs/{START_READY_RUN_ID}")  # The journey ended on the run page.
+        expect(page.get_by_test_id("upgrade-state")).to_have_text("complete")  # The durable run reached completion.
+        targets = page.get_by_test_id("upgrade-run-table").locator("tbody tr")  # The saved device results.
+        expect(targets).to_have_count(1)  # The seeded start plan has one gateway.
+        for target in targets.all():  # Inspect every device result in the completed run.
+            expect(target.locator("[data-run-field='state']")).to_have_text("upgraded")  # The target completed.
+            expect(target.locator("[data-run-field='version_after']")).to_have_text(
+                target.locator("[data-run-field='version_target']").inner_text()
+            )  # The reported version matches the requested version.
+            expect(target.locator("[data-run-version-check]")).to_have_text(
+                "Version matches"
+            )  # The portal verified the completed version.
+        recorder.step("completed targets")  # Preserve evidence of the final result.
 
     @pytest.mark.parametrize("run_id", [FAILED_RUN_ID, STOPPED_RUN_ID, LIFECYCLE_RUN_ID])
     def test_run_page_of_each_seeded_state(self, reader: tuple[Any, JourneyRecorder], run_id: str) -> None:

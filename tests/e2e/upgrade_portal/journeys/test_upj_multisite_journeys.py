@@ -3,9 +3,9 @@
 Why:
     The multi-site mode is the focus of issue #3200. Each journey starts at the
     mode picker and goes as far as the stand-in server allows: the options page,
-    the confirm page, the start, the progress page, and a final state. The
-    stand-in cloud always reports a running job, so each journey fulfills the
-    status read with the final answer that a real cloud sends at the end.
+    the confirm page, the start, the progress page, and a final state. A
+    process-shared control moves local stand-in jobs to completion without
+    intercepting browser routes.
 
     A check that fails because of a known product defect keeps its assertion
     and carries a strict xfail with the issue number. The file then stays
@@ -15,7 +15,6 @@ Why:
 
 from __future__ import annotations
 
-import json  # Build the fulfilled status answers.
 import logging  # Record device selections and invalid-option attempts without session data.
 import re  # Match the page addresses of the multi-site flow.
 from collections.abc import Callable, Sequence  # Type the helpers.
@@ -25,6 +24,7 @@ import pytest
 
 from tests.e2e.upgrade_portal.journeys.evidence import JourneyRecorder  # The evidence of each journey.
 from tests.support.upgrade_portal_e2e.model_version_picker import ModelVersionPicker  # Check actual device selects.
+from tests.support.upgrade_portal_e2e.site_lock import SiteRelease  # Release pre-check locks through the test contract.
 
 sync_api = pytest.importorskip("playwright.sync_api", reason="Playwright is not installed.")
 expect = sync_api.expect  # The retrying assertion of Playwright.
@@ -61,9 +61,7 @@ COMBINATIONS = (  # Every non-empty family combination, single families first.
 OPTIONS_URL = re.compile(r".*/upgrade/org/options$")  # The options page.
 CONFIRM_URL = re.compile(r".*/upgrade/org/confirm$")  # The confirm page.
 JOB_URL = re.compile(r".*/upgrade/org/jobs/[^/?#]+$")  # The progress page of one operation.
-STATUS_ROUTE = re.compile(r".*/api/org-upgrades/[^/]+$")  # The status read of the progress page.
 FLASH = "flash-message"  # The in-page message of a refused request.
-PHASE_DEFECT = "#3223: the multi-site path never applies the canary phase rule"  # One reason for each phase case.
 IN_VIEW_SCRIPT = (  # True when the whole element box sits inside the viewport.
     "element => { const box = element.getBoundingClientRect();"
     " return box.top >= 0 && box.bottom <= window.innerHeight; }"
@@ -141,6 +139,15 @@ class MultiSiteJourney:
             expect(self.page.get_by_test_id(FLASH)).to_be_visible()  # The refusal shows in the page.
             self.recorder.step("options refused")  # Record the refusal.
 
+    def release_site_locks(self) -> None:
+        """Release only locks that this browser session still holds."""
+        csrf_token = self.page.get_by_test_id("csrf-meta").get_attribute("content")  # The release route checks CSRF.
+        if not csrf_token:  # Fail explicitly when the page cannot authorize cleanup.
+            raise AssertionError("The page did not publish a CSRF token for site-lock cleanup.")
+        release = SiteRelease(self.page.request, csrf_token)  # Use the shared site-lock teardown contract.
+        for site_id in (SITE_ID, SECOND_SITE_ID):  # Pre-checks may acquire either selected site.
+            release.free_site(site_id)  # Re-take and release each lock held by this session.
+
     def start(self) -> str:
         """Type the confirmation word and start the upgrade.
 
@@ -169,52 +176,6 @@ class MultiSiteJourney:
         self.page.get_by_test_id("org-upgrade-precheck-missing").click()  # Start only the missing captures.
         self.page.wait_for_load_state("networkidle", timeout=120_000)  # Wait for the reload that unlocks the field.
 
-    def fulfill_status(self, payload: dict[str, Any]) -> None:
-        """Answer the status read of the progress page with a fixed body.
-
-        Args:
-            payload: The status body that a real cloud sends.
-        """
-
-        def answer(route: Any) -> None:
-            """Fulfill a GET and pass every other method through."""
-            if route.request.method != "GET":  # A cancel post must reach the server.
-                route.continue_()  # The server answers the cancel itself.
-                return  # Nothing else to do for this request.
-            route.fulfill(status=200, content_type="application/json", body=json.dumps(payload))
-
-        self.page.route(STATUS_ROUTE, answer)  # Every later status read gets this body.
-
-
-def final_status(families: Sequence[str], state: str = "completed") -> dict[str, Any]:
-    """Build a final status body for the selected families at both sites.
-
-    Args:
-        families: The families of the operation.
-        state: The final state of every child.
-
-    Returns:
-        A status body in the shape that the progress script paints.
-    """
-    rows = [  # One child for each site and family.
-        {
-            "site_id": site_id,
-            "site_name": site_name,
-            "device_family": family,
-            "id": f"{family}-job-{index}",
-            "status": state,
-            "total": 1,
-            "upgraded": 1 if state == "completed" else 0,
-            "failed": 1 if state == "failed" else 0,
-        }
-        for index, (site_id, site_name) in enumerate(zip((SITE_ID, SECOND_SITE_ID), SITE_NAMES, strict=True))
-        for family in families
-    ]
-    total = len(rows)  # One target in each child.
-    upgraded = sum(row["upgraded"] for row in rows)  # The upgraded count of the whole operation.
-    failed = sum(row["failed"] for row in rows)  # The failed count of the whole operation.
-    return {"status": state, "total": total, "upgraded_count": upgraded, "failed_count": failed, "site_upgrades": rows}
-
 
 @pytest.fixture
 def operator(firmware_operator_page: Any, journey_recorder: Callable[..., JourneyRecorder]) -> MultiSiteJourney:
@@ -234,7 +195,10 @@ class TestMultiSiteFamilyJourneys:
     @pytest.mark.parametrize("families", COMBINATIONS, ids=["-".join(item) for item in COMBINATIONS])
     @pytest.mark.fresh_server
     def test_family_combination_reaches_a_final_state(
-        self, operator: MultiSiteJourney, families: tuple[str, ...]
+        self,
+        operator: MultiSiteJourney,
+        families: tuple[str, ...],
+        simulated_cloud_status_control: Any,
     ) -> None:
         """One family combination reaches the confirm page, the start, and a completed state."""
         operator.open_options()  # Both sites, because the AP child names both.
@@ -248,19 +212,35 @@ class TestMultiSiteFamilyJourneys:
                 )  # Keep each selected model and version visible in the plan.
             else:  # A cleared family must not appear in the plan.
                 expect(firmware).not_to_contain_text(FAMILY_MODELS[family])  # Excluded models must leave the plan.
+        simulated_cloud_status_control.complete_multi_site()  # The local cloud completes each submitted child.
         operator.start()  # The operator types the word and starts the operation.
         progress = operator.page.get_by_test_id("org-upgrade-site-progress")  # The child table.
         expect(progress).to_be_visible()  # The table shows at once.
-        operator.fulfill_status(final_status(families))  # The cloud reports the end of every child.
         operator.page.get_by_test_id("org-upgrade-refresh").click()  # Read the final state now.
         expect(operator.page.locator("[data-org-upgrade-field='status']")).to_have_text("completed")  # The aggregate.
+        expect(operator.page.locator("[data-org-upgrade-field='total']")).to_have_text(str(len(families) * 2))
+        expect(operator.page.locator("[data-org-upgrade-field='upgraded_count']")).to_have_text(
+            str(len(families) * 2)
+        )  # Every selected device completed.
+        expect(operator.page.locator("[data-org-upgrade-field='failed_count']")).to_have_text("0")
+        child_rows = progress.locator("tbody tr")  # Each site and family has a durable child result.
+        expected_children = (1 if "ap" in families else 0) + 2 * sum(
+            family != "ap" for family in families
+        )  # AP jobs cover both sites once. Other families use one job per site.
+        expect(child_rows).to_have_count(expected_children)  # Every selected child reached the page.
+        for row in child_rows.all():  # Inspect every backend child, not only the aggregate label.
+            family = row.locator("td").nth(0).inner_text()  # Read the child family from the real result row.
+            target_count = "2" if family == "ap" else "1"  # The AP job covers both selected sites.
+            expect(row.locator("td").nth(1)).to_have_text("completed")  # Each child reached its final state.
+            expect(row.locator("td").nth(2)).to_have_text(target_count)  # Each child names its selected targets.
+            expect(row.locator("td").nth(3)).to_have_text(target_count)  # Every selected target completed.
+            expect(row.locator("td").nth(4)).to_have_text("0")  # No target failed.
         for family in families:  # Each family shows its completed child.
             expect(progress).to_contain_text(family)  # The family column names the family.
         operator.recorder.step("final state")  # Record the end of the journey.
         final = operator.page.locator("[data-org-upgrade-field='status']").inner_text()  # The painted state.
         assert final == "completed"  # The journey ends on the completed state.
 
-    @pytest.mark.xfail(strict=True, reason="#3220: a running cloud word reads as attention_required")
     @pytest.mark.fresh_server
     def test_running_operation_reads_as_running(self, operator: MultiSiteJourney) -> None:
         """A job that the cloud still runs shows a running state after the start."""
@@ -272,7 +252,6 @@ class TestMultiSiteFamilyJourneys:
         expect(status).not_to_have_text("attention_required")  # A running job needs no attention.
         assert status.inner_text() != "attention_required"  # The same rule as a plain comparison.
 
-    @pytest.mark.xfail(strict=True, reason="#3220: the first status read releases the site locks of a running job")
     @pytest.mark.fresh_server
     def test_running_operation_keeps_its_site_locks(self, operator: MultiSiteJourney) -> None:
         """Both sites stay locked while the cloud still runs the job."""
@@ -286,15 +265,18 @@ class TestMultiSiteFamilyJourneys:
             expect(row).not_to_contain_text("Free")  # A running job holds the site.
             assert "Free" not in row.inner_text()  # The same rule as a plain comparison.
 
-    @pytest.mark.xfail(strict=True, reason="#3225: a completed operation still offers the cancel form")
     @pytest.mark.fresh_server
-    def test_completed_operation_offers_no_cancel(self, operator: MultiSiteJourney) -> None:
+    def test_completed_operation_offers_no_cancel(
+        self,
+        operator: MultiSiteJourney,
+        simulated_cloud_status_control: Any,
+    ) -> None:
         """A completed operation hides the cancel control."""
         operator.open_options()  # Both sites.
         operator.choose_families(("ap",))  # AP only.
         operator.review()  # The confirm page.
+        simulated_cloud_status_control.complete_multi_site()  # The local cloud completes the selected child.
         operator.start()  # The progress page.
-        operator.fulfill_status(final_status(("ap",)))  # The cloud reports the end.
         operator.page.get_by_test_id("org-upgrade-refresh").click()  # Read the end now.
         expect(operator.page.locator("[data-org-upgrade-field='status']")).to_have_text("completed")  # The end.
         operator.recorder.step("completed state")  # Record the page with the end state.
@@ -302,11 +284,36 @@ class TestMultiSiteFamilyJourneys:
         expect(cancel_word).to_be_hidden()  # No cancel.
         assert cancel_word.is_hidden() is True  # The same rule as a plain comparison.
 
+    @pytest.mark.fresh_server
+    def test_site_list_fault_refuses_the_plan(
+        self,
+        operator: MultiSiteJourney,
+        simulated_cloud_status_control: Any,
+    ) -> None:
+        """Issue #3393: a site-list transport fault refuses the options plan."""
+        operator.open_options()  # Warm the site list cache through the normal browser flow.
+        operator.choose_families(("ap",))  # Keep a valid device choice before the fault.
+        simulated_cloud_status_control.arm_site_list_fault()  # Clear the cache and fail one local cloud read.
+        with operator.page.expect_response("**/api/org-upgrades/options") as response_info:
+            operator.review(expect_confirm=False)  # Submit through the actual options form.
+        response = response_info.value  # The browser receives the service refusal.
+        assert response.status == 503  # The route reports an unavailable cloud read.
+        error = response.json()["error"]  # Read the structured response that the page received.
+        assert error["code"] == "org_upgrade_site_read_failed"  # Keep the stable fault code.
+        assert error["message"] == "The Mist cloud site read failed. Try again."  # Give the operator a next action.
+        assert operator.page.url.endswith("/upgrade/org/options")  # The failed request opens no confirmation plan.
+        expect(operator.page.get_by_test_id("org-upgrade-review")).to_be_visible()  # Keep the repair path available.
+        confirmation = operator.page.goto(
+            "/upgrade/org/confirm", wait_until="domcontentloaded"
+        )  # A refusal proves the failed save left no plan in the session.
+        assert confirmation is not None and confirmation.status == 400  # The confirmation gate stays closed.
+        saved_plan_error = confirmation.json()["error"]  # Read the confirmation refusal.
+        assert saved_plan_error["code"] == "org_upgrade_options_invalid"  # No valid plan exists.
+
 
 class TestMultiSiteOptionsJourneys:
     """The options page guides the operator and keeps each choice."""
 
-    @pytest.mark.xfail(strict=True, reason="#3206: the refusal shows above the fold, and the page does not move to it")
     def test_default_form_refusal_is_in_view(self, reader: MultiSiteJourney) -> None:
         """A refused default form shows its message where the operator looks."""
         reader.open_options()  # Both sites.
@@ -317,7 +324,6 @@ class TestMultiSiteOptionsJourneys:
         in_view = reader.page.get_by_test_id(FLASH).evaluate(IN_VIEW_SCRIPT)  # The browser measures the box.
         assert in_view is True  # The same rule as a plain comparison.
 
-    @pytest.mark.xfail(strict=True, reason="#3206: the refusal names the internal field version_target")
     def test_unknown_version_names_the_control(self, reader: MultiSiteJourney) -> None:
         """The selects refuse an unavailable version, and an empty plan names the device heading."""
         reader.open_options()  # Both sites.
@@ -339,7 +345,6 @@ class TestMultiSiteOptionsJourneys:
         expect(flash).to_contain_text("Device target versions")  # Require the current device heading.
         assert "version_target" not in flash.inner_text()  # The same rule as a plain comparison.
 
-    @pytest.mark.xfail(strict=True, reason="#3207: the controls of a cleared family stay visible")
     def test_cleared_families_hide_their_controls(self, reader: MultiSiteJourney) -> None:
         """AP only hides the switch, gateway, reboot, and Junos controls."""
         reader.open_options()  # Both sites.
@@ -352,7 +357,6 @@ class TestMultiSiteOptionsJourneys:
         hidden = targets.controls(2, "switch").first.is_hidden()  # Preserve the direct visibility assertion.
         assert hidden is True  # The same rule as a plain comparison.
 
-    @pytest.mark.xfail(strict=True, reason="#3221: the options page resets families, reboot, Junos action, and force")
     def test_back_from_confirm_keeps_every_choice(self, reader: MultiSiteJourney) -> None:
         """The Back link of the confirm page shows the choices that the operator made."""
         reader.open_options()  # Both sites.
@@ -376,15 +380,9 @@ class TestMultiSiteOptionsJourneys:
         ("control", "value"),
         [
             ("org-upgrade-canary-phases", "abc"),
-            pytest.param(
-                "org-upgrade-canary-phases", "50,10", marks=pytest.mark.xfail(strict=True, reason=PHASE_DEFECT)
-            ),
-            pytest.param(
-                "org-upgrade-canary-phases", "10,101", marks=pytest.mark.xfail(strict=True, reason=PHASE_DEFECT)
-            ),
-            pytest.param(
-                "org-upgrade-canary-phases", "10,50", marks=pytest.mark.xfail(strict=True, reason=PHASE_DEFECT)
-            ),
+            ("org-upgrade-canary-phases", "50,10"),
+            ("org-upgrade-canary-phases", "10,101"),
+            ("org-upgrade-canary-phases", "10,50"),
             ("org-upgrade-max-failures", "150"),
             ("org-upgrade-max-failures", "-1"),
             ("org-upgrade-reboot-at", "soon"),
@@ -402,7 +400,8 @@ class TestMultiSiteOptionsJourneys:
     def test_invalid_value_stays_in_the_page(self, reader: MultiSiteJourney, control: str, value: str) -> None:
         """Each invalid value shows a message in the page and keeps the options page."""
         reader.open_options()  # Both sites.
-        reader.choose_families(("ap",))  # A valid family and version.
+        families = ("switch",) if control == "org-upgrade-reboot-at" else ("ap",)  # The date needs a Junos family.
+        reader.choose_families(families)  # Choose a family that exposes the tested control.
         reader.page.get_by_test_id(control).fill(value)  # The invalid value under test.
         reader.page.evaluate("() => document.querySelectorAll('input').forEach(i => i.removeAttribute('min'))")
         reader.page.evaluate("() => document.querySelectorAll('input').forEach(i => i.removeAttribute('max'))")
@@ -432,18 +431,21 @@ class TestMultiSiteConfirmJourneys:
     @pytest.mark.parametrize("word", ["confirm", "CONFIRM ", " CONFIRM", "CONFIRMED", "", "C0NFIRM"])
     def test_start_stays_closed_for_a_wrong_word(self, reader: MultiSiteJourney, word: str) -> None:
         """Only the exact word opens the start button."""
-        reader.open_options()  # Both sites.
-        reader.choose_families(("ap",))  # AP only.
-        reader.review()  # The confirm page.
-        reader.page.get_by_test_id("org-upgrade-confirmation").fill(word)  # A wrong word.
-        expect(reader.page.get_by_test_id("org-upgrade-start")).to_be_disabled()  # The start stays closed.
-        assert reader.page.get_by_test_id("org-upgrade-start").is_disabled() is True  # The same rule as a comparison.
+        try:  # The test takes pre-check locks before it types the wrong word.
+            reader.open_options()  # Both sites.
+            reader.choose_families(("ap",))  # AP only.
+            reader.review()  # The confirm page.
+            reader.ensure_prechecks_ready()  # The confirmation field stays disabled until every site passes.
+            reader.page.get_by_test_id("org-upgrade-confirmation").fill(word)  # A wrong word.
+            expect(reader.page.get_by_test_id("org-upgrade-start")).to_be_disabled()  # The start stays closed.
+            assert reader.page.get_by_test_id("org-upgrade-start").is_disabled() is True  # Confirm the disabled state.
+        finally:  # Do not leave a pre-check lock for the next parameter.
+            reader.release_site_locks()  # Release only this operator's site locks.
 
 
 class TestMultiSiteSessionJourneys:
     """A change of mode clears the old multi-site choices."""
 
-    @pytest.mark.xfail(strict=True, reason=PHASE_DEFECT)
     @pytest.mark.fresh_server
     def test_invalid_phases_follow_through_to_the_start(self, operator: MultiSiteJourney) -> None:
         """Descending canary phases must stop before the start, or the start must refuse them."""
@@ -460,6 +462,7 @@ class TestMultiSiteSessionJourneys:
             operator.recorder.step("after start with descending phases")  # Record the start answer.
         assert not JOB_URL.match(operator.page.url), "The portal started a job with descending canary phases."
 
+    @pytest.mark.xfail(strict=True, reason="#4540: showOrgBusyRefusal is not defined in the request handler scope")
     @pytest.mark.fresh_server
     def test_second_start_on_busy_sites_explains_the_lock(self, operator: MultiSiteJourney) -> None:
         """A start on sites that a running job holds names the running job."""
@@ -479,7 +482,7 @@ class TestMultiSiteSessionJourneys:
         expect(flash).not_to_contain_text("site_lock_wrong_run")  # No internal code.
         assert first_job.rsplit("/", 1)[-1].startswith("org-run-")  # The first job page exists for the operator.
 
-    @pytest.mark.xfail(strict=True, reason="#3224: the busy-site refusal names no running job and offers no link")
+    @pytest.mark.xfail(strict=True, reason="#4540: showOrgBusyRefusal is not defined in the request handler scope")
     @pytest.mark.fresh_server
     def test_busy_site_refusal_links_to_the_running_job(self, operator: MultiSiteJourney) -> None:
         """A start on busy sites links to the job that holds them and closes the start button."""

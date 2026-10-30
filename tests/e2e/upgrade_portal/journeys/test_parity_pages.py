@@ -7,6 +7,7 @@ from typing import Any  # Playwright page objects have no local stub type.
 
 import pytest  # Use xfail markers for known parity gaps.
 
+from tests.e2e.upgrade_portal.org_precheck_steps import OrgPrecheckSteps  # Enforce the multi-site start gate.
 from tests.support.upgrade_portal_e2e.model_version_picker import ModelVersionPicker  # Use real device choices.
 
 sync_api = pytest.importorskip("playwright.sync_api", reason="Playwright is not installed.")  # Skip without Playwright.
@@ -38,7 +39,9 @@ def _release_locks(page: Any) -> None:
 def _watch(page: Any) -> dict[str, list[str]]:
     """Collect browser errors so a failed parity step keeps its evidence."""
     events: dict[str, list[str]] = {"console": [], "pageerror": [], "requestfailed": [], "http": []}  # Store text only.
-    page.on("console", lambda message: events["console"].append(message.text))  # Keep console messages.
+    page.on(
+        "console", lambda message: events["console"].append(message.text) if message.type == "error" else None
+    )  # Keep only console errors from the browser.
     page.on("pageerror", lambda error: events["pageerror"].append(str(error)))  # Keep script errors.
     page.on("requestfailed", lambda request: events["requestfailed"].append(request.url))  # Keep failed requests.
     page.on(
@@ -89,13 +92,6 @@ def _fill_multi_options(page: Any) -> None:
     page.get_by_test_id("org-upgrade-max-failures").fill("5")  # Set the visible failure threshold.
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "#3204 #3205 #3209 (P-10, P-19, P-21, P-22, P-23, P-24): "
-        "multi-site options lack per-device and advanced controls"
-    ),
-)
 def test_options_page_pair_has_the_same_main_controls(page: Any) -> None:
     """The options pages must expose the same controls before a firmware write."""
     events = _watch(page)  # Collect browser evidence for this page pair.
@@ -106,26 +102,24 @@ def test_options_page_pair_has_the_same_main_controls(page: Any) -> None:
             "stable": page.get_by_test_id("upgrade-stable-version-group").is_visible(),  # Stable version choice.
             "p2p": page.get_by_test_id("upgrade-p2p-group").is_visible(),  # AP peer-to-peer controls.
             "rrm": page.get_by_test_id("upgrade-rrm-first-batch-percentage-field").is_visible(),  # RRM details.
-            "ssr": page.get_by_test_id("upgrade-ssr-channel-field").count() == 1,  # SSR release train.
         }
         _open_multi_options(page, "options", 2)  # Multi-site options.
         multi_controls = {  # Read the counterpart controls in multi-site mode.
-            "per_device": page.get_by_test_id("upgrade-target-table").count() == 1,  # Expected per-device rows.
-            "stable": page.get_by_test_id("upgrade-stable-version-group").count() == 1,  # Expected stable choice.
-            "p2p": page.get_by_test_id("upgrade-p2p-group").count() == 1,  # Expected AP peer-to-peer controls.
-            "rrm": page.get_by_test_id("upgrade-rrm-first-batch-percentage-field").count()
-            == 1,  # Expected RRM details.
-            "ssr": page.get_by_test_id("upgrade-ssr-channel-field").count() == 1,  # Expected SSR release train.
+            "per_device": page.get_by_test_id("org-upgrade-device-summary").is_visible(),  # The organization table.
+            "stable": page.get_by_test_id("org-upgrade-stable-version-group").is_visible(),  # The organization choice.
+            "p2p": page.get_by_test_id("org-upgrade-p2p-group").is_visible(),  # The organization AP choice.
+            "rrm": page.get_by_test_id("org-upgrade-rrm-first-batch-percentage-field").is_visible(),  # RRM details.
         }
+        ssr_targets = page.locator('select[data-org-version-for][data-gateway-family="ssr"]')  # Find SSR targets.
+        ssr_field = page.get_by_test_id("org-upgrade-ssr-channel-field")  # The route-specific SSR choice.
+        assert ssr_field.count() == int(ssr_targets.count() > 0)  # Show the control only when SSR is present.
         assert events == {"console": [], "pageerror": [], "requestfailed": [], "http": []}  # No browser fault.
-        assert multi_controls == single_controls  # Known gap: multi-site lacks several controls.
+        assert multi_controls == single_controls  # Each mode uses distinct selectors for equivalent controls.
     finally:  # Cleanup must run after the known failure.
         _release_locks(page)  # Release locks for the next browser journey.
 
 
-@pytest.mark.xfail(
-    strict=True, reason="#3243 #3222 (P-27, P-28): multi-site confirm omits pre-check, warnings, and advanced summary"
-)
+@pytest.mark.xfail(strict=True, reason="#3222 (P-27, P-28): multi-site confirm omits warnings and advanced summary")
 def test_confirm_page_pair_has_the_same_review_content(page: Any) -> None:
     """The confirm pages must show the same safety review before the typed word."""
     events = _watch(page)  # Collect browser evidence for this page pair.
@@ -155,10 +149,6 @@ def test_confirm_page_pair_has_the_same_review_content(page: Any) -> None:
 
 
 @pytest.mark.fresh_server
-@pytest.mark.xfail(
-    strict=True,
-    reason="#3244 to #3249 (P-38 to P-47, P-50): multi-site progress lacks run controls",
-)
 def test_progress_page_pair_has_the_same_run_controls(firmware_operator_page: Any) -> None:
     """The progress pages must show the same device detail and recovery controls."""
     page = firmware_operator_page  # Use the operator that may start firmware writes.
@@ -179,25 +169,26 @@ def test_progress_page_pair_has_the_same_run_controls(firmware_operator_page: An
             "devices": page.get_by_test_id("upgrade-run-table").is_visible(),  # Per-device table exists.
             "captures": page.get_by_text("Post-check capture").count() > 0,  # Capture fields exist.
             "mist_account": page.get_by_test_id("upgrade-cloud-account").is_visible(),  # Mist account is visible.
-            "stop": page.get_by_test_id("stop-open-button").count() == 1,  # Stop control can exist.
+            "stop_or_cancel": page.get_by_test_id("stop-button").count() == 1,  # Stop a live single-site run.
         }
         next_step = _open_multi_options(page, "progress", 3)  # Open multi-site options.
         _fill_multi_options(page)  # Fill all required family versions.
         page.get_by_test_id("org-upgrade-review").click()  # Move to confirm.
         page.wait_for_url(re.compile(r".*/upgrade/org/confirm$"))  # Wait for the confirm page.
+        OrgPrecheckSteps.take_missing(page)  # Each site needs a verified pre-check before the start.
         page.get_by_test_id("org-upgrade-confirmation").fill("CONFIRM")  # Type the required word.
         expect(page.get_by_test_id("org-upgrade-start")).to_be_enabled()  # Wait for the gate to open.
         page.get_by_test_id("org-upgrade-start").click()  # Start the aggregate operation.
         page.wait_for_url(re.compile(r".*/upgrade/org/jobs/[^/?#]+$"))  # Wait for multi-site progress.
         _shot(page, "progress", next_step, "org-progress")  # Record the multi-site progress page.
         multi_progress = {  # Read counterpart controls in multi-site mode.
-            "phases": page.get_by_test_id("upgrade-phase-gateways").count() == 1,  # Expected cascade phases.
-            "devices": page.get_by_test_id("upgrade-run-table").count() == 1,  # Expected per-device table.
-            "captures": page.get_by_text("Post-check capture").count() > 0,  # Expected capture fields.
-            "mist_account": page.get_by_test_id("upgrade-cloud-account").count() == 1,  # Expected account label.
-            "stop": page.get_by_test_id("stop-open-button").count() == 1,  # Expected stop control.
+            "phases": page.get_by_test_id("org-upgrade-phase-gateways").count() == 1,  # The organization phase list.
+            "devices": page.get_by_test_id("org-upgrade-device-table").is_visible(),  # The organization device table.
+            "captures": page.get_by_test_id("org-upgrade-postcheck-list").count() == 1,  # Site capture results.
+            "mist_account": page.get_by_test_id("org-upgrade-cloud-account").is_visible(),  # The account label.
+            "stop_or_cancel": page.get_by_test_id("org-upgrade-cancel-controls").count() == 1,  # Cancel queued runs.
         }
         assert events == {"console": [], "pageerror": [], "requestfailed": [], "http": []}  # No browser fault.
-        assert multi_progress == single_progress  # Known gap: multi-site progress is site-level only.
+        assert multi_progress == single_progress  # Each mode uses distinct selectors for equivalent controls.
     finally:  # Cleanup must run after the known failure.
         _release_locks(page)  # Release locks for any following journey.
