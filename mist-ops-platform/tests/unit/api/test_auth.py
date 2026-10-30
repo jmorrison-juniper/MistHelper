@@ -127,7 +127,7 @@ class TestAuthService:
 
         self.svc.validate_token("tok-new")
 
-        mock_write.assert_called_once()
+        assert mock_write.call_count == 1
 
     def test_read_cache_returns_none_and_logs_truncated_value(
         self,
