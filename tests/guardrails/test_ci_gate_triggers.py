@@ -329,8 +329,8 @@ class TestCancelledRunStops:
     def test_each_gate_after_a_failure_still_runs(self, workflow: dict[str, Any]) -> None:
         """The jobs that ran after a failed gate keep that behavior through !cancelled()."""
         gated = CancellableJobAudit.gated_jobs(workflow)  # Read the jobs that run after a failed dependency.
-        # Issue #4250 adds playwright_shards, so the pinned set holds 9 jobs.
-        assert len(gated) == 9, f"Expected 9 jobs with !cancelled(), found {len(gated)}: {gated}"  # Pin the set.
+        # Issues #4250 and #3200 add two browser jobs, so the pinned set holds 10 jobs.
+        assert len(gated) == 10, f"Expected 10 jobs with !cancelled(), found {len(gated)}: {gated}"  # Pin the set.
         assert "quality_gate_issues" in gated, "The issue job must still run after a failed gate."
 
     def test_the_audit_rejects_an_always_condition(self) -> None:
