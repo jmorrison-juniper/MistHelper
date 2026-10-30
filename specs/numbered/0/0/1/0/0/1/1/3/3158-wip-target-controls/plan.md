@@ -70,7 +70,7 @@ tests/support/wip_target_controls/
   browser.py
 tests/unit/web_portal/wip_target_controls/test_metadata.py
 tests/contract/web_portal/wip_target_controls/test_handler_outputs.py
-tests/e2e/wip_target_controls/
+tests/e2e/web_portal/wip_target_controls/
   conftest.py
   test_controls.py
   test_failure_recovery.py
