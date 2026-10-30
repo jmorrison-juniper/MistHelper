@@ -181,7 +181,7 @@ The root interpreter is the separate root `.venv/bin/python`.
 | Complete root Black | `rtk proxy .venv/bin/python -m black --check --diff .` | Passed for 2,013 files. |
 | Complete root strict types | `rtk proxy .venv/bin/python -m mypy src/ MistHelper.py wsgi.py scripts/mist_ideas_analyzer_pkg/__init__.py scripts/mist_ideas_distiller_v2_pkg/__init__.py --config-file pyproject.toml` | Passed for 663 source files. |
 | Complete root Bandit | `rtk proxy .venv/bin/python -m bandit -c pyproject.toml -r . -q` | Passed. Existing annotation warnings remain. |
-| Bandit path contract | `rtk proxy .venv/bin/bandit-exclude-check --include-sample ./src/utils/zen_city_metadata.py --include-sample '.\src\utils\zen_city_metadata.py'` | Passed. The optional SARIF formatter reports missing `sarif_om`. |
+| Bandit path contract | `rtk proxy .venv/bin/bandit-exclude-check --include-sample ./src/foundation/support/utils/zen_city_metadata.py --include-sample '.\src\foundation\support\utils\zen_city_metadata.py'` | Historical run passed. These paths now name the canonical source location. The optional SARIF formatter reported missing `sarif_om`. |
 | Complete root Pylint | `rtk proxy .venv/bin/python -m pylint src/ --fail-under=9.5` | Passed with score 9.83. |
 | Complete root complexity | `rtk proxy .venv/bin/python -m radon cc src/ MistHelper.py wsgi.py scripts/analyze_marvis_pcap.py scripts/probe_zscaler_endpoints.py tests/unit/utils/test_zscaler_catalogue.py -j \| rtk proxy .venv/bin/complexity-gate --max 10` | Passed. |
 | Factory complexity | `rtk proxy .venv/bin/python -m radon cc mist-ops-platform/src/shared/mist/session.py -j \| rtk proxy .venv/bin/complexity-gate --max 10` | Passed. |
