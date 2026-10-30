@@ -25,6 +25,7 @@ import os
 import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from types import TracebackType
 from unittest.mock import MagicMock
 
 import pytest
@@ -155,10 +156,11 @@ class TestRunCsvGenerator:
         assert record.name == "src.foundation.persistence.cache.cache_utils"
         assert record.msg == "Failed to generate %s using %s: %s"
         assert record.args == ("out.csv", "boom_gen", error)
-        assert record.exc_info is not None
+        assert isinstance(record.exc_info, tuple)
         assert record.exc_info[0] is error_type
         assert record.exc_info[1] is error
-        assert record.exc_info[2] is not None
+        assert isinstance(record.exc_info[2], TracebackType)
+        assert record.exc_info[2].tb_frame.f_code.co_name == "_run_csv_generator"
 
     @pytest.mark.parametrize("error_type", [KeyboardInterrupt, SystemExit, GeneratorExit])
     def test_process_control_exception_propagates(
@@ -232,9 +234,10 @@ class TestCheckAndGenerateCsv:
         record = caplog.records[0]
         assert record.name == "src.foundation.persistence.cache.cache_utils"
         assert record.args == ("nope.csv", "bad_gen", error)
-        assert record.exc_info is not None
+        assert isinstance(record.exc_info, tuple)
         assert record.exc_info[1] is error
-        assert record.exc_info[2] is not None
+        assert isinstance(record.exc_info[2], TracebackType)
+        assert record.exc_info[2].tb_frame.f_code.co_name == "_run_csv_generator"
 
     def test_generator_writes_missing_cache(self, fake_mh: _FakeMH, tmp_path: Path) -> None:
         """Retain the successful file result through the freshness dispatcher."""
