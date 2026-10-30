@@ -35,7 +35,7 @@
 
 ## Phase 4: Polish and Cross-Cutting Concerns
 
-- [x] T010 Run the focused tests and the controlled scan mutation described in `specs/numbered/0/0/0/4/2/0/0/3/2753-csv-device-id-validation/design/quickstart.md`. (delivered: 125 focused tests passed; the synthetic mutation was detected)
+- [x] T010 Run the focused tests and the controlled scan mutation described in `specs/numbered/0/0/0/4/2/0/0/3/2753-csv-device-id-validation/design/quickstart.md`. (delivered: 120 focused tests passed; the synthetic mutation was detected)
 - [ ] T011 Run applicable local gates and both test-quality ratchets without changing `.github/test-quality-baseline.json`.
 - [x] T012 Analyze `specs/numbered/0/0/0/4/2/0/0/3/2753-csv-device-id-validation/spec.md`, `plan.md`, and `tasks.md`. (delivered: manual review found complete requirement coverage and no conflicts; the prerequisite script could not run because `pwsh` is unavailable)
 

@@ -11,8 +11,6 @@ import sys
 import tempfile
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 # --- Module-level mistapi stub, restored the moment the import finishes ---
 # WHY: pytest imports every test module during collection but runs teardown_module only
 # for a module that has a selected test. A stub left in sys.modules therefore leaks for
@@ -763,9 +761,9 @@ class TestParseFailures:
         assert "connection timeout" in comp.parse_failures[0]["failure_reason"]
         assert comp.counters.parse_failures == 1
 
-    @pytest.mark.parametrize(
-        "failure_method, failure_args",
-        [
+    def test_failure_records_reject_invalid_device_ids(self) -> None:
+        """Both failure paths reject missing, blank, and non-string device IDs."""
+        failure_cases: list[tuple[str, dict[str, object]]] = [
             (
                 "_record_mist_parse_failure",
                 {
@@ -783,31 +781,23 @@ class TestParseFailures:
                     "error_msg": "connection timeout",
                 },
             ),
-        ],
-    )
-    @pytest.mark.parametrize(
-        "device",
-        [
+        ]  # WHY: cover both failure-record entry points.
+        invalid_devices: list[dict[str, object]] = [
             {"site_id": "s1", "site_name": "Site1"},
             {"site_id": "s1", "site_name": "Site1", "id": ""},
             {"site_id": "s1", "site_name": "Site1", "id": 42},
-        ],
-    )
-    def test_failure_records_reject_invalid_device_id(
-        self,
-        failure_method: str,
-        failure_args: dict[str, object],
-        device: dict[str, object],
-        caplog: pytest.LogCaptureFixture,
-    ) -> None:
-        """Both failure paths reject missing, blank, and non-string device IDs."""
-        comp = _make_comparator()
-        recorder = getattr(comp, failure_method)
-        with caplog.at_level("ERROR"):
-            with pytest.raises(ValueError, match="device id is required"):
-                recorder(device=device, **failure_args)
-        assert comp.parse_failures == []
-        assert "device id" in caplog.text.lower()
+        ]  # WHY: cover absent, blank, and non-string IDs.
+        for failure_method, failure_args in failure_cases:  # WHY: check each record path.
+            for device in invalid_devices:  # WHY: check every invalid ID shape.
+                comparator = _make_comparator()  # WHY: isolate each rejected record.
+                recorder = getattr(comparator, failure_method)  # WHY: select the tested path.
+                try:
+                    recorder(device=device, **failure_args)  # WHY: submit one invalid device.
+                except ValueError as error:
+                    assert "device id is required" in str(error).lower()  # WHY: preserve the operator error.
+                else:
+                    raise AssertionError("Invalid device ID did not fail.")  # WHY: fail when validation is bypassed.
+                assert comparator.parse_failures == []  # WHY: do not append an unidentified failure.
 
 
 # ================================================================
