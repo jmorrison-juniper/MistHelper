@@ -1384,6 +1384,24 @@ The three feature records passed STE with scores of 97, 96, and 93.
 The link check found zero broken links.
 The held actions and analytics paths, fixtures, markers, and pytest settings remain unchanged.
 
+## Firmware manager test relocation, 2026-10-30
+
+The current map assigns `tests/unit/firmware/test_firmware_manager_ap_msp.py` to
+`tests/unit/prod_readiness/operations/execution/firmware/upgraders/manager/site/`.
+The live open-PR scan found no claim on either path.
+Exact issue checks found no claim in issues #2746, #2747, #2752, or #2753.
+The recent session-file query returned zero rows for both paths.
+The target group held one file before this move and holds two files now.
+The branch merge-tree preview against `origin/main` reported no conflict.
+
+The focused test passed before the move with 154 tests.
+It passed after the move with 154 tests.
+The before-and-after collections contain 154 node IDs each.
+The IDs match after the source path changes to the mapped destination.
+Ruff, Black, compilation, and `git diff --check` pass.
+No test-quality baseline entry or Ruff path override names this test.
+The issue remains open, and the pull request remains a draft.
+
 ## Configuration relocation fixture repair, 2026-10-28
 
 CI run `40692675966` failed on head `d53e5626f381d6ce1d8024859a9cffa91e072e69`.
