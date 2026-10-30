@@ -1,4 +1,4 @@
-"""Run shipped WIP controls and actual handler outputs through the browser."""
+"""Run shipped WIP controls and actual handler outputs in the web-portal browser shard."""
 
 import pytest
 from playwright.sync_api import Page, expect

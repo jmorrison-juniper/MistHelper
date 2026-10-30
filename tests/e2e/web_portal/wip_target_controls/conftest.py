@@ -1,4 +1,4 @@
-"""Keep issue 3158 browser proof local, owned, bounded, and strictly collected."""
+"""Keep issue 3158 browser proof local, bounded, owned, and in the web-portal shard."""
 
 import logging
 import os
