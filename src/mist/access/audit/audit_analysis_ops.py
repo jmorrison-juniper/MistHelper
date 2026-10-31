@@ -17,7 +17,7 @@ from src.foundation.runtime.config.source_dependency_resolver import (
 )
 from src.mist.access.audit.analyzer import AuditAnalysisResult, AuditLogAnalyzer  # Audit analysis result + engine.
 from src.mist.access.audit.filter import AuditLogFilter  # Audit log filtering to remove noise and system events.
-from src.mist.access.audit.renderer import AuditReportRenderer  # Mermaid timeline + HTML report rendering.
+from src.mist.access.audit.rendering.renderer import AuditReportRenderer  # Mermaid timeline + HTML report rendering.
 from src.mist.access.audit.time_parser import (
     ParsedTimeRange,
     TimeRangeParser,

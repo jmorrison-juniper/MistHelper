@@ -1,4 +1,4 @@
-"""Mermaid Markdown rendering cluster for :mod:`src.mist.access.audit.renderer`.
+"""Mermaid Markdown rendering cluster for :mod:`src.mist.access.audit.rendering.renderer`.
 
 Owns the four ``_mermaid_*`` sections (header, admin timeline, object
 changelogs, rollback table). Split out to shrink the parent module and
@@ -10,8 +10,10 @@ from __future__ import annotations  # WHY: postponed evaluation for forward-ref 
 import json  # WHY: pretty-print original/final states in fenced code blocks
 from typing import TYPE_CHECKING, Any  # WHY: TYPE_CHECKING avoids circular import at runtime
 
-from src.mist.access.audit._renderer_delta import compute_delta  # WHY: shared delta walker (relative for pylint E0401)
-from src.mist.access.audit._renderer_time import (
+from src.mist.access.audit.rendering._renderer_delta import (
+    compute_delta,  # WHY: shared delta walker (absolute import for pylint E0401)
+)
+from src.mist.access.audit.rendering._renderer_time import (
     epoch_to_readable,
     epoch_to_short,
 )  # WHY: shared timestamp formatters (relative)
