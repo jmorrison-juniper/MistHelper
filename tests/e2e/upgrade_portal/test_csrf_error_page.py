@@ -96,8 +96,9 @@ def _read_refusal_page(page: Any, response: Any) -> None:
     sync_api.expect(message).to_contain_text(RECOVERY_SENTENCE)  # The sentence names the recovery.
     sync_api.expect(page.get_by_test_id("error-back-link")).to_have_attribute("href", FORM_PATH)  # The form page.
     sync_api.expect(page.get_by_test_id("error-site-list-link")).to_be_visible()  # The second way out stays.
-    spoken = message.aria_snapshot()  # The signal word and the sentence, as a screen reader reads them.
-    assert "Warning:" in spoken and RECOVERY_SENTENCE in spoken, f"The alert reads {spoken!r}."
+    sync_api.expect(message).to_match_aria_snapshot(  # Wait for the generated prefix in the accessibility tree.
+        f"- paragraph: '/Warning: .*{re.escape(RECOVERY_SENTENCE)}/'"
+    )
     assert STALE_TOKEN not in page.content(), "The page shows the refused token."  # The page hides the token.
 
 
@@ -142,3 +143,28 @@ def test_a_stale_token_in_a_live_session_recovers_through_the_link_back(page: An
     page.wait_for_url(SITE_LIST_URL, timeout=GATE_TIMEOUT_MS)  # The portal accepted the fresh form.
     page.screenshot(path=str(tmp_path / "fresh-form-accepted.png"), full_page=True)  # The next page.
     assert page.get_by_test_id("error-page").count() == 0, "The fresh form reached the error page."
+
+
+@pytest.mark.parametrize("restore_warning", [True, False], ids=["delayed-warning", "missing-warning"])
+def test_the_refusal_check_requires_the_warning_prefix(page: Any, restore_warning: bool) -> None:
+    """Wait for a delayed accessible warning, but reject a warning that stays absent."""
+    _open_mode_form(page)  # Use the same refused navigation as the operator journey.
+    page.context.clear_cookies()  # End only the isolated test session.
+    response = _send_single_site(page)  # Read the real refusal page before controlling its stylesheet.
+    page.wait_for_load_state("load")  # Control a loaded stylesheet, not an unfinished navigation.
+    page.evaluate("""() => {
+            const sheet = document.querySelector('link[href$="/css/portal.css"]').sheet;
+            sheet.disabled = true;
+        }""")  # Reproduce the absent generated prefix without changing the recovery text.
+    message = page.get_by_test_id("error-message")  # Check that the controlled state matches the CI failure.
+    assert "Warning:" not in message.aria_snapshot(), "The stylesheet still supplies the warning prefix."
+    if not restore_warning:  # A retry must not turn a missing warning into a pass.
+        with pytest.raises(AssertionError, match="Locator expected to match Aria snapshot"):
+            _read_refusal_page(page, response)  # Keep the required signal word in the accessible warning.
+        return  # The negative case ends with the stylesheet still disabled.
+    page.evaluate("""() => {
+            window.setTimeout(() => {
+                document.querySelector('link[href$="/css/portal.css"]').sheet.disabled = false;
+            }, 1000);
+        }""")  # Restore the real stylesheet after the first accessibility assertion can observe its absence.
+    _read_refusal_page(page, response)  # Require the warning and recovery text, not only the paragraph.
