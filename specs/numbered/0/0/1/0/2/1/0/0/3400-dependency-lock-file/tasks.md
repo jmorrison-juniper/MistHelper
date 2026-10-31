@@ -22,8 +22,8 @@
 
 ## S3 Bootstrap
 
-- [ ] T012 Switch `scripts/bootstrap_worktree.py` to `uv sync --locked`.
-- [ ] T013 Update the bootstrap unit and contract tests.
+- [x] T012 Switch `scripts/bootstrap_worktree.py` to `uv sync --locked`.
+- [x] T013 Update the bootstrap unit and contract tests.
 
 ## S4 Exports
 

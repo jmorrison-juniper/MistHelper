@@ -1,13 +1,15 @@
 """Keep the native compose provider in each development environment.
 
 Issue #3398 records a Windows worktree that could not run scripts/compose.ps1.
-The bootstrap installed both requirement files, but neither file named the
-native provider. These contracts need no network, PowerShell, or container.
+The locked development environment must keep its native provider. These
+contracts need no network, PowerShell, or container.
 """
 
 from __future__ import annotations
 
 import logging
+import sys
+import tomllib
 from pathlib import Path
 from subprocess import CompletedProcess
 from unittest.mock import patch
@@ -16,7 +18,7 @@ import pytest
 from packaging.requirements import Requirement
 from packaging.utils import canonicalize_name
 
-from scripts.bootstrap_worktree import REQUIREMENT_FILES, PipIndexProbe, WorktreeBootstrapper
+from scripts.bootstrap_worktree import PipIndexProbe, WorktreeBootstrapper
 
 LOGGER = logging.getLogger(__name__)
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
@@ -43,17 +45,24 @@ class TestBootstrapComposeProvider:
         ), "The native compose provider must install on Windows."
 
     def test_bootstrap_manifests_pin_the_native_provider(self) -> None:
-        """The files that the bootstrap installs must include the reviewed provider."""
-        LOGGER.info("Reading %d bootstrap manifests", len(REQUIREMENT_FILES))
-        lines = [
-            line
-            for name in REQUIREMENT_FILES
-            for line in (REPOSITORY_ROOT / name).read_text(encoding="utf-8").splitlines()
-        ]
-        LOGGER.debug("Read %d lines from %d bootstrap manifests", len(lines), len(REQUIREMENT_FILES))
-        print(f"The compose dependency guard checked {len(REQUIREMENT_FILES)} bootstrap manifests.")
-        assert "requirements-dev.txt" in REQUIREMENT_FILES
-        self._assert_provider_pin(lines)
+        """The canonical manifest and lock must include the reviewed provider."""
+        LOGGER.info("Reading the project manifest and lock")  # Trace before reading both package records.
+        manifest = tomllib.loads(  # Parse the canonical declarations instead of generated pip exports.
+            (REPOSITORY_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+        )
+        lines = manifest["project"]["dependencies"] + manifest["project"]["optional-dependencies"]["dev"]
+        lock = tomllib.loads((REPOSITORY_ROOT / "uv.lock").read_text(encoding="utf-8"))  # Read the locked records.
+        providers = [package for package in lock["package"] if package["name"] == "podman-compose"]
+        LOGGER.debug(  # Report counts without exposing dependency sources.
+            "Read %d manifest entries and %d locked provider records", len(lines), len(providers)
+        )
+        print(
+            f"The compose dependency guard checked {len(lines)} manifest entries and "
+            f"{len(providers)} locked records."
+        )
+        self._assert_provider_pin(lines)  # Keep the declared provider exact and Windows-compatible.
+        assert len(providers) == 1, "The lock must contain one native compose provider."  # Reject missing duplicates.
+        assert providers[0]["version"] == "1.6.0", "The lock must retain the reviewed provider version."  # No drift.
 
     @pytest.mark.parametrize(
         "lines",
@@ -72,32 +81,26 @@ class TestBootstrapComposeProvider:
             self._assert_provider_pin(lines)
 
     @pytest.mark.parametrize("uv_path", (None, r"C:\Tools\uv.exe"))
-    def test_windows_bootstrap_installs_both_manifests(self, uv_path: str | None) -> None:
-        """Both installers target the Windows worktree without using the host's executable search."""
-        bootstrapper = WorktreeBootstrapper(REPOSITORY_ROOT)
-        LOGGER.info("Checking the Windows bootstrap install commands without starting a process")
+    def test_windows_bootstrap_uses_one_locked_sync(self, uv_path: str | None) -> None:
+        """The Windows bootstrap uses UV sync instead of installing requirements files."""
+        bootstrapper = WorktreeBootstrapper(REPOSITORY_ROOT)  # Target the real project root.
+        LOGGER.info("Checking the Windows bootstrap sync without starting a process")  # Explain the contract check.
         with (
             patch("scripts.bootstrap_worktree.sys.platform", "win32"),
             patch("scripts.bootstrap_worktree.shutil.which", return_value=uv_path),
             patch.object(PipIndexProbe, "fallback_index", return_value=None),
             patch("scripts.bootstrap_worktree.subprocess.run", return_value=CompletedProcess([], 0)) as install,
         ):
-            installed = bootstrapper.install_requirements()
+            bootstrapper.sync_dependencies()  # Run the production code with subprocess calls replaced.
             commands = [call.args[0] for call in install.call_args_list]
-        interpreter = str(REPOSITORY_ROOT / ".venv" / "Scripts" / "python.exe")
-        prefix = (
-            [interpreter, "-m", "pip", "install"]
-            if uv_path is None
-            else [uv_path, "pip", "install", "--python", interpreter]
-        )
-        expected = [
-            [*prefix, "pip>=26.2.2", "-r", str(REPOSITORY_ROOT / name)]
-            for name in ("requirements.txt", "requirements-dev.txt")
-        ]
         LOGGER.debug("The Windows bootstrap issued %d install commands", len(commands))
         print(f"The Windows bootstrap guard checked {len(commands)} install commands.")
-        assert installed == ["requirements.txt", "requirements-dev.txt"]
-        assert commands == expected
+        prefix = [uv_path] if uv_path else [getattr(sys, "_base_executable", sys.executable), "-m", "uv"]
+        expected = [[*prefix, "sync", "--locked", "--extra", "dev"]]  # Both paths must use the lock and dev group.
+        if uv_path is None:
+            expected.insert(0, [prefix[0], "-m", "pip", "install", "--user", "uv"])  # Install only the UV tool.
+        assert commands == expected  # Reject a requirements-file install or missing lock flag.
+        assert install.call_args.kwargs["cwd"] == REPOSITORY_ROOT  # Resolve the lock from the repository root.
 
     def test_compose_preserves_the_worktree_provider_and_missing_provider_error(self) -> None:
         """The compose script must retain its native provider and explicit repair command."""
