@@ -37,6 +37,7 @@ class StreamConnection:
 
     _socket: Any | None  # The socket exists only after open.
     _reader: FrameReader | None  # The reader follows the socket lifetime.
+    _runtime: SocketRuntime | None  # Close and receive share descriptor ownership.
 
     def __init__(
         self,
@@ -50,16 +51,19 @@ class StreamConnection:
         self._clock, self._closed = clock, closed  # Store timing and close coordination.
         self._lock = threading.Lock()  # Protect the socket and reader references.
         self._socket, self._reader = None, None  # Create empty connection references.
+        self._runtime = None  # Open creates the shared descriptor owner.
         self._log = StructuredTransportLogger(logging.getLogger(__name__))  # Emit bounded JSON records.
 
     def open(self) -> Any:
         """Open and publish one websocket-client socket."""
         socket = self._create()  # Build the socket with authentication, TLS, and host proxy settings.
+        runtime = SocketRuntime(socket)  # One owner protects both receive and close.
         with self._lock:  # Publish both connection objects together.
             self._socket = socket  # Close can now reach the live socket.
-            self._reader = FrameReader(socket, self._closed, self._clock, self._endpoint.profile.read_timeout_seconds)
+            self._runtime = runtime  # Close retains this owner after connection detachment.
+            self._reader = FrameReader(runtime, self._closed, self._clock, self._endpoint.profile.read_timeout_seconds)
         if self._closed.is_set():  # A close can occur while the factory blocks.
-            SocketRuntime(socket).close()  # Release the socket before any subscription leaves.
+            runtime.close()  # Release the socket before any subscription leaves.
             raise ConnectionClosed(code=None, dropped=False)  # Report a local stop.
         self._log.emit(logging.DEBUG, "stream_open_ready", {"status": "open"})  # Log safe readiness.
         return socket  # The subscription collaborator needs the open socket.
@@ -98,11 +102,12 @@ class StreamConnection:
         self._log.emit(logging.INFO, "stream_close_start", {"action": "close"})  # Log before changing state.
         self._closed.set()  # Wake all bounded read loops.
         with self._lock:  # Detach both connection objects together.
-            socket = self._socket  # Copy the socket for closure outside the lock.
+            runtime = self._runtime  # Preserve the active receive owner outside the connection lock.
             self._socket = None  # Future operations cannot use the old socket.
             self._reader = None  # Future reads report a local close.
-        if socket is not None:  # Closing before open remains harmless.
-            SocketRuntime(socket).close()  # Abort, close, and shutdown the socket.
+            self._runtime = None  # Only the detached owner can release this descriptor.
+        if runtime is not None:  # Closing before open remains harmless.
+            runtime.close()  # Abort and retain the descriptor until its active receive exits.
         self._log.emit(logging.DEBUG, "stream_close_ready", {"status": "closed"})  # Log safe completion.
 
 
