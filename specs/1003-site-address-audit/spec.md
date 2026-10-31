@@ -116,6 +116,7 @@ As a NOC operator running the audit a second time on the same or updated CSV, I 
 - **Single CSV file in `data/`**: Auto-selected without prompting.
 - **SNMP location variable absent or empty**: Treated as missing; comparison proceeds with remaining candidates; no error.
 - **Mist API rate limit (HTTP 429)** on inventory/site calls: Back-off with configurable delay; retry up to 3 times; log warning on each retry. (Note: this applies to the standard mistapi inventory/site reads, not geocoding — there is no Mist geocoding call.)
+- **Mist inventory/site request returns a non-2xx HTTP status**: Log a warning, skip pagination, and use no records from the response.
 - **Device serial in Mist but not assigned to any site**: Row flagged `UNMATCHED` with reason "device unassigned"; serial is found but `site_id` is null.
 - **Mall/multi-tenant building (ambiguous result)**: Multiple plausible business results (Tier 2 Nominatim, or Tier 3 UI autocomplete when enabled) -> classified `AMBIGUOUS`; first result's address shown in Suggested Address column.
 - **`BUSINESS_NAME` env var absent and operator skips the prompt**: Raw address used as geocoding query (no business name prefix); behavior logged.
@@ -293,6 +294,7 @@ Implemented in `ComparisonTableRenderer`; input via `safe_input()`. Invalid inpu
 - **FR-012**: The feature MUST make zero writes to any Mist site record.
 - **FR-013**: All geocoding operations MUST be guarded by a `try/except` block; any single-row geocoding failure MUST be logged and the row classified `NO_RESULT`; the audit MUST continue for remaining rows.
 - **FR-014**: Nominatim requests MUST be rate-limited to ≤ 1 request/second.
+- **FR-015**: Before pagination, `AddressAuditEngine` MUST reject any inventory or site response without an integer 2xx HTTP status; rejected responses MUST yield no records.
 
 ### Coding-Standard Requirements (NON-NEGOTIABLE — from `agents.md` / `copilot-instructions.md`)
 
