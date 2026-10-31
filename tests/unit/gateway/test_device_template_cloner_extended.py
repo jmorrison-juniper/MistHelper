@@ -10,12 +10,11 @@ from __future__ import annotations  # PEP 563 postponed evaluation for typing fo
 import json  # Encode plausible bodies for native SDK refusal responses
 import logging  # Set caplog levels for logger-based assertions after #886 print->logger migration
 from types import SimpleNamespace  # Build fake mistapi response objects with .data attr
-from typing import Any  # Untyped kwargs need explicit Any for mypy --strict compatibility
+from typing import Any, Protocol, cast  # Type test doubles without module-scope SDK imports
 from unittest.mock import MagicMock, patch  # MagicMock for injection, patch for mistapi calls
 
 import pytest  # Parametrize and monkeypatch fixtures
 import requests  # Build concrete HTTP responses for mistapi parsing
-from mistapi.__api_response import APIResponse  # Parse refusal status and response data through the SDK
 
 from src.mist.resources.gateway.device_template_cloner import (  # SUT imports for direct manipulation
     COMMON_GATEWAY_MODELS,  # Constant list used to validate hardware picker output
@@ -26,14 +25,24 @@ from src.mist.resources.gateway.device_template_cloner import (  # SUT imports f
 _SUT_LOGGER = "src.mist.resources.gateway.device_template_cloner"  # Module logger name for caplog level scoping
 
 
-def _build_api_response(status_code: int, data: object) -> APIResponse:
+class _NativeAPIResponse(Protocol):
+    """Describe the SDK response fields used by these tests."""
+
+    data: Any
+    status_code: int | None
+
+
+def _build_api_response(status_code: int, data: object) -> _NativeAPIResponse:
     """Build a native SDK response with a valid body and the requested HTTP status."""
+    from mistapi.__api_response import APIResponse  # Keep the SDK import out of module-scope classification
+
     response = requests.Response()  # Create the response object consumed by mistapi
     response.status_code = status_code  # Set the refusal or success status under test
     response.url = "https://api.example.test/mist-resource"  # Provide a safe mock request URL
     response.headers["Content-Type"] = "application/json"  # Make the response body valid JSON
     response._content = json.dumps(data).encode("utf-8")  # Preserve plausible success data on refusals
-    return APIResponse(response=response, url=response.url)  # Exercise the real SDK parser
+    api_response = APIResponse(response=response, url=response.url)  # Exercise the real SDK parser
+    return cast(_NativeAPIResponse, api_response)  # Give the SDK's untyped result its precise test interface
 
 
 def _build_deps(**overrides: Any) -> DeviceTemplateClonerDeps:
@@ -501,7 +510,8 @@ def test_create_and_export_refuses_native_http_403_without_export(
 ) -> None:
     """A refused template create must not return success or export a result."""
     caplog.set_level(logging.ERROR, logger=_SUT_LOGGER)  # Capture the operation refusal signal
-    manager = _build_manager()  # Build cloner with mocked dependencies
+    export_mock = MagicMock(name="save_data_fn")  # Track exports through a typed mock reference
+    manager = _build_manager(save_data_fn=export_mock)  # Build cloner with mocked dependencies
     api_response = _build_api_response(
         403, {"id": "template-1", "name": "Tempting template", "type": "standalone"}
     )  # Model a denied create with a plausible success body
@@ -520,7 +530,7 @@ def test_create_and_export_refuses_native_http_403_without_export(
         "type": "standalone",
     }  # Confirm the refusal carries plausible template data
     assert result is False  # A non-success response must fail the workflow
-    manager.write_csv_fn.assert_not_called()  # A refused create must not export a success row
+    export_mock.assert_not_called()  # A refused create must not export a success row
     assert "Mist API operation createOrgGatewayTemplate returned HTTP status 403" in caplog.text  # Expose refusal
 
 
