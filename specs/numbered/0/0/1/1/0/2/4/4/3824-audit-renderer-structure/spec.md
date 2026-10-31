@@ -58,6 +58,7 @@ A network operations engineer reads utility names, descriptions, and input hints
 - A tracked diagnostic script or test that imports a moved module uses the new path.
 - The utility text logger and `UtilityText.__module__` use the new module path.
 - The source debt count decreases, and the change does not add a new structural violation.
+- Generated runtime files and package markers do not count as source children in the structural check.
 
 ## Requirements
 

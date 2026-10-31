@@ -50,10 +50,11 @@ No shared infrastructure blocks the user stories.
 - [x] T010 [P] [US3] Move `utility_text.py` into `src/mist/realtime/websocket_streams/catalog/utilities/utility_text.py`.
 - [x] T011 [P] [US3] Update the remaining source and test imports in `src/mist/realtime/websocket_streams/catalog/utilities/utility_fields.py`, `src/mist/realtime/websocket_streams/catalog/utilities/utility_discovery.py`, and `tests/unit/websocket_streams/catalog/test_ws_utility_text_3890.py`.
 - [x] T012 [US3] Remove the resolved catalog violation and map the moved module in `tests/guardrails/nested_package_baseline.json`, `tests/guardrails/test_nested_package_structure.py`, and `tests/guardrails/test_src_public_symbol_preservation.py`.
+- [x] T015 [US3] Exclude `__init__.py` markers and generated `__pycache__` directories from the WebSocket feature structure guard. Update measured totals and prove that a real source violation still fails.
 
 ## Phase 8: Polish and Cross-Cutting Concerns
 
-- [x] T013 Run focused tests, import checks, the nested-package and symbol-preservation guards, old-path search, compile, Ruff, Black, mypy, Markdown links, STE, and the test-quality preflight. Record exact outcomes.
+- [x] T013 Run focused tests, import checks, the nested-package and symbol-preservation guards, the WebSocket feature structure guard, old-path search, compile, Ruff, Black, mypy, Markdown links, STE, and the test-quality preflight. Record exact outcomes.
 - [ ] T014 Commit only the feature files, rebase onto `origin/main`, rerun affected gates, run the required test-quality analyzer before push, and open a pull request with the repository template. State why no release note applies. Keep the pull request open and leave auto-merge disabled until current-head checks, review, and hold status are verified.
 
 ## Dependencies and Execution Order
@@ -68,7 +69,8 @@ No shared infrastructure blocks the user stories.
 - **T009** precedes **T010** and **T011** so the import contract is tested before the move.
 - **T010** and **T011** can proceed in parallel after **T009** because they change separate files.
 - **T012** depends on **T010**.
-- **T013** depends on **T009** through **T012**.
+- **T015** depends on **T012**.
+- **T013** depends on **T009** through **T012** and **T015**.
 - **T014** depends on **T013**.
 
 ## Parallel Opportunities
@@ -80,4 +82,5 @@ After **T009**, run **T010** and **T011** in parallel because they change separa
 1. Add the import-path regression test and confirm it fails before the move.
 2. Move the module and update active callers.
 3. Update the structural baseline and symbol-preservation map.
-4. Run the focused tests and all applicable move-module gates.
+4. Exclude package markers and generated cache directories from the WebSocket structure guard.
+5. Run the focused tests and all applicable move-module gates.

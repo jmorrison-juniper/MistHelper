@@ -24,7 +24,7 @@ Move the audit renderer and its helpers into bounded packages. Keep report behav
 
 **Performance Goals**: No change to report generation time or output size
 
-**Constraints**: Each source directory has five structural children or fewer. Do not keep old-path aliases. Keep Mist API calls, report content, and utility text unchanged.
+**Constraints**: Each source directory has five structural children or fewer. Exclude generated runtime files and package markers from structural counts. Do not keep old-path aliases. Keep Mist API calls, report content, and utility text unchanged.
 
 **Scale/Scope**: Six renderer modules, one utility text module, active imports, focused tests, and two nested-package baseline entries
 
@@ -124,6 +124,8 @@ After the move, `utility_text.py` resides in `utilities/`. Its two source caller
 - Update the utility text logger name and `UtilityText.__module__` path. Keep class methods and returned text unchanged.
 - Update both source imports and both test imports. Remove the old module path without an alias.
 - Remove the `src/mist/realtime/websocket_streams/catalog` baseline entry and update the measured count to 33 violations and 236 excess.
+- Update the WebSocket feature structure guard to exclude `__init__.py` markers and `__pycache__` directories. Add a fixture with six cache files and keep a failing path for a real source violation.
+- Include the moved utility text module in the WebSocket feature structure measurement, with totals of 146 modules, 275 classes, and 861 functions.
 - Do not rewrite the tracked `.specify/feature.json` pointer. It selects another feature and is not part of this change.
 - Stop this slice after pull request creation. The coordinator owns merge and production deployment after all required checks and review pass.
 
