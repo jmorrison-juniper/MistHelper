@@ -18,6 +18,7 @@ so it under-reports. That direction is safe here. A prompt the audit does
 find is a prompt the operation really reaches.
 """
 
+import ast
 import sys
 from copy import deepcopy
 from pathlib import Path
@@ -39,6 +40,57 @@ prompt_audit = pytest.importorskip(
 FunctionIndex = prompt_audit.FunctionIndex  # Read the index class from the optional module.
 PromptWalker = prompt_audit.PromptWalker  # Read the walker class from the optional module.
 read_menu_handlers = prompt_audit.read_menu_handlers  # Read the handler reader from the optional module.
+
+
+class JuniperPromptWalker(PromptWalker):
+    """Walk the Juniper RMA workflows, which the shared walker cannot follow. Issues #4141 and #4139."""
+
+    # The shared walker drops a call on a constructed object, such as Workflow(session).execute(), and
+    # a call through self or cls. It also skips a helper name it has already visited, so a second prompt
+    # through the same helper is lost. This walker resolves those calls and counts every call site.
+    MENUS = frozenset({"294", "295", "296", "297", "300", "303", "304"})  # The rows this walker serves.
+
+    def prompts_for(self, dotted: str) -> tuple[list[str], str]:
+        """Return the prompt kinds the handler reaches, in source order, and a note."""
+        node = self.index.lookup(dotted)
+        if node is None:
+            return [], "handler not found"
+        parts = dotted.split(".")
+        found: list[str] = []  # Prompts in the order the walk meets them.
+        self._follow(node, parts[-2] if len(parts) > 1 else "", found, ())
+        return found, "ok"
+
+    def _follow(self, node: ast.AST, owner: str, found: list[str], stack: tuple[int, ...]) -> None:
+        """Follow every call of one function in source order and record each prompt."""
+        if len(stack) > prompt_audit.MAX_DEPTH or id(node) in stack:
+            return  # A cycle or a deep chain adds nothing.
+        calls = [call for call in ast.walk(node) if isinstance(call, ast.Call)]
+        for call in sorted(calls, key=lambda item: (item.lineno, item.col_offset)):
+            name = self._resolved_name(call, owner)
+            plain = (name or "").rsplit(".", 1)[-1]
+            if plain in prompt_audit.RAW_INPUT_NAMES:
+                found.append("raw")  # Every call site is one prompt, including a repeat.
+                continue
+            self._descend(name, owner, found, stack + (id(node),))
+
+    def _descend(self, name: str | None, owner: str, found: list[str], stack: tuple[int, ...]) -> None:
+        """Follow a call into its function when the index resolves the name."""
+        target = self.index.lookup(name) if name else None
+        if target is not None:
+            parts = name.split(".")
+            self._follow(target, parts[-2] if len(parts) > 1 else owner, found, stack)
+
+    def _resolved_name(self, call: ast.Call, owner: str) -> str | None:
+        """Return the qualified name of a call, resolving self, cls, and a constructed object."""
+        func = call.func
+        if isinstance(func, ast.Attribute):
+            value = func.value
+            if isinstance(value, ast.Name) and value.id in ("self", "cls"):
+                return f"{owner}.{func.attr}"  # The method belongs to the class that holds the call.
+            if isinstance(value, ast.Call) and isinstance(value.func, ast.Name):
+                return f"{value.func.id}.{func.attr}"  # Workflow(session).execute() names Workflow.execute.
+        return self._call_name(call)
+
 
 from web_portal.menu_registry import build_static_menu_actions  # noqa: E402
 from web_portal.services.operation import PARAMETER_REGISTRY, OperationExecutor  # noqa: E402
@@ -87,19 +139,6 @@ AUDIT_SEES_FEWER_PROMPTS = frozenset(
         "95",  # DeviceDataFetcher resolves the site and gateway-device prompts through injected PromptUtils.
         "96",  # DeviceDataFetcher resolves the site and all-device prompts through injected PromptUtils.
         "203",
-        # Issue #4139: the Juniper RMA menus read operator answers through an injected resolver,
-        # SourceDependencyResolver.InputUtils (juniper_menu_support.py), or through the mh.InputUtils
-        # module alias (lookup.py and asset_lookup.py). The static walk cannot resolve either path.
-        # Menus 295, 297, and 303 also add a dependent identifier control through dynamic_parameters,
-        # which this test does not count. The browser tests in tests/e2e/web_portal/test_juniper_menus_browser.py
-        # drive each of these menus through the portal and check the result, so the prompt order is proven there.
-        "294",
-        "295",
-        "296",
-        "297",
-        "300",
-        "303",
-        "304",
     }
 )
 
@@ -127,10 +166,12 @@ def audit() -> dict:
     """Return the prompt kinds each portal menu row reaches."""
     index = FunctionIndex(REPO_ROOT)  # Parsing every source file once keeps this affordable.
     walker = PromptWalker(index)
+    juniper_walker = JuniperPromptWalker(index)
     handlers = read_menu_handlers(REPO_ROOT)
     report = {}
     for menu, dotted in handlers.items():
-        prompts, note = walker.prompts_for(dotted)
+        chosen = juniper_walker if menu in JuniperPromptWalker.MENUS else walker
+        prompts, note = chosen.prompts_for(dotted)
         report[menu] = {"handler": dotted, "prompts": prompts, "note": note}
     return report
 
@@ -376,6 +417,18 @@ def test_a_row_that_prompts_first_offers_real_choices():
         assert options[0]["value"] == "1", f"menu {menu} numbers its first choice {options[0]['value']}, not 1"
         values = [option["value"] for option in options]
         assert values == [str(index) for index in range(1, len(options) + 1)], f"menu {menu} choice values have a gap"
+
+
+@pytest.mark.parametrize(
+    ("menu", "expected"),
+    [("294", 2), ("295", 2), ("296", 3), ("297", 3), ("300", 2), ("303", 3), ("304", 1)],
+)
+def test_the_audit_reaches_every_juniper_rma_prompt(menu, expected, audit):
+    """Each Juniper RMA menu reaches its prompts, so no exemption hides it."""
+    row = audit[menu]
+    assert row["note"] == "ok", f"menu {menu} handler {row['handler']} was not found"
+    assert row["prompts"] == ["raw"] * expected, f"menu {menu} reaches {row['prompts']}, not {expected} prompts"
+    assert len(_declared_types(menu)) <= len(row["prompts"]), f"menu {menu} declares more controls than prompts"
 
 
 def test_no_new_row_declares_a_control_no_prompt_consumes(audit, runnable):
