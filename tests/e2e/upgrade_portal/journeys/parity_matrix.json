@@ -1,812 +1,2344 @@
 [
   {
-    "id": "P-01",
-    "capability": "Choose single-site or multi-site mode",
-    "group": "scope selection",
-    "single_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/routes/upgrade.py:1026"
+    "id": "C01",
+    "name": "Select the organization and the mode",
+    "capability": "Select the organization and the mode",
+    "group": "scope and inventory",
+    "families": [
+      "gateway",
+      "switch",
+      "access point"
+    ],
+    "testids": [],
+    "single": "proven",
+    "multi": "proven",
+    "journeys": {
+      "single": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_single_site_journeys.py::TestSingleSiteJourneys.test_selection_reaches_the_capture_page"
+      ],
+      "multi": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_multisite_journeys.py::TestMultiSiteFamilyJourneys.test_family_combination_reaches_a_final_state"
+      ]
     },
-    "multi_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py:177"
-    },
-    "gap": "",
-    "severity": "low"
+    "verdict": "parity",
+    "issue": null,
+    "out_of_date": false,
+    "evidence": {
+      "single": [
+        {
+          "source": "P-01",
+          "path": "src/interfaces/portals/upgrade_portal/app/routes/upgrade.py:1026",
+          "status": "present"
+        }
+      ],
+      "multi": [
+        {
+          "source": "P-01",
+          "path": "src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py:177",
+          "status": "present"
+        }
+      ]
+    }
   },
   {
-    "id": "P-02",
-    "capability": "Select one or more approved sites",
-    "group": "scope selection",
-    "single_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/routes/upgrade.py:863"
+    "id": "C02",
+    "name": "Select one site or several sites",
+    "capability": "Select one site or several sites",
+    "group": "scope and inventory",
+    "families": [
+      "gateway",
+      "switch",
+      "access point"
+    ],
+    "testids": [],
+    "single": "proven",
+    "multi": "proven",
+    "journeys": {
+      "single": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_single_site_journeys.py::TestSingleSiteJourneys.test_selection_reaches_the_capture_page"
+      ],
+      "multi": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_multisite_journeys.py::TestMultiSiteFamilyJourneys.test_family_combination_reaches_a_final_state"
+      ]
     },
-    "multi_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py:177"
-    },
-    "gap": "",
-    "severity": "low"
+    "verdict": "parity",
+    "issue": null,
+    "out_of_date": false,
+    "evidence": {
+      "single": [
+        {
+          "source": "P-02",
+          "path": "src/interfaces/portals/upgrade_portal/app/routes/upgrade.py:863",
+          "status": "present"
+        },
+        {
+          "source": "P-03",
+          "path": "src/interfaces/portals/upgrade_portal/upgrade/options.py:855",
+          "status": "present"
+        }
+      ],
+      "multi": [
+        {
+          "source": "P-02",
+          "path": "src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py:177",
+          "status": "present"
+        },
+        {
+          "source": "P-03",
+          "path": "src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py:324",
+          "status": "present"
+        }
+      ]
+    }
   },
   {
-    "id": "P-03",
-    "capability": "Read upgrade inventory before options render",
-    "group": "inventory",
-    "single_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/upgrade/options.py:855"
+    "id": "C03",
+    "name": "Show the inventory with the firmware mismatch mark and the unsupported mark",
+    "capability": "Show the inventory with the firmware mismatch mark and the unsupported mark",
+    "group": "scope and inventory",
+    "families": [
+      "gateway",
+      "switch",
+      "access point"
+    ],
+    "testids": [],
+    "single": "proven",
+    "multi": "proven",
+    "journeys": {
+      "single": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_single_site_journeys.py::TestSingleSiteJourneys.test_selection_reaches_the_capture_page"
+      ],
+      "multi": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_multisite_journeys.py::TestMultiSiteFamilyJourneys.test_family_combination_reaches_a_final_state"
+      ]
     },
-    "multi_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py:324"
-    },
-    "gap": "",
-    "severity": "low"
+    "verdict": "parity",
+    "issue": null,
+    "out_of_date": false,
+    "evidence": {
+      "single": [
+        {
+          "source": "P-03",
+          "path": "src/interfaces/portals/upgrade_portal/upgrade/options.py:855",
+          "status": "present"
+        },
+        {
+          "source": "P-04",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/options.html:862",
+          "status": "present"
+        }
+      ],
+      "multi": [
+        {
+          "source": "P-03",
+          "path": "src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py:324",
+          "status": "present"
+        },
+        {
+          "source": "P-04",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_options.html:180",
+          "status": "present"
+        }
+      ]
+    }
   },
   {
-    "id": "P-04",
-    "capability": "Show supported device inventory in the options page",
-    "group": "inventory",
-    "single_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/options.html:862"
+    "id": "C04",
+    "name": "Select all, one, or more device families",
+    "capability": "Select all, one, or more device families",
+    "group": "scope and inventory",
+    "families": [
+      "gateway",
+      "switch",
+      "access point"
+    ],
+    "testids": [],
+    "single": "proven",
+    "multi": "proven",
+    "journeys": {
+      "single": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_single_site_journeys.py::TestSingleSiteJourneys.test_selection_reaches_the_capture_page"
+      ],
+      "multi": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_multisite_journeys.py::TestMultiSiteFamilyJourneys.test_family_combination_reaches_a_final_state"
+      ]
     },
-    "multi_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_options.html:180"
-    },
-    "gap": "",
-    "severity": "low"
+    "verdict": "parity",
+    "issue": null,
+    "out_of_date": false,
+    "evidence": {
+      "single": [
+        {
+          "source": "P-05",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/options.html:145",
+          "status": "present"
+        }
+      ],
+      "multi": [
+        {
+          "source": "P-05",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_options.html:19",
+          "status": "present"
+        }
+      ]
+    }
   },
   {
-    "id": "P-05",
-    "capability": "Select AP, switch, and gateway families",
-    "group": "device selection",
-    "single_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/options.html:145"
+    "id": "C05",
+    "name": "Classify each gateway as Junos or SSR and use the route of its class",
+    "capability": "Classify each gateway as Junos or SSR and use the route of its class",
+    "group": "scope and inventory",
+    "families": [
+      "Junos gateway",
+      "SSR gateway"
+    ],
+    "testids": [],
+    "single": "proven",
+    "multi": "proven",
+    "journeys": {
+      "single": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_single_site_journeys.py::TestSingleSiteJourneys.test_selection_reaches_the_capture_page"
+      ],
+      "multi": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_multisite_journeys.py::TestMultiSiteFamilyJourneys.test_family_combination_reaches_a_final_state"
+      ]
     },
-    "multi_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_options.html:19"
-    },
-    "gap": "",
-    "severity": "low"
+    "verdict": "parity",
+    "issue": null,
+    "out_of_date": false,
+    "evidence": {
+      "single": [
+        {
+          "source": "P-53",
+          "path": "src/operations/execution/firmware/upgrade_service.py:593",
+          "status": "present"
+        }
+      ],
+      "multi": [
+        {
+          "source": "P-53",
+          "path": "src/operations/execution/firmware/aggregate_upgrade_service.py:233",
+          "status": "present"
+        }
+      ]
+    }
   },
   {
-    "id": "P-06",
-    "capability": "Run AP-only upgrades",
-    "group": "family options",
-    "single_site": {
-      "status": "present",
-      "evidence": "src/operations/execution/firmware/upgrade_service.py:65"
+    "id": "C06",
+    "name": "Keep each Mist Edge device out of the plan",
+    "capability": "Keep each Mist Edge device out of the plan",
+    "group": "scope and inventory",
+    "families": [
+      "Mist Edge"
+    ],
+    "testids": [],
+    "single": "proven",
+    "multi": "proven",
+    "journeys": {
+      "single": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_single_site_journeys.py::TestSingleSiteJourneys.test_selection_reaches_the_capture_page"
+      ],
+      "multi": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_multisite_journeys.py::TestMultiSiteFamilyJourneys.test_family_combination_reaches_a_final_state"
+      ]
     },
-    "multi_site": {
-      "status": "present",
-      "evidence": "src/operations/execution/firmware/aggregate_upgrade_service.py:118"
-    },
-    "gap": "",
-    "severity": "low"
+    "verdict": "parity",
+    "issue": null,
+    "out_of_date": false,
+    "evidence": {
+      "single": [
+        {
+          "source": "P-54",
+          "path": "src/operations/execution/firmware/upgrade_service.py:593",
+          "status": "absent"
+        }
+      ],
+      "multi": [
+        {
+          "source": "P-54",
+          "path": "src/operations/execution/firmware/aggregate_upgrade_service.py:233",
+          "status": "absent"
+        }
+      ]
+    }
   },
   {
-    "id": "P-07",
-    "capability": "Run switch-only upgrades",
-    "group": "family options",
-    "single_site": {
-      "status": "present",
-      "evidence": "src/operations/execution/firmware/upgrade_service.py:65"
+    "id": "C07",
+    "name": "Hold a site lock, name the holder, release the lock, and take over after the cooldown",
+    "capability": "Hold a site lock, name the holder, release the lock, and take over after the cooldown",
+    "group": "scope and inventory",
+    "families": [
+      "gateway",
+      "switch",
+      "access point"
+    ],
+    "testids": [],
+    "single": "proven",
+    "multi": "defect",
+    "journeys": {
+      "single": [
+        "tests/e2e/upgrade_portal/journeys/test_crosscut_journeys.py::test_locks_heartbeat_conflict_and_release"
+      ],
+      "multi": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_multisite_journeys.py::TestMultiSiteFamilyJourneys.test_running_operation_reads_as_running",
+        "tests/e2e/upgrade_portal/journeys/test_upj_multisite_journeys.py::TestMultiSiteFamilyJourneys.test_running_operation_keeps_its_site_locks",
+        "tests/e2e/upgrade_portal/journeys/test_upj_multisite_journeys.py::TestMultiSiteSessionJourneys.test_busy_site_refusal_links_to_the_running_job"
+      ]
     },
-    "multi_site": {
-      "status": "present",
-      "evidence": "src/operations/execution/firmware/aggregate_upgrade_service.py:136"
+    "verdict": "gap",
+    "issue": 4540,
+    "out_of_date": false,
+    "evidence": {
+      "single": [
+        {
+          "source": "P-06",
+          "path": "src/operations/execution/firmware/upgrade_service.py:65",
+          "status": "present"
+        },
+        {
+          "source": "P-07",
+          "path": "src/operations/execution/firmware/upgrade_service.py:65",
+          "status": "present"
+        }
+      ],
+      "multi": [
+        {
+          "source": "P-06",
+          "path": "src/operations/execution/firmware/aggregate_upgrade_service.py:118",
+          "status": "present"
+        },
+        {
+          "source": "P-07",
+          "path": "src/operations/execution/firmware/aggregate_upgrade_service.py:136",
+          "status": "present"
+        }
+      ]
     },
-    "gap": "",
-    "severity": "low"
+    "related_issues": [
+      3224
+    ],
+    "finding": "Confirmed strict-xfail regression or contract failure."
   },
   {
-    "id": "P-08",
-    "capability": "Run gateway-only upgrades",
-    "group": "family options",
-    "single_site": {
-      "status": "present",
-      "evidence": "src/operations/execution/firmware/upgrade_service.py:65"
+    "id": "C08",
+    "name": "Run the pre-check capture at the standard tier and the extra tier, with a download",
+    "capability": "Run the pre-check capture at the standard tier and the extra tier, with a download",
+    "group": "options and confirmation",
+    "families": [
+      "gateway",
+      "switch",
+      "access point"
+    ],
+    "testids": [],
+    "single": "proven",
+    "multi": "proven",
+    "journeys": {
+      "single": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_single_site_journeys.py::TestSingleSiteJourneys.test_options_and_confirm_pages_of_a_prepared_run"
+      ],
+      "multi": [
+        "tests/e2e/upgrade_portal/journeys/test_parity_pages.py::test_options_page_pair_has_the_same_main_controls"
+      ]
     },
-    "multi_site": {
-      "status": "present",
-      "evidence": "src/operations/execution/firmware/aggregate_upgrade_service.py:136"
-    },
-    "gap": "",
-    "severity": "low"
+    "verdict": "parity",
+    "issue": null,
+    "out_of_date": false,
+    "evidence": {
+      "single": [
+        {
+          "source": "P-27",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/confirm.html:194",
+          "status": "present"
+        }
+      ],
+      "multi": [
+        {
+          "source": "P-27",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_confirm.html:8",
+          "status": "absent"
+        }
+      ]
+    }
   },
   {
-    "id": "P-09",
-    "capability": "Run mixed-family upgrades",
-    "group": "family options",
-    "single_site": {
-      "status": "present",
-      "evidence": "src/operations/execution/firmware/upgrade_service.py:916"
+    "id": "C09",
+    "name": "Refuse the start until a verified pre-check exists",
+    "capability": "Refuse the start until a verified pre-check exists",
+    "group": "options and confirmation",
+    "families": [
+      "gateway",
+      "switch",
+      "access point"
+    ],
+    "testids": [],
+    "single": "proven",
+    "multi": "proven",
+    "journeys": {
+      "single": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_single_site_journeys.py::TestSingleSiteJourneys.test_options_and_confirm_pages_of_a_prepared_run"
+      ],
+      "multi": [
+        "tests/e2e/upgrade_portal/journeys/test_parity_pages.py::test_options_page_pair_has_the_same_main_controls"
+      ]
     },
-    "multi_site": {
-      "status": "present",
-      "evidence": "src/operations/execution/firmware/aggregate_upgrade_service.py:113"
-    },
-    "gap": "",
-    "severity": "low"
+    "verdict": "parity",
+    "issue": null,
+    "out_of_date": false,
+    "evidence": {
+      "single": [
+        {
+          "source": "P-27",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/confirm.html:194",
+          "status": "present"
+        }
+      ],
+      "multi": [
+        {
+          "source": "P-27",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_confirm.html:8",
+          "status": "absent"
+        }
+      ]
+    }
   },
   {
-    "id": "P-10",
-    "capability": "Choose a target version per device",
-    "group": "per-device versions",
-    "single_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/options.html:889"
+    "id": "C10",
+    "name": "Select a version for each device from the available versions",
+    "capability": "Select a version for each device from the available versions",
+    "group": "options and confirmation",
+    "families": [
+      "gateway",
+      "switch",
+      "access point"
+    ],
+    "testids": [],
+    "single": "proven",
+    "multi": "defect",
+    "journeys": {
+      "single": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_single_site_journeys.py::TestSingleSiteJourneys.test_options_and_confirm_pages_of_a_prepared_run"
+      ],
+      "multi": [
+        "tests/contract/upgrade_portal/test_org_upgrade_routes.py::test_checked_switch_with_empty_version_stays_in_the_durable_plan",
+        "tests/e2e/upgrade_portal/journeys/test_parity_pages.py::test_options_page_pair_has_the_same_main_controls"
+      ]
     },
-    "multi_site": {
-      "status": "absent",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_options.html:35"
+    "verdict": "gap",
+    "issue": 3394,
+    "out_of_date": false,
+    "evidence": {
+      "single": [
+        {
+          "source": "P-10",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/options.html:889",
+          "status": "present"
+        },
+        {
+          "source": "P-11",
+          "path": "src/interfaces/portals/upgrade_portal/upgrade/options.py:799",
+          "status": "present"
+        }
+      ],
+      "multi": [
+        {
+          "source": "P-10",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_options.html:35",
+          "status": "absent"
+        },
+        {
+          "source": "P-11",
+          "path": "src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py:306",
+          "status": "present"
+        }
+      ]
     },
-    "gap": "Multi-site offers one text field per family, not one control per device.",
-    "severity": "critical"
+    "finding": "Confirmed strict-xfail regression or contract failure."
   },
   {
-    "id": "P-11",
-    "capability": "Validate target versions against each device model",
-    "group": "per-device versions",
-    "single_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/upgrade/options.py:799"
+    "id": "C11",
+    "name": "Select the strategy: canary, big bang, RRM, or serial",
+    "capability": "Select the strategy: canary, big bang, RRM, or serial",
+    "group": "options and confirmation",
+    "families": [
+      "gateway",
+      "switch",
+      "access point"
+    ],
+    "testids": [],
+    "single": "proven",
+    "multi": "proven",
+    "journeys": {
+      "single": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_single_site_journeys.py::TestSingleSiteJourneys.test_options_and_confirm_pages_of_a_prepared_run"
+      ],
+      "multi": [
+        "tests/e2e/upgrade_portal/journeys/test_parity_pages.py::test_options_page_pair_has_the_same_main_controls"
+      ]
     },
-    "multi_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py:306"
-    },
-    "gap": "",
-    "severity": "low"
+    "verdict": "parity",
+    "issue": null,
+    "out_of_date": false,
+    "evidence": {
+      "single": [
+        {
+          "source": "P-13",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/options.html:213",
+          "status": "present"
+        },
+        {
+          "source": "P-14",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/options.html:226",
+          "status": "present"
+        },
+        {
+          "source": "P-15",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/options.html:245",
+          "status": "present"
+        },
+        {
+          "source": "P-16",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/options.html:257",
+          "status": "present"
+        }
+      ],
+      "multi": [
+        {
+          "source": "P-13",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_options.html:63",
+          "status": "present"
+        },
+        {
+          "source": "P-14",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_options.html:63",
+          "status": "present"
+        },
+        {
+          "source": "P-15",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_options.html:63",
+          "status": "present"
+        },
+        {
+          "source": "P-16",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_options.html:63",
+          "status": "partial"
+        }
+      ]
+    }
   },
   {
-    "id": "P-12",
-    "capability": "Show incompatible or missing common version warnings",
-    "group": "per-device versions",
-    "single_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/upgrade/options.py:113"
+    "id": "C12",
+    "name": "Set the canary phases",
+    "capability": "Set the canary phases",
+    "group": "options and confirmation",
+    "families": [
+      "gateway",
+      "switch",
+      "access point"
+    ],
+    "testids": [],
+    "single": "proven",
+    "multi": "proven",
+    "journeys": {
+      "single": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_single_site_journeys.py::TestSingleSiteJourneys.test_options_and_confirm_pages_of_a_prepared_run"
+      ],
+      "multi": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_multisite_journeys.py::TestMultiSiteSessionJourneys.test_invalid_phases_follow_through_to_the_start"
+      ]
     },
-    "multi_site": {
-      "status": "partial",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py:331"
+    "verdict": "parity",
+    "issue": null,
+    "out_of_date": false,
+    "evidence": {
+      "single": [
+        {
+          "source": "P-17",
+          "path": "src/interfaces/portals/upgrade_portal/upgrade/options.py:483",
+          "status": "present"
+        }
+      ],
+      "multi": [
+        {
+          "source": "P-17",
+          "path": "src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py:224",
+          "status": "present"
+        }
+      ]
     },
-    "gap": "Multi-site filters rows by family version but does not show per-model warning text on the page.",
-    "severity": "high"
+    "finding": "Confirmed strict-xfail regression or contract failure."
   },
   {
-    "id": "P-13",
-    "capability": "Choose the big-bang strategy",
-    "group": "strategy",
-    "single_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/options.html:213"
+    "id": "C13",
+    "name": "Select the reboot after the write",
+    "capability": "Select the reboot after the write",
+    "group": "options and confirmation",
+    "families": [
+      "gateway",
+      "switch",
+      "access point"
+    ],
+    "testids": [],
+    "single": "proven",
+    "multi": "proven",
+    "journeys": {
+      "single": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_single_site_journeys.py::TestSingleSiteJourneys.test_options_and_confirm_pages_of_a_prepared_run"
+      ],
+      "multi": [
+        "tests/e2e/upgrade_portal/journeys/test_parity_pages.py::test_options_page_pair_has_the_same_main_controls"
+      ]
     },
-    "multi_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_options.html:63"
-    },
-    "gap": "",
-    "severity": "low"
+    "verdict": "parity",
+    "issue": null,
+    "out_of_date": false,
+    "evidence": {
+      "single": [
+        {
+          "source": "P-26",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/options.html:455",
+          "status": "present"
+        }
+      ],
+      "multi": [
+        {
+          "source": "P-26",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_options.html:104",
+          "status": "present"
+        }
+      ]
+    }
   },
   {
-    "id": "P-14",
-    "capability": "Choose the canary strategy",
-    "group": "strategy",
-    "single_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/options.html:226"
+    "id": "C14",
+    "name": "Set the reboot-at interval",
+    "capability": "Set the reboot-at interval",
+    "group": "options and confirmation",
+    "families": [
+      "gateway",
+      "switch",
+      "access point"
+    ],
+    "testids": [],
+    "single": "proven",
+    "multi": "proven",
+    "journeys": {
+      "single": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_single_site_journeys.py::TestSingleSiteJourneys.test_options_and_confirm_pages_of_a_prepared_run"
+      ],
+      "multi": [
+        "tests/e2e/upgrade_portal/journeys/test_parity_pages.py::test_options_page_pair_has_the_same_main_controls"
+      ]
     },
-    "multi_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_options.html:63"
-    },
-    "gap": "",
-    "severity": "low"
+    "verdict": "parity",
+    "issue": null,
+    "out_of_date": false,
+    "evidence": {
+      "single": [
+        {
+          "source": "P-26",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/options.html:455",
+          "status": "present"
+        }
+      ],
+      "multi": [
+        {
+          "source": "P-26",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_options.html:104",
+          "status": "present"
+        }
+      ]
+    }
   },
   {
-    "id": "P-15",
-    "capability": "Choose the serial strategy",
-    "group": "strategy",
-    "single_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/options.html:245"
+    "id": "C15",
+    "name": "Select the Junos file action",
+    "capability": "Select the Junos file action",
+    "group": "options and confirmation",
+    "families": [
+      "gateway",
+      "switch",
+      "access point"
+    ],
+    "testids": [],
+    "single": "proven",
+    "multi": "proven",
+    "journeys": {
+      "single": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_single_site_journeys.py::TestSingleSiteJourneys.test_options_and_confirm_pages_of_a_prepared_run"
+      ],
+      "multi": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_multisite_journeys.py::TestMultiSiteOptionsJourneys.test_back_from_confirm_keeps_every_choice"
+      ]
     },
-    "multi_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_options.html:63"
+    "verdict": "parity",
+    "issue": null,
+    "out_of_date": false,
+    "evidence": {
+      "single": [
+        {
+          "source": "P-16",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/options.html:257",
+          "status": "present"
+        }
+      ],
+      "multi": [
+        {
+          "source": "P-16",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_options.html:63",
+          "status": "partial"
+        }
+      ]
     },
-    "gap": "",
-    "severity": "low"
+    "finding": "Confirmed strict-xfail regression or contract failure."
   },
   {
-    "id": "P-16",
-    "capability": "Choose the RRM strategy for APs",
-    "group": "strategy",
-    "single_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/options.html:257"
+    "id": "C16",
+    "name": "Force the write when a device runs the selected version",
+    "capability": "Force the write when a device runs the selected version",
+    "group": "options and confirmation",
+    "families": [
+      "gateway",
+      "switch",
+      "access point"
+    ],
+    "testids": [],
+    "single": "proven",
+    "multi": "proven",
+    "journeys": {
+      "single": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_single_site_journeys.py::TestSingleSiteJourneys.test_options_and_confirm_pages_of_a_prepared_run"
+      ],
+      "multi": [
+        "tests/e2e/upgrade_portal/journeys/test_parity_pages.py::test_options_page_pair_has_the_same_main_controls"
+      ]
     },
-    "multi_site": {
-      "status": "partial",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_options.html:63"
-    },
-    "gap": "Multi-site shows RRM but the aggregate AP body only sends canary fields.",
-    "severity": "high"
+    "verdict": "parity",
+    "issue": null,
+    "out_of_date": false,
+    "evidence": {
+      "single": [
+        {
+          "source": "P-20",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/options.html:490",
+          "status": "present"
+        }
+      ],
+      "multi": [
+        {
+          "source": "P-20",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_options.html:145",
+          "status": "present"
+        }
+      ]
+    }
   },
   {
-    "id": "P-17",
-    "capability": "Set canary phases",
-    "group": "advanced options",
-    "single_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/upgrade/options.py:483"
+    "id": "C17",
+    "name": "Select the stable version",
+    "capability": "Select the stable version",
+    "group": "options and confirmation",
+    "families": [
+      "gateway",
+      "switch",
+      "access point"
+    ],
+    "testids": [],
+    "single": "proven",
+    "multi": "proven",
+    "journeys": {
+      "single": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_single_site_journeys.py::TestSingleSiteJourneys.test_options_and_confirm_pages_of_a_prepared_run"
+      ],
+      "multi": [
+        "tests/e2e/upgrade_portal/journeys/test_parity_pages.py::test_options_page_pair_has_the_same_main_controls"
+      ]
     },
-    "multi_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py:224"
-    },
-    "gap": "",
-    "severity": "low"
+    "verdict": "parity",
+    "issue": null,
+    "out_of_date": false,
+    "evidence": {
+      "single": [
+        {
+          "source": "P-21",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/options.html:523",
+          "status": "present"
+        }
+      ],
+      "multi": [
+        {
+          "source": "P-21",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_options.html:35",
+          "status": "absent"
+        }
+      ]
+    }
   },
   {
-    "id": "P-18",
-    "capability": "Set maximum failure percentage",
-    "group": "advanced options",
-    "single_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/upgrade/options.py:493"
+    "id": "C18",
+    "name": "Set the P2P choice, the P2P cluster size, and the P2P parallelism",
+    "capability": "Set the P2P choice, the P2P cluster size, and the P2P parallelism",
+    "group": "options and confirmation",
+    "families": [
+      "access point"
+    ],
+    "testids": [],
+    "single": "proven",
+    "multi": "proven",
+    "journeys": {
+      "single": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_single_site_journeys.py::TestSingleSiteJourneys.test_options_and_confirm_pages_of_a_prepared_run"
+      ],
+      "multi": [
+        "tests/e2e/upgrade_portal/journeys/test_parity_pages.py::test_options_page_pair_has_the_same_main_controls"
+      ]
     },
-    "multi_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py:218"
-    },
-    "gap": "",
-    "severity": "low"
+    "verdict": "parity",
+    "issue": null,
+    "out_of_date": false,
+    "evidence": {
+      "single": [
+        {
+          "source": "P-22",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/options.html:557",
+          "status": "present"
+        },
+        {
+          "source": "P-23",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/options.html:640",
+          "status": "present"
+        }
+      ],
+      "multi": [
+        {
+          "source": "P-22",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_options.html:35",
+          "status": "absent"
+        },
+        {
+          "source": "P-23",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_options.html:63",
+          "status": "absent"
+        }
+      ]
+    }
   },
   {
-    "id": "P-19",
-    "capability": "Set maximum failures per phase",
-    "group": "advanced options",
-    "single_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/upgrade/options.py:483"
+    "id": "C19",
+    "name": "Set the RRM node sequence, the slow ramp, the first batch, and the maximum batch",
+    "capability": "Set the RRM node sequence, the slow ramp, the first batch, and the maximum batch",
+    "group": "options and confirmation",
+    "families": [
+      "access point"
+    ],
+    "testids": [],
+    "single": "proven",
+    "multi": "proven",
+    "journeys": {
+      "single": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_single_site_journeys.py::TestSingleSiteJourneys.test_options_and_confirm_pages_of_a_prepared_run"
+      ],
+      "multi": [
+        "tests/e2e/upgrade_portal/journeys/test_parity_pages.py::test_options_page_pair_has_the_same_main_controls"
+      ]
     },
-    "multi_site": {
-      "status": "absent",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_options.html:148"
-    },
-    "gap": "Multi-site has only a failure percentage field.",
-    "severity": "high"
+    "verdict": "parity",
+    "issue": null,
+    "out_of_date": false,
+    "evidence": {
+      "single": [
+        {
+          "source": "P-23",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/options.html:640",
+          "status": "present"
+        }
+      ],
+      "multi": [
+        {
+          "source": "P-23",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_options.html:63",
+          "status": "absent"
+        }
+      ]
+    }
   },
   {
-    "id": "P-20",
-    "capability": "Set force write for devices already on the version",
-    "group": "advanced options",
-    "single_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/options.html:490"
+    "id": "C20",
+    "name": "Select the mesh upgrade",
+    "capability": "Select the mesh upgrade",
+    "group": "options and confirmation",
+    "families": [
+      "access point"
+    ],
+    "testids": [],
+    "single": "proven",
+    "multi": "proven",
+    "journeys": {
+      "single": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_single_site_journeys.py::TestSingleSiteJourneys.test_options_and_confirm_pages_of_a_prepared_run"
+      ],
+      "multi": [
+        "tests/e2e/upgrade_portal/journeys/test_parity_pages.py::test_options_page_pair_has_the_same_main_controls"
+      ]
     },
-    "multi_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_options.html:145"
-    },
-    "gap": "",
-    "severity": "low"
+    "verdict": "parity",
+    "issue": null,
+    "out_of_date": false,
+    "evidence": {
+      "single": [
+        {
+          "source": "P-22",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/options.html:557",
+          "status": "present"
+        }
+      ],
+      "multi": [
+        {
+          "source": "P-22",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_options.html:35",
+          "status": "absent"
+        }
+      ]
+    }
   },
   {
-    "id": "P-21",
-    "capability": "Ask the cloud for the vendor stable build",
-    "group": "advanced options",
-    "single_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/options.html:523"
+    "id": "C21",
+    "name": "Select the SSR channel",
+    "capability": "Select the SSR channel",
+    "group": "options and confirmation",
+    "families": [
+      "SSR gateway"
+    ],
+    "testids": [],
+    "single": "proven",
+    "multi": "proven",
+    "journeys": {
+      "single": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_single_site_journeys.py::TestSingleSiteJourneys.test_options_and_confirm_pages_of_a_prepared_run"
+      ],
+      "multi": [
+        "tests/e2e/upgrade_portal/journeys/test_parity_pages.py::test_options_page_pair_has_the_same_main_controls"
+      ]
     },
-    "multi_site": {
-      "status": "absent",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_options.html:35"
-    },
-    "gap": "Multi-site requires literal family versions and has no stable-build choice.",
-    "severity": "high"
+    "verdict": "parity",
+    "issue": null,
+    "out_of_date": false,
+    "evidence": {
+      "single": [
+        {
+          "source": "P-24",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/options.html:765",
+          "status": "present"
+        }
+      ],
+      "multi": [
+        {
+          "source": "P-24",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_options.html:35",
+          "status": "absent"
+        }
+      ]
+    }
   },
   {
-    "id": "P-22",
-    "capability": "Configure AP peer-to-peer download",
-    "group": "advanced options",
-    "single_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/options.html:557"
+    "id": "C22",
+    "name": "Set the maximum failures and the maximum failure percentage",
+    "capability": "Set the maximum failures and the maximum failure percentage",
+    "group": "options and confirmation",
+    "families": [
+      "gateway",
+      "switch",
+      "access point"
+    ],
+    "testids": [],
+    "single": "proven",
+    "multi": "proven",
+    "journeys": {
+      "single": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_single_site_journeys.py::TestSingleSiteJourneys.test_options_and_confirm_pages_of_a_prepared_run"
+      ],
+      "multi": [
+        "tests/e2e/upgrade_portal/journeys/test_parity_pages.py::test_options_page_pair_has_the_same_main_controls"
+      ]
     },
-    "multi_site": {
-      "status": "absent",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_options.html:35"
-    },
-    "gap": "Multi-site has no peer-to-peer AP controls.",
-    "severity": "high"
+    "verdict": "parity",
+    "issue": null,
+    "out_of_date": false,
+    "evidence": {
+      "single": [
+        {
+          "source": "P-18",
+          "path": "src/interfaces/portals/upgrade_portal/upgrade/options.py:493",
+          "status": "present"
+        },
+        {
+          "source": "P-19",
+          "path": "src/interfaces/portals/upgrade_portal/upgrade/options.py:483",
+          "status": "present"
+        }
+      ],
+      "multi": [
+        {
+          "source": "P-18",
+          "path": "src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py:218",
+          "status": "present"
+        },
+        {
+          "source": "P-19",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_options.html:148",
+          "status": "absent"
+        }
+      ]
+    }
   },
   {
-    "id": "P-23",
-    "capability": "Configure RRM batch percentages and order",
-    "group": "advanced options",
-    "single_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/options.html:640"
+    "id": "C23",
+    "name": "Set the start time",
+    "capability": "Set the start time",
+    "group": "options and confirmation",
+    "families": [
+      "gateway",
+      "switch",
+      "access point"
+    ],
+    "testids": [],
+    "single": "proven",
+    "multi": "proven",
+    "journeys": {
+      "single": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_single_site_journeys.py::TestSingleSiteJourneys.test_options_and_confirm_pages_of_a_prepared_run"
+      ],
+      "multi": [
+        "tests/e2e/upgrade_portal/journeys/test_parity_pages.py::test_options_page_pair_has_the_same_main_controls"
+      ]
     },
-    "multi_site": {
-      "status": "absent",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_options.html:63"
-    },
-    "gap": "Multi-site shows the RRM strategy but no RRM detail controls.",
-    "severity": "high"
+    "verdict": "parity",
+    "issue": null,
+    "out_of_date": false,
+    "evidence": {
+      "single": [
+        {
+          "source": "P-25",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/options.html:450",
+          "status": "present"
+        }
+      ],
+      "multi": [
+        {
+          "source": "P-25",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_options.html:163",
+          "status": "present"
+        }
+      ]
+    }
   },
   {
-    "id": "P-24",
-    "capability": "Configure SSR release train",
-    "group": "advanced options",
-    "single_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/options.html:765"
+    "id": "C24",
+    "name": "Show the warning list for mixed gateway classes and for a version that runs now",
+    "capability": "Show the warning list for mixed gateway classes and for a version that runs now",
+    "group": "options and confirmation",
+    "families": [
+      "gateway",
+      "switch",
+      "access point"
+    ],
+    "testids": [],
+    "single": "proven",
+    "multi": "missing",
+    "journeys": {
+      "single": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_single_site_journeys.py::TestSingleSiteJourneys.test_options_and_confirm_pages_of_a_prepared_run"
+      ],
+      "multi": [
+        "tests/e2e/upgrade_portal/journeys/test_parity_pages.py::test_options_page_pair_has_the_same_main_controls"
+      ]
     },
-    "multi_site": {
-      "status": "absent",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_options.html:35"
-    },
-    "gap": "Multi-site has no SSR channel field.",
-    "severity": "high"
+    "verdict": "gap",
+    "issue": 3200,
+    "out_of_date": false,
+    "evidence": {
+      "single": [
+        {
+          "source": "P-12",
+          "path": "src/interfaces/portals/upgrade_portal/upgrade/options.py:113",
+          "status": "present"
+        }
+      ],
+      "multi": [
+        {
+          "source": "P-12",
+          "path": "src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py:331",
+          "status": "partial"
+        }
+      ]
+    }
   },
   {
-    "id": "P-25",
-    "capability": "Schedule firmware download start",
-    "group": "schedule",
-    "single_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/options.html:450"
+    "id": "C25",
+    "name": "Show the confirmation summary with the scope, the versions, the options, and the call count",
+    "capability": "Show the confirmation summary with the scope, the versions, the options, and the call count",
+    "group": "options and confirmation",
+    "families": [
+      "gateway",
+      "switch",
+      "access point"
+    ],
+    "testids": [],
+    "single": "proven",
+    "multi": "defect",
+    "journeys": {
+      "single": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_single_site_journeys.py::TestSingleSiteJourneys.test_options_and_confirm_pages_of_a_prepared_run"
+      ],
+      "multi": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_multisite_journeys.py::TestMultiSiteConfirmJourneys.test_confirm_page_names_the_sites_and_the_schedule"
+      ]
     },
-    "multi_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_options.html:163"
+    "verdict": "gap",
+    "issue": 3222,
+    "out_of_date": false,
+    "evidence": {
+      "single": [
+        {
+          "source": "P-28",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/confirm.html:160",
+          "status": "present"
+        }
+      ],
+      "multi": [
+        {
+          "source": "P-28",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_confirm.html:8",
+          "status": "partial"
+        }
+      ]
     },
-    "gap": "",
-    "severity": "low"
+    "finding": "Confirmed strict-xfail regression or contract failure."
   },
   {
-    "id": "P-26",
-    "capability": "Schedule switch and gateway reboot",
-    "group": "schedule",
-    "single_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/options.html:455"
+    "id": "C26",
+    "name": "Type `CONFIRM` before the start",
+    "capability": "Type `CONFIRM` before the start",
+    "group": "options and confirmation",
+    "families": [
+      "gateway",
+      "switch",
+      "access point"
+    ],
+    "testids": [],
+    "single": "proven",
+    "multi": "proven",
+    "journeys": {
+      "single": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_single_site_journeys.py::TestSingleSiteJourneys.test_options_and_confirm_pages_of_a_prepared_run"
+      ],
+      "multi": [
+        "tests/e2e/upgrade_portal/journeys/test_parity_pages.py::test_options_page_pair_has_the_same_main_controls"
+      ]
     },
-    "multi_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_options.html:104"
-    },
-    "gap": "",
-    "severity": "low"
+    "verdict": "parity",
+    "issue": null,
+    "out_of_date": false,
+    "evidence": {
+      "single": [
+        {
+          "source": "P-29",
+          "path": "src/interfaces/portals/upgrade_portal/app/routes/upgrade.py:441",
+          "status": "present"
+        }
+      ],
+      "multi": [
+        {
+          "source": "P-29",
+          "path": "src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py:680",
+          "status": "present"
+        }
+      ]
+    }
   },
   {
-    "id": "P-27",
-    "capability": "Run and require a pre-check capture before start",
-    "group": "pre-check capture",
-    "single_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/confirm.html:194"
+    "id": "C27",
+    "name": "Show the Mist account label before the write",
+    "capability": "Show the Mist account label before the write",
+    "group": "progress and stop",
+    "families": [
+      "gateway",
+      "switch",
+      "access point"
+    ],
+    "testids": [],
+    "single": "proven",
+    "multi": "proven",
+    "journeys": {
+      "single": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_single_site_journeys.py::TestSingleSiteJourneys.test_run_page_of_each_seeded_state"
+      ],
+      "multi": [
+        "tests/e2e/upgrade_portal/journeys/test_parity_pages.py::test_progress_page_pair_has_the_same_run_controls"
+      ]
     },
-    "multi_site": {
-      "status": "absent",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_confirm.html:8"
-    },
-    "gap": "Multi-site confirm does not show or require a pre-check capture.",
-    "severity": "critical"
+    "verdict": "parity",
+    "issue": null,
+    "out_of_date": false,
+    "evidence": {
+      "single": [
+        {
+          "source": "P-50",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/progress.html:210",
+          "status": "present"
+        }
+      ],
+      "multi": [
+        {
+          "source": "P-50",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_progress.html:8",
+          "status": "absent"
+        }
+      ]
+    }
   },
   {
-    "id": "P-28",
-    "capability": "Show full confirmation content before write",
-    "group": "confirmation content",
-    "single_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/confirm.html:160"
+    "id": "C28",
+    "name": "Run the cascade of gateways, switches, access points, and clients with the settle gate",
+    "capability": "Run the cascade of gateways, switches, access points, and clients with the settle gate",
+    "group": "progress and stop",
+    "families": [
+      "gateway",
+      "switch",
+      "access point",
+      "wireless client"
+    ],
+    "testids": [],
+    "single": "proven",
+    "multi": "proven",
+    "journeys": {
+      "single": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_single_site_journeys.py::TestSingleSiteJourneys.test_run_page_of_each_seeded_state"
+      ],
+      "multi": [
+        "tests/e2e/upgrade_portal/journeys/test_parity_pages.py::test_progress_page_pair_has_the_same_run_controls"
+      ]
     },
-    "multi_site": {
-      "status": "partial",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_confirm.html:8"
-    },
-    "gap": "Multi-site omits pre-check, warnings, cloud call count, and advanced summary rows.",
-    "severity": "critical"
+    "verdict": "parity",
+    "issue": null,
+    "out_of_date": false,
+    "evidence": {
+      "single": [
+        {
+          "source": "P-38",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/progress.html:236",
+          "status": "present"
+        },
+        {
+          "source": "P-40",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/progress.html:236",
+          "status": "present"
+        }
+      ],
+      "multi": [
+        {
+          "source": "P-38",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_progress.html:24",
+          "status": "absent"
+        },
+        {
+          "source": "P-40",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_progress.html:24",
+          "status": "absent"
+        }
+      ]
+    }
   },
   {
-    "id": "P-29",
-    "capability": "Require typed CONFIRM before start",
-    "group": "typed confirmation",
-    "single_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/routes/upgrade.py:441"
+    "id": "C29",
+    "name": "Show the status and the version check of each device",
+    "capability": "Show the status and the version check of each device",
+    "group": "progress and stop",
+    "families": [
+      "gateway",
+      "switch",
+      "access point",
+      "wireless client"
+    ],
+    "testids": [],
+    "single": "proven",
+    "multi": "proven",
+    "journeys": {
+      "single": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_single_site_journeys.py::TestSingleSiteJourneys.test_run_page_of_each_seeded_state"
+      ],
+      "multi": [
+        "tests/e2e/upgrade_portal/journeys/test_parity_pages.py::test_progress_page_pair_has_the_same_run_controls"
+      ]
     },
-    "multi_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py:680"
-    },
-    "gap": "",
-    "severity": "low"
+    "verdict": "parity",
+    "issue": null,
+    "out_of_date": false,
+    "evidence": {
+      "single": [
+        {
+          "source": "P-39",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/progress.html:319",
+          "status": "present"
+        }
+      ],
+      "multi": [
+        {
+          "source": "P-39",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_progress.html:59",
+          "status": "absent"
+        }
+      ]
+    }
   },
   {
-    "id": "P-30",
-    "capability": "Protect forms with CSRF tokens",
-    "group": "CSRF and owner checks",
-    "single_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/confirm.html:341"
+    "id": "C30",
+    "name": "Refresh the progress page by the automatic poll and by the refresh control",
+    "capability": "Refresh the progress page by the automatic poll and by the refresh control",
+    "group": "progress and stop",
+    "families": [
+      "gateway",
+      "switch",
+      "access point",
+      "wireless client"
+    ],
+    "testids": [],
+    "single": "proven",
+    "multi": "proven",
+    "journeys": {
+      "single": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_single_site_journeys.py::TestSingleSiteJourneys.test_run_page_of_each_seeded_state"
+      ],
+      "multi": [
+        "tests/e2e/upgrade_portal/journeys/test_parity_pages.py::test_progress_page_pair_has_the_same_run_controls"
+      ]
     },
-    "multi_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_confirm.html:32"
-    },
-    "gap": "",
-    "severity": "low"
+    "verdict": "parity",
+    "issue": null,
+    "out_of_date": false,
+    "evidence": {
+      "single": [
+        {
+          "source": "P-38",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/progress.html:236",
+          "status": "present"
+        }
+      ],
+      "multi": [
+        {
+          "source": "P-38",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_progress.html:24",
+          "status": "absent"
+        }
+      ]
+    }
   },
   {
-    "id": "P-31",
-    "capability": "Refuse a write from an unreachable operator address",
-    "group": "CSRF and owner checks",
-    "single_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/routes/upgrade.py:549"
+    "id": "C31",
+    "name": "Show the age of the last update and the stale-run badge",
+    "capability": "Show the age of the last update and the stale-run badge",
+    "group": "progress and stop",
+    "families": [
+      "gateway",
+      "switch",
+      "access point",
+      "wireless client"
+    ],
+    "testids": [],
+    "single": "proven",
+    "multi": "partial",
+    "journeys": {
+      "single": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_single_site_journeys.py::TestSingleSiteJourneys.test_run_page_of_each_seeded_state"
+      ],
+      "multi": [
+        "tests/e2e/upgrade_portal/journeys/test_parity_pages.py::test_progress_page_pair_has_the_same_run_controls"
+      ]
     },
-    "multi_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py:972"
-    },
-    "gap": "",
-    "severity": "low"
+    "verdict": "gap",
+    "issue": 3200,
+    "out_of_date": false,
+    "evidence": {
+      "single": [
+        {
+          "source": "P-38",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/progress.html:236",
+          "status": "present"
+        }
+      ],
+      "multi": [
+        {
+          "source": "P-38",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_progress.html:24",
+          "status": "absent"
+        }
+      ]
+    }
   },
   {
-    "id": "P-32",
-    "capability": "Bind writes to the current browser owner",
-    "group": "CSRF and owner checks",
-    "single_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/routes/upgrade.py:1647"
+    "id": "C32",
+    "name": "Show the failure alert with the device and the reported cause",
+    "capability": "Show the failure alert with the device and the reported cause",
+    "group": "progress and stop",
+    "families": [
+      "gateway",
+      "switch",
+      "access point",
+      "wireless client"
+    ],
+    "testids": [],
+    "single": "proven",
+    "multi": "proven",
+    "journeys": {
+      "single": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_single_site_journeys.py::TestSingleSiteJourneys.test_run_page_of_each_seeded_state"
+      ],
+      "multi": [
+        "tests/e2e/upgrade_portal/journeys/test_parity_pages.py::test_progress_page_pair_has_the_same_run_controls"
+      ]
     },
-    "multi_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py:428"
-    },
-    "gap": "",
-    "severity": "low"
+    "verdict": "parity",
+    "issue": null,
+    "out_of_date": false,
+    "evidence": {
+      "single": [
+        {
+          "source": "P-39",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/progress.html:319",
+          "status": "present"
+        }
+      ],
+      "multi": [
+        {
+          "source": "P-39",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_progress.html:59",
+          "status": "absent"
+        }
+      ]
+    }
   },
   {
-    "id": "P-33",
-    "capability": "Acquire and refresh site locks through the write",
-    "group": "site locks and heartbeat",
-    "single_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/upgrade/driver.py:33"
+    "id": "C33",
+    "name": "Show the operator address on the progress page",
+    "capability": "Show the operator address on the progress page",
+    "group": "progress and stop",
+    "families": [
+      "gateway",
+      "switch",
+      "access point",
+      "wireless client"
+    ],
+    "testids": [],
+    "single": "proven",
+    "multi": "proven",
+    "journeys": {
+      "single": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_single_site_journeys.py::TestSingleSiteJourneys.test_run_page_of_each_seeded_state"
+      ],
+      "multi": [
+        "tests/e2e/upgrade_portal/journeys/test_parity_pages.py::test_progress_page_pair_has_the_same_run_controls"
+      ]
     },
-    "multi_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py:788"
-    },
-    "gap": "",
-    "severity": "low"
+    "verdict": "parity",
+    "issue": null,
+    "out_of_date": false,
+    "evidence": {
+      "single": [
+        {
+          "source": "P-50",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/progress.html:210",
+          "status": "present"
+        }
+      ],
+      "multi": [
+        {
+          "source": "P-50",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_progress.html:8",
+          "status": "absent"
+        }
+      ]
+    }
   },
   {
-    "id": "P-34",
-    "capability": "Release site locks after a settled operation",
-    "group": "site locks and heartbeat",
-    "single_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/upgrade/driver.py:33"
+    "id": "C34",
+    "name": "Stop with the typed word `STOP` and show the three outcome lists",
+    "capability": "Stop with the typed word `STOP` and show the three outcome lists",
+    "group": "progress and stop",
+    "families": [
+      "gateway",
+      "switch",
+      "access point",
+      "wireless client"
+    ],
+    "testids": [],
+    "single": "proven",
+    "multi": "proven",
+    "journeys": {
+      "single": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_single_site_journeys.py::TestSingleSiteJourneys.test_run_page_of_each_seeded_state"
+      ],
+      "multi": [
+        "tests/e2e/upgrade_portal/journeys/test_parity_pages.py::test_progress_page_pair_has_the_same_run_controls"
+      ]
     },
-    "multi_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py:857"
-    },
-    "gap": "",
-    "severity": "low"
+    "verdict": "parity",
+    "issue": null,
+    "out_of_date": false,
+    "evidence": {
+      "single": [
+        {
+          "source": "P-41",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/stop.html:83",
+          "status": "present"
+        }
+      ],
+      "multi": [
+        {
+          "source": "P-41",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_progress.html:37",
+          "status": "partial"
+        }
+      ]
+    }
   },
   {
-    "id": "P-35",
-    "capability": "Submit each destructive child no more than once",
-    "group": "submit safety",
-    "single_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/routes/upgrade.py:1680"
+    "id": "C35",
+    "name": "Cancel work that did not get to the cloud",
+    "capability": "Cancel work that did not get to the cloud",
+    "group": "recovery and history",
+    "families": [
+      "gateway",
+      "switch",
+      "access point",
+      "wireless client"
+    ],
+    "testids": [],
+    "single": "proven",
+    "multi": "proven",
+    "journeys": {
+      "single": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_single_site_journeys.py::TestSingleSiteJourneys.test_history_and_comparison_pages"
+      ],
+      "multi": [
+        "tests/e2e/upgrade_portal/journeys/test_parity_pages.py::test_progress_page_pair_has_the_same_run_controls"
+      ]
     },
-    "multi_site": {
-      "status": "present",
-      "evidence": "src/operations/execution/firmware/aggregate_upgrade_service.py:91"
-    },
-    "gap": "",
-    "severity": "low"
+    "verdict": "parity",
+    "issue": null,
+    "out_of_date": false,
+    "evidence": {
+      "single": [
+        {
+          "source": "P-42",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/progress.html:564",
+          "status": "present"
+        }
+      ],
+      "multi": [
+        {
+          "source": "P-42",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_progress.html:37",
+          "status": "absent"
+        }
+      ]
+    }
   },
   {
-    "id": "P-36",
-    "capability": "Refuse replay of a confirmed request",
-    "group": "submit safety",
-    "single_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/routes/upgrade.py:1597"
+    "id": "C36",
+    "name": "Retry the failed devices with the saved options",
+    "capability": "Retry the failed devices with the saved options",
+    "group": "recovery and history",
+    "families": [
+      "gateway",
+      "switch",
+      "access point",
+      "wireless client"
+    ],
+    "testids": [],
+    "single": "proven",
+    "multi": "proven",
+    "journeys": {
+      "single": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_single_site_journeys.py::TestSingleSiteJourneys.test_history_and_comparison_pages"
+      ],
+      "multi": [
+        "tests/e2e/upgrade_portal/journeys/test_parity_pages.py::test_progress_page_pair_has_the_same_run_controls"
+      ]
     },
-    "multi_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py:687"
-    },
-    "gap": "",
-    "severity": "low"
+    "verdict": "parity",
+    "issue": null,
+    "out_of_date": false,
+    "evidence": {
+      "single": [
+        {
+          "source": "P-43",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/progress.html:503",
+          "status": "present"
+        }
+      ],
+      "multi": [
+        {
+          "source": "P-43",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_progress.html:8",
+          "status": "absent"
+        }
+      ]
+    }
   },
   {
-    "id": "P-37",
-    "capability": "Record unknown submission outcomes without retry",
-    "group": "submit safety",
-    "single_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/routes/upgrade.py:1626"
+    "id": "C37",
+    "name": "Set a new start time for work that did not start",
+    "capability": "Set a new start time for work that did not start",
+    "group": "recovery and history",
+    "families": [
+      "gateway",
+      "switch",
+      "access point",
+      "wireless client"
+    ],
+    "testids": [],
+    "single": "proven",
+    "multi": "proven",
+    "journeys": {
+      "single": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_single_site_journeys.py::TestSingleSiteJourneys.test_history_and_comparison_pages"
+      ],
+      "multi": [
+        "tests/e2e/upgrade_portal/journeys/test_parity_pages.py::test_progress_page_pair_has_the_same_run_controls"
+      ]
     },
-    "multi_site": {
-      "status": "present",
-      "evidence": "src/operations/execution/firmware/aggregate_upgrade_service.py:416"
-    },
-    "gap": "",
-    "severity": "low"
+    "verdict": "parity",
+    "issue": null,
+    "out_of_date": false,
+    "evidence": {
+      "single": [
+        {
+          "source": "P-44",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/progress.html:540",
+          "status": "present"
+        }
+      ],
+      "multi": [
+        {
+          "source": "P-44",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_progress.html:8",
+          "status": "absent"
+        }
+      ]
+    }
   },
   {
-    "id": "P-38",
-    "capability": "Show cascade phases and settled counts",
-    "group": "progress detail",
-    "single_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/progress.html:236"
+    "id": "C38",
+    "name": "Reconcile an uncertain status with a typed confirmation",
+    "capability": "Reconcile an uncertain status with a typed confirmation",
+    "group": "recovery and history",
+    "families": [
+      "gateway",
+      "switch",
+      "access point",
+      "wireless client"
+    ],
+    "testids": [],
+    "single": "proven",
+    "multi": "proven",
+    "journeys": {
+      "single": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_single_site_journeys.py::TestSingleSiteJourneys.test_history_and_comparison_pages"
+      ],
+      "multi": [
+        "tests/e2e/upgrade_portal/journeys/test_parity_pages.py::test_progress_page_pair_has_the_same_run_controls"
+      ]
     },
-    "multi_site": {
-      "status": "absent",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_progress.html:24"
-    },
-    "gap": "Multi-site shows current phase text but no gateway, switch, AP, or client phase blocks.",
-    "severity": "critical"
+    "verdict": "parity",
+    "issue": null,
+    "out_of_date": false,
+    "evidence": {
+      "single": [
+        {
+          "source": "P-45",
+          "path": "src/interfaces/portals/upgrade_portal/api/run_controls/routes.py:320",
+          "status": "present"
+        }
+      ],
+      "multi": [
+        {
+          "source": "P-45",
+          "path": "src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py:1193",
+          "status": "absent"
+        }
+      ]
+    }
   },
   {
-    "id": "P-39",
-    "capability": "Show per-device state, before version, target version, and after version",
-    "group": "progress detail",
-    "single_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/progress.html:319"
+    "id": "C39",
+    "name": "Run the post-check capture with no operator action",
+    "capability": "Run the post-check capture with no operator action",
+    "group": "recovery and history",
+    "families": [
+      "gateway",
+      "switch",
+      "access point",
+      "wireless client"
+    ],
+    "testids": [],
+    "single": "proven",
+    "multi": "proven",
+    "journeys": {
+      "single": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_single_site_journeys.py::TestSingleSiteJourneys.test_history_and_comparison_pages"
+      ],
+      "multi": [
+        "tests/e2e/upgrade_portal/journeys/test_parity_pages.py::test_progress_page_pair_has_the_same_run_controls"
+      ]
     },
-    "multi_site": {
-      "status": "absent",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_progress.html:59"
-    },
-    "gap": "Multi-site shows one row per site child, not one row per device.",
-    "severity": "critical"
+    "verdict": "parity",
+    "issue": null,
+    "out_of_date": false,
+    "evidence": {
+      "single": [
+        {
+          "source": "P-46",
+          "path": "src/interfaces/portals/upgrade_portal/upgrade/driver.py:84",
+          "status": "present"
+        }
+      ],
+      "multi": [
+        {
+          "source": "P-46",
+          "path": "src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py:1193",
+          "status": "absent"
+        }
+      ]
+    }
   },
   {
-    "id": "P-40",
-    "capability": "Show settle gate and wireless client phase status",
-    "group": "progress detail",
-    "single_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/progress.html:236"
+    "id": "C40",
+    "name": "Compare the pre-check and the post-check, with the statistics and the downloads",
+    "capability": "Compare the pre-check and the post-check, with the statistics and the downloads",
+    "group": "recovery and history",
+    "families": [
+      "gateway",
+      "switch",
+      "access point",
+      "wireless client"
+    ],
+    "testids": [],
+    "single": "proven",
+    "multi": "proven",
+    "journeys": {
+      "single": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_single_site_journeys.py::TestSingleSiteJourneys.test_history_and_comparison_pages"
+      ],
+      "multi": [
+        "tests/e2e/upgrade_portal/journeys/test_parity_pages.py::test_progress_page_pair_has_the_same_run_controls"
+      ]
     },
-    "multi_site": {
-      "status": "absent",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_progress.html:24"
-    },
-    "gap": "Multi-site does not expose the settle gate or clients phase.",
-    "severity": "critical"
+    "verdict": "parity",
+    "issue": null,
+    "out_of_date": false,
+    "evidence": {
+      "single": [
+        {
+          "source": "P-47",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/progress.html:309",
+          "status": "present"
+        }
+      ],
+      "multi": [
+        {
+          "source": "P-47",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_progress.html:8",
+          "status": "absent"
+        }
+      ]
+    }
   },
   {
-    "id": "P-41",
-    "capability": "Stop a running firmware write with per-device outcome",
-    "group": "stop",
-    "single_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/stop.html:83"
+    "id": "C41",
+    "name": "Show the work on the history page with its status, operator, account, and links",
+    "capability": "Show the work on the history page with its status, operator, account, and links",
+    "group": "recovery and history",
+    "families": [
+      "gateway",
+      "switch",
+      "access point",
+      "wireless client"
+    ],
+    "testids": [],
+    "single": "proven",
+    "multi": "proven",
+    "journeys": {
+      "single": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_single_site_journeys.py::TestSingleSiteJourneys.test_history_and_comparison_pages"
+      ],
+      "multi": [
+        "tests/e2e/upgrade_portal/journeys/test_parity_pages.py::test_progress_page_pair_has_the_same_run_controls"
+      ]
     },
-    "multi_site": {
-      "status": "partial",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_progress.html:37"
-    },
-    "gap": "Multi-site has best-effort cancellation only and no single-site stop outcome controls.",
-    "severity": "high"
+    "verdict": "parity",
+    "issue": null,
+    "out_of_date": false,
+    "evidence": {
+      "single": [
+        {
+          "source": "P-48",
+          "path": "src/interfaces/portals/upgrade_portal/app/routes/review.py:1856",
+          "status": "present"
+        }
+      ],
+      "multi": [
+        {
+          "source": "P-48",
+          "path": "src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py:1107",
+          "status": "partial"
+        }
+      ]
+    }
   },
   {
-    "id": "P-42",
-    "capability": "Cancel a not-yet-started scheduled run",
-    "group": "cancel",
-    "single_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/progress.html:564"
+    "id": "C42",
+    "name": "Retry, cancel, or clear several runs from the history page",
+    "capability": "Retry, cancel, or clear several runs from the history page",
+    "group": "recovery and history",
+    "families": [
+      "gateway",
+      "switch",
+      "access point",
+      "wireless client"
+    ],
+    "testids": [],
+    "single": "proven",
+    "multi": "proven",
+    "journeys": {
+      "single": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_single_site_journeys.py::TestSingleSiteJourneys.test_history_and_comparison_pages"
+      ],
+      "multi": [
+        "tests/e2e/upgrade_portal/journeys/test_parity_pages.py::test_progress_page_pair_has_the_same_run_controls"
+      ]
     },
-    "multi_site": {
-      "status": "absent",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_progress.html:37"
-    },
-    "gap": "Multi-site has no not-yet-started cancel control apart from job cancellation.",
-    "severity": "high"
+    "verdict": "parity",
+    "issue": null,
+    "out_of_date": false,
+    "evidence": {
+      "single": [
+        {
+          "source": "P-48",
+          "path": "src/interfaces/portals/upgrade_portal/app/routes/review.py:1856",
+          "status": "present"
+        }
+      ],
+      "multi": [
+        {
+          "source": "P-48",
+          "path": "src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py:1107",
+          "status": "partial"
+        }
+      ]
+    }
   },
   {
-    "id": "P-43",
-    "capability": "Retry failed or stopped runs",
-    "group": "retry",
-    "single_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/progress.html:503"
+    "id": "C43",
+    "name": "Show the audit rows of each action",
+    "capability": "Show the audit rows of each action",
+    "group": "recovery and history",
+    "families": [
+      "gateway",
+      "switch",
+      "access point",
+      "wireless client"
+    ],
+    "testids": [],
+    "single": "proven",
+    "multi": "proven",
+    "journeys": {
+      "single": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_single_site_journeys.py::TestSingleSiteJourneys.test_history_and_comparison_pages"
+      ],
+      "multi": [
+        "tests/e2e/upgrade_portal/journeys/test_parity_pages.py::test_progress_page_pair_has_the_same_run_controls"
+      ]
     },
-    "multi_site": {
-      "status": "absent",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_progress.html:8"
-    },
-    "gap": "Multi-site has no retry control.",
-    "severity": "high"
+    "verdict": "parity",
+    "issue": null,
+    "out_of_date": false,
+    "evidence": {
+      "single": [
+        {
+          "source": "P-49",
+          "path": "src/interfaces/portals/upgrade_portal/app/routes/runs.py:129",
+          "status": "present"
+        }
+      ],
+      "multi": [
+        {
+          "source": "P-49",
+          "path": "src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py:936",
+          "status": "partial"
+        }
+      ]
+    }
   },
   {
-    "id": "P-44",
-    "capability": "Reschedule a planned run",
-    "group": "reschedule",
-    "single_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/progress.html:540"
+    "id": "C44",
+    "name": "Send one write for each planned write or child, and refuse a replay",
+    "capability": "Send one write for each planned write or child, and refuse a replay",
+    "group": "write safety",
+    "families": [
+      "gateway",
+      "switch",
+      "access point"
+    ],
+    "testids": [],
+    "single": "proven",
+    "multi": "proven",
+    "journeys": {
+      "single": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_single_site_journeys.py::TestSingleSiteJourneys.test_start_reaches_a_completed_run"
+      ],
+      "multi": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_multisite_journeys.py::TestMultiSiteFamilyJourneys.test_family_combination_reaches_a_final_state"
+      ]
     },
-    "multi_site": {
-      "status": "absent",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_progress.html:8"
-    },
-    "gap": "Multi-site has no reschedule control.",
-    "severity": "high"
+    "verdict": "parity",
+    "issue": null,
+    "out_of_date": false,
+    "evidence": {
+      "single": [
+        {
+          "source": "P-35",
+          "path": "src/interfaces/portals/upgrade_portal/app/routes/upgrade.py:1680",
+          "status": "present"
+        },
+        {
+          "source": "P-36",
+          "path": "src/interfaces/portals/upgrade_portal/app/routes/upgrade.py:1597",
+          "status": "present"
+        }
+      ],
+      "multi": [
+        {
+          "source": "P-35",
+          "path": "src/operations/execution/firmware/aggregate_upgrade_service.py:91",
+          "status": "present"
+        },
+        {
+          "source": "P-36",
+          "path": "src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py:687",
+          "status": "present"
+        }
+      ]
+    }
   },
   {
-    "id": "P-45",
-    "capability": "Reconcile stale or unknown runs from read-only evidence",
-    "group": "reconciliation",
-    "single_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/api/run_controls/routes.py:320"
+    "id": "C45",
+    "name": "Keep an uncertain write unknown and do not send it again",
+    "capability": "Keep an uncertain write unknown and do not send it again",
+    "group": "write safety",
+    "families": [
+      "gateway",
+      "switch",
+      "access point"
+    ],
+    "testids": [],
+    "single": "proven",
+    "multi": "proven",
+    "journeys": {
+      "single": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_single_site_journeys.py::TestSingleSiteJourneys.test_start_reaches_a_completed_run"
+      ],
+      "multi": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_multisite_journeys.py::TestMultiSiteFamilyJourneys.test_family_combination_reaches_a_final_state"
+      ]
     },
-    "multi_site": {
-      "status": "absent",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py:1193"
-    },
-    "gap": "Multi-site has no reconciliation endpoint or UI.",
-    "severity": "high"
+    "verdict": "parity",
+    "issue": null,
+    "out_of_date": false,
+    "evidence": {
+      "single": [
+        {
+          "source": "P-37",
+          "path": "src/interfaces/portals/upgrade_portal/app/routes/upgrade.py:1626",
+          "status": "present"
+        }
+      ],
+      "multi": [
+        {
+          "source": "P-37",
+          "path": "src/operations/execution/firmware/aggregate_upgrade_service.py:416",
+          "status": "present"
+        }
+      ]
+    }
   },
   {
-    "id": "P-46",
-    "capability": "Run post-check capture after the upgrade",
-    "group": "post-check capture",
-    "single_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/upgrade/driver.py:84"
+    "id": "C46",
+    "name": "Keep each result visible after a partial submission",
+    "capability": "Keep each result visible after a partial submission",
+    "group": "write safety",
+    "families": [
+      "gateway",
+      "switch",
+      "access point"
+    ],
+    "testids": [],
+    "single": "proven",
+    "multi": "proven",
+    "journeys": {
+      "single": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_single_site_journeys.py::TestSingleSiteJourneys.test_start_reaches_a_completed_run"
+      ],
+      "multi": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_multisite_journeys.py::TestMultiSiteFamilyJourneys.test_family_combination_reaches_a_final_state"
+      ]
     },
-    "multi_site": {
-      "status": "absent",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py:1193"
-    },
-    "gap": "Multi-site never starts a post-check capture.",
-    "severity": "critical"
+    "verdict": "parity",
+    "issue": null,
+    "out_of_date": false,
+    "evidence": {
+      "single": [
+        {
+          "source": "P-37",
+          "path": "src/interfaces/portals/upgrade_portal/app/routes/upgrade.py:1626",
+          "status": "present"
+        }
+      ],
+      "multi": [
+        {
+          "source": "P-37",
+          "path": "src/operations/execution/firmware/aggregate_upgrade_service.py:416",
+          "status": "present"
+        }
+      ]
+    }
   },
   {
-    "id": "P-47",
-    "capability": "Compare pre-check and post-check captures",
-    "group": "comparison",
-    "single_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/progress.html:309"
+    "id": "C47",
+    "name": "Check the owner before each control action",
+    "capability": "Check the owner before each control action",
+    "group": "write safety",
+    "families": [
+      "gateway",
+      "switch",
+      "access point"
+    ],
+    "testids": [],
+    "single": "proven",
+    "multi": "proven",
+    "journeys": {
+      "single": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_single_site_journeys.py::TestSingleSiteJourneys.test_start_reaches_a_completed_run"
+      ],
+      "multi": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_multisite_journeys.py::TestMultiSiteFamilyJourneys.test_family_combination_reaches_a_final_state"
+      ]
     },
-    "multi_site": {
-      "status": "absent",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_progress.html:8"
-    },
-    "gap": "Multi-site has no captures to compare and no comparison link.",
-    "severity": "critical"
+    "verdict": "parity",
+    "issue": null,
+    "out_of_date": false,
+    "evidence": {
+      "single": [
+        {
+          "source": "P-32",
+          "path": "src/interfaces/portals/upgrade_portal/app/routes/upgrade.py:1647",
+          "status": "present"
+        }
+      ],
+      "multi": [
+        {
+          "source": "P-32",
+          "path": "src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py:428",
+          "status": "present"
+        }
+      ]
+    }
   },
   {
-    "id": "P-48",
-    "capability": "List run history and capture history",
-    "group": "history and run list",
-    "single_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/routes/review.py:1856"
+    "id": "C48",
+    "name": "Check the CSRF token of each browser write",
+    "capability": "Check the CSRF token of each browser write",
+    "group": "write safety",
+    "families": [
+      "gateway",
+      "switch",
+      "access point"
+    ],
+    "testids": [],
+    "single": "proven",
+    "multi": "proven",
+    "journeys": {
+      "single": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_single_site_journeys.py::TestSingleSiteJourneys.test_start_reaches_a_completed_run"
+      ],
+      "multi": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_multisite_journeys.py::TestMultiSiteFamilyJourneys.test_family_combination_reaches_a_final_state"
+      ]
     },
-    "multi_site": {
-      "status": "partial",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py:1107"
-    },
-    "gap": "Multi-site can show a known job but has no organization run list or capture history entry.",
-    "severity": "medium"
+    "verdict": "parity",
+    "issue": null,
+    "out_of_date": false,
+    "evidence": {
+      "single": [
+        {
+          "source": "P-30",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/confirm.html:341",
+          "status": "present"
+        }
+      ],
+      "multi": [
+        {
+          "source": "P-30",
+          "path": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_confirm.html:32",
+          "status": "present"
+        }
+      ]
+    }
   },
   {
-    "id": "P-49",
-    "capability": "Write audit log records for operations",
-    "group": "audit log records",
-    "single_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/routes/runs.py:129"
+    "id": "C49",
+    "name": "Refuse a write from an operator address on a reserved domain",
+    "capability": "Refuse a write from an operator address on a reserved domain",
+    "group": "write safety",
+    "families": [
+      "gateway",
+      "switch",
+      "access point"
+    ],
+    "testids": [],
+    "single": "proven",
+    "multi": "proven",
+    "journeys": {
+      "single": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_single_site_journeys.py::TestSingleSiteJourneys.test_start_reaches_a_completed_run"
+      ],
+      "multi": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_multisite_journeys.py::TestMultiSiteFamilyJourneys.test_family_combination_reaches_a_final_state"
+      ]
     },
-    "multi_site": {
-      "status": "partial",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py:936"
-    },
-    "gap": "Multi-site logs with module logging but does not use the queryable audit logger path.",
-    "severity": "medium"
+    "verdict": "parity",
+    "issue": null,
+    "out_of_date": false,
+    "evidence": {
+      "single": [
+        {
+          "source": "P-31",
+          "path": "src/interfaces/portals/upgrade_portal/app/routes/upgrade.py:549",
+          "status": "present"
+        }
+      ],
+      "multi": [
+        {
+          "source": "P-31",
+          "path": "src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py:972",
+          "status": "present"
+        }
+      ]
+    }
   },
   {
-    "id": "P-50",
-    "capability": "Show the Mist account label",
-    "group": "Mist account label",
-    "single_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/progress.html:210"
+    "id": "C50",
+    "name": "Refuse a write after the session expires",
+    "capability": "Refuse a write after the session expires",
+    "group": "write safety",
+    "families": [
+      "gateway",
+      "switch",
+      "access point"
+    ],
+    "testids": [],
+    "single": "proven",
+    "multi": "proven",
+    "journeys": {
+      "single": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_single_site_journeys.py::TestSingleSiteJourneys.test_start_reaches_a_completed_run"
+      ],
+      "multi": [
+        "tests/e2e/upgrade_portal/journeys/test_upj_multisite_journeys.py::TestMultiSiteFamilyJourneys.test_family_combination_reaches_a_final_state"
+      ]
     },
-    "multi_site": {
-      "status": "absent",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/assets/templates/upgrade/org_progress.html:8"
-    },
-    "gap": "Multi-site progress does not show the Mist account label.",
-    "severity": "medium"
+    "verdict": "parity",
+    "issue": null,
+    "out_of_date": false,
+    "evidence": {
+      "single": [
+        {
+          "source": "spec.md",
+          "path": "specs/3200-upgrade-portal-journeys/spec.md:1065",
+          "status": "present"
+        }
+      ],
+      "multi": [
+        {
+          "source": "spec.md",
+          "path": "specs/3200-upgrade-portal-journeys/spec.md:1065",
+          "status": "present"
+        }
+      ]
+    }
   },
   {
-    "id": "P-51",
-    "capability": "Render error responses on portal pages",
-    "group": "error pages",
-    "single_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/routes/upgrade.py:522"
+    "id": "C51",
+    "name": "Show the navigation menu on each page",
+    "capability": "Show the navigation menu on each page",
+    "group": "cross-cutting",
+    "families": [
+      "gateway",
+      "switch",
+      "access point"
+    ],
+    "testids": [],
+    "single": "proven",
+    "multi": "proven",
+    "journeys": {
+      "single": [
+        "tests/e2e/upgrade_portal/journeys/test_crosscut_journeys.py::test_navigation_selection_switching_and_themes"
+      ],
+      "multi": [
+        "tests/e2e/upgrade_portal/journeys/test_crosscut_journeys.py::test_navigation_selection_switching_and_themes"
+      ]
     },
-    "multi_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py:549"
-    },
-    "gap": "",
-    "severity": "low"
+    "verdict": "parity",
+    "issue": null,
+    "out_of_date": false,
+    "evidence": {
+      "single": [
+        {
+          "source": "spec.md",
+          "path": "specs/3200-upgrade-portal-journeys/spec.md:1066",
+          "status": "present"
+        }
+      ],
+      "multi": [
+        {
+          "source": "spec.md",
+          "path": "specs/3200-upgrade-portal-journeys/spec.md:1066",
+          "status": "present"
+        }
+      ]
+    }
   },
   {
-    "id": "P-52",
-    "capability": "Gate destructive writes behind a deployment flag",
-    "group": "deployment write gate",
-    "single_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/routes/upgrade.py:549"
+    "id": "C52",
+    "name": "Pass the basic accessibility checks on each page",
+    "capability": "Pass the basic accessibility checks on each page",
+    "group": "cross-cutting",
+    "families": [
+      "gateway",
+      "switch",
+      "access point"
+    ],
+    "testids": [],
+    "single": "proven",
+    "multi": "proven",
+    "journeys": {
+      "single": [
+        "tests/e2e/upgrade_portal/journeys/test_crosscut_journeys.py::test_sign_in_sign_out_and_signed_out_errors",
+        "tests/e2e/upgrade_portal/journeys/test_crosscut_journeys.py::test_navigation_selection_switching_and_themes"
+      ],
+      "multi": [
+        "tests/e2e/upgrade_portal/journeys/test_crosscut_journeys.py::test_navigation_selection_switching_and_themes"
+      ]
     },
-    "multi_site": {
-      "status": "present",
-      "evidence": "src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py:172"
-    },
-    "gap": "",
-    "severity": "low"
+    "verdict": "parity",
+    "issue": null,
+    "out_of_date": false,
+    "evidence": {
+      "single": [
+        {
+          "source": "spec.md",
+          "path": "specs/3200-upgrade-portal-journeys/spec.md:1067",
+          "status": "present"
+        }
+      ],
+      "multi": [
+        {
+          "source": "spec.md",
+          "path": "specs/3200-upgrade-portal-journeys/spec.md:1067",
+          "status": "present"
+        }
+      ]
+    }
   },
   {
-    "id": "P-53",
-    "capability": "Classify Junos gateway and SSR gateway routes",
-    "group": "SSR and Mist Edge classification",
-    "single_site": {
-      "status": "present",
-      "evidence": "src/operations/execution/firmware/upgrade_service.py:593"
+    "id": "C53",
+    "name": "Show each control at a narrow viewport",
+    "capability": "Show each control at a narrow viewport",
+    "group": "cross-cutting",
+    "families": [
+      "gateway",
+      "switch",
+      "access point"
+    ],
+    "testids": [],
+    "single": "defect",
+    "multi": "defect",
+    "journeys": {
+      "single": [
+        "tests/e2e/upgrade_portal/journeys/test_crosscut_journeys.py::test_sign_in_page_fits_narrow_viewport"
+      ],
+      "multi": [
+        "tests/e2e/upgrade_portal/journeys/test_crosscut_journeys.py::test_sign_in_page_fits_narrow_viewport"
+      ]
     },
-    "multi_site": {
-      "status": "present",
-      "evidence": "src/operations/execution/firmware/aggregate_upgrade_service.py:233"
+    "verdict": "gap",
+    "issue": 4539,
+    "out_of_date": false,
+    "evidence": {
+      "single": [
+        {
+          "source": "spec.md",
+          "path": "specs/3200-upgrade-portal-journeys/spec.md:1068",
+          "status": "present"
+        }
+      ],
+      "multi": [
+        {
+          "source": "spec.md",
+          "path": "specs/3200-upgrade-portal-journeys/spec.md:1068",
+          "status": "present"
+        }
+      ]
     },
-    "gap": "",
-    "severity": "low"
+    "finding": "Confirmed strict-xfail regression or contract failure."
   },
   {
-    "id": "P-54",
-    "capability": "Classify Mist Edge devices separately from other gateways",
-    "group": "SSR and Mist Edge classification",
-    "single_site": {
-      "status": "absent",
-      "evidence": "src/operations/execution/firmware/upgrade_service.py:593"
+    "id": "C54",
+    "name": "Show a plain error page with a way back",
+    "capability": "Show a plain error page with a way back",
+    "group": "cross-cutting",
+    "families": [
+      "gateway",
+      "switch",
+      "access point"
+    ],
+    "testids": [],
+    "single": "proven",
+    "multi": "proven",
+    "journeys": {
+      "single": [
+        "tests/e2e/upgrade_portal/journeys/test_crosscut_journeys.py::test_missing_run_error_page_offers_back_link"
+      ],
+      "multi": [
+        "tests/e2e/upgrade_portal/journeys/test_crosscut_journeys.py::test_unknown_url_error_page_offers_back_link"
+      ]
     },
-    "multi_site": {
-      "status": "absent",
-      "evidence": "src/operations/execution/firmware/aggregate_upgrade_service.py:233"
-    },
-    "gap": "Neither mode has a Mist Edge family classifier in the audited upgrade path.",
-    "severity": "high"
+    "verdict": "parity",
+    "issue": null,
+    "out_of_date": false,
+    "evidence": {
+      "single": [
+        {
+          "source": "P-51",
+          "path": "src/interfaces/portals/upgrade_portal/app/routes/upgrade.py:522",
+          "status": "present"
+        }
+      ],
+      "multi": [
+        {
+          "source": "P-51",
+          "path": "src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py:549",
+          "status": "present"
+        }
+      ]
+    }
   }
 ]
