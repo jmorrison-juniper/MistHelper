@@ -8,6 +8,7 @@ Why:
 
 from __future__ import annotations  # Keep annotations lazy for Python 3.13.
 
+import importlib.util  # Check that the retired module path is absent.
 from enum import Enum  # The annotation tests need a small enum.
 
 from src.mist.realtime.websocket_streams.catalog.model import FieldKind, Safety  # Field kinds and safety classes.
@@ -15,7 +16,9 @@ from src.mist.realtime.websocket_streams.catalog.sdk_annotation import SdkAnnota
 from src.mist.realtime.websocket_streams.catalog.utilities.utility_catalog import (
     UtilityCatalog,
 )  # Read installed SDK signatures.
-from src.mist.realtime.websocket_streams.catalog.utility_text import UtilityText  # The class under test.
+from src.mist.realtime.websocket_streams.catalog.utilities.utility_text import (
+    UtilityText,
+)  # Resolve the canonical utility text package path.
 
 
 class SampleMode(Enum):
@@ -40,6 +43,16 @@ unreadable_function.__annotations__ = {"session": "MissingSessionType"}  # Name 
 
 class TestUtilityText:
     """Verify the plain names, sentences, and hints."""
+
+    def test_module_uses_canonical_path_without_retired_alias(self) -> None:
+        """The class resolves from its canonical path, with no old module alias."""
+        new_module_path = (
+            "src.mist.realtime.websocket_streams.catalog."  # Name the canonical package.
+            "utilities.utility_text"  # Name the utility text module.
+        )  # Build the full canonical module path.
+        old_module_path = "src.mist.realtime.websocket_streams.catalog.utility_text"  # Name the retired module.
+        assert UtilityText.__module__ == new_module_path  # Report the canonical module path.
+        assert importlib.util.find_spec(old_module_path) is None  # Reject an old-path compatibility module.
 
     def test_label_fixes_acronyms_and_uses_curated_names(self) -> None:
         """A label keeps each acronym in capitals and uses a curated name first."""

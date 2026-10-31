@@ -1,4 +1,4 @@
-# Tasks: Audit Renderer Structure
+# Tasks: Nested Source Package Remediation
 
 **Input**: `specs/numbered/0/0/1/1/0/2/4/4/3824-audit-renderer-structure/`
 
@@ -34,24 +34,50 @@ No shared infrastructure blocks the user stories.
 ## Phase 5: Polish and Cross-Cutting Concerns
 
 - [x] T006 Run renderer and structure tests. Check new imports, removed imports, old-path references, and moved symbols. Run Ruff, Black, mypy, the test-quality preflight, Markdown links, and STE.
-- [ ] T007 Stage only the feature manifest and commit. Rebase onto `origin/main` and rerun affected gates. Run the required test-quality analyzer before push. Push the branch and open a pull request with exact results. Keep it unmerged. Leave auto-merge disabled until the coordinator verifies required checks, CodeQL, review, base freshness, and no active holds.
+- [x] T007 Commit the audit renderer slice, rebase it onto current `main`, run exact-head checks, and merge it as PR #4552.
+
+## Phase 6: Foundational Updates
+
+- [x] T008 Extend `spec.md`, `plan.md`, `design/research.md`, `design/contracts/python-imports.md`, `design/quickstart.md`, and `design/checklists/requirements.md` for the WebSocket utility text move.
+
+## Phase 7: User Story 3 - Maintain the WebSocket utility catalog (Priority: P2)
+
+**Goal**: Keep utility text unchanged while moving its module into the existing utility package.
+
+**Independent Test**: Run the utility text tests and confirm that the new module path resolves and the old module path does not.
+
+- [x] T009 [US3] Add an import-path regression test in `tests/unit/websocket_streams/catalog/test_ws_utility_text.py`.
+- [x] T010 [P] [US3] Move `utility_text.py` into `src/mist/realtime/websocket_streams/catalog/utilities/utility_text.py`.
+- [x] T011 [P] [US3] Update the remaining source and test imports in `src/mist/realtime/websocket_streams/catalog/utilities/utility_fields.py`, `src/mist/realtime/websocket_streams/catalog/utilities/utility_discovery.py`, and `tests/unit/websocket_streams/catalog/test_ws_utility_text_3890.py`.
+- [x] T012 [US3] Remove the resolved catalog violation and map the moved module in `tests/guardrails/nested_package_baseline.json`, `tests/guardrails/test_nested_package_structure.py`, and `tests/guardrails/test_src_public_symbol_preservation.py`.
+
+## Phase 8: Polish and Cross-Cutting Concerns
+
+- [x] T013 Run focused tests, import checks, the nested-package and symbol-preservation guards, old-path search, compile, Ruff, Black, mypy, Markdown links, STE, and the test-quality preflight. Record exact outcomes.
+- [ ] T014 Commit only the feature files, rebase onto `origin/main`, rerun affected gates, run the required test-quality analyzer before push, and open a pull request with the repository template. State why no release note applies. Keep the pull request open and leave auto-merge disabled until current-head checks, review, and hold status are verified.
 
 ## Dependencies and Execution Order
 
-- **T001** precedes **T002** so the new import contract has a failing regression test before the move.
-- **T002** and **T003** touch separate files and can proceed in parallel after **T001**.
-- **T004** depends on the completed move in **T002**.
-- **T005** is independent of the source move.
+- **T001** precedes **T002** so the renderer import contract fails before the move.
+- **T002** and **T003** can proceed in parallel after **T001**.
+- **T004** depends on **T002**.
+- **T005** is independent of the renderer move.
 - **T006** depends on **T002**, **T003**, **T004**, and **T005**.
-- **T007** depends on **T006**.
+- **T007** depends on **T006** and records the completed PR #4552 slice.
+- **T008** precedes all implementation tasks in User Story 3.
+- **T009** precedes **T010** and **T011** so the import contract is tested before the move.
+- **T010** and **T011** can proceed in parallel after **T009** because they change separate files.
+- **T012** depends on **T010**.
+- **T013** depends on **T009** through **T012**.
+- **T014** depends on **T013**.
 
 ## Parallel Opportunities
 
-After **T001**, run **T002** and **T003** in parallel because they change separate source and caller files. Run **T005** in parallel with **T002** or **T004**.
+After **T009**, run **T010** and **T011** in parallel because they change separate files.
 
 ## Implementation Strategy
 
-1. Add the import contract test and verify it fails before the move.
-2. Move the modules and update active callers.
-3. Update the structural baseline and add the issue release note.
-4. Run the independent tests and all applicable move-module gates.
+1. Add the import-path regression test and confirm it fails before the move.
+2. Move the module and update active callers.
+3. Update the structural baseline and symbol-preservation map.
+4. Run the focused tests and all applicable move-module gates.

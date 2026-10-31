@@ -1,4 +1,4 @@
-# Research: Audit Renderer Structure
+# Research: Nested Source Package Remediation
 
 ## Decision
 
@@ -10,11 +10,17 @@ The audit package has 10 structural children. Moving its six renderer modules le
 
 Keep the renderer facade in `renderer.py` under the new package. This makes the import and `__module__` change explicit and avoids a re-export wrapper.
 
+The WebSocket catalog has six structural children. Move `utility_text.py` into the existing `utilities/` package, which has four modules. The move leaves five children in both directories and removes one recorded violation.
+
+The utility text module has two source importers and two test importers. Update those four paths. Keep `UtilityText` methods and returned text unchanged. The logger name and `UtilityText.__module__` value change with the new path.
+
 ## Alternatives Considered
 
 - Keep all renderer modules in `audit/`: rejected because the directory remains above the five-child limit.
 - Reject an old-path module that re-exports the renderer. The issue removes obsolete paths. The constitution prohibits compatibility wrappers.
 - Reject moves to unrelated audit packages. They scatter one rendering task and do not reduce direct-child counts as clearly.
+- Move `channels.py` into `registry/`: rejected because it has more active callers than `utility_text.py`.
+- Keep `utility_text.py` at the catalog root: rejected because the directory remains above the five-child limit.
 
 ## Unknowns
 
