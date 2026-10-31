@@ -32,9 +32,9 @@ No foundational tasks are required.
 
 ### Implementation for User Story 1
 
-- [x] T002 [US1] Require a dictionary and log a `ValueError` in `_display_missing_zones` in `src/mist/intelligence/analytics/zone_analyzer.py`.
+- [x] T002 [US1] Require a dictionary and log a `ValueError` in `_display_missing_zones` in `src/mist/intelligence/analytics/site/zone_analyzer.py`.
 - [x] T003 [P] [US1] Add the issue-specific release note in `changelog.d/issue-2753-missing-zone-map-validation.md`.
-- [x] T004 [US1] Temporarily restore the old fallback in `src/mist/intelligence/analytics/zone_analyzer.py` to prove the tests in `tests/unit/test_zone_analyzer.py` fail, restore validation, and run that test file.
+- [x] T004 [US1] Temporarily restore the old fallback in `src/mist/intelligence/analytics/site/zone_analyzer.py` to prove the tests in `tests/unit/test_zone_analyzer.py` fail, restore validation, and run that test file.
 
 ## Dependencies and Execution Order
 

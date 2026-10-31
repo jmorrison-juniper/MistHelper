@@ -686,7 +686,9 @@ class TestDisplayHelpersBranches:
         caplog: pytest.LogCaptureFixture,
     ) -> None:
         """Invalid maps fail visibly and cannot claim that all sites are configured."""
-        from src.mist.intelligence.analytics.zone_analyzer import _display_missing_zones  # WHY: test the bounded helper
+        from src.mist.intelligence.analytics.site.zone_analyzer import (
+            _display_missing_zones,  # WHY: test the bounded helper
+        )
 
         zone_analysis = {"zone_count_stats": {}}  # WHY: let the section path reach missing-map validation
         zone_analysis.update(analysis)  # WHY: preserve missing and invalid field shapes
@@ -705,7 +707,9 @@ class TestDisplayHelpersBranches:
 
     def test_display_missing_zones_with_empty_map(self, capsys: pytest.CaptureFixture[str]) -> None:
         """An explicit empty map keeps the valid all-sites message."""
-        from src.mist.intelligence.analytics.zone_analyzer import _display_missing_zones  # WHY: test the bounded helper
+        from src.mist.intelligence.analytics.site.zone_analyzer import (
+            _display_missing_zones,  # WHY: test the bounded helper
+        )
 
         _display_missing_zones({"sites_missing_common_zones": {}})  # WHY: provide a complete empty result
         output = capsys.readouterr().out  # WHY: inspect the user-facing result

@@ -61,7 +61,7 @@ specs/numbered/0/0/0/4/2/0/0/3/2753-missing-zone-map-validation/
 ### Source Code
 
 ```text
-src/mist/intelligence/analytics/zone_analyzer.py
+src/mist/intelligence/analytics/site/zone_analyzer.py
 tests/unit/test_zone_analyzer.py
 changelog.d/issue-2753-missing-zone-map-validation.md
 ```
