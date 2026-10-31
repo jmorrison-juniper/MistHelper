@@ -1,4 +1,4 @@
-"""HTML delta-value formatter for :mod:`src.mist.access.audit.renderer`.
+"""HTML delta-value formatter for :mod:`src.mist.access.audit.rendering.renderer`.
 
 Renders a recursive ``dict`` / ``list`` structure into an indented JSON-like
 HTML fragment where the leaf values (the actual changed data) are wrapped

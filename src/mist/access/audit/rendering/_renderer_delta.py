@@ -1,4 +1,4 @@
-"""Delta / diff computation helpers for :mod:`src.mist.access.audit.renderer`.
+"""Delta / diff computation helpers for :mod:`src.mist.access.audit.rendering.renderer`.
 
 This module owns the recursive dict/list delta engine used by the
 Mermaid and HTML rollback reports. It was split out of ``renderer.py``

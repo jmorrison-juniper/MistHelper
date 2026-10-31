@@ -948,6 +948,28 @@ class TestExportAndDisplayData:
 class TestExecute:
     """End-to-end coverage of :meth:`execute`."""
 
+    def test_partial_save_failures_preserve_fetch_error(
+        self,
+        fake_mh: _FakeMH,
+        api_call: MagicMock,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:  # WHY: both write boundaries must keep the fetch failure.
+        """Both failed writes must leave the fetch error visible."""  # WHY: keep the fetch failure visible.
+        original_error = RuntimeError("fetch failed")  # WHY: identify the error that both writes must keep.
+        fake_mh.DataExporter.write_with_format_selection.side_effect = OSError("disk full")  # WHY: fail both writes.
+        fetcher = _make_fetcher(api_call)  # WHY: exercise the public fetch workflow.
+        fetcher.rawdata = [{"id": 99}]  # WHY: enter both paths that write partial data.
+        with (
+            patch("src.mist.access.api.api_data_fetcher.mistapi.get_all", side_effect=original_error),  # WHY: fail.
+            caplog.at_level(logging.ERROR),  # WHY: capture both write failures.
+            pytest.raises(RuntimeError, match="fetch failed") as raised,  # WHY: require the fetch failure.
+        ):  # WHY: combine the API error with two failed writes.
+            fetcher.execute()  # WHY: exercise emergency and outer write handlers.
+        assert raised.value is original_error  # WHY: a write failure must not replace the fetch failure.
+        assert fake_mh.DataExporter.write_with_format_selection.call_count == 2  # WHY: exercise both write handlers.
+        assert "during error handling: disk full" in caplog.text  # WHY: report the emergency write failure.
+        assert "outer exception handler: disk full" in caplog.text  # WHY: report the outer write failure.
+
     def test_success_path(self, fake_mh: _FakeMH, api_call: MagicMock, caplog: pytest.LogCaptureFixture) -> None:
         """Happy path must resolve org, fetch, export, and display.
 

@@ -1,11 +1,10 @@
-"""Tests for src.mist.access.audit.renderer module."""
+"""Tests for src.mist.access.audit.rendering.renderer module."""
 
 import os
 import tempfile
 
 import pytest
 
-from src.mist.access.audit._renderer_delta import DiffKeyContext
 from src.mist.access.audit.analyzer import (
     AdminTimeline,
     AuditAnalysisResult,
@@ -13,7 +12,8 @@ from src.mist.access.audit.analyzer import (
     ObjectChangelog,
     RollbackDiff,
 )
-from src.mist.access.audit.renderer import AuditReportRenderer
+from src.mist.access.audit.rendering._renderer_delta import DiffKeyContext
+from src.mist.access.audit.rendering.renderer import AuditReportRenderer
 
 
 @pytest.fixture

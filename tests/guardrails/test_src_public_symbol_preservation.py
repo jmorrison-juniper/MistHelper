@@ -69,6 +69,12 @@ MODULE_PATHS = {  # Map each old direct module to its new canonical module.
         "mist/intelligence/analytics/site/site_inventory_health_analyzer.py"
     ),
     "mist/intelligence/analytics/zone_analyzer.py": "mist/intelligence/analytics/site/zone_analyzer.py",
+    "mist/access/audit/renderer.py": "mist/access/audit/rendering/renderer.py",  # For guard.
+    "mist/access/audit/_renderer_delta.py": "mist/access/audit/rendering/_renderer_delta.py",  # For guard.
+    "mist/access/audit/_renderer_format.py": "mist/access/audit/rendering/_renderer_format.py",  # For guard.
+    "mist/access/audit/_renderer_time.py": "mist/access/audit/rendering/_renderer_time.py",  # For guard.
+    "mist/access/audit/_renderer_html.py": "mist/access/audit/rendering/clusters/_renderer_html.py",  # For guard.
+    "mist/access/audit/_renderer_mermaid.py": "mist/access/audit/rendering/clusters/_renderer_mermaid.py",  # For guard.
     "org_data_collector.py": "operations/wan/org_data_collector.py",
     "wan_hub_group_manager.py": "operations/wan/wan_hub_group_manager.py",
     "wan_vpn_builder.py": "operations/wan/wan_vpn_builder.py",

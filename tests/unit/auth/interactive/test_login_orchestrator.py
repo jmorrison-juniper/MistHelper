@@ -27,6 +27,7 @@ from typing import Any, cast  # WHY: dict[str, Any] annotations + cast(Any, x) f
 from unittest.mock import MagicMock, patch  # WHY: mandatory spec= mocks + patch decorators.
 
 import pytest  # WHY: fixtures + parametrize.
+from requests import Response, Session  # WHY: restrict HTTP mocks to the actual response and session interfaces.
 
 from src.mist.access.auth.interactive.clouds import CloudSelector  # WHY: shared class object for patch.object.
 from src.mist.access.auth.interactive.credential_prompter import (
@@ -216,6 +217,31 @@ class TestAuthenticate:
         ):
             assert orch._authenticate(MagicMock(spec=object), "c", "h", "e", "p") is False
         fake_gen.assert_called_once_with(exc)  # WHY: dispatch preserves the exception object.
+
+    def test_http_503_login_clears_session_and_reports_server_failure(self, caplog: pytest.LogCaptureFixture) -> None:
+        """An SDK server failure must clear the session without a success message."""
+        orch = _make_orchestrator(state={"apisession": "partial"})  # WHY: detect retained session state.
+        sdk = orch._resolve_mistapi()  # WHY: use the same SDK resolution as the interactive workflow.
+        assert isinstance(sdk, ModuleType)  # WHY: the test requires the installed SDK module.
+        response = MagicMock(spec=Response)  # WHY: isolate the HTTP boundary without replacing SDK behavior.
+        response.status_code = 503  # WHY: exercise the server refusal branch in the SDK.
+        response.json.return_value = {"detail": "Service Unavailable"}  # WHY: supply the server error detail.
+        with (
+            patch.object(Session, "post", autospec=True, return_value=response) as fake_post,
+            patch.object(sdk.APISession, "_load_env"),  # WHY: exclude all external credentials.
+            patch("mistapi.__api_session.CONSOLE._set_log_level"),  # WHY: preserve shared SDK logging levels.
+            patch.object(LoginOrchestrator, "_finalize_session") as fake_finalize,
+            caplog.at_level(logging.WARNING),
+        ):
+            result = orch._authenticate(sdk, "Global 01", "api.mist.com", "user@example.com", "unused")
+        assert result is False  # WHY: a server refusal must not become a successful login.
+        assert orch.state["apisession"] is None  # WHY: failed login must remove the partial session.
+        assert fake_post.call_count == 1  # WHY: reject an extra login attempt after the server refusal.
+        assert fake_post.call_args.args[1] == "https://api.mist.com/api/v1/login"  # WHY: verify the failed endpoint.
+        fake_finalize.assert_not_called()  # WHY: failed login must not configure a usable session.
+        assert "X Authentication failed: Service Unavailable" in caplog.text
+        assert "Interactive login failed: Service Unavailable" in caplog.text
+        assert "Login successful" not in caplog.text  # WHY: operators must not see a success message.
 
 
 class TestRunLoginPipeline:

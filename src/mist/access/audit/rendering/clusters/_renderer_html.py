@@ -1,4 +1,4 @@
-"""HTML rendering cluster for :mod:`src.mist.access.audit.renderer`.
+"""HTML rendering cluster for :mod:`src.mist.access.audit.rendering.renderer`.
 
 Owns the ``_build_html``, timeline JavaScript, and diff-section generators
 that together produce the self-contained HTML audit report. Split out to
@@ -14,11 +14,15 @@ from dataclasses import dataclass  # WHY: frozen bundle for template fragments (
 from datetime import UTC, datetime  # WHY: ISO-format timestamps for Plotly x-axis
 from typing import TYPE_CHECKING, Any  # WHY: TYPE_CHECKING avoids circular import at runtime
 
-from src.mist.access.audit._renderer_delta import compute_delta  # WHY: shared delta walker (relative for pylint E0401)
-from src.mist.access.audit._renderer_format import (
+from src.mist.access.audit.rendering._renderer_delta import (
+    compute_delta,  # WHY: shared delta walker (absolute import for pylint E0401)
+)
+from src.mist.access.audit.rendering._renderer_format import (
     format_delta_html,
 )  # WHY: reused leaf HTML formatter (relative import)
-from src.mist.access.audit._renderer_time import epoch_to_readable  # WHY: shared timestamp formatter (relative import)
+from src.mist.access.audit.rendering._renderer_time import (
+    epoch_to_readable,  # WHY: shared timestamp formatter (absolute import)
+)
 
 if TYPE_CHECKING:  # WHY: only imported by type-checkers
     from src.mist.access.audit.analyzer import AuditAnalysisResult  # WHY: analysis payload type

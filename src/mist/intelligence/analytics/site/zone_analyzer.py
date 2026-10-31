@@ -923,7 +923,11 @@ def _display_common_zones(zone_analysis: dict[str, Any], stats: dict[str, Any]) 
 
 def _display_missing_zones(zone_analysis: dict[str, Any]) -> None:
     """Display sites missing common zones."""
-    missing = zone_analysis.get("sites_missing_common_zones", {})  # WHY: pull the missing-common map
+    missing = zone_analysis.get("sites_missing_common_zones")  # WHY: require the producer's explicit result
+    if not isinstance(missing, dict):  # WHY: reject incomplete data before a false success can display
+        message = "_display_missing_zones requires sites_missing_common_zones to be a dictionary."  # WHY: stable error
+        logger.error(message)  # WHY: make the missing analysis contract visible to operators
+        raise ValueError(message)  # WHY: prevent an incomplete result from appearing complete
     print(f"\n[Sites Missing Common Zones] ({len(missing)} sites)")  # WHY: sub-section header + count
     if not missing:  # WHY: distinct message for the empty case
         print("  All sites have the common zones configured")  # WHY: reassure the user

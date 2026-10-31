@@ -1,4 +1,4 @@
-"""Timestamp formatting helpers for :mod:`src.mist.access.audit.renderer`.
+"""Timestamp formatting helpers for :mod:`src.mist.access.audit.rendering.renderer`.
 
 Pure conversion utilities shared by the parent renderer facade and the
 Mermaid / HTML cluster modules. Extracting them into a public module

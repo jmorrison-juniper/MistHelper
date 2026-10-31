@@ -426,6 +426,20 @@ class TestBuildSummaryRows:
 class TestAnalyzeZonePatterns:
     """Tests for ZoneConfigurationAnalyzer._analyze_zone_patterns."""
 
+    def test_produced_missing_zone_map_reaches_display(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """The producer supplies an explicit map that the display can trust."""
+        site_zones = {  # WHY: provide complete source data to the real zone-pattern producer
+            "s1": {"zone_count": 2, "zone_names": {"A", "B"}, "site_name": "S1"},  # WHY: site with both zones
+            "s2": {"zone_count": 2, "zone_names": {"A", "B"}, "site_name": "S2"},  # WHY: site with both zones
+            "s3": {"zone_count": 1, "zone_names": {"A"}, "site_name": "S3"},  # WHY: site with a common zone
+        }
+        result = ZoneConfigurationAnalyzer._analyze_zone_patterns(site_zones)  # WHY: exercise the real producer
+        assert isinstance(result["sites_missing_common_zones"], dict)  # WHY: require the producer contract
+        ZoneConfigurationAnalyzer._display_zone_section(result)  # WHY: prove the result reaches the display
+        output = capsys.readouterr().out  # WHY: inspect the producer-backed display
+        assert "S3" in output  # WHY: confirm the produced missing-site entry is displayed
+        assert "Missing: B" in output  # WHY: confirm the produced missing-zone detail is displayed
+
     def test_empty_input(self) -> None:
         result = ZoneConfigurationAnalyzer._analyze_zone_patterns({})
         assert result["zone_frequency"] == {}
@@ -545,6 +559,11 @@ class TestAnalyzeOccupancyPatterns:
 class TestDisplayResults:
     """Tests for display methods (smoke tests)."""
 
+    def test_display_zone_section_skips_empty_analysis(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """An absent zone analysis keeps the existing silent skip."""
+        ZoneConfigurationAnalyzer._display_zone_section({})  # WHY: exercise the empty-analysis boundary
+        assert capsys.readouterr().out == ""  # WHY: the skipped section must not write output
+
     @pytest.mark.parametrize(
         "analysis",
         [
@@ -643,6 +662,60 @@ class TestDisplayResults:
 class TestDisplayHelpersBranches:
     """Cover display helper branches with data present."""
 
+    @pytest.mark.parametrize(
+        "analysis",
+        [
+            {},
+            {"sites_missing_common_zones": None},
+            {"sites_missing_common_zones": []},
+            {"sites_missing_common_zones": ""},
+            {"sites_missing_common_zones": "private-map-value"},
+            {"sites_missing_common_zones": False},
+            {"sites_missing_common_zones": 0},
+            {"sites_missing_common_zones": ()},
+            {"sites_missing_common_zones": set()},
+        ],
+        ids=["missing", "null", "list", "blank", "text", "boolean", "number", "tuple", "set"],
+    )
+    @pytest.mark.parametrize("combined", [False, True], ids=["direct", "section"])
+    def test_display_missing_zones_rejects_invalid_map(
+        self,
+        analysis: dict[str, Any],
+        combined: bool,
+        capsys: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Invalid maps fail visibly and cannot claim that all sites are configured."""
+        from src.mist.intelligence.analytics.site.zone_analyzer import (
+            _display_missing_zones,  # WHY: test the bounded helper
+        )
+
+        zone_analysis = {"zone_count_stats": {}}  # WHY: let the section path reach missing-map validation
+        zone_analysis.update(analysis)  # WHY: preserve missing and invalid field shapes
+        message = "_display_missing_zones requires sites_missing_common_zones to be a dictionary."  # WHY: stable error
+        with pytest.raises(ValueError) as error:  # WHY: invalid input must stop the report visibly
+            if combined:  # WHY: cover the helper through its existing section caller
+                ZoneConfigurationAnalyzer._display_zone_section(zone_analysis)  # WHY: exercise the report path
+            else:  # WHY: also test the helper without preceding section output
+                _display_missing_zones(zone_analysis)  # WHY: exercise the direct call path
+        captured = capsys.readouterr()  # WHY: confirm failure does not print reassurance or a missing-zone section
+        assert str(error.value) == message  # WHY: preserve the actionable validation contract
+        assert "Sites Missing Common Zones" not in captured.out  # WHY: invalid input cannot display a count
+        assert "All sites have the common zones configured" not in captured.out  # WHY: invalid input cannot reassure
+        assert "private-map-value" not in caplog.text  # WHY: do not expose supplied invalid data in the error
+        assert (ZoneConfigurationAnalyzer.__module__, 40, message) in caplog.record_tuples  # WHY: require error logging
+
+    def test_display_missing_zones_with_empty_map(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """An explicit empty map keeps the valid all-sites message."""
+        from src.mist.intelligence.analytics.site.zone_analyzer import (
+            _display_missing_zones,  # WHY: test the bounded helper
+        )
+
+        _display_missing_zones({"sites_missing_common_zones": {}})  # WHY: provide a complete empty result
+        output = capsys.readouterr().out  # WHY: inspect the user-facing result
+        assert "[Sites Missing Common Zones] (0 sites)" in output  # WHY: retain the accurate count
+        assert "All sites have the common zones configured" in output  # WHY: reassure only for explicit emptiness
+
     def test_display_missing_zones_with_data(self, capsys: pytest.CaptureFixture[str]) -> None:
         from src.mist.intelligence.analytics.site.zone_analyzer import _display_missing_zones
 
@@ -653,8 +726,9 @@ class TestDisplayHelpersBranches:
         }
         _display_missing_zones(zone_analysis)
         out = capsys.readouterr().out
+        assert "[Sites Missing Common Zones] (1 sites)" in out
         assert "S1" in out
-        assert "Missing:" in out
+        assert "Missing: X, Y" in out
 
     def test_display_zone_deviations_with_data(self, capsys: pytest.CaptureFixture[str]) -> None:
         from src.mist.intelligence.analytics.site.zone_analyzer import _display_zone_deviations

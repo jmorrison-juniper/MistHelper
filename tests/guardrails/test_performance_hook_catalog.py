@@ -255,6 +255,41 @@ class TestPerformanceHookCatalog:
         print(f"Checked {len(hook_rows)} active hook rows against the current source tree.")
         assert not failures, f"Checked {len(hook_rows)} active hook rows. Unresolved rows:\n" + "\n".join(failures)
 
+    def test_audit_renderer_hook_rows_use_current_paths_and_symbols(self) -> None:
+        catalog = PerformanceHookCatalog(_ARTIFACT_ROOT)  # Read active rows from the hook catalog.
+        hook_rows = {  # Index the affected rows so path and symbol changes stay explicit.
+            row["hook_id"]: (row["file_path"], row["symbol_or_class"])
+            for row in catalog.hook_rows()
+            if row["hook_id"]
+            in {
+                "hook-0079",
+                "hook-0080",
+                "hook-0081",
+                "hook-0082",
+                "hook-0083",
+                "hook-0087",
+                "hook-0088",
+                "hook-diag-0068",
+                "hook-diag-0069",
+            }
+        }  # Keep only the catalog rows affected by the renderer move.
+        expected_rows = {  # Preserve symbols while recording each current module path.
+            "hook-0079": ("src/mist/access/audit/rendering/_renderer_delta.py", "DiffKeyContext"),
+            "hook-0080": ("src/mist/access/audit/rendering/_renderer_format.py", "format_delta_html"),
+            "hook-0081": ("src/mist/access/audit/rendering/clusters/_renderer_html.py", "_HtmlCluster"),
+            "hook-0082": ("src/mist/access/audit/rendering/clusters/_renderer_mermaid.py", "_MermaidCluster"),
+            "hook-0083": ("src/mist/access/audit/rendering/_renderer_time.py", "epoch_to_readable"),
+            "hook-0087": ("src/mist/access/audit/rendering/renderer.py", "AuditReportRenderer.render_mermaid"),
+            "hook-0088": ("src/mist/access/audit/rendering/renderer.py", "AuditReportRenderer.render_html"),
+            "hook-diag-0068": ("src/mist/access/audit/rendering/_renderer_format.py", "_format_dict"),
+            "hook-diag-0069": (
+                "src/mist/access/audit/rendering/clusters/_renderer_html.py",
+                "_group_changes_by_admin",
+            ),
+        }  # Require the exact current path and symbol for each affected hook.
+        print(f"Checked {len(hook_rows)} audit renderer hook path and symbol records.")
+        assert hook_rows == expected_rows
+
     def test_summary_artifacts_match_catalog_tables(self) -> None:
         catalog = PerformanceHookCatalog(_ARTIFACT_ROOT)  # Create the artifact reader for this spec.
         hook_rows = catalog.hook_rows()  # Read hook rows once for all count checks.
