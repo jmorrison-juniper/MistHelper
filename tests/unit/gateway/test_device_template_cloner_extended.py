@@ -108,6 +108,21 @@ def test_list_sites_refuses_native_http_403_with_site_data(caplog: pytest.LogCap
     assert "Mist API operation listOrgSites returned HTTP status 403" in caplog.text  # Expose the refusal
 
 
+def test_list_sites_refuses_native_http_500_with_site_data(caplog: pytest.LogCaptureFixture) -> None:
+    """A server error must not expose plausible site data to selection."""
+    caplog.set_level(logging.ERROR, logger=_SUT_LOGGER)  # Capture the operation refusal signal
+    manager = _build_manager()  # Build cloner with mocked dependencies
+    api_response = _build_api_response(500, [{"id": "site-1", "name": "Tempting site"}])  # Model a server failure
+    with patch(  # Keep the request local while the real helper evaluates its SDK response
+        "src.mist.resources.gateway.device_template_cloner.mistapi.api.v1.orgs.sites.listOrgSites",
+        return_value=api_response,
+    ):
+        sites = manager._list_sites()  # Exercise the live site-list response check
+    assert api_response.data == [{"id": "site-1", "name": "Tempting site"}]  # Confirm the refusal carries data
+    assert sites == []  # A server error must not enter site selection
+    assert "Mist API operation listOrgSites returned HTTP status 500" in caplog.text  # Expose the refusal
+
+
 def test_select_site_returns_none_when_no_sites(caplog: pytest.LogCaptureFixture) -> None:
     """_select_site must return None and inform the engineer when no sites exist."""
     caplog.set_level(logging.WARNING, logger=_SUT_LOGGER)  # Warning level after #886 migration
