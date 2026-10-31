@@ -723,3 +723,26 @@ def test_switch_page_http_503_stops_pagination(
     assert result is None
     assert caplog.record_tuples == [("root", logging.ERROR, f"searchOrgDevices switch page failed: {refusal.value}")]
     session.mist_get.assert_called_once_with(response.url)
+
+
+def test_switch_page_http_404_stops_pagination(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A missing page must stop switch pagination and report the HTTP status."""
+    from src.mist.resources.inventory import org_device_inventory_summary as summary_module
+
+    response = requests.Response()  # WHY: use a real response so requests creates an actual HTTPError.
+    response.status_code = 404  # WHY: model a client refusal from a missing page.
+    response.reason = "Not Found"  # WHY: preserve the status text in the logged error.
+    response.url = "https://api.mist.com/api/v1/orgs/org-1/devices/search?start=1000"  # WHY: identify the failed page.
+    with pytest.raises(requests.HTTPError) as refusal:  # WHY: exercise the native requests refusal path.
+        response.raise_for_status()  # WHY: attach the response to the HTTPError.
+    session = SimpleNamespace(mist_get=MagicMock(side_effect=refusal.value))  # WHY: fail the next-page request.
+    monkeypatch.setattr(summary_module, "apisession", session)  # WHY: inject the isolated session mock.
+
+    result = OrgDeviceInventorySummaryCore._search_switch_page("org-1", response.url)  # WHY: exercise the helper.
+
+    assert result is None  # WHY: a failed page must stop pagination.
+    expected_log = f"searchOrgDevices switch page failed: {refusal.value}"  # WHY: name the expected refusal.
+    assert caplog.record_tuples == [("root", logging.ERROR, expected_log)]  # WHY: verify the exact error report.
+    session.mist_get.assert_called_once_with(response.url)  # WHY: verify the requested cursor.
