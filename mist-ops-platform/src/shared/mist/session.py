@@ -2,6 +2,9 @@
 
 Creates ``mistapi.APISession`` objects with credentials retrieved from
 HashiCorp Vault and cached briefly in Redis to avoid repeated lookups.
+Resolution checks the cache, Vault ``api_token``, and configured
+``mist_api_token`` in that order. Only nonblank strings are usable.
+Accepted strings remain unchanged. Missing credentials stop SDK construction.
 """
 
 from __future__ import annotations
@@ -72,22 +75,24 @@ class MistSessionFactory:
     # -- internal helpers ------------------------------------------------
 
     def _resolve_token(self, org_id: str) -> str:
-        """Retrieve token from cache, then Vault, then env fallback."""
+        """Resolve a nonblank token without changing its opaque value."""
+        logger.info("Mist token resolution starts for org %s", org_id)
         cached = self._read_cache(org_id)
-        if cached:
+        if isinstance(cached, str) and cached.strip():  # Do not trim the accepted token.
             return cached
-
+        logger.warning("Rejected cache api_token: org=%s checked=1", org_id)
         token = self._read_vault(org_id)
-        if token:
+        if isinstance(token, str) and token.strip():
             self._write_cache(org_id, token)
             return token
+        logger.warning("Rejected Vault api_token: org=%s checked=2", org_id)
 
-        # Fallback to global env token
-        if self._settings.mist_api_token:
-            return self._settings.mist_api_token
+        token = self._settings.mist_api_token
+        if isinstance(token, str) and token.strip():
+            return token
 
-        msg = f"No Mist API token for org {org_id}"
-        raise RuntimeError(msg)
+        logger.error("No usable api_token or mist_api_token: org=%s checked=3", org_id)
+        raise RuntimeError(f"No Mist API token for org {org_id}")
 
     def _read_vault(self, org_id: str) -> str | None:
         """Fetch API token from Vault KV v2."""
