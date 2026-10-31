@@ -10,7 +10,7 @@ from src.mist.realtime.websocket_streams.catalog.model import FieldKind, FieldSp
 from src.mist.realtime.websocket_streams.catalog.sdk_annotation import (
     SdkAnnotation,
 )  # Read enum values from SDK annotations.
-from src.mist.realtime.websocket_streams.catalog.utilities.utility_text import (
+from src.mist.realtime.websocket_streams.catalog.utilities.metadata.utility_text import (
     UtilityText,  # Build public labels and hints.
 )
 

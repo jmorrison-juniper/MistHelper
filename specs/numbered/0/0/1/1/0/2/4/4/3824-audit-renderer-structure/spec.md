@@ -59,6 +59,7 @@ A network operations engineer reads utility names, descriptions, and input hints
 - The utility text logger and `UtilityText.__module__` use the new module path.
 - The source debt count decreases, and the change does not add a new structural violation.
 - Generated runtime files and package markers do not count as source children in the structural check.
+- The `utilities/` package has no more than five direct entries after generated cache directories are excluded.
 
 ## Requirements
 
@@ -80,7 +81,7 @@ A network operations engineer reads utility names, descriptions, and input hints
 - **SC-001**: The audit source package and each new renderer directory contain no more than five structural children.
 - **SC-002**: The repository-wide nested source measure reports 33 violations and 236 total excess, down from 34 violations and 237 excess.
 - **SC-003**: The audit renderer tests pass for Mermaid output, HTML output, delta behavior, and empty results.
-- **SC-004**: Each source directory affected by the WebSocket utility text move has no more than five structural children.
+- **SC-004**: The WebSocket utility package has no more than five direct entries, including its package marker and excluding generated caches.
 - **SC-005**: The utility text tests confirm that labels, descriptions, and input hints retain their current values.
 - **SC-006**: The new utility text import path resolves, and the old path fails to resolve.
 

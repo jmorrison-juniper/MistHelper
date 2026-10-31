@@ -76,7 +76,10 @@ MODULE_PATHS = {  # Map each old direct module to its new canonical module.
     "mist/access/audit/_renderer_html.py": "mist/access/audit/rendering/clusters/_renderer_html.py",  # For guard.
     "mist/access/audit/_renderer_mermaid.py": "mist/access/audit/rendering/clusters/_renderer_mermaid.py",  # For guard.
     "mist/realtime/websocket_streams/catalog/utility_text.py": (
-        "mist/realtime/websocket_streams/catalog/utilities/utility_text.py"
+        "mist/realtime/websocket_streams/catalog/utilities/metadata/utility_text.py"
+    ),  # Preserve symbols across the WebSocket utility text move.
+    "mist/realtime/websocket_streams/catalog/utilities/utility_profile.py": (
+        "mist/realtime/websocket_streams/catalog/utilities/metadata/utility_profile.py"
     ),  # Preserve symbols across the WebSocket utility text move.
     "org_data_collector.py": "operations/wan/org_data_collector.py",
     "wan_hub_group_manager.py": "operations/wan/wan_hub_group_manager.py",

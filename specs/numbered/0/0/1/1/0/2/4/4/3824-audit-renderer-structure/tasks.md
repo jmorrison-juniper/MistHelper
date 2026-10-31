@@ -47,10 +47,11 @@ No shared infrastructure blocks the user stories.
 **Independent Test**: Run the utility text tests and confirm that the new module path resolves and the old module path does not.
 
 - [x] T009 [US3] Add an import-path regression test in `tests/unit/websocket_streams/catalog/test_ws_utility_text.py`.
-- [x] T010 [P] [US3] Move `utility_text.py` into `src/mist/realtime/websocket_streams/catalog/utilities/utility_text.py`.
+- [x] T010 [P] [US3] Move `utility_text.py` into `src/mist/realtime/websocket_streams/catalog/utilities/metadata/utility_text.py`.
 - [x] T011 [P] [US3] Update the remaining source and test imports in `src/mist/realtime/websocket_streams/catalog/utilities/utility_fields.py`, `src/mist/realtime/websocket_streams/catalog/utilities/utility_discovery.py`, and `tests/unit/websocket_streams/catalog/test_ws_utility_text_3890.py`.
 - [x] T012 [US3] Remove the resolved catalog violation and map the moved module in `tests/guardrails/nested_package_baseline.json`, `tests/guardrails/test_nested_package_structure.py`, and `tests/guardrails/test_src_public_symbol_preservation.py`.
 - [x] T015 [US3] Exclude `__init__.py` markers and generated `__pycache__` directories from the WebSocket feature structure guard. Update measured totals and prove that a real source violation still fails.
+- [x] T016 [US3] Move `utility_profile.py` and `utility_text.py` into `utilities/metadata/`. Keep the parent package at five direct entries and test that old module paths are absent.
 
 ## Phase 8: Polish and Cross-Cutting Concerns
 
@@ -70,7 +71,8 @@ No shared infrastructure blocks the user stories.
 - **T010** and **T011** can proceed in parallel after **T009** because they change separate files.
 - **T012** depends on **T010**.
 - **T015** depends on **T012**.
-- **T013** depends on **T009** through **T012** and **T015**.
+- **T016** depends on **T010** through **T012** and **T015**.
+- **T013** depends on **T009** through **T012**, **T015**, and **T016**.
 - **T014** depends on **T013**.
 
 ## Parallel Opportunities
@@ -83,4 +85,5 @@ After **T009**, run **T010** and **T011** in parallel because they change separa
 2. Move the module and update active callers.
 3. Update the structural baseline and symbol-preservation map.
 4. Exclude package markers and generated cache directories from the WebSocket structure guard.
-5. Run the focused tests and all applicable move-module gates.
+5. Group the utility metadata modules and keep the parent package within five direct entries.
+6. Run the focused tests and all applicable move-module gates.
