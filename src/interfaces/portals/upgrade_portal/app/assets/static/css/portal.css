@@ -196,6 +196,10 @@
     font-size: 0.85rem;
 }
 
+#dependency-panel .table code {
+    overflow-wrap: anywhere; /* Long service addresses must not widen the sign-in page. */
+}
+
 /* Keep the credential label above its field and below the mode choices. */
 .signin-token-group {
     margin-top: 0.75rem;

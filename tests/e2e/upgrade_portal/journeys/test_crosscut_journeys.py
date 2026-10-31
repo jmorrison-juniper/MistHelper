@@ -172,10 +172,13 @@ def assert_focus_visible(page: Any) -> None:
 
 def assert_no_horizontal_scroll(page: Any) -> None:
     """Require the document to fit the viewport width."""
-    fits = page.evaluate(
-        "() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1"
-    )  # Compare widths.
-    assert fits is True, "The page has horizontal document scroll."  # Forms must fit a narrow viewport.
+    document_width, viewport_width = page.evaluate(
+        "() => [document.documentElement.scrollWidth, document.documentElement.clientWidth]"
+    )  # Measure the actual layout rather than infer it from a style rule.
+    message = (
+        f"{page.url} has horizontal document scroll: " f"{document_width}px for a {viewport_width}px viewport."
+    )  # Identify the page and widths when the layout exceeds the viewport.
+    assert document_width <= viewport_width, message  # Forms must fit without hiding their content.
 
 
 def assert_signed_in_nav(page: Any) -> None:
@@ -404,6 +407,14 @@ def test_history_comparison_errors_and_viewports(page: Any, signed_out_page: Any
     out_shots.step("history needs session")  # Capture the sign-in form.
     expect(signed_out_page.locator("h1")).to_contain_text("Sign in")  # The form is shown.
     for width, height in VIEWPORTS:  # Check the requested viewport sizes.
+        signed_out_page.set_viewport_size({"width": width, "height": height})  # Cover the signed-out form too.
+        signed_out_page.goto(SIGNIN_PATH, wait_until="domcontentloaded")  # Render the actual sign-in state.
+        out_shots.step(f"signin viewport {width}x{height}")  # Keep evidence for the narrow sign-in regression.
+        assert_no_horizontal_scroll(signed_out_page)  # Issue #4539 reported 400 pixels at a 390-pixel viewport.
+        table_fits = signed_out_page.get_by_test_id("dependency-panel").evaluate(
+            "panel => panel.querySelector('table').getBoundingClientRect().right <= panel.getBoundingClientRect().right"
+        )  # A document overflow clip must not hide an oversized service-check table.
+        assert table_fits is True, "The service-check table exceeds its card."  # Keep service details accessible.
         page.set_viewport_size({"width": width, "height": height})  # Resize the browser viewport.
         for path, label in (
             (SIGNIN_PATH, "signin"),
