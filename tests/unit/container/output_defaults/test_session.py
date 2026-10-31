@@ -113,6 +113,7 @@ class TestBashSyntax:
         with pytest.raises(expected) as failure:  # Do not claim an application received a signal.
             BashSession.run(sandbox, interruption=signal.SIGTERM)  # Signal synchronization must fail closed.
         if mode == "launch-timeout":  # The injected decision still uses the configured 30-second timeout.
+            assert isinstance(failure.value, subprocess.TimeoutExpired)  # Prove the timeout type.
             assert failure.value.timeout == 30  # Never weaken the bound to make this case pass.
 
 
