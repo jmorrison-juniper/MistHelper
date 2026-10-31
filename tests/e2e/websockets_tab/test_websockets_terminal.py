@@ -1021,13 +1021,21 @@ def test_review_3710_silent_device_shows_notice_and_failed_reason(
 ) -> None:
     """Issue #3710: a silent device shows a notice, and the cloud close shows a failed reason."""
     harness = silent_terminal_harness  # Use a short name for the harness.
+    opened_at_ms = 1_700_000_000_000  # Fix elapsed notice time independently of browser and server scheduling.
+    page.clock.set_fixed_time(opened_at_ms / 1000)  # Playwright takes seconds and freezes only Date.now.
     page.add_init_script(
         "window.MistWebSocketTerminalTestHooks = {readWaitSeconds: 0.5, noOutputNoticeSeconds: 2};"
     )  # Shorten the read wait and the notice wait.
     _open_shell(page, harness)  # Start a shell on the silent device.
     page.locator("#wsSessionReason", has_text=WAITING_NOTICE).wait_for(timeout=READY_TIMEOUT_MS)  # First notice.
-    page.wait_for_timeout(1500)  # Stay before the controlled two-second notice boundary.
+    page.clock.set_fixed_time((opened_at_ms + 1999) / 1000)  # Stop one millisecond before the notice boundary.
+    for _ in range(2):  # The second request proves the first controlled read updated the page before it.
+        with page.expect_request(
+            lambda request: "/terminal?after=0&wait=0.5" in request.url, timeout=READY_TIMEOUT_MS
+        ):  # Observe the real read loop without replacing its answers or its timers.
+            pass
     assert page.locator("#wsSessionReason").inner_text() == WAITING_NOTICE  # Do not show the notice too early.
+    page.clock.set_fixed_time((opened_at_ms + 2000) / 1000)  # Cross the exact boundary without a real-time sleep.
     page.locator("#wsSessionReason", has_text=SILENT_NOTICE).wait_for(
         timeout=READY_TIMEOUT_MS
     )  # Show it after two seconds.
