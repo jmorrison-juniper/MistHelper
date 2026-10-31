@@ -35,8 +35,11 @@ No live firmware operation ran. The focused contract module blocks external sock
 | Full configured Vulture target | No finding |
 | Repository Pylint | 9.92 out of 10 |
 | Test-quality input preflight | Passed, four required inputs read and validated |
+| Committed-difference test quality | One file checked, zero findings, zero new findings against the baseline |
+| Full-suite test quality | 1211 files checked, 594 existing findings, zero new findings against the baseline |
 | Symbol comparison | Zero lost names. One intentional addition: `OrgRetrySiteScope`. The tool returns 1 for an addition. |
 | STE, nine initial Markdown files | Each file passed threshold 80 |
+| Markdown links | Nine specification files checked, zero broken local links |
 
 The initial smaller coverage selection reached 89.79 percent.
 Adding the remaining related organization contracts raised coverage without lowering the threshold.
