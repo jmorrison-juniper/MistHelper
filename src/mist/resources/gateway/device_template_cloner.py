@@ -127,6 +127,16 @@ class DeviceConfigTemplateClonerManager:  # Menu 194 clone-to-template manager
         self.save_data_fn = deps.save_data_fn  # Legacy CSV writer retained for compat
         self.write_csv_fn = deps.write_csv_fn  # PK-aware format-selecting writer
 
+    @staticmethod
+    def _response_succeeded(response: object, operation: str) -> bool:
+        """Accept only successful HTTP responses before the caller reads response data."""
+        status_code = getattr(response, "status_code", None)  # Read the SDK status before trusting its body
+        if not isinstance(status_code, int) or not 200 <= status_code < 300:  # Reject absent or failed statuses
+            logger.error("Mist API operation %s returned HTTP status %s", operation, status_code)  # Expose refusal
+            return False  # Prevent an error body from entering the normal workflow
+        logger.debug("Mist API operation %s returned HTTP status %d", operation, status_code)  # Record success status
+        return True  # Permit the caller to consume successful response data
+
     # ------------------------------------------------------------------
     # Site selection
     # ------------------------------------------------------------------
@@ -138,6 +148,8 @@ class DeviceConfigTemplateClonerManager:  # Menu 194 clone-to-template manager
             self.apisession,
             self.org_id,
         )
+        if not self._response_succeeded(response, "listOrgSites"):  # Refuse site data from a failed response
+            return []  # Stop selection when the organization request failed
         sites = response.data if hasattr(response, "data") else []  # Extract data list from response
         logger.debug("Received %d sites from API", len(sites))  # Log result count after call
         return sites  # Return site list for caller to display
@@ -168,6 +180,8 @@ class DeviceConfigTemplateClonerManager:  # Menu 194 clone-to-template manager
             site_id,
             type="all",  # Must specify "all" or API defaults to APs only
         )
+        if not self._response_succeeded(response, "listSiteDevices"):  # Refuse device data from a failed response
+            return []  # Stop gateway selection when the site request failed
         devices = response.data if hasattr(response, "data") else []  # Extract data list from response
         gateways = [d for d in devices if d.get("type") == "gateway"]  # Keep only gateway-type devices
         logger.debug("Found %d gateway device(s) at site %s", len(gateways), site_id)  # Log count
@@ -215,6 +229,8 @@ class DeviceConfigTemplateClonerManager:  # Menu 194 clone-to-template manager
             site_id,
             device_id,
         )
+        if not self._response_succeeded(response, "getSiteDevice"):  # Refuse device config from a failed response
+            return None  # Stop cloning when the selected device read failed
         config = response.data if hasattr(response, "data") else {}  # Extract device dict from response
         logger.debug(  # Log field count after fetch - safe summary without secret values
             "Received device config with %d top-level fields", len(config)
@@ -234,6 +250,8 @@ class DeviceConfigTemplateClonerManager:  # Menu 194 clone-to-template manager
             self.apisession,
             self.org_id,
         )
+        if not self._response_succeeded(response, "listOrgGatewayTemplates"):  # Refuse template data on failure
+            return set()  # Stop name validation when the organization request failed
         templates = response.data if hasattr(response, "data") else []  # Extract template list
         names = {t.get("name", "") for t in templates if t.get("name")}  # Build name set for O(1) lookup
         logger.debug("Found %d existing gateway template name(s)", len(names))  # Log count after fetch
@@ -421,6 +439,8 @@ class DeviceConfigTemplateClonerManager:  # Menu 194 clone-to-template manager
             self.org_id,
             body=payload,  # Pass full payload dict as API request body
         )
+        if not self._response_succeeded(response, "createOrgGatewayTemplate"):  # Refuse a failed create response
+            return None  # Prevent failed creation from reaching export
         template = response.data if hasattr(response, "data") else {}  # Extract created template dict
         logger.debug(  # Log new template ID after creation - safe identifying field
             "Created gateway template with ID %s", template.get("id", "unknown")
