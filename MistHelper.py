@@ -471,16 +471,16 @@ from src.mist.intelligence.analytics.data_collection_manager import (
 from src.mist.intelligence.analytics.insight_metrics_utils import (
     InsightMetricsUtils,
 )  # Cat E canonical (1014 P11) -- re-export for MistHelper.InsightMetricsUtils callers
-from src.mist.intelligence.analytics.site_analytics_configurator import (  # Import site analytics configuration tools
+from src.mist.intelligence.analytics.site.site_analytics_configurator import (
     SiteAnalyticsConfigurator as ExtractedSiteAnalyticsConfigurator,  # Rename to avoid naming conflicts
-)
-from src.mist.intelligence.analytics.site_analytics_configurator import (
+)  # Import site analytics configuration tools.
+from src.mist.intelligence.analytics.site.site_analytics_configurator import (
     SiteAnalyticsConfiguratorDeps,
 )  # Import dependency injection class
-from src.mist.intelligence.analytics.site_inventory_health_analyzer import (  # Import the moved dependency.
+from src.mist.intelligence.analytics.site.site_inventory_health_analyzer import (  # Import the moved dependency.
     SiteInventoryHealthAnalyzer as ExtractedSiteInventoryHealthAnalyzer,  # Rename to avoid naming conflicts
 )
-from src.mist.intelligence.analytics.site_inventory_health_analyzer import (
+from src.mist.intelligence.analytics.site.site_inventory_health_analyzer import (
     SiteInventoryHealthAnalyzerDeps,
 )  # Import dependency injection class
 from src.mist.intelligence.analytics.telemetry_emitter import (

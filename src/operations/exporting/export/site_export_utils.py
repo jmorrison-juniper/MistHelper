@@ -542,9 +542,9 @@ class SiteExportUtils(SiteInsightsExporter):  # WHY: inherit insights exporters 
     def zone_config_analysis(self) -> None:
         """Run the zone, engagement, and occupancy configuration analysis.
 
-        Menu 6 delegates to `src.mist.intelligence.analytics.zone_analyzer`.
+        Menu 6 delegates to `src.mist.intelligence.analytics.site.zone_analyzer`.
         """
-        from src.mist.intelligence.analytics.zone_analyzer import ZoneConfigurationAnalyzer as _ZCA
+        from src.mist.intelligence.analytics.site.zone_analyzer import ZoneConfigurationAnalyzer as _ZCA
 
         _ZCA.analyze(  # WHY: reuse zone analyzer for menu #6.
             apisession=self.apisession,

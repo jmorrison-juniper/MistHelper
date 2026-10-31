@@ -203,7 +203,7 @@ The entrypoint held roughly 28,000 lines before the decomposition. It now holds
 
 ```text
 src/
-├── analytics/              # Site inventory health analysis and zone configuration
+├── mist/intelligence/analytics/site/  # Site inventory health analysis and zone configuration
 ├── api/                    # API operation modules (orgs, sites, const)
 ├── audit/                  # Audit log operations
 ├── auth/                   # Authentication and session management
@@ -258,7 +258,7 @@ src/
 | `src/operations/exporting/export/` | **Done** | Output writer (`DataExporter.write_with_format_selection`) |
 | `src/foundation/constants.py` | **Done** | Shared constants |
 | `src/wan_*.py` | **Done** | WAN hub group manager, VPN builder |
-| `src/mist/intelligence/analytics/` | **Done (Wave 2)** | Site inventory health analyzer, site analytics configurator, zone analyzer |
+| `src/mist/intelligence/analytics/site/` | **Done (Wave 2)** | Site inventory health analyzer, site analytics configurator, zone analyzer |
 | `src/operations/execution/capture/` | **Done (Wave 2)** | Canonical packet capture manager + download/poll helper extraction |
 | `src/operations/exporting/export/` | **Done (Wave 2)** | Site export utilities and site insights exporter |
 | `src/mist/resources/gateway/` | **Done (Wave 2)** | Gateway exports, stats exporter, override analyzer, WAN2 migration, probe overrides |
@@ -277,7 +277,7 @@ All 9 phases completed with hard-gate evidence. Each phase passed: extraction, t
 
 | Phase | Package | Key Classes | Menu Operations |
 |-------|---------|-------------|-----------------|
-| 1 | `src/mist/intelligence/analytics/` | `SiteInventoryHealthAnalyzer`, `SiteAnalyticsConfigurator` | 7, 169 |
+| 1 | `src/mist/intelligence/analytics/site/` | `SiteInventoryHealthAnalyzer`, `SiteAnalyticsConfigurator` | 7, 169 |
 | 2 | `src/mist/intelligence/troubleshooting/`, `src/operations/execution/ssh/` | `MarvisTroubleshootUtils`, `SSHRunnerManager` | 124-127, 139, 175-176 |
 | 3 | `src/mist/resources/gateway/` | `WAN2MigrationManager`, `WanProbeDeviceOverrideManager` | 149, 167 |
 | 4 | `src/mist/resources/site/` | `SiteConfigManager` | 171-174 |

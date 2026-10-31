@@ -132,7 +132,7 @@ flowchart TD
 
 | Package | Primary Classes | Menu Ops |
 |---------|----------------|----------|
-| `src/mist/intelligence/analytics/` | `ZoneConfigurationAnalyzer`, `SiteInventoryHealthAnalyzer`, `SiteAnalyticsConfigurator` | 7, 77-79, 169 |
+| `src/mist/intelligence/analytics/site/` | `ZoneConfigurationAnalyzer`, `SiteInventoryHealthAnalyzer`, `SiteAnalyticsConfigurator` | 7, 77-79, 169 |
 | `src/operations/execution/capture/` | `PacketCaptureManager`, `PacketCaptureDownloadManager` | 134-135 |
 | `src/foundation/persistence/db/` | `DatabaseRouter`, `ArangoDBWriter`, `RedisTimeSeriesWriter`, `RedisJSONWriter` | Output backends |
 | `src/mist/resources/device/` | Device utility modules | 128-133, 148, 207-208 |
