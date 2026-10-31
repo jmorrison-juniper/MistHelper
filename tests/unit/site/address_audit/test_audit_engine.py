@@ -1,6 +1,10 @@
 """Unit tests for AddressAuditEngine classification + assembly (1003-site-address-audit)."""
 
+import json  # Build a native HTTP error response without a network request.
 from unittest.mock import MagicMock
+
+import pytest  # Cover both client and server response failures.
+import requests  # Build the HTTP response that the Mist SDK wraps.
 
 from src.mist.resources.site.address_audit import audit_engine as eng_mod
 from src.mist.resources.site.address_audit.audit_engine import AddressAuditEngine
@@ -379,6 +383,29 @@ class TestResolveAndClassify:
             authoritative_index={"by_name": {}, "by_full": {}, "by_no_suite": {}},  # WHY: Empty index for zero-row.
         )
         assert engine._resolve_and_classify([], [], None, ctx) == []  # WHY: Empty input must produce empty output.
+
+
+class TestGetAll:
+    """Mist HTTP status controls whether the response can yield records."""
+
+    @pytest.mark.parametrize(("status_code", "expected_count"), [(200, 1), (403, 0), (503, 0)])
+    def test_results_body_is_paginated_only_for_successful_status(self, status_code, expected_count):
+        """A plausible error body must not pass through SDK pagination."""
+        from mistapi.__api_response import APIResponse  # Wrap the response with the native Mist SDK type.
+
+        http_response = requests.Response()  # Native response lets the SDK parse the error body.
+        http_response.status_code = status_code  # Exercise both refused and unavailable responses.
+        http_response.url = "https://api.example.test/api/v1/orgs/example/inventory"  # SDK response requires a URL.
+        http_response.headers["Content-Type"] = "application/json"  # Let the SDK decode its normal JSON payload.
+        records = [{"serial": "REFUSED-DEVICE", "site_id": "refused-site"}]  # Match an ordinary inventory result.
+        http_response._content = json.dumps(  # Reproduce an error body that resembles a successful list response.
+            {"results": records}
+        ).encode("utf-8")
+        sdk_response = APIResponse(http_response, http_response.url)  # Use the SDK's real response wrapper.
+
+        actual_records = AddressAuditEngine._get_all(sdk_response, MagicMock())  # Paginate only accepted responses.
+        expected_records = records[:expected_count]  # Keep the ordinary success result while rejecting error data.
+        assert actual_records == expected_records  # Preserve only valid results.
 
 
 class TestEnvConfig:

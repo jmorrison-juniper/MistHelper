@@ -395,8 +395,16 @@ class AddressAuditEngine:
     @staticmethod
     def _get_all(response: Any, apisession: Any) -> list[dict[str, Any]]:
         """Fully paginate a Mist API response into a list (empty on failure)."""
+        status_code = getattr(response, "status_code", None)  # Require an explicit status from the SDK response.
+        if not isinstance(status_code, int) or not 200 <= status_code < 300:  # Reject refused or malformed responses.
+            logger.warning("Mist API response status %s is not successful; skipping pagination", status_code)
+            logger.debug("Skipped Mist pagination and returned 0 records")  # Report the fail-closed result.
+            return []  # Refused response data must not become inventory or site records.
+        logger.info("Paginating Mist API response with HTTP status %s", status_code)  # Action-log start.
         try:
-            return mistapi.get_all(response=response, mist_session=apisession) or []  # Exhaust pagination.
+            records = mistapi.get_all(response=response, mist_session=apisession) or []  # Exhaust pagination.
+            logger.debug("Mist pagination returned %d records", len(records))  # Summarize the result.
+            return records  # Hand back only records from successful responses.
         except Exception as exc:  # a read failure must not crash the audit.
             logger.warning("Mist pagination failed: %s", exc)  # Log and degrade to empty.
             return []  # Return nothing so the audit continues.
