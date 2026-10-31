@@ -560,6 +560,23 @@ class TestFetchHubSpokeVpnsError:
         assert all_vpns == []
         assert "Error retrieving VPN" in caplog.text
 
+    @patch("src.operations.wan.wan_hub_group_manager.mistapi.api.v1.orgs.vpns.listOrgVpns")
+    def test_http_503_returns_empty(
+        self, mock_list: MagicMock, caplog: pytest.LogCaptureFixture
+    ) -> None:  # WHY: prove the service-failure response is rejected.
+        """A service failure must not produce VPN records or hide the operator warning."""
+        from requests import HTTPError, Response  # WHY: construct the SDK failure without network access.
+
+        caplog.set_level(logging.ERROR)  # WHY: capture the failure signal that the operator needs.
+        response = Response()  # WHY: attach the service status to the raised HTTP error.
+        response.status_code = 503  # WHY: represent an unavailable Mist API response.
+        mock_list.side_effect = HTTPError("Service Unavailable", response=response)  # WHY: SDK call fails.
+        manager = WanHubGroupNumberManager(MagicMock(), "org-1")  # WHY: create the source object under test.
+        hub_spoke, all_vpns = manager._fetch_hub_spoke_vpns()  # WHY: exercise the read-failure boundary.
+        assert hub_spoke == []  # WHY: failed reads must not report hub-spoke VPN records.
+        assert all_vpns == []  # WHY: failed reads must not report any VPN records.
+        assert "Error retrieving VPN" in caplog.text  # WHY: failure must remain visible to the operator.
+
 
 # ---------------------------------------------------------------------------
 # Coverage: _display_profile_list
