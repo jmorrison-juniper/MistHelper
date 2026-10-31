@@ -5,9 +5,22 @@ from __future__ import annotations
 import json
 from types import SimpleNamespace
 from typing import Any
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 
 from web_portal.routes.operations import _build_replay, _fetch_msp_grants
+
+
+class FakeMistSession:
+    """Return one controlled self response through the SDK session contract."""
+
+    def __init__(self, response: SimpleNamespace) -> None:
+        self.response: SimpleNamespace = response  # Store the response returned by the fake transport.
+
+    def mist_get(self, *, uri: str, query: dict[str, str]) -> SimpleNamespace:
+        """Return the response that the SDK self endpoint requests."""
+        assert uri == "/api/v1/self"  # Require the SDK to call the self endpoint.
+        assert query == {}  # The self endpoint does not take query parameters.
+        return self.response  # Return controlled data without a network request.
 
 
 def _decode_event(event: str) -> tuple[str, dict[str, Any]]:
@@ -108,22 +121,23 @@ def test_replay_ignores_missing_and_active_runs() -> None:
 
 def test_msp_grants_filter_invalid_rows_and_sort_name_fallbacks() -> None:
     """Valid grants keep their existing name fallback and stable sort."""
-    session = object()  # Provide a non-empty session without a production credential.
-    response = SimpleNamespace(
-        status_code=200,
-        data={
-            "privileges": [
-                {"msp_id": "msp-z", "msp_name": "Zulu"},
-                {"msp_id": "msp-a", "name": "Alpha"},
-                {"msp_id": "msp-id"},
-                {"msp_id": ""},
-                {"msp_id": 7},
-                "invalid",
-            ]
-        },
-    )  # Cover both name fallbacks and malformed privilege entries.
-    with patch("mistapi.api.v1.self.self.getSelf", return_value=response) as get_self:
-        grants = _fetch_msp_grants(session)  # Read the mocked self response.
+    session = FakeMistSession(
+        SimpleNamespace(
+            status_code=200,
+            data={
+                "privileges": [
+                    {"msp_id": "msp-z", "msp_name": "Zulu"},
+                    {"msp_id": "msp-a", "name": "Alpha"},
+                    {"msp_id": "msp-id"},
+                    {"msp_id": ""},
+                    {"msp_id": 7},
+                    "invalid",
+                ]
+            },
+        )
+    )  # Use the SDK session interface without a production credential.
+
+    grants = _fetch_msp_grants(session)  # Read the mocked self response.
 
     assert grants == [
         {"id": "msp-a", "name": "Alpha"},
@@ -131,28 +145,25 @@ def test_msp_grants_filter_invalid_rows_and_sort_name_fallbacks() -> None:
         {"id": "msp-z", "name": "Zulu"},
     ]  # Keep valid rows in the label order used by the selector.
     assert grants.reason is None  # A non-empty grant list needs no empty-state explanation.
-    get_self.assert_called_once_with(session)  # Confirm one SDK read used the supplied session.
 
 
 def test_msp_grants_report_client_error_status() -> None:
     """A refused Mist response remains distinct from an empty grant list."""
-    session = object()  # Provide a non-empty session without a production credential.
-    response = SimpleNamespace(status_code=403, data={"privileges": []})  # Model a refused API response.
-    with patch("mistapi.api.v1.self.self.getSelf", return_value=response) as get_self:
-        grants = _fetch_msp_grants(session)  # Read the mocked refused response.
+    session = FakeMistSession(
+        SimpleNamespace(status_code=403, data={"privileges": []})
+    )  # Model a refused response through the SDK session interface.
+    grants = _fetch_msp_grants(session)  # Read the mocked refused response.
 
     assert grants == []  # Do not expose grants from a refused response.
     assert grants.reason == "The Mist API returned status 403 while reading MSP access."  # Preserve the refusal.
-    get_self.assert_called_once_with(session)  # Confirm one SDK read used the supplied session.
 
 
 def test_msp_grants_report_server_error_status() -> None:
     """A Mist server failure remains distinct from an empty grant list."""
-    session = object()  # Provide a non-empty session without a production credential.
-    response = SimpleNamespace(status_code=500, data={"privileges": []})  # Model a failed API response.
-    with patch("mistapi.api.v1.self.self.getSelf", return_value=response) as get_self:
-        grants = _fetch_msp_grants(session)  # Read the mocked failed response.
+    session = FakeMistSession(
+        SimpleNamespace(status_code=500, data={"privileges": []})
+    )  # Model a failed response through the SDK session interface.
+    grants = _fetch_msp_grants(session)  # Read the mocked failed response.
 
     assert grants == []  # Do not expose grants from a failed response.
     assert grants.reason == "The Mist API returned status 500 while reading MSP access."  # Preserve the failure.
-    get_self.assert_called_once_with(session)  # Confirm one SDK read used the supplied session.
