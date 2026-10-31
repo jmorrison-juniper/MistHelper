@@ -31,7 +31,7 @@
 
 - [x] T008 [P] Write `changelog.d/issue-3396-retry-site-scope.md`. (delivered: changelog.d/issue-3396-retry-site-scope.md)
 - [x] T009 Run applicable local gates and record conformance in `analysis.md`. (delivered: specs/numbered/0/0/1/0/2/0/4/1/3396-retry-site-scope/analysis.md)
-- [ ] T010 Commit the explicit manifest and run the committed-difference quality gate for `tests/contract/upgrade_portal/test_org_child_controls_routes.py`.
+- [x] T010 Commit the explicit manifest and run the committed-difference quality gate for `tests/contract/upgrade_portal/test_org_child_controls_routes.py`. (delivered: tests/contract/upgrade_portal/test_org_child_controls_routes.py)
 
 ## Dependencies and execution order
 
