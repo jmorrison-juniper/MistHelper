@@ -309,6 +309,13 @@ def adjust_model_matching(source_rules, old_model, new_model):
 - [x] Retry on transient API failures (up to 3 times)
 - [x] Display clear error messages with context for troubleshooting
 
+### HTTP Refusal Handling
+- The device-config cloning workflow MUST reject a non-2xx response from `listOrgSites`, `listSiteDevices`, `getSiteDevice`, `listOrgGatewayTemplates`, or `createOrgGatewayTemplate` before it uses response data.
+- The workflow MUST report the refused operation and HTTP status, even when the response body contains plausible site, device, configuration, template, or creation data.
+- If `listOrgGatewayTemplates` is refused, the workflow MUST stop before it prompts for template metadata or calls `createOrgGatewayTemplate`.
+- A refused create MUST fail the workflow and MUST NOT export a successful template record.
+- Tests MUST send native SDK responses with HTTP 403 or HTTP 500 and plausible response data, then assert the failure result and refusal signal.
+
 ### Logging & Observability
 - [x] Log template selection decision at INFO level
 - [x] Log full API request/response (template details) at DEBUG level
