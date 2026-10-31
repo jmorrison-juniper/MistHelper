@@ -18,6 +18,7 @@ from dataclasses import asdict, dataclass
 from datetime import UTC, datetime, timedelta
 from threading import Lock
 from typing import Any
+from unittest.mock import Mock
 
 import pytest
 from flask import Flask
@@ -67,6 +68,15 @@ PLAN_CHOICES = {  # The choices of a plan of the access points and the switches.
     "version_switch": JUNOS_TARGET,
     "strategy": "big_bang",
 }
+
+
+@pytest.fixture(autouse=True)
+def block_external_connections(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Reject external connections so a missing fake cannot reach a live service."""
+    blocked = Mock(side_effect=AssertionError("Contract tests must not open external connections."))
+    monkeypatch.setattr("socket.socket.connect", blocked)
+    monkeypatch.setattr("socket.socket.connect_ex", blocked)
+    monkeypatch.setattr("socket.create_connection", blocked)
 
 
 class RecordStore:
@@ -507,6 +517,9 @@ def test_a_retry_save_with_a_cleared_type_plans_the_other_retry_device(harness: 
     assert saved.status_code == 200, saved.get_json()  # The Sites page would end the retry, so no refusal.
     plan = harness.store.records[saved_operation_id(harness)]  # The new durable plan.
     assert planned_macs(plan) == {AP_TWO}  # The failed access point, and no healthy device.
+    assert plan["site_ids"] == [SITE_TWO]
+    assert plan["site_names"] == {SITE_TWO: "Site Two"}
+    assert harness.operator.selected_site_ids == (harness.site_one, SITE_TWO)
     assert plan["retry_of_operation_id"] == RETRY_ID  # The plan stays a retry of the earlier operation.
     assert browser_value(harness, RETRY_SESSION_KEY) == {"operation_id": RETRY_ID, "org_id": harness.org_id}
 
@@ -526,7 +539,119 @@ def test_a_retry_save_plans_the_other_device_when_a_retry_device_left_its_site(h
     assert saved.status_code == 200, saved.get_json()  # The first site holds no retry device, and the save goes on.
     plan = harness.store.records[saved_operation_id(harness)]  # The new durable plan.
     assert planned_macs(plan) == {AP_TWO}  # The retry device that stays, and no healthy device.
+    assert plan["site_ids"] == [SITE_TWO]
+    assert plan["site_names"] == {SITE_TWO: "Site Two"}
+    assert harness.operator.selected_site_ids == (harness.site_one, SITE_TWO)
     assert plan["retry_of_operation_id"] == RETRY_ID  # The plan stays a retry of the earlier operation.
+
+
+class TestRetrySiteScope:
+    """Prove effective site scope across the real save, confirmation, and submission routes."""
+
+    @pytest.mark.parametrize(
+        ("retry", "selected_types"),
+        [(True, ["ap"]), (True, ["ap", "switch"]), (False, ["ap", "switch"])],
+        ids=["retry-cleared-switches", "retry-all-targeted-sites", "plain-save"],
+    )
+    def test_scope_matches_targets(
+        self, harness: ControlsHarness, monkeypatch: pytest.MonkeyPatch, retry: bool, selected_types: list[str]
+    ) -> None:
+        """Only partial retries narrow scope, and every consumer uses that same scope."""
+        if retry:
+            harness.store.write_run(settled_record(harness))
+            opened = post_json(harness, f"/api/org-upgrades/{RETRY_ID}/retry")
+            assert opened.status_code == 200
+        expected_sites = [SITE_TWO] if selected_types == ["ap"] else [harness.site_one, SITE_TWO]
+        captures = PrecheckAdopterStandIn(expected_sites).install(harness.client.application.config)
+        saved = post_json(harness, OPTIONS_API, {**PLAN_CHOICES, "selected_types": selected_types})
+        assert saved.status_code == 200, saved.get_json()
+        plan = harness.store.records[saved_operation_id(harness)]
+        assert plan["site_ids"] == expected_sites
+        names = {harness.site_one: "Test Site", SITE_TWO: "Site Two"}
+        assert plan["site_names"] == {site_id: names[site_id] for site_id in expected_sites}
+        assert {target["site_id"] for child in plan["children"] for target in child["targets"]} == set(expected_sites)
+        assert {site_id for child in plan["children"] for site_id in org_upgrade._child_site_ids(child)} == set(
+            expected_sites
+        )
+        self.assert_confirmation(harness, plan, captures)
+        self.assert_submission(harness, plan, captures, monkeypatch)
+
+    @staticmethod
+    def assert_confirmation(
+        harness: ControlsHarness, plan: Mapping[str, Any], captures: PrecheckAdopterStandIn
+    ) -> None:
+        """Check rendered counts and capture rows against the durable scope."""
+        response = harness.client.get(CONFIRM_PAGE)
+        assert response.status_code == 200
+        page = response.get_data(as_text=True)
+        assert f'<strong>Sites:</strong> {len(plan["site_ids"])}' in page
+        assert f"<strong>Devices:</strong> {len(planned_macs(plan))}" in page
+        assert re.findall(r'data-testid="org-upgrade-precheck-row-([^"]+)"', page) == plan["site_ids"]
+        assert captures.reads == plan["site_ids"]
+        assert harness.operator.selected_site_ids == (harness.site_one, SITE_TWO)
+
+    @staticmethod
+    def assert_submission(
+        harness: ControlsHarness,
+        plan: Mapping[str, Any],
+        captures: PrecheckAdopterStandIn,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Check pre-check reads, lock checks, and token-bearing acquisitions without a cloud write."""
+        captures.reads.clear()
+        acquire = Mock(wraps=lock.acquire_site_lock)
+        check_lock = Mock(wraps=org_upgrade.upgrade_routes.lock_refusal)
+        monkeypatch.setattr(lock, "acquire_site_lock", acquire)
+        monkeypatch.setattr(org_upgrade.upgrade_routes, "lock_refusal", check_lock)
+        started = post_json(harness, SUBMIT_API, {"confirmation": "CONFIRM"})
+        assert started.status_code == 200, started.get_json()
+        assert started.get_json() == {"next": f'/upgrade/org/jobs/{plan["operation_id"]}'}
+        assert captures.reads == plan["site_ids"]
+        assert [call.args[1] for call in check_lock.call_args_list] == plan["site_ids"]
+        assert [call.args[0].site_id for call in acquire.call_args_list] == plan["site_ids"]
+        stored = harness.store.records[plan["operation_id"]]
+        assert set(stored["site_locks"]) == set(plan["site_ids"])
+        assert all(saved["lock_token"] for saved in stored["site_locks"].values())
+        assert harness.operator.selected_site_ids == (harness.site_one, SITE_TWO)
+
+    @pytest.mark.parametrize("changed_scope", ["missing", "reordered", "nonce"])
+    def test_changed_effective_context_refuses_submission(self, harness: ControlsHarness, changed_scope: str) -> None:
+        """A retry must not bypass the exact ordered-site and nonce comparisons."""
+        harness.store.write_run(settled_record(harness))
+        post_json(harness, f"/api/org-upgrades/{RETRY_ID}/retry")
+        operation_id = save_plan(harness)
+        if changed_scope == "nonce":
+            with harness.client.session_transaction() as browser_session:
+                browser_session[org_upgrade.OPTIONS_NONCE_SESSION_KEY] = "changed-confirmation-nonce"
+        else:
+            selected = (SITE_TWO,) if changed_scope == "missing" else (SITE_TWO, harness.site_one)
+            harness.operator.selected_site_ids = selected
+        started = post_json(harness, SUBMIT_API, {"confirmation": "CONFIRM"})
+        assert started.status_code == 409, started.get_json()
+        assert error_code(started) == org_upgrade.ALREADY_SUBMITTED
+        assert harness.store.records[operation_id]["state"] == "planned"
+        assert harness.locks.values == {}
+
+    @pytest.mark.parametrize("planned_site", [False, True], ids=["excluded-site-busy", "planned-site-busy"])
+    def test_only_effective_site_locks_can_block_submission(self, harness: ControlsHarness, planned_site: bool) -> None:
+        """An unrelated site lock cannot block a narrowed retry, but a planned-site lock still blocks it."""
+        harness.store.write_run(settled_record(harness))
+        post_json(harness, f"/api/org-upgrades/{RETRY_ID}/retry")
+        saved = post_json(harness, OPTIONS_API, {**PLAN_CHOICES, "selected_types": ["ap"]})
+        assert saved.status_code == 200
+        operation_id = saved_operation_id(harness)
+        busy_site = SITE_TWO if planned_site else harness.site_one
+        owner = identity.build_owner("another.operator@juniper.net", identity.issue_browser_id())
+        grant = lock.acquire_site_lock(
+            lock.LockRequest(harness.org_id, busy_site, owner, "unrelated-run"), harness.locks
+        )
+        assert grant.state == lock.LockState.ACQUIRED
+        before = lock.read_lock(harness.org_id, busy_site, harness.locks)
+        started = post_json(harness, SUBMIT_API, {"confirmation": "CONFIRM"})
+        assert started.status_code == (409 if planned_site else 200), started.get_json()
+        assert harness.store.records[operation_id]["state"] == ("planned" if planned_site else "running")
+        assert lock.read_lock(harness.org_id, busy_site, harness.locks) == before
+        assert harness.operator.selected_site_ids == (harness.site_one, SITE_TWO)
 
 
 def test_a_retry_save_refuses_a_site_whose_view_read_failed(harness: ControlsHarness) -> None:
