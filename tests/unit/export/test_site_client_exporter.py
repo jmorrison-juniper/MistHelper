@@ -30,6 +30,7 @@ network, no CSV I/O.
 from __future__ import annotations  # WHY: PEP 604 unions on Python 3.10+.
 
 import logging  # WHY: caplog verification of error-path logging.
+from types import SimpleNamespace  # WHY: model MistAPI responses with separate status and body fields.
 from typing import Any  # WHY: monkeypatched fakes carry loose typing.
 from unittest.mock import MagicMock, call  # WHY: FR-008 collaborator doubles + call assertions.
 
@@ -633,3 +634,29 @@ class TestGetSiteBeacon:
                 "site-123",
                 "beacon-456",
             )
+
+    @pytest.mark.parametrize("status_code", [404, 503])
+    def test_unsuccessful_http_response_with_error_body_skips_export(
+        self,
+        wired_deps: dict[str, Any],
+        caplog: pytest.LogCaptureFixture,
+        status_code: int,
+    ) -> None:
+        """A non-2xx SDK response reports failure without exporting its body."""
+        wired_deps["InputUtils"].safe_input.side_effect = ["site-123", "beacon-456"]  # WHY: provide valid request ids.
+        endpoint = wired_deps["mistapi"].api.v1.sites.beacons.getSiteBeacon  # WHY: keep the endpoint mock readable.
+        endpoint.return_value = SimpleNamespace(  # WHY: match the SDK response shape.
+            status_code=status_code,  # WHY: the SDK exposes HTTP status separately from its parsed body.
+            data={"detail": f"HTTP {status_code} error"},  # WHY: error bodies must never become beacon rows.
+        )
+
+        with caplog.at_level(logging.INFO, logger="root"):  # WHY: capture the operator-facing failure message.
+            SiteClientExporter.get_site_beacon()  # WHY: exercise prompt, fetch, failure, and export behavior.
+
+        wired_deps["DataExporter"].write_with_format_selection.assert_not_called()  # WHY: failed status cannot persist.
+        wired_deps["RateLimitingUtils"].get_rate_limited_delay.assert_not_called()  # WHY: only HTTP 429 retries.
+        assert endpoint.call_count == 1  # WHY: other errors do not retry.
+        assert any(f"HTTP {status_code}" in record.message for record in caplog.records)  # WHY: show the failed status.
+        assert not any(  # WHY: failed requests must not report successful exports.
+            "Exported site beacon detail" in record.message for record in caplog.records
+        )
