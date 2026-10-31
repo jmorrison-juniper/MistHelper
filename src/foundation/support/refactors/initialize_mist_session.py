@@ -39,6 +39,17 @@ class MistSessionConfigurator:
     _SAFE_READ_METHODS = frozenset({"GET", "HEAD"})  # Repeat only idempotent reads after transport failures.
 
     @classmethod
+    def configure_shared_admission(cls, session: Any, org_id: str | None = None) -> None:
+        """Install configured shared admission on the existing portal session."""
+        from src.interfaces.wan_performance.collection.request_admission import RequestLedger
+
+        try:
+            if RequestLedger.enabled():
+                cls._configure_timeout(session, org_id)
+        except (ConnectionError, ValueError):
+            _MH.logging.exception("Shared API admission is unavailable. WAN refresh is disabled.")
+
+    @classmethod
     def configure_once(cls, context: Any, session: Any, method: Any) -> bool:
         """Configure and validate the session one time for the context."""
         if context.session_configured:  # Avoid a second transport patch in the same process.
@@ -51,20 +62,31 @@ class MistSessionConfigurator:
         return cls._validate_methods(session, method)  # Validate methods after transport setup.
 
     @classmethod
-    def _configure_timeout(cls, session: Any) -> None:
+    def _configure_timeout(cls, session: Any, org_id: str | None = None) -> None:
         """Install a default timeout on the wrapped requests session when it exists."""
         inner_session = getattr(session, "_session", None)  # Keep private access in this one guarded seam.
         if inner_session is None:  # New mistapi versions can hide the transport.
+            from src.interfaces.wan_performance.collection.request_admission import RequestLedger
+
+            if RequestLedger.enabled():
+                raise ConnectionError("Shared API admission requires an accessible SDK session transport.")
             _MH.logging.warning("Cannot configure timeout because the session has no transport")  # Explain safely.
             return  # Continue without a timeout when the SDK hides the transport.
-        adapter = cls._build_timeout_adapter(int(_MH.API_REQUEST_TIMEOUT))  # Build one adapter for this session.
+        adapter = cls._build_timeout_adapter(
+            int(_MH.API_REQUEST_TIMEOUT), org_id
+        )  # Build one adapter for this session.
         inner_session.mount("https://", adapter)  # Apply the timeout to Mist HTTPS calls.
         inner_session.mount("http://", adapter)  # Apply the timeout to any HTTP diagnostic call.
         _MH.logging.info("Configured the API request timeout: %ss", _MH.API_REQUEST_TIMEOUT)  # Log no secret data.
 
     @staticmethod
-    def _build_timeout_adapter(default_timeout: int) -> HTTPAdapter:
+    def _build_timeout_adapter(default_timeout: int, org_id: str | None = None) -> HTTPAdapter:
         """Build the adapter that injects the timeout and safe read retry policy."""
+        from src.interfaces.wan_performance.collection.request_admission import AdmittedAdapter, RequestLedger
+
+        if RequestLedger.enabled():
+            return AdmittedAdapter(RequestLedger.connect(org_id), default_timeout)
+
         from typing import Self  # Preserve the concrete retry subtype in the override result.
 
         from urllib3.response import BaseHTTPResponse  # Match the urllib3 retry override response contract.
