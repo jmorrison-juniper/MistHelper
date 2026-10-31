@@ -141,7 +141,7 @@ class APIDataFetcher:
         except KeyError as error:  # Malformed response key.
             self._handle_key_error(response, error)  # Try to recover data.
             return bool(self.rawdata)  # WHY: recovery success lets the caller continue.
-        except Exception as error:  # Other API failure.
+        except Exception as error:  # Route SDK errors through rate-limit and partial-write handling.
             self._handle_api_exception(error)  # Handle/raise the failure.
             return False  # WHY: static analysis needs an explicit return after handler calls.
 
@@ -356,7 +356,7 @@ class APIDataFetcher:
                 # WHY (#886 Phase 2): consolidated print()+logging.info into a single WARNING so
                 # the emergency-save notice remains operator-visible via the default handler.
                 logger.warning("Emergency save: %s partial records written to %s", len(self.rawdata), self.filename)
-            except Exception as save_error:  # Save failed.
+            except Exception as save_error:  # Keep the API failure if the emergency write fails.
                 logging.error("Failed to save partial data during error handling: %s", save_error)  # log save fail.
 
         logger.debug("EXIT: APIDataFetcher - API error")  # Trace exit.
@@ -393,7 +393,7 @@ class APIDataFetcher:
             )
             logger.warning("Error: %s", str(error))
             logger.warning("You can retry the operation later to get remaining data")
-        except Exception as save_error:  # Save failed.
+        except Exception as save_error:  # Keep the fetch failure if the outer data write fails.
             # WHY (#886 Phase 2): consolidated print() with logging.error so the critical failure
             # surfaces once through the ERROR-level default handler.
             logging.error("Failed to save partial data in outer exception handler: %s", save_error)
