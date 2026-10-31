@@ -174,7 +174,7 @@ def test_nested_package_ratchet_matches_main() -> None:
     validate_ratchet(actual, baseline)
     expected_message = (
         f"nested_package_scope: {len(actual)} directories examined, "  # Record the checked directory count.
-        "35 violations, 242 total excess"  # Record the reduced package debt.
+        "34 violations, 237 total excess"  # Record the reduced package debt.
     )  # Keep the resolved analytics result explicit.
     assert message == expected_message  # Require the updated measured result.
 
