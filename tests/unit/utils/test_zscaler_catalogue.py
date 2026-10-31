@@ -472,7 +472,7 @@ class TestEnsureFresh:
         # when no probes file exists on disk.
         assert seen["probes"] == {"schema_version": 3}
 
-    def test_validation_exception_is_non_fatal(self, monkeypatch, tmp_path):
+    def test_validation_exception_is_non_fatal(self, monkeypatch, tmp_path, caplog):
         """A crash in ``run_full_validation`` does not block the refreshed dict."""
         refreshed = {"fetched_utc": _fresh_ts(), "proxy_hostnames": ["new.zs"]}
         monkeypatch.setattr(zc_mod, "refresh_cenr", lambda _p: (refreshed, []))
@@ -482,7 +482,7 @@ class TestEnsureFresh:
 
         monkeypatch.setattr(zc_mod, "run_full_validation", _boom)
         result = ensure_fresh(tmp_path / "zscaler_cenr_hostnames.json", {"fetched_utc": _stale_ts()})
-        assert result is refreshed
+        assert result is refreshed and "validation crashed: network gone" in caplog.text
 
     def test_empty_refresh_result_falls_back_to_in_memory_copy(self, monkeypatch, tmp_path):
         """Total-failure refresh (empty dict) falls back to the caller's dict."""

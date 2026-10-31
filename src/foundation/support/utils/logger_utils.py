@@ -145,7 +145,7 @@ class SensitiveFilter(logging.Filter):
             if sanitized != message:  # Only mutate if something was actually scrubbed
                 record.msg = sanitized  # Replace the message with the sanitized version
                 record.args = ()  # Clear args so getMessage() uses the new msg directly
-        except Exception as error:  # nosec B110 - A log call here can re-enter this filter and recurse.
+        except Exception as error:  # nosec B110 - Keep broad because logging here can re-enter this filter.
             record.msg = "Log redaction failed: %s: %s"  # Replace the unsafe record with a diagnostic.
             record.args = (type(error).__name__, error)  # Name the failure type without a recursive log call.
         return True  # Always pass the record on. We only sanitize, never suppress

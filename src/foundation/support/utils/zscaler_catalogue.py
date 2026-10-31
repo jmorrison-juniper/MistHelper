@@ -1219,7 +1219,7 @@ def _run_probe_validation(  # WHY: Keep behavior.
                 "endpoints (n=%d); refresh kept anyway",
                 len(results),
             )
-    except Exception as exc:  # validation is best-effort
+    except Exception as exc:  # Keep broad because cache loading and endpoint validation are best-effort refresh steps.
         logger.warning("zscaler_catalogue: validation crashed: %s", exc)  # WHY: Keep behavior.
     return probes, results  # WHY: Keep behavior.
 

@@ -334,7 +334,7 @@ class RateLimitingUtils:  # WHY: static-method facade groups rate-limit helpers 
             logger.debug(
                 "API usage refreshed: %d/%d requests", api_usage_cache["used"], api_usage_cache["limit"]
             )  # WHY: trace successful refresh.
-        except Exception as api_error:  # WHY: mistapi may raise anything. Log and continue with cached values.
+        except Exception as api_error:  # Keep broad because mistapi failures must preserve usable cached values.
             logging.warning("Failed to refresh API usage data: %s. Using cached values.", api_error)  # WHY: warn.
 
     @staticmethod
@@ -613,7 +613,7 @@ class RateLimitingUtils:  # WHY: static-method facade groups rate-limit helpers 
             return RateLimitingUtils._run_pid_pipeline(
                 apisession, api_usage_cache, tuning_data, smoothed_delay
             )  # WHY: happy path.
-        except Exception as rate_error:  # WHY: safety net. Log and use fallback delay for any unexpected failure.
+        except Exception as rate_error:  # Keep broad because delay failures must use a safe rate-limit fallback.
             logging.error(
                 "Failed to calculate dynamic delay: %s. Using 500ms fallback.", rate_error
             )  # WHY: surface failure.
