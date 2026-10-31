@@ -241,8 +241,8 @@ class DeviceConfigTemplateClonerManager:  # Menu 194 clone-to-template manager
     # Existing template name lookup
     # ------------------------------------------------------------------
 
-    def _fetch_existing_template_names(self) -> set:
-        """Return a set of existing gateway template names for uniqueness validation."""
+    def _fetch_existing_template_names(self) -> set | None:
+        """Return template names or None when the organization lookup fails."""
         logger.info(  # Log before API call with org context
             "Fetching existing gateway templates for org_id %s to check name uniqueness", self.org_id
         )
@@ -251,7 +251,7 @@ class DeviceConfigTemplateClonerManager:  # Menu 194 clone-to-template manager
             self.org_id,
         )
         if not self._response_succeeded(response, "listOrgGatewayTemplates"):  # Refuse template data on failure
-            return set()  # Stop name validation when the organization request failed
+            return None  # Distinguish a refused lookup from an empty template list
         templates = response.data if hasattr(response, "data") else []  # Extract template list
         names = {t.get("name", "") for t in templates if t.get("name")}  # Build name set for O(1) lookup
         logger.debug("Found %d existing gateway template name(s)", len(names))  # Log count after fetch
@@ -500,6 +500,8 @@ class DeviceConfigTemplateClonerManager:  # Menu 194 clone-to-template manager
     def _gather_template_meta(self, gateway: dict) -> tuple[str, str, str] | None:
         """Meta phase: return (name, ttype, model) or None if confirmation declined."""
         existing_names = self._fetch_existing_template_names()  # Step 5: load existing name set
+        if existing_names is None:  # Abort when template names could not be verified
+            return None  # Do not prompt or create without duplicate-name validation
         device_model = gateway.get("model", "SRX300")  # Use source model as default suggestion
         name, ttype, model = self._prompt_template_meta(device_model, existing_names)  # Step 6
         if not self._confirm_creation(name, ttype, model):  # Step 7: require explicit confirmation

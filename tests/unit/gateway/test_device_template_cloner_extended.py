@@ -349,7 +349,7 @@ def test_fetch_existing_template_names_returns_empty_when_response_missing_data_
 def test_fetch_existing_template_names_refuses_native_http_403_with_template_data(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """A refused template list must not affect duplicate-name validation."""
+    """A refused template list must remain distinct from an empty template list."""
     caplog.set_level(logging.ERROR, logger=_SUT_LOGGER)  # Capture the operation refusal signal
     manager = _build_manager()  # Build cloner with mocked dependencies
     api_response = _build_api_response(403, [{"id": "template-1", "name": "Tempting name"}])  # Model denied list
@@ -359,7 +359,7 @@ def test_fetch_existing_template_names_refuses_native_http_403_with_template_dat
     ):
         names = manager._fetch_existing_template_names()  # Exercise the live template-list response check
     assert api_response.data == [{"id": "template-1", "name": "Tempting name"}]  # Confirm the refusal carries data
-    assert names == set()  # A non-success response must not validate names from error data
+    assert names is None  # A refused lookup must not resemble a valid empty template list
     assert "Mist API operation listOrgGatewayTemplates returned HTTP status 403" in caplog.text  # Expose refusal
 
 
@@ -606,6 +606,38 @@ def test_clone_returns_false_when_device_config_missing(caplog: pytest.LogCaptur
         result = manager.clone()  # Invoke workflow under test
     assert result is False  # Must return False when config missing
     assert "Failed to fetch device configuration" in caplog.text  # Message must appear
+
+
+def test_clone_aborts_when_template_list_is_refused_before_prompt_or_create(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A refused template lookup must abort before prompts or template creation."""
+    caplog.set_level(logging.ERROR, logger=_SUT_LOGGER)  # Capture the operation refusal signal
+    manager = _build_manager()  # Build cloner with mocked dependencies
+    gateway = {"id": "gw-1", "model": "SRX340"}  # Selected source gateway
+    api_response = _build_api_response(403, [{"id": "template-1", "name": "Tempting name"}])  # Model a denied list
+    prompt_mock = MagicMock(return_value=("name", "standalone", "SRX340"))  # Track metadata prompts
+    create_mock = MagicMock(return_value={"id": "template-2"})  # Track any template creation attempt
+    with (
+        patch.multiple(  # Complete the source phase without external calls
+            manager,
+            _select_site=MagicMock(return_value={"id": "site-1"}),
+            _list_gateways=MagicMock(return_value=[gateway]),
+            _select_gateway=MagicMock(return_value=gateway),
+            _fetch_device_config=MagicMock(return_value={"id": "dev-1"}),
+            _prompt_template_meta=prompt_mock,
+            _create_template=create_mock,
+        ),
+        patch(  # Return a native refusal from the real template-listing path
+            "src.mist.resources.gateway.device_template_cloner.mistapi.api.v1.orgs.gatewaytemplates.listOrgGatewayTemplates",
+            return_value=api_response,
+        ),
+    ):
+        result = manager.clone()  # Exercise the complete workflow refusal path
+    assert result is False  # A refused list must abort the clone workflow
+    prompt_mock.assert_not_called()  # The workflow must stop before asking for metadata
+    create_mock.assert_not_called()  # The workflow must not create from unverified name data
+    assert "Mist API operation listOrgGatewayTemplates returned HTTP status 403" in caplog.text  # Expose refusal
 
 
 def test_clone_returns_false_when_gateway_selection_aborted() -> None:
