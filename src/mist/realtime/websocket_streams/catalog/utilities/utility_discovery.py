@@ -13,13 +13,15 @@ import mistapi.device_utils.srx as sdk_srx  # Provide SRX utility functions.
 import mistapi.device_utils.ssr as sdk_ssr  # Provide SSR utility functions.
 
 from src.mist.realtime.websocket_streams.catalog.model import UtilityDefinition  # Build immutable utility records.
+from src.mist.realtime.websocket_streams.catalog.utilities.metadata.utility_profile import (
+    UtilityProfile,
+)  # Classify utility behavior.
+from src.mist.realtime.websocket_streams.catalog.utilities.metadata.utility_text import (
+    UtilityText,  # Build public names and descriptions.
+)
 from src.mist.realtime.websocket_streams.catalog.utilities.utility_fields import (
     UtilityFieldFactory,
 )  # Build target and input fields.
-from src.mist.realtime.websocket_streams.catalog.utilities.utility_profile import (
-    UtilityProfile,
-)  # Classify utility behavior.
-from src.mist.realtime.websocket_streams.catalog.utility_text import UtilityText  # Build public names and descriptions.
 from src.mist.realtime.websocket_streams.live.transport.runtime.logging.structured_logger import (
     StructuredTransportLogger,
 )  # Apply the shared safe JSON logging boundary.
