@@ -7,12 +7,15 @@ clone() exception path.
 
 from __future__ import annotations  # PEP 563 postponed evaluation for typing forward refs
 
+import json  # Encode plausible bodies for native SDK refusal responses
 import logging  # Set caplog levels for logger-based assertions after #886 print->logger migration
 from types import SimpleNamespace  # Build fake mistapi response objects with .data attr
 from typing import Any  # Untyped kwargs need explicit Any for mypy --strict compatibility
 from unittest.mock import MagicMock, patch  # MagicMock for injection, patch for mistapi calls
 
 import pytest  # Parametrize and monkeypatch fixtures
+import requests  # Build concrete HTTP responses for mistapi parsing
+from mistapi.__api_response import APIResponse  # Parse refusal status and response data through the SDK
 
 from src.mist.resources.gateway.device_template_cloner import (  # SUT imports for direct manipulation
     COMMON_GATEWAY_MODELS,  # Constant list used to validate hardware picker output
@@ -21,6 +24,16 @@ from src.mist.resources.gateway.device_template_cloner import (  # SUT imports f
 )
 
 _SUT_LOGGER = "src.mist.resources.gateway.device_template_cloner"  # Module logger name for caplog level scoping
+
+
+def _build_api_response(status_code: int, data: object) -> APIResponse:
+    """Build a native SDK response with a valid body and the requested HTTP status."""
+    response = requests.Response()  # Create the response object consumed by mistapi
+    response.status_code = status_code  # Set the refusal or success status under test
+    response.url = "https://api.example.test/mist-resource"  # Provide a safe mock request URL
+    response.headers["Content-Type"] = "application/json"  # Make the response body valid JSON
+    response._content = json.dumps(data).encode("utf-8")  # Preserve plausible success data on refusals
+    return APIResponse(response=response, url=response.url)  # Exercise the real SDK parser
 
 
 def _build_deps(**overrides: Any) -> DeviceTemplateClonerDeps:
@@ -49,7 +62,7 @@ def _build_manager(*, org_id: str = "org-uuid-1", **overrides: Any) -> DeviceCon
 def test_list_sites_extracts_data_from_response() -> None:
     """_list_sites must extract .data from the mistapi response object."""
     manager = _build_manager()  # Build cloner with default mocks
-    fake_response = SimpleNamespace(data=[{"id": "site-1", "name": "Site A"}])  # API response stub
+    fake_response = SimpleNamespace(data=[{"id": "site-1", "name": "Site A"}], status_code=200)  # API response
     with patch(  # Patch listOrgSites at module import path used by SUT
         "src.mist.resources.gateway.device_template_cloner.mistapi.api.v1.orgs.sites.listOrgSites",
         return_value=fake_response,
@@ -62,13 +75,28 @@ def test_list_sites_extracts_data_from_response() -> None:
 def test_list_sites_returns_empty_when_response_missing_data_attr() -> None:
     """_list_sites must return [] when the response object lacks a .data attribute."""
     manager = _build_manager()  # Build cloner with default mocks
-    fake_response = object()  # Bare object with no .data attribute triggers empty branch
+    fake_response = SimpleNamespace(status_code=200)  # Successful response without .data triggers empty branch
     with patch(  # Patch listOrgSites to return the attr-less response
         "src.mist.resources.gateway.device_template_cloner.mistapi.api.v1.orgs.sites.listOrgSites",
         return_value=fake_response,
     ):
         sites = manager._list_sites()  # Invoke helper under test
     assert sites == []  # Must fall back to empty list when .data missing
+
+
+def test_list_sites_refuses_native_http_403_with_site_data(caplog: pytest.LogCaptureFixture) -> None:
+    """A refused site response must not expose plausible site data to selection."""
+    caplog.set_level(logging.ERROR, logger=_SUT_LOGGER)  # Capture the operation refusal signal
+    manager = _build_manager()  # Build cloner with mocked dependencies
+    api_response = _build_api_response(403, [{"id": "site-1", "name": "Tempting site"}])  # Model a denied list
+    with patch(  # Keep the request local while the real helper evaluates its SDK response
+        "src.mist.resources.gateway.device_template_cloner.mistapi.api.v1.orgs.sites.listOrgSites",
+        return_value=api_response,
+    ):
+        sites = manager._list_sites()  # Exercise the live site-list response check
+    assert api_response.data == [{"id": "site-1", "name": "Tempting site"}]  # Confirm the refusal carries data
+    assert sites == []  # A non-success response must not enter site selection
+    assert "Mist API operation listOrgSites returned HTTP status 403" in caplog.text  # Expose the refusal
 
 
 def test_select_site_returns_none_when_no_sites(caplog: pytest.LogCaptureFixture) -> None:
@@ -105,7 +133,7 @@ def test_list_gateways_filters_only_gateway_type() -> None:
         {"id": "sw-1", "type": "switch"},
         {"id": "gw-2", "type": "gateway", "model": "SSR120"},
     ]
-    fake_response = SimpleNamespace(data=mixed_devices)  # API response stub
+    fake_response = SimpleNamespace(data=mixed_devices, status_code=200)  # Successful API response stub
     with patch(  # Patch listSiteDevices at module import path
         "src.mist.resources.gateway.device_template_cloner.mistapi.api.v1.sites.devices.listSiteDevices",
         return_value=fake_response,
@@ -120,10 +148,25 @@ def test_list_gateways_returns_empty_when_response_missing_data_attr() -> None:
     manager = _build_manager()  # Build cloner with default mocks
     with patch(  # Patch listSiteDevices to return attr-less response
         "src.mist.resources.gateway.device_template_cloner.mistapi.api.v1.sites.devices.listSiteDevices",
-        return_value=object(),
+        return_value=SimpleNamespace(status_code=200),
     ):
         gateways = manager._list_gateways("site-1")  # Invoke helper under test
     assert gateways == []  # Must fall back to empty list when .data missing
+
+
+def test_list_gateways_refuses_native_http_403_with_gateway_data(caplog: pytest.LogCaptureFixture) -> None:
+    """A refused device response must not expose plausible gateways to selection."""
+    caplog.set_level(logging.ERROR, logger=_SUT_LOGGER)  # Capture the operation refusal signal
+    manager = _build_manager()  # Build cloner with mocked dependencies
+    api_response = _build_api_response(403, [{"id": "gw-1", "type": "gateway"}])  # Model a denied device list
+    with patch(  # Keep the request local while the real helper evaluates its SDK response
+        "src.mist.resources.gateway.device_template_cloner.mistapi.api.v1.sites.devices.listSiteDevices",
+        return_value=api_response,
+    ):
+        gateways = manager._list_gateways("site-1")  # Exercise the live device-list response check
+    assert api_response.data == [{"id": "gw-1", "type": "gateway"}]  # Confirm the refusal carries gateway data
+    assert gateways == []  # A non-success response must not enter gateway selection
+    assert "Mist API operation listSiteDevices returned HTTP status 403" in caplog.text  # Expose the refusal
 
 
 def test_select_gateway_returns_none_when_empty(caplog: pytest.LogCaptureFixture) -> None:
@@ -197,7 +240,7 @@ def test_resolve_menu_choice_returns_selected_item_on_valid_input() -> None:
 def test_fetch_device_config_returns_dict_on_success() -> None:
     """_fetch_device_config must return the .data dict from getSiteDevice."""
     manager = _build_manager()  # Build cloner with default mocks
-    fake_response = SimpleNamespace(data={"id": "dev-1", "name": "gw", "ntp_servers": ["1.1.1.1"]})
+    fake_response = SimpleNamespace(data={"id": "dev-1", "name": "gw", "ntp_servers": ["1.1.1.1"]}, status_code=200)
     with patch(  # Patch getSiteDevice at module import path
         "src.mist.resources.gateway.device_template_cloner.mistapi.api.v1.sites.devices.getSiteDevice",
         return_value=fake_response,
@@ -212,7 +255,7 @@ def test_fetch_device_config_returns_none_on_empty_response() -> None:
     manager = _build_manager()  # Build cloner with default mocks
     with patch(  # Patch getSiteDevice to return an empty-data response
         "src.mist.resources.gateway.device_template_cloner.mistapi.api.v1.sites.devices.getSiteDevice",
-        return_value=SimpleNamespace(data={}),
+        return_value=SimpleNamespace(data={}, status_code=200),
     ):
         result = manager._fetch_device_config("site-1", "dev-1")  # Invoke helper under test
     assert result is None  # Empty dict must trigger None return for downstream abort
@@ -223,10 +266,27 @@ def test_fetch_device_config_returns_none_when_response_missing_data_attr() -> N
     manager = _build_manager()  # Build cloner with default mocks
     with patch(  # Patch getSiteDevice to return attr-less response
         "src.mist.resources.gateway.device_template_cloner.mistapi.api.v1.sites.devices.getSiteDevice",
-        return_value=object(),
+        return_value=SimpleNamespace(status_code=200),
     ):
         result = manager._fetch_device_config("site-1", "dev-1")  # Invoke helper under test
     assert result is None  # Missing .data must trigger None return
+
+
+def test_fetch_device_config_refuses_native_http_403_with_config_data(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A refused device read must not return plausible configuration data."""
+    caplog.set_level(logging.ERROR, logger=_SUT_LOGGER)  # Capture the operation refusal signal
+    manager = _build_manager()  # Build cloner with mocked dependencies
+    api_response = _build_api_response(403, {"id": "dev-1", "ntp_servers": ["1.1.1.1"]})  # Model denied config
+    with patch(  # Keep the request local while the real helper evaluates its SDK response
+        "src.mist.resources.gateway.device_template_cloner.mistapi.api.v1.sites.devices.getSiteDevice",
+        return_value=api_response,
+    ):
+        result = manager._fetch_device_config("site-1", "dev-1")  # Exercise the live device-read response check
+    assert api_response.data == {"id": "dev-1", "ntp_servers": ["1.1.1.1"]}  # Confirm the refusal carries config
+    assert result is None  # A non-success response must not reach template payload construction
+    assert "Mist API operation getSiteDevice returned HTTP status 403" in caplog.text  # Expose the refusal
 
 
 # ---------------------------------------------------------------------------
@@ -245,7 +305,7 @@ def test_fetch_existing_template_names_returns_name_set() -> None:
     ]
     with patch(  # Patch listOrgGatewayTemplates at module import path
         "src.mist.resources.gateway.device_template_cloner.mistapi.api.v1.orgs.gatewaytemplates.listOrgGatewayTemplates",
-        return_value=SimpleNamespace(data=templates),
+        return_value=SimpleNamespace(data=templates, status_code=200),
     ):
         names = manager._fetch_existing_template_names()  # Invoke helper under test
     assert names == {"template-a", "template-b"}  # Empty and missing names filtered out
@@ -256,10 +316,27 @@ def test_fetch_existing_template_names_returns_empty_when_response_missing_data_
     manager = _build_manager()  # Build cloner with default mocks
     with patch(  # Patch listOrgGatewayTemplates to return attr-less response
         "src.mist.resources.gateway.device_template_cloner.mistapi.api.v1.orgs.gatewaytemplates.listOrgGatewayTemplates",
-        return_value=object(),
+        return_value=SimpleNamespace(status_code=200),
     ):
         names = manager._fetch_existing_template_names()  # Invoke helper under test
     assert names == set()  # Must fall back to empty set when .data missing
+
+
+def test_fetch_existing_template_names_refuses_native_http_403_with_template_data(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A refused template list must not affect duplicate-name validation."""
+    caplog.set_level(logging.ERROR, logger=_SUT_LOGGER)  # Capture the operation refusal signal
+    manager = _build_manager()  # Build cloner with mocked dependencies
+    api_response = _build_api_response(403, [{"id": "template-1", "name": "Tempting name"}])  # Model denied list
+    with patch(  # Keep the request local while the real helper evaluates its SDK response
+        "src.mist.resources.gateway.device_template_cloner.mistapi.api.v1.orgs.gatewaytemplates.listOrgGatewayTemplates",
+        return_value=api_response,
+    ):
+        names = manager._fetch_existing_template_names()  # Exercise the live template-list response check
+    assert api_response.data == [{"id": "template-1", "name": "Tempting name"}]  # Confirm the refusal carries data
+    assert names == set()  # A non-success response must not validate names from error data
+    assert "Mist API operation listOrgGatewayTemplates returned HTTP status 403" in caplog.text  # Expose refusal
 
 
 # ---------------------------------------------------------------------------
@@ -386,7 +463,7 @@ def test_resolve_hardware_choice_prints_message_on_out_of_range(
 def test_create_template_returns_new_template_dict() -> None:
     """_create_template must return .data dict from createOrgGatewayTemplate."""
     manager = _build_manager()  # Build cloner with default mocks
-    fake_response = SimpleNamespace(data={"id": "tmpl-1", "name": "new-tmpl", "type": "standalone"})
+    fake_response = SimpleNamespace(data={"id": "tmpl-1", "name": "new-tmpl", "type": "standalone"}, status_code=200)
     payload = {"name": "new-tmpl", "type": "standalone", "gateway_matching": {"enable": True}}
     with patch(  # Patch createOrgGatewayTemplate at module import path
         "src.mist.resources.gateway.device_template_cloner.mistapi.api.v1.orgs.gatewaytemplates.createOrgGatewayTemplate",
@@ -402,7 +479,7 @@ def test_create_template_returns_none_on_empty_response() -> None:
     manager = _build_manager()  # Build cloner with default mocks
     with patch(  # Patch createOrgGatewayTemplate to return empty .data
         "src.mist.resources.gateway.device_template_cloner.mistapi.api.v1.orgs.gatewaytemplates.createOrgGatewayTemplate",
-        return_value=SimpleNamespace(data={}),
+        return_value=SimpleNamespace(data={}, status_code=200),
     ):
         result = manager._create_template({"name": "n", "type": "standalone"})  # Invoke helper
     assert result is None  # Empty .data must trigger None return
@@ -413,10 +490,38 @@ def test_create_template_returns_none_when_response_missing_data_attr() -> None:
     manager = _build_manager()  # Build cloner with default mocks
     with patch(  # Patch createOrgGatewayTemplate to return attr-less object
         "src.mist.resources.gateway.device_template_cloner.mistapi.api.v1.orgs.gatewaytemplates.createOrgGatewayTemplate",
-        return_value=object(),
+        return_value=SimpleNamespace(status_code=200),
     ):
         result = manager._create_template({"name": "n"})  # Invoke helper under test
     assert result is None  # Missing .data must trigger None return
+
+
+def test_create_and_export_refuses_native_http_403_without_export(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A refused template create must not return success or export a result."""
+    caplog.set_level(logging.ERROR, logger=_SUT_LOGGER)  # Capture the operation refusal signal
+    manager = _build_manager()  # Build cloner with mocked dependencies
+    api_response = _build_api_response(
+        403, {"id": "template-1", "name": "Tempting template", "type": "standalone"}
+    )  # Model a denied create with a plausible success body
+    with patch(  # Keep the request local while the real create path evaluates the SDK response
+        "src.mist.resources.gateway.device_template_cloner.mistapi.api.v1.orgs.gatewaytemplates.createOrgGatewayTemplate",
+        return_value=api_response,
+    ):
+        result = manager._create_and_export(
+            {"id": "gw-1", "name": "gateway", "model": "SRX340"},
+            {"ntp_servers": ["1.1.1.1"]},
+            ("new-template", "standalone", "SRX340"),
+        )  # Exercise the real create and export workflow
+    assert api_response.data == {
+        "id": "template-1",
+        "name": "Tempting template",
+        "type": "standalone",
+    }  # Confirm the refusal carries plausible template data
+    assert result is False  # A non-success response must fail the workflow
+    manager.write_csv_fn.assert_not_called()  # A refused create must not export a success row
+    assert "Mist API operation createOrgGatewayTemplate returned HTTP status 403" in caplog.text  # Expose refusal
 
 
 # ---------------------------------------------------------------------------
