@@ -94,11 +94,6 @@
       "remediation_issue": 3824
     },
     {
-      "path": "src/mist/intelligence/analytics",
-      "child_count": 6,
-      "remediation_issue": 3824
-    },
-    {
       "path": "src/mist/intelligence/marvis/actions",
       "child_count": 6,
       "remediation_issue": 3824

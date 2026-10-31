@@ -664,7 +664,7 @@ def test_current_channel_planning_handles_exception(caplog: pytest.LogCaptureFix
 def test_zone_config_analysis_delegates_to_zone_analyzer(monkeypatch: pytest.MonkeyPatch) -> None:
     """zone_config_analysis routes to ZoneConfigurationAnalyzer.analyze with wired deps."""
     exporter, _ = _build_exporter()
-    from src.mist.intelligence.analytics import zone_analyzer as za_module  # WHY: patch analyzer under test.
+    from src.mist.intelligence.analytics.site import zone_analyzer as za_module  # WHY: patch analyzer under test.
 
     analyze_mock = MagicMock()
     monkeypatch.setattr(za_module.ZoneConfigurationAnalyzer, "analyze", analyze_mock)

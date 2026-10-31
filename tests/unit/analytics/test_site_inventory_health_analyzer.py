@@ -9,12 +9,18 @@ from unittest.mock import MagicMock
 import pytest
 from requests.exceptions import ConnectionError, HTTPError, Timeout
 
-from src.mist.intelligence.analytics.site_inventory_health_analyzer import (
+from src.mist.intelligence.analytics import (
+    SiteInventoryHealthAnalyzer as RootSiteInventoryHealthAnalyzer,
+)
+from src.mist.intelligence.analytics import (
+    SiteInventoryHealthAnalyzerDeps as RootSiteInventoryHealthAnalyzerDeps,
+)
+from src.mist.intelligence.analytics.site.site_inventory_health_analyzer import (
     SiteInventoryHealthAnalyzer,
     SiteInventoryHealthAnalyzerDeps,
 )
 
-_MODULE_LOGGER = "src.mist.intelligence.analytics.site_inventory_health_analyzer"  # Use the canonical source path.
+_MODULE_LOGGER = "src.mist.intelligence.analytics.site.site_inventory_health_analyzer"  # Use the canonical source path.
 
 
 def _build_mistapi_stub() -> SimpleNamespace:
@@ -37,6 +43,12 @@ def _build_deps() -> SiteInventoryHealthAnalyzerDeps:
         all_sites_fn=MagicMock(return_value=[]),
         save_data_fn=MagicMock(),
     )
+
+
+def test_analytics_root_exports_inventory_classes() -> None:
+    """Issue #3992 keeps the canonical inventory classes at the analytics root."""
+    assert RootSiteInventoryHealthAnalyzer is SiteInventoryHealthAnalyzer
+    assert RootSiteInventoryHealthAnalyzerDeps is SiteInventoryHealthAnalyzerDeps
 
 
 def test_analyze_exits_when_org_missing(caplog: pytest.LogCaptureFixture) -> None:
