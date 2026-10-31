@@ -21,3 +21,5 @@ services:
     build:
       context: .
       dockerfile: Containerfile  # Use Containerfile for Podman, Dockerfile for Docker
+      labels:
+        org.opencontainers.image.revision: "${MISTHELPER_BUILD_REVISION:?Run scripts/compose.ps1 build to set the source revision}"
