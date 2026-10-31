@@ -9,6 +9,8 @@ import logging
 import os
 import threading
 import time
+from collections.abc import Iterable
+from typing import Any
 
 from flask import (
     Blueprint,
@@ -328,73 +330,82 @@ def _get_executor():
     return executor
 
 
-def _build_replay(executor, run_id: str):
+def _build_replay(executor: Any, run_id: str) -> list[str] | None:
     """Build replay events if the operation already finished.
 
     Returns a list of SSE-formatted strings (log lines + final event)
     if the run is terminal, or None if still in progress.
     """
-    if not run_id or not executor:
-        return None
-    status = executor.get_run_status(run_id)
-    if not status or status["status"] not in ("completed", "failed"):
-        return None
-    events = []
-    for entry in status.get("log_messages") or []:
-        msg = entry.get("message", entry) if isinstance(entry, dict) else entry
-        lvl = entry.get("level", "info") if isinstance(entry, dict) else "info"
-        events.append(
-            _format_sse(
-                "log",
-                {
-                    "run_id": run_id,
-                    "message": msg,
-                    "level": lvl,
-                },
-            )
-        )
-    for entry in status.get("debug_messages") or []:
-        msg = entry.get("message", entry) if isinstance(entry, dict) else entry
-        lvl = entry.get("level", "debug") if isinstance(entry, dict) else "debug"
-        events.append(
-            _format_sse(
-                "debug_log",
-                {
-                    "run_id": run_id,
-                    "message": msg,
-                    "level": lvl,
-                },
-            )
-        )
-    if status["status"] == "completed":
-        events.append(
-            _format_sse(
-                "complete",
-                {
-                    "run_id": run_id,
-                    "status": "completed",
-                    "message": status.get("completion_message") or "Operation completed",  # Preserve no-output reason.
-                    "output_files": status.get("output_files", []),
-                    "duration_seconds": _calc_duration(status),
-                },
-            )
-        )
-    else:
-        events.append(
-            _format_sse(
-                "error_event",
-                {
-                    "run_id": run_id,
-                    "status": "failed",
-                    "message": status.get("error_message", "Operation failed"),
-                    "duration_seconds": _calc_duration(status),
-                },
-            )
-        )
-    return events
+    if not run_id or not executor:  # A replay requires both the run and its executor.
+        return None  # Do not query incomplete replay requests.
+    status = executor.get_run_status(run_id)  # Read the existing terminal state.
+    if not status or status["status"] not in ("completed", "failed"):  # Ignore absent and active runs.
+        return None  # The live stream remains responsible for active runs.
+    events = _build_replay_log_events(run_id, status)  # Restore both kinds of saved log messages.
+    events.append(_build_replay_terminal_event(run_id, status))  # Finish with the saved terminal event.
+    return events  # Preserve the log-first replay order.
 
 
-def _calc_duration(status: dict) -> float:
+def _build_replay_log_events(run_id: str, status: dict[str, Any]) -> list[str]:
+    """Build the saved standard and debug log events for one completed run."""
+    log_events = _build_replay_messages(run_id, status.get("log_messages"), "log", "info")  # Restore standard logs.
+    debug_events = _build_replay_messages(
+        run_id, status.get("debug_messages"), "debug_log", "debug"
+    )  # Restore debug logs.
+    return log_events + debug_events  # Keep standard logs before debug logs.
+
+
+def _build_replay_messages(
+    run_id: str, messages: Iterable[Any] | None, event_type: str, default_level: str
+) -> list[str]:
+    """Format saved messages as replay events with the same default level as live messages."""
+    events = []  # Collect each saved message in its original order.
+    for entry in messages or []:  # Empty or missing message collections produce no event.
+        message = entry.get("message", entry) if isinstance(entry, dict) else entry  # Keep legacy string entries.
+        level = (
+            entry.get("level", default_level) if isinstance(entry, dict) else default_level
+        )  # Preserve level defaults.
+        events.append(
+            _format_sse(event_type, {"run_id": run_id, "message": message, "level": level})
+        )  # Match SSE shape.
+    return events  # Return each formatted message event.
+
+
+def _build_replay_terminal_event(run_id: str, status: dict[str, Any]) -> str:
+    """Select the completion or failure event for a terminal operation run."""
+    if status["status"] == "completed":  # Completed runs retain their output and success message.
+        return _build_replay_completion_event(run_id, status)  # Preserve the completion event shape.
+    return _build_replay_failure_event(run_id, status)  # All other terminal runs retain the failure event.
+
+
+def _build_replay_completion_event(run_id: str, status: dict[str, Any]) -> str:
+    """Format the saved completion result for a replaying browser."""
+    return _format_sse(
+        "complete",
+        {
+            "run_id": run_id,
+            "status": "completed",
+            "message": status.get("completion_message") or "Operation completed",  # Preserve no-output reason.
+            "output_files": status.get("output_files", []),
+            "duration_seconds": _calc_duration(status),
+        },
+    )  # Preserve the completion payload fields.
+
+
+def _build_replay_failure_event(run_id: str, status: dict[str, Any]) -> str:
+    """Format the saved failure result for a replaying browser."""
+    return _format_sse(
+        "error_event",
+        {
+            "run_id": run_id,
+            "status": "failed",
+            "message": status.get("error_message", "Operation failed"),
+            "duration_seconds": _calc_duration(status),
+        },
+    )  # Preserve the failure payload fields.
+
+
+def _calc_duration(status: dict[str, Any]) -> float:
     """Calculate operation duration from started/completed timestamps."""
     started = status.get("started_at") or 0
     completed = status.get("completed_at") or 0
@@ -403,7 +414,7 @@ def _calc_duration(status: dict) -> float:
     return 0
 
 
-def _format_sse(event_type: str, data: dict) -> str:
+def _format_sse(event_type: str, data: dict[str, Any]) -> str:
     """Format a dict as an SSE event string."""
     payload = json.dumps(data)
     return f"event: {event_type}\ndata: {payload}\n\n"
@@ -528,7 +539,7 @@ def _fetch_org_sites(apisession, org_id: str, show_empty: bool = False) -> PickL
         return PickList(reason=API_ERROR_REASON)
 
 
-def _fetch_msp_grants(apisession) -> PickList:
+def _fetch_msp_grants(apisession: Any) -> PickList:
     """Fetch permitted MSP grants from the authenticated user's self response."""
     if not apisession:
         logger.warning("Cannot list MSP grants, because the portal holds no Mist API session.")
@@ -543,20 +554,31 @@ def _fetch_msp_grants(apisession) -> PickList:
             return PickList(reason=f"The Mist API returned status {status} while reading MSP access.")
         user_data = getattr(response, "data", None)
         privileges = user_data.get("privileges", []) if isinstance(user_data, dict) else []
-        rows = [
-            {
-                "id": privilege["msp_id"],
-                "name": privilege.get("msp_name") or privilege.get("name") or privilege["msp_id"],
-            }
-            for privilege in privileges
-            if isinstance(privilege, dict) and isinstance(privilege.get("msp_id"), str) and privilege["msp_id"]
-        ]
+        rows = _build_msp_grant_rows(privileges)
         picks = PickList(sort_by_name(rows), reason=NO_MSP_SCOPE_REASON if not rows else None)
         logger.debug("Prepared %d permitted MSP rows", len(picks))
         return picks
     except Exception as error:
         logger.exception("Failed to list permitted MSP grants with %s: %s", type(error).__name__, error)
         return PickList(reason=API_ERROR_REASON)
+
+
+def _build_msp_grant_rows(privileges: Iterable[Any]) -> list[dict[str, Any]]:
+    """Keep only valid MSP grants and use the same name fallback for each row."""
+    rows = []  # Store only grant records with a usable MSP identifier.
+    for privilege in privileges:  # Read each privilege once to preserve API order before sorting.
+        if not isinstance(privilege, dict):  # Ignore entries that cannot hold grant fields.
+            continue  # Malformed entries were ignored by the former comprehension.
+        msp_id = privilege.get("msp_id")  # Read the natural key once for validation and row creation.
+        if not isinstance(msp_id, str) or not msp_id:  # Reject a missing or invalid natural key.
+            continue  # The selector cannot submit a grant without its identifier.
+        rows.append(
+            {
+                "id": msp_id,
+                "name": privilege.get("msp_name") or privilege.get("name") or msp_id,
+            }
+        )  # Preserve the existing display-name preference.
+    return rows  # Return the valid grants for the stable name sort.
 
 
 def _fetch_site_devices(apisession, site_id: str, device_type: str) -> PickList:
