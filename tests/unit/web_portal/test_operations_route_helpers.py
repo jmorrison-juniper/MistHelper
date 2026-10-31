@@ -16,6 +16,14 @@ def _decode_event(event: str) -> tuple[str, dict[str, Any]]:
     return event_type.removeprefix("event: "), json.loads(data_line.removeprefix("data: "))  # Decode event data.
 
 
+def _replay_events(executor: Mock, run_id: str) -> list[str]:
+    """Return a required replay or fail with a useful test error."""
+    events = _build_replay(executor, run_id)  # Build the terminal replay under test.
+    if events is None:  # A terminal test fixture must not use the active-run result.
+        raise AssertionError(f"Expected replay events for {run_id}.")  # Name the missing test result.
+    return events  # Give callers a statically non-empty replay result.
+
+
 def test_completed_replay_keeps_logs_and_completion_payload() -> None:
     """A completed run replays saved logs before its completion event."""
     status = {
@@ -30,9 +38,8 @@ def test_completed_replay_keeps_logs_and_completion_payload() -> None:
     executor = Mock()  # Stand in for the executor without creating a portal service.
     executor.get_run_status.return_value = status  # Return the terminal state for this run.
 
-    events = _build_replay(executor, "run-1")  # Build the browser replay.
+    events = _replay_events(executor, "run-1")  # Build the browser replay.
 
-    assert events is not None  # A completed status must produce replay events.
     decoded = [_decode_event(event) for event in events]  # Compare structured SSE events.
     assert [event_type for event_type, _ in decoded] == [
         "log",
@@ -73,9 +80,8 @@ def test_failed_replay_keeps_failure_message_and_duration() -> None:
     executor = Mock()  # Stand in for the executor without a running operation.
     executor.get_run_status.return_value = status  # Return the failed state for this run.
 
-    events = _build_replay(executor, "run-2")  # Build the browser replay.
+    events = _replay_events(executor, "run-2")  # Build the browser replay.
 
-    assert events is not None  # A failed status must produce a terminal event.
     assert [_decode_event(event) for event in events] == [
         (
             "error_event",
@@ -125,4 +131,28 @@ def test_msp_grants_filter_invalid_rows_and_sort_name_fallbacks() -> None:
         {"id": "msp-z", "name": "Zulu"},
     ]  # Keep valid rows in the label order used by the selector.
     assert grants.reason is None  # A non-empty grant list needs no empty-state explanation.
+    get_self.assert_called_once_with(session)  # Confirm one SDK read used the supplied session.
+
+
+def test_msp_grants_report_client_error_status() -> None:
+    """A refused Mist response remains distinct from an empty grant list."""
+    session = object()  # Provide a non-empty session without a production credential.
+    response = SimpleNamespace(status_code=403, data={"privileges": []})  # Model a refused API response.
+    with patch("mistapi.api.v1.self.self.getSelf", return_value=response) as get_self:
+        grants = _fetch_msp_grants(session)  # Read the mocked refused response.
+
+    assert grants == []  # Do not expose grants from a refused response.
+    assert grants.reason == "The Mist API returned status 403 while reading MSP access."  # Preserve the refusal.
+    get_self.assert_called_once_with(session)  # Confirm one SDK read used the supplied session.
+
+
+def test_msp_grants_report_server_error_status() -> None:
+    """A Mist server failure remains distinct from an empty grant list."""
+    session = object()  # Provide a non-empty session without a production credential.
+    response = SimpleNamespace(status_code=500, data={"privileges": []})  # Model a failed API response.
+    with patch("mistapi.api.v1.self.self.getSelf", return_value=response) as get_self:
+        grants = _fetch_msp_grants(session)  # Read the mocked failed response.
+
+    assert grants == []  # Do not expose grants from a failed response.
+    assert grants.reason == "The Mist API returned status 500 while reading MSP access."  # Preserve the failure.
     get_self.assert_called_once_with(session)  # Confirm one SDK read used the supplied session.
