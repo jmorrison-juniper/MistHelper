@@ -35,6 +35,24 @@ _HISTORICAL_PATH_MOVES = {  # Resolve immutable catalog entries through approved
     "src/mist/intelligence/analytics/zone_analyzer.py": (  # Keep the catalog path unchanged.
         "src/mist/intelligence/analytics/site/zone_analyzer.py"  # Resolve to the canonical file.
     ),
+    "src/mist/access/audit/_renderer_delta.py": (  # Keep the historical hook row unchanged.
+        "src/mist/access/audit/rendering/_renderer_delta.py"  # Resolve to the moved renderer helper.
+    ),
+    "src/mist/access/audit/_renderer_format.py": (  # Keep the historical hook row unchanged.
+        "src/mist/access/audit/rendering/_renderer_format.py"  # Resolve to the moved renderer helper.
+    ),
+    "src/mist/access/audit/_renderer_html.py": (  # Keep the historical hook row unchanged.
+        "src/mist/access/audit/rendering/clusters/_renderer_html.py"  # Resolve to the moved HTML cluster.
+    ),
+    "src/mist/access/audit/_renderer_mermaid.py": (  # Keep the historical hook row unchanged.
+        "src/mist/access/audit/rendering/clusters/_renderer_mermaid.py"  # Resolve to the moved Mermaid cluster.
+    ),
+    "src/mist/access/audit/_renderer_time.py": (  # Keep the historical hook row unchanged.
+        "src/mist/access/audit/rendering/_renderer_time.py"  # Resolve to the moved renderer helper.
+    ),
+    "src/mist/access/audit/renderer.py": (  # Keep the historical hook row unchanged.
+        "src/mist/access/audit/rendering/renderer.py"  # Resolve to the moved renderer facade.
+    ),
 }
 
 
