@@ -24,7 +24,7 @@ Move the audit renderer and its helpers into bounded packages. Keep report behav
 
 **Performance Goals**: No change to report generation time or output size
 
-**Constraints**: Each source directory has five structural children or fewer. Exclude generated runtime files and package markers from structural counts. Do not keep old-path aliases. Keep Mist API calls, report content, and utility text unchanged.
+**Constraints**: Each source directory has five structural children or fewer. Exclude generated runtime files and package markers from structural counts. Keep the `utilities/` directory at five direct entries or fewer, including `__init__.py`. Do not keep old-path aliases. Keep Mist API calls, report content, and utility text unchanged.
 
 **Scale/Scope**: Six renderer modules, one utility text module, active imports, focused tests, and two nested-package baseline entries
 
@@ -32,7 +32,7 @@ Move the audit renderer and its helpers into bounded packages. Keep report behav
 
 ### Pre-design gate
 
-- **Five-Item Rule**: The audit move left each affected audit directory at five children or fewer. The current WebSocket catalog has six structural children. Moving `utility_text.py` into `utilities/` leaves five in `catalog/` and five in `utilities/`.
+- **Five-Item Rule**: The audit move left each affected audit directory at five children or fewer. Moving `utility_text.py` into `utilities/` made six direct entries, including `__init__.py`. Group `utility_profile.py` and `utility_text.py` in `utilities/metadata/` to leave five direct entries in `utilities/`.
 - **Existing debt**: The repository measures 34 nested source violations and 237 total excess children. This slice resolves the catalog violation and targets 33 violations and 236 total excess children.
 - **Incremental remediation**: Issue #3824 tracks the remaining baseline violations. This slice removes only the resolved catalog entry.
 - **Class-based architecture**: Keep behavior in `AuditReportRenderer` and `UtilityText`. Do not add a wrapper or alias.
@@ -102,17 +102,18 @@ The WebSocket catalog move uses this package layout:
 
 ```text
 src/mist/realtime/websocket_streams/catalog/
-├── model.py
-├── sdk_annotation.py
-├── utility_text.py  # Before this slice
 ├── utilities/
+│   ├── __init__.py
 │   ├── utility_catalog.py
 │   ├── utility_discovery.py
 │   ├── utility_fields.py
-│   └── utility_profile.py
+│   └── metadata/
+│       ├── __init__.py
+│       ├── utility_profile.py
+│       └── utility_text.py
 ```
 
-After the move, `utility_text.py` resides in `utilities/`. Its two source callers and two test callers use the new path. The old path does not remain.
+After the move, `utility_text.py` and `utility_profile.py` reside in `utilities/metadata/`. Active callers use the new paths. The old paths do not remain.
 
 ## Implementation Notes
 
@@ -120,12 +121,13 @@ After the move, `utility_text.py` resides in `utilities/`. Its two source caller
 - Update active imports, test imports, and module docstrings. Remove the old module files.
 - Remove the `src/mist/access/audit` baseline entry after the measured count reaches five.
 - Update the guard's explicit repository-wide count from 35 violations and 242 excess to 34 violations and 237 excess.
-- Move `utility_text.py` to `src/mist/realtime/websocket_streams/catalog/utilities/utility_text.py`.
-- Update the utility text logger name and `UtilityText.__module__` path. Keep class methods and returned text unchanged.
-- Update both source imports and both test imports. Remove the old module path without an alias.
+- Move `utility_text.py` and `utility_profile.py` to `src/mist/realtime/websocket_streams/catalog/utilities/metadata/`.
+- Update the utility text logger name and both class `__module__` paths. Keep class behavior and returned text unchanged.
+- Update active source imports, test imports, and symbol-preservation paths. Remove old module paths without aliases.
+- Keep the `utilities/` directory at five direct entries, including `__init__.py` and excluding generated cache directories.
 - Remove the `src/mist/realtime/websocket_streams/catalog` baseline entry and update the measured count to 33 violations and 236 excess.
 - Update the WebSocket feature structure guard to exclude `__init__.py` markers and `__pycache__` directories. Add a fixture with six cache files and keep a failing path for a real source violation.
-- Include the moved utility text module in the WebSocket feature structure measurement, with totals of 146 modules, 275 classes, and 861 functions.
+- Include the new metadata package marker in the WebSocket feature structure measurement, with totals of 147 modules, 275 classes, and 861 functions.
 - Do not rewrite the tracked `.specify/feature.json` pointer. It selects another feature and is not part of this change.
 - Stop this slice after pull request creation. The coordinator owns merge and production deployment after all required checks and review pass.
 

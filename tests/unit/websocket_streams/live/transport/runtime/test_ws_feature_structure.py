@@ -461,8 +461,17 @@ class TestWebSocketFeatureStructure:
         """Prove that the current feature implementation meets every limit."""
         root = Path(__file__).resolve().parents[6]  # Resolve the worktree root from this test location.
         PythonStructureGuard().inspect([Path(__file__)])  # Keep this guard within the same structural limits.
+        utilities_root = root / "src/mist/realtime/websocket_streams/catalog/utilities"  # Name the bounded package.
+        utilities_children = [  # Count package entries, including its import marker.
+            item  # Keep each direct package child.
+            for item in utilities_root.iterdir()  # Inspect direct entries only.
+            if item.name != "__pycache__"  # Exclude generated runtime entries.
+        ]  # Keep the physical package count stable.
+        assert (  # Enforce the direct package entry limit.
+            len(utilities_children) <= 5
+        ), f"utilities has {len(utilities_children)} child items"  # Report the exact gate failure.
         counts, scope = self._measure_feature(root)  # Run checks against the complete T091 mapping table.
-        assert counts == StructureCounts(146, 275, 861)  # Include the moved utility text module in the scope.
+        assert counts == StructureCounts(147, 275, 861)  # Include the metadata package marker in the scope.
         print("T091 mapping scope: " + " | ".join(f"{old} -> {new}" for old, new in scope))  # Print every mapping.
         print(  # Print the exact checked source counts.
             f"checked mappings={len(scope)} paths={len(self.ANALYSIS_SCOPE)} modules={counts.modules} "

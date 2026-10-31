@@ -13,12 +13,15 @@ from enum import Enum  # The annotation tests need a small enum.
 
 from src.mist.realtime.websocket_streams.catalog.model import FieldKind, Safety  # Field kinds and safety classes.
 from src.mist.realtime.websocket_streams.catalog.sdk_annotation import SdkAnnotation  # The class under test.
+from src.mist.realtime.websocket_streams.catalog.utilities.metadata.utility_profile import (
+    UtilityProfile,
+)  # Resolve the canonical utility profile package path.
+from src.mist.realtime.websocket_streams.catalog.utilities.metadata.utility_text import (
+    UtilityText,
+)  # Resolve the canonical utility metadata path.
 from src.mist.realtime.websocket_streams.catalog.utilities.utility_catalog import (
     UtilityCatalog,
 )  # Read installed SDK signatures.
-from src.mist.realtime.websocket_streams.catalog.utilities.utility_text import (
-    UtilityText,
-)  # Resolve the canonical utility text package path.
 
 
 class SampleMode(Enum):
@@ -48,11 +51,26 @@ class TestUtilityText:
         """The class resolves from its canonical path, with no old module alias."""
         new_module_path = (
             "src.mist.realtime.websocket_streams.catalog."  # Name the canonical package.
-            "utilities.utility_text"  # Name the utility text module.
+            "utilities.metadata.utility_text"  # Name the utility text module.
         )  # Build the full canonical module path.
         old_module_path = "src.mist.realtime.websocket_streams.catalog.utility_text"  # Name the retired module.
+        interim_module_path = (  # Name the retired intermediate module.
+            "src.mist.realtime.websocket_streams.catalog.utilities."  # Keep the canonical package prefix.
+            "utility_text"  # Name the intermediate text module.
+        )  # Build the retired path.
+        profile_module_path = (  # Name the canonical profile module.
+            "src.mist.realtime.websocket_streams.catalog.utilities.metadata."  # Keep the metadata prefix.
+            "utility_profile"  # Name the profile module.
+        )  # Build the canonical profile path.
+        old_profile_path = (  # Name the retired profile module.
+            "src.mist.realtime.websocket_streams.catalog.utilities."  # Keep the old package prefix.
+            "utility_profile"  # Name the former profile module.
+        )  # Build the retired profile path.
         assert UtilityText.__module__ == new_module_path  # Report the canonical module path.
         assert importlib.util.find_spec(old_module_path) is None  # Reject an old-path compatibility module.
+        assert importlib.util.find_spec(interim_module_path) is None  # Reject the intermediate module path.
+        assert UtilityProfile.__module__ == profile_module_path  # Report the canonical profile module path.
+        assert importlib.util.find_spec(old_profile_path) is None  # Reject an old profile compatibility module.
 
     def test_label_fixes_acronyms_and_uses_curated_names(self) -> None:
         """A label keeps each acronym in capitals and uses a curated name first."""
