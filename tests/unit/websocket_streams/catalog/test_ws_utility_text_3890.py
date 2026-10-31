@@ -17,7 +17,9 @@ from src.mist.realtime.websocket_streams.catalog.model import Safety  # Safety c
 from src.mist.realtime.websocket_streams.catalog.utilities.utility_catalog import (
     UtilityCatalog,
 )  # Read the installed SDK catalog.
-from src.mist.realtime.websocket_streams.catalog.utility_text import UtilityText  # The class under test.
+from src.mist.realtime.websocket_streams.catalog.utilities.utility_text import (
+    UtilityText,
+)  # The class under test.
 
 STATE_CHANGE = "This changes client state, so each client must ask for a new address."  # Required effect text.
 EX_TARGETS = "Network and MAC addresses, Network and Port, or Port only."  # The three EX target sets.

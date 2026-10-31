@@ -19,7 +19,9 @@ from src.mist.realtime.websocket_streams.catalog.utilities.utility_fields import
 from src.mist.realtime.websocket_streams.catalog.utilities.utility_profile import (
     UtilityProfile,
 )  # Classify utility behavior.
-from src.mist.realtime.websocket_streams.catalog.utility_text import UtilityText  # Build public names and descriptions.
+from src.mist.realtime.websocket_streams.catalog.utilities.utility_text import (
+    UtilityText,  # Build public names and descriptions.
+)
 from src.mist.realtime.websocket_streams.live.transport.runtime.logging.structured_logger import (
     StructuredTransportLogger,
 )  # Apply the shared safe JSON logging boundary.

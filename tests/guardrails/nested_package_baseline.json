@@ -114,11 +114,6 @@
       "remediation_issue": 3824
     },
     {
-      "path": "src/mist/realtime/websocket_streams/catalog",
-      "child_count": 6,
-      "remediation_issue": 3824
-    },
-    {
       "path": "src/mist/resources/device",
       "child_count": 14,
       "remediation_issue": 3824
