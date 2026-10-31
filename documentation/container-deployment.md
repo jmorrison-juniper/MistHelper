@@ -251,6 +251,12 @@ request, so a normal `up` never rebuilds.
 The helper fetches `origin/main` and stops when the checkout is behind. Update
 the checkout, then run the build command again.
 
+The helper writes the full `git rev-parse HEAD` value to `org.opencontainers.image.revision`.
+It appends `-dirty` when staged, unstaged, or untracked non-ignored changes exist.
+Ignored runtime files do not affect this marker.
+The helper sets `MISTHELPER_BUILD_REVISION` for the provider call and restores the previous environment value afterward.
+Do not set this build-only value in a deployment `.env` file.
+
 Warning: `--allow-stale` can build old code and downgrade a running container.
 Use it only for a local test. The helper tags that image as `misthelper:local`,
 so it does not replace the published image.
@@ -269,9 +275,17 @@ podman inspect misthelper-app --format "{{ index .Config.Labels \"org.opencontai
 git rev-parse origin/main
 ```
 
-An empty label names a local build, because only the CI build writes the label.
-A label that differs from `origin/main` names an image that CI published for an
-older commit.
+Use the helper to compare clean local builds and CI builds through the same image-input check.
+
+```powershell
+.\scripts\compose.ps1 check-revision
+```
+
+A clean label succeeds when its commit equals `origin/main` or later changes affect no image input.
+When image inputs differ, the helper names those paths and returns a failure.
+A `-dirty` label records uncommitted changes that a commit comparison cannot verify.
+The helper returns a failure for that label. Build from a clean checkout before checking again.
+An empty label cannot identify the image source. Rebuild with the helper or use a labeled CI image.
 
 Continuous integration builds and publishes an image for every commit that
 changes `src/`, `web_portal/`, `MistHelper.py`, `requirements.txt`, or the
@@ -284,8 +298,7 @@ is needed. Read `.github/workflows/container-build.yml` for the full path list.
 podman inspect misthelper-app --format '{{index .Config.Labels "org.opencontainers.image.revision"}}'
 ```
 
-Compare that value against `git rev-parse origin/main`. An empty answer names a
-local build, because only the continuous integration build writes the label.
+Use the revision check described above to compare this value with `origin/main`.
 
 ## Recreate the application container alone
 
