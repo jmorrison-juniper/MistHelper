@@ -1241,6 +1241,32 @@ def _validated_saved_options(org_id: str, site_ids: list[str]) -> tuple[dict[str
     return _aggregate_saved_options(org_id, site_ids, options)  # Build the durable multi-device plan.
 
 
+class OrgRetrySiteScope:
+    """Keep the saved retry scope separate from the operator selection."""
+
+    @staticmethod
+    def planned_rows(rows: list[dict[str, Any]], targets: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+        """Retain approved sites with planned targets only when saving a retry."""
+        if current_retry_plan() is None:
+            return rows
+        logger.info("Build the effective site scope of the retry plan")
+        planned_sites = {str(target["site_id"]) for target in targets}
+        effective = [row for row in rows if str(row["site_id"]) in planned_sites]
+        logger.debug("The retry plan holds %s effective site(s)", len(effective))
+        return effective
+
+    @staticmethod
+    def effective_ids(operation: Mapping[str, Any] | None, selected: list[str]) -> list[str]:
+        """Read the durable retry scope while preserving exact selected-site order checks."""
+        if operation is None or not operation.get("retry_of_operation_id"):
+            return selected
+        logger.info("Read the effective site scope of retry %s", operation.get("operation_id"))
+        planned_sites = set(operation["site_ids"])
+        effective = [site_id for site_id in selected if site_id in planned_sites]
+        logger.debug("The retry context holds %s effective site(s)", len(effective))
+        return effective
+
+
 def _aggregate_saved_options(
     org_id: str,
     site_ids: list[str],
@@ -1252,6 +1278,7 @@ def _aggregate_saved_options(
     if not rows:  # Issue #3441: a removed site must not produce an orphan plan.
         logger.warning("Refused the aggregate save because a selected site left organization %s", org_id)
         raise SelectedSitesChangedError(SITES_REQUIRED_MESSAGE)  # Return the existing 404 site selection contract.
+    rows = OrgRetrySiteScope.planned_rows(rows, aggregate["targets"])
     mapped = build_options(aggregate["options"], now=None)  # Reuse the proven option mapping.
     choices = OrgUpgradeScheduleReader.anchored_options(mapped)  # Count the reboot delay from the scheduled start.
     OrgAdvancedRules.refuse_stable_access_points(choices, aggregate["targets"])  # Issue #3383: no stable AP build.
@@ -1313,6 +1340,8 @@ def confirm_page() -> str | tuple[Response, int]:
     if context is None or not options:  # Require a complete confirmed context.
         return json_error(BAD_REQUEST_STATUS, OPTIONS_INVALID, "Save valid upgrade options before confirmation.")
     org_id, site_ids = context  # Use only the validated active context.
+    operation = _owned_operation(options, org_id)
+    site_ids = OrgRetrySiteScope.effective_ids(operation, site_ids)
     try:
         rows = selected_rows(org_id, site_ids)  # Recheck site ownership before display.
     except RequestException as error:
@@ -1320,7 +1349,6 @@ def confirm_page() -> str | tuple[Response, int]:
         return json_error(SERVICE_UNAVAILABLE_STATUS, SITE_READ_FAILED, SITE_READ_FAILED_MESSAGE)
     if not rows:  # Do not show an operation for missing or foreign sites.
         return json_error(NOT_FOUND_STATUS, SITES_REQUIRED, SITES_REQUIRED_MESSAGE)
-    operation = _saved_operation(options)  # Read the durable plan one time for every value of the page.
     target_count, families = _confirmation_targets(operation)  # Read only the durable aggregate child summary.
     view = options_view(options)  # Build the display values one time.
     family_summary = firmware_summary(view, families)  # Keep the stable-build wording for that special choice.
@@ -2185,6 +2213,8 @@ def _load_submission_context(request_nonce: object) -> SubmissionContext | tuple
     if not options or cloud_session is None:  # Require confirmed options and an authenticated cloud session.
         return json_error(BAD_REQUEST_STATUS, OPTIONS_INVALID, "The organization upgrade context is incomplete.")
     org_id, site_ids = context  # Use only the validated active scope.
+    operation = _owned_operation(options, org_id)
+    site_ids = OrgRetrySiteScope.effective_ids(operation, site_ids)
     refusal = _site_lock_refusal(org_id, site_ids)  # Keep every existing site lock.
     if refusal is not None:  # One blocked site stops every destructive child.
         return refusal  # Preserve the existing lock response.
