@@ -34,6 +34,8 @@ if sys.version_info < MINIMUM_PYTHON_VERSION:  # Exit early if Python is too old
     # ============================================================================
     # GLOBAL DEPENDENCY MANAGEMENT AND IMPORT SYSTEM
     # ============================================================================
+# Keep these imports after the Python version check and warning filter.
+# pylint: disable=wrong-import-position
 import warnings  # Import warnings module to suppress harmless SyntaxWarnings from third-party libraries
 
 warnings.filterwarnings(
@@ -41,9 +43,12 @@ warnings.filterwarnings(
 )  # Suppress false SyntaxWarnings about escape sequences in regex patterns from mistapi library
 
 import argparse  # Import argparse for command-line argument parsing (--menu, --test, --fast flags)
+import concurrent.futures  # High-level parallelism primitives for batched API calls
+import inspect  # Introspect functions/classes at runtime (signatures, source lookup)
 import logging  # Import logging for structured logging to script.log and console
 import os  # Import os for file path operations, environment variables, and data/ directory setup
 import re  # Import re for regex pattern matching in data parsing (SSIDs, descriptions, and so on)
+import threading  # Locks and threads for safe concurrent operations
 import time  # Import time for rate limiting, delays, and performance monitoring
 import traceback  # Import traceback for detailed exception context in error logs
 import types  # Import types for type annotations (TracebackType)
@@ -51,7 +56,11 @@ from collections.abc import (
     Callable,  # Callable protocol for typed function references
     Iterable,  # Type hints for static analysis
 )
-from datetime import datetime  # Import datetime for timestamping logs and events
+from datetime import (
+    UTC,  # UTC marker for timestamp calculations.
+    datetime,  # Timestamp values used by logs and events.
+    timezone,  # Timezone helper for aware timestamp calculations.
+)
 from pathlib import Path  # Resolve the private menu 305 backup root on each supported operating system.
 from typing import (
     TYPE_CHECKING,
@@ -67,7 +76,7 @@ from packaging.specifiers import (
     InvalidSpecifier,
     SpecifierSet,
 )  # WHY: PEP 440 specifier checks replace hand comparisons.
-from packaging.version import InvalidVersion, Version  # WHY: PEP 440 version comparison.
+from packaging.version import InvalidVersion, Version  # WHY: Compare package versions with PEP 440 rules.
 
 from src.foundation.support.utils.console import (
     echo,
@@ -81,6 +90,8 @@ from src.foundation.support.utils.subprocess_runner import (  # Import the moved
     TimeoutExpired,  # Raised when subprocess.run exceeds its timeout.
     subprocess,  # Re-exported audited module for bootstrap injection without a direct stdlib import.
 )
+
+# pylint: enable=wrong-import-position
 
 logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
 if sys.version_info < MINIMUM_PYTHON_VERSION:  # Log the same version warning after logging becomes importable.
@@ -145,9 +156,6 @@ class LogRotationSettings:  # Preserve the existing behavior during the complian
 
 if TYPE_CHECKING:  # These imports only used by static type checkers (Pylance, mypy), not at runtime
     from types import ModuleType  # ModuleType annotation for optional-module fallback typing
-
-    import websocket  # Type stub for websocket (WebSocket client for device diagnostics)
-    from prettytable import PrettyTable  # Type stub for prettytable (ASCII table formatting)
 
     from src.mist.resources.device.utility_commands import DeviceUtilityCommands  # Type stub for DeviceUtilityCommands
 
@@ -380,6 +388,9 @@ __all__ = [  # Preserve the existing behavior during the compliance refactor.
     "websocket",
 ]
 
+# These imports remain after the public API declarations to preserve the established
+# module initialization and dependency order.
+# pylint: disable=wrong-import-position
 # BatchWorkerConfig import removed: pool machinery moved to ConnectionPoolExecutor (1012 SC-003)
 from src.foundation.models.dataclasses.endpoint_config import (
     EndpointConfig,  # Cat B (1013 SC-001 position 16) -- re-export for MistHelper.EndpointConfig callers
@@ -905,6 +916,8 @@ from src.operations.wan.wan_hub_group_manager import (
 )  # Import WAN hub group number manager for hub routing
 from src.operations.wan.wan_vpn_builder import WanVpnBuilder  # Import WAN VPN configuration builder
 
+# pylint: enable=wrong-import-position
+
 # ============================================================================
 # CONFIGURATION DATACLASSES (5-Item Rule Compliance)
 # ============================================================================
@@ -1049,16 +1062,6 @@ def _early_dependency_check() -> None:  # Public entry point. Delegates to the e
     )
     orchestrator.run()  # Execute the dependency check + install/upgrade workflow
 
-    # Additional standard library imports
-
-
-import concurrent.futures  # High-level parallelism primitives for batched API calls
-import inspect  # Introspect functions/classes at runtime (signatures, source lookup)
-import threading  # Locks and threads for safe concurrent operations
-
-# Note: datetime class already imported at top of file (line 26)
-# Only import timezone here to avoid shadowing datetime class
-from datetime import UTC, timezone  # UTC marker plus timezone helper for tz-aware time math
 
 # Third-party imports with fallbacks
 # Required dependencies: raise clear error if missing (auto-installed by early dependency check)
@@ -1100,10 +1103,12 @@ try:  # Import the SDK without starting a session or touching the network.
 except ImportError:  # The bootstrap dependency check reports the missing SDK before runtime modes start.
     pass  # Keep the public name available for environments that install dependencies later.
 
-    # tqdm wrapper: canonical home is src/foundation/support/utils/tqdm_wrapper.py (1015 T-14, Cat E).
-    # The wrapper resolves to the real tqdm package if installed, else a no-op pass-through.
-    # Re-exported here so ``MistHelper.tqdm`` / ``mh.tqdm`` callers keep working unchanged.
+# The wrapper resolves to real tqdm when available and to a no-op pass-through otherwise.
+# Re-export it for existing MistHelper.tqdm and mh.tqdm callers.
+# pylint: disable=wrong-import-position,ungrouped-imports
 from src.foundation.support.utils.tqdm_wrapper import tqdm  # Cat E canonical (1015 T-14) -- re-export.
+
+# pylint: enable=wrong-import-position,ungrouped-imports
 
 if "requests" not in globals():  # Keep the requests name without importing the HTTP stack during module import.
     requests: Any = None  # Bootstrap and deferred imports publish requests after dependency checks run.
@@ -2528,7 +2533,11 @@ LAST_SELECTED_SITE_ID: str | None = None  # Preserve the existing behavior durin
 # ============================================================================
 
 
+# Keep this re-export after the manager definition to preserve the current import sequence.
+# pylint: disable=wrong-import-position,ungrouped-imports
 from src.foundation.support.utils.input_utils import InputUtils  # Cat E canonical (1015 T-09) -- re-export.
+
+# pylint: enable=wrong-import-position,ungrouped-imports
 
 # ============================================================================
 # CONFIGURATION VARIABLES
@@ -3553,10 +3562,14 @@ def _configure_session_timeout(
     logger.debug("Session timeout setup is owned by MistSessionConfigurator")  # Confirm no patch ran here.
 
 
+# These late re-exports preserve the existing dependency order for runtime wiring.
+# pylint: disable=wrong-import-position
 from src.foundation.models.data.data_processing_utils import DataProcessingUtils  # Cat E canonical (1015 T-10).
 from src.interfaces.visualization.ui.prompt_utils import PromptUtils  # T-07 re-export
 from src.mist.access.api.tenant_fetch import APITenantFetchUtils  # Re-exported for ServicePingLauncher late-binding
 from src.operations.exporting.export.data_exporter import DataExporter  # T-08 re-export
+
+# pylint: enable=wrong-import-position
 
 
 def _get_duc_instance() -> DeviceUtilityCommands:  # Build DeviceUtilityCommands.
@@ -3705,9 +3718,13 @@ def _build_ssh_runner_deps() -> SSHRunnerManagerDeps:  # Build the deps bundle f
     # ============================================================================
 
 
+# Keep this import after the dependency wiring declarations to preserve the current import sequence.
+# pylint: disable=wrong-import-position
 from src.foundation.support.utils.rate_limiting import (
     RateLimitingUtils,
 )  # Preserve the existing behavior during the compliance refactor.
+
+# pylint: enable=wrong-import-position
 
 # ============================================================================
 # ORG CONFIG MIGRATION MANAGER CLASS
@@ -8513,9 +8530,7 @@ if __name__ == "__main__":  # Preserve the existing behavior during the complian
                 logging.exception("Exception in global excepthook: %s", hook_err)  # Keep hook trace
 
         try:
-            import sys as _sys_mod  # Preserve the existing behavior during the compliance refactor.
-
-            _sys_mod.excepthook = _global_excepthook  # Preserve the existing behavior during the compliance refactor.
+            sys.excepthook = _global_excepthook  # Preserve the existing behavior during the compliance refactor.
         except (
             AttributeError,
             TypeError,
@@ -8537,8 +8552,6 @@ if __name__ == "__main__":  # Preserve the existing behavior during the complian
     except Exception as e:  # Broad by design so unexpected startup defects get a controlled final trace
         logging.error("Unhandled exception in main application: %s", e)  # Log before traceback formatting
         try:
-            import traceback  # Preserve the existing behavior during the compliance refactor.
-
             traceback_details = "".join(
                 traceback.format_exception(type(e), e, e.__traceback__)
             )  # Preserve the existing behavior during the compliance refactor.
