@@ -3403,19 +3403,26 @@
         if (item && typeof next === "string" && ORG_JOB_PATH.test(next)) {  /* FR-006: link only a job page. */
             appendOrgJobLink(item, next);  /* The operator can open the job that runs. */
         }
+    }
 
-        function showOrgBusyRefusal(form, error) {
-            form.setAttribute(ORG_FORM_STATE, ORG_FORM_CLOSED);  /* The refused plan must not be submitted again. */
-            form.querySelectorAll("[data-confirm-word]").forEach(function (input) {
-                input.value = "";  /* The typed confirmation must not remain armed. */
-                input.disabled = true;  /* The operator must open a new plan before another start. */
-                applyConfirmGate(input);  /* Keep the submit control disabled with the cleared word. */
-            });
-            var item = showRequestError(error);  /* Show the held-site and owning-job message. */
-            var next = error.details && error.details.next;  /* Read the validated owning progress path. */
-            if (item && typeof next === "string" && ORG_JOB_PATH.test(next)) {  /* Reject unsafe link targets. */
-                appendOrgJobLink(item, next);  /* Link the operation that holds the site. */
-            }
+    /**
+     * Shows the busy-site refusal and keeps the refused plan closed.
+     *
+     * @param {Element} form The organization form.
+     * @param {Error} error The refusal from fetchJson.
+     * @returns {void}
+     */
+    function showOrgBusyRefusal(form, error) {
+        form.setAttribute(ORG_FORM_STATE, ORG_FORM_CLOSED);  /* The refused plan must not be submitted again. */
+        form.querySelectorAll("[data-confirm-word]").forEach(function (input) {
+            input.value = "";  /* The typed confirmation must not remain armed. */
+            input.disabled = true;  /* The operator must open a new plan before another start. */
+            applyConfirmGate(input);  /* Keep the submit control disabled with the cleared word. */
+        });
+        var item = showRequestError(error);  /* Show the held-site and owning-job message. */
+        var next = error.details && error.details.next;  /* Read the validated owning progress path. */
+        if (item && typeof next === "string" && ORG_JOB_PATH.test(next)) {  /* Reject unsafe link targets. */
+            appendOrgJobLink(item, next);  /* Link the operation that holds the site. */
         }
     }
 

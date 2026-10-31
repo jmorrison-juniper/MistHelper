@@ -313,7 +313,7 @@ class TestMultiSiteOptionsJourneys:
         ModelVersionPicker(reader.page).select("", 6)  # The current form starts with model-compatible defaults.
         reader.page.get_by_test_id("org-upgrade-review").scroll_into_view_if_needed()  # The operator scrolls down.
         reader.review(expect_confirm=False)  # All families selected and no version.
-        expect(reader.page.get_by_test_id(FLASH)).to_be_in_viewport()  # The message must be in view.
+        expect(reader.page.get_by_test_id(FLASH)).to_be_in_viewport(ratio=1)  # Wait for the whole message to appear.
         in_view = reader.page.get_by_test_id(FLASH).evaluate(IN_VIEW_SCRIPT)  # The browser measures the box.
         assert in_view is True  # The same rule as a plain comparison.
 
@@ -459,6 +459,60 @@ class TestMultiSiteSessionJourneys:
             operator.page.wait_for_timeout(3000)  # Let the answer paint.
             operator.recorder.step("after start with descending phases")  # Record the start answer.
         assert not JOB_URL.match(operator.page.url), "The portal started a job with descending canary phases."
+
+    @pytest.mark.parametrize(
+        "next_path",
+        [
+            "/upgrade/org/jobs/org-run-busy-4540",
+            None,
+            "https://example.invalid/upgrade/org/jobs/org-run-busy-4540",
+        ],
+        ids=["owning-operation", "missing-address", "unsafe-address"],
+    )
+    def test_synthetic_busy_site_refusal(self, operator: MultiSiteJourney, next_path: str | None) -> None:
+        """A synthetic 409 explains the refusal and keeps the confirmation closed without a page error."""
+        operator.open_options((SITE_ID,))  # The seeded site already has a verified pre-check and needs no lock.
+        for family in FAMILIES:  # Prepare one gateway target without starting an operation.
+            operator.page.get_by_test_id(f"org-upgrade-type-{family}").set_checked(family == "gateway")
+        ModelVersionPicker(operator.page).select(TARGET_VERSION, 1, "gateway")  # Select the one offered target.
+        operator.review()  # Exercise the shipped confirmation form and script.
+        operator.ensure_prechecks_ready()  # Use the stand-in captures to open the confirmation field.
+        page_errors: list[str] = []  # Detect the missing declaration independently of the visible message.
+        operator.page.on("pageerror", lambda error: page_errors.append(str(error)))  # Observe uncaught script errors.
+        self._submit_synthetic_busy_refusal(operator, next_path)  # Intercept the write before it reaches the server.
+        flash = operator.page.get_by_test_id(FLASH)  # Require the actual operator-visible message.
+        expect(flash).to_contain_text("E2E Stand-In Site is held by operation org-run-busy-4540.")
+        expect(flash).to_be_in_viewport(ratio=1)  # Retry until the smooth scroll shows the complete refusal.
+        link = flash.get_by_test_id("org-upgrade-job-link")  # Check only the link attached to this refusal.
+        expect(link).to_have_count(1 if next_path and next_path.startswith("/") else 0)
+        if next_path and next_path.startswith("/"):  # Only the permitted local progress path becomes a link.
+            expect(link).to_have_attribute("href", next_path)
+        confirmation = operator.page.get_by_test_id("org-upgrade-confirmation")  # A refused plan cannot stay armed.
+        expect(confirmation).to_have_value("")  # Remove the previously typed confirmation.
+        expect(confirmation).to_be_disabled()  # Require a new plan before another submission.
+        expect(operator.page.get_by_test_id("org-upgrade-start")).to_be_disabled()
+        operator.recorder.step("synthetic busy-site refusal")  # Preserve screenshots and failed-flow evidence.
+        assert page_errors == [], f"The busy-site refusal caused browser page errors: {page_errors}"
+
+    def _submit_synthetic_busy_refusal(self, operator: MultiSiteJourney, next_path: str | None) -> None:
+        """Return the existing error envelope without sending a firmware request."""
+        envelope = {  # Match the production response shape while using synthetic operation data.
+            "error": {
+                "code": "site_lock_wrong_run",
+                "message": "E2E Stand-In Site is held by operation org-run-busy-4540.",
+                "details": {"next": next_path} if next_path else {},
+            }
+        }
+        operator.page.route(  # Intercept only the start endpoint, not the pre-checks or options.
+            "**/api/org-upgrades",
+            lambda route: route.fulfill(status=409, content_type="application/json", body=json.dumps(envelope)),
+        )
+        operator.page.get_by_test_id("org-upgrade-confirmation").fill("CONFIRM")  # Use the real confirmation gate.
+        logging.info("Submit the synthetic busy-site refusal case")  # Record the action without session data.
+        with operator.page.expect_response(lambda response: response.url.endswith("/api/org-upgrades")) as answer:
+            operator.page.get_by_test_id("org-upgrade-start").click()  # The intercepted response performs no write.
+        assert answer.value.status == 409  # Prove the refusal came from the requested HTTP status.
+        logging.debug("The synthetic busy-site refusal returned status %s", answer.value.status)
 
     @pytest.mark.fresh_server
     def test_second_start_on_busy_sites_explains_the_lock(self, operator: MultiSiteJourney) -> None:
