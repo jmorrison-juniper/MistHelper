@@ -109,7 +109,7 @@ dev = [
     "pytest-cov==7.1.0",
     "pytest-timeout==2.4.0",
     "hypothesis==6.170.8",
-    "playwright==1.64.0",      # supplies the browser driver
+    "playwright==1.64.1",      # supplies the browser driver
     "pytest-playwright==0.10.0",  # supplies the `page` fixture; playwright alone has no pytest plugin
     "bandit[toml]==1.9.4",
     "pip-audit==2.10.1",
