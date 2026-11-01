@@ -101,7 +101,7 @@ dev = [
     "podman-compose==1.6.0",
     "ruff==0.17.2",
     "black==26.10.1",
-    "mypy==2.4.0",
+    "mypy==2.4.1",
     "types-requests==2.33.0.20261006",
     "types-paramiko==5.0.0.20261021",
     "types-tqdm==4.70.0.20260906",
