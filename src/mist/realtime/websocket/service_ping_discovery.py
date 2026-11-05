@@ -124,7 +124,12 @@ class ServicePingDiscoveryMixin:  # WHY: define ServicePingDiscoveryMixin type.
             self._extract_from_device_config(device_config)  # WHY: extract tenants/services from config.
             self._extract_from_device_stats()  # WHY: append services observed in live stats payload.
         except Exception as error:  # WHY: any API error must not abort discovery flow.
-            logging.warning("Could not fetch device configuration: %s", error)  # WHY: warn but continue.
+            logger.error(
+                "Could not fetch device configuration for site %s device %s: %s",
+                self.site_id,
+                self.device_id,
+                error,
+            )  # Report the failed request without its response body.
             self._debug_print(f"Config error: {error}")  # WHY: verbose debug detail for operators.
             print("!? Cannot retrieve device configuration")  # WHY: user-facing failure message.
 
@@ -136,6 +141,10 @@ class ServicePingDiscoveryMixin:  # WHY: define ServicePingDiscoveryMixin type.
         response = mistapi.api.v1.sites.devices.getSiteDevice(
             apisession, self.site_id, self.device_id
         )  # WHY: single mist API round trip for device config.
+        status = getattr(response, "status_code", None)
+        if not isinstance(status, int) or status != 200:
+            status_label = status if isinstance(status, int) else "unknown"
+            raise ValueError(f"getSiteDevice failed with HTTP {status_label}")
         device_config = getattr(response, "data", {})  # WHY: tolerate responses without data attribute.
         logger.debug(
             "Device configuration retrieved with %d top-level keys", len(device_config.keys())
@@ -246,13 +255,14 @@ class ServicePingDiscoveryMixin:  # WHY: define ServicePingDiscoveryMixin type.
             stats_data = self._retrieve_device_stats()  # WHY: isolate API call for cleaner error path.
             self._merge_stats_services(stats_data)  # WHY: append any new service names discovered.
         except Exception as error:  # WHY: any API error must be non-fatal.
-            logging.debug(
+            logger.error(
                 "Device stats retrieval failed for site %s device %s: %s",
                 self.site_id,
                 self.device_id,
                 error,
             )  # WHY: after-action failure log.
             self._debug_print(f"Could not fetch stats: {error}")  # WHY: verbose debug detail.
+            print("!? Cannot retrieve device statistics")
 
     def _retrieve_device_stats(self) -> dict[str, Any]:  # WHY: define _retrieve_device_stats helper.
         """Call getSiteDeviceStats and return the stats payload dict."""
@@ -264,6 +274,10 @@ class ServicePingDiscoveryMixin:  # WHY: define ServicePingDiscoveryMixin type.
         response = mistapi.api.v1.sites.stats.getSiteDeviceStats(
             apisession, self.site_id, self.device_id
         )  # WHY: single mist API round trip for device stats.
+        status = getattr(response, "status_code", None)
+        if not isinstance(status, int) or status != 200:
+            status_label = status if isinstance(status, int) else "unknown"
+            raise ValueError(f"getSiteDeviceStats failed with HTTP {status_label}")
         stats_data = getattr(response, "data", {})  # WHY: tolerate responses without data attribute.
         logger.debug(
             "Device stats retrieved with %d top-level keys", len(stats_data.keys())
