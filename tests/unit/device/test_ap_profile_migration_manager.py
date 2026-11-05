@@ -2435,3 +2435,78 @@ def test_migrate_pacing_ignores_a_foreign_thread_sleep(
     assert len(sleep_args) == 10, f"expected exactly 10 pacing sleeps, got {len(sleep_args)}"
     # WHY: the index the CI failure reported now reads the fallback constant.
     assert sleep_args[4] == pytest.approx(0.75), f"5th sleep arg expected 0.75, got {sleep_args[4]!r}"
+
+
+class TestSiteDiscoveryReadFailure:
+    """Prevent failed organization site reads from becoming migration input."""
+
+    @pytest.mark.parametrize("first_page", [None, [], [{"id": "site-first"}]])
+    @pytest.mark.parametrize("status", [403, 503])
+    def test_pagination_failure_rejects_first_page(
+        self, first_page: Any, status: int, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """A failed later page must not become an empty or partial AP result."""
+        failure = RuntimeError(f"Site pagination HTTP {status}")
+        response = types.SimpleNamespace(data=first_page)
+        with (
+            patch.object(apm_mod._mist_orgs_sites, "listOrgSites", return_value=response),
+            patch.object(apm_mod.mistapi, "get_all", side_effect=failure),
+            patch.object(apm_mod._mist_site_devices, "listSiteDevices") as list_devices,
+            pytest.raises(RuntimeError, match=f"HTTP {status}") as caught,
+        ):
+            APProfileMigrationManager._discover_aps_on_source_profile(object(), "org-1", "source-1")
+        assert caught.value is failure
+        list_devices.assert_not_called()
+        assert "Failed to read organization sites for AP discovery" in caplog.text
+        assert "org-1" in caplog.text
+        assert "Discovery complete" not in caplog.text
+
+    def test_absent_response_data_uses_real_sdk(self, caplog: pytest.LogCaptureFixture) -> None:
+        """The real SDK missing-data failure must not become a zero-AP result."""
+        with (
+            patch.object(apm_mod._mist_orgs_sites, "listOrgSites", return_value=types.SimpleNamespace()),
+            patch.object(apm_mod._mist_site_devices, "listSiteDevices") as list_devices,
+            pytest.raises(AttributeError, match="data"),
+        ):
+            APProfileMigrationManager._discover_aps_on_source_profile(object(), "org-1", "source-1")
+        list_devices.assert_not_called()
+        assert "Failed to read organization sites for AP discovery" in caplog.text
+
+    def test_migration_stops_before_plan_or_writes(
+        self, fake_mh: types.ModuleType, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Real discovery failure must stop migration before any live action."""
+        profiles = [("source-1", "Source", {}), ("target-1", "Target", {})]
+        with (
+            patch.object(APProfileMigrationManager, "_pick_ap_device_profile", side_effect=profiles),
+            patch.object(apm_mod._mist_orgs_sites, "listOrgSites", return_value=types.SimpleNamespace()),
+            patch.object(APProfileMigrationManager, "_render_migration_plan") as render_plan,
+            patch.object(APProfileMigrationManager, "_confirm_migration") as confirm,
+            patch.object(APProfileMigrationManager, "_write_backup_file") as write_backup,
+            patch.object(apm_mod._mist_site_devices, "updateSiteDevice") as update_device,
+            pytest.raises(AttributeError, match="data"),
+        ):
+            APProfileMigrationManager.migrate_aps_between_device_profiles(session=object())
+        render_plan.assert_not_called()
+        confirm.assert_not_called()
+        write_backup.assert_not_called()
+        update_device.assert_not_called()
+        fake_mh.InputUtils.safe_input.assert_not_called()
+        assert "Nothing to migrate" not in capsys.readouterr().out
+
+    @pytest.mark.parametrize("sites", [[], [{"id": "site-1"}, {"id": "site-2"}]])
+    def test_successful_discovery_preserves_records(self, sites: list[dict[str, str]]) -> None:
+        """Successful empty and complete reads must preserve AP filtering."""
+        selected = {"id": "ap-1", "deviceprofile_id": "source-1", "mac": "aa", "name": "AP"}
+        other = {"id": "ap-other", "deviceprofile_id": "other"}
+        session = object()
+        with (
+            patch.object(apm_mod._mist_orgs_sites, "listOrgSites") as list_sites,
+            patch.object(apm_mod.mistapi, "get_all", side_effect=[sites, [selected, other], []]),
+            patch.object(apm_mod._mist_site_devices, "listSiteDevices") as list_devices,
+        ):
+            records = APProfileMigrationManager._discover_aps_on_source_profile(session, "org-1", "source-1")
+        expected = [{"device_id": "ap-1", "site_id": "site-1", "mac": "aa", "hostname": "AP"}] if sites else []
+        assert records == expected
+        list_sites.assert_called_once_with(session, "org-1")
+        assert list_devices.call_args_list == [((session, site["id"]), {"type": "ap"}) for site in sites]
