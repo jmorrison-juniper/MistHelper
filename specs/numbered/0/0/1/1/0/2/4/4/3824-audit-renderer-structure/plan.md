@@ -1,12 +1,12 @@
-# Implementation Plan: Audit Renderer Structure
+# Implementation Plan: Nested Source Package Remediation
 
-**Branch**: `jmorrison-juniper-3824-audit-renderer-structure` | **Date**: 2026-10-31 | **Spec**: [spec.md](spec.md)
+**Branch**: `refactor/3824-websocket-catalog-structure` | **Date**: 2026-10-31 | **Spec**: [spec.md](spec.md)
 
 **Input**: Numeric specification at `specs/numbered/0/0/1/1/0/2/4/4/3824-audit-renderer-structure/spec.md`.
 
 ## Summary
 
-Move the audit renderer and its helpers into bounded packages. Keep report behavior and renderer methods unchanged. Update active imports, remove old module paths, and remove the resolved audit violation from the nested-package baseline.
+Move the audit renderer and its helpers into bounded packages. Keep report behavior and renderer methods unchanged. The next slice moves the WebSocket utility text module into the existing utility package and keeps its labels, descriptions, and hints unchanged.
 
 ## Technical Context
 
@@ -24,28 +24,28 @@ Move the audit renderer and its helpers into bounded packages. Keep report behav
 
 **Performance Goals**: No change to report generation time or output size
 
-**Constraints**: Each source directory has five structural children or fewer. Do not keep old-path aliases. Keep Mist API calls and report content unchanged.
+**Constraints**: Each source directory has five structural children or fewer. Exclude generated runtime files and package markers from structural counts. Keep the `utilities/` directory at five direct entries or fewer, including `__init__.py`. Do not keep old-path aliases. Keep Mist API calls, report content, and utility text unchanged.
 
-**Scale/Scope**: Six renderer modules, two package directories, active imports, renderer tests, and one nested-package baseline entry
+**Scale/Scope**: Six renderer modules, one utility text module, active imports, focused tests, and two nested-package baseline entries
 
 ## Constitution Check
 
 ### Pre-design gate
 
-- **Five-Item Rule**: The current audit directory has 10 structural children and is recorded in the baseline for issue #3824. Moving the six renderer modules leaves five children in `audit/`, five in `rendering/`, and two in `rendering/clusters/`.
-- **Existing debt**: The repository measures 35 nested source violations and 242 total excess children. This slice resolves the audit violation and targets 34 violations and 237 total excess children.
-- **Incremental remediation**: Issue #3824 tracks the remaining baseline violations. This change removes only the resolved audit entry.
-- **Class-based architecture**: Keep behavior in `AuditReportRenderer`, `_HtmlCluster`, and `_MermaidCluster`. Do not add a wrapper or alias.
+- **Five-Item Rule**: The audit move left each affected audit directory at five children or fewer. Moving `utility_text.py` into `utilities/` made six direct entries, including `__init__.py`. Group `utility_profile.py` and `utility_text.py` in `utilities/metadata/` to leave five direct entries in `utilities/`.
+- **Existing debt**: The repository measures 34 nested source violations and 237 total excess children. This slice resolves the catalog violation and targets 33 violations and 236 total excess children.
+- **Incremental remediation**: Issue #3824 tracks the remaining baseline violations. This slice removes only the resolved catalog entry.
+- **Class-based architecture**: Keep behavior in `AuditReportRenderer` and `UtilityText`. Do not add a wrapper or alias.
 - **Safety**: No Mist Cloud operation, destructive action, or production data change is in scope.
-- **Process records**: Add this issue-specific specification under the managed numeric route and add one issue-specific changelog fragment.
+- **Process records**: Extend the existing issue specification under its managed numeric route. Do not change `.specify/feature.json`. Do not add a release note because this internal move changes no user-visible behavior.
 - **Deployment pipeline**: Run each applicable test and quality gate. Stage only the explicit manifest. Commit with a Conventional Commit subject and the required co-author trailer. Rebase and rerun affected gates. Push the branch and open a pull request with exact results. Keep it unmerged and disable auto-merge until the coordinator verifies all required checks, CodeQL, review, base freshness, and no active holds.
 
 **Gate result**: Pass. The planned move reduces the measured violation count and does not increase a source directory count.
 
 ### Post-design gate
 
-- The interface contract records the one intended module-path change.
-- The test plan covers reports, helper behavior, imports, and structural debt.
+- The interface contract records the renderer and utility text module-path changes.
+- The test plan covers report behavior, utility text, imports, and structural debt.
 - No Mist Cloud or data-model contract is required.
 
 **Gate result**: Pass.
@@ -98,12 +98,36 @@ Active callers in `audit_analysis_ops.py`, `tests/run_audit_integration.py`, and
 
 **Structure Decision**: Keep the renderer entry point and three shared helpers in `rendering/`. Put the HTML and Mermaid clusters in `rendering/clusters/`. This gives the audit and rendering directories five structural children or fewer.
 
+The WebSocket catalog move uses this package layout:
+
+```text
+src/mist/realtime/websocket_streams/catalog/
+├── utilities/
+│   ├── __init__.py
+│   ├── utility_catalog.py
+│   ├── utility_discovery.py
+│   ├── utility_fields.py
+│   └── metadata/
+│       ├── __init__.py
+│       ├── utility_profile.py
+│       └── utility_text.py
+```
+
+After the move, `utility_text.py` and `utility_profile.py` reside in `utilities/metadata/`. Active callers use the new paths. The old paths do not remain.
+
 ## Implementation Notes
 
 - The renderer class moves from `src.mist.access.audit.renderer` to `src.mist.access.audit.rendering.renderer`. Its `__module__` value changes accordingly.
 - Update active imports, test imports, and module docstrings. Remove the old module files.
 - Remove the `src/mist/access/audit` baseline entry after the measured count reaches five.
 - Update the guard's explicit repository-wide count from 35 violations and 242 excess to 34 violations and 237 excess.
+- Move `utility_text.py` and `utility_profile.py` to `src/mist/realtime/websocket_streams/catalog/utilities/metadata/`.
+- Update the utility text logger name and both class `__module__` paths. Keep class behavior and returned text unchanged.
+- Update active source imports, test imports, and symbol-preservation paths. Remove old module paths without aliases.
+- Keep the `utilities/` directory at five direct entries, including `__init__.py` and excluding generated cache directories.
+- Remove the `src/mist/realtime/websocket_streams/catalog` baseline entry and update the measured count to 33 violations and 236 excess.
+- Update the WebSocket feature structure guard to exclude `__init__.py` markers and `__pycache__` directories. Add a fixture with six cache files and keep a failing path for a real source violation.
+- Include the new metadata package marker in the WebSocket feature structure measurement, with totals of 147 modules, 275 classes, and 861 functions.
 - Do not rewrite the tracked `.specify/feature.json` pointer. It selects another feature and is not part of this change.
 - Stop this slice after pull request creation. The coordinator owns merge and production deployment after all required checks and review pass.
 
