@@ -113,6 +113,7 @@ class TestBashSyntax:
         with pytest.raises(expected) as failure:  # Do not claim an application received a signal.
             BashSession.run(sandbox, interruption=signal.SIGTERM)  # Signal synchronization must fail closed.
         if mode == "launch-timeout":  # The injected decision still uses the configured 30-second timeout.
+            assert isinstance(failure.value, subprocess.TimeoutExpired)  # Prove the timeout type.
             assert failure.value.timeout == 30  # Never weaken the bound to make this case pass.
 
 
@@ -231,7 +232,44 @@ class TestSessionIsolation:
 
 @pytest.mark.timeout(30)
 class TestSessionRestarts:
-    """Keep measured retry limits, delays, caps, healthy reset, and defaults."""
+    """Keep real restart decisions with controlled elapsed seconds and unchanged defaults."""
+
+    CLOCK_SOURCE = """
+# Unsetting SECONDS removes its wall-clock behavior in this owned shell.
+unset SECONDS
+SECONDS=0
+ISSUE4531_DURATIONS=(__DURATIONS__)
+ISSUE4531_RUN_INDEX=0
+issue4531_clock() {
+    case "$1" in
+        'RUN_START_SECONDS=$SECONDS')
+            SECONDS=0
+            ;;
+        'RUN_SECONDS=$(( SECONDS - RUN_START_SECONDS ))')
+            if [[ $ISSUE4531_RUN_INDEX -ge ${#ISSUE4531_DURATIONS[@]} ]]; then
+                echo "[TEST CLOCK] No duration for the next launch." >&2
+                exit 97
+            fi
+            SECONDS="${ISSUE4531_DURATIONS[$ISSUE4531_RUN_INDEX]}"
+            ISSUE4531_RUN_INDEX=$(( ISSUE4531_RUN_INDEX + 1 ))
+            printf '[TEST CLOCK] run=%s seconds=%s\\n' "$ISSUE4531_RUN_INDEX" "$SECONDS"
+            ;;
+    esac
+}
+trap 'issue4531_clock "$BASH_COMMAND"' DEBUG
+"""  # Change only clock inputs through the existing owned configuration reader.
+
+    @staticmethod
+    def configure_clock(sandbox: SessionSandbox, plan: tuple[tuple[int, float], ...]) -> None:
+        """Supply each planned elapsed duration without editing the actual Bash loop."""
+        assert all(duration >= 0 and int(duration) == duration for _, duration in plan)  # Require whole Bash seconds.
+        durations = " ".join(str(int(duration)) for _, duration in plan)  # Supply data, never shell expressions.
+        source = TestSessionRestarts.CLOCK_SOURCE.replace("__DURATIONS__", durations)  # Keep clock inputs case-local.
+        path = sandbox.root / "session.env"  # Use the existing configuration reader, never BASH_ENV.
+        logging.info("Write the owned restart clock to %s", path)  # Mark the controlled fixture write.
+        with path.open("a", encoding="utf-8", newline="\n") as handle:  # Preserve the owned database-path setting.
+            handle.write(source)  # Disable real clock ticks only inside this synthetic restart case.
+        logging.debug("Wrote %s controlled launch durations", len(plan))  # Report the measured clock scope.
 
     @pytest.mark.parametrize(
         ("plan", "controls", "expected"),
@@ -260,6 +298,26 @@ class TestSessionRestarts:
                 },
                 (0, 5, [1, 2, 1, 2]),  # A healthy run resets both the count and the delay.
             ),
+            (
+                ((3, 0.0), (3, 0.0), (3, 2.0), (3, 0.0), (0, 0.0)),
+                {
+                    "MISTHELPER_MAX_START_ATTEMPTS": "3",
+                    "MISTHELPER_MIN_HEALTHY_SECONDS": "2",
+                    "MISTHELPER_RESTART_DELAY_SECONDS": "1",
+                    "MISTHELPER_MAX_RESTART_DELAY_SECONDS": "2",
+                },
+                (0, 5, [1, 2, 1, 2]),  # The exact healthy threshold must reset both controls.
+            ),
+            (
+                ((3, 0.0), (3, 0.0), (3, 1.0)),
+                {
+                    "MISTHELPER_MAX_START_ATTEMPTS": "3",
+                    "MISTHELPER_MIN_HEALTHY_SECONDS": "2",
+                    "MISTHELPER_RESTART_DELAY_SECONDS": "1",
+                    "MISTHELPER_MAX_RESTART_DELAY_SECONDS": "2",
+                },
+                (1, 3, [1, 2]),  # One second below the healthy threshold must exhaust the crash budget.
+            ),
         ],
     )
     def test_actual_restart_controls_match_base(
@@ -272,7 +330,10 @@ class TestSessionRestarts:
         """Compare each exact result with actual Bash execution of the local base."""
         outcomes: list[tuple[int, int, list[int]]] = []  # Keep actual baseline and live measurements.
         for version in ("base", "live"):  # Keep each application's records and logs separate.
-            sandbox = SessionSandbox.create(tmp_path / version, plan)  # Follow only the bounded synthetic plan.
+            execution = tuple((code, 0.0) for code, _ in plan)  # Recorder startup must not determine elapsed seconds.
+            sandbox = SessionSandbox.create(tmp_path / version, execution)  # Keep child execution real.
+            clock_plan = tuple(plan[min(index, len(plan) - 1)] for index in range(expected[1]))  # Repeat the plan.
+            self.configure_clock(sandbox, clock_plan)  # Supply planned elapsed seconds to the real Bash decisions.
             logging.info("Set the owned restart-control case")  # Mark the environment transformation.
             sandbox.environment.update(controls)  # Use only overrides already exposed by the script.
             logging.debug("Applied %s existing restart controls", len(controls))  # Never change a production default.
@@ -281,10 +342,42 @@ class TestSessionRestarts:
             result = (observation.returncode, len(observation.records), observation.delays)  # Read measured outcomes.
             outcomes.append(result)  # Keep both measurements for the evidence record.
             assert result == expected, observation.output  # Require exact counts, return code, and reported delays.
+            assert observation.output.count("[TEST CLOCK] run=") == expected[1]  # Require every launch clock read.
             assert observation.output.count("[SESSION] Starting MistHelper...") == expected[1]  # Count actual launches.
             assert all(record["argv"] == ["MistHelper.py"] for record in observation.records)  # Preserve invocation.
         print(f"restart base={outcomes[0]} live={outcomes[1]}")  # Retain exact baseline comparisons.
         assert outcomes[0] == outcomes[1]  # Keep every restart-control outcome unchanged.
+
+    def test_restart_controls_ignore_startup_stall(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A delayed fourth launch must not change the planned crash classification."""
+        statement = "time.sleep(duration)"  # Identify the owned recorder delay without changing a production source.
+        recorder = session_module.RecorderApplication  # Reuse the existing module without adding a top-level name.
+        assert recorder.SOURCE.count(statement) == 1  # Refuse an absent or ambiguous injection point.
+        source = recorder.SOURCE.replace(
+            statement, "time.sleep(duration + (2 if count == 3 else 0))"
+        )  # Reproduce scheduling overhead after the healthy launch.
+        monkeypatch.setattr(recorder, "SOURCE", source)  # Restore the recorder after this one case.
+        self.test_actual_restart_controls_match_base(
+            tmp_path,
+            ((3, 0.0), (3, 0.0), (3, 3.0), (3, 0.0), (0, 0.0)),
+            {
+                "MISTHELPER_MAX_START_ATTEMPTS": "3",
+                "MISTHELPER_MIN_HEALTHY_SECONDS": "2",
+                "MISTHELPER_RESTART_DELAY_SECONDS": "1",
+                "MISTHELPER_MAX_RESTART_DELAY_SECONDS": "2",
+            },
+            (0, 5, [1, 2, 1, 2]),
+        )  # Retain exact return, launch, delay, and baseline assertions under the reproduced stall.
+
+    def test_clock_exhaustion_refuses_unmeasured_launch(self, tmp_path: Path) -> None:
+        """A missing duration must fail instead of returning to wall-clock timing."""
+        sandbox = SessionSandbox.create(tmp_path, ((3, 0.0), (0, 0.0)))  # Require two actual clock observations.
+        self.configure_clock(sandbox, ((3, 0.0),))  # Deliberately omit the second duration.
+        observation = BashSession.run(sandbox)  # Keep process ownership and normal cleanup on the clock refusal.
+        assert observation.returncode == 97  # Preserve the explicit test-clock failure code.
+        assert len(observation.records) == 2  # Prove the missing duration applies to a real second launch.
+        assert observation.output.count("[TEST CLOCK] run=") == 1  # Count only completed controlled reads.
+        assert "[TEST CLOCK] No duration for the next launch." in observation.output  # Report the missing input.
 
     def test_original_restart_defaults_remain(self) -> None:
         """Keep five attempts, 30 healthy seconds, two initial seconds, and the 60-second cap."""
