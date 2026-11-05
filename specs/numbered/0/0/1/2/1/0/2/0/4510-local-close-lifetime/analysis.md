@@ -130,6 +130,20 @@ The affected tests and structure checks passed after the rebase.
 The committed-test quality procedure must run again after the fixture commit.
 Its preflight and comparison results belong in the session validation logs.
 The check must report zero new findings before any future publication.
-This investigation does not authorize publication.
-
 Dependency audit, container checks, and generated menu checks do not apply to this transport-only change.
+
+## CI symbol-guard correction
+
+The first published revision removed the imported module name `Any`.
+The source-symbol guard counts imported names as module-level exports.
+Its exact-head CI run therefore rejected the change.
+
+The corrected module keeps `Any` as an explicit re-export.
+The `FrameReader` parameter still uses the concrete `SocketRuntime` type.
+This keeps the existing module export and does not weaken runtime typing.
+The symbol guard passes locally after this correction.
+The close and read behavior does not change.
+
+The correction follows the branch rebase onto the then-current main.
+The final patch must pass the affected WebSocket tests and exact-head CI.
+Keep auto-merge off and do not merge without approval.
