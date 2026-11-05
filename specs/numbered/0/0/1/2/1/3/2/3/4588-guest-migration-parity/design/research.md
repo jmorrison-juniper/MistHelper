@@ -6,10 +6,12 @@ The inspection date is 2026-11-05.
 Current source HEAD is `0213240cb9edfa237f763acd156b90a6049363cb`.
 The GitHub compare result against the previous pin is `identical`, with zero commits ahead or behind.
 The inspected target baseline is `772fc927761b61dea8beb7f708fbbe78c2a38d86`.
-Before submission, current main advanced to `c57c9b704c1ce23976228cd72cad80b9d99926be`.
+During validation, main advanced to `c57c9b704c1ce23976228cd72cad80b9d99926be`,
+then `296b977e28be50cd9ddcca57c46b35bb029afe27`.
 All eight target evidence files below are unchanged between these commits.
 The newer bootstrap instruction uses `uv sync --locked --extra dev`.
-The first bootstrap ran the previously inspected script. Final validation must use the rebased current script and environment.
+The first bootstrap ran the previously inspected script.
+After rebase, the current script successfully restored the locked environment. It still resolved mistapi 0.64.1.
 
 [PR #4279](https://github.com/jmorrison-juniper/MistHelper/pull/4279) merged the independent offline projection.
 [PR #4290](https://github.com/jmorrison-juniper/MistHelper/pull/4290) merged nine old planning files on 2026-10-20.
