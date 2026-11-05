@@ -893,6 +893,38 @@ jobs:
           fi
           echo "The E2E shards finished with success."
 
+  upgrade_portal_journeys:
+    name: "Upgrade portal journeys"
+    # Issue #3200: run the isolated full journey harness after the shared browser suite.
+    needs:
+      - playwright
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install -r requirements.txt
+          python -m pip install -r requirements-dev.txt
+      - name: Install Chromium
+        run: python -m playwright install --with-deps chromium
+      - name: Run isolated upgrade portal journeys
+        run: python -m tests.e2e.upgrade_portal.journeys.run_journeys --parallel 1
+      - name: Upload upgrade portal journey evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: upgrade-portal-journeys
+          path: test-artifacts/upgrade-portal-journeys/
+          if-no-files-found: error
+
   # ──────────────────────────────────────────────────────────────
   # OPS PORTAL (TypeScript + React)
   # ──────────────────────────────────────────────────────────────
@@ -1200,6 +1232,7 @@ jobs:
       - codeql_register_check
       - ops_portal
       - ops_platform_pytest
+      - upgrade_portal_journeys
     if: ${{ !cancelled() }}
     permissions:
       issues: write

@@ -64,7 +64,8 @@ QUALITY_GATES = {
     "test_quality_gate",
 }
 EXPECTED_GATES: dict[Path, set[str]] = {
-    CI_WORKFLOW: QUALITY_GATES | {"codeql_register_check", "ops_portal", "ops_platform_pytest"},
+    CI_WORKFLOW: QUALITY_GATES
+    | {"codeql_register_check", "ops_portal", "ops_platform_pytest", "upgrade_portal_journeys"},
 }
 
 # The job names that the inline copies used before issue #3487.

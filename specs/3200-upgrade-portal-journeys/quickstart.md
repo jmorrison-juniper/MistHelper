@@ -9,7 +9,7 @@ results only. The options are in
 
 ## Prerequisites
 
-- Windows 11 or Linux, with Python 3.13 in `.venv`.
+- Windows 11, macOS, or Linux, with Python 3.13 in `.venv`.
 - The packages of `requirements.txt` and `requirements-dev.txt`.
 - Chromium for Playwright.
 - No API token, no `.env` credential, and no container. The harness needs
@@ -30,19 +30,19 @@ results only. The options are in
 `UPGRADE_PORTAL_JOURNEYS`. The command starts no journey server, and it finishes
 in less than 5 minutes.
 
-## Scenario 2: The smoke subset gets to the end of the upgrade
+## Scenario 2: The single-site and multi-site journeys complete
 
 ```powershell
-$env:UPGRADE_PORTAL_E2E_PORTS="9664,9665,9666,9667,9668,9669"
-.venv\Scripts\python.exe -m tests.e2e.upgrade_portal.journeys.run_journeys --parallel 1 --keyword "test_selection_reaches_the_capture_page or (test_family_combination_reaches_a_final_state and ap and not switch and not gateway)"
+.venv\Scripts\python.exe -m tests.e2e.upgrade_portal.journeys.run_journeys --parallel 1 --keyword "test_start_reaches_a_completed_run or test_family_combination_reaches_a_final_state"
 ```
 
 **Expected result**:
 
-- One single-site journey reaches the capture page.
-- One multi-site AP journey reaches the completed operation state.
-- Each server binds to `127.0.0.1` on one port from 9664 through 9669.
-- `summary.json` reports two passed journeys.
+- One single-site journey reaches the completed run state.
+- Each of the seven multi-site family combinations reaches completed child and aggregate states.
+- Each server binds to `127.0.0.1` on a free port.
+- `summary.json` reports eight passed journeys.
+- `index.html`, `journey.json`, and step screenshots are present.
 - The exit code is 0.
 
 ## Scenario 3: One case for a selection
@@ -57,12 +57,14 @@ unmatched file reports zero selected tests, which the runner accepts.
 ## Scenario 4: The full journey set
 
 ```powershell
-.venv\Scripts\python.exe -m tests.e2e.upgrade_portal.journeys.run_journeys --parallel 3
+$env:UPGRADE_PORTAL_JOURNEYS = "1"
+.venv\Scripts\python.exe -m tests.e2e.upgrade_portal.journeys.run_journeys --parallel 1
 ```
 
 **Expected result**: The runner writes `summary.json` and `index.html` under
-`test-artifacts/upgrade-portal-journeys/`. The full set is opt-in and does not
-run in the default CI pytest selection.
+`test-artifacts/upgrade-portal-journeys/`. The run reports 37 passed and three
+expected failures for issues #3222, #4539, and #4540. The full set is opt-in
+and does not run in the default CI pytest selection.
 
 ## Troubleshooting
 
@@ -73,3 +75,71 @@ run in the default CI pytest selection.
   `journey.json` for the failed journey.
 - If a strict `xfail` passes, the fix of its issue is on the branch. Remove the
   issue from the catalog case, and change the matrix row to `parity`.
+
+## Local verification
+
+The following checks ran on macOS with Python 3.13. The simulated cloud and all
+portal servers used loopback. The checks used no Mist credential or production store.
+
+```sh
+env -u UPGRADE_PORTAL_JOURNEYS .venv/bin/python -m pytest -q -rxXs --timeout 300 tests/e2e/upgrade_portal/journeys
+```
+
+**Result**: 54 skipped. Each skip named the opt-in variable.
+
+```sh
+UPGRADE_PORTAL_JOURNEYS=1 .venv/bin/python -m tests.e2e.upgrade_portal.journeys.run_journeys --parallel 1
+```
+
+**Result**: 37 passed, 3 xfailed. The runner wrote journey records and
+screenshots. The xfails link to issues #3222, #4539, and #4540.
+
+```sh
+.venv/bin/python -m pytest -q -p no:cacheprovider tests/contract/upgrade_portal/test_journey_parity_matrix.py tests/contract/upgrade_portal/test_org_upgrade_routes.py::test_checked_switch_with_empty_version_stays_in_the_durable_plan
+```
+
+**Result**: 1 passed, 1 xfailed. The matrix contract checked all 54 capability
+identifiers. The stored-plan case remains an expected failure for issue #3394.
+
+```sh
+UPGRADE_PORTAL_JOURNEYS=1 .venv/bin/python -m pytest -q -p no:cacheprovider tests/e2e/upgrade_portal/journeys/test_performance_journeys.py
+```
+
+**Result**: 2 passed. The report ranks read-only page and API samples by p95.
+See [performance-report.md](performance-report.md).
+
+## CI journey job
+
+The CI job waits for the shared E2E gate. It runs the full isolated journey
+harness with one worker and a 30-minute job limit.
+
+```sh
+python -m tests.e2e.upgrade_portal.journeys.run_journeys --parallel 1
+```
+
+The job installs Chromium and uploads the complete
+`test-artifacts/upgrade-portal-journeys/` directory as
+`upgrade-portal-journeys`. The upload fails when the directory has no files.
+The harness uses loopback services and simulated cloud data. It needs no
+Mist credential or production store.
+
+The guards check the job settings, the evidence upload, failure reporting, and
+the quality-gate inventory. They also test browser shard contracts and the
+single-site completion and multi-site refusal journeys.
+
+```sh
+UPGRADE_PORTAL_JOURNEYS=1 .venv/bin/python -B -m pytest -q -p no:cacheprovider tests/guardrails/test_quality_gate_close_scope.py tests/guardrails/test_upgrade_portal_journey_ci.py tests/guardrails/test_ci_gate_triggers.py::TestCancelledRunStops tests/guardrails/test_e2e_shard_partition.py tests/e2e/upgrade_portal/journeys/test_upj_single_site_journeys.py::TestSingleSiteJourneys::test_start_reaches_a_completed_run tests/e2e/upgrade_portal/journeys/test_upj_multisite_journeys.py::TestMultiSiteOptionsJourneys::test_default_form_refusal_is_in_view
+```
+
+Result: 35 passed in 5.33 seconds. Ruff and Black pass on the changed Python
+test file.
+
+Run the complete journey suite with this command.
+
+```sh
+UPGRADE_PORTAL_JOURNEYS=1 .venv/bin/python -m tests.e2e.upgrade_portal.journeys.run_journeys --parallel 1
+```
+
+Result: 37 passed and 3 expected failures.
+
+Result: 37 passed and 3 xfailed.
