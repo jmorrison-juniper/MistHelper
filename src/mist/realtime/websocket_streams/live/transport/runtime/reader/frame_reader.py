@@ -5,6 +5,7 @@ from __future__ import annotations  # Keep annotations lazy for Python 3.13.
 import logging  # Reader actions use the shared structured logger.
 import threading  # The close event can come from another thread.
 from collections.abc import Callable  # Tests inject a monotonic clock.
+from typing import Any as Any  # Preserve the module-level symbol checked by the source preservation guard.
 
 import websocket  # The reader maps websocket-client exceptions.
 from websocket import ABNF  # Opcode constants come from websocket-client.
