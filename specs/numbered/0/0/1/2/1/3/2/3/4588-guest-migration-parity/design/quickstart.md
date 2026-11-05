@@ -44,6 +44,8 @@ The exact session commands were:
 
 These ignored scratch paths are session evidence, not committed application files.
 The screenshot manifest persists in this session's `files/guest-parity-evidence/`.
+After inspection, the pinned source snapshot moved into that session evidence directory.
+Keep original-source tests outside target test discovery before the full test-quality scan.
 For another worktree, use a reviewed offline harness with the same isolation contract.
 Do not run the source production entry point with a token to recreate visual evidence.
 

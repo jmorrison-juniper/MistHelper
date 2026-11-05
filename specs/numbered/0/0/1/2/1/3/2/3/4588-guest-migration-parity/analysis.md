@@ -146,6 +146,23 @@ Final pre-commit checks produced these additional results:
 Final rebased and post-commit test-quality results belong in the PR evidence.
 Do not treat a zero-file result as an artifact pass.
 
+The first rebase restored the environment with `uv sync --locked --extra dev`.
+The same 99 tests passed, with the same one PR-event-only skip. Locked mistapi remained 0.64.1.
+The post-commit guidance preflight passed one test and validated all four required inputs.
+The committed-diff quality ratchet reported zero changed test files and zero new findings.
+Zero selected test files is expected for this Markdown-only change, not proof of planning quality.
+
+The first full quality scan found 35 additional findings in the downloaded original-source test snapshot.
+These were not target repository tests.
+The source snapshot moved into persistent session evidence, outside target test discovery.
+No target file, analyzer configuration, threshold, or baseline changed to address this contamination.
+The final clean full-scan result is recorded in the PR.
+
+Main advanced again to `296b977e28be50cd9ddcca57c46b35bb029afe27` while validation ran.
+That change affects the ops-platform token module, tests, and its existing specification.
+All eight guest target evidence files remain unchanged.
+The branch must rebase again before submission and repeat applicable checks.
+
 ## Workflow and approval handling
 
 Specify, clarify, plan, tasks, checklist, and analyze skills were invoked in this worktree.
