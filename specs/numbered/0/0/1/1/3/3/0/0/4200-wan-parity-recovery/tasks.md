@@ -4,18 +4,22 @@
 
 All tasks remain open. Existing implementation is evidence to verify, not an automatic completed task.
 This sequence covers the remaining work. Do not execute blocked implementation pairs without their evidence gates.
+Preserve these task IDs across updates. Dependency rules override phase display order.
+Task paths are repository-relative unless the task names a document in this feature record.
+For a combined test and repair task, record the failing assertion before production edits and the passing assertion afterward.
+If existing behavior passes, record that evidence instead of adding an unnecessary repair.
 
 ## Phase 1 - Setup and preservation
 
 - [ ] T001 Record current source, destination, main, ownership, and copying-rights baselines in design/research.md.
 - [ ] T002 Reconcile owner-provided historical T001-T087 records into an old-to-new mapping in analysis.md without changing historical states.
 - [ ] T003 Create the exhaustive source behavior inventory in design/contracts/parity.md from pinned docs, page behavior, and tests.
-- [ ] T004 Record each verified SDK function, signature, field, timestamp, and limitation in design/contracts/parity.md.
+- [ ] T004 Record each verified SDK function, signature, field, timestamp, limitation, and shared refresh prerequisite in design/contracts/parity.md.
 
 ## Phase 2 - Foundation
 
 - [ ] T005 Write failing authorization, origin isolation, scoped storage, and admission tests in tests/unit/wan_performance/test_live_service.py.
-- [ ] T006 Repair only failures from T005 in src/interfaces/wan_performance/collection/live_service.py and integration/ after E8 passes.
+- [ ] T006 Repair only T005 failures in src/interfaces/wan_performance/collection/live_service.py and src/interfaces/wan_performance/integration/history_repository.py after the foundation portion of E8 passes.
 
 Goal: preserve host safety before extending metrics.
 Independent test: denied and synthetic requests perform no live collection or live writes.
@@ -35,13 +39,13 @@ Independent test: complete all source-mapped transitions with correct identity a
 ## Phase 4 - US2: Utilization and failure views
 
 - [ ] T013 [US2] Verify capacity, units, threshold boundaries, region membership, and role effective times in design/contracts/parity.md.
-- [ ] T014 [US2] Add failing utilization and capacity edge tests in tests/unit/wan_performance/test_domain.py, then repair domain/measurement.py after E3 passes.
+- [ ] T014 [US2] Test utilization in tests/unit/wan_performance/test_domain.py before repairing src/interfaces/wan_performance/domain/measurement.py after E3 passes. An absent or zero capacity prevents utilization calculation.
 - [ ] T015 [US2] Define interval coverage, gaps, continuous runs, cumulative duration, and configurable thresholds in design/contracts/parity.md.
-- [ ] T016 [US2] Test duration boundaries and missing intervals in tests/unit/wan_performance/test_calendar_summaries.py before implementing domain/summary.py after E7 passes.
+- [ ] T016 [US2] Test duration boundaries and missing intervals in tests/unit/wan_performance/test_calendar_summaries.py before repairing src/interfaces/wan_performance/domain/summary.py after the interval portion of E7 passes.
 - [ ] T017 [US2] Verify event types, transition ordering, duplicate handling, flap counting, and availability denominator in design/contracts/parity.md.
-- [ ] T018 [US2] Test status and availability with complete and incomplete events in tests/unit/wan_performance/test_snapshot_records.py before implementing collection/snapshot_records.py after E4 passes.
+- [ ] T018 [US2] Test status and availability with complete and incomplete events in tests/unit/wan_performance/test_snapshot_records.py before repairing src/interfaces/wan_performance/collection/snapshot_records.py after E4 passes.
 - [ ] T019 [US2] Verify ranking scope, ties, top-N limits, primary/secondary comparison, and failover classification in design/contracts/parity.md.
-- [ ] T020 [US2] Test ranking and failover scenarios in tests/unit/wan_performance/test_domain.py before implementing domain/summary.py after E3-E4 pass.
+- [ ] T020 [US2] Test ranking and failover scenarios in tests/unit/wan_performance/test_domain.py before repairing src/interfaces/wan_performance/domain/summary.py after E3-E4 pass. Unknown role or region prevents role or region aggregation.
 - [ ] T021 [US2] Add failing circuit, threshold, failure, and availability browser assertions in tests/e2e/web_portal/test_wan_performance_live.py.
 - [ ] T022 [US2] Wire only verified performance results into src/interfaces/wan_performance/presentation/ after T014, T016, T018, T020, and T021 pass.
 
@@ -51,9 +55,9 @@ Independent test: independently calculated intervals and failures produce exact 
 ## Phase 5 - US3: Quality and SLE
 
 - [ ] T023 [US3] Verify peer sampling, timestamp source, units, averaging weights, maximum, and p95 method in design/contracts/parity.md.
-- [ ] T024 [US3] Test quality history and timestamp rejection in tests/unit/wan_performance/test_peer_insights.py before implementing collection/peer_insights.py and domain/ after E5 passes.
+- [ ] T024 [US3] Test quality history in tests/unit/wan_performance/test_peer_insights.py before repairing src/interfaces/wan_performance/collection/peer_insights.py after E5 passes. An absent timestamp prevents historical placement.
 - [ ] T025 [US3] Verify supported SLE methods, score semantics, classifiers, impact fields, and entity mappings in design/contracts/parity.md.
-- [ ] T026 [US3] Add failing SLE contract, 4xx/5xx, and drilldown browser tests in tests/e2e/web_portal/test_wan_performance_live.py before adding collection and presentation behavior after E6 passes.
+- [ ] T026 [US3] Test SLE contracts, 4xx/5xx, and drilldowns in tests/e2e/web_portal/test_wan_performance_live.py before updating src/interfaces/wan_performance/collection/live_service.py and src/interfaces/wan_performance/presentation/live_routes.py after E6 passes.
 
 Goal: implement supported quality and service-experience behavior without guessed endpoint or timestamp semantics.
 Independent test: approved quality results and SLE impacts preserve identity and time scope.
@@ -61,11 +65,11 @@ Independent test: approved quality results and SLE impacts preserve identity and
 ## Phase 6 - US4: Windows, history, and audiences
 
 - [ ] T027 [US4] Define region/site/circuit weighting, canonical hours, UTC boundaries, short windows, and daily/weekly/monthly coverage in design/contracts/parity.md.
-- [ ] T028 [US4] Test 3h/12h/24h and calendar rollups in tests/unit/wan_performance/test_calendar_summaries.py before implementing domain/calendar.py and domain/summary.py after E3 and E7 pass.
+- [ ] T028 [US4] Test 3h/12h/24h and calendar rollups in tests/unit/wan_performance/test_calendar_summaries.py before repairing src/interfaces/wan_performance/domain/calendar.py and src/interfaces/wan_performance/domain/summary.py after E3 and interval E7 pass.
 - [ ] T029 [US4] Verify 13-month reads, source backfill, storage capacity, retention, and incomplete-history rules in design/contracts/parity.md.
-- [ ] T030 [US4] Test both configured storage implementations in tests/unit/wan_performance/test_history_repository.py before implementing integration/ history behavior after E7 passes.
+- [ ] T030 [US4] Test both stores in tests/unit/wan_performance/test_history_repository.py before updating src/interfaces/wan_performance/integration/sqlite_history.py and src/interfaces/wan_performance/integration/arango_history.py after retention E7 passes.
 - [ ] T031 [US4] Define executive, engineering, and SLE audience controls and summaries in design/contracts/parity.md from verified source goals.
-- [ ] T032 [US4] Test audience filters and report scope in tests/e2e/web_portal/test_wan_performance_live.py before implementing presentation/ after T027-T031 pass.
+- [ ] T032 [US4] Test audience filters, report scope, and required top-offender exports in tests/e2e/web_portal/test_wan_performance_live.py before updating src/interfaces/wan_performance/presentation/live_routes.py after T027-T031 pass.
 
 Goal: show reporting coverage honestly and preserve approved audience requirements.
 Independent test: each approved scope and window matches independent results without a second database.
@@ -75,7 +79,7 @@ Independent test: each approved scope and window matches independent results wit
 - [ ] T033 [US1] Record written rights or the explicit runtime-comparison blocker and approved evidence method in design/research.md.
 - [ ] T034 [US1] Inventory layout, typography, colors, chart semantics, table behavior, and responsive differences in design/contracts/parity.md.
 - [ ] T035 [US1] Add failing layout, keyboard, overlap, and selector assertions in tests/e2e/web_portal/test_wan_performance_offline.py.
-- [ ] T036 [US1] Repair approved visual differences in web_portal/static/css/wan_performance.css and presentation/templates/ after T033-T035 pass.
+- [ ] T036 [US1] Repair approved visual differences in web_portal/static/css/wan_performance.css and src/interfaces/wan_performance/presentation/templates/wan_performance/ after T033-T035 pass.
 
 Goal: preserve reviewed appearance without reproducing protected material.
 Independent test: every required visual row has approved evidence or a named blocker.
@@ -83,8 +87,8 @@ Independent test: every required visual row has approved evidence or a named blo
 ## Phase 8 - US5: Safety, refresh, and failures
 
 - [ ] T037 [US5] Verify shared refresh bounds, concurrency, retry budgets, stale states, and optional Redis ownership in design/contracts/parity.md.
-- [ ] T038 [US5] Test request limits, repeated users, expiry, and outage errors in tests/unit/wan_performance/test_background_refresh.py and test_refresh_store.py.
-- [ ] T039 [US5] Repair verified refresh failures in src/interfaces/wan_performance/background_refresh.py and integration/refresh_store.py after E8 and T038 pass.
+- [ ] T038 [US5] Test request limits, repeated users, expiry, and outage errors in tests/unit/wan_performance/test_background_refresh.py and tests/unit/wan_performance/test_refresh_store.py.
+- [ ] T039 [US5] Repair verified refresh failures in src/interfaces/wan_performance/background_refresh.py and src/interfaces/wan_performance/integration/refresh_store.py after E8 and T038 pass.
 - [ ] T040 [US5] Add browser denied-access, missing-data, stale-data, invalid-scope, storage-error, and API-error assertions in tests/e2e/web_portal/test_wan_performance_live.py.
 - [ ] T041 [US5] Run complete synthetic and mocked live journeys with external requests blocked and retained redacted evidence using design/quickstart.md.
 - [ ] T042 [US5] Verify unchanged host navigation, existing portal journeys, no extra services, and synthetic isolation in design/quickstart.md.
@@ -103,13 +107,16 @@ Independent test: negative cases stop safely and unrelated portal journeys still
 ## Dependencies and execution order
 
 T001-T004 establish evidence before implementation.
-T005 precedes T006. E8 blocks T006.
+T004 must establish existing authorization, scoped storage, origin isolation, and admission contracts before T005.
+T005 precedes T006. Only foundation E8 blocks T006. New background policies remain T037-T039.
 US1 inventory depends on T001-T003. T011 precedes T012.
 Every combined test/implementation task requires a demonstrated failing test before production edits.
 E3 blocks T014. E7 blocks T016. E4 blocks T018. E3-E4 block T020.
 T021 precedes T022 and does not replace its domain prerequisites.
 E5 blocks T024. E6 blocks T026.
 E3/E7 block T028. E7 blocks T030. T027-T031 block T032.
+T015 establishes interval E7 for T016. T027 establishes window E7 for T028.
+T029 establishes retention E7 for T030. Retention research does not block independent duration tests.
 E2 and T033-T035 block T036. Missing rights blocks protected comparison, not descriptive inventory.
 T037-T038 and E8 block T039.
 T041-T042 depend on the verified story increments, not unsupported substitute values.

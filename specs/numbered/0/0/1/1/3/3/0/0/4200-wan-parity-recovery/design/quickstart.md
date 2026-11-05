@@ -11,6 +11,16 @@ If PowerShell becomes available, run prerequisite and setup checks with this exp
 Then run Spec Kit consistency analysis without changing the documents during analysis.
 Until then, report manual validation separately from command execution.
 
+## Skill-guided checks without PowerShell
+
+Read the spec, plan, tasks, constitution, and all returned design files directly.
+Map each FR/SC to task IDs and identify missing or contradictory dependencies.
+Check required artifacts exist, task IDs are unique, paths are explicit, and new directories remain bounded.
+Run installed task-audit, Markdown-link, and STE tools with examined counts.
+Report unresolved evidence separately from document consistency.
+Do not change the feature pointer or add a replacement setup script.
+This process uses the local skills but does not reproduce every PowerShell prerequisite check.
+
 ## Existing regression commands
 
 Use the worktree environment:
@@ -46,3 +56,4 @@ Record exact commands, exit codes, examined counts, source revision, destination
 Run source-to-task and source-to-test coverage checks.
 A missing source contract, rights decision, or accepted deviation remains a blocker.
 Keep PR #4208 draft until the owner accepts the complete evidence.
+Record recovery progress on issue #4200. Do not create another issue for the same subject.

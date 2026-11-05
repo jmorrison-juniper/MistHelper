@@ -6,6 +6,27 @@ This record maps requirements to the new execution sequence.
 It is not a completed source comparison or a successful Spec Kit command report.
 Historical T001-T087 reconciliation remains T002. No historical task state was changed.
 
+## Skill-guided review and corrections
+
+The local analyze and tasks skills supplied the review and task-refinement rules.
+PowerShell setup remains unavailable. Direct document review does not claim successful script execution.
+The user authorized these document refinements on 2026-11-05.
+
+| ID | Category | Severity | Location | Finding and correction |
+| --- | --- | --- | --- | --- |
+| D1 | Dependencies | HIGH | tasks.md: foundation and E8 | Split existing safety prerequisites from later refresh-policy verification. T004 now establishes foundation evidence before T005-T006. |
+| D2 | Dependencies | HIGH | tasks.md: duration and E7 | Separate interval/window evidence from retention. T015, T027, and T029 establish their respective prerequisites. |
+| U1 | Execution detail | MEDIUM | tasks.md: metric and storage tasks | Replace abbreviated module paths with repository-relative paths and require recorded failing assertions before repairs. |
+| C1 | Coverage | HIGH | contracts/parity.md: source goals | Add exportable top offenders and the region-to-circuit chain to the seed inventory and audience tasks. |
+| I1 | Evidence accuracy | HIGH | research.md: destination behavior | Existing duration and event-availability sections are provisional behavior, not absent features. Verify their assumptions instead of repeating obsolete absence claims. |
+| U2 | Comparison scope | HIGH | contracts/parity.md: seed inventory | Add 20 classified seed rows and ten assertion scenarios. These do not replace exhaustive per-control comparison. |
+
+No requirement was removed. No evidence gate was changed to verified.
+All 47 tasks remain open. The revised execution rules preserve stable task IDs.
+The manual review maps all 24 FR/SC entries. It does not establish source runtime or visual parity.
+There are no uncovered FR/SC entries in this document mapping.
+Source behavior classification and historical task reconciliation remain incomplete.
+
 ## Requirement coverage
 
 | Requirement | Tasks | Acceptance evidence |
@@ -83,9 +104,24 @@ Local structural, format, link, and writing checks must remain separate from the
 - An initial link scan before indexing read zero files. Only the subsequent nine-file scan counts as validation.
 - No production tests ran for this documentation-only record. The regression commands are future execution instructions, not new results.
 
+The refined record passed another nine-file STE check with scores from 93 to 97 and no skipped files.
+The nine-file link scan again found zero broken links.
+Direct checks again verified 47 unique sequential open tasks, 24 mapped requirements, and bounded directories.
+An isolated task audit examined this feature under a temporary `specs/` root and reported 47 open tasks, exit 0.
+The temporary audit copy was removed automatically. No test baseline or feature pointer changed.
+`git diff --check` passed after refinement.
+
 ## Start decision
 
 Proceed with T001-T004 and descriptive comparison.
 Do not implement a metric while its dependent gate remains unverified.
 Do not accept full visual parity without permissible comparison evidence.
 Do not merge or close issue #4200 because the recovery documents exist.
+
+## Progress tracking
+
+Issue [#4200](https://github.com/jmorrison-juniper/MistHelper/issues/4200) remains the migration and recovery tracker.
+It has the `in-progress` label and a recovery progress comment.
+Do not create a duplicate issue for the same recovery scope.
+Update task status only when its full evidence or implementation objective is satisfied.
+Future issue updates must identify completed tasks, open gates, exact revisions, and validation results.
