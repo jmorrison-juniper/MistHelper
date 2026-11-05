@@ -3,7 +3,7 @@
 import pytest
 
 from src.foundation.models.operation_outcome import OperationOutcome
-from src.foundation.runtime.config.source_dependency_resolver import SourceDependencyResolver
+from src.foundation.support.refactors.main_entrypoint import MainEntrypoint  # Patch stored context fields directly.
 from src.mist.intelligence.reports.org_security_posture.models import OrganizationSecuritySourceData
 from src.mist.intelligence.reports.org_security_posture.runner import OrgSecurityPostureChecklist
 from tests.unit.reports.org_security_posture.fixtures.representative_org_security_posture import (
@@ -35,7 +35,7 @@ def test_rejected_write_returns_failed_without_summary(capsys: pytest.CaptureFix
 
 def test_missing_context_returns_missing_input_without_write(monkeypatch: pytest.MonkeyPatch) -> None:
     writer = CountingWriter(True)  # Any write would be a defect.
-    monkeypatch.setattr(SourceDependencyResolver, "apisession", None, raising=False)  # No shared session.
+    monkeypatch.setattr(MainEntrypoint.context, "apisession", None)  # Restore the stored session at teardown.
     outcome = OrgSecurityPostureChecklist.run(org_id="org-1", write_fn=writer)  # Normal mode, no session.
     assert outcome.state == "missing_input"  # Missing context maps to missing_input.
     assert writer.calls == 0  # Nothing is written.
