@@ -24,6 +24,7 @@ class _Terminal:
 
 def test_metrics_gateway_rejects_missing_org_without_tty(monkeypatch, caplog) -> None:
     """A service start must fail before it asks Mist Cloud to list organizations."""
+    monkeypatch.setattr(MistHelper, "org_id", "")  # Exclude a session selection retained by an earlier test.
     monkeypatch.setattr(sys, "stdin", _Terminal(False))  # Simulate a service manager without a terminal
     monkeypatch.setattr(sys, "stdout", _Terminal(False))  # Simulate redirected service output
     picker = Mock()  # Track calls to the interactive organization picker

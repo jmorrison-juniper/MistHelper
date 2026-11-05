@@ -8,6 +8,7 @@ from typing import Any  # WHY: fakes capture exporter values of multiple types.
 import pytest  # WHY: use monkeypatch and log capture fixtures.
 from pytest import LogCaptureFixture, MonkeyPatch  # WHY: type pytest fixtures used here.
 
+from src.foundation.support.refactors.main_entrypoint import MainEntrypoint  # Patch stored context fields directly.
 from src.mist.intelligence.reports.client_fingerprint_census import operation as operation_module
 from src.mist.intelligence.reports.client_fingerprint_census.model import EMPTY_CENSUS_MESSAGE, FingerprintCensusRow
 from src.mist.intelligence.reports.client_fingerprint_census.operation import ClientFingerprintCensus
@@ -45,8 +46,8 @@ def test_run_prompts_calls_exports_and_prints_top_20(monkeypatch: MonkeyPatch, c
     monkeypatch.setattr(ClientFingerprintCensus, "_resolve_site", staticmethod(lambda: ("site-1", "HQ")))  # WHY.
     monkeypatch.setattr(ClientFingerprintCensus, "_prompt_distinct", staticmethod(lambda: "family"))  # WHY.
     monkeypatch.setattr(operation_module, "ClientFingerprintCensusClient", _FakeClient)  # WHY: no network.
-    monkeypatch.setattr(operation_module.SourceDependencyResolver, "apisession", object())  # WHY: fake session.
-    monkeypatch.setattr(operation_module.SourceDependencyResolver, "org_id", "org-1")  # WHY: fake org context.
+    monkeypatch.setattr(MainEntrypoint.context, "apisession", object())  # Restore the stored session at teardown.
+    monkeypatch.setattr(MainEntrypoint.context, "org_id", "org-1")  # Restore the stored organization at teardown.
     monkeypatch.setattr(  # WHY: replace the shared exporter with a capture fake.
         operation_module.SourceDependencyResolver.DataExporter,
         "write_with_format_selection",
@@ -83,8 +84,8 @@ def test_run_empty_response_writes_header_only_and_message(
     monkeypatch.setattr(ClientFingerprintCensus, "_resolve_site", staticmethod(lambda: ("site-1", "HQ")))  # WHY.
     monkeypatch.setattr(ClientFingerprintCensus, "_prompt_distinct", staticmethod(lambda: "os_type"))  # WHY.
     monkeypatch.setattr(operation_module, "ClientFingerprintCensusClient", _FakeClient)  # WHY: no network.
-    monkeypatch.setattr(operation_module.SourceDependencyResolver, "apisession", object())  # WHY: fake session.
-    monkeypatch.setattr(operation_module.SourceDependencyResolver, "org_id", "org-1")  # WHY: fake org context.
+    monkeypatch.setattr(MainEntrypoint.context, "apisession", object())  # Restore the stored session at teardown.
+    monkeypatch.setattr(MainEntrypoint.context, "org_id", "org-1")  # Restore the stored organization at teardown.
     monkeypatch.setattr(  # WHY: replace the shared exporter with a capture fake.
         operation_module.SourceDependencyResolver.DataExporter,
         "write_with_format_selection",
