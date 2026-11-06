@@ -152,7 +152,6 @@ class TestOpaqueSessionCookie:
                 json={"method": "token", "token": TEST_TOKEN},
             )
         record = store.resolve(response.cookies["mist_session"])
-        assert record is not None
         assert record.token == TEST_TOKEN
 
 
@@ -302,6 +301,91 @@ class TestEventLoopIsFree:
 class TestUpstreamFailureSeparation:
     """Cover the 503 against 401 contract of issue #1858."""
 
+    @staticmethod
+    def _native_refusal_response(status_code: int) -> Any:
+        """Build a native SDK response with plausible privilege data."""
+        import json  # WHY: serialize plausible data for the SDK response.
+        import requests  # WHY: model the response at the HTTP boundary.
+
+        from mistapi.__api_response import APIResponse  # WHY: load the parser only inside the test helper.
+
+        response = requests.Response()  # WHY: model the response at the HTTP boundary.
+        response.status_code = status_code  # WHY: select the refusal class under test.
+        response.url = "https://api.mist.com/api/v1/self"  # WHY: identify the mocked endpoint.
+        reasons = {401: "Unauthorized", 503: "Service Unavailable"}  # WHY: preserve HTTP status context.
+        response.reason = reasons[status_code]  # WHY: model the correct refusal reason.
+        response.headers["Content-Type"] = "application/json"  # WHY: match the Mist error format.
+        privilege_data = {  # WHY: plausible data must not bypass a failed status.
+            "email": "operator@example.com",
+            "privileges": [{"scope": "org", "org_id": "org-1"}],
+        }
+        response._content = json.dumps(privilege_data).encode()  # WHY: supply a valid Mist response body.
+        return APIResponse(response=response, url=response.url)  # WHY: parse the refusal through mistapi.
+
+    def test_a_native_mist_4xx_rejects_the_token(
+        self,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """A native Mist 4xx response must not grant plausible response privileges."""
+        import logging  # WHY: capture the status-specific rejection signal.
+        from unittest.mock import patch  # WHY: keep SDK calls offline and deterministic.
+
+        response = self._native_refusal_response(401)  # WHY: exercise HTTP rejection through APIResponse.
+        assert response.status_code == 401  # WHY: prove that the response belongs to the client-error class.
+        session = object()  # WHY: prevent APISession from opening a live connection.
+        with (
+            patch(
+                "src.shared.services.auth.mistapi.APISession",
+                return_value=session,
+            ) as mock_session,
+            patch(
+                "mistapi.api.v1.self.self.getSelf",
+                return_value=response,
+            ) as mock_get_self,
+            caplog.at_level(logging.INFO),
+        ):
+            privileges = AuthService().validate_token(TEST_TOKEN)  # WHY: run the real auth and endpoint services.
+        assert privileges == MistPrivileges()  # WHY: rejected credentials grant no returned privileges.
+        assert "Mist rejected the token with status 401." in caplog.text  # WHY: preserve the refusal signal.
+        mock_session.assert_called_once_with(
+            host="api.mist.com",
+            apitoken=TEST_TOKEN,
+        )  # WHY: verify the SDK session boundary.
+        mock_get_self.assert_called_once_with(session)  # WHY: ensure one bounded SDK call.
+
+    def test_a_native_mist_5xx_returns_unavailable(
+        self,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """A native Mist 5xx response must remain an upstream availability error."""
+        import logging  # WHY: capture the status-specific failure signal.
+        from unittest.mock import patch  # WHY: keep SDK calls offline and deterministic.
+
+        response = self._native_refusal_response(503)  # WHY: exercise HTTP failure through APIResponse.
+        assert response.status_code == 503  # WHY: prove that the response belongs to the server-error class.
+        session = object()  # WHY: prevent APISession from opening a live connection.
+        with (
+            patch(
+                "src.shared.services.auth.mistapi.APISession",
+                return_value=session,
+            ) as mock_session,
+            patch(
+                "mistapi.api.v1.self.self.getSelf",
+                return_value=response,
+            ) as mock_get_self,
+            caplog.at_level(logging.WARNING),
+            pytest.raises(MistApiUnavailableError, match="Mist API returned status 503"),
+        ):
+            AuthService().validate_token(
+                TEST_TOKEN,
+            )  # WHY: preserve upstream failure as an availability error.
+        assert "Mist privilege lookup failed with status 503." in caplog.text  # WHY: preserve the failure signal.
+        mock_session.assert_called_once_with(
+            host="api.mist.com",
+            apitoken=TEST_TOKEN,
+        )  # WHY: verify the SDK session boundary.
+        mock_get_self.assert_called_once_with(session)  # WHY: ensure one bounded SDK call.
+
     async def test_an_unreachable_mist_api_returns_503(
         self,
         app: FastAPI,
@@ -363,6 +447,5 @@ class TestSessionStoreBehavior:
     def test_a_stale_result_forces_a_new_lookup(self, store: SessionStore) -> None:
         session_id = store.create(TEST_TOKEN, {"email": "a@b.com"})
         record = store.resolve(session_id)
-        assert record is not None
         assert record.privileges_are_fresh() is True
         assert record.privileges_are_fresh(now=record.verified_at + 400) is False
