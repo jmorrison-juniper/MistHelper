@@ -1,6 +1,7 @@
 """Exercise source pagination, joins, and the real CSV export boundary."""
 
 import csv
+import time
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -30,7 +31,6 @@ def test_paginated_sources_reach_real_csv_writer(tmp_path: Path, monkeypatch: py
     pages = {
         "sites-next": response([{"id": "site-two", "name": "Second site"}]),
         "inventory-next": response([{"mac": "000000000002", "type": "ap", "site_id": "site-two", "connected": False}]),
-        "stats-next": response([{"mac": "000000000002", "status": "disconnected", "last_trouble": {"code": "99"}}]),
     }
     with (
         patch("src.operations.exporting.ap_warning_report.operation.SourceDependencyResolver", runtime),
@@ -45,14 +45,39 @@ def test_paginated_sources_reach_real_csv_writer(tmp_path: Path, monkeypatch: py
                 [{"code": "03", "key": "DHCP", "name": "DHCP error", "description": "No DHCP response"}]
             ),
         ),
-        patch("mistapi.api.v1.orgs.sites.listOrgSites", return_value=response([], "sites-next")),
         patch(
-            "mistapi.api.v1.orgs.inventory.getOrgInventory",
-            return_value=response([{"mac": "000000000001", "type": "ap", "connected": True}], "inventory-next"),
+            "mistapi.api.v1.orgs.sites.listOrgSites",
+            return_value=response([{"id": "site-one", "name": "First site"}], "sites-next"),
         ),
         patch(
-            "mistapi.api.v1.orgs.stats.listOrgDevicesStats",
-            return_value=response([{"mac": "000000000001", "last_trouble": {"code": "03"}}], "stats-next"),
+            "mistapi.api.v1.orgs.inventory.getOrgInventory",
+            return_value=response(
+                [{"mac": "000000000001", "type": "ap", "site_id": "site-one", "connected": True}],
+                "inventory-next",
+            ),
+        ),
+        patch(
+            "mistapi.api.v1.sites.stats.listSiteDevicesStats",
+            side_effect=[
+                response(
+                    [
+                        {
+                            "mac": "000000000001",
+                            "status": "connected",
+                            "last_trouble": {"code": "03", "timestamp": time.time()},
+                        }
+                    ]
+                ),
+                response(
+                    [
+                        {
+                            "mac": "000000000002",
+                            "status": "disconnected",
+                            "last_trouble": {"code": "99", "timestamp": time.time()},
+                        }
+                    ]
+                ),
+            ],
         ),
         patch("mistapi.get_next", side_effect=lambda mist_session, response: pages[response.next]),
     ):
@@ -68,7 +93,7 @@ def test_paginated_sources_reach_real_csv_writer(tmp_path: Path, monkeypatch: py
     assert rows[1]["definition_status"] == "unknown"
 
 
-@pytest.mark.parametrize("endpoint", ["definitions", "sites", "inventory", "stats"])
+@pytest.mark.parametrize("endpoint", ["definitions", "sites", "inventory", "site_statistics"])
 @pytest.mark.parametrize("status", [403, 503])
 def test_failed_required_source_writes_nothing(endpoint: str, status: int) -> None:
     """Every required endpoint must succeed before the output writer can run."""
@@ -77,14 +102,19 @@ def test_failed_required_source_writes_nothing(endpoint: str, status: int) -> No
         apisession=Mock(),
         DataExporter=SimpleNamespace(write_with_format_selection=Mock()),
     )
-    replies = {name: response([]) for name in ("definitions", "sites", "inventory", "stats")}
+    replies = {name: response([]) for name in ("definitions", "sites", "inventory", "site_statistics")}
     replies[endpoint] = response([], status=status)
+    if endpoint != "sites":
+        replies["sites"] = response([{"id": "site-one", "name": "First site"}])
     with (
         patch("src.operations.exporting.ap_warning_report.operation.SourceDependencyResolver", runtime),
         patch("mistapi.api.v1.const.ap_led_status.listApLedDefinition", return_value=replies["definitions"]),
         patch("mistapi.api.v1.orgs.sites.listOrgSites", return_value=replies["sites"]),
         patch("mistapi.api.v1.orgs.inventory.getOrgInventory", return_value=replies["inventory"]),
-        patch("mistapi.api.v1.orgs.stats.listOrgDevicesStats", return_value=replies["stats"]),
+        patch(
+            "mistapi.api.v1.sites.stats.listSiteDevicesStats",
+            return_value=replies["site_statistics"],
+        ),
         pytest.raises(RuntimeError, match="failed"),
     ):
         ApWarningReport.run()

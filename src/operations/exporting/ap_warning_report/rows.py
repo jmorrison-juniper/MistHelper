@@ -39,21 +39,24 @@ class ApIdentity:
 
 
 class TroubleEvidence:
-    """Preserve the most authoritative reported observation without asserting health."""
+    """Read site statistics evidence without treating it as proof of an active fault."""
 
     @staticmethod
-    def read(inventory: dict[str, Any], statistics: dict[str, Any]) -> tuple[str, str, str, bool]:
-        """Prefer an explicit statistics observation, including its cleared state."""
-        source = "statistics" if "last_trouble" in statistics else "inventory"
-        observation = (statistics if source == "statistics" else inventory).get("last_trouble")
-        if observation is None:
-            return "", "", source, True
-        if not isinstance(observation, dict):
-            raise ValueError("AP last_trouble must be an object")
-        raw_code = observation.get("code")
-        code = TroubleCode.normalize(raw_code)
-        missing = raw_code is None or not str(raw_code).strip()
-        return code, TroubleCode.timestamp(observation.get("timestamp")), source, missing
+    def read(statistics: dict[str, Any]) -> tuple[str, str, bool]:
+        """Return the site-reported code, time, and missing-code state."""
+        observation = statistics.get("last_trouble")  # WHY: Site statistics are the report's eligible evidence.
+        if observation is None:  # WHY: Inventory data cannot replace a missing site observation.
+            return "", "", True  # WHY: Keep missing evidence distinct from a healthy AP.
+        if not isinstance(observation, dict):  # WHY: Reject malformed evidence instead of hiding it.
+            raise ValueError("AP last_trouble must be an object")  # WHY: Invalid payloads must stop the report.
+        raw_code = observation.get("code")  # WHY: Normalize the exact code supplied by Mist.
+        code = TroubleCode.normalize(raw_code)  # WHY: Exclude zero values and preserve numeric formatting.
+        missing = raw_code is None or not str(raw_code).strip()  # WHY: Count absent codes explicitly.
+        return (
+            code,
+            TroubleCode.timestamp(observation.get("timestamp")),
+            missing,
+        )  # WHY: Retain the observation time for filtering.
 
 
 class ReportSources:
@@ -64,7 +67,8 @@ class ReportSources:
         logger.info("Indexing AP warning report sources")
         self.definitions = CodeDefinitions(sources["definitions"])
         self.sites = ApIdentity.index(sources["sites"], "id")
-        self.statistics = ApIdentity.index(sources["stats"], "mac")
+        ap_statistics = [row for row in sources["stats"] if row.get("type", "ap") == "ap"]
+        self.statistics = ApIdentity.index(ap_statistics, "mac")
         inventory = [row for row in sources["inventory"] if row.get("type", "ap") == "ap"]
         self.inventory = ApIdentity.index(inventory, "mac")
         logger.debug(
@@ -78,23 +82,39 @@ class WarningRows:
     def __init__(self, org_id: str, sources: dict[str, list[dict[str, Any]]]) -> None:
         """Retain immutable source references for one report build."""
         self._org_id, self._sources = org_id, sources
-        self.summary = {"inventory_aps": 0, "missing_trouble": 0, "matched": 0}
+        self.summary = {
+            "inventory_aps": 0,
+            "site_statistics_aps": 0,
+            "missing_trouble": 0,
+            "excluded_trouble": 0,
+            "matched": 0,
+        }
 
     def build(self, reported_at: str) -> list[dict[str, Any]]:
-        """Select APs with nonzero trouble codes and enrich each natural identity."""
+        """Select recent site-reported trouble and enrich each inventory identity."""
         logger.info("Building AP warning report rows")
         sources = ReportSources(self._sources)
-        self.summary = {"inventory_aps": len(sources.inventory), "missing_trouble": 0, "matched": 0}
+        self.summary = {
+            "inventory_aps": len(sources.inventory),
+            "site_statistics_aps": len(sources.statistics),
+            "missing_trouble": 0,
+            "excluded_trouble": 0,
+            "matched": 0,
+        }
         rows: list[dict[str, Any]] = []
         for mac, device in sorted(sources.inventory.items()):
             stats = sources.statistics.get(mac, {})
-            code, timestamp, source, missing = TroubleEvidence.read(device, stats)
+            code, timestamp, missing = TroubleEvidence.read(stats)
             self.summary["missing_trouble"] += missing
-            if code:
-                row = self._row(device, stats, sources.sites)
-                row.update(sources.definitions.describe(code))
-                row.update(trouble_timestamp=timestamp, trouble_source=source, reported_at=reported_at)
-                rows.append(row)
+            if not code:
+                continue
+            if timestamp and not TroubleCode.is_recent(timestamp, reported_at):
+                self.summary["excluded_trouble"] += 1
+                continue
+            row = self._row(device, stats, sources.sites)
+            row.update(sources.definitions.describe(code))
+            row.update(trouble_timestamp=timestamp, trouble_source="statistics", reported_at=reported_at)
+            rows.append(row)
         self.summary["matched"] = len(rows)
         logger.debug("Built AP warning report rows counts=%s", self.summary)
         return rows

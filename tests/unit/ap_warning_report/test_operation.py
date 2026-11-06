@@ -1,6 +1,7 @@
 """Verify export orchestration without real credentials or cloud requests."""
 
 import logging
+import time
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import Mock, patch
@@ -30,7 +31,7 @@ def report_sources() -> dict[str, list[dict[str, Any]]]:
         "definitions": [{"code": "03", "key": "DHCP", "name": "DHCP error", "description": "No DHCP response"}],
         "sites": [{"id": "site-one", "name": "First site"}],
         "inventory": [{"mac": "000000000001", "type": "ap", "site_id": "site-one", "connected": True}],
-        "stats": [{"mac": "000000000001", "last_trouble": {"code": "03"}}],
+        "stats": [{"mac": "000000000001", "last_trouble": {"code": "03", "timestamp": time.time()}}],
     }
 
 
@@ -77,7 +78,7 @@ def test_no_matches_does_not_write_or_claim_health(
         client.return_value.read.return_value = report_sources
         assert ApWarningReport.run() == 0
     runtime.DataExporter.write_with_format_selection.assert_not_called()
-    assert "missing trouble evidence=1" in caplog.text
+    assert "missing trouble codes=1" in caplog.text
     assert "No report was written" in caplog.text
     assert "healthy" not in caplog.text
 
@@ -143,3 +144,44 @@ def test_timeout_and_connection_error_prevent_output(
         with pytest.raises(RuntimeError, match="failed"):
             ApWarningReport.run()
     runtime.DataExporter.write_with_format_selection.assert_not_called()
+
+
+@pytest.mark.parametrize("written", [True, False])
+def test_all_recovered_rows_have_a_separate_verified_export(
+    runtime: SimpleNamespace, report_sources: dict[str, Any], written: bool
+) -> None:
+    """Zero retained warnings must not silently discard verified recovery evidence."""
+    now = int(time.time()) - 1 + 0.1234567  # Exercise rounding above an identical fractional history boundary.
+    report_sources["definitions"][0]["key"] = "NO_IP_ADDRESS"
+    report_sources["stats"][0]["last_trouble"]["timestamp"] = now - 60
+    runtime.DataExporter.write_with_format_selection.return_value = written
+    evidence = {
+        "history_start": now - 3600,
+        "history_end": now,
+        "evidence_status": "complete",
+        "catalogue_verified": True,
+        "events": [{"mac": "000000000001", "timestamp": now - 58, "type": "AP_CONNECTED"}],
+        "statistics": {
+            "mac": "000000000001",
+            "site_id": "site-one",
+            "status": "connected",
+            "last_seen": now,
+            "last_trouble": {"code": "03", "timestamp": now - 60},
+        },
+    }
+    with (
+        patch("src.operations.exporting.ap_warning_report.operation.SourceDependencyResolver", runtime),
+        patch("src.operations.exporting.ap_warning_report.operation.ApWarningClient") as client,
+        patch("src.operations.exporting.ap_warning_report.operation.RecoveryEvidenceReader") as recovery,
+    ):
+        client.return_value.read.return_value = report_sources
+        recovery.return_value.read.return_value = evidence
+        if written:
+            assert ApWarningReport.run() == 0
+        else:
+            with pytest.raises(RuntimeError, match="write"):
+                ApWarningReport.run()
+    arguments = runtime.DataExporter.write_with_format_selection.call_args
+    assert arguments.args[1] == f"ApRecoveredReport_{ORG_ID}.csv"
+    assert arguments.kwargs["api_function_name"] == "ap_recovered_report"
+    assert arguments.args[0][0]["recovery_status"] == "recovered"

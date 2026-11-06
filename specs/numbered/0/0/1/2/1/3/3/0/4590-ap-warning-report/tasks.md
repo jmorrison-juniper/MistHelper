@@ -52,7 +52,26 @@ Complete integration without waiting for the unfinished WAN feature.
 - [x] T019 Test the final menu callable and portal visibility in tests/guardrails and tests/e2e. (delivered: tests/e2e/web_portal/test_ap_warning_report.py)
 - [x] T020 Run final integration gates and record the results in analysis.md. (delivered: analysis.md)
 
+## Phase 8: Recent site trouble window
+
+- [x] T021 Read paginated AP statistics from each site in src/operations/exporting/ap_warning_report/client.py. (delivered: src/operations/exporting/ap_warning_report/client.py)
+- [x] T022 Filter report rows to nonzero trouble records from the prior 15 minutes in src/operations/exporting/ap_warning_report/rows.py. (delivered: src/operations/exporting/ap_warning_report/rows.py)
+- [x] T023 Test per-site requests, time-window boundaries, and end-to-end pagination in tests/unit/ap_warning_report and tests/integration/ap_warning_report. (delivered: tests/integration/ap_warning_report/test_sdk_flow.py)
+- [x] T024 Run the targeted quality gates and record their exact results in analysis.md. (delivered: analysis.md)
+- [x] T025 Document the 15-minute window and its limits in documentation/ap-warning-report.md and changelog.d/issue-4625-ap-recovery-filter.md. (delivered: documentation/ap-warning-report.md, changelog.d/issue-4625-ap-recovery-filter.md)
+
 ## Dependencies and execution order
+
+## Recovery filtering, issue #4625
+
+- [x] T026 Verify SDK signatures, schema fields, live code definitions, and connection event names. Update spec.md and plan.md.
+- [x] T027 Implement bounded candidate history, fresh statistics, conservative recovery, and a separate recovered export.
+- [x] T028 Test equality, event order, stale statistics, duplicate transitions, repeated interruptions, unknown codes, missing history, and HTTP failures.
+- [x] T029 Run local gates and a read-only live menu 307 report. Compare the original 20 candidates at an explicit UTC cutoff.
+- [ ] T030 Commit explicit files, run the committed test-quality gate, create the template-based pull request, and wait for protected squash merge.
+
+T026 precedes T027. T027 precedes T028. T028 precedes T029. T029 precedes T030.
+FR-015 through FR-020 and SC-008 through SC-009 map to T027 through T029.
 
 T001 and T002 precede T003 and T004.
 T005 through T012 depend on the foundation.
@@ -63,6 +82,9 @@ T015 follows T013 and T014.
 T016 requires a separate ownership check but does not require the merge.
 T017 precedes T018 and T019.
 T020 follows the menu, portal, and documentation changes.
+T021 updates the existing client and precedes T022.
+T022 depends on T021 and precedes T023.
+T024 and T025 complete the final validation and documentation record.
 
 ## Parallel examples
 

@@ -1,6 +1,7 @@
 """Verify natural-key replacement through the actual report and SQLite writer."""
 
 import sqlite3
+import time
 from contextlib import closing
 from pathlib import Path
 from types import SimpleNamespace
@@ -32,11 +33,14 @@ def test_repeated_export_updates_ap_without_duplicates(tmp_path: Path, monkeypat
     )
     sources = {
         "definitions": [{"code": "03", "key": "DHCP", "name": "DHCP error", "description": "No DHCP response"}],
-        "sites": [],
-        "inventory": [{"mac": "000000000001"}, {"mac": "000000000002"}],
+        "sites": [{"id": "site-one", "name": "First site"}],
+        "inventory": [
+            {"mac": "000000000001", "site_id": "site-one"},
+            {"mac": "000000000002", "site_id": "site-one"},
+        ],
         "stats": [
-            {"mac": "000000000001", "last_trouble": {"code": "03"}},
-            {"mac": "000000000002", "last_trouble": {"code": "03"}},
+            {"mac": "000000000001", "site_id": "site-one", "last_trouble": {"code": "03", "timestamp": time.time()}},
+            {"mac": "000000000002", "site_id": "site-one", "last_trouble": {"code": "03", "timestamp": time.time()}},
         ],
     }
     with (
@@ -54,7 +58,7 @@ def test_repeated_export_updates_ap_without_duplicates(tmp_path: Path, monkeypat
     ):
         client.return_value.read.return_value = sources
         assert ApWarningReport.run() == 2
-        sources["stats"][0]["last_trouble"] = {"code": "99"}
+        sources["stats"][0]["last_trouble"] = {"code": "99", "timestamp": time.time()}
         assert ApWarningReport.run() == 2
     with closing(sqlite3.connect(database)) as connection:
         rows = connection.execute(

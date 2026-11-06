@@ -4,10 +4,10 @@
 
 ## Summary
 
-Build an isolated report package before menu integration.
-Join AP inventory with site names and documented AP trouble statistics.
-Read the LED dictionary once and retain unknown codes.
-Register menu 307 and preserve the separate WAN documentation change in pull request #4208.
+Keep the existing report package and menu registration.
+Read AP statistics for each site, then retain recent or untimed nonzero trouble records.
+Join the results with inventory, site names, connection state, and the live LED dictionary.
+Preserve unknown codes and do not treat recent evidence as proof of an active fault.
 
 ## Technical Context
 
@@ -23,11 +23,11 @@ Register menu 307 and preserve the separate WAN documentation change in pull req
 
 **Project Type**: Existing menu application.
 
-**Performance Goals**: One paginated request sequence per source, with dictionary retrieval once per run.
+**Performance Goals**: One paginated request sequence per site, with dictionary retrieval once per run.
 
 **Constraints**: Read-only SDK requests, no new dependencies, and no credentials in output.
 
-**Scale/Scope**: One selected organization, all its sites and AP inventory.
+**Scale/Scope**: One selected organization, all its sites and AP inventory, with sequential site statistics reads.
 
 ## Constitution Check
 
@@ -39,6 +39,9 @@ Register menu 307 and preserve the separate WAN documentation change in pull req
   Separate remediation must migrate existing records without changing this feature.
 - Product writes use DataExporter under `data/`.
 - All cloud reads use supported SDK methods and the existing authenticated session.
+- Site statistics reads use `listSiteDevicesStats` with AP type and all connection states.
+- Timed observations must fall inside the inclusive 15-minute window ending at report creation.
+- Untimed observations retain uncertainty. Future observations do not qualify.
 - SDK pagination validates every page rather than accepting a partial `get_all` result.
 - Tests cover endpoint arguments, malformed data, failed pages, unknown codes, and output failure.
 - Commit messages use Conventional Commits.
@@ -79,6 +82,39 @@ tests/integration/ap_warning_report/
 **Structure Decision**: Use a new compliant package rather than extending an oversized existing package.
 
 ## Complexity Tracking
+
+## Recovery filtering, issue #4625
+
+Use the isolated completion worktree and preserve issue #4624 changes.
+The existing branch replaces the branch-creation hook. Do not change the shared feature pointer.
+Update this existing managed specification rather than create a competing feature record.
+Use sequential candidate-only reads. No concurrency or new dependency is necessary.
+Use `searchOrgDeviceEvents` with MAC, AP type, an explicit 60-minute UTC window, and at most ten pages.
+Use SDK `search_after` pagination. Missing totals, incomplete totals, or a full terminal page without proof mean incomplete evidence.
+Validate live `AP_CONNECTED` and `AP_DISCONNECTED` catalogue keys before accepting state evidence.
+The verified event records contain `ap`, `mac`, `type`, and epoch `timestamp`.
+Read `getSiteDeviceStats` for each candidate and require matching identity and site.
+Statistics are fresh only when `last_seen` is within 300 seconds before the evidence cutoff and not before reconnect.
+This five-minute freshness limit is conservative and independent of the trouble observation window.
+Read all event types so newer trouble and connection blockers remain visible.
+Treat `AP_CONFIG_FAILED`, `AP_RESTARTED`, `AP_UNASSIGNED`, and `AP_UNCLAIMED` after reconnect as blockers.
+Also check fresh `last_trouble` for newer observations.
+Only verified code-and-key pairs 02 through 08 and 12 through 16 can qualify for recovery.
+Other codes remain visible. In particular, a cloud connection does not clear a management tunnel or firmware fault.
+Add classification columns without removing the existing report columns.
+Give the recovered export its own natural-key strategy so it cannot overwrite warning rows in the database.
+Keep existing test directories unchanged. Extend their existing test modules.
+The existing methods above structural limits remain debt. Keep new recovery methods at 25 lines or fewer and complexity at ten or less.
+The separate structural guard remains the remediation authority for existing debt.
+
+### Verified evidence
+
+The vendored OpenAPI `response_device_events_search` requires `results`, `start`, `end`, `limit`, and `total`.
+The installed SDK accepts `start` and `end` as text, and exposes `search_after`, not `page`.
+Live definitions identify `AP_CONNECTED` as cloud reconnection and `AP_DISCONNECTED` as loss of cloud connection.
+The read-only candidate probe returned `status`, `last_seen`, `last_trouble`, `mac`, `id`, and `site_id`.
+The screenshot times convert to disconnect `2026-11-06T22:11:26Z`, trouble `22:17:01Z`, and reconnect `22:17:03Z`.
+Those times establish ordering, not a complete recovery decision without fresh statistics and complete history.
 
 No new structural exception is required for source files.
 The existing test trees and unique changelog process records retain their established layout.
