@@ -27,6 +27,7 @@ No shared infrastructure changes are required.
 - [X] T002 [US1] Validate SDK response status before pagination in `src/operations/protection/security/rogue_dhcp/scanner.py`. Preserve list-based test doubles and allow only integer 2xx statuses on SDK response objects. (delivered: `src/operations/protection/security/rogue_dhcp/scanner.py`)
 - [X] T003 [P] [US1] Add the issue-specific release note to `changelog.d/issue-4560-rogue-dhcp-http-503-data.md`. (delivered: `changelog.d/issue-4560-rogue-dhcp-http-503-data.md`)
 - [X] T004 [US1] Run the focused scanner tests, Ruff, and Black checks for the changed Python files. (verified: pytest, Ruff, and Black passed)
+- [X] T005 [US1] Replace opaque full-pagination with per-page status and body validation. Add regression tests for a later 503 body, a malformed later body, and a successful later page. (verified: 43 scanner tests pass, and the installed SDK reproducer rejects the later 503 offline)
 
 ## Dependencies & Execution Order
 

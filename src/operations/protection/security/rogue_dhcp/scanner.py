@@ -130,7 +130,7 @@ class RogueDhcpScanner:
             "site_events": mistapi.api.v1.sites.devices.searchSiteDeviceEvents,
             "marvis_actions": mistapi.api.v1.sites.marvis_configs.searchSiteMarvisConfigActions,
             "org_sites": mistapi.api.v1.orgs.sites.listOrgSites,
-            "get_all": mistapi.get_all,
+            "get_next": mistapi.get_next,
         }
 
     @staticmethod
@@ -153,26 +153,61 @@ class RogueDhcpScanner:
         logger.error("Rogue DHCP scan rejected %s response: %s", name, status_description)  # WHY: report the failure.
         raise RuntimeError(f"Rogue DHCP scan rejected {name} response: {status_description}")  # WHY: stop data use.
 
-    def _read_pages(self, response: Any, name: str) -> list[dict[str, Any]]:
-        """Validate one response and follow every page.
+    def _read_page_records(self, response: Any, name: str) -> list[dict[str, Any]]:
+        """Validate one response before returning its records.
 
         Args:
-            response: The APIResponse the SDK returned.
+            response: One response returned by the Mist SDK.
             name: The endpoint key used by this scan.
 
         Returns:
-            Every record across every page.
+            The records in this page.
 
         Raises:
-            RuntimeError: When the response status does not show success.
+            RuntimeError: When the status or page data is invalid.
         """
         self._validate_response_status(response, name)  # WHY: failed bodies cannot become scan evidence.
-        get_all = self._api.get("get_all")  # WHY: the paginator is injectable, so a test returns one page.
-        if get_all is None:  # WHY: a stand-in map may omit the paginator.
-            data = getattr(response, "data", None)  # WHY: fall back to the single page the response carries.
-            return list(data) if isinstance(data, list) else []  # WHY: a non-list page names no record.
-        records = get_all(response=response, mist_session=self._apisession)  # WHY: follow the next links.
-        return list(records) if records else []  # WHY: the paginator returns None when it read nothing.
+        if isinstance(response, list):  # WHY: preserve existing list-based test doubles.
+            return response  # WHY: the list already represents one complete test page.
+        data = getattr(response, "data", None)  # WHY: SDK page data is held on the response object.
+        if isinstance(data, list):  # WHY: some SDK endpoints return an unwrapped list.
+            return data  # WHY: a valid list needs no results envelope.
+        records = data.get("results") if isinstance(data, dict) else None  # WHY: search pages use a results envelope.
+        if isinstance(records, list) and all(isinstance(record, dict) for record in records):  # WHY: enforce row shape.
+            return records  # WHY: only record dictionaries enter the scanner.
+        body_type = type(data).__name__  # WHY: identify malformed page data without logging its contents.
+        logger.error("Rogue DHCP scan rejected %s page body type %s", name, body_type)  # WHY: report the failure.
+        raise RuntimeError(f"Rogue DHCP scan rejected {name} page body type {body_type}")  # WHY: stop incomplete scans.
+
+    def _read_pages(self, response: Any, name: str) -> list[dict[str, Any]]:
+        """Validate each response while following every page.
+
+        Args:
+            response: The first APIResponse the SDK returned.
+            name: The endpoint key used by this scan.
+
+        Returns:
+            Every record across all valid pages.
+
+        Raises:
+            RuntimeError: When a page is invalid or the next-page reader is missing.
+        """
+        get_next = self._api.get("get_next")  # WHY: validate every SDK page before reading its body.
+        records: list[dict[str, Any]] = []  # WHY: keep accepted records from successful pages.
+        current = response  # WHY: begin with the endpoint response already validated by this scanner.
+        while True:  # WHY: each next link needs the same status and body checks.
+            records.extend(self._read_page_records(current, name))  # WHY: reject invalid pages before adding records.
+            if not getattr(current, "next", None):  # WHY: stop after the final page.
+                return records  # WHY: all pages have passed validation.
+            if get_next is None:  # WHY: an unread next link means the scan would be incomplete.
+                raise RuntimeError(f"Rogue DHCP scan cannot read next page for {name}")  # WHY: report the gap.
+            logger.info("Rogue DHCP scan reads next page for %s", name)  # WHY: log before the SDK request.
+            next_response = get_next(self._apisession, current)  # WHY: retrieve one page for explicit validation.
+            logger.debug("Rogue DHCP scan received next page for %s", name)  # WHY: record request completion.
+            if next_response is None:  # WHY: a next link without a response cannot complete the scan.
+                message = f"Rogue DHCP scan received no next page for {name}"  # WHY: name the incomplete scan.
+                raise RuntimeError(message)  # WHY: avoid a clean partial scan.
+            current = next_response  # WHY: validate this page on the next loop iteration.
 
     def _search(self, name: str, source: str, **kwargs: Any) -> list[dict[str, Any]]:
         """Run one search, follow its pages, and keep only the matching records.

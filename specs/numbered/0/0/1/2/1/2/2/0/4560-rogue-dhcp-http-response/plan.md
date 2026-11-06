@@ -6,7 +6,7 @@
 
 ## Summary
 
-Check each Mist SDK response before pagination. Reject non-success status values so an error body cannot become a rogue DHCP finding. Keep plain list test responses and successful SDK responses unchanged.
+Check every Mist SDK response before reading its page body. Reject non-success statuses and malformed page data so neither can become a rogue DHCP finding. Keep plain list test responses and successful SDK pages unchanged.
 
 ## Technical Context
 
@@ -35,7 +35,7 @@ Check each Mist SDK response before pagination. Reject non-success status values
 
 ### Decision: Reject failed responses before pagination
 
-The scanner currently sends every SDK response to `mistapi.get_all`. The installed SDK response exposes an HTTP status, and a valid-looking error body can still contain a `results` list. Check the status before calling the paginator.
+The scanner currently sends each first SDK response to `mistapi.get_all`. The installed `get_all` calls `get_next` and appends later response data without checking its status. Check each response before reading its body.
 
 ### Decision: Preserve explicit failure reporting
 
@@ -51,11 +51,11 @@ Raise an error for a response without a valid 2xx status. An organization failur
 
 ### Mist response contract
 
-An SDK response with an integer status from 200 through 299 may reach pagination. A response with any other status, an absent status, or a malformed status must raise before pagination. Existing list-based test doubles remain supported.
+An SDK response with an integer status from 200 through 299 may contribute records. A response with any other status, an absent or malformed status, or an invalid page body must raise before the scanner reads that page. Existing list-based test doubles remain supported.
 
 ### Verification
 
-Run the rogue DHCP scanner unit tests. Include 4xx and 5xx responses that carry plausible alarm data. Confirm the paginator does not receive those responses. Confirm a successful response still yields the finding. Run Ruff and Black checks on changed Python files.
+Run the rogue DHCP scanner unit tests. Include first-page and later-page failures that carry plausible alarm data. Confirm malformed later bodies fail and successful later pages contribute records. Run Ruff and Black checks on changed Python files.
 
 ## Project Structure
 
@@ -82,7 +82,7 @@ tests/unit/security/rogue_dhcp/test_scanner.py
 changelog.d/issue-4560-rogue-dhcp-http-503-data.md
 ```
 
-**Structure Decision**: Keep the status check in the scanner’s shared response-reading path. Keep regression tests in the existing rogue DHCP scanner module. Add the required issue-specific changelog fragment.
+**Structure Decision**: Keep status and body checks in the scanner’s shared page-reading path. Use the SDK next-page function so the scanner can validate each response. Keep regression tests in the existing rogue DHCP scanner module. Add the required issue-specific changelog fragment.
 
 ## Complexity Tracking
 
