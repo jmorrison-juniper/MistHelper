@@ -36,7 +36,7 @@ The paths below use the worktree virtual environment.
 
 | Command | Result |
 | --- | --- |
-| `rtk proxy .venv\Scripts\python.exe -m pytest tests\unit\ap_warning_report tests\integration\ap_warning_report tests\integration\test_mistapi_sdk_compatibility.py tests\unit\refactors\test_sqlite_database_writer.py -q --cov=src.operations.exporting.ap_warning_report --cov-report=term-missing --cov-fail-under=90` | 158 passed. New report package coverage: 100 percent. |
+| `rtk proxy .venv\Scripts\python.exe -m pytest tests\unit\ap_warning_report tests\integration\ap_warning_report tests\integration\test_mistapi_sdk_compatibility.py tests\unit\refactors\test_sqlite_database_writer.py -q --cov=src.operations.exporting.ap_warning_report --cov-report=term-missing --cov-fail-under=90` | 160 passed. New report package coverage: 100 percent. |
 | `rtk proxy .venv\Scripts\python.exe -m ruff check src\operations\exporting\ap_warning_report src\foundation\support\refactors\endpoint_primary_key_strategies.py tests\unit\ap_warning_report tests\integration\ap_warning_report` | All checks passed. |
 | `rtk proxy .venv\Scripts\python.exe -m black --check src\operations\exporting\ap_warning_report src\foundation\support\refactors\endpoint_primary_key_strategies.py tests\unit\ap_warning_report tests\integration\ap_warning_report` | Twelve files need no format changes. |
 | `rtk proxy .venv\Scripts\python.exe -m mypy src\operations\exporting\ap_warning_report src\foundation\support\refactors\endpoint_primary_key_strategies.py --config-file pyproject.toml` | Success. Six source files checked. |
@@ -68,6 +68,11 @@ The separate bootstrap issue preserves the full failure output.
 `uv sync --frozen --extra dev` installed the existing lock without dependency-file changes.
 The first SQLite integration assertion used an unsanitized table name.
 The test now uses the established SQLite table name normalization.
+The first test-quality check found two missing SQLite failure cases.
+The added cases reject empty bodies and malformed JSON before the SQLite writer runs.
+Their first assertions expected the internal client message rather than the public report message.
+The assertions now use the public error boundary, and both cases pass.
+The test-quality baseline remains unchanged.
 
 ## Remaining work
 

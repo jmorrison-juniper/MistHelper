@@ -61,3 +61,36 @@ def test_repeated_export_updates_ap_without_duplicates(tmp_path: Path, monkeypat
             "SELECT org_id, mac, code FROM ApWarningReport_00000000_0000_0000_0000_000000000001 ORDER BY mac"
         ).fetchall()
     assert rows == [(ORG_ID, "000000000001", "99"), (ORG_ID, "000000000002", "03")]
+
+
+@pytest.mark.parametrize(
+    "payload,raw_data",
+    [(None, ""), ({}, "<html>invalid JSON</html>")],
+    ids=["empty_body", "malformed_json"],
+)
+def test_empty_body_and_malformed_json_block_sqlite_output(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, payload: object, raw_data: str
+) -> None:
+    """Broken SDK bodies must fail before the real SQLite export boundary."""
+    monkeypatch.chdir(tmp_path)
+    runtime = SimpleNamespace(
+        ConfigUtils=SimpleNamespace(get_cached_or_prompted_org_id=lambda: ORG_ID),
+        apisession=Mock(),
+        DataExporter=DataExporter,
+    )
+    response = SimpleNamespace(status_code=200, data=payload, raw_data=raw_data, next=None)
+    with (
+        patch("src.operations.exporting.ap_warning_report.operation.SourceDependencyResolver", runtime),
+        patch(
+            "src.operations.exporting.export.data_exporter.SourceDependencyResolver",
+            SimpleNamespace(OUTPUT_FORMAT="sqlite"),
+        ),
+        patch("mistapi.api.v1.const.ap_led_status.listApLedDefinition", return_value=response),
+        patch.object(
+            DataExporter, "write_with_format_selection", wraps=DataExporter.write_with_format_selection
+        ) as writer,
+        pytest.raises(RuntimeError, match="AP warning report failed"),
+    ):
+        ApWarningReport.run()
+    writer.assert_not_called()
+    assert not (tmp_path / "data").exists()
