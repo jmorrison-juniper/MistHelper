@@ -61,7 +61,9 @@ The locked runtime export provides exact pins without changing repository depend
 The audit of that export passes with no known vulnerabilities.
 The installed-environment audit also passes, but skips the two repository-owned packages absent from PyPI.
 
-## Remaining release gate
+## Committed-test quality gate
 
-Run the documented committed-test preflight and test-quality ratchet before the push.
-Do not treat an uncommitted comparison as evidence for that gate.
+The required input preflight passes with four readable, validated inputs.
+The changed-test ratchet checks nine files and 27 findings with zero new findings.
+The full ratchet checks 1,236 files and 585 findings with zero new findings.
+The baseline remains unchanged.

@@ -34,7 +34,7 @@
 
 - [x] T011 Generate references with `scripts/generate_menu_wiki.py` and `scripts/menu_api_map/`.
 - [x] T012 Add `changelog.d/issue-4120-troubleshooting-core-relocation.md` and record verification in `analysis.md`.
-- [ ] T013 Run applicable local gates, commit explicit paths, and run the test-quality ratchet before the PR.
+- [x] T013 Run applicable local gates, commit explicit paths, and run the test-quality ratchet before the PR.
 
 ## Dependencies
 
