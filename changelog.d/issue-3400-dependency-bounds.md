@@ -1,3 +1,3 @@
-### Remove extra package maximum limits
+### Generate pip exports from the tracked lock
 
-- **Changed**: Pip requirements remove package maximum limits. The Waitress requirement applies only to Windows. Issue #3400.
+- **Changed**: Pip requirement files use package versions from `uv.lock`. Issue #3400.

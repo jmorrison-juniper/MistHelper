@@ -27,8 +27,8 @@
 
 ## S4 Exports
 
-- [ ] T014 Generate `requirements.txt` and `requirements-dev.txt` from the lock.
-- [ ] T015 Add the export drift guard.
+- [x] T014 Generate `requirements.txt` and `requirements-dev.txt` from the lock.
+- [x] T015 Add the export drift guard.
 
 ## S5 CI
 
