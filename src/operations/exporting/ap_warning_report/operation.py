@@ -69,7 +69,7 @@ class ApWarningReport:
             report.summary["matched"],
         )
         if not rows:
-            logger.info("No APs reported a nonzero trouble code. No report was written.")
+            logger.info("No AP warning records matched. No report was written.")
             return 0
         return ApWarningReport._persist(rows, org_id)
 

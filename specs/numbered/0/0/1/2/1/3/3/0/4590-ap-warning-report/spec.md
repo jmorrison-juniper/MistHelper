@@ -52,6 +52,7 @@ An operator receives an explicit failure when a required source cannot be read.
 
 1. **Given** a failed inventory, site, statistics, or definition read, **When** the report runs, **Then** it reports failure and writes nothing.
 2. **Given** no matching codes, **When** the report runs, **Then** it reports zero matches and does not claim all APs are healthy.
+   The portal marks this result as completed with no output file, including when all trouble evidence is absent.
 
 ### Edge Cases
 

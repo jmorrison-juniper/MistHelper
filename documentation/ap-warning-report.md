@@ -46,6 +46,7 @@ An AP that no longer qualifies can remain in an existing database table from a p
 Use `reported_at` to select the rows from the report run that you need.
 
 No matches produce a log message and no new output.
+The portal marks this result as completed and states that no output file exists.
 A failed source page, invalid required data, or failed output write produces an explicit error.
 The report completes every required source read before it writes output.
 It does not export a partially read organization.

@@ -128,3 +128,49 @@ The two skipped discovery records describe roots omitted by the changed-test sel
 No baseline changed.
 All 20 feature tasks are complete.
 No pull request, merge, production deployment, or change to pull request #4208 is part of this implementation.
+
+## End-to-end follow-up
+
+The user requested end-to-end testing and repair of each discovered issue.
+The earlier tests remain valid for their stated scope.
+However, their green result did not prove correct portal execution.
+The initial completion assessment was incomplete.
+
+The added SDK transport test uses the real CLI dispatcher, SDK endpoint functions, HTTP response parser, pagination, and CSV writer.
+Only HTTP transport and runtime selection are controlled.
+Twelve requests cover all sources and multiple pages.
+The saved report includes connected and disconnected APs.
+It excludes cleared codes, absent observations, and statistics-only devices.
+Sixteen negative cases cover HTTP 403, HTTP 503, empty bodies, and malformed JSON.
+Each case verifies the exact failing source and page before checking that no report exists.
+
+Issue #4592 records a defect in the initial test harness.
+The SDK rejected its synthetic hostname before transport.
+The initial sixteen negative-case passes are invalid.
+The repaired harness uses a supported SDK hostname with controlled transport.
+Its exact-page assertions reject unrelated early failures.
+
+Real portal execution exposed issue #4593.
+A successful zero-match report with missing trouble evidence appeared as failed.
+The portal did not recognize the report's empty-result wording.
+The report now uses the existing recognized empty-record wording.
+The integer return contract and source-failure behavior remain unchanged.
+Portal tests obtain the real CSRF token, start menu 307, wait for its worker, and read its terminal status.
+They cover missing evidence, cleared codes, a saved CSV, source failure, and output failure.
+An initial portal fixture lacked the normal runtime output directory.
+That fixture was corrected before the report-classification defect was isolated.
+
+Read-only Mist tools returned 37 live AP LED definitions.
+Their AP summary omits trouble fields and cannot validate report selection.
+The local process has no Mist token and no worktree `.env` file.
+No live SDK report execution, browser session, or production write occurred.
+Controlled transport and real Flask routes establish local behavior, not a fully live-cloud result.
+
+The integrated command in the menu evidence table was repeated after the repair.
+It passed 284 tests, with one unrelated absent-category skip and 100 percent report-package coverage.
+The seventeen new SDK-flow cases passed.
+All seven AP portal cases passed, including five worker execution cases.
+Targeted Ruff, Black, mypy, and Bandit checks passed.
+Mypy checked five report source files.
+The four changed Markdown documents passed STE with scores of 95, 99, 96, and 89.
+The test-quality baseline remains unchanged.
