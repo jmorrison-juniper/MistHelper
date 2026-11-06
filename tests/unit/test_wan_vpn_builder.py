@@ -386,12 +386,12 @@ class TestPromptRoleAssignments:
     """Test _prompt_role_assignments validation."""
 
     def test_valid_assignments(self, builder, sample_profiles):
-        builder._safe_input = MagicMock(side_effect=["h", "s", "k"])
-        result = builder._prompt_role_assignments(sample_profiles)
-        assert result is not None
-        assert result[0]["role"] == "hub"
-        assert result[1]["role"] == "spoke"
-        assert result[2]["role"] == "skip"
+        builder._safe_input = MagicMock(side_effect=["h", "s", "k"])  # WHY: provide one choice for each profile.
+        result = builder._prompt_role_assignments(sample_profiles)  # WHY: exercise the valid assignment path.
+        assert [assignment["role"] for assignment in result] == ["hub", "spoke", "skip"]  # WHY: verify all roles.
+        assert result[0]["role"] == "hub"  # WHY: confirm the hub assignment.
+        assert result[1]["role"] == "spoke"  # WHY: confirm the spoke assignment.
+        assert result[2]["role"] == "skip"  # WHY: confirm the skipped assignment.
 
     def test_all_skip_prompts_retry_then_cancel(self, builder, sample_profiles):
         builder._safe_input = MagicMock(side_effect=["k", "k", "k", "n"])
@@ -399,11 +399,10 @@ class TestPromptRoleAssignments:
         assert result is None
 
     def test_invalid_then_valid(self, builder):
-        profiles = [{"name": "HUB1", "port_config": {}}]
-        builder._safe_input = MagicMock(side_effect=["x", "invalid", "h"])
-        result = builder._prompt_role_assignments(profiles)
-        assert result is not None
-        assert result[0]["role"] == "hub"
+        profiles = [{"name": "HUB1", "port_config": {}}]  # WHY: isolate one profile for role selection.
+        builder._safe_input = MagicMock(side_effect=["x", "invalid", "h"])  # WHY: exercise invalid choices and retry.
+        result = builder._prompt_role_assignments(profiles)  # WHY: run the role assignment path.
+        assert result[0]["role"] == "hub"  # WHY: prove the retry accepts the valid role.
 
 
 class TestDisplayPreview:
@@ -436,9 +435,11 @@ class TestRunWorkflow:
     @patch("src.operations.wan.wan_vpn_builder.mistapi.api.v1.orgs.vpns.listOrgVpns")
     @patch("src.operations.wan.wan_vpn_builder.mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles")
     def test_no_profiles_exits(self, mock_list_profiles, mock_list_vpns, mock_create, mock_get_all, builder):
-        mock_get_all.return_value = []
-        builder.run()
-        mock_create.assert_not_called()
+        mock_list_profiles.return_value.status_code = 200  # WHY: establish success before checking empty profile data.
+        mock_get_all.return_value = []  # WHY: model a successful request with no gateway profiles.
+        builder.run()  # WHY: verify the no-profile workflow branch.
+        assert mock_create.call_count == 0  # WHY: an empty inventory must not create a VPN.
+        assert mock_list_profiles.call_count == 1  # WHY: prove the builder checked the profile inventory.
 
     @patch("src.operations.wan.wan_vpn_builder.mistapi.api.v1.orgs.vpns.createOrgVpn")
     def test_api_failure_skips_profile_update(self, mock_create, builder, sample_profiles):
@@ -459,11 +460,11 @@ class TestExecuteEntryPoint:
     """Test execute() static entry point."""
 
     def test_no_org_id_exits(self):
-        mock_session = MagicMock()
-        mock_get_org = MagicMock(return_value=None)
-        mock_input = MagicMock()
-        WanVpnBuilder.execute(mock_session, mock_get_org, mock_input)
-        mock_get_org.assert_called_once()
+        mock_session = MagicMock()  # WHY: provide a session without external API access.
+        mock_get_org = MagicMock(return_value=None)  # WHY: model the missing organization identifier.
+        mock_input = MagicMock()  # WHY: detect whether the entry point asks for input.
+        WanVpnBuilder.execute(mock_session, mock_get_org, mock_input)  # WHY: exercise entry-point validation.
+        assert mock_get_org.call_count == 1  # WHY: verify the organization identifier is checked once.
 
 
 # ---------------------------------------------------------------------------
@@ -532,10 +533,10 @@ class TestPromptProfileUpdates:
     """Test _prompt_profile_updates flow."""
 
     def test_decline_skips_updates(self, builder, hub_spoke_assignments):
-        builder._safe_input = MagicMock(return_value="n")
-        builder._update_single_profile = MagicMock()
-        builder._prompt_profile_updates("vpn-id", "TestVPN", hub_spoke_assignments)
-        builder._update_single_profile.assert_not_called()
+        builder._safe_input = MagicMock(return_value="n")  # WHY: decline the optional profile update.
+        builder._update_single_profile = MagicMock()  # WHY: detect any profile update attempt.
+        builder._prompt_profile_updates("vpn-id", "TestVPN", hub_spoke_assignments)  # WHY: exercise the decline path.
+        assert builder._update_single_profile.call_count == 0  # WHY: a declined update must not change profiles.
 
     def test_accept_calls_update(self, builder, hub_spoke_assignments):
         builder._safe_input = MagicMock(return_value="y")
@@ -662,3 +663,5 @@ class TestFetchProfilesHttpRefusal:
         builder.run()  # WHY: execute the full workflow after the failed read.
         builder._create_vpn.assert_not_called()  # WHY: no VPN can be created without valid profiles.
         safe_input.assert_not_called()  # WHY: the workflow must stop before it asks for configuration.
+        assert builder._create_vpn.call_count == 0  # WHY: prove the workflow does not reach VPN creation.
+        assert safe_input.call_count == 0  # WHY: prove the workflow does not prompt without valid profiles.
