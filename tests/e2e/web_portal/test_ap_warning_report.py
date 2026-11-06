@@ -66,8 +66,8 @@ def test_report_completion_through_portal(
     executor = OperationExecutor(MistHelper.menu_actions, runtime.apisession, org_id, None)
     monkeypatch.setitem(client.application.config, "OPERATION_EXECUTOR", executor)
     page = client.get("/operations").get_data(as_text=True)
-    token = re.search(r'<meta name="csrf-token" content="([^"]+)"', page)
-    assert token is not None
+    tokens = re.findall(r'<meta name="csrf-token" content="([^"]+)"', page)
+    assert len(tokens) == 1
     try:
         with (
             patch("src.operations.exporting.ap_warning_report.operation.SourceDependencyResolver", runtime),
@@ -81,7 +81,9 @@ def test_report_completion_through_portal(
                 side_effect=RuntimeError("Controlled source read failure") if case == "source_failure" else None,
             ),
         ):
-            started = client.post("/api/operations/run", json={"menu_number": "307"}, headers={"X-CSRFToken": token[1]})
+            started = client.post(
+                "/api/operations/run", json={"menu_number": "307"}, headers={"X-CSRFToken": tokens[0]}
+            )
             assert started.status_code == 202
             run_id = started.get_json()["run_id"]
             executor._runs[run_id]["_future"].result(timeout=10)
