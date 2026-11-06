@@ -8,7 +8,10 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from src.foundation.support.refactors.endpoint_primary_key_strategies import SleWindowIdentity
-from src.operations.exporting.export.endpoint_family_exporter import EndpointFamilyExporter
+from src.operations.exporting.export.endpoint_family_exporter import (
+    _SITE_SLE_OPS,
+    EndpointFamilyExporter,
+)
 
 HISTOGRAM_OPERATION = "getSiteSleHistogram"
 IMPACT_OPERATION = "getSiteSleImpactSummary"
@@ -273,3 +276,26 @@ class TestSleWindowIdentity:
             written = EndpointFamilyExporter._persist([], "summary.csv", operation, {})
         assert written == 0
         writer.write_with_format_selection.assert_not_called()
+
+    @pytest.mark.parametrize("status_code", (404, 503))
+    def test_http_failure_stops_before_pagination_and_persistence(self, status_code: int) -> None:
+        """Do not treat an HTTP refusal as an empty successful summary export."""
+        writer = MagicMock()
+        host = SimpleNamespace(apisession=object(), DataExporter=SimpleNamespace(write_with_format_selection=writer))
+        response = SimpleNamespace(status_code=status_code, url="https://mist.invalid/api/sle")
+        endpoint = next(operation for operation in _SITE_SLE_OPS if operation.operation == HISTOGRAM_OPERATION)
+        callable_obj = MagicMock(return_value=response)
+        arguments = SimpleNamespace(
+            values=("site-1", "site", "scope-1", "coverage"),
+            label="site-1_scope_scope-1_coverage",
+        )
+        with (
+            patch.object(EndpointFamilyExporter, "_mist_helper", return_value=host),
+            patch.object(EndpointFamilyExporter, "_resolve", return_value=callable_obj),
+            patch.object(EndpointFamilyExporter, "_collect_arguments", return_value=arguments),
+            patch("src.operations.exporting.export.endpoint_family_exporter.mistapi.get_all") as get_all,
+        ):
+            EndpointFamilyExporter._run(endpoint)
+        assert callable_obj.call_count == 1
+        assert get_all.call_count == 0
+        assert writer.write_with_format_selection.call_count == 0

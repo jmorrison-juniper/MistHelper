@@ -248,8 +248,9 @@ class TestRouterSnapshot:
         )
         mock_backends["arango_writer"].snapshot.return_value = True
         data = [{"id": "site-1", "name": "HQ"}]
-        router.write(data, "listOrgSites")
-        mock_backends["arango_writer"].snapshot.assert_called_once()
+        result = router.write(data, "listOrgSites")
+        assert result.success is True
+        assert mock_backends["arango_writer"].snapshot.call_count == 1
 
     def test_snapshot_error_does_not_fail_write(self, config, mock_backends, strategies):
         router = _make_router(config, mock_backends, strategies)
@@ -277,25 +278,26 @@ class TestRouterWebhook:
             "after": {"name": "Updated Site"},
         }
         router.handle_webhook_audit(payload)
-        mock_backends["arango_writer"].snapshot.assert_called_once()
+        assert mock_backends["arango_writer"].snapshot.call_count == 1
 
     def test_webhook_with_no_arango(self, standalone_config):
         from src.foundation.persistence.db.router import DatabaseRouter
 
         router = DatabaseRouter(standalone_config)
         router.handle_webhook_audit({"object_type": "site", "object_id": "s1"})
-        # Should not raise
+        assert router._arango_writer is None
 
     def test_webhook_missing_object_id(self, config, mock_backends, strategies):
         router = _make_router(config, mock_backends, strategies)
         router.handle_webhook_audit({"object_type": "site"})
-        mock_backends["arango_writer"].snapshot.assert_not_called()
+        assert mock_backends["arango_writer"].snapshot.call_count == 0
 
     def test_webhook_snapshot_error_handled(self, config, mock_backends, strategies):
         router = _make_router(config, mock_backends, strategies)
         mock_backends["arango_writer"].snapshot.side_effect = ArangoError("err")
         payload = {"object_type": "site", "object_id": "s1", "after": {}}
-        router.handle_webhook_audit(payload)  # should not raise
+        router.handle_webhook_audit(payload)
+        assert mock_backends["arango_writer"].snapshot.call_count == 1
 
 
 class TestRouterTimeseries:
@@ -425,21 +427,29 @@ class TestRouterClose:
         router = _make_router(config, mock_backends, strategies)
         router.close()
 
-        mock_backends["arango_writer"].close.assert_called_once()
-        mock_backends["redis_writer"].close.assert_called_once()
-        mock_backends["redis_json_writer"].close.assert_called_once()
+        assert (
+            mock_backends["arango_writer"].close.call_count,
+            mock_backends["redis_writer"].close.call_count,
+            mock_backends["redis_json_writer"].close.call_count,
+        ) == (1, 1, 1)
 
     def test_close_handles_errors(self, config, mock_backends, strategies):
         router = _make_router(config, mock_backends, strategies)
         mock_backends["arango_writer"].close.side_effect = ArangoError("err")
         mock_backends["redis_writer"].close.side_effect = RedisError("err")
-        router.close()  # should not raise
+        router.close()
+        assert (
+            mock_backends["arango_writer"].close.call_count,
+            mock_backends["redis_writer"].close.call_count,
+            mock_backends["redis_json_writer"].close.call_count,
+        ) == (1, 1, 1)
 
     def test_close_standalone(self, standalone_config):
         from src.foundation.persistence.db.router import DatabaseRouter
 
         router = DatabaseRouter(standalone_config)
-        router.close()  # should not raise
+        router.close()
+        assert router.config.standalone_mode is True
 
 
 class TestRouterRedisJsonError:
@@ -473,8 +483,9 @@ class TestRouterSnapshotEdgeCases:
             records_failed=0,
         )
         data = [{"id": "lic-1"}]
-        router.write(data, "getOrgLicensesSummary")
-        mock_backends["arango_writer"].snapshot.assert_not_called()
+        result = router.write(data, "getOrgLicensesSummary")
+        assert result.success is True
+        assert mock_backends["arango_writer"].snapshot.call_count == 0
 
     def test_snapshot_skips_empty_pk(self, config, mock_backends, strategies):
         router = _make_router(config, mock_backends, strategies)
@@ -618,4 +629,4 @@ class TestRouterCloseRedisJson:
         mock_backends["arango_writer"].close.side_effect = ArangoError("arango close err")
         router.close()
 
-        mock_backends["redis_json_writer"].close.assert_called_once()
+        assert mock_backends["redis_json_writer"].close.call_count == 1
