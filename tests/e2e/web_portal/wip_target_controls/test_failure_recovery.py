@@ -215,17 +215,17 @@ class TestPendingTargetResponses:
         page.locator("#parameterError button").click()
         expect(page.get_by_label("Site", exact=False)).to_be_enabled()
         expect(page.get_by_test_id("run-btn")).to_be_disabled()
-        expect(page.get_by_test_id("wip-caution")).to_be_visible()
+        expect(page.get_by_test_id("wip-caution")).to_be_hidden()
 
     def test_run_waits_for_required_metadata(self, wip_journey: BrowserJourney) -> None:
         """The initial selection must not briefly enable Run before its target descriptors arrive."""
         page = wip_journey.page
         held = NativeMistSession.HeldResponse((200, {}))
         wip_journey.server.portal.ledger.holds["/api/operations/parameters/63"] = held
-        page.locator("button.accordion-button", has_text="Work In Progress").click()
+        page.locator("button.accordion-button", has_text="Site Config & Monitoring").click()
         page.locator('.op-item[data-menu="63"]').click()
         assert held.arrived.wait(10), "The actual parameter request did not reach its controlled hold."
-        expect(page.get_by_test_id("wip-caution")).to_be_visible()
+        expect(page.get_by_test_id("wip-caution")).to_be_hidden()
         expect(page.get_by_test_id("run-btn")).to_be_disabled()
         assert wip_journey.input_requests() == []
         held.release.set()

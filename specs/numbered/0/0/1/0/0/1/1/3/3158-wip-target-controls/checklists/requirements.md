@@ -18,6 +18,7 @@
 - [x] No unresolved ordinary design choice remains.
 - [x] Each requirement has a measurable proof.
 - [x] The current Site controls and actual handler behavior are recorded.
+- [x] Menus 63 through 65 use the category that describes their site exports.
 - [x] Empty, failed, stale, encoded, escaped, and keyboard cases are included.
 - [x] The scope excludes all reserved source and shared files.
 - [x] The separate current filename concern is reported to the parent.
@@ -28,6 +29,7 @@
 - [x] Native and browser proofs measure real boundaries.
 - [x] Both negative guards require a counted failure.
 - [x] The safety registry remains authoritative.
+- [x] The category correction does not change run permission.
 - [x] The local-only handoff has no publication or deployment task.
 
 ## Notes
