@@ -58,7 +58,7 @@ jobs:
       contents: write
       # The job sets the auto-merge state and writes the notice comments.
       pull-requests: write
-    uses: jmorrison-juniper/misthelper-devtools/.github/workflows/reusable-auto-merge.yml@e8e093d205428b5503887267b6a9751fa7354be7 # v0.6.3
+    uses: jmorrison-juniper/misthelper-devtools/.github/workflows/reusable-auto-merge.yml@3c99f86586e2862b21dde310727bce6da353d7e5 # Verified merge recovery
     with:
       # The workflows that a push to main starts. The dispatch job reads this
       # one list, so a new main workflow needs one edit only.
