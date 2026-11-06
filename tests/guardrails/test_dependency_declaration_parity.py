@@ -1,10 +1,8 @@
-"""Prove that pyproject.toml declares every package of the requirements files (issue #3400).
+"""Prove that the locked exports match direct declarations in pyproject.toml (issue #3400).
 
-``pyproject.toml`` is the canonical dependency declaration. Before the lock file
-exists, each package in ``requirements.txt`` and ``requirements-dev.txt`` must
-appear in the ``dependencies`` list or in the ``dev`` extra, with a floor that is
-not lower and with an upper bound that is not looser. The guard prints the count
-of packages that it examined and fails when an input is unreadable or empty.
+The export files include transitive packages. Their ``via misthelper`` comments
+identify direct project packages. The guard checks those pins against the
+canonical declarations and fails when an input is unreadable or empty.
 """
 
 import logging
@@ -24,16 +22,40 @@ REQUIREMENT_FILES = ("requirements.txt", "requirements-dev.txt")  # The two file
 
 
 class DeclarationParity:
-    """Compare the requirement files with the pyproject declaration."""
+    """Compare direct locked exports with the pyproject declaration."""
+
+    @classmethod
+    def read_requirements(cls, path: Path) -> list[Requirement]:
+        """Parse direct project requirements from one generated export."""
+        logger.info("Reading generated dependency export %s", path.name)  # Trace the file before reading.
+        try:
+            lines = path.read_text(encoding="utf-8").splitlines()  # Read the export and split its package blocks.
+        except (OSError, UnicodeError) as error:
+            logger.error("Could not read dependency export %s: %s", path.name, error)  # Preserve the read failure.
+            raise
+        found: list[Requirement] = []  # Keep only packages that the project declares directly.
+        current: str | None = None  # Track the package line for its following UV annotations.
+        annotations: list[str] = []  # Store comments that identify the source of the current package.
+        for line in lines:
+            if line and not line[0].isspace() and not line.startswith("#"):
+                if current is not None and cls.is_direct(annotations):
+                    found.append(Requirement(current))  # Keep a direct project requirement.
+                current = line.split(" #")[0].strip()  # Remove any inline annotation from the requirement.
+                annotations = []  # Start a new annotation block for the next package.
+            elif current is not None:
+                annotations.append(line)  # Keep the source comments for the current package.
+        if current is not None and cls.is_direct(annotations):
+            found.append(Requirement(current))  # Keep the final direct package in the file.
+        logger.debug("Read %s direct requirements from %s", len(found), path.name)  # Report the measured count.
+        if not found:  # An empty parse means the guard read nothing.
+            raise AssertionError(f"No direct requirement found in {path}")
+        return found
 
     @staticmethod
-    def read_requirements(path: Path) -> list[Requirement]:
-        """Parse one requirements file, and fail when it is absent or empty."""
-        lines = [line.split(" #")[0].strip() for line in path.read_text(encoding="utf-8").splitlines()]  # Drop comments
-        found = [Requirement(line) for line in lines if line and not line.startswith("#")]  # Keep requirements
-        if not found:  # An empty parse means the guard read nothing.
-            raise AssertionError(f"No requirement found in {path}")
-        return found
+    def is_direct(annotations: list[str]) -> bool:
+        """Return whether UV identifies the root project as a package source."""
+        sources = {annotation.replace("#", "").strip() for annotation in annotations}  # Normalize UV comment text.
+        return "misthelper" in sources or "via misthelper" in sources  # Match direct package annotations.
 
     @staticmethod
     def read_declared(pyproject: Path) -> dict[str, list[Requirement]]:
@@ -76,6 +98,14 @@ class DeclarationParity:
     @classmethod
     def compare(cls, wanted: Requirement, item: Requirement) -> str | None:
         """Return why one declaration is looser than the wanted requirement, or None."""
+        exact_pins = [clause for clause in wanted.specifier if clause.operator == "=="]  # Find exact locked pins.
+        if len(exact_pins) == 1 and "*" not in exact_pins[0].version:
+            pinned_version = Version(exact_pins[0].version)  # Check the locked version against the declaration.
+            if not item.specifier.contains(pinned_version, prereleases=True):
+                return f"version {pinned_version} is outside {item.specifier}"
+            if str(wanted.marker or "") != str(item.marker or ""):
+                return f"marker {item.marker} differs from {wanted.marker}"
+            return None
         wanted_floor, item_floor = cls.floor(wanted), cls.floor(item)
         if wanted_floor and (item_floor is None or item_floor < wanted_floor):  # The floor must not drop.
             return f"floor {item_floor} is below {wanted_floor}"
@@ -117,7 +147,9 @@ def test_pyproject_declares_each_requirement() -> None:
         ("requests>=2.34.2,<3", [], "not declared"),
         ("waitress>=3.0.2 ; sys_platform == 'win32'", ["waitress>=3.0.2"], "marker"),
         ("black==26.10.1", ["black==26.10.1"], None),
-        ("black==26.10.1", ["black==26.10.0"], "floor 26.10.0 is below 26.10.1"),
+        ("black==26.10.1", ["black==26.10.0"], "version 26.10.1 is outside ==26.10.0"),
+        ("requests==2.34.2", ["requests>=2.34.2,<3"], None),
+        ("requests==3.0.0", ["requests>=2.34.2,<3"], "version 3.0.0 is outside <3,>=2.34.2"),
         ("pdfplumber>=0.11.10", ["pdfplumber>=0.11.10,<1"], None),
     ],
 )
@@ -133,7 +165,7 @@ def test_comparison_detects_a_looser_declaration(wanted: str, declared: list[str
 def test_audit_fails_on_an_empty_requirements_file(tmp_path: Path) -> None:
     """Fail closed when a requirements file holds no requirement."""
     (tmp_path / "requirements.txt").write_text("# only a comment\n", encoding="utf-8")
-    with pytest.raises(AssertionError, match="No requirement found"):
+    with pytest.raises(AssertionError, match="No direct requirement found"):
         DeclarationParity.read_requirements(tmp_path / "requirements.txt")
 
 
@@ -143,8 +175,11 @@ def test_audit_reports_a_missing_package(tmp_path: Path) -> None:
         '[project]\nname = "x"\ndependencies = ["requests>=2"]\n[project.optional-dependencies]\ndev = []\n',
         encoding="utf-8",
     )
-    (tmp_path / "requirements.txt").write_text("requests>=2\nflask>=3\n", encoding="utf-8")
-    (tmp_path / "requirements-dev.txt").write_text("black==1.0\n", encoding="utf-8")
+    (tmp_path / "requirements.txt").write_text(
+        "requests==2.0\n    # via misthelper\nurllib3==2.8\n    # via requests\nflask==3.0\n    # via misthelper\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "requirements-dev.txt").write_text("black==1.0\n    # via misthelper\n", encoding="utf-8")
     examined, defects = DeclarationParity.audit(tmp_path)
     assert examined == 3
     assert len(defects) == 2

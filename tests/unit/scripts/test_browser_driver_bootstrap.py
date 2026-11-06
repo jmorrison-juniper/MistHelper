@@ -28,6 +28,9 @@ logger = logging.getLogger(__name__)  # WHY: keep test log records on the module
 # because neither requirement file named either package.
 _REQUIREMENTS_DEV = Path(__file__).resolve().parents[3] / "requirements-dev.txt"
 
+# UV omits source comments from generated exports, so keep this note in the declaration.
+_PYPROJECT = Path(__file__).resolve().parents[3] / "pyproject.toml"
+
 # The workflow that runs the browser gate. It must download the browser and it
 # must run the suite in strict mode.
 _CI_WORKFLOW = Path(__file__).resolve().parents[3] / ".github" / "workflows" / "ci.yml"
@@ -48,13 +51,13 @@ def test_the_requirement_file_pins_the_browser_package(package: str) -> None:
     assert f"{package}==" in text, f"{package} must carry an exact pin in requirements-dev.txt"
 
 
-def test_the_requirement_file_names_the_browser_download() -> None:
-    """The pin MUST carry the warning that the package ships no browser."""
+def test_the_project_declaration_names_the_browser_download() -> None:
+    """The declaration MUST name the browser download that the package needs."""
     logger.info("Checking the browser download warning")  # Report the plan before the read.
-    text = _REQUIREMENTS_DEV.read_text(encoding="utf-8")  # Read the pinned tool list.
+    text = _PYPROJECT.read_text(encoding="utf-8")  # Read the canonical comment that UV does not export.
 
     # WHY: a reader who installs the package alone still cannot open a page.
-    assert "playwright install chromium" in text, "the pin must name the browser download command"
+    assert "python -m playwright install chromium" in text, "the declaration must name the browser download command"
 
 
 # ---------------------------------------------------------------------------
