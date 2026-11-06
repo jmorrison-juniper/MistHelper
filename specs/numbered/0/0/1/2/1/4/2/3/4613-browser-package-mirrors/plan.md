@@ -18,7 +18,7 @@ An unfamiliar configuration or an existing backup must fail without a rewrite.
 **Target Platform**: Existing `ubuntu-latest` runner.
 **Project Type**: Internal CI configuration.
 **Performance Goals**: Avoid the measured slow endpoint without claiming an unmeasured runtime.
-**Constraints**: Preserve all test and CI contracts. Do not retry CI, merge, or enable auto-merge.
+**Constraints**: Preserve all test and CI contracts. Do not retry CI or enable auto-merge. Follow revised FR-007 before considering a manual merge.
 **Scale/Scope**: One shared matrix setup step and one focused test module.
 
 ## Constitution Check
@@ -32,7 +32,7 @@ An unfamiliar configuration or an existing backup must fail without a rewrite.
 - Separate incremental remediation: consolidate existing workflow setup during a later owner-approved CI maintenance change.
 - Only the unique release-note fragment enters the established process folder.
 - No Mist Cloud requests, product outputs, service changes, dependency changes, or production operations occur.
-- User instructions prohibit retries, merges, and auto-merge. These override the generic delivery defaults.
+- Revised FR-007 permits merge consideration, not execution. Separate explicit user authorization remains required. Retries and auto-merge remain prohibited.
 - No additional agents are necessary because the research and implementation are one continuous trace.
 
 ## Project Structure
@@ -65,5 +65,8 @@ Before delivery, apply this patch to the complete #4208 workflow in memory and c
 
 The coordinator assigned the serial slot to #4613 after #4604 reached its browser job limit.
 Verify current main and validate the final commit before publication.
-Publish the linked pull request, but do not merge or enable auto-merge.
-Hosted transfer speed remains unproven.
+The original publication instruction prohibited merge and auto-merge.
+The user later authorized evidence review and a specification revision before merge consideration.
+Revised FR-007 records the current conditions. This revision does not authorize a merge, CI retry, or auto-merge.
+The specification links the hosted measurements and their limits.
+Main advanced after the evaluated head. A current candidate and its exact-head checks remain required before any later authorized merge.

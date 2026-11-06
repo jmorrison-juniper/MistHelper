@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-06
 
-**Status**: Specified
+**Status**: Implemented. Evidence reviewed. Merge not authorized.
 
 **Input**: Investigate and address #4613 without changing the browser job budget, test selection, assertions, required statuses, or CI policy.
 
@@ -35,6 +35,7 @@ A maintainer needs the complete browser suite and its existing failure rules aft
 1. **Given** the repair, **When** the workflow runs, **Then** the same browser installer, package sources, test directories, and assertions remain.
 2. **Given** a failed or incomplete shard, **When** the aggregator runs, **Then** the required result remains failed.
 3. **Given** PR #4208, **When** its owner reconciles the workflow, **Then** its WAN evidence upload remains unchanged.
+4. **Given** successful hosted evidence, **When** a maintainer considers a manual merge, **Then** current-base checks and separate user authorization remain required.
 
 ### Edge Cases
 
@@ -53,7 +54,9 @@ A maintainer needs the complete browser suite and its existing failure rules aft
 - **FR-004**: Preserve the 20-minute job limit, full shard selection, assertions, required names, services, and failure handling.
 - **FR-005**: Prove successful setup, repeat behavior, invalid inputs, backup failure, and rejected workflow mutations without external requests.
 - **FR-006**: Preserve PR #4208's separate WAN upload change without importing its product changes into this branch.
-- **FR-007**: Do not retry CI, merge, or enable auto-merge.
+- **FR-007**: Do not retry CI or enable auto-merge. Consider a manual merge only after evidence review and this authorized specification revision.
+  Require a current branch, successful required checks and CodeQL on the exact candidate, and the repository's serial validation slot.
+  Require separate explicit user authorization before executing a merge. This revision does not grant that authorization or change CI policy.
 
 ## Success Criteria *(mandatory)*
 
@@ -70,3 +73,14 @@ A maintainer needs the complete browser suite and its existing failure rules aft
 - Removing the slow route preserves signed package identity because the alternatives serve the same Ubuntu archive.
 - Offline equivalence does not measure hosted-runner transfer speed.
 - Earlier silent test stalls in #3736 have no proved connection to these downloads.
+
+## Evidence review and authorization
+
+The user selected: "Review the evidence and revise the specification before considering a merge".
+This authorizes this revision, not a merge, an automatic merge, a CI retry, or a check bypass.
+The branch remains owned by this session. PR #4208's workflow handover and upload-preservation requirement remain unchanged.
+
+[The hosted evidence](design/research.md#hosted-validation-and-revision-review) supports SC-004 for two evaluated heads.
+One successful run on each head does not guarantee future transfer speed.
+The earlier absolute merge prohibition remains the historical instruction. Revised FR-007 permits consideration only under its stated conditions.
+If main advances or this revision changes the candidate, earlier successful checks do not establish readiness for that new candidate.
