@@ -32,6 +32,7 @@ import pytest
 
 from src.foundation.support.refactors.endpoint_primary_key_strategies import (
     ENDPOINT_PRIMARY_KEY_STRATEGIES,
+    SleTrendIdentity,
     SleWindowIdentity,
 )
 from src.operations.exporting.export.endpoint_catalog import (
@@ -195,7 +196,10 @@ class TestSlePrimaryKeys:
                 **result,
                 count=len(result["windows"]),
                 invalid=sum(
-                    not SleWindowIdentity.matches(ENDPOINT_PRIMARY_KEY_STRATEGIES[name]["primary_key"])
+                    not (
+                        SleTrendIdentity.matches(ENDPOINT_PRIMARY_KEY_STRATEGIES[name]["primary_key"])
+                        or SleWindowIdentity.matches(ENDPOINT_PRIMARY_KEY_STRATEGIES[name]["primary_key"])
+                    )
                     for name in result["windows"]
                 ),
             )
@@ -211,7 +215,10 @@ class TestSlePrimaryKeys:
         incomplete = tuple(
             name
             for name in result["windows"]
-            if not SleWindowIdentity.matches(ENDPOINT_PRIMARY_KEY_STRATEGIES[name]["primary_key"])
+            if not (
+                SleTrendIdentity.matches(ENDPOINT_PRIMARY_KEY_STRATEGIES[name]["primary_key"])
+                or SleWindowIdentity.matches(ENDPOINT_PRIMARY_KEY_STRATEGIES[name]["primary_key"])
+            )
         )
         assert incomplete == ()
 

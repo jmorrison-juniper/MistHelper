@@ -24,7 +24,10 @@ from typing import Any  # Column values from the Mist API are heterogeneous
 from src.foundation.runtime.config.source_dependency_resolver import (
     SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
 )
-from src.foundation.support.refactors.endpoint_primary_key_strategies import SleWindowIdentity
+from src.foundation.support.refactors.endpoint_primary_key_strategies import (
+    SleTrendIdentity,
+    SleWindowIdentity,
+)
 
 logger = logging.getLogger(__name__)  # Keep refactor logs tied to this module.
 
@@ -188,15 +191,19 @@ class SQLiteDatabaseWriter:  # Upsert records into SQLite.
 
     def _prepare_sle_window_rows(self) -> None:
         """Identify only new SLE rows so legacy surrogate rows remain unchanged."""
-        fields = SleWindowIdentity.fields(self.api_function_name or "")
+        operation = self.api_function_name or ""
+        fields = SleTrendIdentity.fields(operation)
+        identity = SleTrendIdentity
+        if not fields:
+            fields = SleWindowIdentity.fields(operation)
+            identity = SleWindowIdentity
         if not fields:
             return
         logger.info("Preparing new SLE window rows for table %s", self.table_name)
         if any("misthelper_internal_id" in row for row in self.processed_data):
             raise ValueError("SLE exports must not supply legacy surrogate identifiers")
         self.processed_data = [
-            {**row, "misthelper_sle_window_key": SleWindowIdentity.key(row, list(fields))}
-            for row in self.processed_data
+            {**row, "misthelper_sle_window_key": identity.key(row, list(fields))} for row in self.processed_data
         ]
         logger.debug("Prepared %d new SLE window rows for table %s", len(self.processed_data), self.table_name)
 
@@ -284,7 +291,8 @@ class SQLiteDatabaseWriter:  # Upsert records into SQLite.
 
     def _create_sle_window_identity_index(self) -> None:
         """Constrain new window rows without updating or deduplicating legacy rows."""
-        if not SleWindowIdentity.fields(self.api_function_name or ""):
+        operation = self.api_function_name or ""
+        if not SleTrendIdentity.fields(operation) and not SleWindowIdentity.fields(operation):
             return
         safe_table = self._get_safe_table_name()
         logger.info("Creating the new-row SLE identity index for table %s", self.table_name)
@@ -347,7 +355,8 @@ class SQLiteDatabaseWriter:  # Upsert records into SQLite.
     def _determine_insert_mode(self) -> str:  # Choose upsert vs insert.
         """Determine insert strategy based on schema type."""
         cursor = self._require_cursor()  # WHY: fail visibly under python -O before a DELETE can run.
-        if SleWindowIdentity.fields(self.api_function_name or ""):
+        operation = self.api_function_name or ""
+        if SleTrendIdentity.fields(operation) or SleWindowIdentity.fields(operation):
             logger.info("Using keyed replacement for SLE windows in table %s", self.table_name)
             logger.debug("Preserving legacy rows while replacing keyed SLE windows in table %s", self.table_name)
             return "INSERT OR REPLACE"

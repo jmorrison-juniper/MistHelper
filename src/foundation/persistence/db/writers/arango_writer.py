@@ -20,7 +20,10 @@ from arango.collection import StandardCollection
 
 from src.foundation.persistence.db import ARANGO_DEFAULT_HOSTNAME, DatabaseConfig, WriteResult, host_resolver
 from src.foundation.persistence.db.database_schema_utils import ArangoIndexManager, ArangoIndexState
-from src.foundation.support.refactors.endpoint_primary_key_strategies import SleWindowIdentity
+from src.foundation.support.refactors.endpoint_primary_key_strategies import (
+    SleTrendIdentity,
+    SleWindowIdentity,
+)
 
 logger = structlog.get_logger(__name__)  # WHY: module-scoped logger tags every event
 
@@ -4055,6 +4058,8 @@ class ArangoDBWriter:  # WHY: primary writer class for the ArangoDB polyglot bac
     @staticmethod
     def _compute_key(doc: dict, strategy_type: str, primary_keys: list[str]) -> str:  # WHY: key resolution helper
         """Return the _key that _prepare_document should assign for this strategy."""
+        if SleTrendIdentity.matches(primary_keys):
+            return SleTrendIdentity.key(doc, primary_keys)
         if SleWindowIdentity.matches(primary_keys):
             return SleWindowIdentity.key(doc, primary_keys)
         if strategy_type == "auto_increment_with_unique":  # WHY: other auto-increment strategies need unique IDs.

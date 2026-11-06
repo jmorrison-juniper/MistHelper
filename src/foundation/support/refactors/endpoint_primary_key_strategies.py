@@ -15,8 +15,8 @@ src.foundation.support.refactors.endpoint_primary_key_strategies import
 ENDPOINT_PRIMARY_KEY_STRATEGIES``.
 
 The catalog remains a bare dictionary without a wrapper or compatibility shim.
-``SleWindowIdentity`` validates and constructs complete keys for SLE trend and
-summary-window strategies. Other endpoint key behavior stays unchanged.
+``SleTrendIdentity`` validates trend keys, and ``SleWindowIdentity`` validates
+histogram and impact-summary keys. Other endpoint key behavior stays unchanged.
 
 Strategy schema (each value): {
     "type": "natural_pk" | "composite_pk" | "auto_pk" | "time_series",
@@ -33,59 +33,52 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 
 
-class SleWindowIdentity:
-    """Validate complete SLE window identities without changing unrelated endpoint keys."""
+class SleTrendIdentity:
+    """Validate complete SLE trend identities without changing unrelated endpoint keys."""
 
     @staticmethod
     def fields(operation: str) -> tuple[str, ...]:
-        """Return the ordered identity columns for supported SLE window operations."""
+        """Return the ordered identity columns for supported SLE trend operations."""
         identifiers = ("site_id", "scope", "scope_id", "metric")
         if operation == "getSiteSleClassifierSummaryTrend":
             return (*identifiers, "classifier_name", "start", "end")
         if operation == "getSiteSleSummaryTrend":
             return (*identifiers, "start", "end")
-        if operation == "getSiteSleHistogram":
-            return (*identifiers, "start", "end")
-        if operation == "getSiteSleImpactSummary":
-            return (*identifiers, "classifier", "failure", "start", "end")
         return ()
 
     @staticmethod
     def matches(primary_keys: list[str]) -> bool:
-        """Match only the four complete SLE window identity tuples."""
+        """Match only the two complete SLE trend identity tuples."""
         return tuple(primary_keys) in (
-            SleWindowIdentity.fields("getSiteSleSummaryTrend"),
-            SleWindowIdentity.fields("getSiteSleClassifierSummaryTrend"),
-            SleWindowIdentity.fields("getSiteSleHistogram"),
-            SleWindowIdentity.fields("getSiteSleImpactSummary"),
+            SleTrendIdentity.fields("getSiteSleSummaryTrend"),
+            SleTrendIdentity.fields("getSiteSleClassifierSummaryTrend"),
         )
 
     @staticmethod
-    def enrich(row: dict[str, Any], arguments: dict[str, str], operation: str) -> dict[str, Any]:
-        """Use only selected path identifiers and preserve returned window boundaries."""
-        source_fields = ("site_id", "scope", "scope_id", "metric")
-        dimensions = {name: arguments.get(name) for name in source_fields}
-        if operation in ("getSiteSleSummaryTrend", "getSiteSleClassifierSummaryTrend") and "classifier" in arguments:
-            dimensions["classifier_name"] = arguments.get("classifier")
+    def enrich(row: dict[str, Any], arguments: dict[str, str], operation: str | None = None) -> dict[str, Any]:
+        """Use selected request identifiers rather than untrusted response dimensions."""
+        if operation is not None and not SleTrendIdentity.fields(operation):
+            raise ValueError(f"Unsupported SLE trend operation: {operation}")
+        dimensions = {name: value for name, value in arguments.items() if name != "classifier"}
+        if "classifier" in arguments:
+            dimensions["classifier_name"] = arguments["classifier"]
         return {**row, **dimensions}
 
-    @staticmethod
-    def key(row: dict[str, Any], primary_keys: list[str]) -> str:
+    @classmethod
+    def key(cls, row: dict[str, Any], primary_keys: list[str]) -> str:
         """Build an unambiguous stable key and reject incomplete or invalid windows."""
-        values = [SleWindowIdentity._value(name, row.get(name)) for name in primary_keys]
+        values = [cls._value(name, row.get(name)) for name in primary_keys]
         if Decimal(values[-1]) < Decimal(values[-2]):
             raise ValueError("SLE window end precedes start")
         payload = json.dumps(values, ensure_ascii=True, separators=(",", ":")).encode("ascii")
         return "sle_" + hashlib.sha256(payload).hexdigest()
 
-    @staticmethod
-    def _value(name: str, value: Any) -> str:
+    @classmethod
+    def _value(cls, name: str, value: Any) -> str:
         """Normalize boundaries and validate source-specific string identity fields."""
         if name in ("start", "end"):
-            return SleWindowIdentity._window_value(name, value)
-        if not isinstance(value, str):
-            raise ValueError(f"Missing or invalid SLE identity field: {name}")
-        if name not in ("classifier", "failure") and not value.strip():
+            return cls._window_value(name, value)
+        if not isinstance(value, str) or not value.strip():
             raise ValueError(f"Missing or invalid SLE identity field: {name}")
         return value
 
@@ -101,6 +94,46 @@ class SleWindowIdentity:
         if not number.is_finite() or number < 0:
             raise ValueError(f"Invalid SLE window field: {name}")
         return format(number.normalize(), "f")
+
+
+class SleWindowIdentity(SleTrendIdentity):
+    """Validate complete histogram and impact-summary window identities."""
+
+    @staticmethod
+    def fields(operation: str) -> tuple[str, ...]:
+        """Return the ordered identity columns for histogram and impact summaries."""
+        identifiers = ("site_id", "scope", "scope_id", "metric")
+        if operation == "getSiteSleHistogram":
+            return (*identifiers, "start", "end")
+        if operation == "getSiteSleImpactSummary":
+            return (*identifiers, "classifier", "failure", "start", "end")
+        return ()
+
+    @staticmethod
+    def matches(primary_keys: list[str]) -> bool:
+        """Match only the two complete SLE summary-window identity tuples."""
+        return tuple(primary_keys) in (
+            SleWindowIdentity.fields("getSiteSleHistogram"),
+            SleWindowIdentity.fields("getSiteSleImpactSummary"),
+        )
+
+    @staticmethod
+    def enrich(row: dict[str, Any], arguments: dict[str, str], operation: str | None = None) -> dict[str, Any]:
+        """Use selected path identifiers while preserving returned windows and impact dimensions."""
+        if operation is None or not SleWindowIdentity.fields(operation):
+            raise ValueError(f"Unsupported SLE window operation: {operation}")
+        source_fields = ("site_id", "scope", "scope_id", "metric")
+        dimensions = {name: arguments.get(name) for name in source_fields}
+        return {**row, **dimensions}
+
+    @classmethod
+    def _value(cls, name: str, value: Any) -> str:
+        """Allow empty impact labels while validating every other identity component."""
+        if name in ("classifier", "failure"):
+            if not isinstance(value, str):
+                raise ValueError(f"Missing or invalid SLE identity field: {name}")
+            return value
+        return super()._value(name, value)
 
 
 # This configuration determines how each API endpoint's data should be stored in Redis/SQLite

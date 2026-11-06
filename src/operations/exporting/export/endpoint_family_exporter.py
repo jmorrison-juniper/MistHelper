@@ -20,7 +20,10 @@ from src.foundation.models.data.data_processing_utils import (
 from src.foundation.runtime.config.source_dependency_resolver import (
     SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
 )
-from src.foundation.support.refactors.endpoint_primary_key_strategies import SleWindowIdentity
+from src.foundation.support.refactors.endpoint_primary_key_strategies import (
+    SleTrendIdentity,
+    SleWindowIdentity,
+)
 from src.foundation.support.utils.input_utils import InputUtils  # WHY: MSP selection must use the EOF-safe prompt.
 from src.operations.exporting.export.endpoint_catalog import (
     menu_text,
@@ -690,13 +693,20 @@ class EndpointFamilyExporter:
         rows: list[dict[str, Any]], operation: str, arguments: dict[str, str] | None
     ) -> list[dict[str, Any]]:
         """Add and validate complete identities before any SLE window output is written."""
-        fields = SleWindowIdentity.fields(operation)
-        if not fields:
-            return rows
+        trend_fields = SleTrendIdentity.fields(operation)
+        if trend_fields:
+            identity = SleTrendIdentity
+            fields = trend_fields
+            identified = [SleTrendIdentity.enrich(row, arguments or {}) for row in rows]
+        else:
+            fields = SleWindowIdentity.fields(operation)
+            if not fields:
+                return rows
+            identity = SleWindowIdentity
+            identified = [SleWindowIdentity.enrich(row, arguments or {}, operation) for row in rows]
         logger.info("Preparing SLE window identities for %s", operation)
-        identified = [SleWindowIdentity.enrich(row, arguments or {}, operation) for row in rows]
         for row in identified:
-            SleWindowIdentity.key(row, list(fields))
+            identity.key(row, list(fields))
         logger.debug("Prepared %d complete SLE window identities for %s", len(identified), operation)
         return identified
 
