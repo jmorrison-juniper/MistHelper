@@ -64,12 +64,15 @@ def test_repeated_export_updates_ap_without_duplicates(tmp_path: Path, monkeypat
 
 
 @pytest.mark.parametrize(
-    "payload,raw_data",
-    [(None, ""), ({}, "<html>invalid JSON</html>")],
+    "response",
+    [
+        SimpleNamespace(status_code=200, data=None, raw_data="", next=None),
+        SimpleNamespace(status_code=200, data={}, raw_data="bad json", next=None),
+    ],
     ids=["empty_body", "malformed_json"],
 )
 def test_empty_body_and_malformed_json_block_sqlite_output(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, payload: object, raw_data: str
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, response: SimpleNamespace
 ) -> None:
     """Broken SDK bodies must fail before the real SQLite export boundary."""
     monkeypatch.chdir(tmp_path)
@@ -78,7 +81,6 @@ def test_empty_body_and_malformed_json_block_sqlite_output(
         apisession=Mock(),
         DataExporter=DataExporter,
     )
-    response = SimpleNamespace(status_code=200, data=payload, raw_data=raw_data, next=None)
     with (
         patch("src.operations.exporting.ap_warning_report.operation.SourceDependencyResolver", runtime),
         patch(

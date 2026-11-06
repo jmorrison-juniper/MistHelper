@@ -72,6 +72,8 @@ The first test-quality check found two missing SQLite failure cases.
 The added cases reject empty bodies and malformed JSON before the SQLite writer runs.
 Their first assertions expected the internal client message rather than the public report message.
 The assertions now use the public error boundary, and both cases pass.
+The analyzer requires literal failure bodies.
+The fixtures now bind those bodies directly to SDK response objects.
 The test-quality baseline remains unchanged.
 
 ## Remaining work
