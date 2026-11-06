@@ -11,8 +11,10 @@ Preserve record names, content, and ownership.
 Prepare discovery and guard changes before any approved relocation.
 The initial phase delivers planning.
 Subsequent authorization permits safe process implementation and the single #4202 move.
-The shared-tool release and Redis owner action remain separate prerequisites.
-Issue #4263 remains open.
+PR #4223 merged the Redis record at its grouped route.
+The reviewed recursive task-audit release is pinned.
+The full audit reports unrelated missing references.
+Issue #4263 remains open for review.
 
 ## Technical Context
 
@@ -150,13 +152,13 @@ Executable numeric vectors exposed a boxed nullable-number defect in the existin
 The resolver now passes the numeric value directly and preserves the prescribed eight-digit route.
 Focused tests verify both route kinds and intentional selector persistence.
 
-The public task-audit CLI cannot accept an explicit nested feature path.
-Its `--root` option still appends `specs/` and scans direct children.
-The verified upstream blocker is [jmorrison-juniper/misthelper-devtools#72](https://github.com/jmorrison-juniper/misthelper-devtools/issues/72).
-No installed package was changed.
+The recursive task audit scans grouped records.
+It scanned this feature's task file and reported no finding for it.
+It exits 1 on missing references in other records.
+Those records remain outside this issue's scope.
 
 The coordinator subsequently relayed user authorization for the single merged #4202 record move.
 The [migration contract](design/contracts/migration.md) records its verified nine-file map and two reference-only edits.
 The live root now has four direct records and one group.
-No other record or PR #4223 file changed.
-PR #4223 remains blocked pending its owner's separate rebase and path update.
+The Redis record now uses the grouped route after PR #4223 merged.
+PR #4272 removed the nested duplicate tracked by issue #4269.
