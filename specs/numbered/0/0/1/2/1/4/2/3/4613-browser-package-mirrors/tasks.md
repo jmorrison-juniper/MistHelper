@@ -31,12 +31,14 @@
 - [x] T007 Add `changelog.d/issue-4613-browser-package-mirrors.md` and complete the focused offline gates from `design/quickstart.md`. (delivered: changelog.d/issue-4613-browser-package-mirrors.md)
 - [x] T008 Analyze `spec.md`, `plan.md`, and `tasks.md`, and commit the change. (delivered: spec.md, plan.md, tasks.md)
 - [x] T009 Validate the publication tree and prepare the linked pull request body using `.github/PULL_REQUEST_TEMPLATE.md`. The coordinator assigned the serial slot to #4613. (delivered: .github/PULL_REQUEST_TEMPLATE.md, design/quickstart.md)
+- [x] T010 Review hosted evidence and revise FR-007 under the user's later instruction. Preserve separate merge authorization and all validation requirements. (delivered: spec.md, plan.md, design/research.md, design/checklists/requirements.md)
 
 ## Dependencies and execution
 
 T001 and T002 precede implementation.
 T003 precedes T004. T005 and T006 follow T004.
 T007 and T008 follow both user stories. T009 follows T008.
+T010 follows T009 and the user's explicit revision instruction.
 The two stories share the workflow and test module, so implementation remains serial.
 Documentation review can run independently from offline test execution.
 
@@ -44,6 +46,7 @@ Documentation review can run independently from offline test execution.
 
 Deliver the route change and its contracts together.
 Do not treat hosted-runner speed as locally verified.
-A normal later CI run must measure the runtime criterion. No retry is authorized.
+A normal CI run measured the runtime criterion. The specification links the hosted evidence and its limits. No retry is authorized.
 The session records the published PR URL and exact head separately after the final committed-difference gate.
-Do not merge or enable auto-merge.
+Revised FR-007 permits merge consideration only under its stated conditions.
+Do not execute a merge without separate explicit user authorization. Do not enable auto-merge.

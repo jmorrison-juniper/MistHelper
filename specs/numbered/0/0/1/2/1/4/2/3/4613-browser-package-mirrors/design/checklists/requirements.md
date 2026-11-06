@@ -31,4 +31,8 @@
 
 ## Notes
 
-Hosted-runner speed remains unmeasured until a normal CI run. This change does not authorize a retry.
+The authorized revision preserves every original runtime and validation criterion.
+FR-007 now permits merge consideration after evidence review, but requires separate explicit user authorization before execution.
+Retries, auto-merge, and check bypasses remain prohibited.
+The [hosted evidence](../research.md#hosted-validation-and-revision-review) measures two evaluated heads, not a future candidate or guaranteed network speed.
+All checklist items remain satisfied. No clarification marker remains.

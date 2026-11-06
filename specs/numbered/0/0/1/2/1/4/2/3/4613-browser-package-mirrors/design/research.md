@@ -64,3 +64,32 @@ Its diff adds only the WAN Performance evidence upload in that file.
 The user granted the handover, and this session notified its owner before editing.
 Keep that upload unchanged during reconciliation.
 The issue artifact list returned no artifacts. Both diagnostic ZIP artifacts and all issue comments were read.
+
+## Hosted validation and revision review
+
+The review on 2026-11-06 inspected the live PR, completed job logs, run identities, required checks, and branch ownership.
+The local branch and live PR head both identified `f5247c68c01cd3badd15f62e23ef14cbdbc3d2b7`.
+Only PR #4617 owns these specification records. The worktree was clean before this revision.
+
+| Evaluated head | Web-portal job | Browser installation | Package payload | Full selected result |
+| - | - | - | - | - |
+| `17ea00e87c767fef956337de6babf9cf9a626b8b` | [127810704470](https://github.com/jmorrison-juniper/MistHelper/actions/runs/42193119980/job/127810704470) | 22 seconds | 21.1 MB in 2 seconds, 9490 kB/s | 453 passed, two warnings, 638.43 seconds |
+| `f5247c68c01cd3badd15f62e23ef14cbdbc3d2b7` | [128092020295](https://github.com/jmorrison-juniper/MistHelper/actions/runs/42274893165/job/128092020295) | 22 seconds | 21.1 MB in 1 second, 14.4 MB/s | 453 passed, two warnings, 667.20 seconds |
+
+The rebased run completed successfully with `run_attempt: 1` on the second evaluated head.
+Mirror preparation succeeded at `19:02:52Z`. Browser installation ran from `19:02:52Z` through `19:03:14Z`.
+The job ran from `19:01:53Z` through `19:14:35Z`, within the unchanged 20-minute limit.
+Its log separately records 12.9 MB of package indexes in four seconds.
+The required-check query reported 15 passed and zero failed. CodeQL, all E2E shards, and Upgrade portal journeys also passed.
+
+These observations satisfy SC-004 for the evaluated heads. They do not prove future transfer speed or repair the separate #3736 silent interval.
+The Azure failure cause remains unknown. No workflow retry produced these measurements.
+
+The user authorized evidence review and specification revision before merge consideration.
+Revised FR-007 preserves the retry and auto-merge prohibitions and requires separate explicit merge authorization.
+The runtime budget, selected cases, assertions, required statuses, and CI policy remain unchanged.
+No workflow or test source changes are part of this revision. PR #4208's upload intent remains unchanged.
+
+At review, live main identified `d29cfd3984bcd00074d7b73c6d786be9edce249c`, beyond this branch's evaluated base.
+This revision therefore does not establish current-base merge readiness.
+Any later candidate needs applicable local validation and exact-head required checks, including CodeQL.
