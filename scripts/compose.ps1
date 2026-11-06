@@ -85,8 +85,8 @@ if ($LASTEXITCODE -ne 0) {
 # "up-corporate-ca" merges the certificate overlay only when requested.
 #
 # "check-revision" reads the commit label of the running container and
-# compares the image inputs against origin/main. An empty label names a local
-# build, because only the CI build writes the label.
+# compares the image inputs against origin/main. Local builds carry the source
+# commit and a dirty marker when uncommitted changes exist.
 if ($ComposeArguments.Count -gt 0 -and $ComposeArguments[0] -eq "build") {
     $BuildFile = Join-Path $RepositoryRoot "compose.build.yml"  # The file that holds the build section.
     if (-not (Test-Path $BuildFile)) {
@@ -117,16 +117,37 @@ if ($ComposeArguments.Count -gt 0 -and $ComposeArguments[0] -eq "build") {
         $BuildImageTag = "misthelper:local"  # Keep the stale image separate from the published name.
         Write-Host "Stale build approved. The image will use the local-only tag misthelper:local." -ForegroundColor Yellow  # Confirm the safe image name.
     }
+    Write-Host "Reading the source revision and checkout status before the image build." -ForegroundColor Cyan
+    $SourceRevision = [string](& git -C $RepositoryRoot rev-parse HEAD)
+    if ($LASTEXITCODE -ne 0 -or $SourceRevision -notmatch '\A(?:[0-9a-f]{40}|[0-9a-f]{64})\z') {
+        throw "Could not read a valid source revision, so the image build stopped."
+    }
+    $CheckoutChanges = @(& git -C $RepositoryRoot status --porcelain --untracked-files=normal)
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not read the checkout status, so the image build stopped."
+    }
+    if ($CheckoutChanges.Count -gt 0) {
+        $SourceRevision += "-dirty"
+    }
+    Write-Verbose "The image source revision is $SourceRevision."
+    $HadBuildRevision = Test-Path Env:MISTHELPER_BUILD_REVISION
+    $PreviousBuildRevision = $env:MISTHELPER_BUILD_REVISION
     $HadBuildImage = Test-Path Env:MISTHELPER_BUILD_IMAGE  # Record whether the caller already set the build image.
     $PreviousBuildImage = $env:MISTHELPER_BUILD_IMAGE  # Preserve the caller value for later restoration.
     $env:MISTHELPER_BUILD_IMAGE = $BuildImageTag  # Pass the selected image name to the compose overlay.
     $BuildExitCode = 1  # Keep a failure result if the provider cannot return normally.
     try {  # Ensure the caller environment is restored after provider success or failure.
+        $env:MISTHELPER_BUILD_REVISION = $SourceRevision
         Write-Host "Building the image as $BuildImageTag." -ForegroundColor Green  # Name the image before the provider starts.
         & $Interpreter -m podman_compose -f $ComposeFile -f $BuildFile build  # Build only after the revision safety check.
         $BuildExitCode = $LASTEXITCODE  # Preserve the provider result before cleanup.
         Write-Verbose "The compose build exited with status $BuildExitCode."  # Report the provider result for diagnostics.
     } finally {  # Restore process state so later compose commands keep their prior environment.
+        if ($HadBuildRevision) {
+            $env:MISTHELPER_BUILD_REVISION = $PreviousBuildRevision
+        } else {
+            Remove-Item Env:MISTHELPER_BUILD_REVISION -ErrorAction SilentlyContinue
+        }
         if ($HadBuildImage) {  # Keep an environment value that the caller supplied.
             $env:MISTHELPER_BUILD_IMAGE = $PreviousBuildImage  # Restore the caller's original image selection.
         } else {  # Remove the temporary value when the caller had none.
@@ -163,13 +184,18 @@ if ($ComposeArguments.Count -gt 0 -and $ComposeArguments[0] -eq "check-revision"
         throw "The container misthelper-app is absent, so its revision cannot be read."
     }
     if ([string]::IsNullOrWhiteSpace($RevisionLabel)) {
-        Write-Host "The container holds no revision label. It runs a local build, not the CI image." -ForegroundColor Red
+        Write-Host "The container holds no revision label. Its source revision cannot be verified. Rebuild through scripts/compose.ps1 build or use a labeled CI image." -ForegroundColor Red
         exit 1
     }
-    $RevisionCommit = (git -C $RepositoryRoot rev-parse "$RevisionLabel^{commit}").Trim()
+    if ($RevisionLabel.EndsWith("-dirty")) {
+        Write-Host "The container runs revision $RevisionLabel with uncommitted changes. Its image inputs cannot be verified against origin/main. Build from a clean checkout before checking again." -ForegroundColor Yellow
+        exit 1
+    }
+    $RevisionCommit = git -C $RepositoryRoot rev-parse --verify --end-of-options "$RevisionLabel^{commit}"
     if ($LASTEXITCODE -ne 0) {
         throw "The container revision label '$RevisionLabel' does not name a commit in this repository."
     }
+    $RevisionCommit = $RevisionCommit.Trim()
     $OriginHead = (git -C $RepositoryRoot rev-parse origin/main).Trim()  # The tested commit that CI published.
     if ($LASTEXITCODE -ne 0) {
         throw "The repository has no origin/main, so the revision cannot be compared."
