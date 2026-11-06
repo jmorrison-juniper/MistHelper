@@ -113,6 +113,11 @@ Use MistHelper when you need one of these.
 | Restore firmware policies with complete verified recovery backups and progress (menu 306) | [Backup restoration](documentation/backup-restoration.md) |
 | Export connected or disconnected APs with reported warning or error codes (menu 307) | [AP warning report](documentation/ap-warning-report.md) |
 
+Repeated site SLE histogram exports replace the keyed record for matching
+request dimensions and returned `start` and `end` values. Impact-summary exports
+also match on returned `classifier` and `failure` values. Both exports preserve
+all existing SQLite rows and ArangoDB documents.
+
 ## How to set it up as a container
 
 The container is the supported way to run MistHelper.

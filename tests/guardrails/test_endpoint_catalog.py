@@ -30,7 +30,11 @@ from unittest.mock import MagicMock, Mock
 
 import pytest
 
-from src.foundation.support.refactors.endpoint_primary_key_strategies import ENDPOINT_PRIMARY_KEY_STRATEGIES
+from src.foundation.support.refactors.endpoint_primary_key_strategies import (
+    ENDPOINT_PRIMARY_KEY_STRATEGIES,
+    SleTrendIdentity,
+    SleWindowIdentity,
+)
 from src.operations.exporting.export.endpoint_catalog import (
     DESTRUCTIVE,
     ENDPOINT_CATALOG,
@@ -188,8 +192,16 @@ class TestSlePrimaryKeys:
         print(
             "primary_key_scan entries={entries} summaries={summaries} trends={trends} "
             "mapped={mapped} unmapped={unmapped} auto_envelopes={auto_envelopes} "
-            "window_objects={count} other_defects=getSiteSleHistogram,getSiteSleImpactSummary".format(
-                **result, count=len(result["windows"])
+            "window_objects={count} invalid_window_identities={invalid}".format(
+                **result,
+                count=len(result["windows"]),
+                invalid=sum(
+                    not (
+                        SleTrendIdentity.matches(ENDPOINT_PRIMARY_KEY_STRATEGIES[name]["primary_key"])
+                        or SleWindowIdentity.matches(ENDPOINT_PRIMARY_KEY_STRATEGIES[name]["primary_key"])
+                    )
+                    for name in result["windows"]
+                ),
             )
         )
         assert result["entries"] == len(ENDPOINT_PRIMARY_KEY_STRATEGIES) > 0
@@ -200,17 +212,40 @@ class TestSlePrimaryKeys:
             "getSiteSleImpactSummary",
             "getSiteSleSummaryTrend",
         )
-        other_defects = tuple(
-            name for name in result["windows"] if ENDPOINT_PRIMARY_KEY_STRATEGIES[name]["type"] != "composite_pk"
+        incomplete = tuple(
+            name
+            for name in result["windows"]
+            if not (
+                SleTrendIdentity.matches(ENDPOINT_PRIMARY_KEY_STRATEGIES[name]["primary_key"])
+                or SleWindowIdentity.matches(ENDPOINT_PRIMARY_KEY_STRATEGIES[name]["primary_key"])
+            )
         )
-        assert other_defects == ("getSiteSleHistogram", "getSiteSleImpactSummary")
+        assert incomplete == ()
 
-    @pytest.mark.parametrize("operation", ("getSiteSleSummaryTrend", "getSiteSleClassifierSummaryTrend"))
+    @pytest.mark.parametrize(
+        "operation",
+        (
+            "getSiteSleSummaryTrend",
+            "getSiteSleClassifierSummaryTrend",
+            "getSiteSleHistogram",
+            "getSiteSleImpactSummary",
+        ),
+    )
     def test_primary_key_fields_are_complete(self, operation: str) -> None:
-        """Retain every request dimension and both returned window boundaries."""
+        """Retain the exact source dimensions and response fields for each SLE window."""
         fields = ["site_id", "scope", "scope_id", "metric"]
-        fields += ["classifier_name"] if "Classifier" in operation else []
-        assert ENDPOINT_PRIMARY_KEY_STRATEGIES[operation]["primary_key"] == [*fields, "start", "end"]
+        if operation == "getSiteSleClassifierSummaryTrend":
+            fields += ["classifier_name"]
+        if operation == "getSiteSleImpactSummary":
+            fields += ["classifier", "failure"]
+        fields += ["start", "end"]
+        assert ENDPOINT_PRIMARY_KEY_STRATEGIES[operation]["primary_key"] == fields
+        expected_type = (
+            "auto_increment_with_unique"
+            if operation in ("getSiteSleHistogram", "getSiteSleImpactSummary")
+            else "composite_pk"
+        )
+        assert ENDPOINT_PRIMARY_KEY_STRATEGIES[operation]["type"] == expected_type
 
     @pytest.mark.parametrize("table", ({}, {"getSummary": {"type": "auto_increment_with_unique"}}))
     def test_primary_key_zero_input_fails(self, table: dict[str, dict[str, Any]]) -> None:

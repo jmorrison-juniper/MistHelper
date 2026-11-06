@@ -90,6 +90,19 @@ Keep the rule in one place, so the instructions cannot disagree.
 
 In short, choose the endpoint in the Mist API first.
 Define the primary key strategy before you export data.
+
+### SLE summary window keys
+
+The site SLE histogram identity uses `site_id`, `scope`, `scope_id`, `metric`,
+`start`, and `end`. The impact-summary identity adds `classifier` and `failure`.
+The exporter uses the selected request path values and the actual response
+boundaries. It does not use measurements, labels, or export time as identity.
+
+A matching export replaces only its new keyed record. A different window or
+request identity creates a separate keyed record. Existing SQLite rows and
+ArangoDB documents keep their original identifiers and values. The repair does
+not migrate or remove legacy records.
+
 Put the operation class in the matching `src\` package.
 Register the menu entry after the operation exists.
 Update the user documents and the release-note fragment.

@@ -124,7 +124,7 @@ class TestPayloadValues:
             harness.close()
 
 
-class TestSleWindowIdentity:
+class TestSleTrendIdentity:
     """Retain legacy documents while enforcing complete new window identities."""
 
     @pytest.fixture(params=("getSiteSleSummaryTrend", "getSiteSleClassifierSummaryTrend"))
