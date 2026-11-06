@@ -9,16 +9,13 @@ event loop, and for a cache that stops the repeat upstream call.
 from __future__ import annotations
 
 import asyncio
-import json
-import logging
 import threading
 import time
 from typing import Any
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
 import httpx
 import pytest
-import requests
 from fastapi import Depends, FastAPI
 
 from src.api.deps import get_db_session
@@ -307,6 +304,9 @@ class TestUpstreamFailureSeparation:
     @staticmethod
     def _native_refusal_response(status_code: int) -> Any:
         """Build a native SDK response with plausible privilege data."""
+        import json  # WHY: serialize plausible data for the SDK response.
+        import requests  # WHY: model the response at the HTTP boundary.
+
         from mistapi.__api_response import APIResponse  # WHY: load the parser only inside the test helper.
 
         response = requests.Response()  # WHY: model the response at the HTTP boundary.
@@ -327,6 +327,9 @@ class TestUpstreamFailureSeparation:
         caplog: pytest.LogCaptureFixture,
     ) -> None:
         """A native Mist 4xx response must not grant plausible response privileges."""
+        import logging  # WHY: capture the status-specific rejection signal.
+        from unittest.mock import patch  # WHY: keep SDK calls offline and deterministic.
+
         response = self._native_refusal_response(401)  # WHY: exercise HTTP rejection through APIResponse.
         assert response.status_code == 401  # WHY: prove that the response belongs to the client-error class.
         session = object()  # WHY: prevent APISession from opening a live connection.
@@ -355,6 +358,9 @@ class TestUpstreamFailureSeparation:
         caplog: pytest.LogCaptureFixture,
     ) -> None:
         """A native Mist 5xx response must remain an upstream availability error."""
+        import logging  # WHY: capture the status-specific failure signal.
+        from unittest.mock import patch  # WHY: keep SDK calls offline and deterministic.
+
         response = self._native_refusal_response(503)  # WHY: exercise HTTP failure through APIResponse.
         assert response.status_code == 503  # WHY: prove that the response belongs to the server-error class.
         session = object()  # WHY: prevent APISession from opening a live connection.
