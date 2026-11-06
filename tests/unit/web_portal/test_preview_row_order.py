@@ -15,9 +15,14 @@ from __future__ import annotations
 
 import csv
 import json
+import sqlite3  # Build a real local database without an external service.
+from collections.abc import Iterator  # Type the isolated portal fixture without a shared application.
+from contextlib import closing  # Release SQLite handles before temporary-directory cleanup.
 from pathlib import Path
+from urllib.parse import quote  # Match the browser's encoded path segment for nested files.
 
 import pytest
+from flask.testing import FlaskClient  # Keep route tests on the real Flask request boundary.
 
 from web_portal.services.data_browser import DataBrowserService
 from web_portal.services.row_sorter import RowSorter, SortSpec
@@ -208,6 +213,204 @@ class TestTheRouteCarriesTheSort:
         response = portal.get("/api/data/preview/rows.csv?page=1&per_page=10&sort_column=99&sort_dir=asc")
         assert response.status_code == 200
         assert names(response.get_json()) == ["beta", "Alpha", "delta", "charlie"]
+
+
+class TestNestedResultPreviews:  # Keep issue #4036 fixtures separate from the sort fixtures.
+    """Verify file selection through real requests without Mist credentials."""
+
+    @pytest.fixture
+    def portal(self, tmp_path: Path) -> Iterator[FlaskClient]:  # Give each case its own data directory.
+        """Create an isolated portal and release its workers after each test."""
+        from web_portal.app import WebPortalApp  # Use the production routes without a live server.
+        from web_portal.menu_registry import build_static_menu_actions  # Avoid Mist menu discovery.
+
+        app = WebPortalApp.create_app(  # Disable live API access.
+            apisession=None, menu_actions=build_static_menu_actions(), org_id="test-org"
+        )
+        app.config.update(TESTING=True, DATA_DIR=str(tmp_path))  # Restrict requests to synthetic files.
+        try:  # Always release workers, including after a failed assertion.
+            yield app.test_client()  # Exercise Flask route selection rather than a service mock.
+        finally:  # A failed regression must not leave application workers active.
+            WebPortalApp.shutdown_app(app)  # Release only this fixture's application.
+
+    @pytest.mark.parametrize("filename", ["allowlist.json", "oid_assignments.json"])
+    @pytest.mark.parametrize("directory", ["", "mib_generator", "exports/mib_generator", "exports/results.db"])
+    def test_json_preview_and_download(  # Cover both reported files at three depths.
+        self, portal: FlaskClient, tmp_path: Path, filename: str, directory: str
+    ) -> None:
+        """Keep each file's contents, row order, pagination, and download bytes."""
+        target = tmp_path / directory / filename  # Build a portable fixture path.
+        content = json.dumps({"result": filename, "scope": "synthetic"}).encode("utf-8")  # Identify each file.
+        portal.application.logger.info("Writing a synthetic JSON result.")  # Trace fixture creation.
+        target.parent.mkdir(parents=True, exist_ok=True)  # Create only the temporary parent directories.
+        target.write_bytes(content)  # Preserve exact bytes for the download comparison.
+        portal.application.logger.debug("Wrote %d synthetic bytes.", len(content))  # Report size, not contents.
+        relative_path = target.relative_to(tmp_path).as_posix()  # URLs use forward slashes on every platform.
+        encoded_path = quote(relative_path, safe="")  # Match encodeURIComponent used by the Results panel.
+        portal.application.logger.info("Requesting synthetic download and preview responses.")  # Trace requests.
+        with portal.get(f"/api/data/download/{encoded_path}") as download:  # Close the file response after use.
+            assert download.status_code == 200  # Prove the file exists before testing the failed preview.
+            assert download.data == content  # Downloads must retain the exact source bytes.
+        first = portal.get(f"/api/data/preview/{encoded_path}?page=1&per_page=1")  # Reproduce the browser request.
+        second = portal.get(f"/api/data/preview/{encoded_path}?page=2&per_page=1")  # Preserve pagination.
+        portal.application.logger.debug(  # Record actual outcomes.
+            "Preview statuses: %s, %s.", first.status_code, second.status_code
+        )
+        assert first.status_code == second.status_code == 200  # A nested file must not return a false 404.
+        assert first.get_json() == {  # Preserve the existing object representation.
+            "columns": ["Key", "Value"],
+            "rows": [["result", filename]],
+            "total_rows": 2,
+            "page": 1,
+            "per_page": 1,
+            "total_pages": 2,
+        }
+        assert second.get_json() == {  # Preserve the second row and metadata.
+            "columns": ["Key", "Value"],
+            "rows": [["scope", "synthetic"]],
+            "total_rows": 2,
+            "page": 2,
+            "per_page": 1,
+            "total_pages": 2,
+        }
+        assert target.read_bytes() == content  # Neither preview nor download may change the source.
+
+    @pytest.mark.parametrize(
+        ("filename", "content", "expected_status", "expected_error"),
+        [
+            ("missing.json", None, 404, "File not found"),
+            ("malformed.json", "{not valid JSON", 400, "Failed to read JSON:"),
+        ],
+    )
+    def test_nested_json_errors_preserve_the_file_cause(
+        self,
+        portal: FlaskClient,
+        tmp_path: Path,
+        filename: str,
+        content: str | None,
+        expected_status: int,
+        expected_error: str,
+    ) -> None:
+        """A missing file and invalid JSON must not look like the same route failure."""
+        target = tmp_path / "mib_generator" / filename  # Keep both error fixtures below one output directory.
+        target.parent.mkdir()  # Create only the synthetic parent directory.
+        if content is not None:  # The absent-file case must remain absent.
+            portal.application.logger.info("Writing a malformed synthetic JSON result.")  # Trace fixture creation.
+            target.write_text(content, encoding="utf-8")  # Cause the parser to report invalid JSON.
+            portal.application.logger.debug("Wrote the malformed synthetic JSON result.")  # Do not log its contents.
+        encoded_path = quote(f"mib_generator/{filename}", safe="")  # Match the browser's encoded path segment.
+        response = portal.get(f"/api/data/preview/{encoded_path}")  # Exercise the nested route matcher.
+        portal.application.logger.debug(  # Report the route result without the fixture contents.
+            "Nested JSON error response status: %s.", response.status_code
+        )
+        assert response.status_code == expected_status  # Keep missing and malformed outcomes distinct.
+        assert response.get_json()["error"].startswith(expected_error)  # Preserve the useful failure reason.
+        assert str(tmp_path) not in response.get_data(as_text=True)  # Never expose an internal absolute path.
+
+    @pytest.fixture(params=["db", "sqlite", "DB", "SQLITE"])
+    def sqlite_result(  # Cover both supported extensions without case dependence.
+        self, portal: FlaskClient, tmp_path: Path, request: pytest.FixtureRequest
+    ) -> Iterator[str]:
+        """Create a nested SQLite result and verify that preview leaves it unchanged."""
+        target = tmp_path / "exports" / f"results.{request.param}"  # Exercise a database below the output root.
+        portal.application.logger.info("Writing a synthetic SQLite result.")  # Trace fixture creation only.
+        target.parent.mkdir()  # Keep the database inside this test's output boundary.
+        with closing(sqlite3.connect(target)) as connection:  # Release the real SQLite connection after creation.
+            connection.execute("CREATE TABLE devices (name TEXT, count INTEGER)")  # Use a fixed test schema.
+            connection.executemany(  # Give pagination and search distinct rows.
+                "INSERT INTO devices VALUES (?, ?)", [("beta", 9), ("Alpha", 10), ("delta", 2)]
+            )
+            connection.commit()  # Make fixture rows visible to the read-only preview connection.
+        source_bytes = target.read_bytes()  # Detect any preview write to the source database.
+        portal.application.logger.debug("Wrote %d synthetic SQLite bytes.", len(source_bytes))  # Record only the size.
+        yield target.relative_to(tmp_path).as_posix()  # Pass a URL path, not an absolute filesystem path.
+        assert target.read_bytes() == source_bytes  # Preview must not modify the SQLite result.
+
+    @pytest.mark.parametrize(
+        ("selection", "expected"),
+        [
+            (
+                "devices?page=1&per_page=2",
+                {
+                    "columns": ["name", "count"],
+                    "rows": [["beta", 9], ["Alpha", 10]],
+                    "total_rows": 3,
+                    "page": 1,
+                    "per_page": 2,
+                    "total_pages": 2,
+                },
+            ),
+            (
+                "devices?page=2&per_page=2",
+                {
+                    "columns": ["name", "count"],
+                    "rows": [["delta", 2]],
+                    "total_rows": 3,
+                    "page": 2,
+                    "per_page": 2,
+                    "total_pages": 2,
+                },
+            ),
+            (
+                "devices?search=ALPHA",
+                {
+                    "columns": ["name", "count"],
+                    "rows": [["Alpha", 10]],
+                    "total_rows": 1,
+                    "page": 1,
+                    "per_page": 50,
+                    "total_pages": 1,
+                },
+            ),
+            ("missing", {"error": "Table not found"}),
+        ],
+    )
+    def test_sqlite_table_selection(  # Compare exact table responses at the route boundary.
+        self, portal: FlaskClient, sqlite_result: str, selection: str, expected: dict
+    ) -> None:
+        """Preserve nested database listing, table rows, search, and missing-table errors."""
+        portal.application.logger.info("Requesting synthetic SQLite previews.")  # Trace local requests.
+        listing = portal.get(f"/api/data/preview/{sqlite_result}")  # A database path alone must still list its tables.
+        response = portal.get(f"/api/data/preview/{sqlite_result}/{selection}")  # Select explicit table rows.
+        portal.application.logger.debug("SQLite preview status: %s.", response.status_code)  # Report the actual result.
+        assert listing.status_code == 200  # Nested databases must remain browsable.
+        assert listing.get_json() == {  # Preserve table metadata.
+            "tables": [{"table_name": "devices", "row_count": 3, "column_names": ["name", "count"]}]
+        }
+        assert response.status_code == (404 if "error" in expected else 200)  # Preserve missing-table denial status.
+        assert response.get_json() == expected  # Verify exact rows, order, pagination, and failure reason.
+
+    @pytest.mark.parametrize("endpoint", ["preview", "download"])
+    @pytest.mark.parametrize("attack", ["traversal", "encoded", "absolute", "outside-link"])
+    def test_outside_paths_remain_denied(  # Check both read routes against the same boundary.
+        self, portal: FlaskClient, tmp_path: Path, endpoint: str, attack: str
+    ) -> None:
+        """Deny outside files without exposing their synthetic contents."""
+        outside = tmp_path.with_suffix(".json")  # Give each case its own file outside the configured output root.
+        portal.application.logger.info("Writing a synthetic outside-boundary fixture.")  # Record the test action.
+        outside.write_text('{"scope": "outside-marker-4036"}', encoding="utf-8")  # Detect accidental content exposure.
+        portal.application.logger.debug("Wrote the outside-boundary fixture.")  # Do not log its contents.
+        if attack == "outside-link":  # Create a link only for the link-denial case.
+            try:  # Windows accounts can lack link-creation permission.
+                (tmp_path / "link.json").symlink_to(outside)  # Keep the link inside and its target outside.
+            except (OSError, NotImplementedError) as error:  # Report an unavailable platform capability.
+                pytest.skip(f"Cannot create the synthetic symbolic link: {error}")  # Do not claim a link test passed.
+        paths = {  # Preserve each distinct attack spelling.
+            "traversal": f"../{outside.name}",
+            "encoded": f"%2e%2e%2f{outside.name}",
+            "absolute": outside.as_posix(),
+            "outside-link": "link.json",
+        }
+        portal.application.logger.info("Requesting an outside-boundary path.")  # Trace the denial test.
+        with portal.get(  # Follow only local slash normalization.
+            f"/api/data/{endpoint}/{paths[attack]}", follow_redirects=True
+        ) as response:
+            portal.application.logger.debug(  # Record the real denial.
+                "Outside-boundary response status: %s.", response.status_code
+            )
+            assert response.status_code == 404  # No outside file may become reachable through either route.
+            assert response.get_json() == {"error": "File not found"}  # Keep the existing nondisclosing denial body.
+            assert b"outside-marker-4036" not in response.data  # A denial must expose none of the file contents.
 
 
 class TestADamagedFileNeverRaises:

@@ -4,7 +4,17 @@ Provides file listing, CSV/SQLite preview with pagination,
 and file download endpoints.
 """
 
-from flask import Blueprint, current_app, jsonify, render_template, request, send_file
+from __future__ import annotations
+
+from pathlib import PurePosixPath  # HTTP paths use forward slashes on every supported platform.
+from typing import TYPE_CHECKING
+
+from flask import Blueprint, Response, current_app, jsonify, render_template, request, send_file
+
+if TYPE_CHECKING:
+    from web_portal.services.data_browser import DataBrowserService
+    from web_portal.services.row_sorter import SortSpec
+
 
 data_bp = Blueprint("data", __name__)
 
@@ -33,27 +43,34 @@ def list_files():
 
 
 @data_bp.route("/api/data/preview/<path:filepath>")
-def preview_file(filepath):
-    """Return paginated preview of a CSV or SQLite table list."""
-    from web_portal.services.data_browser import DataBrowserService
-    from web_portal.services.row_sorter import SortSpec
+def preview_file(filepath: str) -> Response | tuple[Response, int]:  # Use one matcher for files and tables.
+    """Preview a complete file path or an explicit SQLite file-and-table path."""
+    from web_portal.services.data_browser import DataBrowserService  # Retain the existing file-access guard.
+    from web_portal.services.row_sorter import SortSpec  # Preserve the existing optional CSV order.
 
-    data_dir = current_app.config.get("DATA_DIR", "data")
-    service = DataBrowserService(data_dir)
-    page = request.args.get("page", 1, type=int)
-    per_page = request.args.get("per_page", 50, type=int)
-    search = request.args.get("search", "")
-    # Issue #3047: the table sent a sort that no argument carried, so the arrow
-    # moved and the rows did not. Read the order here and hand it to the service.
-    sort = _read_sort_request(service, filepath, SortSpec)
-    result = service.preview_file(filepath, page, per_page, search, sort)
-    if "error" in result:
-        status = 404 if "not found" in result["error"].lower() else 400
-        return jsonify(result), status
-    return jsonify(result)
+    data_dir = current_app.config.get("DATA_DIR", "data")  # Keep the configured output boundary.
+    service = DataBrowserService(data_dir)  # Apply the same safe-path checks as downloads.
+    database_path, _, table_name = filepath.rpartition("/")  # Split only for an explicit SQLite table selection.
+    if (  # A directory with a database suffix must still permit nested file previews.
+        table_name  # Require an explicit nonempty table selection.
+        and PurePosixPath(database_path).suffix.lower() in (".db", ".sqlite")  # Keep supported SQLite extensions.
+        and service.resolve_safe_path(database_path) is not None  # Require a guarded file, not a directory.
+    ):
+        return preview_table(database_path, table_name)  # Keep table validation, pagination, and errors unchanged.
+    page = request.args.get("page", 1, type=int)  # Preserve the current page default.
+    per_page = request.args.get("per_page", 50, type=int)  # Preserve the current page-size default.
+    search = request.args.get("search", "")  # Preserve the existing search contract.
+    sort = _read_sort_request(service, filepath, SortSpec)  # Issue #3047 requires the requested CSV order.
+    current_app.logger.info("Reading a data file preview.")  # Trace the read without disclosing file contents.
+    result = service.preview_file(filepath, page, per_page, search, sort)  # Keep every requested directory segment.
+    current_app.logger.debug("Data file preview returned an error: %s.", "error" in result)  # Record only the outcome.
+    if "error" in result:  # Keep the existing failure response and status.
+        status = 404 if "not found" in result["error"].lower() else 400  # Preserve denial and missing-file behavior.
+        return jsonify(result), status  # Return a JSON reason rather than an HTML error.
+    return jsonify(result)  # Preserve the existing preview response schema.
 
 
-def _read_sort_request(service, filepath: str, spec_class):
+def _read_sort_request(service: DataBrowserService, filepath: str, spec_class: type[SortSpec]) -> SortSpec | None:
     """Build the sort request of this call, or None when the caller asked for none.
 
     The column count comes from the file itself, so a crafted index can never
@@ -74,8 +91,7 @@ def _read_sort_request(service, filepath: str, spec_class):
     return spec_class.from_request(column, request.args.get("sort_dir", "asc"), len(columns))
 
 
-@data_bp.route("/api/data/preview/<path:filepath>/<table_name>")
-def preview_table(filepath, table_name):
+def preview_table(filepath: str, table_name: str) -> Response | tuple[Response, int]:
     """Return paginated preview of a specific SQLite table."""
     from web_portal.services.data_browser import DataBrowserService
 
