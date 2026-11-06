@@ -15,8 +15,8 @@ src.foundation.support.refactors.endpoint_primary_key_strategies import
 ENDPOINT_PRIMARY_KEY_STRATEGIES``.
 
 The catalog remains a bare dictionary without a wrapper or compatibility shim.
-``SleTrendIdentity`` validates and constructs the complete keys for the two SLE
-summary-trend strategies. Other endpoint key behavior stays unchanged.
+``SleWindowIdentity`` validates and constructs complete keys for SLE trend and
+summary-window strategies. Other endpoint key behavior stays unchanged.
 
 Strategy schema (each value): {
     "type": "natural_pk" | "composite_pk" | "auto_pk" | "time_series",
@@ -33,39 +33,46 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 
 
-class SleTrendIdentity:
+class SleWindowIdentity:
     """Validate complete SLE window identities without changing unrelated endpoint keys."""
 
     @staticmethod
     def fields(operation: str) -> tuple[str, ...]:
-        """Return the ordered identity columns for supported SLE trend operations."""
+        """Return the ordered identity columns for supported SLE window operations."""
         identifiers = ("site_id", "scope", "scope_id", "metric")
         if operation == "getSiteSleClassifierSummaryTrend":
             return (*identifiers, "classifier_name", "start", "end")
         if operation == "getSiteSleSummaryTrend":
             return (*identifiers, "start", "end")
+        if operation == "getSiteSleHistogram":
+            return (*identifiers, "start", "end")
+        if operation == "getSiteSleImpactSummary":
+            return (*identifiers, "classifier", "failure", "start", "end")
         return ()
 
     @staticmethod
     def matches(primary_keys: list[str]) -> bool:
-        """Restrict the new document-key contract to the two complete SLE strategies."""
+        """Match only the four complete SLE window identity tuples."""
         return tuple(primary_keys) in (
-            SleTrendIdentity.fields("getSiteSleSummaryTrend"),
-            SleTrendIdentity.fields("getSiteSleClassifierSummaryTrend"),
+            SleWindowIdentity.fields("getSiteSleSummaryTrend"),
+            SleWindowIdentity.fields("getSiteSleClassifierSummaryTrend"),
+            SleWindowIdentity.fields("getSiteSleHistogram"),
+            SleWindowIdentity.fields("getSiteSleImpactSummary"),
         )
 
     @staticmethod
-    def enrich(row: dict[str, Any], arguments: dict[str, str]) -> dict[str, Any]:
-        """Use selected request identifiers rather than untrusted response dimensions."""
-        dimensions = {name: value for name, value in arguments.items() if name != "classifier"}
-        if "classifier" in arguments:
-            dimensions["classifier_name"] = arguments["classifier"]
+    def enrich(row: dict[str, Any], arguments: dict[str, str], operation: str) -> dict[str, Any]:
+        """Use only selected path identifiers and preserve returned window boundaries."""
+        source_fields = ("site_id", "scope", "scope_id", "metric")
+        dimensions = {name: arguments.get(name) for name in source_fields}
+        if operation in ("getSiteSleSummaryTrend", "getSiteSleClassifierSummaryTrend") and "classifier" in arguments:
+            dimensions["classifier_name"] = arguments.get("classifier")
         return {**row, **dimensions}
 
     @staticmethod
     def key(row: dict[str, Any], primary_keys: list[str]) -> str:
         """Build an unambiguous stable key and reject incomplete or invalid windows."""
-        values = [SleTrendIdentity._value(name, row.get(name)) for name in primary_keys]
+        values = [SleWindowIdentity._value(name, row.get(name)) for name in primary_keys]
         if Decimal(values[-1]) < Decimal(values[-2]):
             raise ValueError("SLE window end precedes start")
         payload = json.dumps(values, ensure_ascii=True, separators=(",", ":")).encode("ascii")
@@ -73,11 +80,18 @@ class SleTrendIdentity:
 
     @staticmethod
     def _value(name: str, value: Any) -> str:
-        """Normalize numeric boundaries and require nonempty string identifiers."""
-        if name not in ("start", "end"):
-            if not isinstance(value, str) or not value.strip():
-                raise ValueError(f"Missing or invalid SLE identity field: {name}")
-            return value
+        """Normalize boundaries and validate source-specific string identity fields."""
+        if name in ("start", "end"):
+            return SleWindowIdentity._window_value(name, value)
+        if not isinstance(value, str):
+            raise ValueError(f"Missing or invalid SLE identity field: {name}")
+        if name not in ("classifier", "failure") and not value.strip():
+            raise ValueError(f"Missing or invalid SLE identity field: {name}")
+        return value
+
+    @staticmethod
+    def _window_value(name: str, value: Any) -> str:
+        """Normalize one finite, nonnegative numeric boundary."""
         if isinstance(value, bool) or not isinstance(value, (int, float, str)):
             raise ValueError(f"Missing or invalid SLE window field: {name}")
         try:
@@ -4159,14 +4173,14 @@ for _endpoint_family_operation, _endpoint_family_strategy in {  # Add missing st
     },
     "getSiteSleHistogram": {
         "type": "auto_increment_with_unique",
-        "primary_key": ["misthelper_internal_id"],
+        "primary_key": ["site_id", "scope", "scope_id", "metric", "start", "end"],
         "indexes": ["site_id", "scope", "scope_id", "metric"],
         "unique_constraints": [],
         "description": "Endpoint family export for getSiteSleHistogram",
     },
     "getSiteSleImpactSummary": {
         "type": "auto_increment_with_unique",
-        "primary_key": ["misthelper_internal_id"],
+        "primary_key": ["site_id", "scope", "scope_id", "metric", "classifier", "failure", "start", "end"],
         "indexes": ["site_id", "scope", "scope_id", "metric"],
         "unique_constraints": [],
         "description": "Endpoint family export for getSiteSleImpactSummary",

@@ -26,7 +26,7 @@ from src.foundation.persistence.db.database_schema_utils import (
     DatabaseSchemaUtils,
 )  # WHY: the real DDL proves the ALTER names match CREATE.
 from src.foundation.support.refactors import sqlite_database_writer as swr_mod  # WHY: module handle for monkeypatching
-from src.foundation.support.refactors.endpoint_primary_key_strategies import SleTrendIdentity
+from src.foundation.support.refactors.endpoint_primary_key_strategies import SleWindowIdentity
 from src.foundation.support.refactors.sqlite_database_writer import SQLiteDatabaseWriter  # WHY: SUT direct import
 
 # ---------------------------------------------------------------------------
@@ -109,7 +109,7 @@ class TestSleWindowRows:
                 ).fetchall()
                 assert [record[:-1] for record in preserved] == legacy_rows
         assert stored == ([("legacy", None)] * 2 if legacy else []) + [
-            ("second", SleTrendIdentity.key(row, list(SleTrendIdentity.fields(operation))))
+            ("second", SleWindowIdentity.key(row, list(SleWindowIdentity.fields(operation))))
         ]
         assert row["value"] == "old"
 

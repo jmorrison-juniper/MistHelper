@@ -12,6 +12,7 @@ from arango.exceptions import ArangoError  # WHY: router tests must raise the na
 from redis.exceptions import RedisError  # WHY: router tests must raise the narrowed Redis driver type
 
 from src.foundation.persistence.db import DatabaseConfig, WriteResult
+from src.foundation.support.refactors.endpoint_primary_key_strategies import ENDPOINT_PRIMARY_KEY_STRATEGIES
 
 
 @pytest.fixture
@@ -132,6 +133,26 @@ class TestRouterRouting:
         result = router.write(data, "getOrgLicensesSummary")
 
         mock_backends["arango_writer"].write.assert_called_once()
+        assert result.backend == "arangodb"
+
+    @pytest.mark.parametrize(
+        "operation",
+        ("getSiteSleHistogram", "getSiteSleImpactSummary"),
+    )
+    def test_sle_window_strategies_route_to_arango_only(self, config, mock_backends, operation):
+        router = _make_router(config, mock_backends, ENDPOINT_PRIMARY_KEY_STRATEGIES)
+        mock_backends["arango_writer"].write.return_value = WriteResult(
+            success=True,
+            backend="arangodb",
+            records_written=1,
+            records_failed=0,
+        )
+
+        result = router.write([{"site_id": "site-1"}], operation)
+
+        mock_backends["arango_writer"].write.assert_called_once()
+        mock_backends["redis_writer"].write.assert_not_called()
+        mock_backends["redis_json_writer"].write.assert_not_called()
         assert result.backend == "arangodb"
 
     def test_unknown_function_uses_default_arango(self, config, mock_backends, strategies):

@@ -11,7 +11,7 @@ from hypothesis import strategies as hypothesis_strategies
 from src.foundation.persistence.db.writers.arango_writer import IMPORT_BATCH_SIZE
 from src.foundation.support.refactors.endpoint_primary_key_strategies import (
     ENDPOINT_PRIMARY_KEY_STRATEGIES,
-    SleTrendIdentity,
+    SleWindowIdentity,
 )
 from tests.unit.arango_indexes.fakes import ArangoIndexWriterHarness
 
@@ -157,7 +157,7 @@ class TestSleWindowIdentity:
             assert writer.write([{**row, "value": value}], operation, strategy).records_written == 1
         assert len(documents) == 2
         assert {key: documents[key] for key in legacy} == legacy
-        key = SleTrendIdentity.key(row, strategy["primary_key"])
+        key = SleWindowIdentity.key(row, strategy["primary_key"])
         assert documents[key]["value"] == "second"
         assert writer.write([{**row, **change}], operation, strategy).records_written == 1
         assert len(documents) == 3
@@ -188,11 +188,11 @@ class TestSleWindowIdentity:
             "end": 200,
         }
         with pytest.raises(ValueError, match="SLE"):
-            SleTrendIdentity.key(row, list(SleTrendIdentity.fields("getSiteSleSummaryTrend")))
+            SleWindowIdentity.key(row, list(SleWindowIdentity.fields("getSiteSleSummaryTrend")))
 
     def test_numeric_equivalence_and_classifier_isolation(self) -> None:
         """Canonical timestamps must agree while distinct classifier values must differ."""
-        fields = list(SleTrendIdentity.fields("getSiteSleClassifierSummaryTrend"))
+        fields = list(SleWindowIdentity.fields("getSiteSleClassifierSummaryTrend"))
         row = {
             "site_id": "a_b",
             "scope": "site",
@@ -202,7 +202,7 @@ class TestSleWindowIdentity:
             "start": 100,
             "end": 200,
         }
-        key = SleTrendIdentity.key(row, fields)
-        assert SleTrendIdentity.key({**row, "start": 100.0, "end": "200.00"}, fields) == key
-        assert SleTrendIdentity.key({**row, "classifier_name": "other"}, fields) != key
-        assert SleTrendIdentity.key({**row, "site_id": "a", "scope_id": "b_c"}, fields) != key
+        key = SleWindowIdentity.key(row, fields)
+        assert SleWindowIdentity.key({**row, "start": 100.0, "end": "200.00"}, fields) == key
+        assert SleWindowIdentity.key({**row, "classifier_name": "other"}, fields) != key
+        assert SleWindowIdentity.key({**row, "site_id": "a", "scope_id": "b_c"}, fields) != key
