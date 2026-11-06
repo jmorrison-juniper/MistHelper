@@ -10,22 +10,22 @@
 
 ## User Scenarios & Testing *(mandatory)*
 
-### User Story 1 - Read the category caution (Priority: P1)
+### User Story 1 - Read accurate operation categories (Priority: P1)
 
-An operator sees a caution before a run of a row in the displayed Work In Progress category.
-The caution names the current category and a possible incomplete result.
-It tells the operator to verify the result.
-It does not claim that the operation is unimplemented.
+An operator sees each operation under a category that describes its work.
+Menus 63 through 65 appear under Site Config & Monitoring because they are registered site exports.
+The page does not label these completed operations as Work In Progress.
+If a future operation is explicitly placed in Work In Progress, the page shows its caution before a run.
 
-**Why this priority**: The category currently carries no guidance about incomplete results.
+**Why this priority**: The old menu-number range mislabeled three interactive-safe exports as unfinished work.
 
-**Independent Test**: Select each current Work In Progress row before any run. Select a normal row afterward.
+**Independent Test**: Select each menu from 63 through 65 and inspect its category and caution state.
 
 **Acceptance Scenarios**:
 
-1. **Given** a Work In Progress row, **When** the operator selects it, **Then** the page shows the caution before Run.
-2. **Given** a visible caution, **When** the operator selects a normal row, **Then** the page hides the caution.
-3. **Given** a changed displayed category, **When** the page lists the row, **Then** the caution follows that category.
+1. **Given** menu 63, 64, or 65, **When** the operator views the operation list, **Then** the row appears under Site Config & Monitoring.
+2. **Given** menu 63, 64, or 65, **When** the operator selects the row, **Then** the page does not show a Work In Progress caution.
+3. **Given** a row whose displayed category is Work In Progress, **When** the operator selects it, **Then** the page shows the caution before Run.
 4. **Given** an unsafe operation, **When** its displayed category changes, **Then** the safety registry still refuses its run.
 
 ### User Story 2 - Select a site and switch (Priority: P1)
@@ -96,6 +96,7 @@ The proof records the actual client output, not a site cache.
 - **FR-014**: Count the checked rows, prompt answers, handler calls, endpoint calls, output writes, and live network calls.
 - **FR-015**: Prove acceptance fails when the switch descriptor or caution metadata is removed.
 - **FR-016**: Preserve the existing HTTP and payload policy. Report any additional source defect to the parent.
+- **FR-017**: Place menus 63 through 65 under Site Config & Monitoring, not Work In Progress.
 
 ### Key Entities
 
@@ -108,7 +109,8 @@ The proof records the actual client output, not a site cache.
 
 ### Measurable Outcomes
 
-- **SC-001**: All three current Work In Progress rows show a caution before execution.
+- **SC-001**: Menus 63 through 65 appear under Site Config & Monitoring and show no Work In Progress caution.
+- **SC-008**: A row explicitly placed in Work In Progress shows the caution before execution.
 - **SC-002**: One normal row hides the previous caution without changing its run permission.
 - **SC-003**: Menu 63 submits exactly two prompt answers and calls the selected virtual chassis endpoint exactly once.
 - **SC-004**: Menus 64 and 65 each submit one prompt answer and produce their actual client output.
@@ -119,7 +121,8 @@ The proof records the actual client output, not a site cache.
 
 ## Assumptions
 
-- The current category label remains unchanged. The caution does not reclassify any operation.
+- No current operation is registered as Work In Progress. Do not assign a new safety category as part of this change.
+- The caution follows the displayed Work In Progress category when a future operation uses that category.
 - Actual exporter bodies, menu definitions, SDK contracts, primary keys, authentication, and database routing remain read-only.
 - Existing tests remain read-only. This repair owns only the new reserved test modules and support package.
 - The current main source starts at `d30ef1690e9c00698e0e462f54de793c7a2093b9`.

@@ -24,7 +24,7 @@
 
 **Goal**: Show the category caution before execution without changing safety decisions.
 
-**Independent Test**: Select three WIP rows, then one normal row. Remove warning metadata and require acceptance to fail.
+**Independent Test**: Select a row assigned to the WIP category and a normal row. Remove warning metadata and require acceptance to fail.
 
 - [x] T007 [US1] Add category and safety proofs. (delivered: tests/unit/web_portal/wip_target_controls/test_metadata.py)
 - [x] T008 [US1] Add caution browser proofs. (delivered: tests/e2e/web_portal/wip_target_controls/test_controls.py)
@@ -88,6 +88,16 @@ The complete strict hashed alternative audited 105 applicable native runtime pac
 The Git-only development tool remains outside that runtime audit.
 STE scores passed the default threshold, but dictionary coverage remains unavailable and partial.
 The menu 64 filename concern is outside this change and remains separate from #3158.
+
+## Issue Owner Category Direction
+
+The issue owner later confirmed that menus 63 through 65 belong under Site Config & Monitoring.
+These operations are interactive-safe exports and are not marked as unfinished in the operation registry.
+
+- [x] T025 Move menus 63 through 65 from the Work In Progress heading to Site Config & Monitoring.
+- [x] T026 Prove the three rows do not receive false Work In Progress metadata.
+- [x] T027 Preserve the caution behavior for a row that actually uses the Work In Progress category.
+- [x] T028 Run the focused browser, category, and export regression tests without a live Mist request.
 
 ## Current-Main Work
 

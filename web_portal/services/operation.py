@@ -36,8 +36,7 @@ CATEGORY_RANGES = [
     (35, 39, "Template Exports"),
     (40, 41, "Statistics & Analytics"),
     (42, 48, "Security & Configuration"),
-    (49, 62, "Site Config & Monitoring"),
-    (63, 65, "Work In Progress"),
+    (49, 65, "Site Config & Monitoring"),  # Keep the selected-site exports with their related operations.
     (66, 89, "Insights & Diagnostics"),
     (90, 96, "Device Troubleshooting"),
     (188, 208, "Org Administration"),

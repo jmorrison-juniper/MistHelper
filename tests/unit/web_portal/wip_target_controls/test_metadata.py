@@ -55,19 +55,20 @@ class TestRequiredTargetMetadata:
 class TestDisplayedCategoryCaution:
     """The displayed category supplies guidance, never execution permission."""
 
-    def test_current_wip_rows_have_warning_metadata(self, executor: OperationExecutor) -> None:
-        """Check all three current rows and one normal row."""
+    def test_site_export_rows_do_not_claim_work_in_progress(self, executor: OperationExecutor) -> None:
+        """Check the corrected category for all three selected-site exports."""
         actions = {number: executor._menu_actions[number] for number in ("63", "64", "65", "11")}
         categories = executor.build_category_list(actions)
         by_category = {category["name"]: category["operations"] for category in categories}
-        assert set(by_category) == {"Organization Exports", "Work In Progress"}
-        assert [row["menu_number"] for row in by_category["Work In Progress"]] == ["63", "64", "65"]
-        for row in by_category["Work In Progress"]:
-            TargetAcceptance.require_caution(row)
+        assert set(by_category) == {"Organization Exports", "Site Config & Monitoring"}
+        site_rows = by_category["Site Config & Monitoring"]
+        assert [row["menu_number"] for row in site_rows] == ["63", "64", "65"]
+        for row in site_rows:
+            assert "work_in_progress" not in row  # A range label must not call complete exports unfinished.
             assert row["category"] == "interactive"
         normal = by_category["Organization Exports"][0]
         assert normal == dict(menu_number="11", description=actions["11"].title, category="non_interactive")
-        print("Checked 3 WIP rows, 3 caution properties, and 1 unchanged normal row.")
+        print("Checked 3 site export rows, 0 false WIP flags, and 1 unchanged normal row.")
 
     def test_warning_follows_actual_category_overrides(
         self, executor: OperationExecutor, monkeypatch: pytest.MonkeyPatch
@@ -97,15 +98,18 @@ class TestCountedNegativeGuards:
         assert [parameter["name"] for parameter in parameters] == ["site_id"]
         print("Checked 1 removed switch descriptor. The target acceptance guard failed.")
 
-    def test_removing_warning_metadata_fails_acceptance(self, executor: OperationExecutor) -> None:
+    def test_removing_warning_metadata_fails_acceptance(
+        self, executor: OperationExecutor, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """The exact WIP row is the guard input, without any network requirement."""
-        categories = executor.build_category_list({"63": executor._menu_actions["63"]})
+        monkeypatch.setitem(CATEGORY_OVERRIDES, 11, "Work In Progress")
+        categories = executor.build_category_list({"11": executor._menu_actions["11"]})
         row = deepcopy(categories[0]["operations"][0])
         TargetAcceptance.require_caution(row)
         assert row.pop("work_in_progress") is True
         with pytest.raises(AssertionError, match="Checked 1 WIP row"):
             TargetAcceptance.require_caution(row)
-        assert row["menu_number"] == "63"
+        assert row["menu_number"] == "11"
         print("Checked 1 removed caution property. The warning acceptance guard failed.")
 
 

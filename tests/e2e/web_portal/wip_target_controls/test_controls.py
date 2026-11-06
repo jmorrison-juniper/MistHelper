@@ -8,7 +8,7 @@ from web_portal.services.operation import OperationExecutor
 
 
 class TestCurrentWipControls:
-    """Three current rows and one normal row must retain their real controls."""
+    """Three site exports and one normal row must retain their real controls."""
 
     @staticmethod
     def _choose_switch(page: Page) -> None:
@@ -37,17 +37,16 @@ class TestCurrentWipControls:
         assert scenario.router.format_write.call_count == 2
         assert scenario.router.csv_write.call_count == 2
 
-    def test_switch_and_caution_appear_before_a_real_vc_run(
+    def test_switch_control_appears_before_a_real_vc_run(
         self, wip_journey: BrowserJourney, selector_callbacks: BrowserCallbacks
     ) -> None:
-        """This flow fails against the original missing-control and warning state."""
+        """The page groups the export accurately and supplies the required switch control."""
         page = wip_journey.page
         wip_journey.select("63")
         caution = page.get_by_test_id("wip-caution")
-        expect(caution).to_be_visible()
-        expect(caution).to_contain_text("Caution:")
-        expect(caution).to_contain_text("Work In Progress")
-        expect(caution).to_contain_text("Verify the result")
+        expect(caution).to_be_hidden()
+        expect(page.locator("button.accordion-button", has_text="Site Config & Monitoring")).to_be_visible()
+        expect(page.locator("button.accordion-button", has_text="Work In Progress")).to_have_count(0)
         expect(page.get_by_test_id("run-btn")).to_be_disabled()
         self._choose_switch(page)
         result = wip_journey.run()
@@ -94,7 +93,7 @@ class TestCurrentClientControls:
         """Select the actual site control and inspect the real writer's reported output."""
         page = journey.page
         journey.select(number)
-        expect(page.get_by_test_id("wip-caution")).to_be_visible()
+        expect(page.get_by_test_id("wip-caution")).to_be_hidden()
         expect(page.get_by_test_id("param-site_id")).to_be_enabled()
         expect(page.locator("#parameterFields select")).to_have_count(1)
         expect(page.get_by_test_id("run-btn")).to_be_disabled()

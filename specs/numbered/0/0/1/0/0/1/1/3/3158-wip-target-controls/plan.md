@@ -6,7 +6,8 @@
 
 ## Summary
 
-Complete menu 63's target metadata and show a category-derived caution.
+Complete menu 63's target metadata and use accurate operation categories.
+Show a category-derived caution only for rows that are actually assigned to Work In Progress.
 Keep the existing handlers, input bridge, safety registry, selector reasons, and output behavior.
 Use the shipped page and script with controlled native SDK transport and real local CSV writes.
 Commit the verified repair and open a pull request. Keep #3158 open.
@@ -29,7 +30,7 @@ Commit the verified repair and open a pull request. Keep #3158 open.
 
 **Constraints**: No live Mist API call, source exporter change, dependency change, shared test edit, or production resource.
 
-**Scale/Scope**: Three product files, three current WIP rows, one normal control row, and new owned tests.
+**Scale/Scope**: Three selected-site exports, one normal control row, and owned category, target, and output tests.
 
 ## Constitution Check
 
@@ -99,13 +100,15 @@ The unchanged local CSV writer compares its suffix against lowercase `.csv`.
 The parent retained the three portal source paths and requested a separate issue for the filename concern.
 The separate bug is [#3738](https://github.com/jmorrison-juniper/MistHelper/issues/3738).
 The product scope does not include that writer or exporter.
-Do not claim the filename mismatch is repaired by target metadata.
-Use `Part of #3158`, not a closure reference, while the filename acceptance remains unresolved.
+PR #3776 later repaired the filename suffix in the separate issue.
+Do not claim the filename repair as a target-metadata change.
+Use `Part of #3158`, not a closure reference, because the issue remains open for review.
 Tracked control tests prove the requested logical target, actual local writer counts, rows, metadata, and cache exclusion.
 They do not require the doubled filename.
 The earlier wrong filename remains a diagnostic fact in private pre-edit evidence and in the companion issue.
 The control tests accept the later single-suffix repair without a handler, label, or fixture change.
 
+Menus 63 through 65 will join Site Config & Monitoring because all three are interactive-safe site exports.
 The caution will use a boolean property only on rows whose actual displayed category is Work In Progress.
 Normal rows retain their complete previous payload shape.
 The accepted category-list INFO record and DEBUG count summary remain exact.
@@ -116,6 +119,10 @@ Menu 63 receives the existing Site descriptor and required Device descriptor wit
 The existing input bridge continues to send the site name and switch name.
 The real prompt resolves those names to the original site and device identifiers.
 Menus 64 and 65 retain their current single Site descriptor.
+
+The issue owner later confirmed that menus 63 through 65 must not appear under Work In Progress.
+The category range now ends at menu 65 in Site Config & Monitoring.
+This change does not add a Work In Progress safety state or alter registry permissions.
 
 ## SpecKit Execution Limits
 
@@ -184,6 +191,14 @@ Prepare the repository pull request template with exact results and honest limit
 Create one Conventional Commits commit with the required Copilot App trailer.
 Open one pull request with `Part of #3158` and the separate #3738 scope note.
 Do not add auto-merge or merge before coordinator review.
+
+## Current-Main Verification
+
+PR #4528 merged the target controls and warning support into main.
+The offline control suite and exporter suffix suite pass on the current main checkout.
+The issue owner later directed menus 63 through 65 to Site Config & Monitoring.
+No current registry entry uses the Work In Progress category.
+The follow-on category correction keeps run permissions unchanged and removes the false heading.
 
 ## Complexity Tracking
 

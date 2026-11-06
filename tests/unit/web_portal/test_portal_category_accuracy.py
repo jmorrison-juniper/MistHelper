@@ -61,12 +61,13 @@ def test_no_category_promises_work_it_does_not_hold(categories):
 
 
 def test_the_three_misleading_categories_are_gone(categories):
-    """The categories that held no matching operation no longer appear."""
+    """No category heading promises work that its rows do not perform."""
     # Each of these held only rows that belonged elsewhere. Issue #3153.
     names = [category["name"] for category in categories]
     assert "Packet Captures" not in names  # It held two device inventory exports.
     assert "WebSocket Device Commands" not in names  # It held reports and an inventory export.
     assert "Statistics & Analytics" not in names  # It held two template exports.
+    assert "Work In Progress" not in names  # Menus 63-65 are registered site exports, not unfinished work.
 
 
 @pytest.mark.parametrize(
@@ -80,6 +81,9 @@ def test_the_three_misleading_categories_are_gone(categories):
         ("10", "Organization Exports", "devices"),
         ("40", "Template Exports", "template"),
         ("41", "Template Exports", "template"),
+        ("63", "Site Config & Monitoring", "switch"),
+        ("64", "Site Config & Monitoring", "wifi clients"),
+        ("65", "Site Config & Monitoring", "statistics"),
     ],
 )
 def test_each_misfiled_row_now_sits_with_its_own_kind(categories, menu_number, expected_category, expected_word):
