@@ -712,6 +712,9 @@ MainEntrypoint.bind_host_module(sys.modules[__name__])  # Give source packages a
 
 from src.foundation.runtime.time.time_utils import TimeUtils  # Cat E canonical (1014 P6)
 from src.foundation.runtime.validation.validation_utils import ValidationUtils  # Cat E canonical (1014 P5)
+from src.foundation.support.menu_testing.interactive_test_runner import (
+    InteractiveTestRunner,
+)  # Import interactive diagnostic test runner
 from src.foundation.support.refactors.maps_manager_launcher import (
     MapsManagerLauncher,
 )  # Extracted Maps Manager launcher (SC-006)
@@ -773,6 +776,15 @@ from src.interfaces.visualization.ui.interactive_display_utils import (
 from src.mist.intelligence.marvis.actions.operation import (
     MarvisActionsOperation,  # Menu 270 (issue #3299) -- Marvis Actions export and bulk resolve.
 )
+from src.mist.intelligence.marvis.troubleshooting.marvis_troubleshoot_utils import (
+    MarvisTroubleshootDeps,  # Cat B (1013 SC-001 position 39) -- re-export for lazy access in troubleshoot_utils.py
+)
+from src.mist.intelligence.marvis.troubleshooting.marvis_troubleshoot_utils import (
+    MarvisTroubleshootUtils as ExtractedMarvisTroubleshootUtils,  # Cat B (1013 SC-001 position 39) -- re-export
+)
+from src.mist.intelligence.marvis.troubleshooting.troubleshoot_utils import (
+    TroubleshootUtils,  # Cat B (1013 SC-001 position 39) -- re-export for MistHelper.TroubleshootUtils callers
+)
 from src.mist.intelligence.reports.admin_token_hygiene.operation import (
     AdminTokenHygieneReport,
 )  # Menu 273 (issue #3554) -- tokens.
@@ -826,18 +838,6 @@ from src.mist.intelligence.reports.wan_edge_scorecard.scorecard import (
 )
 from src.mist.intelligence.reports.wired_client_manufacturer_report_generator import (
     WiredClientManufacturerReportGenerator,  # Cat B (1013 SC-001 position 26) -- re-export
-)
-from src.mist.intelligence.troubleshooting.core.interactive_test_runner import (
-    InteractiveTestRunner,
-)  # Import interactive diagnostic test runner
-from src.mist.intelligence.troubleshooting.core.marvis_troubleshoot_utils import (
-    MarvisTroubleshootDeps,  # Cat B (1013 SC-001 position 39) -- re-export for lazy access in troubleshoot_utils.py
-)
-from src.mist.intelligence.troubleshooting.core.marvis_troubleshoot_utils import (
-    MarvisTroubleshootUtils as ExtractedMarvisTroubleshootUtils,  # Cat B (1013 SC-001 position 39) -- re-export
-)
-from src.mist.intelligence.troubleshooting.core.troubleshoot_utils import (
-    TroubleshootUtils,  # Cat B (1013 SC-001 position 39) -- re-export for MistHelper.TroubleshootUtils callers
 )
 from src.mist.intelligence.troubleshooting.nac_idp_credential_test.operation import (
     NacIdpCredentialTest,  # Menu 285 (issue #3565) -- validate one NAC identity provider credential safely.
