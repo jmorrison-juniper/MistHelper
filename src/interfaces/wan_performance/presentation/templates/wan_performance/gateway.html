@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% from "wan_performance/_dashboard_components.html" import chart_grid, kpi_grid %}
+{% block title %}Gateway - {{ config.PORTAL.title }}{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/wan_performance.css') }}">
+{% endblock %}
+
+{% block content %}
+<section class="container-fluid wan-performance" data-testid="wan-gateway">
+    {% include "wan_performance/_data_state.html" %}
+    <nav class="wan-breadcrumbs" aria-label="Breadcrumb">
+        <a href="{{ url_for('wan_performance.overview') }}">Overview</a><span>&gt;</span><strong>Gateway Details</strong>
+    </nav>
+    <header class="wan-page-heading">
+        <div>
+            <h1>Gateway: Store 100 Gateway</h1>
+            <p>ID: {{ dashboard.circuit.gateway.gateway_id }} · Site: {{ dashboard.site_name }}</p>
+        </div>
+        <div data-testid="wan-gateway-health"><strong class="text-success">Up</strong><p>Last seen: 2023-11-14 22:13:20 UTC</p></div>
+    </header>
+
+    {{ kpi_grid(dashboard.pages["gateway"].kpis, "wan-gateway-kpis") }}
+
+    <div class="wan-dashboard-grid" data-testid="wan-gateway-tables">
+        {% for table in dashboard.pages["gateway"].tables %}
+        {% set table_index = loop.index0 %}
+        <section class="wan-panel" data-testid="{{ 'wan-port-table' if loop.first else 'wan-peer-table' }}">
+            <header class="wan-panel-heading">
+                <h2>{{ table.title }}</h2>
+                <p>Click a name for details.</p>
+            </header>
+            <div class="table-responsive">
+                <table class="table table-sm wan-table">
+                    <thead><tr>{% for column in table.columns %}<th scope="col">{{ column }}</th>{% endfor %}</tr></thead>
+                    <tbody>
+                    {% for row in table.rows %}
+                    <tr>
+                        {% for value in row %}
+                        <td>
+                            {% if loop.first and table_index == 0 %}
+                            <a data-testid="wan-port-link"
+                               href="{{ url_for('wan_performance.port', site_id=dashboard.circuit.gateway.site.site_id, port_name=dashboard.circuit.port_name, gateway_id=dashboard.circuit.gateway.gateway_id) }}">{{ value }}</a>
+                            {% elif loop.first %}
+                            <a data-testid="wan-peer-link"
+                               href="{{ url_for('wan_performance.vpn_peer', site_id=dashboard.peer_path.gateway.site.site_id, peer_mac=dashboard.peer_path.peer_mac) }}">{{ value }}</a>
+                            {% else %}{{ value }}{% endif %}
+                        </td>
+                        {% endfor %}
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="{{ table.columns|length }}">{{ table.empty_message }}</td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+        {% endfor %}
+    </div>
+    {{ chart_grid(dashboard.pages["gateway"].charts, "wan-gateway-charts") }}
+    <p class="mt-3"><a data-testid="wan-back-link" href="{{ url_for('wan_performance.overview') }}">Back to overview</a></p>
+</section>
+{% endblock %}
