@@ -532,6 +532,7 @@ class OperationRegistry:
                 "requires typed RESTORE and verified recovery backups, supports --dry-run."
             ),
         },
+        "307": {"category": "safe"},
         "238": {"category": "interactive_safe", "skip_reason": "Requires an MSP ID"},
         "240": {
             "category": "interactive_safe",

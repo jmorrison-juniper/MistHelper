@@ -8,7 +8,7 @@ file adds to it, and it does not hold a copy of a rule from it. Where the two fi
 ## What this repository is
 
 MistHelper is a Python tool for the operation of a network on the Juniper Mist cloud. It gives a
-network operations center 305 registered menu operations, numbered 1 through 306 with one gap at
+network operations center 306 registered menu operations, numbered 1 through 307 with one gap at
 152. Menu 0 exits the tool. The tool exports data, manages devices, and upgrades firmware.
 Each export writes to CSV, to SQLite, or to
 ArangoDB and Redis. The audience is a junior engineer in a network operations center, so each
@@ -208,13 +208,13 @@ updates a row and does not duplicate it. Define the strategy before you write th
 ### Menu categories
 
 `src/foundation/support/utils/operation_registry.py` is the single source of truth for the
-category of each menu. The measurement date of the counts below is 2026-10-14. The guard
+category of each menu. The measurement date of the counts below is 2026-11-06. The guard
 `tests/guardrails/test_destructive_menu_docs.py` fails when this table drifts from the registry.
 
 | Category | Count | Menu numbers |
 | - | - | - |
 | `interactive_safe` | 106 | 60-96, 195-203, 209-229, 235-238, 240-242, 244-247, 254, 256-268, 270, 288-289, 294-304 |
-| `safe` | 84 | 1-13, 15-17, 20-58, 188, 193, 204-205, 230-234, 243, 248-253, 255, 269, 271-280, 282 |
+| `safe` | 85 | 1-13, 15-17, 20-58, 188, 193, 204-205, 230-234, 243, 248-253, 255, 269, 271-280, 282, 307 |
 | `destructive` | 50 | 154-187, 189-191, 194, 206-208, 239, 281, 286-287, 291-293, 305-306 |
 | `interactive` | 33 | 0, 124-150, 192, 283-285, 290 |
 | `websocket` | 22 | 102-123 |

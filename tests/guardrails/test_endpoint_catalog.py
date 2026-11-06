@@ -509,13 +509,13 @@ class TestMenuText:
         (
             (
                 "MistHelper.py",
-                306,
-                "01648768e81231a8733c2d1324642890d07da3ef3440374895e18423ebf079a7",
+                307,
+                "0ccd015408aad2c841d4abc56bf889e4fc8f1885e4e429e005474c1bf3e403a8",
             ),  # Preserve the command-line menu identity after the menu 235 label update.
             (
                 "web_portal/menu_registry.py",
-                190,
-                "83ce780caef7e63e476b07df07d259c5e765fae2a257f5fcbbc690035c5d9f5a",
+                191,
+                "44d0d0b4225bfc269ebea9c23e6b7bb46df4c046f1b346c1d643200ad2281b7c",
             ),  # Preserve the portal menu identity after the menu 235 label update.
         ),
     )

@@ -576,6 +576,7 @@ from src.operations.execution.firmware_policy.cli import (  # Menu 305 configure
 )
 from src.operations.execution.firmware_policy.recovery.cli import RestoreMenu
 from src.operations.execution.firmware_policy.sdk import PolicyApi  # Keep all menu 305 requests in the SDK boundary.
+from src.operations.exporting.ap_warning_report.operation import ApWarningReport
 from src.operations.exporting.export.const_definitions_exporter import (
     ConstDefinitionsExporter,  # Cat B (1013 SC-001 position 17) -- re-export
 )
@@ -5001,6 +5002,14 @@ menu_actions: dict[str, Any] = {
         ),
         category=OperationRegistry.skip_category("306"),
         destructive=True,
+        supports_fast=False,
+    ),
+    "307": GlobalImportManager.MenuEntry(
+        menu_id="307",
+        handler=ApWarningReport.run,
+        title="Export AP warning and error codes across all sites",
+        category=OperationRegistry.skip_category("307"),
+        destructive=False,
         supports_fast=False,
     ),
     "238": GlobalImportManager.MenuEntry(  # Use named fields for menu 238.

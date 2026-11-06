@@ -50,6 +50,7 @@ CATEGORY_RANGES = [
     (277, 282, "Health Scorecards"),  # Issue #3617 groups Tier 2 read-only scorecard reports.
     (283, 290, "Diagnostic Utilities"),  # Issue #3618 groups Tier 3 diagnostics and safe reports.
     (294, 304, "Juniper RMA"),  # Juniper access, correlation, lookups, request reads, and asset reads (read-only).
+    (307, 307, "AP Warning Reports"),
 ]
 
 # Menu numbers whose range gives the wrong category name. Issue #3153.

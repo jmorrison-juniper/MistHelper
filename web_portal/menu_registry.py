@@ -206,6 +206,7 @@ MENU_DESCRIPTIONS = {
     "302": "Correlate Mist support tickets with Juniper service requests and RMAs (read-only)",
     "303": "Look up one Juniper service request or RMA (read-only)",
     "304": "Look up Juniper warranty, contract, and status data for serial numbers (read-only)",
+    "307": "Export AP warning and error codes across all sites",
 }
 
 
