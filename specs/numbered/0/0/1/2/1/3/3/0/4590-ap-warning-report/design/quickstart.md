@@ -16,7 +16,7 @@ The SQLite test verifies replacement without duplicate organization-and-MAC iden
 See [the gate evidence](../analysis.md) for the broader regression selection and source checks.
 Run the repository test-quality procedure after committing the intended tests.
 
-Menu execution remains unavailable until integration after pull request #4208 merges.
-After integration, confirm the final number in the generated menu reference before execution.
+Menu 307 runs the report from the command line or the portal.
+Confirm the number in the generated menu reference before execution.
 Use the existing organization selection and output format prompts.
 Review the report timestamp before treating historical trouble evidence as a current failure.

@@ -3,9 +3,9 @@
 This page is generated. Run `python scripts/generate_menu_wiki.py` after any
 change to `menu_actions` in `MistHelper.py` or to `src/foundation/support/utils/operation_registry.py`.
 
-MistHelper defines **305 actionable menu entries**, numbered
-1 to 306 with gaps at 152.
-Menu 0 is Exit, so the registry holds 306 entries in total.
+MistHelper defines **306 actionable menu entries**, numbered
+1 to 307 with gaps at 152.
+Menu 0 is Exit, so the registry holds 307 entries in total.
 
 The Safety column reads from `src/foundation/support/utils/operation_registry.py`, which is the
 single source of truth. The classifier fails closed, so an unregistered option
@@ -23,7 +23,7 @@ never runs in an automated test pass.
 | Menu numbers | Category | Summary |
 |---|---|---|
 | 60-96, 195-203, 209-229, 235-238, 240-242, 244-247, 254, 256-268, 270, 288-289, 294-304 | Interactive safe | 106 operations. They prompt for a choice, such as a site, a device, or a mode. Most of them only read data. An operation that can change Mist data first asks for a typed value, such as a token or a count. The --testinteractive run includes them. |
-| 1-13, 15-17, 20-58, 188, 193, 204-205, 230-234, 243, 248-253, 255, 269, 271-280, 282 | Safe org exports | 84 operations. Read-only org exports. The --test run includes them. |
+| 1-13, 15-17, 20-58, 188, 193, 204-205, 230-234, 243, 248-253, 255, 269, 271-280, 282, 307 | Safe org exports | 85 operations. Read-only org exports. The --test run includes them. |
 | 154-187, 189-191, 194, 206-208, 239, 281, 286-287, 291-293, 305-306 | Destructive | 50 operations. They change the Mist cloud configuration. Each one needs a typed confirmation. |
 | 0, 124-150, 192, 283-285, 290 | Interactive | 33 operations. They prompt the operator, so no automated run includes them. |
 | 102-123 | WebSocket | 22 operations. They open a WebSocket stream to a device. |
@@ -340,6 +340,7 @@ never runs in an automated test pass.
 | 304 | Look up Juniper warranty, contract, and status data for serial numbers (read-only) | Interactive safe | `AssetLookupWorkflow.run` |
 | 305 | DESTRUCTIVE: Organization Auto-Upgrade Policy - Set model versions and restore all site inheritance (Requires typing 'CONFIGURE', verified full backups, supports --dry-run) | Destructive | `lambda: PolicyMenu(api=PolicyApi(MainEntrypoint.context.apisession), inputs=PolicyMenuInputs(organization=ConfigUtils.get_cached_or_prompted_org_id, selectors=(lambda: _build_org_ap_upgrader(org_id='')._select_msps(), lambda msp: _build_org_ap_upgrader(org_id='')._select_orgs_from_msp(msp)) if MainEntrypoint.context.msp_privileges else None, stopped=ConfigUtils.check_stop_signal, dry_run=getattr(globals().get('args', None), 'dry_run', False), data_directory=Path(os.environ.get('DATA_DIR', 'data')))).run()` |
 | 306 | DESTRUCTIVE: Restore organization and site firmware policies from private backups (Requires typing 'RESTORE', verified recovery backups, supports --dry-run) | Destructive | `lambda: RestoreMenu(api=PolicyApi(MainEntrypoint.context.apisession), inputs=PolicyMenuInputs(organization=ConfigUtils.get_cached_or_prompted_org_id, stopped=ConfigUtils.check_stop_signal, dry_run=getattr(globals().get('args', None), 'dry_run', False), data_directory=Path(os.environ.get('DATA_DIR', 'data')))).run()` |
+| 307 | Export AP warning and error codes across all sites | Safe org exports | `ApWarningReport.run` |
 
 ### Endpoint family sub-menus (259-268)
 

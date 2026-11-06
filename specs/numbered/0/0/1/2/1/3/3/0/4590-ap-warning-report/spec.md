@@ -116,5 +116,6 @@ No custom HTTP or WebSocket transport is necessary.
 - Numeric codes retain at least two digits for matching and display.
 - Statistics provide documented trouble evidence. Inventory evidence remains usable when statistics do not carry a code.
 - The app already created and renamed this worktree branch. The branch hook must not create another checkout.
-- The user permits independent work while pull request #4208 owns `README.md`.
-  Menu integration and its documentation remain pending until that ownership ends.
+- The user requests active progress after the independent implementation.
+  Pull request #4208 changes a separate README section and has no active competing agent.
+  Preserve that change without requiring the WAN feature merge.

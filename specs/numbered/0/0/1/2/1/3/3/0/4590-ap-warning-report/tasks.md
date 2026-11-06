@@ -42,14 +42,14 @@
 - [x] T014 Add the unique fragment at changelog.d/issue-4590-ap-warning-report.md. (delivered: changelog.d/issue-4590-ap-warning-report.md)
 - [x] T015 Commit only feature-owned files and update the existing session automation. (delivered: src/operations/exporting/ap_warning_report/operation.py)
 
-## Phase 7: Deferred menu integration
+## Phase 7: Menu integration
 
-The user requires pull request #4208 to merge before the shared documentation changes.
-Keep these tasks unchecked until that condition holds.
+The coordination check found separate README sections and no active competing agent.
+Complete integration without waiting for the unfinished WAN feature.
 
-- [ ] T017 Register the next unused final number in MistHelper.py and src/foundation/support/utils/operation_registry.py.
-- [ ] T018 Update README.md and .github/copilot-instructions.md, then regenerate documentation/menu_reference.md and the API map.
-- [ ] T019 Test the final menu callable and portal visibility in tests/guardrails and tests/e2e.
+- [x] T017 Register the next unused final number in MistHelper.py and src/foundation/support/utils/operation_registry.py. (delivered: MistHelper.py)
+- [x] T018 Update README.md and .github/copilot-instructions.md, then regenerate documentation/menu_reference.md and the API map. (delivered: documentation/menu_reference.md)
+- [x] T019 Test the final menu callable and portal visibility in tests/guardrails and tests/e2e. (delivered: tests/e2e/web_portal/test_ap_warning_report.py)
 - [ ] T020 Run final integration gates and record the results in analysis.md.
 
 ## Dependencies and execution order
@@ -61,7 +61,8 @@ T010 requires the completed client, row builder, and export callable.
 T013 follows all isolated implementation and tests.
 T015 follows T013 and T014.
 T016 requires a separate ownership check but does not require the merge.
-T017 through T020 require the merge of pull request #4208.
+T017 precedes T018 and T019.
+T020 follows the menu, portal, and documentation changes.
 
 ## Parallel examples
 
@@ -72,4 +73,4 @@ The output integration test requires all report components.
 
 Deliver the report package and mocked tests first.
 Preserve the verified independent work without registering an incomplete menu.
-After the ownership blocker ends, complete the menu and documentation as one integration change.
+Complete the menu and documentation as one integration change, preserving the separate WAN documentation.

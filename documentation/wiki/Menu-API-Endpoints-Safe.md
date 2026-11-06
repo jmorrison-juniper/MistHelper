@@ -2,7 +2,7 @@
 
 # Menu API endpoints: safe
 
-This page lists the Mist API endpoints of the 84 menu options in the `safe` category.
+This page lists the Mist API endpoints of the 85 menu options in the `safe` category.
 A menu option in this category reads data and exports it. The --test run executes this category.
 
 The index page explains how to read the map: [Menu API endpoint map](Menu-API-Endpoints).
@@ -16,10 +16,10 @@ That diagram links the menu option to the classes that send the requests, and ea
 
 ```mermaid
 flowchart LR
-    root["safe: 84 menu<br/>options"]
-    root --> f_orgs_sites["orgs/sites<br/>24 menu options"]
-    root --> f_orgs_inventory["orgs/inventory<br/>12 menu options"]
-    root --> f_orgs_stats["orgs/stats<br/>8 menu options"]
+    root["safe: 85 menu<br/>options"]
+    root --> f_orgs_sites["orgs/sites<br/>25 menu options"]
+    root --> f_orgs_inventory["orgs/inventory<br/>13 menu options"]
+    root --> f_orgs_stats["orgs/stats<br/>9 menu options"]
     root --> f_orgs_devices["orgs/devices<br/>5 menu options"]
     root --> f_orgs_gatewaytemplates["orgs/gatewaytemplates<br/>5 menu options"]
     root --> f_sites_devices["sites/devices<br/>5 menu options"]
@@ -1319,3 +1319,27 @@ flowchart LR
 | GET | `/api/v1/orgs/{org_id}/wlans` | [`orgs.wlans.listOrgWlans`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/wlans/list-org-wlans) | [`RoguePciEvidenceClient.list_org_wlans`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/intelligence/reports/rogue_pci_evidence/client.py) | Call |
 | GET | `/api/v1/sites/{site_id}/insights/rogues` | [`sites.insights.listSiteRogueAPs`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/rogues/list-site-rogue-a-ps) | [`RoguePciEvidenceClient.list_site_rogue_aps`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/intelligence/reports/rogue_pci_evidence/client.py) | Call |
 | GET | `/api/v1/sites/{site_id}/setting` | [`sites.setting.getSiteSetting`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/setting/get-site-setting) | [`RoguePciEvidenceClient.list_site_settings`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/intelligence/reports/rogue_pci_evidence/client.py) | Call |
+
+## Menu 307
+
+- Title: Export AP warning and error codes across all sites
+- Handler: `ApWarningReport.run`
+- Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter)
+- Endpoints: 4
+
+```mermaid
+flowchart LR
+    menu["Menu 307: Export AP<br/>warning and error<br/>codes acr..."]
+    menu --> c1["ApWarningClient"]
+    c1 --> e1["GET<br/>/api/v1/const<br/>/ap_led_status"]
+    c1 --> e2["GET<br/>/api/v1/orgs<br/>/{org_id}/inventory"]
+    c1 --> e3["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
+    c1 --> e4["GET<br/>/api/v1/orgs<br/>/{org_id}/stats<br/>/devices"]
+```
+
+| Method | Path | SDK function | Called from | Found by |
+| - | - | - | - | - |
+| GET | `/api/v1/const/ap_led_status` | [`const.ap_led_status.listApLedDefinition`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-ap-led-definition) | [`ApWarningClient._fetch`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/ap_warning_report/client.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/inventory` | [`orgs.inventory.getOrgInventory`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/inventory/get-org-inventory) | [`ApWarningClient._inventory`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/ap_warning_report/client.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`ApWarningClient._fetch`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/ap_warning_report/client.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/stats/devices` | [`orgs.stats.listOrgDevicesStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/stats/devices/list-org-devices-stats) | [`ApWarningClient._statistics`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/operations/exporting/ap_warning_report/client.py) | Call |

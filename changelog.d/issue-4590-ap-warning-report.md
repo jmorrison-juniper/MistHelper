@@ -1,4 +1,4 @@
-### AP warning report preparation
+### AP warning report
 
-- **Added**: An isolated AP trouble report joins inventory, sites, statistics, and live code definitions.
-  Menu registration remains pending until the documentation ownership restriction ends. Issue #4590.
+- **Added**: Menu 307 exports connected and disconnected APs with reported trouble codes and live Mist definitions.
+  The report identifies historical evidence and preserves unknown codes. Issue #4590.

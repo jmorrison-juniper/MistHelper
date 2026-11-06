@@ -7,7 +7,7 @@
 Build an isolated report package before menu integration.
 Join AP inventory with site names and documented AP trouble statistics.
 Read the LED dictionary once and retain unknown codes.
-Defer shared menu documentation until pull request #4208 merges.
+Register menu 307 and preserve the separate WAN documentation change in pull request #4208.
 
 ## Technical Context
 
@@ -47,7 +47,8 @@ Defer shared menu documentation until pull request #4208 merges.
 - No shared feature pointer changes.
 
 **Post-design decision**: Pass for isolated implementation.
-Final menu registration remains blocked by the user-selected README ownership restriction.
+The coordination check found separate README sections and no active competing agent.
+The user requests progress, so menu integration no longer depends on the WAN feature merge.
 
 ## Project Structure
 

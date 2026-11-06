@@ -2,22 +2,25 @@
 
 ## Result
 
-The independent report package and natural-key strategy are implemented.
-The menu is not registered.
-The user requires pull request #4208 to merge before the shared documentation changes.
-The existing session automation checks that condition every 30 minutes.
+The report package, natural-key strategy, CLI menu 307, and portal listing are implemented.
+The user requests progress rather than waiting for the unfinished WAN feature.
+A three-way README merge preserves both features without conflict.
+The obsolete wait automation is removed.
 
 ## Artifact analysis
 
 | ID | Severity | Finding | Resolution |
 | --- | --- | --- | --- |
 | I1 | Medium | The export contract described a Boolean return, but the callable returns a row count. | The contract now specifies the verified row count. |
-| B1 | Blocked | Final menu registration and documentation require the README ownership restriction to end. | Tasks T017 through T020 remain unchecked. |
+| B1 | Resolved | The README overlap originally delayed menu integration. | A measured three-way merge preserves both features. Menu integration proceeds independently. |
 
 All twelve functional requirements have task coverage.
-FR-001 remains deferred with menu integration.
-The other requirements have isolated implementation and tests.
+FR-001 now has CLI registration and portal visibility tests.
+The other requirements have implementation and tests.
 There are no unresolved code-meaning or connection-state questions.
+All six success criteria map to the source, row, definition, and failure-path tests.
+The final analysis covers 18 requirements and success criteria across 20 tasks.
+Coverage is 100 percent, with no critical findings or unmapped tasks.
 
 ## Verified behavior
 
@@ -59,7 +62,7 @@ This result does not constitute full repository SDK verification.
 The test run reported one Dash plugin deprecation warning and three existing SQLite fixture resource warnings.
 The feature tests do not use production credentials.
 No live cloud sweep, full-suite coverage run, portal browser run, or container deployment occurred.
-Those checks do not replace the deferred menu integration checks.
+The portal checks use the real Flask routes without a browser or cloud session.
 
 ## Environment notes
 
@@ -76,9 +79,37 @@ The analyzer requires literal failure bodies.
 The fixtures now bind those bodies directly to SDK response objects.
 The test-quality baseline remains unchanged.
 
-## Remaining work
+## Menu integration evidence
 
-Run the test-quality procedure after the local feature commit.
-Record its result in a comment on issue #4590.
-After pull request #4208 merges, recheck file ownership before tasks T017 through T020.
-Determine the final unused menu number at that time rather than reserving a potentially stale number.
+The four new menu and portal tests failed before registration and passed after registration.
+The existing identity guard detected the intentionally added menu.
+Its expected counts and exact identity digests now include menu 307 without weakening its comparisons.
+
+| Command | Result |
+| --- | --- |
+| `rtk proxy .venv\Scripts\python.exe -m pytest tests\unit\ap_warning_report tests\integration\ap_warning_report tests\e2e\web_portal\test_ap_warning_report.py tests\guardrails\test_menu_number_uniqueness.py tests\guardrails\test_operation_registry_menu_coverage.py tests\guardrails\test_portal_operation_coverage.py tests\guardrails\test_destructive_menu_docs.py tests\guardrails\test_endpoint_catalog.py tests\guardrails\test_e2e_shard_partition.py tests\guardrails\test_nested_package_structure.py tests\guardrails\test_process_folder_structure.py tests\integration\test_mistapi_sdk_compatibility.py -q --cov=src.operations.exporting.ap_warning_report --cov-report=term-missing --cov-fail-under=90` | 262 passed. One absent unsafe-category fixture skipped. Report package coverage: 100 percent. |
+| `rtk proxy .venv\Scripts\python.exe -m pytest tests\unit\scripts\test_menu_api_map.py -q` | 36 passed. One optional lint check skipped. |
+| `rtk proxy .venv\Scripts\python.exe -m ruff check .` | All checks passed with the repository exclusion settings. |
+| `rtk proxy .venv\Scripts\python.exe -m mypy src MistHelper.py wsgi.py scripts\mist_ideas_analyzer_pkg\__init__.py scripts\mist_ideas_distiller_v2_pkg\__init__.py --config-file pyproject.toml` | Success. No issues in 873 source files. |
+| `rtk proxy .venv\Scripts\python.exe -m black --check MistHelper.py src\foundation\support\utils\operation_registry.py web_portal\services\operation.py web_portal\menu_registry.py tests\unit\ap_warning_report\test_menu.py tests\e2e\web_portal\test_ap_warning_report.py tests\guardrails\test_endpoint_catalog.py` | Seven files need no format changes. |
+| `rtk proxy .venv\Scripts\python.exe -m py_compile MistHelper.py src\foundation\support\utils\operation_registry.py web_portal\services\operation.py web_portal\menu_registry.py` | No output. |
+| `rtk proxy .venv\Scripts\python.exe -m bandit -c pyproject.toml MistHelper.py src\foundation\support\utils\operation_registry.py web_portal\services\operation.py web_portal\menu_registry.py -q` | No findings. |
+| `rtk proxy .venv\Scripts\python.exe -m pydocstyle src\operations\exporting\ap_warning_report src\foundation\support\utils\operation_registry.py web_portal\services\operation.py web_portal\menu_registry.py` | No violations. |
+| `rtk proxy .venv\Scripts\python.exe scripts\generate_menu_wiki.py` | Both menu-reference pages generated. |
+| `rtk proxy .venv\Scripts\python.exe -m scripts.menu_api_map --check` | All 16 map pages match the source for 307 menu options. |
+
+STE checks passed for the changed instruction files, operator guide, release fragment, and specification records.
+Symbol comparisons found no lost module-level names.
+`MistHelper.py` adds the intended `ApWarningReport` import.
+The registry, portal group module, and static portal map preserve their module-level names.
+
+Explicitly type-checking the excluded portal modules reported 71 existing annotation errors.
+Explicitly linting the generated portal map reported two existing long strings.
+The configured repository mypy and Ruff commands passed without changing their exclusions.
+The generated portal map changes only the new menu row.
+The Markdown link check scanned 21 repository-local documents and found zero broken links.
+The published wiki pages use wiki-relative links and do not enter that local-link check.
+An initial check against the unpublished wiki copies reported 541 unresolved wiki-local targets.
+The generated map drift check verifies those copies against their source instead.
+The final test-quality procedure runs after the integration commit.
+Its exact result is recorded on issue #4590.
