@@ -19,16 +19,16 @@ flowchart LR
     root["safe: 85 menu<br/>options"]
     root --> f_orgs_sites["orgs/sites<br/>25 menu options"]
     root --> f_orgs_inventory["orgs/inventory<br/>13 menu options"]
-    root --> f_orgs_stats["orgs/stats<br/>9 menu options"]
-    root --> f_orgs_devices["orgs/devices<br/>5 menu options"]
+    root --> f_orgs_stats["orgs/stats<br/>8 menu options"]
+    root --> f_orgs_devices["orgs/devices<br/>6 menu options"]
     root --> f_orgs_gatewaytemplates["orgs/gatewaytemplates<br/>5 menu options"]
     root --> f_sites_devices["sites/devices<br/>5 menu options"]
     root --> f_orgs_jsi["orgs/jsi<br/>4 menu options"]
     root --> f_orgs_networktemplates["orgs/networktemplates<br/>4 menu options"]
     root --> f_sites_insights["sites/insights<br/>4 menu options"]
+    root --> f_sites_stats["sites/stats<br/>4 menu options"]
     root --> f_orgs_admins["orgs/admins<br/>3 menu options"]
     root --> f_orgs_alarms["orgs/alarms<br/>3 menu options"]
-    root --> f_orgs_apitokens["orgs/apitokens<br/>3 menu options"]
     root --> more["70 more families"]
 ```
 
@@ -1325,7 +1325,7 @@ flowchart LR
 - Title: Export AP warning and error codes across all sites
 - Handler: `ApWarningReport.run`
 - Shared helpers: [`ConfigUtils`](README.md#configutils), [`DataExporter`](README.md#dataexporter)
-- Endpoints: 4
+- Endpoints: 7
 
 ```mermaid
 flowchart LR
@@ -1334,12 +1334,20 @@ flowchart LR
     c1 --> e1["GET<br/>/api/v1/const<br/>/ap_led_status"]
     c1 --> e2["GET<br/>/api/v1/orgs<br/>/{org_id}/inventory"]
     c1 --> e3["GET<br/>/api/v1/orgs<br/>/{org_id}/sites"]
-    c1 --> e4["GET<br/>/api/v1/orgs<br/>/{org_id}/stats<br/>/devices"]
+    c1 --> e4["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/devices"]
+    menu --> c2["RecoveryEvidence<br/>Reader"]
+    c2 --> e5["GET<br/>/api/v1/const<br/>/device_events"]
+    c2 --> e6["GET<br/>/api/v1/sites<br/>/{site_id}/stats<br/>/devices/{device_id}"]
+    menu --> c3["EventHistoryReader"]
+    c3 --> e7["GET<br/>/api/v1/orgs<br/>/{org_id}/devices<br/>/events/search"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
 | - | - | - | - | - |
 | GET | `/api/v1/const/ap_led_status` | [`const.ap_led_status.listApLedDefinition`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/definitions/list-ap-led-definition) | [`ApWarningClient._fetch`](../../src/operations/exporting/ap_warning_report/client.py) | Call |
+| GET | `/api/v1/const/device_events` | [`const.device_events.listDeviceEventsDefinitions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/constants/events/list-device-events-definitions) | [`RecoveryEvidenceReader._catalogue`](../../src/operations/exporting/ap_warning_report/client.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/devices/events/search` | [`orgs.devices.searchOrgDeviceEvents`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/devices/search-org-device-events) | [`EventHistoryReader._request`](../../src/operations/exporting/ap_warning_report/client.py) | Call |
 | GET | `/api/v1/orgs/{org_id}/inventory` | [`orgs.inventory.getOrgInventory`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/inventory/get-org-inventory) | [`ApWarningClient._inventory`](../../src/operations/exporting/ap_warning_report/client.py) | Call |
 | GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`ApWarningClient._fetch`](../../src/operations/exporting/ap_warning_report/client.py) | Call |
-| GET | `/api/v1/orgs/{org_id}/stats/devices` | [`orgs.stats.listOrgDevicesStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/stats/devices/list-org-devices-stats) | [`ApWarningClient._statistics`](../../src/operations/exporting/ap_warning_report/client.py) | Call |
+| GET | `/api/v1/sites/{site_id}/stats/devices` | [`sites.stats.listSiteDevicesStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/devices/list-site-devices-stats) | [`ApWarningClient._statistics`](../../src/operations/exporting/ap_warning_report/client.py) | Call |
+| GET | `/api/v1/sites/{site_id}/stats/devices/{device_id}` | [`sites.stats.getSiteDeviceStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/devices/get-site-device-stats) | [`RecoveryEvidenceReader._statistics`](../../src/operations/exporting/ap_warning_report/client.py) | Call |
