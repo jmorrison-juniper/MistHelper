@@ -348,3 +348,27 @@ It examined 795 children, 792 grandfathered entries, 3 managed roots, 128 struct
 The STE and link results above still apply because the feature files did not change.
 The route suite remains blocked by the missing `pwsh` executable.
 Fresh CI and CodeQL results for the latest branch commit are not yet available.
+
+## Current Main Verification
+
+**Recorded**: `2026-11-06`.
+
+**Base**: `main` at `fb7a7d10d40c89a44ccfdaf0304ec57b2fd3b02d`.
+
+These results were run against this main commit.
+The merged records and current route tests satisfy the grouping requirements.
+Issue #4263 remains open as requested.
+
+| Evidence | Result |
+| --- | --- |
+| PR #4265 | Merged. 37 checks passed, 0 failed, and 6 were skipped or cancelled. |
+| PR #4271 | Merged. 39 checks passed, 0 failed, and 6 were skipped or cancelled. |
+| PR #4223 | Merged at `9ba3a7e5ca8f3c371e58887531623a249510d7df`. 39 checks passed, 0 failed, and 6 were skipped or cancelled. The Redis record now uses its grouped timestamp path. |
+| Issue #4269 and PR #4272 | Issue #4269 closed after PR #4272 removed the nested duplicate. The seven duplicate file pairs had matching hashes. PR checks had 39 passes, 0 failures, and 6 skipped or cancelled. |
+| Process-folder guard | 11 passed. The guard examined 795 root children, 792 grandfathered entries, 3 managed roots, 184 structural directories, and 77 feature records. |
+| Route and structure contracts | With PowerShell 7.6.7 on `PATH`, 51 passed in 18.01 seconds. |
+| Recursive task audit | Exit 1. It scanned this feature's task file and reported no finding for it. Other existing records have missing references. |
+
+The audit result is a repository-wide issue outside this feature.
+The prior statements that PR #4223 and issue #4269 block this feature are now stale.
+No implementation gap remains in issue #4263.

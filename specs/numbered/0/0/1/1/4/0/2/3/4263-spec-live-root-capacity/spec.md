@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-17
 
-**Status**: Process increment implemented. The approved #4202 move is verified. Shared task discovery and Redis integration remain blocked.
+**Status**: Grouped timestamp routing and approved moves are on `main`. PR #4223 and issue #4269 are resolved. The full audit still reports unrelated records.
 
 **Input**: [Issue #4263](https://github.com/jmorrison-juniper/MistHelper/issues/4263) requires bounded timestamp groups before Redis planning PR #4223 can proceed.
 
