@@ -34,16 +34,17 @@ A network operator runs a rogue DHCP scan. The scan must not report a security f
 ### Functional Requirements
 
 - **FR-001**: The scan MUST use response data only when the request has a successful HTTP status.
-- **FR-002**: The scan MUST reject a failed response before it sends that response to pagination.
+- **FR-002**: The scan MUST validate every response status before it reads that page body.
+- **FR-006**: The scan MUST reject a malformed page body instead of treating it as a valid empty result.
 - **FR-003**: The scan MUST report an organization request failure instead of presenting its response body as a finding.
 - **FR-004**: The scan MUST report a site request failure and exclude its response body from findings.
 - **FR-005**: The scan MUST keep valid findings from successful responses.
 
 ### Mist Cloud Transport Requirements
 
-- The scan uses the existing Mist SDK methods `searchOrgAlarms`, `searchOrgDeviceEvents`, `searchSiteAlarms`, `searchSiteDeviceEvents`, `searchSiteMarvisConfigActions`, and `listOrgSites`, plus the SDK paginator.
+- The scan uses the existing Mist SDK methods `searchOrgAlarms`, `searchOrgDeviceEvents`, `searchSiteAlarms`, `searchSiteDeviceEvents`, `searchSiteMarvisConfigActions`, and `listOrgSites`, plus the SDK next-page reader.
 - This change adds no transport, endpoint, or authentication behavior.
-- Tests MUST show that failed response data does not reach pagination and that successful response data remains usable. Existing SDK authentication and endpoint paths remain unchanged.
+- Tests MUST show that each failed page stops pagination, malformed page bodies are rejected, and successful pages remain usable. Existing SDK authentication and endpoint paths remain unchanged.
 
 ### Key Entities
 
@@ -58,8 +59,10 @@ A network operator runs a rogue DHCP scan. The scan must not report a security f
 - **SC-002**: A valid finding from a successful response remains in the scan result.
 - **SC-003**: A failed site request appears in the scan's failed-site report.
 - **SC-004**: A failed organization request stops the scan before pagination reads its body.
+- **SC-005**: Zero records come from a later page with a failed status or malformed results.
 
 ## Assumptions
 
 - A failed request cannot provide reliable security evidence, even when its body resembles a valid alarm.
 - Existing list-based test doubles remain supported. Mist SDK response objects must provide a successful HTTP status before the scanner reads their data.
+- The SDK next-page reader returns one response at a time, so the scanner can validate each page before it reads its body.

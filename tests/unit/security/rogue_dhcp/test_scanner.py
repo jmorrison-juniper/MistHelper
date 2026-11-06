@@ -10,6 +10,7 @@ Every test injects stand-in callables, so no test opens a network connection.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from types import SimpleNamespace  # WHY: model Mist SDK response objects without a network request.
 from typing import Any
 
@@ -46,7 +47,7 @@ class RecordingApi:
         self.calls: list[tuple[str, dict[str, Any]]] = []
         self.failing_sites: set[str] = set()
 
-    def _handler(self, name: str):
+    def _handler(self, name: str) -> Callable[..., Any]:
         """Return a callable that records its call and returns the scripted page."""
 
         def call(_session: Any, **kwargs: Any) -> Any:
@@ -64,12 +65,7 @@ class RecordingApi:
         names = ("org_alarms", "org_events", "site_alarms", "site_events", "marvis_actions", "org_sites")
         api: dict[str, Any] = {name: self._handler(name) for name in names}
 
-        def get_all(response: Any, **_kwargs: Any) -> list[dict[str, Any]]:  # WHY: mock SDK paging locally.
-            if isinstance(response, list):  # WHY: keep the current list-based test response behavior.
-                return list(response)  # WHY: one list represents one page in these tests.
-            return response.data["results"]  # WHY: SDK response doubles expose their page in data.
-
-        api["get_all"] = get_all  # WHY: share the page behavior across the scanner tests.
+        api["get_next"] = lambda _session, _response: None  # WHY: default test pages have no next response.
         return api
 
     def names_called(self) -> list[str]:
@@ -241,13 +237,13 @@ def test_every_finding_carries_the_organization() -> None:
     assert build_scanner(api).scan().findings[0].org_id == "org-1"
 
 
-def test_a_missing_paginator_reads_the_single_page() -> None:
-    """A stand-in map may omit the paginator, and the scan must still read the page."""
+def test_a_missing_next_reader_reads_a_single_page() -> None:
+    """A single page remains readable when a stand-in map omits the next-page reader."""
     api = RecordingApi({"org_alarms": [ROGUE_ALARM]})
     api_map = api.as_map()
-    del api_map["get_all"]
+    del api_map["get_next"]
     scanner = RogueDhcpScanner(object(), "org-1", api=api_map)
-    assert scanner.scan().finding_count == 0
+    assert scanner.scan().finding_count == 1
 
 
 @pytest.mark.parametrize("status_code", [403, 503])
@@ -256,20 +252,14 @@ def test_failed_sdk_response_is_rejected_before_pagination(status_code: int) -> 
     api = RecordingApi()  # WHY: track the endpoint calls without using Mist credentials.
     api_map = api.as_map()  # WHY: replace only the response and paginator for this case.
     failed_response = SimpleNamespace(status_code=status_code, data={"results": [ROGUE_ALARM]})  # WHY: model the issue.
-    paginator_calls: list[Any] = []  # WHY: prove the error response never reaches pagination.
-
-    def read_response(response: Any, **_kwargs: Any) -> list[dict[str, Any]]:  # WHY: reproduce vulnerable paging.
-        paginator_calls.append(response)  # WHY: record every response the paginator receives.
-        if isinstance(response, list):  # WHY: later list pages remain readable if the defect is present.
-            return response  # WHY: preserve later list pages if the bug remains.
-        return response.data["results"]  # WHY: reproduce the vulnerable results extraction.
+    next_page_calls: list[Any] = []  # WHY: prove failed first pages stop before pagination.
 
     api_map["org_alarms"] = lambda _session, **_kwargs: failed_response  # WHY: return a plausible alarm with an error.
-    api_map["get_all"] = read_response  # WHY: record whether the failed body reaches pagination.
+    api_map["get_next"] = lambda _session, response: next_page_calls.append(response)  # WHY: track page requests.
     scanner = RogueDhcpScanner(object(), "org-1", api=api_map)  # WHY: use the mock map and no live session.
     with pytest.raises(RuntimeError, match=f"HTTP {status_code}"):  # WHY: a failed request must stop the scan.
         scanner.query_organization()  # WHY: exercise the organization request boundary.
-    assert paginator_calls == []  # WHY: no failed response can become a row.
+    assert next_page_calls == []  # WHY: no failed response can trigger pagination.
 
 
 @pytest.mark.parametrize("status_code", [None, "200", True, 199, 300])
@@ -307,6 +297,50 @@ def test_successful_sdk_response_reaches_pagination() -> None:
     assert findings[0].source == "org_alarm"  # WHY: preserve the normal source label.
 
 
+def test_failed_later_sdk_page_is_rejected_before_its_records_are_returned() -> None:
+    """A later HTTP 503 body must not enter the scan after a successful first page."""
+    api = RecordingApi()  # WHY: use no network-backed endpoint calls.
+    api_map = api.as_map()  # WHY: replace one response and the next-page callback.
+    first_page = SimpleNamespace(status_code=200, data={"results": []}, next="/alarms?page=2")  # WHY: model page one.
+    failed_page = SimpleNamespace(status_code=503, data={"results": [ROGUE_ALARM]}, next=None)  # WHY: model page two.
+    next_page_calls: list[Any] = []  # WHY: confirm the later page was requested exactly once.
+
+    def read_next(_session: Any, response: Any) -> Any:  # WHY: return the failed page without a live HTTP call.
+        next_page_calls.append(response)  # WHY: track the successful response used to request the next page.
+        return failed_page  # WHY: model a 503 response with a valid-looking alarm body.
+
+    api_map["org_alarms"] = lambda _session, **_kwargs: first_page  # WHY: the initial request succeeds.
+    api_map["get_next"] = read_next  # WHY: the fake next request returns the 503 page.
+    scanner = RogueDhcpScanner(object(), "org-1", api=api_map)  # WHY: exercise only mocked SDK behavior.
+    with pytest.raises(RuntimeError, match="HTTP 503"):  # WHY: reject the later error response.
+        scanner.query_organization()  # WHY: exercise the organization paging path.
+    assert len(next_page_calls) == 1  # WHY: prove the later response triggered status validation.
+
+
+def test_successful_later_sdk_page_contributes_records() -> None:
+    """A later successful page must preserve the scanner's paginated result behavior."""
+    api = RecordingApi()  # WHY: keep the case independent of the Mist service.
+    api_map = api.as_map()  # WHY: inject two local page responses.
+    first_page = SimpleNamespace(status_code=200, data={"results": []}, next="/alarms?page=2")  # WHY: model page one.
+    later_page = SimpleNamespace(status_code=200, data={"results": [ROGUE_ALARM]}, next=None)  # WHY: model page two.
+    api_map["get_next"] = lambda _session, _response: later_page  # WHY: return a successful page without a request.
+    scanner = RogueDhcpScanner(object(), "org-1", api=api_map)  # WHY: use only local test responses.
+    records = scanner._read_pages(first_page, "org_alarms")  # WHY: verify both successful pages are collected.
+    assert records == [ROGUE_ALARM]  # WHY: preserve the later valid record.
+
+
+def test_later_sdk_page_with_invalid_results_is_rejected() -> None:
+    """A successful status cannot authorize a malformed later page body."""
+    api = RecordingApi()  # WHY: keep the malformed response local.
+    api_map = api.as_map()  # WHY: inject the second page without network calls.
+    first_page = SimpleNamespace(status_code=200, data={"results": []}, next="/alarms?page=2")  # WHY: model page one.
+    invalid_page = SimpleNamespace(status_code=200, data={"results": "not-a-list"}, next=None)  # WHY: bad body shape.
+    api_map["get_next"] = lambda _session, _response: invalid_page  # WHY: return malformed content locally.
+    scanner = RogueDhcpScanner(object(), "org-1", api=api_map)  # WHY: use no Mist credentials.
+    with pytest.raises(RuntimeError, match="page body type dict"):  # WHY: malformed results cannot appear clean.
+        scanner._read_pages(first_page, "org_alarms")  # WHY: validate body shape for the later page.
+
+
 def test_failed_site_response_is_reported_as_a_site_failure() -> None:
     """A failed site response must not add its body to the scan result."""
     api = RecordingApi({"org_alarms": [ROGUE_ALARM]})  # WHY: name one site through a successful organization alarm.
@@ -341,7 +375,7 @@ class TestTheDefaultApiMapMatchesTheInstalledSdk:
 
     def test_the_map_holds_every_name_the_scan_calls(self) -> None:
         """A missing key would raise only during a live run, so pin the whole set here."""
-        expected = {"org_alarms", "org_events", "site_alarms", "site_events", "marvis_actions", "org_sites", "get_all"}
+        expected = {"org_alarms", "org_events", "site_alarms", "site_events", "marvis_actions", "org_sites", "get_next"}
         assert set(self._default_map()) == expected
 
     def test_every_entry_is_callable(self) -> None:
