@@ -2,7 +2,7 @@
 #    uv export --locked --no-hashes --no-emit-project --extra dev --output-file requirements-dev.txt
 annotated-types==0.8.0
     # via pydantic
-anyio==4.15.1
+anyio==4.16.0
     # via
     #   httpx2
     #   openai
@@ -27,7 +27,7 @@ boolean-py==5.0
     # via license-expression
 cachecontrol==0.14.4
     # via pip-audit
-certifi==2026.10.19
+certifi==2026.10.23
     # via requests
 cffi==2.1.1 ; platform_python_implementation != 'PyPy'
     # via
@@ -41,7 +41,7 @@ charset-normalizer==3.5.2
     #   requests
 choreographer==1.4.0
     # via kaleido
-click==8.5.0
+click==8.5.1
     # via
     #   black
     #   flask
@@ -73,7 +73,7 @@ cycler==0.12.1
     # via matplotlib
 cyclonedx-python-lib==11.12.0
     # via pip-audit
-dash==4.4.1
+dash==4.5.0
     # via misthelper
 defusedxml==0.7.1
     # via py-serializable
@@ -95,7 +95,7 @@ flask==3.1.3
     #   misthelper
 flask-wtf==1.3.0
     # via misthelper
-fonttools==4.67.0
+fonttools==4.68.0
     # via matplotlib
 greenlet==3.5.6
     # via playwright
@@ -105,9 +105,9 @@ h11==0.16.0 ; sys_platform != 'emscripten'
     # via httpcore2
 hiredis==3.5.0
     # via redis
-httpcore2==2.15.1 ; sys_platform != 'emscripten'
+httpcore2==2.16.0 ; sys_platform != 'emscripten'
     # via httpx2
-httpx2==2.15.1
+httpx2==2.16.0
     # via openai
 httpx2-jsfetch==1.0 ; sys_platform == 'emscripten'
     # via httpx2
@@ -122,7 +122,7 @@ idna==3.20
     #   anyio
     #   httpx2
     #   requests
-importlib-metadata==9.0.1
+importlib-metadata==10.1.0
     # via dash
 iniconfig==2.3.1
     # via pytest
@@ -150,7 +150,7 @@ jeepney==0.9.0 ; sys_platform == 'linux'
     #   secretstorage
 jinja2==3.1.6
     # via flask
-jiter==0.17.0
+jiter==0.19.0
     # via openai
 jsonschema==4.26.0
     # via misthelper
@@ -209,7 +209,7 @@ mypy-extensions==1.1.0
     #   black
     #   isort
     #   mypy
-narwhals==2.27.1
+narwhals==2.28.0
     # via plotly
 nest-asyncio==1.6.0
     # via dash
@@ -220,7 +220,7 @@ numpy==2.5.4
     #   contourpy
     #   matplotlib
     #   misthelper
-openai==3.35.1
+openai==3.46.0
     # via misthelper
 packageurl-python==0.17.6
     # via cyclonedx-python-lib
@@ -261,7 +261,7 @@ pip-audit==2.10.1
     # via misthelper
 pip-requirements-parser==32.0.1
     # via pip-audit
-platformdirs==4.13.5
+platformdirs==4.14.5
     # via
     #   black
     #   choreographer
@@ -292,13 +292,13 @@ py==1.11.0
     # via interrogate
 py-serializable==2.1.0
     # via cyclonedx-python-lib
-pycparser==3.11 ; implementation_name != 'PyPy' and platform_python_implementation != 'PyPy'
+pycparser==3.12 ; implementation_name != 'PyPy' and platform_python_implementation != 'PyPy'
     # via cffi
-pydantic==2.14.1
+pydantic==2.14.3
     # via
     #   dash
     #   openai
-pydantic-core==2.50.1
+pydantic-core==2.50.4
     # via pydantic
 pydocstyle==6.3.0
     # via misthelper
@@ -319,7 +319,7 @@ pyparsing==3.3.3
     # via
     #   matplotlib
     #   pip-requirements-parser
-pypdfium2==5.14.0
+pypdfium2==5.15.0
     # via pdfplumber
 pyte==0.8.2
     # via misthelper
@@ -335,11 +335,11 @@ pytest-playwright==0.10.0
     # via misthelper
 pytest-timeout==2.4.0
     # via misthelper
-python-arango==8.3.6
+python-arango==8.3.7
     # via misthelper
 python-crfsuite==0.9.12
     # via usaddress
-python-dateutil==2.9.0.post0
+python-dateutil==4.0.0
     # via matplotlib
 python-discovery==1.6.4
     # via virtualenv
@@ -403,14 +403,12 @@ ruff==0.17.3
     # via misthelper
 secretstorage==3.5.0 ; sys_platform == 'linux'
     # via keyring
-setuptools==84.2.0
+setuptools==84.2.1
     # via dash
 simplejson==4.2.0
     # via choreographer
 six==1.17.0
-    # via
-    #   mando
-    #   python-dateutil
+    # via mando
 sniffio==1.3.1
     # via openai
 snowballstemmer==3.1.1
@@ -460,8 +458,10 @@ typing-extensions==4.16.0
     #   pydantic-core
     #   pyee
     #   typing-inspection
-typing-inspection==0.4.4
+typing-inspection==0.4.5
     # via pydantic
+tzdata==2026.6
+    # via python-dateutil
 urllib3==2.8.0
     # via
     #   misthelper
@@ -480,7 +480,7 @@ vulture==2.16
     # via misthelper
 waitress==3.0.2 ; sys_platform == 'win32'
     # via misthelper
-wcwidth==0.9.2
+wcwidth==0.9.4
     # via
     #   prettytable
     #   pyte
@@ -492,9 +492,9 @@ werkzeug==3.1.9
     # via
     #   dash
     #   flask
-wtforms==3.2.2
+wtforms==3.3.2
     # via flask-wtf
 yaml-config==0.1.5
     # via usaddress-scourgify
-zipp==4.1.1
+zipp==4.1.2
     # via importlib-metadata
