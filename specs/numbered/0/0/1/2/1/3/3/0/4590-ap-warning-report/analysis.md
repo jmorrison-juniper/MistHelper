@@ -111,5 +111,20 @@ The Markdown link check scanned 21 repository-local documents and found zero bro
 The published wiki pages use wiki-relative links and do not enter that local-link check.
 An initial check against the unpublished wiki copies reported 541 unresolved wiki-local targets.
 The generated map drift check verifies those copies against their source instead.
-The final test-quality procedure runs after the integration commit.
-Its exact result is recorded on issue #4590.
+The final test-quality procedure passed after integration commit `c0d0c56`.
+The intended base resolved to `5d444bda23ea50de131d67b6e6fcf37055adfa77`.
+The preflight read and validated all four required inputs.
+
+```powershell
+rtk git fetch --no-tags origin "+refs/heads/main:refs/remotes/origin/main"
+rtk git rev-parse --verify "origin/main^{commit}"
+rtk proxy .venv\Scripts\python.exe -B -m pytest -p no:cacheprovider -s -q tests\guardrails\local_test_quality_loop\test_guidance.py::TestLiveGuides
+rtk proxy .venv\Scripts\test-quality-analyzer.exe --gate --config .github\test-quality-config.toml --baseline .github\test-quality-baseline.json --changed-from origin/main --full-gate-path .github\workflows\ci.yml --full-gate-path requirements-dev.txt
+```
+
+The analyzer reported `gate_scope: 9 files checked, 0 findings checked`.
+The result was `gate: 0 new findings vs baseline`, with zero parse errors.
+The two skipped discovery records describe roots omitted by the changed-test selection, not skipped feature files.
+No baseline changed.
+All 20 feature tasks are complete.
+No pull request, merge, production deployment, or change to pull request #4208 is part of this implementation.

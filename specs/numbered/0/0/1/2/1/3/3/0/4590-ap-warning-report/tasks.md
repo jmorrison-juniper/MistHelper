@@ -50,7 +50,7 @@ Complete integration without waiting for the unfinished WAN feature.
 - [x] T017 Register the next unused final number in MistHelper.py and src/foundation/support/utils/operation_registry.py. (delivered: MistHelper.py)
 - [x] T018 Update README.md and .github/copilot-instructions.md, then regenerate documentation/menu_reference.md and the API map. (delivered: documentation/menu_reference.md)
 - [x] T019 Test the final menu callable and portal visibility in tests/guardrails and tests/e2e. (delivered: tests/e2e/web_portal/test_ap_warning_report.py)
-- [ ] T020 Run final integration gates and record the results in analysis.md.
+- [x] T020 Run final integration gates and record the results in analysis.md. (delivered: analysis.md)
 
 ## Dependencies and execution order
 

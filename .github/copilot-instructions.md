@@ -208,7 +208,7 @@ updates a row and does not duplicate it. Define the strategy before you write th
 ### Menu categories
 
 `src/foundation/support/utils/operation_registry.py` is the single source of truth for the
-category of each menu. The measurement date of the counts below is 2026-10-14. The guard
+category of each menu. The measurement date of the counts below is 2026-11-06. The guard
 `tests/guardrails/test_destructive_menu_docs.py` fails when this table drifts from the registry.
 
 | Category | Count | Menu numbers |
