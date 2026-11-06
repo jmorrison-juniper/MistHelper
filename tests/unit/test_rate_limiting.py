@@ -893,6 +893,7 @@ class TestCoverageGapTargets:
             "requests": 750,  # Current usage count
             "request_limit": 5000,  # Rate limit
         }
+        mock_mistapi.api.v1.self.usage.getSelfApiUsage.return_value.status_code = 200  # Model HTTP success explicitly.
         cache = {  # Minimal cache dict to be populated by the success path
             "used": 0,  # Will be set to 750 on success
             "limit": 5000,  # Will be set to 5000 on success
@@ -930,6 +931,7 @@ class TestCoverageGapTargets:
             "requests": 100,  # Usage count
             "request_limit": 5000,  # Rate limit
         }
+        mock_mistapi.api.v1.self.usage.getSelfApiUsage.return_value.status_code = 200  # Model HTTP success explicitly.
         with patch.dict("sys.modules", {"mistapi": mock_mistapi}):  # Inject mock mistapi
             smoothed, delay = RateLimitingUtils.get_rate_limited_delay(  # Call with uninitialized cache
                 smoothed_delay=0.5,  # Prior smoothed delay
@@ -942,6 +944,84 @@ class TestCoverageGapTargets:
 # ---------------------------------------------------------------------------
 # Cold shared cache (issue #3091)
 # ---------------------------------------------------------------------------
+class TestRefreshApiUsageNativeResponses:
+    """Verify that native Mist SDK responses preserve cache status semantics."""
+
+    @staticmethod
+    def _native_response(status_code: int | None) -> object:
+        """Build a parsed SDK response without contacting the Mist service."""
+        import requests  # WHY: construct an offline transport response with a real status.
+        from mistapi.__api_response import APIResponse  # WHY: preserve installed SDK parsing behavior.
+
+        if status_code is None:  # WHY: represent an SDK result with no underlying HTTP response.
+            return APIResponse(response=None, url="https://api.mist.invalid/api/v1/self/usage")  # WHY: stay offline.
+        response = requests.Response()  # WHY: provide the concrete response type that mistapi reads.
+        response.status_code = status_code  # WHY: select the success or refusal path under test.
+        response.url = "https://api.mist.invalid/api/v1/self/usage"  # WHY: prevent any live network destination.
+        response.headers["Content-Type"] = "application/json"  # WHY: make the fixture a realistic API response.
+        response._content = b'{"requests": 1275, "request_limit": 5000}'  # WHY: model a usage-shaped response body.
+        response.encoding = "utf-8"  # WHY: let the SDK decode its local JSON body consistently.
+        return APIResponse(response=response, url=response.url)  # WHY: exercise the native SDK response wrapper.
+
+    @pytest.mark.parametrize("status_code", [403, 503, None])
+    def test_failed_http_status_preserves_valid_cache(self, status_code: int, caplog: pytest.LogCaptureFixture) -> None:
+        """A failed native response cannot replace valid cached quota values."""
+        response = self._native_response(status_code)  # WHY: return realistic data with a failed status.
+        session = MagicMock(name="api_session")  # WHY: prove the endpoint call uses only the local test seam.
+        mistapi_module = MagicMock(name="mistapi_module")  # WHY: prevent the SDK endpoint from accessing a network.
+        endpoint = mistapi_module.api.v1.self.usage.getSelfApiUsage  # WHY: intercept the single existing SDK method.
+        endpoint.return_value = response  # WHY: supply the locally parsed SDK response.
+        cache = {  # WHY: seed every field with a valid prior reading.
+            "used": 900,  # WHY: preserve the last valid usage count.
+            "limit": 5000,  # WHY: preserve the last valid hourly limit.
+            "last_updated": 100.0,  # WHY: preserve the last successful refresh time.
+            "perceived_requests": 7,  # WHY: retain local request accounting.
+            "initialized": True,  # WHY: retain the valid initialized state.
+            "previous_elapsed": 30.0,  # WHY: retain PID timing metadata.
+        }
+        original_cache = cache.copy()  # WHY: compare every field after the failed refresh.
+        with (
+            patch.dict(sys.modules, {"mistapi": mistapi_module}),
+            caplog.at_level(logging.WARNING),
+        ):  # WHY: isolate the SDK call and its warning.
+            RateLimitingUtils._refresh_api_usage(
+                session, cache, 200.0
+            )  # WHY: exercise failure handling without a request.
+        endpoint.assert_called_once_with(session)  # WHY: ensure the test replaced the only API boundary.
+        assert cache == original_cache  # WHY: failed status must preserve all valid cached fields.
+        assert f"HTTP {status_code}" in caplog.text  # WHY: make the failed response visible to the operator.
+        assert "1275" not in caplog.text  # WHY: do not log the response body or its usage data.
+
+    def test_successful_http_status_refreshes_cache(self, caplog: pytest.LogCaptureFixture) -> None:
+        """A successful native response continues to refresh all quota fields."""
+        response = self._native_response(200)  # WHY: supply valid usage data with a successful status.
+        session = MagicMock(name="api_session")  # WHY: keep the endpoint session local.
+        mistapi_module = MagicMock(name="mistapi_module")  # WHY: keep the SDK call offline.
+        endpoint = mistapi_module.api.v1.self.usage.getSelfApiUsage  # WHY: intercept the existing API method.
+        endpoint.return_value = response  # WHY: use the native parsed response object.
+        cache = {  # WHY: start from stale values so each update is observable.
+            "used": 900,  # WHY: verify the successful usage count replaces stale data.
+            "limit": 4000,  # WHY: verify the successful limit replaces stale data.
+            "last_updated": 100.0,  # WHY: verify the successful refresh time advances.
+            "perceived_requests": 7,  # WHY: verify local request accounting resets.
+            "initialized": False,  # WHY: verify successful data initializes the cache.
+        }
+        with (
+            patch.dict(sys.modules, {"mistapi": mistapi_module}),
+            caplog.at_level(logging.DEBUG),
+        ):  # WHY: isolate the SDK call and its success log.
+            RateLimitingUtils._refresh_api_usage(
+                session, cache, 200.0
+            )  # WHY: refresh from the local successful response.
+        endpoint.assert_called_once_with(session)  # WHY: prove that only the mocked SDK boundary ran.
+        assert cache["used"] == 1275  # WHY: successful response data must replace stale usage.
+        assert cache["limit"] == 5000  # WHY: successful response data must replace the stale limit.
+        assert cache["last_updated"] == 200.0  # WHY: the successful refresh time must be recorded.
+        assert cache["perceived_requests"] == 0  # WHY: a refresh resets locally counted requests.
+        assert cache["initialized"] is True  # WHY: successful data marks the cache ready.
+        assert "API usage refreshed" in caplog.text  # WHY: preserve success observability.
+
+
 class TestColdCacheStartsTheAdaptiveDelay:
     """The shared quota cache starts empty, so the pipeline must seed it."""
 
