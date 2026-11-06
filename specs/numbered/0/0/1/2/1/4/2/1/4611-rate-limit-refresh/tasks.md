@@ -49,7 +49,7 @@
 **Purpose**: Record the behavior and run the required local gates.
 
 - [X] T007 [P] Add the issue-specific release note in `changelog.d/issue-4611-rate-limit-refresh-http-status.md`.
-- [ ] T008 Run the focused tests, format and lint checks, and test-quality ratchet for `tests/unit/test_rate_limiting.py`.
+- [X] T008 Run the focused tests, format and lint checks, and test-quality ratchet for `tests/unit/test_rate_limiting.py`.
 - [X] T009 Verify the native response tests make no network request and confirm the explicit file manifest before commit in `tests/unit/test_rate_limiting.py`.
 
 ## Dependencies & Execution Order
