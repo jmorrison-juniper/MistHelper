@@ -287,11 +287,29 @@ class TestFetchProfiles:
 
     @patch("src.operations.wan.wan_vpn_builder.mistapi.get_all")
     @patch("src.operations.wan.wan_vpn_builder.mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles")
-    def test_profiles_sorted_alphabetically(self, mock_list, mock_get_all, builder, sample_profiles):
-        mock_get_all.return_value = list(sample_profiles)
-        result = builder._fetch_profiles()
-        names = [profile["name"] for profile in result]
-        assert names == ["SPOKE01", "SPOKE02", "VREPOL69"]
+    def test_profiles_sorted_alphabetically(
+        self,
+        mock_list: MagicMock,
+        mock_get_all: MagicMock,
+        builder: WanVpnBuilder,
+        sample_profiles: list[dict],
+    ) -> None:
+        mock_list.return_value.status_code = 200  # WHY: successful responses need an explicit HTTP status.
+        mock_get_all.return_value = list(sample_profiles)  # WHY: provide known profiles for the sort check.
+        result = builder._fetch_profiles()  # WHY: exercise successful profile retrieval.
+        names = [profile["name"] for profile in result]  # WHY: isolate the ordering behavior.
+        assert names == ["SPOKE01", "SPOKE02", "VREPOL69"]  # WHY: keep the current alphabetical order.
+
+    @patch("src.operations.wan.wan_vpn_builder.mistapi.get_all")
+    @patch("src.operations.wan.wan_vpn_builder.mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles")
+    def test_missing_status_returns_empty(
+        self, mock_list: MagicMock, mock_get_all: MagicMock, builder: WanVpnBuilder
+    ) -> None:
+        """A response without status evidence must not supply profiles."""
+        mock_list.return_value.status_code = None  # WHY: missing status cannot prove request success.
+        result = builder._fetch_profiles()  # WHY: test the fail-closed response boundary.
+        assert result == []  # WHY: unknown response status must not enter the builder.
+        mock_get_all.assert_not_called()  # WHY: pagination cannot read data without success evidence.
 
     @patch("src.operations.wan.wan_vpn_builder.mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles")
     def test_api_error_returns_empty(self, mock_list, builder):
@@ -583,24 +601,49 @@ class TestDisplayProfileList:
 class TestFetchProfilesHttpRefusal:
     """Test that a Mist refusal does not supply gateway profiles."""
 
-    def test_http_403_response_returns_no_profiles(self):
-        """A native Mist refusal must not enter the gateway profile inventory."""
+    @staticmethod
+    def _native_response(status_code: int, reason: str, response_body: bytes) -> object:
+        """Create an SDK response with the requested HTTP result."""
         import sys  # WHY: access the SDK module imported by the system under test.
 
         import requests  # WHY: construct the native HTTP response consumed by the Mist SDK.
 
-        builder = WanVpnBuilder(MagicMock(), "org-1")  # WHY: tie status evidence to the imported source class.
         response = requests.Response()  # WHY: the Mist SDK reads its status and body.
-        response.status_code = 403  # WHY: model an explicit permission refusal.
+        response.status_code = status_code  # WHY: model the failed Mist API request.
         response.url = "https://api.mist.com/api/v1/orgs/org-1/deviceprofiles"  # WHY: identify the mocked endpoint.
-        response.reason = "Forbidden"  # WHY: preserve the native HTTP refusal detail.
+        response.reason = reason  # WHY: preserve the native HTTP failure detail.
         response.headers["Content-Type"] = "application/json"  # WHY: use the Mist error response format.
-        response._content = b'{"detail":"forbidden"}'  # WHY: give APIResponse a valid refusal body.
+        response._content = response_body  # WHY: include the response data under test.
         source_module = sys.modules[WanVpnBuilder.__module__]  # WHY: reuse the SDK import already under test.
         response_module = getattr(source_module.mistapi, "__api_response")  # WHY: access the SDK response type.
-        api_response = response_module.APIResponse(  # WHY: retain native refusal semantics.
-            response=response, url=response.url
-        )
+        return response_module.APIResponse(response=response, url=response.url)  # WHY: retain native status semantics.
+
+    @pytest.mark.parametrize(
+        ("status_code", "reason", "response_body"),
+        [
+            (403, "Forbidden", b'{"detail":"forbidden"}'),
+            (
+                503,
+                "Service Unavailable",
+                b'{"results":[{"id":"unexpected","name":"Injected","port_config":{}}]}',
+            ),
+        ],
+    )
+    def test_http_error_response_returns_no_profiles(
+        self,
+        status_code: int,
+        reason: str,
+        response_body: bytes,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:  # WHY: a failed HTTP status must exclude all response data from the builder.
+        """A native Mist refusal must not enter the gateway profile inventory."""
+        import sys  # WHY: access the SDK module imported by the system under test.
+
+        builder = WanVpnBuilder(MagicMock(), "org-1")  # WHY: tie status evidence to the imported source class.
+        api_response = self._native_response(status_code, reason, response_body)  # WHY: build the real SDK response.
+        source_module = sys.modules[WanVpnBuilder.__module__]  # WHY: reuse the SDK import already under test.
+        mocked_get_all = MagicMock()  # WHY: detect any attempt to read failed response data.
+        monkeypatch.setattr(source_module.mistapi, "get_all", mocked_get_all)  # WHY: isolate the pagination boundary.
         with patch(
             "src.operations.wan.wan_vpn_builder.mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles",
             return_value=api_response,
@@ -608,3 +651,14 @@ class TestFetchProfilesHttpRefusal:
             profiles = builder._fetch_profiles()  # WHY: run the real profile refusal boundary.
         assert profiles == []  # WHY: a refused read must not supply profiles to the workflow.
         mocked_list.assert_called_once_with(builder.apisession, "org-1", type="gateway")  # WHY: verify SDK scope.
+        mocked_get_all.assert_not_called()  # WHY: failed response data must not reach pagination.
+
+    def test_run_stops_when_profile_inventory_is_empty(self) -> None:  # WHY: no profiles must stop configuration work.
+        """An empty profile inventory must stop the VPN workflow."""
+        safe_input = MagicMock()  # WHY: detect whether the workflow reaches an operator prompt.
+        builder = WanVpnBuilder(MagicMock(), "org-1", safe_input_func=safe_input)  # WHY: isolate the workflow state.
+        builder._fetch_profiles = MagicMock(return_value=[])  # WHY: model an unavailable profile inventory.
+        builder._create_vpn = MagicMock()  # WHY: detect any attempted configuration change.
+        builder.run()  # WHY: execute the full workflow after the failed read.
+        builder._create_vpn.assert_not_called()  # WHY: no VPN can be created without valid profiles.
+        safe_input.assert_not_called()  # WHY: the workflow must stop before it asks for configuration.

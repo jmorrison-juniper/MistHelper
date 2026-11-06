@@ -327,12 +327,22 @@ class WanVpnBuilder:  # WHY: class encapsulates all per-run state (session, org,
     def _fetch_profiles(self) -> list[Any]:  # WHY: isolated so tests can monkeypatch the API call.
         """Fetch gateway device profiles, sorted alphabetically."""
         try:  # WHY: any transport / auth error should degrade gracefully to an empty list.
+            logger.info("Fetching gateway profiles for %s", self.org_id)  # WHY: identify the org before its read.
             response = mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles(
                 self.apisession, self.org_id, type="gateway"
             )  # WHY: only gateway-type profiles are eligible for VPN membership.
+            logger.debug("Received gateway profile response")  # WHY: confirm the request before status validation.
+            status_code = getattr(response, "status_code", None)  # WHY: check status before response data.
+            status_is_successful = isinstance(status_code, int) and 200 <= status_code < 300  # WHY: require valid 2xx.
+            if not status_is_successful:  # WHY: reject unknown and failed status.
+                logger.error("Gateway profile request failed with HTTP status %s", status_code)  # WHY: expose status.
+                return []  # WHY: stop before failed response data can enter the VPN workflow.
+            logger.info("Reading profiles from the successful response")  # WHY: mark the pagination action.
             profiles: list[Any] = mistapi.get_all(response=response, mist_session=self.apisession)  # WHY: paginate.
-            profiles.sort(key=lambda profile: profile.get("name", "").lower())  # WHY: case-insensitive display order.
-            logger.debug("Fetched %d gateway profiles", len(profiles))  # WHY: %s style logging per project rule.
+            logger.debug("Read %d gateway profiles", len(profiles))  # WHY: report the pagination result.
+            logger.info("Sorting %d gateway profiles", len(profiles))  # WHY: mark the display-order transform.
+            profiles.sort(key=lambda profile: profile.get("name", "").lower())  # WHY: preserve case-insensitive order.
+            logger.debug("Sorted %d gateway profiles", len(profiles))  # WHY: report the sort result.
             return profiles  # WHY: sorted list surfaces to run() for display.
         except Exception as error:  # WHY: keep broad so the menu can display with incomplete profile data.
             logging.exception(
