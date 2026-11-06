@@ -19,6 +19,7 @@ Layout history:
 from __future__ import annotations
 
 import csv
+import json
 import logging
 import socket
 import threading
@@ -64,6 +65,10 @@ def results_portal(tmp_path_factory: pytest.TempPathFactory) -> Iterator[str]:
         writer = csv.writer(handle)
         writer.writerow(COLUMNS)
         writer.writerows(ROWS)
+    nested_data_dir = data_dir / "mib_generator"  # Keep the JSON fixture below the result root.
+    nested_data_dir.mkdir()  # Make the nested result directory without using a live export.
+    with open(nested_data_dir / "allowlist.json", "w", encoding="utf-8") as handle:
+        json.dump({"preview": "nested-json-preview"}, handle)  # Keep the expected value synthetic.
 
     app = WebPortalApp.create_app(apisession=None, menu_actions=build_static_menu_actions(), org_id="test-org")
     app.config["TESTING"] = True
@@ -105,6 +110,19 @@ def column_values(page: Any, index: int) -> list[str]:
 
 class TestTheResultsTableReplacesTheLog:
     """Prove the table answers the questions a log cannot."""
+
+    def test_nested_json_result_renders_in_the_results_panel(self, results_page: Any) -> None:
+        """A nested JSON result must render through the existing Results workflow."""
+        logger.info("Previewing the nested synthetic JSON result")  # Mark the browser action.
+        results_page.evaluate("() => OperationResults.showForRun(['mib_generator/allowlist.json'])")
+        results_page.wait_for_function(
+            "() => document.getElementById('resultsBody').innerText.includes('nested-json-preview')",
+            timeout=READY_TIMEOUT_MS,
+        )
+        preview_text = results_page.locator("#resultsBody").inner_text()
+        assert "nested-json-preview" in preview_text
+        assert "Could not read the results" not in preview_text
+        logger.debug("Nested JSON result preview: %s", preview_text)  # Record the rendered result.
 
     def test_the_table_paints_every_row(self, results_page: Any) -> None:
         """A table with no row proves nothing below, so measure it first."""
