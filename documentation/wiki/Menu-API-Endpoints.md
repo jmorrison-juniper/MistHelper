@@ -349,11 +349,11 @@ pie showData
 | [261](Menu-API-Endpoints-Interactive-Safe#menu-261) | Run any site-scoped simple Mist read endpoint (57 operations) | `interactive_safe` | 57 |
 | [262](Menu-API-Endpoints-Interactive-Safe#menu-262) | Run any MSP-scoped Mist get or list endpoint (10 operations) | `interactive_safe` | 10 |
 | [263](Menu-API-Endpoints-Interactive-Safe#menu-263) | Run any site SLE endpoint with scope prompts (15 operations) | `interactive_safe` | 16 |
-| [264](Menu-API-Endpoints-Interactive-Safe#menu-264) | Run any site map endpoint with map prompts (7 operations) | `interactive_safe` | 10 |
-| [265](Menu-API-Endpoints-Interactive-Safe#menu-265) | Run any site detail endpoint with identifier prompts (33 operations) | `interactive_safe` | 36 |
-| [266](Menu-API-Endpoints-Interactive-Safe#menu-266) | Run any org detail endpoint with identifier prompts (61 operations) | `interactive_safe` | 63 |
-| [267](Menu-API-Endpoints-Interactive-Safe#menu-267) | Run any MSP detail endpoint with identifier prompts (10 operations) | `interactive_safe` | 13 |
-| [268](Menu-API-Endpoints-Interactive-Safe#menu-268) | Run any remaining endpoint with identifier prompts (6 operations) | `interactive_safe` | 9 |
+| [264](Menu-API-Endpoints-Interactive-Safe#menu-264) | Run any site map endpoint with map prompts (7 operations) | `interactive_safe` | 12 |
+| [265](Menu-API-Endpoints-Interactive-Safe#menu-265) | Run any site detail endpoint with identifier prompts (33 operations) | `interactive_safe` | 38 |
+| [266](Menu-API-Endpoints-Interactive-Safe#menu-266) | Run any org detail endpoint with identifier prompts (61 operations) | `interactive_safe` | 65 |
+| [267](Menu-API-Endpoints-Interactive-Safe#menu-267) | Run any MSP detail endpoint with identifier prompts (10 operations) | `interactive_safe` | 15 |
+| [268](Menu-API-Endpoints-Interactive-Safe#menu-268) | Run any remaining endpoint with identifier prompts (6 operations) | `interactive_safe` | 11 |
 | [269](Menu-API-Endpoints-Safe#menu-269) | Scan the organization for rogue DHCP servers on switches (30 days) | `safe` | 6 |
 | [270](Menu-API-Endpoints-Interactive-Safe#menu-270) | Export or resolve Marvis Actions by category and subcategory | `interactive_safe` | 4 |
 | [271](Menu-API-Endpoints-Safe#menu-271) | Export the subscription and contract expiry report | `safe` | 3 |
@@ -493,8 +493,10 @@ This helper also uses: `SourceDependencyResolver`, `SourceDependencyResolverServ
 | GET | `/api/v1/orgs/{org_id}/services` | [`orgs.services.listOrgServices`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/services/list-org-services) | [`CONFIG_SNAPSHOT_APIS`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/foundation/persistence/db/router.py) | Name |
 | GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`CONFIG_SNAPSHOT_APIS`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/foundation/persistence/db/router.py) | Name |
 | GET | `/api/v1/sites/{site_id}/devices` | [`sites.devices.listSiteDevices`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/devices/list-site-devices) | [`CONFIG_SNAPSHOT_APIS`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/foundation/persistence/db/router.py) | Name |
-| GET | `/api/v1/sites/{site_id}/sle/{scope}/{scope_id}/metric/{metric}/classifier/{classifier}/summary-trend` | [`sites.sle.getSiteSleClassifierSummaryTrend`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/sles/get-site-sle-classifier-summary-trend) | [`SleTrendIdentity.fields`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/foundation/support/refactors/endpoint_primary_key_strategies.py) | Name |
-| GET | `/api/v1/sites/{site_id}/sle/{scope}/{scope_id}/metric/{metric}/summary-trend` | [`sites.sle.getSiteSleSummaryTrend`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/sles/get-site-sle-summary-trend) | [`SleTrendIdentity.fields`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/foundation/support/refactors/endpoint_primary_key_strategies.py) | Name |
+| GET | `/api/v1/sites/{site_id}/sle/{scope}/{scope_id}/metric/{metric}/classifier/{classifier}/summary-trend` | [`sites.sle.getSiteSleClassifierSummaryTrend`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/sles/get-site-sle-classifier-summary-trend) | [`SleWindowIdentity.fields`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/foundation/support/refactors/endpoint_primary_key_strategies.py) | Name |
+| GET | `/api/v1/sites/{site_id}/sle/{scope}/{scope_id}/metric/{metric}/histogram` | [`sites.sle.getSiteSleHistogram`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/sles/get-site-sle-histogram) | [`SleWindowIdentity.fields`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/foundation/support/refactors/endpoint_primary_key_strategies.py) | Name |
+| GET | `/api/v1/sites/{site_id}/sle/{scope}/{scope_id}/metric/{metric}/impact-summary` | [`sites.sle.getSiteSleImpactSummary`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/sles/get-site-sle-impact-summary) | [`SleWindowIdentity.fields`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/foundation/support/refactors/endpoint_primary_key_strategies.py) | Name |
+| GET | `/api/v1/sites/{site_id}/sle/{scope}/{scope_id}/metric/{metric}/summary-trend` | [`sites.sle.getSiteSleSummaryTrend`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/sles/get-site-sle-summary-trend) | [`SleWindowIdentity.fields`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/foundation/support/refactors/endpoint_primary_key_strategies.py) | Name |
 
 ### InputUtils
 
