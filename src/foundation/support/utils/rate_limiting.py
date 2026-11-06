@@ -325,7 +325,18 @@ class RateLimitingUtils:  # WHY: static-method facade groups rate-limit helpers 
         try:  # WHY: mistapi may be absent or the call may fail. Swallow gracefully.
             import mistapi  # WHY: lazy import keeps module import cheap and testable.
 
-            usage = mistapi.api.v1.self.usage.getSelfApiUsage(apisession).data  # WHY: canonical usage endpoint.
+            logger.info("Refreshing API usage from Mist")  # WHY: identify the external quota request before it runs.
+            response = mistapi.api.v1.self.usage.getSelfApiUsage(apisession)  # WHY: inspect status before its payload.
+            status_code = response.status_code  # WHY: native SDK responses retain the HTTP result code.
+            logger.debug("API usage response status: %s", status_code)  # WHY: record status only.
+            if (
+                status_code is None or not 200 <= status_code < 300
+            ):  # WHY: only successful responses can update quota state.
+                logger.warning(
+                    "Failed to refresh API usage data: HTTP %s. Using cached values.", status_code
+                )  # WHY: report the refusal without exposing response data.
+                return  # WHY: preserve every cached field when the server rejects the refresh.
+            usage = response.data  # WHY: read quota fields only after validating the HTTP status.
             api_usage_cache["used"] = usage.get("requests", 0)  # WHY: default 0 when field absent.
             api_usage_cache["limit"] = usage.get("request_limit", _DEFAULT_REQUEST_LIMIT)  # WHY: fall back to default.
             api_usage_cache["last_updated"] = current_time  # WHY: reset cache-age accounting.
