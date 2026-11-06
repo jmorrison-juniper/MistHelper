@@ -7,10 +7,9 @@ Why:
     process-shared control moves local stand-in jobs to completion without
     intercepting browser routes.
 
-    A check that fails because of a known product defect keeps its assertion
-    and carries a strict xfail with the issue number. The file then stays
-    green, and the xfail turns red when a fix lands, so the fix author must
-    remove the marker.
+    A known product defect stays visible as a failing assertion in its
+    issue-specific journey. The journey runner keeps screenshots and reports,
+    so each failure keeps evidence for the next repair.
 """
 
 from __future__ import annotations
@@ -462,7 +461,6 @@ class TestMultiSiteSessionJourneys:
             operator.recorder.step("after start with descending phases")  # Record the start answer.
         assert not JOB_URL.match(operator.page.url), "The portal started a job with descending canary phases."
 
-    @pytest.mark.xfail(strict=True, reason="#4540: showOrgBusyRefusal is not defined in the request handler scope")
     @pytest.mark.fresh_server
     def test_second_start_on_busy_sites_explains_the_lock(self, operator: MultiSiteJourney) -> None:
         """A start on sites that a running job holds names the running job."""
@@ -479,10 +477,11 @@ class TestMultiSiteSessionJourneys:
         operator.recorder.step("second start refused")  # Record what the operator sees.
         flash = operator.page.get_by_test_id(FLASH)  # The refusal message.
         expect(flash).to_be_visible()  # The operator must see a reason.
+        expect(flash).to_contain_text("Site")  # The refusal names the held site.
+        expect(flash).to_contain_text(first_job.rsplit("/", 1)[-1])  # The refusal names the owning operation.
         expect(flash).not_to_contain_text("site_lock_wrong_run")  # No internal code.
         assert first_job.rsplit("/", 1)[-1].startswith("org-run-")  # The first job page exists for the operator.
 
-    @pytest.mark.xfail(strict=True, reason="#4540: showOrgBusyRefusal is not defined in the request handler scope")
     @pytest.mark.fresh_server
     def test_busy_site_refusal_links_to_the_running_job(self, operator: MultiSiteJourney) -> None:
         """A start on busy sites links to the job that holds them and closes the start button."""
