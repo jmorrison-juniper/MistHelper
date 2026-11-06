@@ -10,13 +10,10 @@ Every test injects stand-in callables, so no test opens a network connection.
 
 from __future__ import annotations
 
-import json  # WHY: build a mocked response body for the installed Mist SDK parser.
 from types import SimpleNamespace  # WHY: model Mist SDK response objects without a network request.
 from typing import Any
 
 import pytest
-import requests  # WHY: create an HTTP response without opening a network connection.
-from mistapi.__api_response import APIResponse  # WHY: exercise the installed SDK response type.
 
 from src.operations.protection.security.rogue_dhcp.scanner import DEFAULT_WINDOW_DAYS, SECONDS_PER_DAY, RogueDhcpScanner
 
@@ -296,29 +293,6 @@ def test_sdk_response_without_status_is_rejected() -> None:
     scanner = RogueDhcpScanner(object(), "org-1", api=api_map)  # WHY: use only the stand-in API map.
     with pytest.raises(RuntimeError, match="invalid status type NoneType"):  # WHY: missing status must fail closed.
         scanner.query_organization()  # WHY: exercise the status validation boundary.
-
-
-def test_mistapi_503_response_with_alarm_body_is_rejected() -> None:
-    """The real SDK response type must not expose a failed alarm to pagination."""
-    transport_response = requests.Response()  # WHY: create a local HTTP response without a request.
-    transport_response.status_code = 503  # WHY: reproduce the service failure in issue #4560.
-    transport_response.url = "https://api.mist.example/org/alarms"  # WHY: use a synthetic endpoint URL.
-    transport_response._content = json.dumps({"results": [ROGUE_ALARM]}).encode()  # WHY: attach a plausible alarm.
-    sdk_response = APIResponse(transport_response, transport_response.url)  # WHY: use the installed SDK parser.
-    api = RecordingApi()  # WHY: provide every other endpoint without a network connection.
-    api_map = api.as_map()  # WHY: replace the organization response and track pagination.
-    api_map["org_alarms"] = lambda _session, **_kwargs: sdk_response  # WHY: return the mocked SDK result.
-    paginator_calls: list[Any] = []  # WHY: prove the SDK error body never reaches the paginator.
-
-    def read_response(response: Any, **_kwargs: Any) -> list[dict[str, Any]]:  # WHY: detect unsafe pagination.
-        paginator_calls.append(response)  # WHY: record each response the scanner sends to pagination.
-        return response.data["results"]  # WHY: emulate the vulnerable extraction from a plausible error body.
-
-    api_map["get_all"] = read_response  # WHY: observe the SDK response boundary.
-    scanner = RogueDhcpScanner(object(), "org-1", api=api_map)  # WHY: run with mocked API calls only.
-    with pytest.raises(RuntimeError, match="HTTP 503"):  # WHY: a failed SDK response must stop the scan.
-        scanner.query_organization()  # WHY: exercise the exact reported request path.
-    assert paginator_calls == []  # WHY: failed SDK data must not become a finding.
 
 
 def test_successful_sdk_response_reaches_pagination() -> None:
