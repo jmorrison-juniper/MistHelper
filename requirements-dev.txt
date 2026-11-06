@@ -472,7 +472,7 @@ usaddress==0.5.16
     # via usaddress-scourgify
 usaddress-scourgify==0.7.1
     # via misthelper
-uv==0.12.5
+uv==0.13.4
     # via misthelper
 virtualenv==21.14.13
     # via pre-commit
