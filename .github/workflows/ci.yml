@@ -812,6 +812,31 @@ jobs:
         run: |
           pip install -r requirements.txt
           pip install -r requirements-dev.txt  # pinned pytest and timeout plugin (issue #1779)
+      - name: Prepare Ubuntu package mirrors
+        # Issue #4613: slow Azure payload transfers consumed the browser budget.
+        # Keep the runner's existing official HTTPS alternatives and apt sources.
+        run: |
+          sudo python3 - <<'PY'
+          from pathlib import Path
+
+          print("Preparing the Ubuntu package mirrors.")
+          mirrors = Path("/etc/apt/apt-mirrors.txt")
+          original = mirrors.read_bytes()
+          azure = b"http://azure.archive.ubuntu.com/ubuntu/\tpriority:1\n"
+          if (
+              original.splitlines(keepends=True).count(azure) != 1
+              or b"https://archive.ubuntu.com/ubuntu/\tpriority:2" not in original.splitlines()
+              or b"https://security.ubuntu.com/ubuntu/\tpriority:3" not in original.splitlines()
+          ):
+              raise SystemExit("Unexpected Ubuntu mirror configuration. No file was changed.")
+          with mirrors.with_suffix(".txt.issue-4613.bak").open("xb") as backup:
+              backup.write(original)
+          remaining = b"".join(line for line in original.splitlines(keepends=True) if line != azure)
+          mirrors.write_bytes(remaining)
+          if mirrors.read_bytes() != remaining:
+              raise SystemExit("Ubuntu mirror verification failed. The original backup remains available.")
+          print("Preserved the remaining Ubuntu package mirrors.")
+          PY
       - name: Download the browser
         # Issue #2241: the playwright package ships no browser. Without this step
         # every browser test reports a skip, and pytest reports a skip as a pass,
