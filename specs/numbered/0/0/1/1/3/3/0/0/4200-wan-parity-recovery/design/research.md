@@ -38,6 +38,25 @@ Research may conclude that a desired goal lacks a supported contract.
 Record that result and request an explicit scope decision. Do not fabricate implementation.
 This document does not resolve these gates.
 
+## Further static discovery
+
+The [discovery record](contracts/discovery.md) adds active source paths, 15 carryover groups, SDK signatures, and existing destination integration observations.
+It distinguishes active overview layout from a separate overview class.
+It records downloads, SLE drilldowns, device charts, MOS, detailed port counters, and peer configuration.
+
+The source has time-series method bodies despite its TODO notes.
+The gateway method calls an absent installed SDK symbol.
+The peer method forwards arguments that the installed device-insight function does not accept.
+This corrects the earlier blanket TODO description. It does not establish working history.
+Both methods remain implemented-but-unverified source behavior.
+
+The source exposes 6h/12h/24h/7-day controls, while ProjectGoals requests 3h/12h/24h windows.
+Record both requirements rather than silently replacing either.
+The existing destination already implements calendar-window calculations and configured-store selection.
+Those mechanisms do not prove historical completeness, retention, or safe multiworker behavior.
+
+No product changes, live Mist requests, store connections, source execution, or protected captures accompanied this discovery.
+
 ## Current destination observations
 
 The local product matches remote PR head `1a408c9511d8b32662d201068f2f54196f643450`.

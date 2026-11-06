@@ -14,6 +14,9 @@ Map rows to destination selectors and assertions. Do not mark a page complete be
 | WAN port | `/port/{site}/{encoded-port}?gateway_id={gateway}` | Encoded identity, utilization, receive/transmit bandwidth, capacity, history |
 | VPN peer | `/vpn/{site}/{encoded-peer}` | Peer identity, loss, latency, jitter, tunnel details, missing history |
 
+The [source and destination discovery](discovery.md) records 15 additional surface groups, static call paths, and SDK incompatibilities.
+Use its D01-D15 evidence with P01-P20. Neither inventory is exhaustive or runtime-accepted.
+
 Destination routes may differ but must preserve tested equivalent identifiers and navigation.
 The gateway identifier representation requires explicit source-to-destination mapping, not an assumed UUID/MAC substitution.
 
@@ -80,7 +83,7 @@ Each row still needs exact source locations, destination assertions, and a revie
 | P08 | ProjectGoals.md: status/flaps/availability, goal | `wan-live-link-event-summary` exists; coverage unverified | T017-T018 |
 | P09 | ProjectGoals.md: primary/secondary failure, goal | Role mapping and comparison unverified | T019-T022 |
 | P10 | ProjectGoals.md: loss/latency/jitter statistics, goal | Current peer and history controls exist; sample contract unverified | T023-T024 |
-| P11 | TODO.md: peer and port time-series collection, incomplete source work | Generic insights do not establish source TODO completion | T003-T004, T023 |
+| P11 | TODO.md: peer and port time-series collection; method bodies also exist but remain unverified | Source gateway symbol is absent in installed SDK; peer arguments do not match its signature | T003-T004, T023 |
 | P12 | ProjectGoals.md: SLE health scores and trends, goal | Source-to-destination field/score mapping unverified | T025-T026 |
 | P13 | ProjectGoals.md: SLE impacts and classifiers, goal | Required drilldown chain unverified | T025-T026 |
 | P14 | ProjectGoals.md: region/site/circuit/hour dimensions, goal | Region/role effective-time mapping unverified | T013, T027-T028 |
@@ -94,6 +97,9 @@ Each row still needs exact source locations, destination assertions, and a revie
 For P01-P04, enumerate every control rather than using one page row as acceptance.
 Inspect source README, page definitions, tests, and operational documentation read-only to determine completed behavior.
 Source imagery is not imported. Source fixture data is not reused.
+Source detail inventory includes MOS, gateway CPU/memory/uptime, port packet/error counters, and peer path configuration.
+Verify their field contracts and destination assertions individually.
+Preserve actual source 6h/12h/24h/7-day controls separately from the desired 3h project window.
 
 ## Required assertion matrix
 

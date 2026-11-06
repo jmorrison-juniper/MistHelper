@@ -27,6 +27,23 @@ The manual review maps all 24 FR/SC entries. It does not establish source runtim
 There are no uncovered FR/SC entries in this document mapping.
 Source behavior classification and historical task reconciliation remain incomplete.
 
+## Additional discovery
+
+The [discovery record](design/contracts/discovery.md) identifies 15 source surface groups and their remaining verification work.
+It adds active routes, download callbacks, device charts, MOS, port counters, and peer path details.
+It separates source 6h/7-day UI controls from the desired 3h reporting goal.
+
+Static inspection corrects P11's earlier TODO-only classification.
+Both source history methods have bodies, but their SDK calls do not match the installed destination SDK.
+The gateway symbol is absent. The peer filter arguments are unsupported by the inspected device-insight signature.
+No live request established sample shape, scope, units, or historical completeness.
+
+The record also documents existing configured-store selection, cache keys, TTLs, admission bounds, and calendar calculations.
+These observations are not new approved contracts.
+Portal middleware, metric catalogs, scheduling, exports, visual comparison, retention, and backfill still require evidence.
+T001-T004 remain open because partial discovery does not satisfy their full objectives.
+No product file, task status, PR metadata, or remote branch changed during this discovery.
+
 ## Requirement coverage
 
 | Requirement | Tasks | Acceptance evidence |
@@ -110,6 +127,18 @@ Direct checks again verified 47 unique sequential open tasks, 24 mapped requirem
 An isolated task audit examined this feature under a temporary `specs/` root and reported 47 open tasks, exit 0.
 The temporary audit copy was removed automatically. No test baseline or feature pointer changed.
 `git diff --check` passed after refinement.
+
+The discovery update examined ten Markdown files with no skipped files.
+STE scores ranged from 92 to 97.
+Direct checks verified 47 sequential open tasks, 24 mapped requirements, and bounded feature directories.
+The isolated task audit again reported 47 unchecked tasks and exit 0.
+The source tree response was not truncated.
+Static callback inspection found three CSV handlers, but did not prove region/site export buttons work.
+Offline SDK inspection found the gateway symbol absent and peer filter arguments unsupported.
+No production tests ran because only documentation changed.
+The final link scan examined ten tracked Markdown files and found zero broken links.
+The final STE scan examined ten files, skipped none, and passed with scores from 92 to 97.
+`git diff --cached --check` passed.
 
 ## Start decision
 

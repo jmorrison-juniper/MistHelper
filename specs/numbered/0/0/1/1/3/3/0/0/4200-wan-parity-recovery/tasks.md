@@ -13,8 +13,8 @@ If existing behavior passes, record that evidence instead of adding an unnecessa
 
 - [ ] T001 Record current source, destination, main, ownership, and copying-rights baselines in design/research.md.
 - [ ] T002 Reconcile owner-provided historical T001-T087 records into an old-to-new mapping in analysis.md without changing historical states.
-- [ ] T003 Create the exhaustive source behavior inventory in design/contracts/parity.md from pinned docs, page behavior, and tests.
-- [ ] T004 Record each verified SDK function, signature, field, timestamp, limitation, and shared refresh prerequisite in design/contracts/parity.md.
+- [ ] T003 Complete the exhaustive inventory in design/contracts/parity.md from pinned docs, active pages, and tests, using D01-D15 in design/contracts/discovery.md.
+- [ ] T004 Complete SDK field, timestamp, limitation, and refresh prerequisites in design/contracts/parity.md, using the static signature findings in design/contracts/discovery.md.
 
 ## Phase 2 - Foundation
 
