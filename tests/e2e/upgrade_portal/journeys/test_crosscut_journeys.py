@@ -427,9 +427,8 @@ def test_history_comparison_errors_and_viewports(page: Any, signed_out_page: Any
                 assert_no_horizontal_scroll(page)  # Forms and cards must not force body scroll.
 
 
-@pytest.mark.xfail(strict=True, reason="#4539: the sign-in document is 400px wide at a 390px viewport.")
 def test_sign_in_page_fits_narrow_viewport(signed_out_page: Any) -> None:
-    """Keep the sign-in page overflow visible until issue #4539 is fixed."""
+    """Keep the sign-in page within a narrow viewport."""
     page = signed_out_page  # Use a clean browser context for the sign-in page.
     page.set_viewport_size({"width": 390, "height": 844})  # Reproduce the reported narrow viewport.
     shots = StepShots(page, "signin-narrow-viewport")  # Record the focused regression journey.
