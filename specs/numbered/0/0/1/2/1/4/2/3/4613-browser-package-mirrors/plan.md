@@ -61,8 +61,9 @@ Before delivery, apply this patch to the complete #4208 workflow in memory and c
 4. Run Ruff, Black, applicable document checks, and the required test-quality procedure.
 5. Open a linked pull request after focused offline validation. Do not claim hosted-runner speed from local measurements.
 
-## Delivery hold
+## Delivery authorization
 
-The coordinator assigned the serial slot to #4604.
-Preserve the repair in a local commit.
-Do not rebase, push, or open a pull request until the coordinator releases that slot.
+The coordinator assigned the serial slot to #4613 after #4604 reached its browser job limit.
+Verify current main and validate the final commit before publication.
+Publish the linked pull request, but do not merge or enable auto-merge.
+Hosted transfer speed remains unproven.

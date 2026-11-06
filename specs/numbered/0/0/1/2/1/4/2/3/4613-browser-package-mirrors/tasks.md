@@ -29,13 +29,14 @@
 ## Phase 5: Delivery
 
 - [x] T007 Add `changelog.d/issue-4613-browser-package-mirrors.md` and complete the focused offline gates from `design/quickstart.md`. (delivered: changelog.d/issue-4613-browser-package-mirrors.md)
-- [ ] T008 Analyze `spec.md`, `plan.md`, and `tasks.md`, commit the change, and open a linked pull request using `.github/PULL_REQUEST_TEMPLATE.md`. Analysis is complete. Publication waits for the coordinator's serial slot, currently assigned to #4604.
+- [x] T008 Analyze `spec.md`, `plan.md`, and `tasks.md`, and commit the change. (delivered: spec.md, plan.md, tasks.md)
+- [x] T009 Validate the publication tree and prepare the linked pull request body using `.github/PULL_REQUEST_TEMPLATE.md`. The coordinator assigned the serial slot to #4613. (delivered: .github/PULL_REQUEST_TEMPLATE.md, design/quickstart.md)
 
 ## Dependencies and execution
 
 T001 and T002 precede implementation.
 T003 precedes T004. T005 and T006 follow T004.
-T007 and T008 follow both user stories.
+T007 and T008 follow both user stories. T009 follows T008.
 The two stories share the workflow and test module, so implementation remains serial.
 Documentation review can run independently from offline test execution.
 
@@ -44,3 +45,5 @@ Documentation review can run independently from offline test execution.
 Deliver the route change and its contracts together.
 Do not treat hosted-runner speed as locally verified.
 A normal later CI run must measure the runtime criterion. No retry is authorized.
+The session records the published PR URL and exact head separately after the final committed-difference gate.
+Do not merge or enable auto-merge.
