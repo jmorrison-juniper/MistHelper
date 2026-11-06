@@ -415,7 +415,7 @@ class MarvisTroubleshootUtils:
         MarvisTroubleshootUtils._render_summary_fallback(response_data, data, show_raw_keys)  # WHY: fallback path.
 
     @staticmethod
-    def _render_summary_fallback(response_data: dict, data: Any, show_raw_keys: bool) -> None:
+    def _render_summary_fallback(response_data: dict[str, Any], data: Any, show_raw_keys: bool) -> None:
         """Fallback renderer when neither ``results`` nor ``insights`` keys are present.
 
         Why:
@@ -505,7 +505,7 @@ class MarvisTroubleshootUtils:
         return str(insight)  # WHY: non-dicts stringify directly.
 
     @staticmethod
-    def _print_raw_keys_preview(response_data: dict) -> None:
+    def _print_raw_keys_preview(response_data: dict[str, Any]) -> None:
         """Print up to five raw key/value pairs for diagnostic visibility.
 
         Why:
@@ -718,7 +718,7 @@ class MarvisTroubleshootUtils:
             MarvisTroubleshootUtils._handle_insights_error(error)  # WHY: standard error path.
 
     @staticmethod
-    def _fetch_org_info(deps: MarvisTroubleshootDeps, org_id: str) -> dict | None:
+    def _fetch_org_info(deps: MarvisTroubleshootDeps, org_id: str) -> dict[str, Any] | None:
         """Return org metadata dict or None if the API call produced no data.
 
         Why:
@@ -739,10 +739,11 @@ class MarvisTroubleshootUtils:
         if not org_response.data:  # WHY: empty response — cannot render insights.
             logger.warning(" Could not retrieve organization information.")  # WHY: user message.
             return None  # WHY: signal failure.
-        return org_response.data  # WHY: hand back raw dict to caller.
+        org_info: dict[str, Any] = org_response.data  # Preserve the SDK metadata contract without a cast.
+        return org_info  # Return the original response dictionary without a conversion.
 
     @staticmethod
-    def _display_org_features(org_info: dict) -> None:
+    def _display_org_features(org_info: dict[str, Any]) -> None:
         """Print the org name and any detected Marvis/VNA feature toggles.
 
         Why:
