@@ -86,13 +86,11 @@ return 1"""  # Reserve all matching quotas in one atomic operation.
         logger.debug("Reserved one shared Mist API request attempt.")  # Record successful reservation.
 
     def _organization(self, request: PreparedRequest) -> str | None:
-        """Use the request path or selected context for organization scope."""
+        """Use organization scope when the path or session context identifies it."""
         path = urlsplit(str(request.url)).path.split("/")  # Parse only the URL path.
         if len(path) > 4 and path[3] == "orgs":  # Organization requests expose the tenant in the path.
             return path[4]  # Use the source organization value.
-        if len(path) > 3 and path[3] == "sites" and not self.org_id:  # Site requests need a tenant context.
-            raise ConnectionError("Site API request admission requires a selected organization.")  # Fail closed.
-        return self.org_id  # Retain the selected organization for site requests.
+        return self.org_id  # Use the configured tenant when present, or retain credential-only accounting.
 
 
 class AdmittedAdapter(HTTPAdapter):

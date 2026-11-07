@@ -81,6 +81,8 @@ A network operator receives recent cached data when another worker owns the refr
 - **FR-010**: The collection service MUST refuse refresh work when shared admission or its lease is unavailable.
 - **FR-011**: The collection service MUST cache only complete, live snapshots for their matching organization.
 - **FR-012**: This layer MUST exclude durable history, dashboard routes, templates, and visual presentation.
+- **FR-013**: Shared admission MUST enforce the credential quota when a request has no resolvable organization.
+- **FR-014**: Shared admission MUST enforce both credential and organization quotas when the organization is known.
 
 ### Mist Cloud Transport Requirements
 
