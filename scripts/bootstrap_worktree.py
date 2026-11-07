@@ -389,7 +389,9 @@ class WorktreeBootstrapper:
         try:
             result = subprocess.run(command, check=False)  # Preserve the guard's severity-aware console output.
         except OSError as error:
-            LOGGER.warning("Warning: the virtual environment health check failed: %s", error)  # Name the guard fault.
+            LOGGER.warning(
+                "Warning: the virtual environment health check failed (%s).", type(error).__name__
+            )  # Keep private error details out of setup logs.
             LOGGER.warning("The bootstrap continues because this check must not block setup.")  # State safe behavior.
             return  # Keep the bootstrap available for future agents even when the guard has a defect.
         if result.returncode not in (0, 1):  # Exit 1 reports detected corrupt installs; other failures are errors.
@@ -607,7 +609,7 @@ class GitHubAccountChecker:
                 check=False,
             )
         except (OSError, subprocess.SubprocessError) as error:  # Report and continue.
-            LOGGER.debug("The account read failed: %s", error)
+            LOGGER.debug("The account read failed (%s).", type(error).__name__)
             return None
         if result.returncode != 0:  # A failed call names no account.
             LOGGER.debug("The account read returned code %d", result.returncode)

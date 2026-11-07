@@ -5007,10 +5007,10 @@
   {
     "category": "weak_assertion",
     "explanation": "assert x is not None only verifies non-None state.",
-    "file_path": "tests/unit/test_device_utility_commands.py",
+    "file_path": "tests/unit/marvis/standalone/mist/resources/device/test_device_utility_commands.py",
     "heuristic": false,
     "line_number": 231,
-    "related_source": "tests/unit/test_device_utility_commands.py",
+    "related_source": "tests/unit/marvis/standalone/mist/resources/device/test_device_utility_commands.py",
     "remediation": "Assert on the actual value / type / structure you expect.",
     "rule_id": "weak_is_not_none",
     "severity": "medium"
@@ -5018,10 +5018,10 @@
   {
     "category": "weak_assertion",
     "explanation": "Test function 'test_early_return' contains no assertions.",
-    "file_path": "tests/unit/test_device_utility_commands.py",
+    "file_path": "tests/unit/marvis/standalone/mist/resources/device/test_device_utility_commands.py",
     "heuristic": false,
     "line_number": 2759,
-    "related_source": "tests/unit/test_device_utility_commands.py",
+    "related_source": "tests/unit/marvis/standalone/mist/resources/device/test_device_utility_commands.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
     "severity": "medium"
@@ -5029,10 +5029,10 @@
   {
     "category": "weak_assertion",
     "explanation": "Test function 'test_cancelled' contains no assertions.",
-    "file_path": "tests/unit/test_device_utility_commands.py",
+    "file_path": "tests/unit/marvis/standalone/mist/resources/device/test_device_utility_commands.py",
     "heuristic": false,
     "line_number": 2763,
-    "related_source": "tests/unit/test_device_utility_commands.py",
+    "related_source": "tests/unit/marvis/standalone/mist/resources/device/test_device_utility_commands.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
     "severity": "medium"
@@ -5040,10 +5040,10 @@
   {
     "category": "weak_assertion",
     "explanation": "Test function 'test_success' contains no assertions.",
-    "file_path": "tests/unit/test_device_utility_commands.py",
+    "file_path": "tests/unit/marvis/standalone/mist/resources/device/test_device_utility_commands.py",
     "heuristic": false,
     "line_number": 2772,
-    "related_source": "tests/unit/test_device_utility_commands.py",
+    "related_source": "tests/unit/marvis/standalone/mist/resources/device/test_device_utility_commands.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
     "severity": "medium"
@@ -5051,10 +5051,10 @@
   {
     "category": "weak_assertion",
     "explanation": "Test function 'test_early_return' contains no assertions.",
-    "file_path": "tests/unit/test_device_utility_commands.py",
+    "file_path": "tests/unit/marvis/standalone/mist/resources/device/test_device_utility_commands.py",
     "heuristic": false,
     "line_number": 2803,
-    "related_source": "tests/unit/test_device_utility_commands.py",
+    "related_source": "tests/unit/marvis/standalone/mist/resources/device/test_device_utility_commands.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
     "severity": "medium"
@@ -5062,10 +5062,10 @@
   {
     "category": "weak_assertion",
     "explanation": "Test function 'test_cancelled' contains no assertions.",
-    "file_path": "tests/unit/test_device_utility_commands.py",
+    "file_path": "tests/unit/marvis/standalone/mist/resources/device/test_device_utility_commands.py",
     "heuristic": false,
     "line_number": 2820,
-    "related_source": "tests/unit/test_device_utility_commands.py",
+    "related_source": "tests/unit/marvis/standalone/mist/resources/device/test_device_utility_commands.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
     "severity": "medium"
@@ -5073,10 +5073,10 @@
   {
     "category": "weak_assertion",
     "explanation": "Test function 'test_success' contains no assertions.",
-    "file_path": "tests/unit/test_device_utility_commands.py",
+    "file_path": "tests/unit/marvis/standalone/mist/resources/device/test_device_utility_commands.py",
     "heuristic": false,
     "line_number": 2832,
-    "related_source": "tests/unit/test_device_utility_commands.py",
+    "related_source": "tests/unit/marvis/standalone/mist/resources/device/test_device_utility_commands.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
     "severity": "medium"
@@ -5084,10 +5084,10 @@
   {
     "category": "weak_assertion",
     "explanation": "Test function 'test_early_return' contains no assertions.",
-    "file_path": "tests/unit/test_device_utility_commands.py",
+    "file_path": "tests/unit/marvis/standalone/mist/resources/device/test_device_utility_commands.py",
     "heuristic": false,
     "line_number": 2869,
-    "related_source": "tests/unit/test_device_utility_commands.py",
+    "related_source": "tests/unit/marvis/standalone/mist/resources/device/test_device_utility_commands.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
     "severity": "medium"
@@ -5095,10 +5095,10 @@
   {
     "category": "weak_assertion",
     "explanation": "Test function 'test_cancelled' contains no assertions.",
-    "file_path": "tests/unit/test_device_utility_commands.py",
+    "file_path": "tests/unit/marvis/standalone/mist/resources/device/test_device_utility_commands.py",
     "heuristic": false,
     "line_number": 2886,
-    "related_source": "tests/unit/test_device_utility_commands.py",
+    "related_source": "tests/unit/marvis/standalone/mist/resources/device/test_device_utility_commands.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
     "severity": "medium"
@@ -5106,10 +5106,10 @@
   {
     "category": "weak_assertion",
     "explanation": "Test function 'test_success' contains no assertions.",
-    "file_path": "tests/unit/test_device_utility_commands.py",
+    "file_path": "tests/unit/marvis/standalone/mist/resources/device/test_device_utility_commands.py",
     "heuristic": false,
     "line_number": 2898,
-    "related_source": "tests/unit/test_device_utility_commands.py",
+    "related_source": "tests/unit/marvis/standalone/mist/resources/device/test_device_utility_commands.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
     "severity": "medium"
@@ -6107,10 +6107,10 @@
   {
     "category": "weak_assertion",
     "explanation": "Test function 'test_no_msp_calls_single_org' contains no assertions.",
-    "file_path": "tests/unit/test_site_auto_upgrade.py",
+    "file_path": "tests/unit/config/standalone/foundation/support/quality/cross_domain/test_site_auto_upgrade.py",
     "heuristic": false,
     "line_number": 835,
-    "related_source": "tests/unit/test_site_auto_upgrade.py",
+    "related_source": "tests/unit/config/standalone/foundation/support/quality/cross_domain/test_site_auto_upgrade.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
     "severity": "medium"
@@ -6118,10 +6118,10 @@
   {
     "category": "weak_assertion",
     "explanation": "Test function 'test_msp_prompts_mode' contains no assertions.",
-    "file_path": "tests/unit/test_site_auto_upgrade.py",
+    "file_path": "tests/unit/config/standalone/foundation/support/quality/cross_domain/test_site_auto_upgrade.py",
     "heuristic": false,
     "line_number": 858,
-    "related_source": "tests/unit/test_site_auto_upgrade.py",
+    "related_source": "tests/unit/config/standalone/foundation/support/quality/cross_domain/test_site_auto_upgrade.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
     "severity": "medium"
@@ -6129,10 +6129,10 @@
   {
     "category": "weak_assertion",
     "explanation": "Test function 'test_system_exit' contains no assertions.",
-    "file_path": "tests/unit/test_site_auto_upgrade.py",
+    "file_path": "tests/unit/config/standalone/foundation/support/quality/cross_domain/test_site_auto_upgrade.py",
     "heuristic": false,
     "line_number": 1432,
-    "related_source": "tests/unit/test_site_auto_upgrade.py",
+    "related_source": "tests/unit/config/standalone/foundation/support/quality/cross_domain/test_site_auto_upgrade.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
     "severity": "medium"
@@ -6140,10 +6140,10 @@
   {
     "category": "weak_assertion",
     "explanation": "Test function 'test_mode_1_calls_single_org' contains no assertions.",
-    "file_path": "tests/unit/test_site_auto_upgrade.py",
+    "file_path": "tests/unit/config/standalone/foundation/support/quality/cross_domain/test_site_auto_upgrade.py",
     "heuristic": false,
     "line_number": 1683,
-    "related_source": "tests/unit/test_site_auto_upgrade.py",
+    "related_source": "tests/unit/config/standalone/foundation/support/quality/cross_domain/test_site_auto_upgrade.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
     "severity": "medium"
@@ -6151,10 +6151,10 @@
   {
     "category": "weak_assertion",
     "explanation": "Test function 'test_mode_2_calls_msp' contains no assertions.",
-    "file_path": "tests/unit/test_site_auto_upgrade.py",
+    "file_path": "tests/unit/config/standalone/foundation/support/quality/cross_domain/test_site_auto_upgrade.py",
     "heuristic": false,
     "line_number": 1698,
-    "related_source": "tests/unit/test_site_auto_upgrade.py",
+    "related_source": "tests/unit/config/standalone/foundation/support/quality/cross_domain/test_site_auto_upgrade.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
     "severity": "medium"
@@ -6162,10 +6162,10 @@
   {
     "category": "weak_assertion",
     "explanation": "Test function 'test_system_exit' contains no assertions.",
-    "file_path": "tests/unit/test_site_auto_upgrade.py",
+    "file_path": "tests/unit/config/standalone/foundation/support/quality/cross_domain/test_site_auto_upgrade.py",
     "heuristic": false,
     "line_number": 1713,
-    "related_source": "tests/unit/test_site_auto_upgrade.py",
+    "related_source": "tests/unit/config/standalone/foundation/support/quality/cross_domain/test_site_auto_upgrade.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
     "severity": "medium"
@@ -6173,10 +6173,10 @@
   {
     "category": "weak_assertion",
     "explanation": "Test function 'test_valid_org' contains no assertions.",
-    "file_path": "tests/unit/test_site_auto_upgrade.py",
+    "file_path": "tests/unit/config/standalone/foundation/support/quality/cross_domain/test_site_auto_upgrade.py",
     "heuristic": false,
     "line_number": 1765,
-    "related_source": "tests/unit/test_site_auto_upgrade.py",
+    "related_source": "tests/unit/config/standalone/foundation/support/quality/cross_domain/test_site_auto_upgrade.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
     "severity": "medium"
@@ -6184,10 +6184,10 @@
   {
     "category": "weak_assertion",
     "explanation": "Test function 'test_confirm' contains no assertions.",
-    "file_path": "tests/unit/test_site_auto_upgrade.py",
+    "file_path": "tests/unit/config/standalone/foundation/support/quality/cross_domain/test_site_auto_upgrade.py",
     "heuristic": false,
     "line_number": 1876,
-    "related_source": "tests/unit/test_site_auto_upgrade.py",
+    "related_source": "tests/unit/config/standalone/foundation/support/quality/cross_domain/test_site_auto_upgrade.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
     "severity": "medium"
@@ -6195,10 +6195,10 @@
   {
     "category": "weak_assertion",
     "explanation": "Test function 'test_system_exit' contains no assertions.",
-    "file_path": "tests/unit/test_site_auto_upgrade.py",
+    "file_path": "tests/unit/config/standalone/foundation/support/quality/cross_domain/test_site_auto_upgrade.py",
     "heuristic": false,
     "line_number": 1895,
-    "related_source": "tests/unit/test_site_auto_upgrade.py",
+    "related_source": "tests/unit/config/standalone/foundation/support/quality/cross_domain/test_site_auto_upgrade.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
     "severity": "medium"
@@ -6206,10 +6206,10 @@
   {
     "category": "weak_assertion",
     "explanation": "Test function 'test_no_orgs_selected' contains no assertions.",
-    "file_path": "tests/unit/test_site_auto_upgrade.py",
+    "file_path": "tests/unit/config/standalone/foundation/support/quality/cross_domain/test_site_auto_upgrade.py",
     "heuristic": false,
     "line_number": 1932,
-    "related_source": "tests/unit/test_site_auto_upgrade.py",
+    "related_source": "tests/unit/config/standalone/foundation/support/quality/cross_domain/test_site_auto_upgrade.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
     "severity": "medium"
@@ -6217,10 +6217,10 @@
   {
     "category": "weak_assertion",
     "explanation": "Test function 'test_firmware_none_cancels' contains no assertions.",
-    "file_path": "tests/unit/test_site_auto_upgrade.py",
+    "file_path": "tests/unit/config/standalone/foundation/support/quality/cross_domain/test_site_auto_upgrade.py",
     "heuristic": false,
     "line_number": 1949,
-    "related_source": "tests/unit/test_site_auto_upgrade.py",
+    "related_source": "tests/unit/config/standalone/foundation/support/quality/cross_domain/test_site_auto_upgrade.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
     "severity": "medium"
@@ -6228,10 +6228,10 @@
   {
     "category": "weak_assertion",
     "explanation": "Test function 'test_full_flow' contains no assertions.",
-    "file_path": "tests/unit/test_site_auto_upgrade.py",
+    "file_path": "tests/unit/config/standalone/foundation/support/quality/cross_domain/test_site_auto_upgrade.py",
     "heuristic": false,
     "line_number": 1973,
-    "related_source": "tests/unit/test_site_auto_upgrade.py",
+    "related_source": "tests/unit/config/standalone/foundation/support/quality/cross_domain/test_site_auto_upgrade.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
     "severity": "medium"
@@ -6239,10 +6239,10 @@
   {
     "category": "weak_assertion",
     "explanation": "Test function 'test_schedule_none_cancels' contains no assertions.",
-    "file_path": "tests/unit/test_site_auto_upgrade.py",
+    "file_path": "tests/unit/config/standalone/foundation/support/quality/cross_domain/test_site_auto_upgrade.py",
     "heuristic": false,
     "line_number": 2007,
-    "related_source": "tests/unit/test_site_auto_upgrade.py",
+    "related_source": "tests/unit/config/standalone/foundation/support/quality/cross_domain/test_site_auto_upgrade.py",
     "remediation": "Add at least one assertion verifying observable behavior.",
     "rule_id": "weak_zero_assertions",
     "severity": "medium"
