@@ -132,6 +132,7 @@
     var ORG_FORM_CLOSED = "closed";  /* Issue #3242: a replay refusal closed the form for this page. */
     var ORG_REPLAY_CODE = "org_upgrade_already_submitted";  /* Issue #3242: the code of a repeated start. */
     var ORG_BUSY_CODE = "site_lock_wrong_run";  /* Issue #3224: another operation owns a selected site. */
+    var ORG_BUSY_FALLBACK_MESSAGE = "Another operation uses one or more selected sites. Check its progress before you start a new plan.";  /* A missing server sentence must still guide the operator. */
     var ORG_JOB_PATH = /^\/upgrade\/org\/jobs\/[A-Za-z0-9_-]{1,128}$/;  /* Issue #3242: the one safe link target. */
     var ORG_JOB_LINK_TESTID = "org-upgrade-job-link";  /* Issue #3242: the link to the job of the first start. */
     var ORG_FORM_CONTROLS = 'button:not([type]), button[type="submit"], input[type="submit"], [data-confirm-word]';  /* Issue #3242: each control that can send a form. */
@@ -3422,6 +3423,10 @@
             input.disabled = true;  /* The operator must open a new plan before another start. */
             applyConfirmGate(input);  /* Keep the submit control disabled with the cleared word. */
         });
+        var message = (error && error.message) || "";  /* Read the sentence supplied for the refusal. */
+        if (!message.trim() || message === "The request failed." || message === ORG_BUSY_CODE) {  /* Reject empty or internal wording. */
+            error.message = ORG_BUSY_FALLBACK_MESSAGE;  /* Give the operator a clear next step. */
+        }
         var item = showRequestError(error);  /* Show the held-site and owning-job message. */
         var next = error.details && error.details.next;  /* Read the validated owning progress path. */
         if (item && typeof next === "string" && ORG_JOB_PATH.test(next)) {  /* Reject unsafe link targets. */

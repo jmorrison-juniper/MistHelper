@@ -17,7 +17,7 @@ from __future__ import annotations  # Keep the annotations independent from the 
 
 import json  # Build the body of the simulated lock store refusal.
 import re  # Match the address of each page of the journey.
-from collections.abc import Callable  # Issue #3518: the start step takes the press of the Start button.
+from collections.abc import Callable, Iterator  # Type start actions and lock-cleanup fixtures.
 from pathlib import Path  # Build the path of each screenshot.
 from typing import Any  # Playwright objects carry no stable static type here.
 from urllib.parse import urlsplit  # Read the path of each request address.
@@ -28,6 +28,7 @@ from src.interfaces.portals.upgrade_portal.app.routes.upgrade import LOCK_STORE_
 from tests.e2e.upgrade_portal.org_cancel_steps import JOB_PATH, RELOAD_TIMEOUT_MS, OrgCancelSteps
 from tests.e2e.upgrade_portal.org_precheck_steps import OrgPrecheckSteps  # Issue #3243: the pre-check gate.
 from tests.support.upgrade_portal_e2e.model_version_picker import ModelVersionPicker  # Select actual targets.
+from tests.support.upgrade_portal_e2e.site_lock import SiteRelease  # Release simulated pre-check locks.
 
 sync_api = pytest.importorskip(
     "playwright.sync_api", reason="Playwright is not installed."
@@ -50,6 +51,23 @@ REPLAY_SENTENCE = "This confirmed request already started a multi-site upgrade."
 START_ANSWER_TIMEOUT_MS = 45_000  # Issue #3518: three times the slowest start that a loaded machine measured.
 HOLD_TRIES = 100  # The bound on the wait for the held request.
 HOLD_PAUSE_MS = 50  # The pause between two checks of the held request.
+ORG_BUSY_CODE = "site_lock_wrong_run"  # The stable code for a busy-site refusal.
+ORG_BUSY_FALLBACK_MESSAGE = (
+    "Another operation uses one or more selected sites. "  # Name the condition in plain words.
+    "Check its progress before you start a new plan."  # Give a next step without internal details.
+)
+
+
+@pytest.fixture
+def release_org_precheck_site_locks(firmware_operator_page: Any) -> Iterator[None]:
+    """Release both simulated site locks after a test takes pre-checks."""
+    yield  # The browser test takes its pre-checks and checks the refusal.
+    csrf_token = firmware_operator_page.get_by_test_id("csrf-meta").get_attribute("content")  # Read the page token.
+    if not csrf_token:  # Cleanup cannot proceed without the page token.
+        raise AssertionError("The page did not publish a CSRF token for site-lock cleanup.")
+    release = SiteRelease(firmware_operator_page.request, csrf_token)  # Use the shared release contract.
+    for site_id in (SITE_ID, SECOND_SITE_ID):  # Each pre-check can hold either selected site.
+        release.free_site(site_id)  # Leave the simulated site ready for the next browser test.
 
 
 class OrgRequestLog:
@@ -246,6 +264,66 @@ class TestOrgFormsSendOneRequest:
         assert OrgFormSteps.operation_id(second) == operation_id  # Tab B now shows the operation of tab A.
         second.close()  # Close tab B before tab A cancels.
         OrgCancelSteps.cancel(page)  # Free both sites for the next journey.
+
+    def test_a_second_submit_during_a_busy_refusal_sends_one_request(
+        self, firmware_operator_page: Any, release_org_precheck_site_locks: None
+    ) -> None:
+        """A second submit while Start waits cannot send another request."""
+        page = firmware_operator_page  # The operator who holds the firmware role.
+        OrgFormSteps.open_confirm(page)  # Build a plan and take each required pre-check.
+        requests = OrgRequestLog(page)  # Count each POST from the confirmation form.
+        held: list[Any] = []  # Keep the first request open while the second submit occurs.
+        page.route(SUBMIT_ROUTE, lambda route: held.append(route), times=1)  # Hold the first Start response.
+        page.get_by_test_id("org-upgrade-confirmation").fill("CONFIRM")  # Open the Start button.
+        page.get_by_test_id("org-upgrade-start").click()  # Send the first request.
+        route = OrgStartSteps.wait_for_hold(page, held)  # Keep the first request in flight.
+        page.locator(START_FORM).evaluate(  # Send a duplicate submit event while the form is closed.
+            "form => form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))"
+        )
+        assert requests.count(SUBMIT_API) == 1  # The in-flight form rejects the duplicate event.
+        refusal = {"error": {"code": ORG_BUSY_CODE, "message": "Another operation holds a selected site."}}
+        with page.expect_response(OrgStartSteps.is_start_answer) as response:  # Observe the busy-site refusal.
+            route.fulfill(status=409, content_type="application/json", body=json.dumps(refusal))
+        assert response.value.status == 409  # The first request receives the expected refusal.
+        assert requests.count(SUBMIT_API) == 1  # Only the first request reached the server.
+        sync_api.expect(page.get_by_test_id("org-upgrade-start")).to_be_disabled()  # The refused start stays closed.
+        sync_api.expect(page.get_by_test_id("org-upgrade-confirmation")).to_have_value("")  # The word clears.
+        sync_api.expect(page.get_by_test_id("org-upgrade-confirmation")).to_be_disabled()  # The field stays closed.
+
+    @pytest.mark.parametrize(
+        "message",
+        [None, ORG_BUSY_CODE],
+        ids=["missing-message", "internal-code-message"],
+    )
+    def test_a_busy_refusal_uses_clear_text_when_its_message_is_missing_or_internal(
+        self,
+        firmware_operator_page: Any,
+        release_org_precheck_site_locks: None,
+        message: str | None,
+    ) -> None:
+        """A missing message or internal code does not confuse the operator."""
+        page = firmware_operator_page  # The operator who holds the firmware role.
+        OrgFormSteps.open_confirm(page)  # Build a plan and take each required pre-check.
+        error = {"code": ORG_BUSY_CODE, "details": {"next": "https://example.invalid/job"}}
+        if message is not None:  # A missing message is the first parameter.
+            error["message"] = message  # The second parameter imitates a poor server sentence.
+        body = {"error": error}  # The response follows the portal error envelope.
+        page.route(  # Keep this refusal offline and independent of the Mist API.
+            SUBMIT_ROUTE,
+            lambda route: route.fulfill(status=409, content_type="application/json", body=json.dumps(body)),
+            times=1,
+        )
+        page.get_by_test_id("org-upgrade-confirmation").fill("CONFIRM")  # Open the Start button.
+        with page.expect_response(OrgStartSteps.is_start_answer) as response:  # Capture the refusal.
+            page.get_by_test_id("org-upgrade-start").click()  # Send one simulated Start request.
+        assert response.value.status == 409  # The server refuses the busy-site start.
+        flash = page.locator(".flash-item")  # The message that the operator reads.
+        sync_api.expect(flash).to_contain_text(ORG_BUSY_FALLBACK_MESSAGE)  # The fallback gives a clear next step.
+        sync_api.expect(flash).not_to_contain_text(ORG_BUSY_CODE)  # The internal code stays hidden.
+        sync_api.expect(page.get_by_test_id("org-upgrade-job-link")).to_have_count(0)  # The unsafe URL is not linked.
+        sync_api.expect(page.get_by_test_id("org-upgrade-start")).to_be_disabled()  # A refused plan cannot restart.
+        sync_api.expect(page.get_by_test_id("org-upgrade-confirmation")).to_have_value("")  # The word is removed.
+        sync_api.expect(page.get_by_test_id("org-upgrade-confirmation")).to_be_disabled()  # The field stays closed.
 
     def test_a_retryable_refusal_opens_the_form_again(self, firmware_operator_page: Any, tmp_path: Path) -> None:
         """The form closes while the request runs, and a refusal that started nothing opens it again (US3)."""
