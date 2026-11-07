@@ -263,7 +263,8 @@ class TestNestedResultPreviews:  # Keep issue #4036 fixtures separate from the s
         assert str(tmp_path) not in response.get_data(as_text=True)
         records = [record for record in caplog.records if record.message.startswith("JSON preview failed")]
         assert len(records) == 1
-        assert records[0].exc_info is not None
+        assert isinstance(records[0].exc_info, tuple)
+        assert records[0].exc_info[0] is failure
         assert isinstance(records[0].exc_info[1], failure)
         assert str(target) in str(records[0].exc_info[1])
 
