@@ -1,4 +1,4 @@
-"""Unit tests for src.mist.intelligence.troubleshooting.core.interactive_test_runner.
+"""Unit tests for src.foundation.support.menu_testing.interactive_test_runner.
 
 Wave 13 P2 coverage lift — extended coverage for the selector path,
 fallback path, skip emission, org_id resolution, site-resolution
@@ -14,8 +14,7 @@ from unittest.mock import MagicMock
 import pytest  # WHY: pytest monkeypatch fixture for os.environ selector control
 
 from src.foundation.models.dataclasses.progress_event import TestSummary  # WHY: assert summary payload without ceremony
-from src.foundation.support.utils.menu_entry import MenuEntry  # WHY: test fixtures must use the production row model.
-from src.mist.intelligence.troubleshooting.core.interactive_test_runner import (
+from src.foundation.support.menu_testing.interactive_test_runner import (
     InteractiveTestRunner,
     PromptResolutionError,
     SuiteContext,
@@ -23,6 +22,7 @@ from src.mist.intelligence.troubleshooting.core.interactive_test_runner import (
     TestSiteSelectorUnresolved,  # WHY: #1637 fail-closed selector contract exception.
     UnattendedInteractiveInputProvider,
 )
+from src.foundation.support.utils.menu_entry import MenuEntry  # WHY: test fixtures must use the production row model.
 
 logger = logging.getLogger(__name__)  # WHY: keep test log records on the module logger.
 

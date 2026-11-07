@@ -15,6 +15,7 @@ from unittest.mock import patch
 
 import pytest
 
+from src.foundation.support.menu_testing.interactive_test_runner import UnattendedInteractiveInputProvider
 from src.foundation.support.utils.input_utils import InputUtils
 from src.mist.intelligence.marvis.actions.model import (
     CATEGORY_NAMES,
@@ -39,7 +40,6 @@ from src.mist.intelligence.marvis.actions.selection import (
     MarvisTopicCount,
     MarvisTopicSelector,
 )
-from src.mist.intelligence.troubleshooting.core.interactive_test_runner import UnattendedInteractiveInputProvider
 from tests.unit.marvis.actions.conftest import make_raw
 
 CODES = {code.key: code for code in RESOLUTION_CODES}
