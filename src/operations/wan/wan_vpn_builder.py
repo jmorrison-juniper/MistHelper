@@ -332,13 +332,9 @@ class WanVpnBuilder:  # WHY: class encapsulates all per-run state (session, org,
                 self.apisession, self.org_id, type="gateway"
             )  # WHY: only gateway-type profiles are eligible for VPN membership.
             logger.debug("Received gateway profile response")  # WHY: confirm the request before status validation.
-            status_code = getattr(response, "status_code", None)  # WHY: check status before response data.
-            status_is_successful = isinstance(status_code, int) and 200 <= status_code < 300  # WHY: require valid 2xx.
-            if not status_is_successful:  # WHY: reject unknown and failed status.
-                logger.error("Gateway profile request failed with HTTP status %s", status_code)  # WHY: expose status.
-                return []  # WHY: stop before failed response data can enter the VPN workflow.
-            logger.info("Reading profiles from the successful response")  # WHY: mark the pagination action.
-            profiles: list[Any] = mistapi.get_all(response=response, mist_session=self.apisession)  # WHY: paginate.
+            profiles = self._collect_profiles_from_pages(response)  # WHY: reject any failed page before using data.
+            if profiles is None:  # WHY: one failed page invalidates the complete inventory.
+                return []  # WHY: stop before partial data reaches the VPN workflow.
             logger.debug("Read %d gateway profiles", len(profiles))  # WHY: report the pagination result.
             logger.info("Sorting %d gateway profiles", len(profiles))  # WHY: mark the display-order transform.
             profiles.sort(key=lambda profile: profile.get("name", "").lower())  # WHY: preserve case-insensitive order.
@@ -352,6 +348,44 @@ class WanVpnBuilder:  # WHY: class encapsulates all per-run state (session, org,
             )  # WHY: capture the profile read fault for post-mortem.
             logging.error("! Error retrieving gateway device profiles. Check API connectivity.")  # WHY: operator hint.
             return []  # WHY: empty result triggers the graceful abort branch in run().
+
+    def _collect_profiles_from_pages(self, response: Any) -> list[Any] | None:
+        """Return all profile pages only when each SDK response succeeds."""
+        profiles: list[Any] = []  # WHY: stage data until every page passes validation.
+        current_response = response  # WHY: inspect the first page before reading its data.
+        while current_response is not None:  # WHY: validate each page before accepting its profiles.
+            page_profiles = self._validated_profile_page(current_response)  # WHY: validate status and data together.
+            if page_profiles is None:  # WHY: any invalid page invalidates the complete inventory.
+                return None  # WHY: malformed later pages must not allow partial VPN configuration.
+            profiles.extend(page_profiles)  # WHY: hold page data until all following pages pass.
+            if not getattr(current_response, "next", None):  # WHY: finish only when the SDK has no next page.
+                break  # WHY: no more response pages remain.
+            logger.info("Fetching the next gateway profile page")  # WHY: record each additional SDK request.
+            current_response = mistapi.get_next(self.apisession, current_response)  # WHY: use the SDK for pagination.
+            logger.debug("Received the next gateway profile page")  # WHY: record completion before status validation.
+            if current_response is None:  # WHY: a missing page is an incomplete inventory, not a valid end.
+                logger.error("Gateway profile pagination ended before the next page arrived")  # WHY: report truncation.
+                return None  # WHY: discard earlier pages when pagination stops unexpectedly.
+        return profiles  # WHY: expose data only after every page has passed validation.
+
+    @staticmethod
+    def _validated_profile_page(response: Any) -> list[Any] | None:
+        """Return page profiles only when its status and result shape are valid."""
+        status_code = getattr(response, "status_code", None)  # WHY: read status before response data.
+        status_is_successful = isinstance(status_code, int) and 200 <= status_code < 300  # WHY: accept only 2xx.
+        if not status_is_successful:  # WHY: reject failed or unknown page status.
+            logger.error("Gateway profile page failed with HTTP status %s", status_code)  # WHY: report the failure.
+            return None  # WHY: discard staged inventory if this page failed.
+        response_data = getattr(response, "data", None)  # WHY: read page data only after status validation.
+        page_profiles = (
+            response_data
+            if isinstance(response_data, list)
+            else (response_data.get("results") if isinstance(response_data, dict) else None)
+        )  # WHY: accept SDK lists or Mist result dictionaries.
+        if not isinstance(page_profiles, list):  # WHY: require complete profile data on every page.
+            logger.error("Gateway profile page has no valid results list")  # WHY: report malformed page data.
+            return None  # WHY: prevent malformed later pages from allowing partial configuration.
+        return page_profiles  # WHY: pass only a validated page to the staged inventory.
 
     def _fetch_existing_vpns(self) -> list[Any]:  # WHY: separate fetch keeps API responsibilities clear.
         """Fetch all org VPN definitions."""
