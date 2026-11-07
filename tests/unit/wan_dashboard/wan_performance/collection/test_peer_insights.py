@@ -81,7 +81,7 @@ class TestPeerInsights:
         records = PeerQualityInsights(session, FakeAdmission()).collect(self.target())  # Normalize one row.
         assert len(records) == 1  # Preserve the source row.
         assert records[0].metrics["loss"].value is None  # Do not infer zero loss.
-        assert records[0].metrics["loss"].missing_reason  # Explain missing data.
+        assert records[0].metrics["loss"].missing_reason == "The API snapshot has no value."  # Explain missing data.
 
     def test_out_of_window_timestamp_is_rejected(self) -> None:
         """Reject peer rows outside the requested hour."""

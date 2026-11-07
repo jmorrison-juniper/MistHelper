@@ -12,7 +12,7 @@ class FakeRedis:
 
     def __init__(self) -> None:
         """Initialize an empty in-memory store."""
-        self.values: dict[str, str] = {}  # Keep test keys separate.
+        self.values: dict[str, str | bytes] = {}  # Keep test keys separate.
         self.expiry: dict[str, int] = {}  # Track requested expiration.
 
     def set(self, key: str, value: str, **options: object) -> bool:
@@ -24,7 +24,7 @@ class FakeRedis:
             self.expiry[key] = options["ex"]  # Record lease or cache lifetime.
         return True  # Report a successful write.
 
-    def get(self, key: str) -> str | None:
+    def get(self, key: str) -> str | bytes | None:
         """Return a stored value or a cache miss."""
         return self.values.get(key)  # Preserve Redis read semantics.
 
@@ -71,10 +71,18 @@ class TestRefreshStore:
         with pytest.raises(ValueError, match="does not match"):  # Require tenant validation.
             store.publish("org-one", {"org_id": "org-two", "provenance": "live"})  # Refuse wrong tenant.
 
-    @pytest.mark.parametrize("value", ["{", "", "[]"])  # Cover malformed and wrong-shaped cache values.
+    @pytest.mark.parametrize("value", ["{", "[]"])  # Cover malformed and wrong-shaped cache values.
     def test_malformed_cache_is_not_empty_success(self, value: str) -> None:
         """Report invalid cache data instead of returning an empty snapshot."""
         client = FakeRedis()  # Create isolated storage.
         client.values["misthelper:wan:v1:snapshot:org-one"] = value  # Insert malformed data.
         with pytest.raises((json.JSONDecodeError, ValueError)):  # Require explicit cache failure.
             RefreshStore(client).cached("org-one")  # Reject invalid cache content.
+
+    def test_empty_cache_body_is_rejected(self) -> None:
+        """Reject a cache response without JSON data."""
+        client = FakeRedis()  # Create isolated storage.
+        empty_body = b""  # Keep the fake response body empty.
+        client.values["misthelper:wan:v1:snapshot:org-one"] = empty_body  # Store the empty response body.
+        with pytest.raises(json.JSONDecodeError):  # Require explicit cache failure.
+            RefreshStore(client).cached("org-one")  # Reject the empty response.
