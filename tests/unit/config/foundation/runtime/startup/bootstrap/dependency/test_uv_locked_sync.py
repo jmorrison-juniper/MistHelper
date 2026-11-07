@@ -12,6 +12,8 @@ import subprocess
 import sys
 from contextlib import nullcontext
 from pathlib import Path
+from types import SimpleNamespace  # WHY: Replace only the bootstrap clock during duration checks.
+from unittest.mock import Mock  # WHY: Record the environment builder without creating a real virtual environment.
 
 import pytest
 
@@ -96,6 +98,96 @@ class TestLockedSync:
         with pytest.raises(RuntimeError, match="locked UV sync failed with code 3"):  # Surface the process status.
             WorktreeBootstrapper(tmp_path).sync_dependencies()  # Do not report a success-shaped result.
 
+    def test_locked_sync_reports_its_duration(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """A successful locked sync reports one measured duration."""
+        clock = iter((4.0, 6.5))  # WHY: Keep elapsed time stable without patching the process clock.
+        monkeypatch.setattr(
+            bootstrap_worktree, "time", SimpleNamespace(monotonic=clock.__next__)
+        )  # WHY: Replace only the bootstrap clock.
+        monkeypatch.setattr(
+            bootstrap_worktree.shutil, "which", lambda name: "/tools/uv"
+        )  # WHY: Select the installed UV command.
+        monkeypatch.setattr(PipIndexProbe, "fallback_index", lambda probe: None)  # WHY: Keep the sync offline.
+        monkeypatch.setattr(
+            bootstrap_worktree.subprocess,
+            "run",
+            lambda command, **options: subprocess.CompletedProcess(command, 0),
+        )  # WHY: Return success without starting a process.
+
+        with caplog.at_level("INFO", logger="bootstrap_worktree"):  # WHY: Capture the timing report.
+            WorktreeBootstrapper(tmp_path).sync_dependencies()  # WHY: Exercise the locked sync.
+
+        assert "The locked UV sync took 2.5 seconds." in caplog.text  # WHY: Verify the measured duration.
+
+    @pytest.mark.parametrize("first_result", [0, 3])
+    def test_each_sync_invocation_uses_a_fresh_source_decision(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, first_result: int
+    ) -> None:
+        """A later invocation does not inherit an earlier source fallback."""
+        decisions = [bootstrap_worktree.PUBLIC_INDEX_URL, None]  # WHY: Model different source results per call.
+        results = [first_result, 0]  # WHY: Model success or failure, then a successful fresh call.
+        environments: list[dict[str, str]] = []  # WHY: Inspect each independent child environment.
+        monkeypatch.delenv("UV_INDEX_URL", raising=False)  # WHY: Prevent a host value from hiding stale state.
+        monkeypatch.setattr(bootstrap_worktree.shutil, "which", lambda name: "/tools/uv")  # WHY: Avoid installing UV.
+        monkeypatch.setattr(
+            PipIndexProbe, "fallback_index", lambda probe: decisions.pop(0)
+        )  # WHY: Return one fresh source decision per invocation.
+
+        def run(command: list[str], env: dict[str, str], **options: object) -> subprocess.CompletedProcess[str]:
+            environments.append(env)  # WHY: Retain the environment passed to each sync.
+            return subprocess.CompletedProcess(command, results.pop(0))  # WHY: Return the selected status.
+
+        monkeypatch.setattr(bootstrap_worktree.subprocess, "run", run)  # WHY: Avoid starting UV.
+        bootstrapper = WorktreeBootstrapper(tmp_path)  # WHY: Reuse one object to expose stale state.
+
+        if first_result:  # WHY: A failed first run must not block a later invocation.
+            with pytest.raises(
+                RuntimeError, match="locked UV sync failed with code 3"
+            ):  # WHY: Require the first error.
+                bootstrapper.sync_dependencies()  # WHY: Exercise the failed invocation.
+        else:  # WHY: Also cover a successful first invocation.
+            bootstrapper.sync_dependencies()  # WHY: Exercise the successful invocation.
+        bootstrapper.sync_dependencies()  # WHY: Exercise a fresh second invocation.
+
+        assert environments[0]["UV_INDEX_URL"] == bootstrap_worktree.PUBLIC_INDEX_URL  # WHY: Keep first fallback local.
+        assert "UV_INDEX_URL" not in environments[1]  # WHY: Do not inherit the earlier fallback.
+        assert bootstrapper.index_override is None  # WHY: Clear the prior invocation's decision.
+
+    def test_uv_launch_failure_is_safe_and_reports_timing(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """A UV launch error stops once and does not expose its private detail."""
+        secret = "private-launch-detail"  # WHY: Detect accidental exception-detail logging.
+        clock = iter((7.0, 9.0))  # WHY: Keep the failure duration deterministic.
+        commands: list[list[str]] = []  # WHY: Prove that UV receives no retry.
+        monkeypatch.setattr(
+            bootstrap_worktree, "time", SimpleNamespace(monotonic=clock.__next__)
+        )  # WHY: Replace only the bootstrap clock.
+        monkeypatch.setattr(
+            bootstrap_worktree.shutil, "which", lambda name: "/tools/uv"
+        )  # WHY: Select the installed UV command.
+        monkeypatch.setattr(PipIndexProbe, "fallback_index", lambda probe: None)  # WHY: Keep the test offline.
+
+        def fail(command: list[str], **options: object) -> None:
+            commands.append(command)  # WHY: Count attempted launches.
+            raise OSError(secret)  # WHY: Model an error that holds private detail.
+
+        monkeypatch.setattr(bootstrap_worktree.subprocess, "run", fail)  # WHY: Prevent a real process launch.
+
+        with caplog.at_level("DEBUG", logger="bootstrap_worktree"):  # WHY: Inspect safe diagnostic output.
+            with pytest.raises(
+                RuntimeError, match="locked UV sync could not start \\(OSError\\)"
+            ) as caught:  # WHY: Require a safe, typed failure.
+                WorktreeBootstrapper(tmp_path).sync_dependencies()  # WHY: Exercise the failed UV launch.
+
+        assert len(commands) == 1  # WHY: Do not retry an unsafe command failure.
+        assert isinstance(caught.value.__cause__, OSError)  # WHY: Preserve the original failure cause.
+        assert secret not in str(caught.value)  # WHY: Keep exception details private.
+        assert secret not in caplog.text  # WHY: Keep logs free of exception details.
+        assert "The locked UV sync took 2.0 seconds." in caplog.text  # WHY: Report duration on failure.
+
 
 class TestLockedSyncSources:
     """Cover source mapping without changing the caller environment."""
@@ -109,9 +201,11 @@ class TestLockedSyncSources:
         environment = WorktreeBootstrapper(Path("root"))._install_environment(policy)  # Build a child-only mapping.
 
         assert environment["UV_INDEX_URL"] == MIRROR_URL  # Preserve the configured package source.
+        assert environment["UV_LINK_MODE"] == "copy"  # Avoid hard links across the worktree and cache.
         assert environment["UV_NATIVE_TLS"] == "1"  # Keep system trust for TLS inspection.
         assert environment["UV_SYSTEM_CERTS"] == "1"  # Keep system certificates available.
-        assert "UV_HTTP_RETRIES" in environment and "UV_HTTP_TIMEOUT" in environment  # Bound network waits.
+        assert environment["UV_HTTP_RETRIES"] == "1"  # Match the bounded retry contract.
+        assert environment["UV_HTTP_TIMEOUT"] == "15"  # Match the bounded socket timeout.
         assert os.environ["PIP_INDEX_URL"] == MIRROR_URL  # Keep the parent setting unchanged.
         assert "UV_INDEX_URL" not in os.environ  # Keep the mapped value in the child only.
 
@@ -136,6 +230,56 @@ class TestLockedSyncSources:
         assert "PIP_EXTRA_INDEX_URL" not in environment  # Do not retry the failed mirror.
         assert environment["PIP_CONFIG_FILE"] == bootstrap_worktree.os.devnull  # Block saved mirror settings.
         assert "UV_EXTRA_INDEX_URL" not in environment  # Do not restore the failed extra source.
+
+    def test_fallback_keeps_the_caller_environment_and_private_settings_unchanged(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """A failed mirror changes only one child environment and hides its credentials."""
+        secret_url = "https://user:private-index-password@mirror.example.invalid/simple/"  # WHY: Detect leaks.
+        child_environments: list[dict[str, str]] = []  # WHY: Inspect child-only changes.
+        pip_config = tmp_path / "pip.conf"  # WHY: Keep saved configuration inside the test root.
+        uv_config = tmp_path / "uv.toml"  # WHY: Keep saved configuration inside the test root.
+        pip_config.write_text("index-url = private\n", encoding="utf-8")  # WHY: Model existing pip configuration.
+        uv_config.write_text("index-url = private\n", encoding="utf-8")  # WHY: Model existing UV configuration.
+        monkeypatch.setenv("PIP_INDEX_URL", secret_url)  # WHY: Model caller primary-source settings.
+        monkeypatch.setenv("PIP_EXTRA_INDEX_URL", secret_url)  # WHY: Model caller extra-source settings.
+        monkeypatch.setenv("PIP_CONFIG_FILE", str(pip_config))  # WHY: Model saved pip configuration.
+        monkeypatch.setenv("UV_INDEX_URL", secret_url)  # WHY: Model a competing caller UV source.
+        monkeypatch.setenv("UV_CONFIG_FILE", str(uv_config))  # WHY: Model saved UV configuration.
+        monkeypatch.setattr(bootstrap_worktree.shutil, "which", lambda name: "/tools/uv")  # WHY: Avoid installing UV.
+
+        def read_index(probe: PipIndexProbe) -> str:
+            probe.source_settings["global.index-url"] = secret_url  # WHY: Snapshot the configured primary.
+            probe.source_settings["global.extra-index-url"] = secret_url  # WHY: Snapshot the configured extra.
+            return secret_url  # WHY: Model the selected private index.
+
+        def fail_connection(probe: PipIndexProbe, url: str) -> bool:
+            return False  # WHY: Select the public fallback without a network request.
+
+        def run(command: list[str], env: dict[str, str], **options: object) -> subprocess.CompletedProcess[str]:
+            child_environments.append(dict(env))  # WHY: Retain an isolated copy for the assertions.
+            return subprocess.CompletedProcess(command, 0)  # WHY: Complete the locked sync successfully.
+
+        monkeypatch.setattr(PipIndexProbe, "read_index_url", read_index)  # WHY: Avoid launching pip for discovery.
+        monkeypatch.setattr(PipIndexProbe, "reaches", fail_connection)  # WHY: Avoid opening a network connection.
+        monkeypatch.setattr(bootstrap_worktree.subprocess, "run", run)  # WHY: Avoid launching UV.
+
+        with caplog.at_level("WARNING", logger="bootstrap_worktree"):  # WHY: Inspect the operator warning.
+            WorktreeBootstrapper(tmp_path).sync_dependencies()  # WHY: Exercise the complete fallback path.
+
+        assert len(child_environments) == 1  # WHY: Run one locked sync.
+        assert child_environments[0]["UV_INDEX_URL"] == bootstrap_worktree.PUBLIC_INDEX_URL  # WHY: Use safe source.
+        assert child_environments[0]["PIP_INDEX_URL"] == bootstrap_worktree.PUBLIC_INDEX_URL  # WHY: Align pip source.
+        assert child_environments[0]["PIP_CONFIG_FILE"] == bootstrap_worktree.os.devnull  # WHY: Ignore saved pip.
+        assert "PIP_EXTRA_INDEX_URL" not in child_environments[0]  # WHY: Drop the failed extra source.
+        assert os.environ["PIP_INDEX_URL"] == secret_url  # WHY: Preserve the caller primary source.
+        assert os.environ["PIP_EXTRA_INDEX_URL"] == secret_url  # WHY: Preserve the caller extra source.
+        assert os.environ["PIP_CONFIG_FILE"] == str(pip_config)  # WHY: Preserve saved pip configuration.
+        assert os.environ["UV_INDEX_URL"] == secret_url  # WHY: Preserve the caller UV source.
+        assert os.environ["UV_CONFIG_FILE"] == str(uv_config)  # WHY: Preserve saved UV configuration.
+        assert pip_config.read_text(encoding="utf-8") == "index-url = private\n"  # WHY: Do not rewrite pip config.
+        assert uv_config.read_text(encoding="utf-8") == "index-url = private\n"  # WHY: Do not rewrite UV config.
+        assert "private-index-password" not in caplog.text  # WHY: Redact source credentials.
 
     @pytest.mark.parametrize(
         ("caller", "sources", "expected"),
@@ -174,13 +318,18 @@ class TestLockedSyncSources:
                 },
                 ("https://global.example.invalid/simple/", "https://global-extra.example.invalid/simple/"),
             ),
+            (
+                {},
+                {"install.extra-index-url": "https://extra-only.example.invalid/simple/"},
+                (None, "https://extra-only.example.invalid/simple/"),
+            ),
         ],
     )
     def test_pip_source_precedence_maps_to_uv(
         self,
         caller: dict[str, str],
         sources: dict[str, str],
-        expected: tuple[str, str],
+        expected: tuple[str | None, str | None],
     ) -> None:
         """Caller settings override install and global config, which override nothing."""
         policy = WorktreeBootstrapper.InstallationPolicy("/tools/uv", sources, None, "/base/python")
@@ -189,7 +338,10 @@ class TestLockedSyncSources:
 
         policy.apply(environment)  # Keep captured pip configuration available to UV.
 
-        assert (environment["UV_INDEX_URL"], environment["UV_EXTRA_INDEX_URL"]) == expected  # Preserve precedence.
+        assert (
+            environment.get("UV_INDEX_URL"),
+            environment.get("UV_EXTRA_INDEX_URL"),
+        ) == expected  # Preserve precedence.
         assert all(  # Remove every competing alias before UV reads the environment.
             name not in environment for name in ("UV_INDEX", "UV_DEFAULT_INDEX", "UV_CONFIG_FILE")
         )
@@ -257,6 +409,71 @@ class TestIndexProbe:
         }
         assert calls[0][0] == ["/worktree/.venv/bin/python", "-m", "pip", "config", "list"]  # Use worktree pip.
         assert calls[0][1]["timeout"] == 30  # Bound the configuration read.
+
+    def test_configuration_snapshot_keeps_whitespace_and_all_source_values(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """One configuration report preserves install priority and both source classes."""
+        report = (
+            " global.index-url = 'https://global.example.invalid/simple/' \n"  # WHY: Include leading spaces.
+            " install.index-url = 'https://install.example.invalid/simple/' \n"  # WHY: Include higher-priority source.
+            " global.extra-index-url = 'https://global-extra.example.invalid/simple/' \n"  # WHY: Keep global extra.
+            " install.extra-index-url = 'https://install-extra.example.invalid/simple/' \n"  # WHY: Keep install extra.
+        )
+        monkeypatch.setattr(
+            bootstrap_worktree.subprocess,
+            "run",
+            lambda command, **options: subprocess.CompletedProcess(command, 0, stdout=report),
+        )  # WHY: Return a captured configuration report without running pip.
+        probe = PipIndexProbe(Path("/worktree/.venv/bin/python"))  # WHY: Avoid a real interpreter.
+
+        assert probe.read_index_url() == "https://global.example.invalid/simple/"  # WHY: Preserve first report value.
+        assert probe.source_settings == {  # WHY: Retain every source for later precedence decisions.
+            "global.index-url": "https://global.example.invalid/simple/",
+            "install.index-url": "https://install.example.invalid/simple/",
+            "global.extra-index-url": "https://global-extra.example.invalid/simple/",
+            "install.extra-index-url": "https://install-extra.example.invalid/simple/",
+        }
+
+    def test_sync_reads_and_probes_once_without_logging_index_credentials(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """The complete sync makes one source read and one bounded probe."""
+        secret_url = "https://user:probe-password@mirror.example.invalid/simple/"  # WHY: Detect credential leaks.
+        report = f"global.index-url='{secret_url}'"  # WHY: Model pip's private configuration output.
+        commands: list[list[str]] = []  # WHY: Count the source read and locked sync.
+        probes: list[tuple[tuple[str, int], float]] = []  # WHY: Count bounded network probes.
+        for name in (
+            "PIP_INDEX_URL",
+            "PIP_EXTRA_INDEX_URL",
+            "UV_INDEX",
+            "UV_DEFAULT_INDEX",
+            "UV_INDEX_URL",
+            "UV_EXTRA_INDEX_URL",
+        ):
+            monkeypatch.delenv(name, raising=False)  # WHY: Remove host-specific source settings.
+        monkeypatch.setattr(bootstrap_worktree.shutil, "which", lambda name: "/tools/uv")  # WHY: Select installed UV.
+
+        def run(command: list[str], **options: object) -> subprocess.CompletedProcess[str]:
+            commands.append(command)  # WHY: Count each subprocess invocation.
+            output = report if command[-4:] == ["-m", "pip", "config", "list"] else ""  # WHY: Answer the source read.
+            return subprocess.CompletedProcess(command, 0, stdout=output)  # WHY: Complete both commands successfully.
+
+        def refuse(address: tuple[str, int], timeout: float) -> nullcontext[None]:
+            probes.append((address, timeout))  # WHY: Record the bounded connection attempt.
+            raise OSError("connection refused")  # WHY: Select the public fallback deterministically.
+
+        monkeypatch.setattr(bootstrap_worktree.subprocess, "run", run)  # WHY: Avoid starting external processes.
+        monkeypatch.setattr(socket, "create_connection", refuse)  # WHY: Avoid network access.
+
+        with caplog.at_level("DEBUG", logger="bootstrap_worktree"):  # WHY: Inspect probe logs.
+            WorktreeBootstrapper(tmp_path).sync_dependencies()  # WHY: Exercise the integrated source decision.
+
+        assert len(commands) == 2  # WHY: Read configuration once, then run one locked sync.
+        assert sum(command[-4:] == ["-m", "pip", "config", "list"] for command in commands) == 1  # WHY: One read.
+        assert sum("sync" in command for command in commands) == 1  # WHY: One package operation.
+        assert probes == [(("mirror.example.invalid", 443), 3.0)]  # WHY: Make one bounded probe.
+        assert "probe-password" not in caplog.text  # WHY: Hide URL credentials.
 
     def test_read_index_url_keeps_setup_available_when_pip_cannot_start(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """An unreadable pip configuration does not prevent the package sync."""
@@ -374,6 +591,69 @@ class TestIndexProbe:
         assert "for this run only" in caplog.text  # Confirm that saved configuration remains unchanged.
 
 
+class TestEnvironmentOptions:
+    """Keep environment paths and creation modes correct across platforms."""
+
+    @pytest.mark.parametrize(
+        ("platform", "path_parts"),
+        [("win32", ("Scripts", "python.exe")), ("linux", ("bin", "python")), ("darwin", ("bin", "python"))],
+    )
+    def test_interpreter_path_is_platform_specific(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        platform: str,
+        path_parts: tuple[str, str],
+    ) -> None:
+        """Return the Windows path or the POSIX path for the selected platform."""
+        monkeypatch.setattr(bootstrap_worktree.sys, "platform", platform)  # WHY: Exercise each platform branch.
+        bootstrapper = WorktreeBootstrapper(tmp_path)  # WHY: Build paths from an isolated root.
+
+        assert bootstrapper.interpreter == tmp_path / ".venv" / Path(*path_parts)  # WHY: Keep both path forms.
+
+    @pytest.mark.parametrize("platform, symlinks", [("win32", False), ("linux", True), ("darwin", True)])
+    def test_environment_builder_uses_platform_symlink_policy(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, platform: str, symlinks: bool
+    ) -> None:
+        """Select symlinks only on POSIX platforms."""
+        monkeypatch.setattr(bootstrap_worktree.sys, "platform", platform)  # WHY: Exercise each platform branch.
+        builder = Mock()  # WHY: Prevent creation of a real environment.
+        options_seen: list[dict[str, object]] = []  # WHY: Inspect the builder policy.
+
+        def build(**options: object) -> Mock:
+            options_seen.append(options)  # WHY: Retain the constructor settings.
+            return builder  # WHY: Keep the environment creation local.
+
+        monkeypatch.setattr(bootstrap_worktree.venv, "EnvBuilder", build)  # WHY: Replace the environment builder.
+        WorktreeBootstrapper(tmp_path).create_environment()  # WHY: Exercise environment creation.
+
+        assert options_seen == [{"with_pip": True, "upgrade_deps": False, "symlinks": symlinks}]  # WHY: Check options.
+        assert builder.create.call_args.args == (tmp_path / ".venv",)  # WHY: Use the configured environment path.
+
+    def test_environment_creation_reuses_and_recreates_the_interpreter(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Reuse an existing interpreter unless recreation is explicit."""
+        builder = Mock()  # WHY: Prevent creation of a real environment.
+        calls: list[dict[str, object]] = []  # WHY: Count environment-builder construction.
+
+        def build(**options: object) -> Mock:
+            calls.append(options)  # WHY: Record each environment creation.
+            return builder  # WHY: Keep the environment creation local.
+
+        monkeypatch.setattr(bootstrap_worktree.venv, "EnvBuilder", build)  # WHY: Replace the environment builder.
+        bootstrapper = WorktreeBootstrapper(tmp_path)  # WHY: Own the temporary environment.
+        bootstrapper.create_environment()  # WHY: Create the initial environment.
+        bootstrapper.interpreter.parent.mkdir(parents=True)  # WHY: Model the created interpreter path.
+        bootstrapper.interpreter.touch()  # WHY: Mark the environment as ready.
+        bootstrapper.create_environment()  # WHY: Check the reuse path.
+        assert len(calls) == 1  # WHY: Reuse must not create another environment.
+        bootstrapper.create_environment(recreate=True)  # WHY: Explicitly rebuild the environment.
+
+        assert len(calls) == 2  # WHY: Recreate must construct a new environment.
+        assert builder.create.call_count == 2  # WHY: Verify the initial and recreated builds.
+
+
 class TestBootstrapMain:
     """Keep the locked sync in the complete bootstrap sequence."""
 
@@ -441,3 +721,73 @@ class TestBootstrapMain:
 
         assert bootstrap_worktree.main([]) == 1  # Return a failure code to the shell.
         assert events == ["sweep", "create", "sync"]  # Do not run health, browser, or account checks.
+
+    def test_health_failure_is_nonblocking_and_redacts_error(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """A health command failure warns without exposing its private detail."""
+        secret = "private-health-detail"  # WHY: Detect accidental exception-detail logging.
+
+        def fail(*args: object, **options: object) -> subprocess.CompletedProcess[str]:
+            raise OSError(secret)  # WHY: Model an error that holds private detail.
+
+        monkeypatch.setattr(bootstrap_worktree.subprocess, "run", fail)  # WHY: Prevent a health subprocess.
+
+        with caplog.at_level("WARNING", logger="bootstrap_worktree"):  # WHY: Capture the warning.
+            WorktreeBootstrapper(tmp_path).check_environment_health()  # WHY: Exercise the nonblocking health check.
+
+        assert "failed (OSError)" in caplog.text  # WHY: Report only the error type.
+        assert secret not in caplog.text  # WHY: Keep private error details out of logs.
+
+    def test_account_failure_is_nonblocking_and_redacts_error(
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """An unknown active account does not block setup or expose private detail."""
+        secret = "private-account-detail"  # WHY: Detect accidental exception-detail logging.
+        monkeypatch.setattr(
+            bootstrap_worktree.shutil, "which", lambda name: "/tools/gh"
+        )  # WHY: Select the account command.
+
+        def fail(*args: object, **options: object) -> subprocess.CompletedProcess[str]:
+            raise OSError(secret)  # WHY: Model an error that holds private detail.
+
+        monkeypatch.setattr(bootstrap_worktree.subprocess, "run", fail)  # WHY: Prevent an account subprocess.
+
+        with caplog.at_level("DEBUG", logger="bootstrap_worktree"):  # WHY: Capture the account diagnostic.
+            result = bootstrap_worktree.GitHubAccountChecker().warn_on_mismatch()  # WHY: Check unknown-account safety.
+
+        assert result is True  # WHY: An unknown account must not block setup.
+        assert "The account read failed (OSError)." in caplog.text  # WHY: Report only the error type.
+        assert secret not in caplog.text  # WHY: Keep private error details out of logs.
+
+    def test_main_continues_after_browser_health_and_account_warnings(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Nonblocking readiness warnings do not change the successful exit code."""
+        events: list[object] = []  # WHY: Record setup order without external actions.
+        self._patch_main(tmp_path, monkeypatch, events)  # WHY: Keep setup operations local.
+        monkeypatch.setattr(
+            WorktreeBootstrapper, "install_browser_driver", lambda self: events.append("browser-warning") or False
+        )  # WHY: Model a nonblocking browser warning.
+        monkeypatch.setattr(
+            WorktreeBootstrapper, "check_environment_health", lambda self: events.append("health-warning")
+        )  # WHY: Model a nonblocking health warning.
+        monkeypatch.setattr(
+            bootstrap_worktree.GitHubAccountChecker,
+            "configure_git_username",
+            lambda self, root: events.append("configure-warning") or False,
+        )  # WHY: Model a nonblocking credential warning.
+        monkeypatch.setattr(
+            bootstrap_worktree.GitHubAccountChecker,
+            "warn_on_mismatch",
+            lambda self: events.append("account-warning") or False,
+        )  # WHY: Model a nonblocking account warning.
+
+        assert bootstrap_worktree.main([]) == 0  # WHY: Preserve successful readiness despite warnings.
+        assert events[-5:] == [  # WHY: Run every later readiness step.
+            "health-warning",
+            "browser-warning",
+            "report",
+            "configure-warning",
+            "account-warning",
+        ]
