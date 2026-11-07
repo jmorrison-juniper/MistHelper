@@ -11,6 +11,8 @@ from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
+import requests
+from mistapi.__api_response import APIResponse
 
 from src.foundation.support.utils.rate_limiting import PidInputs, RateLimitingUtils
 
@@ -872,6 +874,72 @@ class TestEdgeCases:
 # ---------------------------------------------------------------------------
 # Coverage gap tests: lines 27-28, 206-212, 302-303, 366
 # ---------------------------------------------------------------------------
+class TestRefreshApiUsageHttpStatus:
+    """Test that the rate limiter trusts only successful native SDK responses."""
+
+    @staticmethod
+    def _make_usage_response(status_code: int) -> APIResponse:
+        """Build a native SDK response without making a network request."""
+        transport_response = requests.Response()  # WHY: provide the SDK with a local transport result.
+        transport_response.status_code = status_code  # WHY: exercise the status decision with native response data.
+        transport_response.url = "https://api.mist.invalid/api/v1/self/usage"  # WHY: use a reserved offline domain.
+        transport_response.headers["Content-Type"] = "application/json"  # WHY: let the SDK parse the test body.
+        transport_response._content = json.dumps(  # WHY: include plausible usage data even when the status fails.
+            {"requests": 1275, "request_limit": 5000}
+        ).encode("utf-8")
+        transport_response.encoding = "utf-8"  # WHY: make native response text decoding deterministic.
+        return APIResponse(  # WHY: preserve the SDK response behavior under test.
+            response=transport_response, url=transport_response.url
+        )
+
+    @pytest.mark.parametrize("status_code", [403, 503])
+    def test_failed_native_response_preserves_cache_and_logs(
+        self, status_code: int, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Keep all cached values when a native SDK response has an error status."""
+        sdk_response = self._make_usage_response(status_code)  # WHY: expose data and an unsuccessful status together.
+        mock_mistapi = MagicMock()  # WHY: control the SDK boundary without network access.
+        mock_mistapi.api.v1.self.usage.getSelfApiUsage.return_value = sdk_response  # WHY: return the native response.
+        api_session = MagicMock()  # WHY: prove the existing SDK session reaches the endpoint method.
+        cache = {  # WHY: seed every field that a failed refresh must preserve.
+            "used": 900,
+            "limit": 5000,
+            "last_updated": 100.0,
+            "perceived_requests": 7,
+            "initialized": True,
+            "previous_elapsed": 30.0,
+        }
+        original_cache = cache.copy()  # WHY: compare the full cache after the failed refresh.
+        with caplog.at_level(logging.WARNING):  # WHY: capture the operator-visible refresh failure.
+            with patch.dict("sys.modules", {"mistapi": mock_mistapi}):  # WHY: isolate the SDK import boundary.
+                RateLimitingUtils._refresh_api_usage(api_session, cache, 200.0)  # WHY: exercise the production path.
+        mock_mistapi.api.v1.self.usage.getSelfApiUsage.assert_called_once_with(api_session)  # WHY: preserve SDK use.
+        assert cache == original_cache  # WHY: failed data must not replace any valid cached field.
+        assert f"HTTP status {status_code}" in caplog.text  # WHY: identify the failed response to the operator.
+
+    def test_successful_native_response_updates_cache(self) -> None:
+        """Keep the current cache update behavior for a successful native SDK response."""
+        sdk_response = self._make_usage_response(200)  # WHY: model an accepted response with parsed usage data.
+        mock_mistapi = MagicMock()  # WHY: control the SDK boundary without network access.
+        mock_mistapi.api.v1.self.usage.getSelfApiUsage.return_value = sdk_response  # WHY: return the native response.
+        api_session = MagicMock()  # WHY: verify that the existing SDK session remains in use.
+        cache = {  # WHY: seed values that a successful refresh must replace.
+            "used": 900,
+            "limit": 1000,
+            "last_updated": 100.0,
+            "perceived_requests": 7,
+            "initialized": True,
+        }
+        with patch.dict("sys.modules", {"mistapi": mock_mistapi}):  # WHY: isolate the SDK import boundary.
+            RateLimitingUtils._refresh_api_usage(api_session, cache, 200.0)  # WHY: exercise the production path.
+        mock_mistapi.api.v1.self.usage.getSelfApiUsage.assert_called_once_with(api_session)  # WHY: preserve SDK use.
+        assert cache["used"] == 1275  # WHY: accept usage only after a successful status.
+        assert cache["limit"] == 5000  # WHY: retain the returned request limit.
+        assert cache["last_updated"] == 200.0  # WHY: record the accepted refresh time.
+        assert cache["perceived_requests"] == 0  # WHY: clear in-flight estimates after a valid refresh.
+        assert cache["initialized"] is True  # WHY: keep accepted data marked authoritative.
+
+
 class TestCoverageGapTargets:
     """Tests targeting specific uncovered lines in rate_limiting.py."""
 
@@ -889,10 +957,12 @@ class TestCoverageGapTargets:
     def test_refresh_api_usage_success_path(self):  # Cover lines 206-212
         """_refresh_api_usage populates cache dict when mistapi returns valid usage data."""
         mock_mistapi = MagicMock()  # Create a deep mock for the mistapi module
-        mock_mistapi.api.v1.self.usage.getSelfApiUsage.return_value.data = {  # Mock the API response
+        mock_response = mock_mistapi.api.v1.self.usage.getSelfApiUsage.return_value  # WHY: configure one SDK response.
+        mock_response.data = {  # Mock the API response
             "requests": 750,  # Current usage count
             "request_limit": 5000,  # Rate limit
         }
+        mock_response.status_code = 200  # WHY: model a successful SDK response.
         cache = {  # Minimal cache dict to be populated by the success path
             "used": 0,  # Will be set to 750 on success
             "limit": 5000,  # Will be set to 5000 on success
