@@ -203,6 +203,9 @@ var OperationResults = (function() {
     function load() {
         var generation = ++state.requestGeneration;
         clippingNotice.stop();
+        document.getElementById('resultsHead').innerHTML = '';  // Old columns do not describe the pending selection.
+        document.getElementById('resultsBody').innerHTML = '';  // Never display old rows as the selected file.
+        show('resultsPagination', false);  // Old page controls must not refer to a pending result.
         setSummary('Loading the results...');
         fetch(buildUrl())
             .then(readJsonAnswer)

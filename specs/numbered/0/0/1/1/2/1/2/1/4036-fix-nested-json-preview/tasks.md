@@ -56,6 +56,14 @@
 
 - [X] T006 [P] Add `changelog.d/issue-4036-nested-json-preview.md` with a `### Fixed` heading and one bullet naming issue #4036 and nested JSON preview in the Results panel.
 
+## Acceptance follow-up
+
+- [X] T008 Return nondisclosing JSON read errors in `web_portal/services/data_browser.py`. Keep parser reasons and log exception details.
+- [X] T009 Clear previous rows and page controls before a Results request in `web_portal/static/js/operation_results.js`.
+- [X] T010 Inject path-bearing read failures in route tests. Verify a listed temporary file removed before preview clears previous browser contents.
+
+T008 and T009 follow T003. T010 follows T008 and T009.
+
 ## Dependencies and execution order
 
 ### Phase dependencies

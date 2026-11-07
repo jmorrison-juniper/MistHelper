@@ -74,4 +74,28 @@ If the defect no longer reproduces, record the exact revision and results.
 If another pull request owns a required file, report that owner and stop overlapping work.
 Do not open a placeholder pull request.
 Only a validated focused fix may use `Closes #4036`.
-Do not merge.
+The original implementation task did not authorize a merge.
+
+## Acceptance Reassessment
+
+The user requested repairs for path disclosure and stale contents, followed by acceptance reassessment.
+JSON read failures now return a fixed client message and log exception details on the server.
+Parser failures retain their reason, line, and column.
+The Results panel clears previous rows, headings, and page controls before each preview request.
+
+| Criteria | Evidence |
+| --- | --- |
+| US1 scenarios 1 and 2, SC-002 and SC-005 | Parameterized Playwright tests display both named nested JSON files through the Results panel. |
+| US1 scenarios 3 through 5, SC-001 and SC-006 | Route tests cover root and nested paths, exact page rows and counts, and unchanged download bytes. |
+| FR-003 and JSON shape edge cases | Nested route tests preserve arrays, empty objects, and empty arrays. Streaming tests preserve column order and filtering. |
+| US2 scenarios 1 and 3, FR-004 and FR-007 | Malformed JSON retains its parser error. Injected permission, operating-system, and unexpected failures expose no internal path. |
+| US2 scenario 2, FR-005 | Playwright lists a temporary file, removes it, selects it, and checks empty pending rows followed by the missing-file error. |
+| US3 scenarios 1 through 4, SC-004 | SQLite tests verify tables, pagination, search, and missing tables. Path tests deny traversal, absolute paths, and outside links. |
+| FR-008 and FR-009 | Source-byte assertions prove read-only previews. Output-discovery tests preserve the merged #4081 input exclusions. |
+
+The feature-specific merge hold is removed because the acceptance criteria have corresponding verified evidence.
+The existing empty-array response reports two total rows and displays one content row.
+A direct comparison with the committed JSON reader confirms that this response remains unchanged.
+This repair preserves that existing behavior and does not change JSON representation rules.
+This reassessment does not authorize this agent to merge or enable auto-merge.
+A separately approved merge still requires current main, the serial merge slot, and every required check on the latest commit.
