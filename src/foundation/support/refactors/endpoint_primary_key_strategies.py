@@ -3434,6 +3434,12 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "indexes": ["site_id", "connection_status", "code"],
         "description": "Latest reported trouble evidence for each organization AP",
     },
+    "ap_recovered_report": {
+        "type": "composite_pk",
+        "primary_key": ["org_id", "mac"],
+        "indexes": ["site_id", "recovery_status", "code"],
+        "description": "Verified recovery evidence for each organization AP",
+    },
     "ap_scorecard_by_site": {
         "type": "auto_increment_with_unique",
         "primary_key": ["misthelper_internal_id"],

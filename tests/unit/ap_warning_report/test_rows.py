@@ -25,40 +25,43 @@ def sources() -> dict[str, list[dict[str, Any]]]:
                 "mac": "00:00:00:00:00:01",
                 "status": "connected",
                 "site_id": "site-one",
-                "last_trouble": {"code": "03", "timestamp": 0},
+                "last_trouble": {"code": "03", "timestamp": 1793836800},
             },
-            {"mac": "000000000002", "status": "disconnected", "last_trouble": {"code": "99"}},
+            {
+                "mac": "000000000002",
+                "status": "disconnected",
+                "last_trouble": {"code": "99", "timestamp": 1793835899},
+            },
             {"mac": "000000000003", "last_trouble": {"code": "00"}},
         ],
     }
 
 
-def test_warning_filter_includes_both_connection_states(sources: dict[str, Any]) -> None:
-    """Only nonzero trouble evidence qualifies, independent of connection."""
+def test_warning_filter_includes_only_recent_trouble(sources: dict[str, Any]) -> None:
+    """Only nonzero trouble timestamps within 15 minutes qualify."""
     original = deepcopy(sources)
     report = WarningRows(ORG_ID, sources)
     rows = report.build("2026-11-05T00:00:00+00:00")
-    assert [row["mac"] for row in rows] == ["000000000001", "000000000002"]
-    assert [row["connection_status"] for row in rows] == ["connected", "disconnected"]
+    assert [row["mac"] for row in rows] == ["000000000001"]
+    assert [row["connection_status"] for row in rows] == ["connected"]
     assert rows[0]["site_name"] == "First site"
-    assert rows[0]["trouble_timestamp"] == "1970-01-01T00:00:00+00:00"
+    assert rows[0]["trouble_timestamp"] == "2026-11-05T00:00:00+00:00"
     assert rows[0]["trouble_source"] == "statistics"
-    assert rows[1]["definition_status"] == "unknown"
-    assert rows[1]["trouble_timestamp"] == ""
-    assert report.summary == {"inventory_aps": 4, "missing_trouble": 1, "matched": 2}
+    assert report.summary == {
+        "inventory_aps": 4,
+        "site_statistics_aps": 3,
+        "missing_trouble": 1,
+        "excluded_trouble": 1,
+        "matched": 1,
+    }
     assert sources == original
 
 
-def test_inventory_evidence_survives_absent_statistics(sources: dict[str, Any]) -> None:
-    """Unassigned inventory APs remain eligible when they carry trouble evidence."""
+def test_inventory_trouble_is_not_reported_without_site_statistics(sources: dict[str, Any]) -> None:
+    """Organization inventory trouble does not replace site statistics evidence."""
     sources["stats"] = []
     sources["inventory"] = [{"mac": "000000000001", "type": "ap", "connected": False, "last_trouble": {"code": 3}}]
-    row = WarningRows(ORG_ID, sources).build("2026-11-05T00:00:00+00:00")[0]
-    assert row["trouble_source"] == "inventory"
-    assert row["connection_status"] == "disconnected"
-    assert row["site_lookup_status"] == "unassigned"
-    assert row["site_name"] == ""
-    assert row["device_id"] == ""
+    assert WarningRows(ORG_ID, sources).build("2026-11-05T00:00:00+00:00") == []
 
 
 @pytest.mark.parametrize("observation", [None, {}, {"code": "00"}])
@@ -124,3 +127,11 @@ def test_invalid_ap_assignment_fails(sources: dict[str, Any]) -> None:
     sources["stats"][0]["site_id"] = 3
     with pytest.raises(ValueError, match="site identifier"):
         WarningRows(ORG_ID, sources).build("2026-11-05T00:00:00+00:00")
+
+
+def test_untimed_nonzero_trouble_remains_a_candidate(sources: dict[str, Any]) -> None:
+    """Missing observation time cannot silently remove uncertain trouble."""
+    sources["stats"][0]["last_trouble"].pop("timestamp")
+    rows = WarningRows(ORG_ID, sources).build("2026-11-05T00:00:00+00:00")
+    assert [row["mac"] for row in rows] == ["000000000001"]
+    assert rows[0]["trouble_timestamp"] == ""

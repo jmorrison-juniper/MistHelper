@@ -11,7 +11,8 @@ from requests import RequestException
 
 from src.foundation.runtime.config import runtime_settings
 from src.foundation.runtime.config.source_dependency_resolver import SourceDependencyResolver
-from src.operations.exporting.ap_warning_report.client import ApWarningClient
+from src.operations.exporting.ap_warning_report.client import ApWarningClient, RecoveryEvidenceReader
+from src.operations.exporting.ap_warning_report.codes import RecoveryClassifier
 from src.operations.exporting.ap_warning_report.rows import WarningRows
 
 logger = logging.getLogger(__name__)
@@ -35,6 +36,17 @@ REPORT_COLUMNS = [
     "trouble_source",
     "trouble_timestamp",
     "reported_at",
+    "recovery_status",
+    "recovery_reason",
+    "evidence_status",
+    "interruptions_60m",
+    "recovery_connection_at",
+    "statistics_observed_at",
+    "fresh_connection_status",
+    "fresh_trouble_code",
+    "fresh_trouble_timestamp",
+    "history_start",
+    "history_end",
 ]
 
 
@@ -63,23 +75,65 @@ class ApWarningReport:
         report = WarningRows(org_id, client.read())
         rows = report.build(datetime.now(UTC).isoformat())
         logger.info(
-            "AP warning report scanned APs=%d missing trouble evidence=%d matched APs=%d",
+            "AP warning report scanned inventory APs=%d site statistics APs=%d missing trouble codes=%d "
+            "outside-window trouble codes=%d recent trouble APs=%d",
             report.summary["inventory_aps"],
+            report.summary["site_statistics_aps"],
             report.summary["missing_trouble"],
+            report.summary["excluded_trouble"],
             report.summary["matched"],
         )
         if not rows:
             logger.info("No AP warning records matched. No report was written.")
             return 0
-        return ApWarningReport._persist(rows, org_id)
+        retained, recovered = ApWarningReport._classify(rows, org_id)
+        if recovered:
+            ApWarningReport._persist(recovered, org_id, recovered=True)
+        if not retained:
+            logger.info(
+                "No AP warning records matched after recovery filtering. Recovered records were exported separately."
+            )
+            return 0
+        return ApWarningReport._persist(retained, org_id)
 
     @staticmethod
-    def _persist(rows: list[dict[str, Any]], org_id: str) -> int:
+    def _classify(rows: list[dict[str, Any]], org_id: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        """Retain uncertain evidence and make each recovery visible in its own report."""
+        reader = RecoveryEvidenceReader(
+            SourceDependencyResolver.apisession, org_id, runtime_settings.DEFAULT_API_PAGE_LIMIT
+        )
+        retained: list[dict[str, Any]] = []
+        recovered: list[dict[str, Any]] = []
+        logger.info("Classifying AP warning candidates=%d", len(rows))
+        for row in rows:
+            row.update(RecoveryClassifier.classify(row, reader.read(row)))
+            destination = recovered if row["recovery_status"] == "recovered" else retained
+            destination.append(row)
+            logger.info(
+                "AP recovery decision mac=%s status=%s reason=%s evidence=%s interruptions=%s",
+                row["mac"],
+                row["recovery_status"],
+                row["recovery_reason"],
+                row["evidence_status"],
+                row["interruptions_60m"],
+            )
+        logger.info(
+            "AP recovery summary candidates=%d retained=%d recovered=%d", len(rows), len(retained), len(recovered)
+        )
+        logger.debug("Completed AP recovery classification")
+        return retained, recovered
+
+    @staticmethod
+    def _persist(rows: list[dict[str, Any]], org_id: str, recovered: bool = False) -> int:
         """Require a successful standard output write before reporting completion."""
-        filename = f"ApWarningReport_{org_id}.csv"
+        prefix = "ApRecoveredReport" if recovered else "ApWarningReport"
+        filename = f"{prefix}_{org_id}.csv"
         logger.info("Writing AP warning report rows=%d", len(rows))
         written = SourceDependencyResolver.DataExporter.write_with_format_selection(
-            rows, filename, api_function_name="ap_warning_report", fieldnames=REPORT_COLUMNS
+            rows,
+            filename,
+            api_function_name="ap_recovered_report" if recovered else "ap_warning_report",
+            fieldnames=REPORT_COLUMNS,
         )
         if written is not True:
             logger.error("The AP warning report output write failed")
