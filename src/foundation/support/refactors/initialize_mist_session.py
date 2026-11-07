@@ -65,6 +65,16 @@ class MistSessionConfigurator:
     @staticmethod
     def _build_timeout_adapter(default_timeout: int) -> HTTPAdapter:
         """Build the adapter that injects the timeout and safe read retry policy."""
+        from src.interfaces.wan_performance.collection.request_admission import (
+            AdmittedAdapter,
+            RequestLedger,
+        )
+
+        if RequestLedger.enabled():  # Count every Mist API transport attempt when Redis is configured.
+            return AdmittedAdapter(
+                RequestLedger.connect(), default_timeout
+            )  # Fail closed if shared admission is unavailable.
+
         from typing import Self  # Preserve the concrete retry subtype in the override result.
 
         from urllib3.response import BaseHTTPResponse  # Match the urllib3 retry override response contract.
