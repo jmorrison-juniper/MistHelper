@@ -48,7 +48,7 @@ def test_utility_catalog_fields_and_outputs() -> None:
 def test_packet_capture_catalog_has_bounded_duration_field() -> None:
     """Every packet capture field uses the reviewed duration range and default."""
     captures = [entry for entry in UtilityCatalog().entries() if entry.safety is Safety.CAPTURE]  # Select captures.
-    assert captures  # The catalog must contain packet captures.
+    assert len(captures) == 7  # The catalog contains seven packet capture utilities.
     for capture in captures:  # Check every capture entry, not one representative.
         duration = next(field for field in capture.fields if field.name == "duration")  # Find its SDK field.
         assert (duration.label, duration.minimum, duration.maximum, duration.default) == (
