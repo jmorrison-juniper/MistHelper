@@ -24,6 +24,10 @@ Run the SDK contract:
 Run file-scoped Ruff, Black, mypy, Bandit, complexity, symbols, and docstring gates.
 Run the documented test-quality preflight and committed comparison before any push.
 
-Warning: menus 176 and 177 belong to destructive workflows.
-Do not execute these menus against a production organization for this repair.
+Warning: menu 187 writes configuration to a live organization and can cause an outage.
+Do not execute menu 187 against a production organization for this repair.
 Obtain human review before merging.
+
+The lookup keeps response contents out of manager logs.
+The Mist API SDK can print refused response data when SDK debug output is enabled.
+This repair does not change the process-wide SDK debug setting.

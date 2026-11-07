@@ -1,8 +1,8 @@
 """Tests for the org config migration export flow, the operator prompts, and the report.
 
 Why:
-    ``src/mist/resources/org/org_config_migration_manager.py`` drives menu 176 and menu 177.
-    Menu 177 writes into a live org. Issue #1961 reports that the export flow,
+    ``src/mist/resources/org/org_config_migration_manager.py`` drives menu 58 and menu 187.
+    Menu 187 writes into a live org. Issue #1961 reports that the export flow,
     the file selection prompt, the bundle guard, the confirmation gate, and the
     result summary hold no test. This module covers those blocks. No test
     reaches the Mist API, because a mock replaces every endpoint.
@@ -261,7 +261,7 @@ class TestFetchAllTypes:
 
 
 class TestExportConfig:
-    """Cover the menu 176 entry point, which must not write before it fetches."""
+    """Cover the menu 58 entry point, which must not write before it fetches."""
 
     def test_the_flow_reaches_the_file_write(self, manager: OrgConfigMigrationManager) -> None:
         """A broken order would save a bundle before the fetch fills it."""
@@ -271,7 +271,7 @@ class TestExportConfig:
             patch.object(manager, "_save_bundle_to_file", return_value="data/x.json") as save_spy,
             patch.object(manager, "_display_export_summary") as summary_spy,
         ):
-            manager.export_config()  # WHY: drive the whole menu 176 flow.
+            manager.export_config()  # WHY: drive the whole menu 58 flow.
         fetch_spy.assert_called_once()  # WHY: the fetch must run before the write.
         save_spy.assert_called_once()  # WHY: exactly one bundle per export.
         summary_spy.assert_called_once_with(save_spy.call_args[0][0], "data/x.json")
@@ -284,7 +284,7 @@ class TestExportConfig:
             patch.object(manager, "_save_bundle_to_file", return_value="data/x.json"),
             patch.object(manager, "_display_export_summary"),
         ):
-            manager.export_config()  # WHY: drive the whole menu 176 flow.
+            manager.export_config()  # WHY: drive the whole menu 58 flow.
         assert manager.org_id == "dest-org"  # WHY: the resolver value must reach the instance.
 
     @pytest.mark.parametrize("scenario", [(200, "Acme"), (403, "Unknown"), (503, "Unknown")])
@@ -316,14 +316,14 @@ class TestExportConfig:
 
 
 class TestSelectImportFile:
-    """Cover the bundle picker, which is the first gate of menu 177."""
+    """Cover the bundle picker, which is the first gate of menu 187."""
 
     def test_no_bundle_returns_an_empty_path(self, manager: OrgConfigMigrationManager, caplog: Any) -> None:
         """An import with no bundle must stop, not raise on an empty list."""
         caplog.set_level("WARNING")  # WHY: the guard reports the guidance at WARNING level.
         with patch.object(ocm.glob, "glob", return_value=[]):
             assert manager._select_import_file() == ""
-        assert "Menu 176" in caplog.text  # WHY: the message must point at the export step.
+        assert "Menu 58" in caplog.text  # WHY: the message must point at the export step.
 
     def test_a_single_bundle_is_selected_without_a_prompt(self, manager: OrgConfigMigrationManager) -> None:
         """A prompt with one choice wastes the time of the operator."""
@@ -425,7 +425,7 @@ class TestValidateBundleStructure:
     """Cover the structure guard, which is the last check before the import runs."""
 
     def test_a_complete_bundle_passes(self, manager: OrgConfigMigrationManager) -> None:
-        """A valid bundle must pass, or menu 177 can never run."""
+        """A valid bundle must pass, or menu 187 can never run."""
         assert manager._validate_bundle_structure(_valid_bundle()) is True
 
     def test_a_missing_metadata_section_fails(self, manager: OrgConfigMigrationManager, caplog: Any) -> None:
@@ -560,11 +560,11 @@ class TestFetchExistingObjects:
 
 
 class TestImportConfig:
-    """Cover the menu 177 entry point, which must stop at every failed gate."""
+    """Cover the menu 187 entry point, which must stop at every failed gate."""
 
     @staticmethod
     def _patched(manager: OrgConfigMigrationManager) -> dict[str, Any]:
-        """Return the patch handles that isolate the menu 177 flow from the API."""
+        """Return the patch handles that isolate the menu 187 flow from the API."""
         # WHY: one builder keeps the six patches identical across the tests below.
         return {
             "preview": patch.object(manager, "_display_bundle_preview"),  # WHY: silence the printer.
@@ -579,7 +579,7 @@ class TestImportConfig:
             patch.object(manager, "_select_import_file", return_value=""),
             patch.object(manager, "_load_and_validate_bundle") as load_spy,
         ):
-            manager.import_config()  # WHY: drive the menu 177 flow.
+            manager.import_config()  # WHY: drive the whole menu 187 flow.
         assert load_spy.call_count == 0  # WHY: nothing to load means nothing to read.
 
     def test_an_invalid_bundle_stops_the_flow(self, manager: OrgConfigMigrationManager) -> None:
@@ -589,7 +589,7 @@ class TestImportConfig:
             patch.object(manager, "_load_and_validate_bundle", return_value=None),
             patch.object(manager, "_prompt_dry_run") as dry_run_spy,
         ):
-            manager.import_config()  # WHY: drive the menu 177 flow.
+            manager.import_config()  # WHY: drive the whole menu 187 flow.
         assert dry_run_spy.call_count == 0  # WHY: an unusable bundle ends the flow.
 
     def test_a_cancelled_confirmation_stops_the_flow(self, manager: OrgConfigMigrationManager) -> None:
@@ -604,7 +604,7 @@ class TestImportConfig:
             handles["fetch"] as fetch_spy,
             handles["execute"] as execute_spy,
         ):
-            manager.import_config()  # WHY: drive the menu 177 flow.
+            manager.import_config()  # WHY: drive the whole menu 187 flow.
         assert fetch_spy.call_count == 0  # WHY: a cancel must stop before any read.
         assert execute_spy.call_count == 0  # WHY: a cancel must stop before any write.
 
@@ -621,7 +621,7 @@ class TestImportConfig:
             handles["execute"] as execute_spy,
             handles["report"],
         ):
-            manager.import_config()  # WHY: drive the menu 177 flow.
+            manager.import_config()  # WHY: drive the whole menu 187 flow.
         confirm_spy.assert_not_called()  # WHY: a preview needs no typed word.
         assert execute_spy.call_args[0][1] is True  # WHY: the dry-run flag must reach the driver.
 
@@ -638,7 +638,7 @@ class TestImportConfig:
             handles["execute"] as execute_spy,
             handles["report"] as report_spy,
         ):
-            manager.import_config()  # WHY: drive the menu 177 flow.
+            manager.import_config()  # WHY: drive the whole menu 187 flow.
         fetch_spy.assert_called_once()  # WHY: the conflict cache must load first.
         assert execute_spy.call_args[0][1] is False  # WHY: a live run must clear the dry-run flag.
         report_spy.assert_called_once()  # WHY: the operator always gets a summary.
