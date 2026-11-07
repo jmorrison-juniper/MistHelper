@@ -19,6 +19,7 @@ Layout history:
 from __future__ import annotations
 
 import csv
+import json
 import logging
 import socket
 import threading
@@ -52,18 +53,29 @@ def free_port() -> int:
 
 
 @pytest.fixture(scope="module")
-def results_portal(tmp_path_factory: pytest.TempPathFactory) -> Iterator[str]:
+def results_data_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """Keep synthetic result files accessible to file-lifetime tests."""
+    return tmp_path_factory.mktemp("results_data")
+
+
+@pytest.fixture(scope="module")
+def results_portal(results_data_dir: Path) -> Iterator[str]:
     """Serve a portal whose data directory holds one result file."""
     from werkzeug.serving import make_server
 
     from web_portal.app import WebPortalApp
     from web_portal.menu_registry import build_static_menu_actions
 
-    data_dir: Path = tmp_path_factory.mktemp("results_data")
+    data_dir = results_data_dir
     with open(data_dir / "Findings.csv", "w", encoding="utf-8", newline="") as handle:
         writer = csv.writer(handle)
         writer.writerow(COLUMNS)
         writer.writerows(ROWS)
+    nested_data_dir = data_dir / "mib_generator"  # Keep the JSON fixture below the result root.
+    nested_data_dir.mkdir()  # Make the nested result directory without using a live export.
+    for filename in ("allowlist.json", "oid_assignments.json"):
+        with open(nested_data_dir / filename, "w", encoding="utf-8") as handle:
+            json.dump({"preview": filename}, handle)  # Identify the selected synthetic result.
 
     app = WebPortalApp.create_app(apisession=None, menu_actions=build_static_menu_actions(), org_id="test-org")
     app.config["TESTING"] = True
@@ -105,6 +117,49 @@ def column_values(page: Any, index: int) -> list[str]:
 
 class TestTheResultsTableReplacesTheLog:
     """Prove the table answers the questions a log cannot."""
+
+    def test_missing_selection_clears_previous_rows(self, results_page: Any, results_data_dir: Path) -> None:
+        """Pending and missing previews must never retain the previous result."""
+        assert "Denver Branch" in results_page.locator("#resultsBody").inner_text()
+        removed_file = results_data_dir / "mib_generator" / "removed.json"
+        removed_file.write_text('{"preview":"removed"}', encoding="utf-8")
+        results_page.evaluate("() => OperationResults.showForRun(['Findings.csv', 'mib_generator/removed.json'])")
+        results_page.wait_for_function(
+            "() => document.getElementById('resultsBody').innerText.includes('Denver Branch')"
+        )
+        removed_file.unlink()  # Remove only the named temporary fixture after the output list exists.
+        results_page.evaluate("""() => {
+                const fetchResult = window.fetch.bind(window);
+                window.fetch = (url, options) => String(url).includes('removed.json')
+                    ? new Promise(resolve => {
+                        window.releaseMissingPreview = () => resolve(fetchResult(url, options));
+                    }) : fetchResult(url, options);
+                OperationResults.selectFile('mib_generator/removed.json');
+            }""")
+        assert results_page.locator("#resultsBody").inner_text() == ""
+        assert results_page.locator("#resultsHead").inner_text() == ""
+        assert results_page.locator("#resultsPagination").is_hidden()
+        results_page.evaluate("() => window.releaseMissingPreview()")
+        results_page.wait_for_function(
+            "() => document.getElementById('resultsBody').innerText.includes('File not found')"
+        )
+        assert results_page.locator("#resultsBody").inner_text() == "Could not read the results: File not found"
+        assert "Denver Branch" not in results_page.locator("#resultsBody").inner_text()
+
+    @pytest.mark.parametrize("filename", ["allowlist.json", "oid_assignments.json"])
+    def test_nested_json_result_renders_in_the_results_panel(self, results_page: Any, filename: str) -> None:
+        """A nested JSON result must render through the existing Results workflow."""
+        logger.info("Previewing the nested synthetic JSON result")  # Mark the browser action.
+        results_page.evaluate("(filename) => OperationResults.showForRun(['mib_generator/' + filename])", filename)
+        results_page.wait_for_function(
+            "(filename) => document.getElementById('resultsBody').innerText.includes(filename)",
+            arg=filename,
+            timeout=READY_TIMEOUT_MS,
+        )
+        preview_text = results_page.locator("#resultsBody").inner_text()
+        assert filename in preview_text
+        assert "Could not read the results" not in preview_text
+        logger.debug("Nested JSON result preview: %s", preview_text)  # Record the rendered result.
 
     def test_the_table_paints_every_row(self, results_page: Any) -> None:
         """A table with no row proves nothing below, so measure it first."""
