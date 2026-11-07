@@ -166,5 +166,11 @@ def test_configured_capture_service_override_remains_usable(
 
     assert status == 202  # An explicit service can still accept the isolated request.
     assert response.get_json()["capture_id"] == "capture-4653"  # Confirm the override served the request.
-    assert configured_service.request is not None  # Prove the route used the configured service.
+    assert configured_service.request == {  # Prove the route used the configured service.
+        "run_id": "run-1",  # Keep the requested run bound to the override.
+        "org_id": "org-1",  # Preserve the organization scope.
+        "site_id": "site-1",  # Preserve the site scope.
+        "device_ids": ["device-1"],  # Preserve the requested devices.
+        "user_id": "offline@example.test",  # Preserve the test actor identity.
+    }  # Match the complete capture call.
     assert FakeDatabaseRouter.instances == []  # Do not build request storage for an explicit override.
