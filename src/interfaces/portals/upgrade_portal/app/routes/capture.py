@@ -1148,9 +1148,35 @@ def capture_pre_upgrade_for_run(run_id: str) -> tuple[Response, int]:
     """
     # WHY: Fetch the CaptureService from Flask config seam; returns None if not wired yet
     capture_service = current_app.config.get(CAPTURE_SERVICE_KEY)
-    if capture_service is None:  # CaptureService not wired, cannot proceed with capture
-        logger.error("capture: CaptureService not wired for run %s", run_id)  # Name the missing dependency
-        return json_error(SERVER_ERROR_STATUS, "service_unavailable", "CaptureService not available")
+    if capture_service is None:  # The default service needs authenticated request resources.
+        from ..wiring import (  # Keep route imports lazy because wiring installs the route modules.
+            PortalAuthenticationError,  # Map missing login to a safe refusal.
+            PortalDependencyError,  # Map missing request resources to service unavailable.
+            request_dependencies,  # Resolve the shared authenticated request graph.
+        )
+
+        try:  # Resolve the service only after the request passes the route's session guard.
+            dependencies = request_dependencies()  # Authenticate before storage construction.
+            capture_service = dependencies.mutation_services.resolve(CAPTURE_SERVICE_KEY)  # Reuse request ownership.
+        except PortalAuthenticationError:  # Missing identity must stop before capture work.
+            logger.warning(  # Record the refusal without exposing session data.
+                "capture: request has no authenticated Mist session for run %s", run_id
+            )  # Preserve the run context for support.
+            return json_error(  # Refuse before storage construction.
+                401,  # Preserve the authentication status.
+                "not_authenticated",  # Give clients a stable refusal code.
+                "The operator session is unavailable.",  # Explain the refusal without session details.
+            )  # Keep the error response shape.
+        except PortalDependencyError:  # Missing storage or service code must fail closed.
+            logger.error(  # Record the safe dependency failure.
+                "capture: request resources are unavailable for run %s", run_id
+            )  # Preserve the run context for support.
+            return json_error(503, "service_unavailable", "CaptureService not available")  # Refuse before capture work.
+    if capture_service is None:  # A broken configuration cannot report a successful capture.
+        logger.error("capture: CaptureService not wired for run %s", run_id)  # Name the missing dependency.
+        return json_error(  # Refuse the request if neither the override nor provider supplied a service.
+            SERVER_ERROR_STATUS, "service_unavailable", "CaptureService not available"
+        )  # Keep the existing unavailable response.
 
     # WHY: Read the request body to extract device IDs and optional parameters (tier, etc)
     body = request_body()
