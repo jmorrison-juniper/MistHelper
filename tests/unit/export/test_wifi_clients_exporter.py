@@ -13,6 +13,7 @@ import csv  # WHY: build CSV placeholders inline to verify _write_no_data_placeh
 import logging  # WHY: caplog level filtering after print() → logger migration in wifi_clients_exporter.
 import os  # WHY: mkdir/write temporary fixture files under tests/fixtures for CSV-backed helpers.
 from pathlib import Path  # WHY: build platform-neutral tmp_path strings for CSV fixtures under pytest tmp_path.
+from types import SimpleNamespace  # WHY: model valid first pages without a live Mist response.
 from typing import Any  # WHY: annotate mixed-value dict literals so mypy --strict accepts str/int co-occurrence.
 from unittest.mock import MagicMock  # WHY: MagicMock stubs give per-test isolation without ceremony.
 
@@ -63,14 +64,20 @@ def test_execute_exports_merged_records() -> None:
     exporter.data_processing_utils.flatten_nested_fields.side_effect = lambda value: value
     exporter.data_processing_utils.escape_multiline.side_effect = lambda value: value
 
-    client_response = MagicMock()
-    session_response = MagicMock()
+    client_response = SimpleNamespace(
+        status_code=200,
+        raw_data='[{"mac":"aa:bb:cc:dd:ee:ff","hostname":"client-1"}]',
+        data=[{"mac": "aa:bb:cc:dd:ee:ff", "hostname": "client-1"}],
+        next=None,
+    )  # WHY: expose one valid client page to the native pagination contract.
+    session_response = SimpleNamespace(
+        status_code=200,
+        raw_data='[{"mac":"aa:bb:cc:dd:ee:ff","start_time":10}]',
+        data=[{"mac": "aa:bb:cc:dd:ee:ff", "start_time": 10}],
+        next=None,
+    )  # WHY: expose one valid session page to the native pagination contract.
     mistapi_module.api.v1.sites.clients.searchSiteWirelessClients.return_value = client_response
     mistapi_module.api.v1.sites.clients.searchSiteWirelessClientSessions.return_value = session_response
-    mistapi_module.get_all.side_effect = [
-        [{"mac": "aa:bb:cc:dd:ee:ff", "hostname": "client-1"}],
-        [{"mac": "aa:bb:cc:dd:ee:ff", "start_time": 10}],
-    ]
 
     os.makedirs("tests/fixtures", exist_ok=True)
     with open("tests/fixtures/site_list.csv", "w", encoding="utf-8") as file_handle:
@@ -118,7 +125,9 @@ def test_execute_writes_placeholder_when_no_data(tmp_path: Path) -> None:
     exporter, _prompt_utils, mistapi_module, data_exporter = _build_exporter()
     placeholder_path = tmp_path / "SiteWiFiClients.CSV"  # WHY: placeholder written via file_path_utils.get_csv_path
     exporter.file_path_utils.get_csv_path.return_value = str(placeholder_path)  # WHY: route path for both lookups
-    mistapi_module.get_all.return_value = []  # WHY: empty datasets trigger the placeholder branch
+    empty_page = SimpleNamespace(status_code=200, raw_data="[]", data=[], next=None)  # WHY: model a valid empty page.
+    mistapi_module.api.v1.sites.clients.searchSiteWirelessClients.return_value = empty_page
+    mistapi_module.api.v1.sites.clients.searchSiteWirelessClientSessions.return_value = empty_page
 
     exporter.execute(site_id="site-1")
 
@@ -136,10 +145,18 @@ def test_execute_logs_empty_merge_when_no_enriched_rows(tmp_path: Path, caplog) 
     exporter.data_processing_utils.flatten_nested_fields.side_effect = lambda value: value
     exporter.data_processing_utils.escape_multiline.side_effect = lambda value: value
     # WHY: return sessions with no MAC (skipped) and no clients — merge produces zero rows.
-    mistapi_module.get_all.side_effect = [
-        [],  # WHY: zero clients so client_pass produces empty enriched list
-        [{"start_time": 1}],  # WHY: session without MAC — orphan pass skips it
-    ]
+    mistapi_module.api.v1.sites.clients.searchSiteWirelessClients.return_value = SimpleNamespace(
+        status_code=200,
+        raw_data="[]",
+        data=[],
+        next=None,
+    )  # WHY: zero clients so the client pass produces an empty list.
+    mistapi_module.api.v1.sites.clients.searchSiteWirelessClientSessions.return_value = SimpleNamespace(
+        status_code=200,
+        raw_data='[{"start_time":1}]',
+        data=[{"start_time": 1}],
+        next=None,
+    )  # WHY: a session without a MAC is skipped by the orphan pass.
 
     with caplog.at_level(logging.INFO, logger="root"):
         exporter.execute(site_id="site-1")

@@ -69,7 +69,7 @@ def test_failed_wifi_response_does_not_write_empty_placeholder(
         exporter.execute(site_id="site-1")  # WHY: exercise the real top-level failure path.
 
     assert not output_path.exists(), message  # WHY: failed responses must not create success-shaped output.
-    mistapi_module.get_all.assert_not_called()  # WHY: pagination must not process an untrusted response.
+    mistapi_module.get_next.assert_not_called()  # WHY: pagination must not process an untrusted response.
     assert any(  # WHY: failure stays visible to the operator.
         "Failed to fetch WiFi data" in record.getMessage() for record in caplog.records
     )
@@ -85,7 +85,12 @@ def test_valid_empty_wifi_response_keeps_placeholder_behavior(tmp_path: Path) ->
         raw_data="[]",
         data=[],
     )
-    mistapi_module.get_all.return_value = []  # WHY: both WiFi datasets are empty after pagination.
+    mistapi_module.api.v1.sites.clients.searchSiteWirelessClientSessions.return_value = SimpleNamespace(
+        status_code=200,
+        raw_data="[]",
+        data=[],
+        next=None,
+    )  # WHY: the companion dataset also returns a controlled valid-empty page.
     output_path = tmp_path / "SiteWiFiClients.CSV"  # WHY: verify the existing placeholder remains supported.
     exporter.file_path_utils.get_csv_path.side_effect = [  # WHY: separate lookup and output paths.
         str(site_list_path),
