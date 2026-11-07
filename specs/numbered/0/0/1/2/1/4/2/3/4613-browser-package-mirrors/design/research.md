@@ -93,3 +93,32 @@ No workflow or test source changes are part of this revision. PR #4208's upload 
 At review, live main identified `d29cfd3984bcd00074d7b73c6d786be9edce249c`, beyond this branch's evaluated base.
 This revision therefore does not establish current-base merge readiness.
 Any later candidate needs applicable local validation and exact-head required checks, including CodeQL.
+
+## Additional existing-run sample
+
+The later review examined both prepared runs and all five completed main runs in the latest 30-run listing.
+The listing covered `2026-11-06T18:47Z` through `2026-11-07T00:03Z`. The sample includes the canceled main run.
+Every sampled run used attempt one. No new trigger or retry collected these observations.
+
+| Main web-portal job | Browser installation | Apt payload | Selected result |
+| - | - | - | - |
+| [128117991608](https://github.com/jmorrison-juniper/MistHelper/actions/runs/42282055206/job/128117991608) | 19 seconds | 21.1 MB in 0 seconds, 68.2 MB/s | 453 passed, 721.06 seconds |
+| [128135545418](https://github.com/jmorrison-juniper/MistHelper/actions/runs/42288182543/job/128135545418) | 529 seconds | 21.1 MB in 510 seconds, 41.4 kB/s | Canceled, no final summary |
+| [128153384917](https://github.com/jmorrison-juniper/MistHelper/actions/runs/42293210843/job/128153384917) | 19 seconds | 21.1 MB in 1 second, 22.5 MB/s | 453 passed, 656.48 seconds |
+| [128165880649](https://github.com/jmorrison-juniper/MistHelper/actions/runs/42296900715/job/128165880649) | 19 seconds | 21.1 MB in 1 second, 18.4 MB/s | 453 passed, 676.35 seconds |
+| [128229301847](https://github.com/jmorrison-juniper/MistHelper/actions/runs/42315841241/job/128229301847) | 20 seconds | 21.1 MB in 0 seconds, 74.0 MB/s | 453 passed, 717.99 seconds |
+
+These main jobs had no preparation step and downloaded packages through Azure HTTP.
+The canceled job's annotation explicitly identifies the 20-minute job limit.
+It collected 453 cases after the 529-second installation. Its package indexes transferred in one second.
+This independently repeats the setup-budget failure without identifying a stalled test.
+
+All six prepared matrix installations across the two evaluated PR runs completed in 19–23 seconds.
+Their payload summaries report 1–3 seconds. Only two jobs ran the web-portal selection.
+The other jobs ran different selections and are not additional web-portal samples.
+
+Four main comparisons were as fast as, or faster than, the prepared installations.
+Azure therefore shows intermittent behavior, not consistently slow transfers.
+This short observational sample uses different commits, runner allocations, and network conditions. Matrix jobs share temporal conditions.
+Apt rounds durations. Its `0s` does not mean zero transfer time.
+The sample supports no failure probability, universal speed improvement, or future reliability guarantee.
