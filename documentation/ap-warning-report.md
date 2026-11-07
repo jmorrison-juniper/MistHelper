@@ -85,3 +85,8 @@ The portal marks this result as completed and states that no output file exists.
 A failed source page, invalid required data, or failed output write produces an explicit error.
 The report completes every required source read before it writes output.
 It does not export a partially read organization.
+
+## Related runbook
+
+The NOC runbook for this report is [AP_WARNING_REPORT_MENU_307](noc-runbooks/AP_WARNING_REPORT_MENU_307.md). It gives the API call sequence and the filter rules.
+
