@@ -8,11 +8,20 @@ No live Mist connection was made. No source screenshots were downloaded or copie
 | Evidence | Revision or state |
 | --- | --- |
 | MistHelper `origin/main` and local `HEAD` | `296b977e28be50cd9ddcca57c46b35bb029afe27` |
+| Live `origin/main` after serial branch update | `ba5d60a63ae154a5b86263b2baba8802acc7e7b1` |
+| Rebased PR worktree before this evidence refresh | `b8583b6b3bdee2399408d93dc248c548c7a776a8` |
+| Remote PR head before this evidence refresh | `5bdf622c0e09447824f408e0291a99937f516758` |
 | Source public default branch | `main`, `d9be92f91e0f74fef711e9f7d30b59bf71ffdf4c` |
 | MistHelper issue [#4224](https://github.com/jmorrison-juniper/MistHelper/issues/4224) | OPEN when inspected |
 | MistHelper PR [#4226](https://github.com/jmorrison-juniper/MistHelper/pull/4226) | MERGED, 2026-10-26T20:35:38Z |
 | PR merge commit | `14ac97942f1e575edd7dbf8c4bbfb517ef58fad3` |
 | Installed SDK | `mistapi` 0.64.1 |
+
+On 2026-11-06, the branch was rebased onto the live default branch.
+The converter package, shared portal registration and template, converter tests, and OpenAPI
+file did not change since the recorded target revision. The dependency manifests changed, but
+both root requirements files still pin `mistapi==0.64.1`. Other portal tests changed outside
+the converter test paths. This refresh does not claim that unrelated paths stayed unchanged.
 
 The current issue requests the full workflow. The merged PR delivered only a conservative offline DNS component.
 The PR's spec and task record are historical evidence, not evidence of complete implementation.
