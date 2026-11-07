@@ -632,6 +632,67 @@ class TestRetrySiteScope:
         assert harness.store.records[operation_id]["state"] == "planned"
         assert harness.locks.values == {}
 
+    @pytest.mark.parametrize("changed_scope", ["missing", "duplicate", "nonce"])
+    def test_narrowed_context_refuses_submission(self, harness: ControlsHarness, changed_scope: str) -> None:
+        """Reject a changed effective context after saving a retry with one planned site."""
+        harness.store.write_run(settled_record(harness))
+        opened = post_json(harness, f"/api/org-upgrades/{RETRY_ID}/retry")
+        assert opened.status_code == 200
+        saved = post_json(harness, OPTIONS_API, {**PLAN_CHOICES, "selected_types": ["ap"]})
+        assert saved.status_code == 200, saved.get_json()
+        operation_id = saved_operation_id(harness)
+        assert harness.store.records[operation_id]["site_ids"] == [SITE_TWO]
+        assert harness.operator.selected_site_ids == (harness.site_one, SITE_TWO)
+        if changed_scope == "nonce":
+            with harness.client.session_transaction() as browser_session:
+                browser_session[org_upgrade.OPTIONS_NONCE_SESSION_KEY] = "changed-narrowed-nonce"
+        else:
+            harness.operator.selected_site_ids = (
+                (harness.site_one,)
+                if changed_scope == "missing"
+                else (
+                    SITE_TWO,
+                    SITE_TWO,
+                )
+            )
+        before = deepcopy(harness.store.records)
+        started = post_json(harness, SUBMIT_API, {"confirmation": "CONFIRM"})
+        assert started.status_code == 409, started.get_json()
+        expected_code = (
+            org_upgrade.upgrade_routes.PRE_CAPTURE_MISSING_CODE
+            if changed_scope == "missing"
+            else org_upgrade.ALREADY_SUBMITTED
+        )
+        assert error_code(started) == expected_code
+        assert harness.store.records == before
+        assert harness.locks.values == {}
+
+    @pytest.mark.parametrize("foreign_field", ["owner", "org_id"])
+    def test_narrowed_plan_requires_ownership(
+        self, harness: ControlsHarness, monkeypatch: pytest.MonkeyPatch, foreign_field: str
+    ) -> None:
+        """Reject a foreign saved retry without changing records, acquiring locks, or submitting firmware."""
+        harness.store.write_run(settled_record(harness))
+        opened = post_json(harness, f"/api/org-upgrades/{RETRY_ID}/retry")
+        assert opened.status_code == 200
+        saved = post_json(harness, OPTIONS_API, {**PLAN_CHOICES, "selected_types": ["ap"]})
+        assert saved.status_code == 200, saved.get_json()
+        operation_id = saved_operation_id(harness)
+        assert harness.store.records[operation_id]["site_ids"] == [SITE_TWO]
+        foreign = identity.build_owner("another.operator@juniper.net", identity.issue_browser_id())
+        harness.store.records[operation_id][foreign_field] = foreign.key if foreign_field == "owner" else SITE_TWO
+        before = deepcopy(harness.store.records)
+        service = harness.client.application.config["AGGREGATE_UPGRADE_SERVICE"]
+        submit = Mock(side_effect=AssertionError("A foreign operation must not submit firmware."))
+        monkeypatch.setattr(service, "submit", submit)
+        started = post_json(harness, SUBMIT_API, {"confirmation": "CONFIRM"})
+        assert started.status_code == 409, started.get_json()
+        assert error_code(started) == org_upgrade.ALREADY_SUBMITTED
+        submit.assert_not_called()
+        assert harness.store.records == before
+        assert harness.locks.values == {}
+        assert harness.operator.selected_site_ids == (harness.site_one, SITE_TWO)
+
     @pytest.mark.parametrize("planned_site", [False, True], ids=["excluded-site-busy", "planned-site-busy"])
     def test_only_effective_site_locks_can_block_submission(self, harness: ControlsHarness, planned_site: bool) -> None:
         """An unrelated site lock cannot block a narrowed retry, but a planned-site lock still blocks it."""
