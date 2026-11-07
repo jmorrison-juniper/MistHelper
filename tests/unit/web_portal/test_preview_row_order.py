@@ -241,7 +241,12 @@ class TestNestedResultPreviews:  # Keep issue #4036 fixtures separate from the s
 
     @pytest.mark.parametrize("failure", [PermissionError, OSError, RuntimeError])
     def test_json_read_error_hides_internal_path(
-        self, portal: FlaskClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: type[Exception]
+        self,
+        portal: FlaskClient,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        failure: type[Exception],
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         """Exceptions must not disclose a result's internal location."""
         target = tmp_path / "allowlist.json"
@@ -256,6 +261,11 @@ class TestNestedResultPreviews:  # Keep issue #4036 fixtures separate from the s
         assert response.status_code == 400
         assert response.get_json() == {"error": "Failed to read JSON: Cannot read the selected result file."}
         assert str(tmp_path) not in response.get_data(as_text=True)
+        records = [record for record in caplog.records if record.message.startswith("JSON preview failed")]
+        assert len(records) == 1
+        assert records[0].exc_info is not None
+        assert isinstance(records[0].exc_info[1], failure)
+        assert str(target) in str(records[0].exc_info[1])
 
     @pytest.fixture
     def portal(self, tmp_path: Path) -> Iterator[FlaskClient]:  # Give each case its own data directory.

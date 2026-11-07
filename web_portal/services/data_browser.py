@@ -243,8 +243,8 @@ class DataBrowserService:
         except json.JSONDecodeError as error:
             logger.error("JSON preview parsing failed: %s", error)
             return {"error": f"Failed to read JSON: {error.msg} (line {error.lineno}, column {error.colno})"}
-        except Exception:
-            logger.exception("JSON preview failed while reading the selected result.")
+        except Exception as error:
+            logger.error("JSON preview failed while reading the selected result.", exc_info=error)
             return {"error": "Failed to read JSON: Cannot read the selected result file."}
         return self._paginate_json_data(data, page, per_page, search)
 
