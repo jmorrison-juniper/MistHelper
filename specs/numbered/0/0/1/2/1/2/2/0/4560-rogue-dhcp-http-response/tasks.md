@@ -28,6 +28,9 @@ No shared infrastructure changes are required.
 - [X] T003 [P] [US1] Add the issue-specific release note to `changelog.d/issue-4560-rogue-dhcp-http-503-data.md`. (delivered: `changelog.d/issue-4560-rogue-dhcp-http-503-data.md`)
 - [X] T004 [US1] Run the focused scanner tests, Ruff, and Black checks for the changed Python files. (verified: pytest, Ruff, and Black passed)
 - [X] T005 [US1] Replace opaque full-pagination with per-page status and body validation. Add regression tests for a later 503 body, a malformed later body, and a successful later page. (verified: 43 scanner tests pass, and the installed SDK reproducer rejects the later 503 offline)
+- [X] T006 [US1] Add operator-report tests for failed site names, incomplete exports, and incomplete empty results. (delivered: `tests/unit/security/rogue_dhcp/test_operation.py`)
+- [X] T007 [US1] Mark partial exports as incomplete and do not report an incomplete empty scan as clean. (delivered: `src/operations/protection/security/rogue_dhcp/operation.py`)
+- [X] T008 [US1] Run the focused scanner and operation tests. (verified: 58 tests passed)
 
 ## Dependencies & Execution Order
 
@@ -50,8 +53,9 @@ No shared infrastructure changes are required.
 
 1. Add tests that fail for 4xx and 5xx responses.
 2. Reject failed SDK responses before pagination.
-3. Add the issue-specific release note.
-4. Run the focused tests and Python quality checks.
+3. Add tests that reject misleading messages for incomplete scans.
+4. Mark partial findings as partial and suppress clean results when sites failed.
+5. Add the issue-specific release note and run focused tests and Python quality checks.
 
 ## Notes
 
