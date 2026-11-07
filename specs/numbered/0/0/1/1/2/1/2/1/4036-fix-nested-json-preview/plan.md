@@ -92,4 +92,11 @@ changelog.d/
 
 ## Complexity Tracking
 
+## Acceptance follow-up
+
+JSON read exceptions must not disclose internal paths. Preserve JSON parser reasons and positions, but return a fixed message for other read failures.
+Log exception details on the server.
+Clear old Results rows, headings, and page controls before a new preview request.
+Verify path-bearing exceptions through Flask and a removed temporary result through Playwright.
+
 No new subsystem, dependency, or public endpoint is planned. The only recorded structural debt is the existing process-folder child count described in the Constitution Check.

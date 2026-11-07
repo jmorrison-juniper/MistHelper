@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-06
 
-**Status**: Specified
+**Status**: Acceptance verified with synthetic fixtures
 
 **Input**: Specify the confirmed remaining JSON result preview defect in issue #4036. Do not implement application changes in this task.
 
@@ -119,4 +119,6 @@ The portal continues to deny access to files outside the permitted output direct
 - The correction changes request selection only. It does not change result discovery, JSON parsing rules, deployment, or merge state.
 - Before later implementation, confirm the reproduction against current main and inspect current open pull request ownership for every intended file.
 - If reproduction fails or ownership overlaps, preserve evidence and report the blocker. Do not open a placeholder pull request.
-- A later validated fix must link issue #4036 to its pull request and include `Closes #4036`. Do not merge it.
+- The validated fix must link issue #4036 to its pull request and include `Closes #4036`.
+- Acceptance verification removes the feature-specific merge hold. It does not authorize this agent to merge or enable auto-merge.
+- A separately approved merge requires current main, the serial merge slot, and every required check on the latest commit.

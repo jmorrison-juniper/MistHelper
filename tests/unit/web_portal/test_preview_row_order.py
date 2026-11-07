@@ -218,6 +218,45 @@ class TestTheRouteCarriesTheSort:
 class TestNestedResultPreviews:  # Keep issue #4036 fixtures separate from the sort fixtures.
     """Verify file selection through real requests without Mist credentials."""
 
+    @pytest.mark.parametrize(
+        ("content", "expected"),
+        [
+            ({}, {"columns": ["Key", "Value"], "rows": [], "total_rows": 0}),
+            ([], {"columns": ["Content"], "rows": [["[]"]], "total_rows": 2}),
+            (
+                [{"name": "beta"}, {"name": "Alpha"}],
+                {"columns": ["name"], "rows": [["beta"], ["Alpha"]], "total_rows": 2},
+            ),
+        ],
+    )
+    def test_nested_json_shapes(self, portal: FlaskClient, tmp_path: Path, content: object, expected: dict) -> None:
+        """Keep the existing array and empty-result representations."""
+        target = tmp_path / "nested" / "result.json"
+        target.parent.mkdir()
+        target.write_text(json.dumps(content), encoding="utf-8")
+        response = portal.get("/api/data/preview/nested%2Fresult.json")
+        assert response.status_code == 200
+        for field, value in expected.items():
+            assert response.get_json()[field] == value
+
+    @pytest.mark.parametrize("failure", [PermissionError, OSError, RuntimeError])
+    def test_json_read_error_hides_internal_path(
+        self, portal: FlaskClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: type[Exception]
+    ) -> None:
+        """Exceptions must not disclose a result's internal location."""
+        target = tmp_path / "allowlist.json"
+        target.write_text('{"scope":"synthetic"}', encoding="utf-8")
+
+        def denied_read(*args: object, **kwargs: object) -> None:
+            """Inject a read failure containing the private file location."""
+            raise failure(f"Cannot read {target}")
+
+        monkeypatch.setattr("web_portal.services.data_browser.open", denied_read, raising=False)
+        response = portal.get("/api/data/preview/allowlist.json")
+        assert response.status_code == 400
+        assert response.get_json() == {"error": "Failed to read JSON: Cannot read the selected result file."}
+        assert str(tmp_path) not in response.get_data(as_text=True)
+
     @pytest.fixture
     def portal(self, tmp_path: Path) -> Iterator[FlaskClient]:  # Give each case its own data directory.
         """Create an isolated portal and release its workers after each test."""
