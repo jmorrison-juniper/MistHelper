@@ -124,7 +124,10 @@ class RogueDhcpScanOperation:
             logger.info("Rogue DHCP source %s returned records=%d", source, count)
         logger.info("Rogue DHCP scan queried sites=%d failed=%d", len(result.sites_queried), len(result.sites_failed))
         if result.sites_failed:  # WHY: a failed site means the result is incomplete, so name every one.
-            logger.warning("Rogue DHCP scan could not read these sites: %s", ", ".join(result.sites_failed))
+            logger.warning(
+                "Rogue DHCP scan is incomplete because it could not read these sites: %s",  # WHY: state scan limits.
+                ", ".join(result.sites_failed),  # WHY: name every site with missing data.
+            )
         logger.info("%s", result.marvis_scope_note)  # WHY: state the Marvis scope limit on every run.
 
     @staticmethod
@@ -160,12 +163,23 @@ class RogueDhcpScanOperation:
         scanner = RogueDhcpScanner(cls._resolve_session(), org_id, window_days=window_days)  # WHY: build the scan.
         result = scanner.scan()  # WHY: run the whole fan-out and merge.
         cls._print_report(result)  # WHY: the operator reads the table before any file exists.
-        if not result.findings:  # WHY: an empty result writes nothing, per the specification.
-            logger.info("%s", NO_FINDING_MESSAGE)  # WHY: a clear message beats an empty file.
+        if not result.findings:  # WHY: an empty result never writes an export.
+            if not result.sites_failed:  # WHY: only a complete scan can support a clean result.
+                logger.info("%s", NO_FINDING_MESSAGE)  # WHY: a clear message beats an empty file.
             return  # WHY: leave the data directory untouched when the scan found nothing.
         if not cls._export(result):  # WHY: a failed write must reach the operator, not only the log file.
             logger.error(  # WHY: a failed write must reach the operator, not only the log file.
                 "Rogue DHCP scan could not write %s, so the console table holds the only copy", EXPORT_FILENAME
             )
             return  # WHY: do not report success after a failed write.
-        logger.info("Completed the rogue DHCP scan and wrote results to %s", EXPORT_FILENAME)  # WHY: closing report.
+        if result.sites_failed:  # WHY: successful export does not make partial scan data complete.
+            logger.warning(
+                "Rogue DHCP scan wrote partial results to %s; failed sites=%d",  # WHY: avoid a false success report.
+                EXPORT_FILENAME,  # WHY: identify the file with partial findings.
+                len(result.sites_failed),  # WHY: quantify the failed site reads.
+            )
+        else:  # WHY: only a complete scan can report full completion.
+            logger.info(  # WHY: report that every requested site was read and the results were written.
+                "Completed the rogue DHCP scan and wrote results to %s",  # WHY: state the complete outcome.
+                EXPORT_FILENAME,  # WHY: name the output file.
+            )
