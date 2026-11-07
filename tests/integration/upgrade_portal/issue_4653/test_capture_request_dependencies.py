@@ -138,7 +138,9 @@ def test_capture_refuses_missing_operator_before_storage(
     application = build_application(monkeypatch, None)
     response, status = invoke_capture(application)
     assert status == 401
-    assert response.get_json()["error"]["code"] == "not_authenticated"
+    assert response.get_json() == {
+        "error": {"code": "not_authenticated", "message": "The operator session is unavailable."}
+    }
     assert FakeDatabaseRouter.instances == []
     assert FakeCaptureService.instances == []
 
@@ -151,7 +153,7 @@ def test_capture_refuses_database_failure_before_service_work(
     application = build_application(monkeypatch, operator, FailingDatabaseRouter)
     response, status = invoke_capture(application)
     assert status == 503
-    assert response.get_json()["error"]["code"] == "service_unavailable"
+    assert response.get_json() == {"error": {"code": "service_unavailable", "message": "CaptureService not available"}}
     assert FakeCaptureService.instances == []
 
 

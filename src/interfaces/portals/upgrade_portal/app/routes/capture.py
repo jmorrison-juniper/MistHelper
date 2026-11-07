@@ -1129,6 +1129,28 @@ def refusal_for(load: Any) -> tuple[Response, int]:
 # --------------------------------------------------------------------------
 
 
+def resolve_pre_upgrade_capture_service(run_id: str) -> tuple[Any, tuple[Response, int] | None]:
+    """Resolve the capture service or preserve the request dependency refusal."""
+    capture_service = current_app.config.get(CAPTURE_SERVICE_KEY)  # Preserve configured overrides.
+    if capture_service is not None:  # Overrides do not need request storage.
+        return capture_service, None  # Keep the configured service unchanged.
+    from ..wiring import (  # Wiring installs routes, so the import must remain lazy.
+        PortalAuthenticationError,
+        PortalDependencyError,
+        request_dependencies,
+    )
+
+    try:  # Authentication must precede request storage construction.
+        dependencies = request_dependencies()  # Use the authenticated request graph.
+        return dependencies.mutation_services.resolve(CAPTURE_SERVICE_KEY), None  # Preserve request ownership.
+    except PortalAuthenticationError:  # Refuse before capture work without session details.
+        logger.warning("capture: request has no authenticated Mist session for run %s", run_id)
+        return None, json_error(401, "not_authenticated", "The operator session is unavailable.")
+    except PortalDependencyError:  # Missing resources must retain the safe refusal.
+        logger.error("capture: request resources are unavailable for run %s", run_id)
+        return None, json_error(503, "service_unavailable", "CaptureService not available")
+
+
 @capture_bp.post(CAPTURE_PRE_UPGRADE_PATH)  # Phase 2 T-006: POST /api/runs/<run_id>/capture/start
 @identity.require_session  # Ensure operator is authenticated
 def capture_pre_upgrade_for_run(run_id: str) -> tuple[Response, int]:
@@ -1146,32 +1168,9 @@ def capture_pre_upgrade_for_run(run_id: str) -> tuple[Response, int]:
     Returns:
         JSON response with capture_id and status, or error refusal.
     """
-    # WHY: Fetch the CaptureService from Flask config seam; returns None if not wired yet
-    capture_service = current_app.config.get(CAPTURE_SERVICE_KEY)
-    if capture_service is None:  # The default service needs authenticated request resources.
-        from ..wiring import (  # Keep route imports lazy because wiring installs the route modules.
-            PortalAuthenticationError,  # Map missing login to a safe refusal.
-            PortalDependencyError,  # Map missing request resources to service unavailable.
-            request_dependencies,  # Resolve the shared authenticated request graph.
-        )
-
-        try:  # Resolve the service only after the request passes the route's session guard.
-            dependencies = request_dependencies()  # Authenticate before storage construction.
-            capture_service = dependencies.mutation_services.resolve(CAPTURE_SERVICE_KEY)  # Reuse request ownership.
-        except PortalAuthenticationError:  # Missing identity must stop before capture work.
-            logger.warning(  # Record the refusal without exposing session data.
-                "capture: request has no authenticated Mist session for run %s", run_id
-            )  # Preserve the run context for support.
-            return json_error(  # Refuse before storage construction.
-                401,  # Preserve the authentication status.
-                "not_authenticated",  # Give clients a stable refusal code.
-                "The operator session is unavailable.",  # Explain the refusal without session details.
-            )  # Keep the error response shape.
-        except PortalDependencyError:  # Missing storage or service code must fail closed.
-            logger.error(  # Record the safe dependency failure.
-                "capture: request resources are unavailable for run %s", run_id
-            )  # Preserve the run context for support.
-            return json_error(503, "service_unavailable", "CaptureService not available")  # Refuse before capture work.
+    capture_service, refusal = resolve_pre_upgrade_capture_service(run_id)  # Separate dependency refusal decisions.
+    if refusal is not None:  # The provider already supplied the exact safe response.
+        return refusal  # Stop before body validation or capture work.
     if capture_service is None:  # A broken configuration cannot report a successful capture.
         logger.error("capture: CaptureService not wired for run %s", run_id)  # Name the missing dependency.
         return json_error(  # Refuse the request if neither the override nor provider supplied a service.
