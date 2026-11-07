@@ -31,7 +31,7 @@ No shared infrastructure is required.
 
 ## Phase 4: Polish & Cross-Cutting Concerns
 
-- [ ] T004 Run focused tests in `tests/unit/test_rate_limiting.py` and applicable Ruff, Black, mypy, complexity, Bandit, STE, process-folder, and test-quality checks for `src/foundation/support/utils/rate_limiting.py`, `tests/unit/test_rate_limiting.py`, `changelog.d/issue-4611-rate-limit-refresh-http-status.md`, and `specs/numbered/0/0/1/2/1/4/2/1/4611-rate-limit-refresh/`. Record exact results.
+- [X] T004 Run focused tests in `tests/unit/test_rate_limiting.py` and applicable Ruff, Black, mypy, complexity, Bandit, STE, process-folder, and test-quality checks for `src/foundation/support/utils/rate_limiting.py`, `tests/unit/test_rate_limiting.py`, `changelog.d/issue-4611-rate-limit-refresh-http-status.md`, and `specs/numbered/0/0/1/2/1/4/2/1/4611-rate-limit-refresh/`. Record exact results. (delivered: tests/unit/test_rate_limiting.py)
 
 ## Dependencies & Execution Order
 
