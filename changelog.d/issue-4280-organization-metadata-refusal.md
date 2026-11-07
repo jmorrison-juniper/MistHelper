@@ -1,4 +1,4 @@
 ### Organization metadata refusal
 
-- **Fixed**: Organization name lookup now rejects unsuccessful HTTP results and reports failure without response contents.
-  Refused or invalid metadata retains the explicit `Unknown` label. Issue #4280.
+- **Fixed**: The export checks the HTTP result before it accepts an organization name.
+  The manager logs the status, not response contents. It uses `Unknown` after refusal or invalid metadata. Issue #4280.

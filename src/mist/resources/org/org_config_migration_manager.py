@@ -1,10 +1,10 @@
-"""Cross-org WAN/gateway config migration manager extracted from MistHelper menu 176/177.
+"""Cross-org WAN/gateway config migration manager used by MistHelper menu 58 and 187.
 
 Provides :class:`OrgConfigMigrationManager`, the class that owns the export and
-import workflows for cross-org migration bundles. The exporter (menu 176)
+import workflows for cross-org migration bundles. The exporter (menu 58)
 serializes six config types (networks, services, VPNs, gateway templates,
 device profiles, service policies) into a timestamped JSON bundle. The
-importer (menu 177) loads a bundle into a destination org with conflict
+importer (menu 187) loads a bundle into a destination org with conflict
 detection (name-match plus IP/subnet overlap) and dependency-ordered
 creation with cross-reference ID remapping.
 
@@ -31,8 +31,8 @@ class OrgConfigMigrationManager:  # Org config migration manager.
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     """Export and import org-level WAN/gateway configuration for cross-org migration.
 
-    Menu 176: Export 6 config types to a timestamped JSON bundle.
-    Menu 177: Import a bundle into the current org with conflict detection.
+    Menu 58: Export 6 config types to a timestamped JSON bundle.
+    Menu 187: Import a bundle into the current org with conflict detection.
     """
 
     STRIP_FIELDS = frozenset(  # Fields to strip before import
@@ -101,8 +101,8 @@ class OrgConfigMigrationManager:  # Org config migration manager.
     # ------------------------------------------------------------------
 
     def export_config(self) -> None:  # Export the org config.
-        """Menu 176: Export org WAN/gateway config to a JSON bundle."""
-        logger.info("Menu 176: Starting org config export")  # Log operation start for traceability
+        """Menu 58: Export org WAN/gateway config to a JSON bundle."""
+        logger.info("Menu 58: Starting org config export")  # Log operation start for traceability
         self.org_id = self.org_id_fn()  # Resolve current org ID from cache or user prompt
         org_name = self._get_org_name()  # Fetch human-readable org name for bundle metadata
         logger.warning("\n  Exporting WAN/Gateway config from org: %s", org_name)  # User feedback
@@ -111,7 +111,7 @@ class OrgConfigMigrationManager:  # Org config migration manager.
         bundle = self._build_export_bundle(results, org_name)  # Wrap results with metadata
         filepath = self._save_bundle_to_file(bundle, org_name)  # Write bundle to data/ directory
         self._display_export_summary(bundle, filepath)  # Show summary table to user
-        logger.info("Menu 176: Export complete, saved to %s", filepath)  # Log completion
+        logger.info("Menu 58: Export complete, saved to %s", filepath)  # Log completion
 
     def _fetch_all_types(self) -> dict[str, list]:  # type: ignore[type-arg]
         """Fetch all 6 config types and return as a keyed dictionary."""
@@ -122,8 +122,8 @@ class OrgConfigMigrationManager:  # Org config migration manager.
         return results  # Return complete results dict
 
     def import_config(self) -> None:  # Import the org config.
-        """Menu 177: Import a JSON bundle into the current org."""
-        logger.info("Menu 177: Starting org config import")  # Log operation start for traceability
+        """Menu 187: Import a JSON bundle into the current org."""
+        logger.info("Menu 187: Starting org config import")  # Log operation start for traceability
         self.org_id = self.org_id_fn()  # Resolve destination org ID from cache or user prompt
         filepath = self._select_import_file()  # Let user pick from available export bundles
         if not filepath:  # User cancelled or no files found
@@ -141,7 +141,7 @@ class OrgConfigMigrationManager:  # Org config migration manager.
         self._fetch_existing_objects()  # Cache destination org objects for conflict detection
         results = self._execute_import(bundle, dry_run)  # Run the dependency-ordered import
         self._display_import_report(results)  # Show final summary of what happened
-        logger.info("Menu 177: Import complete, %s objects processed", len(results))  # Log completion
+        logger.info("Menu 187: Import complete, %s objects processed", len(results))  # Log completion
 
     # ------------------------------------------------------------------
     # Export helpers
@@ -258,7 +258,7 @@ class OrgConfigMigrationManager:  # Org config migration manager.
         if not files:  # No export bundles exist yet
             logger.warning(
                 "\n  No export bundles found in data/ directory."
-                "\n  Run Menu 176 first to export config from a source org."
+                "\n  Run Menu 58 first to export config from a source org."
             )  # User feedback + guidance
             return ""  # Signal no selection made
 

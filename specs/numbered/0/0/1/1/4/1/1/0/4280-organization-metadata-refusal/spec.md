@@ -23,7 +23,7 @@ The export must retain the `Unknown` label without accepting refused metadata.
 **Acceptance Scenarios**:
 
 1. **Given** a refused request with a name, **When** the lookup completes, **Then** it returns `Unknown` and warns with the status.
-2. **Given** a refusal body with sensitive text, **When** the lookup reports failure, **Then** no log contains that text.
+2. **Given** a refusal body with sensitive text, **When** the lookup reports failure, **Then** the manager log contains no such text.
 3. **Given** a server failure, **When** the lookup completes, **Then** it returns `Unknown` and reports failure.
 
 ### User Story 2 - Preserve a successful name (Priority: P2)
@@ -52,10 +52,10 @@ The operator must retain the organization name from a successful metadata reques
 
 - **FR-001**: Accept names only from successful HTTP results with object metadata, no error field, and a nonblank text name.
 - **FR-002**: Return the exact label `Unknown` for refused or invalid results.
-- **FR-003**: Report refusal with organization context and HTTP status, without response bodies or returned metadata.
+- **FR-003**: Report refusal with organization context and HTTP status, without response bodies or returned metadata in manager logs.
 - **FR-004**: Report request exceptions without exception text that can contain sensitive response contents.
 - **FR-005**: Preserve export metadata structure and the existing import confirmation boundary.
-- **FR-006**: Use offline tests only. Do not execute menus 176 or 177 against production.
+- **FR-006**: Use offline tests only. Do not execute menus 58 or 187 against production.
 - **FR-007**: Require human review before merge. Do not enable automatic merge or close issues #4280 and #4277.
 
 ### Mist Cloud Transport Requirements
@@ -74,7 +74,7 @@ Mock the SDK endpoint and use native SDK response objects to verify HTTP status 
 ### Measurable Outcomes
 
 - **SC-001**: Every tested refusal returns `Unknown` and produces a warning with its HTTP status.
-- **SC-002**: No captured lookup log contains the sensitive marker from a response or exception.
+- **SC-002**: No captured manager log contains the sensitive marker from a response or exception.
 - **SC-003**: Every tested valid name reaches the export metadata unchanged.
 - **SC-004**: All verification requests remain offline, with zero production configuration changes.
 
@@ -85,3 +85,4 @@ Mock the SDK endpoint and use native SDK response objects to verify HTTP status 
 - Unknown metadata remains nonfatal, as the existing lookup contract requires.
 - Only the metadata lookup changes. Configuration writes, file selection, and typed confirmations remain unchanged.
 - The tracked feature selector belongs to another feature and remains unchanged. Commands use an explicit feature directory.
+- The Mist API SDK can print refused response data to its direct console output when SDK debug output is enabled. This feature does not change the process-wide SDK debug setting.
