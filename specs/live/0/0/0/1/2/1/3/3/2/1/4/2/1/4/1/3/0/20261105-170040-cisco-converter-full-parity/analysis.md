@@ -127,8 +127,9 @@ Native PowerShell checks remain unresolved.
 Product lint, type, full-suite, security, publication, deployment, and cloud-write checks do not apply to this documentation-only change.
 No claim is made that future full-parity tests pass.
 
-The default branch advanced during authoring.
-The final comparison uses the newer revision recorded in `design/research.md`.
+The default branch advanced during initial authoring.
+That comparison used the revision recorded in `design/research.md`.
+The serial branch update below records the current base.
 Its converter, portal, converter tests, and OpenAPI content match the initially inspected revision.
 The final combined baseline and process-structure command passed all 74 tests.
 The final independent audit passed after the default-branch update.
@@ -143,8 +144,9 @@ Never treat this analysis as production authorization.
 ## Readiness Discovery Follow-up
 
 The source revision remains `d9be92f91e0f74fef711e9f7d30b59bf71ffdf4c`.
-The isolated branch remains at `296b977e28be50cd9ddcca57c46b35bb029afe27`.
-The target default branch advanced to `5d444bda23ea50de131d67b6e6fcf37055adfa77` during this follow-up.
+At this readiness discovery follow-up, the isolated branch was at
+`296b977e28be50cd9ddcca57c46b35bb029afe27`.
+The target default branch was `5d444bda23ea50de131d67b6e6fcf37055adfa77`.
 The inspected converter, portal, OpenAPI, Compose, dependency, and converter-test paths had no changes between those revisions.
 This comparison does not establish that other paths are unchanged.
 
@@ -168,3 +170,40 @@ Follow-up validation after the documentation updates:
 
 The native PowerShell route test remains unavailable.
 No live cloud operation, source application execution, product change, commit, or publication was performed.
+
+## Serial Branch Update
+
+The ownership assessment confirmed that PR #4596 remained open and assigned to
+`jmorrison-juniper`. Its scoped handover permits specification ownership only.
+Issue #4224 remained open and unassigned. PR #4226 remained merged.
+No other open pull request overlapped this record's ten files.
+The handover did not authorize implementation, shared portal edits, source reuse,
+cloud operations, or merge.
+
+The serial branch-update slot refreshed `origin/main` to
+`ba5d60a63ae154a5b86263b2baba8802acc7e7b1`.
+The remote PR branch still pointed to
+`5bdf622c0e09447824f408e0291a99937f516758`.
+The local branch rebased onto the refreshed base without conflicts.
+The rebased feature commit was `b8583b6b3bdee2399408d93dc248c548c7a776a8`.
+The converter package, shared portal registration and template, converter unit and
+integration tests, OpenAPI file, and dependency SDK pin did not change.
+Both root requirements files still pin `mistapi==0.64.1`.
+The checked task list remains unchanged, with all 33 implementation tasks unchecked.
+
+### Validation after the serial rebase
+
+| Command | Result |
+| --- | --- |
+| `python3 scripts/bootstrap_worktree.py` | Passed. The locked environment installed 172 packages, checked all package records, and installed Chromium. |
+| `.venv/bin/python -m pytest -q tests/unit/gateway/overrides/test_cisco_config_converter.py tests/integration/web_portal/cisco_config_converter/test_routes.py tests/e2e/web_portal/test_portal_smoke.py tests/guardrails/test_process_folder_structure.py` | 74 passed with two existing pytest deprecation warnings. |
+| `find "$FEATURE" -name '*.md' -print0 \| xargs -0 .venv/bin/ste-linter --config .ste-linter.toml --min-score 80 --quiet` | Ten Markdown files read, zero skipped. Each scored 93 or higher. |
+| `.venv/bin/markdown-link-check --root . "$FEATURE"` | Ten tracked Markdown files scanned, zero broken links. |
+| `.venv/bin/python -c 'from importlib.metadata import version; print("mistapi=" + version("mistapi"))'` | Reported `mistapi=0.64.1`. |
+| `pwsh -NoProfile -File .specify/scripts/powershell/check-prerequisites.ps1 -Json -RequireSpec -RequireTasks -IncludeTasks` | Not run. The host reports `pwsh: command not found`, so native Spec Kit prerequisite validation remains unresolved. |
+| `speckit-task-audit --help` | Not run. The command reports `speckit-task-audit: command not found`. The prior task audit remains recorded above. |
+
+This validation confirms the existing converter baseline and documentation links.
+It does not prove full converter parity or authorize implementation or cloud use.
+Legal review, verified API payloads and mappings, integration ownership, cloud-owner
+approval, operator authorization, storage and recovery design, and full-parity tests remain open.
