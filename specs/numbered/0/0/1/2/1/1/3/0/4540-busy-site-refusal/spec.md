@@ -23,11 +23,14 @@ An operator starts an organization upgrade on sites that another operation alrea
 1. **Given** an operation holds a selected site, **When** the operator starts another operation for that site, **Then** the portal shows the held site and owning operation.
 2. **Given** the refusal includes a valid progress path, **When** the portal displays the refusal, **Then** it provides one link to the owning operation.
 3. **Given** the second start is refused, **When** the refusal appears, **Then** the confirmation field is cleared and the start control stays disabled.
+4. **Given** a start request is in flight, **When** the operator submits the form again, **Then** the portal sends no second request.
+5. **Given** a busy-site refusal has no useful message, **When** the portal shows the refusal, **Then** it provides clear guidance without showing the internal error code.
 
 ## Edge Cases
 
 - If the refusal does not include a valid progress path, the portal shows the refusal without a link.
 - The portal does not display the internal refusal code as operator-facing text.
+- If the server omits a useful refusal message, the portal shows a clear general message.
 
 ## Requirements
 
@@ -38,6 +41,7 @@ An operator starts an organization upgrade on sites that another operation alrea
 - **FR-003**: The portal MUST link only to a valid progress path for the owning operation.
 - **FR-004**: The portal MUST clear the confirmation field and keep the refused start closed.
 - **FR-005**: The portal MUST NOT show the internal refusal code as the refusal message.
+- **FR-006**: The portal MUST show clear guidance when the busy-site refusal message is missing or contains only the internal code.
 
 ## Success Criteria
 
@@ -47,6 +51,7 @@ An operator starts an organization upgrade on sites that another operation alrea
 - **SC-002**: Every refusal with a valid progress path displays exactly one link to the owning operation.
 - **SC-003**: Every refused start leaves its confirmation field empty and its start control disabled.
 - **SC-004**: No busy-site refusal displays its internal error code to the operator.
+- **SC-005**: A repeated submit while one start request is in flight sends no additional request.
 
 ## Assumptions
 
