@@ -99,3 +99,17 @@ A direct comparison with the committed JSON reader confirms that this response r
 This repair preserves that existing behavior and does not change JSON representation rules.
 This reassessment does not authorize this agent to merge or enable auto-merge.
 A separately approved merge still requires current main, the serial merge slot, and every required check on the latest commit.
+
+## Coverage Shard Failure
+
+Run `42339040613` tested head `8126f033350b61452ea518737dd94cccbc400a79`.
+The root-and-contracts shard passed 2,255 tests but failed the blind broad exception handler guard.
+The guard reported `web_portal/services/data_browser.py: 1 -> 2`.
+The coverage gate failed because the shard failed, not because a measured coverage percentage was too low.
+
+The JSON read handler logged the active exception without binding it.
+The repair binds the exception and passes it explicitly as `exc_info` to the server logger.
+The client response remains fixed and does not disclose internal paths.
+Regression assertions verify that the server log retains the exception type and private path.
+The complete blind-handler guard and focused preview tests pass locally.
+No baseline or guard threshold changed.
