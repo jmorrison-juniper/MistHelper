@@ -185,6 +185,8 @@ class PortalRequestMutationServices:
         try:  # Convert construction faults into a fail-closed dependency response.
             if service_key == UPGRADE_SERVICE_KEY:  # Firmware work needs the signed-in Mist session.
                 service = self._build_upgrade_service()  # Bind firmware writes to this request.
+            elif service_key == CAPTURE_SERVICE_KEY:  # Capture reads and writes need the same request resources.
+                service = self._build_capture_service()  # Bind capture work to this request.
             elif service_key == COMPARISON_SERVICE_KEY:  # Approval needs request-owned persistence.
                 service = self._build_comparison_service()  # Bind comparison writes to this request.
             else:  # No route may request an unregistered mutation service.
@@ -206,6 +208,19 @@ class PortalRequestMutationServices:
             mist_client=self._cloud_session,  # Never borrow a process-wide Mist client.
             db_router=self._database_router,  # Never reuse another request's database router.
             audit_logger=audit_logger,  # Preserve durable audit records.
+        )
+
+    def _build_capture_service(self) -> Any:
+        """Create the capture service with request-bound cloud, storage, and audit resources."""
+        service_type = self._service_type(  # Load capture logic only when needed.
+            CAPTURE_SERVICE_MODULE,  # Select the capture service module.
+            "CaptureService",  # Select the service constructor.
+        )
+        audit_logger = AuditLogger(db_router=self._database_router)  # Keep capture audit writes request-bound.
+        return service_type(  # Capture reads use one authenticated request graph.
+            mist_client=self._cloud_session,  # Borrow the signed-in operator session.
+            db_router=self._database_router,  # Use the router that request teardown owns.
+            audit_logger=audit_logger,  # Preserve the existing capture audit boundary.
         )
 
     def _build_comparison_service(self) -> Any:
@@ -1732,7 +1747,7 @@ def start_upgrade_run(record: dict[str, Any]) -> None:
 
 
 def _install_capture_service(app: Flask) -> None:
-    """Install the CaptureService into the Flask config seam for Phase 2 T-006.
+    """Install CaptureService when startup has complete dependencies.
 
     Why:
         Phase 2 T-006 requires pre-upgrade and post-upgrade device captures.
@@ -1740,6 +1755,7 @@ def _install_capture_service(app: Flask) -> None:
         network policies, radio settings, and LLDP neighbors from Mist API and
         store them in ArangoDB. The route handler reads the service from the
         Flask config seam (CAPTURE_SERVICE_KEY) so tests can inject a mock.
+        Normal startup defers construction to the authenticated request provider.
 
         The service needs access to: mist_client (to call Mist API), db_router
         (to persist captures to ArangoDB), and audit_logger (to log all capture
@@ -1759,13 +1775,16 @@ def _install_capture_service(app: Flask) -> None:
             )  # Only pre-phase2 deployments lack this
             return
 
+        mist_client = app.config.get("MIST_CLIENT")  # Read only an explicitly configured Mist client.
+        db_router = app.config.get("DB_ROUTER")  # Read only an explicitly configured database router.
+        if mist_client is None or db_router is None:  # Normal startup receives these resources per request.
+            logger.info(  # Report the deferred service decision.
+                "wiring: defer CaptureService construction until an authenticated request"
+            )  # The request provider builds the service after authentication.
+            return  # Do not install a service with missing collaborators.
+
         # WHY: Get the audit logger instance to log capture operations before/after
         audit_logger = logging.getLogger("upgrade_portal.audit")  # The audit logger for compliance and debugging
-
-        # WHY: Read the Mist client from the Flask config without inventing an unsupported client
-        mist_client = app.config.get("MIST_CLIENT")  # May have been injected by a test
-        # WHY: Read the database router from the Flask config because its constructor requires DatabaseConfig
-        db_router = app.config.get("DB_ROUTER")  # May have been injected by a test
 
         # WHY: Instantiate the CaptureService with all required collaborators
         CaptureService = getattr(

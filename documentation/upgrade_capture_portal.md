@@ -94,11 +94,12 @@ reads no store.
 Normal startup installs request resource construction rules. The new provider
 opens no additional external connection at startup.
 
-An authenticated request can create one real database router when a future
-integration calls the provider. Request teardown closes that owned router. It
-does not close the operator Mist session.
+The pre-upgrade capture route builds its default service after authentication.
+It uses the operator Mist session and the database router owned by that request.
+Request teardown closes the router. It does not close the operator Mist session.
+An explicit `CAPTURE_SERVICE` override remains available for tests.
 
-Services and mutation routes remain unchanged for #3977.
+Firmware upgrade routes remain unchanged for #3977.
 
 ## Start the portal
 
