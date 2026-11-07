@@ -105,7 +105,9 @@ class TestCaptureCleanupCompletion:
         case.api.add_override("/pcaps?limit=1", data=rows)  # Keep production capture inspection active.
         UtilityExecution(case.context).run()  # Complete cleanup before inspecting terminal state.
         assert [(call.method, call.uri) for call in case.api.calls] == [("GET", f"{case.path}?limit=1")]
-        assert case.sink.finished == [(SessionState.STOPPED, "The operator stopped the session.")]
+        assert case.sink.finished == [
+            (SessionState.FAILED, "The utility cleanup failed. Read the portal log for the cause.")
+        ]
         case.client.close.assert_called_once_with()  # Close the owned stream even without a matching capture.
 
     @pytest.mark.parametrize("stage", ["GET", "DELETE", "close"])

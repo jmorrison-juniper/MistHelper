@@ -28,4 +28,4 @@ class FallbackSettings:
 
     def limits_payload(self) -> dict[str, int]:
         """Return zero live limits and the established capture limit."""
-        return {"max_sessions": 0, "idle_seconds": 0, "capture_seconds": 60}  # Preserve the public shape.
+        return {"max_sessions": 0, "idle_seconds": 0, "capture_seconds": 3600}  # Preserve the public shape and limit.

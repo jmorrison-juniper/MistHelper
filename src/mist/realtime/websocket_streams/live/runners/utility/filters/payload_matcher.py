@@ -26,14 +26,16 @@ class UtilityPayloadMatcher:
             raise StreamRequestError("bad_request", "The utility trigger answer has no match value.")
         return value
 
-    def matches(self, payloads: list[object], value: str) -> list[object]:
-        """Return matching content in arrival order."""
-        matches: list[object] = []
-        for payload in payloads:
-            content = self.content(payload, value)
-            if content is not None:
-                matches.append(content)
-        return matches
+    def is_capture_end(self, payload: object, value: str) -> bool:
+        """Return whether one event ends the selected capture."""
+        event = self._event_payload(payload)  # Read the event body without changing its shape.
+        return (
+            self._channel in self._CAPTURE_CHANNELS
+            and isinstance(event, Mapping)
+            and event.get("capture_id") == value
+            and "pcap_dict" in event
+            and event.get("pcap_dict") is None
+        )  # Only a matching null packet ends a capture.
 
     def content(self, payload: object, value: str) -> object | None:
         """Return visible content when one payload matches."""

@@ -30,9 +30,11 @@ class CaptureStopper:
         """Stop a matching site capture."""
         logger.emit(logging.INFO, "site_capture_stop_check")
         response = self._apisession.mist_get(f"/api/v1/sites/{site_id}/pcaps?limit=1")
-        if not self._has_capture(response, capture_id):
-            return False
-        self._apisession.mist_delete(f"/api/v1/sites/{site_id}/pcaps")
+        if not self._successful(response) or not self._has_capture(response, capture_id):
+            return False  # Never delete a different or unconfirmed capture.
+        deleted = self._apisession.mist_delete(f"/api/v1/sites/{site_id}/pcaps")
+        if not self._successful(deleted):
+            return False  # Do not report an unconfirmed stop.
         logger.emit(logging.DEBUG, "site_capture_stopped", {"status": "stopped"})
         return True
 
@@ -40,11 +42,19 @@ class CaptureStopper:
         """Stop a matching organization capture."""
         logger.emit(logging.INFO, "org_capture_stop_check")
         response = self._apisession.mist_get(f"/api/v1/orgs/{org_id}/pcaps?limit=1")
-        if not self._has_capture(response, capture_id):
-            return False
-        self._apisession.mist_delete(f"/api/v1/orgs/{org_id}/pcaps")
+        if not self._successful(response) or not self._has_capture(response, capture_id):
+            return False  # Never delete a different or unconfirmed capture.
+        deleted = self._apisession.mist_delete(f"/api/v1/orgs/{org_id}/pcaps")
+        if not self._successful(deleted):
+            return False  # Do not report an unconfirmed stop.
         logger.emit(logging.DEBUG, "org_capture_stopped", {"status": "stopped"})
         return True
+
+    @staticmethod
+    def _successful(response: object) -> bool:
+        """Return whether one API response confirms success."""
+        status = getattr(response, "status_code", 0)  # Read the SDK response status only.
+        return isinstance(status, int) and 200 <= status < 300  # Accept only successful HTTP responses.
 
     @staticmethod
     def _has_capture(response: object, capture_id: str) -> bool:
@@ -80,7 +90,8 @@ class CaptureCleanup:
                 self._context.request.target("site_id"), capture_id
             ),
         }
-        actions[scope]()
+        if not actions[scope]():
+            raise RuntimeError("The capture stop could not be confirmed.")  # Fail cleanup before finalization.
 
     def _target(self) -> tuple[str, str] | None:
         """Return the stopped capture scope and identifier."""

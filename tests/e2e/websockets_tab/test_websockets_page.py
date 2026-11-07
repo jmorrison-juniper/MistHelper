@@ -70,6 +70,7 @@ class FakeWebSocketServices:
         """Build the fake catalog and empty session store."""
         self._lock = threading.Lock()  # Protect sessions while timer threads write.
         self._sessions: dict[str, BrowserSession] = {}  # Active and ended sessions.
+        self.start_bodies: list[dict[str, object]] = []  # Record submitted forms for local browser assertions.
         self._next_id = 1  # Deterministic identifiers make tests easy to read.
         self.shell_inputs: list[dict[str, object]] = []  # Record shell input forms.
         self.terminal_data: dict[str, bytes] = {}  # Store fake terminal byte history by session.
@@ -104,6 +105,7 @@ class FakeWebSocketServices:
         """Clear sessions before one browser story."""
         with self._lock:  # Timer threads can still be ending.
             self._sessions.clear()  # Remove all prior sessions.
+            self.start_bodies.clear()  # Remove prior submitted forms.
             self._next_id = 1  # Reset identifiers.
             self.shell_inputs.clear()  # Remove prior shell input.
             self.terminal_data.clear()  # Remove prior terminal bytes.
@@ -119,7 +121,7 @@ class FakeWebSocketServices:
             "ready": True,
             "reason": None,
             "flags": {},
-            "limits": {"max_sessions": 2, "idle_seconds": 120, "capture_seconds": 60},
+            "limits": {"max_sessions": 2, "idle_seconds": 120, "capture_seconds": 3600},
             "channels": [self._channel(), self._device_command_channel()],
             "utilities": self._utilities(),
         }  # Catalog.
@@ -129,6 +131,7 @@ class FakeWebSocketServices:
         if not isinstance(body, dict):  # The page must send a JSON object.
             return {"error": "The request body is not valid.", "code": "bad_request"}  # Defensive answer.
         with self._lock:  # Session limit and identifier allocation must be atomic.
+            self.start_bodies.append(dict(body))  # Keep the exact request fields submitted by the browser.
             live = [session.title for session in self._sessions.values() if session.live]  # Current live titles.
             if len(live) >= 2:  # The fake limit is two sessions.
                 from src.mist.realtime.websocket_streams.intake.fields.error import (
@@ -454,10 +457,20 @@ class FakeWebSocketServices:
             "maximum": 10000,
             "default": 5,
         }  # Packets.
+        duration = {
+            "name": "duration",
+            "label": "Duration",
+            "kind": "integer",
+            "minimum": 60,
+            "maximum": 3600,
+            "default": 60,
+        }  # Capture duration.
         return [
             self._utility("ex.ping", "Ping", "read", "lines", targets, [host, count], False),
             self._utility("ex.retrieveRoutes", "Routes", "read", "lines", targets, [], False),
-            self._utility("ex.remotePcap", "Packet capture", "capture", "packets", targets, [packets], False),
+            self._utility(
+                "ex.remotePcap", "Packet capture", "capture", "packets", targets, [duration, packets], False
+            ),  # Capture fields.
             self._utility("ex.bouncePort", "Bounce port", "change", "lines", targets, [], True),
             self._utility("ex.shell", "Remote shell", "shell", "terminal", targets, [], False),
         ]  # Utilities.
@@ -720,15 +733,21 @@ def test_command_output_preserves_boundaries_and_filter_matches(page: Any, webso
     assert shot.exists()  # The screenshot was written.
 
 
-def test_packet_capture_journey(page: Any, websocket_portal: str) -> None:
+def test_packet_capture_journey(page: Any, websocket_portal: str, fake_services: FakeWebSocketServices) -> None:
     """US3: a capture shows packet rows."""
     open_page(page, websocket_portal)  # Load the WebSockets page.
     page.get_by_test_id("ws-catalog-entry-ex.remotePcap").click()  # Choose capture.
     choose_device(page)  # Choose site and device.
+    duration = page.get_by_test_id("ws-field-duration")  # Read the capture duration field.
+    assert duration.get_attribute("min") == "60"  # Show the minimum duration in the form.
+    assert duration.get_attribute("max") == "3600"  # Show the maximum duration in the form.
+    duration.fill("120")  # Select a duration above the old fixed limit.
     page.get_by_test_id("ws-start-button").click()  # Start capture.
     page.locator('[data-testid="ws-output"]').get_by_text("source destination tcp").nth(0).wait_for(
         timeout=READY_TIMEOUT_MS
     )  # Packet.
+    submitted = fake_services.start_bodies[-1]["parameters"]  # Read the local fake request.
+    assert isinstance(submitted, dict) and submitted["duration"] == "120"  # HTML submits numeric fields as text.
     shot = screenshot(page, "03-packet-capture.png")  # Keep evidence.
     assert shot.exists()  # The screenshot was written.
 

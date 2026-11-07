@@ -45,6 +45,20 @@ def test_utility_catalog_fields_and_outputs() -> None:
     )  # Shell entries use terminal output.
 
 
+def test_packet_capture_catalog_has_bounded_duration_field() -> None:
+    """Every packet capture field uses the reviewed duration range and default."""
+    captures = [entry for entry in UtilityCatalog().entries() if entry.safety is Safety.CAPTURE]  # Select captures.
+    assert captures  # The catalog must contain packet captures.
+    for capture in captures:  # Check every capture entry, not one representative.
+        duration = next(field for field in capture.fields if field.name == "duration")  # Find its SDK field.
+        assert (duration.label, duration.minimum, duration.maximum, duration.default) == (
+            "Duration",
+            60,
+            3600,
+            60,
+        )  # Keep the operator field bounded.
+
+
 def test_utility_catalog_unknown_key_returns_none() -> None:
     """An unknown utility key returns None."""
     assert UtilityCatalog().get("ex.clearMacTable") is None  # REST-only calls must stay excluded.

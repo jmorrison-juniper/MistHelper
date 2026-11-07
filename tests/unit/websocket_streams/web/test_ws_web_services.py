@@ -337,7 +337,7 @@ def test_fallback_not_ready_parts_have_limits() -> None:
     """Fallback parts provide limits when settings cannot import."""
     service = WebSocketServiceFactory.not_ready("The engine is loading.")  # Build fallback services.
     payload = service.catalog.payload()  # Read the safe catalog payload.
-    assert payload["limits"]["capture_seconds"] == 60  # Fallback settings keep capture seconds.
+    assert payload["limits"]["capture_seconds"] == 3600  # Fallback settings publish the capture maximum.
 
 
 def test_stop_for_app_calls_shutdown() -> None:

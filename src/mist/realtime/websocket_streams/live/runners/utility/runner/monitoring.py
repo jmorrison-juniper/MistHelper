@@ -96,11 +96,18 @@ class UtilityStreamMonitor:
         last_output = started
         first_deadline = started + timing.first_output_seconds
         total_deadline = started + timing.total_seconds
-        while not self._done(first_deadline, total_deadline, last_output, timing):
+        capture = self._is_capture()  # Capture rules ignore first-output and quiet limits.
+        while not self._done(first_deadline, total_deadline, last_output, timing, capture):
+            if filterer.capture_ended:  # The matching end event can arrive before the start response.
+                self.context.state.capture_ended = True  # Preserve completion for the finalizer.
+                return  # Do not read beyond the matching capture end.
             event = self._next(client)
             if event is None:
                 continue
             last_output = self._handle(event, filterer, last_output)
+            if filterer.capture_ended:  # A matching null packet ends this capture.
+                self.context.state.capture_ended = True  # Preserve completion for the finalizer.
+                return  # Do not emit a null packet or read later records.
 
     def _next(self, client: StreamClient) -> Mapping[str, object] | None:
         """Read one event or absorb a local stop close."""
@@ -111,11 +118,15 @@ class UtilityStreamMonitor:
                 return None
             raise
 
-    def _done(self, first_deadline: float, total_deadline: float, last_output: float, timing: UtilityTiming) -> bool:
+    def _done(
+        self, first_deadline: float, total_deadline: float, last_output: float, timing: UtilityTiming, capture: bool
+    ) -> bool:
         """Return whether a run limit ended the monitor."""
         now = time.monotonic()
         if self.context.state.stopping.is_set() or now >= total_deadline:
             return True
+        if capture:  # Quiet periods do not end a packet capture.
+            return False  # The selected total duration remains authoritative.
         if self.context.state.output_count == 0:
             return now >= first_deadline
         return now - last_output >= timing.quiet_seconds
@@ -127,6 +138,11 @@ class UtilityStreamMonitor:
         for match in matches:
             self.output.emit(match)
         return time.monotonic() if matches else previous
+
+    def _is_capture(self) -> bool:
+        """Return whether this monitor owns a packet capture channel."""
+        trigger = self.context.state.trigger
+        return trigger is not None and trigger.listen.channel in {"site_pcaps", "org_pcaps"}  # Match capture scopes.
 
 
 @dataclass(slots=True)
@@ -140,6 +156,9 @@ class UtilityFinisher:
         if self.context.state.stopping.is_set():
             self.stopped()
             return
+        if self.context.state.capture_ended:  # A null end event is valid even without a packet.
+            self.context.sink.finish(SessionState.FINISHED, "The packet capture ended.")  # Report normal completion.
+            return  # Do not classify an empty capture as a timeout.
         if self.context.state.output_count == 0:
             reason = (
                 "The device sent no output before the time limit. "

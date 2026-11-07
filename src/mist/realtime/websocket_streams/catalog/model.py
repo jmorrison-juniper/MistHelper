@@ -39,7 +39,7 @@ class Safety(StrEnum):
     """The safety class of one device utility."""
 
     READ = "read"  # The utility reads state and changes nothing.
-    CAPTURE = "capture"  # The utility captures packets for 60 seconds at most.
+    CAPTURE = "capture"  # The utility captures packets for up to 3,600 seconds.
     CHANGE = "change"  # The utility changes device state. PORTAL_WS_ENABLE_CHANGES unlocks it.
     SHELL = "shell"  # The utility opens a remote shell. PORTAL_WS_ENABLE_SHELL unlocks it.
 

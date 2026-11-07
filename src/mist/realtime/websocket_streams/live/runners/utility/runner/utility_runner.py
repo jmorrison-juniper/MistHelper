@@ -49,6 +49,7 @@ class RunnerState:
     stopping: threading.Event = field(default_factory=threading.Event)
     live_marked: bool = False
     output_count: int = 0
+    capture_ended: bool = False
     client: StreamClient | None = None
     trigger: UtilityRequest | None = None
     answer: Mapping[str, object] | None = None

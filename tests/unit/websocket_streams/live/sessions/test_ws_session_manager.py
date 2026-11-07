@@ -453,6 +453,37 @@ class TestStreamSessionManager:
         assert shell.terminal.expires_mono == clock.value + 1800.0  # The monotonic expiry uses settings.
         assert shell.terminal.expires_at.endswith("Z")  # The public expiry is UTC text.
 
+    def test_capture_life_limit_uses_duration_without_extending_other_sessions(self) -> None:
+        """Allow long captures while keeping the configured life limit for other sessions."""
+        clock = FakeClock()  # Use deterministic session ages.
+        factory = FakeFactory()  # Keep runner actions local.
+        settings = StreamSettings(max_sessions=2, idle_seconds=10000)  # Keep idle cleanup outside this test.
+        manager = StreamSessionManager(settings, factory, clock)  # Build the production manager.
+        capture = manager.session(str(manager.start(self._capture_request(3600))["session_id"]))  # Start capture.
+        utility = manager.session(str(manager.start(self._utility_request())["session_id"]))  # Start read utility.
+        clock.value = 1801.0  # Pass the generic 1800-second life limit.
+        manager.reap_once()  # Apply the configured life rule.
+        assert capture.state is SessionState.CONNECTING  # The selected capture duration remains active.
+        assert utility.state is SessionState.STOPPING  # Other utilities keep the configured limit.
+        clock.value = 3630.0  # Reach the capture duration plus its 30-second margin.
+        manager.reap_once()  # Apply the capture-specific life rule.
+        assert capture.state is SessionState.CONNECTING  # The exact boundary remains valid.
+        clock.value = 3631.0  # Pass the capture completion margin.
+        manager.reap_once()  # Stop an overlong capture.
+        assert capture.state is SessionState.STOPPING  # The capture now receives a stop request.
+
+    def test_stuck_capture_stop_becomes_failed(self) -> None:
+        """Report a capture stop as failed when its cleanup does not complete."""
+        manager, _factory, clock = self._manager(max_sessions=1, idle_seconds=10000)  # Keep idle cleanup inactive.
+        payload = manager.start(self._capture_request(120))  # Start one local capture session.
+        session_id = str(payload["session_id"])  # Keep the checked session identifier.
+        manager.stop(session_id)  # Request capture cleanup.
+        clock.value = 16.0  # Pass the existing 15-second stuck-stop bound.
+        manager.reap_once()  # Resolve the unconfirmed capture stop.
+        session = manager.session(session_id)  # Read the final capture outcome.
+        assert session.state is SessionState.FAILED  # An uncertain stop cannot report success.
+        assert session.reason == "The capture stop could not be confirmed."  # Give the operator a safe reason.
+
     @pytest.mark.parametrize(
         ("fault", "error"),
         [
@@ -679,6 +710,28 @@ class TestStreamSessionManager:
         return StartRequest(
             "utility", definition, {"site_id": ("site-a",), "device_id": ("dev-a",)}, {}, "Ping"
         )  # Return a checked request.
+
+    def _capture_request(self, duration: int) -> StartRequest:
+        """Build one checked packet capture request."""
+        target = FieldSpec("device_id", "Device", FieldKind.UUID, picker="devices")  # Build the device target field.
+        definition = UtilityDefinition(
+            "ex.remotePcap",
+            "ex",
+            "remotePcap",
+            "Packet capture",
+            "Capture packets.",
+            (),
+            Safety.CAPTURE,
+            "packets",
+            (target,),
+        )  # Mark the request with the capture safety class.
+        return StartRequest(
+            "utility",
+            definition,
+            {"site_id": ("site-a",), "device_id": ("dev-a",)},
+            {"duration": duration},
+            "Packet capture",
+        )  # Return a selected duration.
 
     def _screen_request(self) -> StartRequest:
         """Build a checked screen utility request.

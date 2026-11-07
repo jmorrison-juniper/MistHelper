@@ -85,6 +85,7 @@ class TestUtilityTriggerParity:
         "tcpdump_expression": "icmp",
         "num_packets": 10,
         "max_pkt_len": 512,
+        "duration": 120,
         "band": "5",
         "protocol": "icmp",
         "node": "node0",
@@ -165,7 +166,8 @@ class TestUtilityTriggerParity:
             if field.name in signature.parameters:  # Derived capture fields are converted below.
                 self._add_field(kwargs, function, field)  # Convert enums to SDK enum objects.
         if "duration" in signature.parameters:  # Captures and screens use the research duration.
-            kwargs["duration"] = 60  # The owned runner forces a 60 second capture.
+            duration = self.SAMPLES["duration"] if entry.safety is Safety.CAPTURE else 60  # Keep SDK behavior.
+            kwargs["duration"] = duration  # Captures use a field value, while screens keep the SDK default.
         if "device_interfaces" in signature.parameters:  # Wired captures need nested interfaces.
             kwargs["device_interfaces"] = {self.DEVICE_ID: {"ge-0/0/1": None}}  # Match the runner conversion.
         return kwargs  # The caller invokes the SDK.
