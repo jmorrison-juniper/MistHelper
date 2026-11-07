@@ -1,8 +1,8 @@
 """Tests for the org config migration export flow, the operator prompts, and the report.
 
 Why:
-    ``src/mist/resources/org/org_config_migration_manager.py`` drives menu 176 and menu 177.
-    Menu 177 writes into a live org. Issue #1961 reports that the export flow,
+    ``src/mist/resources/org/org_config_migration_manager.py`` drives menu 58 and menu 187.
+    Menu 187 writes into a live org. Issue #1961 reports that the export flow,
     the file selection prompt, the bundle guard, the confirmation gate, and the
     result summary hold no test. This module covers those blocks. No test
     reaches the Mist API, because a mock replaces every endpoint.
@@ -12,8 +12,9 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
 import requests
@@ -52,40 +53,110 @@ def _valid_bundle() -> dict[str, Any]:
 class TestGetOrgName:
     """Cover the org name lookup that labels every export bundle."""
 
-    def test_the_name_is_read_from_the_response(self, manager: OrgConfigMigrationManager) -> None:
-        """The operator identifies a bundle by the source org name in the filename."""
-        response = MagicMock()  # WHY: stand in for the SDK response wrapper.
-        response.data = {"name": "Acme-Corp"}  # WHY: the documented reply shape.
-        with patch.object(ocm.mistapi.api.v1.orgs.orgs, "getOrg", return_value=response):
-            assert manager._get_org_name() == "Acme-Corp"
+    @pytest.mark.parametrize("status", [200, 201, 299])
+    def test_the_name_is_read_from_the_response(
+        self, manager: OrgConfigMigrationManager, caplog: pytest.LogCaptureFixture, status: int
+    ) -> None:
+        """Accept valid metadata without recording its name in lookup logs."""
+        from mistapi.__api_response import APIResponse  # Keep the native fixture local to this SDK boundary.
 
-    def test_a_missing_name_falls_back(self, manager: OrgConfigMigrationManager) -> None:
-        """A blank filename would hide which org an export came from."""
-        response = MagicMock()  # WHY: stand in for the SDK response wrapper.
-        response.data = {"id": "src-org"}  # WHY: the name field is absent.
+        response = requests.Response()  # Exercise the installed SDK response boundary offline.
+        response.status_code = status  # Cover both limits of the successful status range.
+        response._content = b'{"name": " Acme-Corp "}'  # Preserve the exact source label.
+        api_response = APIResponse(response=response, url="https://api.mist.com/api/v1/orgs/dest-org")
+        caplog.set_level("DEBUG", logger=ocm.__name__)  # Capture successful diagnostics as well as warnings.
+        caplog.clear()  # Limit the assertion to lookup logs, not fixture construction.
+        with patch.object(ocm.mistapi.api.v1.orgs.orgs, "getOrg", return_value=api_response) as endpoint:
+            assert manager._get_org_name() == " Acme-Corp "
+        endpoint.assert_called_once_with(manager.session, manager.org_id)  # Preserve the endpoint arguments.
+        assert "Acme-Corp" not in caplog.text  # A valid name must not enter the diagnostic log.
+        assert not [record for record in caplog.records if record.levelno >= 30]  # Success must not warn.
+
+    @pytest.mark.parametrize("status", [199, 300, 401, 403, 404, 429, 500, 503])
+    def test_a_refused_http_result_returns_unknown(
+        self, manager: OrgConfigMigrationManager, caplog: pytest.LogCaptureFixture, status: int
+    ) -> None:
+        """Reject even plausible names from unsuccessful responses without body logs."""
+        from mistapi.__api_response import APIResponse  # Keep the native fixture local to this SDK boundary.
+
+        response = requests.Response()  # Exercise native HTTP status and payload parsing without a request.
+        response.status_code = status  # Include client refusal, server failure, and range boundaries.
+        response._content = b'{"name": "sensitive-body-marker", "error": "sensitive-body-marker"}'
+        api_response = APIResponse(response=response, url="https://api.mist.com/api/v1/orgs/dest-org")
+        manager.org_id = "dest-org"  # Verify that the warning identifies the affected organization.
+        caplog.set_level("DEBUG", logger=ocm.__name__)  # Detect leaks at every lookup log level.
+        caplog.clear()  # Exclude the SDK fixture construction from lookup diagnostics.
+        with (
+            patch.object(ocm.mistapi.api.v1.orgs.orgs, "getOrg", return_value=api_response) as endpoint,
+            patch.object(APIResponse, "data", new_callable=PropertyMock, create=True) as metadata,
+        ):
+            metadata.side_effect = AssertionError("Refused metadata must not be read")  # Prove validation order.
+            assert manager._get_org_name() == "Unknown"
+        metadata.assert_not_called()  # Reject status before inspecting even a plausible name.
+        endpoint.assert_called_once_with(manager.session, "dest-org")  # Refusal must not trigger another request.
+        assert f"HTTP {status}" in caplog.text  # Report the exact refusal status.
+        assert "dest-org" in caplog.text  # Keep enough context to diagnose the failed lookup.
+        assert "sensitive-body-marker" not in caplog.text  # Never record the refusal body or supplied name.
+        assert any(record.levelno == 30 for record in caplog.records)  # The refusal must be visible.
+
+    @pytest.mark.parametrize(
+        "data",
+        [
+            None,
+            [],
+            ["sensitive-body-marker"],
+            {},
+            {"id": "dest-org"},
+            {"name": None},
+            {"name": 42},
+            {"name": ""},
+            {"name": "   "},
+            {"error": "sensitive-body-marker", "name": "sensitive-body-marker"},
+            {"error": "", "name": "sensitive-body-marker"},
+        ],
+    )
+    def test_invalid_metadata_returns_unknown(
+        self, manager: OrgConfigMigrationManager, caplog: pytest.LogCaptureFixture, data: object
+    ) -> None:
+        """Reject malformed metadata and error objects even with HTTP 200."""
+        response = SimpleNamespace(status_code=200, data=data)  # Isolate external payload shape validation.
+        caplog.set_level("DEBUG", logger=ocm.__name__)  # Include debug records in the privacy assertion.
         with patch.object(ocm.mistapi.api.v1.orgs.orgs, "getOrg", return_value=response):
             assert manager._get_org_name() == "Unknown"
+        assert any(record.levelno == 30 for record in caplog.records)  # Invalid metadata must not fail silently.
+        assert "sensitive-body-marker" not in caplog.text  # Never log invalid metadata contents.
 
-    def test_an_empty_payload_falls_back(self, manager: OrgConfigMigrationManager) -> None:
-        """An empty payload must not raise inside the export flow."""
-        response = MagicMock()  # WHY: stand in for the SDK response wrapper.
-        response.data = {}  # WHY: reproduce the empty reply.
-        with patch.object(ocm.mistapi.api.v1.orgs.orgs, "getOrg", return_value=response):
+    @pytest.mark.parametrize("status", [None, "sensitive-status-marker", 200.0, True, False])
+    def test_an_invalid_status_is_rejected_before_data(
+        self, manager: OrgConfigMigrationManager, caplog: pytest.LogCaptureFixture, status: object
+    ) -> None:
+        """Do not read metadata until an integer successful status is present."""
+        response = MagicMock(spec=["data"])  # An absent status attribute must not imply success.
+        if status is not None:  # Also exercise explicit invalid statuses.
+            response.status_code = status
+        caplog.set_level("DEBUG", logger=ocm.__name__)  # Detect interpolation of invalid external status text.
+        with (
+            patch.object(ocm.mistapi.api.v1.orgs.orgs, "getOrg", return_value=response),
+            patch.object(type(response), "data", new_callable=PropertyMock, create=True) as metadata,
+        ):
+            metadata.side_effect = AssertionError("Invalid status must not read metadata")  # Prove early exit.
             assert manager._get_org_name() == "Unknown"
+        metadata.assert_not_called()  # Attribute access itself must wait for HTTP validation.
+        assert "HTTP unavailable" in caplog.text  # Invalid status values need a fixed, safe diagnostic.
+        assert any(record.levelno == 30 for record in caplog.records)  # A missing status needs a visible warning.
+        assert "sensitive-status-marker" not in caplog.text  # Invalid status objects must not enter logs.
 
-    def test_an_http_401_response_falls_back(self, manager: OrgConfigMigrationManager) -> None:
-        """An HTTP 401 response must not abandon an export that would otherwise work."""
-        from mistapi.__api_response import APIResponse  # WHY: drive the installed SDK response boundary.
-
-        response = requests.Response()  # WHY: build the real HTTP response passed to mistapi.
-        response.status_code = 401  # WHY: reproduce the authentication failure from the cloud.
-        response.url = "https://api.mist.com/api/v1/orgs/dest-org"  # WHY: provide the SDK response URL.
-        response._content = b'{"error": "401 denied"}'  # WHY: preserve the error payload returned by Mist.
-        api_response = APIResponse(response=response, url=response.url)  # WHY: exercise the native SDK boundary.
-        with patch.object(ocm.mistapi.api.v1.orgs.orgs, "getOrg", return_value=api_response):
+    @pytest.mark.parametrize("error_type", [requests.Timeout, ConnectionError, RuntimeError])
+    def test_request_errors_do_not_expose_exception_text(
+        self, manager: OrgConfigMigrationManager, caplog: pytest.LogCaptureFixture, error_type: type[Exception]
+    ) -> None:
+        """Retain the unknown label without exposing exception response text."""
+        caplog.set_level("DEBUG", logger=ocm.__name__)  # Exception messages can contain an entire response.
+        with patch.object(ocm.mistapi.api.v1.orgs.orgs, "getOrg", side_effect=error_type("sensitive-body-marker")):
             assert manager._get_org_name() == "Unknown"
-        assert api_response.status_code == 401  # WHY: prove that the fallback consumed an HTTP 401 response.
-        assert api_response.data == {"error": "401 denied"}  # WHY: verify the logged HTTP error body.
+        assert error_type.__name__ in caplog.text  # Report the failure category without its message.
+        assert "sensitive-body-marker" not in caplog.text  # Exception tracebacks can expose sensitive text.
+        assert any(record.levelno == 40 for record in caplog.records)  # Request exceptions need an error log.
 
 
 class TestBuildExportBundle:
@@ -190,7 +261,7 @@ class TestFetchAllTypes:
 
 
 class TestExportConfig:
-    """Cover the menu 176 entry point, which must not write before it fetches."""
+    """Cover the menu 58 entry point, which must not write before it fetches."""
 
     def test_the_flow_reaches_the_file_write(self, manager: OrgConfigMigrationManager) -> None:
         """A broken order would save a bundle before the fetch fills it."""
@@ -200,7 +271,7 @@ class TestExportConfig:
             patch.object(manager, "_save_bundle_to_file", return_value="data/x.json") as save_spy,
             patch.object(manager, "_display_export_summary") as summary_spy,
         ):
-            manager.export_config()  # WHY: drive the whole menu 176 flow.
+            manager.export_config()  # WHY: drive the whole menu 58 flow.
         fetch_spy.assert_called_once()  # WHY: the fetch must run before the write.
         save_spy.assert_called_once()  # WHY: exactly one bundle per export.
         summary_spy.assert_called_once_with(save_spy.call_args[0][0], "data/x.json")
@@ -213,19 +284,46 @@ class TestExportConfig:
             patch.object(manager, "_save_bundle_to_file", return_value="data/x.json"),
             patch.object(manager, "_display_export_summary"),
         ):
-            manager.export_config()  # WHY: drive the whole menu 176 flow.
+            manager.export_config()  # WHY: drive the whole menu 58 flow.
         assert manager.org_id == "dest-org"  # WHY: the resolver value must reach the instance.
+
+    @pytest.mark.parametrize("scenario", [(200, "Acme"), (403, "Unknown"), (503, "Unknown")])
+    def test_validated_metadata_reaches_the_saved_bundle(
+        self,
+        manager: OrgConfigMigrationManager,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        scenario: tuple[int, str],
+    ) -> None:
+        """Integrate lookup validation with the existing export writer without network access."""
+        from mistapi.__api_response import APIResponse  # Keep the native fixture local to this SDK boundary.
+
+        monkeypatch.chdir(tmp_path)  # Keep output separate from production data.
+        (tmp_path / "data").mkdir()  # The existing writer expects the product output directory.
+        response = requests.Response()  # Use the native SDK response shape for this integrated flow.
+        response.status_code = scenario[0]  # Prove that status overrides a plausible body name.
+        response._content = b'{"name": "Acme"}'  # The same body must yield different labels after refusal.
+        api_response = APIResponse(response=response, url="https://api.mist.com/api/v1/orgs/dest-org")
+        with (
+            patch.object(ocm.mistapi.api.v1.orgs.orgs, "getOrg", return_value=api_response),
+            patch.object(manager, "_fetch_all_types", return_value={key: [] for key in TYPE_KEYS}),
+        ):
+            manager.export_config()  # Exercise the real lookup, metadata builder, and file writer.
+        saved_files = list((tmp_path / "data").glob("OrgConfig_Export_*.json"))  # Inspect the private test output.
+        assert len(saved_files) == 1  # The flow must persist exactly one export.
+        bundle = json.loads(saved_files[0].read_text(encoding="utf-8"))  # Verify the durable metadata result.
+        assert bundle["metadata"]["source_org_name"] == scenario[1]  # Preserve success and explicit unknown.
 
 
 class TestSelectImportFile:
-    """Cover the bundle picker, which is the first gate of menu 177."""
+    """Cover the bundle picker, which is the first gate of menu 187."""
 
     def test_no_bundle_returns_an_empty_path(self, manager: OrgConfigMigrationManager, caplog: Any) -> None:
         """An import with no bundle must stop, not raise on an empty list."""
         caplog.set_level("WARNING")  # WHY: the guard reports the guidance at WARNING level.
         with patch.object(ocm.glob, "glob", return_value=[]):
             assert manager._select_import_file() == ""
-        assert "Menu 176" in caplog.text  # WHY: the message must point at the export step.
+        assert "Menu 58" in caplog.text  # WHY: the message must point at the export step.
 
     def test_a_single_bundle_is_selected_without_a_prompt(self, manager: OrgConfigMigrationManager) -> None:
         """A prompt with one choice wastes the time of the operator."""
@@ -327,7 +425,7 @@ class TestValidateBundleStructure:
     """Cover the structure guard, which is the last check before the import runs."""
 
     def test_a_complete_bundle_passes(self, manager: OrgConfigMigrationManager) -> None:
-        """A valid bundle must pass, or menu 177 can never run."""
+        """A valid bundle must pass, or menu 187 can never run."""
         assert manager._validate_bundle_structure(_valid_bundle()) is True
 
     def test_a_missing_metadata_section_fails(self, manager: OrgConfigMigrationManager, caplog: Any) -> None:
@@ -462,11 +560,11 @@ class TestFetchExistingObjects:
 
 
 class TestImportConfig:
-    """Cover the menu 177 entry point, which must stop at every failed gate."""
+    """Cover the menu 187 entry point, which must stop at every failed gate."""
 
     @staticmethod
     def _patched(manager: OrgConfigMigrationManager) -> dict[str, Any]:
-        """Return the patch handles that isolate the menu 177 flow from the API."""
+        """Return the patch handles that isolate the menu 187 flow from the API."""
         # WHY: one builder keeps the six patches identical across the tests below.
         return {
             "preview": patch.object(manager, "_display_bundle_preview"),  # WHY: silence the printer.
@@ -481,7 +579,7 @@ class TestImportConfig:
             patch.object(manager, "_select_import_file", return_value=""),
             patch.object(manager, "_load_and_validate_bundle") as load_spy,
         ):
-            manager.import_config()  # WHY: drive the menu 177 flow.
+            manager.import_config()  # WHY: drive the whole menu 187 flow.
         assert load_spy.call_count == 0  # WHY: nothing to load means nothing to read.
 
     def test_an_invalid_bundle_stops_the_flow(self, manager: OrgConfigMigrationManager) -> None:
@@ -491,7 +589,7 @@ class TestImportConfig:
             patch.object(manager, "_load_and_validate_bundle", return_value=None),
             patch.object(manager, "_prompt_dry_run") as dry_run_spy,
         ):
-            manager.import_config()  # WHY: drive the menu 177 flow.
+            manager.import_config()  # WHY: drive the whole menu 187 flow.
         assert dry_run_spy.call_count == 0  # WHY: an unusable bundle ends the flow.
 
     def test_a_cancelled_confirmation_stops_the_flow(self, manager: OrgConfigMigrationManager) -> None:
@@ -506,7 +604,7 @@ class TestImportConfig:
             handles["fetch"] as fetch_spy,
             handles["execute"] as execute_spy,
         ):
-            manager.import_config()  # WHY: drive the menu 177 flow.
+            manager.import_config()  # WHY: drive the whole menu 187 flow.
         assert fetch_spy.call_count == 0  # WHY: a cancel must stop before any read.
         assert execute_spy.call_count == 0  # WHY: a cancel must stop before any write.
 
@@ -523,7 +621,7 @@ class TestImportConfig:
             handles["execute"] as execute_spy,
             handles["report"],
         ):
-            manager.import_config()  # WHY: drive the menu 177 flow.
+            manager.import_config()  # WHY: drive the whole menu 187 flow.
         confirm_spy.assert_not_called()  # WHY: a preview needs no typed word.
         assert execute_spy.call_args[0][1] is True  # WHY: the dry-run flag must reach the driver.
 
@@ -540,7 +638,7 @@ class TestImportConfig:
             handles["execute"] as execute_spy,
             handles["report"] as report_spy,
         ):
-            manager.import_config()  # WHY: drive the menu 177 flow.
+            manager.import_config()  # WHY: drive the whole menu 187 flow.
         fetch_spy.assert_called_once()  # WHY: the conflict cache must load first.
         assert execute_spy.call_args[0][1] is False  # WHY: a live run must clear the dry-run flag.
         report_spy.assert_called_once()  # WHY: the operator always gets a summary.
