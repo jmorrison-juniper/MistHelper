@@ -20,8 +20,11 @@ A network operator runs a rogue DHCP scan. The scan must not report a security f
 
 **Acceptance Scenarios**:
 
-1. **Given** a failed HTTP response with a rogue DHCP alarm body, **When** the scan reads the response, **Then** it rejects the body and reports the request failure.
+1. **Given** a failed HTTP response with an alarm, **When** the scan reads it, **Then** it rejects the data and reports the failure.
 2. **Given** a successful HTTP response with a rogue DHCP alarm, **When** the scan reads the response, **Then** it keeps the finding.
+3. **Given** a site request fails, **When** the operator reads the report, **Then** the report marks the scan as incomplete and names each failed site.
+4. **Given** a site request fails, **When** the scan has findings, **Then** it labels the export as partial instead of complete.
+5. **Given** a failed site request and no findings, **When** the operator reads the report, **Then** the scan does not claim that the organization is clean.
 
 ### Edge Cases
 
@@ -39,6 +42,9 @@ A network operator runs a rogue DHCP scan. The scan must not report a security f
 - **FR-003**: The scan MUST report an organization request failure instead of presenting its response body as a finding.
 - **FR-004**: The scan MUST report a site request failure and exclude its response body from findings.
 - **FR-005**: The scan MUST keep valid findings from successful responses.
+- **FR-007**: The operator report MUST mark the scan as incomplete and name each site request that failed.
+- **FR-008**: The operation MUST label exported findings as partial when a site request failed.
+- **FR-009**: The operation MUST NOT report an incomplete empty scan as a clean result.
 
 ### Mist Cloud Transport Requirements
 
@@ -60,6 +66,9 @@ A network operator runs a rogue DHCP scan. The scan must not report a security f
 - **SC-003**: A failed site request appears in the scan's failed-site report.
 - **SC-004**: A failed organization request stops the scan before pagination reads its body.
 - **SC-005**: Zero records come from a later page with a failed status or malformed results.
+- **SC-006**: Each failed site appears in an incomplete-scan warning.
+- **SC-007**: An incomplete export is labeled partial and is never reported as complete.
+- **SC-008**: An incomplete scan with no findings does not report a clean result.
 
 ## Assumptions
 
