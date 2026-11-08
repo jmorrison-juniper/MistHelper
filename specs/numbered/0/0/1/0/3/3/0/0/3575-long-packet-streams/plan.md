@@ -130,7 +130,7 @@ documentation/wiki/Web-Portal.md
 ```
 
 **Structure Decision**: Edit the current `src/mist/realtime/websocket_streams/`
-packages. Do not restore the retired `src/websocket_streams/` package or add a
+packages. Do not restore the retired top-level WebSocket package or add a
 second capture runner.
 
 ## Design Decisions
@@ -145,8 +145,9 @@ second capture runner.
 7. Preserve the existing active-capture lookup and conditional delete. Report
    an identity mismatch or an unconfirmed stop as failure.
 8. Extend the session life limit only to `max(configured limit, duration + 30
-   seconds)` for captures. Keep idle cleanup and every non-capture limit
-   unchanged.
+   seconds)` after the first successful trigger response for captures. Bound
+   capture setup with the configured generic limit. Keep idle cleanup and
+   every non-capture limit unchanged.
 
 ## Complexity Tracking
 

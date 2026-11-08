@@ -42,9 +42,12 @@ class SessionRetention(ManagerAttributes):
         """Apply all stop rules to one session."""
         now = self._clock()  # Use one time value for each rule.
         capture, life_limit = self._capture_life_limit(session)  # Keep capture duration within its own limit.
+        life_started = (
+            session.live_mono if capture and session.live_mono is not None else session.started_mono
+        )  # Count capture life after its successful response and bound setup separately.
         if session.live and now - session.last_read_mono > self._settings.idle_seconds:  # The page stopped reading.
             self.stop(session.session_id, "The session stopped because no page read it.")  # Preserve idle reason.
-        if session.live and now - session.started_mono > life_limit:  # The applicable life limit expired.
+        if session.live and now - life_started > life_limit:  # The applicable life limit expired.
             self.stop(session.session_id, "The session reached its maximum life.")  # Preserve life reason.
         self._finish_stuck_stop(session, now, capture)  # Bound cleanup without changing other session results.
 
@@ -64,7 +67,7 @@ class SessionRetention(ManagerAttributes):
         capture = isinstance(definition, UtilityDefinition) and definition.safety is Safety.CAPTURE  # Classify session.
         duration = session.request.parameters.get("duration")  # Read only the checked capture duration.
         life_limit = self._settings.max_stream_seconds  # Keep the generic limit for other sessions.
-        if capture and isinstance(duration, int) and not isinstance(duration, bool):
+        if capture and session.live_mono is not None and isinstance(duration, int) and not isinstance(duration, bool):
             life_limit = max(life_limit, duration + 30)  # Keep time for stream completion and cleanup.
         return capture, life_limit  # Preserve the generic limit outside captures.
 

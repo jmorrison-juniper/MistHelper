@@ -461,16 +461,51 @@ class TestStreamSessionManager:
         manager = StreamSessionManager(settings, factory, clock)  # Build the production manager.
         capture = manager.session(str(manager.start(self._capture_request(3600))["session_id"]))  # Start capture.
         utility = manager.session(str(manager.start(self._utility_request())["session_id"]))  # Start read utility.
+        capture.mark_live()  # The successful trigger response starts capture retention.
         clock.value = 1801.0  # Pass the generic 1800-second life limit.
         manager.reap_once()  # Apply the configured life rule.
-        assert capture.state is SessionState.CONNECTING  # The selected capture duration remains active.
+        assert capture.state is SessionState.LIVE  # The selected capture duration remains active.
         assert utility.state is SessionState.STOPPING  # Other utilities keep the configured limit.
         clock.value = 3630.0  # Reach the capture duration plus its 30-second margin.
         manager.reap_once()  # Apply the capture-specific life rule.
-        assert capture.state is SessionState.CONNECTING  # The exact boundary remains valid.
+        assert capture.state is SessionState.LIVE  # The exact boundary remains valid.
         clock.value = 3631.0  # Pass the capture completion margin.
         manager.reap_once()  # Stop an overlong capture.
         assert capture.state is SessionState.STOPPING  # The capture now receives a stop request.
+
+    @pytest.mark.parametrize("duration", [120, 3600])
+    def test_capture_retention_starts_after_delayed_setup(self, duration: int) -> None:
+        """Keep the full capture interval after slow setup without resetting it on later output."""
+        clock, factory = FakeClock(), FakeFactory()  # Keep time and runner work local.
+        settings = StreamSettings(max_sessions=1, max_stream_seconds=60, idle_seconds=10000)  # Bound setup.
+        manager = StreamSessionManager(settings, factory, clock)  # Exercise the production reaper.
+        capture = manager.session(str(manager.start(self._capture_request(duration))["session_id"]))  # Start setup.
+        clock.value = 60.0  # Consume more than the capture cleanup margin during setup.
+        capture.mark_live()  # The successful trigger response makes the capture live.
+        clock.value = float(duration + 31)  # Pass the old creation-based deadline.
+        manager.reap_once()  # Setup time must not reduce the capture interval.
+        assert capture.state is SessionState.LIVE  # The old implementation stops the capture here.
+        capture.mark_live()  # Later output must not extend the original capture deadline.
+        clock.value = float(60 + duration + 30)  # Reach the response-based deadline exactly.
+        manager.reap_once()  # Preserve the inclusive completion margin.
+        assert capture.state is SessionState.LIVE  # The exact deadline remains valid.
+        clock.value += 1  # Exceed the response-based completion margin.
+        manager.reap_once()  # Bound the active capture lifetime.
+        assert capture.state is SessionState.STOPPING  # Repeated live signals cannot extend retention.
+        assert factory.runners[0].stopped == 1  # Request cleanup only once.
+
+    def test_capture_setup_keeps_the_configured_lifetime_bound(self) -> None:
+        """Stop a capture that never receives its successful trigger response."""
+        clock, factory = FakeClock(), FakeFactory()  # Keep the stalled setup local.
+        settings = StreamSettings(max_sessions=1, max_stream_seconds=60, idle_seconds=10000)  # Bound setup.
+        manager = StreamSessionManager(settings, factory, clock)  # Apply the production setup limit.
+        capture = manager.session(str(manager.start(self._capture_request(3600))["session_id"]))  # Stall setup.
+        clock.value = 61.0  # Pass the configured setup limit without a live response.
+        manager.reap_once()  # Do not give an unstarted capture an hour of setup time.
+        assert capture.state is SessionState.STOPPING  # Setup remains bounded.
+        capture.mark_live()  # A late response cannot cancel the earlier stop.
+        assert capture.state is SessionState.STOPPING  # Keep the first stop decision.
+        assert factory.runners[0].stopped == 1  # Do not send another cleanup request.
 
     def test_stuck_capture_stop_becomes_failed(self) -> None:
         """Report a capture stop as failed when its cleanup does not complete."""

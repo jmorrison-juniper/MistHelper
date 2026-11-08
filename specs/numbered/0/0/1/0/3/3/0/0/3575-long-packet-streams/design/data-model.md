@@ -35,4 +35,6 @@ capture identifier and a null packet record.
 The current session buffer, packet limits, and idle limit remain unchanged.
 Only capture lifetime can exceed the configured generic stream life limit. Its
 maximum is the greater of the configured limit and the selected duration plus
-30 seconds.
+30 seconds. Measure this interval from the first live signal after the successful
+capture response. Keep setup within the configured generic limit. Later output
+does not reset the capture interval.

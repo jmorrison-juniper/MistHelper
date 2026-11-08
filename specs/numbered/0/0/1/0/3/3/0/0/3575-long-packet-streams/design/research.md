@@ -6,7 +6,7 @@ The current `UtilityStreamOpener` confirms its stream subscription before it
 sends the capture REST request. The current `UtilityMessageFilter` selects
 records by capture identifier. Reuse both contracts.
 
-The recovery branch uses the retired `src/websocket_streams/` package and a
+The recovery branch uses the retired top-level WebSocket package and a
 separate transport. The current package lives under
 `src/mist/realtime/websocket_streams/`. Do not copy the retired transport or
 reintroduce its package paths.

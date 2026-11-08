@@ -124,14 +124,13 @@ class UtilityExecution:
 
     def run(self) -> None:
         """Publish a terminal result only after cleanup completes."""
-        started = time.monotonic()
-        monitor_started = started  # Non-capture utilities keep their existing start time.
+        monitor_started = time.monotonic()  # Non-capture utilities keep their existing start time.
         log_fields = {"action": self._context.request.key}
         execution_error: Exception | None = None
         cleanup_error: Exception | None = None
         try:
             try:
-                monitor_started = self._execute(started)  # Capture timing begins after the trigger response.
+                monitor_started = self._execute(monitor_started)  # Capture timing begins after the trigger response.
             except Exception as error:
                 execution_error = error
         finally:

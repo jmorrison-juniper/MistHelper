@@ -99,6 +99,7 @@ class SessionAttributes:
     state: SessionState  # Public state changes under the session lock.
     reason: str  # Public payloads show one plain stop or end reason.
     started_mono: float  # Cleanup uses monotonic session age.
+    live_mono: float | None  # Capture retention starts after the successful trigger response.
     last_read_mono: float  # Idle cleanup uses the last successful page read.
     ended_mono: float | None  # Retention uses the final monotonic time.
     stopping_mono: float | None  # Stuck-stop cleanup uses the stop request time.

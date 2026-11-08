@@ -52,6 +52,7 @@ class SessionStateSupport(SessionAttributes):
         if not self.live or self.state != SessionState.CONNECTING:  # Ended and stopping sessions keep their state.
             return  # The first final or stop result wins.
         self._log_state("session_live_start", "live", logging.INFO)  # Log state only.
+        self.live_mono = self._clock()  # Preserve the first live signal without counting capture setup time.
         self.state = SessionState.LIVE  # The stream can now receive output.
         self._log_state("session_live_complete", "live", logging.DEBUG)  # Confirm safely.
 
@@ -134,6 +135,7 @@ class StreamSession(SessionOutput, SessionLifecycle, SessionStateSupport, Sessio
         self.started_mono = resources.clock()  # Reaper decisions use monotonic time.
         self.last_read_mono = self.started_mono  # A new session starts as recently read.
         self.ended_mono = self.stopping_mono = None  # Live sessions have no end or stop time.
+        self.live_mono = None  # Setup has no successful capture response yet.
         self.started_at, self.ended_at = self._utc_text(), None  # Public times use UTC text.
         self.input_ready = self.stop_requested = False  # Input and stop signals start closed.
         self.counters, self._rate_times = SessionCounters(), deque()  # Start public counts and rate empty.
