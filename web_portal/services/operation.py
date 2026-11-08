@@ -169,8 +169,6 @@ def _read_positive_int_env(name: str, default: int) -> int:
 # depends_on: name of parameter this depends on (for cascading dropdowns)
 # device_filter: ap, switch, gateway, all (only for param_type=device)
 
-PARAMETER_REGISTRY = {}
-
 
 def _site_param(required: bool = True) -> dict:
     """Build a site-type parameter definition."""
