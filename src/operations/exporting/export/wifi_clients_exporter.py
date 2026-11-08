@@ -7,6 +7,8 @@ import logging  # WHY: structured operational logging preserves action-trace con
 from dataclasses import dataclass  # WHY: dataclass bundles both the injected deps and the immutable stamp payload.
 from typing import Any  # WHY: vendor JSON payload shapes remain dynamic dicts of arbitrary value types.
 
+from requests.exceptions import RequestException  # WHY: identify transport failures that can leave a partial read.
+
 from src.mist.access.api.response_integrity import (
     ResponseIntegrityChecker,  # WHY: detect JSON parse failures swallowed by the mistapi SDK.
 )
@@ -35,6 +37,14 @@ class _SiteStamp:  # WHY: immutable value bundle carrying site identifiers stamp
 
     site_id: str  # WHY: canonical UUID stamped for cross-report joins.
     site_name: str  # WHY: human-readable label stamped for operator context.
+
+
+@dataclass(slots=True)
+class _PageReadResult:  # WHY: retain collected rows and mark a read that stopped before its final page.
+    """Hold records from successful pages and identify an interrupted later-page read."""
+
+    records: list[dict[str, Any]]  # WHY: preserve each validated page for export or failure reporting.
+    is_partial: bool = False  # WHY: distinguish a timed-out read from a complete empty result.
 
 
 @dataclass
@@ -87,14 +97,24 @@ class WifiClientsExporter:  # WHY: orchestrator dataclass — attributes act as 
     def _run_export_pipeline(self, stamp: _SiteStamp) -> None:  # WHY: try-guarded fetch/merge/finalize sequencer.
         """Execute the fetch, merge, and finalize stages that require exception-guard protection."""
         fetched = self._fetch_clients_and_sessions(stamp)  # WHY: pull paginated clients + sessions from the SDK.
-        if fetched is None:  # WHY: placeholder branch — helper already persisted the sentinel artifact.
-            return  # WHY: helper already emitted the no-data placeholder artifact — nothing further to do.
-        clients, sessions = fetched  # WHY: unpack non-empty datasets so downstream helpers stay type-narrow.
+        if fetched is None:  # WHY: the fetch helper handled a valid-empty or partial-empty result.
+            return  # WHY: no record remains for the merge or export stages.
+        clients_read, sessions_read = fetched  # WHY: retain completion state beside each dataset.
+        clients = clients_read.records  # WHY: merge only records from validated successful pages.
+        sessions = sessions_read.records  # WHY: merge only records from validated successful pages.
         enriched = self._merge_clients_and_sessions(clients, sessions, stamp)  # WHY: build the merged output rows.
         if not enriched:  # WHY: defensive empty-post-merge branch — nothing to persist to disk.
-            self._log_empty_merge()  # WHY: defensive empty-post-merge guard preserving legacy operator messaging.
+            if clients_read.is_partial or sessions_read.is_partial:  # WHY: do not report an incomplete read as empty.
+                self._log_partial_empty_export()  # WHY: tell the operator that no successful page supplied rows.
+            else:
+                self._log_empty_merge()  # WHY: preserve the complete-read empty-merge notice.
             return  # WHY: nothing to persist when the merge produced zero rows.
-        self._finalize_export(enriched, clients, sessions, stamp.site_name)  # WHY: flatten + escape + write CSV.
+        self._finalize_export(
+            enriched,
+            clients_read,
+            sessions_read,
+            stamp.site_name,
+        )  # WHY: flatten, write, and report completion state for both datasets.
 
     @staticmethod
     def _log_empty_merge() -> None:  # WHY: empty-post-merge emitter isolated to keep pipeline branch-shallow.
@@ -102,6 +122,13 @@ class WifiClientsExporter:  # WHY: orchestrator dataclass — attributes act as 
         logger.warning(_NO_POST_MERGE_TEXT)  # WHY: preserve defensive empty-post-merge log severity + text.
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info(_NO_POST_MERGE_TEXT)  # WHY: preserve legacy operator-facing empty-result message text.
+
+    @staticmethod
+    def _log_partial_empty_export() -> None:
+        """Report a partial read with no exportable records without creating a valid-empty placeholder."""
+        logger.warning(  # WHY: distinguish a short read from a complete empty result.
+            "WiFi export is partial. No records from successful pages are available, so no output file was created."
+        )
 
     def _ensure_site_selected(self, site_id: str | None) -> str | None:  # WHY: cache-seed + prompt orchestrator.
         """Ensure SiteList cache exists and resolve site_id (prompt operator when missing)."""
@@ -142,10 +169,8 @@ class WifiClientsExporter:  # WHY: orchestrator dataclass — attributes act as 
                     return row.get("name", _UNKNOWN_SITE)  # WHY: capture matched name preserving fallback default.
         return _UNKNOWN_SITE  # WHY: no matching row — return fallback so callers rely on a single default source.
 
-    def _fetch_clients_and_sessions(
-        self, stamp: _SiteStamp
-    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]] | None:
-        """Fetch clients + sessions. On empty result write placeholder CSV and return None."""
+    def _fetch_clients_and_sessions(self, stamp: _SiteStamp) -> tuple[_PageReadResult, _PageReadResult] | None:
+        """Fetch clients and sessions, preserving valid-empty and partial-empty behavior."""
         clients = self._fetch_paginated(
             self.mistapi_module.api.v1.sites.clients.searchSiteWirelessClients, stamp.site_id, "wireless clients"
         )  # WHY: pull the full paginated wireless clients dataset for the site.
@@ -154,25 +179,72 @@ class WifiClientsExporter:  # WHY: orchestrator dataclass — attributes act as 
             stamp.site_id,
             "wireless client sessions",
         )  # WHY: pull the full paginated wireless session dataset for the site.
-        if not clients and not sessions:
-            self._write_no_data_placeholder(stamp)  # WHY: persist sentinel artifact so downstream tools see the run.
-            return None  # WHY: signal early-exit to orchestrator. The placeholder already satisfied the contract.
-        return clients or [], sessions or []  # WHY: normalize None so merge helpers can iterate safely.
+        if not clients.records and not sessions.records:  # WHY: distinguish complete emptiness from a short read.
+            if clients.is_partial or sessions.is_partial:  # WHY: incomplete reads cannot create valid-empty output.
+                self._log_partial_empty_export()  # WHY: report the partial result without writing a placeholder.
+                return None  # WHY: no successful records exist for a safe export.
+            self._write_no_data_placeholder(stamp)  # WHY: preserve the sentinel for a complete empty read.
+            return None  # WHY: stop after the valid-empty placeholder satisfies the output contract.
+        return clients, sessions  # WHY: retain page state until the export summary is written.
 
-    def _fetch_paginated(self, endpoint: Any, site_id: str, label: str) -> list[dict[str, Any]]:
-        """Call the supplied paginated endpoint and resolve its full result list via get_all."""
+    def _fetch_paginated(self, endpoint: Any, site_id: str, label: str) -> _PageReadResult:
+        """Read every page through mistapi while retaining valid rows after a later transport failure."""
         logger.info("Fetching %s data...", label)  # WHY: log before the first-page API call for tracing.
-        response = endpoint(self.apisession, site_id, limit=_API_PAGE_LIMIT)  # WHY: first-page API call.
+        current_response = endpoint(self.apisession, site_id, limit=_API_PAGE_LIMIT)  # WHY: request the first page.
         logger.debug(  # WHY: record the response status before validation decides whether data is trustworthy.
             "Received HTTP %s response for %s at site %s",
-            self._response_status_code(response),
+            self._response_status_code(current_response),
             label,
             site_id,
         )
-        self._reject_failed_response(response, site_id, label)  # WHY: stop false-empty output before pagination.
-        results = self.mistapi_module.get_all(response=response, mist_session=self.apisession)  # WHY: paginate.
-        logger.debug("Fetched %d %s records", len(results) if results else 0, label)  # WHY: after-action size.
-        return results or []  # WHY: normalize None to empty list so caller logic stays branch-free.
+        self._reject_failed_response(current_response, site_id, label)  # WHY: keep first-page validation unchanged.
+        results = self._response_records(current_response)  # WHY: copy rows before a later request can fail.
+        while getattr(current_response, "next", None):  # WHY: request only pages that the SDK response identifies.
+            logger.info("Fetching the next page of %s for site %s", label, site_id)  # WHY: trace each page request.
+            try:
+                next_response = self.mistapi_module.get_next(  # WHY: keep SDK authentication and URL handling.
+                    mist_session=self.apisession,
+                    response=current_response,
+                )
+            except (RequestException, TimeoutError) as exception:  # WHY: retain rows only for transport failures.
+                logger.warning(  # WHY: report an incomplete read without exposing the exception or response body.
+                    "WiFi %s pagination stopped after %s. Retaining %d records from successful pages.",
+                    label,
+                    type(exception).__name__,
+                    len(results),
+                )
+                return _PageReadResult(records=results, is_partial=True)  # WHY: export only proven successful rows.
+            if next_response is None:  # WHY: a missing page cannot prove that the result is complete.
+                logger.warning(  # WHY: distinguish an incomplete read from a complete result.
+                    "WiFi %s pagination stopped without a response. Retaining %d records from successful pages.",
+                    label,
+                    len(results),
+                )
+                return _PageReadResult(records=results, is_partial=True)  # WHY: never mark a missing page complete.
+            logger.debug(  # WHY: record each completed SDK page request before response validation.
+                "Received HTTP %s response for %s at site %s",  # WHY: report safe response metadata only.
+                self._response_status_code(next_response),  # WHY: exclude response bodies and credentials.
+                label,  # WHY: identify the WiFi dataset without exposing response content.
+                site_id,  # WHY: associate the page result with its site.
+            )
+            self._reject_failed_response(next_response, site_id, label)  # WHY: never append a failed HTTP page.
+            results.extend(self._response_records(next_response))  # WHY: append only a validated page.
+            current_response = next_response  # WHY: use the received page's next link for the next iteration.
+        logger.debug("Fetched %d %s records", len(results), label)  # WHY: record the complete page count.
+        return _PageReadResult(records=results)  # WHY: mark the fully traversed result as complete.
+
+    @staticmethod
+    def _response_records(response: Any) -> list[dict[str, Any]]:
+        """Copy records from a list response or a search response with a results field."""
+        payload = getattr(response, "data", None)  # WHY: APIResponse stores parsed page data in this field.
+        if isinstance(payload, list):  # WHY: some Mist endpoints return the record list directly.
+            return list(payload)  # WHY: isolate accumulated records from later response mutation.
+        if isinstance(payload, dict) and "results" in payload:  # WHY: search endpoints wrap records in results.
+            page_records = payload["results"]  # WHY: validate the wrapped records before accumulation.
+            if isinstance(page_records, list):  # WHY: only a list is a valid record page.
+                return list(page_records)  # WHY: isolate accumulated records from later response mutation.
+            raise ValueError("WiFi page results are not a list")  # WHY: reject malformed response shapes.
+        return []  # WHY: preserve the SDK's empty result for a valid object without a results field.
 
     @classmethod
     def _reject_failed_response(cls, response: Any, site_id: str, label: str) -> None:
@@ -340,8 +412,8 @@ class WifiClientsExporter:  # WHY: orchestrator dataclass — attributes act as 
     def _finalize_export(
         self,
         enriched: list[dict[str, Any]],
-        clients: list[dict[str, Any]],
-        sessions: list[dict[str, Any]],
+        clients: _PageReadResult,
+        sessions: _PageReadResult,
         site_name: str,
     ) -> None:
         """Flatten, escape, write to backend, and print legacy success summary."""
@@ -369,15 +441,25 @@ class WifiClientsExporter:  # WHY: orchestrator dataclass — attributes act as 
 
     @staticmethod
     def _print_success_summary(
-        clients: list[dict[str, Any]],
-        sessions: list[dict[str, Any]],
+        clients: _PageReadResult,
+        sessions: _PageReadResult,
         enriched: list[dict[str, Any]],
         site_name: str,
     ) -> None:
         """Emit the legacy operator-facing success summary block preserving prior formatting."""
-        client_count = len(clients) if clients else 0  # WHY: compute client count for the legacy summary line.
-        session_count = len(sessions) if sessions else 0  # WHY: compute session count for the legacy summary.
+        client_count = len(clients.records)  # WHY: compute client count for the legacy summary line.
+        session_count = len(sessions.records)  # WHY: compute session count for the legacy summary.
         total_records = len(enriched)  # WHY: total merged-row count for summary reporting.
+        if clients.is_partial or sessions.is_partial:  # WHY: do not label a short read as a complete export.
+            logger.warning(  # WHY: identify retained data and its partial status for the operator.
+                "! WiFi data partially exported to %s (%d clients, %d sessions, %d total records)",
+                _OUTPUT_CSV,
+                client_count,
+                session_count,
+                total_records,
+            )
+            logger.info("! WiFi data partially exported to %s", _OUTPUT_CSV)  # WHY: state the output status.
+            return  # WHY: omit the legacy complete-success notice for a partial result.
         logger.info(
             "! WiFi data exported to %s (%d clients, %d sessions, %d total records)",
             _OUTPUT_CSV,
