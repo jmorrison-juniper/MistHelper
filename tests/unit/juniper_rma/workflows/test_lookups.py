@@ -99,7 +99,7 @@ def test_not_found_is_not_a_fault_and_writes_nothing(monkeypatch: pytest.MonkeyP
     gateway = FakeGateway(bodies={"querysrdetails": [not_found]})  # WHY: the not-found reply.
     exporter = FakeExporter()  # WHY: capture any write.
     LookupWorkflow(build_session(gateway, make_settings()), exporter=exporter).execute()  # WHY: the lookup.
-    assert exporter.writes == []  # WHY: nothing was found, so nothing is written.
+    assert not exporter.writes  # WHY: nothing was found, so nothing is written.
 
 
 def test_invalid_value_stops_before_any_call(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -107,7 +107,7 @@ def test_invalid_value_stops_before_any_call(monkeypatch: pytest.MonkeyPatch) ->
     _script_prompts(monkeypatch, ["2", "bad value"])  # WHY: a space breaks the rule.
     gateway = FakeGateway()  # WHY: no reply is queued, so any call would show up.
     LookupWorkflow(build_session(gateway, make_settings()), exporter=FakeExporter()).execute()  # WHY.
-    assert gateway.calls == []  # WHY: no call was made.
+    assert not gateway.calls  # WHY: no call was made.
 
 
 def test_rma_option_reads_the_rma_items(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -141,4 +141,4 @@ def test_asset_lookup_refuses_a_bad_token_before_any_call(monkeypatch: pytest.Mo
     _script_prompts(monkeypatch, ["JN1 bad/serial"])  # WHY: a token that breaks the rule.
     gateway = FakeGateway()  # WHY: no reply is queued.
     AssetLookupWorkflow(build_session(gateway, make_settings()), exporter=FakeExporter()).execute()  # WHY.
-    assert gateway.calls == []  # WHY: no call was made.
+    assert not gateway.calls  # WHY: no call was made.
