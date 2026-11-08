@@ -51,9 +51,8 @@ limits, or database schemas.
 *GATE: Pass before implementation, subject to the listed validation evidence.*
 
 - **Managed records**: The specification uses the eight-segment base-5 route.
-  The PowerShell prerequisite script is unavailable because `pwsh` is absent.
-  The route was calculated from the repository route helper in the prior
-  assessment. The current worktree branch is already prepared, so do not run
+  The executable route guard passes all 40 tests with checksum-verified
+  portable PowerShell 7.6.9. The current worktree branch is already prepared, so do not run
   the branch-creation hook.
 - **Feature pointer**: `.specify/feature.json` points to issue #4258. Leave it
   unchanged. Use explicit feature paths for this work.

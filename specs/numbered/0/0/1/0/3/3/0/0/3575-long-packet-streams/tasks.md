@@ -88,7 +88,7 @@ identifiers. Verify the delete count and terminal state.
 - [x] T026 Update the Web Portal capture duration guidance in `documentation/wiki/Web-Portal.md`.
 - [x] T027 Run focused unit, contract, and browser tests from `specs/numbered/0/0/1/0/3/3/0/0/3575-long-packet-streams/design/quickstart.md`.
 - [x] T028 Run Ruff, Black, mypy, and applicable WebSockets guardrails for the Python paths listed in `specs/numbered/0/0/1/0/3/3/0/0/3575-long-packet-streams/plan.md`.
-- [ ] T029 Run `tests/guardrails/test_spec_route_contract.py` to verify the managed specification route. (Blocked: `pwsh` is unavailable.)
+- [x] T029 Run `tests/guardrails/test_spec_route_contract.py` to verify the managed specification route. (40 passed with checksum-verified portable PowerShell 7.6.9.)
 - [x] T030 Commit the explicit feature file set from `specs/numbered/0/0/1/0/3/3/0/0/3575-long-packet-streams/plan.md` with a Conventional Commit subject and the required co-author trailer.
 - [x] T031 Run the required test-quality preflight and changed-from-base ratchet after the local commit.
 - [x] T032 Recheck the local commit and `origin/recovery/3575-handoff-20261004` without pushing or creating a pull request, using the files listed in `specs/numbered/0/0/1/0/3/3/0/0/3575-long-packet-streams/plan.md`.
