@@ -154,6 +154,39 @@ def test_native_later_http_failure_is_rejected(
     assert session.links == ["/api/v1/sites/site-1/clients?page=2"]  # WHY: the SDK followed only the planned link.
 
 
+def test_native_two_page_success_exports_each_record_once(
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Successful SDK pages preserve each record and the complete export status."""
+    first_payload = {  # WHY: identify the first record and the SDK link to the second page.
+        "results": [{"mac": "aa:bb"}],
+        "next": "/api/v1/sites/site-1/clients?page=2",
+    }
+    first = _native_response(200, json.dumps(first_payload), first_payload)  # WHY: use native SDK page parsing.
+    later_payload = {"results": [{"mac": "cc:dd"}]}  # WHY: end pagination with a distinct second-page record.
+    later = _native_response(200, json.dumps(later_payload), later_payload)  # WHY: keep both HTTP replies successful.
+    exporter, endpoint, mistapi_module = _build_exporter(first)  # WHY: isolate the first-page endpoint.
+    session = _ControlledSession(later)  # WHY: return the second page without network access.
+    exporter.apisession = session  # WHY: preserve the session used by the endpoint and SDK pagination.
+    mistapi_module.get_next = mistapi.get_next  # WHY: exercise the real SDK page dispatch.
+    mistapi_module.api.v1.sites.clients.searchSiteWirelessClientSessions.return_value = _native_response(200, "[]", [])
+    site_list_path = tmp_path / "SiteList.csv"  # WHY: provide the site lookup without a cloud request.
+    site_list_path.write_text("id,name\nsite-1,Lab Site\n", encoding="utf-8")  # WHY: keep the export entry point local.
+    exporter.file_path_utils.get_csv_path.return_value = str(site_list_path)  # WHY: use the controlled site file.
+    exporter.data_processing_utils.flatten_nested_fields.side_effect = lambda rows: rows  # WHY: preserve row identity.
+    exporter.data_processing_utils.escape_multiline.side_effect = lambda rows: rows  # WHY: inspect exported records.
+    with caplog.at_level("INFO"):
+        exporter.execute(site_id="site-1")  # WHY: verify pagination through the complete export pipeline.
+    exporter.data_exporter.write_with_format_selection.assert_called_once()  # WHY: prevent duplicate backend writes.
+    written_rows = exporter.data_exporter.write_with_format_selection.call_args.args[0]  # WHY: inspect final output.
+    assert sorted(row["mac"] for row in written_rows) == ["aa:bb", "cc:dd"]  # WHY: reject lost or duplicate records.
+    assert "WiFi data exported to SiteWiFiClients.CSV (2 clients, 0 sessions, 2 total records)" in caplog.text
+    assert "partial" not in caplog.text  # WHY: successful pagination must retain the complete status.
+    endpoint.assert_called_once_with(session, "site-1", limit=1000)  # WHY: preserve the SDK request contract.
+    assert session.links == ["/api/v1/sites/site-1/clients?page=2"]  # WHY: fetch the second page exactly once.
+
+
 def test_native_later_timeout_exports_retained_rows_as_partial(
     tmp_path: Path,
     caplog: pytest.LogCaptureFixture,
