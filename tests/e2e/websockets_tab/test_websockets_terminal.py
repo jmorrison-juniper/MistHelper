@@ -10,6 +10,7 @@ from __future__ import annotations  # Keep annotations lazy for Playwright impor
 import json  # Build controlled fake route responses.
 import logging  # Capture log text for the leak scan journey.
 import time  # Bound the footer wait in the resize journey.
+from base64 import b64decode  # Verify stored replay bytes separately from rendered rows.
 from pathlib import Path  # Read the downloaded terminal history file.
 from typing import Any  # Playwright objects are duck typed in these tests.
 from urllib.parse import parse_qs, urlsplit  # Read the after value of each terminal read URL.
@@ -931,18 +932,75 @@ def test_review_20_old_session_end_keeps_shown_session_live(
     _shot(page, harness, "review-20-switch-back-shows-end.png")  # Save evidence.
 
 
-def test_review_18_session_switch_drops_pending_paste(page: Any, terminal_harness: TerminalPortalHarness) -> None:
+class ShellReplayVisibility:
+    """Control native offscreen rendering without changing the replay bytes."""
+
+    OFFSCREEN_SCRIPT = """() => {
+        const scroll = Element.prototype.scrollIntoView;
+        Element.prototype.scrollIntoView = function(options) {
+            if (this.id !== 'wsMessagePanel') scroll.call(this, options);
+        };
+        const focus = HTMLTextAreaElement.prototype.focus;
+        HTMLTextAreaElement.prototype.focus = function() {
+            focus.call(this, {preventScroll: true});
+        };
+        const observer = window.IntersectionObserver;
+        window.IntersectionObserver = class extends observer {
+            constructor(callback, options) {
+                super((entries, instance) => {
+                    window.wsReplayOutsideViewport = entries.some(entry => !entry.isIntersecting);
+                    callback(entries, instance);
+                }, options);
+            }
+        };
+        window.scrollTo(0, 0);
+    }"""  # Let the native observer pause rendering before the held replay arrives.
+
+    @classmethod
+    def select(cls, page: Any, session_id: str, offscreen: bool) -> None:
+        """Select a shell and verify its stored replay before checking rendered text."""
+        if offscreen:  # Exercise the CI ordering through the native renderer.
+            logging.getLogger(__name__).info("Preparing the offscreen shell replay control")
+            page.evaluate(cls.OFFSCREEN_SCRIPT)
+            page.route(
+                f"**/sessions/{session_id}/terminal?after=0&*",
+                lambda route: cls.release(page, route),
+            )  # Hold only the selected shell's initial replay.
+        with page.expect_response(
+            lambda response: f"/{session_id}/terminal" in response.url and "after=0" in response.url
+        ) as replay:
+            page.locator(f'[data-session-id="{session_id}"]').click()
+        data = b64decode(replay.value.json()["data"], validate=True)
+        assert data == b"Welcome to Fake Mist Shell\r\n\x1b[?2004hdevice> "
+        logging.getLogger(__name__).debug("Verified %d stored shell replay bytes", len(data))
+
+    @staticmethod
+    def release(page: Any, route: Any) -> None:
+        """Return real stored output after the native observer pauses rendering."""
+        page.wait_for_function(
+            "() => window.wsReplayOutsideViewport === true",
+            timeout=READY_TIMEOUT_MS,
+        )  # Require the failing visibility precondition instead of an arbitrary sleep.
+        logging.getLogger(__name__).info("Reading the controlled shell replay from the local portal")
+        response = route.fetch()
+        route.fulfill(response=response)
+        logging.getLogger(__name__).debug("Returned the controlled shell replay with status %d", response.status)
+
+
+@pytest.mark.parametrize("offscreen_replay", [False, True], ids=["normal", "offscreen"])
+def test_review_18_session_switch_drops_pending_paste(
+    page: Any, terminal_harness: TerminalPortalHarness, offscreen_replay: bool
+) -> None:
     """Review 18: a paste that waits for confirmation never moves to the next session."""
     _open_shell(page, terminal_harness)  # Start shell A.
     page.get_by_text("Welcome to Fake Mist Shell").wait_for(timeout=READY_TIMEOUT_MS)  # Shell A is live.
     first_id = _active_session_id(page)  # Remember shell A.
     terminal_harness.start_shell(page)  # Start shell B, which the page then shows.
     second_id = _wait_new_active_session(page, first_id)  # Shell B is now the shown session.
-    with page.expect_response(
-        lambda response: f"/{first_id}/terminal" in response.url and "after=0" in response.url
-    ) as replay:  # Wait for shell A to return its stored history.
-        page.locator(f'[data-session-id="{first_id}"]').click()  # Show shell A again.
-    assert replay.value.json()["data"]  # The terminal route must return shell A bytes.
+    ShellReplayVisibility.select(page, first_id, offscreen_replay)  # Verify real stored output in both orderings.
+    page.get_by_test_id("ws-terminal-screen").scroll_into_view_if_needed(
+        timeout=READY_TIMEOUT_MS
+    )  # xterm pauses rendering outside the viewport even when the replay bytes have arrived.
     page.get_by_text("Welcome to Fake Mist Shell").wait_for(timeout=READY_TIMEOUT_MS)  # Shell A replays its banner.
     _shot(page, terminal_harness, "review-18-switch-back-shell-a.png")  # Save the visible replay before the paste.
     _dispatch_terminal_paste(page, "show version\nshow chassis hardware")  # Two lines open the confirmation.
