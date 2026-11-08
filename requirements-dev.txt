@@ -302,7 +302,7 @@ pydantic-core==2.50.4
     # via pydantic
 pydocstyle==6.3.0
     # via misthelper
-pyee==14.0.0
+pyee==16.0.1
     # via playwright
 pygments==2.21.0
     # via
