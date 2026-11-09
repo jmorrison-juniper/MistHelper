@@ -637,9 +637,12 @@ class TestFetchConfigType:
     def test_a_failure_returns_an_empty_list(self, manager: OrgConfigMigrationManager, caplog: Any) -> None:
         """One dead endpoint must not abandon the other five config types."""
         caplog.set_level("ERROR")  # WHY: the handler reports the failure at ERROR level.
+        manager.org_id = "test-org"  # WHY: the failure log must identify the affected organization.
         with patch.object(manager, "_resolve_api_fn", side_effect=RuntimeError("api down")):
             assert manager._fetch_config_type(dict(OrgConfigMigrationManager.CONFIG_TYPES[0])) == []
-        assert "api down" in caplog.text  # WHY: the operator needs the cause to triage.
+        assert "test-org" in caplog.text  # WHY: the operator needs the affected organization.
+        assert "RuntimeError" in caplog.text  # WHY: the operator needs the failure category.
+        assert "api down" not in caplog.text  # WHY: exception text can contain private response data.
 
 
 class TestExecuteImport:

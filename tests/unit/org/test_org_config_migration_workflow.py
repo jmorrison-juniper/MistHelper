@@ -50,6 +50,53 @@ def _valid_bundle() -> dict[str, Any]:
     return bundle  # WHY: the caller adds objects to the type it tests.
 
 
+def _mock_failed_export_endpoints(monkeypatch: pytest.MonkeyPatch, marker: str) -> list[MagicMock]:
+    """Make every real export endpoint raise the same synthetic private error."""
+    endpoint_specs = [  # Map each export type to its actual API endpoint.
+        (ocm.mistapi.api.v1.orgs.networks, "listOrgNetworks"),  # Cover network export failures.
+        (ocm.mistapi.api.v1.orgs.services, "listOrgServices"),  # Cover service export failures.
+        (ocm.mistapi.api.v1.orgs.vpns, "listOrgVpns"),  # Cover VPN export failures.
+        (ocm.mistapi.api.v1.orgs.gatewaytemplates, "listOrgGatewayTemplates"),  # Cover template export failures.
+        (ocm.mistapi.api.v1.orgs.deviceprofiles, "listOrgDeviceProfiles"),  # Cover profile export failures.
+        (ocm.mistapi.api.v1.orgs.servicepolicies, "listOrgServicePolicies"),  # Cover policy export failures.
+    ]  # Map each export type to its actual API endpoint.
+    endpoint_mocks = [  # Create one error source for each real endpoint.
+        MagicMock(side_effect=RuntimeError(f"{marker}: Private Org Name")) for _ in endpoint_specs
+    ]  # Return sensitive exception text from each mocked endpoint.
+    for (endpoint_module, endpoint_name), endpoint_mock in zip(endpoint_specs, endpoint_mocks, strict=True):
+        monkeypatch.setattr(endpoint_module, endpoint_name, endpoint_mock)  # Replace the endpoint without a request.
+    return endpoint_mocks  # Let the test prove that every endpoint ran once.
+
+
+def _successful_metadata_response() -> Any:
+    """Return one successful offline SDK response with a private organization name."""
+    from mistapi.__api_response import APIResponse  # Keep the native fixture local to this SDK boundary.
+
+    response = requests.Response()  # Exercise the native SDK response shape without a request.
+    response.status_code = 200  # A successful metadata response retains its name in the bundle.
+    response._content = b'{"name": "Private Org Name"}'  # Supply identifiable returned metadata.
+    return APIResponse(
+        response=response,
+        url="https://api.mist.com/api/v1/orgs/dest-org",
+    )  # Preserve native response parsing without a network request.
+
+
+def _assert_export_logs_are_private(records: list[Any], saved_file: Path, marker: str) -> str:
+    """Reject returned names, paths, and synthetic exception text from every captured log."""
+    log_messages = "\n".join(record.getMessage() for record in records)  # Include root and manager records.
+    forbidden_values = [
+        marker,
+        "Private Org Name",
+        "Private_Org_Name",
+        saved_file.name,
+        str(Path("data") / saved_file.name),
+        str(saved_file),
+    ]  # Cover metadata and generated output identifiers.
+    for forbidden_value in forbidden_values:
+        assert forbidden_value not in log_messages  # Keep private data out of every logger.
+    return log_messages  # Return messages for useful-context assertions.
+
+
 class TestGetOrgName:
     """Cover the org name lookup that labels every export bundle."""
 
@@ -328,6 +375,40 @@ class TestExportConfig:
         assert saved_files[0].name not in manager_log  # No manager log may include the generated filename.
         assert str(relative_output_path) not in manager_log  # No manager log may include the relative output path.
         assert str(saved_files[0]) not in manager_log  # No manager log may include the generated output path.
+
+    def test_fetch_failures_do_not_expose_exception_text_in_any_export_log(
+        self,
+        manager: OrgConfigMigrationManager,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Keep endpoint errors useful without leaking response text through the root logger."""
+        marker = "synthetic-exception-marker"  # Make arbitrary exception text easy to detect.
+        monkeypatch.chdir(tmp_path)  # Keep output separate from production data.
+        (tmp_path / "data").mkdir()  # The existing writer expects the product output directory.
+        endpoint_mocks = _mock_failed_export_endpoints(monkeypatch, marker)
+        caplog.set_level("DEBUG")  # Capture manager and root logger records across the complete export.
+        caplog.clear()  # Exclude SDK fixture construction records from the export evidence.
+        with patch.object(
+            ocm.mistapi.api.v1.orgs.orgs, "getOrg", return_value=_successful_metadata_response()
+        ):  # Return successful metadata without a live call.
+            manager.export_config()  # Exercise the real fetch loop and each API endpoint wrapper.
+        saved_files = list((tmp_path / "data").glob("OrgConfig_Export_*.json"))  # Inspect the test bundle.
+        assert len(saved_files) == 1  # The flow must persist exactly one export.
+        bundle = json.loads(saved_files[0].read_text(encoding="utf-8"))  # Verify metadata survives failures.
+        assert bundle["metadata"]["source_org_name"] == "Private Org Name"  # Preserve valid source metadata.
+        assert "Private_Org_Name" in saved_files[0].name  # Preserve the sanitized descriptive filename.
+        assert all(endpoint_mock.call_count == 1 for endpoint_mock in endpoint_mocks)  # Visit each real endpoint path.
+        log_messages = _assert_export_logs_are_private(caplog.records, saved_files[0], marker)
+        error_records = [record for record in caplog.records if record.levelno >= 40]  # Keep failures visible.
+        assert len(error_records) == len(TYPE_KEYS)  # Report one useful error for each failed endpoint.
+        assert all(record.name == ocm.__name__ for record in error_records)  # Keep errors on the manager logger.
+        assert all("dest-org" in record.getMessage() for record in error_records)  # Identify the affected org.
+        assert all("RuntimeError" in record.getMessage() for record in error_records)  # Retain failure type context.
+        assert all(
+            config_type["display_name"] in log_messages for config_type in OrgConfigMigrationManager.CONFIG_TYPES
+        )  # Retain the failed endpoint names for diagnosis.
 
 
 class TestSelectImportFile:

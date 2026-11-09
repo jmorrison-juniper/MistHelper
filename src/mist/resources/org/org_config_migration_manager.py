@@ -181,7 +181,7 @@ class OrgConfigMigrationManager:  # Org config migration manager.
         return current  # Return the final callable function
 
     def _fetch_config_type(self, config_type: dict) -> list:  # type: ignore[type-arg]
-        """Fetch all objects of a single config type from the API."""
+        """Fetch one config type and log failures without exception text."""
         display_name = config_type["display_name"]  # Human-readable name for logging
         logger.info("Fetching %s from org %s", display_name, self.org_id)  # Log before API call
         try:
@@ -193,8 +193,12 @@ class OrgConfigMigrationManager:  # Org config migration manager.
             logger.debug("Fetched %s %s objects", len(items), display_name)  # Log result count
             return items  # Return list of config objects
         except Exception as error:  # Catch API errors without crashing the entire export
-            logging.error("  X %s: Error - %s", display_name, error)  # User feedback showing failure
-            logging.error("Failed to fetch %s: %s", display_name, error)  # Log error with context
+            logger.error(
+                "  X %s: Request failed for org %s (%s)",  # Use a fixed message that cannot expose exception text.
+                display_name,  # Identify the failed configuration type.
+                self.org_id,  # Identify the organization that the request used.
+                type(error).__name__,  # Preserve the failure category without the message.
+            )  # Preserve endpoint context and failure type without arbitrary exception text.
             return []  # Return empty list so other types can still proceed
 
     def _extract_response_data(self, response) -> list:  # type: ignore[type-arg, no-untyped-def]
