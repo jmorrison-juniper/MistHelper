@@ -131,11 +131,36 @@ def test_a_successful_write_reports_the_file(stub_resolver: Any, caplog: Any) ->
     assert EXPORT_FILENAME in caplog.text
 
 
-def test_the_report_names_a_failed_site(stub_resolver: Any, caplog: Any) -> None:
-    """FR-026. An incomplete result must say which site it could not read."""
-    with caplog.at_level(logging.WARNING):
-        run_with_result(stub_resolver, build_result([build_finding()], failed=["site-x"]))
-    assert "site-x" in caplog.text
+def test_the_report_names_each_failed_site(stub_resolver: Any, caplog: Any) -> None:
+    """An incomplete result must name every site that the scan could not read."""
+    with caplog.at_level(logging.WARNING):  # WHY: capture the warning shown to the operator.
+        run_with_result(
+            stub_resolver,
+            build_result([build_finding()], failed=["site-x", "site-y"]),
+        )  # WHY: simulate two site failures during the operation.
+    assert "incomplete" in caplog.text.lower()  # WHY: the report must not imply a full scan.
+    assert "failed sites=2" in caplog.text  # WHY: give the operator the failure count.
+    assert "site-x" in caplog.text  # WHY: name the first site that the scan could not read.
+    assert "site-y" in caplog.text  # WHY: name the second site that the scan could not read.
+
+
+def test_an_incomplete_scan_labels_exported_findings_as_partial(stub_resolver: Any, caplog: Any) -> None:
+    """An incomplete scan must not report a partial export as complete."""
+    with caplog.at_level(logging.INFO):  # WHY: capture the full operator report.
+        run_with_result(stub_resolver, build_result([build_finding()], failed=["site-x"]))  # WHY: model partial input.
+    assert "partial" in caplog.text.lower()  # WHY: label the exported data as incomplete.
+    assert EXPORT_FILENAME in caplog.text  # WHY: identify the file with partial findings.
+    assert "Completed the rogue DHCP scan" not in caplog.text  # WHY: prevent a false success report.
+
+
+def test_an_incomplete_empty_scan_does_not_claim_a_clean_result(stub_resolver: Any, caplog: Any) -> None:
+    """A missing site response must not make an empty result look clean."""
+    with caplog.at_level(logging.INFO):  # WHY: capture the complete operator report.
+        run_with_result(stub_resolver, build_result([], failed=["site-x"]))  # WHY: model no findings and a failed site.
+    assert "incomplete" in caplog.text.lower()  # WHY: warn that the result does not cover every site.
+    assert "site-x" in caplog.text  # WHY: name the missing site data.
+    assert "No rogue DHCP server signal was found" not in caplog.text  # WHY: avoid a clean-result claim.
+    assert stub_resolver.DataExporter.write_with_format_selection.call_count == 0  # WHY: keep empty exports absent.
 
 
 def test_the_report_states_the_marvis_scope_limit(stub_resolver: Any, caplog: Any) -> None:
