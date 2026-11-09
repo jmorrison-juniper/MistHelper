@@ -364,3 +364,17 @@ Existing local commits remain preserved. The test-rename hold remains active.
 FR-015 through FR-018 map to T021 through T023 as recorded in `tasks.md`.
 The extension introduces no new module-level production symbols or dependency.
 Optional commits remain deferred to the explicit local commit.
+
+The implementation commit is `455b85e`, with both non-closing issue references and the required author trailer.
+The same committed input preflight reported `1 passed, 1 warning`, with four inputs read and validated.
+The same committed-difference analyzer reported:
+
+```text
+gate_scope: 3 files checked, 0 findings checked
+test_quality_analyzer: 0 findings (0/0/0/0), 2 skipped, 0 parse errors
+gate: 0 new findings vs baseline
+```
+
+The two skipped entries identify omitted full-suite roots, not the three changed test files.
+The writing gate checked all five extension records, skipped none, and passed with scores from 91 through 98.
+The extension tasks are complete. Publication remains held.
