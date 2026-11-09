@@ -319,7 +319,7 @@ def test_fetch_site_data_bypasses_limit_kwarg_when_unsupported() -> None:
     exporter, mocks = _build_exporter()
     api = _NoLimitApi()
     exporter._fetch_site_data(api, "site-1", {"extra": True})
-    mocks["get_all"].assert_called_once()  # WHY: pagination path executed.
+    assert [entry.kwargs["response"]["kwargs"] for entry in mocks["get_all"].call_args_list] == [{"extra": True}]
 
 
 def test_emit_debug_table_renders_prettytable_and_progress() -> None:
