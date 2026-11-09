@@ -111,6 +111,9 @@ Apply the rule through `_redact_text` to messages and fresh or cached exception 
 Use `tests/unit/utils/test_logger_verification_urls.py` for isolated stream and real portal tests.
 The dedicated test file follows the explicit ownership handoff instead of editing the renamed test.
 The existing test directory exceeds the structural limit. Its separate directory migration remains assigned to the test owner.
+The approved analyzer-scope handoff separates three SDK cases into `tests/unit/utils/test_logger_verification_url_sdk_integration.py`.
+The original dedicated file retains 131 pure filter cases and no SDK import.
+The integration file keeps its explicit SDK import. Analyzer policy remains unchanged.
 Do not change bootstrap handlers or exporter callers in this handoff.
 Unlabeled response details remain outside this rule. Handler installation and safe exporter diagnostics require separate owners.
 Publication and test-rename holds remain active.

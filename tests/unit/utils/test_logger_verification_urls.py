@@ -3,9 +3,7 @@
 import logging
 import sys
 from io import StringIO
-from unittest.mock import Mock
 
-import mistapi
 import pytest
 
 from src.foundation.support.utils.logger_utils import SensitiveFilter
@@ -105,15 +103,3 @@ class TestVerificationUrlProbe:
         rendered = self.render(record, True, False)
         assert "URL_SYNTHETIC_4705" not in rendered
         assert f"***REDACTED***{delimiter}Safe context" in rendered
-
-    @pytest.mark.parametrize("value", ["(SDK_SYNTHETIC_VALUE)", "prefix(SDK_SYNTHETIC_VALUE)", "'SDK_SYNTHETIC_VALUE'"])
-    def test_sdk_path_punctuation(self, value: str) -> None:
-        """Check the real SDK URI construction with an in-memory transport."""
-        session = Mock()
-        mistapi.api.v1.self.update.verifySelfEmail(session, value)
-        uri = session.mist_get.call_args.kwargs["uri"]
-        session.mist_get.assert_called_once_with(uri=f"/api/v1/self/update/verify/{value}", query={})
-        record = logging.makeLogRecord({"msg": "SDK request %s", "args": (uri,), "levelno": logging.INFO})
-        rendered = self.render(record, True, False)
-        assert "SDK_SYNTHETIC_VALUE" not in rendered
-        assert "SDK request /api/v1/self/update/verify/***REDACTED***" in rendered
