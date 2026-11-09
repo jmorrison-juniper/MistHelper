@@ -12,8 +12,6 @@ from unittest.mock import Mock
 import pytest
 import requests
 import urllib3
-from mistapi.__api_request import APIRequest
-from mistapi.__logger import LogSanitizer
 
 from MistHelper import LogRotationSettings
 from src.foundation.support.refactors import main_entrypoint
@@ -187,6 +185,9 @@ class TestBootstrapHandlerRedaction:
         self, sinks: BootstrapSinks, monkeypatch: pytest.MonkeyPatch, sink: str, status: int
     ) -> None:
         """Check the installed SDK request logger without creating a real HTTP session."""
+        from mistapi.__api_request import APIRequest  # Load SDK request code only for this offline integration case.
+        from mistapi.__logger import LogSanitizer  # Restore the SDK logger filter only during its dedicated case.
+
         root, console, log_path = sinks  # Use only isolated handler output.
         response = requests.Response()  # Build a response in memory without a socket.
         response.status_code = status  # Exercise success and client/server failures without retries.
