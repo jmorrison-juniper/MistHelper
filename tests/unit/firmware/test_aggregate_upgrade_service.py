@@ -182,6 +182,65 @@ def test_partial_submission_keeps_each_child_and_blocks_replay() -> None:
         service.submit(SAFE_SESSION, record, store, permit_lock)
 
 
+@pytest.mark.parametrize(
+    ("raw_status", "upgrade_id", "accepted", "expected_status"),
+    [
+        pytest.param(400, None, (), "rejected", id="confirmed-client-refusal"),
+        pytest.param(503, None, (), "submission_unknown", id="server-error"),
+        pytest.param(200, None, ("001122334455",), "submission_unknown", id="success-without-identity"),
+        pytest.param(0, None, (), "submission_unknown", id="missing-http-status"),
+        pytest.param(200, "device-job", ("001122334455",), "accepted", id="valid-accepted-job"),
+    ],
+)
+def test_device_submission_state_requires_refusal_evidence(
+    raw_status: int, upgrade_id: str | None, accepted: tuple[str, ...], expected_status: str
+) -> None:
+    """Keep an unaccepted device submission uncertain unless HTTP proves refusal."""
+    child_record: dict[str, Any] = {}  # Keep the classifier input isolated.
+    submission = SimpleNamespace(  # Match only the fields read by the classifier.
+        upgrade_id=upgrade_id, raw_status=raw_status, accepted=accepted
+    )
+    AggregateUpgradeService._apply_device_submission(child_record, submission)  # Apply the real classifier.
+    assert child_record["status"] == expected_status  # Keep refusal and uncertainty distinct.
+
+
+@pytest.mark.parametrize(
+    ("raw_status", "upgrade_id", "error", "expected_status"),
+    [
+        pytest.param(400, None, "The cloud refused the request.", "rejected", id="confirmed-client-refusal"),
+        pytest.param(503, "server-job", "The server failed.", "submission_unknown", id="server-error"),
+        pytest.param(200, None, None, "submission_unknown", id="success-without-identity"),
+        pytest.param(0, None, "The status is missing.", "submission_unknown", id="missing-http-status"),
+        pytest.param(200, "ap-job", None, "accepted", id="valid-accepted-job"),
+    ],
+)
+def test_organization_submission_state_requires_refusal_evidence(
+    raw_status: int, upgrade_id: str | None, error: str | None, expected_status: str
+) -> None:
+    """Keep an unaccepted organization submission uncertain unless HTTP proves refusal."""
+    child_record: dict[str, Any] = {}  # Keep the classifier input isolated.
+    result = OrgUpgradeResult(ORG_ID, upgrade_id, raw_status, {}, error)  # Model the exact response.
+    AggregateUpgradeService._apply_org_submission(child_record, result)  # Apply the real classifier.
+    assert child_record["status"] == expected_status  # Keep refusal and uncertainty distinct.
+
+
+@pytest.mark.parametrize(
+    ("raw_status", "expected"),
+    [
+        pytest.param(400, True, id="lower-refusal-bound"),
+        pytest.param(499, True, id="upper-refusal-bound"),
+        pytest.param(399, False, id="below-refusal-range"),
+        pytest.param(500, False, id="server-error"),
+        pytest.param(None, False, id="missing-status"),
+        pytest.param("400", False, id="invalid-status-type"),
+        pytest.param(True, False, id="boolean-status"),
+    ],
+)
+def test_confirmed_refusal_requires_an_integer_client_error(raw_status: object, expected: bool) -> None:
+    """Reject invalid status values as proof that no cloud job exists."""
+    assert AggregateUpgradeService.is_confirmed_refusal(raw_status) is expected  # Use one shared refusal rule.
+
+
 def test_mixed_status_and_cancellation_keep_all_results() -> None:
     """A poll and a cancel preserve completed, failed, and running children."""
     org = OrgServiceStandIn()  # Record AP actions.

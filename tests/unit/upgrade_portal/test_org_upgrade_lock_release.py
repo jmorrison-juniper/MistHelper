@@ -20,8 +20,19 @@ def operation(*states: str, state: str = "running", cancelled: bool = False) -> 
     Returns:
         The operation record.
     """
-    children = [{"child_id": f"child-{index}", "status": value} for index, value in enumerate(states)]  # One row each.
-    return {"state": state, "children": children, "cancellation": {"requested": cancelled, "results": []}}
+    children = [  # One row for each child state.
+        {
+            "child_id": f"child-{index}",  # Keep each test child distinct.
+            "status": value,  # Preserve the requested child state.
+            "raw_status": 400 if value == "rejected" else 0,  # Keep legacy refusals distinct from unknown results.
+        }
+        for index, value in enumerate(states)
+    ]
+    return {  # Keep the operation shape used by the lock and retry checks.
+        "state": state,
+        "children": children,
+        "cancellation": {"requested": cancelled, "results": []},
+    }
 
 
 @pytest.mark.parametrize("child_state", ["running", "accepted", "partial", "read_unknown", "submission_unknown"])
@@ -62,6 +73,49 @@ def test_a_plan_with_no_accepted_child_needs_no_phase_watch_release_gate() -> No
     record = operation("rejected", "not_submitted", state="failed")  # The cloud accepted no child job.
     record["phase_watch"] = {"state": "not_started"}  # The prepared watch has no accepted target.
     assert org_upgrade._operation_is_settled(record) is True  # No phase or post-check stage can run.
+
+
+@pytest.mark.parametrize(
+    "raw_status",
+    [
+        pytest.param(503, id="server-error"),
+        pytest.param(200, id="damaged-success"),
+        pytest.param(0, id="missing-status"),
+        pytest.param(None, id="invalid-status"),
+    ],
+)
+@pytest.mark.parametrize(
+    "phase_watch",
+    [pytest.param(None, id="no-watch"), pytest.param({"state": "not_started"}, id="mapping-watch")],
+)
+def test_legacy_ambiguous_rejection_keeps_lock_and_blocks_retry(
+    monkeypatch: pytest.MonkeyPatch, raw_status: object, phase_watch: dict[str, str] | None
+) -> None:
+    """Keep old rejected records with no refusal proof away from release and retry."""
+    record = operation("rejected", state="failed")  # Model a legacy child that used the broad rejected state.
+    child = record["children"][0]  # Select the only child submission.
+    child["raw_status"] = raw_status  # Replace the known-refusal status with uncertain evidence.
+    record["site_locks"] = {"site-one": {"lock_id": "test-lock"}}  # Model one held site lock.
+    if phase_watch is not None:  # Exercise both records with and without a watch map.
+        record["phase_watch"] = phase_watch  # Preserve a mapping-shaped watch value.
+    callbacks: list[str] = []  # Record physical release and persistence requests.
+    monkeypatch.setattr(org_upgrade, "_release_one_lock", lambda *arguments: callbacks.append("release"))
+    monkeypatch.setattr(org_upgrade, "_cas_operation", lambda *arguments: callbacks.append("persist"))
+    org_upgrade.release_operation_locks(record)  # Run the real release gate with safe callbacks.
+    assert org_upgrade._operation_is_settled(record) is False  # The ambiguous child keeps the operation open.
+    assert org_upgrade.retry_plan_of(record) is None  # The same certainty rule blocks a retry.
+    assert callbacks == []  # No physical release or lock-map persistence occurred.
+    assert record["site_locks"]  # Keep the original site-lock record intact.
+
+
+def test_a_cloud_reported_rejection_keeps_its_existing_final_rule() -> None:
+    """A known cloud child state remains final after a successful status read."""
+    record = operation("rejected", state="failed")  # Build a child that has already settled.
+    child = record["children"][0]  # Select the cloud child state.
+    child["raw_status"] = 200  # The status read itself succeeded.
+    child["upgrade_id"] = "cloud-job"  # The response names the known cloud job.
+    child["cloud_status"] = "rejected"  # The cloud reported the final child state.
+    assert org_upgrade._operation_is_settled(record) is True  # Preserve the existing release behavior.
 
 
 @pytest.mark.parametrize(("state", "settled"), [("completed", True), ("failed", True), ("attention_required", False)])

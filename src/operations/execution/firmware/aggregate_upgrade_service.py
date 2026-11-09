@@ -929,22 +929,58 @@ class AggregateUpgradeService:  # Coordinate all child routes through one durabl
         record["errors"].append({"child_id": child["child_id"], "error": child["error"]})  # Keep the child error.
 
     @staticmethod
+    def is_confirmed_refusal(raw_status: object) -> bool:
+        """Return whether an integer HTTP client error proves that no job started."""
+        return (  # Reject booleans and non-integer values as refusal evidence.
+            isinstance(raw_status, int)  # Require the stored HTTP status type.
+            and not isinstance(raw_status, bool)  # Python treats booleans as integers.
+            and 400 <= raw_status < 500  # Match the established refusal boundary.
+        )
+
+    @classmethod
+    def submission_state(cls, accepted: bool, raw_status: object) -> str:
+        """Classify an accepted submission, a proven refusal, or an uncertain result."""
+        if accepted:  # The caller has verified the accepted response and its identity.
+            return "accepted"  # Permit the existing status-read path.
+        if cls.is_confirmed_refusal(raw_status):  # Only client errors prove refusal.
+            return "rejected"  # Preserve the established refusal state.
+        return "submission_unknown"  # Keep server, invalid, and damaged success replies uncertain.
+
+    @staticmethod
     def _apply_org_submission(child: MutableMapping[str, Any], result: OrgUpgradeResult) -> None:
         """Copy an organization AP submission result."""
         child["upgrade_id"] = result.upgrade_id  # Keep an identifier when the response has one.
         child["raw_status"] = result.raw_status  # Preserve the true HTTP status.
-        child["error"] = result.error  # Keep a malformed success distinct from acceptance.
         child["status_data"] = deepcopy(dict(result.data))  # Retain every site result.
-        child["status"] = "accepted" if result.error is None and result.upgrade_id else "rejected"  # Set outcome.
+        accepted = (  # Require the established HTTP status, a clean response, and a cloud identity.
+            result.error is None  # The response parser found no error.
+            and result.raw_status in upgrade_service.ACCEPTED_STATUS  # Keep the existing accepted-status contract.
+            and bool(result.upgrade_id)  # A status read needs a cloud job identity.
+        )
+        child["status"] = AggregateUpgradeService.submission_state(accepted, result.raw_status)  # Set one certainty.
+        child["error"] = result.error  # Keep the service error when it supplied one.
+        if child["status"] == "rejected" and result.error is None:  # Explain a refusal without a service message.
+            child["error"] = f"The cloud refused the submission with status {result.raw_status}."
+        elif child["status"] == "submission_unknown" and result.error is None:  # Explain a damaged success.
+            child["error"] = "The cloud did not confirm an upgrade identity or a refusal."
 
     @staticmethod
     def _apply_device_submission(child: MutableMapping[str, Any], submission: Any) -> None:
         """Copy one site or SSR submission result."""
         child["upgrade_id"] = submission.upgrade_id  # Keep a cloud identifier when one exists.
         child["raw_status"] = submission.raw_status  # Preserve the exact HTTP status.
-        accepted = bool(submission.accepted) and submission.raw_status in upgrade_service.ACCEPTED_STATUS
-        child["status"] = "accepted" if accepted else "rejected"  # Do not turn a refusal into success.
-        child["error"] = None if accepted else f"The cloud answered status {submission.raw_status}."  # Explain refusal.
+        accepted = (  # Require an accepted HTTP status, target result, and cloud identity.
+            bool(submission.accepted)  # Require at least one accepted target.
+            and submission.raw_status in upgrade_service.ACCEPTED_STATUS  # Keep the existing status contract.
+            and bool(submission.upgrade_id)  # A job identity is required for a safe status read.
+        )
+        child["status"] = AggregateUpgradeService.submission_state(accepted, submission.raw_status)  # Set certainty.
+        if child["status"] == "accepted":  # Accepted children keep the existing empty error.
+            child["error"] = None  # The response proved a cloud job identity.
+        elif child["status"] == "rejected":  # A client error proves that the cloud refused the write.
+            child["error"] = f"The cloud refused the submission with status {submission.raw_status}."
+        else:  # Other unaccepted responses can hide a cloud job.
+            child["error"] = f"The submission outcome is unknown after status {submission.raw_status}."
 
     def _read_child(
         self,

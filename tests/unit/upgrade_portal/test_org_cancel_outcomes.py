@@ -163,6 +163,8 @@ def test_a_child_job_that_never_started_lists_no_device(status: str, raw_status:
         pytest.param("planned", 0, "claim-1", id="planned-during-a-live-submission"),
         pytest.param("rejected", 500, None, id="a-server-error"),
         pytest.param("rejected", 200, None, id="a-damaged-success"),
+        pytest.param("submission_unknown", 503, None, id="a-classified-server-error"),
+        pytest.param("submission_unknown", 200, None, id="a-classified-damaged-success"),
         pytest.param("submission_unknown", 0, None, id="an-unknown-submission"),
     ],
 )

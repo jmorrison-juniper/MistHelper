@@ -1744,7 +1744,7 @@ SETTLED_OPERATION_STATES = frozenset(  # States that end every destructive child
 # follow. An uncertain child (`submission_unknown`, `read_unknown`) keeps the
 # sites, and the lease then expires on its own if no read reconciles it.
 FINAL_WRITE_STATES = frozenset(  # Child states in which no firmware write can follow.
-    {"completed", "cancelled", "failed", "rejected", "not_submitted"}
+    {"completed", "cancelled", "failed", "not_submitted"}
 )
 
 
@@ -1781,8 +1781,7 @@ def _operation_is_settled(operation: Mapping[str, Any]) -> bool:
     children = [child for child in operation.get("children", ()) if isinstance(child, Mapping)]  # Valid rows.
     if not children:  # A damaged record with no child keeps the conservative state rule.
         return str(operation.get("state", "")) in SETTLED_OPERATION_STATES  # Only a final aggregate state.
-    states = [str(child.get("status", "")).strip().lower() for child in children]  # One word for each child.
-    if not all(state in FINAL_WRITE_STATES for state in states):  # One child can still write firmware.
+    if not all(_child_write_is_settled(child) for child in children):  # One child can still write firmware.
         return False  # The operation keeps every selected site.
     watch = operation.get(WATCH_KEY)  # Issue #3333: the watch includes every post-check capture.
     if not isinstance(watch, Mapping):  # An earlier record has no phase watch or post-check stage.
@@ -1790,6 +1789,20 @@ def _operation_is_settled(operation: Mapping[str, Any]) -> bool:
     if OrgPhaseTargets.accepted_count(operation) == 0:  # No accepted child starts a phase watch.
         return True  # The operation has no post-check scope to protect.
     return OrgPhaseWatch.state_of(operation) in FINAL_WATCH_STATES  # Release only after the watch closes.
+
+
+def _child_write_is_settled(child: Mapping[str, Any]) -> bool:
+    """Return true only when a child state proves that its write has ended."""
+    state = str(child.get("status", "")).strip().lower()  # Normalize the stored child state.
+    if state in FINAL_WRITE_STATES:  # These states already prove that no write can follow.
+        return True  # Preserve the established final-state behavior.
+    if state != "rejected":  # An unknown submission state cannot release a site.
+        return False  # Keep every selected site until proof exists.
+    cloud_status = str(child.get("cloud_status") or "").strip().lower()  # Read any status from a known cloud job.
+    return (  # Accept only refusal evidence or the existing cloud-reported rejection.
+        AggregateUpgradeService.is_confirmed_refusal(child.get("raw_status"))  # Require an HTTP 4xx refusal.
+        or cloud_status == "rejected"  # Preserve a rejection reported for an identified cloud job.
+    )
 
 
 def _release_one_lock(org_id: str, site_id: str, value: object) -> None:

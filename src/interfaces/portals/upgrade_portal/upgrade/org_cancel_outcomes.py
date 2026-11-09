@@ -20,6 +20,7 @@ from typing import Any  # Accept the stored record as plain JSON.
 
 from src.operations.execution.firmware.aggregate_upgrade_service import (
     ENDED_CHILD_STATUS,
+    AggregateUpgradeService,
 )  # Issue #3367: the ended result word.
 
 logger = logging.getLogger(__name__)  # Use the module logger without secret fields.
@@ -41,7 +42,6 @@ class OrgCancelLists:
     """Apply the three list rules to the cancel result of one child job."""
 
     KEYS = ("cancelled", "already_writing", "no_cancel_available")  # The three lists of one cancel result.
-    REFUSED_STATUSES = range(400, 500)  # A client error proves that the cloud created no job.
 
     @classmethod
     def lists(cls, child: Mapping[str, Any], claimed: bool) -> tuple[dict[str, list[str]], str]:
@@ -80,7 +80,9 @@ class OrgCancelLists:
             return True  # No later request can send it.
         if status == "planned":  # No request sent the child job yet.
             return not claimed  # A live submission can still send it.
-        return status == "rejected" and child.get("raw_status") in cls.REFUSED_STATUSES  # The cloud refused it.
+        return status == "rejected" and AggregateUpgradeService.is_confirmed_refusal(  # Require shared refusal proof.
+            child.get("raw_status")
+        )
 
     @staticmethod
     def _macs(child: Mapping[str, Any]) -> list[str]:
