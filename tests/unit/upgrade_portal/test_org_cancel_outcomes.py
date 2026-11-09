@@ -145,8 +145,16 @@ def test_an_access_point_result_without_lists_names_each_access_point() -> None:
     [
         pytest.param("planned", 0, None, id="planned-with-no-live-submission"),
         pytest.param("not_submitted", 0, "claim-1", id="not-submitted"),
-        pytest.param("rejected", 400, None, id="refused-by-the-cloud"),
-        pytest.param("rejected", 499, None, id="refused-at-the-upper-bound"),
+        pytest.param("rejected", 400, None, id="refused-by-the-cloud"),  # The server rejected the request.
+        pytest.param("rejected", 401, None, id="unauthorized"),  # The server rejected the credentials.
+        pytest.param("rejected", 403, None, id="forbidden"),  # The server rejected the operator scope.
+        pytest.param("rejected", 404, None, id="missing-resource"),  # The server rejected the missing resource.
+        pytest.param("rejected", 405, None, id="method-refused"),  # The server rejected the method.
+        pytest.param("rejected", 409, None, id="request-conflict"),  # The server rejected the conflict.
+        pytest.param("rejected", 410, None, id="resource-gone"),  # The server rejected the missing resource.
+        pytest.param("rejected", 413, None, id="request-too-large"),  # The server rejected the request size.
+        pytest.param("rejected", 415, None, id="unsupported-content"),  # The server rejected the content type.
+        pytest.param("rejected", 422, None, id="invalid-request"),  # The server rejected the request fields.
     ],
 )
 def test_a_child_job_that_never_started_lists_no_device(status: str, raw_status: int, claim: str | None) -> None:
@@ -160,10 +168,14 @@ def test_a_child_job_that_never_started_lists_no_device(status: str, raw_status:
 @pytest.mark.parametrize(
     ("status", "raw_status", "claim"),
     [
-        pytest.param("planned", 0, "claim-1", id="planned-during-a-live-submission"),
-        pytest.param("rejected", 500, None, id="a-server-error"),
-        pytest.param("rejected", 200, None, id="a-damaged-success"),
-        pytest.param("submission_unknown", 0, None, id="an-unknown-submission"),
+        pytest.param("planned", 0, "claim-1", id="planned-during-a-live-submission"),  # The write may still run.
+        pytest.param("rejected", 408, None, id="a-request-timeout"),  # The response does not prove refusal.
+        pytest.param("rejected", 429, None, id="a-rate-limit"),  # The response does not prove refusal.
+        pytest.param("rejected", 499, None, id="an-unlisted-client-status"),  # The status is not allowlisted.
+        pytest.param("rejected", 451, None, id="an-unlisted-client-status"),  # The status is not allowlisted.
+        pytest.param("rejected", 500, None, id="a-server-error"),  # The response does not prove refusal.
+        pytest.param("rejected", 200, None, id="a-damaged-success"),  # The response does not prove refusal.
+        pytest.param("submission_unknown", 0, None, id="an-unknown-submission"),  # No response proves refusal.
     ],
 )
 def test_an_uncertain_child_job_lists_every_device_as_writing(status: str, raw_status: int, claim: str | None) -> None:

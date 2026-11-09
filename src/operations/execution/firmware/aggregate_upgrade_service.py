@@ -17,6 +17,9 @@ from dataclasses import dataclass  # Group the build input below the parameter l
 from datetime import UTC, datetime, timedelta  # Bound destructive claim leases in UTC.
 from typing import Any, Protocol  # Accept the SDK and define the durable store seam.
 
+from src.foundation.support.submission_certainty import (  # Keep the shared rule private to this module.
+    SubmissionCertainty as _SubmissionCertainty,
+)
 from src.operations.execution.firmware import upgrade_service  # Reuse the proven site and SSR planner.
 from src.operations.execution.firmware.org_cancel_sort import (
     OrgCancelSort,
@@ -933,18 +936,51 @@ class AggregateUpgradeService:  # Coordinate all child routes through one durabl
         """Copy an organization AP submission result."""
         child["upgrade_id"] = result.upgrade_id  # Keep an identifier when the response has one.
         child["raw_status"] = result.raw_status  # Preserve the true HTTP status.
-        child["error"] = result.error  # Keep a malformed success distinct from acceptance.
         child["status_data"] = deepcopy(dict(result.data))  # Retain every site result.
-        child["status"] = "accepted" if result.error is None and result.upgrade_id else "rejected"  # Set outcome.
+        if (  # Require a recognized success status, a valid response, and a trackable cloud job.
+            result.raw_status in upgrade_service.ACCEPTED_STATUS  # Only success statuses can prove acceptance.
+            and result.error is None  # A malformed response cannot prove acceptance.
+            and result.upgrade_id  # Keep a cloud identity for later reconciliation.
+        ):
+            child["status"] = "accepted"  # Keep the accepted job available for later reads.
+            child["error"] = None  # Do not show an error for a valid accepted response.
+            return  # Do not classify accepted evidence as a refusal.
+        if _SubmissionCertainty.is_known_refusal(result.raw_status):  # Only an explicit refusal proves no job exists.
+            child["status"] = "rejected"  # Keep a proven refusal eligible for lock release.
+            child["error"] = result.error or (  # Preserve useful details from the refusal response.
+                f"The cloud refused the request with status {result.raw_status}."  # Name the refusal status.
+            )
+            return  # Do not classify a proven refusal as uncertain.
+        child["status"] = "submission_unknown"  # Keep the site locked when the reply cannot prove refusal.
+        child["error"] = result.error or (  # Preserve the safe error or explain the uncertain status.
+            f"The cloud response status {result.raw_status} did not prove that no job exists."  # State the uncertainty.
+        )
 
     @staticmethod
     def _apply_device_submission(child: MutableMapping[str, Any], submission: Any) -> None:
         """Copy one site or SSR submission result."""
         child["upgrade_id"] = submission.upgrade_id  # Keep a cloud identifier when one exists.
         child["raw_status"] = submission.raw_status  # Preserve the exact HTTP status.
-        accepted = bool(submission.accepted) and submission.raw_status in upgrade_service.ACCEPTED_STATUS
-        child["status"] = "accepted" if accepted else "rejected"  # Do not turn a refusal into success.
-        child["error"] = None if accepted else f"The cloud answered status {submission.raw_status}."  # Explain refusal.
+        accepted = (  # A device result needs both accepted targets and an identity for later reconciliation.
+            bool(submission.accepted)  # Require at least one accepted device target.
+            and submission.raw_status in upgrade_service.ACCEPTED_STATUS  # Require a success response status.
+            and bool(submission.upgrade_id)  # Keep a cloud identity for later reconciliation.
+        )
+        if accepted:  # The response identifies a job that the portal can read.
+            child["status"] = "accepted"  # Keep the accepted job available for later reads.
+            child["error"] = None  # Do not show an error for a valid accepted response.
+            return  # Do not classify accepted evidence as a refusal.
+        if _SubmissionCertainty.is_known_refusal(
+            submission.raw_status
+        ):  # Only an explicit refusal proves no job exists.
+            child["status"] = "rejected"  # Keep a proven refusal eligible for lock release.
+            child["error"] = f"The cloud refused the request with status {submission.raw_status}."  # Name refusal.
+            return  # Do not classify a proven refusal as uncertain.
+        child["status"] = "submission_unknown"  # Keep the site locked when the reply cannot prove refusal.
+        child["error"] = (  # Keep a readable reason when the response cannot prove refusal.
+            f"The cloud response status {submission.raw_status} "  # Name the response status.
+            "did not prove that no job exists."  # State why the outcome remains uncertain.
+        )
 
     def _read_child(
         self,

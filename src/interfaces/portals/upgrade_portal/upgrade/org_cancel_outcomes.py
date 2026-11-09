@@ -18,6 +18,9 @@ import logging  # Record each build before and after its action.
 from collections.abc import Mapping  # Name the read-only shape of a stored record.
 from typing import Any  # Accept the stored record as plain JSON.
 
+from src.foundation.support.submission_certainty import (  # Keep the shared rule private to this module.
+    SubmissionCertainty as _SubmissionCertainty,
+)
 from src.operations.execution.firmware.aggregate_upgrade_service import (
     ENDED_CHILD_STATUS,
 )  # Issue #3367: the ended result word.
@@ -41,7 +44,6 @@ class OrgCancelLists:
     """Apply the three list rules to the cancel result of one child job."""
 
     KEYS = ("cancelled", "already_writing", "no_cancel_available")  # The three lists of one cancel result.
-    REFUSED_STATUSES = range(400, 500)  # A client error proves that the cloud created no job.
 
     @classmethod
     def lists(cls, child: Mapping[str, Any], claimed: bool) -> tuple[dict[str, list[str]], str]:
@@ -80,7 +82,10 @@ class OrgCancelLists:
             return True  # No later request can send it.
         if status == "planned":  # No request sent the child job yet.
             return not claimed  # A live submission can still send it.
-        return status == "rejected" and child.get("raw_status") in cls.REFUSED_STATUSES  # The cloud refused it.
+        return (  # A rejected child needs explicit evidence before cancellation can call it refused.
+            status == "rejected"  # Apply the refusal rule only to a rejected child.
+            and _SubmissionCertainty.is_known_refusal(child.get("raw_status"))  # Require an allowlisted status.
+        )
 
     @staticmethod
     def _macs(child: Mapping[str, Any]) -> list[str]:

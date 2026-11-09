@@ -21,6 +21,9 @@ from typing import Any
 from flask import Blueprint, Response, current_app, g, has_request_context, jsonify, request, session
 from requests.exceptions import RequestException  # Name the transport faults that the Mist SDK can raise.
 
+from src.foundation.support.submission_certainty import (  # Keep the shared rule private to this module.
+    SubmissionCertainty as _SubmissionCertainty,
+)
 from src.interfaces.portals.upgrade_portal.api.run_controls.views import (
     RunStalePolicy,
 )  # Issue #3249: the age rule of the single-site page.
@@ -1782,7 +1785,11 @@ def _operation_is_settled(operation: Mapping[str, Any]) -> bool:
     if not children:  # A damaged record with no child keeps the conservative state rule.
         return str(operation.get("state", "")) in SETTLED_OPERATION_STATES  # Only a final aggregate state.
     states = [str(child.get("status", "")).strip().lower() for child in children]  # One word for each child.
-    if not all(state in FINAL_WRITE_STATES for state in states):  # One child can still write firmware.
+    if not all(  # Require final states and evidence for each rejected child.
+        state in FINAL_WRITE_STATES  # Require a final child state.
+        and _SubmissionCertainty.allows_settlement(state, child.get("raw_status"))  # Require refusal proof when needed.
+        for child, state in zip(children, states, strict=True)  # Pair each state with its saved response evidence.
+    ):
         return False  # The operation keeps every selected site.
     watch = operation.get(WATCH_KEY)  # Issue #3333: the watch includes every post-check capture.
     if not isinstance(watch, Mapping):  # An earlier record has no phase watch or post-check stage.

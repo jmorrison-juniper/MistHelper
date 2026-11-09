@@ -133,6 +133,62 @@ def build_record(service: AggregateUpgradeService) -> dict[str, Any]:
     return service.build(request)  # No cloud call runs here.
 
 
+@pytest.mark.parametrize(
+    ("raw_status", "upgrade_id", "error", "expected"),
+    [
+        pytest.param(400, None, "refused", "rejected", id="known-refusal"),  # The refusal proves no job exists.
+        pytest.param(408, None, "timeout", "submission_unknown", id="request-timeout"),  # A timeout is uncertain.
+        pytest.param(429, None, "rate-limited", "submission_unknown", id="rate-limit"),  # The write may have arrived.
+        pytest.param(499, None, "client-closed", "submission_unknown", id="unlisted-client-status"),  # Not allowlisted.
+        pytest.param(
+            503, None, "server-error", "submission_unknown", id="server-error"
+        ),  # A server reply is uncertain.
+        pytest.param(
+            503, "ap-job", None, "submission_unknown", id="server-error-with-identity"
+        ),  # A server error stays uncertain even when it carries an identity.
+        pytest.param(200, None, "malformed", "submission_unknown", id="malformed-success"),  # No valid identity exists.
+        pytest.param(200, None, None, "submission_unknown", id="missing-upgrade-identity"),  # No job can be reconciled.
+        pytest.param(200, "ap-job", None, "accepted", id="accepted"),  # A valid identity proves acceptance.
+    ],
+)
+def test_org_submission_classifies_response_certainty(  # Preserve uncertain replies instead of calling them refusals.
+    raw_status: int,
+    upgrade_id: str | None,
+    error: str | None,
+    expected: str,
+) -> None:
+    """Only explicit refusals settle an organization submission."""
+    child_record: dict[str, Any] = {"child_id": "child-1"}  # Keep the child fields under test.
+    result = OrgUpgradeResult(ORG_ID, upgrade_id, raw_status, {}, error)  # Model the saved cloud response.
+    AggregateUpgradeService._apply_org_submission(child_record, result)  # Use the production classifier.
+    assert child_record["status"] == expected  # Preserve uncertainty unless the evidence proves a refusal.
+
+
+@pytest.mark.parametrize(
+    ("raw_status", "accepted", "upgrade_id", "expected"),
+    [
+        pytest.param(200, ("001122334455",), "site-job", "accepted", id="accepted"),  # A tracked job can be read.
+        pytest.param(202, ("001122334455",), "site-job", "accepted", id="accepted-async"),  # Async acceptance is valid.
+        pytest.param(400, (), None, "rejected", id="known-refusal"),  # The allowlist proves no job exists.
+        pytest.param(408, (), None, "submission_unknown", id="request-timeout"),  # A timeout is uncertain.
+        pytest.param(429, (), None, "submission_unknown", id="rate-limit"),  # The write may have arrived.
+        pytest.param(503, (), None, "submission_unknown", id="server-error"),  # A server reply is uncertain.
+        pytest.param(200, ("001122334455",), None, "submission_unknown", id="missing-upgrade-identity"),
+    ],
+)
+def test_device_submission_requires_a_reconcilable_outcome(  # Require a stable identity before accepting a reply.
+    raw_status: int,
+    accepted: tuple[str, ...],
+    upgrade_id: str | None,
+    expected: str,
+) -> None:
+    """A device response without a job identity cannot prove a final outcome."""
+    child_record: dict[str, Any] = {"child_id": "child-1"}  # Keep the child fields under test.
+    submission = UpgradeSubmission(upgrade_id, "site", accepted, (), raw_status)  # Model the saved response.
+    AggregateUpgradeService._apply_device_submission(child_record, submission)  # Use the production classifier.
+    assert child_record["status"] == expected  # Never collapse an ambiguous reply into a refusal.
+
+
 def test_build_routes_each_family_and_keeps_explicit_targets() -> None:
     """The plan uses one AP child and the proven site and SSR routes."""
     service = AggregateUpgradeService(OrgServiceStandIn(), DeviceServiceStandIn())  # Use stand-ins only.
