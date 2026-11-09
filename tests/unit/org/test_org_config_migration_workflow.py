@@ -231,7 +231,7 @@ class TestDisplayExportSummary:
         )  # WHY: preview now uses INFO.
         counts = {key: 1 for key in TYPE_KEYS}  # WHY: one object of every type.
         bundle = {"metadata": {"object_counts": counts}}  # WHY: the printer reads this section.
-        manager._display_export_summary(bundle, "data/OrgConfig_Export_Acme.json")  # WHY: drive the printer.
+        manager._display_export_summary(bundle)  # WHY: drive the printer without a generated path.
         for config_type in OrgConfigMigrationManager.CONFIG_TYPES:  # WHY: check all six labels.
             assert str(config_type["display_name"]) in caplog.text
         assert "TOTAL" in caplog.text  # WHY: the operator checks the grand total first.
@@ -239,7 +239,7 @@ class TestDisplayExportSummary:
     def test_an_empty_export_reports_a_zero_total(self, manager: OrgConfigMigrationManager, caplog: Any) -> None:
         """An org with no WAN config must report zero rather than raise."""
         caplog.set_level("INFO")  # WHY: INFO keeps this operator preview visible by default.
-        manager._display_export_summary({"metadata": {"object_counts": {}}}, "data/x.json")  # WHY: drive it empty.
+        manager._display_export_summary({"metadata": {"object_counts": {}}})  # WHY: drive it empty.
         assert "TOTAL" in caplog.text  # WHY: the totals row must still print.
 
 
@@ -274,7 +274,7 @@ class TestExportConfig:
             manager.export_config()  # WHY: drive the whole menu 58 flow.
         fetch_spy.assert_called_once()  # WHY: the fetch must run before the write.
         save_spy.assert_called_once()  # WHY: exactly one bundle per export.
-        summary_spy.assert_called_once_with(save_spy.call_args[0][0], "data/x.json")
+        summary_spy.assert_called_once_with(save_spy.call_args[0][0])
 
     def test_the_org_resolver_sets_the_source_org(self, manager: OrgConfigMigrationManager) -> None:
         """A wrong org would export the config of the wrong customer."""
@@ -287,23 +287,26 @@ class TestExportConfig:
             manager.export_config()  # WHY: drive the whole menu 58 flow.
         assert manager.org_id == "dest-org"  # WHY: the resolver value must reach the instance.
 
-    @pytest.mark.parametrize("scenario", [(200, "Acme"), (403, "Unknown"), (503, "Unknown")])
+    @pytest.mark.parametrize("scenario", [(200, "Private-Org-Name"), (403, "Unknown"), (503, "Unknown")])
     def test_validated_metadata_reaches_the_saved_bundle(
         self,
         manager: OrgConfigMigrationManager,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
         scenario: tuple[int, str],
     ) -> None:
-        """Integrate lookup validation with the existing export writer without network access."""
+        """Keep export metadata and filenames while excluding the name and path from manager logs."""
         from mistapi.__api_response import APIResponse  # Keep the native fixture local to this SDK boundary.
 
         monkeypatch.chdir(tmp_path)  # Keep output separate from production data.
         (tmp_path / "data").mkdir()  # The existing writer expects the product output directory.
         response = requests.Response()  # Use the native SDK response shape for this integrated flow.
         response.status_code = scenario[0]  # Prove that status overrides a plausible body name.
-        response._content = b'{"name": "Acme"}'  # The same body must yield different labels after refusal.
+        response._content = b'{"name": "Private-Org-Name"}'  # Make returned metadata identifiable in captured logs.
         api_response = APIResponse(response=response, url="https://api.mist.com/api/v1/orgs/dest-org")
+        caplog.set_level("DEBUG", logger=ocm.__name__)  # Capture every manager record from the export.
+        caplog.clear()  # Exclude SDK wrapper diagnostics from this manager-log assertion.
         with (
             patch.object(ocm.mistapi.api.v1.orgs.orgs, "getOrg", return_value=api_response),
             patch.object(manager, "_fetch_all_types", return_value={key: [] for key in TYPE_KEYS}),
@@ -312,7 +315,16 @@ class TestExportConfig:
         saved_files = list((tmp_path / "data").glob("OrgConfig_Export_*.json"))  # Inspect the private test output.
         assert len(saved_files) == 1  # The flow must persist exactly one export.
         bundle = json.loads(saved_files[0].read_text(encoding="utf-8"))  # Verify the durable metadata result.
-        assert bundle["metadata"]["source_org_name"] == scenario[1]  # Preserve success and explicit unknown.
+        assert bundle["metadata"]["source_org_name"] == scenario[1]  # Preserve the valid name or explicit unknown.
+        if scenario[0] == 200:  # A successful export keeps the source label in its filename.
+            assert "Private-Org-Name" in saved_files[0].name  # Preserve the operator's descriptive file name.
+        manager_records = [record for record in caplog.records if record.name == ocm.__name__]
+        assert manager_records  # The test must inspect records from the complete export flow.
+        manager_log = "\n".join(record.getMessage() for record in manager_records)
+        assert "saved in data/" in manager_log  # Keep the output directory visible to the operator.
+        assert "Private-Org-Name" not in manager_log  # The returned name must not enter manager logs.
+        assert "Private_Org_Name" not in manager_log  # The generated safe filename must not enter manager logs.
+        assert str(saved_files[0]) not in manager_log  # No manager log may include the generated output path.
 
 
 class TestSelectImportFile:

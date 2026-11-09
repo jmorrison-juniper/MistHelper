@@ -105,13 +105,13 @@ class OrgConfigMigrationManager:  # Org config migration manager.
         logger.info("Menu 58: Starting org config export")  # Log operation start for traceability
         self.org_id = self.org_id_fn()  # Resolve current org ID from cache or user prompt
         org_name = self._get_org_name()  # Fetch human-readable org name for bundle metadata
-        logger.warning("\n  Exporting WAN/Gateway config from org: %s", org_name)  # User feedback
+        logger.warning("\n  Exporting WAN/Gateway config.")  # Avoid the returned org name in manager logs.
 
         results = self._fetch_all_types()  # Fetch all 6 config types from the API
         bundle = self._build_export_bundle(results, org_name)  # Wrap results with metadata
-        filepath = self._save_bundle_to_file(bundle, org_name)  # Write bundle to data/ directory
-        self._display_export_summary(bundle, filepath)  # Show summary table to user
-        logger.info("Menu 58: Export complete, saved to %s", filepath)  # Log completion
+        self._save_bundle_to_file(bundle, org_name)  # Write the bundle without retaining its private path.
+        self._display_export_summary(bundle)  # Show summary table without the generated filename.
+        logger.info("Menu 58: Export complete.")  # Avoid the generated filename in manager logs.
 
     def _fetch_all_types(self) -> dict[str, list]:  # type: ignore[type-arg]
         """Fetch all 6 config types and return as a keyed dictionary."""
@@ -226,21 +226,20 @@ class OrgConfigMigrationManager:  # Org config migration manager.
         timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")  # UTC timestamp for uniqueness
         filename = f"OrgConfig_Export_{safe_name}_{timestamp}.json"  # Construct descriptive filename
         filepath = os.path.join("data", filename)  # Use os.path.join for cross-platform paths
-        logger.info("Saving export bundle to %s", filepath)  # Log before file write
+        logger.info("Saving export bundle in data/")  # Avoid the returned org name in the generated filename.
         with open(filepath, "w", encoding="utf-8") as output_file:  # Open file with UTF-8 encoding
             json.dump(bundle, output_file, indent=2, default=str)  # Write indented JSON for readability
         logger.debug("Export bundle saved, %s bytes", os.path.getsize(filepath))  # Log file size after write
-        return filepath  # Return path for summary display
+        return filepath  # Return the path to the caller without logging it.
 
-    def _display_export_summary(self, bundle: dict, filepath: str) -> None:  # type: ignore[type-arg]
+    def _display_export_summary(self, bundle: dict) -> None:  # type: ignore[type-arg]
         """Print a summary table of the export results."""
         counts = bundle["metadata"]["object_counts"]  # Extract per-type counts from metadata
         total = sum(counts.values())  # Calculate total objects across all types
         logger.warning(
-            "\n  Export Summary - saved to %s\n  %s",
-            filepath,
+            "\n  Export Summary - saved in data/\n  %s",
             "-" * 40,
-        )  # Show output file location + separator
+        )  # Show the output directory without the generated filename.
         for config_type in self.CONFIG_TYPES:  # Iterate types in registry order
             key = config_type["key"]  # Get the bundle key for this type
             logger.warning("    %-25s %5d", config_type["display_name"], counts.get(key, 0))  # Aligned count column
