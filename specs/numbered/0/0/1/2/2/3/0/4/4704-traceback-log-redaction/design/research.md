@@ -53,3 +53,12 @@ Match header names without case sensitivity.
 Keep the rule on one line and retain cached exception protection.
 Issue #4705 owns this additional labeled-header gap.
 Arbitrary unlabeled secrets remain outside the protection contract.
+
+## Structured Header Decision
+
+Digest and AWS4 values contain several parameters, quoted strings, and commas.
+A scheme-plus-token rule leaves later parameters visible.
+Redact through the end of the labeled line instead.
+Do not cross CR or LF.
+This intentionally removes any same-line diagnostic after a header.
+Tests must prove that subsequent diagnostic lines and safe exception chains remain complete.

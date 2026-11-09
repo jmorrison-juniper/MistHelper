@@ -261,6 +261,11 @@ class TestLabeledCredentials:
             "password=ISSUE4705_SYNTHETIC_VALUE",
             "token: ISSUE4705_SYNTHETIC_VALUE",
             "api_key=ISSUE4705_SYNTHETIC_VALUE",
+            'Authorization: Digest username="synthetic", realm="example", response="ISSUE4705_SYNTHETIC_VALUE"',
+            (
+                "Authorization: AWS4-HMAC-SHA256 Credential=synthetic, SignedHeaders=host, "
+                "Signature=ISSUE4705_SYNTHETIC_VALUE"
+            ),
         ],
     )
     def test_complete_labeled_value_is_removed(self, message: str) -> None:
@@ -278,6 +283,16 @@ class TestLabeledCredentials:
         record = logging.makeLogRecord({"msg": message})
         assert SensitiveFilter().filter(record) is True
         assert record.getMessage() == message
+
+    @pytest.mark.parametrize("newline", ["\n", "\r\n"])
+    def test_complete_header_stops_at_line_boundary(self, newline: str) -> None:
+        """Protect all parameters without removing the next safe diagnostic."""
+        message = (
+            f'Authorization: Digest username="synthetic", response="ISSUE4705_SYNTHETIC_VALUE"{newline}Safe context'
+        )
+        record = logging.makeLogRecord({"msg": message})
+        assert SensitiveFilter().filter(record) is True
+        assert record.getMessage() == f"Authorization={REDACTED_PLACEHOLDER}{newline}Safe context"
 
     def test_unlabeled_text_is_outside_the_redaction_contract(self) -> None:
         """Do not claim recognition of an arbitrary unlabeled value."""
