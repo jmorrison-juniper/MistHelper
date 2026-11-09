@@ -81,6 +81,28 @@ def test_split_full_address_preserves_non_string_json_identity(json_address: str
 
 
 @pytest.mark.parametrize(
+    "address, marker",
+    [
+        ("private-string-address-marker", "private-string-address-marker"),
+        ({"private-object-address-marker": "private-value"}, "private-object-address-marker"),
+    ],
+)
+def test_split_full_address_diagnostic_does_not_log_address(
+    address: object,
+    marker: str,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Keep parse diagnostics while excluding supplied string and object values."""
+    with caplog.at_level(logging.DEBUG):
+        result = OrgInventoryExporter._split_full_address(address)
+
+    assert result[0] is address
+    assert result[1:] == ("", "", "", "")
+    assert "Failed to split address" in caplog.text
+    assert marker not in caplog.text
+
+
+@pytest.mark.parametrize(
     "address",
     [FirstSplitIndexError("123 Main St, Springfield, IL 62704, US"), AddressWithSecondSplitIndexError("unused")],
 )
