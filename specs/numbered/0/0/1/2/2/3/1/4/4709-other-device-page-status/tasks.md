@@ -1,0 +1,40 @@
+# Tasks: Other-device event page status
+
+**Input**: [Specification](spec.md), [plan](plan.md), and records under `design/`.
+
+## Phase 1: Setup
+
+- [x] T001 Preserve #1794 artifacts and inspect shared helpers in `design/research.md`. (delivered: design/research.md)
+
+## Phase 2: Foundational
+
+- [x] T002 Extend real SDK response fixtures in `tests/unit/export/test_site_other_device_events_exporter.py`. (delivered: tests/unit/export/test_site_other_device_events_exporter.py)
+
+## Phase 3: User Story 1 - Reject incomplete exports
+
+**Goal**: Stop failed pages without writing partial records.
+
+**Independent Test**: Initial 403, initial 503, and later empty-body 503 never write or report completion.
+
+- [x] T003 [US1] Prove failures before repair in `tests/unit/export/test_site_other_device_events_exporter.py`. (delivered: tests/unit/export/test_site_other_device_events_exporter.py)
+- [x] T004 [US1] Validate every page in `src/operations/exporting/export/site_other_device_events_exporter.py`. (delivered: src/operations/exporting/export/site_other_device_events_exporter.py)
+
+## Phase 4: User Story 2 - Preserve complete results
+
+**Goal**: Preserve valid results and local error boundaries.
+
+**Independent Test**: Empty, single-page, and multiple-page results preserve exact output behavior.
+
+- [x] T005 [US2] Verify complete results and #1794 boundaries in `tests/unit/export/test_site_other_device_events_exporter.py`. (delivered: tests/unit/export/test_site_other_device_events_exporter.py)
+
+## Phase 5: Polish
+
+- [x] T006 Add `changelog.d/issue-4709-other-device-page-status.md`. (delivered: changelog.d/issue-4709-other-device-page-status.md)
+- [x] T007 Record exact validation and consistency evidence in `analysis.md`. (delivered: analysis.md)
+
+## Dependencies and execution
+
+T001 precedes T002. T002 precedes T003. T003 precedes T004.
+T004 precedes T005. T005 precedes T006 and T007.
+Both stories share the reserved source and test, so parallel edits are unsafe.
+All seven tasks use the checklist format. Implement failure safety before validating complete results.
