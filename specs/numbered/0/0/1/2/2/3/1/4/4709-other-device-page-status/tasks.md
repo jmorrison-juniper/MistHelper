@@ -34,6 +34,8 @@
 - [x] T008 [US1] Prove and reject repeated cursors, invalid cursors, and malformed rows in `tests/unit/export/test_site_other_device_events_exporter.py` and `src/operations/exporting/export/site_other_device_events_exporter.py`.
 - [x] T009 [US2] Prove and correct empty-string completion and local collection propagation in `tests/unit/export/test_site_other_device_events_exporter.py` and `src/operations/exporting/export/site_other_device_events_exporter.py`.
 - [x] T010 [US1] Prove and reject contradictory JSON totals and malformed pagination headers in `tests/unit/export/test_site_other_device_events_exporter.py` and `src/operations/exporting/export/site_other_device_events_exporter.py`.
+- [x] T011 [US1] Prove and correct a later absent total, empty present headers, and oversized counts in `tests/unit/export/test_site_other_device_events_exporter.py` and `src/operations/exporting/export/site_other_device_events_exporter.py`.
+- [x] T012 [US1] Prove and correct cursor destination safety in `tests/unit/export/test_site_other_device_events_exporter.py` and `src/operations/exporting/export/site_other_device_events_exporter.py`.
 
 ## Dependencies and execution
 
@@ -45,3 +47,5 @@ T008 follows T007 because the coordinator added cursor safety after the first lo
 Update the feature evidence after T008.
 T009 follows T008 after independent verification corrected the cursor contract and identified a local exception boundary defect.
 T010 follows T009 after independent verification found incomplete terminal pages with present metadata.
+T011 follows T010 after independent verification found three metadata boundary defects.
+T012 follows T011 after independent verification found a cursor that changed the request host.

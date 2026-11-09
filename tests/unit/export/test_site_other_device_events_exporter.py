@@ -47,12 +47,12 @@ def sdk_result(monkeypatch: pytest.MonkeyPatch) -> tuple[MagicMock, MagicMock]:
     """Replace endpoint and pagination results for boundary tests."""
     search = MagicMock(
         return_value=APIResponse(
-            _http_response(200, {"results": [{"mac": "aa:bb", "timestamp": 1}], "next": "/next"}),
+            _http_response(200, {"results": [{"mac": "aa:bb", "timestamp": 1}], "next": "/api/v1/next"}),
             "https://api.invalid/events",
         )
     )  # WHY: a real first response must prove success before the next request.
     paginate = MagicMock(
-        return_value=APIResponse(_http_response(200, {"results": []}), "https://api.invalid/next")
+        return_value=APIResponse(_http_response(200, {"results": []}), "https://api.invalid/api/v1/next")
     )  # WHY: finish pagination without adding synthetic extra records.
     monkeypatch.setattr(
         mistapi.api.v1.sites.otherdevices, "searchSiteOtherDeviceEvents", search
@@ -245,7 +245,9 @@ class TestInstalledSdkContract:
     def test_two_successful_pages_reach_the_writer(self, menu: Any, transport: APIRequest) -> None:
         """The real endpoint and pagination helper preserve all successful event rows."""
         transport._session.get.side_effect = [
-            _http_response(200, {"results": [{"mac": "aa:bb", "metadata": {"vendor": "Juniper"}}], "next": "/next"}),
+            _http_response(
+                200, {"results": [{"mac": "aa:bb", "metadata": {"vendor": "Juniper"}}], "next": "/api/v1/next"}
+            ),
             _http_response(200, {"results": [{"mac": "cc:dd", "timestamp": 2}]}),
         ]  # WHY: exercise the real follow-up request and transformation.
         SiteOtherDeviceEventsExporter.other_device_events()  # WHY: verify the SDK-to-writer path.
@@ -258,7 +260,7 @@ class TestInstalledSdkContract:
             "https://api.invalid/api/v1/sites/site-1/otherdevices/events/search",
         )  # WHY: verify the endpoint uses the selected site.
         assert transport._session.get.call_args_list[1].args == (
-            "https://api.invalid/next",
+            "https://api.invalid/api/v1/next",
         )  # WHY: verify real pagination.
 
     def test_malformed_followup_page_retains_fallback(
@@ -269,7 +271,7 @@ class TestInstalledSdkContract:
     ) -> None:
         """A missing results field cannot produce a complete export."""
         transport._session.get.side_effect = [
-            _http_response(200, {"results": [{"mac": "aa:bb"}], "next": "/next"}),
+            _http_response(200, {"results": [{"mac": "aa:bb"}], "next": "/api/v1/next"}),
             _http_response(200, {"unexpected": "synthetic-private-response"}),
         ]  # WHY: preserve the malformed-page fallback from issue #1794.
         with caplog.at_level(logging.INFO):
@@ -295,7 +297,7 @@ class TestInstalledSdkContract:
             [failure]
             if stage == "endpoint"
             else [
-                _http_response(200, {"results": [{"mac": "aa:bb"}], "next": "/next"}),
+                _http_response(200, {"results": [{"mac": "aa:bb"}], "next": "/api/v1/next"}),
                 failure,
             ]
         )  # WHY: exercise failure during either HTTP request.
@@ -363,7 +365,7 @@ class TestPageStatusValidation:
         first = (
             _http_response(200, [{"mac": "aa:bb"}], {"X-Page-Total": "2", "X-Page-Limit": "1", "X-Page-Page": "1"})
             if shape == "list"
-            else _http_response(200, {"results": [{"mac": "aa:bb"}], "next": "/next"})
+            else _http_response(200, {"results": [{"mac": "aa:bb"}], "next": "/api/v1/next"})
         )  # WHY: cover header-based list paging and link-based search paging.
         transport._session.get.side_effect = [first, _http_response(503, failure_data)]  # WHY: reproduce issue #4709.
         with caplog.at_level(logging.DEBUG):
@@ -442,8 +444,12 @@ class TestPaginationCursorSafety:
     @pytest.mark.parametrize(
         "cursors",
         [
-            ["/next?cursor=synthetic-private-repeat", "/next?cursor=synthetic-private-repeat"],
-            ["/next?cursor=synthetic-private-repeat", "/next?cursor=second", "/next?cursor=synthetic-private-repeat"],
+            ["/api/v1/next?cursor=synthetic-private-repeat", "/api/v1/next?cursor=synthetic-private-repeat"],
+            [
+                "/api/v1/next?cursor=synthetic-private-repeat",
+                "/api/v1/next?cursor=second",
+                "/api/v1/next?cursor=synthetic-private-repeat",
+            ],
         ],
     )
     def test_repeated_cursor_stops_before_another_request(
@@ -477,6 +483,78 @@ class TestPaginationCursorSafety:
         assert transport._session.get.call_count == 1  # WHY: do not send an invalid cursor to the SDK.
         assert "Error fetching" in caplog.text  # WHY: invalid cursors cannot imply a terminal successful page.
         menu.DataExporter.write_with_format_selection.assert_not_called()  # WHY: reject incomplete output.
+
+    @pytest.mark.parametrize(
+        "cursor",
+        [
+            "@example.invalid/collect",
+            "//example.invalid/api/v1/collect",
+            "https://example.invalid/api/v1/collect",
+            "example.invalid/api/v1/collect",
+            "\\example.invalid/api/v1/collect",
+            "/next?cursor=synthetic-private-other",
+            "/api/v1/collect example.invalid",
+            "/api/v1/collect\r\nHost: example.invalid",
+            "/api/v1/collect\x00example.invalid",
+        ],
+    )
+    def test_unsafe_cursor_never_leaves_the_cloud(
+        self, menu: Any, transport: APIRequest, caplog: pytest.LogCaptureFixture, cursor: str
+    ) -> None:
+        """Only a cloud-relative Mist API path can reach the next-page SDK call."""
+        transport._session = requests.Session()  # WHY: let requests resolve the real destination of each URL.
+        transport._session.headers["Authorization"] = "Token synthetic-private-token"  # WHY: prove no credential leak.
+        sent: list[requests.PreparedRequest] = []  # WHY: record each prepared destination without a socket.
+        responses = iter(
+            [
+                _http_response(200, {"results": [{"mac": "aa:bb"}], "next": cursor}),
+                _http_response(200, {"results": []}),
+            ]
+        )  # WHY: keep the pre-repair reproduction finite.
+        with (
+            patch.object(
+                requests.Session,
+                "send",
+                autospec=True,
+                side_effect=lambda _s, prepared, **_k: sent.append(prepared) or next(responses),
+            ),
+            caplog.at_level(logging.DEBUG),
+        ):
+            SiteOtherDeviceEventsExporter.other_device_events()  # WHY: reject the unsafe link through the menu.
+        hosts = [
+            requests.utils.urlparse(prepared.url).hostname for prepared in sent
+        ]  # WHY: read each real destination.
+        assert hosts == ["api.invalid"]  # WHY: a non-cloud destination is never called.
+        assert "Error fetching" in caplog.text  # WHY: an unsafe link cannot prove completion.
+        assert "example.invalid" not in caplog.text  # WHY: keep cursor values private.
+        assert "synthetic-private" not in caplog.text  # WHY: keep cursor and credential values private.
+        menu.DataExporter.write_with_format_selection.assert_not_called()  # WHY: discard incomplete rows.
+
+    def test_documented_cursor_keeps_credentials_on_the_cloud(self, menu: Any, transport: APIRequest) -> None:
+        """A documented Mist continuation path reaches only the configured cloud host."""
+        transport._session = requests.Session()  # WHY: let requests resolve the real destination of each URL.
+        transport._session.headers["Authorization"] = "Token synthetic-private-token"  # WHY: track the credential.
+        sent: list[requests.PreparedRequest] = []  # WHY: record each prepared destination without a socket.
+        cursor = "/api/v1/sites/site-1/otherdevices/events/search?limit=1&search_after=%5B2%5D"  # WHY: documented form.
+        responses = iter(
+            [
+                _http_response(200, {"results": [{"mac": "aa:bb"}], "next": cursor}),
+                _http_response(200, {"results": [{"mac": "cc:dd"}]}),
+            ]
+        )  # WHY: supply two complete real pages.
+        with patch.object(
+            requests.Session,
+            "send",
+            autospec=True,
+            side_effect=lambda _s, prepared, **_k: sent.append(prepared) or next(responses),
+        ):
+            SiteOtherDeviceEventsExporter.other_device_events()  # WHY: follow the documented link through the menu.
+        assert [requests.utils.urlparse(prepared.url).hostname for prepared in sent] == ["api.invalid"] * 2
+        assert sent[1].url == f"https://api.invalid{cursor}"  # WHY: preserve the documented path and query.
+        assert all(
+            prepared.headers["Authorization"] == "Token synthetic-private-token" for prepared in sent
+        )  # WHY: the credential travels only to the configured cloud host.
+        assert len(menu.DataExporter.write_with_format_selection.call_args.args[0]) == 2  # WHY: keep both pages.
 
     @pytest.mark.parametrize("data", [[None], [1], ["synthetic-private-row"], {"results": [None]}])
     def test_malformed_record_never_reaches_transformation(
@@ -542,7 +620,7 @@ class TestLocalCollectionBoundaries:
     ) -> None:
         """A local validation defect after a successful page must not become a request failure."""
         transport._session.get.side_effect = [
-            _http_response(200, {"results": [{"mac": "aa:bb"}], "next": "/next"}),
+            _http_response(200, {"results": [{"mac": "aa:bb"}], "next": "/api/v1/next"}),
             _http_response(200, {"results": [{"mac": "cc:dd"}]}),
         ]  # WHY: prove the second SDK request succeeds before local validation fails.
         failure = NameError("synthetic-private-later-validation")  # WHY: preserve the defect without logging its text.
@@ -574,6 +652,10 @@ class TestAdvertisedCompleteness:
             ({"results": [{"mac": "aa:bb"}], "total": "synthetic-private-total"}, {}),
             ({"results": [{"mac": "aa:bb"}], "total": True}, {}),
             ({"results": [{"mac": "aa:bb"}], "total": -1}, {}),
+            ([{"mac": "aa:bb"}], {"X-Page-Total": "", "X-Page-Limit": "", "X-Page-Page": ""}),
+            ([{"mac": "aa:bb"}], {"X-Page-Page": ""}),
+            ({"results": [{"mac": "aa:bb"}], "total": "9" * 5000}, {}),
+            ({"results": [{"mac": "aa:bb"}], "total": "1" * 19}, {}),
         ],
     )
     def test_contradictory_or_malformed_metadata_never_writes(
@@ -598,6 +680,7 @@ class TestAdvertisedCompleteness:
             ({"results": [{"mac": "aa:bb"}], "total": 1, "limit": 1}, {}),
             ({"results": [{"mac": "aa:bb"}], "total": 1, "next": ""}, {}),
             ({"results": [{"mac": "aa:bb"}], "total": 0}, {}),
+            ({"results": [{"mac": "aa:bb"}], "total": "0" * 17 + "1"}, {}),
             ({"results": [{"mac": "aa:bb"}]}, {}),
             ([{"mac": "aa:bb"}], {"X-Page-Total": "1", "X-Page-Limit": "1", "X-Page-Page": "1"}),
             ([{"mac": "aa:bb"}], {}),
@@ -618,7 +701,7 @@ class TestAdvertisedCompleteness:
     def test_total_satisfied_across_search_pages(self, menu: Any, transport: APIRequest) -> None:
         """The terminal total counts rows from every page, not only the last page."""
         transport._session.get.side_effect = [
-            _http_response(200, {"results": [{"mac": "aa:bb"}], "total": 2, "limit": 1, "next": "/next"}),
+            _http_response(200, {"results": [{"mac": "aa:bb"}], "total": 2, "limit": 1, "next": "/api/v1/next"}),
             _http_response(200, {"results": [{"mac": "cc:dd"}], "total": 2, "limit": 1}),
         ]  # WHY: each documented search page reports the all-page total.
         SiteOtherDeviceEventsExporter.other_device_events()  # WHY: a complete two-page search must write.
@@ -628,3 +711,23 @@ class TestAdvertisedCompleteness:
             "SiteOtherDeviceEvents_Branch.csv",
             api_function_name="searchSiteOtherDeviceEvents",
         )  # WHY: preserve every row in order.
+
+    @pytest.mark.parametrize(("first_total", "writes"), [(3, False), (2, True)])
+    def test_absent_later_total_keeps_known_total(
+        self,
+        menu: Any,
+        transport: APIRequest,
+        caplog: pytest.LogCaptureFixture,
+        first_total: int,
+        writes: bool,
+    ) -> None:
+        """A later page without a total cannot erase the total that an earlier page advertised."""
+        transport._session.get.side_effect = [
+            _http_response(200, {"results": [{"mac": "aa:bb"}], "total": first_total, "next": "/api/v1/next"}),
+            _http_response(200, {"results": [{"mac": "cc:dd"}]}),
+        ]  # WHY: the terminal page omits both total and next.
+        with caplog.at_level(logging.DEBUG):
+            SiteOtherDeviceEventsExporter.other_device_events()  # WHY: read both pages through the menu.
+        assert transport._session.get.call_count == 2  # WHY: the first page advertises one next request.
+        assert ("Error fetching" in caplog.text) is not writes  # WHY: a short read is a failed read.
+        assert menu.DataExporter.write_with_format_selection.call_count == int(writes)  # WHY: write complete only.

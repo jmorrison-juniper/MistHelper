@@ -216,6 +216,30 @@ They also covered a non-integer page header, partial headers, and text, boolean,
 After the repair, the targeted command reported 88 passed with 100 percent exporter coverage.
 The exporter has 88 statements. The highest complexity is 10.
 
+## Metadata boundary corrections
+
+Independent verification found three defects in commit `6a4aea6`.
+A later page without `total` replaced a known total of 3 with 0, so two of three rows were written.
+Three empty `X-Page-*` headers counted as absent, so the page was written.
+A 5,000-digit `total` string reached `int` and raised the conversion `ValueError`.
+
+The red run added 6 cases. Before the repair, 4 failed and 80 passed.
+The failures were the empty headers, one empty header, the 5,000-digit total, and the later absent total.
+After the repair, the targeted command reported 95 passed with 100 percent exporter coverage.
+The page validator has complexity 9, and no module-level name changed.
+
+## Cursor destination safety
+
+Independent verification found that the SDK appends the `next` cursor to `https://` and the cloud host.
+A synthetic cursor that starts with `@` moved the next request and its synthetic credential to a different host.
+This result needs control of the upstream response. The finding stays private until review.
+
+The red run added 9 unsafe cursor cases. Before the repair, 9 failed and 85 passed.
+One case sent a request to `example.invalid`, and one case sent a request to a different host name.
+Seven cases sent a second request with a non-API path, whitespace, or a control character.
+After the repair, the targeted command reported 105 passed with 100 percent exporter coverage.
+A documented cursor still reaches the cloud host with its path and query.
+
 ## Intentional changes and limitations
 
 - Every non-2xx, absent, boolean, or non-integer status now fails instead of producing no data.
@@ -233,3 +257,5 @@ The exporter has 88 statements. The highest complexity is 10.
 - A JSON numeric string such as `"2"` passes as a count. Other text, booleans, and negative values fail.
 - Rows above the JSON `total` pass, because events can arrive during a read.
 - Valid `X-Page-Total` values receive no row comparison. The SDK cursor uses them.
+- A count with more than 18 digits fails as malformed metadata.
+- A cursor that does not start with `/api/v1/` fails, even if a later SDK accepts it.

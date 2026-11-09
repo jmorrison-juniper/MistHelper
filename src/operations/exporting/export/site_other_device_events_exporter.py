@@ -53,23 +53,25 @@ class SiteOtherDeviceEventsExporter:
         )  # WHY: show completion to the operator.
 
     @staticmethod
-    def _page_records(response: Any) -> tuple[list[Any], int] | None:
+    def _page_records(response: Any, known_total: int) -> tuple[list[Any], int] | None:
         """Validate dictionary rows and present pagination metadata of a successful page."""
         payload = response.data  # WHY: the caller already proved a successful HTTP status.
         envelope = payload if isinstance(payload, dict) else {}  # WHY: only search envelopes carry a JSON total.
         rows = envelope.get("results", payload)  # WHY: accept list pages and documented results envelopes.
-        pages = [
-            (response.headers or {}).get(f"X-Page-{name}") for name in ("Total", "Limit", "Page")
-        ]  # WHY: the SDK derives list cursors from these headers.
+        headers = response.headers or {}  # WHY: the SDK can omit the header mapping.
+        names = ("X-Page-Total", "X-Page-Limit", "X-Page-Page")  # WHY: the SDK derives list cursors from these.
+        present = any(map(headers.__contains__, names))  # WHY: an empty header value is present, not absent.
         counts = [
-            str(envelope.get("total", 0)),
-            *map(str, pages[: len(pages) * any(pages)]),
-        ]  # WHY: absent headers add no count, and partial headers fail as text.
+            str(envelope.get("total", known_total)),
+            *[*map(str, map(headers.get, names))] * present,
+        ]  # WHY: an absent total keeps the known total, and missing present headers fail as text.
         if not (
             isinstance(rows, list)
             and all(isinstance(row, dict) for row in rows)
-            and all(count.isascii() and count.isdigit() for count in counts)
-        ):  # WHY: malformed rows or present metadata cannot prove a complete page.
+            and "".join(counts).isascii()
+            and all(map(str.isdigit, counts))
+            and max(map(len, counts)) <= 18
+        ):  # WHY: malformed rows, metadata, or counts above 18 digits cannot prove a complete page.
             logger.error(
                 "Other-device event page does not contain valid records or pagination metadata"
             )  # WHY: omit private payload and header values.
@@ -81,11 +83,13 @@ class SiteOtherDeviceEventsExporter:
         """Collect every successful page or reject the entire incomplete result."""
         records: list[Any] = []  # WHY: keep accepted rows private until every page succeeds.
         seen: set[str] = set()  # WHY: repeated cursors cannot prove progress or completion.
+        total = 0  # WHY: no advertised total imposes no count requirement.
         while response is not None:  # WHY: failed external calls cannot contribute records.
-            page = SiteOtherDeviceEventsExporter._page_records(response)  # WHY: admit only complete successful pages.
+            page = SiteOtherDeviceEventsExporter._page_records(response, total)  # WHY: admit only valid pages.
             if page is None:  # WHY: distinguish a failed response from a valid empty record list.
                 return None  # WHY: discard all earlier rows rather than exporting incomplete data.
             records.extend(page[0])  # WHY: retain validated rows until pagination proves completeness.
+            total = page[1]  # WHY: keep the most recent present total across pages without one.
             logger.debug("Collected %d other-device event rows", len(records))  # WHY: record each accepted page.
             cursor = response.next  # WHY: keep the next link private while validating progress.
             if cursor is None or cursor == "":  # WHY: preserve both SDK terminal cursor values.
@@ -94,9 +98,13 @@ class SiteOtherDeviceEventsExporter:
                     return None  # WHY: a terminal cursor cannot hide missing advertised rows.
                 return records  # WHY: only complete rows can reach the writer.
             if (
-                not isinstance(cursor, str) or not cursor.strip() or cursor in seen
-            ):  # WHY: reject invalid or cyclic links.
-                logger.error("Other-device event page cursor is invalid or repeated")  # WHY: omit private cursor text.
+                not isinstance(cursor, str)
+                or cursor in seen
+                or not (cursor[:8] == "/api/v1/" and cursor.replace(" ", "\n").isprintable())
+            ):  # WHY: the SDK appends the cursor to the cloud host, so only a cloud API path keeps that host.
+                logger.error(
+                    "Other-device event page cursor is invalid, unsafe, or repeated"
+                )  # WHY: omit private cursor text.
                 return None  # WHY: handle known invalid remote cursors explicitly.
             seen.add(cursor)  # WHY: stop before issuing another request to a previously requested cursor.
             response = SiteOtherDeviceEventsExporter._fetch_events(response=response)  # WHY: isolate the SDK call only.

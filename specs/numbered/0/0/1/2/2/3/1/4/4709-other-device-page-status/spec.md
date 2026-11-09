@@ -62,6 +62,11 @@ An operator retains successful empty, single-page, and multiple-page results.
 - **FR-008**: If a terminal page has a JSON `total`, require at least that number of collected rows.
   If any `X-Page-Total`, `X-Page-Limit`, or `X-Page-Page` header exists, require all three as nonnegative integers.
   Do not infer a count when the metadata is absent.
+  Keep the most recent present JSON `total` when a later page omits it.
+  Treat a header name as present even when its value is empty.
+  Reject a count with more than 18 digits before conversion.
+- **FR-009**: Send a cursor to `get_next` only if it starts with `/api/v1/` and has no whitespace or control character.
+  The SDK appends the cursor to the cloud host, so this rule keeps each request and its credential on that host.
 
 ### Mist Cloud Transport Requirements
 
