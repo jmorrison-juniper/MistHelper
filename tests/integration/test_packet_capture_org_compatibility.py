@@ -16,4 +16,4 @@ def test_org_capture_workflow_calls_confirmation_and_execute() -> None:
     manager._build_org_payload.return_value = {"type": "mxedge"}
     workflow = OrgCaptureWorkflow(manager=manager)
     workflow.run()
-    manager._confirm_and_execute_org_capture.assert_called_once()
+    manager._confirm_and_execute_org_capture.assert_called_once_with({"type": "mxedge"})
