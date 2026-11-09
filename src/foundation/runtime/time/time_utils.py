@@ -40,9 +40,10 @@ class TimeUtils:
         try:
             chosen_hours = test_hours if IS_TEST_MODE else default_hours  # Pick the window for the active mode
             return max(1, chosen_hours)  # Never return less than 1 hour (clamp misconfigured values)
-        except Exception:  # Preserve the mode-specific fallback for any unexpected calculation failure.
-            logger.exception(
-                "Lookback calculation failed. Using %s fallback.",
+        except Exception as error:  # Preserve the mode-specific fallback for any unexpected calculation failure.
+            logger.error(
+                "Lookback calculation failed (%s). Using %s fallback.",
+                type(error).__name__,
                 "test" if IS_TEST_MODE else "production",
             )
             return test_hours if IS_TEST_MODE else default_hours  # Fall back to a sensible default per mode

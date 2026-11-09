@@ -10,6 +10,7 @@ observe both branches deterministically. No live I/O.
 from __future__ import annotations  # WHY: PEP 604 unions in method signatures on Python 3.10+.
 
 import logging  # WHY: caplog-level configuration and logger-name assertions.
+from io import StringIO
 
 import pytest  # WHY: caplog + monkeypatch fixtures.
 
@@ -17,6 +18,7 @@ from src.foundation.runtime.time import (
     time_utils as tu,
 )  # WHY: import as module so IS_TEST_MODE can be monkeypatched by attr name.
 from src.foundation.runtime.time.time_utils import TimeUtils  # WHY: SUT static-method callsite convenience.
+from src.foundation.support.utils.logger_utils import SensitiveFilter
 
 
 class TestGetDynamicLookbackHours:
@@ -62,11 +64,9 @@ class TestGetDynamicLookbackHours:
         assert len(caplog.records) == 1
         record = caplog.records[0]
         assert (record.name, record.levelno) == (tu.__name__, logging.ERROR)
-        assert record.getMessage() == "Lookback calculation failed. Using test fallback."
-        if record.exc_info is None:
-            pytest.fail("The fallback log must include the exception traceback.")
-        assert record.exc_info[0] is error_type
-        assert str(record.exc_info[1]) == "simulated max failure"
+        assert record.getMessage() == f"Lookback calculation failed ({error_type.__name__}). Using test fallback."
+        assert record.exc_info is None
+        assert "simulated max failure" not in caplog.text
 
     @pytest.mark.parametrize("error_type", [RuntimeError, TypeError])
     def test_exception_fallback_returns_default_hours_in_production_mode(
@@ -84,11 +84,9 @@ class TestGetDynamicLookbackHours:
         assert len(caplog.records) == 1
         record = caplog.records[0]
         assert (record.name, record.levelno) == (tu.__name__, logging.ERROR)
-        assert record.getMessage() == "Lookback calculation failed. Using production fallback."
-        if record.exc_info is None:
-            pytest.fail("The fallback log must include the exception traceback.")
-        assert record.exc_info[0] is error_type
-        assert str(record.exc_info[1]) == "simulated max failure"
+        assert record.getMessage() == f"Lookback calculation failed ({error_type.__name__}). Using production fallback."
+        assert record.exc_info is None
+        assert "simulated max failure" not in caplog.text
 
     @pytest.mark.parametrize("test_mode", [False, True])
     def test_invalid_fallback_value_is_not_logged(
@@ -106,12 +104,38 @@ class TestGetDynamicLookbackHours:
         record = caplog.records[0]
         mode = "test" if test_mode else "production"
         assert (record.name, record.levelno) == (tu.__name__, logging.ERROR)
-        assert record.getMessage() == f"Lookback calculation failed. Using {mode} fallback."
-        if record.exc_info is None:
-            pytest.fail("The fallback log must include the exception traceback.")
-        assert record.exc_info[0] is TypeError
+        assert record.getMessage() == f"Lookback calculation failed (TypeError). Using {mode} fallback."
+        assert record.exc_info is None
         assert sentinel not in caplog.text
         assert sentinel not in repr(record.args)
+
+    @pytest.mark.parametrize("test_mode", [False, True])
+    def test_handler_output_excludes_exception_token(self, monkeypatch: pytest.MonkeyPatch, test_mode: bool) -> None:
+        """Exclude private exception text from the complete filtered handler output."""
+        monkeypatch.setattr(tu, "IS_TEST_MODE", test_mode)
+        output = StringIO()
+        handler = logging.StreamHandler(output)
+        handler.addFilter(SensitiveFilter())
+        handler.setFormatter(logging.Formatter("%(levelname)s %(name)s %(message)s"))
+        sentinel = "synthetic-private-time-token"
+
+        def fail_max(_minimum: int, _chosen: int) -> int:
+            """Raise an error with synthetic private text to exercise logging."""
+            raise RuntimeError(f"token={sentinel}")
+
+        monkeypatch.setattr(tu, "max", fail_max, raising=False)
+        tu.logger.addHandler(handler)
+        try:
+            assert TimeUtils.get_dynamic_lookback_hours(default_hours=17, test_hours=3) == (3 if test_mode else 17)
+        finally:
+            tu.logger.removeHandler(handler)
+            handler.close()
+        mode = "test" if test_mode else "production"
+        assert output.getvalue() == (
+            f"ERROR {tu.__name__} Lookback calculation failed (RuntimeError). Using {mode} fallback.\n"
+        )
+        assert sentinel not in output.getvalue()
+        assert "Traceback" not in output.getvalue()
 
 
 class TestLogDynamicLookback:
