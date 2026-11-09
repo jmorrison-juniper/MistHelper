@@ -64,7 +64,7 @@ class TestResolve:
     def test_a_failure_does_not_raise(self) -> None:
         """A raised error inside a worker thread would abort the whole fan-out."""
         with patch.object(socket, "gethostbyname", side_effect=OSError("network down")):
-            zp._resolve("gateway.zscaler.net")  # WHY: the call must return, not raise.
+            assert zp._resolve("gateway.zscaler.net") == (None, "OSError: network down")  # WHY: preserve the error.
 
 
 class TestIcmpPing:
@@ -291,7 +291,7 @@ class TestCloseQuietly:
         """A cleanup error must not replace the probe result the caller earned."""
         conn = MagicMock()  # WHY: stand in for the HTTP connection object.
         conn.close.side_effect = OSError("already closed")  # WHY: reproduce a double close.
-        zp._close_quietly(conn)  # WHY: the call must return, not raise.
+        assert (zp._close_quietly(conn), conn.close.call_count) == (None, 1)  # WHY: require one close without an error.
 
 
 class TestRequestHeadOrGet:
