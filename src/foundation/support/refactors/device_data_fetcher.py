@@ -131,8 +131,8 @@ class DeviceDataFetcher:
             result = [response.data] if response.data else None  # Wrap single-device response into a one-element list
             logger.debug("Fetch returned %s record(s)", 0 if result is None else len(result))  # Result-size trace
             return result  # None signals empty response so callers can skip processing
-        except Exception as error:  # Any API/network error yields None with a structured log
-            logging.error("Failed to fetch device data: %s", error)  # Structured error log
+        except Exception as error:  # Arbitrary callbacks require the existing None fallback for every exception type.
+            logging.error("Failed to fetch device data: %s", type(error).__name__)  # Exclude private callback text.
             return None  # Signal failure without raising to preserve interactive UX
 
     def _process_and_output(self, data: list[dict[str, Any]]) -> None:

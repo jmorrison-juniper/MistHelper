@@ -14,6 +14,7 @@ required.
 from __future__ import annotations  # WHY: PEP 604 unions on Python 3.10+.
 
 import logging  # WHY: caplog verification of the info/debug breadcrumbs.
+from io import StringIO
 from types import SimpleNamespace  # WHY: lightweight stand-in for mistapi response objects.
 from typing import Any  # WHY: monkeypatched fakes carry loose typing.
 from unittest.mock import MagicMock  # WHY: FR-008 mandates MagicMock for collaborators.
@@ -119,8 +120,9 @@ class TestDeviceDataFetcherFetchOrchestration:
             site_id="site-A",
             device_id="dev-B",
         )
-        DeviceDataFetcher(config).fetch()  # WHY: exercise full orchestration.
+        result = DeviceDataFetcher(config).fetch()  # WHY: exercise full orchestration.
 
+        assert result is None
         # WHY: fetch callable invoked with (apisession, site_id, device_id).
         fetch_function.assert_called_once_with(wired_misthelper["apisession"], "site-A", "dev-B")
         wired_misthelper["DataProcessingUtils"].flatten_nested_fields.assert_called_once_with([{"id": "row"}])
@@ -191,9 +193,10 @@ class TestDeviceDataFetcherFetchOrchestration:
             "site-42", device_type="gateway"
         )  # WHY: exact forwarding contract.
 
-    def test_empty_response_data_skips_processing(self, wired_misthelper: dict[str, Any]) -> None:
+    @pytest.mark.parametrize("response_data", [None, {}, []])
+    def test_empty_response_data_skips_processing(self, wired_misthelper: dict[str, Any], response_data: Any) -> None:
         """When response.data is falsy, _fetch_data returns None and processing/output are skipped."""
-        fetch_function = _make_fetch_function(None)  # WHY: response.data None -> result None.
+        fetch_function = _make_fetch_function(response_data)
         config = DeviceFetchConfig(  # WHY: pre-supplied ids to skip prompts.
             fetch_function=fetch_function,
             filename="f.csv",
@@ -209,9 +212,19 @@ class TestDeviceDataFetcherFetchOrchestration:
         wired_misthelper["DataExporter"].write_with_format_selection.assert_not_called()  # WHY: no CSV write.
         wired_misthelper["DisplayUtils"].dict_list_as_pretty_table.assert_not_called()  # WHY: no render.
 
-    def test_fetch_data_returns_none_on_exception(self, wired_misthelper: dict[str, Any]) -> None:
-        """A fetch_function that raises is caught; result is None and no processing occurs."""
-        fetch_function = MagicMock(name="fetch_function", side_effect=RuntimeError("boom"))  # WHY: any error.
+    @pytest.mark.parametrize(
+        "exception_type", [Exception, RuntimeError, ValueError, TypeError, AttributeError, OSError]
+    )
+    def test_fetch_data_returns_none_on_exception(
+        self,
+        wired_misthelper: dict[str, Any],
+        caplog: pytest.LogCaptureFixture,
+        monkeypatch: pytest.MonkeyPatch,
+        exception_type: type[Exception],
+    ) -> None:
+        """Arbitrary callback failures keep the fallback without disclosing their messages."""
+        private_message = "Bearer synthetic-token https://example.invalid/?password=synthetic-password"
+        fetch_function = MagicMock(name="fetch_function", side_effect=exception_type(private_message))
         fetch_function.__name__ = "erroring_fetch"  # WHY: SUT reads __name__ for the debug log.
         config = DeviceFetchConfig(  # WHY: pre-supplied ids to skip prompts.
             fetch_function=fetch_function,
@@ -220,11 +233,44 @@ class TestDeviceDataFetcherFetchOrchestration:
             site_id="s",
             device_id="d",
         )
-        result = DeviceDataFetcher(config).fetch()  # WHY: exercise exception branch.
+        output = StringIO()
+        handler = logging.StreamHandler(output)
+        handler.setFormatter(logging.Formatter("%(levelname)s %(name)s %(message)s"))
+        root_logger = logging.getLogger()
+        monkeypatch.setattr(root_logger, "handlers", [*root_logger.handlers, handler])
+        with caplog.at_level(logging.ERROR):
+            result = DeviceDataFetcher(config).fetch()
 
         assert result is None  # WHY: preserve the existing caught-exception return contract.
+        fetch_function.assert_called_once_with(wired_misthelper["apisession"], "s", "d")
+        assert caplog.messages == [f"Failed to fetch device data: {exception_type.__name__}"]
+        assert output.getvalue() == f"ERROR root Failed to fetch device data: {exception_type.__name__}\n"
+        assert private_message not in caplog.text
+        assert caplog.records[0].args == (exception_type.__name__,)
+        assert caplog.records[0].exc_info is None
+        assert caplog.records[0].stack_info is None
+        wired_misthelper["DataProcessingUtils"].flatten_nested_fields.assert_not_called()
+        wired_misthelper["DataProcessingUtils"].escape_multiline.assert_not_called()
         wired_misthelper["DataExporter"].write_with_format_selection.assert_not_called()  # WHY: no CSV write.
         wired_misthelper["DisplayUtils"].dict_list_as_pretty_table.assert_not_called()  # WHY: no render.
+
+    @pytest.mark.parametrize("status_code", [400, 403, 429, 500, 503])
+    def test_http_refusal_preserves_false_result(
+        self, wired_misthelper: dict[str, Any], status_code: int, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """HTTP refusal skips output even when the response contains data."""
+        fetch_function = _make_fetch_function({"id": "refused"})
+        fetch_function.return_value.status_code = status_code
+        config = DeviceFetchConfig(fetch_function, "f.csv", "d", site_id="s", device_id="d")
+        with caplog.at_level(logging.ERROR):
+            result = DeviceDataFetcher(config).fetch()
+
+        assert result is False
+        fetch_function.assert_called_once_with(wired_misthelper["apisession"], "s", "d")
+        assert caplog.messages == [f"The cloud returned HTTP {status_code} for device data at site s"]
+        wired_misthelper["DataProcessingUtils"].flatten_nested_fields.assert_not_called()
+        wired_misthelper["DataExporter"].write_with_format_selection.assert_not_called()
+        wired_misthelper["DisplayUtils"].dict_list_as_pretty_table.assert_not_called()
 
     def test_fetch_logs_progress(self, wired_misthelper: dict[str, Any], caplog: pytest.LogCaptureFixture) -> None:
         """The orchestration emits info + debug breadcrumbs at expected checkpoints."""
