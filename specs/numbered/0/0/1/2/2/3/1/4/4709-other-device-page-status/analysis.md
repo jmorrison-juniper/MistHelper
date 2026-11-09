@@ -240,6 +240,19 @@ Seven cases sent a second request with a non-API path, whitespace, or a control 
 After the repair, the targeted command reported 105 passed with 100 percent exporter coverage.
 A documented cursor still reaches the cloud host with its path and query.
 
+## Cursor resource confinement
+
+Independent verification found that a cursor for a different site, endpoint, or dot-segment path passed the `/api/v1/` rule.
+The SDK sends a JSON `next` without change, and it derives a header `next` from the request path with a `page` query.
+Both documented forms keep the path `/api/v1/sites/{site_id}/otherdevices/events/search` and change only the query.
+The guard now compares the path before `?` with that exact path for the selected site.
+An exact comparison also rejects encoded, normalized, case-changed, and trailing-slash forms.
+
+The red run added 13 cases. Before the repair, 13 failed and 96 passed.
+After the repair, the targeted command with the process-folder guard reported 120 passed with 100 percent exporter coverage.
+The private independent file reported 11 passed, which includes its 3 cross-resource cases.
+The `_collect_events` complexity stays at 10.
+
 ## Intentional changes and limitations
 
 - Every non-2xx, absent, boolean, or non-integer status now fails instead of producing no data.
@@ -258,4 +271,4 @@ A documented cursor still reaches the cloud host with its path and query.
 - Rows above the JSON `total` pass, because events can arrive during a read.
 - Valid `X-Page-Total` values receive no row comparison. The SDK cursor uses them.
 - A count with more than 18 digits fails as malformed metadata.
-- A cursor that does not start with `/api/v1/` fails, even if a later SDK accepts it.
+- A cursor with a path other than `/api/v1/sites/{site_id}/otherdevices/events/search` for the selected site fails, even if a later SDK accepts it.

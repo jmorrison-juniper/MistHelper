@@ -79,7 +79,7 @@ class SiteOtherDeviceEventsExporter:
         return rows, int(counts[0])  # WHY: the documented JSON total counts rows across all pages.
 
     @staticmethod
-    def _collect_events(response: Any) -> list[Any] | None:
+    def _collect_events(response: Any, site_id: str) -> list[Any] | None:
         """Collect every successful page or reject the entire incomplete result."""
         records: list[Any] = []  # WHY: keep accepted rows private until every page succeeds.
         seen: set[str] = set()  # WHY: repeated cursors cannot prove progress or completion.
@@ -100,8 +100,11 @@ class SiteOtherDeviceEventsExporter:
             if (
                 not isinstance(cursor, str)
                 or cursor in seen
-                or not (cursor[:8] == "/api/v1/" and cursor.replace(" ", "\n").isprintable())
-            ):  # WHY: the SDK appends the cursor to the cloud host, so only a cloud API path keeps that host.
+                or not (
+                    cursor.partition("?")[0] == f"/api/v1/sites/{site_id}/otherdevices/events/search"
+                    and cursor.replace(" ", "\n").isprintable()
+                )
+            ):  # WHY: only the exact selected-site search path keeps the host, the site, and the endpoint.
                 logger.error(
                     "Other-device event page cursor is invalid, unsafe, or repeated"
                 )  # WHY: omit private cursor text.
@@ -152,7 +155,7 @@ class SiteOtherDeviceEventsExporter:
         site_id, site_name = resolved  # WHY: preserve selected identifiers and the output filename.
         response = SiteOtherDeviceEventsExporter._fetch_events(site_id)  # WHY: contain only the external SDK call.
         rawdata = SiteOtherDeviceEventsExporter._collect_events(
-            response
+            response, site_id
         )  # WHY: let unexpected local defects propagate.
         if rawdata is None:  # WHY: failed pages must not reach transformations or storage.
             logger.info(

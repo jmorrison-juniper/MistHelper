@@ -47,7 +47,13 @@ def sdk_result(monkeypatch: pytest.MonkeyPatch) -> tuple[MagicMock, MagicMock]:
     """Replace endpoint and pagination results for boundary tests."""
     search = MagicMock(
         return_value=APIResponse(
-            _http_response(200, {"results": [{"mac": "aa:bb", "timestamp": 1}], "next": "/api/v1/next"}),
+            _http_response(
+                200,
+                {
+                    "results": [{"mac": "aa:bb", "timestamp": 1}],
+                    "next": "/api/v1/sites/site-1/otherdevices/events/search?page=2",
+                },
+            ),
             "https://api.invalid/events",
         )
     )  # WHY: a real first response must prove success before the next request.
@@ -246,7 +252,11 @@ class TestInstalledSdkContract:
         """The real endpoint and pagination helper preserve all successful event rows."""
         transport._session.get.side_effect = [
             _http_response(
-                200, {"results": [{"mac": "aa:bb", "metadata": {"vendor": "Juniper"}}], "next": "/api/v1/next"}
+                200,
+                {
+                    "results": [{"mac": "aa:bb", "metadata": {"vendor": "Juniper"}}],
+                    "next": "/api/v1/sites/site-1/otherdevices/events/search?page=2",
+                },
             ),
             _http_response(200, {"results": [{"mac": "cc:dd", "timestamp": 2}]}),
         ]  # WHY: exercise the real follow-up request and transformation.
@@ -260,7 +270,7 @@ class TestInstalledSdkContract:
             "https://api.invalid/api/v1/sites/site-1/otherdevices/events/search",
         )  # WHY: verify the endpoint uses the selected site.
         assert transport._session.get.call_args_list[1].args == (
-            "https://api.invalid/api/v1/next",
+            "https://api.invalid/api/v1/sites/site-1/otherdevices/events/search?page=2",
         )  # WHY: verify real pagination.
 
     def test_malformed_followup_page_retains_fallback(
@@ -271,7 +281,9 @@ class TestInstalledSdkContract:
     ) -> None:
         """A missing results field cannot produce a complete export."""
         transport._session.get.side_effect = [
-            _http_response(200, {"results": [{"mac": "aa:bb"}], "next": "/api/v1/next"}),
+            _http_response(
+                200, {"results": [{"mac": "aa:bb"}], "next": "/api/v1/sites/site-1/otherdevices/events/search?page=2"}
+            ),
             _http_response(200, {"unexpected": "synthetic-private-response"}),
         ]  # WHY: preserve the malformed-page fallback from issue #1794.
         with caplog.at_level(logging.INFO):
@@ -297,7 +309,10 @@ class TestInstalledSdkContract:
             [failure]
             if stage == "endpoint"
             else [
-                _http_response(200, {"results": [{"mac": "aa:bb"}], "next": "/api/v1/next"}),
+                _http_response(
+                    200,
+                    {"results": [{"mac": "aa:bb"}], "next": "/api/v1/sites/site-1/otherdevices/events/search?page=2"},
+                ),
                 failure,
             ]
         )  # WHY: exercise failure during either HTTP request.
@@ -365,7 +380,9 @@ class TestPageStatusValidation:
         first = (
             _http_response(200, [{"mac": "aa:bb"}], {"X-Page-Total": "2", "X-Page-Limit": "1", "X-Page-Page": "1"})
             if shape == "list"
-            else _http_response(200, {"results": [{"mac": "aa:bb"}], "next": "/api/v1/next"})
+            else _http_response(
+                200, {"results": [{"mac": "aa:bb"}], "next": "/api/v1/sites/site-1/otherdevices/events/search?page=2"}
+            )
         )  # WHY: cover header-based list paging and link-based search paging.
         transport._session.get.side_effect = [first, _http_response(503, failure_data)]  # WHY: reproduce issue #4709.
         with caplog.at_level(logging.DEBUG):
@@ -444,11 +461,14 @@ class TestPaginationCursorSafety:
     @pytest.mark.parametrize(
         "cursors",
         [
-            ["/api/v1/next?cursor=synthetic-private-repeat", "/api/v1/next?cursor=synthetic-private-repeat"],
             [
-                "/api/v1/next?cursor=synthetic-private-repeat",
-                "/api/v1/next?cursor=second",
-                "/api/v1/next?cursor=synthetic-private-repeat",
+                "/api/v1/sites/site-1/otherdevices/events/search?cursor=synthetic-private-repeat",
+                "/api/v1/sites/site-1/otherdevices/events/search?cursor=synthetic-private-repeat",
+            ],
+            [
+                "/api/v1/sites/site-1/otherdevices/events/search?cursor=synthetic-private-repeat",
+                "/api/v1/sites/site-1/otherdevices/events/search?cursor=second",
+                "/api/v1/sites/site-1/otherdevices/events/search?cursor=synthetic-private-repeat",
             ],
         ],
     )
@@ -496,12 +516,25 @@ class TestPaginationCursorSafety:
             "/api/v1/collect example.invalid",
             "/api/v1/collect\r\nHost: example.invalid",
             "/api/v1/collect\x00example.invalid",
+            "/api/v1/sites/another-site/otherdevices/events/search?page=2",
+            "/api/v1/orgs/another-org/stats/devices?page=2",
+            "/api/v1/sites/site-1/otherdevices/events/../secrets?page=2",
+            "/api/v1/sites/site-1/otherdevices/events/search/../../../../orgs/x/stats?page=2",
+            "/api/v1/sites/site-1/otherdevices/events/%2e%2e/secrets?page=2",
+            "/api/v1/sites/site-1/otherdevices/events%2Fsearch?page=2",
+            "/api/v1/sites/site%2D1/otherdevices/events/search?page=2",
+            "/api/v1/sites/SITE-1/otherdevices/events/search?page=2",
+            "/api/v1/sites/site-1//otherdevices/events/search?page=2",
+            "/api/v1/sites/site-1/otherdevices/events/search/?page=2",
+            "/api/v1/sites/site-1/otherdevices/events/search;x=1?page=2",
+            "/api/v1/sites/site-1/otherdevices/events/search#@example.invalid",
+            "/api/v1/sites/site-1-other/otherdevices/events/search?page=2",
         ],
     )
     def test_unsafe_cursor_never_leaves_the_cloud(
         self, menu: Any, transport: APIRequest, caplog: pytest.LogCaptureFixture, cursor: str
     ) -> None:
-        """Only a cloud-relative Mist API path can reach the next-page SDK call."""
+        """Only the selected site's event-search path can reach the next-page SDK call."""
         transport._session = requests.Session()  # WHY: let requests resolve the real destination of each URL.
         transport._session.headers["Authorization"] = "Token synthetic-private-token"  # WHY: prove no credential leak.
         sent: list[requests.PreparedRequest] = []  # WHY: record each prepared destination without a socket.
@@ -530,12 +563,21 @@ class TestPaginationCursorSafety:
         assert "synthetic-private" not in caplog.text  # WHY: keep cursor and credential values private.
         menu.DataExporter.write_with_format_selection.assert_not_called()  # WHY: discard incomplete rows.
 
-    def test_documented_cursor_keeps_credentials_on_the_cloud(self, menu: Any, transport: APIRequest) -> None:
-        """A documented Mist continuation path reaches only the configured cloud host."""
+    @pytest.mark.parametrize(
+        "cursor",
+        [
+            "/api/v1/sites/site-1/otherdevices/events/search?limit=1&search_after=%5B2%5D",
+            "/api/v1/sites/site-1/otherdevices/events/search?page=2",
+            "/api/v1/sites/site-1/otherdevices/events/search",
+        ],
+    )
+    def test_documented_cursor_keeps_credentials_on_the_cloud(
+        self, menu: Any, transport: APIRequest, cursor: str
+    ) -> None:
+        """A JSON or header-derived continuation for the selected site reaches only the cloud host."""
         transport._session = requests.Session()  # WHY: let requests resolve the real destination of each URL.
         transport._session.headers["Authorization"] = "Token synthetic-private-token"  # WHY: track the credential.
         sent: list[requests.PreparedRequest] = []  # WHY: record each prepared destination without a socket.
-        cursor = "/api/v1/sites/site-1/otherdevices/events/search?limit=1&search_after=%5B2%5D"  # WHY: documented form.
         responses = iter(
             [
                 _http_response(200, {"results": [{"mac": "aa:bb"}], "next": cursor}),
@@ -620,7 +662,9 @@ class TestLocalCollectionBoundaries:
     ) -> None:
         """A local validation defect after a successful page must not become a request failure."""
         transport._session.get.side_effect = [
-            _http_response(200, {"results": [{"mac": "aa:bb"}], "next": "/api/v1/next"}),
+            _http_response(
+                200, {"results": [{"mac": "aa:bb"}], "next": "/api/v1/sites/site-1/otherdevices/events/search?page=2"}
+            ),
             _http_response(200, {"results": [{"mac": "cc:dd"}]}),
         ]  # WHY: prove the second SDK request succeeds before local validation fails.
         failure = NameError("synthetic-private-later-validation")  # WHY: preserve the defect without logging its text.
@@ -701,7 +745,15 @@ class TestAdvertisedCompleteness:
     def test_total_satisfied_across_search_pages(self, menu: Any, transport: APIRequest) -> None:
         """The terminal total counts rows from every page, not only the last page."""
         transport._session.get.side_effect = [
-            _http_response(200, {"results": [{"mac": "aa:bb"}], "total": 2, "limit": 1, "next": "/api/v1/next"}),
+            _http_response(
+                200,
+                {
+                    "results": [{"mac": "aa:bb"}],
+                    "total": 2,
+                    "limit": 1,
+                    "next": "/api/v1/sites/site-1/otherdevices/events/search?page=2",
+                },
+            ),
             _http_response(200, {"results": [{"mac": "cc:dd"}], "total": 2, "limit": 1}),
         ]  # WHY: each documented search page reports the all-page total.
         SiteOtherDeviceEventsExporter.other_device_events()  # WHY: a complete two-page search must write.
@@ -723,7 +775,14 @@ class TestAdvertisedCompleteness:
     ) -> None:
         """A later page without a total cannot erase the total that an earlier page advertised."""
         transport._session.get.side_effect = [
-            _http_response(200, {"results": [{"mac": "aa:bb"}], "total": first_total, "next": "/api/v1/next"}),
+            _http_response(
+                200,
+                {
+                    "results": [{"mac": "aa:bb"}],
+                    "total": first_total,
+                    "next": "/api/v1/sites/site-1/otherdevices/events/search?page=2",
+                },
+            ),
             _http_response(200, {"results": [{"mac": "cc:dd"}]}),
         ]  # WHY: the terminal page omits both total and next.
         with caplog.at_level(logging.DEBUG):

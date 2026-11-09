@@ -65,7 +65,9 @@ An operator retains successful empty, single-page, and multiple-page results.
   Keep the most recent present JSON `total` when a later page omits it.
   Treat a header name as present even when its value is empty.
   Reject a count with more than 18 digits before conversion.
-- **FR-009**: Send a cursor to `get_next` only if it starts with `/api/v1/` and has no whitespace or control character.
+- **FR-009**: Send a cursor to `get_next` only if its path before `?` is exactly `/api/v1/sites/{site_id}/otherdevices/events/search` for the selected site.
+  The cursor must have no whitespace or control character.
+  Reject a different site, a different endpoint, a dot segment, an encoded form, and a changed case.
   The SDK appends the cursor to the cloud host, so this rule keeps each request and its credential on that host.
 
 ### Mist Cloud Transport Requirements

@@ -12,7 +12,7 @@ Accept `None` and `""` as terminal cursors, consistent with the installed SDK.
 Handle known invalid remote data explicitly with fixed messages and a failed result.
 Catch arbitrary exceptions only around the actual endpoint or `get_next` call in `_fetch_events`.
 Invoke `_collect_events` outside that catch and use `_fetch_events` for each follow-up request.
-Accept a cursor only when it is a cloud API path that starts with `/api/v1/` and has no whitespace or control character.
+Accept a cursor only when its path before `?` is exactly `/api/v1/sites/{site_id}/otherdevices/events/search` for the selected site, with no whitespace or control character.
 
 ## Technical Context
 
