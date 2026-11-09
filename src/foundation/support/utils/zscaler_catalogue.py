@@ -1184,9 +1184,10 @@ def _run_probe_validation(  # WHY: Keep behavior.
         Extracted from ``ensure_fresh`` so the caller stays under Radon
         CC=10. Validation is best-effort by contract (menu 206 already
         writes probes that self-report failures) so any exception is
-        swallowed and returned as an empty ``results`` list rather than
-        propagated. The probes dict is still returned so ``ensure_fresh``
-        can subsequently stamp observations into it.
+        caught rather than propagated. The probe document and any results
+        already assigned remain available for observation updates.
+        Warnings name only the failed stage because exception messages
+        and exception class names can contain private values.
 
     Args:
         cenr_path: Path to the CENR cache. Probes cache is resolved as a
@@ -1194,33 +1195,39 @@ def _run_probe_validation(  # WHY: Keep behavior.
         fresh: Freshly-refreshed CENR document.
 
     Returns:
-        ``(probes, results)``. ``probes`` is the v3-promoted ZCC roles
-        dict (empty when the file is missing). ``results`` is the probe
-        result list (empty on any exception path).
+        ``(probes, results)`` contains the latest acquired probe document
+        and result list. Results stay empty until validation returns.
+        A later summary failure retains both objects.
     """
     probes: dict[str, Any] = {}  # WHY: Keep behavior.
     probes_path = cenr_path.parent / "zscaler_client_connector_probes.json"  # WHY: Keep behavior.
     results: list[ProbeResult] = []  # WHY: Keep behavior.
+    stage = "cache read"  # Identify the failed step without private exception data.
     try:
         if probes_path.is_file():  # WHY: Keep behavior.
             probes = json.loads(probes_path.read_text(encoding="utf-8"))  # WHY: Keep behavior.
         # Promote the ZCC roles cache so run_full_validation and every
         # downstream reader work off the shared v3 dict shape.
+        stage = "cache promotion"  # Distinguish invalid cache shapes from validation failures.
         probes = promote_cache_document(probes, kind="zcc")  # v2 -> v3 loader adapter
+        stage = "endpoint validation"  # Identify validation failures without exposing endpoint names.
         results = run_full_validation(  # WHY: Keep behavior.
             probes,
             fresh,
             timeout=DEFAULT_TIMEOUT,
             workers=DEFAULT_WORKERS,
         )
+        stage = "result summary"  # Keep completed results when their summary fails.
         if results and not any(r.responding_protocols for r in results):  # WHY: Keep behavior.
             logger.warning(  # WHY: Keep behavior.
                 "zscaler_catalogue: full-fleet validation showed zero responding "
                 "endpoints (n=%d); refresh kept anyway",
                 len(results),
             )
-    except Exception as exc:  # Keep broad because cache loading and endpoint validation are best-effort refresh steps.
-        logger.warning("zscaler_catalogue: validation crashed: %s", exc)  # WHY: Keep behavior.
+    except Exception:  # Keep broad because optional cache loading and validation must not block menu 206.
+        logger.warning(  # Report a fixed stage without exception text, class names, or a traceback.
+            "zscaler_catalogue: validation crashed during %s. Refresh kept.", stage
+        )
     return probes, results  # WHY: Keep behavior.
 
 
