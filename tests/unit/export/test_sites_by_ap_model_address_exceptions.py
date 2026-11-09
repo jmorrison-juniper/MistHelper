@@ -58,7 +58,7 @@ class TestAddressExceptionBoundary:
             result = SitesByAPModelExporter._split_address(address)
         assert result == (address, "", "", "", "")
         assert result[0] is address
-        assert caplog.records
+        assert len(caplog.records) > 0
 
     @pytest.mark.parametrize(
         ("site", "expected"),
