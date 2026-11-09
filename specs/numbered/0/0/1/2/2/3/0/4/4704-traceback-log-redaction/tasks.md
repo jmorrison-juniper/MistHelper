@@ -94,3 +94,11 @@ T024 precedes T025. T026 requires T025. These tasks refine FR-015 and FR-016.
 - [x] T028 Run focused tests and committed quality gates. Record every checked and skipped file. (delivered: analysis.md, local commit cbb954e)
 
 T028 requires T027. Both tasks refine the validation of FR-015 through FR-018.
+
+## Phase 11: Bootstrap Safe Menu Text
+
+- [x] T029 Reproduce safe menu corruption and preserve explicit synthetic assignments in the dedicated filter tests.
+- [x] T030 Require colon or equals assignments in the owned shared filter.
+- [ ] T031 Validate existing protections and provide the correction commit to the bootstrap owner for routing checks.
+
+T029 precedes T030. T031 requires T030. These tasks refine FR-004 and FR-011.

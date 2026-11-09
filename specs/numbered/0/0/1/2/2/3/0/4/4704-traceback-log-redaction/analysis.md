@@ -452,3 +452,26 @@ The report lists these skipped entries:
 Thus, all 131 pure filter cases remain in an analyzed file.
 Only the three SDK cases remain in the explicitly excluded integration file.
 Pytest executed all 134 cases. The analyzer configuration and baseline remain unchanged.
+
+## Bootstrap Menu False Positive
+
+The bootstrap owner reported four routing failures for `273: Admin and API Token Hygiene Report`.
+The whitespace-only label separator incorrectly treated `Token Hygiene` as a credential assignment.
+The repair requires an explicit colon or equals sign after ordinary credential labels.
+It preserves quoted keys and horizontal spacing. Authorization and URL rules remain unchanged.
+Credential words in prose no longer imply a private assignment.
+Whitespace-only unlabeled values remain outside the recognition contract.
+
+The new tests first had a missing synthetic portal-context field.
+After correcting that fixture, the selected regressions reported `8 failed, 42 passed, 131 deselected, 1 warning`.
+The valid failures cover menu titles, policy prose, and authorization prose in fresh and cached reports.
+Forty explicit synthetic assignment cases passed before and after the repair.
+They cover all ordinary credential keys, both assignment separators, quoted keys, and horizontal spacing.
+
+The same six-file focused command now reports `346 passed, 1 warning`, with `100%` coverage of all 49 statements.
+Compile, Ruff, Black, mypy, Bandit, complexity, pydocstyle, symbols, and Pylint passed with the earlier commands.
+Pylint remains `9.80/10`. The Dash warning and mypy configuration notes remain.
+The dedicated pure filter file holds 181 cases. The SDK integration file still holds three cases.
+The existing renamed tests and bootstrap source remain unchanged.
+The bootstrap owner retains the four routing checks and will test the shared correction locally.
+No network, credential access, publication, or public comment occurred. All holds remain active.

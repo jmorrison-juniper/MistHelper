@@ -103,3 +103,39 @@ class TestVerificationUrlProbe:
         rendered = self.render(record, True, False)
         assert "URL_SYNTHETIC_4705" not in rendered
         assert f"***REDACTED***{delimiter}Safe context" in rendered
+
+
+class TestCredentialLabelBoundaries:
+    """Distinguish explicit credential labels from ordinary menu language."""
+
+    @pytest.mark.parametrize(
+        "message",
+        [
+            "273: Admin and API Token Hygiene Report",
+            "API Token Hygiene Report",
+            "Invalid token",
+            "The password policy check passed",
+            "Authorization is required",
+        ],
+    )
+    @pytest.mark.parametrize("cached", [False, True])
+    def test_safe_words(self, message: str, cached: bool) -> None:
+        """Preserve the complete safe report through the production handler."""
+        record = TestVerificationUrlProbe.record(message, "cause")
+        record.run_id = "synthetic-run"
+        record.site_id = "synthetic-site"
+        expected = logging.Formatter(factory.LOG_FORMAT).format(record)
+        if not cached:
+            record.exc_text = None
+        assert TestVerificationUrlProbe.render(record, True, cached) == expected + "\n"
+
+    @pytest.mark.parametrize("key", ["password", "passwd", "secret", "token", "api_key", "psk", "credential", "auth"])
+    @pytest.mark.parametrize("separator", ["=", ": ", '": "', "' = '", "\t:\t"])
+    def test_explicit_labels(self, key: str, separator: str) -> None:
+        """Retain protection for explicit synthetic credential assignments."""
+        text = f'{key}{separator}LABEL_SYNTHETIC_4705"\nSafe context'
+        record = TestVerificationUrlProbe.record(text, "cause")
+        rendered = TestVerificationUrlProbe.render(record, True, True)
+        assert "LABEL_SYNTHETIC_4705" not in rendered
+        assert "***REDACTED***" in rendered
+        assert rendered.count("Safe context") == 2
