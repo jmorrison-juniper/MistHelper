@@ -370,19 +370,17 @@ class AddressUtils:
 
     @staticmethod
     def _scourgify_parse(address_string: str | None, debug: bool) -> dict[str, Any]:
-        """Parse via usaddress-scourgify, falling back to the heuristic parser on any error."""
-        try:  # WHY: library parsing can raise on malformed input
-            if debug:  # WHY: trace the parse attempt when debugging
-                logger.debug("USADDRESS_PARSE: Attempting for: '%s'", address_string)
+        """Parse with usaddress-scourgify and fall back only when that parser fails."""
+        if debug:  # WHY: trace the parse attempt when debugging
+            logger.debug("USADDRESS_PARSE: Attempting for: '%s'", address_string)
+        try:  # WHY: optional parser failures retain the supported heuristic fallback
             parsed = normalize_address_record(address_string)  # WHY: normalize via the optional library
-            return AddressUtils._build_scourgify_result(parsed, address_string)  # WHY: shape into result dict
-        except (
-            Exception
-        ) as error:  # nosec B110 - Keep broad because optional scourgify errors need the heuristic fallback.
+        except Exception as error:  # nosec B110 - Optional parser failures need the heuristic fallback.
             logger.debug(
                 "Optional address normalization failed: %s: %s", type(error).__name__, error
             )  # WHY: name the fallback cause for diagnostics
             return AddressUtils._parse_components(address_string, debug=debug)  # WHY: heuristic fallback path
+        return AddressUtils._build_scourgify_result(parsed, address_string)  # WHY: expose local shaping defects
 
     @staticmethod
     def _build_scourgify_result(parsed: dict[str, Any], address_string: str | None) -> dict[str, Any]:
