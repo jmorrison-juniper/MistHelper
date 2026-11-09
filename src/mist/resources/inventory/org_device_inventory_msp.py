@@ -180,26 +180,26 @@ def _flatten_version_rows(collected: list[_OrgProcessedResult]) -> list[dict[str
     return combined  # WHY: return flat rows to caller for printing + export.
 
 
-def _print_combined_model_report(model_rows: list[dict[str, Any]]) -> None:
+def _print_combined_model_report(model_rows: list[dict[str, Any]], coverage: str = "All Orgs") -> None:
     """Print the combined MSP model count summary table to the operator."""
     model_table = PrettyTable()  # WHY: console table for operator display.
     model_table.field_names = ["Org", "Device Type", "Model", "Count"]  # WHY: stable column order for readers.
     for row in model_rows:  # WHY: add each combined row to the table.
         model_table.add_row([row["Org"], row["Device Type"], row["Model"], row["Count"]])  # WHY: match header.
     print(f"\n{_HEADER_DIVIDER}")  # WHY: preserve legacy divider before header.
-    print("  Combined MSP Model Count Summary (All Orgs)")  # WHY: preserve legacy report header text.
+    print(f"  Combined MSP Model Count Summary ({coverage})")  # Identify the organizations included in the report.
     print(f"{_HEADER_DIVIDER}")  # WHY: preserve legacy divider after header.
     print(model_table)  # WHY: render the model summary table.
 
 
-def _print_combined_version_report(version_rows: list[dict[str, Any]]) -> None:
+def _print_combined_version_report(version_rows: list[dict[str, Any]], coverage: str = "All Orgs") -> None:
     """Print the combined MSP firmware version summary table to the operator."""
     version_table = PrettyTable()  # WHY: console table for operator display.
     version_table.field_names = ["Org", "Device Type", "Version", "Count"]  # WHY: stable column order.
     for row in version_rows:  # WHY: add each combined row to the table.
         version_table.add_row([row["Org"], row["Device Type"], row["Version"], row["Count"]])  # WHY: match header.
     print(f"\n{_HEADER_DIVIDER}")  # WHY: preserve legacy divider before header.
-    print("  Combined MSP Firmware Version Summary (All Orgs)")  # WHY: preserve legacy report header text.
+    print(f"  Combined MSP Firmware Version Summary ({coverage})")  # Identify incomplete organization coverage.
     print(f"{_HEADER_DIVIDER}")  # WHY: preserve legacy divider after header.
     print(version_table)  # WHY: render the version summary table.
 
@@ -371,10 +371,11 @@ class OrgDeviceInventoryMSPOrchestrator:
         export_rows: list[dict],
         versions: list[str],
         filename: str,
+        coverage: str = "All Orgs",
     ) -> None:
         """Render pivot header/table then export CSV rows via DataExporter."""
         print(f"\n{_HEADER_DIVIDER}")  # WHY: preserve legacy divider before header.
-        print("  Combined MSP Version Distribution per Model (All Orgs)")  # WHY: preserve legacy header text.
+        print(f"  Combined MSP Version Distribution per Model ({coverage})")  # Identify incomplete coverage.
         print(f"{_HEADER_DIVIDER}")  # WHY: preserve legacy divider after header.
         print(table)  # WHY: render the pivot table to the operator.
         ordered_fields = ["Org", "Model", "Device Type"] + versions + ["Total"]  # WHY: CSV header column order.
@@ -391,6 +392,7 @@ class OrgDeviceInventoryMSPOrchestrator:
     def _display_combined_pivot_and_export(
         all_ver_data: list[tuple[str, list[dict]]],
         filename: str,
+        coverage: str = "All Orgs",
     ) -> None:
         """Build combined version-per-model pivot across all MSP orgs and export it."""
         logger.info("Building combined MSP version pivot from %d org datasets", len(all_ver_data))  # WHY: entry log.
@@ -404,14 +406,14 @@ class OrgDeviceInventoryMSPOrchestrator:
             OrgDeviceInventoryMSPOrchestrator._build_msp_pivot_table_and_rows(versions, pivot)
         )  # WHY: build PrettyTable + CSV rows in one pass.
         OrgDeviceInventoryMSPOrchestrator._print_and_export_pivot(
-            table, export_rows, versions, filename
+            table, export_rows, versions, filename, coverage
         )  # WHY: hand off print + export to helper.
 
     @staticmethod
-    def _emit_combined_model(prefix: str, collected: list[_OrgProcessedResult]) -> None:
+    def _emit_combined_model(prefix: str, collected: list[_OrgProcessedResult], coverage: str = "All Orgs") -> None:
         """Flatten, print, and export the combined MSP model summary."""
         combined_model = _flatten_model_rows(collected)  # WHY: aggregate model rows across orgs.
-        _print_combined_model_report(combined_model)  # WHY: render combined table to operator.
+        _print_combined_model_report(combined_model, coverage)  # Keep coverage visible beside the model table.
         DataExporter.write_with_format_selection(
             combined_model,
             f"{prefix}{_MODEL_EXPORT_SUFFIX}",
@@ -419,10 +421,10 @@ class OrgDeviceInventoryMSPOrchestrator:
         )  # WHY: single writer handles CSV format selection + write.
 
     @staticmethod
-    def _emit_combined_version(prefix: str, collected: list[_OrgProcessedResult]) -> None:
+    def _emit_combined_version(prefix: str, collected: list[_OrgProcessedResult], coverage: str = "All Orgs") -> None:
         """Flatten, print, and export the combined MSP firmware version summary."""
         combined_version = _flatten_version_rows(collected)  # WHY: aggregate firmware rows across orgs.
-        _print_combined_version_report(combined_version)  # WHY: render combined table to operator.
+        _print_combined_version_report(combined_version, coverage)  # Keep coverage visible beside the version table.
         DataExporter.write_with_format_selection(
             combined_version,
             f"{prefix}{_VERSION_EXPORT_SUFFIX}",
@@ -430,16 +432,23 @@ class OrgDeviceInventoryMSPOrchestrator:
         )  # WHY: single writer handles CSV format selection + write.
 
     @staticmethod
-    def _build_combined_reports(msp_safe_name: str, collected: list[dict[str, Any]]) -> None:
+    def _build_combined_reports(
+        msp_safe_name: str, collected: list[dict[str, Any]], coverage: str = "All Orgs"
+    ) -> None:
         """Generate combined MSP model/version and pivot reports from collected org outputs."""
         prefix = f"MSP_{msp_safe_name}"  # WHY: filename prefix shared by all combined reports.
         typed_collected = [_to_org_result(entry) for entry in collected]  # WHY: adapt legacy dicts to dataclass form.
-        OrgDeviceInventoryMSPOrchestrator._emit_combined_model(prefix, typed_collected)  # WHY: model report step.
-        OrgDeviceInventoryMSPOrchestrator._emit_combined_version(prefix, typed_collected)  # WHY: version report step.
+        OrgDeviceInventoryMSPOrchestrator._emit_combined_model(
+            prefix, typed_collected, coverage
+        )  # Keep the model report consistent with batch coverage.
+        OrgDeviceInventoryMSPOrchestrator._emit_combined_version(
+            prefix, typed_collected, coverage
+        )  # Keep the firmware report consistent with batch coverage.
         all_ver_data = [(entry.safe_org, entry.ver_per_model) for entry in typed_collected]  # WHY: pivot inputs.
         OrgDeviceInventoryMSPOrchestrator._display_combined_pivot_and_export(
             all_ver_data,
             f"{prefix}{_PIVOT_EXPORT_SUFFIX}",
+            coverage,
         )  # WHY: build + export combined version-per-model pivot.
         print(f"\n  Combined MSP reports written with prefix: {prefix}_")  # WHY: operator confirmation footer.
 
@@ -478,6 +487,9 @@ class OrgDeviceInventoryMSPOrchestrator:
         child_org_name = org_record.get("name", child_org_id)  # WHY: display name for logs + operator UI.
         if not child_org_id:  # WHY: cannot invoke runner without an id.
             logger.warning("Skipping org record with no id: %s", org_record)  # WHY: log skipped record.
+            print(
+                f"  [{idx}/{total}] Skipping {child_org_name}: missing organization ID"
+            )  # Expose the skipped record and its cause without requiring log access.
             return  # WHY: skip malformed record.
         print(f"  [{idx}/{total}] {child_org_name}")  # WHY: operator progress indicator.
         OrgDeviceInventoryMSPOrchestrator._run_org_and_collect(
@@ -499,6 +511,22 @@ class OrgDeviceInventoryMSPOrchestrator:
         return collected  # WHY: batch results feed downstream combined-report logic.
 
     @staticmethod
+    def _report_batch_coverage(total: int, successful: int) -> str:
+        """Report exact batch counts and return a console-only combined-report label."""
+        excluded = total - successful  # Count only records that did not produce a collected result.
+        status = "partial" if excluded else "complete"  # Never describe an incomplete batch as complete.
+        logger.info(
+            "Reporting MSP inventory coverage: %d succeeded, %d skipped or failed", successful, excluded
+        )  # Record coverage before console output.
+        print(
+            f"\nMSP inventory summary {status}. Succeeded: {successful}. Skipped or failed: {excluded}."
+        )  # Distinguish runner successes from organizations merely found.
+        logger.debug("MSP inventory coverage reported for %d organizations: %s", total, status)  # Record status.
+        return (
+            f"Partial: {successful} succeeded, {excluded} skipped or failed" if excluded else "All Orgs"
+        )  # Preserve complete-report headings while labeling every partial table.
+
+    @staticmethod
     def execute_msp(run_for_org_fn: Callable[[str], tuple[list[dict], list[dict], list[dict], str]]) -> None:
         """Mode 3: run inventory summaries for all orgs under selected MSP."""
         logger.info("Starting MSP device inventory summary")  # WHY: entry log for batch flow.
@@ -512,11 +540,14 @@ class OrgDeviceInventoryMSPOrchestrator:
             return  # WHY: abort empty batch.
         print(f"  Found {len(orgs_data)} organizations.  Running inventory summary for each...\n")  # WHY: header.
         collected = OrgDeviceInventoryMSPOrchestrator._process_orgs_batch(orgs_data, run_for_org_fn)  # WHY: batch.
-        logger.info("MSP inventory complete for %d orgs", len(orgs_data))  # WHY: post-batch trace.
-        print(f"\nMSP inventory summary complete. Processed {len(orgs_data)} organizations.")  # WHY: operator footer.
+        coverage = OrgDeviceInventoryMSPOrchestrator._report_batch_coverage(
+            len(orgs_data), len(collected)
+        )  # Derive batch status from successful results, not loop iterations.
         if len(collected) >= _MIN_ORGS_FOR_COMBINED:  # WHY: combined reports meaningful only for 2+ orgs.
             msp_safe_name = _sanitize_msp_name(active_msp.get("msp_name", "MSP"))  # WHY: filesystem-safe MSP name.
-            OrgDeviceInventoryMSPOrchestrator._build_combined_reports(msp_safe_name, collected)  # WHY: combined step.
+            OrgDeviceInventoryMSPOrchestrator._build_combined_reports(
+                msp_safe_name, collected, coverage
+            )  # Carry coverage to every combined report without changing exported rows.
         else:
             logger.info("Skipping combined reports: fewer than 2 orgs processed successfully")  # WHY: trace skip.
 

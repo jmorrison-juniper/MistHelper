@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import socket
 from types import SimpleNamespace
 from typing import Any  # WHY: type mixed-value dicts for mypy strict.
 from unittest.mock import MagicMock
@@ -18,6 +19,13 @@ from src.mist.resources.inventory.org_device_inventory_msp import (
     _to_org_result,
     configure_org_device_inventory_msp_dependencies,
 )
+
+
+@pytest.fixture(autouse=True)
+def block_inventory_network(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Block sockets and DNS so inventory tests cannot contact a live service."""
+    for name in ("socket", "create_connection", "getaddrinfo", "gethostbyname", "gethostbyname_ex", "gethostbyaddr"):
+        monkeypatch.setattr(socket, name, MagicMock(side_effect=AssertionError(f"Network access blocked: {name}")))
 
 
 def _configure_msp(*, privileges: list[dict] | None = None, safe_input_return: str = "1") -> MagicMock:
@@ -469,6 +477,107 @@ def test_process_orgs_batch_iterates_all_orgs() -> None:
     collected = OrgDeviceInventoryMSPOrchestrator._process_orgs_batch(orgs, _runner)
     assert len(collected) == 2
     assert [c["safe_org"] for c in collected] == ["o1", "o2"]
+
+
+def _configure_batch(monkeypatch: pytest.MonkeyPatch, organizations: list[dict[str, str]]) -> MagicMock:
+    """Inject batch discovery and capture exports without service or database access."""
+    exporter = _configure_msp()
+    monkeypatch.setattr(
+        OrgDeviceInventoryMSPOrchestrator, "_resolve_active_msp", MagicMock(return_value={"msp_id": "m1"})
+    )
+    monkeypatch.setattr(OrgDeviceInventoryMSPOrchestrator, "_fetch_org_list", MagicMock(return_value=organizations))
+    return exporter
+
+
+def _assert_combined_exports(exporter: MagicMock) -> None:
+    """Check all export rows, filenames, and writer options against the existing contract."""
+    expected_reports = [
+        ("CombinedDeviceModelCounts", "orgDeviceModelSummary", {"Model": "AP1", "Count": 2}),
+        ("CombinedDeviceFirmwareSummary", "orgDeviceFirmwareSummary", {"Version": "1.0", "Count": 2}),
+        ("CombinedDeviceVersionPerModel", "orgDeviceVersionPerModel", {"Model": "AP1", "1.0": 2, "Total": 2}),
+    ]
+    assert exporter.call_count == 3
+    for (suffix, api_name, fields), export_call in zip(expected_reports, exporter.call_args_list, strict=True):
+        expected_rows = [{"Org": organization, "Device Type": "ap", **fields} for organization in ("o1", "o2")]
+        assert export_call.args == (expected_rows, f"MSP_MSP_{suffix}")
+        expected_options: dict[str, Any] = {"api_function_name": api_name}
+        if "Total" in fields:
+            expected_options["fieldnames"] = ["Org", "Model", "Device Type", "1.0", "Total"]
+        assert export_call.kwargs == expected_options
+
+
+@pytest.mark.parametrize(
+    ("organizations", "successful", "excluded"),
+    [
+        ([{"id": "o1"}, {"id": "o2"}], 2, 0),
+        ([{"name": "Missing ID"}, {"id": "o1"}], 1, 1),
+        ([{"id": "failed", "name": "Failed Org"}, {"id": "o1"}], 1, 1),
+        ([{"id": "o1"}, {"name": "Missing ID"}, {"id": "failed"}], 1, 2),
+        ([{"name": "Missing ID"}, {"id": "failed"}], 0, 2),
+        ([{"id": "o1"}, {"id": "failed"}, {"id": "o2"}], 2, 1),
+    ],
+    ids=["all-success", "missing-id", "runner-exception", "mixed", "zero-success", "partial-combined"],
+)
+def test_execute_msp_reports_actual_coverage(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    organizations: list[dict[str, str]],
+    successful: int,
+    excluded: int,
+) -> None:
+    """Count only runner returns and retain visible causes for excluded organizations."""
+    exporter = _configure_batch(monkeypatch, organizations)
+    results = [
+        RuntimeError("synthetic runner failure") if record["id"] == "failed" else ([], [], [], record["id"])
+        for record in organizations
+        if record.get("id")
+    ]
+    runner = MagicMock(side_effect=results)
+    OrgDeviceInventoryMSPOrchestrator.execute_msp(runner)
+    output = capsys.readouterr().out
+    status = "partial" if excluded else "complete"
+    assert f"MSP inventory summary {status}. Succeeded: {successful}. Skipped or failed: {excluded}." in output
+    assert runner.call_args_list == [((record["id"],),) for record in organizations if record.get("id")]
+    if any(not record.get("id") for record in organizations):
+        assert "Skipping Missing ID: missing organization ID" in output
+    if any(record.get("id") == "failed" for record in organizations):
+        assert "synthetic runner failure" in output
+    assert exporter.call_count == (2 if successful >= 2 else 0)
+
+
+@pytest.mark.parametrize("partial", [True, False], ids=["partial-reports", "complete-reports"])
+def test_execute_msp_labels_every_combined_report(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], partial: bool
+) -> None:
+    """Render all three real reports and preserve exact successful export records."""
+    organizations = [{"id": "o1"}, {"id": "o2"}]
+    if partial:
+        organizations.insert(1, {"id": "failed"})
+    exporter = _configure_batch(monkeypatch, organizations)
+    rows = [{"device_type": "ap", "model": "AP1", "version": "1.0", "count": 2}]
+    runner = MagicMock(
+        side_effect=[
+            (rows, rows, rows, "o1"),
+            *([RuntimeError("synthetic runner failure")] if partial else []),
+            (rows, rows, rows, "o2"),
+        ]
+    )
+    OrgDeviceInventoryMSPOrchestrator.execute_msp(runner)
+    output = capsys.readouterr().out
+    scope = "Partial: 2 succeeded, 1 skipped or failed" if partial else "All Orgs"
+    for title in ("Model Count Summary", "Firmware Version Summary", "Version Distribution per Model"):
+        assert f"Combined MSP {title} ({scope})" in output
+    assert ("All Orgs" in output) is not partial
+    _assert_combined_exports(exporter)
+
+
+@pytest.mark.parametrize(
+    "name", ["socket", "create_connection", "getaddrinfo", "gethostbyname", "gethostbyname_ex", "gethostbyaddr"]
+)
+def test_inventory_network_is_blocked(name: str) -> None:
+    """Prove the offline fixture rejects socket creation, connections, and DNS lookup."""
+    with pytest.raises(AssertionError, match=f"Network access blocked: {name}"):
+        getattr(socket, name)()
 
 
 def test_run_single_msp_org_short_circuits_without_msp(monkeypatch: pytest.MonkeyPatch) -> None:
