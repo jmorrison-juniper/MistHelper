@@ -87,3 +87,10 @@ FR-017 and FR-018 map to T021 and T023.
 - [ ] T026 Validate punctuation protection and record the restricted integration handoff.
 
 T024 precedes T025. T026 requires T025. These tasks refine FR-015 and FR-016.
+
+## Phase 10: Analyzer Scope
+
+- [x] T027 Separate the three SDK integration cases from the 131 pure filter cases without changing analyzer policy. (delivered: tests/unit/utils/test_logger_verification_url_sdk_integration.py)
+- [ ] T028 Run focused tests and committed quality gates. Record every checked and skipped file.
+
+T028 requires T027. Both tasks refine the validation of FR-015 through FR-018.

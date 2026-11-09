@@ -376,3 +376,33 @@ Pylint remains `9.80/10`. The existing Dash warning and mypy configuration notes
 The earlier text-delimiter design is superseded by this correction.
 Existing renamed tests remain unchanged. No caller, handler installation, or SDK source changed.
 The publication, integration, and ownership holds remain active.
+
+The correction commit is `90d63f630`, with both issue references and the required trailer.
+The same committed input preflight reported `1 passed, 1 warning`, with four inputs validated.
+The committed analyzer reported `3 files checked`, `0 new findings`, `3 skipped`, and `0 parse errors`.
+Two skips are omitted full-suite roots.
+The third is the dedicated regression file, excluded by the existing `mist_api_excluded` policy after adding the real SDK call.
+Thus, this gate does not assess that file. Its 134 executable regression cases pass in pytest.
+No analyzer configuration or baseline changed.
+The writing gate checked five records, skipped none, and passed with scores from 92 through 98.
+
+## Separate SDK Integration Scope
+
+The approved test-only handoff moves three SDK cases to `tests/unit/utils/test_logger_verification_url_sdk_integration.py`.
+The file name states its integration purpose while retaining the existing owned test directory.
+The pure filter file retains 131 cases with no SDK import.
+The integration file imports the SDK directly and uses a mocked session.
+No analyzer configuration, import masking, production source, or existing renamed test changed.
+
+The focused command adds the integration file to the earlier expanded selection:
+
+```bash
+.venv/bin/python -m pytest -q tests/unit/utils/test_logger_verification_urls.py tests/unit/utils/test_logger_verification_url_sdk_integration.py tests/unit/test_logger_utils.py tests/unit/utils/test_logger_utils_private_digest.py tests/unit/upgrade_portal/test_logging_contract.py tests/contract/upgrade_portal/test_no_credential_leak.py --cov=src.foundation.support.utils.logger_utils --cov-report=term-missing --cov-fail-under=80
+.venv/bin/python -m ruff check tests/unit/utils/test_logger_verification_urls.py tests/unit/utils/test_logger_verification_url_sdk_integration.py
+.venv/bin/python -m black tests/unit/utils/test_logger_verification_urls.py tests/unit/utils/test_logger_verification_url_sdk_integration.py
+.venv/bin/python -m pydocstyle tests/unit/utils/test_logger_verification_urls.py tests/unit/utils/test_logger_verification_url_sdk_integration.py
+```
+
+Result: `296 passed, 1 warning`, with `100%` coverage of all 49 source statements.
+Ruff and pydocstyle passed. Black left both files unchanged. Whitespace checks passed.
+All publication and ownership holds remain active.
