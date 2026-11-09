@@ -27,6 +27,10 @@ does.
 Menu 164 builds WAN VPNs from gateway profiles. It uses no profile data from a
 failed Mist response.
 
+Menus 213 and 214 export site application lists and site system events. When an
+output write fails, each menu logs an error that names the endpoint and the
+output file. It does not claim that the export succeeded.
+
 Menu 254 searches organization inventory. It reports an initial request failure
 instead of an empty result. It reports a failed output write without claiming
 that the export succeeded.
