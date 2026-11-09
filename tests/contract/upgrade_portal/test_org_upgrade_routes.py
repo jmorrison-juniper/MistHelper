@@ -758,6 +758,28 @@ def test_unknown_submission_blocks_a_repeat(org_upgrade_client: FlaskClient) -> 
         assert browser_session["org_upgrade_last_job"]["state"] == "submission_unknown"
 
 
+def test_returned_server_error_submission_blocks_a_repeat(  # Keep the replay guard after a returned error.
+    org_upgrade_client: FlaskClient,
+) -> None:
+    """A returned server error keeps the uncertainty marker before return."""
+
+    class UnknownService:  # Return a saved server error without a usable job identity.
+        @staticmethod
+        def submit(cloud_session: Any, org_id: str, body: dict[str, object]) -> OrgUpgradeResult:  # Model HTTP 503.
+            return OrgUpgradeResult(org_id, None, 503, {}, "server error")  # Keep all evidence offline.
+
+    org_upgrade_client.application.config["ORG_UPGRADE_SERVICE"] = UnknownService  # Install the offline service.
+    save_valid_options(org_upgrade_client)  # Prepare the confirmed form without a cloud request.
+    first = org_upgrade_client.post(ORG_SUBMIT_API, json={"confirmation": "CONFIRM"})  # Submit the uncertain result.
+    second = org_upgrade_client.post(ORG_SUBMIT_API, json={"confirmation": "CONFIRM"})  # Attempt a blocked repeat.
+    assert first.status_code == 502  # The route reports the malformed response envelope.
+    assert first.get_json()["error"]["code"] == "org_upgrade_submission_failed"  # Keep the public failure contract.
+    assert second.status_code == 409  # The uncertainty marker blocks a second write.
+    assert second.get_json()["error"]["code"] == "org_upgrade_already_submitted"  # Name the replay refusal.
+    with org_upgrade_client.session_transaction() as browser_session:  # Read the durable browser marker.
+        assert browser_session["org_upgrade_last_job"]["state"] == "submission_unknown"  # Preserve unknown state.
+
+
 def test_zero_failure_limit_survives_the_options_round_trip(org_upgrade_client: FlaskClient) -> None:
     """The strict zero-percent failure limit stays visible after validation."""
     answer = org_upgrade_client.post(
