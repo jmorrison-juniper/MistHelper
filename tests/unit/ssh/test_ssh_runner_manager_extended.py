@@ -17,7 +17,7 @@ from unittest.mock import MagicMock, patch  # WHY: standard mocking primitives.
 
 import pytest  # WHY: caplog fixture + parametrize.
 
-from src.operations.execution.ssh.ssh_runner_manager import SSHRunnerManager, SSHRunnerManagerDeps
+from src.operations.execution.ssh.ssh_runner_manager import ProgressContext, SSHRunnerManager, SSHRunnerManagerDeps
 
 
 @pytest.fixture(autouse=True)
@@ -91,7 +91,7 @@ def test_emit_completion_fires_when_emitter_present() -> None:
     """Emitter receives progress-complete call with expected shape."""
     emitter = SimpleNamespace(emit_progress_complete=MagicMock())
     SSHRunnerManager._emit_completion(emitter, 100.0, cancelled=True)
-    emitter.emit_progress_complete.assert_called_once()
+    assert emitter.emit_progress_complete.call_args.args[:3] == (ProgressContext("97", "ssh_runner", 0), 0, True)
 
 
 # ---------------------------------------------------------------------------
@@ -681,3 +681,12 @@ def test_run_interactive_workflow_full_path(monkeypatch: pytest.MonkeyPatch) -> 
     ):
         assert SSHRunnerManager._run_interactive_workflow(deps) is True
     executor.assert_called_once()
+
+
+@pytest.mark.parametrize("cancelled", [False, True])
+def test_emit_completion_preserves_payload_with_fixed_clock(cancelled: bool) -> None:
+    """Completion telemetry preserves identity, count, cancellation, and elapsed time."""
+    emitter = SimpleNamespace(emit_progress_complete=MagicMock())
+    with patch("src.operations.execution.ssh.ssh_runner_manager.time.time", return_value=125.0):
+        SSHRunnerManager._emit_completion(emitter, 100.0, cancelled=cancelled)
+    emitter.emit_progress_complete.assert_called_once_with(ProgressContext("97", "ssh_runner", 0), 0, cancelled, 25.0)
