@@ -243,3 +243,45 @@ class TestSensitiveTracebacks:
         rendered = logging.Formatter().format(record)
         assert rendered == "Log redaction failed: RuntimeError"
         assert record.exc_info is None and record.exc_text is None
+
+
+class TestLabeledCredentials:
+    """Keep credential matching on one line and cover complete header values."""
+
+    @pytest.mark.parametrize(
+        "message",
+        [
+            "Authorization: Bearer ISSUE4705_SYNTHETIC_VALUE",
+            "aUtHoRiZaTiOn: bEaReR ISSUE4705_SYNTHETIC_VALUE",
+            "AUTHORIZATION: Basic ISSUE4705_SYNTHETIC_VALUE",
+            "Authorization: Custom-Scheme ISSUE4705_SYNTHETIC_VALUE",
+            "Authorization: ISSUE4705_SYNTHETIC_VALUE",
+            "Authorization=Bearer\tISSUE4705_SYNTHETIC_VALUE",
+            '"Authorization": "Bearer ISSUE4705_SYNTHETIC_VALUE"',
+            "password=ISSUE4705_SYNTHETIC_VALUE",
+            "token: ISSUE4705_SYNTHETIC_VALUE",
+            "api_key=ISSUE4705_SYNTHETIC_VALUE",
+        ],
+    )
+    def test_complete_labeled_value_is_removed(self, message: str) -> None:
+        """A credential scheme must not conceal the value from redaction."""
+        record = logging.makeLogRecord({"msg": message})
+        assert SensitiveFilter().filter(record) is True
+        assert "ISSUE4705_SYNTHETIC_VALUE" not in record.getMessage()
+        assert REDACTED_PLACEHOLDER in record.getMessage()
+
+    @pytest.mark.parametrize("ending", ["token", "password", "auth", "Authorization:"])
+    @pytest.mark.parametrize("newline", ["\n", "\r\n"])
+    def test_empty_label_does_not_consume_next_line(self, ending: str, newline: str) -> None:
+        """A label without a value must leave the following diagnostic intact."""
+        message = f"Invalid {ending}{newline}{newline}The above exception was the direct cause"
+        record = logging.makeLogRecord({"msg": message})
+        assert SensitiveFilter().filter(record) is True
+        assert record.getMessage() == message
+
+    def test_unlabeled_text_is_outside_the_redaction_contract(self) -> None:
+        """Do not claim recognition of an arbitrary unlabeled value."""
+        message = "Request failed ISSUE4705_SYNTHETIC_UNLABELED"
+        record = logging.makeLogRecord({"msg": message})
+        assert SensitiveFilter().filter(record) is True
+        assert record.getMessage() == message

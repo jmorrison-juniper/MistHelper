@@ -30,6 +30,8 @@
 - [x] Scenarios cover the normal and portal handlers.
 - [x] Outcomes require both failing and passing regression evidence.
 - [x] The specification leaves implementation choices to the plan.
+- [x] The follow-up requirements cover complete safe chains and labeled authorization values.
+- [x] The protection scope explicitly excludes arbitrary unlabeled secrets.
 
 ## Notes
 

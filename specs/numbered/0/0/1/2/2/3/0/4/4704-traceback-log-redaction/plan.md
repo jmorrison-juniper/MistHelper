@@ -7,7 +7,10 @@
 ## Summary
 
 Extend `SensitiveFilter` to sanitize rendered exception text before a standard handler emits it.
-Keep the existing in-place message contract and credential pattern.
+Keep the existing in-place message contract and ordinary credential rules.
+Restrict credential separators to the current line.
+Match complete authorization headers before the ordinary credential rule.
+Redact an authorization scheme and its value together.
 Sanitize cached exception text from earlier handlers.
 Retain exception types, frames, chain separators, and safe messages.
 If formatting fails, replace the unsafe record with a diagnostic that excludes the error value.
@@ -71,3 +74,16 @@ The existing logging module and test modules exceed five top-level names.
 Keep the production symbol set unchanged and add only the regression tests needed for this defect.
 The existing process-folder debt remains outside this repair.
 Optional commit hooks are deferred to the final local commit.
+
+## Follow-up for Issues #4704 and #4705
+
+Independent real-handler tests found that a newline separator corrupts a safe exception chain ending in `Invalid token`.
+They also found that `Authorization: Bearer` values bypass the existing key pattern.
+Add failing tests for both findings before changing the pattern.
+Keep the original credential keys and add the complete authorization key.
+Use horizontal whitespace only in value separators.
+Apply the authorization rule first so the ordinary rule cannot remove only the scheme.
+Use the same normal, cached, and chained exception paths for both rules.
+The scope excludes arbitrary unlabeled secrets.
+Add `changelog.d/issue-4705-authorization-log-redaction.md`.
+Keep publication held and commit with non-closing references to both issues.

@@ -18,7 +18,7 @@ _PRIVATE_DIGEST_LENGTH = 12  # Hex characters kept from the digest. Enough to st
 # Regex patterns that identify credential-like keys in log records.
 # Match is case-insensitive so "Password", "PASSWORD", "password" all trigger.
 _SENSITIVE_KEY_PATTERNS = re.compile(  # Compiled once at module load for performance
-    r"(password|passwd|secret|token|api_key|psk|credential|auth)",
+    r"(password|passwd|secret|token|api_key|psk|credential|authorization|auth)",
     re.IGNORECASE,
 )
 
@@ -118,6 +118,9 @@ class SensitiveFilter(logging.Filter):
     It sanitizes the formatted message and the exception text cache before a
     standard handler formats the record. This includes exception chains and
     cached text from earlier handlers. Safe traceback context stays visible.
+    Credential separators do not cross line boundaries. Authorization headers
+    protect the scheme and value together. Arbitrary unlabeled secrets are
+    outside this pattern-based contract.
 
     The filter does not log its own actions because recursive logging can
     re-enter the filter. If rendering fails, it emits a safe diagnostic instead.
@@ -127,7 +130,11 @@ class SensitiveFilter(logging.Filter):
     # it belongs to a sensitive key.  Matches patterns like:
     #   password=abc123  or  "password": "abc123"
     _VALUE_PATTERN = re.compile(  # Compiled once at class load for performance
-        r"(?P<key>" + _SENSITIVE_KEY_PATTERNS.pattern + r')[=:\s"\']+(?P<value>\S+)',
+        r"(?P<key>" + _SENSITIVE_KEY_PATTERNS.pattern + r')[=: \t"\']+(?P<value>\S+)',
+        re.IGNORECASE,
+    )
+    _AUTHORIZATION_PATTERN = re.compile(
+        r"""(?P<key>authorization)[ \t"']*[:=][ \t"']*(?:[a-z][a-z0-9+.-]*[ \t]+)?[^ \t\r\n"']+""",
         re.IGNORECASE,
     )
 
@@ -150,6 +157,7 @@ class SensitiveFilter(logging.Filter):
 
     def _redact_text(self, text: str) -> str:
         """Apply the same credential rule to message and exception text."""
+        text = self._AUTHORIZATION_PATTERN.sub(r"\g<key>=***REDACTED***", text)
         return self._VALUE_PATTERN.sub(r"\g<key>=***REDACTED***", text)
 
     def _redact_traceback(self, record: logging.LogRecord) -> None:

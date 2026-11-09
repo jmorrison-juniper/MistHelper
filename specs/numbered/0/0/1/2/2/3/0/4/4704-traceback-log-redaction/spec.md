@@ -6,7 +6,7 @@
 
 **Status**: Approved for local implementation
 
-**Input**: Repair issue #4704 at the logging boundary. Preserve safe messages and useful traceback context. Hold publication.
+**Input**: Repair issues #4704 and #4705 at the logging boundary. Preserve safe messages and useful traceback context. Hold publication.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -44,6 +44,8 @@ An operator receives the same protection when a previous handler has already for
 - Repeated formatting through protected handlers.
 - Malformed message arguments and exception rendering errors.
 - Safe exception text and ordinary messages.
+- A safe exception ending in `Invalid token`, followed by a standard chain separator.
+- Case-insensitive authorization headers with a scheme and a synthetic value.
 
 ## Requirements *(mandatory)*
 
@@ -57,6 +59,10 @@ An operator receives the same protection when a previous handler has already for
 - **FR-006**: Use synthetic credentials only. Do not contact Mist services or operate containers or firmware.
 - **FR-007**: Change only the three owned paths and unique specification and changelog records.
 - **FR-008**: Commit locally with `Refs #4704`. Do not push, create a PR, rebase, merge, or change credentials.
+- **FR-009**: Preserve complete safe exception chains. A credential label without a value must not consume the next line.
+- **FR-010**: Redact labeled authorization values, including the complete scheme and value, in messages and exception text.
+- **FR-011**: Match authorization header names without case sensitivity. Retain ordinary labeled credential protection.
+- **FR-012**: Reference #4705 in the local follow-up commit and a unique changelog fragment.
 
 ## Success Criteria *(mandatory)*
 
@@ -69,7 +75,7 @@ An operator receives the same protection when a previous handler has already for
 
 ## Assumptions
 
-- Existing credential recognition defines the scope. This change does not add a credential parser.
+- Protection covers recognized labeled credentials and authorization headers, not arbitrary unlabeled secrets.
 - Unprotected handlers remain outside the protection contract.
 - Standard traceback formatting remains the required diagnostic format.
 - Publication remains held for the serial queue.
