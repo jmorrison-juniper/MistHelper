@@ -51,9 +51,8 @@ class CommandCsvLoader:
                 reader = csv.reader(csvfile, delimiter=",")  # Simple comma delimiter (more reliable than sniffing)
                 for row_num, row in enumerate(reader, 1):  # 1-based row index for warning messages
                     self._consume_csv_row(row, row_num, commands, invalid)  # Per-row dispatch
-        except Exception as error:  # mirror original broad catch
-            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-            logger.info("[WARNING] Warning: Could not read %s: %s", csv_file_path, error)
+        except (OSError, UnicodeError, csv.Error) as error:  # Input failures permit the documented empty fallback.
+            logger.info("[WARNING] Warning: Could not read %s: %s", csv_file_path, type(error).__name__)
             return []  # Bail out cleanly on read failure
         self._warn_invalid_rows(invalid, csv_file_path)  # User-facing warning preserved from original
         return self._enforce_command_cap(commands, csv_file_path)  # Trim to per-run cap

@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import csv  # Field limits provide a real parser failure without shared state changes.
 import logging  # WHY: caplog assertions verify migrated logger output
-import os  # WHY: filesystem probes for legacy-fallback branch coverage
 from pathlib import Path  # WHY: cross-platform tmp path helper
+from unittest.mock import Mock  # Local failures require no host permission changes.
 
 import pytest  # WHY: fixtures (tmp_path, caplog, monkeypatch) drive the loader tests
 
+from src.operations.execution.ssh.config import csv_loader  # Patch only the loader, not global file access.
 from src.operations.execution.ssh.config.csv_loader import CommandCsvLoader  # WHY: SUT under test
 
 _LOGGER_NAME = "src.operations.execution.ssh.config.csv_loader"  # WHY: module-scoped logger used by the SUT
@@ -112,30 +114,66 @@ def test_load_enforces_command_cap(tmp_path: Path, caplog: pytest.LogCaptureFixt
     assert "Too many commands" in out  # WHY: user-facing message preserved
 
 
+@pytest.mark.parametrize("error_type", [OSError, PermissionError, FileNotFoundError, IsADirectoryError])
 def test_load_handles_read_exception(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+    error_type: type[OSError],
 ) -> None:
-    """A file-read failure returns [] and prints a warning."""
-    import builtins  # WHY: patch the true builtin open() since csv_loader does not module-scope it
-    from typing import Any, cast  # WHY: cast preserves builtin.open signature without ignore markers
-
-    csv_path = tmp_path / "cmds.csv"  # WHY: path that exists on disk
-    csv_path.write_text("show version\n", encoding="utf-8")  # WHY: file present for os.path.exists
-    target = str(csv_path)  # WHY: pin target so we only fail the SUT's open call
-    real_open = builtins.open  # WHY: preserve original open for pass-through of unrelated paths
-
-    def _selective_open(*args: Any, **kwargs: Any) -> Any:  # WHY: match open() variadic signature
-        file = args[0] if args else kwargs.get("file")  # WHY: first positional arg is the file target
-        if isinstance(file, (str, bytes, os.PathLike)) and os.fspath(file) == target:  # WHY: match the SUT path
-            raise OSError("boom")  # WHY: force the broad-except branch inside CommandCsvLoader.load
-        return real_open(*args, **kwargs)  # WHY: delegate for unrelated opens
-
-    monkeypatch.setattr(builtins, "open", cast(Any, _selective_open))  # WHY: cast satisfies mypy strict mode
+    """Unreadable files preserve the fallback without disclosing exception text."""
+    csv_path = _write_csv(tmp_path / "cmds.csv", ["show version"])  # Resolution needs a real local file.
+    failure = error_type("private synthetic detail\nsecond line")  # Detect raw and multiline exception disclosure.
+    monkeypatch.setattr(csv_loader, "open", Mock(side_effect=failure), raising=False)  # Isolate the failed read.
     with caplog.at_level(logging.INFO, logger=_LOGGER_NAME):  # WHY: capture module-scoped logger output
-        result = CommandCsvLoader().load(str(csv_path))  # WHY: run through the failing read path
-    out = "\n".join(r.getMessage() for r in caplog.records)  # WHY: aggregate captured log lines
-    assert result == []  # WHY: broad-except returns empty list
-    assert "Could not read" in out  # WHY: warning surfaced to operator
+        result = CommandCsvLoader().load(csv_path)  # Exercise the public fallback contract.
+    assert result == []  # Unreadable input must not supply commands.
+    assert f"Could not read {csv_path}: {error_type.__name__}" in caplog.text  # Retain safe failure context.
+    assert "private synthetic detail" not in caplog.text  # Exception text can contain private data.
+    assert "second line" not in caplog.text  # Multiline input must not create log records.
+    assert all(record.exc_info is None for record in caplog.records)  # Tracebacks also expose exception text.
+
+
+@pytest.mark.parametrize("failure_kind", ["encoding", "field-limit"])
+def test_load_handles_invalid_csv(tmp_path: Path, caplog: pytest.LogCaptureFixture, failure_kind: str) -> None:
+    """Real decoding and parser failures discard every command from the file."""
+    csv_path = tmp_path / "invalid.csv"  # Keep malformed input outside product output.
+    if failure_kind == "encoding":  # Invalid UTF-8 reaches the text reader failure path.
+        csv_path.write_bytes(b"show version\nprivate-synthetic-detail\xff\n")  # Include a valid prefix.
+        expected_type = "UnicodeDecodeError"  # Keep only the safe failure category.
+    else:  # The default CSV dialect reports oversized fields without strict mode.
+        oversized = "private-synthetic-detail" + ("x" * csv.field_size_limit())  # Preserve the global limit.
+        _write_csv(csv_path, ["show version", oversized])  # Fail after a valid parsed row.
+        expected_type = "Error"  # The standard CSV exception class is csv.Error.
+    with caplog.at_level(logging.INFO, logger=_LOGGER_NAME):  # Capture the fallback notice.
+        result = CommandCsvLoader().load(str(csv_path))  # Use real file reading and CSV parsing.
+    assert result == []  # A failed file must not return a partial command list.
+    assert f"Could not read {csv_path}: {expected_type}" in caplog.text  # Name the input failure.
+    assert "private-synthetic-detail" not in caplog.text  # Never include failed input in this notice.
+    assert all(record.exc_info is None for record in caplog.records)  # Exclude raw exception tracebacks.
+
+
+@pytest.mark.parametrize("error_type", [TypeError, AttributeError, NameError, ValueError, RuntimeError])
+def test_load_propagates_unexpected_validation_errors(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, error_type: type[Exception]
+) -> None:
+    """Programming defects must not appear as an empty command file."""
+    csv_path = _write_csv(tmp_path / "commands.csv", ["show version"])  # Exercise the real parsing path.
+    failure = error_type("synthetic validation defect")  # A non-input failure must remain visible.
+    monkeypatch.setattr(csv_loader, "validate_command", Mock(side_effect=failure))  # Inject the validation defect.
+    with pytest.raises(error_type) as caught:  # An empty fallback would fail this test.
+        CommandCsvLoader().load(csv_path)  # Parsing must not execute a command or connect to SSH.
+    assert caught.value is failure  # Propagate the original exception without replacement.
+
+
+def test_load_preserves_csv_dialect(tmp_path: Path) -> None:
+    """Quoted commas, ignored columns, and permissive quotes retain their behavior."""
+    csv_path = _write_csv(  # Preserve the established parser rather than introduce strict mode.
+        tmp_path / "dialect.csv",
+        ['"show interfaces, detail",ignored', " show version ,ignored", '"show route'],
+    )
+    result = CommandCsvLoader().load(csv_path)  # Read synthetic commands without executing them.
+    assert result == ["show interfaces, detail", "show version", "show route"]  # Keep first-column parsing.
 
 
 def test_resolve_csv_path_returns_primary_when_exists(tmp_path: Path) -> None:
