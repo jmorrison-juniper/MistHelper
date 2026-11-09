@@ -483,3 +483,13 @@ The committed preflight reported `1 passed, 1 warning`, with four inputs validat
 The committed analyzer reported `4 files checked`, `0 new findings`, `3 skipped`, and `0 parse errors`.
 The analyzed and skipped paths remain exactly those listed in the preceding scope section.
 The dedicated pure filter file is analyzed. Only the separate SDK integration file is excluded.
+
+The later independent title scan identified eight affected CLI titles.
+The regression now includes menus 44, 47, 131, 200, 247, 255, 273, and 274.
+All eight titles remain unchanged in both fresh and cached real portal reports.
+The expanded command reports `360 passed, 1 warning`, with `100%` source coverage.
+Ruff and Black passed again. The pure filter file now holds 195 cases.
+The bootstrap owner separately reported `40 passed` against exactly `845970159623d470729581b1ecd0ea0080372cee`.
+That run included all five console-routing cases, sixteen bootstrap redaction cases, and nineteen logging and rotation cases.
+The owner used an in-memory git-object module without modifying shared source or the held test.
+This is owner-reported integration evidence, not a local execution in this worktree.

@@ -112,6 +112,13 @@ class TestCredentialLabelBoundaries:
         "message",
         [
             "273: Admin and API Token Hygiene Report",
+            "44: Export PSK (Pre-Shared Key) information for the organization",
+            "47: Export API token information for the organization",
+            "131: Get ZTP Password for Switch/Gateway (console only)",
+            "200: Search Site Guest Authorization (searchSiteGuestAuthorization) - Per-site authorized guest CSV",
+            "247: Verify an email change token from the Mist email (verifySelfEmail)",
+            "255: Search PSK portal logs for the organization (searchOrgPskPortalLogs)",
+            "274: Export the PSK hygiene report",
             "API Token Hygiene Report",
             "Invalid token",
             "The password policy check passed",
