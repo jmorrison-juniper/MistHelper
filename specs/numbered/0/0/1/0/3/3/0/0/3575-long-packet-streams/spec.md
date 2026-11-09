@@ -100,7 +100,7 @@ owned resources.
 - **FR-004**: A capture MUST remain active through quiet periods until its selected duration or a matching end event.
 - **FR-005**: The tab MUST show records only for the selected channel and capture identifier.
 - **FR-006**: The tab MUST treat a matching end event as normal completion and MUST NOT display a null packet.
-- **FR-007**: A manual stop MUST check the active capture identifier and MUST send no stop for a different capture.
+- **FR-007**: A manual stop MUST check the active status object and MUST send no stop if that status reports a different capture identifier.
 - **FR-008**: A failed or uncertain start or stop MUST produce a failure state, not a success state.
 - **FR-009**: Each terminal path MUST release the resources owned by the capture session.
 - **FR-010**: The change MUST preserve current capture cleanup, target checks, regional authentication, and safety flags.
@@ -147,7 +147,9 @@ owned resources.
 
 - The default duration remains 60 seconds.
 - A capture can end before its selected duration when the cloud sends a matching end event.
-- The current capture scopes, safety classifications, packet limits, and cleanup endpoint remain authoritative.
+- The documented capture scopes, safety classifications, packet limits, and active-status cleanup endpoint remain authoritative.
+- Status and stop use `/api/v1/{sites|orgs}/{id}/pcaps/capture`. The stop operation accepts no capture identifier.
+- Warning: a replacement between status and stop can receive the scope-wide stop. The identity check cannot provide atomic cancellation.
 - The current generic session life limit remains unchanged for non-capture streams.
 - The capture session may remain active through the selected duration plus a 30-second completion margin.
 - The feature changes no menu operation, database schema, dependency, or environment variable.

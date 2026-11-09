@@ -56,6 +56,7 @@ from src.mist.realtime.websocket_streams.live.transport.stream_client import (
 )  # Stop tests override open behavior.
 from tests.unit.websocket_streams.live.transport.fake_mist_cloud.api import (
     FakeApiCall,
+    FakeApiResponse,
     FakeApiSession,
 )  # Offline REST trigger fake.
 from tests.unit.websocket_streams.live.transport.fake_mist_cloud.devices import (
@@ -514,27 +515,37 @@ def test_capture_stop_sends_delete_only_for_matching_capture() -> None:
         device = StreamDevice()  # Build one fake stream device.
         cloud.register("/api-ws/v1/stream", device)  # Register the stream route.
         api = FakeApiSession(cloud)  # Build a fake API session.
-        api.add_override("/pcaps/capture", data={"id": "cap-stop"})  # Use a deterministic capture id.
-        api.add_override("/pcaps?limit=1", data=[{"id": "cap-stop"}])  # Let CaptureStopper match the capture.
+        api.add_override(
+            "/pcaps/capture", data={"id": "cap-stop", "type": "wired", "enabled": True}
+        )  # Start and active status both identify this capture.
         runner, sink = _build_runner(cloud, api, _request("ex.remotePcap", "packets"), _slow_table())  # Build.
         runner.start()  # Start the capture runner.
         _wait_for_calls(api, 1)  # Wait for the capture trigger.
         runner.stop()  # Ask the runner to stop the capture.
         state, _reason = sink.wait_finished()  # Wait for stopped state.
     assert state == SessionState.STOPPED  # Stop produces the operator stopped state.
-    assert _has_call(api.calls, "DELETE", f"/api/v1/sites/{SITE_ID}/pcaps")  # Matching capture was stopped.
+    path = f"/api/v1/sites/{SITE_ID}/pcaps/capture"  # Start, status, and stop use the documented endpoint.
+    assert [(call.method, call.uri) for call in api.calls] == [
+        ("POST", path),
+        ("GET", path),
+        ("DELETE", path),
+    ]  # Check active identity before the scope-wide stop.
 
 
 @pytest.mark.parametrize(
     ("lookup_status", "lookup_data", "delete_status", "delete_expected"),
     [
-        (200, [{"id": "other-capture"}], 200, False),
-        (503, [{"id": "cap-stop"}], 200, False),
-        (200, [{"id": "cap-stop"}], 503, True),
+        (200, {"id": "other-capture", "type": "wired"}, 200, False),
+        (503, {"id": "cap-stop", "type": "wired"}, 200, False),
+        (200, {"id": "cap-stop", "type": "wired"}, 503, True),
     ],
 )
 def test_capture_stop_requires_confirmed_identity_and_delete(
-    lookup_status: int, lookup_data: list[dict[str, str]], delete_status: int, delete_expected: bool
+    monkeypatch: pytest.MonkeyPatch,
+    lookup_status: int,
+    lookup_data: dict[str, str],
+    delete_status: int,
+    delete_expected: bool,
 ) -> None:
     """Fail a capture stop when its identity or cloud delete is not confirmed."""
     with FakeMistCloud() as cloud:  # Start a loopback fake Mist cloud.
@@ -542,8 +553,16 @@ def test_capture_stop_requires_confirmed_identity_and_delete(
         cloud.register("/api-ws/v1/stream", device)  # Register the stream route.
         api = FakeApiSession(cloud)  # Build a fake API session.
         api.add_override("/pcaps/capture", data={"id": "cap-stop"})  # Use a deterministic capture id.
-        api.add_override("/pcaps?limit=1", lookup_status, lookup_data)  # Control identity lookup success.
-        api.add_override("/api/v1/sites/", delete_status, {})  # Control cloud delete success.
+
+        def delete_capture(uri: str) -> FakeApiResponse:
+            """Record the stop request independently of the trigger response."""
+            api.calls.append(FakeApiCall("DELETE", uri, None))  # Keep the exact stop-path assertion observable.
+            return FakeApiResponse(delete_status, {})  # A successful stop needs no response body.
+
+        monkeypatch.setattr(
+            api, "mist_get", lambda _uri: FakeApiResponse(lookup_status, lookup_data)
+        )  # Model the active status object separately from the successful POST response.
+        monkeypatch.setattr(api, "mist_delete", delete_capture)  # Keep method-independent fake overrides out.
         runner, sink = _build_runner(cloud, api, _request("ex.remotePcap", "packets"), _slow_table())  # Build.
         runner.start()  # Start the capture runner.
         _wait_for_calls(api, 1)  # Wait for the capture trigger.
@@ -551,7 +570,7 @@ def test_capture_stop_requires_confirmed_identity_and_delete(
         state, reason = sink.wait_finished()  # Wait for cleanup and final state.
     assert state is SessionState.FAILED  # An unconfirmed capture stop cannot appear successful.
     assert reason == "The utility cleanup failed. Read the portal log for the cause."  # Use the safe reason.
-    assert _has_call(api.calls, "DELETE", f"/api/v1/sites/{SITE_ID}/pcaps") is delete_expected  # Check scope.
+    assert _has_call(api.calls, "DELETE", f"/api/v1/sites/{SITE_ID}/pcaps/capture") is delete_expected  # Check scope.
 
 
 def test_screen_utility_is_refused() -> None:

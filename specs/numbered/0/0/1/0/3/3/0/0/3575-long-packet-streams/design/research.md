@@ -21,14 +21,25 @@ the body builder.
 The bundled Mist API example marks a stopped capture with its `capture_id` and
 `pcap_dict: null`. Treat only a matching end event as normal completion.
 
-## Decision: Keep current capture cleanup
+## Decision: Check active status before a scope-wide stop
 
-The current cleanup reads the active capture list and checks its identifier
-before it sends the scope-wide delete. Keep this sequence. Do not copy the
-recovery branch's different status endpoint or private HTTP transport.
+The bundled OpenAPI contract defines active status as one object from
+`GET /api/v1/{sites|orgs}/{id}/pcaps/capture`. The `id` field identifies the
+capture. The optional `enabled` field identifies a disabled capture when false.
+The `/pcaps` collection lists completed captures and cannot prove active identity.
+
+Read active status through the existing SDK session. Check the identifier and
+reject a non-object status or a false or malformed `enabled` field. Then send
+`DELETE /api/v1/{sites|orgs}/{id}/pcaps/capture`. The stop operation accepts no
+capture identifier. Do not copy the recovery branch's private HTTP transport.
 
 If the active identifier differs or cannot be confirmed, do not send a delete
 and do not report a successful stop.
+
+Warning: another operator can replace the active capture between the status
+request and the stop request. The scope-wide stop can then stop that replacement.
+The API offers no atomic identifier-specific stop. The identity guard reduces
+risk but cannot remove this race.
 
 ## Decision: Extend only capture retention
 

@@ -18,10 +18,15 @@
 
 ## Stop and cleanup
 
-- On operator stop, check the active capture identifier with the existing lookup.
-- Send one scope delete only when the identifier matches.
+- On operator stop, read the status object from `GET /api/v1/{sites|orgs}/{id}/pcaps/capture`.
+- Match its identifier. Reject a non-object status or a false or malformed `enabled` field.
+- Send one `DELETE` to that same endpoint only after the identifier matches.
 - Report a mismatch, request failure, or unconfirmed cleanup as failure.
 - Close the stream and release owned resources before publishing a terminal state.
+
+Warning: the stop operation accepts no capture identifier. A replacement capture
+between the status request and stop request can receive the scope-wide stop.
+This check is not atomic cancellation.
 
 ## Safety and verification
 

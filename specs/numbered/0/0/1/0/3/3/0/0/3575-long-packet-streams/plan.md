@@ -142,8 +142,9 @@ second capture runner.
 4. Start the capture monitor clock after the REST start response succeeds.
 5. Disable first-output and quiet-time completion only for packet captures.
 6. Treat a matching `pcap_dict: null` event as normal capture completion.
-7. Preserve the existing active-capture lookup and conditional delete. Report
-   an identity mismatch or an unconfirmed stop as failure.
+7. Check the active status object at `/pcaps/capture` before a scope-wide stop
+   at that endpoint. Report an identity mismatch or an unconfirmed stop as failure.
+   The status check cannot prevent replacement between the two requests.
 8. Extend the session life limit only to `max(configured limit, duration + 30
    seconds)` after the first successful trigger response for captures. Bound
    capture setup with the configured generic limit. Keep idle cleanup and

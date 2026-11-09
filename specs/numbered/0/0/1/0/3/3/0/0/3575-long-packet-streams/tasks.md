@@ -75,12 +75,12 @@ identifiers. Verify the delete count and terminal state.
 
 - [x] T020 [P] [US3] Test capture-only lifetime extension and stuck-stop failure in `tests/unit/websocket_streams/live/sessions/test_ws_session_manager.py`.
 - [x] T021 [P] [US3] Test that identifier mismatch, lookup failure, and delete failure do not report success in `tests/unit/websocket_streams/live/runners/utility/test_ws_utility_runner.py`.
-- [x] T022 [P] [US3] Verify cleanup completes before the terminal state in `tests/unit/websocket_streams/live/transport/clients/test_capture_cleanup_completion_3769.py`.
+- [x] T022 [P] [US3] Verify site and organization active-status objects, exact stop paths, and cleanup before terminal state in `tests/unit/websocket_streams/live/transport/clients/test_capture_cleanup_completion_3769.py`.
 
 ### Implementation for User Story 3
 
 - [x] T023 [US3] Extend only capture session lifetime and fail an unconfirmed capture stop in `src/mist/realtime/websocket_streams/live/sessions/manager/lifecycle.py`.
-- [x] T024 [US3] Report identifier and API stop failures without sending an unrelated delete in `src/mist/realtime/websocket_streams/live/runners/utility/runner/capture.py` and `src/mist/realtime/websocket_streams/live/runners/utility/runner/execution.py`.
+- [x] T024 [US3] Check active identity before the documented scope-wide stop and report failures in `src/mist/realtime/websocket_streams/live/runners/utility/runner/capture.py` and `src/mist/realtime/websocket_streams/live/runners/utility/runner/execution.py`.
 
 ## Phase 6: Polish and Cross-Cutting Concerns
 
