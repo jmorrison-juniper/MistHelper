@@ -126,24 +126,61 @@ class TestIsCsvFresh:
 class TestRunCsvGenerator:
     """Cover the success and failure legs of the generator wrapper."""
 
-    def test_generator_success_returns_true(self):
+    def test_generator_success_returns_true(self, caplog: pytest.LogCaptureFixture) -> None:
         """Generator that completes without raising returns True."""
-        called = {"n": 0}
+        generator = MagicMock()
+        generator.__name__ = "success_gen"
+        with caplog.at_level(logging.INFO):
+            assert CacheUtils._run_csv_generator(generator, "out.csv") is True
+        generator.assert_called_once_with()
+        assert "! out.csv generated or refreshed." in caplog.messages
+        assert not any(record.levelno >= logging.ERROR for record in caplog.records)
 
-        def _gen():
-            called["n"] += 1
+    @pytest.mark.parametrize("error_type", [RuntimeError, ValueError, OSError])
+    def test_generator_exception_returns_false(
+        self, error_type: type[Exception], caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """A callback failure preserves its cause and traceback without raising."""
+        error = error_type("generator failed")
+        generator = MagicMock(side_effect=error)
+        generator.__name__ = "boom_gen"
+        with caplog.at_level(logging.ERROR):
+            assert CacheUtils._run_csv_generator(generator, "out.csv") is False
+        generator.assert_called_once_with()
+        assert len(caplog.records) == 1
+        record = caplog.records[0]
+        assert record.name == "root"
+        assert record.levelno == logging.ERROR
+        assert record.getMessage() == "Failed to generate out.csv using boom_gen: generator failed"
+        assert record.exc_info is not None
+        assert record.exc_info[:2] == (error_type, error)
+        assert record.exc_info[2] is not None
+        assert "Traceback (most recent call last):" in caplog.text
+        assert "_run_csv_generator" in caplog.text
+        assert f"{error_type.__name__}: generator failed" in caplog.text
 
-        assert CacheUtils._run_csv_generator(_gen, "out.csv") is True
-        assert called["n"] == 1
-
-    def test_generator_exception_returns_false(self):
-        """Generator that raises must be swallowed and reported as failure."""
-
-        def _gen():
-            raise RuntimeError("kaboom")
-
-        _gen.__name__ = "boom_gen"
-        assert CacheUtils._run_csv_generator(_gen, "out.csv") is False
+    @pytest.mark.parametrize("interrupt_type", [KeyboardInterrupt, SystemExit])
+    @pytest.mark.parametrize("use_dispatcher", [False, True], ids=["generator", "dispatcher"])
+    def test_generator_interrupt_propagates(
+        self,
+        interrupt_type: type[BaseException],
+        use_dispatcher: bool,
+        fake_mh: _FakeMH,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """An interrupt reaches each caller without a false completion record."""
+        interrupt = interrupt_type("stop generation")
+        generator = MagicMock(side_effect=interrupt)
+        generator.__name__ = "interrupted_gen"
+        with caplog.at_level(logging.INFO), pytest.raises(interrupt_type) as raised:
+            if use_dispatcher:
+                CacheUtils.check_and_generate_csv("out.csv", generator, freshness_minutes=60)
+            else:
+                CacheUtils._run_csv_generator(generator, "out.csv")
+        assert raised.value is interrupt
+        generator.assert_called_once_with()
+        assert not any(record.levelno >= logging.ERROR for record in caplog.records)
+        assert "! out.csv generated or refreshed." not in caplog.messages
 
 
 # ---------------------------------------------------------------------------
@@ -179,14 +216,22 @@ class TestCheckAndGenerateCsv:
         assert CacheUtils.check_and_generate_csv("missing.csv", gen, freshness_minutes=60) is True
         gen.assert_called_once()
 
-    def test_returns_false_when_generator_fails(self, fake_mh):
-        """Generator that raises causes a False return."""
-
-        def _gen():
-            raise ValueError("nope")
-
-        _gen.__name__ = "bad_gen"
-        assert CacheUtils.check_and_generate_csv("nope.csv", _gen, freshness_minutes=60) is False
+    def test_returns_false_when_generator_fails(self, fake_mh: _FakeMH, caplog: pytest.LogCaptureFixture) -> None:
+        """The public dispatcher retains the generator failure and traceback."""
+        error = ValueError("nope")
+        generator = MagicMock(side_effect=error)
+        generator.__name__ = "bad_gen"
+        with caplog.at_level(logging.ERROR):
+            assert CacheUtils.check_and_generate_csv("nope.csv", generator, freshness_minutes=60) is False
+        generator.assert_called_once_with()
+        assert len(caplog.records) == 1
+        record = caplog.records[0]
+        assert record.getMessage() == "Failed to generate nope.csv using bad_gen: nope"
+        assert record.exc_info is not None
+        assert record.exc_info[1] is error
+        assert record.exc_info[2] is not None
+        assert "Traceback (most recent call last):" in caplog.text
+        assert "ValueError: nope" in caplog.text
 
 
 # ---------------------------------------------------------------------------

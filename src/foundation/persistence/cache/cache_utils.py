@@ -101,7 +101,9 @@ class CacheUtils:
             logger.info("! %s generated or refreshed.", file_name)  # Confirm success to operator
             return True  # Generation succeeded
         except Exception as error:  # Generation failed for any reason
-            logging.error("Failed to generate %s using %s: %s", file_name, generate_function.__name__, error)  # Log it
+            logging.exception(
+                "Failed to generate %s using %s: %s", file_name, generate_function.__name__, error
+            )  # Preserve the callback traceback for failure diagnosis.
             return False  # Generation failed
 
     @staticmethod
