@@ -757,13 +757,15 @@ def test_real_portal_preserves_complete_safe_exception_chain(chain: str, cached:
         "aUtHoRiZaTiOn: bEaReR",
         "AUTHORIZATION: Basic",
         "Authorization: Custom-Scheme",
+        'Authorization: Digest username="synthetic", realm="example", response=',
+        "Authorization: AWS4-HMAC-SHA256 Credential=synthetic, SignedHeaders=host, Signature=",
         "password=",
         "token=",
     ],
 )
 def test_real_portal_redacts_labeled_values_in_messages_and_exceptions(chain: str, cached: bool, label: str) -> None:
     """Remove synthetic labeled values throughout fresh and cached chains."""
-    text = f"Request failed {label} ISSUE4705_SYNTHETIC_PORTAL_VALUE"
+    text = f"Request failed {label} ISSUE4705_SYNTHETIC_PORTAL_VALUE\nSafe following diagnostic"
     record = PortalCredentialRecord.build(text, chain)
     probe = PortalTracebackProbe(cached)
     try:
@@ -771,6 +773,7 @@ def test_real_portal_redacts_labeled_values_in_messages_and_exceptions(chain: st
         rendered = probe.output.getvalue()
         assert "ISSUE4705_SYNTHETIC_PORTAL_VALUE" not in rendered
         assert "***REDACTED***" in rendered and "ValueError: Request failed" in rendered
+        assert rendered.count("Safe following diagnostic") == 2
         assert "Traceback (most recent call last):" in rendered and "in build" in rendered
         assert f"run={PROBE_RUN_ID}" in rendered and f"site={PROBE_SITE_ID}" in rendered
         if chain != "direct":

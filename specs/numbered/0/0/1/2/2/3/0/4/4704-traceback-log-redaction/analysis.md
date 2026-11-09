@@ -237,3 +237,41 @@ gate: 0 new findings vs baseline
 The two skipped entries still identify omitted full-suite roots, not either changed test file.
 All follow-up tasks are complete.
 No push, PR creation, rebase, merge, or credential change is permitted.
+
+## Structured Authorization Follow-up
+
+The user supplied Digest and AWS4 reproductions with synthetic values.
+The clean starting commit was `a53979308`.
+The ownership check found 27 open PRs with no overlap.
+The large-PR scan again read every page for PR #4358.
+
+The scheme-plus-token matcher removed only the first token of these structured values.
+The header matcher now removes the complete remaining line.
+CR and LF remain strict boundaries.
+Any same-line diagnostic after the header is intentionally removed because the value boundary is not reliable.
+Subsequent safe diagnostic lines remain visible.
+The scope still excludes arbitrary unlabeled secrets.
+
+The new tests produced `16 failed, 104 passed, 1 warning` against the previous source.
+The expanded regression command in this document then produced `162 passed, 1 warning`.
+Coverage remains `47` statements, `0` missed, and `100%`.
+Real-handler tests cover both structured schemes in direct, explicit-cause, implicit-context, fresh, and cached output.
+The complete-output checks require both subsequent diagnostic lines to remain.
+Unit tests also cover the exact quoted Digest response and both LF and CRLF boundaries.
+
+The source typing, Bandit, complexity, Pylint, pydocstyle, and Vulture commands passed again.
+Pylint remains `9.79/10`, with only R0903.
+The first Ruff check found one long synthetic AWS4 test string.
+The test string now uses adjacent literals without changing its value.
+Final compile, Ruff, and Black commands passed.
+Process guards again reported `28 passed, 1 skipped, 1 warning`.
+Interrogate remained at `100%`, and the symbol check found no module-level name changes.
+The same STE command checked all ten records, skipped none, and passed with scores from 92 through 99.
+The exact commands remain in the validation table and follow-up writing section above.
+The committed-difference result follows the local implementation commit.
+
+FR-013 maps to T018 and T019.
+FR-014 maps to T018 through T020.
+All fourteen functional requirements and four success criteria have tasks.
+No new module-level production name or external dependency is required.
+Publication remains held.

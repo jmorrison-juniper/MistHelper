@@ -87,3 +87,13 @@ Use the same normal, cached, and chained exception paths for both rules.
 The scope excludes arbitrary unlabeled secrets.
 Add `changelog.d/issue-4705-authorization-log-redaction.md`.
 Keep publication held and commit with non-closing references to both issues.
+
+## Structured Authorization Values
+
+The scheme-plus-token rule leaves later Digest and AWS4 parameters visible.
+Treat the complete remainder of the labeled header line as private.
+Use CR and LF as strict boundaries.
+This intentionally removes any same-line diagnostic after the header because no reliable value boundary exists there.
+Preserve safe diagnostics on subsequent lines and complete exception chain separators.
+Extend the existing parameterized real-handler tests before changing the matcher.
+Keep the same owned files and publication hold.

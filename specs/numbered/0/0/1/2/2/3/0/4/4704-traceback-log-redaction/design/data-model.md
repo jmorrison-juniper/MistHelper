@@ -19,6 +19,6 @@ The filter keeps the original exception objects unchanged.
 The standard formatter consumes the sanitized cache instead of rendering raw exception text again.
 Unprotected handlers and formatters that deliberately ignore the standard cache are outside this contract.
 
-Authorization matching consumes a scheme and value before ordinary credential replacement.
+Authorization matching consumes the complete remaining header line before ordinary credential replacement.
 Neither rule crosses a line boundary.
 A safe credential word at the end of an exception therefore leaves the complete chain separator unchanged.

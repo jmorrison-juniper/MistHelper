@@ -63,6 +63,8 @@ An operator receives the same protection when a previous handler has already for
 - **FR-010**: Redact labeled authorization values, including the complete scheme and value, in messages and exception text.
 - **FR-011**: Match authorization header names without case sensitivity. Retain ordinary labeled credential protection.
 - **FR-012**: Reference #4705 in the local follow-up commit and a unique changelog fragment.
+- **FR-013**: Redact the complete labeled authorization value through its line boundary, including quoted and comma-separated Digest and AWS4 parameters.
+- **FR-014**: Preserve the next line, including safe diagnostics and standard exception chain separators.
 
 ## Success Criteria *(mandatory)*
 

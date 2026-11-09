@@ -119,7 +119,9 @@ class SensitiveFilter(logging.Filter):
     standard handler formats the record. This includes exception chains and
     cached text from earlier handlers. Safe traceback context stays visible.
     Credential separators do not cross line boundaries. Authorization headers
-    protect the scheme and value together. Arbitrary unlabeled secrets are
+    protect the complete remaining line, including structured parameters.
+    Any same-line diagnostic after that header is also removed.
+    Arbitrary unlabeled secrets are
     outside this pattern-based contract.
 
     The filter does not log its own actions because recursive logging can
@@ -134,7 +136,7 @@ class SensitiveFilter(logging.Filter):
         re.IGNORECASE,
     )
     _AUTHORIZATION_PATTERN = re.compile(
-        r"""(?P<key>authorization)[ \t"']*[:=][ \t"']*(?:[a-z][a-z0-9+.-]*[ \t]+)?[^ \t\r\n"']+""",
+        r"""(?P<key>authorization)[ \t"']*[:=][ \t]*[^ \t\r\n][^\r\n]*""",
         re.IGNORECASE,
     )
 
