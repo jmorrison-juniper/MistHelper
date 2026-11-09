@@ -32,6 +32,7 @@ from src.foundation.runtime.config.source_dependency_resolver import (
     SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
 )
 from src.foundation.support.utils.console import ConsoleEchoFilter
+from src.foundation.support.utils.logger_utils import SensitiveFilter
 
 logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
 
@@ -189,8 +190,6 @@ class ApplicationBootstrap:  # Explicit startup step for CLI and web hosts
 
     def _configure_logging(self) -> None:
         """Configure the root logger once for the requested startup."""
-        from src.foundation.support.utils.logger_utils import SensitiveFilter  # Keep bootstrap imports passive.
-
         log_dir = Path("data")  # Keep the existing runtime log directory.
         log_dir.mkdir(exist_ok=True)  # Create the log directory only during explicit startup.
         console_level = int(os.environ.get("CONSOLE_LOG_LEVEL", logging.INFO))  # Read console level at startup only.
