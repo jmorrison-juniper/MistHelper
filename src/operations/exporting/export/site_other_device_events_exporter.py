@@ -70,7 +70,8 @@ class SiteOtherDeviceEventsExporter:
         if not isinstance(payload, list) or any(
             not isinstance(row, dict) for row in payload
         ):  # WHY: malformed records must not reach local transformations.
-            raise ValueError("Other-device event page does not contain a record list")  # WHY: reject unsafe rows.
+            logger.error("Other-device event page does not contain a record list")  # WHY: reject unsafe remote rows.
+            return None  # WHY: handle known malformed data without catching unexpected local defects.
         return payload  # WHY: preserve the SDK row schema without altering records.
 
     @staticmethod
@@ -78,45 +79,44 @@ class SiteOtherDeviceEventsExporter:
         """Collect every successful page or reject the entire incomplete result."""
         records: list[Any] = []  # WHY: keep accepted rows private until every page succeeds.
         seen: set[str] = set()  # WHY: repeated cursors cannot prove progress or completion.
-        while True:  # WHY: validate the first response and every promised subsequent response.
+        while response is not None:  # WHY: failed external calls cannot contribute records.
             page = SiteOtherDeviceEventsExporter._page_records(response)  # WHY: admit only complete successful pages.
             if page is None:  # WHY: distinguish a failed response from a valid empty record list.
                 return None  # WHY: discard all earlier rows rather than exporting incomplete data.
             records.extend(page)  # WHY: retain validated rows until pagination proves completeness.
             logger.debug("Collected %d other-device event rows", len(records))  # WHY: record each accepted page.
             cursor = response.next  # WHY: keep the next link private while validating progress.
-            if cursor is None:  # WHY: only an absent cursor proves that the page sequence ended.
+            if cursor is None or cursor == "":  # WHY: preserve both SDK terminal cursor values.
                 return records  # WHY: only complete rows can reach the writer.
             if (
                 not isinstance(cursor, str) or not cursor.strip() or cursor in seen
             ):  # WHY: reject invalid or cyclic links.
-                raise ValueError("Other-device event page cursor is invalid or repeated")  # WHY: stop incomplete reads.
+                logger.error("Other-device event page cursor is invalid or repeated")  # WHY: omit private cursor text.
+                return None  # WHY: handle known invalid remote cursors explicitly.
             seen.add(cursor)  # WHY: stop before issuing another request to a previously requested cursor.
-            logger.info("Fetching the next other-device event page")  # WHY: trace each external page request.
-            response = mistapi.get_next(
-                mist_session=SourceDependencyResolver.apisession, response=response
-            )  # WHY: preserve SDK authentication and URL handling without hiding page statuses.
+            response = SiteOtherDeviceEventsExporter._fetch_events(response=response)  # WHY: isolate the SDK call only.
+        return None  # WHY: discard earlier rows after any failed external call.
 
     @staticmethod
-    def _fetch_events(site_id: str) -> list[Any] | None:
-        """Keep SDK and malformed-page failures inside the sanitized menu boundary."""
-        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        try:  # WHY: keep SDK failures inside the menu operation.
-            logger.info("Calling searchSiteOtherDeviceEvents for site_id=%s", site_id)  # WHY: trace the API call.
-            response = mistapi.api.v1.sites.otherdevices.searchSiteOtherDeviceEvents(
-                mh.apisession, site_id
-            )  # WHY: preserve the existing endpoint and session contract.
-            rawdata = SiteOtherDeviceEventsExporter._collect_events(response)  # WHY: validate all page statuses.
-        except Exception:  # WHY: SDK calls and malformed remote pages have no shared exception type.
+    def _fetch_events(site_id: str | None = None, response: Any = None) -> Any:
+        """Contain exceptions from one SDK call without catching local collection defects."""
+        session = SourceDependencyResolver.apisession  # WHY: resolve dependencies outside the external-call catch.
+        logger.info("Requesting an other-device event page")  # WHY: trace the external request without its cursor.
+        try:  # WHY: the installed SDK has no reliable common exception taxonomy.
+            result = (
+                mistapi.api.v1.sites.otherdevices.searchSiteOtherDeviceEvents(session, site_id)
+                if site_id is not None
+                else mistapi.get_next(mist_session=session, response=response)
+            )  # WHY: catch only the actual endpoint or next-page call.
+        except Exception:  # WHY: retain the menu fallback for demonstrated external-call exceptions.
             logger.error(
                 "Error fetching other-device events for the selected site"
             )  # WHY: report the request failure without private exception text.
-            rawdata = None  # WHY: an exception cannot produce a complete export.
-        if rawdata is None:  # WHY: HTTP failures and external exceptions use the same menu fallback.
-            logger.info(
-                "! Error fetching other-device event data. Please try again."
-            )  # WHY: preserve the menu fallback without exposing response content.
-        return rawdata  # WHY: preserve the difference between an empty success and a failed request.
+            return None  # WHY: an external exception cannot produce a complete page.
+        logger.debug("Other-device event page request completed")  # WHY: confirm the external call returned.
+        if result is None:  # WHY: a missing response cannot prove successful completion.
+            logger.error("Other-device event page failed: HTTP unavailable")  # WHY: report no invented status.
+        return result  # WHY: let local validation inspect the real SDK response outside this catch.
 
     @staticmethod
     def other_device_events() -> None:
@@ -130,8 +130,14 @@ class SiteOtherDeviceEventsExporter:
         if resolved is None:  # WHY: stop when the operator does not select a site.
             return  # WHY: preserve the menu loop after a canceled selection.
         site_id, site_name = resolved  # WHY: preserve selected identifiers and the output filename.
-        rawdata = SiteOtherDeviceEventsExporter._fetch_events(site_id)  # WHY: isolate remote failures from persistence.
+        response = SiteOtherDeviceEventsExporter._fetch_events(site_id)  # WHY: contain only the external SDK call.
+        rawdata = SiteOtherDeviceEventsExporter._collect_events(
+            response
+        )  # WHY: let unexpected local defects propagate.
         if rawdata is None:  # WHY: failed pages must not reach transformations or storage.
+            logger.info(
+                "! Error fetching other-device event data. Please try again."
+            )  # WHY: preserve sanitized menu feedback for known remote failures.
             return  # WHY: do not persist any rows from an incomplete request.
         logger.debug("Received %d other-device event rows", len(rawdata))  # WHY: report the API result count.
         SiteOtherDeviceEventsExporter._persist_events(

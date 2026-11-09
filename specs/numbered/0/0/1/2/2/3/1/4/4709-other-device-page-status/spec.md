@@ -37,6 +37,8 @@ An operator retains successful empty, single-page, and multiple-page results.
 1. **Given** a valid empty response, **When** the export runs, **Then** it reports no data without writing.
 2. **Given** complete pages, **When** the export runs, **Then** it writes all rows once.
 3. **Given** a local transform or writer defect, **When** persistence runs, **Then** the original exception reaches the caller.
+4. **Given** `next=""` or `next=None`, **When** a valid page arrives, **Then** the exporter preserves its rows without another request.
+5. **Given** an unexpected local validation or collection defect, **When** collection runs, **Then** the original exception reaches the caller.
 
 ### Edge Cases
 
@@ -55,6 +57,7 @@ An operator retains successful empty, single-page, and multiple-page results.
 - **FR-004**: Preserve sanitized request-failure reporting and local defect propagation from #1794.
 - **FR-005**: Verify the behavior offline with real SDK responses, blocked DNS and sockets, and mocked storage.
 - **FR-006**: Reject repeated or invalid cursors and malformed records without exposing private data.
+- **FR-007**: Accept `None` and `""` as terminal cursors. Catch arbitrary exceptions only at the endpoint and SDK pagination calls.
 
 ### Mist Cloud Transport Requirements
 

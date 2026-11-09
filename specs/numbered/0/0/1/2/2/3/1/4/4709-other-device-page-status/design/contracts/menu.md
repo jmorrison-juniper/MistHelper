@@ -6,4 +6,6 @@ A complete export writes every row once with the existing filename and endpoint 
 An HTTP failure, absent status, missing promised page, or malformed payload produces failure feedback without writing.
 Failure messages include only fixed text and validated integer status values.
 No exporter message includes an exception, response body, or next-page URL.
-Local transformation and writer exceptions continue to reach the caller.
+Local validation, collection, transformation, and writer exceptions continue to reach the caller.
+Only the endpoint and SDK `get_next` calls have broad exception handling.
+Known malformed pages and invalid cursors use explicit failed results, not broad exception handling.

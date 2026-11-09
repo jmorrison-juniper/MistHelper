@@ -463,11 +463,11 @@ class TestPaginationCursorSafety:
         assert "records exported" not in caplog.text  # WHY: do not report an incomplete read as complete.
         menu.DataExporter.write_with_format_selection.assert_not_called()  # WHY: discard accumulated rows.
 
-    @pytest.mark.parametrize("cursor", ["", " ", 0, False, [], {}, 17])
+    @pytest.mark.parametrize("cursor", [" ", 0, False, [], {}, 17])
     def test_invalid_cursor_never_proves_completion(
         self, menu: Any, transport: APIRequest, caplog: pytest.LogCaptureFixture, cursor: Any
     ) -> None:
-        """Only None marks completion and only a nonblank string can request another page."""
+        """Whitespace and non-string cursors cannot prove completion."""
         transport._session.get.side_effect = [
             _http_response(200, {"results": [{"mac": "aa:bb"}], "next": cursor}),
             _http_response(200, {"results": []}),
@@ -495,3 +495,65 @@ class TestPaginationCursorSafety:
         assert "Error fetching" in caplog.text  # WHY: report the unusable remote response.
         assert "synthetic-private-row" not in caplog.text  # WHY: keep record values private.
         menu.DataExporter.write_with_format_selection.assert_not_called()  # WHY: reject malformed output.
+
+
+class TestLocalCollectionBoundaries:
+    """Preserve SDK terminal cursors without hiding local collection defects."""
+
+    @pytest.mark.parametrize("cursor", [None, ""])
+    def test_terminal_cursor_preserves_rows(
+        self, menu: Any, transport: APIRequest, caplog: pytest.LogCaptureFixture, cursor: str | None
+    ) -> None:
+        """Both documented terminal values preserve a successful event page."""
+        transport._session.get.return_value = _http_response(
+            200, {"results": [{"mac": "aa:bb"}], "next": cursor}
+        )  # WHY: use the real SDK response path for terminal cursor compatibility.
+        with caplog.at_level(logging.DEBUG):
+            SiteOtherDeviceEventsExporter.other_device_events()  # WHY: a terminal page must reach the writer.
+        assert transport._session.get.call_count == 1  # WHY: neither terminal value advertises another request.
+        assert "Error fetching" not in caplog.text  # WHY: a successful terminal page is not a request failure.
+        menu.DataExporter.write_with_format_selection.assert_called_once_with(
+            [{"mac": "aa:bb"}], "SiteOtherDeviceEvents_Branch.csv", api_function_name="searchSiteOtherDeviceEvents"
+        )  # WHY: preserve the complete successful record.
+
+    @staticmethod
+    @pytest.mark.parametrize("method", ["_page_records", "_collect_events"])
+    @pytest.mark.parametrize("failure_type", [NameError, ValueError])
+    def test_local_collection_defect_propagates(
+        menu: Any, transport: APIRequest, caplog: pytest.LogCaptureFixture, method: str, failure_type: type[Exception]
+    ) -> None:
+        """Unexpected validation and collection failures retain their original exception."""
+        transport._session.get.return_value = _http_response(200, [{"mac": "aa:bb"}])  # WHY: first prove SDK success.
+        failure = failure_type("synthetic-private-validation")  # WHY: detect false cloud diagnoses and private logs.
+        with (
+            patch.object(SiteOtherDeviceEventsExporter, method, side_effect=failure),
+            caplog.at_level(logging.DEBUG),
+            pytest.raises(failure_type) as captured,
+        ):
+            SiteOtherDeviceEventsExporter.other_device_events()  # WHY: local defects must escape the request boundary.
+        assert captured.value is failure  # WHY: preserve the original defect for the caller.
+        assert "Error fetching" not in caplog.text  # WHY: do not classify local defects as cloud failures.
+        assert "synthetic-private-validation" not in caplog.text  # WHY: do not log the exception payload.
+        assert all(record.exc_info is None for record in caplog.records)  # WHY: avoid private traceback output.
+        menu.DataExporter.write_with_format_selection.assert_not_called()  # WHY: failed collection cannot write.
+
+    def test_later_validation_defect_propagates(
+        self, menu: Any, transport: APIRequest, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """A local validation defect after a successful page must not become a request failure."""
+        transport._session.get.side_effect = [
+            _http_response(200, {"results": [{"mac": "aa:bb"}], "next": "/next"}),
+            _http_response(200, {"results": [{"mac": "cc:dd"}]}),
+        ]  # WHY: prove the second SDK request succeeds before local validation fails.
+        failure = NameError("synthetic-private-later-validation")  # WHY: preserve the defect without logging its text.
+        with (
+            patch.object(SiteOtherDeviceEventsExporter, "_page_records", side_effect=[[{"mac": "aa:bb"}], failure]),
+            caplog.at_level(logging.DEBUG),
+            pytest.raises(NameError) as captured,
+        ):
+            SiteOtherDeviceEventsExporter.other_device_events()  # WHY: later validation has the same local boundary.
+        assert captured.value is failure  # WHY: preserve the exact local exception.
+        assert transport._session.get.call_count == 2  # WHY: establish the successful follow-up request.
+        assert "Error fetching" not in caplog.text  # WHY: do not misreport a successful SDK call.
+        assert "synthetic-private-later-validation" not in caplog.text  # WHY: protect local exception text.
+        menu.DataExporter.write_with_format_selection.assert_not_called()  # WHY: reject incomplete storage output.

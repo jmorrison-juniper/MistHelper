@@ -6,8 +6,12 @@
 
 Replace unchecked `get_all` aggregation with a local page loop through `mistapi.get_next`.
 Check every status before accepting the payload. Return no aggregate after any failed page.
-Keep the request boundary separate from transformations and the writer.
+Keep the request boundary separate from local validation, collection, transformations, and the writer.
 Track requested cursors locally. Reject repeated cursors, invalid cursors, and records that are not dictionaries.
+Accept `None` and `""` as terminal cursors, consistent with the installed SDK.
+Handle known invalid remote data explicitly with fixed messages and a failed result.
+Catch arbitrary exceptions only around the actual endpoint or `get_next` call in `_fetch_events`.
+Invoke `_collect_events` outside that catch and use `_fetch_events` for each follow-up request.
 
 ## Technical Context
 

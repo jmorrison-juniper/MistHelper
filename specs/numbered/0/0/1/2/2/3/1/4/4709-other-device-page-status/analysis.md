@@ -6,7 +6,7 @@ Every page now requires a successful integer HTTP status and a valid record list
 The exporter uses the existing SDK `get_next` helper instead of unchecked `get_all`.
 It writes only after the final page succeeds.
 Failed or missing pages discard the complete aggregate and produce sanitized failure feedback.
-Transforms and the writer remain outside the request exception boundary.
+Local validation, collection, transforms, and the writer remain outside the request exception boundary.
 
 ## Preservation before repair
 
@@ -114,8 +114,9 @@ The corrected command directs the badge into the session artifact folder.
 | FR-004: Preserve #1794 boundaries | T005 | Local failures propagate, external failures return, and logs omit private strings. |
 | FR-005: Verify offline | T002, T005 | DNS/socket blockers, real SDK responses, mocked HTTP session, and mocked writer. |
 | FR-006: Reject malformed records and cursors | T008 | Direct repeats, longer cycles, invalid cursors, and malformed records. |
+| FR-007: Preserve SDK completion and local boundaries | T009 | Empty-string completion and unexpected local defects propagate without cloud error messages. |
 
-All six requirements map to the eight completed tasks.
+All seven requirements map to the nine completed tasks.
 No uncovered requirement, unresolved clarification, or cross-artifact conflict remains.
 The class has five methods. Page validation and collection remain separate methods.
 The menu method now has 18 lines. The unchanged persistence method retains its existing 27-line debt.
@@ -129,7 +130,9 @@ That commit and the preserved #1794 commit remain unchanged.
 
 `PickerPageReader.read` and `PolicyResponse.collect` provide the requested-cursor set pattern.
 The exporter uses this invariant locally without their domain-specific exception classes.
-Only `None` marks completion. Blank, non-string, and previously requested cursors fail before the next request.
+The first cursor extension treated only `None` as completion.
+The correction below also accepts the exact empty string.
+Whitespace-only, non-string, and previously requested cursors fail before the next request.
 Successful page lists must contain dictionary records.
 Every failure discards accumulated rows and retains the sanitized menu fallback.
 
@@ -160,6 +163,46 @@ The focused analyzer command above also passes with the cursor-extension tests.
 It checks one file, reports zero findings and parse errors, and reports zero new findings.
 Its cursor-extension reports use the `issue-4709-cursor-quality` prefix in the session artifact folder.
 STE passes for all seven updated Markdown files, with scores from 85 through 98.
+
+## Independent verification corrections
+
+Independent offline verification identified two defects in commit `193789329c0754d0d4d84e467f65f7095ca18b65`.
+The documented `next` string has no `minLength`, and installed `mistapi.get_all` treats `""` as terminal.
+The coordinator corrected the earlier instruction to reject every blank cursor.
+Both `None` and `""` now preserve terminal rows.
+Whitespace-only, non-string, and repeated cursors remain invalid.
+
+The broad `_fetch_events` catch also covered local `_collect_events` and `_page_records` execution.
+A local `NameError` therefore became a false SDK failure.
+`_fetch_events` now performs only one endpoint or SDK `get_next` call inside its catch.
+Dependency resolution, logging, page validation, and collection execute outside that catch.
+Known invalid page shapes and cursors log fixed messages and return a failed result explicitly.
+No exception class acts as a proxy for malformed remote data.
+Unexpected local `NameError` and `ValueError` exceptions propagate with their original identity and no private log text.
+The later-page regression also verifies this boundary after a successful follow-up request.
+
+Before the correction, this exact command reported **5 failed, 1 passed**:
+
+```text
+.venv/bin/python -m pytest tests/unit/export/test_site_other_device_events_exporter.py::TestLocalCollectionBoundaries -q
+```
+
+The output remains in session artifact `issue-4709-boundary-before.txt`.
+The exact empty-string case failed, while the `None` case passed.
+Four local-defect cases failed because the menu swallowed their exceptions.
+The later-page regression was added after that reproduction.
+
+The final combined pytest command above reports **74 passed**, comprising 63 exporter cases and 11 managed-record guards.
+Exporter coverage is **100 percent**, with 85 statements and zero missing statements.
+The unchanged status, partial-page, external-call, privacy, success, and empty-result scenarios remain covered.
+The exact Ruff, Black, mypy, compilation, Bandit, complexity, documentation, symbol, and input-preflight commands above pass.
+Pylint reports **9.75/10**, with its existing two notices.
+The focused API-inclusive analyzer checks one file and reports zero findings, zero parse errors, and zero new findings.
+Its reports use the `issue-4709-boundary-quality` prefix in the session artifact folder.
+One long test comment failed Ruff initially. A shorter comment repaired it before the final successful run.
+The class still has five methods.
+Their lengths are 27, 20, 21, 19, and 24 lines, including unchanged persistence debt.
+All prior commits remain unchanged. The publication hold and source ownership remain active.
 
 ## Intentional changes and limitations
 
