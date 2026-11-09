@@ -102,7 +102,7 @@ def redact_if_sensitive(key: str, value: str) -> str:
 
 
 class SensitiveFilter(logging.Filter):
-    """Logging filter that scrubs credential-like substrings from log messages.
+    """Redact credential-shaped values in messages and exception tracebacks.
 
     Install on a handler to provide a defence-in-depth layer: even if a
     caller accidentally logs a raw password, this filter replaces it before
@@ -115,8 +115,12 @@ class SensitiveFilter(logging.Filter):
         logging.getLogger().addHandler(handler)
 
     The filter uses the same regex patterns as ``redact_if_sensitive()``.
-    It operates on the formatted message string, so it catches values that
-    slipped through argument formatting as well.
+    It sanitizes the formatted message and the exception text cache before a
+    standard handler formats the record. This includes exception chains and
+    cached text from earlier handlers. Safe traceback context stays visible.
+
+    The filter does not log its own actions because recursive logging can
+    re-enter the filter. If rendering fails, it emits a safe diagnostic instead.
     """
 
     # Simple value-redaction pattern: anything after an = or : that looks like
@@ -128,24 +132,29 @@ class SensitiveFilter(logging.Filter):
     )
 
     def filter(self, record: logging.LogRecord) -> bool:
-        """Scrub the formatted log message in-place before it is emitted.
-
-        Args:
-            record: The log record being processed by the handler.
-
-        Returns:
-            True always — we never suppress records, only sanitize them.
-        """
+        """Sanitize a record in place without suppressing safe diagnostics."""
         try:
-            message = record.getMessage()  # Render the final formatted message string
-            sanitized = self._VALUE_PATTERN.sub(  # Replace credential values in-place
-                r"\g<key>=***REDACTED***",  # Keep the key name, replace only the value
-                message,
-            )
-            if sanitized != message:  # Only mutate if something was actually scrubbed
-                record.msg = sanitized  # Replace the message with the sanitized version
-                record.args = ()  # Clear args so getMessage() uses the new msg directly
-        except Exception as error:  # nosec B110 - Keep broad because logging here can re-enter this filter.
-            record.msg = "Log redaction failed: %s: %s"  # Replace the unsafe record with a diagnostic.
-            record.args = (type(error).__name__, error)  # Name the failure type without a recursive log call.
-        return True  # Always pass the record on. We only sanitize, never suppress
+            message = record.getMessage()
+            sanitized = self._redact_text(message)
+            if sanitized != message:
+                record.msg = sanitized
+                record.args = ()
+            self._redact_traceback(record)
+        except Exception as error:
+            record.msg = "Log redaction failed: %s"
+            record.args = (type(error).__name__,)
+            record.exc_info = None
+            record.exc_text = None
+            record.stack_info = None
+        return True
+
+    def _redact_text(self, text: str) -> str:
+        """Apply the same credential rule to message and exception text."""
+        return self._VALUE_PATTERN.sub(r"\g<key>=***REDACTED***", text)
+
+    def _redact_traceback(self, record: logging.LogRecord) -> None:
+        """Protect the exception cache, including text from earlier handlers."""
+        if record.exc_info and not record.exc_text:
+            record.exc_text = logging.Formatter().formatException(record.exc_info)
+        if record.exc_text:
+            record.exc_text = self._redact_text(record.exc_text)
