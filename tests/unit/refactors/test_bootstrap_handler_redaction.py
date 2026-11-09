@@ -151,7 +151,7 @@ class TestBootstrapHandlerRedaction:
         assert any(isinstance(item, ConsoleEchoFilter) for item in console_handler.filters)
         for handler in root.handlers:
             assert any(isinstance(item, SensitiveFilter) for item in handler.filters)
-            assert handler.formatter is not None
+            assert isinstance(handler.formatter, logging.Formatter)
             assert handler.formatter._fmt == "%(asctime)s - %(levelname)s - %(message)s"
         for level in (logging.DEBUG, logging.INFO, logging.WARNING, logging.ERROR):
             logging.getLogger("mistapi.bootstrap_redaction").log(level, "Read status=%d", level)
