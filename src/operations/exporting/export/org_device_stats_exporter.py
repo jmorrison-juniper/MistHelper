@@ -79,7 +79,7 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
                 # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
                 logger.info("* Fast mode: Using cached %s (age %.1fm)", output_file, age_minutes)  # User notice
                 return True  # Caller skips re-fetch
-        except Exception as e:  # Freshness-check error
+        except OSError as e:  # A metadata error makes the cache unavailable.
             logging.debug("Fast mode freshness check failed for %s: %s", output_file, e)  # Log
         return False  # Cache stale or unreadable
 
@@ -129,7 +129,7 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
                 # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
                 logger.info("* Fast mode: Using cached %s (age %.1fm)", output_file, age_minutes)  # User notice
                 return True  # Caller can return early
-        except Exception as exception:  # Cache metadata problems degrade gracefully
+        except OSError as exception:  # A metadata error makes the cache unavailable.
             logging.debug("Fast mode freshness check failed for %s: %s", output_file, exception)  # Log fallback
         return False  # Cache missing, stale, or unreadable
 
@@ -181,7 +181,7 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
                 sites = [
                     (row.get("id"), row.get("name", "Unknown")) for row in reader if row.get("id")
                 ]  # Build tuple list used by pool workers
-        except Exception as exception:  # Cache read failure -> signal API fallback
+        except Exception as exception:  # Cache generation invokes a callback with an open exception contract.
             logging.warning("* Could not use cached sites, fetching from API: %s", exception)  # Explain fallback
             return None
         logger.info("* Loaded %s sites from cached data", len(sites))  # Confirm cached count
@@ -256,7 +256,7 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
                 else:
                     logger.debug("! Collected %s port stats from site %s", len(port_stats), site_name)  # First-try
                 return port_stats  # Annotated rows
-            except Exception as exception:  # Retry on transient failure
+            except Exception as exception:  # The worker retries failures from the SDK and its result processing.
                 if first_exception is None:  # Only attempt one is recorded.
                     first_exception = exception  # Keep the original cause for the final report.
                 if not OrgDeviceStatsExporter._handle_site_port_stats_retry(attempt, site_name, exception):
@@ -276,7 +276,7 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
             else:  # Site still failed logically
                 still_failed.append(site_info)  # Keep for summary
                 logger.warning(" FAST RETRY EMPTY: %s", site_info[1])  # Record unresolved
-        except Exception as exception:  # Future itself raised unexpectedly
+        except Exception as exception:  # A future can propagate any exception from its worker.
             still_failed.append(site_info)  # Preserve in failure list
             logging.error(" FAST RETRY EXC: %s -> %s", site_info[1], exception)  # Log
 
@@ -347,7 +347,7 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
             all_port_stats = sorted(
                 all_port_stats, key=lambda row: row.get("mac", "")
             )  # Sort by MAC to produce deterministic CSV ordering.
-        except Exception as exception:  # Sorting failures should not block export.
+        except Exception as exception:  # Row access and comparison can raise arbitrary exceptions during sorting.
             logging.debug("Could not sort by MAC: %s", exception)  # Record sort failure while continuing unsorted.
         flattened = DataProcessingUtils.flatten_nested_fields(
             all_port_stats
@@ -466,7 +466,7 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
                 # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
                 logger.info("* Fast mode: Using cached %s (age %.1fm)", output_file, age_minutes)  # Operator-facing.
                 return True
-        except Exception as e:  # Freshness check failed -- fall through to fetch.
+        except OSError as e:  # A metadata error makes the cache unavailable.
             logging.debug("Fast mode freshness check failed for %s: %s", output_file, e)  # Debug-only.
         return False
 
