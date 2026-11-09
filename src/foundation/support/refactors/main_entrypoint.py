@@ -189,6 +189,8 @@ class ApplicationBootstrap:  # Explicit startup step for CLI and web hosts
 
     def _configure_logging(self) -> None:
         """Configure the root logger once for the requested startup."""
+        from src.foundation.support.utils.logger_utils import SensitiveFilter  # Keep bootstrap imports passive.
+
         log_dir = Path("data")  # Keep the existing runtime log directory.
         log_dir.mkdir(exist_ok=True)  # Create the log directory only during explicit startup.
         console_level = int(os.environ.get("CONSOLE_LOG_LEVEL", logging.INFO))  # Read console level at startup only.
@@ -196,9 +198,11 @@ class ApplicationBootstrap:  # Explicit startup step for CLI and web hosts
         console_handler = logging.StreamHandler()  # Preserve console logging for operators.
         console_handler.setLevel(console_level)  # Apply the requested console threshold.
         console_handler.addFilter(ConsoleEchoFilter())  # Keep the file copy without repeating direct terminal output.
+        console_handler.addFilter(SensitiveFilter())  # Redact propagated child records before console output.
         file_path = log_dir / "script.log"  # Preserve the existing log file name.
         file_handler = _MH.LogRotationSettings.from_environment().build_handler(str(file_path))  # Bound log growth.
         file_handler.setLevel(file_level)  # Apply the requested file threshold.
+        file_handler.addFilter(SensitiveFilter())  # Redact propagated child records before file output.
         logging.basicConfig(  # Configure root logging only inside this bootstrap step.
             level=logging.DEBUG,  # Capture all records and let handlers filter them.
             format="%(asctime)s - %(levelname)s - %(message)s",  # Keep the historical log line format.
