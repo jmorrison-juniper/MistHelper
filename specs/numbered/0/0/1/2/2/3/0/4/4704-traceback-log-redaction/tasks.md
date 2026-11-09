@@ -27,7 +27,7 @@
 
 - [x] T010 Run focused tests and file gates. Record commands, results, and limitations in `analysis.md`. (delivered: analysis.md)
 - [x] T011 Add `changelog.d/issue-4704-traceback-log-redaction.md` and analyze requirement coverage in `analysis.md`. (delivered: changelog.d/issue-4704-traceback-log-redaction.md, analysis.md)
-- [ ] T012 Commit the explicit file manifest with `Refs #4704`. Run the committed test-quality gate. Record evidence in `analysis.md`.
+- [x] T012 Commit the explicit file manifest with `Refs #4704`. Run the committed test-quality gate. Record evidence in `analysis.md`. (delivered: analysis.md, local commit f9189122e)
 
 ## Dependencies
 

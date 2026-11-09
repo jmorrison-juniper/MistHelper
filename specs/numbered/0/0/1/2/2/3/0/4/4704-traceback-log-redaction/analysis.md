@@ -37,6 +37,14 @@ The regression cases cover direct exceptions, explicit causes, implicit context,
 The real portal cases also exercise an earlier unprotected handler.
 The earlier handler's raw synthetic output proves that it populated the cache before the protected handler ran.
 
+The original reproduction after the repair reported:
+
+```text
+Main message redacted: True
+Synthetic token remains in portal traceback: False
+Portal traceback present: True
+```
+
 ## Exact Validation Commands
 
 Each command below ran from the worktree root.
@@ -59,7 +67,7 @@ Each command below ran from the worktree root.
 | `.venv/bin/python -m pydocstyle src/foundation/support/utils/logger_utils.py` | Exit 0. No findings. |
 | `.venv/bin/interrogate src/foundation/support/utils/logger_utils.py --fail-under 90` | Passed. Docstring coverage 100%. |
 | `.venv/bin/symbol-diff --base 3964d21d03f9f5717cb8eafb7272ecff21f5362a src/foundation/support/utils/logger_utils.py` | No lost or added module-level names. |
-| `.venv/bin/ste-linter --config .ste-linter.toml --min-score 80 changelog.d/issue-4704-traceback-log-redaction.md specs/numbered/0/0/1/2/2/3/0/4/4704-traceback-log-redaction/*.md specs/numbered/0/0/1/2/2/3/0/4/4704-traceback-log-redaction/design/*.md specs/numbered/0/0/1/2/2/3/0/4/4704-traceback-log-redaction/design/checklists/requirements.md` | The initial eight records passed with scores from 94 through 99. Final record validation follows the local commit checks. |
+| `.venv/bin/ste-linter --config .ste-linter.toml --min-score 80 changelog.d/issue-4704-traceback-log-redaction.md specs/numbered/0/0/1/2/2/3/0/4/4704-traceback-log-redaction/*.md specs/numbered/0/0/1/2/2/3/0/4/4704-traceback-log-redaction/design/*.md specs/numbered/0/0/1/2/2/3/0/4/4704-traceback-log-redaction/design/checklists/requirements.md` | All nine records passed with scores from 94 through 99. No file was skipped. |
 | `git diff --check` | Exit 0. No whitespace errors. |
 | `git fetch --no-tags origin '+refs/heads/main:refs/remotes/origin/main'` | Exit 0. No rebase or credential change. |
 
@@ -104,5 +112,41 @@ The explicit publication hold overrides the deployment stages for this assignmen
 ## Committed Test-Quality Gate
 
 The working-tree check examined two test files and reported zero findings and zero new findings.
-The required committed-difference check remains pending until the implementation commit exists.
-Its preflight and result will be recorded after that check runs.
+The implementation commit is `f9189122e3b2d4a13470aec8164db8bfce268114`.
+Its message contains `Refs #4704` and the required author trailer.
+The worktree was clean before the required committed-difference check.
+
+The base resolution command was `git rev-parse --verify 'origin/main^{commit}'`.
+It returned `3964d21d03f9f5717cb8eafb7272ecff21f5362a`.
+
+The required preflight command was:
+
+```bash
+.venv/bin/python -B -m pytest -p no:cacheprovider -s -q tests/guardrails/local_test_quality_loop/test_guidance.py::TestLiveGuides
+```
+
+Result: `1 passed, 1 warning`.
+The guard reported `inputs_attempted=4 input_reads=4 input_validations=4`.
+
+The required analyzer command was:
+
+```bash
+.venv/bin/test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json --changed-from origin/main --full-gate-path .github/workflows/ci.yml --full-gate-path requirements-dev.txt
+```
+
+Result:
+
+```text
+gate_scope: 2 files checked, 0 findings checked
+test_quality_analyzer: 0 findings (0/0/0/0), 2 skipped, 0 parse errors
+gate: 0 new findings vs baseline
+```
+
+The two skipped entries identify omitted test roots, not either changed test file.
+Both changed test files were parsed and checked.
+The report names `tests` and `mist-ops-platform/tests` as the omitted full-suite roots.
+This result does not claim a full-suite analysis.
+No baseline file changed.
+
+This evidence update changes only the feature's analysis and task records.
+Publication remains held for the serial queue.
