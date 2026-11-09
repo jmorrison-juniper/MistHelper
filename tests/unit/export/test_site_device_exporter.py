@@ -176,25 +176,25 @@ class TestDisplayInventoryTable:
         table.add_row.assert_called_once()
 
     def test_sort_exception_logged(self, fake_mh, caplog):
-        """Exception on sortby assignment → warning logged, method continues."""
+        """Verify the sort warning and continued inventory table rendering."""
+        from unittest.mock import PropertyMock
+
         from src.operations.exporting.export.site_device_exporter import SiteDeviceExporter
 
-        class BadTable:
-            field_names: list[str] = []
-
-            def __setattr__(self, name, value):
-                if name == "sortby":
-                    raise RuntimeError("bad sort")
-                super().__setattr__(name, value)
-
-            def add_row(self, _row):
-                pass
-
-            def get_string(self):
-                return ""
-
-        with patch("src.operations.exporting.export.site_device_exporter.PrettyTable", return_value=BadTable()):
-            SiteDeviceExporter._display_inventory_table([{"model": "AP41"}], ["model"])
+        table = MagicMock()
+        table.get_string.return_value = "AP41 inventory"
+        with (
+            patch("src.operations.exporting.export.site_device_exporter.PrettyTable", return_value=table),
+            patch.object(type(table), "sortby", PropertyMock(side_effect=RuntimeError("bad sort")), create=True),
+            caplog.at_level(logging.DEBUG),
+        ):
+            result = SiteDeviceExporter._display_inventory_table([{"model": "AP41"}], ["model"])
+        assert ("root", logging.WARNING, "! Could not sort table by 'model': bad sort") in caplog.record_tuples
+        assert result is None
+        assert table.field_names == ["model"]
+        table.add_row.assert_called_once_with(["AP41"])
+        table.get_string.assert_called_once_with()
+        assert (LOGGER_NAME, logging.DEBUG, "\nAP41 inventory") in caplog.record_tuples
 
 
 class TestPersistSiteDeviceStats:
