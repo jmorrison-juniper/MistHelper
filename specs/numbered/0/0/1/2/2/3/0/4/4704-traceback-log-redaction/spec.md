@@ -57,7 +57,7 @@ An operator receives the same protection when a previous handler has already for
 - **FR-004**: Preserve safe message behavior, failure types, traceback frames, and portal run and site context.
 - **FR-005**: Emit a safe diagnostic if redaction fails. Do not expose the original report or the redaction error value.
 - **FR-006**: Use synthetic credentials only. Do not contact Mist services or operate containers or firmware.
-- **FR-007**: Change only the three owned paths and unique specification and changelog records.
+- **FR-007**: Change only the owned logging source, approved test paths, and unique specification and changelog records.
 - **FR-008**: Commit locally with `Refs #4704`. Do not push, create a PR, rebase, merge, or change credentials.
 - **FR-009**: Preserve complete safe exception chains. A credential label without a value must not consume the next line.
 - **FR-010**: Redact labeled authorization values, including the complete scheme and value, in messages and exception text.
@@ -65,6 +65,10 @@ An operator receives the same protection when a previous handler has already for
 - **FR-012**: Reference #4705 in the local follow-up commit and a unique changelog fragment.
 - **FR-013**: Redact the complete labeled authorization value through its line boundary, including quoted and comma-separated Digest and AWS4 parameters.
 - **FR-014**: Preserve the next line, including safe diagnostics and standard exception chain separators.
+- **FR-015**: Redact the credential-bearing suffix of the exact email verification route in relative and absolute URLs.
+- **FR-016**: Preserve unrelated URLs, following diagnostic lines, and exception chain separators.
+- **FR-017**: Add a dedicated test file. Do not edit the test file renamed by draft #4358.
+- **FR-018**: Treat URL recognition as additional protection only. Unlabeled response details and unprotected handlers require separate repairs.
 
 ## Success Criteria *(mandatory)*
 
@@ -83,3 +87,7 @@ An operator receives the same protection when a previous handler has already for
 - Publication remains held for the serial queue.
 - The app-managed branch replaces the branch-creation hook.
 - The feature selector remains command-scoped because `.specify/feature.json` is a shared tracked record.
+- The URL rule protects the suffix after `/api/v1/self/update/verify/`, including its query and fragment.
+- URL suffix boundaries are whitespace and surrounding text delimiters. Encoded values remain private without decoding.
+- The later source-only handoff does not release the existing test rename or publication holds.
+- Direct SDK console output and response details without recognized patterns require separate repairs.

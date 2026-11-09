@@ -255,3 +255,86 @@ FR-014 maps to T018 through T020.
 All fourteen functional requirements and four success criteria have tasks.
 No new module-level production name or external dependency is required.
 Publication remains held.
+
+## Verification URL Extension
+
+The approved source handoff extends `logger_utils.py` only.
+The clean starting commit was `c88487ef901897fe236b0ec35c134eb02b2434e6`.
+The ownership scan read all 27 open PRs and every file page for draft #4358.
+That draft renames the original logging test, which this extension does not edit.
+The dedicated regression file is `tests/unit/utils/test_logger_verification_urls.py`.
+No SDK, bootstrap, exporter, or shared instruction file changed.
+
+The rule recognizes the exact relative verification route or its HTTP or HTTPS absolute URL.
+It preserves the route and replaces its nonempty suffix through whitespace or a surrounding text delimiter.
+The private suffix includes encoded characters, query values, and fragments without decoding.
+Scheme matching ignores case. Path matching remains exact.
+It preserves empty routes, unrelated URLs, nested lookalike paths, subsequent lines, and exception chain separators.
+Both message and exception sanitization use the existing shared method.
+The filter still avoids recursive logging.
+
+### Regression Evidence
+
+Before the source change, this command reported `48 failed, 6 passed, 1 warning`:
+
+```bash
+.venv/bin/python -m pytest -q tests/unit/utils/test_logger_verification_urls.py --tb=no
+```
+
+The final expanded command reported `238 passed, 1 warning` and `100%` coverage of all 49 source statements:
+
+```bash
+.venv/bin/python -m pytest -q tests/unit/utils/test_logger_verification_urls.py tests/unit/test_logger_utils.py tests/unit/utils/test_logger_utils_private_digest.py tests/unit/upgrade_portal/test_logging_contract.py tests/contract/upgrade_portal/test_no_credential_leak.py --cov=src.foundation.support.utils.logger_utils --cov-report=term-missing --cov-fail-under=80
+```
+
+The dedicated file holds 76 cases.
+They cover normal and real portal handlers, direct and chained failures, earlier formatting, URL boundaries, and safe reports.
+The recurring warning is the Dash plugin hook deprecation.
+All tests use synthetic values and in-memory streams. No network request occurs.
+
+### File Gates
+
+Each command below passed:
+
+```bash
+.venv/bin/python -m ruff check src/foundation/support/utils/logger_utils.py tests/unit/utils/test_logger_verification_urls.py
+.venv/bin/python -m black --check src/foundation/support/utils/logger_utils.py tests/unit/utils/test_logger_verification_urls.py
+.venv/bin/python -m py_compile src/foundation/support/utils/logger_utils.py tests/unit/utils/test_logger_verification_urls.py
+.venv/bin/python -m mypy src/foundation/support/utils/logger_utils.py --config-file pyproject.toml
+.venv/bin/bandit -c pyproject.toml src/foundation/support/utils/logger_utils.py -q
+.venv/bin/radon cc src/foundation/support/utils/logger_utils.py -j | .venv/bin/complexity-gate --max 10
+.venv/bin/pydocstyle src/foundation/support/utils/logger_utils.py tests/unit/utils/test_logger_verification_urls.py
+.venv/bin/interrogate src/foundation/support/utils/logger_utils.py tests/unit/utils/test_logger_verification_urls.py --fail-under 90
+.venv/bin/vulture src/foundation/support/utils/logger_utils.py --min-confidence 70
+.venv/bin/symbol-diff --base HEAD src/foundation/support/utils/logger_utils.py
+.venv/bin/pylint src/foundation/support/utils/logger_utils.py --fail-under=9.5
+git diff --check
+```
+
+Pylint reported `9.80/10`, with the existing R0903 notice.
+Interrogate reported `100%`. No module-level production name changed.
+Mypy reported success with existing unused configuration-section notes.
+The process guard command reported `32 passed, 1 skipped, 1 warning`:
+
+```bash
+.venv/bin/python -m pytest -q tests/guardrails/test_move_module_guidance.py tests/guardrails/test_changelog_fragment_policy.py
+```
+
+The skipped guard requires a PR event.
+Full repository tests and dependency audits did not run.
+
+### Integration Handoff and Limits
+
+This extension provides additional URL-path protection, not complete remediation.
+Unlabeled exception values and response details can still contain private values.
+The SDK can also print response details directly to stdout at DEBUG console level.
+Handler filters cannot protect direct console output.
+The bootstrap owner must protect each actual output handler, including propagated SDK records.
+The exporter owner must remove raw exception interpolation and protect response-detail handling.
+The SDK console path needs a separate scoped repair. The firmware-only request guard remains outside this ownership.
+No live operation, container, credential access, publication, or repository comment occurred.
+Existing local commits remain preserved. The test-rename hold remains active.
+
+FR-015 through FR-018 map to T021 through T023 as recorded in `tasks.md`.
+The extension introduces no new module-level production symbols or dependency.
+Optional commits remain deferred to the explicit local commit.

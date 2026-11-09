@@ -121,8 +121,10 @@ class SensitiveFilter(logging.Filter):
     Credential separators do not cross line boundaries. Authorization headers
     protect the complete remaining line, including structured parameters.
     Any same-line diagnostic after that header is also removed.
-    Arbitrary unlabeled secrets are
-    outside this pattern-based contract.
+    The exact email verification URL route protects its nonempty suffix,
+    including query and fragment text, until whitespace or a text delimiter.
+    Arbitrary unlabeled secrets and direct SDK console output are outside
+    this pattern-based handler contract.
 
     The filter does not log its own actions because recursive logging can
     re-enter the filter. If rendering fails, it emits a safe diagnostic instead.
@@ -138,6 +140,9 @@ class SensitiveFilter(logging.Filter):
     _AUTHORIZATION_PATTERN = re.compile(
         r"""(?P<key>authorization)[ \t"']*[:=][ \t]*[^ \t\r\n][^\r\n]*""",
         re.IGNORECASE,
+    )
+    _VERIFICATION_URL_PATTERN = re.compile(
+        r"""(?P<route>(?<![\w/])(?:(?i:https?)://[^/\s<>"'?#]+)?/api/v1/self/update/verify/)[^\s<>"'()\[\]{}]+"""
     )
 
     def filter(self, record: logging.LogRecord) -> bool:
@@ -159,6 +164,7 @@ class SensitiveFilter(logging.Filter):
 
     def _redact_text(self, text: str) -> str:
         """Apply the same credential rule to message and exception text."""
+        text = self._VERIFICATION_URL_PATTERN.sub(r"\g<route>***REDACTED***", text)
         text = self._AUTHORIZATION_PATTERN.sub(r"\g<key>=***REDACTED***", text)
         return self._VALUE_PATTERN.sub(r"\g<key>=***REDACTED***", text)
 
