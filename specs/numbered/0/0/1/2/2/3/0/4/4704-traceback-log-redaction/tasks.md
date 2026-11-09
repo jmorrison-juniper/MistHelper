@@ -1,0 +1,53 @@
+# Tasks: Traceback log redaction
+
+**Input**: [Specification](spec.md), [plan](plan.md), and the documents under `design/`.
+
+## Phase 1: Setup
+
+- [x] T001 Verify current main, clean status, and complete PR ownership for the paths in `plan.md`. (delivered: design/checklists/requirements.md)
+- [x] T002 Restore the locked environment without credential changes and reproduce the portal leak. (delivered: design/research.md)
+
+## Phase 2: Foundational
+
+- [x] T003 Complete the bounded specification and design in `spec.md` and `plan.md`. (delivered: spec.md)
+
+## Phase 3: User Story 1 - Safe Failure Reports
+
+- [x] T004 [P] [US1] Add direct and chained exception regressions in `tests/unit/test_logger_utils.py`. (delivered: tests/unit/test_logger_utils.py)
+- [x] T005 [P] [US1] Add real portal exception regressions in `tests/unit/upgrade_portal/test_logging_contract.py`. (delivered: tests/unit/upgrade_portal/test_logging_contract.py)
+- [x] T006 [US1] Prove the new tests fail against unchanged `src/foundation/support/utils/logger_utils.py`. (delivered: analysis.md)
+- [x] T007 [US1] Sanitize rendered exception text and safe failure diagnostics in `src/foundation/support/utils/logger_utils.py`. (delivered: src/foundation/support/utils/logger_utils.py)
+
+## Phase 4: User Story 2 - Several Handlers
+
+- [x] T008 [US2] Cover cached text and handler order in `tests/unit/test_logger_utils.py` and `tests/unit/upgrade_portal/test_logging_contract.py`. (delivered: tests/unit/test_logger_utils.py, tests/unit/upgrade_portal/test_logging_contract.py)
+- [x] T009 [US2] Confirm the cache protection in `src/foundation/support/utils/logger_utils.py` preserves safe text and exception objects. (delivered: src/foundation/support/utils/logger_utils.py)
+
+## Phase 5: Final Verification
+
+- [x] T010 Run focused tests and file gates. Record commands, results, and limitations in `analysis.md`. (delivered: analysis.md)
+- [x] T011 Add `changelog.d/issue-4704-traceback-log-redaction.md` and analyze requirement coverage in `analysis.md`. (delivered: changelog.d/issue-4704-traceback-log-redaction.md, analysis.md)
+- [ ] T012 Commit the explicit file manifest with `Refs #4704`. Run the committed test-quality gate. Record evidence in `analysis.md`.
+
+## Dependencies
+
+T001 through T003 precede the regression work.
+T004 and T005 can run independently because they own different files.
+T006 requires both regression files.
+T007 requires the failing proof.
+T008 and T009 reuse the regression setup and follow T007.
+T010 through T012 require both user stories.
+
+## Independent Checks
+
+US1 checks direct failures and linked failures through both handlers.
+US2 checks complete output after an earlier handler has formatted the record.
+Both stories are required for the local repair.
+
+## Implementation Strategy
+
+Write the failing regression cases first.
+Repair the shared filter once.
+Preserve the existing portal handler and callers.
+Optional commit hooks remain deferred to the final local commit.
+Publication remains held.

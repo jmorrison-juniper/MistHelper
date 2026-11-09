@@ -10,6 +10,11 @@ never written to log files regardless of how callers use the logging API.
 from __future__ import annotations  # Enable PEP 604 union types on Python 3.10+
 
 import logging  # Standard library logging for creating test LogRecord objects
+import sys
+from io import StringIO
+from unittest.mock import Mock
+
+import pytest
 
 from src.foundation.support.utils.logger_utils import (  # Module under test
     REDACTED_PLACEHOLDER,  # The canonical replacement string
@@ -142,3 +147,99 @@ class TestSensitiveFilter:
         record = self._make_record("need %s and %s", args=("only_one",))  # Wrong arg count
         result = flt.filter(record)  # getMessage() raises TypeError → except catches → True
         assert result is True  # Filter always returns True; exception was silently swallowed
+
+
+class TestSensitiveTracebacks:
+    """Prove that complete handler output protects synthetic exception values."""
+
+    token = "ISSUE4704_SYNTHETIC_TOKEN"
+    password = "ISSUE4704_SYNTHETIC_PASSWORD"
+
+    def _record(self, chain: str = "direct") -> logging.LogRecord:
+        """Build a real exception chain without external services."""
+        try:
+            try:
+                message = "Host unreachable" if chain == "safe" else f"token={self.token}"
+                raise ValueError(message)
+            except ValueError as error:
+                if chain == "cause":
+                    raise RuntimeError(f"password={self.password}") from error
+                if chain == "context":
+                    raise RuntimeError(f"password={self.password}")  # noqa: B904 - This case must use implicit context.
+                if chain == "group":
+                    failures = [error, RuntimeError(f"password={self.password}")]
+                    raise ExceptionGroup("Dependency failures", failures) from None
+                if chain == "note":
+                    error.add_note(f"password={self.password}")
+                raise
+        except Exception:
+            return logging.makeLogRecord({"msg": "Dependency failed", "exc_info": sys.exc_info()})
+
+    @pytest.mark.parametrize("chain", ["direct", "cause", "context", "group", "note"])
+    @pytest.mark.parametrize("cached", [False, True])
+    def test_complete_stream_output(self, chain: str, cached: bool) -> None:
+        """Keep frames and exception types while redacting fresh and cached text."""
+        record = self._record(chain)
+        original_exception = record.exc_info
+        if cached:
+            raw = logging.Formatter().format(record)
+            assert self.token in raw, "The earlier formatter did not render the synthetic value."
+        output = StringIO()
+        handler = logging.StreamHandler(output)
+        handler.addFilter(SensitiveFilter())
+        handler.handle(record)
+        handler.handle(record)
+        rendered = output.getvalue()
+        handler.close()
+        assert self.token not in rendered and self.password not in rendered
+        assert REDACTED_PLACEHOLDER in rendered
+        assert rendered.count("Dependency failed") == 2
+        assert "Traceback" in rendered and "_record" in rendered and "ValueError" in rendered
+        assert record.exc_info is original_exception, "Redaction changed the exception objects."
+        if chain in ("cause", "context", "group"):
+            assert "RuntimeError" in rendered
+        if chain == "cause":
+            assert "The above exception was the direct cause" in rendered
+        if chain == "context":
+            assert "During handling of the above exception" in rendered
+
+    def test_cached_text_without_exception_info(self) -> None:
+        """Protect a record whose earlier handler supplied only cached text."""
+        record = logging.LogRecord("redaction.probe", logging.ERROR, __file__, 1, "Safe message", (), None)
+        record.exc_text = f"ValueError: token={self.token}\nUseful frame context"
+        assert SensitiveFilter().filter(record) is True
+        rendered = logging.Formatter().format(record)
+        assert self.token not in rendered
+        assert REDACTED_PLACEHOLDER in rendered
+        assert "ValueError" in rendered and "Useful frame context" in rendered and "Safe message" in rendered
+
+    def test_safe_traceback_matches_standard_output(self) -> None:
+        """Leave safe messages and tracebacks unchanged, including their cache."""
+        record = self._record("safe")
+        expected = logging.Formatter().format(record)
+        assert SensitiveFilter().filter(record) is True
+        assert logging.Formatter().format(record) == expected
+        assert "Host unreachable" in expected
+
+    @pytest.mark.parametrize("failure", ["message", "traceback"])
+    def test_redaction_failure_excludes_unsafe_fields(self, failure: str, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A redaction error must not expose either exception value."""
+
+        class UnrenderableMessage:
+            """Raise a synthetic credential-bearing error during message rendering."""
+
+            def __str__(self) -> str:
+                """Fail without a real credential."""
+                raise RuntimeError("token=ISSUE4704_SYNTHETIC_RENDER_ERROR")
+
+        record = self._record()
+        if failure == "message":
+            record.msg = UnrenderableMessage()
+        else:
+            monkeypatch.setattr(
+                logging.Formatter, "formatException", Mock(side_effect=RuntimeError(f"token={self.token}"))
+            )
+        assert SensitiveFilter().filter(record) is True
+        rendered = logging.Formatter().format(record)
+        assert rendered == "Log redaction failed: RuntimeError"
+        assert record.exc_info is None and record.exc_text is None

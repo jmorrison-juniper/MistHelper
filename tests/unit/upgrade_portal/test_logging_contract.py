@@ -637,3 +637,64 @@ def test_the_installed_portal_handler_redacts_exception_text_and_keeps_context()
         package_logger.handlers = original_handlers  # Return the original handler chain.
         package_logger.setLevel(original_level)  # Return the original threshold.
         package_logger.propagate = original_propagate  # Return the original ancestor-routing choice.
+
+
+class PortalTracebackProbe:
+    """Exercise the real portal handler without changing shared logger state."""
+
+    token = "ISSUE4704_SYNTHETIC_PORTAL_TOKEN"
+    password = "ISSUE4704_SYNTHETIC_PORTAL_PASSWORD"
+
+    def __init__(self, earlier_handler: bool) -> None:
+        """Attach an optional earlier formatter before the protected handler."""
+        self.output = StringIO()
+        self.earlier_output = StringIO()
+        self.logger = logging.Logger(PROBE_LOGGER, logging.INFO)
+        if earlier_handler:
+            self.logger.addHandler(logging.StreamHandler(self.earlier_output))
+        self.handler = factory.build_log_handler()
+        assert isinstance(self.handler, logging.StreamHandler)
+        self.handler.setStream(self.output)
+        self.logger.addHandler(self.handler)
+
+    def emit(self, chain: str) -> None:
+        """Log a real synthetic failure and a safe diagnostic through both handlers."""
+        try:
+            try:
+                raise ValueError(f"token={self.token}")
+            except ValueError as error:
+                if chain == "cause":
+                    raise RuntimeError(f"password={self.password}") from error
+                if chain == "context":
+                    raise RuntimeError(f"password={self.password}")  # noqa: B904 - This case must use implicit context.
+                raise
+        except (ValueError, RuntimeError):
+            self.logger.exception(
+                "portal: dependency failure token=%s",
+                self.token,
+                extra={factory.RUN_FIELD: PROBE_RUN_ID, factory.SITE_FIELD: PROBE_SITE_ID},
+            )
+        self.logger.info(ORDINARY_MESSAGE)
+
+
+@pytest.mark.parametrize("chain", ["direct", "cause", "context"])
+@pytest.mark.parametrize("earlier_handler", [False, True])
+def test_real_portal_handler_protects_traceback_cache(chain: str, earlier_handler: bool) -> None:
+    """Protect full tracebacks even when an earlier handler cached raw text."""
+    probe = PortalTracebackProbe(earlier_handler)
+    try:
+        probe.emit(chain)
+        rendered = probe.output.getvalue()
+        assert probe.token not in rendered and probe.password not in rendered
+        assert "***REDACTED***" in rendered
+        assert "Traceback (most recent call last):" in rendered and "ValueError" in rendered
+        assert "test_logging_contract.py" in rendered and "in emit" in rendered
+        assert ORDINARY_MESSAGE in rendered and "portal: dependency failure" in rendered
+        assert f"run={PROBE_RUN_ID}" in rendered and f"site={PROBE_SITE_ID}" in rendered
+        if earlier_handler:
+            assert probe.token in probe.earlier_output.getvalue(), "The earlier handler did not create a raw cache."
+        if chain != "direct":
+            assert "RuntimeError" in rendered
+    finally:
+        for handler in probe.logger.handlers:
+            handler.close()
