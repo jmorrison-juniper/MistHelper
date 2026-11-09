@@ -18,7 +18,7 @@ Constraints:
 from __future__ import annotations  # WHY: PEP 604 unions retained across whole module.
 
 import logging  # WHY: assert error log paths were exercised for menu-76 cancel branches.
-from unittest.mock import MagicMock  # WHY: build interchangeable stubs for injected collaborators.
+from unittest.mock import MagicMock, patch  # WHY: Inject collaborators and detect forbidden context calls.
 
 import pytest
 
@@ -106,11 +106,11 @@ class TestInit:
 class TestExecute:
     """Cover the three exit paths of execute(): prompt-cancel, context-fail, full run."""
 
-    def test_execute_returns_when_prompts_cancel(self, caplog) -> None:
+    def test_execute_returns_when_prompts_cancel(self) -> None:
         """When _prompt_site_and_device returns None, execute() must return without building context."""
         op = _make_op()  # WHY: fresh SUT.
         op.PromptUtils.select_site.return_value = ""  # WHY: falsy site_id triggers the cancel branch.
-        with caplog.at_level(logging.INFO):  # WHY: capture starting log entry too.
+        with patch.object(op, "_build_context", side_effect=AssertionError("Site selection was cancelled.")):
             op.execute()  # WHY: exercise the top-level dispatcher.
         op.InsightMetricsUtils.export_const_insight_metrics.assert_called_once()  # WHY: refresh still ran.
         op.PromptUtils.select_device_id_from_inventory.assert_not_called()  # WHY: cancelled before device prompt.
