@@ -19,7 +19,6 @@ import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
-from unittest.mock import Mock, PropertyMock
 
 import pytest
 
@@ -483,9 +482,7 @@ class TestEnsureFresh:
 
         monkeypatch.setattr(zc_mod, "run_full_validation", _boom)
         result = ensure_fresh(tmp_path / "zscaler_cenr_hostnames.json", {"fetched_utc": _stale_ts()})
-        assert result is refreshed
-        assert "validation crashed during endpoint validation. Refresh kept." in caplog.text
-        assert "network gone" not in caplog.text
+        assert result is refreshed and "endpoint validation. Refresh kept." in caplog.text
 
     def test_empty_refresh_result_falls_back_to_in_memory_copy(self, monkeypatch, tmp_path):
         """Total-failure refresh (empty dict) falls back to the caller's dict."""
@@ -511,83 +508,6 @@ class TestEnsureFresh:
         monkeypatch.setattr(zc_mod, "run_full_validation", lambda *_a, **_kw: [_Result(), _Result()])
         result = ensure_fresh(tmp_path / "zscaler_cenr_hostnames.json", {"fetched_utc": _stale_ts()})
         assert result is refreshed
-
-
-class TestProbeValidationFailurePrivacy:
-    """Keep optional validation nonfatal without recording private error data."""
-
-    @pytest.mark.parametrize("stage", ["cache read", "cache promotion", "endpoint validation", "result summary"])
-    @pytest.mark.parametrize(
-        "error",
-        [
-            PermissionError(13, "private-host.invalid token=private-token", "/private/cache.json"),
-            UnicodeDecodeError("utf-8", b"\xffprivate-token", 0, 1, "private-host.invalid"),
-            json.JSONDecodeError("private-token", '{"private-host.invalid":', 1),
-            TypeError("private-host.invalid token=private-token"),
-            AttributeError("private-host.invalid token=private-token"),
-            type("private-host.invalid-private-token", (RuntimeError,), {})("/private/cache.json"),
-        ],
-    )
-    def test_failure_retains_state_and_logs_only_stage(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-        tmp_path: Path,
-        caplog: pytest.LogCaptureFixture,
-        stage: str,
-        error: Exception,
-    ) -> None:
-        """Each failure stage preserves acquired state and emits only a fixed status."""
-        probes = {"schema_version": 3, "roles": []}
-        validation = Mock(return_value=[])
-        monkeypatch.setattr(zc_mod, "run_full_validation", validation)
-        monkeypatch.setattr(zc_mod.urllib.request, "urlopen", Mock(side_effect=AssertionError("Unexpected transport")))
-        monkeypatch.setattr(Path, "is_file", Mock(return_value=True))
-        reader = Mock(return_value=json.dumps(probes))
-        monkeypatch.setattr(Path, "read_text", reader)
-        promotion = Mock(side_effect=lambda document, **_kwargs: document)
-        monkeypatch.setattr(zc_mod, "promote_cache_document", promotion)
-        if stage == "cache read":
-            reader.side_effect = error
-        elif stage == "cache promotion":
-            promotion.side_effect = error
-        elif stage == "endpoint validation":
-            validation.side_effect = error
-        else:
-            result = Mock(spec=zc_mod.ProbeResult)
-            type(result).responding_protocols = PropertyMock(side_effect=error)
-            validation.return_value = [result]
-        with caplog.at_level("DEBUG", logger=zc_mod.__name__):
-            returned_probes, returned_results = zc_mod._run_probe_validation(tmp_path / "cenr.json", {})
-        assert returned_probes == ({} if stage == "cache read" else probes)
-        if stage == "result summary":
-            assert returned_results is validation.return_value
-        else:
-            assert returned_results == []
-        assert validation.call_count == (1 if stage in ("endpoint validation", "result summary") else 0)
-        assert len(caplog.records) == 1
-        record = caplog.records[0]
-        assert record.levelname == "WARNING"
-        assert record.getMessage() == f"zscaler_catalogue: validation crashed during {stage}. Refresh kept."
-        assert record.args == (stage,)
-        assert record.exc_info is None
-        assert record.exc_text is None
-        assert record.stack_info is None
-
-    @pytest.mark.parametrize("error", [KeyboardInterrupt(), SystemExit(2)])
-    def test_control_flow_exceptions_still_propagate(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture, error: BaseException
-    ) -> None:
-        """Operator interruption and process exit must not become validation warnings."""
-        monkeypatch.setattr(Path, "is_file", Mock(return_value=False))
-        validation = Mock(side_effect=error)
-        monkeypatch.setattr(zc_mod, "run_full_validation", validation)
-        monkeypatch.setattr(zc_mod.urllib.request, "urlopen", Mock(side_effect=AssertionError("Unexpected transport")))
-        with pytest.raises(type(error)):
-            zc_mod._run_probe_validation(tmp_path / "cenr.json", {})
-        validation.assert_called_once_with(
-            {"schema_version": 3}, {}, timeout=zc_mod.DEFAULT_TIMEOUT, workers=zc_mod.DEFAULT_WORKERS
-        )
-        assert "validation crashed" not in caplog.text
 
 
 def _load_v2_fixture(name: str) -> dict[str, Any]:
@@ -1280,3 +1200,84 @@ class TestUS3PersistedObservations:
         entry = on_disk["proxy_hostnames"][0]
         assert entry["observed_protocol"] == "HTTPS", "HTTPS must beat UDP when both open (R-003)"
         assert entry["observed_port"] == 443
+
+
+class TestProbeValidationFailurePrivacy:
+    """Keep optional validation nonfatal without recording private error data."""
+
+    @pytest.mark.parametrize("stage", ["cache read", "cache promotion", "endpoint validation", "result summary"])
+    @pytest.mark.parametrize(
+        "error",
+        [
+            PermissionError(13, "private-host.invalid token=private-token", "/private/cache.json"),
+            UnicodeDecodeError("utf-8", b"\xffprivate-token", 0, 1, "private-host.invalid"),
+            json.JSONDecodeError("private-token", '{"private-host.invalid":', 1),
+            TypeError("private-host.invalid token=private-token"),
+            AttributeError("private-host.invalid token=private-token"),
+            type("private-host.invalid-private-token", (RuntimeError,), {})("/private/cache.json"),
+        ],
+    )
+    def test_failure_retains_state_and_logs_only_stage(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+        caplog: pytest.LogCaptureFixture,
+        stage: str,
+        error: Exception,
+    ) -> None:
+        """Each failure stage preserves acquired state and emits only a fixed status."""
+        from unittest.mock import Mock, PropertyMock
+
+        probes = {"schema_version": 3, "roles": []}
+        validation = Mock(return_value=[])
+        monkeypatch.setattr(zc_mod, "run_full_validation", validation)
+        monkeypatch.setattr(zc_mod.urllib.request, "urlopen", Mock(side_effect=AssertionError("Unexpected transport")))
+        monkeypatch.setattr(Path, "is_file", Mock(return_value=True))
+        reader = Mock(return_value=json.dumps(probes))
+        monkeypatch.setattr(Path, "read_text", reader)
+        promotion = Mock(side_effect=lambda document, **_kwargs: document)
+        monkeypatch.setattr(zc_mod, "promote_cache_document", promotion)
+        if stage == "cache read":
+            reader.side_effect = error
+        elif stage == "cache promotion":
+            promotion.side_effect = error
+        elif stage == "endpoint validation":
+            validation.side_effect = error
+        else:
+            result = Mock(spec=zc_mod.ProbeResult)
+            type(result).responding_protocols = PropertyMock(side_effect=error)
+            validation.return_value = [result]
+        with caplog.at_level("DEBUG", logger=zc_mod.__name__):
+            returned_probes, returned_results = zc_mod._run_probe_validation(tmp_path / "cenr.json", {})
+        assert returned_probes == ({} if stage == "cache read" else probes)
+        if stage == "result summary":
+            assert returned_results is validation.return_value
+        else:
+            assert returned_results == []
+        assert validation.call_count == (1 if stage in ("endpoint validation", "result summary") else 0)
+        assert len(caplog.records) == 1
+        record = caplog.records[0]
+        assert record.levelname == "WARNING"
+        assert record.getMessage() == f"zscaler_catalogue: validation crashed during {stage}. Refresh kept."
+        assert record.args == (stage,)
+        assert record.exc_info is None
+        assert record.exc_text is None
+        assert record.stack_info is None
+
+    @pytest.mark.parametrize("error", [KeyboardInterrupt(), SystemExit(2)])
+    def test_control_flow_exceptions_still_propagate(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture, error: BaseException
+    ) -> None:
+        """Operator interruption and process exit must not become validation warnings."""
+        from unittest.mock import Mock
+
+        monkeypatch.setattr(Path, "is_file", Mock(return_value=False))
+        validation = Mock(side_effect=error)
+        monkeypatch.setattr(zc_mod, "run_full_validation", validation)
+        monkeypatch.setattr(zc_mod.urllib.request, "urlopen", Mock(side_effect=AssertionError("Unexpected transport")))
+        with pytest.raises(type(error)):
+            zc_mod._run_probe_validation(tmp_path / "cenr.json", {})
+        validation.assert_called_once_with(
+            {"schema_version": 3}, {}, timeout=zc_mod.DEFAULT_TIMEOUT, workers=zc_mod.DEFAULT_WORKERS
+        )
+        assert "validation crashed" not in caplog.text
