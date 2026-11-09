@@ -17,7 +17,7 @@ from src.foundation.runtime.config.source_dependency_resolver import (
     SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
 )
 
-logger = logging.getLogger(__name__)  # Use a module logger for non-exception export messages.
+logger = logging.getLogger(__name__)  # Record export messages under this module.
 
 
 class SiteOtherDeviceEventsExporter:
@@ -76,14 +76,15 @@ class SiteOtherDeviceEventsExporter:
             rawdata = mistapi.get_all(
                 response=response, mist_session=mh.apisession
             )  # WHY: retrieve every paged event row.
-            logger.debug("Received %d other-device event rows", len(rawdata))  # WHY: report the API result count.
-            SiteOtherDeviceEventsExporter._persist_events(
-                rawdata, site_name
-            )  # WHY: route rows through the shared writer.
-        except Exception as error:  # WHY: surface network and SDK failures without a traceback.
-            logging.error(
-                "Error fetching other-device events for site %s: %s", site_name, error
-            )  # WHY: preserve site context.
-            logging.info(
-                "! Error fetching other-device event data: %s", error
-            )  # WHY: give the operator an actionable message.
+        except Exception:  # WHY: SDK calls and malformed remote pages have no shared exception type.
+            logger.error(
+                "Error fetching other-device events for the selected site"
+            )  # WHY: report the request failure without private exception text.
+            logger.info(
+                "! Error fetching other-device event data. Please try again."
+            )  # WHY: preserve the menu fallback without exposing response content.
+            return  # WHY: do not persist rows from an incomplete request.
+        logger.debug("Received %d other-device event rows", len(rawdata))  # WHY: report the API result count.
+        SiteOtherDeviceEventsExporter._persist_events(
+            rawdata, site_name
+        )  # WHY: let local transformation and writer defects reach the caller.
