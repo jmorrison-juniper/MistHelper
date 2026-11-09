@@ -64,3 +64,7 @@ This repair does not alter it. A separate structural slice can address that exis
 No new module-level names or output fields are necessary.
 The cursor extension follows the progress invariant in `PickerPageReader.read` and `PolicyResponse.collect`.
 Use no feature-specific errors from those helpers.
+The status check moves to the fetch boundary, outside the external-call catch.
+The page validator returns the rows and the JSON `total`. The collector compares the total only at a terminal cursor.
+Header totals receive a format check only, because the SDK derives the list cursor from them.
+The device inventory guard `guard_page_count` is prior art. The exporter does not import the portal layer.

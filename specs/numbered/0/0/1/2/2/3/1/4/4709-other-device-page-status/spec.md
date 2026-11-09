@@ -46,6 +46,7 @@ An operator retains successful empty, single-page, and multiple-page results.
 - A missing status, missing promised page, malformed body, or malformed row list cannot prove completeness.
 - Selection cancellation must not start a request.
 - Repeated or invalid cursors must stop the read without another request or a partial export.
+- A terminal cursor with fewer rows than the JSON `total`, or with malformed pagination headers, cannot prove completeness.
 
 ## Requirements
 
@@ -58,6 +59,9 @@ An operator retains successful empty, single-page, and multiple-page results.
 - **FR-005**: Verify the behavior offline with real SDK responses, blocked DNS and sockets, and mocked storage.
 - **FR-006**: Reject repeated or invalid cursors and malformed records without exposing private data.
 - **FR-007**: Accept `None` and `""` as terminal cursors. Catch arbitrary exceptions only at the endpoint and SDK pagination calls.
+- **FR-008**: If a terminal page has a JSON `total`, require at least that number of collected rows.
+  If any `X-Page-Total`, `X-Page-Limit`, or `X-Page-Page` header exists, require all three as nonnegative integers.
+  Do not infer a count when the metadata is absent.
 
 ### Mist Cloud Transport Requirements
 

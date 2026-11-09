@@ -547,7 +547,9 @@ class TestLocalCollectionBoundaries:
         ]  # WHY: prove the second SDK request succeeds before local validation fails.
         failure = NameError("synthetic-private-later-validation")  # WHY: preserve the defect without logging its text.
         with (
-            patch.object(SiteOtherDeviceEventsExporter, "_page_records", side_effect=[[{"mac": "aa:bb"}], failure]),
+            patch.object(
+                SiteOtherDeviceEventsExporter, "_page_records", side_effect=[([{"mac": "aa:bb"}], 0), failure]
+            ),
             caplog.at_level(logging.DEBUG),
             pytest.raises(NameError) as captured,
         ):
@@ -557,3 +559,72 @@ class TestLocalCollectionBoundaries:
         assert "Error fetching" not in caplog.text  # WHY: do not misreport a successful SDK call.
         assert "synthetic-private-later-validation" not in caplog.text  # WHY: protect local exception text.
         menu.DataExporter.write_with_format_selection.assert_not_called()  # WHY: reject incomplete storage output.
+
+
+class TestAdvertisedCompleteness:
+    """Reject terminal pages that contradict present pagination metadata."""
+
+    @pytest.mark.parametrize(
+        ("data", "headers"),
+        [
+            ({"results": [{"mac": "aa:bb"}], "total": 2, "limit": 1}, {}),
+            ({"results": [{"mac": "aa:bb"}], "total": 2, "next": ""}, {}),
+            ([{"mac": "aa:bb"}], {"X-Page-Total": "2", "X-Page-Limit": "1", "X-Page-Page": "synthetic-private-page"}),
+            ([{"mac": "aa:bb"}], {"X-Page-Total": "2", "X-Page-Limit": "1"}),
+            ({"results": [{"mac": "aa:bb"}], "total": "synthetic-private-total"}, {}),
+            ({"results": [{"mac": "aa:bb"}], "total": True}, {}),
+            ({"results": [{"mac": "aa:bb"}], "total": -1}, {}),
+        ],
+    )
+    def test_contradictory_or_malformed_metadata_never_writes(
+        self, menu: Any, transport: APIRequest, caplog: pytest.LogCaptureFixture, data: Any, headers: dict[str, str]
+    ) -> None:
+        """An SDK terminal cursor cannot prove completeness against present contrary metadata."""
+        transport._session.get.side_effect = [
+            _http_response(200, data, headers),
+            _http_response(200, [{"mac": "cc:dd"}]),
+        ]  # WHY: keep a pre-repair reproduction finite if a defect requests another page.
+        with caplog.at_level(logging.DEBUG):
+            SiteOtherDeviceEventsExporter.other_device_events()  # WHY: validate completeness through the menu.
+        assert transport._session.get.call_count == 1  # WHY: the SDK advertises no next request.
+        assert "Error fetching" in caplog.text  # WHY: report the incomplete page as a failed read.
+        assert "synthetic-private" not in caplog.text  # WHY: keep metadata values out of logs.
+        assert "records exported" not in caplog.text  # WHY: do not report a partial read as complete.
+        menu.DataExporter.write_with_format_selection.assert_not_called()  # WHY: never write incomplete output.
+
+    @pytest.mark.parametrize(
+        ("data", "headers"),
+        [
+            ({"results": [{"mac": "aa:bb"}], "total": 1, "limit": 1}, {}),
+            ({"results": [{"mac": "aa:bb"}], "total": 1, "next": ""}, {}),
+            ({"results": [{"mac": "aa:bb"}], "total": 0}, {}),
+            ({"results": [{"mac": "aa:bb"}]}, {}),
+            ([{"mac": "aa:bb"}], {"X-Page-Total": "1", "X-Page-Limit": "1", "X-Page-Page": "1"}),
+            ([{"mac": "aa:bb"}], {}),
+        ],
+    )
+    def test_satisfied_or_absent_metadata_preserves_rows(
+        self, menu: Any, transport: APIRequest, caplog: pytest.LogCaptureFixture, data: Any, headers: dict[str, str]
+    ) -> None:
+        """Satisfied totals and absent metadata keep the successful terminal export."""
+        transport._session.get.return_value = _http_response(200, data, headers)  # WHY: use the real SDK response.
+        with caplog.at_level(logging.DEBUG):
+            SiteOtherDeviceEventsExporter.other_device_events()  # WHY: a complete terminal page must write.
+        assert "Error fetching" not in caplog.text  # WHY: complete metadata is not a request failure.
+        menu.DataExporter.write_with_format_selection.assert_called_once_with(
+            [{"mac": "aa:bb"}], "SiteOtherDeviceEvents_Branch.csv", api_function_name="searchSiteOtherDeviceEvents"
+        )  # WHY: preserve the complete successful record.
+
+    def test_total_satisfied_across_search_pages(self, menu: Any, transport: APIRequest) -> None:
+        """The terminal total counts rows from every page, not only the last page."""
+        transport._session.get.side_effect = [
+            _http_response(200, {"results": [{"mac": "aa:bb"}], "total": 2, "limit": 1, "next": "/next"}),
+            _http_response(200, {"results": [{"mac": "cc:dd"}], "total": 2, "limit": 1}),
+        ]  # WHY: each documented search page reports the all-page total.
+        SiteOtherDeviceEventsExporter.other_device_events()  # WHY: a complete two-page search must write.
+        assert transport._session.get.call_count == 2  # WHY: read both advertised pages.
+        menu.DataExporter.write_with_format_selection.assert_called_once_with(
+            [{"mac": "aa:bb"}, {"mac": "cc:dd"}],
+            "SiteOtherDeviceEvents_Branch.csv",
+            api_function_name="searchSiteOtherDeviceEvents",
+        )  # WHY: preserve every row in order.

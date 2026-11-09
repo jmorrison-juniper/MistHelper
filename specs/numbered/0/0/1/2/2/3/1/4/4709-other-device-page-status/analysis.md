@@ -204,6 +204,18 @@ The class still has five methods.
 Their lengths are 27, 20, 21, 19, and 24 lines, including unchanged persistence debt.
 All prior commits remain unchanged. The publication hold and source ownership remain active.
 
+## Advertised completeness
+
+The schema `response_events_other_devices_search` defines `total` as matching rows across all pages.
+The installed SDK sets `next` from the JSON `next` field. Else it uses three integer `X-Page-*` headers.
+A parse error leaves `next` as `None`. The installed `get_all` does not compare a total.
+
+The red run added 14 cases. Seven failed and seven passed before the repair.
+The seven failures covered a short JSON total with no `next` and with `next=""`.
+They also covered a non-integer page header, partial headers, and text, boolean, and negative totals.
+After the repair, the targeted command reported 88 passed with 100 percent exporter coverage.
+The exporter has 88 statements. The highest complexity is 10.
+
 ## Intentional changes and limitations
 
 - Every non-2xx, absent, boolean, or non-integer status now fails instead of producing no data.
@@ -218,3 +230,6 @@ All prior commits remain unchanged. The publication hold and source ownership re
 - Full-suite tests, dependency audits, and full-tree gates do not run for this bounded change.
 - One existing Dash plugin deprecation warning remains.
 - No push, pull request, rebase, merge, issue closure, Git configuration change, or credential change occurs.
+- A JSON numeric string such as `"2"` passes as a count. Other text, booleans, and negative values fail.
+- Rows above the JSON `total` pass, because events can arrive during a read.
+- Valid `X-Page-Total` values receive no row comparison. The SDK cursor uses them.

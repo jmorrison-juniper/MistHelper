@@ -53,26 +53,28 @@ class SiteOtherDeviceEventsExporter:
         )  # WHY: show completion to the operator.
 
     @staticmethod
-    def _page_records(response: Any) -> list[Any] | None:
-        """Validate status and dictionary rows before accepting a remote page."""
-        status = getattr(response, "status_code", None)  # WHY: the SDK retains HTTP failures without raising.
-        status = (
-            status if isinstance(status, int) and not isinstance(status, bool) else None
-        )  # WHY: booleans and private text cannot represent HTTP status values.
-        if status is None or not 200 <= status < 300:  # WHY: only a successful HTTP status proves safety.
+    def _page_records(response: Any) -> tuple[list[Any], int] | None:
+        """Validate dictionary rows and present pagination metadata of a successful page."""
+        payload = response.data  # WHY: the caller already proved a successful HTTP status.
+        envelope = payload if isinstance(payload, dict) else {}  # WHY: only search envelopes carry a JSON total.
+        rows = envelope.get("results", payload)  # WHY: accept list pages and documented results envelopes.
+        pages = [
+            (response.headers or {}).get(f"X-Page-{name}") for name in ("Total", "Limit", "Page")
+        ]  # WHY: the SDK derives list cursors from these headers.
+        counts = [
+            str(envelope.get("total", 0)),
+            *map(str, pages[: len(pages) * any(pages)]),
+        ]  # WHY: absent headers add no count, and partial headers fail as text.
+        if not (
+            isinstance(rows, list)
+            and all(isinstance(row, dict) for row in rows)
+            and all(count.isascii() and count.isdigit() for count in counts)
+        ):  # WHY: malformed rows or present metadata cannot prove a complete page.
             logger.error(
-                "Other-device event page failed: HTTP %s", status if status is not None else "unavailable"
-            )  # WHY: report safe status metadata without a response body or URL.
-            return None  # WHY: no failed page can contribute rows to an export.
-        payload = response.data  # WHY: inspect the payload only after its status proves success.
-        if isinstance(payload, dict):  # WHY: search responses wrap event rows in results.
-            payload = payload.get("results")  # WHY: missing results cannot prove a successful empty search.
-        if not isinstance(payload, list) or any(
-            not isinstance(row, dict) for row in payload
-        ):  # WHY: malformed records must not reach local transformations.
-            logger.error("Other-device event page does not contain a record list")  # WHY: reject unsafe remote rows.
+                "Other-device event page does not contain valid records or pagination metadata"
+            )  # WHY: omit private payload and header values.
             return None  # WHY: handle known malformed data without catching unexpected local defects.
-        return payload  # WHY: preserve the SDK row schema without altering records.
+        return rows, int(counts[0])  # WHY: the documented JSON total counts rows across all pages.
 
     @staticmethod
     def _collect_events(response: Any) -> list[Any] | None:
@@ -83,10 +85,13 @@ class SiteOtherDeviceEventsExporter:
             page = SiteOtherDeviceEventsExporter._page_records(response)  # WHY: admit only complete successful pages.
             if page is None:  # WHY: distinguish a failed response from a valid empty record list.
                 return None  # WHY: discard all earlier rows rather than exporting incomplete data.
-            records.extend(page)  # WHY: retain validated rows until pagination proves completeness.
+            records.extend(page[0])  # WHY: retain validated rows until pagination proves completeness.
             logger.debug("Collected %d other-device event rows", len(records))  # WHY: record each accepted page.
             cursor = response.next  # WHY: keep the next link private while validating progress.
             if cursor is None or cursor == "":  # WHY: preserve both SDK terminal cursor values.
+                if len(records) < page[1]:  # WHY: the documented total counts matching rows across all pages.
+                    logger.error("Other-device event pages ended before the advertised total")  # WHY: omit counts.
+                    return None  # WHY: a terminal cursor cannot hide missing advertised rows.
                 return records  # WHY: only complete rows can reach the writer.
             if (
                 not isinstance(cursor, str) or not cursor.strip() or cursor in seen
@@ -114,8 +119,15 @@ class SiteOtherDeviceEventsExporter:
             )  # WHY: report the request failure without private exception text.
             return None  # WHY: an external exception cannot produce a complete page.
         logger.debug("Other-device event page request completed")  # WHY: confirm the external call returned.
-        if result is None:  # WHY: a missing response cannot prove successful completion.
-            logger.error("Other-device event page failed: HTTP unavailable")  # WHY: report no invented status.
+        status = getattr(result, "status_code", None)  # WHY: the SDK retains HTTP failures without raising.
+        status = (
+            status if isinstance(status, int) and not isinstance(status, bool) else None
+        )  # WHY: missing responses, booleans, and private text cannot represent HTTP status values.
+        if status is None or not 200 <= status < 300:  # WHY: only a successful HTTP status proves safety.
+            logger.error(
+                "Other-device event page failed: HTTP %s", status if status is not None else "unavailable"
+            )  # WHY: report safe status metadata without a response body or URL.
+            return None  # WHY: no failed page can contribute rows to an export.
         return result  # WHY: let local validation inspect the real SDK response outside this catch.
 
     @staticmethod

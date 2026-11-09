@@ -33,6 +33,7 @@
 - [x] T007 Record exact validation and consistency evidence in `analysis.md`. (delivered: analysis.md)
 - [x] T008 [US1] Prove and reject repeated cursors, invalid cursors, and malformed rows in `tests/unit/export/test_site_other_device_events_exporter.py` and `src/operations/exporting/export/site_other_device_events_exporter.py`.
 - [x] T009 [US2] Prove and correct empty-string completion and local collection propagation in `tests/unit/export/test_site_other_device_events_exporter.py` and `src/operations/exporting/export/site_other_device_events_exporter.py`.
+- [x] T010 [US1] Prove and reject contradictory JSON totals and malformed pagination headers in `tests/unit/export/test_site_other_device_events_exporter.py` and `src/operations/exporting/export/site_other_device_events_exporter.py`.
 
 ## Dependencies and execution
 
@@ -43,3 +44,4 @@ All nine tasks use the checklist format. Implement failure safety before validat
 T008 follows T007 because the coordinator added cursor safety after the first local repair commit.
 Update the feature evidence after T008.
 T009 follows T008 after independent verification corrected the cursor contract and identified a local exception boundary defect.
+T010 follows T009 after independent verification found incomplete terminal pages with present metadata.
