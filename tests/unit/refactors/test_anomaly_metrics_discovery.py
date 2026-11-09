@@ -6,11 +6,12 @@ monkeypatched so the discovery flow executes without touching real filesystem
 paths. Tests exercise: missing-CSV fallback, IO/parse exception fallback, full
 happy-path with site-scoped rows, priority sort ordering, and _process_csv_row
 branch coverage (non-site rows, empty keys, blank names, priority keyword hits).
-No source edits, no live I/O.
+Uses synthetic CSV files and errors. Makes no live API requests.
 """
 
 from __future__ import annotations  # WHY: PEP 604 unions in type hints on Python 3.10+.
 
+import csv  # Generate a parser failure with the active CSV field limit.
 import logging  # WHY: verify structured error/warning/info logs at documented sites.
 from pathlib import Path  # WHY: tmp_path fixture returns Path objects for CSV file creation.
 from typing import Any  # WHY: return-type annotations for helpers/mocks.
@@ -70,18 +71,148 @@ class TestDiscover:
         assert result is not AnomalyMetricsDiscovery.FALLBACK_METRICS  # WHY: must be a copy, not the same list.
         assert "ConstInsightMetrics.csv not found" in caplog.text  # WHY: operator guidance in the warning.
 
-    def test_exception_returns_fallback_and_logs_error(
-        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    @pytest.mark.parametrize(
+        "failure",
+        [
+            (stage, error_type)
+            for stage in ("get_csv_path", "_parse_metrics_csv")
+            for error_type in (RuntimeError, OSError, UnicodeError, csv.Error)
+        ],
+    )
+    def test_supported_failure_returns_fallback_and_logs_safe_error(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+        caplog: pytest.LogCaptureFixture,
+        failure: tuple[str, type[Exception]],
     ) -> None:
-        """When get_csv_path raises, discover() logs ERROR and returns a fallback copy."""
-        broken_utils = MagicMock(name="FilePathUtils")  # WHY: MagicMock stand-in for MistHelper.FilePathUtils.
-        broken_utils.get_csv_path.side_effect = RuntimeError("boom")  # WHY: trigger the outer except path.
-        monkeypatch.setattr("MistHelper.FilePathUtils", broken_utils, raising=False)  # WHY: publish for proxy.
-        with caplog.at_level(logging.ERROR):  # WHY: except branch logs at ERROR.
-            result = AnomalyMetricsDiscovery.discover()  # WHY: exercise the exception branch.
+        """Supported failures retain the fallback without disclosing exception text."""
+        stage, error_type = failure  # Cover each supported failure at both guarded calls.
+        csv_file = tmp_path / "metrics.csv"  # Use an isolated input for both failure stages.
+        csv_file.write_text("key,name,scope\n", encoding="utf-8")  # Permit the parser stage to run.
+        file_utils = _install_file_path_utils(monkeypatch, str(csv_file))  # Resolve only the synthetic file.
+        target = file_utils if stage == "get_csv_path" else AnomalyMetricsDiscovery  # Cover both guarded calls.
+        monkeypatch.setattr(
+            target, stage, MagicMock(side_effect=error_type("synthetic-sensitive-detail"))
+        )  # Inject safely.
+        with caplog.at_level(logging.DEBUG):  # Include every log level in the disclosure check.
+            result = AnomalyMetricsDiscovery.discover()  # Exercise the supported failure boundary.
         assert result == AnomalyMetricsDiscovery.FALLBACK_METRICS  # WHY: verbatim match of the fallback set.
         assert result is not AnomalyMetricsDiscovery.FALLBACK_METRICS  # WHY: must be a defensive copy.
-        assert "Error reading ConstInsightMetrics.csv" in caplog.text  # WHY: error log message format.
+        assert f"Error reading ConstInsightMetrics.csv ({error_type.__name__})" in caplog.text  # Name the safe cause.
+        assert "Using fallback metrics." in caplog.text  # Make degraded discovery explicit.
+        assert "synthetic-sensitive-detail" not in caplog.text  # Never log raw exception text.
+        assert not any(record.exc_info for record in caplog.records)  # Tracebacks can disclose exception text.
+
+    @pytest.mark.parametrize("stage", ["get_csv_path", "_parse_metrics_csv"])
+    @pytest.mark.parametrize("error_type", [TypeError, AttributeError, NameError, KeyError, ValueError, AssertionError])
+    def test_unexpected_failure_propagates(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+        stage: str,
+        error_type: type[Exception],
+    ) -> None:
+        """Programming defects propagate from path resolution and CSV processing."""
+        csv_file = tmp_path / "metrics.csv"  # Use an isolated input for both failure stages.
+        csv_file.write_text("key,name,scope\n", encoding="utf-8")  # Permit the parser stage to run.
+        file_utils = _install_file_path_utils(monkeypatch, str(csv_file))  # Resolve only the synthetic file.
+        target = file_utils if stage == "get_csv_path" else AnomalyMetricsDiscovery  # Cover both guarded calls.
+        error = error_type("synthetic-programming-defect")  # Identify the exact propagated exception.
+        monkeypatch.setattr(
+            target, stage, MagicMock(side_effect=error)
+        )  # Inject a defect rather than an input failure.
+        with pytest.raises(error_type) as caught:  # A fallback must not hide this defect.
+            AnomalyMetricsDiscovery.discover()  # Exercise the narrowed exception boundary.
+        assert caught.value is error  # Preserve the original exception for the caller.
+
+    @pytest.mark.parametrize(
+        "contents",
+        [
+            "key,name,scope\nvalid,Valid,site\nshort,Short\n",
+            "scope,key,name\nsite,valid,Valid\nsite,short\n",
+            "scope,name,key\nsite,Valid,valid\nsite,Short\n",
+        ],
+    )
+    def test_short_csv_row_returns_fallback(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+        caplog: pytest.LogCaptureFixture,
+        contents: str,
+    ) -> None:
+        """A missing cell triggers CSV recovery instead of an attribute error or partial result."""
+        csv_file = tmp_path / "short.csv"  # Keep malformed input isolated from product files.
+        csv_file.write_text(contents, encoding="utf-8")  # Omit each required cell in turn.
+        _install_file_path_utils(monkeypatch, str(csv_file))  # Read only this synthetic CSV.
+        with caplog.at_level(logging.ERROR):  # Verify the malformed input has an explicit report.
+            result = AnomalyMetricsDiscovery.discover()  # Exercise real DictReader padding.
+        assert result == AnomalyMetricsDiscovery.FALLBACK_METRICS  # Discard partial discovery on malformed rows.
+        assert result is not AnomalyMetricsDiscovery.FALLBACK_METRICS  # Preserve the fallback copy contract.
+        assert "Error reading ConstInsightMetrics.csv (Error)" in caplog.text  # Report the CSV error category.
+
+    @pytest.mark.parametrize("failure", ["encoding", "field-limit", "permission", "directory"])
+    def test_unreadable_csv_returns_fallback(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+        caplog: pytest.LogCaptureFixture,
+        failure: str,
+    ) -> None:
+        """Unreadable input returns defaults and a safe error report."""
+        csv_file = tmp_path / "unreadable.csv"  # Confine file access to the test directory.
+        contents = (
+            b"key,name,scope\n\xff,Private,site\n"
+            if failure == "encoding"
+            else ("key,name,scope\n" + "x" * (csv.field_size_limit() + 1) + ",Private,site\n").encode("utf-8")
+        )  # Exercise real decoding and CSV parser failures.
+        csv_file.write_bytes(contents)  # Create synthetic input without production credentials.
+        _install_file_path_utils(
+            monkeypatch, str(tmp_path if failure == "directory" else csv_file)
+        )  # Include directory IO.
+        if failure == "permission":  # File permissions differ across supported platforms.
+            monkeypatch.setattr(
+                "src.foundation.support.refactors.anomaly_metrics_discovery.open",
+                MagicMock(side_effect=PermissionError("synthetic-sensitive-detail")),
+                raising=False,
+            )  # Simulate denial only at this module's file-read boundary.
+        with caplog.at_level(logging.DEBUG):  # Check all emitted records for data disclosure.
+            result = AnomalyMetricsDiscovery.discover()  # Exercise real reading except for simulated permission denial.
+        assert result == AnomalyMetricsDiscovery.FALLBACK_METRICS  # Preserve the existing recovery result.
+        assert result is not AnomalyMetricsDiscovery.FALLBACK_METRICS  # Return a distinct list.
+        assert "Error reading ConstInsightMetrics.csv" in caplog.text  # Report failure instead of silent success.
+        assert "Using fallback metrics." in caplog.text  # Tell the operator that defaults replaced discovery.
+        assert "synthetic-sensitive-detail" not in caplog.text  # Exclude simulated private exception text.
+        assert "Private" not in caplog.text  # Exclude CSV content from diagnostic messages.
+        assert str(tmp_path) not in caplog.text  # Exclude private filesystem paths.
+
+    @pytest.mark.parametrize(
+        ("contents", "expected"),
+        [
+            ("", []),
+            (
+                "key,scope\n CUSTOM , SITE \n",
+                [{"metric_name": "custom", "description": "Anomaly events for custom", "priority": False}],
+            ),
+            ("key,name\ncustom,Custom\n", []),
+            (
+                'key,name,scope,extra\ncustom,"Custom, metric",site,ignored\n',
+                [{"metric_name": "custom", "description": "Custom, metric", "priority": False}],
+            ),
+        ],
+    )
+    def test_supported_csv_shapes_remain_unchanged(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+        contents: str,
+        expected: list[dict[str, Any]],
+    ) -> None:
+        """Empty files, absent headers, quoted cells, and extra columns retain their behavior."""
+        csv_file = tmp_path / "supported.csv"  # Keep compatibility cases independent of exported files.
+        csv_file.write_text(contents, encoding="utf-8")  # Use the export encoding.
+        _install_file_path_utils(monkeypatch, str(csv_file))  # Resolve this supported input.
+        assert AnomalyMetricsDiscovery.discover() == expected  # Preserve exact filtering and output shapes.
 
     def test_parses_site_scoped_rows_only(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         """Non-site scope rows and empty keys are filtered out; site rows survive."""

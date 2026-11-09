@@ -58,7 +58,11 @@ class AnomalyMetricsDiscovery:
 
         Returns:
             List of metric dictionaries with metric_name, description, and priority.
+
+        File, encoding, CSV, and runtime failures return the fallback metrics.
+        Other exceptions propagate so programming errors remain visible.
         """
+        logger.info("Reading ConstInsightMetrics.csv for anomaly metrics")  # Record discovery without a private path.
         try:
             metrics_path = _MH.FilePathUtils.get_csv_path(
                 "ConstInsightMetrics.csv"
@@ -69,8 +73,11 @@ class AnomalyMetricsDiscovery:
 
             return cls._parse_metrics_csv(metrics_path)  # Parse and return discovered metrics
 
-        except Exception as exception:  # Any parse/IO error yields the fallback list
-            logging.error("Error reading ConstInsightMetrics.csv: %s", str(exception))  # Structured error log
+        except (OSError, UnicodeError, csv.Error, RuntimeError) as exception:  # Preserve supported failure fallbacks.
+            logging.error(
+                "Error reading ConstInsightMetrics.csv (%s). Using fallback metrics.", type(exception).__name__
+            )  # Report the failure type without exception text, file contents, or credentials.
+            logger.debug("Returning %s fallback anomaly metrics", len(cls.FALLBACK_METRICS))  # Record fallback size.
             return cls.FALLBACK_METRICS.copy()  # Return a defensive copy of the fallback set
 
     @classmethod
@@ -79,6 +86,9 @@ class AnomalyMetricsDiscovery:
         logger.warning(
             "ConstInsightMetrics.csv not found. Please export organization constants first (menu option 11)."
         )  # Guide operator toward the export menu that produces the CSV
+        logger.debug(
+            "Returning %s fallback anomaly metrics", len(cls.FALLBACK_METRICS)
+        )  # Record missing-file recovery.
         return cls.FALLBACK_METRICS.copy()  # Defensive copy so callers can mutate without side effects
 
     @classmethod
@@ -96,11 +106,17 @@ class AnomalyMetricsDiscovery:
         return cls._sort_by_priority(potential_metrics)  # Priority-first ordering before returning
 
     @classmethod
-    def _process_csv_row(cls, row: dict[str, str]) -> dict[str, Any] | None:
+    def _process_csv_row(cls, row: dict[str, str | None]) -> dict[str, Any] | None:
         """Process a single CSV row and return metric dict if site-scoped."""
-        metric_key = row.get("key", "").strip().lower()  # Normalized key used for keyword matching
-        metric_name = row.get("name", "").strip()  # Human-readable name for the description column
-        metric_scope = row.get("scope", "").strip().lower()  # Only site-scoped metrics apply to anomaly export
+        if any(
+            row.get(field, "") is None for field in ("key", "name", "scope")
+        ):  # DictReader pads short rows with None.
+            raise csv.Error(
+                "A metric row has fewer values than its header."
+            )  # Keep malformed CSV on the fallback path.
+        metric_key = (row.get("key") or "").strip().lower()  # Normalize validated text for keyword matching.
+        metric_name = (row.get("name") or "").strip()  # Preserve blank and absent descriptions.
+        metric_scope = (row.get("scope") or "").strip().lower()  # Limit anomaly discovery to site metrics.
 
         if metric_scope != "site" or not metric_key:  # Reject non-site or unnamed rows
             return None  # Signals _parse_metrics_csv to skip this row
