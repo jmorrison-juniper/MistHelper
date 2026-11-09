@@ -13,7 +13,11 @@ from src.foundation.support.utils.address_utils import AddressUtils
 class TestScourgifyBoundary:
     """Keep optional parser failures separate from local result-shaping defects."""
 
-    def test_result_shaping_error_propagates(self) -> None:
+    @pytest.mark.parametrize(
+        "shaping_error_type",
+        [RuntimeError, TypeError, AttributeError, NameError, IndexError, ValueError],
+    )
+    def test_result_shaping_error_propagates(self, shaping_error_type: type[Exception]) -> None:
         """Expose result-building defects instead of hiding them with fallback parsing."""
         address = "123 Main St, Springfield, IL 62701"  # WHY: use one supported input for both boundaries
         normalized_record = {"address_line_1": "123 Main St"}  # WHY: provide a valid optional-parser result
@@ -22,11 +26,13 @@ class TestScourgifyBoundary:
         with (
             patch.object(address_utils, "normalize_address_record", return_value=normalized_record) as normalize,
             patch.object(
-                AddressUtils, "_build_scourgify_result", side_effect=RuntimeError(shaping_error)
+                AddressUtils,
+                "_build_scourgify_result",
+                side_effect=shaping_error_type(shaping_error),
             ) as build_result,
             patch.object(AddressUtils, "_parse_components") as fallback,
         ):
-            with pytest.raises(RuntimeError, match=shaping_error):  # WHY: local defects must remain visible
+            with pytest.raises(shaping_error_type, match=shaping_error):  # WHY: local defects must remain visible
                 AddressUtils.enhanced_parse(address)  # WHY: exercise the public parser boundary
 
         normalize.assert_called_once_with(address)  # WHY: confirm the optional parser received the input
