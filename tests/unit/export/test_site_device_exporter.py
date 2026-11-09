@@ -169,10 +169,10 @@ class TestDisplayInventoryTable:
         """No model column → sortby left untouched."""
         from src.operations.exporting.export.site_device_exporter import SiteDeviceExporter
 
-        with patch("src.operations.exporting.export.site_device_exporter.PrettyTable") as PT:
-            table = MagicMock()
-            PT.return_value = table
+        table = MagicMock()
+        with patch("src.operations.exporting.export.site_device_exporter.PrettyTable", return_value=table):
             SiteDeviceExporter._display_inventory_table([{"name": "x"}], ["name"])
+        assert "sortby" not in vars(table)
         table.add_row.assert_called_once()
 
     def test_sort_exception_logged(self, fake_mh, caplog):
