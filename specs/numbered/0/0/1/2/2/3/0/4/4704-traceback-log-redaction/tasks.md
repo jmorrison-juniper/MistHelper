@@ -99,6 +99,6 @@ T028 requires T027. Both tasks refine the validation of FR-015 through FR-018.
 
 - [x] T029 Reproduce safe menu corruption and preserve explicit synthetic assignments in the dedicated filter tests.
 - [x] T030 Require colon or equals assignments in the owned shared filter.
-- [ ] T031 Validate existing protections and provide the correction commit to the bootstrap owner for routing checks.
+- [x] T031 Validate existing protections and provide the correction commit to the bootstrap owner for routing checks. (delivered: analysis.md, local commit 845970159)
 
 T029 precedes T030. T031 requires T030. These tasks refine FR-004 and FR-011.

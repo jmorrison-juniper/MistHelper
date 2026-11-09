@@ -475,3 +475,11 @@ The dedicated pure filter file holds 181 cases. The SDK integration file still h
 The existing renamed tests and bootstrap source remain unchanged.
 The bootstrap owner retains the four routing checks and will test the shared correction locally.
 No network, credential access, publication, or public comment occurred. All holds remain active.
+
+The correction commit is `845970159623d470729581b1ecd0ea0080372cee`.
+It contains both issue references and the required trailer.
+The commit was sent only to the bootstrap owner for this integration issue.
+The committed preflight reported `1 passed, 1 warning`, with four inputs validated.
+The committed analyzer reported `4 files checked`, `0 new findings`, `3 skipped`, and `0 parse errors`.
+The analyzed and skipped paths remain exactly those listed in the preceding scope section.
+The dedicated pure filter file is analyzed. Only the separate SDK integration file is excluded.
