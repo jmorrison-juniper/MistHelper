@@ -47,7 +47,6 @@ class TestSites:
         from src.operations.exporting.export.org_site_exporter import OrgSiteExporter
 
         OrgSiteExporter.sites()
-
         fake_mh.APIDataFetcher.assert_called_once()
         kwargs = fake_mh.APIDataFetcher.call_args.kwargs
         assert kwargs["filename"] == "SiteList"
@@ -55,13 +54,14 @@ class TestSites:
         assert kwargs["limit"] == 1000
         fake_mh.APIDataFetcher.return_value.execute.assert_called_once()
 
-    def test_sqlite_format(self, fake_mh):
-        """OUTPUT_FORMAT=sqlite is accepted (log-only branch)."""
+    def test_sqlite_format(self, fake_mh, caplog: pytest.LogCaptureFixture):
+        """Require the SQLite completion message after the mocked fetcher executes."""
         from src.operations.exporting.export.org_site_exporter import OrgSiteExporter
 
+        caplog.set_level("INFO")
         fake_mh.OUTPUT_FORMAT = "sqlite"
         OrgSiteExporter.sites()
-
+        assert "Completed site list export and wrote results to SQLite table." in caplog.messages
         fake_mh.APIDataFetcher.return_value.execute.assert_called_once()
 
     def test_with_emitter(self, fake_mh):
