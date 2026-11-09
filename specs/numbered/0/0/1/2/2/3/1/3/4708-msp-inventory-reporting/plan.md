@@ -37,7 +37,7 @@ Preserve complete-report headings and every export field and filename.
 - The established release-note directory has existing process-folder debt. Add only the required unique issue fragment.
 - Separate remediation remains outside this reservation: migrate existing process records through their managed maintenance process.
 - Product export paths and fields remain unchanged.
-- Optional commit hooks are deferred to one final local commit.
+- Optional commit hooks are deferred to local commits after the focused checks.
 - The branch-creation hook conflicts with the assigned app-managed worktree and is not executed.
 - PowerShell is unavailable. The route follows the verified eight-digit algorithm in `spec-route.ps1`.
 - Do not modify the shared `.specify/feature.json` or generated agent context.

@@ -120,6 +120,22 @@ Six direct rejection tests prove that the offline fixture blocks sockets and DNS
 Post-commit test-quality checks and the final commit ID belong in the local handoff.
 They cannot be recorded in the same commit before that commit exists.
 
+The first post-commit input preflight passed with four input reads and four validations.
+The first test-quality scan examined one test file and reported 15 new findings.
+An in-memory comparison of the unchanged base test found the same 15 findings, but reported zero new findings.
+The comparison matched each finding by file, rule, and explanation.
+The initial test additions had moved existing tests to different lines.
+The baseline identified those moved findings as new.
+
+The correction appends all new tests and fixtures after the original test content.
+Local socket imports preserve existing import lines and baseline locations.
+No existing assertion or baseline entry changes.
+A second local commit records this correction because the assignment prohibits an amended commit.
+The final committed test-quality result belongs in the handoff.
+
+The committed Markdown link check examined ten files and found zero broken links.
+All nine final feature records passed STE at 94 to 97.
+
 ## Specification Analysis
 
 | Requirement | Tasks | Coverage |
@@ -157,7 +173,7 @@ The verified routing algorithm produced the fixed eight-segment route.
 A structural check examined 13 managed directories and found no directory above five children.
 The feature root has five children after this evidence record.
 No shared selector, instruction file, or Git configuration changed.
-Optional commit hooks were deferred to one final local commit.
+Optional commit hooks were deferred to local commits after the focused checks.
 The branch-creation hook was not run because the assignment requires the existing app-managed worktree.
 
 No push, pull request, rebase, merge, issue closure, hook bypass, bootstrap, live Mist call, SSH call, firmware action, or production database call occurred.

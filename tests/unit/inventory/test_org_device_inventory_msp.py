@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import socket
 from types import SimpleNamespace
 from typing import Any  # WHY: type mixed-value dicts for mypy strict.
 from unittest.mock import MagicMock
@@ -19,13 +18,6 @@ from src.mist.resources.inventory.org_device_inventory_msp import (
     _to_org_result,
     configure_org_device_inventory_msp_dependencies,
 )
-
-
-@pytest.fixture(autouse=True)
-def block_inventory_network(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Block sockets and DNS so inventory tests cannot contact a live service."""
-    for name in ("socket", "create_connection", "getaddrinfo", "gethostbyname", "gethostbyname_ex", "gethostbyaddr"):
-        monkeypatch.setattr(socket, name, MagicMock(side_effect=AssertionError(f"Network access blocked: {name}")))
 
 
 def _configure_msp(*, privileges: list[dict] | None = None, safe_input_return: str = "1") -> MagicMock:
@@ -479,6 +471,86 @@ def test_process_orgs_batch_iterates_all_orgs() -> None:
     assert [c["safe_org"] for c in collected] == ["o1", "o2"]
 
 
+def test_run_single_msp_org_short_circuits_without_msp(monkeypatch: pytest.MonkeyPatch) -> None:
+    """run_single_msp_org should short-circuit when resolve returns None."""
+    _configure_msp()
+    monkeypatch.setattr(OrgDeviceInventoryMSPOrchestrator, "_resolve_active_msp", staticmethod(lambda: None))
+    run_mock = MagicMock()
+    OrgDeviceInventoryMSPOrchestrator.run_single_msp_org(run_mock)
+    run_mock.assert_not_called()
+
+
+def test_run_single_msp_org_short_circuits_without_orgs(monkeypatch: pytest.MonkeyPatch) -> None:
+    """run_single_msp_org should short-circuit when org list is empty."""
+    _configure_msp(privileges=[{"msp_id": "m1", "msp_name": "M", "role": "admin"}])
+    monkeypatch.setattr(
+        OrgDeviceInventoryMSPOrchestrator,
+        "_resolve_active_msp",
+        staticmethod(lambda: {"msp_id": "m1", "msp_name": "M", "role": "admin"}),
+    )
+    monkeypatch.setattr(OrgDeviceInventoryMSPOrchestrator, "_fetch_org_list", staticmethod(lambda active_msp: []))
+    run_mock = MagicMock()
+    OrgDeviceInventoryMSPOrchestrator.run_single_msp_org(run_mock)
+    run_mock.assert_not_called()
+
+
+def test_run_single_msp_org_invokes_runner_on_valid_selection(monkeypatch: pytest.MonkeyPatch) -> None:
+    """run_single_msp_org should invoke the runner when a valid org is chosen."""
+    _configure_msp(privileges=[{"msp_id": "m1", "msp_name": "M", "role": "admin"}], safe_input_return="1")
+    monkeypatch.setattr(
+        OrgDeviceInventoryMSPOrchestrator,
+        "_resolve_active_msp",
+        staticmethod(lambda: {"msp_id": "m1", "msp_name": "M", "role": "admin"}),
+    )
+    monkeypatch.setattr(
+        OrgDeviceInventoryMSPOrchestrator,
+        "_fetch_org_list",
+        staticmethod(lambda active_msp: [{"id": "org-1", "name": "Org One"}]),
+    )
+    run_mock = MagicMock()
+    OrgDeviceInventoryMSPOrchestrator.run_single_msp_org(run_mock)
+    run_mock.assert_called_once_with("org-1")
+
+
+def test_run_single_msp_org_rejects_org_without_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    """run_single_msp_org should not invoke runner when selected org lacks an id."""
+    _configure_msp(privileges=[{"msp_id": "m1", "msp_name": "M", "role": "admin"}], safe_input_return="1")
+    monkeypatch.setattr(
+        OrgDeviceInventoryMSPOrchestrator,
+        "_resolve_active_msp",
+        staticmethod(lambda: {"msp_id": "m1", "msp_name": "M", "role": "admin"}),
+    )
+    monkeypatch.setattr(
+        OrgDeviceInventoryMSPOrchestrator,
+        "_fetch_org_list",
+        staticmethod(lambda active_msp: [{"name": "no-id"}]),
+    )
+    run_mock = MagicMock()
+    OrgDeviceInventoryMSPOrchestrator.run_single_msp_org(run_mock)
+    run_mock.assert_not_called()
+
+
+def test_fetch_org_list_returns_empty_without_apisession() -> None:
+    """_fetch_org_list should return empty list when apisession is not configured."""
+    configure_org_device_inventory_msp_dependencies(
+        apisession_dependency=None,  # WHY: force session-missing branch
+        input_utils=SimpleNamespace(safe_input=MagicMock(return_value="")),
+        data_exporter=SimpleNamespace(write_with_format_selection=MagicMock()),
+        msp_privileges_value=[],
+    )
+    result = OrgDeviceInventoryMSPOrchestrator._fetch_org_list({"msp_id": "m1", "msp_name": "M"})
+    assert result == []
+
+
+@pytest.fixture(autouse=True)
+def block_inventory_network(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Block sockets and DNS so inventory tests cannot contact a live service."""
+    import socket
+
+    for name in ("socket", "create_connection", "getaddrinfo", "gethostbyname", "gethostbyname_ex", "gethostbyaddr"):
+        monkeypatch.setattr(socket, name, MagicMock(side_effect=AssertionError(f"Network access blocked: {name}")))
+
+
 def _configure_batch(monkeypatch: pytest.MonkeyPatch, organizations: list[dict[str, str]]) -> MagicMock:
     """Inject batch discovery and capture exports without service or database access."""
     exporter = _configure_msp()
@@ -576,76 +648,7 @@ def test_execute_msp_labels_every_combined_report(
 )
 def test_inventory_network_is_blocked(name: str) -> None:
     """Prove the offline fixture rejects socket creation, connections, and DNS lookup."""
+    import socket
+
     with pytest.raises(AssertionError, match=f"Network access blocked: {name}"):
         getattr(socket, name)()
-
-
-def test_run_single_msp_org_short_circuits_without_msp(monkeypatch: pytest.MonkeyPatch) -> None:
-    """run_single_msp_org should short-circuit when resolve returns None."""
-    _configure_msp()
-    monkeypatch.setattr(OrgDeviceInventoryMSPOrchestrator, "_resolve_active_msp", staticmethod(lambda: None))
-    run_mock = MagicMock()
-    OrgDeviceInventoryMSPOrchestrator.run_single_msp_org(run_mock)
-    run_mock.assert_not_called()
-
-
-def test_run_single_msp_org_short_circuits_without_orgs(monkeypatch: pytest.MonkeyPatch) -> None:
-    """run_single_msp_org should short-circuit when org list is empty."""
-    _configure_msp(privileges=[{"msp_id": "m1", "msp_name": "M", "role": "admin"}])
-    monkeypatch.setattr(
-        OrgDeviceInventoryMSPOrchestrator,
-        "_resolve_active_msp",
-        staticmethod(lambda: {"msp_id": "m1", "msp_name": "M", "role": "admin"}),
-    )
-    monkeypatch.setattr(OrgDeviceInventoryMSPOrchestrator, "_fetch_org_list", staticmethod(lambda active_msp: []))
-    run_mock = MagicMock()
-    OrgDeviceInventoryMSPOrchestrator.run_single_msp_org(run_mock)
-    run_mock.assert_not_called()
-
-
-def test_run_single_msp_org_invokes_runner_on_valid_selection(monkeypatch: pytest.MonkeyPatch) -> None:
-    """run_single_msp_org should invoke the runner when a valid org is chosen."""
-    _configure_msp(privileges=[{"msp_id": "m1", "msp_name": "M", "role": "admin"}], safe_input_return="1")
-    monkeypatch.setattr(
-        OrgDeviceInventoryMSPOrchestrator,
-        "_resolve_active_msp",
-        staticmethod(lambda: {"msp_id": "m1", "msp_name": "M", "role": "admin"}),
-    )
-    monkeypatch.setattr(
-        OrgDeviceInventoryMSPOrchestrator,
-        "_fetch_org_list",
-        staticmethod(lambda active_msp: [{"id": "org-1", "name": "Org One"}]),
-    )
-    run_mock = MagicMock()
-    OrgDeviceInventoryMSPOrchestrator.run_single_msp_org(run_mock)
-    run_mock.assert_called_once_with("org-1")
-
-
-def test_run_single_msp_org_rejects_org_without_id(monkeypatch: pytest.MonkeyPatch) -> None:
-    """run_single_msp_org should not invoke runner when selected org lacks an id."""
-    _configure_msp(privileges=[{"msp_id": "m1", "msp_name": "M", "role": "admin"}], safe_input_return="1")
-    monkeypatch.setattr(
-        OrgDeviceInventoryMSPOrchestrator,
-        "_resolve_active_msp",
-        staticmethod(lambda: {"msp_id": "m1", "msp_name": "M", "role": "admin"}),
-    )
-    monkeypatch.setattr(
-        OrgDeviceInventoryMSPOrchestrator,
-        "_fetch_org_list",
-        staticmethod(lambda active_msp: [{"name": "no-id"}]),
-    )
-    run_mock = MagicMock()
-    OrgDeviceInventoryMSPOrchestrator.run_single_msp_org(run_mock)
-    run_mock.assert_not_called()
-
-
-def test_fetch_org_list_returns_empty_without_apisession() -> None:
-    """_fetch_org_list should return empty list when apisession is not configured."""
-    configure_org_device_inventory_msp_dependencies(
-        apisession_dependency=None,  # WHY: force session-missing branch
-        input_utils=SimpleNamespace(safe_input=MagicMock(return_value="")),
-        data_exporter=SimpleNamespace(write_with_format_selection=MagicMock()),
-        msp_privileges_value=[],
-    )
-    result = OrgDeviceInventoryMSPOrchestrator._fetch_org_list({"msp_id": "m1", "msp_name": "M"})
-    assert result == []
