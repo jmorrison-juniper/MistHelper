@@ -273,7 +273,7 @@ class TestDeviceStats:
         from src.operations.exporting.export.site_device_exporter import SiteDeviceExporter
 
         with patch.object(SiteDeviceExporter, "_resolve_site_for_stats", return_value=None):
-            SiteDeviceExporter.device_stats()
+            assert _unresolved_site_calls(SiteDeviceExporter, "device_stats") == (0, 0)
 
     def test_happy_path_persists(self, fake_mh):
         """Resolver + fetch OK → _persist called with rows and site name."""
@@ -553,7 +553,7 @@ class TestDevices:
         from src.operations.exporting.export.site_device_exporter import SiteDeviceExporter
 
         with patch.object(SiteDeviceExporter, "_resolve_site_for_stats", return_value=None):
-            SiteDeviceExporter.devices()
+            assert _unresolved_site_calls(SiteDeviceExporter, "devices") == (0, 0)
 
     def test_happy_path_persists(self, fake_mh):
         """Fetch OK → persist called with data."""
@@ -587,3 +587,22 @@ class TestDevices:
             SiteDeviceExporter.devices()
 
         assert "Error fetching device data" in caplog.text
+
+
+def _unresolved_site_calls(exporter: type, operation: str) -> tuple[int, int]:
+    """Measure fetch and persistence calls when site resolution stops an export."""
+    from src.operations.exporting.export import site_device_exporter as module
+
+    boundaries = {
+        "device_stats": (module.mistapi.api.v1.sites.stats, "listSiteDevicesStats", "_persist_site_device_stats"),
+        "devices": (module.mistapi.api.v1.sites.devices, "listSiteDevices", "_persist_site_devices"),
+    }
+    sdk, fetch_name, persist_name = boundaries[operation]
+    rows = [{"id": "d1"}]
+    with (
+        patch.object(sdk, fetch_name, return_value=MagicMock(data=rows)) as fetch,
+        patch.object(module.mistapi, "get_all", return_value=rows),
+        patch.object(exporter, persist_name) as persist,
+    ):
+        getattr(exporter, operation)()
+    return fetch.call_count, persist.call_count
