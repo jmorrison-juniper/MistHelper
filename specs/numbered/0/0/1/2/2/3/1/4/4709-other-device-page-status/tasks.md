@@ -31,10 +31,13 @@
 
 - [x] T006 Add `changelog.d/issue-4709-other-device-page-status.md`. (delivered: changelog.d/issue-4709-other-device-page-status.md)
 - [x] T007 Record exact validation and consistency evidence in `analysis.md`. (delivered: analysis.md)
+- [x] T008 [US1] Prove and reject repeated cursors, invalid cursors, and malformed rows in `tests/unit/export/test_site_other_device_events_exporter.py` and `src/operations/exporting/export/site_other_device_events_exporter.py`.
 
 ## Dependencies and execution
 
 T001 precedes T002. T002 precedes T003. T003 precedes T004.
 T004 precedes T005. T005 precedes T006 and T007.
 Both stories share the reserved source and test, so parallel edits are unsafe.
-All seven tasks use the checklist format. Implement failure safety before validating complete results.
+All eight tasks use the checklist format. Implement failure safety before validating complete results.
+T008 follows T007 because the coordinator added cursor safety after the first local repair commit.
+Update the feature evidence after T008.

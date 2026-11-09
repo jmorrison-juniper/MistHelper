@@ -33,9 +33,10 @@ Only these existing files change:
 - `tests/unit/export/test_site_other_device_events_exporter.py`
 
 The new release note is `changelog.d/issue-4709-other-device-page-status.md`.
-Nine new records reside in this feature directory:
+Ten new records reside in this feature directory:
 `spec.md`, `plan.md`, `tasks.md`, `analysis.md`, `design/research.md`,
-`design/data-model.md`, `design/quickstart.md`, `design/contracts/menu.md`, and `design/checklists/requirements.md`.
+`design/data-model.md`, `design/quickstart.md`, `design/contracts/menu.md`, `design/contracts/cursor.md`,
+and `design/checklists/requirements.md`.
 No #1794 feature record or release note changes.
 
 ## Before and after evidence
@@ -112,13 +113,53 @@ The corrected command directs the badge into the session artifact folder.
 | FR-003: Preserve complete results | T005 | Empty, single-page, and two-page tests for both payload shapes. |
 | FR-004: Preserve #1794 boundaries | T005 | Local failures propagate, external failures return, and logs omit private strings. |
 | FR-005: Verify offline | T002, T005 | DNS/socket blockers, real SDK responses, mocked HTTP session, and mocked writer. |
+| FR-006: Reject malformed records and cursors | T008 | Direct repeats, longer cycles, invalid cursors, and malformed records. |
 
-All five requirements map to the seven completed tasks.
+All six requirements map to the eight completed tasks.
 No uncovered requirement, unresolved clarification, or cross-artifact conflict remains.
-The class has five methods. New methods have 7, 23, and 19 physical lines.
+The class has five methods. Page validation and collection remain separate methods.
 The menu method now has 18 lines. The unchanged persistence method retains its existing 27-line debt.
 The feature root has five children. The design directory has five children.
 Optional commit hooks remain deferred until validation. Disabled companion hooks do not run.
+
+## Cursor extension
+
+The coordinator requested cursor safety after local commit `4ee8f9d5bae65dfe16d784fa391a97dee82d088f`.
+That commit and the preserved #1794 commit remain unchanged.
+
+`PickerPageReader.read` and `PolicyResponse.collect` provide the requested-cursor set pattern.
+The exporter uses this invariant locally without their domain-specific exception classes.
+Only `None` marks completion. Blank, non-string, and previously requested cursors fail before the next request.
+Successful page lists must contain dictionary records.
+Every failure discards accumulated rows and retains the sanitized menu fallback.
+
+Before the extension, this exact command produced **13 failed** cases:
+
+```text
+.venv/bin/python -m pytest tests/unit/export/test_site_other_device_events_exporter.py::TestPaginationCursorSafety -q
+```
+
+The full output remains in the session artifact `issue-4709-cursor-before.txt`.
+Finite sentinel responses prevent the failing cycle reproductions from hanging.
+The direct repeat made three requests instead of two.
+The longer cycle made four requests instead of three.
+Both incorrectly reached the writer before the extension.
+Malformed cursors either implied completion or caused another request.
+Malformed rows reached transformation before the extension.
+
+After the extension, the exact combined pytest command above reports **68 passed**.
+This includes 57 exporter cases and 11 managed-record guards.
+Exporter coverage is **100 percent**, with 81 statements and zero missing statements.
+The existing Dash plugin warning remains.
+
+The exact Ruff, Black, mypy, compilation, Bandit, complexity, pydocstyle, interrogate, symbol, and input-preflight commands above pass again.
+Pylint now reports **9.74/10**, with the same two existing notices.
+The first Black check requested formatting. Black repaired both owned Python files, and the final check passes.
+No new failure suppression or baseline change occurs.
+The focused analyzer command above also passes with the cursor-extension tests.
+It checks one file, reports zero findings and parse errors, and reports zero new findings.
+Its cursor-extension reports use the `issue-4709-cursor-quality` prefix in the session artifact folder.
+STE passes for all seven updated Markdown files, with scores from 85 through 98.
 
 ## Intentional changes and limitations
 

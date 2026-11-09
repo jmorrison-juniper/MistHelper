@@ -7,6 +7,7 @@
 Replace unchecked `get_all` aggregation with a local page loop through `mistapi.get_next`.
 Check every status before accepting the payload. Return no aggregate after any failed page.
 Keep the request boundary separate from transformations and the writer.
+Track requested cursors locally. Reject repeated cursors, invalid cursors, and records that are not dictionaries.
 
 ## Technical Context
 
@@ -57,3 +58,5 @@ The branch hook cannot replace the app-managed branch. Optional commit hooks rem
 The existing persistence method exceeds 25 physical lines with comments and logging.
 This repair does not alter it. A separate structural slice can address that existing debt.
 No new module-level names or output fields are necessary.
+The cursor extension follows the progress invariant in `PickerPageReader.read` and `PolicyResponse.collect`.
+Use no feature-specific errors from those helpers.

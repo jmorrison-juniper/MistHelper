@@ -43,6 +43,7 @@ An operator retains successful empty, single-page, and multiple-page results.
 - Both list pages and search pages with a `results` list require validation.
 - A missing status, missing promised page, malformed body, or malformed row list cannot prove completeness.
 - Selection cancellation must not start a request.
+- Repeated or invalid cursors must stop the read without another request or a partial export.
 
 ## Requirements
 
@@ -53,6 +54,7 @@ An operator retains successful empty, single-page, and multiple-page results.
 - **FR-003**: Preserve complete empty, single-page, and multiple-page results and output metadata.
 - **FR-004**: Preserve sanitized request-failure reporting and local defect propagation from #1794.
 - **FR-005**: Verify the behavior offline with real SDK responses, blocked DNS and sockets, and mocked storage.
+- **FR-006**: Reject repeated or invalid cursors and malformed records without exposing private data.
 
 ### Mist Cloud Transport Requirements
 

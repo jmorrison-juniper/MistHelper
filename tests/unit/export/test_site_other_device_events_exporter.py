@@ -434,3 +434,64 @@ class TestPageStatusValidation:
         assert "synthetic-private-url" not in caplog.text  # WHY: keep response URLs out of error reporting.
         assert all(record.exc_info is None for record in caplog.records)  # WHY: do not expose hidden response data.
         menu.DataExporter.write_with_format_selection.assert_not_called()  # WHY: reject unproven success.
+
+
+class TestPaginationCursorSafety:
+    """Reject malformed records and cursors without writing incomplete events."""
+
+    @pytest.mark.parametrize(
+        "cursors",
+        [
+            ["/next?cursor=synthetic-private-repeat", "/next?cursor=synthetic-private-repeat"],
+            ["/next?cursor=synthetic-private-repeat", "/next?cursor=second", "/next?cursor=synthetic-private-repeat"],
+        ],
+    )
+    def test_repeated_cursor_stops_before_another_request(
+        self, menu: Any, transport: APIRequest, caplog: pytest.LogCaptureFixture, cursors: list[str]
+    ) -> None:
+        """Stop direct repeats and longer cycles before writing any accumulated rows."""
+        responses = [
+            _http_response(200, {"results": [{"mac": "aa:bb"}], "next": cursor}) for cursor in cursors
+        ]  # WHY: supply complete real pages until a cursor repeats.
+        responses.append(_http_response(200, {"results": []}))  # WHY: keep the pre-repair reproduction finite.
+        transport._session.get.side_effect = responses  # WHY: a faulty collector must not reach the sentinel page.
+        with caplog.at_level(logging.DEBUG):
+            SiteOtherDeviceEventsExporter.other_device_events()  # WHY: reject cycles through the menu boundary.
+        assert transport._session.get.call_count == len(cursors)  # WHY: stop before requesting the repeated cursor.
+        assert "Error fetching" in caplog.text  # WHY: cursor cycles cannot prove completeness.
+        assert "synthetic-private-repeat" not in caplog.text  # WHY: keep cursor values private.
+        assert "records exported" not in caplog.text  # WHY: do not report an incomplete read as complete.
+        menu.DataExporter.write_with_format_selection.assert_not_called()  # WHY: discard accumulated rows.
+
+    @pytest.mark.parametrize("cursor", ["", " ", 0, False, [], {}, 17])
+    def test_invalid_cursor_never_proves_completion(
+        self, menu: Any, transport: APIRequest, caplog: pytest.LogCaptureFixture, cursor: Any
+    ) -> None:
+        """Only None marks completion and only a nonblank string can request another page."""
+        transport._session.get.side_effect = [
+            _http_response(200, {"results": [{"mac": "aa:bb"}], "next": cursor}),
+            _http_response(200, {"results": []}),
+        ]  # WHY: make malformed cursors fail before any next request.
+        with caplog.at_level(logging.INFO):
+            SiteOtherDeviceEventsExporter.other_device_events()  # WHY: invalid cursor shapes must not write.
+        assert transport._session.get.call_count == 1  # WHY: do not send an invalid cursor to the SDK.
+        assert "Error fetching" in caplog.text  # WHY: invalid cursors cannot imply a terminal successful page.
+        menu.DataExporter.write_with_format_selection.assert_not_called()  # WHY: reject incomplete output.
+
+    @pytest.mark.parametrize("data", [[None], [1], ["synthetic-private-row"], {"results": [None]}])
+    def test_malformed_record_never_reaches_transformation(
+        self, menu: Any, transport: APIRequest, caplog: pytest.LogCaptureFixture, data: Any
+    ) -> None:
+        """Both documented page shapes require dictionary records."""
+        transport._session.get.return_value = _http_response(
+            200, data
+        )  # WHY: malformed records are remote data failures.
+        with (
+            patch.object(exporter_module.DataProcessingUtils, "flatten_nested_fields") as flatten,
+            caplog.at_level(logging.INFO),
+        ):
+            SiteOtherDeviceEventsExporter.other_device_events()  # WHY: refuse malformed rows at the page boundary.
+        flatten.assert_not_called()  # WHY: an invalid remote record must not become a local transform defect.
+        assert "Error fetching" in caplog.text  # WHY: report the unusable remote response.
+        assert "synthetic-private-row" not in caplog.text  # WHY: keep record values private.
+        menu.DataExporter.write_with_format_selection.assert_not_called()  # WHY: reject malformed output.

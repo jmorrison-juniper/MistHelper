@@ -53,11 +53,23 @@ class SiteOtherDeviceEventsExporter:
         )  # WHY: show completion to the operator.
 
     @staticmethod
-    def _page_records(payload: Any) -> list[Any]:
-        """Require a record list so malformed pages cannot prove completeness."""
+    def _page_records(response: Any) -> list[Any] | None:
+        """Validate status and dictionary rows before accepting a remote page."""
+        status = getattr(response, "status_code", None)  # WHY: the SDK retains HTTP failures without raising.
+        status = (
+            status if isinstance(status, int) and not isinstance(status, bool) else None
+        )  # WHY: booleans and private text cannot represent HTTP status values.
+        if status is None or not 200 <= status < 300:  # WHY: only a successful HTTP status proves safety.
+            logger.error(
+                "Other-device event page failed: HTTP %s", status if status is not None else "unavailable"
+            )  # WHY: report safe status metadata without a response body or URL.
+            return None  # WHY: no failed page can contribute rows to an export.
+        payload = response.data  # WHY: inspect the payload only after its status proves success.
         if isinstance(payload, dict):  # WHY: search responses wrap event rows in results.
             payload = payload.get("results")  # WHY: missing results cannot prove a successful empty search.
-        if not isinstance(payload, list):  # WHY: malformed payloads must not enter the aggregate.
+        if not isinstance(payload, list) or any(
+            not isinstance(row, dict) for row in payload
+        ):  # WHY: malformed records must not reach local transformations.
             raise ValueError("Other-device event page does not contain a record list")  # WHY: reject unsafe rows.
         return payload  # WHY: preserve the SDK row schema without altering records.
 
@@ -65,22 +77,21 @@ class SiteOtherDeviceEventsExporter:
     def _collect_events(response: Any) -> list[Any] | None:
         """Collect every successful page or reject the entire incomplete result."""
         records: list[Any] = []  # WHY: keep accepted rows private until every page succeeds.
+        seen: set[str] = set()  # WHY: repeated cursors cannot prove progress or completion.
         while True:  # WHY: validate the first response and every promised subsequent response.
-            status = getattr(response, "status_code", None)  # WHY: the SDK retains HTTP failures without raising.
-            status = (
-                status if isinstance(status, int) and not isinstance(status, bool) else None
-            )  # WHY: booleans and private text cannot represent HTTP status values.
-            if status is None or not 200 <= status < 300:  # WHY: only a successful HTTP status proves safety.
-                logger.error(
-                    "Other-device event page failed: HTTP %s", status if status is not None else "unavailable"
-                )  # WHY: report safe status metadata without a response body or URL.
+            page = SiteOtherDeviceEventsExporter._page_records(response)  # WHY: admit only complete successful pages.
+            if page is None:  # WHY: distinguish a failed response from a valid empty record list.
                 return None  # WHY: discard all earlier rows rather than exporting incomplete data.
-            records.extend(
-                SiteOtherDeviceEventsExporter._page_records(response.data)
-            )  # WHY: accept only a successful page with a valid row list.
+            records.extend(page)  # WHY: retain validated rows until pagination proves completeness.
             logger.debug("Collected %d other-device event rows", len(records))  # WHY: record each accepted page.
-            if not response.next:  # WHY: the SDK marks a complete result with no next link.
+            cursor = response.next  # WHY: keep the next link private while validating progress.
+            if cursor is None:  # WHY: only an absent cursor proves that the page sequence ended.
                 return records  # WHY: only complete rows can reach the writer.
+            if (
+                not isinstance(cursor, str) or not cursor.strip() or cursor in seen
+            ):  # WHY: reject invalid or cyclic links.
+                raise ValueError("Other-device event page cursor is invalid or repeated")  # WHY: stop incomplete reads.
+            seen.add(cursor)  # WHY: stop before issuing another request to a previously requested cursor.
             logger.info("Fetching the next other-device event page")  # WHY: trace each external page request.
             response = mistapi.get_next(
                 mist_session=SourceDependencyResolver.apisession, response=response
