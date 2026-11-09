@@ -713,15 +713,20 @@ class OrgInventoryExporter:  # Org inventory exporters.
         return gateways  # Processed rows for the summary table
 
     @staticmethod
-    def _split_full_address(address: str) -> tuple[str, str, str, str, str]:  # Parse address into parts.
-        """Split a full address into (street, city, state, zip, country). Raw street + blanks on parse failure."""
-        try:
-            parts = address.split(", ")  # Split on comma separators.
-            state_zip = parts[2].split()  # Split state and zip.
-            return parts[0], parts[1], state_zip[0], state_zip[1], parts[3]  # street, city, state, zip, country
-        except Exception as exception:  # Catch parse errors.
-            logging.debug("Failed to split address '%s': %s", address, exception)  # Log parse failure.
-            return address, "", "", "", ""  # Return raw address fallback.
+    def _split_full_address(address: Any) -> tuple[Any, str, str, str, str]:  # Parse address into parts.
+        """Split JSON address values and retain the original value when fields are absent."""
+        if not isinstance(address, str):  # JSON objects, numbers, booleans, and null have no string fields.
+            logging.debug("Failed to split address '%s': address is not a string", address)  # Log parse failure.
+            return address, "", "", "", ""  # Preserve the original JSON value.
+        parts = address.split(", ")  # Split on the API address delimiter.
+        if len(parts) < 4:  # Require each field read by the established output mapping.
+            logging.debug("Failed to split address '%s': fewer than four fields", address)  # Log parse failure.
+            return address, "", "", "", ""  # Preserve malformed address text.
+        state_zip = parts[2].split()  # Split state and postal code tokens.
+        if len(state_zip) < 2:  # Require both tokens read by the established output mapping.
+            logging.debug("Failed to split address '%s': state or postal code is missing", address)  # Log failure.
+            return address, "", "", "", ""  # Preserve malformed address text.
+        return parts[0], parts[1], state_zip[0], state_zip[1], parts[3]  # Return the five address fields.
 
     @staticmethod
     def _enrich_gateways_with_site_info(inventory: list, site_lookup: dict) -> list:  # type: ignore[type-arg]

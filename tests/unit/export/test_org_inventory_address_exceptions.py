@@ -4,10 +4,14 @@ from __future__ import annotations
 
 import json
 import logging
+from unittest.mock import MagicMock
 
 import pytest
+import requests
 
-from src.operations.exporting.export.org_inventory_exporter import OrgInventoryExporter
+from src.operations.exporting.export import org_inventory_exporter
+
+OrgInventoryExporter = org_inventory_exporter.OrgInventoryExporter
 
 
 class FirstSplitIndexError(str):
@@ -110,3 +114,23 @@ def test_gateway_enrichment_adds_no_per_address_info_records(caplog: pytest.LogC
         OrgInventoryExporter._enrich_gateways_with_site_info(devices, site_lookup)
 
     assert not [record for record in caplog.records if record.levelno == logging.INFO]
+
+
+@pytest.mark.parametrize("status_code", [404, 503])
+def test_gateway_export_propagates_mocked_http_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    status_code: int,
+) -> None:
+    """Keep upstream site-fetch failures visible before gateway parsing starts."""
+    response = requests.Response()
+    response.status_code = status_code
+    failure = requests.HTTPError(response=response)
+    fetch_sites = MagicMock(side_effect=failure)
+    monkeypatch.setattr(org_inventory_exporter.ConfigUtils, "get_cached_or_prompted_org_id", lambda: "org-1")
+    monkeypatch.setattr(org_inventory_exporter.APICoreFetchUtils, "all_sites_with_limit", fetch_sites)
+
+    with pytest.raises(requests.HTTPError) as error:
+        OrgInventoryExporter.gateways_with_site_info()
+
+    assert error.value.response is response
+    fetch_sites.assert_called_once_with("org-1")
