@@ -4,7 +4,7 @@ Covers both branches of `TimeUtils.get_dynamic_lookback_hours` (test-mode + prod
 mode, plus the exception fallback), and both branches of `TimeUtils.log_dynamic_lookback`
 (test-mode INFO vs production DEBUG). IS_TEST_MODE is a module-level constant computed
 from sys.argv at import time; we monkeypatch it on the imported module so each test can
-observe both branches deterministically. No source edits, no live I/O.
+observe both branches deterministically. No live I/O.
 """
 
 from __future__ import annotations  # WHY: PEP 604 unions in method signatures on Python 3.10+.
@@ -32,11 +32,12 @@ class TestGetDynamicLookbackHours:
         monkeypatch.setattr(tu, "IS_TEST_MODE", True)  # WHY: force test-mode branch of the ternary.
         assert TimeUtils.get_dynamic_lookback_hours(default_hours=24, test_hours=2) == 2  # WHY: test-mode path.
 
-    def test_clamps_to_one_hour_minimum(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    @pytest.mark.parametrize("test_mode", [False, True])
+    @pytest.mark.parametrize("hours", [0, -5])
+    def test_clamps_to_one_hour_minimum(self, monkeypatch: pytest.MonkeyPatch, test_mode: bool, hours: int) -> None:
         """Zero/negative inputs clamp up to 1 hour to prevent sub-hour windows."""
-        monkeypatch.setattr(tu, "IS_TEST_MODE", False)  # WHY: keep the production branch active for a clean clamp.
-        assert TimeUtils.get_dynamic_lookback_hours(default_hours=0, test_hours=1) == 1  # WHY: max(1,0) == 1.
-        assert TimeUtils.get_dynamic_lookback_hours(default_hours=-5, test_hours=1) == 1  # WHY: max(1,-5) == 1.
+        monkeypatch.setattr(tu, "IS_TEST_MODE", test_mode)
+        assert TimeUtils.get_dynamic_lookback_hours(default_hours=hours, test_hours=hours) == 1
 
     def test_defaults_use_24_and_1(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Calling with no args exercises the signature defaults (default_hours=24, test_hours=1)."""
@@ -45,28 +46,47 @@ class TestGetDynamicLookbackHours:
         monkeypatch.setattr(tu, "IS_TEST_MODE", True)  # WHY: exercise the signature default under test mode.
         assert TimeUtils.get_dynamic_lookback_hours() == 1  # WHY: test_hours=1 default arg is applied.
 
+    @pytest.mark.parametrize("error_type", [RuntimeError, TypeError])
     def test_exception_fallback_returns_test_hours_in_test_mode(
-        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, error_type: type[Exception]
     ) -> None:
         """If the inner branch raises, the except fallback returns the correct value for the current mode."""
         monkeypatch.setattr(tu, "IS_TEST_MODE", True)  # WHY: force test-mode both in try and except.
 
         def _boom(_a: int, _b: int) -> int:  # WHY: local double replaces builtins.max to raise inside try block.
-            raise RuntimeError("simulated max failure")  # WHY: trigger the broad-except fallback in the SUT.
+            raise error_type("simulated max failure")
 
         monkeypatch.setattr(tu, "max", _boom, raising=False)  # WHY: shadow builtins.max in the module namespace.
-        caplog.set_level(logging.DEBUG, logger=tu.__name__)  # WHY: capture the DEBUG fallback log line.
+        caplog.set_level(logging.ERROR, logger=tu.__name__)
         assert TimeUtils.get_dynamic_lookback_hours(default_hours=24, test_hours=3) == 3  # WHY: fallback -> test_hours.
+        assert len(caplog.records) == 1
+        record = caplog.records[0]
+        assert (record.name, record.levelno) == (tu.__name__, logging.ERROR)
+        assert record.getMessage() == "Lookback calculation failed. Using test fallback of 3 hours."
+        assert record.exc_info is not None
+        assert record.exc_info[0] is error_type
+        assert str(record.exc_info[1]) == "simulated max failure"
 
-    def test_exception_fallback_returns_default_hours_in_production_mode(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    @pytest.mark.parametrize("error_type", [RuntimeError, TypeError])
+    def test_exception_fallback_returns_default_hours_in_production_mode(
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, error_type: type[Exception]
+    ) -> None:
         """If the inner branch raises in production mode, the except fallback returns default_hours."""
         monkeypatch.setattr(tu, "IS_TEST_MODE", False)  # WHY: force production branch of the fallback ternary.
 
         def _boom(_a: int, _b: int) -> int:  # WHY: local double replaces builtins.max to raise inside try block.
-            raise RuntimeError("simulated max failure")  # WHY: trigger the broad-except fallback in the SUT.
+            raise error_type("simulated max failure")
 
         monkeypatch.setattr(tu, "max", _boom, raising=False)  # WHY: shadow builtins.max in the module namespace.
+        caplog.set_level(logging.ERROR, logger=tu.__name__)
         assert TimeUtils.get_dynamic_lookback_hours(default_hours=17, test_hours=1) == 17  # WHY: fallback -> default.
+        assert len(caplog.records) == 1
+        record = caplog.records[0]
+        assert (record.name, record.levelno) == (tu.__name__, logging.ERROR)
+        assert record.getMessage() == "Lookback calculation failed. Using production fallback of 17 hours."
+        assert record.exc_info is not None
+        assert record.exc_info[0] is error_type
+        assert str(record.exc_info[1]) == "simulated max failure"
 
 
 class TestLogDynamicLookback:

@@ -35,12 +35,17 @@ class TimeUtils:
 
         Outside test mode the caller's default_hours window is honored. Both values are
         clamped to a 1-hour minimum so a misconfiguration never yields a sub-hour window.
+        If the calculation fails, log the exception and return the selected input unchanged.
         """
         try:
             chosen_hours = test_hours if IS_TEST_MODE else default_hours  # Pick the window for the active mode
             return max(1, chosen_hours)  # Never return less than 1 hour (clamp misconfigured values)
-        except Exception as error:  # Never let lookback math crash a caller
-            logging.debug("get_dynamic_lookback_hours fallback due to error: %s", error)  # Log the unexpected failure
+        except Exception:  # Preserve the mode-specific fallback for any unexpected calculation failure.
+            logger.exception(
+                "Lookback calculation failed. Using %s fallback of %s hours.",
+                "test" if IS_TEST_MODE else "production",
+                test_hours if IS_TEST_MODE else default_hours,
+            )
             return test_hours if IS_TEST_MODE else default_hours  # Fall back to a sensible default per mode
 
     @staticmethod
