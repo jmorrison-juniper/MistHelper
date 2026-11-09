@@ -105,7 +105,7 @@ The branch hook remains superseded by the explicit app-managed branch requiremen
 Optional commit hooks remain deferred to the explicit local commit.
 Add exact-route URL recognition before the existing labeled-value rules.
 Preserve the route and replace its entire nonempty suffix, including query and fragment.
-Stop at whitespace or surrounding text delimiters. Do not decode URL values.
+Stop at whitespace only. Punctuation cannot prove that a private value ended. Do not decode URL values.
 Do not match a route embedded in a different path.
 Apply the rule through `_redact_text` to messages and fresh or cached exception text.
 Use `tests/unit/utils/test_logger_verification_urls.py` for isolated stream and real portal tests.
