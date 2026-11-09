@@ -687,6 +687,6 @@ def test_run_interactive_workflow_full_path(monkeypatch: pytest.MonkeyPatch) -> 
 def test_emit_completion_preserves_payload_with_fixed_clock(cancelled: bool) -> None:
     """Completion telemetry preserves identity, count, cancellation, and elapsed time."""
     emitter = SimpleNamespace(emit_progress_complete=MagicMock())
-    with patch("src.operations.execution.ssh.ssh_runner_manager.time.time", return_value=125.0):
+    with patch("src.operations.execution.ssh.ssh_runner_manager.time", SimpleNamespace(time=lambda: 125.0)):
         SSHRunnerManager._emit_completion(emitter, 100.0, cancelled=cancelled)
     emitter.emit_progress_complete.assert_called_once_with(ProgressContext("97", "ssh_runner", 0), 0, cancelled, 25.0)
