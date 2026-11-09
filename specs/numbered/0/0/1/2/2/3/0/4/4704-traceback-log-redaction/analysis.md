@@ -432,3 +432,23 @@ The focused command adds the integration file to the earlier expanded selection:
 Result: `296 passed, 1 warning`, with `100%` coverage of all 49 source statements.
 Ruff and pydocstyle passed. Black left both files unchanged. Whitespace checks passed.
 All publication and ownership holds remain active.
+
+The test separation commit is `cbb954e`, with both issue references and the required trailer.
+The required committed preflight reported `1 passed, 1 warning`, with four inputs validated.
+The analyzer reported `gate_scope: 4 files checked, 0 findings checked`.
+Its final result was `0 new findings`, `3 skipped`, and `0 parse errors`.
+The report lists these analyzed files:
+
+- `tests/unit/test_logger_utils.py`
+- `tests/unit/upgrade_portal/test_logging_contract.py`
+- `tests/unit/utils/test_logger_verification_urls.py`
+
+The report lists these skipped entries:
+
+- `tests/unit/utils/test_logger_verification_url_sdk_integration.py`: `mist_api_excluded`.
+- `tests`: `omitted_test_root` during changed-file selection.
+- `mist-ops-platform/tests`: `omitted_test_root` during changed-file selection.
+
+Thus, all 131 pure filter cases remain in an analyzed file.
+Only the three SDK cases remain in the explicitly excluded integration file.
+Pytest executed all 134 cases. The analyzer configuration and baseline remain unchanged.
