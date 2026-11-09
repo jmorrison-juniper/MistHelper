@@ -78,20 +78,17 @@ class SitesByAPModelExporter:
         if not isinstance(address, str):  # External values need not satisfy the expected string schema.
             logger.debug("Cannot split a non-string address of type %s.", type(address).__name__)  # Explain retention.
             return address, "", "", "", ""  # Preserve the existing raw-value fallback without conversion.
-        logger.info("Splitting a site address.")  # Trace the transform without disclosing the address.
+        logger.debug("Splitting a site address.")  # Keep per-address traces out of operator export output.
         parts = address.split(", ")  # A split failure is not a missing field and must propagate.
-        try:
-            street = parts[0]  # Street part.
-            city = parts[1]  # City part.
-            state_zip = parts[2].split()  # State/zip part.
-            state = state_zip[0]  # State token.
-            zip_code = state_zip[1]  # Zip token.
-            country = parts[3]  # Country part.
-            logger.debug("Split a site address into five fields.")  # Report the completed transform.
-            return street, city, state, zip_code, country  # Return the parts.
-        except IndexError as exception:  # Missing address parts or state/zip tokens retain the original value.
-            logging.debug("Failed to split address '%s': %s", address, exception)  # Trace the failure.
-            return address, "", "", "", ""  # Return address as street.
+        if len(parts) < 4:  # Validate the field count instead of catching unrelated indexing defects.
+            logger.debug("Failed to split address: fewer than four address fields.")  # Explain the fallback.
+            return address, "", "", "", ""  # Preserve the whole address when a required field is absent.
+        state_zip = parts[2].split()  # A second split failure must propagate, including IndexError.
+        if len(state_zip) < 2:  # Validate token availability before indexing the state and ZIP fields.
+            logger.debug("Failed to split address: fewer than two state and ZIP tokens.")  # Explain the fallback.
+            return address, "", "", "", ""  # Preserve the whole address when a required token is absent.
+        logger.debug("Split a site address into five fields.")  # Report the completed transform.
+        return parts[0], parts[1], state_zip[0], state_zip[1], parts[3]  # Retain the existing field and token order.
 
     @staticmethod
     def _build_export_rows(

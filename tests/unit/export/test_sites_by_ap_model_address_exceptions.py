@@ -107,3 +107,27 @@ class TestAddressExceptionBoundary:
         with pytest.raises(error_type, match="synthetic split failure") as raised:
             SitesByAPModelExporter._split_address(address)
         assert raised.value is error
+
+    @pytest.mark.parametrize("batch_size", [1, 100, 1000])
+    def test_batch_keeps_operator_log_count_bounded(self, batch_size: int, caplog: pytest.LogCaptureFixture) -> None:
+        """Address transforms must not add operator messages as an export grows."""
+        with caplog.at_level(logging.DEBUG):
+            results = [
+                SitesByAPModelExporter._split_address("1 Example St, Test City, CA 90000, USA")
+                for _ in range(batch_size)
+            ]
+        assert results == [("1 Example St", "Test City", "CA", "90000", "USA")] * batch_size
+        assert sum(record.levelno >= logging.INFO for record in caplog.records) == 0
+        assert any("Split a site address into five fields." in record.getMessage() for record in caplog.records)
+
+    @pytest.mark.parametrize("error_type", [RuntimeError, TypeError, AttributeError, NameError, IndexError])
+    def test_unexpected_state_zip_split_errors_propagate(self, error_type: type[Exception]) -> None:
+        """The second split must not hide a defect as a missing address token."""
+        error = error_type("synthetic state ZIP split failure")
+        state_zip = Mock(spec=str)
+        state_zip.split.side_effect = error
+        address = Mock(spec=str)
+        address.split.return_value = ["1 Example St", "Test City", state_zip, "USA"]
+        with pytest.raises(error_type, match="synthetic state ZIP split failure") as raised:
+            SitesByAPModelExporter._split_address(address)
+        assert raised.value is error
