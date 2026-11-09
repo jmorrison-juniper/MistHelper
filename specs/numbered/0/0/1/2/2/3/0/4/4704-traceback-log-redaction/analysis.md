@@ -338,3 +338,41 @@ Existing local commits remain preserved. The test-rename hold remains active.
 FR-015 through FR-018 map to T021 through T023 as recorded in `tasks.md`.
 The extension introduces no new module-level production symbols or dependency.
 Optional commits remain deferred to the explicit local commit.
+
+The implementation commit is `455b85e`, with both non-closing issue references and the required author trailer.
+The same committed input preflight reported `1 passed, 1 warning`, with four inputs read and validated.
+The same committed-difference analyzer reported:
+
+```text
+gate_scope: 3 files checked, 0 findings checked
+test_quality_analyzer: 0 findings (0/0/0/0), 2 skipped, 0 parse errors
+gate: 0 new findings vs baseline
+```
+
+The two skipped entries identify omitted full-suite roots, not the three changed test files.
+The writing gate checked all five extension records, skipped none, and passed with scores from 91 through 98.
+The extension tasks are complete. Publication remains held.
+
+## Verification URL Punctuation Correction
+
+The later independent check disproved punctuation as a safe URL boundary.
+The previous candidate left a value beginning with `(` unchanged.
+The corrected rule uses whitespace only to end the private suffix.
+It removes adjacent quote or bracket characters because they can belong to the value.
+This intentionally removes non-whitespace diagnostic text attached to that suffix.
+Newlines remain strict boundaries. Values containing whitespace are not covered beyond their first whitespace.
+Unlabeled values and direct SDK console output remain outside this protection.
+This change does not complete advisory remediation.
+
+The dedicated test command above reported `123 failed, 11 passed, 1 warning` before this source correction.
+That count includes assertions for the corrected quote-removal behavior.
+Three cases call the real SDK function with a mocked session and inspect its exact URI.
+They cover leading parentheses, embedded parentheses, and quotes without network access.
+Additional cases cover brackets, braces, angle brackets, fresh and cached reports, and exception chains.
+The expanded command above then reported `296 passed, 1 warning`, with `100%` coverage of all 49 statements.
+The dedicated test file now holds 134 cases.
+Compile, Ruff, Black, mypy, Bandit, complexity, pydocstyle, symbols, and Pylint passed with the same commands above.
+Pylint remains `9.80/10`. The existing Dash warning and mypy configuration notes remain.
+The earlier text-delimiter design is superseded by this correction.
+Existing renamed tests remain unchanged. No caller, handler installation, or SDK source changed.
+The publication, integration, and ownership holds remain active.

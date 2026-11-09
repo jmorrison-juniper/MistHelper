@@ -3,7 +3,9 @@
 import logging
 import sys
 from io import StringIO
+from unittest.mock import Mock
 
+import mistapi
 import pytest
 
 from src.foundation.support.utils.logger_utils import SensitiveFilter
@@ -55,6 +57,11 @@ class TestVerificationUrlProbe:
             "http://example.invalid:8055/api/v1/self/update/verify/URL_SYNTHETIC_4705",
             "HTTPS://example.invalid/api/v1/self/update/verify/URL_SYNTHETIC_4705",
             "/api/v1/self/update/verify/URL_SYNTHETIC_4705%2Fencoded?next=URL_SYNTHETIC_4705#URL_SYNTHETIC_4705",
+            "/api/v1/self/update/verify/(URL_SYNTHETIC_4705)",
+            "/api/v1/self/update/verify/prefix(URL_SYNTHETIC_4705)",
+            '/api/v1/self/update/verify/"URL_SYNTHETIC_4705"',
+            "/api/v1/self/update/verify/<URL_SYNTHETIC_4705>",
+            "/api/v1/self/update/verify/[URL_SYNTHETIC_4705]{suffix}",
         ],
     )
     def test_private_suffix(self, portal: bool, cached: bool, chain: str, url: str) -> None:
@@ -63,7 +70,7 @@ class TestVerificationUrlProbe:
         rendered = self.render(self.record(text, chain), portal, cached)
         assert "URL_SYNTHETIC_4705" not in rendered
         assert "/api/v1/self/update/verify/***REDACTED***" in rendered
-        assert "***REDACTED***'\r\nSafe following diagnostic" in rendered
+        assert "***REDACTED***\r\nSafe following diagnostic" in rendered
         assert rendered.count("Safe following diagnostic") == 2
         assert "ValueError: Request failed" in rendered
         assert "Traceback (most recent call last):" in rendered
@@ -90,7 +97,7 @@ class TestVerificationUrlProbe:
         expected = logging.Formatter().format(record)
         assert self.render(record, False, True) == expected + "\n"
 
-    @pytest.mark.parametrize("delimiter", ['"', "'", ")", "]", "}", ">", " ", "\n", "\r\n"])
+    @pytest.mark.parametrize("delimiter", [" ", "\t", "\n", "\r\n"])
     def test_url_boundary(self, delimiter: str) -> None:
         """Retain surrounding text after the recognized private suffix."""
         text = f"/api/v1/self/update/verify/URL_SYNTHETIC_4705{delimiter}Safe context"
@@ -98,3 +105,15 @@ class TestVerificationUrlProbe:
         rendered = self.render(record, True, False)
         assert "URL_SYNTHETIC_4705" not in rendered
         assert f"***REDACTED***{delimiter}Safe context" in rendered
+
+    @pytest.mark.parametrize("value", ["(SDK_SYNTHETIC_VALUE)", "prefix(SDK_SYNTHETIC_VALUE)", "'SDK_SYNTHETIC_VALUE'"])
+    def test_sdk_path_punctuation(self, value: str) -> None:
+        """Check the real SDK URI construction with an in-memory transport."""
+        session = Mock()
+        mistapi.api.v1.self.update.verifySelfEmail(session, value)
+        uri = session.mist_get.call_args.kwargs["uri"]
+        session.mist_get.assert_called_once_with(uri=f"/api/v1/self/update/verify/{value}", query={})
+        record = logging.makeLogRecord({"msg": "SDK request %s", "args": (uri,), "levelno": logging.INFO})
+        rendered = self.render(record, True, False)
+        assert "SDK_SYNTHETIC_VALUE" not in rendered
+        assert "SDK request /api/v1/self/update/verify/***REDACTED***" in rendered

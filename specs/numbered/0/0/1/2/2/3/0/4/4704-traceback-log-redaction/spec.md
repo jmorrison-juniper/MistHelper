@@ -88,6 +88,6 @@ An operator receives the same protection when a previous handler has already for
 - The app-managed branch replaces the branch-creation hook.
 - The feature selector remains command-scoped because `.specify/feature.json` is a shared tracked record.
 - The URL rule protects the suffix after `/api/v1/self/update/verify/`, including its query and fragment.
-- URL suffix boundaries are whitespace and surrounding text delimiters. Encoded values remain private without decoding.
+- URL suffix boundaries are whitespace only. Punctuation and encoded values remain private without decoding.
 - The later source-only handoff does not release the existing test rename or publication holds.
 - Direct SDK console output and response details without recognized patterns require separate repairs.

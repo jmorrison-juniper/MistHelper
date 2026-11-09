@@ -122,7 +122,9 @@ class SensitiveFilter(logging.Filter):
     protect the complete remaining line, including structured parameters.
     Any same-line diagnostic after that header is also removed.
     The exact email verification URL route protects its nonempty suffix,
-    including query and fragment text, until whitespace or a text delimiter.
+    including punctuation, query, and fragment text, until whitespace.
+    Adjacent non-whitespace diagnostic punctuation is also removed because
+    punctuation alone cannot identify the end of a credential.
     Arbitrary unlabeled secrets and direct SDK console output are outside
     this pattern-based handler contract.
 
@@ -142,7 +144,7 @@ class SensitiveFilter(logging.Filter):
         re.IGNORECASE,
     )
     _VERIFICATION_URL_PATTERN = re.compile(
-        r"""(?P<route>(?<![\w/])(?:(?i:https?)://[^/\s<>"'?#]+)?/api/v1/self/update/verify/)[^\s<>"'()\[\]{}]+"""
+        r"""(?P<route>(?<![\w/])(?:(?i:https?)://[^/\s<>"'?#]+)?/api/v1/self/update/verify/)\S+"""
     )
 
     def filter(self, record: logging.LogRecord) -> bool:
