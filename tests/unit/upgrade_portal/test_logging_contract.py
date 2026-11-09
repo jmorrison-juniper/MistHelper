@@ -39,6 +39,7 @@ from __future__ import annotations
 import ast
 import logging
 import re
+import sys
 from io import StringIO  # Captures the real handler output without writing the synthetic marker to the console.
 from pathlib import Path
 from typing import NamedTuple
@@ -695,6 +696,87 @@ def test_real_portal_handler_protects_traceback_cache(chain: str, earlier_handle
             assert probe.token in probe.earlier_output.getvalue(), "The earlier handler did not create a raw cache."
         if chain != "direct":
             assert "RuntimeError" in rendered
+    finally:
+        for handler in probe.logger.handlers:
+            handler.close()
+
+
+class PortalCredentialRecord:
+    """Build real exception chains to check the portal's full rendered output."""
+
+    @staticmethod
+    def build(text: str, chain: str) -> logging.LogRecord:
+        """Retain the exception and source frames without contacting a service."""
+        try:
+            try:
+                raise ValueError(text)
+            except ValueError as error:
+                if chain == "cause":
+                    raise RuntimeError("Dependency failed") from error
+                if chain == "context":
+                    raise RuntimeError("Dependency failed")  # noqa: B904 - Prove implicit exception context.
+                raise
+        except (ValueError, RuntimeError):
+            return logging.makeLogRecord(
+                {
+                    "msg": text,
+                    "levelno": logging.ERROR,
+                    "exc_info": sys.exc_info(),
+                    "run_id": PROBE_RUN_ID,
+                    "site_id": PROBE_SITE_ID,
+                }
+            )
+
+
+@pytest.mark.parametrize("chain", ["cause", "context"])
+@pytest.mark.parametrize("cached", [False, True])
+def test_real_portal_preserves_complete_safe_exception_chain(chain: str, cached: bool) -> None:
+    """Keep the exact safe report when a credential word ends an exception."""
+    record = PortalCredentialRecord.build("Invalid token", chain)
+    expected = logging.Formatter(factory.LOG_FORMAT).format(record)
+    record.exc_text = None
+    probe = PortalTracebackProbe(cached)
+    try:
+        probe.logger.handle(record)
+        assert probe.output.getvalue() == expected + "\n"
+        assert "ValueError: Invalid token\n" in expected
+        assert "RuntimeError: Dependency failed" in expected
+        if cached:
+            assert "Invalid token" in probe.earlier_output.getvalue()
+    finally:
+        for handler in probe.logger.handlers:
+            handler.close()
+
+
+@pytest.mark.parametrize("chain", ["direct", "cause", "context"])
+@pytest.mark.parametrize("cached", [False, True])
+@pytest.mark.parametrize(
+    "label",
+    [
+        "Authorization: Bearer",
+        "aUtHoRiZaTiOn: bEaReR",
+        "AUTHORIZATION: Basic",
+        "Authorization: Custom-Scheme",
+        "password=",
+        "token=",
+    ],
+)
+def test_real_portal_redacts_labeled_values_in_messages_and_exceptions(chain: str, cached: bool, label: str) -> None:
+    """Remove synthetic labeled values throughout fresh and cached chains."""
+    text = f"Request failed {label} ISSUE4705_SYNTHETIC_PORTAL_VALUE"
+    record = PortalCredentialRecord.build(text, chain)
+    probe = PortalTracebackProbe(cached)
+    try:
+        probe.logger.handle(record)
+        rendered = probe.output.getvalue()
+        assert "ISSUE4705_SYNTHETIC_PORTAL_VALUE" not in rendered
+        assert "***REDACTED***" in rendered and "ValueError: Request failed" in rendered
+        assert "Traceback (most recent call last):" in rendered and "in build" in rendered
+        assert f"run={PROBE_RUN_ID}" in rendered and f"site={PROBE_SITE_ID}" in rendered
+        if chain != "direct":
+            assert "RuntimeError: Dependency failed" in rendered
+        if cached:
+            assert "ISSUE4705_SYNTHETIC_PORTAL_VALUE" in probe.earlier_output.getvalue()
     finally:
         for handler in probe.logger.handlers:
             handler.close()

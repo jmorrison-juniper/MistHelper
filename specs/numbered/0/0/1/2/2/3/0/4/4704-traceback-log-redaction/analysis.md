@@ -99,7 +99,7 @@ The explicit publication hold overrides the deployment stages for this assignmen
 
 ## Limitations
 
-- The protection uses the existing credential pattern. It is not a new parser for every credential format.
+- Protection covers recognized labeled credentials and authorization scheme values. It does not recognize arbitrary unlabeled secrets.
 - Unprotected handlers can still emit raw values. Custom formatters that ignore the standard exception cache are outside this contract.
 - The changelog PR-diff guard skipped because no pull request event exists locally. Its skip is not a passing result.
 - Pytest reports one Dash plugin deprecation warning. The warning does not come from this change.
@@ -150,3 +150,78 @@ No baseline file changed.
 
 This evidence update changes only the feature's analysis and task records.
 Publication remains held for the serial queue.
+
+## Follow-up: Complete Safe Chains and Authorization Values
+
+The user directed one local repair for #4704 and #4705.
+The clean starting follow-up commit was `345fcff58`.
+The ownership checks again found 27 open PRs and no owner for the three paths.
+The paginated check again included all 470 files of PR #4358.
+No new branch, credential change, or publication operation ran.
+
+### Cause and Repair
+
+The ordinary value separator used `\s`, which includes newlines.
+When an exception ended in `Invalid token`, the pattern consumed the next chain separator's first word.
+The separator now permits only horizontal whitespace.
+The complete safe report now equals the standard formatter output for both explicit causes and implicit context.
+The tests cover an earlier handler that caches the report.
+
+The key pattern did not match the complete `Authorization` label.
+A dedicated case-insensitive header rule now removes the scheme and value before ordinary credential replacement.
+Tests cover Bearer, Basic, a custom scheme, a value without a scheme, quoted labels, tabs, and ordinary labeled credentials.
+Real portal output covers messages, direct exceptions, explicit causes, implicit context, and earlier-handler caches.
+A separate test proves that arbitrary unlabeled text remains outside the recognition contract.
+
+### Failing and Passing Evidence
+
+The first new handler fixture omitted `levelno`, which caused a logging type error.
+The fixture now uses `logging.ERROR`.
+After that fixture correction, the unchanged source produced `41 failed, 62 passed, 1 warning`.
+Those failures reproduce the two reported defects.
+
+The final expanded regression command was:
+
+```bash
+.venv/bin/python -m pytest -q tests/unit/test_logger_utils.py tests/unit/utils/test_logger_utils_private_digest.py tests/unit/upgrade_portal/test_logging_contract.py tests/contract/upgrade_portal/test_no_credential_leak.py --cov=src.foundation.support.utils.logger_utils --cov-report=term-missing --cov-fail-under=80
+```
+
+Result: `146 passed, 1 warning`.
+Source coverage: `47` statements, `0` missed, `100%`.
+The warning remains the Dash plugin deprecation.
+
+### Repeated Local Gates
+
+The exact file-level commands in the validation table ran again for this follow-up.
+Compile, Ruff, Black, mypy, Bandit, complexity, pydocstyle, Vulture, and symbol checks passed.
+Pylint reported `9.79/10`, with only the existing R0903 filter-class message.
+Interrogate reported `100%` docstring coverage.
+The first Black check required source formatting. Black applied that formatting, and the final check passed.
+A temporary implicit-string-concatenation warning was removed before the final Pylint run.
+The process guard command again reported `28 passed, 1 skipped, 1 warning`.
+The skipped guard still requires a pull request event.
+No module-level production name changed.
+New methods remain within the 25-line limit.
+
+The follow-up writing command was:
+
+```bash
+.venv/bin/ste-linter --config .ste-linter.toml --min-score 80 changelog.d/issue-4704-traceback-log-redaction.md changelog.d/issue-4705-authorization-log-redaction.md specs/numbered/0/0/1/2/2/3/0/4/4704-traceback-log-redaction/*.md specs/numbered/0/0/1/2/2/3/0/4/4704-traceback-log-redaction/design/*.md specs/numbered/0/0/1/2/2/3/0/4/4704-traceback-log-redaction/design/checklists/requirements.md
+```
+
+Result: all ten records passed, with scores from 90 through 99. No file was skipped.
+
+### Updated Specification Analysis
+
+FR-009 maps to T013 and T015.
+FR-010 and FR-011 map to T014 and T015.
+FR-012 maps to T016 and T017.
+The twelve functional requirements and four success criteria all have tasks.
+No ambiguity, unmapped requirement, or unresolved implementation finding remains.
+The existing structural debt and publication limitations remain unchanged.
+
+### Publication Hold
+
+The follow-up must contain `Refs #4704` and `Refs #4705`, plus the required author trailer.
+The committed-difference gate remains pending until this follow-up commit exists.
+No push, PR creation, rebase, merge, or credential change is permitted.

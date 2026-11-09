@@ -51,3 +51,13 @@ Repair the shared filter once.
 Preserve the existing portal handler and callers.
 Optional commit hooks remain deferred to the final local commit.
 Publication remains held.
+
+## Phase 6: Independent Findings
+
+- [x] T013 [US1] Prove safe-chain corruption through the real handler in `tests/unit/upgrade_portal/test_logging_contract.py`. (delivered: tests/unit/upgrade_portal/test_logging_contract.py)
+- [x] T014 [US1] Prove authorization value leakage and ordinary credential behavior in `tests/unit/test_logger_utils.py` and `tests/unit/upgrade_portal/test_logging_contract.py`. (delivered: tests/unit/test_logger_utils.py)
+- [x] T015 [US1] Repair line-bounded credential matching and complete authorization values in `src/foundation/support/utils/logger_utils.py`. (delivered: src/foundation/support/utils/logger_utils.py)
+- [x] T016 Add `changelog.d/issue-4705-authorization-log-redaction.md`, validate the repair, and record exact results in `analysis.md`. (delivered: changelog.d/issue-4705-authorization-log-redaction.md, analysis.md)
+- [ ] T017 Commit the follow-up locally with references to both issues and run the committed-difference test-quality gate.
+
+T013 and T014 precede T015. T016 requires T015. T017 requires T016.

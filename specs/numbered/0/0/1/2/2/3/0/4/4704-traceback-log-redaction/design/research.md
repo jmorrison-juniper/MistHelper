@@ -38,3 +38,18 @@ Those tests did not send traceback information through the handler.
 If message or traceback rendering raises, clear exception and stack fields.
 Keep only the redaction error type in the replacement diagnostic.
 Do not include the error value because it can contain another credential.
+
+## Independent Findings
+
+The original separator used `\s`, which includes newlines.
+A safe exception ending in `Invalid token` could therefore consume the start of the next chain separator.
+Restrict ordinary value separators to horizontal whitespace.
+
+The original key rule matched only `auth` within `Authorization`.
+The remaining letters stopped the required separator from matching.
+Add the complete key and a dedicated rule for a scheme and its value.
+Apply that rule before the ordinary value rule.
+Match header names without case sensitivity.
+Keep the rule on one line and retain cached exception protection.
+Issue #4705 owns this additional labeled-header gap.
+Arbitrary unlabeled secrets remain outside the protection contract.
