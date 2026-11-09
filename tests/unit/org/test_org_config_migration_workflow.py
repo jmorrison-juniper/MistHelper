@@ -319,7 +319,7 @@ class TestExportConfig:
         if scenario[0] == 200:  # A successful export keeps the source label in its filename.
             assert "Private-Org-Name" in saved_files[0].name  # Preserve the operator's descriptive file name.
         manager_records = [record for record in caplog.records if record.name == ocm.__name__]
-        assert manager_records  # The test must inspect records from the complete export flow.
+        assert len(manager_records) >= 1  # The test must inspect records from the complete export flow.
         manager_log = "\n".join(record.getMessage() for record in manager_records)
         assert "saved in data/" in manager_log  # Keep the output directory visible to the operator.
         assert "Private-Org-Name" not in manager_log  # The returned name must not enter manager logs.
