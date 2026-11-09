@@ -1281,3 +1281,47 @@ class TestProbeValidationFailurePrivacy:
             {"schema_version": 3}, {}, timeout=zc_mod.DEFAULT_TIMEOUT, workers=zc_mod.DEFAULT_WORKERS
         )
         assert "validation crashed" not in caplog.text
+
+
+class TestProbeObservationWriteFailures:
+    """Keep refreshed observations available when optional cache writes fail."""
+
+    def test_both_write_failures_preserve_refresh_and_observations(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """A failed CENR write must not prevent the ZCC write or the refreshed return."""
+        from unittest.mock import Mock, call
+
+        fresh = {"schema_version": 3, "proxy_hostnames": [{"host": "probe.invalid"}]}
+        probes = {"schema_version": 3, "roles": [{"fqdns": [{"host": "probe.invalid"}]}]}
+        refresh = Mock(return_value=(fresh, []))
+        validation = Mock(
+            return_value=[
+                _make_probe_result("probe.invalid", tcp={443: "open"}, https_status=200, responding_protocols=["HTTPS"])
+            ]
+        )
+        writer = Mock(side_effect=PermissionError("mock cache is read-only"))
+        monkeypatch.setattr(zc_mod, "refresh_cenr", refresh)
+        monkeypatch.setattr(zc_mod, "run_full_validation", validation)
+        monkeypatch.setattr(zc_mod, "_atomic_write_json", writer)
+        monkeypatch.setattr(Path, "is_file", Mock(return_value=True))
+        monkeypatch.setattr(Path, "read_text", Mock(return_value=json.dumps(probes)))
+        transport = Mock(side_effect=AssertionError("Unexpected transport"))
+        monkeypatch.setattr(zc_mod.urllib.request, "urlopen", transport)
+        cenr_path = tmp_path / "cenr.json"
+        result = zc_mod.ensure_fresh(cenr_path, {"schema_version": 3, "fetched_utc": _stale_ts()})
+        assert result is fresh
+        refresh.assert_called_once_with(cenr_path)
+        written_probes = writer.call_args_list[1].args[1]
+        validation.assert_called_once_with(
+            written_probes, fresh, timeout=zc_mod.DEFAULT_TIMEOUT, workers=zc_mod.DEFAULT_WORKERS
+        )
+        assert writer.call_args_list == [
+            call(cenr_path, fresh),
+            call(tmp_path / "zscaler_client_connector_probes.json", written_probes),
+        ]
+        _assert_observation(fresh["proxy_hostnames"][0], "HTTPS", 443)
+        _assert_observation(written_probes["roles"][0]["fqdns"][0], "HTTPS", 443)
+        assert "CENR observation rewrite failed: mock cache is read-only" in caplog.text
+        assert "ZCC observation rewrite failed: mock cache is read-only" in caplog.text
+        transport.assert_not_called()
