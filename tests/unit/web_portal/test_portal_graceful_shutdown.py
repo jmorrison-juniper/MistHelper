@@ -79,9 +79,9 @@ def test_event_bus_stop_ends_the_heartbeat_thread(event_bus):
 
 
 def test_event_bus_stop_is_idempotent(event_bus):
-    """A second stop() call does not raise."""
+    """A second stop() call preserves the stopped heartbeat state."""
     event_bus.stop()  # First call performs the real stop.
-    event_bus.stop()  # Second call must return quietly, not raise.
+    assert _repeat_bus_stop_state(event_bus) == (None, True)  # A repeat must preserve the stopped bus state.
 
 
 def test_operation_executor_shutdown_stops_the_pool(executor_factory):
@@ -93,10 +93,10 @@ def test_operation_executor_shutdown_stops_the_pool(executor_factory):
 
 
 def test_operation_executor_shutdown_is_idempotent(executor_factory):
-    """A second shutdown() call does not raise."""
+    """A second shutdown() call does not repeat pool cleanup."""
     executor = executor_factory(_menu_actions())  # Build one executor for this test.
     executor.shutdown()  # First call performs the real shutdown.
-    executor.shutdown()  # Second call must return quietly, not raise.
+    assert _repeat_pool_shutdown_calls(executor) == 0  # A repeat must not release the same pool twice.
 
 
 def test_operation_executor_shutdown_waits_for_an_in_flight_run(executor_factory):
@@ -130,13 +130,46 @@ def test_webportalapp_shutdown_app_stops_the_operation_executor():
 
 
 def test_webportalapp_shutdown_app_tolerates_a_missing_executor():
-    """shutdown_app() does not raise when no operation ever ran."""
+    """shutdown_app() stops the heartbeat when no operation ever ran."""
     app = _build_test_app()  # Build a real app that never served an operation request.
+    thread = app.config["EVENT_BUS"]._heartbeat_thread  # Retain the resource that shutdown must stop.
+    assert "OPERATION_EXECUTOR" not in app.config  # Prove this app has no pool to stop.
     WebPortalApp.shutdown_app(app)  # No OPERATION_EXECUTOR key exists, so this call must not raise.
+    assert not thread.is_alive()  # An absent executor must not prevent heartbeat cleanup.
 
 
 def test_webportalapp_shutdown_app_is_idempotent():
-    """A second shutdown_app() call for the same app does not raise."""
+    """A second shutdown_app() call does not repeat resource cleanup."""
+    from unittest.mock import patch
+
     app = _build_test_app()  # Build a real app for this test.
-    WebPortalApp.shutdown_app(app)  # First call performs the real shutdown.
-    WebPortalApp.shutdown_app(app)  # Second call must return quietly, not raise.
+    bus = app.config["EVENT_BUS"]  # Observe the real heartbeat cleanup.
+    thread = bus._heartbeat_thread  # Retain the thread after the bus clears its handle.
+    executor = OperationExecutor(_menu_actions(), None, None, bus)  # Include a real pool in app cleanup.
+    app.config["OPERATION_EXECUTOR"] = executor  # Use the same resource key as the request handler.
+    with (
+        patch.object(bus, "stop", wraps=bus.stop) as stop,
+        patch.object(executor, "shutdown", wraps=executor.shutdown) as shutdown,
+    ):
+        WebPortalApp.shutdown_app(app)  # First call performs the real shutdown.
+        WebPortalApp.shutdown_app(app)  # Second call must return quietly, not raise.
+    assert stop.call_count == 1  # A duplicate app shutdown must not stop the bus again.
+    assert shutdown.call_count == 1  # A duplicate app shutdown must not drain the executor again.
+    assert not thread.is_alive()  # Both calls must leave the original heartbeat stopped.
+    with pytest.raises(RuntimeError):  # Both calls must leave the real pool closed to new work.
+        executor._pool.submit(lambda: None)
+
+
+def _repeat_bus_stop_state(bus: PortalEventBus) -> tuple[object, bool]:
+    """Observe the resource state after a real second stop without moving existing tests."""
+    bus.stop()  # Exercise the repeated call without replacing its behavior.
+    return bus._heartbeat_thread, bus._stop_event.is_set()  # Report the heartbeat handle and stop signal.
+
+
+def _repeat_pool_shutdown_calls(executor: OperationExecutor) -> int:
+    """Count real pool cleanup calls during a repeated executor shutdown."""
+    from unittest.mock import patch
+
+    with patch.object(executor._pool, "shutdown", wraps=executor._pool.shutdown) as shutdown:
+        executor.shutdown()  # Exercise the repeated call while retaining real pool behavior.
+    return shutdown.call_count  # The test requires the repeat to skip pool cleanup.
