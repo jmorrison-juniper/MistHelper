@@ -27,7 +27,6 @@ class UtilityFieldFactory:
             "timeout",
             "on_message",
             "device_interfaces",
-            "duration",
             "rows",
             "cols",
         }
@@ -36,6 +35,7 @@ class UtilityFieldFactory:
     _SPECS = {
         "host": (FieldKind.HOST, True, None, None, None),
         "count": (FieldKind.INTEGER, False, 1, 100, 5),
+        "duration": (FieldKind.INTEGER, False, 60, 3600, 60),
         "node": (FieldKind.CHOICE, False, None, None, None),
         "size": (FieldKind.INTEGER, False, 1, 65000, None),
         "vrf": (FieldKind.NAME, False, None, None, None),
@@ -71,7 +71,9 @@ class UtilityFieldFactory:
         fields = [
             self.parameter(family, name, parameter, hints.get(parameter.name))
             for parameter in parameters
-            if parameter.name not in self._SKIP_PARAMS and parameter.name != "port"
+            if parameter.name not in self._SKIP_PARAMS
+            and parameter.name != "port"
+            and (parameter.name != "duration" or "Pcap" in name)
         ]  # Convert each operator-controlled parameter.
         if name == "remotePcap" and family in {"ex", "srx", "ssr"}:  # Wired captures select device ports.
             fields.insert(0, self.named("port_ids", True, family))  # Add the derived port list first.

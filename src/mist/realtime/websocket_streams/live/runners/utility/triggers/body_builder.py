@@ -77,7 +77,7 @@ class CaptureBodyBuilder:
     def _base(params: Mapping[str, object]) -> dict[str, object]:
         """Return shared capture fields."""
         body: dict[str, object] = {
-            "duration": 60,
+            "duration": params.get("duration", 60),
             "max_pkt_len": params.get("max_pkt_len", 512),
             "num_packets": params.get("num_packets", 1024),
         }

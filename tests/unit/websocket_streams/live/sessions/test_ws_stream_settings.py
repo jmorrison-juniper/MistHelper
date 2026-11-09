@@ -22,7 +22,7 @@ class TestStreamSettings:
         assert settings.limits_payload() == {
             "max_sessions": 5,
             "idle_seconds": 120,
-            "capture_seconds": 60,
+            "capture_seconds": 3600,
         }  # The public payload is stable.
 
     def test_flags_accept_enabled_and_disabled_values(self) -> None:
@@ -92,11 +92,11 @@ class TestTerminalHistorySetting:
         assert settings.terminal_history_bytes == 1024 * 1024  # A bad value cannot change the limit.
         assert "PORTAL_WS_TERMINAL_HISTORY_KB" in caplog.text  # The warning names the variable.
 
-    def test_public_limits_payload_does_not_change(self) -> None:
-        """Keep the history size out of the public catalog payload."""
+    def test_public_limits_payload_keeps_capture_limit_and_hides_history(self) -> None:
+        """Publish the capture limit without exposing the history size."""
         settings = StreamSettings.from_environment({"PORTAL_WS_TERMINAL_HISTORY_KB": "4096"})  # Set a valid value.
         assert settings.limits_payload() == {
             "max_sessions": 5,
             "idle_seconds": 120,
-            "capture_seconds": 60,
+            "capture_seconds": 3600,
         }  # The catalog route sends the same keys as before.

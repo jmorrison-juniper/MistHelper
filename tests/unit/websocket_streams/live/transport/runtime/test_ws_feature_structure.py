@@ -471,7 +471,7 @@ class TestWebSocketFeatureStructure:
             len(utilities_children) <= 5
         ), f"utilities has {len(utilities_children)} child items"  # Report the exact gate failure.
         counts, scope = self._measure_feature(root)  # Run checks against the complete T091 mapping table.
-        assert counts == StructureCounts(147, 275, 861)  # Include the metadata package marker in the scope.
+        assert counts == StructureCounts(147, 275, 865)  # Include four bounded long-capture helper methods.
         print("T091 mapping scope: " + " | ".join(f"{old} -> {new}" for old, new in scope))  # Print every mapping.
         print(  # Print the exact checked source counts.
             f"checked mappings={len(scope)} paths={len(self.ANALYSIS_SCOPE)} modules={counts.modules} "

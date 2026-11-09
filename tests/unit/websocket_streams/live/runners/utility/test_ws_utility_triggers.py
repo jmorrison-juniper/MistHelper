@@ -53,6 +53,11 @@ class TestUtilityTriggerTable:
             "raw": False,
         }  # SSR capture body matches SDK defaults.
         assert capture.listen.timing.total_seconds == 70.0  # Capture total time adds ten seconds.
+        long_capture = table.request_for(
+            self._request("ssr.remotePcap", {"duration": 120, "port_ids": ["ge-0/0/1"]})
+        )  # Build a capture with an operator-selected duration.
+        assert long_capture.body["duration"] == 120  # The REST request uses the selected duration.
+        assert long_capture.listen.timing.total_seconds == 130.0  # The stream keeps its ten-second margin.
         screen = table.request_for(self._request("ex.topCommand", {}))  # Build one screen trigger.
         assert screen.body is None  # The SDK top command sends no body.
         assert screen.listen.channel == "url"  # Screen commands listen through the returned URL.

@@ -63,17 +63,26 @@ class ScalarFieldChecker:
 
     def _integer(self, spec: FieldSpec, raw: object) -> int:
         """Check one whole number and its configured range."""
-        text = (
-            str(raw).strip() if isinstance(raw, (str, int)) and not isinstance(raw, bool) else ""
-        )  # Normalize valid types.
-        if not text.isdecimal():  # Whole positive numbers use decimal text only.
+        if isinstance(raw, int) and not isinstance(raw, bool):  # JSON integers need no text conversion.
+            value = raw  # Keep large integer input away from string conversion.
+        elif isinstance(raw, str):  # Form values arrive as text.
+            value = self._integer_text(spec, raw.strip())  # Check text shape before conversion.
+        else:  # Booleans and other input types are not integer fields.
             raise StreamRequestError("bad_request", "The field must be a whole number.", {"field": spec.name})
-        value = int(text)  # Convert only after the shape check.
         below = spec.minimum is not None and value < spec.minimum  # Check the optional lower bound.
         above = spec.maximum is not None and value > spec.maximum  # Check the optional upper bound.
         if below or above:  # Either range failure refuses the value.
             raise StreamRequestError("bad_request", "The field is outside the allowed range.", {"field": spec.name})
         return value  # The SDK receives an integer.
+
+    def _integer_text(self, spec: FieldSpec, text: str) -> int:
+        """Check integer form text before converting it."""
+        max_digits = len(str(spec.maximum)) if spec.maximum is not None else 20  # Bound conversion size.
+        if not text.isascii() or not text.isdecimal() or len(text) > max_digits:
+            raise StreamRequestError(
+                "bad_request", "The field must be a whole number.", {"field": spec.name}
+            )  # Refuse non-ASCII, malformed, or oversized input.
+        return int(text)  # Convert only after the size and shape checks.
 
     def _boolean(self, spec: FieldSpec, raw: object) -> bool:
         """Check one JSON or form boolean."""

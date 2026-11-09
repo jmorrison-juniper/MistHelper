@@ -101,7 +101,7 @@ Each utility has one safety class.
 | Class | Effect on the device | Default state |
 | - | - | - |
 | `read` | Reads the device state. It changes nothing. | Available |
-| `capture` | Captures packets for 60 seconds or less. It changes nothing. | Available |
+| `capture` | Captures packets for a selected duration of up to 3,600 seconds. It changes nothing. | Available |
 | `change` | Bounces a port, runs a cable test, releases a DHCP lease, or clears sessions. | Locked |
 | `shell` | Opens a command shell on the device. | Locked |
 

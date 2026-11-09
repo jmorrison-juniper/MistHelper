@@ -23,6 +23,7 @@ class UtilityMessageFilter:
         self._matcher = UtilityPayloadMatcher(channel)
         self._buffer = EarlyPayloadBuffer()
         self._value: str | None = None
+        self.capture_ended = False
 
     @property
     def dropped_count(self) -> int:
@@ -33,16 +34,16 @@ class UtilityMessageFilter:
         """Bind the trigger answer and return held matching payloads."""
         logger.emit(logging.INFO, "utility_filter_bind")
         value = self._matcher.answer_value(answer)
-        matches = self._bind_value(value)
-        logger.emit(logging.DEBUG, "utility_filter_bound", {"count": len(matches)})
-        return matches
-
-    def _bind_value(self, value: str) -> list[object]:
-        """Store one match value and filter held payloads."""
         with self._buffer.lock:
             self._value = value
             held = self._buffer.drain()
-        return self._matcher.matches(held, value)
+        matches = []
+        for payload in held:
+            content = self._content(payload, value)
+            if content is not None:
+                matches.append(content)
+        logger.emit(logging.DEBUG, "utility_filter_bound", {"count": len(matches)})
+        return matches
 
     def offer(self, payload: object) -> list[object]:
         """Return one matching payload or hold an early payload."""
@@ -51,5 +52,12 @@ class UtilityMessageFilter:
                 self._buffer.hold(payload)
                 return []
             value = self._value
-        content = self._matcher.content(payload, value)
+        content = self._content(payload, value)
         return [content] if content is not None else []
+
+    def _content(self, payload: object, value: str) -> object | None:
+        """Return matching output and record a matching capture end."""
+        if self._matcher.is_capture_end(payload, value):
+            self.capture_ended = True
+            return None
+        return self._matcher.content(payload, value)

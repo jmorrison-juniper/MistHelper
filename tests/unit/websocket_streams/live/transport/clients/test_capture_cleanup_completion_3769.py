@@ -6,11 +6,12 @@ import json
 import logging
 import threading
 from dataclasses import replace
-from unittest.mock import Mock
+from unittest.mock import Mock, call
 
 import pytest
 
 from src.mist.realtime.websocket_streams.live.runners.utility.filters.message_filter import UtilityMessageFilter
+from src.mist.realtime.websocket_streams.live.runners.utility.runner.capture import CaptureStopper
 from src.mist.realtime.websocket_streams.live.runners.utility.runner.execution import (
     UtilityExecution,
     UtilityStarter,
@@ -23,7 +24,47 @@ from src.mist.realtime.websocket_streams.live.sessions.record.state import Sessi
 from src.mist.realtime.websocket_streams.live.transport.endpoint import ConnectFailure, MistStreamEndpoint
 from src.mist.realtime.websocket_streams.live.transport.stream_client import StreamClient
 from tests.unit.websocket_streams.live.runners.utility.test_ws_utility_runner import FakeSink, _request
-from tests.unit.websocket_streams.live.transport.fake_mist_cloud.api import FakeApiSession
+from tests.unit.websocket_streams.live.transport.fake_mist_cloud.api import FakeApiResponse, FakeApiSession
+
+
+class TestCaptureStopContract:
+    """Keep cleanup on the documented active-capture endpoint for both scopes."""
+
+    @pytest.mark.parametrize("scope", ["sites", "orgs"])
+    @pytest.mark.parametrize(
+        "case",
+        [
+            (200, {"id": "owned", "type": "wired", "enabled": True}, 200, True, True),
+            (200, {"id": "owned", "type": "wired"}, 200, True, True),
+            (200, {"id": "owned", "type": "wired"}, 204, True, True),
+            (200, {"id": "other", "type": "wired", "enabled": True}, 200, False, False),
+            (200, {"id": "owned", "type": "wired", "enabled": False}, 200, False, False),
+            (200, {"id": "owned", "type": "wired", "enabled": "true"}, 200, False, False),
+            (200, {"id": "owned", "type": "wired", "enabled": 1}, 200, False, False),
+            (200, {"id": None, "type": "wired"}, 200, False, False),
+            (200, {}, 200, False, False),
+            (200, None, 200, False, False),
+            (200, [{"id": "owned"}], 200, False, False),
+            (200, {"results": [{"id": "owned"}]}, 200, False, False),
+            (200, "invalid response", 200, False, False),
+            (403, {"id": "owned", "type": "wired"}, 200, False, False),
+            (503, {"id": "owned", "type": "wired"}, 200, False, False),
+            (200, {"id": "owned", "type": "wired"}, 403, True, False),
+            (200, {"id": "owned", "type": "wired"}, 503, True, False),
+        ],
+    )
+    def test_exact_status_and_stop_paths(self, scope: str, case: tuple[int, object, int, bool, bool]) -> None:
+        """Check status identity before a scope-wide stop with no ID argument."""
+        status, data, delete_status, expected_delete, expected = case  # Keep each failure contract in one case.
+        api = FakeApiSession()  # No response can reach a live API.
+        api.mist_get = Mock(return_value=FakeApiResponse(status, data))  # Use the documented object response.
+        api.mist_delete = Mock(return_value=FakeApiResponse(delete_status, ""))  # Stop success has no body contract.
+        stopper = CaptureStopper(api)  # Exercise the production identity guard.
+        stop = stopper.stop_site if scope == "sites" else stopper.stop_org  # Select the actual scope boundary.
+        assert stop("scope-id", "owned") is expected  # Preserve explicit failure for uncertain cleanup.
+        path = f"/api/v1/{scope}/scope-id/pcaps/capture"  # Status and stop share the documented path.
+        api.mist_get.assert_called_once_with(path)  # Never read the completed-capture list.
+        assert api.mist_delete.call_args_list == ([call(path)] if expected_delete else [])  # No capture ID argument.
 
 
 class CleanupCase:
@@ -41,8 +82,10 @@ class CleanupCase:
         self.client = Mock(spec=StreamClient)  # Isolate stream I/O from the cleanup-order proof.
         state.client = self.client  # Exercise production stream closure before capture cleanup.
         self.context = RunContext(self.api, MistStreamEndpoint(self.api), request, self.sink, table, state)
-        self.path = trigger.path.removesuffix("/capture")  # Use the actual scope from the trigger.
-        self.api.add_override("/pcaps?limit=1", data=[{"id": "owned-capture"}])  # Match this capture only.
+        self.path = trigger.path  # Status and stop use the same endpoint as the capture trigger.
+        self.api.add_override(
+            "/pcaps/capture", data={"id": "owned-capture", "type": "wired", "enabled": True}
+        )  # Use the active status object, not a completed-capture list.
         opened = (self.client, trigger, UtilityMessageFilter(trigger.listen.channel))
         monkeypatch.setattr(UtilityStarter, "start", Mock(return_value=opened))  # Isolate subscription setup.
         monkeypatch.setattr(UtilityStreamMonitor, "read", Mock())  # Control when monitoring ends.
@@ -89,7 +132,7 @@ class TestCaptureCleanupCompletion:
         assert not worker.is_alive()  # Cleanup and finalization must both end.
         assert case.sink.finished == [(SessionState.STOPPED, "The operator stopped the session.")]
         assert [(call.method, call.uri) for call in case.api.calls] == [
-            ("GET", f"{case.path}?limit=1"),
+            ("GET", case.path),
             ("DELETE", case.path),
         ]  # The exact owned capture cleanup precedes the final result.
 
@@ -101,11 +144,13 @@ class TestCaptureCleanupCompletion:
         """Preserve capture identity checks when the active capture changes."""
         case = CleanupCase(monkeypatch, key)  # Use the production scope and identity decision.
         case.api.overrides.clear()  # Replace the owned match with the selected boundary response.
-        rows = [] if capture_id is None else [{"id": capture_id}]  # Model absent and different captures.
-        case.api.add_override("/pcaps?limit=1", data=rows)  # Keep production capture inspection active.
+        status = {} if capture_id is None else {"id": capture_id, "type": "wired"}  # Active status is one object.
+        case.api.add_override("/pcaps/capture", data=status)  # Keep production capture inspection active.
         UtilityExecution(case.context).run()  # Complete cleanup before inspecting terminal state.
-        assert [(call.method, call.uri) for call in case.api.calls] == [("GET", f"{case.path}?limit=1")]
-        assert case.sink.finished == [(SessionState.STOPPED, "The operator stopped the session.")]
+        assert [(call.method, call.uri) for call in case.api.calls] == [("GET", case.path)]
+        assert case.sink.finished == [
+            (SessionState.FAILED, "The utility cleanup failed. Read the portal log for the cause.")
+        ]
         case.client.close.assert_called_once_with()  # Close the owned stream even without a matching capture.
 
     @pytest.mark.parametrize("stage", ["GET", "DELETE", "close"])
@@ -173,6 +218,7 @@ class TestTriggerFailureCompletion:
         """Use the real starter and fake only the stream connection."""
         case = CleanupCase(monkeypatch, "ex.remotePcap")  # Retain the controlled API and sink.
         monkeypatch.undo()  # Restore the real starter and monitor for failure-path integration.
+        case.api.overrides.clear()  # Trigger responses must not inherit the active-status response.
         monkeypatch.setattr(UtilityStreamOpener, "_client", Mock(return_value=case.client))
         case.context.state.stopping.clear()  # Trigger errors must retain their failure classification.
         case.context.state.answer = None  # A failed trigger never supplies a capture identifier.
@@ -191,7 +237,7 @@ class TestTriggerFailureCompletion:
         UtilityExecution(case.context).run()  # Reject the trigger before any capture identifier exists.
         assert case.sink.finished == [(SessionState.FAILED, f"The utility failed with status {status_code}.")]
         case.client.close.assert_called_once_with()  # The opened stream must close before failure notification.
-        assert [(call.method, call.uri) for call in case.api.calls] == [("POST", f"{case.path}/capture")]
+        assert [(call.method, call.uri) for call in case.api.calls] == [("POST", case.path)]
 
     @pytest.mark.parametrize(
         ("error_type", "reason"),
@@ -206,7 +252,7 @@ class TestTriggerFailureCompletion:
         UtilityExecution(case.context).run()  # A failed request must still release its allocated stream.
         assert case.sink.finished == [(SessionState.FAILED, reason)]  # Retain the safe connection reason.
         case.client.close.assert_called_once_with()  # Cleanup must precede terminal failure.
-        assert [(call.method, call.uri) for call in case.api.calls] == [("POST", f"{case.path}/capture")]
+        assert [(call.method, call.uri) for call in case.api.calls] == [("POST", case.path)]
 
     @pytest.mark.parametrize("data", ["bad json", b""], ids=["malformed-json", "empty-body"])
     def test_invalid_trigger_body_closes_before_notification(
@@ -219,7 +265,7 @@ class TestTriggerFailureCompletion:
         assert case.sink.finished == [(SessionState.FAILED, "The utility failed with status 200.")]
         case.client.close.assert_called_once_with()  # The existing close callback checks notification ordering.
         assert case.context.state.answer is None  # An invalid body cannot establish capture ownership.
-        assert [(call.method, call.uri) for call in case.api.calls] == [("POST", f"{case.path}/capture")]
+        assert [(call.method, call.uri) for call in case.api.calls] == [("POST", case.path)]
 
     @pytest.mark.parametrize("cleanup_fails", [False, True])
     def test_cleanup_events_identify_action(

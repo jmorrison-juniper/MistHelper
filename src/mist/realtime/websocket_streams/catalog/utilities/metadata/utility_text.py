@@ -37,6 +37,7 @@ class UtilityText:
     _NAMES = {
         "band": "Radio band",
         "createShellSession": "Remote shell",
+        "duration": "Duration",
         "interfaces": "Interfaces",
         "ip": "IP address",
         "macs": "MAC addresses",
@@ -85,6 +86,7 @@ class UtilityText:
     }
     _HINTS = {
         "host": "Type a host name or an IP address.",
+        "duration": "Choose a capture duration from 60 through 3,600 seconds.",
         "interfaces": "Type one or more Mist Edge interface names. Put a comma between the names.",
         "macs": "Type one or more MAC addresses. Put a comma between the addresses.",
         "node": "Choose a node only for a two-node cluster.",
@@ -134,7 +136,8 @@ class UtilityText:
         if utility_key in cls._UTILITY_SENTENCES:  # Issue #3890: some families accept different targets.
             return cls._UTILITY_SENTENCES[utility_key]  # Return the family-specific guidance.
         if safety is Safety.CAPTURE:  # All captures share one limit and one output.
-            return "Capture packets for 60 seconds and show each packet record."  # Describe the capture result.
+            return "Capture packets for the selected duration and show each packet record."
+            # Describe the capture result without repeating its field limit.
         if name in cls._SENTENCES:  # A curated sentence states the effect of the utility.
             return cls._SENTENCES[name]  # Return the curated sentence.
         if name.startswith("retrieve"):  # A retrieve utility reads one table or one summary.

@@ -124,13 +124,13 @@ class UtilityExecution:
 
     def run(self) -> None:
         """Publish a terminal result only after cleanup completes."""
-        started = time.monotonic()
+        monitor_started = time.monotonic()  # Non-capture utilities keep their existing start time.
         log_fields = {"action": self._context.request.key}
         execution_error: Exception | None = None
         cleanup_error: Exception | None = None
         try:
             try:
-                self._execute(started)
+                monitor_started = self._execute(monitor_started)  # Capture timing begins after the trigger response.
             except Exception as error:
                 execution_error = error
         finally:
@@ -146,12 +146,16 @@ class UtilityExecution:
         elif execution_error is not None:
             self._finisher.error(execution_error)
         else:
-            self._finisher.finish(started)
+            self._finisher.finish(monitor_started)
 
-    def _execute(self, started: float) -> None:
+    def _execute(self, started: float) -> float:
         """Start and monitor one utility without a terminal notification."""
         client, trigger, filterer = self._starter.start()
-        self._monitor.read(client, trigger.listen.timing, filterer, started)
+        monitor_started = (
+            time.monotonic() if trigger.listen.channel in {"site_pcaps", "org_pcaps"} else started
+        )  # Start capture timing only after its successful REST response.
+        self._monitor.read(client, trigger.listen.timing, filterer, monitor_started)
+        return monitor_started  # Keep the final time-limit reason aligned with monitoring.
 
     def _close(self) -> None:
         """Close the stream and stop a matching capture when required."""

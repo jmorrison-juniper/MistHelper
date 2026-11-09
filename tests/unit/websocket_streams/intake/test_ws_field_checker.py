@@ -28,6 +28,25 @@ def test_field_checker_converts_valid_values() -> None:
     assert checker.check(FieldSpec("vlan", "VLAN", FieldKind.VLAN), "20") == "20"  # VLAN values stay text.
 
 
+@pytest.mark.parametrize("raw", ["60", "3600"])  # Both duration boundaries are valid.
+def test_field_checker_accepts_capture_duration_boundaries(raw: str) -> None:
+    """Accept the lowest and highest packet capture durations."""
+    checker = FieldValueChecker()  # Build the field checker.
+    spec = FieldSpec("duration", "Duration", FieldKind.INTEGER, minimum=60, maximum=3600, default=60)
+    assert checker.check(spec, raw) == int(raw)  # Return the checked duration as an integer.
+
+
+@pytest.mark.parametrize("raw", ["59", "3601", "-1", "1.5", True, "١٢٠", "9" * 5000])
+def test_field_checker_refuses_invalid_capture_durations(raw: object) -> None:
+    """Reject out-of-range, non-ASCII, Boolean, and oversized duration values."""
+    checker = FieldValueChecker()  # Build the field checker.
+    spec = FieldSpec("duration", "Duration", FieldKind.INTEGER, minimum=60, maximum=3600, default=60)
+    with pytest.raises(StreamRequestError) as error:  # Capture the invalid value refusal.
+        checker.check(spec, raw)  # Send one invalid duration value.
+    assert error.value.code == "bad_request"  # The request uses the stable error code.
+    assert error.value.extra["field"] == "duration"  # The refusal names the duration field.
+
+
 def test_field_checker_omits_empty_optional_value() -> None:
     """An empty optional field returns None."""
     checker = FieldValueChecker()  # Build the field checker.

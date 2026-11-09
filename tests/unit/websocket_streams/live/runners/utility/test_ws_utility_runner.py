@@ -5,7 +5,10 @@ from __future__ import annotations  # Keep annotations lazy for Python 3.13.
 import json  # The Show Route fake output is one JSON text line, as on the live SRX.
 import threading  # The fake sink waits for the background runner thread.
 import time  # Reliability tests report measured run time.
+from collections.abc import Callable  # Type monitor observation callbacks.
 from dataclasses import replace  # Short timing tables replace immutable trigger records.
+from types import SimpleNamespace  # Timed monitor tests use a local fake client.
+from typing import cast  # Keep the fake client at the production boundary.
 
 import pytest  # The tests verify request errors and time bounds.
 import websocket  # Tests build the same handshake exceptions as websocket-client.
@@ -17,10 +20,20 @@ from src.mist.realtime.websocket_streams.catalog.model import (
 from src.mist.realtime.websocket_streams.intake.start_request.models import (
     StartRequest,
 )  # Tests build checked start requests.
+from src.mist.realtime.websocket_streams.live.runners.utility.filters.message_filter import (
+    UtilityMessageFilter,
+)  # Build matching capture filters.
 from src.mist.realtime.websocket_streams.live.runners.utility.runner.execution import (
     UtilityStreamOpener,
 )  # Subscribe seam.
+from src.mist.realtime.websocket_streams.live.runners.utility.runner.monitoring import (
+    UtilityFinisher,
+    UtilityOutput,
+    UtilityStreamMonitor,
+)  # Test capture monitor outcomes.
 from src.mist.realtime.websocket_streams.live.runners.utility.runner.utility_runner import (
+    RunContext,
+    RunnerState,
     UtilityRunner,
 )  # Utility runner class.
 from src.mist.realtime.websocket_streams.live.runners.utility.triggers.models import (
@@ -43,6 +56,7 @@ from src.mist.realtime.websocket_streams.live.transport.stream_client import (
 )  # Stop tests override open behavior.
 from tests.unit.websocket_streams.live.transport.fake_mist_cloud.api import (
     FakeApiCall,
+    FakeApiResponse,
     FakeApiSession,
 )  # Offline REST trigger fake.
 from tests.unit.websocket_streams.live.transport.fake_mist_cloud.devices import (
@@ -202,6 +216,72 @@ def test_quiet_limit_finishes_after_output() -> None:
         state, reason = sink.wait_finished()  # Wait for quiet completion.
     assert state == SessionState.FINISHED  # Output before quiet time is successful.
     assert reason == "The utility finished."  # Quiet completion keeps the current success reason.
+
+
+@pytest.mark.parametrize(
+    ("duration", "packet_times"),
+    [(120, [59.0, 61.0, 119.0]), (3600, [3599.0])],
+)
+def test_capture_monitor_keeps_records_through_quiet_periods(
+    monkeypatch: pytest.MonkeyPatch, duration: int, packet_times: list[float]
+) -> None:
+    """Keep captures active through quiet periods until the selected duration."""
+    clock = [0.0]  # Store fake monotonic time for the monitor.
+    monkeypatch.setattr(
+        "src.mist.realtime.websocket_streams.live.runners.utility.runner.monitoring.time.monotonic",
+        lambda: clock[0],
+    )  # Use a fake clock so the duration assertion stays offline.
+    request = _request("ex.remotePcap", "packets", {"duration": duration})  # Select a bounded capture duration.
+    context, monitor, filterer, trigger, sink = _capture_monitor(request)  # Build the production monitor with fakes.
+    events = [(at, _capture_event("capture-one", _packet_record())) for at in packet_times]  # Schedule packets.
+    client = _scheduled_client(clock, events, float(duration + 10))  # End at the stream completion margin.
+    monitor.read(client, trigger.listen.timing, filterer, 0.0)  # Read without wall-clock delay.
+    assert clock[0] == duration + 10  # Quiet periods do not end capture before its duration.
+    assert len(sink.messages) == len(packet_times)  # Each matching packet remains visible.
+    UtilityFinisher(context).finish(0.0)  # Apply the normal completed-capture outcome.
+    assert context.sink.finished[-1][0] is SessionState.FINISHED  # A packet capture ends successfully.
+
+
+def test_matching_capture_end_event_finishes_without_null_packet(monkeypatch: pytest.MonkeyPatch) -> None:
+    """End only on the matching capture identity and do not display a null packet."""
+    clock = [0.0]  # Store fake monotonic time for the monitor.
+    monkeypatch.setattr(
+        "src.mist.realtime.websocket_streams.live.runners.utility.runner.monitoring.time.monotonic",
+        lambda: clock[0],
+    )  # Use a fake clock so the event assertion stays offline.
+    request = _request("ex.remotePcap", "packets", {"duration": 120})  # Build one packet capture.
+    context, monitor, filterer, trigger, sink = _capture_monitor(request)  # Build the production monitor.
+    events = [
+        (5.0, _capture_event("other-capture", None)),
+        (7.0, _capture_event("capture-one", _packet_record())),
+        (8.0, _capture_event("capture-one", None)),
+        (9.0, _capture_event("capture-one", _packet_record())),
+    ]  # Include a foreign end, one packet, and the matching end.
+    client = _scheduled_client(clock, events, 130.0)  # Provide a bounded fallback time.
+    monitor.read(client, trigger.listen.timing, filterer, 0.0)  # Read until the matching end event.
+    UtilityFinisher(context).finish(0.0)  # Apply the normal completed-capture outcome.
+    assert context.state.capture_ended is True  # The matching null packet ends this capture.
+    assert len(sink.messages) == 1  # Only the matching packet reaches the page.
+    assert context.sink.finished[-1][0] is SessionState.FINISHED  # An empty end event is not a timeout.
+
+
+def test_capture_monitor_clock_starts_after_trigger_response(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Start capture duration timing after the successful REST response."""
+    with FakeMistCloud() as cloud:  # Start a loopback fake Mist cloud.
+        device = StreamDevice()  # Build one fake stream device.
+        cloud.register("/api-ws/v1/stream", device)  # Register the stream route.
+        api = FakeApiSession(cloud)  # Build a fake API session.
+        api.add_override("/pcaps/capture", data={"id": "capture-clock"})  # Return a checked capture identity.
+        response_times: list[float] = []  # Record when the fake REST response is ready.
+        api.before_post_return = lambda _uri, _body: response_times.append(time.monotonic())  # Mark response time.
+        monitor_times: list[float] = []  # Record the monitor start supplied by the runner.
+        monkeypatch.setattr(UtilityStreamMonitor, "read", _record_monitor_start(monitor_times))  # Observe start.
+        sink = _run_utility(
+            cloud, api, _request("ex.remotePcap", "packets", {"duration": 120}), _fast_table()
+        )  # Run a selected capture.
+        sink.wait_finished()  # Wait for the background execution to finish.
+    assert len(response_times) == 1 and len(monitor_times) == 1  # Each capture starts once.
+    assert monitor_times[0] >= response_times[0]  # The duration clock starts after the REST response.
 
 
 def test_total_limit_reason_names_the_limit() -> None:
@@ -435,15 +515,62 @@ def test_capture_stop_sends_delete_only_for_matching_capture() -> None:
         device = StreamDevice()  # Build one fake stream device.
         cloud.register("/api-ws/v1/stream", device)  # Register the stream route.
         api = FakeApiSession(cloud)  # Build a fake API session.
-        api.add_override("/pcaps/capture", data={"id": "cap-stop"})  # Use a deterministic capture id.
-        api.add_override("/pcaps?limit=1", data=[{"id": "cap-stop"}])  # Let CaptureStopper match the capture.
+        api.add_override(
+            "/pcaps/capture", data={"id": "cap-stop", "type": "wired", "enabled": True}
+        )  # Start and active status both identify this capture.
         runner, sink = _build_runner(cloud, api, _request("ex.remotePcap", "packets"), _slow_table())  # Build.
         runner.start()  # Start the capture runner.
         _wait_for_calls(api, 1)  # Wait for the capture trigger.
         runner.stop()  # Ask the runner to stop the capture.
         state, _reason = sink.wait_finished()  # Wait for stopped state.
     assert state == SessionState.STOPPED  # Stop produces the operator stopped state.
-    assert _has_call(api.calls, "DELETE", f"/api/v1/sites/{SITE_ID}/pcaps")  # Matching capture was stopped.
+    path = f"/api/v1/sites/{SITE_ID}/pcaps/capture"  # Start, status, and stop use the documented endpoint.
+    assert [(call.method, call.uri) for call in api.calls] == [
+        ("POST", path),
+        ("GET", path),
+        ("DELETE", path),
+    ]  # Check active identity before the scope-wide stop.
+
+
+@pytest.mark.parametrize(
+    ("lookup_status", "lookup_data", "delete_status", "delete_expected"),
+    [
+        (200, {"id": "other-capture", "type": "wired"}, 200, False),
+        (503, {"id": "cap-stop", "type": "wired"}, 200, False),
+        (200, {"id": "cap-stop", "type": "wired"}, 503, True),
+    ],
+)
+def test_capture_stop_requires_confirmed_identity_and_delete(
+    monkeypatch: pytest.MonkeyPatch,
+    lookup_status: int,
+    lookup_data: dict[str, str],
+    delete_status: int,
+    delete_expected: bool,
+) -> None:
+    """Fail a capture stop when its identity or cloud delete is not confirmed."""
+    with FakeMistCloud() as cloud:  # Start a loopback fake Mist cloud.
+        device = StreamDevice()  # Build one fake stream device.
+        cloud.register("/api-ws/v1/stream", device)  # Register the stream route.
+        api = FakeApiSession(cloud)  # Build a fake API session.
+        api.add_override("/pcaps/capture", data={"id": "cap-stop"})  # Use a deterministic capture id.
+
+        def delete_capture(uri: str) -> FakeApiResponse:
+            """Record the stop request independently of the trigger response."""
+            api.calls.append(FakeApiCall("DELETE", uri, None))  # Keep the exact stop-path assertion observable.
+            return FakeApiResponse(delete_status, {})  # A successful stop needs no response body.
+
+        monkeypatch.setattr(
+            api, "mist_get", lambda _uri: FakeApiResponse(lookup_status, lookup_data)
+        )  # Model the active status object separately from the successful POST response.
+        monkeypatch.setattr(api, "mist_delete", delete_capture)  # Keep method-independent fake overrides out.
+        runner, sink = _build_runner(cloud, api, _request("ex.remotePcap", "packets"), _slow_table())  # Build.
+        runner.start()  # Start the capture runner.
+        _wait_for_calls(api, 1)  # Wait for the capture trigger.
+        runner.stop()  # Ask the runner to stop the capture.
+        state, reason = sink.wait_finished()  # Wait for cleanup and final state.
+    assert state is SessionState.FAILED  # An unconfirmed capture stop cannot appear successful.
+    assert reason == "The utility cleanup failed. Read the portal log for the cause."  # Use the safe reason.
+    assert _has_call(api.calls, "DELETE", f"/api/v1/sites/{SITE_ID}/pcaps/capture") is delete_expected  # Check scope.
 
 
 def test_screen_utility_is_refused() -> None:
@@ -599,3 +726,60 @@ def _wait_for_calls(api: FakeApiSession, count: int) -> None:
 def _has_call(calls: list[FakeApiCall], method: str, uri: str) -> bool:
     """Return whether the fake API session recorded a matching call."""
     return any(call.method == method and call.uri == uri for call in calls)  # Tests assert stop request shape.
+
+
+def _capture_monitor(
+    request: StartRequest,
+) -> tuple[RunContext, UtilityStreamMonitor, UtilityMessageFilter, UtilityRequest, FakeSink]:
+    """Build the production capture monitor with a local API and sink."""
+    table = UtilityTriggerTable()  # Build the real trigger metadata.
+    trigger = table.request_for(request)  # Keep the production capture timing.
+    api = FakeApiSession()  # Prevent all external REST calls.
+    sink = FakeSink()  # Record packet output and terminal state.
+    state = RunnerState(trigger=trigger, answer={"id": "capture-one"})  # Bind one local capture identity.
+    context = RunContext(api, MistStreamEndpoint(api), request, sink, table, state)  # Assemble the run context.
+    filterer = UtilityMessageFilter(trigger.listen.channel)  # Use the production payload filter.
+    filterer.bind({"id": "capture-one"})  # Bind the local capture identifier.
+    monitor = UtilityStreamMonitor(context, UtilityOutput(context))  # Build the production monitor.
+    return context, monitor, filterer, trigger, sink  # Return all observed collaborators.
+
+
+def _scheduled_client(clock: list[float], events: list[tuple[float, dict[str, object]]], end_at: float) -> StreamClient:
+    """Return a fake client that advances a controlled clock through scheduled events."""
+
+    def next_event(_timeout: float) -> dict[str, object] | None:
+        """Return one event and advance fake time."""
+        if events:  # Scheduled events take priority over the fallback time.
+            clock[0], event = events.pop(0)  # Move to the next event time.
+            return event  # Deliver the local fake event.
+        clock[0] = end_at  # Move directly to the configured monitor end.
+        return None  # The monitor checks its total deadline.
+
+    return cast(StreamClient, SimpleNamespace(next_event=next_event))  # Adapt only the test fake.
+
+
+def _capture_event(capture_id: str, packet: object) -> dict[str, object]:
+    """Build one nested Mist packet event for a local stream."""
+    payload = {"capture_id": capture_id, "pcap_dict": packet}  # Match the documented capture data shape.
+    return {"event": "data", "channel": CAPTURE_CHANNEL, "data": json.dumps(payload)}  # Encode nested JSON.
+
+
+def _record_monitor_start(
+    monitor_times: list[float],
+) -> Callable[
+    [UtilityStreamMonitor, StreamClient, UtilityTiming, UtilityMessageFilter, float],
+    None,
+]:
+    """Return a monitor stub that records the selected timing start."""
+
+    def record(
+        _monitor: UtilityStreamMonitor,
+        _client: StreamClient,
+        _timing: UtilityTiming,
+        _filterer: UtilityMessageFilter,
+        started: float,
+    ) -> None:
+        """Record one monitor start without waiting for capture duration."""
+        monitor_times.append(started)  # Keep only timing metadata.
+
+    return record  # Let the test replace the monitor method.

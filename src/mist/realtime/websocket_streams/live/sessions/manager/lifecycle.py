@@ -7,6 +7,7 @@ import threading  # Web requests and the reaper share manager state.
 import time  # Production managers use the monotonic clock.
 from collections.abc import Callable  # Tests inject a fake clock.
 
+from src.mist.realtime.websocket_streams.catalog.model import Safety, UtilityDefinition  # Identify capture sessions.
 from src.mist.realtime.websocket_streams.live.sessions.manager.contracts import (
     ManagerAttributes,
     RunnerFactoryLike,
@@ -40,20 +41,48 @@ class SessionRetention(ManagerAttributes):
     def _reap_session(self, session: StreamSession) -> None:
         """Apply all stop rules to one session."""
         now = self._clock()  # Use one time value for each rule.
+        capture, life_limit = self._capture_life_limit(session)  # Keep capture duration within its own limit.
+        life_started = (
+            session.live_mono if capture and session.live_mono is not None else session.started_mono
+        )  # Count capture life after its successful response and bound setup separately.
         if session.live and now - session.last_read_mono > self._settings.idle_seconds:  # The page stopped reading.
             self.stop(session.session_id, "The session stopped because no page read it.")  # Preserve idle reason.
-        if session.live and now - session.started_mono > self._settings.max_stream_seconds:  # Life limit expired.
+        if session.live and now - life_started > life_limit:  # The applicable life limit expired.
             self.stop(session.session_id, "The session reached its maximum life.")  # Preserve life reason.
+        self._finish_stuck_stop(session, now, capture)  # Bound cleanup without changing other session results.
+
+    def _finish_stuck_stop(self, session: StreamSession, now: float, capture: bool) -> None:
+        """Finish a stop that exceeded the cleanup bound."""
         stopping_at = session.stopping_mono if session.stopping_mono is not None else now  # Bound stop age.
         if session.state == SessionState.STOPPING and now - stopping_at > 15.0:  # The runner did not finish.
-            session.finish(SessionState.STOPPED, session.reason or "The session stopped.")  # Preserve stop cause.
+            state = SessionState.FAILED if capture else SessionState.STOPPED  # Capture uncertainty is a failure.
+            reason = (
+                "The capture stop could not be confirmed." if capture else session.reason or "The session stopped."
+            )  # Preserve a safe capture failure or the existing stop result.
+            session.finish(state, reason)  # Publish only a confirmed capture stop.
+
+    def _capture_life_limit(self, session: StreamSession) -> tuple[bool, int]:
+        """Return the capture class and its bounded life limit."""
+        definition = session.request.definition  # Read the immutable utility definition.
+        capture = isinstance(definition, UtilityDefinition) and definition.safety is Safety.CAPTURE  # Classify session.
+        duration = session.request.parameters.get("duration")  # Read only the checked capture duration.
+        life_limit = self._settings.max_stream_seconds  # Keep the generic limit for other sessions.
+        if capture and session.live_mono is not None and isinstance(duration, int) and not isinstance(duration, bool):
+            life_limit = max(life_limit, duration + 30)  # Keep time for stream completion and cleanup.
+        return capture, life_limit  # Preserve the generic limit outside captures.
 
     def _prune_ended(self) -> None:
         """Keep five recent ended sessions for at most ten minutes."""
         with self._lock:  # Build one stable expired-session snapshot.
             ended = [session for session in self._sessions.values() if not session.live]  # Ignore live sessions.
             ended.sort(key=lambda item: item.ended_mono or item.started_mono, reverse=True)  # Newest first.
-            expired = self._expired_session_ids(ended)  # Apply count and age bounds.
+            now = self._clock()  # Use one clock value for a stable decision.
+            expired = [
+                session.session_id
+                for position, session in enumerate(ended)
+                if position >= self.ENDED_KEEP_COUNT
+                or now - (session.ended_mono or session.started_mono) > self.ENDED_KEEP_SECONDS
+            ]  # Preserve exact edge and newest-first behavior.
         removed = self._remove_expired(expired)  # Remove artifacts before releasing each session buffer.
         self._logger.emit(logging.DEBUG, "session_prune_complete", {"count": removed})  # Log count only.
 
@@ -70,16 +99,6 @@ class SessionRetention(ManagerAttributes):
                     self._sessions.pop(session_id, None)
                     removed += 1
         return removed
-
-    def _expired_session_ids(self, ended: list[StreamSession]) -> list[str]:
-        """Return ended session identifiers that exceed retention bounds."""
-        now = self._clock()  # Use one clock value for a stable decision.
-        return [
-            session.session_id
-            for position, session in enumerate(ended)
-            if position >= self.ENDED_KEEP_COUNT
-            or now - (session.ended_mono or session.started_mono) > self.ENDED_KEEP_SECONDS
-        ]  # Preserve exact edge and newest-first behavior.
 
 
 class SessionReaper(ManagerAttributes):

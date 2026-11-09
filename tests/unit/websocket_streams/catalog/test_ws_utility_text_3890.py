@@ -128,5 +128,5 @@ class TestSentenceFallback:
 
     def test_capture_text_stays_unchanged(self, catalog: UtilityCatalog) -> None:
         """A capture utility keeps the shared capture sentence."""
-        expected = "Capture packets for 60 seconds and show each packet record."  # The shared capture text.
+        expected = "Capture packets for the selected duration and show each packet record."  # Capture interval.
         assert catalog.get("ex.remotePcap").description == expected  # The capture text stays.
