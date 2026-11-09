@@ -61,15 +61,15 @@ class TUILauncher:  # Launch TUI mode from interactive menu.
         """Main entry point: launch TUI mode from menu."""
         logger.info("TUI_MODE: Starting Terminal User Interface mode from menu")  # Log launch entry
         self._print_welcome()  # Announce TUI activation on stdout
-
         if not self._ensure_api_session():  # Bail out early if session initialization fails
             logger.debug("TUI_MODE: launch aborted because API session could not be initialized")  # Log abort
             return  # Nothing further to run
 
         self._suppress_console_logging()  # Silence console handlers so Rich TUI owns stdout
-
+        completed = False  # Only a normal TUI return permits a success report.
         try:  # Guarded run to guarantee handler restoration in finally
             self._run_tui()  # Enter the Rich event loop
+            completed = True  # An exception or interruption leaves completion false.
         except KeyboardInterrupt:  # User hit Ctrl+C inside the TUI
             self._handle_keyboard_interrupt()  # Log and print exit banner
         except Exception as error:  # TUI errors must never crash the numbered menu
@@ -77,8 +77,10 @@ class TUILauncher:  # Launch TUI mode from interactive menu.
         finally:  # Always run regardless of exception path
             self._restore_console_logging()  # Re-attach console handlers before returning to menu
 
-        self._print_exit_message()  # Show "returned from TUI" banner on stdout
-        logger.debug("TUI_MODE: launch() finished cleanly")  # Log after launch completes
+        if completed:  # Report success only after normal completion and console restoration.
+            logger.info("TUI_MODE: TUI mode completed successfully")  # Preserve the normal completion report.
+        self._print_exit_message()  # Show the menu return banner for every TUI outcome.
+        logger.debug("TUI_MODE: launch() returning to main menu")  # Do not imply that a failed TUI succeeded.
 
     def _print_welcome(self) -> None:
         """Print TUI activation messages."""
@@ -174,6 +176,5 @@ class TUILauncher:  # Launch TUI mode from interactive menu.
             timestamp = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]  # Local wall-clock for eyeball parity
             logger.debug("TUI_DEBUG: [%s] TUI_MODE function completed - returning to caller", timestamp)  # Trace
 
-        logger.info("TUI_MODE: TUI mode completed successfully")  # Success-path summary log
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("\n>> Returned from TUI mode to main menu")
