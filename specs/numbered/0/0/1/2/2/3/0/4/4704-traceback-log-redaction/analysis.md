@@ -268,7 +268,13 @@ Process guards again reported `28 passed, 1 skipped, 1 warning`.
 Interrogate remained at `100%`, and the symbol check found no module-level name changes.
 The same STE command checked all ten records, skipped none, and passed with scores from 92 through 99.
 The exact commands remain in the validation table and follow-up writing section above.
-The committed-difference result follows the local implementation commit.
+The implementation commit is `219f18a60`.
+It contains non-closing references to both issues and the required author trailer.
+The worktree was clean before the same required preflight and committed-difference commands ran.
+The preflight reported `1 passed, 1 warning`, with four inputs read and validated.
+The analyzer reported `gate_scope: 2 files checked, 0 findings checked` and `gate: 0 new findings vs baseline`.
+Its two skipped entries still identify omitted full-suite roots, not either changed test file.
+No parse error or baseline change occurred.
 
 FR-013 maps to T018 and T019.
 FR-014 maps to T018 through T020.

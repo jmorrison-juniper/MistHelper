@@ -66,6 +66,6 @@ T013 and T014 precede T015. T016 requires T015. T017 requires T016.
 
 - [x] T018 [US1] Reproduce Digest and AWS4 leaks in both existing test files. (delivered: tests/unit/test_logger_utils.py, tests/unit/upgrade_portal/test_logging_contract.py)
 - [x] T019 [US1] Redact the complete header line in `src/foundation/support/utils/logger_utils.py`, without crossing CR or LF. (delivered: src/foundation/support/utils/logger_utils.py)
-- [ ] T020 Validate, update the unique #4705 changelog and `analysis.md`, and commit locally with both issue references.
+- [x] T020 Validate, update the unique #4705 changelog and `analysis.md`, and commit locally with both issue references. (delivered: local commit 219f18a60, analysis.md)
 
 T018 precedes T019. T020 requires T019.
