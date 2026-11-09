@@ -95,11 +95,11 @@ def test_render_loop_breaks_when_quit_requested(tui_stub) -> None:
     tui_stub._keyboard_dispatch.dispatch.assert_called_once_with("q")  # Single dispatch
 
 
-def test_teardown_terminal_swallows_restore_failure(tui_stub) -> None:
-    """Restore errors must not propagate from teardown."""
+def test_teardown_terminal_swallows_restore_failure(tui_stub, caplog: pytest.LogCaptureFixture) -> None:
+    """Teardown records the restore error without propagation."""
     tui_stub.IS_WINDOWS = False  # Unix path
     tui_stub.termios.tcsetattr.side_effect = OSError("restore-fail")  # Force a terminal I/O failure
-    TuiRunner(tui_stub)._teardown_terminal()  # Should not raise
+    assert _restore_error_messages(tui_stub, caplog) == ["TUI: Error restoring terminal settings: restore-fail"]
 
 
 def test_teardown_terminal_propagates_unexpected_restore_failure(tui_stub) -> None:
@@ -115,3 +115,10 @@ def test_teardown_terminal_windows_noop(tui_stub) -> None:
     tui_stub.IS_WINDOWS = True  # Windows branch
     TuiRunner(tui_stub)._teardown_terminal()  # No-op call
     tui_stub.termios.tcsetattr.assert_not_called()  # Never touched
+
+
+def _restore_error_messages(tui_stub: Any, caplog: pytest.LogCaptureFixture) -> list[str]:
+    """Observe error records from teardown without a real terminal."""
+    with caplog.at_level("ERROR"):  # Capture the error independently of the default log level.
+        TuiRunner(tui_stub)._teardown_terminal()  # Exercise the real handler with the terminal mock.
+    return [record.getMessage() for record in caplog.records if record.levelname == "ERROR"]
