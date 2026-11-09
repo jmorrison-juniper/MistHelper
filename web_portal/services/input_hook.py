@@ -44,7 +44,7 @@ class InputInterceptor:
         queue = getattr(cls._local, "input_queue", None)
         if queue is not None and len(queue) > 0:
             answer = queue.popleft()
-            logger.debug("InputInterceptor: answered '%s'", answer)
+            logger.debug("InputInterceptor: consumed queued answer")
             return str(answer)
         if queue is not None and len(queue) == 0:
             raise EOFError("Web input queue exhausted")
