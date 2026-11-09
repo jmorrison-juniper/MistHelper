@@ -99,7 +99,10 @@ class OrgWebhookDeliveriesExporter:
         safe_name = webhook_name.replace(" ", "_")  # Keep the output filename portable.
         filename = f"OrgWebhookDeliveries_{safe_name}.csv"  # Use a stable organization export filename.
         logger.info("Writing organization webhook delivery data")  # Log before the storage action.
-        mh.DataExporter.write_with_format_selection(sanitized, filename, api_function_name=_OPERATION)  # Persist rows.
+        written = mh.DataExporter.write_with_format_selection(sanitized, filename, api_function_name=_OPERATION)
+        if not written:
+            logger.error("Failed to export %d organization webhook delivery records to %s", len(rawdata), filename)
+            return
         logger.debug("%s persisted %d rows to %s", _OPERATION, len(rawdata), filename)  # Log the write result.
         logger.info(
             "! %d organization webhook delivery records exported to %s", len(rawdata), filename
