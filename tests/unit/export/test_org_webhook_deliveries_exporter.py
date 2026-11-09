@@ -2,7 +2,9 @@
 
 from __future__ import annotations  # WHY: support the project Python type syntax.
 
+import socket
 import sys  # WHY: replace the lazy MistHelper import with a local test double.
+from collections.abc import Iterator
 from unittest.mock import MagicMock, patch  # WHY: isolate SDK and writer calls.
 
 import pytest  # WHY: provide fixtures and parameterized cases.
@@ -16,12 +18,25 @@ _MODULE = "src.operations.exporting.export.org_webhook_deliveries_exporter"  # W
 _WEBHOOKS = [{"id": "wh-1", "name": "Alarms"}, {"id": "wh-2", "name": "Audits"}]  # WHY: test two valid choices.
 
 
+@pytest.fixture(autouse=True)
+def block_network(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """Reject socket and DNS requests so tests use only synthetic data."""
+    blocked = MagicMock(side_effect=AssertionError("Network access is not allowed in webhook export tests"))
+    for attribute in ("connect", "connect_ex", "sendto"):
+        monkeypatch.setattr(socket.socket, attribute, blocked)
+    for attribute in ("create_connection", "getaddrinfo", "gethostbyname", "gethostbyname_ex", "gethostbyaddr"):
+        monkeypatch.setattr(socket, attribute, blocked)
+    yield
+    blocked.assert_not_called()
+
+
 @pytest.fixture
 def mist_helper(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
     """Return a local MistHelper stand-in."""
     stub = MagicMock()  # WHY: expose the session, resolver, and writer used by the exporter.
     stub.apisession = MagicMock()  # WHY: the SDK receives this authenticated session.
     monkeypatch.setitem(sys.modules, "MistHelper", stub)  # WHY: satisfy the lazy module import.
+    monkeypatch.setattr(f"{_MODULE}.SourceDependencyResolver", stub)
     return stub  # WHY: let each test configure the shared collaborators.
 
 
@@ -123,6 +138,117 @@ class TestWebhookExport:
         assert f"HTTP {status_code}" in caplog.text  # WHY: the operator must see the status.
         assert "Error fetching organization webhook deliveries" in caplog.text  # WHY: prove product logging.
         mist_helper.DataExporter.write_with_format_selection.assert_not_called()  # WHY: failed calls write nothing.
+
+
+class TestWebhookWriteStatus:
+    """Verify that completion messages match the storage result."""
+
+    @pytest.mark.parametrize("write_ok", [False, True])
+    def test_persist_reports_the_writer_result(
+        self, mist_helper: MagicMock, caplog: pytest.LogCaptureFixture, write_ok: bool
+    ) -> None:
+        """Report failure without a success or persistence message."""
+        writer = mist_helper.DataExporter.write_with_format_selection
+        writer.return_value = write_ok
+        with caplog.at_level("DEBUG", logger=_MODULE):
+            result = OrgWebhookDeliveriesExporter._persist([{"id": "delivery-1"}], "Alarm Hook")
+        writer.assert_called_once_with(
+            [{"id": "delivery-1"}],
+            "OrgWebhookDeliveries_Alarm_Hook.csv",
+            api_function_name="searchOrgWebhooksDeliveries",
+        )
+        assert result is None
+        completion = "! 1 organization webhook delivery records exported to OrgWebhookDeliveries_Alarm_Hook.csv"
+        assert ((_MODULE, 20, completion) in caplog.record_tuples) is write_ok
+        assert ("records exported" in caplog.text) is write_ok
+        assert ("persisted 1 rows" in caplog.text) is write_ok
+        errors = [record.getMessage() for record in caplog.records if record.levelname == "ERROR"]
+        expected = (
+            []
+            if write_ok
+            else ["Failed to export 1 organization webhook delivery records to OrgWebhookDeliveries_Alarm_Hook.csv"]
+        )
+        assert errors == expected
+
+    def test_empty_input_does_not_write(self, mist_helper: MagicMock, caplog: pytest.LogCaptureFixture) -> None:
+        """Keep the empty-result behavior without claiming persistence."""
+        with caplog.at_level("DEBUG", logger=_MODULE):
+            result = OrgWebhookDeliveriesExporter._persist([], "Alarm Hook")
+        assert result is None
+        mist_helper.DataExporter.write_with_format_selection.assert_not_called()
+        assert caplog.record_tuples == [(_MODULE, 20, "! No organization webhook delivery data found")]
+
+    @pytest.mark.parametrize("write_ok", [False, True])
+    def test_entrypoint_preserves_the_write_status(
+        self, mist_helper: MagicMock, caplog: pytest.LogCaptureFixture, write_ok: bool
+    ) -> None:
+        """Exercise real persistence after a synthetic delivery search."""
+        mist_helper.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org-1"
+        mist_helper.DataExporter.write_with_format_selection.return_value = write_ok
+        with (
+            patch.object(OrgWebhookDeliveriesExporter, "_select_webhook_id", return_value=("wh-1", "Alarms")),
+            patch(f"{_MODULE}.mistapi.api.v1.orgs.webhooks.searchOrgWebhooksDeliveries") as search,
+            patch(f"{_MODULE}.mistapi.get_all", return_value=[{"id": "delivery-1"}]),
+            caplog.at_level("DEBUG", logger=_MODULE),
+        ):
+            search.return_value.status_code = 200
+            result = OrgWebhookDeliveriesExporter.deliveries()
+        assert result is None
+        search.assert_called_once_with(mist_helper.apisession, "org-1", "wh-1")
+        mist_helper.DataExporter.write_with_format_selection.assert_called_once_with(
+            [{"id": "delivery-1"}],
+            "OrgWebhookDeliveries_Alarms.csv",
+            api_function_name="searchOrgWebhooksDeliveries",
+        )
+        assert ("records exported" in caplog.text) is write_ok
+        assert ("persisted 1 rows" in caplog.text) is write_ok
+        assert ("Failed to export" in caplog.text) is not write_ok
+
+    def test_writer_exception_stays_inside_the_entrypoint(
+        self, mist_helper: MagicMock, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Keep the existing menu error behavior when storage raises."""
+        mist_helper.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org-1"
+        mist_helper.DataExporter.write_with_format_selection.side_effect = OSError("synthetic write failure")
+        with (
+            patch.object(OrgWebhookDeliveriesExporter, "_select_webhook_id", return_value=("wh-1", "Alarms")),
+            patch(f"{_MODULE}.mistapi.api.v1.orgs.webhooks.searchOrgWebhooksDeliveries"),
+            patch(f"{_MODULE}.mistapi.get_all", return_value=[{"id": "delivery-1"}]),
+            caplog.at_level("DEBUG"),
+        ):
+            result = OrgWebhookDeliveriesExporter.deliveries()
+        assert result is None
+        assert (
+            "root",
+            40,
+            "Error fetching organization webhook deliveries: synthetic write failure",
+        ) in caplog.record_tuples
+        assert "records exported" not in caplog.text
+        assert "persisted" not in caplog.text
+
+    @pytest.mark.parametrize("status_code", [403, 500])
+    def test_rejected_response_never_reaches_storage(
+        self, mist_helper: MagicMock, caplog: pytest.LogCaptureFixture, status_code: int
+    ) -> None:
+        """Preserve the existing rejected-response boundary."""
+        mist_helper.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org-1"
+        with (
+            patch.object(OrgWebhookDeliveriesExporter, "_select_webhook_id", return_value=("wh-1", "Alarms")),
+            patch(f"{_MODULE}.mistapi.api.v1.orgs.webhooks.searchOrgWebhooksDeliveries") as search,
+            patch(f"{_MODULE}.mistapi.get_all") as paginate,
+            caplog.at_level("DEBUG", logger=_MODULE),
+        ):
+            search.return_value.status_code = status_code
+            result = OrgWebhookDeliveriesExporter.deliveries()
+        assert result is None
+        paginate.assert_not_called()
+        mist_helper.DataExporter.write_with_format_selection.assert_not_called()
+        assert caplog.record_tuples[-1] == (
+            _MODULE,
+            40,
+            f"The cloud returned HTTP {status_code} for organization webhook deliveries at org org-1",
+        )
+        assert "records exported" not in caplog.text
 
 
 def test_existing_composite_strategy_matches_delivery_identity() -> None:
