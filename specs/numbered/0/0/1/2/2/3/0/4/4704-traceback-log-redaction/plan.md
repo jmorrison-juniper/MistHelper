@@ -97,3 +97,20 @@ This intentionally removes any same-line diagnostic after the header because no 
 Preserve safe diagnostics on subsequent lines and complete exception chain separators.
 Extend the existing parameterized real-handler tests before changing the matcher.
 Keep the same owned files and publication hold.
+
+## Verification URL Extension
+
+Extend the existing feature without a new branch or shared feature selector.
+The branch hook remains superseded by the explicit app-managed branch requirement.
+Optional commit hooks remain deferred to the explicit local commit.
+Add exact-route URL recognition before the existing labeled-value rules.
+Preserve the route and replace its entire nonempty suffix, including query and fragment.
+Stop at whitespace or surrounding text delimiters. Do not decode URL values.
+Do not match a route embedded in a different path.
+Apply the rule through `_redact_text` to messages and fresh or cached exception text.
+Use `tests/unit/utils/test_logger_verification_urls.py` for isolated stream and real portal tests.
+The dedicated test file follows the explicit ownership handoff instead of editing the renamed test.
+The existing test directory exceeds the structural limit. Its separate directory migration remains assigned to the test owner.
+Do not change bootstrap handlers or exporter callers in this handoff.
+Unlabeled response details remain outside this rule. Handler installation and safe exporter diagnostics require separate owners.
+Publication and test-rename holds remain active.
