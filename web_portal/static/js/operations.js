@@ -722,10 +722,11 @@ function findParameterIndex(parameterName) {
 
 function createTextInput(param) {
     var input = document.createElement('input');
-    input.type = 'text';
+    input.type = param.input_type === 'password' ? 'password' : 'text';  // Mask only the explicit display override.
     input.className = 'form-control form-control-sm';
     input.name = param.name;
     input.id = 'param-' + param.name;
+    input.setAttribute('data-testid', 'param-' + param.name);
     input.placeholder = param.placeholder || '';
     if (param.default) input.value = param.default;
     if (param.required) input.required = true;

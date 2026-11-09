@@ -855,8 +855,11 @@ def _build_registry() -> dict:
     registry["247"] = {  # Menu 247 verifies an email change token from a Mist email.
         "category": "interactive",  # The portal must collect the token before Run is enabled.
         "parameters": [
-            _required_text_param(  # Answer the token prompt without echoing the token meaning in logs.
-                "email_change_token", "Email Change Token", placeholder="Token from the Mist email"
+            _required_text_param(  # Mask the display without changing the text answer contract.
+                "email_change_token",
+                "Email Change Token",
+                placeholder="Token from the Mist email",
+                input_type="password",
             ),
         ],
     }
