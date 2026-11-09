@@ -63,7 +63,8 @@ class TestGetDynamicLookbackHours:
         record = caplog.records[0]
         assert (record.name, record.levelno) == (tu.__name__, logging.ERROR)
         assert record.getMessage() == "Lookback calculation failed. Using test fallback of 3 hours."
-        assert record.exc_info is not None
+        if record.exc_info is None:
+            pytest.fail("The fallback log must include the exception traceback.")
         assert record.exc_info[0] is error_type
         assert str(record.exc_info[1]) == "simulated max failure"
 
@@ -84,7 +85,8 @@ class TestGetDynamicLookbackHours:
         record = caplog.records[0]
         assert (record.name, record.levelno) == (tu.__name__, logging.ERROR)
         assert record.getMessage() == "Lookback calculation failed. Using production fallback of 17 hours."
-        assert record.exc_info is not None
+        if record.exc_info is None:
+            pytest.fail("The fallback log must include the exception traceback.")
         assert record.exc_info[0] is error_type
         assert str(record.exc_info[1]) == "simulated max failure"
 
