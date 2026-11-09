@@ -42,9 +42,8 @@ class TimeUtils:
             return max(1, chosen_hours)  # Never return less than 1 hour (clamp misconfigured values)
         except Exception:  # Preserve the mode-specific fallback for any unexpected calculation failure.
             logger.exception(
-                "Lookback calculation failed. Using %s fallback of %s hours.",
+                "Lookback calculation failed. Using %s fallback.",
                 "test" if IS_TEST_MODE else "production",
-                test_hours if IS_TEST_MODE else default_hours,
             )
             return test_hours if IS_TEST_MODE else default_hours  # Fall back to a sensible default per mode
 

@@ -62,7 +62,7 @@ class TestGetDynamicLookbackHours:
         assert len(caplog.records) == 1
         record = caplog.records[0]
         assert (record.name, record.levelno) == (tu.__name__, logging.ERROR)
-        assert record.getMessage() == "Lookback calculation failed. Using test fallback of 3 hours."
+        assert record.getMessage() == "Lookback calculation failed. Using test fallback."
         if record.exc_info is None:
             pytest.fail("The fallback log must include the exception traceback.")
         assert record.exc_info[0] is error_type
@@ -84,11 +84,34 @@ class TestGetDynamicLookbackHours:
         assert len(caplog.records) == 1
         record = caplog.records[0]
         assert (record.name, record.levelno) == (tu.__name__, logging.ERROR)
-        assert record.getMessage() == "Lookback calculation failed. Using production fallback of 17 hours."
+        assert record.getMessage() == "Lookback calculation failed. Using production fallback."
         if record.exc_info is None:
             pytest.fail("The fallback log must include the exception traceback.")
         assert record.exc_info[0] is error_type
         assert str(record.exc_info[1]) == "simulated max failure"
+
+    @pytest.mark.parametrize("test_mode", [False, True])
+    def test_invalid_fallback_value_is_not_logged(
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, test_mode: bool
+    ) -> None:
+        """Keep an invalid input out of logs while preserving the fallback."""
+        monkeypatch.setattr(tu, "IS_TEST_MODE", test_mode)
+        caplog.set_level(logging.ERROR, logger=tu.__name__)
+        sentinel = "private-test-input"
+        result = TimeUtils.get_dynamic_lookback_hours(
+            default_hours=sentinel, test_hours=sentinel  # type: ignore[arg-type]
+        )
+        assert result == sentinel
+        assert len(caplog.records) == 1
+        record = caplog.records[0]
+        mode = "test" if test_mode else "production"
+        assert (record.name, record.levelno) == (tu.__name__, logging.ERROR)
+        assert record.getMessage() == f"Lookback calculation failed. Using {mode} fallback."
+        if record.exc_info is None:
+            pytest.fail("The fallback log must include the exception traceback.")
+        assert record.exc_info[0] is TypeError
+        assert sentinel not in caplog.text
+        assert sentinel not in repr(record.args)
 
 
 class TestLogDynamicLookback:
