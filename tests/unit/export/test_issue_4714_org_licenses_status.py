@@ -109,6 +109,17 @@ class TestLicenseRequestStatus:
 class TestLicenseWriteStatus:
     """Preserve valid output while reporting empty results and rejected writes correctly."""
 
+    def test_none_wrapper_uses_direct_get(self, license_case: SimpleNamespace) -> None:
+        """A wrapper set to None must retain the original direct request behavior."""
+        license_case.sdk.api.v1.orgs.licenses.listOrgLicenses = None  # Model an explicitly unavailable SDK wrapper.
+        result = module.OrgAdminExporter.licenses()  # Keep a valid response on the direct SDK session path.
+        assert result is None  # Preserve the public result.
+        license_case.resolver.apisession.mist_get.assert_called_once_with("/api/v1/orgs/synthetic-org/licenses")
+        license_case.sdk.get_all.assert_not_called()  # Do not paginate through an unavailable wrapper.
+        license_case.resolver.DataExporter.write_with_format_selection.assert_called_once_with(
+            [{"id": "license-1", "notes": "line\\nnext"}], "OrgLicenses.csv", api_function_name="listOrgLicenses"
+        )  # Preserve the successful normalized output.
+
     @pytest.mark.parametrize("status", (200, 201, 204, 299))
     def test_success(self, license_case: SimpleNamespace, caplog: pytest.LogCaptureFixture, status: int) -> None:
         """Both endpoints retain real flattening, newline escaping, metadata, and the public return."""

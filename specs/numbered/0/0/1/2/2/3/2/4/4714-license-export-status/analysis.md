@@ -36,3 +36,10 @@ Shared pagination needs separate ownership and a separate change.
 PowerShell is unavailable. The specification uses the documented numeric routing calculation without changing the shared feature selector.
 No live operation, dependency audit requiring network access, full test suite, or publication runs as part of this focused local repair.
 The session evidence contains the exact commands, outputs, hashes, and committed files.
+
+## Compatibility correction
+
+The independent inspection found that the first candidate called a wrapper with the value `None`.
+The original implementation used the direct request in this case.
+The correction retains that behavior and adds two guarded regression cases.
+Those cases fail on the first candidate and pass on the corrected source.
