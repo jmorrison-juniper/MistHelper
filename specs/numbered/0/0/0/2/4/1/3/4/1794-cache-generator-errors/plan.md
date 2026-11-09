@@ -6,10 +6,11 @@
 
 ## Summary
 
-Use `logging.exception` for the existing error log in `CacheUtils._run_csv_generator`.
-Preserve its root logger, message template, arguments, exception boundary, and boolean results.
+Use `logging.error` to report the exception type without exception text or traceback.
+Preserve the root logger, filename, generator name, exception boundary, and boolean results.
 Use mocked callbacks to test failures, success, keyboard interrupts, and process exits.
 Test the public cache dispatcher with a missing cache and the same failure assertions.
+Exercise a real filtered handler and formatter with labeled and unlabeled synthetic secrets.
 
 ## Technical Context
 
@@ -33,7 +34,8 @@ Separate process-folder remediation remains outside this slice.
 Each new specification directory has five children or fewer.
 Tests use mocked generators and temporary paths. No production data changes.
 The ordinary `Exception` boundary is necessary for caller-supplied callbacks.
-Ruff requires `logging.exception` instead of `logging.error(..., exc_info=True)`.
+The filter does not sanitize a traceback appended by a formatter.
+Exception text can contain unlabeled secrets, so the error record must omit both.
 `KeyboardInterrupt` and `SystemExit` remain outside that boundary.
 No Mist transport, dependency, environment variable, or schema change is necessary.
 
@@ -58,10 +60,10 @@ The design directory contains research, data model, validation guide, and the sp
 
 ## Validation
 
-First demonstrate that the new failure test fails because the log record lacks exception information.
-Then apply the single logging change and run the complete cache test module.
+First demonstrate that the real handler emits a synthetic callback secret.
+Then remove exception text and traceback from the failure log and run the complete cache test module.
 Run focused compile, lint, format, type, complexity, security, symbol, documentation, and specification checks.
-Commit explicit paths once, then run the required test quality preflight and committed-difference gate.
+Commit explicit paths, then run the required test quality preflight and committed-difference gate.
 Do not push or open a pull request. Report evidence and remaining blockers to the coordinator.
 
 ## Complexity Tracking

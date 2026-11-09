@@ -3,16 +3,17 @@
 ## Findings
 
 No requirement gap, ambiguity, duplication, or constitution conflict was found.
-The review examined three core records, five functional requirements, and eight tasks.
-All five requirements have task coverage.
+The review examined three core records, six functional requirements, and nine tasks.
+All six requirements have task coverage.
 
 | Requirement | Tasks | Evidence |
 |---|---|---|
 | FR-001 | T003, T004, T005 | Ordinary failures return `False`. |
-| FR-002 | T003, T004, T005 | Tests assert context, exception identity, and traceback. |
+| FR-002 | T003, T004, T005 | Tests assert filename, generator name, and exception type. |
 | FR-003 | T003 | Success invokes the callback once and retains its message. |
 | FR-004 | T006 | Interrupts propagate through both entry points. |
 | FR-005 | T003, T005, T006 | Tests use mocked callbacks only. |
+| FR-006 | T003, T004, T005, T009 | A filtered handler excludes exception text and traceback. |
 
 Setup and documentation tasks support the same bounded slice.
 Existing structural debt remains unchanged, as recorded in the [plan](plan.md).
@@ -25,7 +26,7 @@ Commands use the isolated environment under `.venv/bin/`.
 |---|---|
 | `python -m pytest tests/unit/cache/test_cache_utils.py -q` before changes | 33 passed. |
 | `python -m pytest tests/unit/cache/test_cache_utils.py -k 'generator_exception or returns_false_when_generator_fails' -q` before the fix | Four failures because `record.exc_info` was `None`. |
-| `python -m pytest tests/unit/cache/test_cache_utils.py -q --cov=src.foundation.persistence.cache.cache_utils --cov-report=term-missing --cov-fail-under=100` | 39 passed, 100% source coverage. |
+| `python -m pytest tests/unit/cache/test_cache_utils.py -q --cov=src.foundation.persistence.cache.cache_utils --cov-report=term-missing --cov-fail-under=100` | 43 passed, 100% source coverage after the privacy correction. |
 | `python -m ruff check src/foundation/persistence/cache/cache_utils.py tests/unit/cache/test_cache_utils.py` | All checks passed. |
 | `python -m black --check src/foundation/persistence/cache/cache_utils.py tests/unit/cache/test_cache_utils.py` | Two files unchanged. |
 | `python -m py_compile src/foundation/persistence/cache/cache_utils.py tests/unit/cache/test_cache_utils.py` | Passed, no output. |
@@ -45,7 +46,10 @@ Commands use the isolated environment under `.venv/bin/`.
 The changelog diff guard skips because no pull request event exists.
 Pytest reports one existing Dash plugin deprecation warning.
 Ruff rejected the first `logging.error(..., exc_info=True)` form.
-The final `logging.exception` form passes and preserves the same root error record.
+That earlier `logging.exception` form exposed callback secrets in formatted tracebacks.
+The corrected form reports the exception type without exception text or traceback.
+Four real-handler regression cases failed before the correction.
+The corrected real-handler cases pass for both entry points and both synthetic secret forms.
 The task audit examined 885 records, 407 task files, and 11,029 markers.
 It reported 36 malformed markers and missing evidence paths in other records.
 The first scoped audit invocation used an invalid root. The repository-root retry produced the counts above.

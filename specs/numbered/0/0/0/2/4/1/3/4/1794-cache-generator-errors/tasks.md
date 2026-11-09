@@ -14,11 +14,11 @@
 
 ## Phase 3: User Story 1 - Diagnose a generation failure (Priority: P1)
 
-**Goal**: Preserve failure context and traceback.
+**Goal**: Preserve safe failure context without callback exception secrets.
 **Independent Test**: Inspect the error record and boolean result.
 
-- [x] T003 [US1] Add mocked failure and success assertions and demonstrate four missing-traceback failures. (delivered: tests/unit/cache/test_cache_utils.py)
-- [x] T004 [US1] Preserve the active traceback without changing the boundary or message. (delivered: src/foundation/persistence/cache/cache_utils.py)
+- [x] T003 [US1] Add mocked failure and success assertions and demonstrate the formatted output leak. (delivered: tests/unit/cache/test_cache_utils.py)
+- [x] T004 [US1] Report the exception type without its text or traceback. (delivered: src/foundation/persistence/cache/cache_utils.py)
 - [x] T005 [US1] Test failure reporting through the public cache dispatcher. (delivered: tests/unit/cache/test_cache_utils.py)
 
 ## Phase 4: User Story 2 - Stop generation safely (Priority: P2)
@@ -32,12 +32,13 @@
 
 - [x] T007 Add the release fragment. (delivered: changelog.d/issue-1794-cache-generator-errors.md)
 - [x] T008 Run the focused gates and record consistency findings. (delivered: analysis.md)
+- [x] T009 [US1] Test labeled and unlabeled callback secrets with a filtered handler and formatter. (delivered: tests/unit/cache/test_cache_utils.py)
 
 ## Dependencies and Execution Order
 
 T002 depends on T001. T003 depends on T002. T004 depends on T003.
 T005 and T006 depend on T004. T007 depends on T004.
-T008 depends on T005, T006, and T007.
+T009 depends on T004. T008 depends on T005, T006, T007, and T009.
 US2 has no behavioral dependency on US1 but uses the same test file.
 
 ## Parallel Examples
@@ -49,6 +50,6 @@ Documentation checks and source checks can run independently.
 
 ## Implementation Strategy
 
-Complete US1 first and prove the traceback regression.
-Complete US2 next, then run all focused checks and create one local commit.
+Complete US1 first and prove the secret exposure regression.
+Complete US2 next, then run all focused checks and create a local commit.
 Optional commit hooks remain deferred. Disabled companion hooks do not execute.

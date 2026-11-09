@@ -2,8 +2,8 @@
 
 No stored data model changes.
 
-The existing error record retains its root logger, error level, filename, callback name, and exception text.
-Its exception information contains the original exception type, instance, and nonempty traceback.
+The existing error record retains its root logger, error level, filename, and callback name.
+It reports the exception type, but carries no exception text or traceback.
 
 Successful generation returns `True`.
 An ordinary exception returns `False`.

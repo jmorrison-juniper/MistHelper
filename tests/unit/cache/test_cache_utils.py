@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import csv
 import importlib
+import io
 import logging  # WHY (#886 Phase 2): assert against caplog after print()->logging migration.
 import os
 import time
@@ -30,6 +31,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from src.foundation.persistence.cache.cache_utils import CacheUtils
+from src.foundation.support.utils.logger_utils import SensitiveFilter
 
 
 class _FakeFilePathUtils:
@@ -126,6 +128,40 @@ class TestIsCsvFresh:
 class TestRunCsvGenerator:
     """Cover the success and failure legs of the generator wrapper."""
 
+    @pytest.mark.parametrize("use_dispatcher", [False, True], ids=["generator", "dispatcher"])
+    @pytest.mark.parametrize("secret", ["token=synthetic-secret-17", "unlabeled-synthetic-secret-29"])
+    def test_formatted_failure_does_not_expose_callback_secrets(
+        self, use_dispatcher: bool, secret: str, fake_mh: _FakeMH, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """A real filtered handler must not emit exception text or chained exception text."""
+        error = ValueError(secret)
+        error.__cause__ = RuntimeError(secret)
+        generator = MagicMock(side_effect=error)
+        generator.__name__ = "private_gen"
+        stream = io.StringIO()
+        handler = logging.StreamHandler(stream)
+        handler.setFormatter(logging.Formatter("%(levelname)s %(message)s"))
+        handler.addFilter(SensitiveFilter())
+        root = logging.getLogger()
+        root.addHandler(handler)
+        try:
+            with caplog.at_level(logging.ERROR):
+                if use_dispatcher:
+                    result = CacheUtils.check_and_generate_csv("out.csv", generator, freshness_minutes=60)
+                else:
+                    result = CacheUtils._run_csv_generator(generator, "out.csv")
+        finally:
+            root.removeHandler(handler)
+            handler.close()
+        assert result is False
+        generator.assert_called_once_with()
+        output = stream.getvalue()
+        assert "ERROR Failed to generate out.csv using private_gen" in output
+        assert "ValueError" in output
+        assert secret not in output
+        assert "synthetic-secret-17" not in output
+        assert "Traceback (most recent call last):" not in output
+
     def test_generator_success_returns_true(self, caplog: pytest.LogCaptureFixture) -> None:
         """Generator that completes without raising returns True."""
         generator = MagicMock()
@@ -140,7 +176,7 @@ class TestRunCsvGenerator:
     def test_generator_exception_returns_false(
         self, error_type: type[Exception], caplog: pytest.LogCaptureFixture
     ) -> None:
-        """A callback failure preserves its cause and traceback without raising."""
+        """A callback failure reports its type without exposing exception details."""
         error = error_type("generator failed")
         generator = MagicMock(side_effect=error)
         generator.__name__ = "boom_gen"
@@ -151,12 +187,10 @@ class TestRunCsvGenerator:
         record = caplog.records[0]
         assert record.name == "root"
         assert record.levelno == logging.ERROR
-        assert record.getMessage() == "Failed to generate out.csv using boom_gen: generator failed"
-        assert record.exc_info and record.exc_info[:2] == (error_type, error)
-        assert record.exc_info[2] is error.__traceback__
-        assert "Traceback (most recent call last):" in caplog.text
-        assert "_run_csv_generator" in caplog.text
-        assert f"{error_type.__name__}: generator failed" in caplog.text
+        assert record.getMessage() == f"Failed to generate out.csv using boom_gen: {error_type.__name__}"
+        assert record.exc_info is None
+        assert "generator failed" not in caplog.text
+        assert "Traceback (most recent call last):" not in caplog.text
 
     @pytest.mark.parametrize("interrupt_type", [KeyboardInterrupt, SystemExit])
     @pytest.mark.parametrize("use_dispatcher", [False, True], ids=["generator", "dispatcher"])
@@ -216,7 +250,7 @@ class TestCheckAndGenerateCsv:
         gen.assert_called_once()
 
     def test_returns_false_when_generator_fails(self, fake_mh: _FakeMH, caplog: pytest.LogCaptureFixture) -> None:
-        """The public dispatcher retains the generator failure and traceback."""
+        """The dispatcher reports the failure type without exception text."""
         error = ValueError("nope")
         generator = MagicMock(side_effect=error)
         generator.__name__ = "bad_gen"
@@ -225,11 +259,10 @@ class TestCheckAndGenerateCsv:
         generator.assert_called_once_with()
         assert len(caplog.records) == 1
         record = caplog.records[0]
-        assert record.getMessage() == "Failed to generate nope.csv using bad_gen: nope"
-        assert record.exc_info and record.exc_info[:2] == (ValueError, error)
-        assert record.exc_info[2] is error.__traceback__
-        assert "Traceback (most recent call last):" in caplog.text
-        assert "ValueError: nope" in caplog.text
+        assert record.getMessage() == "Failed to generate nope.csv using bad_gen: ValueError"
+        assert record.exc_info is None
+        assert "ValueError: nope" not in caplog.text
+        assert "Traceback (most recent call last):" not in caplog.text
 
 
 # ---------------------------------------------------------------------------
