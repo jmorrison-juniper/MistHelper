@@ -84,6 +84,6 @@ FR-017 and FR-018 map to T021 and T023.
 
 - [x] T024 Prove leading and embedded punctuation leaks with synthetic values and the real SDK URI builder. (delivered: tests/unit/utils/test_logger_verification_urls.py)
 - [x] T025 Use whitespace-only suffix boundaries in the owned filter. (delivered: src/foundation/support/utils/logger_utils.py)
-- [ ] T026 Validate punctuation protection and record the restricted integration handoff.
+- [x] T026 Validate punctuation protection and record the restricted integration handoff. (delivered: analysis.md, local commit 90d63f630)
 
 T024 precedes T025. T026 requires T025. These tasks refine FR-015 and FR-016.

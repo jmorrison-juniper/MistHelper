@@ -402,3 +402,12 @@ Pylint remains `9.80/10`. The existing Dash warning and mypy configuration notes
 The earlier text-delimiter design is superseded by this correction.
 Existing renamed tests remain unchanged. No caller, handler installation, or SDK source changed.
 The publication, integration, and ownership holds remain active.
+
+The correction commit is `90d63f630`, with both issue references and the required trailer.
+The same committed input preflight reported `1 passed, 1 warning`, with four inputs validated.
+The committed analyzer reported `3 files checked`, `0 new findings`, `3 skipped`, and `0 parse errors`.
+Two skips are omitted full-suite roots.
+The third is the dedicated regression file, excluded by the existing `mist_api_excluded` policy after adding the real SDK call.
+Thus, this gate does not assess that file. Its 134 executable regression cases pass in pytest.
+No analyzer configuration or baseline changed.
+The writing gate checked five records, skipped none, and passed with scores from 92 through 98.
