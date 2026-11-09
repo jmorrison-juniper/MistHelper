@@ -287,7 +287,7 @@ class TestExportConfig:
             manager.export_config()  # WHY: drive the whole menu 58 flow.
         assert manager.org_id == "dest-org"  # WHY: the resolver value must reach the instance.
 
-    @pytest.mark.parametrize("scenario", [(200, "Private-Org-Name"), (403, "Unknown"), (503, "Unknown")])
+    @pytest.mark.parametrize("scenario", [(200, "Private Org Name"), (403, "Unknown"), (503, "Unknown")])
     def test_validated_metadata_reaches_the_saved_bundle(
         self,
         manager: OrgConfigMigrationManager,
@@ -303,7 +303,7 @@ class TestExportConfig:
         (tmp_path / "data").mkdir()  # The existing writer expects the product output directory.
         response = requests.Response()  # Use the native SDK response shape for this integrated flow.
         response.status_code = scenario[0]  # Prove that status overrides a plausible body name.
-        response._content = b'{"name": "Private-Org-Name"}'  # Make returned metadata identifiable in captured logs.
+        response._content = b'{"name": "Private Org Name"}'  # Make returned metadata identifiable in captured logs.
         api_response = APIResponse(response=response, url="https://api.mist.com/api/v1/orgs/dest-org")
         caplog.set_level("DEBUG", logger=ocm.__name__)  # Capture every manager record from the export.
         caplog.clear()  # Exclude SDK wrapper diagnostics from this manager-log assertion.
@@ -317,13 +317,16 @@ class TestExportConfig:
         bundle = json.loads(saved_files[0].read_text(encoding="utf-8"))  # Verify the durable metadata result.
         assert bundle["metadata"]["source_org_name"] == scenario[1]  # Preserve the valid name or explicit unknown.
         if scenario[0] == 200:  # A successful export keeps the source label in its filename.
-            assert "Private-Org-Name" in saved_files[0].name  # Preserve the operator's descriptive file name.
+            assert "Private_Org_Name" in saved_files[0].name  # Preserve the sanitized descriptive file name.
         manager_records = [record for record in caplog.records if record.name == ocm.__name__]
         assert len(manager_records) >= 1  # The test must inspect records from the complete export flow.
         manager_log = "\n".join(record.getMessage() for record in manager_records)
+        relative_output_path = Path("data") / saved_files[0].name  # Check the emitted relative path too.
         assert "saved in data/" in manager_log  # Keep the output directory visible to the operator.
-        assert "Private-Org-Name" not in manager_log  # The returned name must not enter manager logs.
+        assert "Private Org Name" not in manager_log  # The returned name must not enter manager logs.
         assert "Private_Org_Name" not in manager_log  # The generated safe filename must not enter manager logs.
+        assert saved_files[0].name not in manager_log  # No manager log may include the generated filename.
+        assert str(relative_output_path) not in manager_log  # No manager log may include the relative output path.
         assert str(saved_files[0]) not in manager_log  # No manager log may include the generated output path.
 
 
