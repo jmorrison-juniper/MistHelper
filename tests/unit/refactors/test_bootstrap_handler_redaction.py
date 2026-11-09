@@ -7,8 +7,13 @@ import sys
 from collections.abc import Iterator
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
+import requests
+import urllib3
+from mistapi.__api_request import APIRequest
+from mistapi.__logger import LogSanitizer
 
 from MistHelper import LogRotationSettings
 from src.foundation.support.refactors import main_entrypoint
@@ -30,7 +35,16 @@ class TestBootstrapHandlerRedaction:
         monkeypatch.setattr(root, "filters", [])  # Isolate the optional SDK root filter.
         monkeypatch.setattr(root, "level", logging.DEBUG)  # Restore the host threshold after the test.
         monkeypatch.setattr(root, "disabled", False)  # Allow synthetic records regardless of host configuration.
-        for name in ("mistapi", "mistapi.bootstrap_redaction"):
+        for name in (
+            "mistapi",
+            "mistapi.bootstrap_redaction",
+            "urllib3",
+            "urllib3.connectionpool",
+            "mistapi_extra",
+            "urllib3_extra",
+            "application.mistapi",
+            "mistapi2",
+        ):
             child = logging.getLogger(name)  # Control propagation without calling an SDK request.
             monkeypatch.setattr(child, "handlers", [])  # Require both records to reach bootstrap handlers.
             monkeypatch.setattr(child, "filters", [])  # Prevent prior filters from hiding a handler defect.
@@ -133,6 +147,107 @@ class TestBootstrapHandlerRedaction:
             assert "SYNTHETIC_FAILURE_VALUE" not in output  # The failed input must not reach an output handler.
         finally:
             root.handlers = [file_handler, console_handler]  # Restore ownership for fixture cleanup.
+
+    @pytest.mark.parametrize("sink", ["file", "console"])
+    @pytest.mark.parametrize(
+        ("name", "protected"),
+        [
+            ("mistapi", True),
+            ("mistapi.bootstrap_redaction", True),
+            ("urllib3", True),
+            ("urllib3.connectionpool", True),
+            ("mistapi_extra", False),
+            ("urllib3_extra", False),
+            ("application.mistapi", False),
+            ("mistapi2", False),
+        ],
+    )
+    @pytest.mark.parametrize("label", ["password ", "token ", "credential\t"])
+    def test_logger_boundaries(self, sinks: BootstrapSinks, sink: str, name: str, protected: bool, label: str) -> None:
+        """Keep whitespace-value protection only inside the exact transport logger families."""
+        root, console, log_path = sinks  # Check each actual sink without shared product data.
+        main_entrypoint.ApplicationBootstrap(parse_cli=False)._configure_logging()  # Install real bootstrap handlers.
+        file_handler, console_handler = root.handlers  # Preserve both handles for cleanup.
+        assert isinstance(console_handler, logging.StreamHandler)
+        console_handler.setStream(console)  # Capture the console after pytest changes its stream.
+        root.handlers = [file_handler if sink == "file" else console_handler]  # Require each boundary to work alone.
+        message = label + "SYNTHETIC_GUARD_VALUE"  # Exercise the earlier whitespace-delimited contract.
+        try:
+            logging.getLogger(name).warning("%s", message)  # Emit through actual logger propagation.
+            output = log_path.read_text(encoding="utf-8") if sink == "file" else console.getvalue()
+            expected = label.strip() + "=***REDACTED***" if protected else message
+            assert output.splitlines()[-1].endswith(" - WARNING - " + expected)
+            assert ("SYNTHETIC_GUARD_VALUE" in output) is (not protected)
+        finally:
+            root.handlers = [file_handler, console_handler]  # Close both real handlers during fixture cleanup.
+
+    @pytest.mark.parametrize("sink", ["file", "console"])
+    @pytest.mark.parametrize("status", [200, 400, 503])
+    def test_mocked_sdk_request(
+        self, sinks: BootstrapSinks, monkeypatch: pytest.MonkeyPatch, sink: str, status: int
+    ) -> None:
+        """Check the installed SDK request logger without creating a real HTTP session."""
+        root, console, log_path = sinks  # Use only isolated handler output.
+        response = requests.Response()  # Build a response in memory without a socket.
+        response.status_code = status  # Exercise success and client/server failures without retries.
+        response._content = b"{}"  # Supply valid JSON for the real SDK response parser.
+        response.request = requests.Request("GET", "https://synthetic.invalid/api/v1/self").prepare()
+        session = SimpleNamespace(proxies={}, get=Mock(return_value=response))  # Keep all HTTP calls in memory.
+        if status >= 400:
+            session.get.side_effect = requests.HTTPError(
+                "password SYNTHETIC_SDK_VALUE", response=response
+            )  # Drive the actual SDK error logger with a synthetic labeled value.
+        monkeypatch.setattr(requests, "session", lambda: session)  # Prevent construction of a network session.
+        request = APIRequest()  # Use the installed SDK logging and request orchestration.
+        request._cloud_uri = "synthetic.invalid"  # Use a reserved hostname without sending a request.
+        logging.getLogger("mistapi").addFilter(LogSanitizer())  # Preserve the SDK's own record formatting boundary.
+        main_entrypoint.ApplicationBootstrap(parse_cli=False)._configure_logging()  # Build both real output handlers.
+        file_handler, console_handler = root.handlers  # Preserve both handles for cleanup.
+        assert isinstance(console_handler, logging.StreamHandler)
+        console_handler.setStream(console)  # Capture the console after pytest starts the call phase.
+        root.handlers = [file_handler if sink == "file" else console_handler]  # Check each sink independently.
+        try:
+            result = request.mist_get("/api/v1/self")  # The session mock prevents DNS, HTTP, and sockets.
+            output = log_path.read_text(encoding="utf-8") if sink == "file" else console.getvalue()
+            session.get.assert_called_once_with("https://synthetic.invalid/api/v1/self")
+            assert "apirequest:mist_get:sending request" in output  # Prove real SDK output reached this sink.
+            assert "SYNTHETIC_SDK_VALUE" not in output  # Keep whitespace-delimited failure values private.
+            if status >= 400:
+                assert "HTTP error: password=***REDACTED***" in output
+            else:
+                assert result.status_code == 200
+                assert "response status code: 200" in output
+        finally:
+            root.handlers = [file_handler, console_handler]  # Release both handlers through fixture cleanup.
+
+    @pytest.mark.parametrize("sink", ["file", "console"])
+    @pytest.mark.parametrize("status", [200, 400, 503])
+    def test_mocked_urllib3_request(self, sinks: BootstrapSinks, sink: str, status: int) -> None:
+        """Check the real urllib3 response logger with a connection that cannot send traffic."""
+        root, console, log_path = sinks  # Use only isolated temporary output.
+        connection = Mock(spec=urllib3.connection.HTTPConnection)  # Replace all connection behavior with a mock.
+        connection.is_closed = False  # Skip connection establishment in the real pool code.
+        connection.getresponse.return_value = urllib3.response.HTTPResponse(
+            body=b"{}", status=status, version=11, version_string="HTTP/1.1"
+        )  # Supply the real response shape without HTTP.
+        main_entrypoint.ApplicationBootstrap(parse_cli=False)._configure_logging()  # Build actual bootstrap sinks.
+        file_handler, console_handler = root.handlers  # Preserve both handles for cleanup.
+        assert isinstance(console_handler, logging.StreamHandler)
+        console_handler.setStream(console)  # Capture the console during the test call phase.
+        root.handlers = [file_handler if sink == "file" else console_handler]  # Keep each sink independent.
+        try:
+            with urllib3.HTTPConnectionPool("synthetic.invalid") as pool:
+                response = pool._make_request(
+                    connection, "GET", "/diagnostic?password=SYNTHETIC_TRANSPORT_VALUE"
+                )  # The mock handles request/getresponse without creating a socket.
+            output = log_path.read_text(encoding="utf-8") if sink == "file" else console.getvalue()
+            connection.request.assert_called_once()  # Confirm that the real pool used only the mock.
+            assert response.status == status
+            assert "HTTP/1.1" in output and str(status) in output
+            assert "password=***REDACTED***" in output
+            assert "SYNTHETIC_TRANSPORT_VALUE" not in output
+        finally:
+            root.handlers = [file_handler, console_handler]  # Close both actual output handlers.
 
     @pytest.mark.parametrize(("console_level", "file_level"), [(10, 20), (30, 40)])
     def test_output_policy(

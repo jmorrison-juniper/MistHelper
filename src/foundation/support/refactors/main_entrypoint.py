@@ -39,6 +39,16 @@ logger = logging.getLogger(__name__)  # Name the logger for this module so a rea
 _MH = SourceDependencyResolver  # Use the source resolver for lazy host and source dependency access.
 
 
+class SDKLogSensitiveFilter(SensitiveFilter):
+    """Redact SDK transport records without changing the policy for application text."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        """Apply shared redaction only to exact SDK logger families and their children."""
+        if record.name in ("mistapi", "urllib3") or record.name.startswith(("mistapi.", "urllib3.")):
+            return super().filter(record)  # Keep the existing conservative rules for SDK and transport output.
+        return True  # Preserve the previous policy for all other logger names.
+
+
 @dataclass
 class AppContext:
     """Own the live application state for one MistHelper process.
@@ -197,11 +207,11 @@ class ApplicationBootstrap:  # Explicit startup step for CLI and web hosts
         console_handler = logging.StreamHandler()  # Preserve console logging for operators.
         console_handler.setLevel(console_level)  # Apply the requested console threshold.
         console_handler.addFilter(ConsoleEchoFilter())  # Keep the file copy without repeating direct terminal output.
-        console_handler.addFilter(SensitiveFilter())  # Redact propagated child records before console output.
+        console_handler.addFilter(SDKLogSensitiveFilter())  # Redact SDK transport records before console output.
         file_path = log_dir / "script.log"  # Preserve the existing log file name.
         file_handler = _MH.LogRotationSettings.from_environment().build_handler(str(file_path))  # Bound log growth.
         file_handler.setLevel(file_level)  # Apply the requested file threshold.
-        file_handler.addFilter(SensitiveFilter())  # Redact propagated child records before file output.
+        file_handler.addFilter(SDKLogSensitiveFilter())  # Redact SDK transport records before file output.
         logging.basicConfig(  # Configure root logging only inside this bootstrap step.
             level=logging.DEBUG,  # Capture all records and let handlers filter them.
             format="%(asctime)s - %(levelname)s - %(message)s",  # Keep the historical log line format.

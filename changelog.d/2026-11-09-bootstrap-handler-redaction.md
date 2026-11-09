@@ -1,4 +1,4 @@
 ### Bootstrap log handler redaction
 
-- **Security**: Install the shared sensitive-value filter on the bootstrap file and console handlers.
-  This local change addresses handler coverage only. Other redaction work remains separate.
+- **Security**: Filter `mistapi` and `urllib3` records at the bootstrap file and console handlers.
+  Keep the existing policy for other logger names. Direct SDK console output remains outside this change.
