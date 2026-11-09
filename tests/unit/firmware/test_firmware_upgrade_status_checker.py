@@ -958,10 +958,10 @@ class TestCheckStoredUpgrades:
         assert "No site-level upgrade tracking file" in capsys.readouterr().out
 
     def test_load_error_returns(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        chk = _make_checker(monkeypatch)
-        monkeypatch.setattr(os.path, "exists", lambda _p: True)
-        monkeypatch.setattr(chk, "_load_org_upgrades_from_file", lambda _p: None)
-        chk._check_stored_upgrades()
+        chk, loader, probe = _stored_load_failure_probe(monkeypatch)
+        chk._check_stored_upgrades()  # Exercise the failed tracker read without a live upgrade probe.
+        loader.assert_called_once_with("ActiveUpgrades.json")
+        assert probe.call_args_list == []  # A failed read must prevent each subsequent upgrade probe.
 
     def test_empty_after_filter(self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
         chk = _make_checker(monkeypatch)
@@ -1192,9 +1192,9 @@ class TestSiteUpgrades:
         assert capsys.readouterr().out == ""
 
     def test_check_site_upgrades_with_filter(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        chk = _make_checker(monkeypatch, site_filter="site-x")
-        monkeypatch.setattr(chk, "_check_single_site_upgrades", lambda _s: True)
-        chk._check_site_upgrades()
+        chk, sites = _single_site_probe(monkeypatch)
+        chk._check_site_upgrades()  # Exercise the scope decision with other sites available.
+        assert sites == ["site-x"]  # The selected site must be the only site checked.
 
     def test_check_site_upgrades_no_filter_uses_first_5(self, monkeypatch: pytest.MonkeyPatch) -> None:
         chk = _make_checker(monkeypatch)
@@ -1305,7 +1305,7 @@ class TestExports:
 
     def test_export_active_operations_empty(self, monkeypatch: pytest.MonkeyPatch) -> None:
         chk = _make_checker(monkeypatch)
-        chk._export_active_operations("ts")
+        assert _empty_export_open_calls(chk, monkeypatch) == []  # Empty data must not open an export file.
 
     def test_export_active_operations_writes_csv(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> None:
         chk = _make_checker(monkeypatch)
@@ -1421,15 +1421,15 @@ class TestCheckOrchestrator:
     """``check`` end-to-end orchestration + ``_check_active_operations`` fanout."""
 
     def test_early_exit_on_no_site(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        chk = _make_checker(monkeypatch)
-        monkeypatch.setattr(chk, "_resolve_site_filter", lambda: False)
-        chk.check()  # no exception
+        chk, stages = _status_stage_probe(monkeypatch, "_resolve_site_filter")
+        chk.check()  # Exercise the real orchestration with a canceled site selection.
+        assert stages == ["_resolve_site_filter"]  # Cancellation must prevent every later stage.
 
     def test_early_exit_on_no_stats(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        chk = _make_checker(monkeypatch)
-        monkeypatch.setattr(chk, "_resolve_site_filter", lambda: True)
-        monkeypatch.setattr(chk, "_fetch_device_stats", lambda: False)
-        chk.check()
+        chk, stages = _status_stage_probe(monkeypatch, "_fetch_device_stats")
+        chk.check()  # Exercise the real orchestration with unavailable device statistics.
+        # No later stage may fetch data, process devices, display results, or export files.
+        assert stages == ["_resolve_site_filter", "_fetch_device_stats"]
 
     def test_happy_path_calls_all_stages(self, monkeypatch: pytest.MonkeyPatch) -> None:
         chk = _make_checker(monkeypatch)
@@ -1514,3 +1514,55 @@ def test_ssr_upgrade_payload_http_errors_return_none(
     )
     result = chk._fetch_ssr_upgrades_payload()  # WHY: drive the real response-status branch.
     assert result is None  # WHY: failed HTTP status codes cannot prove that no upgrades exist.
+
+
+def _stored_load_failure_probe(
+    monkeypatch: pytest.MonkeyPatch,
+) -> tuple[FirmwareUpgradeStatusChecker, MagicMock, MagicMock]:
+    """Observe tracker loading and upgrade probes without external requests."""
+    chk = _make_checker(monkeypatch)
+    loader, probe = MagicMock(return_value=None), MagicMock()
+    monkeypatch.setattr(os.path, "exists", lambda _path: True)
+    monkeypatch.setattr(chk, "_load_org_upgrades_from_file", loader)
+    monkeypatch.setattr(chk, "_check_stored_upgrade", probe)
+    return chk, loader, probe
+
+
+def _single_site_probe(
+    monkeypatch: pytest.MonkeyPatch,
+) -> tuple[FirmwareUpgradeStatusChecker, list[str]]:
+    """Record the selected site with unrelated sites available in the lookup."""
+    chk = _make_checker(monkeypatch, site_filter="site-x")
+    chk.site_lookup = {"site-other": "Other site", "site-x": "Selected site"}
+    sites: list[str] = []
+    monkeypatch.setattr(chk, "_check_single_site_upgrades", lambda site: sites.append(site) or True)
+    return chk, sites
+
+
+def _empty_export_open_calls(chk: FirmwareUpgradeStatusChecker, monkeypatch: pytest.MonkeyPatch) -> list[Any]:
+    """Observe file access during an empty export without creating a file."""
+    opened = MagicMock()
+    monkeypatch.setattr(builtins, "open", opened)
+    chk._export_active_operations("ts")
+    return opened.mock_calls
+
+
+def _status_stage_probe(
+    monkeypatch: pytest.MonkeyPatch, stop_stage: str
+) -> tuple[FirmwareUpgradeStatusChecker, list[str]]:
+    """Record orchestration stages and stop at the specified failed prerequisite."""
+    chk = _make_checker(monkeypatch)
+    stages: list[str] = []
+    for name in (
+        "_resolve_site_filter",
+        "_fetch_device_stats",
+        "_fetch_site_lookup",
+        "_process_all_devices",
+        "_display_summary",
+        "_display_upgrading_devices",
+        "_check_active_operations",
+        "_export_results",
+        "_display_recommendations",
+    ):
+        monkeypatch.setattr(chk, name, lambda stage=name: stages.append(stage) or stage != stop_stage)
+    return chk, stages
