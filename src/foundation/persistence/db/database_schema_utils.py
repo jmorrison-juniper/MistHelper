@@ -47,7 +47,7 @@ class DatabaseSchemaUtils:  # Build SQLite DDL from data.
 
     @staticmethod
     def determine_api_function_name_from_context() -> str:  # Infer API name from the call stack.
-        """Walk the call stack and return the first frame whose name looks like a Mist API call. Else 'unknown'."""
+        """Return the nearest API name or 'unknown' for no match. Let local failures propagate."""
         frame = inspect.currentframe()  # Start at the current frame.
         try:
             while frame:  # Walk up the stack.
@@ -59,8 +59,6 @@ class DatabaseSchemaUtils:  # Build SQLite DDL from data.
                     logger.debug("Detected API function name from stack: %s", function_name)  # Trace detected name.
                     return function_name  # Use the detected API name.
                 frame = frame.f_back  # Step to the caller frame.
-        except Exception as error:  # Stack inspection failed.
-            logging.debug("Error determining API function name: %s", error)  # Trace the inspection error.
         finally:
             del frame  # Break the reference cycle.
         return "unknown"  # Fallback when undetected.

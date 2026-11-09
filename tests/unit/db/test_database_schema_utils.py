@@ -53,7 +53,7 @@ class TestDetermineApiFunctionNameFromContext:
         assert searchOrgClients() == "searchOrgClients"
 
     def test_handles_stack_inspection_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """When frame introspection raises, the try/except returns the 'unknown' fallback."""
+        """A local inspection failure must propagate without selecting a different schema."""
         import src.foundation.persistence.db.database_schema_utils as module
 
         class _ExplodingFrame:
@@ -64,7 +64,8 @@ class TestDetermineApiFunctionNameFromContext:
                 raise RuntimeError("frame introspection failed")
 
         monkeypatch.setattr(module.inspect, "currentframe", lambda: _ExplodingFrame())
-        assert DatabaseSchemaUtils.determine_api_function_name_from_context() == "unknown"
+        with pytest.raises(RuntimeError, match="frame introspection failed"):
+            DatabaseSchemaUtils.determine_api_function_name_from_context()
 
 
 class TestGetEndpointStrategy:
