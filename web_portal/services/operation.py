@@ -281,6 +281,7 @@ def _endpoint_family_dynamic_parameters(required: tuple[str, ...]) -> list[dict]
 
 def _endpoint_family_choice_options(operations: tuple) -> tuple[list[dict], dict[str, list[dict]]]:
     """Build chooser options and per-choice prompt controls for one endpoint family."""
+    # Resolve the current catalog function each time a caller builds choices.
     from src.operations.exporting.export.endpoint_catalog import (
         menu_text,
     )  # Use the same readable text the CLI chooser prints.
@@ -308,8 +309,8 @@ def _site_scoped_chooser_options() -> tuple:
     Returns:
         The count options and the simple-endpoint options, in chooser order.
     """
-    # These modules already load when the menu table builds, so the import is
-    # resolved by this point and costs nothing extra.
+    # Resolve the current tables each time a caller builds the site choices.
+    # The registry also calls this helper during module initialization.
     from src.operations.exporting.export.count_exporter import _SITE_OPS as site_count_ops
     from src.operations.exporting.export.simple_endpoint_exporter import _SITE_OPS as site_endpoint_ops
 
@@ -635,6 +636,8 @@ def _build_registry() -> dict:
     # alarm acknowledge confirmation as the last control.
     # The subcategory values use the category/subcategory pair, because the
     # categories ap and gateway both hold the subcategory key non_compliant.
+    # Resolve the current model constants when the registry is built.
+    # The first registry build runs during module initialization.
     from src.mist.intelligence.marvis.actions.model import (
         CATEGORY_NAMES,  # Read the category names that the CLI table shows.
         RESOLUTION_CODES,  # Read the four codes in the order of the Mist UI.
@@ -727,6 +730,8 @@ def _build_registry() -> dict:
         ],
     }
 
+    # Resolve the current field list when the registry is built.
+    # Keep this import after the Marvis model to preserve initialization order.
     from src.mist.intelligence.reports.client_fingerprint_census.model import (
         DISTINCT_FIELDS,
     )  # Read the OpenAPI field list.
@@ -777,6 +782,8 @@ def _build_registry() -> dict:
     }
 
     # --- Issue #3230 required plain prompts and endpoint family explorers ---
+    # Resolve the current exporter tables when the registry is built.
+    # Keep this group after the site chooser and model imports to preserve their order.
     from src.operations.exporting.export.count_exporter import (
         _MSP_OPS as msp_count_ops,
     )  # Read the MSP chooser source of truth.
@@ -1372,6 +1379,7 @@ class OperationExecutor:
 
     def _run_operation_for_owner(self, run: dict, parameters: dict) -> None:
         """Run the operation and assess its result while this run owns the worker."""
+        # Load the input hook only when this service executes an operation.
         from web_portal.services.input_hook import web_input_context  # Keep submitted answers scoped to this worker.
 
         self._update_status(run, "running", 0)  # Publish the active state before the handler starts.
