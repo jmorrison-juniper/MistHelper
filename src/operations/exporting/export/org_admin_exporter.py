@@ -68,10 +68,11 @@ class OrgAdminExporter:
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         license_api = mistapi.api.v1.orgs.licenses  # Locate the SDK namespace before selecting an endpoint.
         logger.info("Requesting organization licenses for org %s", current_org_id)  # Identify the request target.
-        if hasattr(license_api, "listOrgLicenses"):  # The installed SDK determines whether this wrapper exists.
-            response = license_api.listOrgLicenses(mh.apisession, current_org_id, limit=1000)  # Use the SDK wrapper.
-            OrgAdminExporter._validate_license_response(response, current_org_id)  # Validate before SDK pagination.
-            return mistapi.get_all(response=response, mist_session=mh.apisession) or []  # Preserve SDK pagination.
+        if hasattr(license_api, "listOrgLicenses"):  # Check the namespace before accessing its optional member.
+            if license_api.listOrgLicenses is not None:  # Preserve the direct request when the wrapper is null.
+                response = license_api.listOrgLicenses(mh.apisession, current_org_id, limit=1000)  # Use the wrapper.
+                OrgAdminExporter._validate_license_response(response, current_org_id)  # Validate before pagination.
+                return mistapi.get_all(response=response, mist_session=mh.apisession) or []  # Preserve SDK pagination.
         logger.debug("listOrgLicenses wrapper not present in mistapi library; performing direct GET /licenses")
         raw_url = f"/api/v1/orgs/{current_org_id}/licenses"  # Compose the existing SDK session path.
         if mh.apisession is None:  # Direct GET requires an initialized session.
