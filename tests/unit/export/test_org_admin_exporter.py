@@ -82,6 +82,7 @@ def test_fetch_license_payload_uses_wrapper_when_present() -> None:
     """When listOrgLicenses exists on mistapi the wrapper path paginates via get_all."""
     fake_mh = _make_mh()
     fake_response = MagicMock(name="wrapperResponse")
+    fake_response.status_code = 200
     fake_licenses_ns = MagicMock(name="licensesNS")
     fake_licenses_ns.listOrgLicenses.return_value = fake_response
     fake_mistapi = MagicMock(name="mistapi")
@@ -102,7 +103,7 @@ def test_fetch_license_payload_uses_wrapper_when_present() -> None:
 def test_fetch_license_payload_raw_get_fallback_when_wrapper_absent() -> None:
     """When listOrgLicenses is missing the helper issues a raw GET and unwraps .data."""
     fake_mh = _make_mh()
-    fake_mh.apisession.mist_get.return_value = SimpleNamespace(data=[{"id": "L2"}])
+    fake_mh.apisession.mist_get.return_value = SimpleNamespace(status_code=200, data=[{"id": "L2"}])
     fake_mistapi = MagicMock(name="mistapi")
     fake_mistapi.api.v1.orgs.licenses = SimpleNamespace()  # No listOrgLicenses attribute.
 
@@ -119,7 +120,7 @@ def test_fetch_license_payload_raw_get_fallback_when_wrapper_absent() -> None:
 def test_fetch_license_payload_raw_get_defaults_none_data_to_empty_list() -> None:
     """Raw GET fallback with .data=None must return an empty list, not None."""
     fake_mh = _make_mh()
-    fake_mh.apisession.mist_get.return_value = SimpleNamespace(data=None)
+    fake_mh.apisession.mist_get.return_value = SimpleNamespace(status_code=200, data=None)
     fake_mistapi = MagicMock(name="mistapi")
     fake_mistapi.api.v1.orgs.licenses = SimpleNamespace()
 
@@ -146,6 +147,22 @@ def test_fetch_license_payload_raises_when_session_not_initialized() -> None:
             OrgAdminExporter._fetch_license_payload("org-uuid")
 
 
+def test_fetch_license_payload_rejects_http_503_before_pagination() -> None:
+    """A server failure must stop the SDK wrapper path before data consumption."""
+    fake_mh = _make_mh()
+    fake_mistapi = MagicMock(name="mistapi")
+    response = SimpleNamespace(status_code=503, data={"error": "synthetic failure"})
+    fake_mistapi.api.v1.orgs.licenses.listOrgLicenses.return_value = response
+    with (
+        patch("src.operations.exporting.export.org_admin_exporter.mistapi", fake_mistapi),
+        patch("src.operations.exporting.export.org_admin_exporter.SourceDependencyResolver", fake_mh),
+    ):
+        with pytest.raises(RuntimeError, match="HTTP 503"):
+            OrgAdminExporter._fetch_license_payload("org-uuid")
+    fake_mistapi.get_all.assert_not_called()
+    fake_mh.DataExporter.write_with_format_selection.assert_not_called()
+
+
 # ---------- _fetch_license_records ----------
 
 
@@ -164,18 +181,17 @@ def test_fetch_license_records_wraps_non_list_payload_into_list() -> None:
 # ---------- licenses ----------
 
 
-def test_licenses_writes_empty_csv_when_no_records() -> None:
-    """No records -> empty CSV write, no DataProcessing pipeline."""
+def test_licenses_skips_write_when_no_records() -> None:
+    """A valid empty result requires no writer or data processing."""
     fake_mh = _make_mh()
     fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org-uuid"
     with (
         patch("src.operations.exporting.export.org_admin_exporter.SourceDependencyResolver", fake_mh),
         patch.object(OrgAdminExporter, "_fetch_license_records", return_value=[]),
     ):
-        OrgAdminExporter.licenses()
-    fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(
-        [], "OrgLicenses.csv", api_function_name="listOrgLicenses"
-    )
+        result = OrgAdminExporter.licenses()
+    assert result is None
+    fake_mh.DataExporter.write_with_format_selection.assert_not_called()
 
 
 def test_licenses_flattens_escapes_and_writes_on_success() -> None:
@@ -197,8 +213,8 @@ def test_licenses_flattens_escapes_and_writes_on_success() -> None:
     )
 
 
-def test_licenses_best_effort_empty_write_on_fetch_failure_then_reraises() -> None:
-    """A fetch error triggers a best-effort empty write and re-raises."""
+def test_licenses_fetch_failure_reraises_without_write() -> None:
+    """A fetch error propagates without an empty recovery write."""
     fake_mh = _make_mh()
     fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org-uuid"
     boom = RuntimeError("fetch failed")
@@ -208,13 +224,11 @@ def test_licenses_best_effort_empty_write_on_fetch_failure_then_reraises() -> No
     ):
         with pytest.raises(RuntimeError, match="fetch failed"):
             OrgAdminExporter.licenses()
-    fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(
-        [], "OrgLicenses.csv", api_function_name="listOrgLicenses"
-    )  # WHY: empty write keeps endpoint metadata.
+    fake_mh.DataExporter.write_with_format_selection.assert_not_called()
 
 
-def test_licenses_swallows_secondary_write_failure() -> None:
-    """If the best-effort cleanup write also fails, the primary error still propagates."""
+def test_licenses_preserves_primary_error_without_recovery_write() -> None:
+    """An unavailable writer must not replace the primary fetch failure."""
     fake_mh = _make_mh()
     fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org-uuid"
     fake_mh.DataExporter.write_with_format_selection.side_effect = OSError("disk full")
@@ -224,6 +238,7 @@ def test_licenses_swallows_secondary_write_failure() -> None:
     ):
         with pytest.raises(RuntimeError, match="primary"):
             OrgAdminExporter.licenses()
+    fake_mh.DataExporter.write_with_format_selection.assert_not_called()
 
 
 # ---------- usage ----------
