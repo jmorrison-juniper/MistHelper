@@ -73,18 +73,23 @@ class SitesByAPModelExporter:
         return SitesByAPModelExporter._resolve_model_choice(choice, models)  # Parse + bounds-check
 
     @staticmethod
-    def _split_address(address: str) -> tuple[str, str, str, str, str]:  # Split an address string.
-        """Split a full address string into street, city, state, zip, country."""
+    def _split_address(address: object) -> tuple[object, str, str, str, str]:  # Preserve raw external values.
+        """Split strings, retain incomplete or non-string values, and propagate unexpected errors."""
+        if not isinstance(address, str):  # External values need not satisfy the expected string schema.
+            logger.debug("Cannot split a non-string address of type %s.", type(address).__name__)  # Explain retention.
+            return address, "", "", "", ""  # Preserve the existing raw-value fallback without conversion.
+        logger.info("Splitting a site address.")  # Trace the transform without disclosing the address.
+        parts = address.split(", ")  # A split failure is not a missing field and must propagate.
         try:
-            parts = address.split(", ")  # Split on commas.
             street = parts[0]  # Street part.
             city = parts[1]  # City part.
             state_zip = parts[2].split()  # State/zip part.
             state = state_zip[0]  # State token.
             zip_code = state_zip[1]  # Zip token.
             country = parts[3]  # Country part.
+            logger.debug("Split a site address into five fields.")  # Report the completed transform.
             return street, city, state, zip_code, country  # Return the parts.
-        except Exception as exception:  # Parse failed.
+        except IndexError as exception:  # Missing address parts or state/zip tokens retain the original value.
             logging.debug("Failed to split address '%s': %s", address, exception)  # Trace the failure.
             return address, "", "", "", ""  # Return address as street.
 
