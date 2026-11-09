@@ -129,7 +129,7 @@ class TestBootstrapHandlerRedaction:
                 "password=SYNTHETIC_FAILURE_VALUE count=%d", "invalid"
             )
             output = log_path.read_text(encoding="utf-8") if sink == "file" else console.getvalue()
-            assert "Log redaction failed: TypeError:" in output  # Require an explicit diagnostic rather than silence.
+            assert " - ERROR - Log redaction failed: TypeError" in output  # Require the error type, not exception text.
             assert "SYNTHETIC_FAILURE_VALUE" not in output  # The failed input must not reach an output handler.
         finally:
             root.handlers = [file_handler, console_handler]  # Restore ownership for fixture cleanup.
