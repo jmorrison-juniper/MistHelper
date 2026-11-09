@@ -152,9 +152,8 @@ class TestRunCsvGenerator:
         assert record.name == "root"
         assert record.levelno == logging.ERROR
         assert record.getMessage() == "Failed to generate out.csv using boom_gen: generator failed"
-        assert record.exc_info is not None
-        assert record.exc_info[:2] == (error_type, error)
-        assert record.exc_info[2] is not None
+        assert record.exc_info and record.exc_info[:2] == (error_type, error)
+        assert record.exc_info[2] is error.__traceback__
         assert "Traceback (most recent call last):" in caplog.text
         assert "_run_csv_generator" in caplog.text
         assert f"{error_type.__name__}: generator failed" in caplog.text
@@ -227,9 +226,8 @@ class TestCheckAndGenerateCsv:
         assert len(caplog.records) == 1
         record = caplog.records[0]
         assert record.getMessage() == "Failed to generate nope.csv using bad_gen: nope"
-        assert record.exc_info is not None
-        assert record.exc_info[1] is error
-        assert record.exc_info[2] is not None
+        assert record.exc_info and record.exc_info[:2] == (ValueError, error)
+        assert record.exc_info[2] is error.__traceback__
         assert "Traceback (most recent call last):" in caplog.text
         assert "ValueError: nope" in caplog.text
 
