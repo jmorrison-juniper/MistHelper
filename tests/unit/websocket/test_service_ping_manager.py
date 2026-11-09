@@ -977,12 +977,12 @@ def test_cleanup_disconnects_when_manager_present(capsys: pytest.CaptureFixture[
     assert "WebSocket connection closed" in capsys.readouterr().out
 
 
-def test_cleanup_noop_when_no_manager() -> None:
-    """No websocket manager means cleanup is a no-op with no exception raised."""
+def test_cleanup_noop_when_no_manager(caplog: pytest.LogCaptureFixture) -> None:
+    """Without a manager, cleanup raises no exception and reports no false failure."""
     _configure_manager()
     manager = ServicePingManager()
 
-    manager._cleanup()
+    assert _cleanup_warning_messages(manager, caplog) == []
 
 
 def test_cleanup_swallows_exceptions(caplog: pytest.LogCaptureFixture) -> None:
@@ -1231,3 +1231,10 @@ def test_menu_action_120_description_is_preserved() -> None:
     assert callable(handler)
     assert "WebSocket Service Ping" in description
     assert "SSR gateways" in description
+
+
+def _cleanup_warning_messages(manager: ServicePingManager, caplog: pytest.LogCaptureFixture) -> list[str]:
+    """Observe cleanup warnings without replacing the cleanup behavior."""
+    with caplog.at_level(logging.WARNING, logger="root"):
+        manager._cleanup()
+    return [record.getMessage() for record in caplog.records if "WebSocket cleanup error" in record.getMessage()]
