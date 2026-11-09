@@ -83,7 +83,7 @@ def test_host_outside_the_allowlist_is_refused_before_any_send() -> None:
     client, _sleeps = _client(http)  # WHY: the gateway under test.
     with pytest.raises(JuniperTransportError, match="not in JUNIPER_ALLOWED_HOSTS"):  # WHY: the host check.
         _post(client, base="https://evil.example.org/css-caseapi/1.0")  # WHY: an unlisted host.
-    assert http.calls == []  # WHY: nothing was sent.
+    assert not http.calls  # WHY: nothing was sent.
 
 
 def test_plain_http_base_address_is_refused_before_any_send() -> None:
@@ -92,7 +92,7 @@ def test_plain_http_base_address_is_refused_before_any_send() -> None:
     client, _sleeps = _client(http)  # WHY: the gateway under test.
     with pytest.raises(JuniperTransportError, match="HTTPS"):  # WHY: the scheme check.
         _post(client, base="http://apigw.juniper.net/css-caseapi/1.0")  # WHY: plain HTTP.
-    assert http.calls == []  # WHY: nothing was sent.
+    assert not http.calls  # WHY: nothing was sent.
 
 
 def test_redirect_reply_is_refused_and_not_followed() -> None:
@@ -179,7 +179,7 @@ def test_rate_limiter_pauses_when_no_token_is_left() -> None:
     """The second request in the same instant waits for the refill."""
     clock = FakeClock()  # WHY: time does not move on its own.
     sleeps: list[float] = []  # WHY: record the pauses.
-    limiter = RequestRateLimiter(2.0, clock, lambda seconds: sleeps.append(seconds))  # WHY: 2 requests per second.
+    limiter = RequestRateLimiter(2.0, clock, sleeps.append)  # WHY: 2 requests per second.
     assert limiter.acquire() == 0.0  # WHY: the first request uses the starting token.
     assert limiter.acquire() == pytest.approx(0.5)  # WHY: the next token refills in half a second at 2 per second.
     assert sleeps == [pytest.approx(0.5)]  # WHY: the pause was requested once.

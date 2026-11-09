@@ -34,7 +34,7 @@ def test_list_row_maps_the_summary_fields() -> None:
     )
     assert request.request_number == "2026-0001-000001"  # WHY: the natural key.
     assert request.case_number == "CASE-1"  # WHY: the join value is trimmed.
-    assert request.rma_numbers == ()  # WHY: the list row has no RMA list.
+    assert not request.rma_numbers  # WHY: the list row has no RMA list.
 
 
 def test_detail_collects_the_rma_numbers_in_reply_order() -> None:
@@ -89,4 +89,4 @@ def test_items_of_every_type_get_unique_keys() -> None:
 
 def test_rma_with_no_items_gives_an_empty_list() -> None:
     """An RMA with no item lists yields no items."""
-    assert RmaItem.parse_all("RMA-1", {"rmaNumber": "RMA-1"}) == []  # WHY: nothing to parse.
+    assert not RmaItem.parse_all("RMA-1", {"rmaNumber": "RMA-1"})  # WHY: nothing to parse.
