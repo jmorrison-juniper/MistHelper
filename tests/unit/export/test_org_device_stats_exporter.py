@@ -375,11 +375,11 @@ class TestLoadPortStatsSitesFromApi:
 class TestLogFirstSiteSample:
     """Empty vs populated branches."""
 
-    def test_populated(self, fake_mh):
-        """Populated list logs first entry without raising."""
-        from src.operations.exporting.export.org_device_stats_exporter import OrgDeviceStatsExporter
+    def test_populated(self, fake_mh: ModuleType, caplog: pytest.LogCaptureFixture) -> None:
+        """Require the DEBUG record for the first site and its type."""
+        records = _first_site_sample_records(caplog)
 
-        OrgDeviceStatsExporter._log_first_site_sample([("s1", "n1"), ("s2", "n2")])
+        assert records == [(logging.DEBUG, "First site sample: ('s1', 'n1'), type: <class 'tuple'>")]
 
     def test_empty(self, fake_mh: ModuleType, caplog: pytest.LogCaptureFixture) -> None:
         """Empty list still logs a placeholder without raising."""
@@ -805,3 +805,12 @@ def test_module_importable():
     from src.operations.exporting.export import org_device_stats_exporter
 
     assert hasattr(org_device_stats_exporter, "OrgDeviceStatsExporter")
+
+
+def _first_site_sample_records(caplog: pytest.LogCaptureFixture) -> list[tuple[int, str]]:
+    """Capture the real sample record without moving the other test declarations."""
+    from src.operations.exporting.export.org_device_stats_exporter import OrgDeviceStatsExporter
+
+    with caplog.at_level(logging.DEBUG, logger=OrgDeviceStatsExporter.__module__):
+        OrgDeviceStatsExporter._log_first_site_sample([("s1", "n1"), ("s2", "n2")])
+    return [(record.levelno, record.getMessage()) for record in caplog.records]
