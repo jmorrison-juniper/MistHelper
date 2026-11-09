@@ -59,9 +59,13 @@ class SiteSystemEventsExporter:
         flattened_data = DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten nested dicts for CSV.
         sanitized_data = DataProcessingUtils.escape_multiline(flattened_data)  # Make multiline values CSV-safe.
         filename = f"SiteSystemEvents_{site_name.replace(' ', '_')}.csv"  # Per-site filename.
-        mh.DataExporter.write_with_format_selection(  # Persist through the CSV, SQLite, or Arango selector.
+        logger.info("Writing searchSiteSystemEvents rows to %s", filename)  # Identify the output before persistence.
+        success = mh.DataExporter.write_with_format_selection(  # Keep the writer's actual persistence result.
             sanitized_data, filename, api_function_name="searchSiteSystemEvents"
         )
+        if not success:  # A failed write must not produce either success message.
+            logger.error("searchSiteSystemEvents failed to write %d rows to %s", len(rawdata), filename)
+            return
         logger.debug(  # Post-call count trace per the action-logging rule.
             "searchSiteSystemEvents persisted %d rows to %s", len(rawdata), filename
         )

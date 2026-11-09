@@ -317,3 +317,119 @@ class TestSystemEvents:
 
         api = wired["api:src.operations.exporting.export.site_system_events_exporter"]
         api.api.v1.sites.events.searchSiteSystemEvents.assert_not_called()
+
+
+class TestSiteWriteOutcomes:
+    """Keep persistence results consistent through both site menu operations."""
+
+    @pytest.fixture(
+        params=[
+            ("applications", False),
+            ("applications", True),
+            ("system-events", False),
+            ("system-events", True),
+        ],
+        ids=["applications-direct", "applications-menu", "system-events-direct", "system-events-menu"],
+    )
+    def write_case(self, wired: dict[str, Any], request: pytest.FixtureRequest) -> dict[str, Any]:
+        """Supply synthetic rows through the persistence method or the menu."""
+        applications, through_menu = request.param  # Select the reserved exporter and its entry point.
+        exporter = SiteApplicationListExporter if applications == "applications" else SiteSystemEventsExporter
+        module_path = exporter.__module__  # Reuse the existing collaborator isolation for this source module.
+        api = wired[f"api:{module_path}"].api.v1.sites  # Keep SDK calls inside the existing mock tree.
+        endpoint = "getSiteApplicationList" if applications == "applications" else "searchSiteSystemEvents"
+        rows = [{"id": "synthetic"}]  # Use no production identifiers or records.
+        sdk_module = api.wxtags if applications == "applications" else api.events  # Preserve endpoint routing.
+        getattr(sdk_module, endpoint).return_value = rows  # Feed the menu the same rows as the direct method.
+        persist = getattr(
+            exporter, "_persist_applications" if applications == "applications" else "_persist_system_events"
+        )
+        menu = getattr(exporter, "application_list" if applications == "applications" else "system_events")
+        return {
+            "invoke": menu if through_menu else lambda: persist(rows, "HQ Site"),
+            "through_menu": through_menu,
+            "rows": rows,
+            "endpoint": endpoint,
+            "filename": f"{exporter.__name__.removesuffix('Exporter')}_HQ_Site.csv",
+            "writer": wired["DataExporter"].write_with_format_selection,
+            "processing": wired[f"dp:{module_path}"],
+        }
+
+    def test_failed_write_reports_error_without_success(
+        self, write_case: dict[str, Any], caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """A failed writer must not produce either persistence success message."""
+        write_case["writer"].return_value = False  # Exercise the reported defect with a real Boolean result.
+        with caplog.at_level(logging.DEBUG):  # Capture the persistence trace as well as operator notices.
+            result = write_case["invoke"]()  # Exercise the direct method and the menu integration independently.
+        assert result is None  # Preserve the existing public and private return contracts.
+        write_case["writer"].assert_called_once_with(
+            write_case["rows"], write_case["filename"], api_function_name=write_case["endpoint"]
+        )
+        errors = [record.message for record in caplog.records if record.levelno >= logging.ERROR]
+        assert len(errors) == 1  # Report one failure rather than a success or duplicate error.
+        assert write_case["filename"] in errors[0]  # Identify the output that the writer could not save.
+        assert write_case["endpoint"] in errors[0]  # Identify the operation that failed.
+        assert "persisted" not in caplog.text  # Reject a false persistence trace.
+        assert " exported " not in caplog.text  # Reject a false operator success notice.
+
+    def test_successful_write_preserves_transforms_and_messages(
+        self, write_case: dict[str, Any], caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """A successful writer must receive sanitized rows and retain both notices."""
+        write_case["writer"].return_value = True  # Require an explicit successful writer result.
+        processing = write_case["processing"]  # Observe both existing row transformations.
+        processing.flatten_nested_fields.side_effect = None  # Replace the fixture's identity transformation.
+        processing.flatten_nested_fields.return_value = [{"flat": "synthetic"}]  # Distinguish the flatten result.
+        processing.escape_multiline.side_effect = None  # Replace the fixture's identity escaping.
+        processing.escape_multiline.return_value = [{"safe": "synthetic"}]  # Distinguish the writer payload.
+        with caplog.at_level(logging.DEBUG):  # Retain evidence for both success messages.
+            result = write_case["invoke"]()  # Exercise the same successful result through both entry points.
+        assert result is None  # Do not expose the writer result as a new return value.
+        processing.flatten_nested_fields.assert_called_once_with(write_case["rows"])
+        processing.escape_multiline.assert_called_once_with([{"flat": "synthetic"}])
+        write_case["writer"].assert_called_once_with(
+            [{"safe": "synthetic"}], write_case["filename"], api_function_name=write_case["endpoint"]
+        )
+        assert f"{write_case['endpoint']} persisted 1 rows to {write_case['filename']}" in caplog.text
+        kind = "application" if write_case["endpoint"] == "getSiteApplicationList" else "system event"
+        assert f"! 1 {kind} records exported to {write_case['filename']}" in caplog.text
+        assert not any(record.levelno >= logging.ERROR for record in caplog.records)
+
+    def test_empty_rows_preserve_notice_without_writing(
+        self, write_case: dict[str, Any], caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """An empty response must still stop before transformation or persistence."""
+        write_case["rows"].clear()  # Feed both entry points an empty synthetic response.
+        with caplog.at_level(logging.DEBUG):  # Detect an accidental success or error notice.
+            result = write_case["invoke"]()  # Exercise the existing early return.
+        assert result is None  # Preserve the empty-result return contract.
+        write_case["writer"].assert_not_called()  # Never persist an empty result.
+        write_case["processing"].flatten_nested_fields.assert_not_called()  # Preserve the early return boundary.
+        write_case["processing"].escape_multiline.assert_not_called()  # Do not sanitize missing rows.
+        kind = "application" if write_case["endpoint"] == "getSiteApplicationList" else "system event"
+        assert f"! No {kind} data found for this site" in caplog.text  # Keep the existing empty notice.
+        assert "persisted" not in caplog.text  # Do not report a persistence operation.
+        assert " exported " not in caplog.text  # Do not report a successful export.
+        assert not any(record.levelno >= logging.ERROR for record in caplog.records)
+
+    def test_writer_exception_keeps_existing_boundary(
+        self, write_case: dict[str, Any], caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Direct calls must propagate exceptions while menus retain their handlers."""
+        failure = RuntimeError("synthetic writer failure")  # Use a fixed error with no production details.
+        write_case["writer"].side_effect = failure  # Fail only the mocked persistence operation.
+        with caplog.at_level(logging.DEBUG):  # Reject success messages after the exception.
+            if write_case["through_menu"]:  # Menu handlers already convert exceptions into operator errors.
+                assert write_case["invoke"]() is None  # Preserve the menu return contract.
+                assert "synthetic writer failure" in caplog.text  # Retain the existing failure context.
+                assert any(record.levelno >= logging.ERROR for record in caplog.records)
+            else:  # Private persistence methods must not swallow a writer exception.
+                with pytest.raises(RuntimeError, match="synthetic writer failure") as raised:
+                    write_case["invoke"]()  # Exercise the unchanged exception boundary.
+                assert raised.value is failure  # Preserve the exact exception rather than replace it.
+        write_case["writer"].assert_called_once_with(
+            write_case["rows"], write_case["filename"], api_function_name=write_case["endpoint"]
+        )
+        assert "persisted" not in caplog.text  # An exception must never claim persistence.
+        assert " exported " not in caplog.text  # An exception must never claim export success.
