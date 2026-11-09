@@ -171,6 +171,8 @@ class TestVerifyEmailMenu:
             SelfAccountExporter.verify_email()
 
         mist_helper.DataExporter.write_with_format_selection.assert_called_once()
+        row = mist_helper.DataExporter.write_with_format_selection.call_args.args[0][0]
+        assert (row["org_id"], row["status_code"], row["detail"]) == (ORG_ID, 200, "")
 
     def test_no_org_returns_early(self, mist_helper: MagicMock) -> None:
         """A cancelled org prompt must not call the Mist API."""
@@ -182,6 +184,8 @@ class TestVerifyEmailMenu:
         verify.assert_not_called()
         mist_helper.InputUtils.safe_input.assert_not_called()
         mist_helper.DataExporter.write_with_format_selection.assert_not_called()
+        assert verify.call_count == 0
+        assert mist_helper.DataExporter.write_with_format_selection.call_count == 0
 
     def test_an_empty_token_cancels(self, mist_helper: MagicMock) -> None:
         """An empty answer must not call the Mist API or write a row."""
@@ -193,6 +197,8 @@ class TestVerifyEmailMenu:
 
         verify.assert_not_called()
         mist_helper.DataExporter.write_with_format_selection.assert_not_called()
+        assert verify.call_count == 0
+        assert mist_helper.DataExporter.write_with_format_selection.call_count == 0
 
     def test_a_400_reports_the_detail_and_writes(self, mist_helper: MagicMock) -> None:
         """A 400 body names the reason, and the event still records."""
