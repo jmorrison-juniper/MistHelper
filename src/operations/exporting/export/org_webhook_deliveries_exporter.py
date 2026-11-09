@@ -18,14 +18,14 @@ from src.foundation.support.utils.input_utils import InputUtils  # WHY: handle E
 logger = logging.getLogger(__name__)  # Use a module logger for non-exception export messages.
 
 _OPERATION = "searchOrgWebhooksDeliveries"  # WHY: select the configured storage-key strategy.
-_HTTP_OK = 200  # WHY: response doubles without a status retain the existing success behavior.
-_HTTP_ERROR_MIN = 400  # WHY: HTTP 4xx and 5xx responses cannot prove an empty delivery result.
+_HTTP_OK = 200  # Successful HTTP statuses start at 200.
+_HTTP_ERROR_MIN = 300  # Redirects and errors cannot prove a successful result.
 
 
-def _response_status_code(response: Any) -> int:
-    """Return the HTTP status when the SDK response exposes one."""
-    status_code = getattr(response, "status_code", _HTTP_OK)  # WHY: old tests use simple response doubles.
-    return status_code if isinstance(status_code, int) else _HTTP_OK  # WHY: non-integer attributes are not statuses.
+def _response_status_code(response: Any) -> int | None:
+    """Read an integer HTTP status without assuming a successful response."""
+    status_code = getattr(response, "status_code", None)
+    return status_code if isinstance(status_code, int) and not isinstance(status_code, bool) else None
 
 
 class OrgWebhookDeliveriesExporter:
@@ -70,10 +70,17 @@ class OrgWebhookDeliveriesExporter:
     @staticmethod
     def _select_webhook_id(org_id: str) -> tuple[str, str] | None:
         """List organization webhooks and prompt for one selection."""
-        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logger.info("Listing organization webhooks for org_id=%s", org_id)  # Log before the SDK call.
-        response = mistapi.api.v1.orgs.webhooks.listOrgWebhooks(mh.apisession, org_id)  # Fetch choices.
-        webhooks = mistapi.get_all(response=response, mist_session=mh.apisession)  # Read all webhook pages.
+        response = mistapi.api.v1.orgs.webhooks.listOrgWebhooks(SourceDependencyResolver.apisession, org_id)
+        status_code = _response_status_code(response)
+        if status_code is None or not _HTTP_OK <= status_code < _HTTP_ERROR_MIN:
+            logger.error(
+                "The cloud returned HTTP %s for organization webhooks at org %s",
+                status_code if status_code is not None else "missing or invalid",
+                org_id,
+            )
+            return None
+        webhooks = mistapi.get_all(response=response, mist_session=SourceDependencyResolver.apisession)
         logger.debug("Received %d organization webhooks", len(webhooks))  # Log the choice count.
         if not webhooks:  # Stop when the organization has no configured webhooks.
             logger.info("! No webhooks configured for this organization")  # Give the operator a clear result.
@@ -127,11 +134,11 @@ class OrgWebhookDeliveriesExporter:
             response = mistapi.api.v1.orgs.webhooks.searchOrgWebhooksDeliveries(
                 mh.apisession, org_id, webhook_id
             )  # Fetch deliveries.
-            status_code = _response_status_code(response)  # WHY: a failed response can carry an empty body.
-            if status_code >= _HTTP_ERROR_MIN:  # WHY: a failure must not become a false no-data result.
+            status_code = _response_status_code(response)
+            if status_code is None or not _HTTP_OK <= status_code < _HTTP_ERROR_MIN:
                 logger.error(  # WHY: match the repository error contract for rejected cloud responses.
                     "The cloud returned HTTP %s for organization webhook deliveries at org %s",
-                    status_code,
+                    status_code if status_code is not None else "missing or invalid",
                     org_id,
                 )
                 return  # WHY: stop before pagination and persistence on HTTP 403 or another failure.

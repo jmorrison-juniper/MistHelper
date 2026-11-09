@@ -3,6 +3,7 @@
 from __future__ import annotations  # Keep modern annotations import-safe.
 
 import sys  # Inject the source dependency host used by the exporter.
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch  # Isolate prompt, SDK, and persistence boundaries.
 
 import pytest  # Provide fixtures and parameterized invalid choices.
@@ -74,7 +75,9 @@ class TestWebhookSearchSuppression:
     def test_invalid_selection_makes_no_delivery_search(self, mist_helper: MagicMock, raw: str) -> None:
         """List webhooks, reject the supplied choice, and make no search call."""
         with (
-            patch(f"{_MODULE}.mistapi.api.v1.orgs.webhooks.listOrgWebhooks", return_value=object()),
+            patch(
+                f"{_MODULE}.mistapi.api.v1.orgs.webhooks.listOrgWebhooks", return_value=SimpleNamespace(status_code=200)
+            ),
             patch(f"{_MODULE}.mistapi.get_all", return_value=_WEBHOOKS),
             patch(f"{_MODULE}.InputUtils.safe_input", return_value=raw),
             patch(f"{_MODULE}.mistapi.api.v1.orgs.webhooks.searchOrgWebhooksDeliveries") as search_call,
@@ -93,7 +96,9 @@ class TestWebhookSearchSuppression:
         """Keep HTTP client and server failures inside the menu operation."""
         error = RuntimeError(f"HTTP {status_code}")  # Preserve the failed status for operator evidence.
         with (
-            patch(f"{_MODULE}.mistapi.api.v1.orgs.webhooks.listOrgWebhooks", return_value=object()),
+            patch(
+                f"{_MODULE}.mistapi.api.v1.orgs.webhooks.listOrgWebhooks", return_value=SimpleNamespace(status_code=200)
+            ),
             patch(f"{_MODULE}.InputUtils.safe_input", return_value="wh-b"),
             patch(f"{_MODULE}.mistapi.get_all", return_value=_WEBHOOKS),
             patch(
@@ -111,11 +116,13 @@ class TestWebhookSearchSuppression:
         """Send the selected stable identifier through the existing export flow."""
         deliveries = [{"id": "delivery-1", "webhook_id": "wh-b", "timestamp": 1}]  # Provide one result row.
         with (
-            patch(f"{_MODULE}.mistapi.api.v1.orgs.webhooks.listOrgWebhooks", return_value=object()),
+            patch(
+                f"{_MODULE}.mistapi.api.v1.orgs.webhooks.listOrgWebhooks", return_value=SimpleNamespace(status_code=200)
+            ),
             patch(f"{_MODULE}.InputUtils.safe_input", return_value="wh-b"),
             patch(
                 f"{_MODULE}.mistapi.api.v1.orgs.webhooks.searchOrgWebhooksDeliveries",
-                return_value=object(),
+                return_value=SimpleNamespace(status_code=200),
             ) as search_call,
             patch(f"{_MODULE}.mistapi.get_all", side_effect=[_WEBHOOKS, deliveries]),
             patch.object(OrgWebhookDeliveriesExporter, "_persist") as persist_call,
