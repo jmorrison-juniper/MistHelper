@@ -173,6 +173,9 @@ class TestMultiSiteRecoveryControls:
 
         page.get_by_test_id("org-upgrade-review").click()  # The first site now holds no retry device.
         page.wait_for_url(CONFIRM_PATH)
+        sync_api.expect(page.get_by_test_id("org-upgrade-confirm")).to_contain_text("Sites: 1")
+        sync_api.expect(page.get_by_test_id(f"org-upgrade-precheck-row-{FIRST_SITE_ID}")).to_have_count(0)
+        sync_api.expect(page.get_by_test_id(f"org-upgrade-precheck-row-{SECOND_SITE_ID}")).to_have_count(1)
         sync_api.expect(page.get_by_test_id("org-upgrade-confirm")).to_contain_text("Devices: 1")
         sync_api.expect(page.get_by_test_id("org-upgrade-firmware")).to_contain_text(
             f"E2E-AP {NEW_VERSION}"
