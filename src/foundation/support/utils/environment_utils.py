@@ -153,6 +153,8 @@ class EnvironmentUtils:
             if EnvironmentUtils._run_container_detectors():  # Run the chained detectors
                 return True  # A detector confirmed container
         except Exception as container_detection_error:  # Keep broad because host probes must not prevent startup.
-            logging.debug("Container detection failed with exception: %s", container_detection_error)  # log failure
+            logger.warning(
+                "Container detection failed (%s). Using direct mode.", type(container_detection_error).__name__
+            )  # Report the failure type without exposing private exception text or traceback values.
         logger.debug("Container detection: no container indicators found - running in direct mode")  # direct mode
         return False  # Default: not containerized
