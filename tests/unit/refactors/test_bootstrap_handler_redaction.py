@@ -25,6 +25,25 @@ type RedactionCase = tuple[int, str, tuple[str, ...], str]
 class TestBootstrapHandlerRedaction:
     """Keep propagated SDK records private without changing output policy."""
 
+    @pytest.mark.parametrize(
+        ("name", "expected"),
+        [
+            ("mistapi", True),
+            ("mistapi.api.request", True),
+            ("urllib3", True),
+            ("urllib3.connectionpool", True),
+            ("mistapi2", False),
+            ("mistapi_extra", False),
+            ("urllib3_extra", False),
+            ("application.mistapi", False),
+            ("Mistapi", False),
+            ("", False),
+        ],
+    )
+    def test_logger_family_predicate(self, name: str, expected: bool) -> None:
+        """Define the public boundary decision independently of logging handler output."""
+        assert main_entrypoint.SDKLogSensitiveFilter.protects_logger(name) is expected
+
     @pytest.fixture
     def sinks(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[BootstrapSinks]:
         """Use real bootstrap handlers without changing host logging or product data."""

@@ -42,9 +42,14 @@ _MH = SourceDependencyResolver  # Use the source resolver for lazy host and sour
 class SDKLogSensitiveFilter(SensitiveFilter):
     """Redact SDK transport records without changing the policy for application text."""
 
+    @staticmethod
+    def protects_logger(name: str) -> bool:
+        """Identify exact SDK transport logger families without matching similar application names."""
+        return name in ("mistapi", "urllib3") or name.startswith(("mistapi.", "urllib3."))
+
     def filter(self, record: logging.LogRecord) -> bool:
         """Apply shared redaction only to exact SDK logger families and their children."""
-        if record.name in ("mistapi", "urllib3") or record.name.startswith(("mistapi.", "urllib3.")):
+        if self.protects_logger(record.name):
             return super().filter(record)  # Keep the existing conservative rules for SDK and transport output.
         return True  # Preserve the previous policy for all other logger names.
 
