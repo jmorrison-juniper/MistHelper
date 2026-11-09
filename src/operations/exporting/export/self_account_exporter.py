@@ -15,8 +15,8 @@ Why:
 Shape of the response:
     A 200 body is empty, and the email address is updated. A 400 body holds
     ``{"detail": "invalid token"}`` or ``{"detail": "email already existed"}``.
-    The exporter therefore reports by status code and reads the detail field
-    from the 400 body.
+    The exporter reports the status code and only recognized, fixed detail
+    messages. It omits arbitrary response text and SDK exception details.
 
 Security:
     The token is a single-use credential. It is never logged, never written
@@ -69,15 +69,22 @@ class SelfAccountExporter:
         return token
 
     @staticmethod
-    def _detail(data: Any) -> str:
-        """Read the detail field from a 400 body. Return an empty string otherwise.
+    def _detail(data: Any, token: str) -> str:
+        """Return a fixed public detail message or an empty string.
 
         Why:
-            Only the 400 body carries a reason, and a 200 body is empty.
+            A response can contain private values. Only an exact recognized
+            message is safe, unless it contains the submitted token.
         """
-        if isinstance(data, dict) and data.get("detail"):  # WHY: only 400 bodies carry detail.
-            return str(data["detail"])  # WHY: surface the API message to the operator.
-        return ""  # WHY: a 200 body is empty.
+        if not isinstance(data, dict):
+            return ""
+        detail = data.get("detail")
+        if not isinstance(detail, str):
+            return ""
+        for safe_detail in ("invalid token", "email already existed", "server unavailable"):
+            if detail == safe_detail and (not token or token not in safe_detail):
+                return safe_detail
+        return ""
 
     @staticmethod
     def _verify(token: str) -> tuple[int, str]:
@@ -90,7 +97,7 @@ class SelfAccountExporter:
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logger.info("Calling verifySelfEmail for the configured account")  # Pre-call log, no token.
         response = mistapi.api.v1.self.update.verifySelfEmail(mh.apisession, token)  # The single SDK call.
-        detail = SelfAccountExporter._detail(response.data)  # WHY: a 400 body carries the reason.
+        detail = SelfAccountExporter._detail(response.data, token)
         logger.debug("verifySelfEmail returned status=%s", response.status_code)  # Post-call trace.
         return response.status_code, detail
 
@@ -146,9 +153,10 @@ class SelfAccountExporter:
             return
         try:
             status_code, detail = SelfAccountExporter._verify(token)  # The single SDK call.
-        except Exception as e:  # WHY: surface any SDK or network error, keep the menu alive.
-            logging.error("verifySelfEmail failed for org %s: %s", org_id, e)  # Failure context.
-            logging.info("! Email change token verification failed: %s", e)  # ASCII-only user notice.
+        except Exception:
+            # SDK exception text, types, and tracebacks can contain private values.
+            logger.error("verifySelfEmail failed for org %s. SDK error details omitted.", org_id)
+            logger.info("! Email change token verification failed. Returning to the menu.")
             return
         if status_code == 200:
             logger.info("! Email address updated - the token was valid")  # ASCII-only success notice.

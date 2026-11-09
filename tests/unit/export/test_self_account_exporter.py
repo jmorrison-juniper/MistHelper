@@ -3,7 +3,7 @@
 The suite proves six behaviors that the menu depends on:
 
 1. The token prompt returns the pasted token and an empty answer cancels.
-2. The detail reader reads the 400 body and returns empty for a 200 body.
+2. The detail reader permits fixed messages and omits untrusted response text.
 3. The SDK call passes the token and returns the status code and detail.
 4. The audit row holds the org, the status, and a UTC timestamp, and never
    the token.
@@ -61,16 +61,42 @@ class TestPromptToken:
 
 
 class TestDetail:
-    """The detail reader must read a 400 body and stay empty for a 200 body."""
+    """The detail reader must permit only fixed public messages."""
 
     def test_reads_the_detail_field(self) -> None:
         """A 400 body carries the reason in the detail field."""
-        assert SelfAccountExporter._detail({"detail": "invalid token"}) == "invalid token"
+        assert SelfAccountExporter._detail({"detail": "invalid token"}, TOKEN) == "invalid token"
 
     @pytest.mark.parametrize("body", [None, {}, [], "error", 42])
     def test_a_non_detail_body_is_empty(self, body: Any) -> None:
         """A 200 body is empty, so the reader returns an empty string."""
-        assert SelfAccountExporter._detail(body) == ""
+        assert SelfAccountExporter._detail(body, TOKEN) == ""
+
+    @pytest.mark.parametrize("detail", ["email already existed", "server unavailable"])
+    def test_preserves_safe_messages(self, detail: str) -> None:
+        """Recognized public messages remain available to the operator."""
+        assert SelfAccountExporter._detail({"detail": detail}, TOKEN) == detail
+
+    @pytest.mark.parametrize(
+        "detail",
+        [TOKEN, f"invalid token: {TOKEN}", "private@example.invalid", {"value": TOKEN}, [TOKEN], 42],
+    )
+    def test_omits_untrusted_details(self, detail: Any) -> None:
+        """Unknown text and structured values must not enter the output."""
+        assert SelfAccountExporter._detail({"detail": detail}, TOKEN) == ""
+
+    @pytest.mark.parametrize("token", ["invalid token", "token", "email already existed", "server"])
+    def test_omits_a_safe_message_containing_the_token(self, token: str) -> None:
+        """Even a recognized message must not disclose the submitted value."""
+        for detail in ("invalid token", "email already existed", "server unavailable"):
+            expected = "" if token in detail else detail
+            assert SelfAccountExporter._detail({"detail": detail}, token) == expected
+
+    def test_does_not_convert_a_private_object_to_text(self) -> None:
+        """The response detail must not invoke an untrusted text conversion."""
+        detail = MagicMock()
+        assert SelfAccountExporter._detail({"detail": detail}, TOKEN) == ""
+        detail.__str__.assert_not_called()
 
 
 class TestVerify:
@@ -154,6 +180,8 @@ class TestVerifyEmailMenu:
             SelfAccountExporter.verify_email()
 
         verify.assert_not_called()
+        mist_helper.InputUtils.safe_input.assert_not_called()
+        mist_helper.DataExporter.write_with_format_selection.assert_not_called()
 
     def test_an_empty_token_cancels(self, mist_helper: MagicMock) -> None:
         """An empty answer must not call the Mist API or write a row."""
@@ -222,3 +250,99 @@ class TestVerifyEmailMenu:
             SelfAccountExporter.verify_email()
 
         assert TOKEN not in caplog.text
+
+    @pytest.mark.parametrize("status_code", [200, 400, 403, 429, 500, 503])
+    @pytest.mark.parametrize(
+        "detail",
+        [f"invalid token: {TOKEN}", "private@example.invalid", {"value": TOKEN}],
+    )
+    def test_private_response_details_are_omitted(
+        self, mist_helper: MagicMock, caplog: pytest.LogCaptureFixture, status_code: int, detail: Any
+    ) -> None:
+        """Synthetic private details must not reach logs or the audit writer."""
+        mist_helper.ConfigUtils.get_cached_or_prompted_org_id.return_value = ORG_ID
+        mist_helper.InputUtils.safe_input.return_value = TOKEN
+        with (
+            patch(
+                f"{MODULE}.mistapi.api.v1.self.update.verifySelfEmail",
+                return_value=SimpleNamespace(status_code=status_code, data={"detail": detail}),
+            ) as verify,
+            caplog.at_level("DEBUG"),
+        ):
+            SelfAccountExporter.verify_email()
+
+        verify.assert_called_once_with(mist_helper.apisession, TOKEN)
+        writer = mist_helper.DataExporter.write_with_format_selection
+        writer.assert_called_once()
+        row = writer.call_args.args[0][0]
+        assert set(row) == {"org_id", "status_code", "detail", "verified_at_utc"}
+        assert (row["org_id"], row["status_code"], row["detail"]) == (ORG_ID, status_code, "")
+        assert row["verified_at_utc"].endswith("+00:00")
+        assert writer.call_args.args[1] == "verify_self_email.csv"
+        assert writer.call_args.kwargs == {"api_function_name": "verifySelfEmail"}
+        if status_code == 200:
+            assert "Email address updated - the token was valid" in caplog.text
+        else:
+            assert f"failed (status {status_code}): no detail" in caplog.text
+        assert TOKEN not in repr(writer.call_args)
+        assert "private@example.invalid" not in repr(writer.call_args)
+        assert TOKEN not in caplog.text
+        assert "private@example.invalid" not in caplog.text
+        for record in caplog.records:
+            assert TOKEN not in repr(record.__dict__)
+            assert "private@example.invalid" not in repr(record.__dict__)
+            assert record.exc_info is None
+            assert record.stack_info is None
+
+    @pytest.mark.parametrize("message", [TOKEN, f"GET /self/update/verify/{TOKEN}", "private@example.invalid"])
+    def test_private_exceptions_are_omitted(
+        self, mist_helper: MagicMock, caplog: pytest.LogCaptureFixture, message: str
+    ) -> None:
+        """SDK exception text and class names must not enter raw log records."""
+        private_error = type(f"PrivateError_{TOKEN}", (Exception,), {})
+        mist_helper.ConfigUtils.get_cached_or_prompted_org_id.return_value = ORG_ID
+        mist_helper.InputUtils.safe_input.return_value = TOKEN
+        with (
+            patch(
+                f"{MODULE}.mistapi.api.v1.self.update.verifySelfEmail",
+                side_effect=private_error(message),
+            ) as verify,
+            caplog.at_level("DEBUG"),
+        ):
+            SelfAccountExporter.verify_email()
+
+        verify.assert_called_once_with(mist_helper.apisession, TOKEN)
+        mist_helper.DataExporter.write_with_format_selection.assert_not_called()
+        assert "SDK error details omitted." in caplog.text
+        assert "Returning to the menu." in caplog.text
+        for record in caplog.records:
+            assert TOKEN not in repr(record.__dict__)
+            assert "private@example.invalid" not in repr(record.__dict__)
+            assert private_error.__name__ not in repr(record.__dict__)
+            assert record.exc_info is None
+            assert record.exc_text is None
+            assert record.stack_info is None
+
+    @pytest.mark.parametrize("token", ["invalid token", "email already existed", "server unavailable"])
+    def test_a_submitted_public_message_is_not_reported(
+        self, mist_helper: MagicMock, caplog: pytest.LogCaptureFixture, token: str
+    ) -> None:
+        """A response that matches both the public message and token stays private."""
+        mist_helper.ConfigUtils.get_cached_or_prompted_org_id.return_value = ORG_ID
+        mist_helper.InputUtils.safe_input.return_value = token
+        with (
+            patch(
+                f"{MODULE}.mistapi.api.v1.self.update.verifySelfEmail",
+                return_value=SimpleNamespace(status_code=400, data={"detail": token}),
+            ),
+            caplog.at_level("DEBUG"),
+        ):
+            SelfAccountExporter.verify_email()
+
+        writer = mist_helper.DataExporter.write_with_format_selection
+        writer.assert_called_once()
+        assert writer.call_args.args[0][0]["detail"] == ""
+        assert token not in repr(writer.call_args)
+        assert "failed (status 400): no detail" in caplog.text
+        for record in caplog.records:
+            assert token not in repr(record.__dict__)
