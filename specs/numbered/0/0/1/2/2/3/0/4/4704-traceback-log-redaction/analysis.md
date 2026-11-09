@@ -222,6 +222,18 @@ The existing structural debt and publication limitations remain unchanged.
 
 ### Publication Hold
 
-The follow-up must contain `Refs #4704` and `Refs #4705`, plus the required author trailer.
-The committed-difference gate remains pending until this follow-up commit exists.
+The follow-up commit is `0934e5b43`.
+It contains `Refs #4704` and `Refs #4705`, plus the required author trailer.
+The worktree was clean before the committed-difference gate.
+The same preflight command reported `1 passed, 1 warning`, with four inputs read and validated.
+The same committed-difference analyzer command reported:
+
+```text
+gate_scope: 2 files checked, 0 findings checked
+test_quality_analyzer: 0 findings (0/0/0/0), 2 skipped, 0 parse errors
+gate: 0 new findings vs baseline
+```
+
+The two skipped entries still identify omitted full-suite roots, not either changed test file.
+All follow-up tasks are complete.
 No push, PR creation, rebase, merge, or credential change is permitted.
