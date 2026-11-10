@@ -18,6 +18,8 @@ import importlib.machinery  # Stub-spec construction
 import sys  # sys.modules manipulation for stub install
 import types  # ModuleType + SimpleNamespace for mistapi stubs
 from collections.abc import Iterator  # Typing for fixture generator
+from contextlib import contextmanager  # Scoped module replacement
+from pathlib import Path  # Isolated temporary image path
 from typing import Any  # Permissive typing for mistapi/dash stubs
 
 import pytest  # Test fixture / parametrize APIs
@@ -41,24 +43,62 @@ def _build_dash_stub() -> types.ModuleType:
     return dash_stub
 
 
-sys.modules["dash"] = _build_dash_stub()  # Install stub before launcher imports run
+@contextmanager
+def _temporary_dash_stub() -> Iterator[types.ModuleType]:
+    """Provide the stub while preserving the Dash module state around each use."""
+    original_dash = sys.modules.get("dash")  # Keep a loaded module for restoration
+    dash_was_present = "dash" in sys.modules  # Distinguish an absent module from a loaded one
+    dash_stub = _build_dash_stub()  # Isolate callbacks from the installed Dash package
+    sys.modules["dash"] = dash_stub  # Let lazy callback imports resolve to the stub
+    try:
+        yield dash_stub  # Keep the stub active during import or callback execution
+    finally:
+        if dash_was_present:
+            sys.modules["dash"] = original_dash  # Restore the exact prior module entry
+        else:
+            sys.modules.pop("dash", None)  # Keep Dash absent when it was absent before use
 
-from src.interfaces.visualization.maps.launcher import MapViewerCallbacks, MapViewerState  # noqa: E402
+
+with _temporary_dash_stub():  # Support launcher imports that resolve Dash during collection
+    from src.interfaces.visualization.maps.launcher import MapViewerCallbacks, MapViewerState
 
 
 @pytest.fixture(autouse=True)
 def _dash_stub() -> Iterator[types.ModuleType]:
     """Per-test: install fresh stub, restore original on teardown."""
-    original = sys.modules.get("dash")  # Snapshot for restoration
-    stub = _build_dash_stub()  # Fresh stub for this test
-    sys.modules["dash"] = stub  # Install for this test
-    try:
+    with _temporary_dash_stub() as stub:  # Bound the test stub to the fixture lifetime
         yield stub
+
+
+def test_dash_stub_restores_previously_loaded_module(_dash_stub: types.ModuleType) -> None:
+    """Restore the same loaded module after the temporary stub exits."""
+    original_dash = sys.modules["dash"]  # Capture the fixture's active module
+    with _temporary_dash_stub() as temporary_stub:  # Exercise a nested temporary install
+        assert sys.modules["dash"] is temporary_stub  # Confirm the temporary module is active
+    assert sys.modules["dash"] is original_dash  # Confirm the loaded module was restored
+
+
+def test_dash_stub_restores_absent_module(_dash_stub: types.ModuleType) -> None:
+    """Keep Dash absent after the temporary stub exits."""
+    original_dash = sys.modules.pop("dash")  # Create the initially absent state
+    try:
+        with _temporary_dash_stub() as temporary_stub:  # Exercise a temporary install from absence
+            assert sys.modules["dash"] is temporary_stub  # Confirm the temporary module is active
+        assert "dash" not in sys.modules  # Confirm the absent state was restored
     finally:
-        if original is None:
-            sys.modules.pop("dash", None)
-        else:
-            sys.modules["dash"] = original  # Restore prior stub
+        sys.modules["dash"] = original_dash  # Restore the outer test fixture state
+
+
+def test_dash_stub_restores_none_module_entry(_dash_stub: types.ModuleType) -> None:
+    """Keep an explicit None entry after the temporary stub exits."""
+    original_dash = sys.modules.pop("dash")  # Save the outer fixture module
+    sys.modules["dash"] = None  # Model a blocked import entry in the module cache
+    try:
+        with _temporary_dash_stub() as temporary_stub:  # Exercise a temporary install from None
+            assert sys.modules["dash"] is temporary_stub  # Confirm the temporary module is active
+        assert "dash" in sys.modules and sys.modules["dash"] is None  # Confirm the None entry returned
+    finally:
+        sys.modules["dash"] = original_dash  # Restore the outer test fixture state
 
 
 class _FakeCallbackManager:
@@ -164,6 +204,7 @@ def _make_clone_mistapi(  # many small flags to drive each step independently
                 "site_id": site_id,
                 "map_id": map_id,
                 "file": file,
+                "file_content": Path(file).read_bytes(),  # Capture bytes before upload cleanup removes the file
             }
         )
         return upload_response or _FakeResponse(200)
@@ -276,8 +317,27 @@ def test_clone_rejects_missing_config() -> None:
     assert cache == "__NO_UPDATE__"
 
 
-def test_clone_happy_path_creates_map_and_increments_cache_bust() -> None:
+def test_clone_happy_path_creates_map_and_increments_cache_bust(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
     """Successful clone => success Span + incremented cache-bust trigger."""
+    from src.interfaces.visualization.maps.launcher import _viewer_clone as viewer_clone  # Patch requests
+
+    image_url = "https://example.com/map.png"  # Use a synthetic URL that the test never contacts
+    image_content = b"synthetic map image"  # Supply deterministic image bytes for the fake response
+    image_path = tmp_path / "source.png"  # Keep the temporary image inside pytest's isolated directory
+    download_calls: list[tuple[str, dict[str, Any]]] = []  # Record the request without opening a socket
+
+    def _download_image(url: str, **kwargs: Any) -> Any:
+        download_calls.append((url, kwargs))  # Verify the clone requests the source image
+        return types.SimpleNamespace(status_code=200, content=image_content)  # Return synthetic image data
+
+    def _create_image_path(_url: str) -> str:
+        return str(image_path)  # Replace the system temp directory with pytest's isolated path
+
+    monkeypatch.setattr(viewer_clone.requests, "get", _download_image)  # Prevent all network access
+    monkeypatch.setattr(viewer_clone, "_create_temp_image_path", _create_image_path)  # Contain the image file
     source = _FakeResponse(
         200,
         data={
@@ -286,7 +346,7 @@ def test_clone_happy_path_creates_map_and_increments_cache_bust() -> None:
             "width": 1000,
             "height": 800,
             "ppm": 10,
-            "url": "https://example.com/map.png",
+            "url": image_url,
         },
     )
     create = _FakeResponse(201, data={"id": "new-map-id"})
@@ -308,6 +368,12 @@ def test_clone_happy_path_creates_map_and_increments_cache_bust() -> None:
     create_body = mistapi_stub._calls["createSiteMap"][0]["body"]
     assert create_body["name"] == "CopyMap"
     assert create_body["width"] == 1000  # Dimensional props copied
+    assert download_calls == [(image_url, {"timeout": viewer_clone._HTTP_TIMEOUT_SECS})]  # Verify one mocked fetch
+    upload_call = mistapi_stub._calls["addSiteMapImageFile"][0]  # Read the recorded upload call
+    assert upload_call["map_id"] == "new-map-id"  # Verify the image targets the cloned map
+    assert upload_call["file"] == str(image_path)  # Verify the upload uses the isolated file
+    assert upload_call["file_content"] == image_content  # Verify the upload receives downloaded bytes
+    assert not image_path.exists()  # Verify the callback removes its temporary image
 
 
 def test_clone_fetch_source_failure_returns_error() -> None:
