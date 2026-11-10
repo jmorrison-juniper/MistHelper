@@ -11,13 +11,13 @@
 1. Review the current compatible updates:
 
    ```text
-   uv lock --upgrade --dry-run
+   uv lock --upgrade --dry-run --upgrade-package 'openai==3.48.0'
    ```
 
 2. If the preview matches the reviewed update set, update the lock:
 
    ```text
-   uv lock --upgrade
+   uv lock --upgrade --upgrade-package 'openai==3.48.0'
    ```
 
 3. Generate the runtime export:

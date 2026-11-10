@@ -10,7 +10,7 @@
 
 **Alternative considered**: Update only the three named packages. This would omit the compatible updates in the reviewed preview.
 
-Re-run the preview after rebasing this branch onto current `main`. Treat that preview as the update set. Review all package changes before changing the lock.
+Re-run `uv lock --upgrade --dry-run --upgrade-package 'openai==3.48.0'` after rebasing this branch onto current `main`. Treat that preview as the update set. Review all package changes before changing the lock.
 
 ### Lock and exports
 

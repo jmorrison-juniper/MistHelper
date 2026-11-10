@@ -4,9 +4,9 @@
 
 ## Summary
 
-Rebase the branch onto current `main`, review a new dependency preview, then update the lock with the approved compatible releases. Regenerate both pip exports from the lock. Preserve all 11 runtime platform markers.
+Rebase the branch onto current `main`, review a new dependency preview, then update the lock with the approved compatible releases. Set `openai` to the exact version from the issue. Regenerate both pip exports from the lock. Preserve all 11 runtime platform markers.
 
-The issue requests `importlib-metadata` 10.2.0, `openai` 3.48.0, and `pypdfium2` 5.15.2. A prior preview predates current `main` and is not authoritative. Review the refreshed preview before changing the lock. Keep existing package constraints in force. Do not edit `pyproject.toml` while open PR #4358 owns it.
+The issue requests `importlib-metadata` 10.2.0, `openai` 3.48.0, and `pypdfium2` 5.15.2. A prior preview predates current `main` and is not authoritative. Use `uv lock --upgrade --dry-run --upgrade-package 'openai==3.48.0'` for the refreshed preview. Keep existing package constraints in force. Do not edit `pyproject.toml` while open PR #4358 owns it.
 
 ## Technical Context
 

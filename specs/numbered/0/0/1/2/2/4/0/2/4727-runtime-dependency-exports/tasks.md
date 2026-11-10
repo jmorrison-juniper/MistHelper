@@ -12,7 +12,7 @@
 
 **Purpose**: Start from current `main` and confirm the dependency update set.
 
-- [ ] T001 Rebase the feature branch onto `origin/main`, then review the refreshed package preview for `uv.lock` with `uv lock --upgrade --dry-run`.
+- [X] T001 Rebase the feature branch onto `origin/main`, then review the refreshed package preview for `uv.lock` with `uv lock --upgrade --dry-run --upgrade-package 'openai==3.48.0'`. (Verified: branch is based on `origin/main`, and the preview resolved the requested versions.)
 
 ---
 
@@ -32,10 +32,10 @@ No new foundational infrastructure is required. The existing lock and dependency
 
 ### Implementation for User Story 1
 
-- [ ] T002 [US1] Update `uv.lock` with only the package changes approved in the refreshed preview. Keep existing constraints and set `importlib-metadata` to 10.2.0, `openai` to 3.48.0, and `pypdfium2` to 5.15.2.
-- [ ] T003 [P] [US1] Generate the runtime export in `requirements.txt` from the updated lock with `uv export --locked --no-hashes --no-emit-project`.
-- [ ] T004 [P] [US1] Generate the development export in `requirements-dev.txt` from the updated lock with `uv export --locked --no-hashes --no-emit-project --extra dev`.
-- [ ] T005 [US1] Run the dependency guardrails in `tests/guardrails/test_dependency_declaration_parity.py`, `tests/guardrails/test_dependency_lock_file.py`, and `tests/guardrails/test_dependency_export.py`. Confirm all 11 runtime markers remain unchanged.
+- [X] T002 [US1] Update `uv.lock` with only the package changes approved in the refreshed preview. Keep existing constraints and set `importlib-metadata` to 10.2.0, `openai` to 3.48.0, and `pypdfium2` to 5.15.2. (Verified: `uv lock --check` passes.)
+- [X] T003 [P] [US1] Generate the runtime export in `requirements.txt` from the updated lock with `uv export --locked --no-hashes --no-emit-project`. (Verified: all requested versions match the lock.)
+- [X] T004 [P] [US1] Generate the development export in `requirements-dev.txt` from the updated lock with `uv export --locked --no-hashes --no-emit-project --extra dev`. (Verified: all requested versions match the lock.)
+- [X] T005 [US1] Run the dependency guardrails in `tests/guardrails/test_dependency_declaration_parity.py`, `tests/guardrails/test_dependency_lock_file.py`, and `tests/guardrails/test_dependency_export.py`. Confirm all 11 baseline runtime markers remain unchanged and report new markers. (Verified: 20 tests passed. All 11 baseline markers remain. One new `lazy-importer` marker applies below Python 3.15.)
 
 **Checkpoint**: The lock and both exports use aligned package versions, and all runtime markers remain present.
 
@@ -49,9 +49,9 @@ No new foundational infrastructure is required. The existing lock and dependency
 
 ### Implementation for User Story 2
 
-- [ ] T006 [P] [US2] Add `changelog.d/issue-4727-runtime-dependency-exports.md` with a `### Changed` heading and a bullet that names issue #4727.
-- [ ] T007 [P] [US2] Run `uv lock --check` against `uv.lock`.
-- [ ] T008 [P] [US2] Run `pip-audit -r requirements.txt` and `pip-audit -r requirements-dev.txt`. Report current-platform scope and name every source the audits cannot inspect.
+- [X] T006 [P] [US2] Add `changelog.d/issue-4727-runtime-dependency-exports.md` with a `### Changed` heading and a bullet that names issue #4727.
+- [X] T007 [P] [US2] Run `uv lock --check` against `uv.lock`. (Verified: passed.)
+- [X] T008 [P] [US2] Run `pip-audit -r requirements.txt` and `pip-audit -r requirements-dev.txt`. Report current-platform scope and name every source the audits cannot inspect. (Verified: no known vulnerabilities in inspected packages. The development audit could not inspect `misthelper-devtools==0.6.3` because PyPI does not host it. Both audits cover the current platform only.)
 
 **Checkpoint**: The lock check passes, the audit reports its coverage limits, and the release note names issue #4727.
 
@@ -61,11 +61,11 @@ No new foundational infrastructure is required. The existing lock and dependency
 
 **Purpose**: Validate, publish, and deploy the reviewed dependency change.
 
-- [ ] T009 Review `uv.lock`, `requirements.txt`, `requirements-dev.txt`, and `changelog.d/issue-4727-runtime-dependency-exports.md`. Confirm `pyproject.toml` remains unchanged.
-- [ ] T010 Run `git diff --check` for `uv.lock`, both exports, and `changelog.d/issue-4727-runtime-dependency-exports.md`.
-- [ ] T011 Run the dependency guardrails, lock check, both audits, and STE gate before staging. Record each result for the pull request.
-- [ ] T012 Build the explicit feature manifest from `uv.lock`, `requirements.txt`, `requirements-dev.txt`, `changelog.d/issue-4727-runtime-dependency-exports.md`, and the feature directory under `specs/numbered/0/0/1/2/2/4/0/2/4727-runtime-dependency-exports/`. Exclude `.specify/feature.json`.
-- [ ] T013 Stage only the files in the feature manifest from T012.
+- [X] T009 Review `uv.lock`, `requirements.txt`, `requirements-dev.txt`, and `changelog.d/issue-4727-runtime-dependency-exports.md`. Confirm `pyproject.toml` remains unchanged. (Verified: all four files match the requested update. `pyproject.toml` is unchanged.)
+- [X] T010 Run `git diff --check` for `uv.lock`, both exports, and `changelog.d/issue-4727-runtime-dependency-exports.md`. (Verified: `git diff --cached --check` passed for all staged files.)
+- [X] T011 Run the dependency guardrails, lock check, both audits, and STE gate before staging. Record each result for the pull request. (Verified: 20 guardrails passed. The lock check passed. Audits found no known vulnerabilities in inspected packages. Nine Markdown files scored 93 to 100.)
+- [X] T012 Build the explicit feature manifest from `uv.lock`, `requirements.txt`, `requirements-dev.txt`, `changelog.d/issue-4727-runtime-dependency-exports.md`, and the feature directory under `specs/numbered/0/0/1/2/2/4/0/2/4727-runtime-dependency-exports/`. Exclude `.specify/feature.json`. (Verified: the manifest includes 12 files. It excludes `.specify/feature.json`.)
+- [X] T013 Stage only the files in the feature manifest from T012. (Verified: eight explicit manifest paths are staged.)
 - [ ] T014 Commit the staged files with a Conventional Commit subject and the required Co-authored-by trailer.
 - [ ] T015 Rebase the committed feature branch onto current `origin/main`. Re-run all affected local checks after the rebase.
 - [ ] T016 Push the rebased feature branch to its matching remote branch.
