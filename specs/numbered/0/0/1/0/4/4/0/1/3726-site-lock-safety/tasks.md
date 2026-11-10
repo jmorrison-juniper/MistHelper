@@ -52,6 +52,7 @@
 
 - [X] T008 [P] [US2] Update cancellation outcome tests for documented refusal statuses, 429, undocumented statuses, and conflicting legacy evidence in `tests/unit/upgrade_portal/test_org_cancel_outcomes.py`.
 - [X] T008a [US2] Test stored uncertain children with stale ended cancellation data through HTML, JSON, and stale-claim recovery. Preserve settlement, retry barriers, and cloud identity rules.
+- [X] T008b [US2] Share cancellation conflict text between the child cell and outcome panel. Test page/poll parity, unchanged stored fields, and later completed devices.
 
 ### Implementation for User Story 2
 
