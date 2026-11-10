@@ -43,6 +43,7 @@ An operator submits a firmware upgrade that the cloud explicitly refuses, or the
 - Treat HTTP 408, HTTP 429, HTTP 5xx, transport failures, and non-allowlisted client responses as uncertain.
 - Treat HTTP 200 without a required upgrade identity as uncertain.
 - Treat a documented refusal response as uncertain when it retains a job identity or accepted target.
+- Treat a refusal response as uncertain when its body is malformed or the normalizer cannot retain all body evidence.
 - Preserve the existing release rule for completed operations with no child entries. Require refusal evidence for every recorded `rejected` child.
 - Keep earlier records with a rejected status uncertain unless their stored evidence proves a refusal.
 - Keep a site locked when a post-upgrade watch remains active, even after every firmware child settles.
@@ -52,7 +53,7 @@ An operator submits a firmware upgrade that the cloud explicitly refuses, or the
 ### Functional Requirements
 
 - **FR-001**: The portal MUST distinguish accepted submissions, proven refusals, requests that were not sent, and uncertain outcomes.
-- **FR-002**: The portal MUST treat transport failures, HTTP 408, HTTP 429, HTTP 5xx, malformed success data, missing required upgrade identities, and non-allowlisted responses as uncertain.
+- **FR-002**: The portal MUST treat transport failures, HTTP 408, HTTP 429, HTTP 5xx, malformed or unretained response bodies, missing required upgrade identities, and non-allowlisted responses as uncertain.
 - **FR-003**: The portal MUST treat only explicitly allowlisted client-refusal responses as proof that the cloud did not create a firmware job.
 - **FR-004**: The portal MUST keep each affected site locked while any child outcome remains uncertain.
 - **FR-005**: The portal MUST prevent a retry while any affected child outcome remains uncertain.

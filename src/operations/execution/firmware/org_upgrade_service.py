@@ -58,6 +58,7 @@ class OrgUpgradeResult:
         raw_status: The HTTP status code, or zero when no valid code exists.
         data: A detached copy of the response object, including both site fields.
         error: The response error, or None for a valid HTTP 200 response.
+        response_data_valid: Whether the SDK retained a JSON object that agrees with raw JSON, when present.
     """
 
     org_id: str
@@ -65,6 +66,7 @@ class OrgUpgradeResult:
     raw_status: int
     data: Mapping[str, object]
     error: str | None
+    response_data_valid: bool = True
 
 
 class _OrgUpgradeResponse:
@@ -101,6 +103,7 @@ class _OrgUpgradeResponse:
         raw_status = code if type(code) is int and 100 <= code <= 599 else 0
         raw_data: object = getattr(response, "data", None)
         data = cls._copy_data(raw_data)
+        response_data_valid = cls._response_data_is_valid(response, raw_data, data)
         error = None
         try:
             cls._check_http(response, raw_status, raw_data, cancel)
@@ -108,7 +111,7 @@ class _OrgUpgradeResponse:
             cls._check_sites(data)
         except ValueError as problem:
             error = str(problem)
-        return OrgUpgradeResult(org_id, upgrade_id, raw_status, data, error)
+        return OrgUpgradeResult(org_id, upgrade_id, raw_status, data, error, response_data_valid)
 
     @staticmethod
     def _copy_data(raw_data: object) -> dict[str, object]:
@@ -116,6 +119,22 @@ class _OrgUpgradeResponse:
         if not isinstance(raw_data, Mapping) or any(not isinstance(key, str) for key in raw_data):
             return {}
         return deepcopy(dict(raw_data))
+
+    @staticmethod
+    def _response_data_is_valid(response: object, raw_data: object, data: Mapping[str, object]) -> bool:
+        """Check that the retained response object has no discarded body evidence."""
+        if not isinstance(raw_data, Mapping) or any(not isinstance(key, str) for key in raw_data):
+            return False
+        raw_text: object = getattr(response, "raw_data", "")
+        if raw_text in ("", None):
+            return True
+        if not isinstance(raw_text, str):
+            return False
+        try:
+            parsed = json.loads(raw_text)
+        except json.JSONDecodeError:
+            return False
+        return isinstance(parsed, Mapping) and all(isinstance(key, str) for key in parsed) and dict(parsed) == data
 
     @staticmethod
     def _response_id(data: Mapping[str, object], expected: str | None, cancel: bool) -> str | None:

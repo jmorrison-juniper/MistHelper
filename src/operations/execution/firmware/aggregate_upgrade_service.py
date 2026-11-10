@@ -946,7 +946,12 @@ class AggregateUpgradeService:  # Coordinate all child routes through one durabl
             child["error"] = None  # Do not show an error for a valid accepted response.
             return  # Do not classify accepted evidence as a refusal.
         evidence = {"upgrade_id": result.upgrade_id, "status_data": result.data}  # Retain all response evidence.
-        if _SubmissionCertainty.is_known_refusal(result.raw_status, evidence):  # Refusal needs no conflicting evidence.
+        if (  # A refusal requires a complete response body as well as a documented status.
+            result.response_data_valid  # Discarded body evidence cannot prove that no job exists.
+            and _SubmissionCertainty.is_known_refusal(
+                result.raw_status, evidence
+            )  # Refusal needs no conflicting evidence.
+        ):
             child["status"] = "rejected"  # Keep a proven refusal eligible for lock release.
             child["error"] = result.error or (  # Preserve useful details from the refusal response.
                 f"The cloud refused the request with status {result.raw_status}."  # Name the refusal status.
