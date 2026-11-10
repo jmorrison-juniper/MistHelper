@@ -21,10 +21,13 @@ from typing import Any  # Accept the stored record as plain JSON.
 from src.foundation.support.submission_certainty import (  # Keep the shared rule private to this module.
     SubmissionCertainty as _SubmissionCertainty,
 )
+from src.interfaces.portals.upgrade_portal.upgrade.org_cancel_text import OrgCancelText as _OrgCancelText
 from src.operations.execution.firmware.aggregate_upgrade_service import (
     ENDED_CHILD_STATUS,
-    FINAL_CHILD_STATES as _FINAL_CHILD_STATES,
 )  # Issue #3367: the ended result word.
+from src.operations.execution.firmware.aggregate_upgrade_service import (
+    FINAL_CHILD_STATES as _FINAL_CHILD_STATES,
+)
 
 logger = logging.getLogger(__name__)  # Use the module logger without secret fields.
 
@@ -118,6 +121,14 @@ class OrgCancelOutcomes:
     """Build one cancel outcome row for each child job that holds a cancel result."""
 
     MULTIPLE_SITES = "Multiple sites"  # The label of a child job with no site name and no site.
+
+    @classmethod
+    def text(cls, child: Mapping[str, Any]) -> str:
+        """Build cancellation text from the same conflict evidence as the device lists."""
+        cancellation = child.get("cancellation")  # Keep the stored result unchanged.
+        if OrgCancelLists._ended_result_conflicts(child, False):  # Do not repeat a stale ended claim.
+            cancellation = cls._row(child, False)  # Share the panel's uncertain status and device lists.
+        return _OrgCancelText.text(cancellation)  # Text never controls cancellation or lock eligibility.
 
     @classmethod
     def rows(cls, record: Any) -> list[dict[str, Any]]:

@@ -40,6 +40,8 @@ The shared rule consumes the raw HTTP status and existing submission fields. It 
 - Preserve verified reconciliation counts, nested target precedence, public fields, and all settlement decisions.
 - Validate root organization target arrays with the same rules as nested site arrays before progress proof becomes valid.
 - A stored `already_ended` cancellation cannot hide an uncertain or active child. Display unknown cancellation and every target as potentially writing.
+- The cancellation cell and outcome panel use the same conflict evidence without changing stored cancellation records or child fields.
+- A later completed child retains the statement that cancellation sent no request. Never imply that cancellation prevented a completed write.
 
 ## Status evidence
 

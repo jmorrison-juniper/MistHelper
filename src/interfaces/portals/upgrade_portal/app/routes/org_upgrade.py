@@ -2302,7 +2302,7 @@ def _aggregate_child_summary(child: Mapping[str, Any]) -> tuple[dict[str, Any], 
         "failed": failed,
         "error": child.get("error"),
         "cancellation": child.get("cancellation"),
-        "cancellation_text": OrgCancelText.text(child.get("cancellation")),  # Issue #3225: one text for both paints.
+        "cancellation_text": OrgCancelOutcomes.text(child),  # Share the panel's verified cancellation evidence.
     }
     return row, (total, upgraded, failed)  # Let the caller add aggregate totals.
 
