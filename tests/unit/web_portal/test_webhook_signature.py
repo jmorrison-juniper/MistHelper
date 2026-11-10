@@ -231,6 +231,7 @@ class TestAppFactoryWebhookConfig:
     ) -> None:
         """An absent variable must leave an empty secret, not a missing key."""
         monkeypatch.delenv("WEBHOOK_SECRET", raising=False)
+        monkeypatch.delenv("WEBHOOK_ENABLED", raising=False)
         app = Flask(__name__)
 
         WebPortalApp._load_webhook_config(app)
