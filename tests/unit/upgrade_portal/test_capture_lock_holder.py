@@ -155,6 +155,19 @@ def lock_reader_that_names(holder: str) -> Callable[[str, list[str]], dict[str, 
     return read  # The test writes this callable into the application configuration.
 
 
+def seed_site_lock(app: Flask, store: FakeLockStore, owner: identity.SessionOwner) -> lock.LockRecord:
+    """Create a real lock and make the reader report the same stored holder."""
+    request = lock.LockRequest(org_id=ORG_ID, site_id=SITE_ID, owner=owner, run_id="")
+    grant = lock.acquire_site_lock(request, client=store)
+
+    def read(org_id: str, site_ids: list[str]) -> dict[str, str | None]:
+        """Read the fake store so the reported holder agrees with the existing lock."""
+        return lock.read_site_locks(org_id, site_ids, client=store)
+
+    app.config[LOCK_READER_KEY] = read
+    return grant.record
+
+
 def unreachable_lock_reader(org_id: str, site_ids: list[str]) -> dict[str, str]:
     """Act as a lock store that no request can reach.
 
@@ -356,14 +369,15 @@ def test_the_lock_holder_takes_their_own_capture(
         registered_owner: The identity pair of the registered operator.
         lock_store: The fresh store that receives this operator's lock.
     """
-    portal_app.config[LOCK_READER_KEY] = lock_reader_that_names(registered_owner.actor_email)  # The same operator.
+    held = seed_site_lock(portal_app, lock_store, registered_owner)
     answer = start_capture(client)  # The lock exists, and this operator holds it.
     assert_capture_started(answer, capture_runner)  # The capture runs, so the journey finishes.
     assert lock_store.holder_email(lock.build_key(ORG_ID, SITE_ID)) == registered_owner.actor_email
+    assert lock.read_lock(ORG_ID, SITE_ID, client=lock_store) == held
 
 
 def test_the_lock_holder_reads_no_refusal_code(
-    portal_app: Flask, client: FlaskClient, registered_owner: identity.SessionOwner
+    portal_app: Flask, client: FlaskClient, registered_owner: identity.SessionOwner, lock_store: FakeLockStore
 ) -> None:
     """The lock holder never reads the code `site_locked` for their own site.
 
@@ -376,10 +390,13 @@ def test_the_lock_holder_reads_no_refusal_code(
         portal_app: The application that holds the lock reader seam.
         client: The signed-in test client.
         registered_owner: The identity pair of the registered operator.
+        lock_store: The store that must retain this operator's existing lock.
     """
-    portal_app.config[LOCK_READER_KEY] = lock_reader_that_names(registered_owner.actor_email)  # The same operator.
+    held = seed_site_lock(portal_app, lock_store, registered_owner)
     answer = start_capture(client)  # The lock exists, and this operator holds it.
+    assert answer.status_code == ACCEPTED_STATUS
     assert error_code(answer) != SITE_LOCKED_CODE  # The holder is the one operator the lock protects.
+    assert lock.read_lock(ORG_ID, SITE_ID, client=lock_store) == held
 
 
 # --------------------------------------------------------------------------
@@ -387,7 +404,9 @@ def test_the_lock_holder_reads_no_refusal_code(
 # --------------------------------------------------------------------------
 
 
-def test_a_second_operator_is_refused(portal_app: Flask, client: FlaskClient, capture_runner: RecordingRunner) -> None:
+def test_a_second_operator_is_refused(
+    portal_app: Flask, client: FlaskClient, capture_runner: RecordingRunner, lock_store: FakeLockStore
+) -> None:
     """A site that another operator holds answers 409 `site_locked`.
 
     Why:
@@ -399,12 +418,15 @@ def test_a_second_operator_is_refused(portal_app: Flask, client: FlaskClient, ca
         portal_app: The application that holds the lock reader seam.
         client: The signed-in test client.
         capture_runner: The stand-in that received no job.
+        lock_store: The store that must retain the other operator's lock.
     """
-    portal_app.config[LOCK_READER_KEY] = lock_reader_that_names(OTHER_EMAIL)  # A different operator holds it.
+    other_owner = identity.build_owner(OTHER_EMAIL, identity.issue_browser_id())
+    held = seed_site_lock(portal_app, lock_store, other_owner)
     answer = start_capture(client)  # The lock check refuses this start.
     assert answer.status_code == CONFLICT_STATUS  # `contracts/http-api.md:138` fixes this status.
     assert error_code(answer) == SITE_LOCKED_CODE  # The same line fixes this code.
     assert capture_runner.jobs == []  # A refusal starts no work at all.
+    assert lock.read_lock(ORG_ID, SITE_ID, client=lock_store) == held
 
 
 def test_a_free_site_starts_the_capture(
