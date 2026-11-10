@@ -493,3 +493,38 @@ The bootstrap owner separately reported `40 passed` against exactly `84597015962
 That run included all five console-routing cases, sixteen bootstrap redaction cases, and nineteen logging and rotation cases.
 The owner used an in-memory git-object module without modifying shared source or the held test.
 This is owner-reported integration evidence, not a local execution in this worktree.
+
+## Forward-Only Conservative Restoration
+
+The coordinator requested this correction after identifying the whitespace-delimited security regression.
+The original assignment permits local commits and prohibits rebase, publication, merge, and credential changes.
+No original restriction prevents this forward-only local correction.
+The earlier menu-preservation source decision and its integration success claim are superseded.
+All existing commits remain in history.
+
+The ordinary value pattern now matches the preserved conservative candidate exactly.
+Space and tab separators protect labeled values without requiring assignment punctuation.
+No phrase exemption, case heuristic, value-length rule, or synthetic-marker rule was added.
+Authorization, URL, and traceback behavior remains unchanged.
+Seventy-two new cases cover three credential labels, spaces and tabs, both handlers, fresh and cached text, and all three exception forms.
+Before the source correction, those cases reported `72 failed, 193 deselected, 1 warning`.
+
+The six-file focused command in this document reports `408 passed, 22 xfailed, 1 warning`.
+Source coverage remains `100%` of 49 statements.
+The 22 menu and prose assertions remain executable under strict expected-failure markers.
+They retain their exact-output assertions and state the unresolved conservative-matching conflict.
+The standalone safe `Invalid token` case remains in the existing safe-report selection.
+No original redaction test was removed.
+This additional command exposes the menu assertions without their expected-failure policy:
+
+```bash
+.venv/bin/python -m pytest -q tests/unit/utils/test_logger_verification_urls.py -k safe_words --runxfail --tb=no
+```
+
+Result: `22 failed, 243 deselected, 1 warning`, as expected for the unresolved integration.
+This is not a menu integration fix or complete advisory remediation.
+The bootstrap owner must reconcile menu routing separately without weakening credential protection.
+Compile, Ruff, Black, mypy, Bandit, complexity, pydocstyle, symbols, and whitespace checks passed with the earlier offline commands.
+The recurring Dash warning and unused mypy configuration notes remain.
+No network, credential access, branch replacement, rebase, amend, push, publication, or merge occurred.
+The README requirement remains an unresolved ownership dependency.

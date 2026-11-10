@@ -102,3 +102,12 @@ T028 requires T027. Both tasks refine the validation of FR-015 through FR-018.
 - [x] T031 Validate existing protections and provide the correction commit to the bootstrap owner for routing checks. (delivered: analysis.md, local commit 845970159)
 
 T029 precedes T030. T031 requires T030. These tasks refine FR-004 and FR-011.
+
+## Phase 12: Restore Conservative Protection
+
+- [x] T032 Prove whitespace-labeled message and exception leaks with synthetic values before repairing the source.
+- [x] T033 Restore conservative recognition without rewriting history or adding phrase exemptions.
+- [ ] T034 Run offline focused gates and record the unresolved menu integration, including strict expected failures.
+
+T032 precedes T033. T034 requires T033.
+This phase supersedes the security-weakening matching decision in Phase 11, not its historical evidence.

@@ -114,9 +114,11 @@ The existing test directory exceeds the structural limit. Its separate directory
 The approved analyzer-scope handoff separates three SDK cases into `tests/unit/utils/test_logger_verification_url_sdk_integration.py`.
 The original dedicated file retains 131 pure filter cases and no SDK import.
 The integration file keeps its explicit SDK import. Analyzer policy remains unchanged.
-The bootstrap integration requires explicit credential assignments rather than whitespace-only matches.
-Keep colon and equals assignments, quoted keys, horizontal spacing, and all existing authorization and URL rules.
-Preserve ordinary menu titles and policy prose. Whitespace-only unlabeled values remain outside the recognition contract.
+The earlier explicit-assignment change weakened whitespace-delimited protection and is superseded.
+Restore conservative space and tab separators without phrase exemptions or heuristics.
+Keep authorization, URL, and traceback protection unchanged.
+Retain menu preservation assertions as strict expected failures with an explicit unresolved integration reason.
+This filter cannot distinguish arbitrary labeled values from identical ordinary prose.
 Do not change bootstrap handlers or exporter callers in this handoff.
 Unlabeled response details remain outside this rule. Handler installation and safe exporter diagnostics require separate owners.
 Publication and test-rename holds remain active.

@@ -118,9 +118,9 @@ class SensitiveFilter(logging.Filter):
     It sanitizes the formatted message and the exception text cache before a
     standard handler formats the record. This includes exception chains and
     cached text from earlier handlers. Safe traceback context stays visible.
-    Credential separators do not cross line boundaries. Authorization headers
-    and ordinary credential labels require an explicit colon or equals sign.
-    Credential words in ordinary prose remain unchanged.
+    Credential separators do not cross line boundaries. Ordinary credential
+    labels also recognize spaces and tabs without assignment punctuation.
+    This conservative rule can change credential words in ordinary prose.
     Authorization headers protect the complete remaining line, including structured parameters.
     Any same-line diagnostic after that header is also removed.
     The exact email verification URL route protects its nonempty suffix,
@@ -138,7 +138,7 @@ class SensitiveFilter(logging.Filter):
     # it belongs to a sensitive key.  Matches patterns like:
     #   password=abc123  or  "password": "abc123"
     _VALUE_PATTERN = re.compile(  # Compiled once at class load for performance
-        r"(?P<key>" + _SENSITIVE_KEY_PATTERNS.pattern + r""")[ \t"']*[:=][ \t"']*(?P<value>\S+)""",
+        r"(?P<key>" + _SENSITIVE_KEY_PATTERNS.pattern + r')[=: \t"\']+(?P<value>\S+)',
         re.IGNORECASE,
     )
     _AUTHORIZATION_PATTERN = re.compile(

@@ -91,4 +91,4 @@ An operator receives the same protection when a previous handler has already for
 - URL suffix boundaries are whitespace only. Punctuation and encoded values remain private without decoding.
 - The later source-only handoff does not release the existing test rename or publication holds.
 - Direct SDK console output and response details without recognized patterns require separate repairs.
-- Ordinary credential labels require a colon or equals sign. Credential words in menu titles and prose are not assignments.
+- Ordinary credential labels retain space and tab separators. Credential-word menu preservation remains an unresolved integration requirement.
