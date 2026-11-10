@@ -149,12 +149,6 @@ def test_an_access_point_result_without_lists_names_each_access_point() -> None:
         pytest.param("rejected", 401, None, id="unauthorized"),  # The server rejected the credentials.
         pytest.param("rejected", 403, None, id="forbidden"),  # The server rejected the operator scope.
         pytest.param("rejected", 404, None, id="missing-resource"),  # The server rejected the missing resource.
-        pytest.param("rejected", 405, None, id="method-refused"),  # The server rejected the method.
-        pytest.param("rejected", 409, None, id="request-conflict"),  # The server rejected the conflict.
-        pytest.param("rejected", 410, None, id="resource-gone"),  # The server rejected the missing resource.
-        pytest.param("rejected", 413, None, id="request-too-large"),  # The server rejected the request size.
-        pytest.param("rejected", 415, None, id="unsupported-content"),  # The server rejected the content type.
-        pytest.param("rejected", 422, None, id="invalid-request"),  # The server rejected the request fields.
     ],
 )
 def test_a_child_job_that_never_started_lists_no_device(status: str, raw_status: int, claim: str | None) -> None:
@@ -169,7 +163,9 @@ def test_a_child_job_that_never_started_lists_no_device(status: str, raw_status:
     ("status", "raw_status", "claim"),
     [
         pytest.param("planned", 0, "claim-1", id="planned-during-a-live-submission"),  # The write may still run.
+        pytest.param("rejected", 405, None, id="undocumented-method-status"),
         pytest.param("rejected", 408, None, id="a-request-timeout"),  # The response does not prove refusal.
+        pytest.param("rejected", 409, None, id="undocumented-conflict-status"),
         pytest.param("rejected", 429, None, id="a-rate-limit"),  # The response does not prove refusal.
         pytest.param("rejected", 499, None, id="an-unlisted-client-status"),  # The status is not allowlisted.
         pytest.param("rejected", 451, None, id="an-unlisted-client-status"),  # The status is not allowlisted.
@@ -182,6 +178,24 @@ def test_an_uncertain_child_job_lists_every_device_as_writing(status: str, raw_s
     """A cloud job can exist, so the portal claims no stop (issue #3327)."""
     unavailable = {"status": "unavailable", "message": "The child has no known upgrade identifier."}
     row = only_row(record(child("child-1", status, unavailable, raw_status=raw_status), claim=claim))
+    assert (row["cancelled"], row["already_writing"], row["note"]) == ([], [SWITCH], UNSORTED_NOTE)
+
+
+@pytest.mark.parametrize(
+    "evidence",
+    [
+        pytest.param({"upgrade_id": "job-one"}, id="retained-upgrade-identity"),
+        pytest.param({"status_data": {"targets": {"upgraded": [SWITCH]}}}, id="accepted-target"),
+        pytest.param({"status_data": {"id": "job-one"}}, id="identity-in-response-data"),
+    ],
+)
+def test_a_documented_refusal_with_conflicting_legacy_evidence_reports_writing_devices(
+    evidence: dict[str, Any],
+) -> None:
+    """A legacy rejected child cannot claim that no job exists when evidence conflicts."""
+    unavailable = {"status": "unavailable", "message": "The child has no known upgrade identifier."}
+    stored_child = child("child-1", "rejected", unavailable, raw_status=400, **evidence)
+    row = only_row(record(stored_child))
     assert (row["cancelled"], row["already_writing"], row["note"]) == ([], [SWITCH], UNSORTED_NOTE)
 
 

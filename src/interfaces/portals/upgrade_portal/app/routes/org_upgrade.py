@@ -1787,7 +1787,9 @@ def _operation_is_settled(operation: Mapping[str, Any]) -> bool:
     states = [str(child.get("status", "")).strip().lower() for child in children]  # One word for each child.
     if not all(  # Require final states and evidence for each rejected child.
         state in FINAL_WRITE_STATES  # Require a final child state.
-        and _SubmissionCertainty.allows_settlement(state, child.get("raw_status"))  # Require refusal proof when needed.
+        and _SubmissionCertainty.allows_settlement(
+            state, child.get("raw_status"), child
+        )  # Require refusal proof without job evidence.
         for child, state in zip(children, states, strict=True)  # Pair each state with its saved response evidence.
     ):
         return False  # The operation keeps every selected site.
@@ -2321,7 +2323,10 @@ def _aggregate_child_counts(child: Mapping[str, Any]) -> tuple[int, int, int]:
         _array_count(targets.get("failed")),  # The devices that the cloud lists as failed.
     )
     status = str(child.get("status") or "").strip().lower()  # A rejected child has no cloud target lists.
-    if status in {"rejected", "not_submitted"}:  # The portal submitted no device of this child job.
+    if status == "not_submitted" or (  # Count only a proven refusal as a failed, unsubmitted child.
+        status == "rejected"  # Legacy rejected states require their saved evidence.
+        and _SubmissionCertainty.is_known_refusal(child.get("raw_status"), child)  # Reject conflicting evidence.
+    ):
         logger.debug(
             "Child job %s rejected %s target(s)", child.get("child_id", ""), counts[0]
         )  # Log the failure count.

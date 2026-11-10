@@ -17,9 +17,9 @@ An aggregate operation holds the selected child submissions, durable outcome evi
 
 | Field | Meaning | Validation |
 |---|---|---|
-| `status` | Accepted, rejected, not submitted, running, final, or uncertain state | `rejected` proves no cloud job only when `raw_status` is an allowlisted refusal. |
-| `raw_status` | HTTP response status, when available | Only an integer in the explicit allowlist proves refusal. Other values remain uncertain. |
-| `upgrade_id` | Cloud identity used to read or cancel an accepted job | An accepted-looking response without the required identity is uncertain. |
+| `status` | Accepted, rejected, not submitted, running, final, or uncertain state | `rejected` proves no cloud job only when `raw_status` is documented and no conflicting identity or accepted target exists. |
+| `raw_status` | HTTP response status, when available | Only integer status 400, 401, 403, or 404 can prove refusal. Other values remain uncertain. |
+| `upgrade_id` | Cloud identity used to read or cancel an accepted job | Any retained job identity conflicts with a refusal status. |
 | `error` | Safe operator-facing reason | Do not include credentials or secret response content. |
 
 ## Outcome transitions
@@ -27,7 +27,8 @@ An aggregate operation holds the selected child submissions, durable outcome evi
 | Evidence | Child status | Can settle? | Can release a site? |
 |---|---|---:|---:|
 | Accepted response with a required identity | `accepted` | No | No |
-| Explicit allowlisted refusal | `rejected` | Yes | Only after other children and any watch settle |
+| Documented refusal status without conflicting evidence | `rejected` | Yes | Only after other children and any watch settle |
+| Refusal status with a job identity or accepted target | `submission_unknown` | No | Keep the lock and block retry |
 | Proven local stop before a cloud write | `not_submitted` | Yes | Only after other children and any watch settle |
 | Transport error or timeout | `submission_unknown` | No | No |
 | 408, 429, 499, 5xx, or unlisted response | `submission_unknown` | No | No |
@@ -36,4 +37,4 @@ An aggregate operation holds the selected child submissions, durable outcome evi
 
 ## Lock-release invariant
 
-The portal releases site locks only when every child is final and every rejected child carries allowlisted refusal evidence. It also waits for any required phase watch. An uncertain recorded outcome cannot prove that the cloud job ended.
+The portal releases site locks only when every child is final and every rejected child carries documented refusal evidence with no conflicting identity or accepted target. It also waits for any required phase watch. An uncertain recorded outcome cannot prove that the cloud job ended.

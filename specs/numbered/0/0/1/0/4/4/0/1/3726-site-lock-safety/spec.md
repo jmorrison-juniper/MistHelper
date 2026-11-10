@@ -42,6 +42,7 @@ An operator submits a firmware upgrade that the cloud explicitly refuses, or the
 
 - Treat HTTP 408, HTTP 429, HTTP 5xx, transport failures, and non-allowlisted client responses as uncertain.
 - Treat HTTP 200 without a required upgrade identity as uncertain.
+- Treat a documented refusal response as uncertain when it retains a job identity or accepted target.
 - Preserve the existing release rule for completed operations with no child entries. Require refusal evidence for every recorded `rejected` child.
 - Keep earlier records with a rejected status uncertain unless their stored evidence proves a refusal.
 - Keep a site locked when a post-upgrade watch remains active, even after every firmware child settles.
@@ -81,7 +82,8 @@ An operator submits a firmware upgrade that the cloud explicitly refuses, or the
 
 ## Assumptions
 
-- Treat only HTTP 400, 401, 403, 404, 405, 409, 410, 413, 415, and 422 as explicit refusal evidence. Treat other statuses as uncertain unless separate stored evidence proves that no request was sent.
+- Treat only HTTP 400, 401, 403, and 404 as refusal candidates because the local OpenAPI lists them for upgrade endpoints. Treat HTTP 429 and undocumented statuses as uncertain.
+- Treat a refusal candidate as uncertain when the response or stored child record has a job identity or accepted target.
 - Treat HTTP 408, 429, and 499 as uncertain because the response does not prove that the cloud created no job.
 - Keep the existing lock lease and operator recovery controls. This change does not add a timeout, retry, migration, or manual lock-clear workflow.
 - Treat a missing device upgrade identity as uncertain even when the response otherwise resembles acceptance.

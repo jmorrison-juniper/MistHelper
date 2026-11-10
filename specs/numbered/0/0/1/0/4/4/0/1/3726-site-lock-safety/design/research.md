@@ -17,14 +17,14 @@
 
 ## Decision: Use a narrow client-refusal allowlist
 
-**Decision**: Treat HTTP 400, 401, 403, 404, 405, 409, 410, 413, 415, and 422 as explicit refusal evidence. Treat 408, 429, 499, 5xx, and every unlisted value as uncertain.
+**Decision**: Treat HTTP 400, 401, 403, and 404 as refusal candidates because the local OpenAPI lists them for the upgrade endpoints. Treat HTTP 429 and every undocumented status as uncertain.
 
-**Rationale**: A refused destructive write can release a site only when the response clearly rejects the request. Timeouts, rate limits, server failures, and unlisted statuses do not prove that the cloud created no job. A narrow allowlist fails closed when the response is new or malformed.
+**Rationale**: The OpenAPI lists HTTP 400, 401, 403, 404, and 429 for the upgrade endpoints. It does not list the other statuses in the earlier candidate allowlist. A refusal candidate still cannot prove that no job exists when the response retains a job identity or an accepted target.
 
 **Alternatives considered**:
 
 - Treat every 4xx response as a refusal. Rejected because 408 and 429 can occur after an uncertain request and 499 does not provide a reliable cloud refusal.
-- Treat only HTTP 400 as a refusal. Rejected because authorization, missing-resource, conflict, and validation responses are explicit refusal cases in the current bounded design.
+- Treat the earlier candidate list as proven refusal evidence. Rejected because the local OpenAPI does not list 405, 409, 410, 413, 415, or 422.
 - Treat every returned response as final. Rejected because HTTP 200 can contain malformed data or lack an identity needed to reconcile the job.
 
 ## Decision: Preserve existing recovery and lease behavior
@@ -42,12 +42,14 @@
 ## Evidence
 
 - The issue's source-export proof showed that HTTP 503 and malformed HTTP 200 replies become `rejected`, while the lock predicate treats every `rejected` child as settled.
-- The current cancellation path already requires refusal evidence, but its range includes all 4xx values.
+- The previous candidate allowed undocumented 4xx statuses to prove refusal, and it did not check for a retained job identity or accepted target.
 - The current route uses `_operation_is_settled` for both lock release and retry eligibility.
+- The previous summary path counted every `rejected` child as fully failed, even when stored evidence conflicted.
+- Organization upgrade response data can retain an `id` or accepted target list even when the response status is a refusal candidate. Device submissions can retain both accepted targets and an upgrade identity.
 - The issue's prior assessment identified `src/operations/execution/firmware/aggregate_upgrade_service.py`, `src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py`, and `src/interfaces/portals/upgrade_portal/upgrade/org_cancel_outcomes.py` as the current source paths.
 - The exact open-PR path check found no open pull request that changes these three production files.
 - The issue contains no attached artifacts or images.
 
 ## Unresolved Questions
 
-None. The explicit allowlist is a conservative implementation assumption. The human reviewer must review the allowlist and lock-retention behavior before merge.
+None. The documented refusal candidates and the conflict rule are now explicit. The human reviewer must review the lock-retention behavior before merge.

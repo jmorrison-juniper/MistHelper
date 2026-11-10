@@ -84,7 +84,9 @@ class OrgCancelLists:
             return not claimed  # A live submission can still send it.
         return (  # A rejected child needs explicit evidence before cancellation can call it refused.
             status == "rejected"  # Apply the refusal rule only to a rejected child.
-            and _SubmissionCertainty.is_known_refusal(child.get("raw_status"))  # Require an allowlisted status.
+            and _SubmissionCertainty.is_known_refusal(
+                child.get("raw_status"), child
+            )  # Require status evidence without a job identity or accepted target.
         )
 
     @staticmethod

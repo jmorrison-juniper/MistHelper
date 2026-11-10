@@ -32,12 +32,13 @@ Classify only explicitly allowlisted client refusals as `rejected`. Record every
 
 ## Design Decisions
 
-1. Define the refusal allowlist as HTTP 400, 401, 403, 404, 405, 409, 410, 413, 415, and 422. Exclude 408, 429, 499, all 5xx statuses, and all unlisted values.
-2. Put the shared refusal predicate in `src/foundation/support/submission_certainty.py`. The common foundation layer can serve both firmware execution and portal code without a reverse dependency or duplicated rules. This folder has three direct children, so one new module keeps it within the five-child limit.
-3. Keep `rejected` only when a response proves refusal. Convert ambiguous returned responses to `submission_unknown`.
-4. Treat an accepted-looking device response without an upgrade identity as `submission_unknown`. Keep its lock because the portal cannot reconcile the job.
-5. Apply the refusal evidence check to legacy `rejected` records. A missing, malformed, or unlisted status does not prove that no job exists.
-6. Preserve current lock lease, recovery controls, error-handling breadth, and retry policy. The existing settled-operation gate blocks retry while an unknown child remains.
+1. Use HTTP 400, 401, 403, and 404 as refusal candidates because `documentation/mist-api-openapi31json.json` lists them for upgrade endpoints. Keep 429 and undocumented statuses uncertain.
+2. Keep any response with a retained job identity or accepted target uncertain, even when its status is a documented refusal candidate.
+3. Put the shared refusal predicate in `src/foundation/support/submission_certainty.py`. The common foundation layer can serve both firmware execution and portal code without a reverse dependency or duplicated rules. This folder has three direct children, so one new module keeps it within the five-child limit.
+4. Keep `rejected` only when a response proves refusal. Convert ambiguous returned responses to `submission_unknown`.
+5. Treat an accepted-looking device response without an upgrade identity as `submission_unknown`. Keep its lock because the portal cannot reconcile the job.
+6. Apply the refusal evidence check to legacy `rejected` records. A missing, malformed, undocumented, or conflicting response does not prove that no job exists.
+7. Preserve current lock lease, recovery controls, error-handling breadth, and retry policy. The existing settled-operation gate blocks retry while an unknown child remains.
 
 ## Phase 0: Research
 

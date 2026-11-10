@@ -31,5 +31,6 @@
 
 ## Notes
 
-- The refusal allowlist is an explicit assumption. Review it against the current submission and cancellation paths during planning.
+- The refusal status list must match the upgrade OpenAPI. Review it against the current submission and cancellation paths.
+- A retained job identity or accepted target must override a refusal status.
 - Offline tests must verify each outcome without calling Mist Cloud or changing a production lock.

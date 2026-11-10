@@ -134,32 +134,48 @@ def build_record(service: AggregateUpgradeService) -> dict[str, Any]:
 
 
 @pytest.mark.parametrize(
-    ("raw_status", "upgrade_id", "error", "expected"),
+    ("raw_status", "upgrade_id", "error", "data", "expected"),
     [
-        pytest.param(400, None, "refused", "rejected", id="known-refusal"),  # The refusal proves no job exists.
-        pytest.param(408, None, "timeout", "submission_unknown", id="request-timeout"),  # A timeout is uncertain.
-        pytest.param(429, None, "rate-limited", "submission_unknown", id="rate-limit"),  # The write may have arrived.
-        pytest.param(499, None, "client-closed", "submission_unknown", id="unlisted-client-status"),  # Not allowlisted.
+        pytest.param(400, None, "refused", {}, "rejected", id="documented-refusal"),
+        pytest.param(401, None, "unauthorized", {}, "rejected", id="documented-unauthorized"),
+        pytest.param(403, None, "forbidden", {}, "rejected", id="documented-forbidden"),
+        pytest.param(404, None, "missing-resource", {}, "rejected", id="documented-missing-resource"),
+        pytest.param(405, None, "method-not-allowed", {}, "submission_unknown", id="undocumented-405"),
+        pytest.param(408, None, "timeout", {}, "submission_unknown", id="request-timeout"),
+        pytest.param(409, None, "conflict", {}, "submission_unknown", id="undocumented-409"),
+        pytest.param(429, None, "rate-limited", {}, "submission_unknown", id="rate-limit"),
+        pytest.param(499, None, "client-closed", {}, "submission_unknown", id="unlisted-client-status"),
         pytest.param(
-            503, None, "server-error", "submission_unknown", id="server-error"
+            503, None, "server-error", {}, "submission_unknown", id="server-error"
         ),  # A server reply is uncertain.
         pytest.param(
-            503, "ap-job", None, "submission_unknown", id="server-error-with-identity"
+            503, "ap-job", None, {}, "submission_unknown", id="server-error-with-identity"
         ),  # A server error stays uncertain even when it carries an identity.
-        pytest.param(200, None, "malformed", "submission_unknown", id="malformed-success"),  # No valid identity exists.
-        pytest.param(200, None, None, "submission_unknown", id="missing-upgrade-identity"),  # No job can be reconciled.
-        pytest.param(200, "ap-job", None, "accepted", id="accepted"),  # A valid identity proves acceptance.
+        pytest.param(400, "ap-job", "refused", {}, "submission_unknown", id="refusal-with-job-identity"),
+        pytest.param(
+            400,
+            None,
+            "refused",
+            {"site_upgrades": [{"upgrade": {"targets": {"upgraded": ["ap-one"]}}}]},
+            "submission_unknown",
+            id="refusal-with-accepted-target",
+        ),
+        pytest.param(400, None, "refused", {"id": "ap-job"}, "submission_unknown", id="refusal-with-response-id"),
+        pytest.param(200, None, "malformed", {}, "submission_unknown", id="malformed-success"),
+        pytest.param(200, None, None, {}, "submission_unknown", id="missing-upgrade-identity"),
+        pytest.param(200, "ap-job", None, {}, "accepted", id="accepted"),
     ],
 )
 def test_org_submission_classifies_response_certainty(  # Preserve uncertain replies instead of calling them refusals.
     raw_status: int,
     upgrade_id: str | None,
     error: str | None,
+    data: dict[str, Any],
     expected: str,
 ) -> None:
-    """Only explicit refusals settle an organization submission."""
+    """Only documented refusals without conflicting evidence settle an organization submission."""
     child_record: dict[str, Any] = {"child_id": "child-1"}  # Keep the child fields under test.
-    result = OrgUpgradeResult(ORG_ID, upgrade_id, raw_status, {}, error)  # Model the saved cloud response.
+    result = OrgUpgradeResult(ORG_ID, upgrade_id, raw_status, data, error)  # Model the saved cloud response.
     AggregateUpgradeService._apply_org_submission(child_record, result)  # Use the production classifier.
     assert child_record["status"] == expected  # Preserve uncertainty unless the evidence proves a refusal.
 
@@ -169,10 +185,17 @@ def test_org_submission_classifies_response_certainty(  # Preserve uncertain rep
     [
         pytest.param(200, ("001122334455",), "site-job", "accepted", id="accepted"),  # A tracked job can be read.
         pytest.param(202, ("001122334455",), "site-job", "accepted", id="accepted-async"),  # Async acceptance is valid.
-        pytest.param(400, (), None, "rejected", id="known-refusal"),  # The allowlist proves no job exists.
+        pytest.param(400, (), None, "rejected", id="documented-refusal"),
+        pytest.param(401, (), None, "rejected", id="documented-unauthorized"),
+        pytest.param(403, (), None, "rejected", id="documented-forbidden"),
+        pytest.param(404, (), None, "rejected", id="documented-missing-resource"),
+        pytest.param(405, (), None, "submission_unknown", id="undocumented-405"),
         pytest.param(408, (), None, "submission_unknown", id="request-timeout"),  # A timeout is uncertain.
+        pytest.param(409, (), None, "submission_unknown", id="undocumented-409"),
         pytest.param(429, (), None, "submission_unknown", id="rate-limit"),  # The write may have arrived.
         pytest.param(503, (), None, "submission_unknown", id="server-error"),  # A server reply is uncertain.
+        pytest.param(400, (), "site-job", "submission_unknown", id="refusal-with-job-identity"),
+        pytest.param(400, ("001122334455",), None, "submission_unknown", id="refusal-with-accepted-target"),
         pytest.param(200, ("001122334455",), None, "submission_unknown", id="missing-upgrade-identity"),
     ],
 )
@@ -259,6 +282,31 @@ def test_mixed_status_and_cancellation_keep_all_results() -> None:
     service.cancel(SAFE_SESSION, record, store)  # A repeated request continues without duplicate cloud calls.
     assert org.calls.count("cancel") == 0  # The completed AP child job still got no cancel request.
     assert len([call for call in devices.calls if call[0] == "cancel"]) == 2  # Each running gateway job once.
+
+
+@pytest.mark.parametrize("route_type", ["organization", "device"])
+def test_legacy_rejected_child_with_identity_receives_cancel(route_type: str) -> None:
+    """A rejected record with a job identity must not be reported as already ended."""
+    org = OrgServiceStandIn()  # Record the organization cancellation.
+    devices = DeviceServiceStandIn()  # Record the device cancellation.
+    service = AggregateUpgradeService(org, devices)  # Keep both cloud boundaries offline.
+    record = build_record(service)  # Build valid child plans for each route.
+    if route_type == "organization":  # Select the organization child path.
+        child = next(child for child in record["children"] if child["route"] == "upgradeOrgDevices")  # Match AP route.
+    else:  # Select one site or SSR child path.
+        child = next(child for child in record["children"] if child["route"] != "upgradeOrgDevices")  # Match device.
+    child.update({"status": "rejected", "raw_status": 400, "upgrade_id": "known-job"})  # Keep conflicting job identity.
+    child["status_data"] = {  # Keep accepted-target evidence in the saved response.
+        "id": "known-job",  # Retain the response identity.
+        "targets": {"upgraded": [child["targets"][0]["mac"]]},  # Prove that the cloud accepted a target.
+    }
+
+    result = service._cancellation_result(SAFE_SESSION, child)  # Apply the production cancellation decision.
+
+    assert result["status"] == "requested"  # Conflicting refusal evidence must not skip the cancel.
+    assert org.calls.count("cancel") == (route_type == "organization")  # The organization route runs once.
+    device_cancel_count = len([call for call in devices.calls if call[0] == "cancel"])  # Count device cancellations.
+    assert device_cancel_count == (route_type == "device")  # Match the selected route.
 
 
 def test_concurrent_parent_claim_allows_one_submitter() -> None:
