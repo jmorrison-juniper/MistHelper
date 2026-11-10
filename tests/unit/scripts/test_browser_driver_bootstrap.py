@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 
@@ -19,6 +20,7 @@ from scripts.bootstrap_worktree import (
     PLAYWRIGHT_BROWSER,
     PLAYWRIGHT_INSTALL_HINT,
     WorktreeBootstrapper,
+    main,
     report_result,
 )
 
@@ -34,6 +36,9 @@ _PYPROJECT = Path(__file__).resolve().parents[3] / "pyproject.toml"
 # The workflow that runs the browser gate. It must download the browser and it
 # must run the suite in strict mode.
 _CI_WORKFLOW = Path(__file__).resolve().parents[3] / ".github" / "workflows" / "ci.yml"
+
+# The Windows entry point that must select the supported interpreter.
+_WINDOWS_BOOTSTRAP = Path(__file__).resolve().parents[3] / "scripts" / "bootstrap_worktree.ps1"
 
 
 # ---------------------------------------------------------------------------
@@ -144,6 +149,48 @@ def test_the_report_names_the_locked_sync_on_success(tmp_path: Path, caplog: pyt
     report_result(WorktreeBootstrapper(tmp_path), browser_ready=True)
 
     assert "Installed dependencies with uv sync --locked --extra dev." in caplog.text
+
+
+@pytest.mark.parametrize(
+    ("version", "expected"),
+    [
+        ((3, 14), False),  # WHY: the old baseline must fail before setup changes files.
+        ((3, 15), True),  # WHY: the new minimum must run the bootstrap.
+        ((3, 16), True),  # WHY: newer interpreters must remain supported.
+    ],
+)
+def test_python_version_guard_requires_315(version: tuple[int, int], expected: bool, tmp_path: Path) -> None:
+    """The bootstrap accepts Python 3.15 and newer only."""
+    logger.info("Checking Python %s.%s against the bootstrap minimum.", *version)  # Trace the decision input.
+    supported = WorktreeBootstrapper(tmp_path).check_python_version(version)  # Ask the bootstrap to validate it.
+    logger.debug("The bootstrap accepted the interpreter: %s.", supported)  # Report the decision without ambiguity.
+
+    assert supported is expected  # Confirm the minimum-version contract.
+
+
+def test_windows_entrypoint_selects_python_315() -> None:
+    """The Windows entry point MUST select Python 3.15.2 through UV."""
+    logger.info("Checking the Windows bootstrap interpreter.")  # Trace before reading the PowerShell entry point.
+    text = _WINDOWS_BOOTSTRAP.read_text(encoding="utf-8")  # Read the command that prepares Windows worktrees.
+
+    assert "Get-Command uv" in text  # Require UV to select the supported interpreter.
+    assert '"--no-project"' in text  # Prevent project discovery from changing the selected interpreter.
+    assert '"--python", "3.15.2"' in text  # Lock the bootstrap to the tested Python release.
+    assert "& $uv.Source @arguments" in text  # Run the bootstrap through the selected UV command.
+
+
+def test_main_stops_before_sweep_when_python_is_too_old(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The command rejects an old interpreter before it changes the worktree."""
+    logger.info("Checking the early Python version gate.")  # Trace before replacing external work.
+    version_check = Mock(return_value=False)  # Reject Python without starting a real setup process.
+    sweep = Mock()  # Detect any cleanup that would change the worktree.
+    monkeypatch.setattr("scripts.bootstrap_worktree.WorktreeBootstrapper.check_python_version", version_check)
+    monkeypatch.setattr("scripts.bootstrap_worktree.StaleSourceSweeper.sweep", sweep)
+    result = main([])  # Run the command with no optional arguments.
+    logger.debug("The bootstrap returned code %s.", result)  # Report the command result.
+
+    assert result == 1  # An unsupported interpreter must return failure.
+    assert sweep.call_count == 0  # Reject before the bootstrap removes stale files.
 
 
 def _completed(code: int) -> object:

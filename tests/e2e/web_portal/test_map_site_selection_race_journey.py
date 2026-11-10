@@ -39,7 +39,8 @@ except pytest.skip.Exception as error:
     if os.environ.get("UPGRADE_PORTAL_E2E_STRICT") == "1":
         raise pytest.UsageError(
             "The Playwright package is not installed. UPGRADE_PORTAL_E2E_STRICT=1 forbids a skip. "
-            "Run python scripts/bootstrap_worktree.py, then python -m playwright install chromium."
+            "Run uv run --no-project --python 3.15.2 python scripts/bootstrap_worktree.py, "
+            "then python -m playwright install chromium."
         ) from error
     raise
 

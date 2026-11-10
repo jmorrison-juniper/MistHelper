@@ -8,8 +8,8 @@ module fails to import. The reader then sees a source defect that does not
 exist. Run this script one time in each new worktree. See issue #1866.
 
 Usage:
-    python scripts/bootstrap_worktree.py
-    python scripts/bootstrap_worktree.py --recreate
+    uv run --no-project --python 3.15.2 python scripts/bootstrap_worktree.py
+    uv run --no-project --python 3.15.2 python scripts/bootstrap_worktree.py --recreate
 
 The script works on Windows, macOS, and Linux. The script prints the path of the
 interpreter that it created.
@@ -38,6 +38,8 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+
+MINIMUM_PYTHON_VERSION: tuple[int, int] = (3, 15)  # Keep every new worktree on the supported runtime.
 
 LOGGER = logging.getLogger("bootstrap_worktree")
 
@@ -199,6 +201,21 @@ class WorktreeBootstrapper:
         self.root = root  # Keep the worktree root, because every path starts here.
         self.venv_dir = root / venv_name  # Build the environment path with pathlib, so both platforms work.
         self.index_override: str | None = None  # Hold the index that this run uses when the configured one fails.
+
+    def check_python_version(self, version: tuple[int, int] | None = None) -> bool:
+        """Reject a bootstrap interpreter below the supported Python minimum."""
+        LOGGER.info("Checking the bootstrap interpreter against Python 3.15.")  # Report the required runtime.
+        active_version = version  # Keep the injected version available for focused tests.
+        if active_version is None:  # Read the active runtime when no test version was supplied.
+            active_version = (sys.version_info.major, sys.version_info.minor)  # Read only the supported version fields.
+        if active_version < MINIMUM_PYTHON_VERSION:  # Reject unsupported runtimes before setup changes files.
+            LOGGER.error(
+                "Python 3.15 or newer is required. Run the bootstrap command: %s.",  # Keep the error actionable.
+                "uv run --no-project --python 3.15.2 python scripts/bootstrap_worktree.py",  # Select Python 3.15.2.
+            )  # Give the supported command without formatting the logger message early.
+            return False  # Stop setup before the stale-source sweep.
+        LOGGER.debug("The bootstrap interpreter uses Python %s.%s.", *active_version)  # Report the accepted version.
+        return True  # Allow the caller to continue with the worktree.
 
     class InstallationPolicy:  # Own sync decisions without changing browser or account helpers.
         """Apply one invocation's locked sync command and package-source policy."""
@@ -647,6 +664,8 @@ def main(argv: list[str] | None = None) -> int:
     root = REPOSITORY_ROOT  # Reuse the root that also made repository package imports safe.
     LOGGER.info("Preparing the worktree at %s", root)
     bootstrapper = WorktreeBootstrapper(root)  # Build the object that owns every step.
+    if not bootstrapper.check_python_version():  # Reject an unsupported interpreter before the cleanup step.
+        return 1  # Report the unsupported interpreter to the shell.
     StaleSourceSweeper(root).sweep()  # Remove the orphaned package directories that a branch switch left behind.
     try:  # Report a failed step as one clear message, because the user reads the console.
         bootstrapper.create_environment(recreate=args.recreate)  # Create the environment first.

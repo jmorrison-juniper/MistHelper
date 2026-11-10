@@ -17,21 +17,22 @@ Podman container.
 
 ## Language and environment
 
-The language is Python 3.13 or newer, because `pyproject.toml` requires `>=3.13`. The package
+The language is Python 3.15 or newer, because `pyproject.toml` requires `>=3.15`. The package
 `mistapi>=0.64.0,<0.65` is the only interface to the Mist REST API. UV is the preferred
 installer, and `requirements.txt` stays current for pip. Podman is the container runtime, and
 each example uses Podman.
 
-A new worktree holds no `.venv`. Build the environment one time with these two commands.
+A new worktree has no `.venv`. Install Python 3.15.2 and create the environment with these commands.
 
 ```powershell
-python scripts/bootstrap_worktree.py
+uv python install 3.15.2
+uv run --no-project --python 3.15.2 python scripts/bootstrap_worktree.py
 .venv\Scripts\Activate.ps1
 ```
 
-On macOS or Linux, run `python3 scripts/bootstrap_worktree.py`, then `source .venv/bin/activate`.
-The bootstrap runs `uv sync --locked --extra dev`, downloads Chromium for the browser tests, and
-sets the git credential account to `jmorrison-juniper`.
+On macOS or Linux, run the first two commands, then `source .venv/bin/activate`. The bootstrap
+runs `uv sync --locked --extra dev`, downloads Chromium for browser tests, and sets the git
+credential account to `jmorrison-juniper`.
 
 The `misthelper-devtools` package in `requirements-dev.txt` supplies the shared commands:
 `test-quality-analyzer`, `complexity-gate`, `check-citations`, `speckit-task-audit`,
@@ -537,8 +538,8 @@ unchanged.
 ## Known pitfalls
 
 - Issue #1866: a new worktree has no `.venv`, so the tests ran against the global interpreter.
-  Run `python scripts/bootstrap_worktree.py` first. `python -m pytest` now stops with one message
-  that names the bootstrap command.
+  Run `uv run --no-project --python 3.15.2 python scripts/bootstrap_worktree.py` first.
+  `python -m pytest` now stops with one message that names the bootstrap command.
 
 - Issue #1893: `GH_TOKEN` or `GITHUB_TOKEN` named another account, and the push went to the wrong
   identity. Clear both variables, then run `gh auth switch --user jmorrison-juniper`.

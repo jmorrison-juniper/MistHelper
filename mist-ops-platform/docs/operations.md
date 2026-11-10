@@ -4,7 +4,7 @@
 
 - Docker/Podman with Compose support
 - PostgreSQL 16, Redis 7, MinIO, Vault (provided via compose)
-- Python 3.13+ for local development
+- Python 3.15 or newer for local development
 
 ## Quick Start
 

@@ -19,7 +19,7 @@
 #   podman build --build-arg INSTALL_CORPORATE_CA=true -t misthelper .
 # At run time, mount the proxy root certificate instead:
 #   -v /path/to/corp-root-ca.crt:/usr/local/share/ca-certificates/corp-root-ca.crt:ro
-FROM python:3.13-slim
+FROM python:3.15-slim
 
 # Metadata following OCI standards
 LABEL org.opencontainers.image.title="MistHelper"

@@ -92,7 +92,7 @@ Logs do not contain tokens, note contents, or raw response bodies.
 
 ## Offline Validation
 
-Use the existing Python 3.13+ development environment.
+Use the existing Python 3.15+ development environment.
 Run these commands from the repository root:
 
 ```bash
