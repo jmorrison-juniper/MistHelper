@@ -107,7 +107,7 @@ class LoginOrchestrator:
             return False  # Propagate failure to the caller
         login_result = self._initial_login(apisession)  # First login attempt without 2FA
         if self._needs_two_factor(login_result):  # Mist signalled 2FA required
-            login_result = self._handle_two_factor(apisession)  # Prompt + resubmit with 2FA
+            login_result = self._handle_two_factor(apisession, email, password)  # Prompt + resubmit with 2FA
             if login_result is None:  # User aborted 2FA prompt
                 return False  # Propagate failure to the caller
         if not self._is_authenticated(login_result):  # Login still failed after any 2FA
@@ -182,8 +182,12 @@ class LoginOrchestrator:
             return True  # 2FA prompt is needed
         return bool(login_result.get("two_factor_required"))  # Legacy fallback shape
 
-    def _handle_two_factor(self, apisession: Any) -> dict[str, Any] | None:
-        """Prompt for 2FA and replay the login with the code attached."""
+    def _handle_two_factor(self, apisession: Any, email: str, password: str) -> dict[str, Any] | None:
+        """Prompt for 2FA and replay the login with the code attached.
+
+        The SDK clears its stored password after the first login request, so the
+        replay must supply the email and the password again (issue #4755).
+        """
         logger.warning("")  # Blank spacer matches legacy output exactly
         logger.warning("  Two-factor authentication required.")  # Legacy console message routed via logger
         code = CredentialPrompter(self.safe_input).prompt_two_factor()  # EOF-safe 2FA prompt
@@ -192,7 +196,11 @@ class LoginOrchestrator:
             return None  # Propagate failure to the caller
         logger.warning("  Sending 2FA verification...")  # Legacy console message routed via logger
         logger.info("Resubmitting login_with_return() with 2FA code")  # Trace before SDK call
-        result: dict[str, Any] | None = apisession.login_with_return(two_factor=code)  # Replay with 2FA
+        result: dict[str, Any] | None = apisession.login_with_return(  # Replay the full login with 2FA
+            email=email,  # Resupply the email because the SDK needs both credentials on replay
+            password=password,  # Resupply the password because the SDK cleared it after the first login
+            two_factor=code,  # Send the operator code to /api/v1/login/two_factor
+        )
         logger.debug("2FA login returned authenticated=%s", bool(result and result.get("authenticated")))
         return result  # Hand the post-2FA login response back to the pipeline
 
