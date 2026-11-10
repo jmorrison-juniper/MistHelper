@@ -25,6 +25,7 @@ The shared rule consumes the raw HTTP status and existing submission fields. It 
 - Cancellation reporting calls the same refusal predicate before claiming that no cloud job exists.
 - A prior `rejected` record remains uncertain when its status is undocumented or its saved response names a job or accepted target.
 - A discarded or malformed response body cannot prove a refusal.
+- Device and organization normalizers use the same body check before a refusal can settle.
 - A prior `rejected` record with a job identity must not skip cancellation as an already-ended child.
 - Summary counts do not count an uncertain rejected child as fully failed.
 - No path retries a destructive submission because the response is uncertain.

@@ -981,9 +981,9 @@ class AggregateUpgradeService:  # Coordinate all child routes through one durabl
             "accepted_targets": submission.accepted,  # An accepted target conflicts with refusal.
             "response_data": submission.response_data,  # The refusal body can also name accepted targets.
         }
-        if _SubmissionCertainty.is_known_refusal(
+        if submission.response_data_valid and _SubmissionCertainty.is_known_refusal(
             submission.raw_status, evidence
-        ):  # Refusal needs no conflicting evidence.
+        ):  # Refusal requires a complete response body without conflicting evidence.
             child["status"] = "rejected"  # Keep a proven refusal eligible for lock release.
             child["error"] = f"The cloud refused the request with status {submission.raw_status}."  # Name refusal.
             return  # Do not classify a proven refusal as uncertain.

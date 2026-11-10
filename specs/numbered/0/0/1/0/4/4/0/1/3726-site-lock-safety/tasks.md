@@ -27,6 +27,7 @@
 ### Tests for User Story 1
 
 - [X] T002 [P] [US1] Add offline tests for documented refusals, conflicting identities and accepted targets, HTTP 429, undocumented statuses, HTTP 5xx, malformed successes and refusal bodies, and missing identities. Exercise the real device and organization normalizers in `tests/unit/firmware/test_aggregate_upgrade_service.py`.
+- [X] T002a [US1] Check discarded device list bodies, malformed or mismatched raw JSON, and valid refusal bodies through the real normalizer. Prove that uncertain replies block another submission without a browser or network.
 - [X] T003 [P] [US1] Add lock-retention tests for ambiguous replies and conflicting legacy rejected records, and prove that a known not-submitted child can settle, in `tests/unit/upgrade_portal/test_org_upgrade_lock_release.py`.
 - [X] T004 [P] [US1] Test that a returned HTTP 503 keeps the uncertainty marker and blocks a repeated submission in `tests/contract/upgrade_portal/test_org_upgrade_routes.py`.
 
