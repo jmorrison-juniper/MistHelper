@@ -30,6 +30,8 @@ uv run --no-project --python 3.15.2 python scripts/bootstrap_worktree.py
 .venv\Scripts\Activate.ps1
 ```
 
+On Windows, install Microsoft C++ Build Tools with the C++ workload to build `python-crfsuite`.
+
 On macOS or Linux, run the first two commands, then `source .venv/bin/activate`. The bootstrap
 runs `uv sync --locked --extra dev`, downloads Chromium for browser tests, and sets the git
 credential account to `jmorrison-juniper`.

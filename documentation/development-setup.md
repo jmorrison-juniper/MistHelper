@@ -10,7 +10,7 @@ the tool and not to change it.
 
 | Item | Minimum |
 |------|---------|
-| Python | 3.13 or newer |
+| Python | 3.15 or newer |
 | mistapi | 0.64.0, less than 0.65 |
 | Container runtime | Podman (primary) or Docker |
 
@@ -26,7 +26,7 @@ cd MistHelper
 ## Step 2: Create the environment
 
 The bootstrap script creates `.venv` and installs `requirements.txt` and
-`requirements-dev.txt`, in that order. Use Python 3.13 or newer to run the script.
+`requirements-dev.txt`, in that order. Use Python 3.15 or newer to run the script.
 
 ```powershell
 python scripts/bootstrap_worktree.py   # Windows, Linux, or macOS
@@ -49,7 +49,7 @@ The bootstrap cannot create a new environment in that case.
 If this error occurs, create the environment with the command below, then run the bootstrap again.
 
 ```bash
-UV_SYSTEM_CERTS=1 UV_LINK_MODE=copy uv venv --python 3.13 --seed .venv
+UV_SYSTEM_CERTS=1 UV_LINK_MODE=copy uv venv --python 3.15 --seed .venv
 ```
 
 ### Installer selection and reports

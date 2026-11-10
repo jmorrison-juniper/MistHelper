@@ -4,6 +4,7 @@
 
 - Install UV 0.13.7 or newer.
 - Use stable Python 3.15.2.
+- On Windows, install Microsoft C++ Build Tools with the C++ workload to build `python-crfsuite`.
 - Run these commands from a MistHelper worktree.
 
 ## Create the environment

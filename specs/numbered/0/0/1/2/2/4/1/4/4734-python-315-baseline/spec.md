@@ -1,6 +1,6 @@
 # Feature Specification: Python 3.15 Baseline
 
-**Feature Branch**: `3999-python-315-baseline`
+**Feature Branch**: `4734-python-315-baseline`
 
 **Created**: 2026-11-10
 
@@ -48,13 +48,15 @@ A maintainer uses the supported Python version for CI, release builds, and produ
 
 1. **Given** a change to the Python support configuration, **When** CI runs, **Then** its Python jobs use Python 3.15.
 2. **Given** a release or product container build, **When** the build completes, **Then** the artifact uses Python 3.15.
+3. **Given** a merged image and operator approval, **When** deployment completes, **Then** its revision matches the merge commit and its health checks pass.
 
 ### Edge Cases
 
 - If a stable Python 3.15 installer is unavailable, the setup process must report the cause.
-- If a required dependency does not support Python 3.15, the build must fail rather than report success.
-- If a worktree belongs to another task, this change must not remove its virtual environment.
+- If a required dependency does not support Python 3.15, the build must stop and show a failure message.
+- If a virtual environment is in use, the cleanup must retain it and report the process ID.
 - If dependency exports change, platform markers must remain correct for each supported operating system.
+- If deployment approval is absent, the process must not deploy the image.
 
 ## Requirements
 
@@ -67,9 +69,10 @@ A maintainer uses the supported Python version for CI, release builds, and produ
 - **FR-005**: Setup instructions MUST state the Python 3.15 minimum.
 - **FR-006**: Dependency lock and export files MUST install on Python 3.15 and retain valid platform markers.
 - **FR-007**: The standard startup check MUST confirm that MistHelper starts in a fresh Python 3.15 environment.
-- **FR-008**: Cleanup MUST remove only the virtual environment in the current checkout.
-- **FR-009**: The change MUST preserve virtual environments in other worktrees.
-- **FR-010**: The pending dependency export changes in issue #4727 MUST remain intact if they can be integrated without conflict.
+- **FR-008**: Cleanup MUST remove each `.venv` directory in a registered MistHelper worktree only after it confirms that no process uses it.
+- **FR-009**: Cleanup MUST NOT remove virtual environments outside registered MistHelper worktrees.
+- **FR-010**: The lock MUST resolve `importlib-metadata` 10.2.0, `openai` 3.49.0, and `pypdfium2` 5.15.2. Both exports MUST come from the lock, and the runtime export MUST preserve all 11 original platform markers.
+- **FR-011**: After merge, the release process MUST verify the image revision and deployment health.
 
 ## Success Criteria
 
@@ -79,13 +82,15 @@ A maintainer uses the supported Python version for CI, release builds, and produ
 - **SC-002**: All first-party runtime, setup, CI, release, and container declarations use Python 3.15 or newer.
 - **SC-003**: A clean Windows environment reports Python 3.15.2 and starts MistHelper with exit code zero.
 - **SC-004**: Dependency installation and all relevant required checks pass with Python 3.15.
-- **SC-005**: No virtual environment outside the current checkout is removed.
+- **SC-005**: Cleanup removes every pre-existing registered `.venv`. Setup then creates one fresh environment in the feature worktree and removes no other path.
+- **SC-006**: The deployed image revision matches the merge commit, and the container and portal health checks pass after approved deployment.
 
 ## Assumptions
 
 - Python 3.15.2 is the current stable Python 3.15 release.
 - The Python 3.15 minimum applies to both the root project and the separately configured Mist Ops Platform.
 - The product continues to support Windows, macOS, and Linux.
-- This work removes only the root checkout's `.venv`. Other worktree environments may support active tasks.
-- The pending dependency export changes in issue #4727 remain in scope, but open pull requests retain ownership of their files.
+- Cleanup covers `.venv` directories in registered MistHelper worktrees after an active-process check. Virtual environments outside those worktrees remain out of scope.
+- The runtime dependency updates from issue #4727 remain in scope, but open pull requests retain ownership of their files.
 - The branch must pass repository checks and use the protected pull request flow. This work does not bypass branch protection.
+- Production deployment requires separate explicit approval.

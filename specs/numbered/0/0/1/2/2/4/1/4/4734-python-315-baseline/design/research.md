@@ -36,9 +36,17 @@ The staged `requirements.txt` change includes three package updates but removes 
 
 **Alternatives considered**: Copy the staged export as-is. That would lose platform-specific constraints and create drift from the lock.
 
-## Decision: Preserve worktree environments and open pull request ownership
+## Decision: Use Microsoft C++ Build Tools for Windows source builds
 
-Eleven registered worktrees currently contain `.venv` directories. This feature removes only the environment in the main checkout. Pull request #4676 owns `uv.lock`, and pull request #4678 owns `requirements-dev.txt`.
+The Python 3.15.2 sync reached `python-crfsuite==0.9.12`, which has no CPython 3.15 Windows wheel and needs a C++ compiler. The address parser has a heuristic fallback, but removing its package would reduce parsing accuracy.
+
+**Rationale**: Build the native dependency and preserve the current address parser behavior.
+
+**Alternatives considered**: Remove the optional parser package, which changes address parsing behavior. Wait for an upstream wheel, which delays Python 3.15 validation.
+
+## Decision: Preserve worktree environments and pull request ownership
+
+Eleven registered worktrees contain `.venv` directories. This feature preserves environments outside its worktree. Its Python 3.15.2 environment is incomplete because dependency installation stopped at the native package build.
 
 **Rationale**: Other worktrees may support active tasks. Editing files owned by open pull requests can discard or conflict with separate changes.
 

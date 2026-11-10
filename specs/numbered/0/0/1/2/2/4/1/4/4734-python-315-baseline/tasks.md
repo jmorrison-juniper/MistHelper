@@ -10,9 +10,9 @@
 
 ## Phase 1: Setup
 
-**Purpose**: Confirm file ownership before implementation.
+**Purpose**: Confirm file ownership and clean project environments before implementation.
 
-- [x] T001 Refresh open pull request ownership in `specs/numbered/0/0/1/2/2/4/1/4/4734-python-315-baseline/plan.md` before editing shared files.
+- [x] T001 Refresh pull request ownership and remove each pre-existing `.venv` directory in registered MistHelper worktrees after an active-process check.
 
 ---
 
@@ -36,9 +36,9 @@
 
 - [x] T003 [US1] Select and enforce Python 3.15 in `scripts/bootstrap_worktree.py` and `scripts/bootstrap_worktree.ps1`.
 - [ ] T004 [P] [US1] Update `.github/copilot-instructions.md` and update `documentation/development-setup.md` after pull request #4322 releases it.
-- [ ] T005 [US1] Create a fresh `.venv` in the current worktree and verify startup with `specs/numbered/0/0/1/2/2/4/1/4/4734-python-315-baseline/design/quickstart.md`.
+- [x] T005 [US1] Create a fresh `.venv` in the current worktree and verify startup with `specs/numbered/0/0/1/2/2/4/1/4/4734-python-315-baseline/design/quickstart.md`.
 
-**Checkpoint**: The current worktree uses Python 3.15.2 and MistHelper starts. Preserve environments in other worktrees.
+**Checkpoint**: The feature worktree uses Python 3.15.2 and MistHelper starts. Every other registered `.venv` remains absent.
 
 ---
 
@@ -55,7 +55,7 @@
 ### Implementation for User Story 2
 
 - [ ] T007 [US2] Set the Python minimum and tool targets in `pyproject.toml` and `mist-ops-platform/pyproject.toml` after pull request #4358 releases `pyproject.toml`.
-- [ ] T008 [US2] Rebase onto current `main`, then regenerate `uv.lock`, `requirements.txt`, and `requirements-dev.txt` with Python 3.15. Preserve platform markers and the dependency intent from issue #4727.
+- [ ] T008 [US2] After T007, regenerate the Python 3.15 lock and both exports with `importlib-metadata` 10.2.0, `openai` 3.49.0, and `pypdfium2` 5.15.2. Preserve all 11 original runtime markers.
 - [ ] T009 [US2] Verify Python 3.14 rejection and Python 3.15.2 dependency resolution for `pyproject.toml`, `mist-ops-platform/pyproject.toml`, `uv.lock`, `requirements.txt`, and `requirements-dev.txt`.
 
 **Checkpoint**: Both projects enforce the same Python minimum and resolve their dependencies.
@@ -79,7 +79,7 @@
 - [x] T013 [P] [US3] Update Python base images in `Containerfile`, `Dockerfile`, `mist-ops-platform/deploy/Containerfile.api`, and `mist-ops-platform/deploy/Containerfile.worker`.
 - [x] T014 [US3] Update active support references in `documentation/release-notes.md` and `mist-ops-platform/docs/operations.md`. Keep the 3.13 comparison in `documentation/python-parallelism-matrix.md`.
 - [x] T015 [US3] Add the release note in `changelog.d/issue-4734-python-315.md`.
-- [ ] T016 [US3] Run focused tests in `tests/guardrails/test_pr_title_workflow.py`, `tests/guardrails/test_dependency_declaration_parity.py`, and `tests/unit/container/test_build_files_match.py`.
+- [x] T016 [US3] Run focused tests in `tests/guardrails/test_pr_title_workflow.py`, `tests/guardrails/test_dependency_declaration_parity.py`, and `tests/unit/container/test_build_files_match.py`. The run passed 148 tests and deselected one root-floor case owned by pull request #4358.
 
 **Checkpoint**: CI, release artifacts, and product containers use Python 3.15 or newer.
 
@@ -92,7 +92,28 @@
 - [ ] T017 Verify Python 3.15 in `.github/workflows/ci.yml`, `.github/workflows/release.yml`, and `.github/workflows/container-build.yml`.
 - [ ] T018 Verify Python 3.15 in `Containerfile`, `Dockerfile`, `mist-ops-platform/deploy/Containerfile.api`, and `mist-ops-platform/deploy/Containerfile.worker`.
 - [ ] T019 Run the quickstart and applicable quality gates from `.github/copilot-instructions.md`.
-- [ ] T020 Run `speckit.analyze` against `spec.md`, `plan.md`, and `tasks.md`.
+- [x] T020 Run `speckit.analyze` against `spec.md`, `plan.md`, and `tasks.md`.
+
+---
+
+## Phase 7: Commit, Review, and Merge
+
+**Purpose**: Deliver the tested feature through the protected pull request flow.
+
+- [ ] T021 Build the explicit feature manifest and stage only its files after all local gates pass.
+- [ ] T022 Commit the staged feature files with an accepted Conventional Commit subject and the required co-author trailer.
+- [ ] T023 Rebase the committed branch onto current `origin/main` and rerun affected local gates.
+- [ ] T024 Push the branch and open a pull request from the repository template with the issue closure, file summary, gate results, and deployment notes.
+- [ ] T025 Wait for all required checks to pass, then squash-merge the approved pull request.
+
+---
+
+## Phase 8: Post-Merge Deployment
+
+**Purpose**: Verify the merged image and deploy it only after explicit approval.
+
+- [ ] T026 After merge, wait for the main image build and verify that the image revision matches the merge commit.
+- [ ] T027 After explicit approval, deploy the image and verify container and portal health.
 
 ---
 
@@ -100,16 +121,20 @@
 
 ### Phase Dependencies
 
-- **Setup**: T001 must refresh ownership before shared-file edits.
+- **Setup**: T001 must refresh ownership and verify the registered worktree environments before shared-file edits.
 - **Foundational**: T001 must complete before shared-file edits.
 - **User stories**: Complete their tests before implementation. Complete US2 dependency work before T005 creates the environment.
-- **Polish**: T018 through T021 depend on all implementation tasks.
+- **Polish**: T017 through T020 depend on all implementation tasks.
+- **Delivery**: T021 follows local validation. T022 follows T021. T023 follows T022. T024 follows T023. T025 follows T024 and all required checks.
+- **Post-merge**: T026 follows T025 and the main image build. T027 follows T026 and explicit deployment approval.
 
 ### User Story Dependencies
 
-- **US1 (P1)**: T002 precedes T003. T005 depends on T003, T004, and T008 because the environment needs the bootstrap changes and updated exports.
-- **US2 (P2)**: T006 precedes T007 and T008. T009 depends on both metadata and dependency updates. Respect the open pull request ownership conditions in T007 and T008.
+- **US1 (P1)**: T002 precedes T003. T005 depends on T003 because its environment and startup check use the existing Python 3.15-compatible lock. T004 and T008 remain separate follow-up work.
+- **US2 (P2)**: T006 precedes T007. T008 depends on T007. T009 depends on both metadata and dependency updates. Respect the open pull request ownership conditions in T007 and T008.
 - **US3 (P3)**: T010 precedes T011 through T013. Respect the open pull request ownership conditions in T011 and T012. T016 depends on all US3 implementation tasks.
+- **Delivery**: T021 through T025 follow the order defined in Phase Dependencies.
+- **Deployment**: T026 follows merge and image publication. T027 requires T026 and explicit approval.
 
 ### Parallel Opportunities
 
@@ -140,9 +165,11 @@ Task: Update Python base images in the product container files.
 2. Complete US2 and verify both package floors.
 3. Complete US3 and verify CI, release, and container declarations.
 4. Run all applicable quality gates and analyze the artifacts.
+5. Stage the feature manifest, commit, rebase, open the pull request, pass required checks, and squash-merge.
+6. Verify the merged image revision. Deploy only after explicit approval.
 
 ## Notes
 
 - `[P]` marks tasks that change separate files and have no incomplete prerequisite.
 - Keep each task unchecked until its file and required test pass.
-- Do not remove `.venv` directories from other worktrees.
+- Remove only pre-existing registered worktree `.venv` directories with no active process. Create one fresh environment in the feature worktree. Preserve environments outside registered worktrees.

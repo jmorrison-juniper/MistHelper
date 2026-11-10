@@ -26,7 +26,7 @@ on:
     inputs:
       python-version:
         type: string
-        default: '3.13'
+        default: '3.15'
       src-path:
         type: string
         default: 'src/'
@@ -74,7 +74,7 @@ permissions:
 
 env:
   # --- Customize per repo (overridden by workflow_call inputs) ---
-  PYTHON_VERSION: ${{ inputs.python-version || '3.13' }}
+  PYTHON_VERSION: ${{ inputs.python-version || '3.15' }}
   SRC_PATH: ${{ inputs.src-path || 'src/' }}
   # Issue #888: SRC_PATH used to scope every gate to src/, so MistHelper.py, wsgi.py,
   # web_portal and starlink_dashboard.py went unscanned. Each gate below now
