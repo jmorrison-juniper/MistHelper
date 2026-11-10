@@ -247,17 +247,12 @@ class TestAuditLogger(unittest.TestCase):
             user_id="user123",  # WHY: user identifier
             details={"test": "data"},  # WHY: operation details
         )  # WHY: execute logging
-        self.assertRegex(
-            log_id,
-            r"\A[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\Z",
-        )
+        self.assertRegex(log_id, r"\A[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\Z")
         # WHY: verify database write called
         self.mock_db.write.assert_called_once()  # WHY: assert write called
-        # WHY: verify write arguments
         call_args = self.mock_db.write.call_args  # WHY: get call arguments
         entry = call_args.kwargs["data"][0]
-        self.assertEqual(log_id, entry["log_id"])
-        self.assertEqual(log_id, entry["_key"])
+        self.assertEqual((entry["log_id"], entry["_key"]), (log_id, log_id))
         self.assertEqual(call_args.kwargs["collection"], "audit_logs")  # WHY: correct collection
         self.assertIn("timestamp", call_args.kwargs["data"][0])  # WHY: timestamp present
 
@@ -314,15 +309,11 @@ class TestAuditLogger(unittest.TestCase):
             site_id="site_xyz",  # WHY: site identifier
             device_ids=["dev1", "dev2", "dev3"],  # WHY: devices
         )  # WHY: execute logging
-        self.assertRegex(
-            log_id,
-            r"\A[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\Z",
-        )
+        self.assertRegex(log_id, r"\A[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\Z")
         # WHY: verify operation type
         call_args = self.mock_db.write.call_args  # WHY: get call arguments
         entry = call_args.kwargs["data"][0]  # WHY: get entry
-        self.assertEqual(log_id, entry["log_id"])
-        self.assertEqual(log_id, entry["_key"])
+        self.assertEqual((entry["log_id"], entry["_key"]), (log_id, log_id))
         self.assertEqual(entry["operation"], "capture_start")  # WHY: correct operation
         self.assertEqual(entry["result"], "pending")  # WHY: status is pending
 
@@ -347,15 +338,11 @@ class TestAuditLogger(unittest.TestCase):
             error_message="site_id required",  # WHY: error detail
             input_data={"device_ids": []},  # WHY: invalid input
         )  # WHY: execute logging
-        self.assertRegex(
-            log_id,
-            r"\A[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\Z",
-        )
+        self.assertRegex(log_id, r"\A[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\Z")
         # WHY: verify failure status
         call_args = self.mock_db.write.call_args  # WHY: get call arguments
         entry = call_args.kwargs["data"][0]  # WHY: get entry
-        self.assertEqual(log_id, entry["log_id"])
-        self.assertEqual(log_id, entry["_key"])
+        self.assertEqual((entry["log_id"], entry["_key"]), (log_id, log_id))
         self.assertEqual(entry["result"], "failure")  # WHY: status is failure
         self.assertEqual(entry["error_message"], "site_id required")  # WHY: error message present
 
@@ -371,10 +358,8 @@ class TestAuditLogger(unittest.TestCase):
             operation="test",  # WHY: operation type
             user_id="user123",  # WHY: user identifier
         )  # WHY: execute logging
-        self.assertRegex(
-            log_id,
-            r"\A[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\Z",
-        )
+
+        self.assertRegex(log_id, r"\A[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\Z")
 
     def test_masking_disabled(self):
         """Test logging with masking disabled.
