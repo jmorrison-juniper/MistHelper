@@ -552,7 +552,8 @@ MISSING_PLAYWRIGHT_MESSAGE = (
     "then download the browser:\n"
     "    pip install -r requirements-dev.txt\n"
     "    python -m playwright install chromium\n"
-    "`python scripts/bootstrap_worktree.py` runs both commands for you. Issue #2241."
+    "`uv run --no-project --python 3.15.2 python scripts/bootstrap_worktree.py` runs both "
+    "commands for you. Issue #2241."
 )
 
 

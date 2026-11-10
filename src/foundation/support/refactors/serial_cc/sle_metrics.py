@@ -176,7 +176,7 @@ class SLEMetricsService:
         org_id: str,
         config: SimpleNamespace,
         all_sle_data: list[Any],
-        progress: "_SleProgressTracker",
+        progress: _SleProgressTracker,  # Use a direct deferred type reference for Python 3.15.
     ) -> tuple[int, int]:
         """Run the specialized-metrics loop. Return cumulative (retrieved, failed)."""
         retrieved = 0  # Cumulative successful specialized fetches
@@ -228,7 +228,7 @@ class SLEMetricsService:
         org_id: str,
         config: SimpleNamespace,
         all_sle_data: list[Any],
-        progress: "_SleProgressTracker",
+        progress: _SleProgressTracker,  # Use a direct deferred type reference for Python 3.15.
     ) -> tuple[int, int]:
         """Run the per-category aggregation loop. Return cumulative (retrieved, failed)."""
         retrieved = 0  # Cumulative successful category fetches
@@ -284,7 +284,7 @@ class SLEMetricsService:
         org_id: str,
         config: SimpleNamespace,
         all_sle_data: list[Any],
-        progress: "_SleProgressTracker",
+        progress: _SleProgressTracker,  # Use a direct deferred type reference for Python 3.15.
     ) -> None:
         """Run both retrieval loops and export. Write empty CSV on any top-level failure."""
         # WHY: extracted from execute so execute stays under the 25-line STRUCT-LENGTH limit.

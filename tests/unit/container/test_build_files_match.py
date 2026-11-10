@@ -27,6 +27,7 @@ These tests hold one rule: the two files stay byte-identical.
 from __future__ import annotations
 
 import hashlib
+import logging
 from pathlib import Path
 
 import pytest
@@ -37,6 +38,13 @@ DOCKERFILE = REPOSITORY_ROOT / "Dockerfile"
 CONTAINERFILE = REPOSITORY_ROOT / "Containerfile"
 WORKFLOW_DIR = REPOSITORY_ROOT / ".github" / "workflows"
 BUILD_WORKFLOWS = ("container-build.yml", "release.yml")
+PYTHON_BASE_IMAGE_FILES = (
+    DOCKERFILE,  # Check the image that Docker builds.
+    CONTAINERFILE,  # Check the image that Podman builds.
+    REPOSITORY_ROOT / "mist-ops-platform" / "deploy" / "Containerfile.api",  # Check the platform API image.
+    REPOSITORY_ROOT / "mist-ops-platform" / "deploy" / "Containerfile.worker",  # Check the platform worker image.
+)
+logger = logging.getLogger(__name__)  # Keep baseline checks visible in test logs.
 
 
 def _digest(path: Path) -> str:
@@ -83,6 +91,19 @@ class TestTheTwoBuildFilesMatch:
         assert "#3130" in text
 
 
+class TestPythonContainerBaseline:
+    """Each product container must use the supported Python release."""
+
+    @pytest.mark.parametrize("path", PYTHON_BASE_IMAGE_FILES, ids=lambda path: path.name)
+    def test_product_image_uses_python_315(self, path: Path) -> None:
+        """A container that uses an older interpreter violates the package baseline."""
+        logger.info("Checking the Python base image in %s", path)  # Name the container before reading it.
+        contents = path.read_text(encoding="utf-8")  # Read the base image declaration.
+        logger.debug("Read %d characters from the container file.", len(contents))  # Report the inspected size.
+
+        assert "FROM python:3.15-slim" in contents, f"{path} must use Python 3.15."
+
+
 class TestTheWorkflowsBuildAKnownFile:
     """The gate must guard the file that the released image really uses."""
 
@@ -95,6 +116,22 @@ class TestTheWorkflowsBuildAKnownFile:
         assert len(named) >= 1, f"{workflow} must name the build file it uses"
         for value in named:
             assert Path(value).name in {DOCKERFILE.name, CONTAINERFILE.name}
+
+    @pytest.mark.parametrize("workflow", BUILD_WORKFLOWS)
+    def test_workflow_uses_python_315(self, workflow: str) -> None:
+        """Each build workflow must prepare its artifacts with supported Python."""
+        logger.info("Checking Python setup steps in %s", workflow)  # Identify the workflow before reading it.
+        path = WORKFLOW_DIR / workflow  # Resolve the selected workflow within the repository.
+        document = yaml.safe_load(path.read_text(encoding="utf-8"))  # Read the parsed workflow configuration.
+        versions: list[str | None] = []  # Store the selected interpreter for every setup step.
+        for job in document["jobs"].values():  # Inspect each job because builds may have separate stages.
+            for step in job.get("steps", []):  # Inspect each step because setup can occur more than once.
+                if step.get("uses", "").startswith("actions/setup-python@"):  # Ignore steps that do not select Python.
+                    versions.append(step.get("with", {}).get("python-version"))  # Record the version that the job uses.
+        logger.debug("Found %d Python setup steps in %s", len(versions), workflow)  # Report the inspected step count.
+        assert versions and set(versions) == {
+            "3.15"
+        }, f"{workflow} must use Python 3.15."  # Reject old or absent setup.
 
 
 def _collect_build_file_values(node) -> list[str]:

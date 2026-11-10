@@ -49,7 +49,7 @@ The helper does not use a moving branch or invent a heading anchor.
 
 The existing `publish` job checks out the exact tag before it downloads artifacts.
 A later checkout can remove downloaded artifacts during cleanup.
-The job prepares notes with Python 3.13 and the standard library.
+The job prepares notes with Python 3.15 and the standard library.
 
 Generation uses the read-only `POST /repos/{owner}/{repo}/releases/generate-notes` endpoint.
 The step stores the complete response in `${{ runner.temp }}/generated-release-notes.json`.
@@ -92,7 +92,7 @@ Logs do not contain tokens, note contents, or raw response bodies.
 
 ## Offline Validation
 
-Use the existing Python 3.13+ development environment.
+Use the existing Python 3.15+ development environment.
 Run these commands from the repository root:
 
 ```bash

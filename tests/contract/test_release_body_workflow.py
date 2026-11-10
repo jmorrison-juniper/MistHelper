@@ -82,17 +82,17 @@ class ReleaseWorkflowContract:
         @staticmethod
         def check(steps: list[dict[str, Any]]) -> None:
             """Require the consumed commands, their order, and fatal preparation failures."""
-            assert steps[0]["uses"].startswith("actions/checkout@")
-            assert steps[0]["with"] == {"ref": "${{ github.ref }}", "persist-credentials": False}
-            assert steps[1]["uses"].startswith("actions/setup-python@")
-            assert steps[1]["with"] == {"python-version": "3.13"}
-            assert steps[2]["uses"].startswith("actions/download-artifact@")
-            assert steps[3]["uses"].startswith("actions/download-artifact@")
-            assert steps[2]["with"] == {"name": "python-dist", "path": "dist/"}
-            assert steps[3]["with"] == {"name": "standalone-bundle"}
-            generation, preparation = steps[4:6]
-            assert set(generation) == {"name", "id", "shell", "env", "run"}
-            assert set(preparation) == {"name", "id", "shell", "env", "run"}
+            assert steps[0]["uses"].startswith("actions/checkout@")  # Require the tagged source checkout first.
+            assert steps[0]["with"] == {"ref": "${{ github.ref }}", "persist-credentials": False}  # Pin the tag.
+            assert steps[1]["uses"].startswith("actions/setup-python@")  # Check the note-generation interpreter.
+            assert steps[1]["with"] == {"python-version": "3.15"}  # Match the supported Python minimum.
+            assert steps[2]["uses"].startswith("actions/download-artifact@")  # Require the wheel artifacts.
+            assert steps[3]["uses"].startswith("actions/download-artifact@")  # Require the standalone artifact.
+            assert steps[2]["with"] == {"name": "python-dist", "path": "dist/"}  # Keep wheel input location stable.
+            assert steps[3]["with"] == {"name": "standalone-bundle"}  # Keep the standalone artifact name stable.
+            generation, preparation = steps[4:6]  # Check the generation and preparation stages in order.
+            assert set(generation) == {"name", "id", "shell", "env", "run"}  # Require controlled generation fields.
+            assert set(preparation) == {"name", "id", "shell", "env", "run"}  # Require controlled preparation fields.
             assert generation["env"] == {"GH_TOKEN": "${{ github.token }}", "RELEASE_TAG": "${{ github.ref_name }}"}
             assert preparation["env"] == {"RELEASE_TAG": "${{ github.ref_name }}"}
             assert generation["shell"] == preparation["shell"] == "bash"

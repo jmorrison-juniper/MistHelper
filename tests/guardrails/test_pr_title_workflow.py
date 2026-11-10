@@ -76,7 +76,7 @@ POLICY_SNAPSHOTS = {
                 "timeout-minutes": 5,
                 "steps": [
                     {"uses": "actions/checkout@v7", "with": {"persist-credentials": False}},
-                    {"uses": "actions/setup-python@v7", "with": {"python-version": "3.13"}},
+                    {"uses": "actions/setup-python@v7", "with": {"python-version": "3.15"}},
                     {"run": "python -m scripts.pr_title_guard"},
                 ],
             },

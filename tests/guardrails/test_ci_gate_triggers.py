@@ -143,6 +143,27 @@ class TestPushTrigger:
         # A push run on every branch repeats the pull request run and adds cost.
         assert push["branches"] == ["main"], "The push trigger must stay on main."
 
+    @pytest.mark.parametrize("mutation", [None, "default", "fallback"])
+    def test_reusable_workflow_uses_python_315(self, workflow: dict[str, Any], mutation: str | None) -> None:
+        """The reusable CI workflow must default to the supported Python release."""
+        from copy import deepcopy  # Keep each deliberate invalid case away from the shared fixture.
+
+        candidate = deepcopy(workflow)  # Apply the same decision to original and mutated workflows.
+        inputs = candidate[TRIGGER_KEY]["workflow_call"]["inputs"]  # Read the reusable workflow input.
+        if mutation == "default":
+            inputs["python-version"]["default"] = "3.14"  # Reproduce an unsupported default.
+        elif mutation == "fallback":
+            candidate["env"]["PYTHON_VERSION"] = "${{ inputs.python-version || '3.14' }}"  # Reproduce an old fallback.
+        default = inputs["python-version"]["default"]  # Read the version used when callers omit an input.
+        fallback = candidate["env"]["PYTHON_VERSION"]  # Read the version used by standalone workflow runs.
+        valid = default == "3.15" and fallback == "${{ inputs.python-version || '3.15' }}"  # Require both paths.
+        print(
+            f"Checked 1 CI default and 1 fallback, mutation={mutation}, valid={valid}."
+        )  # Report each guard decision.
+        assert valid is (
+            mutation is None
+        ), f"Python version contract changed: mutation={mutation}"  # Prove invalid values fail.
+
     @pytest.mark.parametrize(
         "required_check",
         [

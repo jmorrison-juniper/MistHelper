@@ -45,7 +45,7 @@ os.environ.setdefault("UPGRADE_PORTAL_SEAM_STRICT", "1")
 _REQUIRED_RUNTIME_PACKAGES: tuple[str, ...] = ("mistapi", "structlog", "dotenv", "paramiko")
 
 # The documented command that creates `.venv` and installs the dependencies.
-_BOOTSTRAP_COMMAND = "python scripts/bootstrap_worktree.py"
+_BOOTSTRAP_COMMAND = "uv run --no-project --python 3.15.2 python scripts/bootstrap_worktree.py"
 
 # The attribute that records why `MistHelper.py` stopped part way through its
 # module body. `src/operations/execution/firmware/firmware_manager.py` reads this name and reports the

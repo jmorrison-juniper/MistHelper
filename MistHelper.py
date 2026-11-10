@@ -11,8 +11,8 @@ from __future__ import annotations  # Preserve the existing behavior during the 
 # ============================================================================
 import sys  # Preserve the existing behavior during the compliance refactor.
 
-# Enforce Python 3.13+ requirement
-MINIMUM_PYTHON_VERSION = (3, 13)  # Define minimum required Python version tuple for compatibility checks
+# Enforce Python 3.15+ requirement
+MINIMUM_PYTHON_VERSION = (3, 15)  # Define minimum required Python version tuple for compatibility checks
 if sys.version_info < MINIMUM_PYTHON_VERSION:  # Exit early if Python is too old to prevent cryptic errors later
     # Format current Python version for display
     version_str = f"{sys .version_info .major }.{sys .version_info .minor }.{sys .version_info .micro }"

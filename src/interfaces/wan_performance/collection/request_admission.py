@@ -50,7 +50,7 @@ return 1"""  # Reserve all matching quotas in one atomic operation.
         return not DatabaseConfig.from_env().standalone_mode  # Use shared admission with configured Redis.
 
     @classmethod
-    def connect(cls, org_id: str | None = None) -> "RequestLedger":
+    def connect(cls, org_id: str | None = None) -> RequestLedger:  # Return the configured shared request ledger.
         """Connect to the configured shared Redis service with finite waits."""
         config = DatabaseConfig.from_env()  # Read the existing application store settings.
         if config.standalone_mode:  # Shared accounting cannot use local-only mode.

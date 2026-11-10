@@ -63,7 +63,12 @@ OUTPUTS = {
         ("file", b'{"event-secret": "private-token", "pull_request": }', "json", "JSONDecodeError"),
         ("file", b'{"pull_request": {"title": "unterminated}', "json", "JSONDecodeError"),
         ("file", b"\xef\xbb\xbf{}", "json", "JSONDecodeError"),
-        ("file", b"[" * 10_000 + b"0" + b"]" * 10_000, "json", "RecursionError"),
+        (
+            "file",  # Identify the event file as the input source.
+            b"[" * 10_000 + b"0" + b"]" * 10_000,  # Keep the payload valid JSON on Python 3.15.
+            "event",  # Test shape validation after JSON parsing.
+            "TypeError",  # Reject the parsed array as an invalid event.
+        ),
         ("file", b"9" * 10_000, "json", "ValueError"),
         *[
             ("file", json.dumps(value).encode("utf-8"), "event", "TypeError")

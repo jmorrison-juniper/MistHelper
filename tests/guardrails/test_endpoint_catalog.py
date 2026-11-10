@@ -545,8 +545,8 @@ class TestMenuText:
             (
                 "MistHelper.py",
                 307,
-                "0ccd015408aad2c841d4abc56bf889e4fc8f1885e4e429e005474c1bf3e403a8",
-            ),  # Preserve the command-line menu identity after the menu 235 label update.
+                "fa33926eeab9f2923e840558e4d9507cb7789aeeea4b9ad7d341cd513aac9fb4",
+            ),  # Preserve the command-line source identity across Python AST changes.
             (
                 "web_portal/menu_registry.py",
                 191,
@@ -556,15 +556,29 @@ class TestMenuText:
     )
     def test_menu_263_complete_identity(self, path: str, count: int, expected: str) -> None:
         """The one allowed title edit preserves all other menu metadata."""
-        body = (REPOSITORY_ROOT / path).read_text(encoding="utf-8")
-        tree = ast.parse(body.replace(MENU_263_TITLE.replace("(15 operations)", "(17 operations)"), MENU_263_TITLE))
-        name = "menu_actions" if path == "MistHelper.py" else "MENU_DESCRIPTIONS"
-        definition = TestDescriptions._menu_definition(tree, name)
-        identifiers = {ast.literal_eval(key) for key in definition.keys if isinstance(key, ast.Constant)}
-        assert len(identifiers) == count
-        if path == "MistHelper.py":
-            values: object = ast.dump(definition, include_attributes=False)
-        else:
-            values = ast.literal_eval(definition)
-        payload = json.dumps(values, sort_keys=True, separators=(",", ":")).encode()
-        assert hashlib.sha256(payload).hexdigest() == expected
+        logging.info("Checking the complete menu identity in %s", path)  # Report the guard input before reading it.
+        body = (REPOSITORY_ROOT / path).read_text(encoding="utf-8")  # Read the source that defines the menu.
+        normalized_body = body.replace(
+            MENU_263_TITLE.replace("(15 operations)", "(17 operations)"),
+            MENU_263_TITLE,
+        )  # Normalize the one allowed title change before computing identity.
+        tree = ast.parse(normalized_body)  # Parse the same normalized source on every Python version.
+        name = "menu_actions" if path == "MistHelper.py" else "MENU_DESCRIPTIONS"  # Select the source-specific name.
+        definition = TestDescriptions._menu_definition(tree, name)  # Select the menu definition under test.
+        identifiers = {
+            ast.literal_eval(key) for key in definition.keys if isinstance(key, ast.Constant)
+        }  # Normalize menu keys before counting.
+        assert (
+            len(identifiers) == count
+        ), "the menu must contain the expected number of entries"  # Detect missing or duplicate menu rows.
+        if path == "MistHelper.py":  # Use source text because AST display format changes between Python releases.
+            source_segment = ast.get_source_segment(normalized_body, definition)  # Read the exact normalized block.
+            if source_segment is None:  # Fail if the parser cannot locate the checked source.
+                pytest.fail("the parser must retain the menu source segment")
+            payload = source_segment.encode()  # Hash source bytes without Python-version-specific AST rendering.
+        else:  # Keep the existing portal-data normalization unchanged.
+            values = ast.literal_eval(definition)  # Convert the portal table to plain data before hashing.
+            payload = json.dumps(values, sort_keys=True, separators=(",", ":")).encode()  # Keep a canonical data hash.
+        digest = hashlib.sha256(payload).hexdigest()  # Hash stable source or data, not Python's AST rendering.
+        logging.debug("Computed menu identity %s for %s", digest, path)  # Record the checked identity.
+        assert digest == expected, "the menu identity changed outside the allowed title edit"

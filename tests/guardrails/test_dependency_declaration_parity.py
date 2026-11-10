@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 from packaging.requirements import Requirement
-from packaging.specifiers import Specifier
+from packaging.specifiers import Specifier, SpecifierSet  # WHY: validate package bounds and Python support ranges.
 from packaging.utils import canonicalize_name
 from packaging.version import Version
 
@@ -137,6 +137,26 @@ def test_pyproject_declares_each_requirement() -> None:
     print(f"dependency parity: examined {examined} requirements, {len(defects)} defects")
     assert examined >= 50, f"Examined only {examined} requirements"
     assert defects == [], "\n".join(defects)
+
+
+@pytest.mark.parametrize(
+    "project_file",  # WHY: select each project metadata file for the same floor check.
+    [
+        REPOSITORY_ROOT / "pyproject.toml",  # WHY: validate the root project minimum.
+        REPOSITORY_ROOT / "mist-ops-platform" / "pyproject.toml",  # WHY: validate the platform project minimum.
+    ],
+    ids=("misthelper", "mist-ops-platform"),  # WHY: identify the project in test output.
+)
+def test_projects_reject_python_314_and_accept_python_315(project_file: Path) -> None:
+    """Fail when either project accepts Python 3.14 or rejects Python 3.15."""
+    logger.info("Reading Python support from %s", project_file.relative_to(REPOSITORY_ROOT))  # Identify the metadata.
+    metadata = tomllib.loads(project_file.read_text(encoding="utf-8"))  # Parse the declared project metadata.
+    supported = SpecifierSet(metadata["project"]["requires-python"])  # Evaluate the supported runtime range.
+    logger.debug("Project %s supports Python %s", project_file.name, supported)  # Report the tested support range.
+    assert (  # WHY: enforce the new minimum and target runtime.
+        Version("3.14") not in supported  # WHY: reject the previous minimum.
+        and Version("3.15") in supported  # WHY: accept the requested minimum.
+    )
 
 
 @pytest.mark.parametrize(
