@@ -335,7 +335,11 @@ def assert_capture_started(answer: TestResponse, runner: RecordingRunner) -> Non
 
 
 def test_the_lock_holder_takes_their_own_capture(
-    portal_app: Flask, client: FlaskClient, capture_runner: RecordingRunner, registered_owner: identity.SessionOwner
+    portal_app: Flask,
+    client: FlaskClient,
+    capture_runner: RecordingRunner,
+    registered_owner: identity.SessionOwner,
+    lock_store: FakeLockStore,
 ) -> None:
     """The operator that holds the site lock starts their own pre-check capture.
 
@@ -350,10 +354,12 @@ def test_the_lock_holder_takes_their_own_capture(
         client: The signed-in test client.
         capture_runner: The stand-in that receives the capture job.
         registered_owner: The identity pair of the registered operator.
+        lock_store: The fresh store that receives this operator's lock.
     """
     portal_app.config[LOCK_READER_KEY] = lock_reader_that_names(registered_owner.actor_email)  # The same operator.
     answer = start_capture(client)  # The lock exists, and this operator holds it.
     assert_capture_started(answer, capture_runner)  # The capture runs, so the journey finishes.
+    assert lock_store.holder_email(lock.build_key(ORG_ID, SITE_ID)) == registered_owner.actor_email
 
 
 def test_the_lock_holder_reads_no_refusal_code(
@@ -485,6 +491,23 @@ def test_a_missing_lock_module_still_starts_the_capture(
     monkeypatch.setattr(select, "lock_reader", lambda: None)  # An unset seam alone loads the real reader.
     answer = start_capture(client)  # No reader means no known holder.
     assert_capture_started(answer, capture_runner)  # The capture runs.
+    assert error_code(answer) == ""  # An absent reader must not return a refusal envelope.
+
+
+def test_request_body_empty_json_body_returns_empty_dict(portal_app: Flask) -> None:
+    """Keep an empty body on the validation path without a lock or network call."""
+    with portal_app.test_request_context(START_PATH, method="POST", data=b""):
+        result = capture.request_body()
+    assert result == {}
+
+
+def test_request_body_malformed_json_returns_empty_dict(portal_app: Flask) -> None:
+    """Keep damaged JSON on the validation path without a lock or network call."""
+    with portal_app.test_request_context(
+        START_PATH, method="POST", data="{not valid JSONDecodeError", content_type="application/json"
+    ):
+        result = capture.request_body()
+    assert result == {}
 
 
 # --------------------------------------------------------------------------
