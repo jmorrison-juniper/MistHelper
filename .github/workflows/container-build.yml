@@ -109,7 +109,7 @@ jobs:
     permissions:
       contents: read
       packages: write
-    uses: jmorrison-juniper/misthelper-devtools/.github/workflows/reusable-container-image.yml@e8e093d205428b5503887267b6a9751fa7354be7 # v0.6.3
+    uses: jmorrison-juniper/misthelper-devtools/.github/workflows/reusable-container-image.yml@79a5e45970e876f1656d69520d9635cea1aa25ef # v0.6.4
     with:
       file: ./Containerfile
       version: ${{ github.event.inputs.version_override }}
