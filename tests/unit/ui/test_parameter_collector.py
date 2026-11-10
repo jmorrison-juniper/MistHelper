@@ -18,9 +18,16 @@ def _make_collector(tui_stub) -> ParameterCollector:
 def test_submit_guards_when_no_pending_param(tui_stub) -> None:
     """submit() returns silently when current_param_index is past the end."""
     tui_stub.param_list = [{"name": "x", "has_default": False}]  # One param defined
+    tui_stub.function_params = {"org_id": "captured-org"}  # Preserve earlier captures
     tui_stub.current_param_index = 1  # ... but already past it
+    tui_stub.input_buffer = "unsubmitted text"  # Preserve text for a later prompt
+    tui_stub.output_lines = ["[SUCCESS] prior output"]  # Preserve earlier output
     collector = _make_collector(tui_stub)  # Build collector
     collector.submit()  # Should be a no-op
+    assert tui_stub.function_params == {"org_id": "captured-org"}  # Captures remain unchanged
+    assert tui_stub.input_buffer == "unsubmitted text"  # Input remains unchanged
+    assert tui_stub.output_lines == ["[SUCCESS] prior output"]  # Output remains unchanged
+    assert tui_stub.current_param_index == 1  # Index remains past the end
     collector._executor.execute.assert_not_called()  # Executor never invoked
 
 
