@@ -144,10 +144,10 @@ class TestDeployContracts:
     def test_dry_run_request(self) -> None:
         org_id = uuid.uuid4()
         target_entity_id = uuid.uuid4()
-        change_payload = {"radio": {"power": 14}}
+        expected_change_payload = {"radio": {"power": 14}}
         req = DryRunRequest(
             org_id=str(org_id),
-            change_payload=change_payload,
+            change_payload={"radio": {"power": 14}},
             target_entities=[
                 {"entity_type": "device", "entity_id": str(target_entity_id)},
             ],
@@ -155,7 +155,7 @@ class TestDeployContracts:
         assert req.org_id == org_id
         assert req.target_entities[0].entity_type == "device"
         assert req.target_entities[0].entity_id == target_entity_id
-        assert req.change_payload == change_payload
+        assert req.change_payload == expected_change_payload
 
     def test_rollout_create_has_waves(self) -> None:
         # This test sent name and device_ids to WaveCreate. The schema requires
