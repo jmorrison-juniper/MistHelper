@@ -68,8 +68,8 @@ No new foundational infrastructure is required. The existing lock and dependency
 - [X] T013 Stage only the files in the feature manifest from T012. (Verified: eight explicit manifest paths are staged.)
 - [X] T014 Commit the staged files with a Conventional Commit subject and the required Co-authored-by trailer. (Verified: commit `6e195afcf` uses the required subject and trailer.)
 - [X] T015 Rebase the committed feature branch onto current `origin/main`. Re-run all affected local checks after the rebase. (Verified: the branch was current. Twenty guardrails passed. The lock check passed. Audits found no known vulnerabilities in inspected packages. Nine Markdown files passed STE.)
-- [ ] T016 Push the rebased feature branch to its matching remote branch.
-- [ ] T017 Prepare the pull request body from `.github/PULL_REQUEST_TEMPLATE.md`. Include `Closes #4727`, changed files, local check results, and audit limits.
+- [X] T016 Push the rebased feature branch to its matching remote branch. (Verified: branch is published as `origin/chore/4727-runtime-dependency-exports`.)
+- [X] T017 Prepare the pull request body from `.github/PULL_REQUEST_TEMPLATE.md`. Include `Closes #4727`, changed files, local check results, and audit limits. (Verified: the repository template was read. The body includes the changed files, checks, current-platform scope, and the unaudited Git dependency.)
 - [ ] T018 Wait for all required pull request checks and CodeQL to pass on the current pull request commit.
 - [ ] T019 Squash merge the approved pull request to `main` after all required checks pass.
 - [ ] T020 Wait for `.github/workflows/container-build.yml` on the merged commit. Verify the image revision label equals the merged commit SHA.
