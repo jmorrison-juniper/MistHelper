@@ -48,8 +48,10 @@ def test_every_final_child_releases_the_sites() -> None:
     "raw_status",
     [
         pytest.param(None, id="missing-status"),  # Old records may not retain refusal evidence.
+        pytest.param(405, id="undocumented-method-status"),  # This status is absent from the upgrade OpenAPI.
         pytest.param(408, id="request-timeout"),  # A timeout does not prove refusal.
         pytest.param(429, id="rate-limit"),  # A rate limit does not prove refusal.
+        pytest.param(409, id="undocumented-conflict-status"),  # This status is absent from the upgrade OpenAPI.
         pytest.param(499, id="unlisted-client-status"),  # An unlisted status stays uncertain.
         pytest.param(503, id="server-error"),  # A server error does not prove refusal.
     ],
@@ -64,7 +66,7 @@ def test_a_rejected_child_without_refusal_evidence_keeps_the_sites(  # Retain lo
     assert org_upgrade._operation_is_settled(record) is False  # The site locks stay held.
 
 
-@pytest.mark.parametrize("raw_status", [408, 429, 499, 503])
+@pytest.mark.parametrize("raw_status", [405, 408, 409, 429, 499, 503])
 def test_release_does_not_call_the_lock_boundary_for_uncertain_refusal(  # Guard the physical lock boundary.
     raw_status: int,
     monkeypatch: pytest.MonkeyPatch,
@@ -83,6 +85,35 @@ def test_release_does_not_call_the_lock_boundary_for_uncertain_refusal(  # Guard
     monkeypatch.setattr(org_upgrade, "_release_one_lock", record_release)  # Replace only the physical boundary.
     org_upgrade.release_operation_locks(record)  # Apply the production release decision.
     assert released == []  # No site lock release can follow uncertain evidence.
+    assert record["site_locks"]  # Keep the operation's durable lock map intact.
+
+
+@pytest.mark.parametrize(
+    "evidence",
+    [
+        pytest.param({"upgrade_id": "job-one"}, id="retained-upgrade-identity"),
+        pytest.param({"status_data": {"targets": {"upgraded": ["device-one"]}}}, id="accepted-target"),
+        pytest.param({"status_data": {"id": "job-one"}}, id="identity-in-response-data"),
+    ],
+)
+def test_a_documented_refusal_with_conflicting_legacy_evidence_keeps_the_sites(
+    evidence: dict[str, Any],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A legacy rejected record cannot settle when it retains evidence of a cloud job."""
+    record = operation("rejected", state="failed")  # Model a previously misclassified refusal.
+    record["children"][0].update({"raw_status": 400, **evidence})  # Keep the refusal and the conflict together.
+    record["org_id"] = "org-one"  # Supply the lock key context.
+    record["site_locks"] = {"site-one": {"token": "lock-token"}}  # Model the stored site lock.
+    released: list[tuple[str, str, object]] = []  # Record any physical release request.
+
+    def record_release(org_id: str, site_id: str, value: object) -> None:  # Capture one release request.
+        """Record one call to the physical lock boundary."""
+        released.append((org_id, site_id, value))  # Keep the exact release arguments.
+
+    monkeypatch.setattr(org_upgrade, "_release_one_lock", record_release)  # Replace only the physical boundary.
+    org_upgrade.release_operation_locks(record)  # Apply the production release decision.
+    assert released == []  # No site lock release can follow conflicting evidence.
     assert record["site_locks"]  # Keep the operation's durable lock map intact.
 
 

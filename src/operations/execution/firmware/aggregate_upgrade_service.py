@@ -945,7 +945,8 @@ class AggregateUpgradeService:  # Coordinate all child routes through one durabl
             child["status"] = "accepted"  # Keep the accepted job available for later reads.
             child["error"] = None  # Do not show an error for a valid accepted response.
             return  # Do not classify accepted evidence as a refusal.
-        if _SubmissionCertainty.is_known_refusal(result.raw_status):  # Only an explicit refusal proves no job exists.
+        evidence = {"upgrade_id": result.upgrade_id, "status_data": result.data}  # Retain all response evidence.
+        if _SubmissionCertainty.is_known_refusal(result.raw_status, evidence):  # Refusal needs no conflicting evidence.
             child["status"] = "rejected"  # Keep a proven refusal eligible for lock release.
             child["error"] = result.error or (  # Preserve useful details from the refusal response.
                 f"The cloud refused the request with status {result.raw_status}."  # Name the refusal status.
@@ -970,9 +971,13 @@ class AggregateUpgradeService:  # Coordinate all child routes through one durabl
             child["status"] = "accepted"  # Keep the accepted job available for later reads.
             child["error"] = None  # Do not show an error for a valid accepted response.
             return  # Do not classify accepted evidence as a refusal.
+        evidence = {  # Keep the job identity and accepted targets beside the refusal status.
+            "upgrade_id": submission.upgrade_id,  # A job identifier conflicts with refusal.
+            "accepted_targets": submission.accepted,  # An accepted target conflicts with refusal.
+        }
         if _SubmissionCertainty.is_known_refusal(
-            submission.raw_status
-        ):  # Only an explicit refusal proves no job exists.
+            submission.raw_status, evidence
+        ):  # Refusal needs no conflicting evidence.
             child["status"] = "rejected"  # Keep a proven refusal eligible for lock release.
             child["error"] = f"The cloud refused the request with status {submission.raw_status}."  # Name refusal.
             return  # Do not classify a proven refusal as uncertain.
@@ -1253,7 +1258,10 @@ class AggregateUpgradeService:  # Coordinate all child routes through one durabl
         if not child.get("upgrade_id"):  # No known cloud identity can receive a cancel.
             return {"status": "unavailable", "message": "The child has no known upgrade identifier."}
         state = str(child.get("status") or "").lower()  # The stored state of the last status read.
-        if state in FINAL_CHILD_STATES:  # The cloud job already ended, so a cancel cannot change it.
+        settlement_is_proven = _SubmissionCertainty.allows_settlement(  # Check the saved refusal evidence.
+            state, child.get("raw_status"), child  # Include every saved child field.
+        )  # A conflicting refusal can still name an active cloud job.
+        if state in FINAL_CHILD_STATES and settlement_is_proven:  # Skip only a cancel for a proven final result.
             return self._ended_cancellation(str(child.get("child_id", "")), state)  # Send no cloud call.
         if child.get("route") == "upgradeOrgDevices":  # The AP child uses its organization cancel.
             return self._cancel_org_child(cloud_session, child)  # Send one organization cancel.

@@ -54,5 +54,6 @@ python -m black --check \
 ## Expected results
 
 - Every uncertain response keeps the site lock and blocks retry.
-- Every allowlisted refusal can settle when all other operation steps end.
+- A documented refusal without a retained job identity or accepted target can settle when all other operation steps end.
+- HTTP 429 and undocumented statuses remain uncertain.
 - Tests use offline stand-ins and do not call Mist Cloud or alter a production lock.

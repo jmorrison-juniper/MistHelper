@@ -16,7 +16,7 @@
 
 **Purpose**: Define one shared submission-certainty contract before each consumer uses refusal evidence.
 
-- [X] T005 Create `SubmissionCertainty` with the explicit refusal allowlist, refusal predicate, and settlement helper in `src/foundation/support/submission_certainty.py`.
+- [X] T005 Create `SubmissionCertainty` with documented refusal candidates, conflict checks, refusal predicate, and settlement helper in `src/foundation/support/submission_certainty.py`.
 
 ## Phase 3: User Story 1 - Prevent a duplicate upgrade (Priority: P1)
 
@@ -26,28 +26,28 @@
 
 ### Tests for User Story 1
 
-- [X] T002 [P] [US1] Add offline tests for accepted replies, allowlisted refusals, HTTP 408, HTTP 429, HTTP 499, HTTP 5xx, malformed success, and missing identities in `tests/unit/firmware/test_aggregate_upgrade_service.py`.
-- [X] T003 [P] [US1] Add lock-retention tests for ambiguous replies and legacy rejected records, and prove that a known not-submitted child can settle, in `tests/unit/upgrade_portal/test_org_upgrade_lock_release.py`.
+- [X] T002 [P] [US1] Add offline tests for documented refusals, conflicting identities and accepted targets, HTTP 429, undocumented statuses, HTTP 5xx, malformed success, and missing identities in `tests/unit/firmware/test_aggregate_upgrade_service.py`.
+- [X] T003 [P] [US1] Add lock-retention tests for ambiguous replies and conflicting legacy rejected records, and prove that a known not-submitted child can settle, in `tests/unit/upgrade_portal/test_org_upgrade_lock_release.py`.
 - [X] T004 [P] [US1] Test that a returned HTTP 503 keeps the uncertainty marker and blocks a repeated submission in `tests/contract/upgrade_portal/test_org_upgrade_routes.py`.
 
 ### Implementation for User Story 1
 
-- [X] T006 [US1] Use `SubmissionCertainty` to classify only accepted replies with required identities as `accepted`, allowlisted replies as `rejected`, and all other replies as `submission_unknown` in `src/operations/execution/firmware/aggregate_upgrade_service.py`.
-- [X] T007 [US1] Require allowlisted refusal evidence before a rejected child can settle, release a site lock, or pass retry eligibility in `src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py`.
+- [X] T006 [US1] Use `SubmissionCertainty` to classify only accepted replies with required identities as `accepted`, documented refusals without conflicting evidence as `rejected`, and all other replies as `submission_unknown` in `src/operations/execution/firmware/aggregate_upgrade_service.py`.
+- [X] T007 [US1] Require documented refusal evidence without conflicting identity or accepted-target evidence before a rejected child can settle, release a site lock, pass retry eligibility, or count as fully failed in `src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py`.
 
 ## Phase 4: User Story 2 - Release a lock after a proven refusal (Priority: P2)
 
 **Goal**: Use the same refusal evidence for cancellation reporting and lock release.
 
-**Independent Test**: Offline cancellation tests prove that an allowlisted refusal means no cloud job exists, while 408, 429, 499, server errors, and missing evidence remain uncertain.
+**Independent Test**: Offline cancellation tests prove that documented refusal statuses mean no cloud job exists only when no identity or accepted target conflicts. Status 429, undocumented statuses, server errors, and missing evidence remain uncertain.
 
 ### Tests for User Story 2
 
-- [X] T008 [P] [US2] Update cancellation outcome tests for the explicit refusal allowlist and uncertain statuses in `tests/unit/upgrade_portal/test_org_cancel_outcomes.py`.
+- [X] T008 [P] [US2] Update cancellation outcome tests for documented refusal statuses, 429, undocumented statuses, and conflicting legacy evidence in `tests/unit/upgrade_portal/test_org_cancel_outcomes.py`.
 
 ### Implementation for User Story 2
 
-- [X] T009 [US2] Use `SubmissionCertainty` for cancellation refusal evidence in `src/interfaces/portals/upgrade_portal/upgrade/org_cancel_outcomes.py`.
+- [X] T009 [US2] Use `SubmissionCertainty` and saved child evidence for cancellation refusal decisions in `src/interfaces/portals/upgrade_portal/upgrade/org_cancel_outcomes.py`.
 
 ## Phase 5: Polish & Cross-Cutting Concerns
 

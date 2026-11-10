@@ -1015,6 +1015,7 @@ def test_rejected_child_targets_count_as_failed_devices() -> None:
                 {
                     "child_id": "rejected-gateway",
                     "status": "rejected",
+                    "raw_status": 400,
                     "target_ids": ["gateway-1"],
                     "targets": [{"mac": "gateway-1"}],
                     "status_data": {},
@@ -1024,6 +1025,44 @@ def test_rejected_child_targets_count_as_failed_devices() -> None:
     )
     assert summary["failed_count"] == 1
     assert summary["children"][0]["failed"] == 1
+
+
+@pytest.mark.parametrize(
+    ("evidence", "upgraded", "failed"),
+    [
+        pytest.param({"upgrade_id": "job-one"}, 0, 0, id="retained-upgrade-identity"),
+        pytest.param({"raw_status": 429}, 0, 0, id="rate-limit"),
+        pytest.param(
+            {"status_data": {"targets": {"upgraded": ["gateway-1"]}}},
+            1,
+            0,
+            id="accepted-target-evidence",
+        ),
+    ],
+)
+def test_legacy_rejected_child_summary_keeps_conflicting_evidence(
+    evidence: dict[str, Any],
+    upgraded: int,
+    failed: int,
+) -> None:
+    """A legacy rejected status cannot count every target as failed when evidence conflicts."""
+    summary = org_upgrade.aggregate_summary(
+        {
+            "operation_id": UPGRADE_ID,
+            "state": "failed",
+            "children": [
+                {
+                    "child_id": "legacy-rejected",
+                    "status": "rejected",
+                    "raw_status": 400,
+                    "target_ids": ["gateway-1"],
+                    "targets": [{"mac": "gateway-1"}],
+                    **evidence,
+                }
+            ],
+        }
+    )
+    assert (summary["upgraded_count"], summary["failed_count"]) == (upgraded, failed)
 
 
 def test_status_page_and_api_preserve_site_progress(
