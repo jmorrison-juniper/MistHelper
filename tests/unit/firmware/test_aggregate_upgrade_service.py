@@ -11,9 +11,9 @@ from typing import Any
 
 import pytest
 
-from src.operations.execution.firmware import upgrade_service
+from src.operations.execution.firmware import org_upgrade_service, upgrade_service
 from src.operations.execution.firmware.aggregate_upgrade_service import AggregateBuildInput, AggregateUpgradeService
-from src.operations.execution.firmware.org_upgrade_service import OrgUpgradeResult
+from src.operations.execution.firmware.org_upgrade_service import OrgUpgradeResult, OrgUpgradeService
 from src.operations.execution.firmware.upgrade_service import (
     CancelOutcome,
     DeviceTarget,
@@ -263,34 +263,94 @@ def test_partial_submission_keeps_each_child_and_blocks_replay() -> None:
 
 
 @pytest.mark.parametrize(
+    ("response_data", "raw_data"),
+    [
+        pytest.param(
+            [{"id": "job-one", "targets": {"upgraded": ["001122334455"]}}],
+            "",
+            id="unretained-error-body-list",
+        ),
+        pytest.param({}, "{", id="malformed-error-body-json"),
+        pytest.param(
+            {},
+            '{"id":"job-one","targets":{"upgraded":["001122334455"]}}',
+            id="raw-body-evidence-not-retained",
+        ),
+    ],
+)
+def test_real_org_normalizer_keeps_unretained_refusal_body_uncertain(
+    monkeypatch: pytest.MonkeyPatch,
+    response_data: object,
+    raw_data: str,
+) -> None:
+    """A discarded, malformed, or mismatched body cannot prove a refusal."""
+    mac = "001122334455"  # Select one access point for the offline request.
+    calls: list[str] = []  # Prove the fake cloud boundary runs once.
+
+    def submit_response(session: Any, org_id: str, *, body: dict[str, object]) -> Any:
+        """Return one malformed or unretained response without opening a socket."""
+        del session, org_id, body  # The response fixture covers the only decision under test.
+        calls.append("upgradeOrgDevices")  # Record the one mocked endpoint call.
+        return SimpleNamespace(status_code=400, data=response_data, raw_data=raw_data)
+
+    monkeypatch.setattr(org_upgrade_service.org_devices, "upgradeOrgDevices", submit_response)
+    service = AggregateUpgradeService(OrgUpgradeService, DeviceServiceStandIn())
+    request = AggregateBuildInput(
+        "owner",
+        ORG_ID,
+        ({"site_id": SITE_ONE, "name": "One"},),
+        (target(mac, "ap", "AP45", SITE_ONE, "0.15.1"),),
+        UpgradeOptions(),
+        "nonce",
+    )
+    record = service.build(request)  # Build the organization child without a cloud request.
+
+    service.submit(SAFE_SESSION, record, CasStore(record), permit_lock)  # Exercise the normalizer and aggregate path.
+
+    child = record["children"][0]  # Read the only organization child.
+    assert calls == ["upgradeOrgDevices"]  # Keep the test offline and prove one request.
+    assert child["status"] == "submission_unknown"  # Discarded response evidence cannot prove refusal.
+    assert child["raw_status"] == 400  # Preserve the exact response status.
+
+
+@pytest.mark.parametrize(
     ("status_code", "response_data"),
     [
         pytest.param(400, {"targets": {"upgraded": ["001122334466"]}}, id="refusal-with-accepted-target"),
         pytest.param(429, {}, id="rate-limit"),
     ],
 )
-def test_real_device_response_body_keeps_uncertain_submission(
+def test_real_device_normalizer_keeps_conflicting_refusal_and_429_uncertain(
     monkeypatch: pytest.MonkeyPatch,
     status_code: int,
     response_data: dict[str, Any],
 ) -> None:
-    """The real normalizer keeps conflicting refusals and rate limits uncertain."""
+    """The actual device normalizer preserves accepted-target evidence and HTTP 429 uncertainty."""
     mac = "001122334466"  # Select one switch for the offline request.
     calls: list[str] = []  # Prove the fake cloud boundary runs once.
 
     def resolve_endpoint(name: str) -> Any:
-        """Return one local refusal response for the real device normalizer."""
+        """Return one local response for the real device normalizer."""
         calls.append(name)  # Record the endpoint selected by the production planner.
 
         def endpoint(*args: Any, **kwargs: Any) -> Any:
-            """Return accepted-target evidence with a refusal status."""
+            """Return the configured status and body."""
             del args, kwargs  # The endpoint arguments do not affect this response fixture.
             return SimpleNamespace(status_code=status_code, data=response_data)
 
         return endpoint
 
+    class NormalizingDeviceService(DeviceServiceStandIn):
+        """Route the aggregate request through the real device normalizer."""
+
+        def invoke_upgrade(self, session: Any, plan: Any) -> UpgradeSubmission:
+            """Record the call and normalize the mocked SDK response."""
+            self.calls.append(("submit", plan.endpoint))  # Keep the aggregate call count visible.
+            return upgrade_service.invoke_upgrade(session, plan)
+
     monkeypatch.setattr(upgrade_service, "_resolve_endpoint", resolve_endpoint)
-    service = AggregateUpgradeService(OrgServiceStandIn())  # Use the real device service and an offline AP stand-in.
+    devices = NormalizingDeviceService()
+    service = AggregateUpgradeService(OrgServiceStandIn(), devices)
     request = AggregateBuildInput(
         "owner",
         ORG_ID,
@@ -301,11 +361,11 @@ def test_real_device_response_body_keeps_uncertain_submission(
     )
     record = service.build(request)  # Build the one-child plan without a cloud request.
 
-    service.submit(SAFE_SESSION, record, CasStore(record), permit_lock)  # Exercise the normalizer and aggregate path.
+    service.submit(SAFE_SESSION, record, CasStore(record), permit_lock)  # Run the real normalizer and classifier.
 
     child = record["children"][0]  # Read the only site child.
     assert calls == ["upgradeSiteDevices"]  # Keep the test offline and prove one request.
-    assert child["status"] == "submission_unknown"  # Preserve uncertainty for conflicting evidence and rate limits.
+    assert child["status"] == "submission_unknown"  # Conflicting targets and HTTP 429 remain uncertain.
     assert child["raw_status"] == status_code  # Preserve the exact response status.
 
 
