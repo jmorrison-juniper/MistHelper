@@ -932,10 +932,13 @@ def test_resolve_combined_inventory_org_name_unknown_org_sentinel(monkeypatch) -
 # ---------------------------------------------------------------------------
 
 
-def test_devices_with_site_info_orchestrator(monkeypatch, tmp_path) -> None:
+def test_devices_with_site_info_orchestrator(
+    monkeypatch: pytest.MonkeyPatch, _source_resolver_double: SimpleNamespace
+) -> None:
     """Cover the devices_with_site_info orchestrator path (fast=False)."""
     from src.operations.exporting.export import org_inventory_exporter as mod
 
+    _RecordingDataExporter.calls = []  # Reset the writer record for this orchestrator call.
     monkeypatch.setattr(mod.ConfigUtils, "get_cached_or_prompted_org_id", lambda: "org-1")
     all_sites = MagicMock(return_value=[{"id": "s1", "name": "HQ", "address": "1 Main"}])
     inventory = MagicMock(
@@ -953,23 +956,39 @@ def test_devices_with_site_info_orchestrator(monkeypatch, tmp_path) -> None:
         "all_inventory_with_limit",
         inventory,
     )
-    export_spy = MagicMock()  # WHY: prove the orchestrator emits one CSV write.
-    # DataExporter lives on MistHelper (T-08 pending); stub write
-    monkeypatch.setattr(
-        MistHelper.DataExporter,
-        "export_to_csv",
-        staticmethod(export_spy),
-        raising=False,
-    )
     OrgInventoryExporter.devices_with_site_info(fast=False)
     assert all_sites.call_count == 1  # WHY: prove the orchestrator fetched site rows.
     assert inventory.call_count == 1  # WHY: prove the orchestrator fetched inventory rows.
+    assert _RecordingDataExporter.calls == [
+        (
+            [
+                {
+                    "mac": "aa",
+                    "site_id": "s1",
+                    "type": "ap",
+                    "model": "AP32",
+                    "site_name": "HQ",
+                    "site_address": "1 Main",
+                    "street": "1 Main",
+                    "city": "",
+                    "state": "",
+                    "zip_code": "",
+                    "country": "",
+                }
+            ],
+            "AllDevicesWithSiteInfo.csv",
+            "getOrgInventory",
+        )
+    ]  # Verify the exported row, destination, API name, and single writer call.
 
 
-def test_gateways_with_site_info_orchestrator(monkeypatch) -> None:
+def test_gateways_with_site_info_orchestrator(
+    monkeypatch: pytest.MonkeyPatch, _source_resolver_double: SimpleNamespace
+) -> None:
     """Cover the gateways_with_site_info orchestrator path."""
     from src.operations.exporting.export import org_inventory_exporter as mod
 
+    _RecordingDataExporter.calls = []  # Reset the writer record for this orchestrator call.
     monkeypatch.setattr(mod.ConfigUtils, "get_cached_or_prompted_org_id", lambda: "org-1")
     all_sites = MagicMock(return_value=[{"id": "s1", "name": "HQ", "address": "1 Main"}])
     inventory = MagicMock(
@@ -987,16 +1006,31 @@ def test_gateways_with_site_info_orchestrator(monkeypatch) -> None:
         "all_inventory_with_limit",
         inventory,
     )
-    export_spy = MagicMock()  # WHY: prove the orchestrator emits one CSV write.
-    monkeypatch.setattr(
-        MistHelper.DataExporter,
-        "export_to_csv",
-        staticmethod(export_spy),
-        raising=False,
-    )
     OrgInventoryExporter.gateways_with_site_info()
     assert all_sites.call_count == 1  # WHY: prove the orchestrator fetched site rows.
     assert inventory.call_count == 1  # WHY: prove the orchestrator fetched inventory rows.
+    assert _RecordingDataExporter.calls == [
+        (
+            [
+                {
+                    "mac": "aa",
+                    "site_id": "s1",
+                    "type": "gateway",
+                    "model": "SRX",
+                    "hostname": "gw1",
+                    "site_name": "HQ",
+                    "site_address": "1 Main",
+                    "street": "1 Main",
+                    "city": "",
+                    "state": "",
+                    "zip_code": "",
+                    "country": "",
+                }
+            ],
+            "GatewaysWithSiteInfo.csv",
+            "getOrgInventory",
+        )
+    ]  # Verify the exported row, destination, API name, and single writer call.
 
 
 # ---------------------------------------------------------------------------
