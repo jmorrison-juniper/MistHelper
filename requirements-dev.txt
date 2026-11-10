@@ -58,7 +58,7 @@ comm==0.2.3
     # via dash
 contourpy==1.4.0
     # via matplotlib
-coverage==7.16.2
+coverage==7.17.2
     # via
     #   misthelper
     #   pytest-cov
@@ -83,7 +83,7 @@ dill==0.4.1
     # via pylint
 distlib==0.4.4
     # via virtualenv
-filelock==4.2.4
+filelock==4.2.10
     # via
     #   cachecontrol
     #   python-discovery
@@ -122,7 +122,7 @@ idna==3.20
     #   anyio
     #   httpx2
     #   requests
-importlib-metadata==10.1.0
+importlib-metadata==10.2.0
     # via dash
 iniconfig==2.3.1
     # via pytest
@@ -164,6 +164,8 @@ keyring==25.7.0
     #   misthelper
 kiwisolver==1.5.1
     # via matplotlib
+lazy-importer==0.1.0 ; python_full_version < '3.15'
+    # via importlib-metadata
 libcst==1.9.0
     # via
     #   misthelper
@@ -200,7 +202,7 @@ more-itertools==11.2.1
     # via
     #   jaraco-classes
     #   jaraco-functools
-msgpack==1.2.3
+msgpack==1.2.4
     # via cachecontrol
 mypy==2.4.1
     # via misthelper
@@ -220,7 +222,7 @@ numpy==2.5.4
     #   contourpy
     #   matplotlib
     #   misthelper
-openai==3.46.0
+openai==3.48.0
     # via misthelper
 packageurl-python==0.17.6
     # via cyclonedx-python-lib
@@ -253,7 +255,7 @@ pillow==13.0.0
     #   matplotlib
     #   misthelper
     #   pdfplumber
-pip==26.2.1
+pip==26.3
     # via pip-api
 pip-api==0.0.35
     # via pip-audit
@@ -290,7 +292,7 @@ probableparsing==0.0.1
     # via usaddress
 py==1.11.0
     # via interrogate
-py-serializable==2.1.0
+py-serializable==2.2.0
     # via cyclonedx-python-lib
 pycparser==3.12 ; implementation_name != 'PyPy' and platform_python_implementation != 'PyPy'
     # via cffi
@@ -319,7 +321,7 @@ pyparsing==3.3.3
     # via
     #   matplotlib
     #   pip-requirements-parser
-pypdfium2==5.15.0
+pypdfium2==5.15.2
     # via pdfplumber
 pyte==0.8.2
     # via misthelper
@@ -341,7 +343,7 @@ python-crfsuite==0.9.12
     # via usaddress
 python-dateutil==4.0.0
     # via matplotlib
-python-discovery==1.6.4
+python-discovery==1.9.5
     # via virtualenv
 python-dotenv==1.2.4
     # via
@@ -474,7 +476,7 @@ usaddress-scourgify==0.7.1
     # via misthelper
 uv==0.13.7
     # via misthelper
-virtualenv==21.14.13
+virtualenv==21.15.6
     # via pre-commit
 vulture==2.16
     # via misthelper
