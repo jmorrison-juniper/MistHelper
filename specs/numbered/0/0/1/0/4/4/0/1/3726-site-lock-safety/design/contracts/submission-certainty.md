@@ -26,6 +26,9 @@ The shared rule consumes the raw HTTP status and existing submission fields. It 
 - A prior `rejected` record remains uncertain when its status is undocumented or its saved response names a job or accepted target.
 - A discarded or malformed response body cannot prove a refusal.
 - Device and organization normalizers use the same body check before a refusal can settle.
+- Each new child stores `response_data_valid`. Only exact `true` proves that its response body passed the normalizer check.
+- A legacy rejected child without this proof remains uncertain after reload, even with a documented refusal status.
+- A decoded success identity that disagrees with the raw body cannot become a tracking or cancellation identity.
 - A prior `rejected` record with a job identity must not skip cancellation as an already-ended child.
 - Summary counts do not count an uncertain rejected child as fully failed.
 - No path retries a destructive submission because the response is uncertain.

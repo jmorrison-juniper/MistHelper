@@ -22,6 +22,8 @@ class SubmissionCertainty:  # Share one refusal rule across every firmware consu
         return (  # Keep unknown or conflicting responses fail-closed.
             type(raw_status) is int  # Reject booleans and non-integer statuses.
             and raw_status in cls.REFUSAL_STATUSES  # Accept only documented upgrade endpoint statuses.
+            and evidence is not None
+            and evidence.get("response_data_valid") is True
             and not cls._has_conflicting_evidence(evidence)  # A job identity or accepted target overrides refusal.
         )
 

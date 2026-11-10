@@ -1005,7 +1005,8 @@ def test_reference_site_entries_use_root_totals() -> None:
     assert summary["site_upgrades"][0]["id"] == SITE_UPGRADE_ID
 
 
-def test_rejected_child_targets_count_as_failed_devices() -> None:
+@pytest.mark.parametrize(("proof", "failed"), [(True, 1), (False, 0), (None, 0)])
+def test_rejected_child_targets_count_as_failed_devices(proof: bool | None, failed: int) -> None:
     """A rejected child counts every target as failed when Mist created no job."""
     summary = org_upgrade.aggregate_summary(
         {
@@ -1016,6 +1017,7 @@ def test_rejected_child_targets_count_as_failed_devices() -> None:
                     "child_id": "rejected-gateway",
                     "status": "rejected",
                     "raw_status": 400,
+                    "response_data_valid": proof,
                     "target_ids": ["gateway-1"],
                     "targets": [{"mac": "gateway-1"}],
                     "status_data": {},
@@ -1023,8 +1025,8 @@ def test_rejected_child_targets_count_as_failed_devices() -> None:
             ],
         }
     )
-    assert summary["failed_count"] == 1
-    assert summary["children"][0]["failed"] == 1
+    assert summary["failed_count"] == failed
+    assert summary["children"][0]["failed"] == failed
 
 
 @pytest.mark.parametrize(

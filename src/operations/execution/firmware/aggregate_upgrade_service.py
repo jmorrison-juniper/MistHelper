@@ -934,18 +934,24 @@ class AggregateUpgradeService:  # Coordinate all child routes through one durabl
     @staticmethod
     def _apply_org_submission(child: MutableMapping[str, Any], result: OrgUpgradeResult) -> None:
         """Copy an organization AP submission result."""
-        child["upgrade_id"] = result.upgrade_id  # Keep an identifier when the response has one.
+        child["upgrade_id"] = result.upgrade_id if result.response_data_valid else None
+        child["response_data_valid"] = result.response_data_valid
         child["raw_status"] = result.raw_status  # Preserve the true HTTP status.
         child["status_data"] = deepcopy(dict(result.data))  # Retain every site result.
         if (  # Require a recognized success status, a valid response, and a trackable cloud job.
             result.raw_status in upgrade_service.ACCEPTED_STATUS  # Only success statuses can prove acceptance.
+            and result.response_data_valid
             and result.error is None  # A malformed response cannot prove acceptance.
             and result.upgrade_id  # Keep a cloud identity for later reconciliation.
         ):
             child["status"] = "accepted"  # Keep the accepted job available for later reads.
             child["error"] = None  # Do not show an error for a valid accepted response.
             return  # Do not classify accepted evidence as a refusal.
-        evidence = {"upgrade_id": result.upgrade_id, "status_data": result.data}  # Retain all response evidence.
+        evidence = {
+            "upgrade_id": result.upgrade_id,
+            "status_data": result.data,
+            "response_data_valid": result.response_data_valid,
+        }
         if (  # A refusal requires a complete response body as well as a documented status.
             result.response_data_valid  # Discarded body evidence cannot prove that no job exists.
             and _SubmissionCertainty.is_known_refusal(
@@ -965,10 +971,12 @@ class AggregateUpgradeService:  # Coordinate all child routes through one durabl
     @staticmethod
     def _apply_device_submission(child: MutableMapping[str, Any], submission: Any) -> None:
         """Copy one site or SSR submission result."""
-        child["upgrade_id"] = submission.upgrade_id  # Keep a cloud identifier when one exists.
+        child["upgrade_id"] = submission.upgrade_id if submission.response_data_valid else None
+        child["response_data_valid"] = submission.response_data_valid
         child["raw_status"] = submission.raw_status  # Preserve the exact HTTP status.
         accepted = (  # A device result needs both accepted targets and an identity for later reconciliation.
             bool(submission.accepted)  # Require at least one accepted device target.
+            and submission.response_data_valid
             and submission.raw_status in upgrade_service.ACCEPTED_STATUS  # Require a success response status.
             and bool(submission.upgrade_id)  # Keep a cloud identity for later reconciliation.
         )
@@ -980,6 +988,7 @@ class AggregateUpgradeService:  # Coordinate all child routes through one durabl
             "upgrade_id": submission.upgrade_id,  # A job identifier conflicts with refusal.
             "accepted_targets": submission.accepted,  # An accepted target conflicts with refusal.
             "response_data": submission.response_data,  # The refusal body can also name accepted targets.
+            "response_data_valid": submission.response_data_valid,
         }
         if submission.response_data_valid and _SubmissionCertainty.is_known_refusal(
             submission.raw_status, evidence

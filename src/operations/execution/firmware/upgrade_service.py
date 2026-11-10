@@ -1307,18 +1307,19 @@ def _read_submission(response: Any, plan: UpgradePlan) -> UpgradeSubmission:
     status = _status_code(response)
     macs = tuple(target.mac for target in plan.targets)
     data = getattr(response, "data", None)
+    response_data_valid = SubmissionCertainty.response_data_is_valid(
+        response, data if isinstance(data, Mapping) else None
+    )
     accepted = status in ACCEPTED_STATUS
     reason = f"the cloud answered status {status}"
     return UpgradeSubmission(
-        upgrade_id=_upgrade_id(response),
+        upgrade_id=_upgrade_id(response) if response_data_valid else None,
         scope=plan.scope,
         accepted=macs if accepted else (),
         rejected=() if accepted else tuple((mac, reason) for mac in macs),
         raw_status=status,
         response_data=data if isinstance(data, Mapping) else None,
-        response_data_valid=SubmissionCertainty.response_data_is_valid(
-            response, data if isinstance(data, Mapping) else None
-        ),
+        response_data_valid=response_data_valid,
     )
 
 

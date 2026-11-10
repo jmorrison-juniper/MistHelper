@@ -119,10 +119,11 @@ def test_an_ended_result_with_a_damaged_list_still_lists_no_device() -> None:
     assert (row["cancelled"], row["already_writing"], row["note"]) == ([], [], ENDED_NOTE)
 
 
-def test_a_conflicting_rejected_child_does_not_show_a_stale_ended_result() -> None:
+@pytest.mark.parametrize("upgrade_id", [None, "known-job"])
+def test_a_conflicting_rejected_child_does_not_show_a_stale_ended_result(upgrade_id: str | None) -> None:
     """A retained job identity keeps a legacy rejected child visible as uncertain."""
     stale_result = ended_result()  # Preserve the earlier cancellation result.
-    stored_child = child("child-1", "rejected", stale_result, raw_status=400, upgrade_id="known-job")
+    stored_child = child("child-1", "rejected", stale_result, raw_status=400, upgrade_id=upgrade_id)
 
     row = only_row(record(stored_child))
 
@@ -170,7 +171,9 @@ def test_an_access_point_result_without_lists_names_each_access_point() -> None:
 def test_a_child_job_that_never_started_lists_no_device(status: str, raw_status: int, claim: str | None) -> None:
     """No cloud job exists, so no device of the child job writes firmware."""
     unavailable = {"status": "unavailable", "message": "The child has no known upgrade identifier."}
-    row = only_row(record(child("child-1", status, unavailable, raw_status=raw_status), claim=claim))
+    row = only_row(
+        record(child("child-1", status, unavailable, raw_status=raw_status, response_data_valid=True), claim=claim)
+    )
     assert (row["cancelled"], row["already_writing"], row["no_cancel_available"]) == ([], [], [])
     assert (row["status"], row["note"]) == ("unavailable", NEVER_STARTED_NOTE)
 
@@ -179,6 +182,7 @@ def test_a_child_job_that_never_started_lists_no_device(status: str, raw_status:
     ("status", "raw_status", "claim"),
     [
         pytest.param("planned", 0, "claim-1", id="planned-during-a-live-submission"),  # The write may still run.
+        pytest.param("rejected", 400, None, id="legacy-refusal-without-body-proof"),
         pytest.param("rejected", 405, None, id="undocumented-method-status"),
         pytest.param("rejected", 408, None, id="a-request-timeout"),  # The response does not prove refusal.
         pytest.param("rejected", 409, None, id="undocumented-conflict-status"),
@@ -210,7 +214,7 @@ def test_a_documented_refusal_with_conflicting_legacy_evidence_reports_writing_d
 ) -> None:
     """A legacy rejected child cannot claim that no job exists when evidence conflicts."""
     unavailable = {"status": "unavailable", "message": "The child has no known upgrade identifier."}
-    stored_child = child("child-1", "rejected", unavailable, raw_status=400, **evidence)
+    stored_child = child("child-1", "rejected", unavailable, raw_status=400, response_data_valid=True, **evidence)
     row = only_row(record(stored_child))
     assert (row["cancelled"], row["already_writing"], row["note"]) == ([], [SWITCH], UNSORTED_NOTE)
 
