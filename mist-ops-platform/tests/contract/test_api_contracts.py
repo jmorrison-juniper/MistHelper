@@ -62,8 +62,9 @@ class TestSyncContracts:
     """Verify sync endpoint request/response schemas."""
 
     def test_sync_trigger_request(self) -> None:
-        req = SyncTriggerRequest(org_id=str(uuid.uuid4()))
-        assert req.org_id is not None
+        org_id = uuid.uuid4()
+        req = SyncTriggerRequest(org_id=str(org_id))
+        assert req.org_id == org_id
 
     def test_sync_status_response_fields(self) -> None:
         # This test sent org_id, status, last_sync_at, and next_sync_at. The schema
@@ -141,14 +142,20 @@ class TestDeployContracts:
         assert len(data["target_entities"]) == 1
 
     def test_dry_run_request(self) -> None:
+        org_id = uuid.uuid4()
+        target_entity_id = uuid.uuid4()
+        change_payload = {"radio": {"power": 14}}
         req = DryRunRequest(
-            org_id=str(uuid.uuid4()),
-            change_payload={"radio": {"power": 14}},
+            org_id=str(org_id),
+            change_payload=change_payload,
             target_entities=[
-                {"entity_type": "device", "entity_id": str(uuid.uuid4())},
+                {"entity_type": "device", "entity_id": str(target_entity_id)},
             ],
         )
-        assert req.change_payload is not None
+        assert req.org_id == org_id
+        assert req.target_entities[0].entity_type == "device"
+        assert req.target_entities[0].entity_id == target_entity_id
+        assert req.change_payload == change_payload
 
     def test_rollout_create_has_waves(self) -> None:
         # This test sent name and device_ids to WaveCreate. The schema requires
