@@ -243,6 +243,32 @@ class TestAuthenticate:
         assert "Interactive login failed: Service Unavailable" in caplog.text
         assert "Login successful" not in caplog.text  # WHY: operators must not see a success message.
 
+    def test_two_factor_login_resends_credentials_with_installed_sdk(self) -> None:
+        """A 2FA account must authenticate through the installed SDK (issue #4755)."""
+        orch = _make_orchestrator()  # WHY: fresh state so the result reflects this login only.
+        sdk = orch._resolve_mistapi()  # WHY: use the same SDK resolution as the interactive workflow.
+        assert isinstance(sdk, ModuleType)  # WHY: the test requires the installed SDK module.
+        accepted = MagicMock(spec=Response)  # WHY: one accepted reply serves the login and the 2FA POST.
+        accepted.status_code = 200  # WHY: Mist accepts the password and the code.
+        pending_self = MagicMock(status_code=200, data={"two_factor_required": True, "two_factor_passed": False})
+        verified_self = MagicMock(status_code=200, data={"email": "user@example.com", "privileges": []})
+        with (
+            patch.object(Session, "post", autospec=True, return_value=accepted) as fake_post,
+            patch.object(sdk.APISession, "mist_get", side_effect=[pending_self, verified_self]),
+            patch.object(sdk.APISession, "_load_env"),  # WHY: exclude all external credentials.
+            patch.object(sdk.APISession, "_set_authenticated"),  # WHY: the mocked replies carry no cookies.
+            patch("mistapi.__api_session.CONSOLE._set_log_level"),  # WHY: preserve shared SDK logging levels.
+            patch.object(CredentialPrompter, "prompt_two_factor", return_value="123456"),
+            patch.object(LoginOrchestrator, "_finalize_session") as fake_finalize,
+        ):
+            result = orch._authenticate(sdk, "Global 01", "api.mist.com", "user@example.com", "secret")
+        assert result is True  # WHY: the old replay returned "credentials are missing" here.
+        urls = [call.args[1] for call in fake_post.call_args_list]  # WHY: record the POST order.
+        assert urls[-1] == "https://api.mist.com/api/v1/login/two_factor"  # WHY: the code reached Mist.
+        assert fake_post.call_args.kwargs["json"] == {"two_factor": "123456"}  # WHY: the operator code is sent.
+        assert fake_post.call_args_list[-2].kwargs["json"]["password"] == "secret"  # WHY: replay resent password.
+        fake_finalize.assert_called_once()  # WHY: a verified login configures the session.
+
 
 class TestRunLoginPipeline:
     """``_run_login_pipeline`` walks create-session / login / 2FA / finalize sequence."""
@@ -419,7 +445,7 @@ class TestHandleTwoFactor:
         fake_session = MagicMock()
         with patch.object(CredentialPrompter, "prompt_two_factor", return_value=None):
             with caplog.at_level(logging.WARNING):
-                result = orch._handle_two_factor(fake_session)
+                result = orch._handle_two_factor(fake_session, "user@example.com", "pw")
         assert result is None  # WHY: SUT contract.
         assert orch.state["apisession"] is None  # WHY: partial session cleared.
         assert "Two-factor authentication required." in caplog.text  # WHY: legacy banner routed via logger.
@@ -431,9 +457,11 @@ class TestHandleTwoFactor:
         fake_session.login_with_return = MagicMock(return_value={"authenticated": True})
         with patch.object(CredentialPrompter, "prompt_two_factor", return_value="123456"):
             with caplog.at_level(logging.DEBUG):
-                result = orch._handle_two_factor(fake_session)
+                result = orch._handle_two_factor(fake_session, "user@example.com", "pw")
         assert result == {"authenticated": True}  # WHY: SUT contract.
-        fake_session.login_with_return.assert_called_once_with(two_factor="123456")  # WHY: kwargs shape.
+        fake_session.login_with_return.assert_called_once_with(  # WHY: the SDK cleared the password (#4755).
+            email="user@example.com", password="pw", two_factor="123456"
+        )
         assert "2FA login returned authenticated=True" in caplog.text  # WHY: legacy debug log.
 
 
