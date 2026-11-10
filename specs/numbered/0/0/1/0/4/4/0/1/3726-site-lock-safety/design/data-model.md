@@ -21,6 +21,7 @@ An aggregate operation holds the selected child submissions, durable outcome evi
 | `raw_status` | HTTP response status, when available | Only integer status 400, 401, 403, or 404 can prove refusal. Other values remain uncertain. |
 | `upgrade_id` | Cloud identity used to read or cancel an accepted job | Any retained job identity conflicts with a refusal status. |
 | `response_data_valid` | Durable proof that the normalizer retained a verified response object | Require exact `true` before a rejected child can settle. A missing value leaves legacy refusals uncertain. |
+| `status_data_valid` | Durable proof that the current organization progress body passed validation | Require exact `true` before target lists affect counts, device states, or target-based version reads. |
 | `error` | Safe operator-facing reason | Do not include credentials or secret response content. |
 
 ## Outcome transitions
@@ -40,3 +41,11 @@ An aggregate operation holds the selected child submissions, durable outcome evi
 ## Lock-release invariant
 
 The portal releases site locks only when every child is final and every rejected child carries documented refusal evidence with no conflicting identity or accepted target. It also waits for any required phase watch. An uncertain recorded outcome cannot prove that the cloud job ended.
+
+## Progress evidence
+
+Submission proof and progress proof describe different responses. A valid later status read can establish progress despite invalid or missing submission proof.
+
+Invalid organization responses store empty progress data and false progress proof. Legacy organization bodies without progress proof cannot establish target outcomes.
+
+The summary and device reader share one progress-data selector. Verified reconciliation evidence remains independent from cloud target lists.

@@ -60,6 +60,8 @@ An operator submits a firmware upgrade that the cloud explicitly refuses, or the
 - **FR-006**: The portal MUST release a site lock only when all relevant child actions are proven settled and no post-upgrade watch needs the site.
 - **FR-007**: Cancellation reporting and lock release MUST use the same refusal evidence.
 - **FR-008**: Validation MUST use offline test doubles and MUST make no live firmware request or production lock change.
+- **FR-009**: Organization progress counts and device states MUST ignore target lists without durable progress-verification proof.
+- **FR-010**: A valid later progress read MUST restore verified target counts and version-read eligibility, independently from submission proof.
 
 ### Mist Cloud Transport Requirements
 

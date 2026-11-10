@@ -2315,7 +2315,7 @@ def _aggregate_child_counts(child: Mapping[str, Any]) -> tuple[int, int, int]:
         cloud answer, so the cloud lists count no upgraded device. The counts of
         that child job come from the proof, with the rule of the device table.
     """
-    data = child.get("status_data") if isinstance(child.get("status_data"), Mapping) else {}  # Read status.
+    data = OrgChildDevices.progress_data(child)  # Count only verified organization progress.
     targets = data.get("targets") if isinstance(data.get("targets"), Mapping) else {}  # Read root targets.
     counts = (  # The target count and the two counts of the stored cloud lists.
         len(child.get("target_ids", [])),  # Each target device of the child job.
