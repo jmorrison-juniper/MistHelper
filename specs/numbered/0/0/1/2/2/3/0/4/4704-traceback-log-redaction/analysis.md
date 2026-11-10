@@ -528,3 +528,16 @@ Compile, Ruff, Black, mypy, Bandit, complexity, pydocstyle, symbols, and whitesp
 The recurring Dash warning and unused mypy configuration notes remain.
 No network, credential access, branch replacement, rebase, amend, push, publication, or merge occurred.
 The README requirement remains an unresolved ownership dependency.
+
+The forward-only source commit is `667bf9989`, with both issue references and the required author trailer.
+The committed preflight reported `1 passed, 1 warning`, with four inputs validated.
+The changed-reference analyzer command unexpectedly expanded to full analysis under its existing policy.
+The local `origin/main` reference now resolves to `343461229b9cfbeec93d0dd61ee8a17fb24c6814`.
+Its committed difference includes `requirements-dev.txt`, which triggers that expansion.
+This session did not fetch or change the reference.
+Thus, this check exceeded the requested focused scope automatically, but remained offline.
+It reported `1250 files checked`, `567 findings checked`, `51 skipped`, `0 parse errors`, and `0 new findings vs baseline`.
+The report lists 1199 analyzed files, including the dedicated pure filter file.
+The separate SDK integration file remains excluded by `mist_api_excluded`.
+No configuration or baseline changed.
+The writing gate checked five records, skipped none, and passed with scores from 92 through 98.

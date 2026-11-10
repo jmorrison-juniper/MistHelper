@@ -107,7 +107,7 @@ T029 precedes T030. T031 requires T030. These tasks refine FR-004 and FR-011.
 
 - [x] T032 Prove whitespace-labeled message and exception leaks with synthetic values before repairing the source.
 - [x] T033 Restore conservative recognition without rewriting history or adding phrase exemptions.
-- [ ] T034 Run offline focused gates and record the unresolved menu integration, including strict expected failures.
+- [x] T034 Run offline focused gates and record the unresolved menu integration, including strict expected failures. (delivered: analysis.md, local commit 667bf9989)
 
 T032 precedes T033. T034 requires T033.
 This phase supersedes the security-weakening matching decision in Phase 11, not its historical evidence.
