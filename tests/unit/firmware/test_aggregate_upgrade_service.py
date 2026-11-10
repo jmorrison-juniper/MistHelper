@@ -326,7 +326,7 @@ def test_real_org_normalizer_keeps_unretained_refusal_body_uncertain(
     service.submit(SAFE_SESSION, record, store, permit_lock)  # Exercise the normalizer and aggregate path.
 
     saved = store.read_run(record["run_id"])
-    assert saved is not None
+    assert saved == record  # Verify that persistence retains the complete classified submission.
     reloaded = json.loads(json.dumps(saved))
     child = reloaded["children"][0]  # Read the only organization child after a durable JSON round trip.
     assert calls == ["upgradeOrgDevices"]  # Keep the test offline and prove one request.
@@ -424,7 +424,7 @@ def test_real_device_normalizer_keeps_conflicting_refusal_and_429_uncertain(
     service.submit(SAFE_SESSION, record, store, permit_lock)  # Run the real normalizer and classifier.
 
     saved = store.read_run(record["run_id"])
-    assert saved is not None
+    assert saved == record  # Verify that persistence retains the complete classified submission.
     reloaded = json.loads(json.dumps(saved))
     child = reloaded["children"][0]  # Read the only site child after a durable JSON round trip.
     assert calls == ["upgradeSiteDevices"]  # Keep the test offline and prove one request.
