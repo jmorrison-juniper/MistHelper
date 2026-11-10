@@ -9,6 +9,7 @@ Why:
 
 from __future__ import annotations
 
+import inspect
 import logging
 
 import pytest
@@ -54,7 +55,6 @@ class TestDetermineApiFunctionNameFromContext:
 
     def test_handles_stack_inspection_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """A local inspection failure must propagate without selecting a different schema."""
-        import src.foundation.persistence.db.database_schema_utils as module
 
         class _ExplodingFrame:
             """Frame stand-in whose f_code access raises inside the walker loop."""
@@ -63,7 +63,7 @@ class TestDetermineApiFunctionNameFromContext:
             def f_code(self) -> object:
                 raise RuntimeError("frame introspection failed")
 
-        monkeypatch.setattr(module.inspect, "currentframe", lambda: _ExplodingFrame())
+        monkeypatch.setattr(inspect, "currentframe", lambda: _ExplodingFrame())
         with pytest.raises(RuntimeError, match="frame introspection failed"):
             DatabaseSchemaUtils.determine_api_function_name_from_context()
 

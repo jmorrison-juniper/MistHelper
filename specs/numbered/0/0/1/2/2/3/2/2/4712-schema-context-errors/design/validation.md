@@ -2,8 +2,9 @@
 
 ## Environment and Isolation
 
-The base commit is `5c22ee4b91a3d8025551d68ee918e253334dad88`.
+The base commit is `343461229b9cfbeec93d0dd61ee8a17fb24c6814`.
 The local `origin/main` reference resolves to that commit.
+The branch was rebased onto this main commit after pull request #4740 merged.
 The interpreter is Python 3.14.7.
 The locked environment restoration used `uv run --offline --locked --extra dev python -c 'import pytest; print(pytest.__version__)'`.
 It reported pytest `9.2.0`.
@@ -21,7 +22,7 @@ Against the original committed source, it reports `8 failed, 11 passed, 1 warnin
 The failures cover logging in a real inventory context, six injected frame or logging failures, and cleanup during an exception.
 The original source loads from its Git object without modifying the working source.
 
-The corrected source, the complete legacy schema test, the regression tests, and the Arango index tests report `131 passed, 1 warning in 7.07s`.
+The corrected source, the complete legacy schema test, the regression tests, and the Arango index tests report `131 passed, 1 warning in 6.03s` after the rebase.
 The run used normal pytest fixtures and focused coverage instrumentation.
 It did not skip tests.
 Coverage for `database_schema_utils.py` was `100%` with zero missed statements.
@@ -50,7 +51,7 @@ The Python checks apply to the source file, the new test file, and the handed-of
 | `python -m py_compile` with all three Python paths | Passed with no output |
 | `python -m ruff check` with all three Python paths | `All checks passed!` |
 | `python -m black --check` with all three Python paths | Three files unchanged |
-| `python -m mypy src/foundation/persistence/db/database_schema_utils.py --config-file pyproject.toml` | No issues in one source file |
+| `python -m mypy` on the source file and both changed tests with `--config-file pyproject.toml` | No issues in three source files |
 | `bandit -c pyproject.toml src/foundation/persistence/db/database_schema_utils.py -q` | Passed with no findings |
 | `radon cc src/foundation/persistence/db/database_schema_utils.py -j` through `complexity-gate --max 10` | All functions within the threshold |
 | `pydocstyle src/foundation/persistence/db/database_schema_utils.py` | Passed with no output |
