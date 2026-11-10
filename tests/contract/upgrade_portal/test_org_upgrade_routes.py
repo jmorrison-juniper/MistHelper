@@ -1465,6 +1465,7 @@ def test_aggregate_summary_counts_nested_ap_site_targets() -> None:
                 "device_family": "ap",
                 "route": "upgradeOrgDevices",
                 "upgrade_id": "upgrade-ap",
+                "status_data_valid": True,
                 "status": "running",
                 "target_ids": ["ap-1", "ap-2", "ap-3"],
                 "status_data": {
@@ -1619,6 +1620,7 @@ def device_table_record(owner: str, org_id: str, site_id: str) -> dict[str, Any]
             table_target(AP_TWO, "ap", SECOND_SITE_ID, "0.15.1"),
         ],
         "status_data": ap_status,
+        "status_data_valid": True,
         "error": None,
         "cancellation": None,
     }

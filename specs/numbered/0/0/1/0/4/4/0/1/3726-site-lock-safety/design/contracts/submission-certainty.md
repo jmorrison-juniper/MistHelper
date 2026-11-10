@@ -32,6 +32,10 @@ The shared rule consumes the raw HTTP status and existing submission fields. It 
 - A prior `rejected` record with a job identity must not skip cancellation as an already-ended child.
 - Summary counts do not count an uncertain rejected child as fully failed.
 - No path retries a destructive submission because the response is uncertain.
+- Organization target lists require exact `status_data_valid=true` before they affect public counts or device states.
+- Invalid new responses store empty progress data. Legacy bodies without progress proof remain unverified.
+- A valid subsequent status read establishes its own progress proof without changing submission proof.
+- Preserve verified reconciliation counts, nested target precedence, public fields, and all settlement decisions.
 
 ## Status evidence
 

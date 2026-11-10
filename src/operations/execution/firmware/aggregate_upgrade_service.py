@@ -937,7 +937,7 @@ class AggregateUpgradeService:  # Coordinate all child routes through one durabl
         child["upgrade_id"] = result.upgrade_id if result.response_data_valid else None
         child["response_data_valid"] = result.response_data_valid
         child["raw_status"] = result.raw_status  # Preserve the true HTTP status.
-        child["status_data"] = deepcopy(dict(result.data))  # Retain every site result.
+        AggregateUpgradeService._store_org_progress(child, result)
         if (  # Require a recognized success status, a valid response, and a trackable cloud job.
             result.raw_status in upgrade_service.ACCEPTED_STATUS  # Only success statuses can prove acceptance.
             and result.response_data_valid
@@ -1041,7 +1041,7 @@ class AggregateUpgradeService:  # Coordinate all child routes through one durabl
         """Read and apply one organization AP status."""
         result = self._org_service.status(cloud_session, str(child["org_id"]), str(child["upgrade_id"]))  # Read once.
         child["raw_status"] = result.raw_status  # Preserve the exact HTTP status.
-        child["status_data"] = deepcopy(dict(result.data))  # Preserve every site and target result.
+        self._store_org_progress(child, result)
         child["error"] = result.error  # Preserve an invalid response as an error.
         cloud_word = self._org_status(result)  # The cloud word, or the word that the site entries combine to.
         child["cloud_status"] = cloud_word  # Keep the exact word visible on the progress page.
@@ -1078,9 +1078,15 @@ class AggregateUpgradeService:  # Coordinate all child routes through one durabl
         return "read_unknown"  # An unknown answer stays readable, so the next poll may judge it.
 
     @staticmethod
+    def _store_org_progress(child: MutableMapping[str, Any], result: OrgUpgradeResult) -> None:
+        """Store verified progress separately from the original submission proof."""
+        child["status_data_valid"] = result.response_data_valid and result.error is None
+        child["status_data"] = deepcopy(dict(result.data)) if child["status_data_valid"] else {}
+
+    @staticmethod
     def _org_status(result: OrgUpgradeResult) -> str:
         """Return the organization child display state."""
-        if result.error is not None:  # An invalid response cannot report a known state.
+        if result.error is not None or not result.response_data_valid:  # Invalid data cannot report a known state.
             return "unknown"  # Keep the invalid response visible.
         root = str(result.data.get("status", "")).lower()  # Prefer an explicit root state.
         if root:  # A root state is authoritative when the cloud supplies it.

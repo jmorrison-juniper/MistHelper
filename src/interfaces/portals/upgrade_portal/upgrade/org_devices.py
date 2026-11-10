@@ -168,7 +168,15 @@ class OrgChildDevices:
         self.site_id = str(child.get("site_id") or "")  # The access point child names no site.
         self.site_name = str(child.get("site_name") or "")  # The access point child joins every site name.
         self.state = str(child.get("status") or "unknown").strip().lower()  # The service state of the child.
-        self._lists = CloudTargetLists(child.get("status_data"))  # The cloud lists of the latest read.
+        self._lists = CloudTargetLists(self.progress_data(child))  # Only verified progress can name device states.
+
+    @staticmethod
+    def progress_data(child: Mapping[str, Any]) -> Mapping[str, Any]:
+        """Return verified organization progress without trusting older submission bodies."""
+        data = child.get("status_data")
+        if child.get("route") == "upgradeOrgDevices" and child.get("status_data_valid") is not True:
+            return {}
+        return data if isinstance(data, Mapping) else {}
 
     @classmethod
     def children_of(cls, record: Mapping[str, Any]) -> list[OrgChildDevices]:

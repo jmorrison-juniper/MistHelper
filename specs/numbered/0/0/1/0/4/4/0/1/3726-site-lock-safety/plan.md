@@ -19,7 +19,7 @@ Classify only explicitly allowlisted client refusals as `rejected`. Record every
 **Performance Goals**: No new network calls, retries, or polling
 **Constraints**: Fail closed on uncertain outcomes. Use offline tests only. Preserve existing lock lease and recovery behavior. Do not send a live firmware request or alter a production lock.
 **Human-review boundary**: Prepare one pull request and keep `needs-human-review`. Do not approve, merge, enable auto-merge, or deploy this change.
-**Scale/Scope**: Four production modules, including one new shared module, three unit-test modules, one route contract test, and one changelog fragment.
+**Scale/Scope**: Submission normalizers, aggregate execution, shared certainty checks, portal readers, offline regression modules, and one changelog fragment.
 
 ## Constitution Check
 
@@ -39,6 +39,7 @@ Classify only explicitly allowlisted client refusals as `rejected`. Record every
 5. Treat an accepted-looking device response without an upgrade identity as `submission_unknown`. Keep its lock because the portal cannot reconcile the job.
 6. Apply the refusal evidence check to legacy `rejected` records. A missing, malformed, undocumented, or conflicting response does not prove that no job exists.
 7. Preserve current lock lease, recovery controls, error-handling breadth, and retry policy. The existing settled-operation gate blocks retry while an unknown child remains.
+8. Store separate organization progress proof. Share its reader between summary counts and device rows, including legacy records and valid later reads.
 
 ## Phase 0: Research
 
@@ -87,6 +88,7 @@ src/foundation/support/submission_certainty.py
 src/operations/execution/firmware/aggregate_upgrade_service.py
 src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py
 src/interfaces/portals/upgrade_portal/upgrade/org_cancel_outcomes.py
+src/interfaces/portals/upgrade_portal/upgrade/org_devices.py
 tests/unit/firmware/test_aggregate_upgrade_service.py
 tests/unit/upgrade_portal/test_org_upgrade_lock_release.py
 tests/unit/upgrade_portal/test_org_cancel_outcomes.py

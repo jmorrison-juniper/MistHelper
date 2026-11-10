@@ -14,6 +14,8 @@ import pytest
 
 from src.interfaces.portals.upgrade_portal.app.routes import org_upgrade
 from src.interfaces.portals.upgrade_portal.upgrade.org_cancel_outcomes import OrgCancelOutcomes
+from src.interfaces.portals.upgrade_portal.upgrade.org_devices import OrgChildDevices
+from src.interfaces.portals.upgrade_portal.upgrade.org_versions import OrgVersionRefresh
 from src.operations.execution.firmware import org_upgrade_service, upgrade_service
 from src.operations.execution.firmware.aggregate_upgrade_service import AggregateBuildInput, AggregateUpgradeService
 from src.operations.execution.firmware.org_upgrade_service import OrgUpgradeResult, OrgUpgradeService
@@ -340,6 +342,198 @@ def test_real_org_normalizer_keeps_unretained_refusal_body_uncertain(
     child["cancellation"] = {"status": "unavailable"}
     row = OrgCancelOutcomes.rows(reloaded)[0]
     assert row["already_writing"] == ([] if expected_status == "rejected" else [mac])
+
+
+@pytest.mark.parametrize("target_state", ["upgraded", "failed"])
+def test_invalid_org_submission_cannot_publish_device_progress(
+    monkeypatch: pytest.MonkeyPatch, target_state: str
+) -> None:
+    """Unverified response targets cannot become progress after a durable reload."""
+    mac = "001122334455"
+    response = SimpleNamespace(
+        status_code=200,
+        data={"id": SITE_ONE, "targets": {target_state: [mac]}},
+        raw_data=json.dumps({"id": SITE_TWO, "targets": {}}),
+    )
+    monkeypatch.setattr(org_upgrade_service.org_devices, "upgradeOrgDevices", lambda *args, **kwargs: response)
+    service = AggregateUpgradeService(OrgUpgradeService, DeviceServiceStandIn())
+    request = AggregateBuildInput(
+        "owner",
+        ORG_ID,
+        ({"site_id": SITE_ONE, "name": "One"},),
+        (target(mac, "ap", "AP45", SITE_ONE, "0.15.1"),),
+        UpgradeOptions(),
+        "nonce",
+    )
+    record = service.build(request)
+    store = CasStore(record)
+    service.submit(SAFE_SESSION, record, store, permit_lock)
+    assert store.record == record
+    reloaded = json.loads(json.dumps(store.record))
+    child = reloaded["children"][0]
+    summary = org_upgrade.aggregate_summary(reloaded)
+    reader = OrgChildDevices(child)
+    assert child["status"] == "submission_unknown"
+    assert (summary["upgraded_count"], summary["failed_count"]) == (0, 0)
+    assert reader.state_of(mac) == "submission_unknown"
+    assert reader.wants_version(mac) is False
+    assert org_upgrade._operation_is_settled(reloaded) is False
+    version_result = OrgVersionRefresh(
+        lambda *_: pytest.fail("Unverified targets must not trigger a running-version read.")
+    ).collect(SAFE_SESSION, reloaded)
+    assert version_result.sites_read == 0
+    assert version_result.readings == {}
+
+
+@pytest.mark.parametrize("target_state", ["upgraded", "failed"])
+@pytest.mark.parametrize("proof", [None, False, True])
+def test_persisted_org_progress_requires_its_own_verification(target_state: str, proof: bool | None) -> None:
+    """Old bodies stay uncertain, while a verified later read can report device progress."""
+    mac = "001122334455"
+    child = {
+        "child_id": "org-one",
+        "route": "upgradeOrgDevices",
+        "status": "submission_unknown" if proof is not True else "running",
+        "response_data_valid": False,
+        "target_ids": [mac],
+        "targets": [{"mac": mac}],
+        "status_data": {"targets": {target_state: [mac]}},
+    }
+    if proof is not None:
+        child["status_data_valid"] = proof
+    record = json.loads(json.dumps({"state": "attention_required", "children": [child]}))
+    summary = org_upgrade.aggregate_summary(record)
+    reader = OrgChildDevices(record["children"][0])
+    expected_counts = (int(target_state == "upgraded"), int(target_state == "failed")) if proof is True else (0, 0)
+    assert (summary["upgraded_count"], summary["failed_count"]) == expected_counts
+    assert reader.state_of(mac) == (target_state if proof is True else "submission_unknown")
+    assert reader.wants_version(mac) is (proof is True)
+    assert summary["site_upgrades"][0]["upgraded"] == expected_counts[0]
+    assert summary["site_upgrades"][0]["failed"] == expected_counts[1]
+
+
+@pytest.mark.parametrize("target_state", ["upgraded", "failed"])
+@pytest.mark.parametrize("nested", [False, True])
+@pytest.mark.parametrize("prior_proof", [None, False])
+def test_real_org_status_read_replaces_unverified_progress(
+    monkeypatch: pytest.MonkeyPatch, target_state: str, nested: bool, prior_proof: bool | None
+) -> None:
+    """A verified later status read restores progress independently from submission proof."""
+    mac = "001122334455"
+    data = {"id": SITE_ONE, "status": "running", "targets": {target_state: [mac]}}
+    if nested:
+        data = {
+            "id": SITE_ONE,
+            "status": "running",
+            "targets": {"upgraded": [], "failed": []},
+            "site_upgrades": [{"site_id": SITE_ONE, "upgrade": {"id": SITE_ONE, "targets": {target_state: [mac]}}}],
+        }
+    response = SimpleNamespace(status_code=200, data=data, raw_data=json.dumps(data))
+    monkeypatch.setattr(org_upgrade_service.org_devices, "getOrgDeviceUpgrade", lambda *args: response)
+    service = AggregateUpgradeService(OrgUpgradeService, DeviceServiceStandIn())
+    child = {
+        "child_id": "org-one",
+        "route": "upgradeOrgDevices",
+        "org_id": ORG_ID,
+        "upgrade_id": SITE_ONE,
+        "status": "running",
+        "response_data_valid": False,
+        "target_ids": [mac],
+        "targets": [{"mac": mac, "site_id": SITE_ONE}],
+        "status_data": {},
+    }
+    if prior_proof is not None:
+        child["status_data_valid"] = prior_proof
+    record = {"run_id": "progress-proof", "record_version": 0, "state": "running", "children": [child]}
+    store = CasStore(record)
+    service.status(SAFE_SESSION, record, store)
+    assert store.record == record
+    record = json.loads(json.dumps(store.record))
+    child = record["children"][0]
+    summary = org_upgrade.aggregate_summary(record)
+    reader = OrgChildDevices(record["children"][0])
+    assert child["status_data_valid"] is True
+    assert child["response_data_valid"] is False
+    assert (summary["upgraded_count"], summary["failed_count"]) == (
+        int(target_state == "upgraded"),
+        int(target_state == "failed"),
+    )
+    assert reader.state_of(mac) == target_state
+    assert reader.wants_version(mac) is True
+    reads: list[str] = []
+
+    def read_versions(session: Any, site_id: str) -> dict[str, str]:
+        """Record a local read without using a cloud session."""
+        reads.append(site_id)
+        return {mac: "0.15.1"}
+
+    result = OrgVersionRefresh(read_versions).collect(SAFE_SESSION, record)
+    assert reads == [SITE_ONE]
+    assert result.readings == {mac: "0.15.1"}
+
+
+@pytest.mark.parametrize("proof", [None, False, True])
+def test_verified_reconciliation_remains_independent_from_progress_proof(proof: bool | None) -> None:
+    """Verified reconciliation counts match rows without trusting invalid failed-target lists."""
+    mac = "001122334455"
+    child = {
+        "route": "upgradeOrgDevices",
+        "status": "completed",
+        "reconciliation": {"proven": True},
+        "target_ids": [mac],
+        "targets": [{"mac": mac}],
+        "status_data": {"targets": {"failed": [mac]}},
+    }
+    if proof is not None:
+        child["status_data_valid"] = proof
+    record = json.loads(json.dumps({"state": "completed", "children": [child]}))
+    summary = org_upgrade.aggregate_summary(record)
+    reader = OrgChildDevices(record["children"][0])
+    assert (summary["upgraded_count"], summary["failed_count"]) == (
+        int(proof is not True),
+        int(proof is True),
+    )
+    assert reader.state_of(mac) == ("failed" if proof is True else "completed")
+    assert reader.wants_version(mac) is True
+
+
+@pytest.mark.parametrize("target_state", ["upgraded", "failed"])
+def test_invalid_real_org_status_read_cannot_replace_progress_with_targets(
+    monkeypatch: pytest.MonkeyPatch, target_state: str
+) -> None:
+    """A malformed subsequent status body cannot become trusted device progress."""
+    mac = "001122334455"
+    response = SimpleNamespace(
+        status_code=200,
+        data={"id": SITE_ONE, "status": "completed", "targets": {target_state: [mac]}},
+        raw_data=json.dumps({"id": SITE_TWO, "targets": {}}),
+    )
+    monkeypatch.setattr(org_upgrade_service.org_devices, "getOrgDeviceUpgrade", lambda *args: response)
+    child = {
+        "child_id": "org-one",
+        "route": "upgradeOrgDevices",
+        "org_id": ORG_ID,
+        "upgrade_id": SITE_ONE,
+        "status": "running",
+        "target_ids": [mac],
+        "targets": [{"mac": mac, "site_id": SITE_ONE}],
+        "status_data_valid": True,
+        "status_data": {"targets": {"downloading": [mac]}},
+    }
+    record = {"run_id": "invalid-progress", "record_version": 0, "state": "running", "children": [child]}
+    store = CasStore(record)
+    AggregateUpgradeService(OrgUpgradeService, DeviceServiceStandIn()).status(SAFE_SESSION, record, store)
+    assert store.record == record
+    record = json.loads(json.dumps(store.record))
+    child = record["children"][0]
+    reader = OrgChildDevices(child)
+    summary = org_upgrade.aggregate_summary(record)
+    assert child["status_data_valid"] is False
+    assert child["status_data"] == {}
+    assert child["status"] == "read_unknown"
+    assert (summary["upgraded_count"], summary["failed_count"]) == (0, 0)
+    assert reader.state_of(mac) == "pending"
+    assert reader.wants_version(mac) is False
 
 
 @pytest.mark.parametrize(
