@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 import socket
 import sqlite3
 import sys
@@ -33,20 +34,34 @@ def block_external_access(monkeypatch: pytest.MonkeyPatch) -> None:
 class TestSchemaContextErrors:
     """Check context outcomes without an API session or a database."""
 
+    @staticmethod
+    def patch_currentframe(monkeypatch: pytest.MonkeyPatch, frame: object | None) -> None:
+        """Return synthetic frames only to the detector and real frames to test tooling."""
+        detector_name = module.DatabaseSchemaUtils.determine_api_function_name_from_context.__name__
+
+        def currentframe() -> object | None:
+            """Keep coverage and pytest callers on their real stack frames."""
+            caller = sys._getframe(1)
+            if caller.f_code.co_name == detector_name:
+                return frame
+            return caller
+
+        monkeypatch.setattr(inspect, "currentframe", currentframe)
+
     @pytest.mark.parametrize("name", ["getOrgA", "listOrgA", "searchOrgA", "getSiteA", "listSiteA", "searchSiteA"])
     def test_nearest_matching_frame(self, monkeypatch: pytest.MonkeyPatch, name: str) -> None:
         """Retain every supported pattern and stop before a more distant match."""
         farther = SimpleNamespace(f_code=SimpleNamespace(co_name="getOrgFarther"), f_back=None)
         nearest = SimpleNamespace(f_code=SimpleNamespace(co_name=name), f_back=farther)
         outer = SimpleNamespace(f_code=SimpleNamespace(co_name="ordinary"), f_back=nearest)
-        monkeypatch.setattr(module.inspect, "currentframe", lambda: outer)
+        self.patch_currentframe(monkeypatch, outer)
         assert module.DatabaseSchemaUtils.determine_api_function_name_from_context() == name
 
     @pytest.mark.parametrize("available", [False, True])
     def test_legitimate_unknown(self, monkeypatch: pytest.MonkeyPatch, available: bool) -> None:
         """Use the default only when a normal search has no matching frame."""
         frame = SimpleNamespace(f_code=SimpleNamespace(co_name="ordinary"), f_back=None) if available else None
-        monkeypatch.setattr(module.inspect, "currentframe", lambda: frame)
+        self.patch_currentframe(monkeypatch, frame)
         context = module.DatabaseSchemaUtils.determine_api_function_name_from_context()
         assert context == "unknown"
         assert module.DatabaseSchemaUtils.get_endpoint_strategy(context, [])["type"] == "auto_increment_with_unique"
@@ -85,7 +100,7 @@ class TestSchemaContextErrors:
             monkeypatch.setattr(module.logger, "debug", Mock(side_effect=failure))
         else:
             monkeypatch.setattr(type(frame), attribute, PropertyMock(side_effect=failure), raising=False)
-        monkeypatch.setattr(module.inspect, "currentframe", lambda: frame)
+        self.patch_currentframe(monkeypatch, frame)
         with pytest.raises(error_type) as caught:
             context = module.DatabaseSchemaUtils.determine_api_function_name_from_context()
             module.DatabaseSchemaUtils.get_endpoint_strategy(context, [])
@@ -97,7 +112,7 @@ class TestSchemaContextErrors:
         """Observe method exit locals even when an exception retains its traceback."""
         detector = module.DatabaseSchemaUtils.determine_api_function_name_from_context
         frame = SimpleNamespace(f_code=SimpleNamespace(co_name="getOrgInventory"), f_back=None)
-        monkeypatch.setattr(module.inspect, "currentframe", lambda: None if outcome == "unknown" else frame)
+        self.patch_currentframe(monkeypatch, None if outcome == "unknown" else frame)
         failure = RuntimeError("synthetic cleanup defect") if outcome == "failure" else None
         monkeypatch.setattr(module.logger, "debug", Mock(side_effect=failure))
         exits: list[dict[str, object]] = []

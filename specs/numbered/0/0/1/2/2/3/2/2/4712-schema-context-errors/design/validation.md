@@ -2,7 +2,7 @@
 
 ## Environment and Isolation
 
-The base commit is `3964d21d03f9f5717cb8eafb7272ecff21f5362a`.
+The base commit is `5c22ee4b91a3d8025551d68ee918e253334dad88`.
 The local `origin/main` reference resolves to that commit.
 The interpreter is Python 3.14.7.
 The locked environment restoration used `uv run --offline --locked --extra dev python -c 'import pytest; print(pytest.__version__)'`.
@@ -21,7 +21,15 @@ Against the original committed source, it reports `8 failed, 11 passed, 1 warnin
 The failures cover logging in a real inventory context, six injected frame or logging failures, and cleanup during an exception.
 The original source loads from its Git object without modifying the working source.
 
-The corrected source and five complete test files report `104 passed, 1 warning in 0.53s` in the final run.
+The corrected source, the complete legacy schema test, the regression tests, and the Arango index tests report `131 passed, 1 warning in 7.07s`.
+The run used normal pytest fixtures and focused coverage instrumentation.
+It did not skip tests.
+Coverage for `database_schema_utils.py` was `100%` with zero missed statements.
+The test helper gives synthetic frames only to the schema detector.
+It returns real frames to pytest and coverage callers.
+
+An earlier normal pytest run also passed five related files with `104 passed, 1 warning in 0.38s`.
+Those files were:
 The files are:
 
 - `tests/unit/config/foundation/persistence/storage/db/test_database_schema_context_errors.py`
@@ -30,7 +38,6 @@ The files are:
 - `tests/unit/db/test_sqlite_database_writer_logging.py`
 - `tests/unit/db/sle_window_summary/test_export_identity.py`
 
-No test skipped.
 The warning concerns the existing Dash pytest plugin and its deprecated hook declaration.
 The schema cases cover normal detection, all six patterns, nearest matching frames, legitimate unknown results, unchanged inventory strategy, exception identity, and cleanup.
 
@@ -53,8 +60,8 @@ The Python checks apply to the source file, the new test file, and the handed-of
 | `git diff --check` | Passed with no output |
 
 The isolated `TestLiveGuides` preflight reports `1 passed, 1 warning`.
-The initial test-quality check examined one new test file and reported no new findings.
-The five initial Markdown records passed STE with scores of 86 through 98.
+The committed-change test-quality gate checked two files and reported zero new findings.
+All six specification and release-note Markdown files passed STE with scores of 86 through 98.
 The route check examined 12 directories and found no directory above five children.
 
 ## Limitations
