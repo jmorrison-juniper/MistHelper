@@ -168,6 +168,15 @@ def test_python_version_guard_requires_315(version: tuple[int, int], expected: b
     assert supported is expected  # Confirm the minimum-version contract.
 
 
+def test_python_version_guard_uses_active_interpreter_when_no_version_is_supplied(tmp_path: Path) -> None:
+    """The bootstrap checks the active interpreter when the caller supplies no version."""
+    logger.info("Checking the active Python interpreter against the bootstrap minimum.")  # Trace the default path.
+    supported = WorktreeBootstrapper(tmp_path).check_python_version(None)  # Exercise the default interpreter input.
+    logger.debug("The active interpreter meets the minimum: %s.", supported)  # Report the measured decision.
+
+    assert supported is True, "the current test interpreter must meet the project minimum"
+
+
 def test_windows_entrypoint_selects_python_315() -> None:
     """The Windows entry point MUST select Python 3.15.2 through UV."""
     logger.info("Checking the Windows bootstrap interpreter.")  # Trace before reading the PowerShell entry point.

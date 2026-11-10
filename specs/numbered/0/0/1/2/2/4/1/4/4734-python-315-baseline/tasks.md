@@ -91,7 +91,7 @@
 
 - [x] T017 Verify Python 3.15 in the CI, release, and container workflows.
 - [x] T018 Verify Python 3.15 in all four product container files.
-- [ ] T019 Run the quickstart and applicable quality gates. The root gates passed. The Windows platform test and local image build remain blocked by the LuaJIT build and inactive Podman VM.
+- [ ] T019 Run the quickstart and applicable quality gates. The focused suite passed 219 tests, and Ruff, Black, dependency resolution, and the local image build passed. The test quality ratchet and full Ops Platform suite remain pending.
 - [x] T020 Run `speckit.analyze` against `spec.md`, `plan.md`, and `tasks.md`.
 
 ---
@@ -102,8 +102,8 @@
 
 - [x] T021 Build the explicit feature manifest and stage only its files after all local gates pass.
 - [x] T022 Commit the staged feature files with an accepted Conventional Commit subject and the required co-author trailer.
-- [x] T023 Rebase the committed branch onto current `origin/main` and rerun available local gates. Root gates passed. The Windows platform test and image build remain blocked locally.
-- [ ] T024 Push the branch and open a pull request from the repository template with the issue closure, file summary, gate results, and deployment notes.
+- [x] T023 Rebase the committed branch onto current `origin/main` and rerun available local gates. The local image build now passes. The Ops Platform suite awaits Linux CI because the Windows build cannot link `lupa`.
+- [x] T024 Push the branch and open a pull request from the repository template with the issue closure, file summary, gate results, and deployment notes.
 - [ ] T025 Wait for all required checks to pass, then squash-merge the approved pull request.
 
 ---

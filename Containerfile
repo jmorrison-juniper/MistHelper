@@ -35,7 +35,7 @@ LABEL maintainer="MistHelper Development Team"
 # Install minimal system dependencies including SSH server and SNMP daemon.
 # The snmp package provides snmpget, snmpwalk, and other CLI tools for testing.
 RUN apt-get update && \
-    apt-get install -y ca-certificates openssh-server sudo snmpd snmp && \
+    apt-get install -y --no-install-recommends ca-certificates libstdc++6 openssh-server sudo snmpd snmp && \
     rm -rf /var/lib/apt/lists/*
 
 # Create non-root user and configure SSH access.
@@ -111,10 +111,15 @@ RUN if [ "${INSTALL_CORPORATE_CA}" = "true" ]; then \
 COPY requirements.txt ./
 COPY pyproject.toml ./
 
-# Install Python dependencies. Every download validates the TLS certificate.
+# Install the compiler only while pip builds native dependencies, then remove it in this layer.
+# Every Python package download validates the TLS certificate.
 # Warning: Do not add --trusted-host. That flag disables certificate
 # verification and lets an attacker replace a package during the build.
-RUN pip install --no-cache-dir -r requirements.txt
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends build-essential && \
+    pip install --no-cache-dir -r requirements.txt && \
+    apt-get purge -y --auto-remove build-essential && \
+    rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*.deb
 
 # Copy application files
 # wsgi_capture.py is the entry point of the upgrade capture portal on port 8056.
