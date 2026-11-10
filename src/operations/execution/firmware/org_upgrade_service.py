@@ -205,6 +205,7 @@ class _OrgUpgradeResponse:
             The OpenAPI ``upgrade_org_devices_item`` schema uses ``site_upgrades``.
             The saved guide uses ``upgrades``. If both fields exist, validate both.
         """
+        cls._check_site_state(data)  # Apply the same target-shape rules at the organization root.
         for field in ("site_upgrades", "upgrades"):
             if field not in data:
                 continue

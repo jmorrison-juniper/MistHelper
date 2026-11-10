@@ -332,6 +332,43 @@ def test_a_stored_operation_shows_one_section_for_each_cancel_result(harness: Ca
     assert text_of(page, f"org-cancel-outcome-note-{gateway['child_id']}") == NEVER_STARTED_NOTE  # No cloud job.
 
 
+@pytest.mark.parametrize("upgrade_id", [None, "ap-job"])
+def test_stored_uncertain_submission_cannot_show_stale_ended_cancellation(
+    harness: CancelHarness, upgrade_id: str | None
+) -> None:
+    """Stored uncertainty overrides an ended cancellation without changing the saved record."""
+    stored = harness.store.records[harness.operation_id]
+    ap = stored["children"][0]
+    ap.update(
+        {
+            "status": "submission_unknown",
+            "upgrade_id": upgrade_id,
+            "response_data_valid": False,
+            "status_data_valid": False,
+            "status_data": {},
+            "cancellation": {
+                "status": "already_ended",
+                "state": "completed",
+                "message": ENDED_MESSAGE,
+                "cancelled": [],
+                "already_writing": [],
+                "no_cancel_available": [],
+            },
+        }
+    )
+    before = deepcopy(stored)
+    page = page_of(harness)
+    poll = harness.client.get(f"/api/org-upgrades/{harness.operation_id}").get_json()
+    row = next(row for row in poll["cancel_outcomes"] if row["child_id"] == ap["child_id"])
+    assert (row["status"], row["ended"], row["already_writing"]) == ("unknown", False, [AP_ONE, AP_TWO])
+    assert row["note"] == UNSORTED_NOTE
+    assert items(page, f"org-cancel-outcome-writing-{ap['child_id']}") == [AP_ONE, AP_TWO]
+    assert text_of(page, f"org-cancel-outcome-note-{ap['child_id']}") == UNSORTED_NOTE
+    assert harness.org.cancels == []
+    assert stored["children"] == before["children"]
+    assert org_upgrade._operation_is_settled(stored) is False
+
+
 def test_an_ended_child_job_gets_no_cancel_and_shows_no_list(harness: CancelHarness) -> None:
     """The access point job completed before the cancel, so it gets no request and names no device (issue #3367)."""
     stored = harness.store.records[harness.operation_id]  # The durable operation of the page.

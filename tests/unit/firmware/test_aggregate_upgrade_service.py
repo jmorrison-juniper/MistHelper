@@ -349,6 +349,50 @@ def test_real_org_normalizer_keeps_unretained_refusal_body_uncertain(
 
 
 @pytest.mark.parametrize("target_state", ["upgraded", "failed"])
+@pytest.mark.parametrize("action", ["submit", "status"])
+def test_real_org_normalizer_rejects_nonstring_root_targets(
+    monkeypatch: pytest.MonkeyPatch, target_state: str, action: str
+) -> None:
+    """Malformed root target arrays cannot produce progress counts after a real SDK normalization."""
+    data = {"id": SITE_ONE, "targets": {target_state: [7]}}
+    response = Response()
+    response.status_code = 200
+    response._content = json.dumps(data).encode()
+    sdk_response = APIResponse(response, "/offline/upgrade")
+    assert sdk_response.data == data
+    monkeypatch.setattr(org_upgrade_service.org_devices, "upgradeOrgDevices", lambda *args, **kwargs: sdk_response)
+    monkeypatch.setattr(org_upgrade_service.org_devices, "getOrgDeviceUpgrade", lambda *args: sdk_response)
+    service = AggregateUpgradeService(OrgUpgradeService, DeviceServiceStandIn())
+    request = AggregateBuildInput(
+        "owner",
+        ORG_ID,
+        ({"site_id": SITE_ONE, "name": "One"},),
+        (target("001122334455", "ap", "AP45", SITE_ONE, "0.15.1"),),
+        UpgradeOptions(),
+        "nonce",
+    )
+    record = service.build(request)
+    if action == "status":
+        record["children"][0].update({"status": "running", "upgrade_id": SITE_ONE})
+    store = CasStore(record)
+    if action == "status":
+        service.status(SAFE_SESSION, record, store)
+    else:
+        service.submit(SAFE_SESSION, record, store, permit_lock)
+    assert store.record == record
+    record = json.loads(json.dumps(store.record))
+    child = record["children"][0]
+    summary = org_upgrade.aggregate_summary(record)
+    reader = OrgChildDevices(child)
+    assert (summary["upgraded_count"], summary["failed_count"]) == (0, 0)
+    assert child["status"] == ("read_unknown" if action == "status" else "submission_unknown")
+    assert child["status_data_valid"] is False
+    assert reader.state_of("001122334455") == ("pending" if action == "status" else "submission_unknown")
+    assert reader.wants_version("001122334455") is False
+    assert org_upgrade._operation_is_settled(record) is False
+
+
+@pytest.mark.parametrize("target_state", ["upgraded", "failed"])
 def test_invalid_org_submission_cannot_publish_device_progress(
     monkeypatch: pytest.MonkeyPatch, target_state: str
 ) -> None:
@@ -696,6 +740,43 @@ def test_sdk_empty_cancellation_remains_valid(monkeypatch: pytest.MonkeyPatch, b
     assert result.error is None
     assert result.upgrade_id == SITE_ONE
     assert result.data == {}
+
+
+def test_stale_submission_recovery_retains_but_does_not_trust_ended_cancel() -> None:
+    """Recovery preserves legacy cancellation data without presenting uncertainty as ended."""
+    org = OrgServiceStandIn()
+    devices = DeviceServiceStandIn()
+    service = AggregateUpgradeService(org, devices)
+    record = build_record(service)
+    child = record["children"][0]
+    child.update(
+        {
+            "status": "submission_claimed",
+            "submission_claim_id": "stale",
+            "submission_claimed_at": "2000-01-01T00:00:00+00:00",
+            "upgrade_id": None,
+            "cancellation": {"status": "already_ended"},
+        }
+    )
+    record["children"] = [child]
+    record["state"] = "submission_claimed"
+    record["submission_claimed_at"] = "2000-01-01T00:00:00+00:00"
+    store = CasStore(record)
+    service.status(SAFE_SESSION, record, store)
+    assert store.record == record
+    reloaded = json.loads(json.dumps(store.record))
+    child = reloaded["children"][0]
+    assert child["status"] == "submission_unknown"
+    assert child["cancellation"] == {"status": "already_ended"}
+    row = OrgCancelOutcomes.rows(reloaded)[0]
+    assert row["status"] == "unknown"
+    assert row["ended"] is False
+    assert row["already_writing"] == child["target_ids"]
+    assert org_upgrade._operation_is_settled(reloaded) is False
+    assert org.calls == []
+    assert devices.calls == []
+    with pytest.raises(ValueError, match="no untouched child"):
+        service.submit(SAFE_SESSION, record, store, permit_lock)
 
 
 def test_mixed_status_and_cancellation_keep_all_results() -> None:
