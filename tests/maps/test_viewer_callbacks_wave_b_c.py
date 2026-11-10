@@ -21,6 +21,7 @@ import importlib.machinery
 import sys
 import types
 from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any
 
 import pytest
@@ -45,27 +46,55 @@ def _build_dash_stub() -> types.ModuleType:
     return dash_stub
 
 
-sys.modules["dash"] = _build_dash_stub()  # Install before launcher imports run
+_DASH_MODULE_MISSING = types.ModuleType("_dash_module_missing")  # Sentinel preserves an absent module
 
-from src.interfaces.visualization.maps.launcher import MapViewerCallbacks, MapViewerState  # noqa: E402
+
+@contextmanager
+def _dash_stub_context() -> Iterator[types.ModuleType]:
+    """Provide Dash temporarily without changing the caller's module state."""
+    original = sys.modules.get("dash", _DASH_MODULE_MISSING)  # Keep the exact pre-import state
+    stub = _build_dash_stub()  # Supply the dependency used by the launcher
+    sys.modules["dash"] = stub  # Let the launcher import the synthetic dependency
+    try:  # Keep restoration active if the launcher import fails
+        yield stub  # Expose the synthetic module to the launcher import
+    finally:  # Restore the caller's state after the import
+        if original is _DASH_MODULE_MISSING:  # Preserve an initially absent Dash module
+            sys.modules.pop("dash", None)  # Keep Dash absent after the import
+        else:
+            sys.modules["dash"] = original  # Preserve an already-loaded Dash module
+
+
+with _dash_stub_context():  # Scope the import-only dependency replacement
+    from src.interfaces.visualization.maps.launcher import MapViewerCallbacks, MapViewerState
 
 
 @pytest.fixture(autouse=True)
 def _dash_stub() -> Iterator[types.ModuleType]:
-    """Per-test: install fresh stub, restore original on teardown.
+    """Yield a fresh stub and restore the caller's module state after each test."""
+    with _dash_stub_context() as stub:  # Apply the same restoration rule used during collection
+        yield stub  # Let each test control callback context state
 
-    Yields the active stub so tests can mutate ``callback_context.triggered``.
-    """
-    original = sys.modules.get("dash")  # Snapshot for restoration
-    stub = _build_dash_stub()  # Fresh stub for this test
-    sys.modules["dash"] = stub
-    try:
-        yield stub
-    finally:
-        if original is None:
-            sys.modules.pop("dash", None)
-        else:
-            sys.modules["dash"] = original
+
+@pytest.mark.parametrize("initial_dash_loaded", [True, False], ids=["loaded", "absent"])
+def test_temporary_dash_stub_restores_original_module(
+    initial_dash_loaded: bool,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Restore both supported Dash states after a synthetic import."""
+    if initial_dash_loaded:  # Test restoration of an existing module
+        original = types.ModuleType("original_dash")  # Represent a preloaded Dash module
+        monkeypatch.setitem(sys.modules, "dash", original)  # Simulate the preloaded module
+    else:
+        original = _DASH_MODULE_MISSING  # Represent an absent Dash module
+        monkeypatch.delitem(sys.modules, "dash", raising=False)  # Simulate an absent module
+
+    with _dash_stub_context() as stub:  # Simulate the import-time dependency
+        assert sys.modules["dash"] is stub  # Confirm the synthetic module is active
+
+    if original is _DASH_MODULE_MISSING:  # Check the initially absent state
+        assert "dash" not in sys.modules  # Confirm the stub was removed
+    else:
+        assert sys.modules["dash"] is original  # Confirm the original module was restored
 
 
 class _FakeCallbackManager:
