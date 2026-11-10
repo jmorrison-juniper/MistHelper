@@ -161,7 +161,7 @@ def test_register_with_wires_five_wave_a_callbacks() -> None:
     assert len(app.registered) >= 5
     # Each registration must have a bound method (decorator was invoked)
     for record in app.registered:
-        assert record.bound_func is not None  # Decorator was applied
+        assert callable(record.bound_func)  # The callback decorator must bind an executable handler.
     # The wave-A method names must all be present in the registered set
     bound_names = {record.bound_func.__name__ for record in app.registered}
     wave_a_names = {
