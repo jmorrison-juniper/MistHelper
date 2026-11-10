@@ -20,7 +20,7 @@ import importlib.machinery
 import sys
 import types
 from collections.abc import Iterator
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -43,24 +43,96 @@ def _build_dash_stub() -> types.ModuleType:
     return dash_stub
 
 
-sys.modules["dash"] = _build_dash_stub()  # Install before launcher imports run
+_MISSING_DASH_MODULE = object()  # Distinguish an absent module from a loaded module
 
-from src.interfaces.visualization.maps.launcher import MapViewerCallbacks, MapViewerState  # noqa: E402
+
+def _restore_dash_module(original_dash: object) -> None:
+    """Restore the exact Dash module state that existed before a synthetic replacement."""
+    if original_dash is _MISSING_DASH_MODULE:
+        sys.modules.pop("dash", None)  # Preserve the initially absent module state
+    else:
+        sys.modules["dash"] = cast(types.ModuleType, original_dash)  # Retain the original value, including None
+
+
+def _load_map_viewer() -> tuple[type, type]:
+    """Load the map viewer with a synthetic Dash module and restore process state."""
+    original_dash = sys.modules.get("dash", _MISSING_DASH_MODULE)  # Preserve the exact prior entry
+    sys.modules["dash"] = _build_dash_stub()  # Supply Dash names while importing the launcher
+    try:
+        from src.interfaces.visualization.maps.launcher import (
+            MapViewerCallbacks,
+            MapViewerState,
+        )
+
+        return MapViewerCallbacks, MapViewerState
+    finally:
+        _restore_dash_module(original_dash)  # Restore process state even when import fails
+
+
+MapViewerCallbacks, MapViewerState = _load_map_viewer()  # Load callbacks without leaking the synthetic Dash module
 
 
 @pytest.fixture(autouse=True)
 def _dash_stub() -> Iterator[types.ModuleType]:
     """Per-test: install fresh stub, restore original on teardown."""
-    original = sys.modules.get("dash")  # Snapshot for restoration
+    original = sys.modules.get("dash", _MISSING_DASH_MODULE)  # Snapshot presence and value
     stub = _build_dash_stub()  # Fresh stub for this test
     sys.modules["dash"] = stub
     try:
         yield stub
     finally:
-        if original is None:
-            sys.modules.pop("dash", None)
-        else:
-            sys.modules["dash"] = original
+        _restore_dash_module(original)  # Restore the state from this test's setup
+
+
+def test_restore_dash_module_restores_loaded_module(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep an existing Dash module after a temporary replacement."""
+    original = _build_dash_stub()  # Use a synthetic module without importing Dash
+    monkeypatch.setitem(sys.modules, "dash", _build_dash_stub())  # Install a temporary replacement
+
+    _restore_dash_module(original)
+
+    assert sys.modules["dash"] is original
+
+
+def test_restore_dash_module_removes_temporary_module_when_initially_absent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Remove a synthetic Dash module when no module existed before collection."""
+    monkeypatch.setitem(sys.modules, "dash", _build_dash_stub())  # Simulate the collection-time stub
+
+    _restore_dash_module(_MISSING_DASH_MODULE)
+
+    assert "dash" not in sys.modules
+
+
+def test_restore_dash_module_preserves_present_none_entry(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep a present None entry instead of treating it as an absent module."""
+    monkeypatch.setitem(sys.modules, "dash", _build_dash_stub())  # Install a temporary replacement
+
+    _restore_dash_module(None)
+
+    assert "dash" in sys.modules
+    assert sys.modules["dash"] is None
+
+
+def test_load_map_viewer_restores_dash_when_launcher_import_fails(
+    monkeypatch: pytest.MonkeyPatch,
+    _dash_stub: types.ModuleType,
+) -> None:
+    """Restore the active Dash entry after the launcher import raises."""
+    original_import = __import__  # Preserve Python import behavior outside the simulated failure
+
+    def fail_launcher_import(name: str, *args: Any, **kwargs: Any) -> Any:
+        if name == "src.interfaces.visualization.maps.launcher":
+            raise ImportError("synthetic launcher import failure")
+        return original_import(name, *args, **kwargs)
+
+    monkeypatch.setattr("builtins.__import__", fail_launcher_import)  # Fail only the launcher import
+
+    with pytest.raises(ImportError, match="synthetic launcher import failure"):
+        _load_map_viewer()
+
+    assert sys.modules["dash"] is _dash_stub
 
 
 class _FakeCallbackManager:
