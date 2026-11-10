@@ -38,6 +38,8 @@ The shared rule consumes the raw HTTP status and existing submission fields. It 
 - Invalid new responses store empty progress data. Legacy bodies without progress proof remain unverified.
 - A valid subsequent status read establishes its own progress proof without changing submission proof.
 - Preserve verified reconciliation counts, nested target precedence, public fields, and all settlement decisions.
+- Validate root organization target arrays with the same rules as nested site arrays before progress proof becomes valid.
+- A stored `already_ended` cancellation cannot hide an uncertain or active child. Display unknown cancellation and every target as potentially writing.
 
 ## Status evidence
 

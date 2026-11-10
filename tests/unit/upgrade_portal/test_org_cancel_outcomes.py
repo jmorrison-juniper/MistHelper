@@ -120,10 +120,13 @@ def test_an_ended_result_with_a_damaged_list_still_lists_no_device() -> None:
 
 
 @pytest.mark.parametrize("upgrade_id", [None, "known-job"])
-def test_a_conflicting_rejected_child_does_not_show_a_stale_ended_result(upgrade_id: str | None) -> None:
-    """A retained job identity keeps a legacy rejected child visible as uncertain."""
+@pytest.mark.parametrize(
+    "status", ["rejected", "submission_unknown", "unknown", "read_unknown", "submission_claimed", "running"]
+)
+def test_an_unsettled_child_does_not_show_a_stale_ended_result(upgrade_id: str | None, status: str) -> None:
+    """Unsettled child evidence overrides a stale ended result with or without a job identity."""
     stale_result = ended_result()  # Preserve the earlier cancellation result.
-    stored_child = child("child-1", "rejected", stale_result, raw_status=400, upgrade_id=upgrade_id)
+    stored_child = child("child-1", status, stale_result, raw_status=400, upgrade_id=upgrade_id)
 
     row = only_row(record(stored_child))
 

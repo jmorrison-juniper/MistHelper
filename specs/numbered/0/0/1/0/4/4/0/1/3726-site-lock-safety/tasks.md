@@ -32,6 +32,7 @@
 - [X] T002c [US1] Test invalid organization target lists, persisted missing or false progress proof, and valid later status reads through real normalizers.
 - [X] T002d [US1] Require progress counts, device states, and version-read eligibility to agree after reload for upgraded and failed targets.
 - [X] T002e [US1] Exercise installed SDK response parsing for empty HTTP 400 bodies through both aggregate routes. Preserve explicit JSON objects and empty cancellation responses.
+- [X] T002f [US1] Reproduce malformed root organization target arrays through SDK normalization and aggregate counts. Apply the nested target validation rules at the root.
 - [X] T003 [P] [US1] Add lock-retention tests for ambiguous replies and conflicting legacy rejected records, and prove that a known not-submitted child can settle, in `tests/unit/upgrade_portal/test_org_upgrade_lock_release.py`.
 - [X] T004 [P] [US1] Test that a returned HTTP 503 keeps the uncertainty marker and blocks a repeated submission in `tests/contract/upgrade_portal/test_org_upgrade_routes.py`.
 
@@ -50,6 +51,7 @@
 ### Tests for User Story 2
 
 - [X] T008 [P] [US2] Update cancellation outcome tests for documented refusal statuses, 429, undocumented statuses, and conflicting legacy evidence in `tests/unit/upgrade_portal/test_org_cancel_outcomes.py`.
+- [X] T008a [US2] Test stored uncertain children with stale ended cancellation data through HTML, JSON, and stale-claim recovery. Preserve settlement, retry barriers, and cloud identity rules.
 
 ### Implementation for User Story 2
 

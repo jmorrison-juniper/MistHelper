@@ -23,6 +23,7 @@ from src.foundation.support.submission_certainty import (  # Keep the shared rul
 )
 from src.operations.execution.firmware.aggregate_upgrade_service import (
     ENDED_CHILD_STATUS,
+    FINAL_CHILD_STATES as _FINAL_CHILD_STATES,
 )  # Issue #3367: the ended result word.
 
 logger = logging.getLogger(__name__)  # Use the module logger without secret fields.
@@ -93,13 +94,15 @@ class OrgCancelLists:
 
     @classmethod
     def _ended_result_conflicts(cls, child: Mapping[str, Any], claimed: bool) -> bool:
-        """Return whether an ended cancel record conflicts with a rejected child."""
+        """Return whether an ended cancel record lacks a proven final child state."""
         cancellation = child.get("cancellation")  # Read the stored cancellation evidence.
         return (  # Keep a stale ended result from hiding an uncertain firmware job.
             isinstance(cancellation, Mapping)  # Require a usable cancellation record.
             and cancellation.get("status") == ENDED_CHILD_STATUS  # Check only the early-ended result.
-            and child.get("status") == "rejected"  # A rejected child can conflict with that result.
-            and not cls._never_started(child, claimed)  # Require proof before treating the child as settled.
+            and not (  # A stale result cannot override a current uncertain or active child.
+                child.get("status") in _FINAL_CHILD_STATES  # Require the same final states as cancellation.
+                and (child.get("status") != "rejected" or cls._never_started(child, claimed))
+            )
         )
 
     @staticmethod
