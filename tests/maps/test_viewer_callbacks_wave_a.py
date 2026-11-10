@@ -15,6 +15,7 @@ import importlib.machinery
 import sys
 import types
 from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any
 
 import pytest
@@ -37,27 +38,56 @@ def _build_dash_stub() -> types.ModuleType:
     return dash_stub  # Caller installs into sys.modules
 
 
-# Install once at module import so the launcher import below can resolve
-# ``from dash import ...`` lazily inside register_with. The autouse fixture
-# below replaces and restores per-test to avoid leaking the stub into other
-# test modules (which probe dash via importlib.util.find_spec).
-sys.modules["dash"] = _build_dash_stub()
+class _AbsentDashModule:
+    """Mark that ``dash`` was absent before the test imported its launcher."""
 
-from src.interfaces.visualization.maps.launcher import MapViewerCallbacks, MapViewerState  # noqa: E402
+
+_ABSENT_DASH_MODULE = _AbsentDashModule()  # Distinguish an absent key from a module to restore.
+
+
+@contextmanager
+def _dash_stub_context() -> Iterator[types.ModuleType]:
+    """Install a Dash stub while preserving the prior module state."""
+    original = sys.modules.get("dash", _ABSENT_DASH_MODULE)  # Keep the exact pre-import state.
+    dash_stub = _build_dash_stub()  # Give the launcher its required import names.
+    sys.modules["dash"] = dash_stub  # Make the stub available to the lazy launcher import.
+    try:
+        yield dash_stub  # Keep the stub active for the caller's import or test.
+    finally:
+        if original is _ABSENT_DASH_MODULE:  # Keep an initially absent key absent.
+            sys.modules.pop("dash", None)  # Remove only the stub installed here.
+        else:
+            sys.modules["dash"] = original  # Restore the exact module that existed before.
+
+
+# The launcher imports Dash lazily, so collection needs the stub only during this import.
+with _dash_stub_context():
+    from src.interfaces.visualization.maps.launcher import MapViewerCallbacks, MapViewerState
 
 
 @pytest.fixture(autouse=True)
-def _dash_stub() -> Iterator[None]:
-    """Per-test: install fresh stub, restore original on teardown."""
-    original = sys.modules.get("dash")  # Snapshot for restoration
-    sys.modules["dash"] = _build_dash_stub()  # Fresh stub for this test
-    try:
-        yield  # Test executes here
-    finally:
-        if original is None:
-            sys.modules.pop("dash", None)  # Remove our stub entirely
-        else:
-            sys.modules["dash"] = original  # Restore whatever was there before
+def _dash_stub() -> Iterator[types.ModuleType]:
+    """Install a fresh Dash stub for each test, then restore the prior state."""
+    with _dash_stub_context() as dash_stub:
+        yield dash_stub  # Give behavior tests the exact stub module under test.
+
+
+@pytest.mark.parametrize("dash_initially_loaded", [True, False])
+def test_dash_stub_context_restores_initial_state(dash_initially_loaded: bool, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Restore the prior Dash module or preserve its absence."""
+    original = types.ModuleType("dash")  # Provide a distinct module for the identity check.
+    if dash_initially_loaded:
+        monkeypatch.setitem(sys.modules, "dash", original)  # Simulate a previously imported module.
+    else:
+        monkeypatch.delitem(sys.modules, "dash", raising=False)  # Simulate no prior import.
+
+    with _dash_stub_context() as dash_stub:
+        assert sys.modules["dash"] is dash_stub  # Confirm the context installs its own stub.
+
+    if dash_initially_loaded:
+        assert sys.modules["dash"] is original  # Preserve the exact pre-existing module.
+    else:
+        assert "dash" not in sys.modules  # Do not leave a stub after an absent import.
 
 
 class _FakeCallbackManager:
@@ -166,7 +196,7 @@ def test_register_with_prevents_initial_call_on_three_callbacks() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_display_click_data_delegates_to_callback_manager() -> None:
+def test_display_click_data_delegates_to_callback_manager(_dash_stub: types.ModuleType) -> None:
     """display_click_data passes clickData plus the dash.html module."""
     manager = _FakeCallbackManager()  # Records the call
     callbacks = MapViewerCallbacks(state=MapViewerState(callback_manager=manager))
@@ -178,7 +208,7 @@ def test_display_click_data_delegates_to_callback_manager() -> None:
     assert len(manager.click_calls) == 1  # Called exactly once
     captured = manager.click_calls[0]  # Inspect captured kwargs
     assert captured["click_data"] is click  # Same dict forwarded
-    assert captured["html"] is not None  # dash.html module forwarded
+    assert captured["html"] is _dash_stub.__dict__["html"]  # The active Dash HTML object is forwarded.
 
 
 @pytest.mark.parametrize(
