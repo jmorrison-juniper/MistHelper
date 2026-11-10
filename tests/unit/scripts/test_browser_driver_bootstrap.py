@@ -202,6 +202,21 @@ def test_main_stops_before_sweep_when_python_is_too_old(monkeypatch: pytest.Monk
     assert sweep.call_count == 0  # Reject before the bootstrap removes stale files.
 
 
+def test_main_reads_system_arguments_when_argv_is_none(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The command reads process arguments when the caller supplies None."""
+    logger.info("Checking the default command-line input.")  # Trace before replacing process arguments.
+    monkeypatch.setattr("scripts.bootstrap_worktree.sys.argv", ["bootstrap_worktree.py"])  # Supply no options.
+    version_check = Mock(return_value=False)  # Stop before environment changes.
+    sweep = Mock()  # Detect cleanup that would change the worktree.
+    monkeypatch.setattr("scripts.bootstrap_worktree.WorktreeBootstrapper.check_python_version", version_check)
+    monkeypatch.setattr("scripts.bootstrap_worktree.StaleSourceSweeper.sweep", sweep)
+    result = main(None)  # Exercise the optional argument through the public entry point.
+    logger.debug("The bootstrap returned code %s.", result)  # Report the command result.
+
+    assert result == 1, "the mocked interpreter check must stop the bootstrap"
+    assert sweep.call_count == 0, "the bootstrap must stop before cleanup"
+
+
 def _completed(code: int) -> object:
     """Build a stand-in that answers one return code, like a finished subprocess."""
     logger.debug("Building a stand-in process result with code %d", code)  # Record the build.

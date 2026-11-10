@@ -573,7 +573,8 @@ class TestMenuText:
         ), "the menu must contain the expected number of entries"  # Detect missing or duplicate menu rows.
         if path == "MistHelper.py":  # Use source text because AST display format changes between Python releases.
             source_segment = ast.get_source_segment(normalized_body, definition)  # Read the exact normalized block.
-            assert source_segment is not None, "the parser must retain the menu source segment"
+            if source_segment is None:  # Fail if the parser cannot locate the checked source.
+                pytest.fail("the parser must retain the menu source segment")
             payload = source_segment.encode()  # Hash source bytes without Python-version-specific AST rendering.
         else:  # Keep the existing portal-data normalization unchanged.
             values = ast.literal_eval(definition)  # Convert the portal table to plain data before hashing.
