@@ -11,6 +11,8 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from mistapi.__api_response import APIResponse
+from requests import Response
 
 from src.interfaces.portals.upgrade_portal.app.routes import org_upgrade
 from src.interfaces.portals.upgrade_portal.upgrade.org_cancel_outcomes import OrgCancelOutcomes
@@ -278,6 +280,8 @@ def test_partial_submission_keeps_each_child_and_blocks_replay() -> None:
             id="unretained-error-body-list",
         ),
         pytest.param({}, "{", 400, "submission_unknown", id="malformed-error-body-json"),
+        pytest.param({}, "", 400, "submission_unknown", id="empty-body-sdk-default"),
+        pytest.param({}, None, 400, "submission_unknown", id="missing-raw-body-sdk-default"),
         pytest.param(
             {},
             '{"id":"job-one","targets":{"upgraded":["001122334455"]}}',
@@ -298,7 +302,7 @@ def test_partial_submission_keeps_each_child_and_blocks_replay() -> None:
 def test_real_org_normalizer_keeps_unretained_refusal_body_uncertain(
     monkeypatch: pytest.MonkeyPatch,
     response_data: object,
-    raw_data: str,
+    raw_data: object,
     status_code: int,
     expected_status: str,
 ) -> None:
@@ -563,6 +567,8 @@ def test_invalid_real_org_status_read_cannot_replace_progress_with_targets(
             id="raw-body-evidence-not-retained",
         ),
         pytest.param(400, None, "", "submission_unknown", id="missing-error-body"),
+        pytest.param(400, {}, "", "submission_unknown", id="empty-body-sdk-default"),
+        pytest.param(400, {}, None, "submission_unknown", id="missing-raw-body-sdk-default"),
         pytest.param(400, {1: "invalid key"}, "", "submission_unknown", id="non-string-body-key"),
         pytest.param(400, {}, "[]", "submission_unknown", id="raw-body-list"),
         pytest.param(400, {}, b"{}", "submission_unknown", id="raw-body-not-text"),
@@ -636,6 +642,60 @@ def test_real_device_normalizer_keeps_conflicting_refusal_and_429_uncertain(
         with pytest.raises(ValueError, match="no untouched child"):
             service.submit(SAFE_SESSION, record, CasStore(record), permit_lock)
         assert calls == ["upgradeSiteDevices"]  # An uncertain reply must not send another firmware request.
+
+
+@pytest.mark.parametrize("family", ["ap", "switch"])
+@pytest.mark.parametrize("body", [b"", b"{}", b" \n"])
+def test_sdk_empty_body_cannot_prove_aggregate_refusal(
+    monkeypatch: pytest.MonkeyPatch, family: str, body: bytes
+) -> None:
+    """The installed SDK's empty parse result must not prove a cloud refusal."""
+    response = Response()
+    response.status_code = 400
+    response._content = body
+    sdk_response = APIResponse(response, "/offline/upgrade")
+    assert sdk_response.data == {}
+    assert sdk_response.raw_data == body.decode()
+    monkeypatch.setattr(org_upgrade_service.org_devices, "upgradeOrgDevices", lambda *args, **kwargs: sdk_response)
+    monkeypatch.setattr(upgrade_service, "_resolve_endpoint", lambda _: lambda *args, **kwargs: sdk_response)
+    devices = DeviceServiceStandIn()
+    monkeypatch.setattr(devices, "invoke_upgrade", upgrade_service.invoke_upgrade)
+    service = AggregateUpgradeService(OrgUpgradeService, devices)
+    request = AggregateBuildInput(
+        "owner",
+        ORG_ID,
+        ({"site_id": SITE_ONE, "name": "One"},),
+        (target("001122334466", family, "AP45" if family == "ap" else "EX4400", SITE_ONE, "0.15.1"),),
+        UpgradeOptions(),
+        "nonce",
+    )
+    record = service.build(request)
+    store = CasStore(record)
+    service.submit(SAFE_SESSION, record, store, permit_lock)
+    assert store.record == record
+    record = json.loads(json.dumps(store.record))
+    child = record["children"][0]
+    verified = body == b"{}"
+    assert child["status"] == ("rejected" if verified else "submission_unknown")
+    assert child["response_data_valid"] is verified
+    assert org_upgrade._operation_is_settled(record) is verified
+    child["cancellation"] = {"status": "unavailable"}
+    row = OrgCancelOutcomes.rows(record)[0]
+    assert row["already_writing"] == ([] if verified else ["001122334466"])
+
+
+@pytest.mark.parametrize("body", [b"", b"{}"])
+def test_sdk_empty_cancellation_remains_valid(monkeypatch: pytest.MonkeyPatch, body: bytes) -> None:
+    """An empty cancellation response retains the known job without proving a device stopped."""
+    response = Response()
+    response.status_code = 200
+    response._content = body
+    sdk_response = APIResponse(response, "/offline/cancel")
+    monkeypatch.setattr(org_upgrade_service.org_devices, "cancelOrgDeviceUpgrade", lambda *args: sdk_response)
+    result = OrgUpgradeService.cancel(SAFE_SESSION, ORG_ID, SITE_ONE)
+    assert result.error is None
+    assert result.upgrade_id == SITE_ONE
+    assert result.data == {}
 
 
 def test_mixed_status_and_cancellation_keep_all_results() -> None:

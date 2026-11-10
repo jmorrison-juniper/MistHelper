@@ -25,6 +25,8 @@ The shared rule consumes the raw HTTP status and existing submission fields. It 
 - Cancellation reporting calls the same refusal predicate before claiming that no cloud job exists.
 - A prior `rejected` record remains uncertain when its status is undocumented or its saved response names a job or accepted target.
 - A discarded or malformed response body cannot prove a refusal.
+- An empty decoded object without raw JSON cannot prove refusal. The SDK can retain that default after JSON parsing fails.
+- A retained `{}` JSON body remains valid. An empty cancellation response keeps its separate existing behavior.
 - Device and organization normalizers use the same body check before a refusal can settle.
 - Each new child stores `response_data_valid`. Only exact `true` proves that its response body passed the normalizer check.
 - A legacy rejected child without this proof remains uncertain after reload, even with a documented refusal status.
