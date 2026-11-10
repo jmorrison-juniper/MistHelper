@@ -164,8 +164,6 @@ keyring==25.7.0
     #   misthelper
 kiwisolver==1.5.1
     # via matplotlib
-lazy-importer==0.1.0 ; python_full_version < '3.15'
-    # via importlib-metadata
 libcst==1.9.0
     # via
     #   misthelper
@@ -365,8 +363,6 @@ pyyaml==6.0.3
     #   podman-compose
     #   pre-commit
     #   yaml-config
-pyyaml-ft==8.0.0 ; python_full_version < '3.14'
-    # via libcst
 radon==6.0.1
     # via misthelper
 rapidfuzz==3.14.6
@@ -452,7 +448,6 @@ types-tqdm==4.70.0.20260906
     # via misthelper
 typing-extensions==4.16.0
     # via
-    #   anyio
     #   dash
     #   mypy
     #   openai

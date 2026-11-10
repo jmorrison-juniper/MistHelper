@@ -832,7 +832,7 @@ class E911BSSIDReportGenerator:  # WHY: static-method namespace for the Menu 160
         org_data: dict[str, Any],
         site_state: dict[str, Any],
         total_sites: int,
-    ) -> "SiteBatchContext":
+    ) -> SiteBatchContext:  # Return the typed bundle for each site batch.
         """Construct the ``SiteBatchContext`` handed to per-site helpers.
 
         WHY: extracted so `_process_sites` stays ≤25 lines.

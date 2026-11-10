@@ -43,7 +43,7 @@ class SourceConfiguration:
     kind: str
 
     @classmethod
-    def read(cls, filename: str, content: bytes, name: str, kind: str) -> "SourceConfiguration":
+    def read(cls, filename: str, content: bytes, name: str, kind: str) -> SourceConfiguration:  # Return the type.
         """Reject unsafe input before constructing a source value."""
         cls._filename(filename)
         if not name.strip() or len(name) > 120 or any(ord(character) < 32 for character in name):

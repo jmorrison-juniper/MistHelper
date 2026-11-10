@@ -71,7 +71,7 @@ A maintainer uses the supported Python version for CI, release builds, and produ
 - **FR-007**: The standard startup check MUST confirm that MistHelper starts in a fresh Python 3.15 environment.
 - **FR-008**: Cleanup MUST remove each `.venv` directory in a registered MistHelper worktree only after it confirms that no process uses it.
 - **FR-009**: Cleanup MUST NOT remove virtual environments outside registered MistHelper worktrees.
-- **FR-010**: The lock MUST resolve `importlib-metadata` 10.2.0, `openai` 3.49.0, and `pypdfium2` 5.15.2. Both exports MUST come from the lock, and the runtime export MUST preserve all 11 original platform markers.
+- **FR-010**: The lock MUST resolve `importlib-metadata` 10.2.0, `openai` 3.48.0, and `pypdfium2` 5.15.2. Both exports MUST come from the lock, and the runtime export MUST preserve all 11 original platform markers.
 - **FR-011**: After merge, the release process MUST verify the image revision and deployment health.
 
 ## Success Criteria

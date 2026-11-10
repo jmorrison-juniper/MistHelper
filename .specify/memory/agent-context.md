@@ -3,7 +3,7 @@
 Auto-generated from all feature plans. Last updated: 2026-07-14
 
 ## Active Technologies
-- Python 3.13+ (per pyproject.toml `requires-python = ">=3.13"`) + mistapi >= 0.59.0 (Mist API SDK), python-dotenv >= 1.0.0 (001-radius-wlan-config)
+- Python 3.15+ (per pyproject.toml `requires-python = ">=3.15"`) + mistapi >= 0.59.0 (Mist API SDK), python-dotenv >= 1.0.0 (001-radius-wlan-config)
 - CSV export to `data/` directory for audit trail (001-radius-wlan-config)
 - Python 3.13+ + mistapi >= 0.59.0 (002-bulk-radius-enhance)
 - CSV audit trail in `data/` directory (002-bulk-radius-enhance)

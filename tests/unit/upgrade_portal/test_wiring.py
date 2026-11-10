@@ -505,7 +505,7 @@ class _BindableLock:
         """
         self.run_id = run_id  # The field that the heartbeat reads before it renews.
 
-    def bound_to_run(self, run_id: str) -> "_BindableLock":
+    def bound_to_run(self, run_id: str) -> _BindableLock:  # Return a lock that names the selected run.
         """Return a copy that names one run.
 
         Args:

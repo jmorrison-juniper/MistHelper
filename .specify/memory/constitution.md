@@ -275,7 +275,7 @@ Code without logging is code without observability.
 
 The following technology choices are binding for all MistHelper code:
 
-- **Python**: 3.13 or newer. No code may target older Python versions.
+- **Python**: 3.15 or newer. No code may target older Python versions.
 - **mistapi**: 0.59+ (Thomas Munzer's Mist API SDK). This is the sole
   interface for Juniper Mist Cloud REST APIs. Code MUST NOT send direct
   HTTP requests to a Mist REST endpoint when a working mistapi method exists.

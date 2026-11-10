@@ -38,7 +38,7 @@ class RefreshStore:
         self.client = client  # Use the caller-selected store.
 
     @classmethod
-    def connect(cls, config: DatabaseConfig) -> "RefreshStore":
+    def connect(cls, config: DatabaseConfig) -> RefreshStore:  # Return the configured snapshot store.
         """Connect to the configured Redis service with finite waits."""
         if config.standalone_mode:  # Standalone mode has no shared refresh lock.
             raise ConnectionError("WAN refresh is unavailable without shared Redis.")  # Fail closed.

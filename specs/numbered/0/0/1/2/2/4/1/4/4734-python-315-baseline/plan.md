@@ -23,7 +23,7 @@ Set Python 3.15 as the minimum for both Python projects. Align package metadata,
 **Project Type**: Python command-line tool and separately configured service package
 
 **Performance Goals**: No performance change
-**Constraints**: Preserve dependency markers and open pull request ownership. Remove pre-existing registered worktree `.venv` directories only after an active-process check. Keep Python 3.15 as the minimum across both packages. Deploy only after explicit approval.
+**Constraints**: Preserve dependency markers and unrelated changes in open pull requests. Remove registered worktree `.venv` directories only after an active-process check. Deploy only after explicit approval.
 **Scale/Scope**: Two package roots, setup and support documentation, CI and release workflows, container images, and related guards
 
 ## Constitution Check
@@ -31,8 +31,8 @@ Set Python 3.15 as the minimum for both Python projects. Align package metadata,
 - **Structure**: Pass. The feature adds one managed numeric specification. It adds no product package or module.
 - **Support policy**: Pass. The Python baseline changes to 3.15 in both package roots.
 - **Environment safety**: Pass. Remove pre-existing registered worktree `.venv` directories only after confirming that no process uses them. Preserve environments outside registered MistHelper worktrees.
-- **Dependency safety**: Open pull request ownership was rechecked. Pull request #4322 owns `documentation/development-setup.md`, #4358 owns `pyproject.toml`, #4617 and #4208 own `.github/workflows/ci.yml`, and #4668 owns `.github/workflows/container-build.yml` and `.github/workflows/release.yml`. Pull request #4676 merged and #4678 closed, so rebase onto current `main` before editing the dependency exports. Recheck ownership before each shared-file edit.
-- **Export integrity**: Pass. Resolve `importlib-metadata` 10.2.0, `openai` 3.49.0, and `pypdfium2` 5.15.2 from issue #4727. Generate both exports from the lock and preserve all 11 runtime platform markers.
+- **Dependency safety**: Pass. The user authorized Python-version edits in files held by open pull requests. The branch preserves unrelated changes and is rebased on current `main`.
+- **Export integrity**: Pass. The lock resolves `importlib-metadata` 10.2.0, `openai` 3.48.0, and `pypdfium2` 5.15.2. Both exports come from the lock and preserve all 11 runtime platform markers.
 - **API and data safety**: Pass. The change adds no Mist API calls, data writes, schema changes, or destructive product operation.
 - **Required documentation**: Pass. Update support and setup references. Add a release-note fragment for issue #4734.
 - **Merge safety**: Pass. Use a pull request and required checks. Do not bypass branch protection.

@@ -117,6 +117,22 @@ class TestTheWorkflowsBuildAKnownFile:
         for value in named:
             assert Path(value).name in {DOCKERFILE.name, CONTAINERFILE.name}
 
+    @pytest.mark.parametrize("workflow", BUILD_WORKFLOWS)
+    def test_workflow_uses_python_315(self, workflow: str) -> None:
+        """Each build workflow must prepare its artifacts with supported Python."""
+        logger.info("Checking Python setup steps in %s", workflow)  # Identify the workflow before reading it.
+        path = WORKFLOW_DIR / workflow  # Resolve the selected workflow within the repository.
+        document = yaml.safe_load(path.read_text(encoding="utf-8"))  # Read the parsed workflow configuration.
+        versions: list[str | None] = []  # Store the selected interpreter for every setup step.
+        for job in document["jobs"].values():  # Inspect each job because builds may have separate stages.
+            for step in job.get("steps", []):  # Inspect each step because setup can occur more than once.
+                if step.get("uses", "").startswith("actions/setup-python@"):  # Ignore steps that do not select Python.
+                    versions.append(step.get("with", {}).get("python-version"))  # Record the version that the job uses.
+        logger.debug("Found %d Python setup steps in %s", len(versions), workflow)  # Report the inspected step count.
+        assert versions and set(versions) == {
+            "3.15"
+        }, f"{workflow} must use Python 3.15."  # Reject old or absent setup.
+
 
 def _collect_build_file_values(node) -> list[str]:
     """Return every `file:` value that names a build description."""

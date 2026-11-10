@@ -110,8 +110,6 @@ keyring==25.7.0
     #   misthelper
 kiwisolver==1.5.1
     # via matplotlib
-lazy-importer==0.1.0 ; python_full_version < '3.15'
-    # via importlib-metadata
 logistro==2.0.1
     # via
     #   choreographer
@@ -262,7 +260,6 @@ truststore==0.10.5 ; sys_platform != 'emscripten'
     #   httpx2
 typing-extensions==4.16.0
     # via
-    #   anyio
     #   dash
     #   openai
     #   pydantic
