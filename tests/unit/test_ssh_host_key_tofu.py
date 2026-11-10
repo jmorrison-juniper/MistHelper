@@ -56,9 +56,7 @@ class TestSshConnectorTrustOnFirstUse(unittest.TestCase):
 
         self.connector._trust_host_on_first_use(fake_client, "switch1", 22)  # T013b: client passed in
 
-        self.assertEqual(
-            {"ssh-rsa": fake_host_key}, fake_client.get_host_keys().lookup("switch1")
-        )  # Exact key name and fetched key got enrolled
+        self.assertEqual({"ssh-rsa": fake_host_key}, fake_client.get_host_keys().lookup("switch1"))  # Verify the key.
         self.assertEqual(fake_client.saved_path, "data/ssh_known_hosts")  # Persisted to managed file
         self.connector._fetch_remote_server_key.assert_called_once_with("switch1", 22)  # Fetched once
 
