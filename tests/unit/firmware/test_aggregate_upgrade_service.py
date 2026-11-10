@@ -11,6 +11,7 @@ from typing import Any
 
 import pytest
 
+from src.operations.execution.firmware import upgrade_service
 from src.operations.execution.firmware.aggregate_upgrade_service import AggregateBuildInput, AggregateUpgradeService
 from src.operations.execution.firmware.org_upgrade_service import OrgUpgradeResult
 from src.operations.execution.firmware.upgrade_service import (
@@ -259,6 +260,53 @@ def test_partial_submission_keeps_each_child_and_blocks_replay() -> None:
     assert len([call for call in devices.calls if call[0] == "submit"]) == 3  # Three non-AP groups ran once.
     with pytest.raises(ValueError, match="no untouched child"):  # The replay barrier rejects another submission.
         service.submit(SAFE_SESSION, record, store, permit_lock)
+
+
+@pytest.mark.parametrize(
+    ("status_code", "response_data"),
+    [
+        pytest.param(400, {"targets": {"upgraded": ["001122334466"]}}, id="refusal-with-accepted-target"),
+        pytest.param(429, {}, id="rate-limit"),
+    ],
+)
+def test_real_device_response_body_keeps_uncertain_submission(
+    monkeypatch: pytest.MonkeyPatch,
+    status_code: int,
+    response_data: dict[str, Any],
+) -> None:
+    """The real normalizer keeps conflicting refusals and rate limits uncertain."""
+    mac = "001122334466"  # Select one switch for the offline request.
+    calls: list[str] = []  # Prove the fake cloud boundary runs once.
+
+    def resolve_endpoint(name: str) -> Any:
+        """Return one local refusal response for the real device normalizer."""
+        calls.append(name)  # Record the endpoint selected by the production planner.
+
+        def endpoint(*args: Any, **kwargs: Any) -> Any:
+            """Return accepted-target evidence with a refusal status."""
+            del args, kwargs  # The endpoint arguments do not affect this response fixture.
+            return SimpleNamespace(status_code=status_code, data=response_data)
+
+        return endpoint
+
+    monkeypatch.setattr(upgrade_service, "_resolve_endpoint", resolve_endpoint)
+    service = AggregateUpgradeService(OrgServiceStandIn())  # Use the real device service and an offline AP stand-in.
+    request = AggregateBuildInput(
+        "owner",
+        ORG_ID,
+        ({"site_id": SITE_ONE, "name": "One"},),
+        (target(mac, "switch", "EX4400", SITE_ONE, "23.4R1.9"),),
+        UpgradeOptions(),
+        "nonce",
+    )
+    record = service.build(request)  # Build the one-child plan without a cloud request.
+
+    service.submit(SAFE_SESSION, record, CasStore(record), permit_lock)  # Exercise the normalizer and aggregate path.
+
+    child = record["children"][0]  # Read the only site child.
+    assert calls == ["upgradeSiteDevices"]  # Keep the test offline and prove one request.
+    assert child["status"] == "submission_unknown"  # Preserve uncertainty for conflicting evidence and rate limits.
+    assert child["raw_status"] == status_code  # Preserve the exact response status.
 
 
 def test_mixed_status_and_cancellation_keep_all_results() -> None:

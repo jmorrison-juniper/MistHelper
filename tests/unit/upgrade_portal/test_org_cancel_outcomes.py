@@ -119,6 +119,22 @@ def test_an_ended_result_with_a_damaged_list_still_lists_no_device() -> None:
     assert (row["cancelled"], row["already_writing"], row["note"]) == ([], [], ENDED_NOTE)
 
 
+def test_a_conflicting_rejected_child_does_not_show_a_stale_ended_result() -> None:
+    """A retained job identity keeps a legacy rejected child visible as uncertain."""
+    stale_result = ended_result()  # Preserve the earlier cancellation result.
+    stored_child = child("child-1", "rejected", stale_result, raw_status=400, upgrade_id="known-job")
+
+    row = only_row(record(stored_child))
+
+    assert (row["status"], row["message"], row["ended"]) == (
+        "unknown",
+        "The stored cancel result conflicts with the submission record.",
+        False,
+    )
+    assert (row["cancelled"], row["already_writing"], row["no_cancel_available"]) == ([], [SWITCH], [])
+    assert row["note"] == UNSORTED_NOTE
+
+
 def test_a_partial_result_puts_every_device_in_the_writing_list() -> None:
     """A result with one list is not trusted, because the portal never guesses the other lists."""
     row = only_row(record(child("child-1", "running", {"status": "requested", "cancelled": [SWITCH]})))
