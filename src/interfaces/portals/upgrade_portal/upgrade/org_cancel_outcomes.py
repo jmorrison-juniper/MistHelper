@@ -99,12 +99,14 @@ class OrgCancelLists:
     def _ended_result_conflicts(cls, child: Mapping[str, Any], claimed: bool) -> bool:
         """Return whether an ended cancel record lacks a proven final child state."""
         cancellation = child.get("cancellation")  # Read the stored cancellation evidence.
+        status = child.get("status")  # A persisted JSON value need not contain a state string.
         return (  # Keep a stale ended result from hiding an uncertain firmware job.
             isinstance(cancellation, Mapping)  # Require a usable cancellation record.
             and cancellation.get("status") == ENDED_CHILD_STATUS  # Check only the early-ended result.
             and not (  # A stale result cannot override a current uncertain or active child.
-                child.get("status") in _FINAL_CHILD_STATES  # Require the same final states as cancellation.
-                and (child.get("status") != "rejected" or cls._never_started(child, claimed))
+                isinstance(status, str)  # Reject arrays and objects before the hash-based state lookup.
+                and status in _FINAL_CHILD_STATES  # Require the same final states as cancellation.
+                and (status != "rejected" or cls._never_started(child, claimed))
             )
         )
 

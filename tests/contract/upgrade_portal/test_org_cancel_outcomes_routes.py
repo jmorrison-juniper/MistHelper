@@ -333,15 +333,18 @@ def test_a_stored_operation_shows_one_section_for_each_cancel_result(harness: Ca
 
 
 @pytest.mark.parametrize("upgrade_id", [None, "ap-job"])
+@pytest.mark.parametrize(
+    "stored_status", ["submission_unknown", [], ["completed"], {}, {"state": "completed"}, None, True, 7]
+)
 def test_stored_uncertain_submission_cannot_show_stale_ended_cancellation(
-    harness: CancelHarness, upgrade_id: str | None
+    harness: CancelHarness, upgrade_id: str | None, stored_status: Any
 ) -> None:
     """Stored uncertainty overrides an ended cancellation without changing the saved record."""
     stored = harness.store.records[harness.operation_id]
     ap = stored["children"][0]
     ap.update(
         {
-            "status": "submission_unknown",
+            "status": stored_status,
             "upgrade_id": upgrade_id,
             "response_data_valid": False,
             "status_data_valid": False,
@@ -371,7 +374,7 @@ def test_stored_uncertain_submission_cannot_show_stale_ended_cancellation(
     assert f"<td>{expected_text}</td>" in page
     assert (summary["route"], summary["status"], summary["error"], summary["id"]) == (
         ap["route"],
-        "submission_unknown",
+        stored_status,
         ap["error"],
         upgrade_id,
     )
