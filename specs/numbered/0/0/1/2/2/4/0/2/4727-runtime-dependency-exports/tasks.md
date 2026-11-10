@@ -66,8 +66,8 @@ No new foundational infrastructure is required. The existing lock and dependency
 - [X] T011 Run the dependency guardrails, lock check, both audits, and STE gate before staging. Record each result for the pull request. (Verified: 20 guardrails passed. The lock check passed. Audits found no known vulnerabilities in inspected packages. Nine Markdown files scored 93 to 100.)
 - [X] T012 Build the explicit feature manifest from `uv.lock`, `requirements.txt`, `requirements-dev.txt`, `changelog.d/issue-4727-runtime-dependency-exports.md`, and the feature directory under `specs/numbered/0/0/1/2/2/4/0/2/4727-runtime-dependency-exports/`. Exclude `.specify/feature.json`. (Verified: the manifest includes 12 files. It excludes `.specify/feature.json`.)
 - [X] T013 Stage only the files in the feature manifest from T012. (Verified: eight explicit manifest paths are staged.)
-- [ ] T014 Commit the staged files with a Conventional Commit subject and the required Co-authored-by trailer.
-- [ ] T015 Rebase the committed feature branch onto current `origin/main`. Re-run all affected local checks after the rebase.
+- [X] T014 Commit the staged files with a Conventional Commit subject and the required Co-authored-by trailer. (Verified: commit `6e195afcf` uses the required subject and trailer.)
+- [X] T015 Rebase the committed feature branch onto current `origin/main`. Re-run all affected local checks after the rebase. (Verified: the branch was current. Twenty guardrails passed. The lock check passed. Audits found no known vulnerabilities in inspected packages. Nine Markdown files passed STE.)
 - [ ] T016 Push the rebased feature branch to its matching remote branch.
 - [ ] T017 Prepare the pull request body from `.github/PULL_REQUEST_TEMPLATE.md`. Include `Closes #4727`, changed files, local check results, and audit limits.
 - [ ] T018 Wait for all required pull request checks and CodeQL to pass on the current pull request commit.
