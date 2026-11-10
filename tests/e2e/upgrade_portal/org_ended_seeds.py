@@ -49,6 +49,8 @@ MIXED_CHILD_IDS = {  # The child job of each device family, with identifiers of 
     "ap": "child-e2e-mixed-ap",
     "switch": "child-e2e-mixed-switch",
 }
+CONFLICTED_OPERATION_ID = "org-run-e2e-conflicted-ended-0001"
+CONFLICTED_CHILD_ID = "child-e2e-conflicted-ended-ap"
 SEEDED_OPERATIONS = (  # Each operation and its child job identifiers.
     (ENDED_OPERATION_ID, ENDED_CHILD_IDS),
     (MIXED_OPERATION_ID, MIXED_CHILD_IDS),
@@ -100,6 +102,22 @@ class OrgEndedSeeds:
         return record  # The caller writes the record to the store.
 
     @classmethod
+    def conflicted_ended_record(cls, owner_key: str) -> dict[str, Any]:
+        """Build a legacy rejected child with a stale ended cancellation result."""
+        access_point = cls.access_point_child(CONFLICTED_CHILD_ID)  # Keep both site targets visible.
+        access_point.update(status="rejected", raw_status=400, upgrade_id="known-e2e-job")
+        access_point["cancellation"] = {  # Preserve the stale result from an earlier status read.
+            "status": "already_ended",
+            "cancelled": [],
+            "already_writing": [],
+            "no_cancel_available": [],
+            "message": "The child job already ended: completed. The portal sent no cancel request.",
+        }
+        record = OrgControlSeeds.operation(CONFLICTED_OPERATION_ID, owner_key, [access_point])
+        record["state"] = "attention_required"  # The rejected child still has conflicting job evidence.
+        return record
+
+    @classmethod
     def write(cls, upgrade: Any, identity: Any) -> bool:
         """Write each operation through the run store of the browser server.
 
@@ -115,6 +133,8 @@ class OrgEndedSeeds:
         for operation_id, child_ids in SEEDED_OPERATIONS:  # Each journey cancels its own operation.
             logger.info("Seed the multi-site operation %s with an ended child job", operation_id)  # Before.
             results.append(bool(upgrade.save_run(cls.record(owner_key, operation_id, child_ids))))  # One write.
+        logger.info("Seed the legacy operation %s with conflicting evidence", CONFLICTED_OPERATION_ID)
+        results.append(bool(upgrade.save_run(cls.conflicted_ended_record(owner_key))))
         written = all(results)  # A missing seed fails its journey, so the caller logs one result.
         logger.debug("The ended child seeds report written=%s", written)  # Log after the writes.
         return written  # The caller logs the result.

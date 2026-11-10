@@ -974,6 +974,7 @@ class AggregateUpgradeService:  # Coordinate all child routes through one durabl
         evidence = {  # Keep the job identity and accepted targets beside the refusal status.
             "upgrade_id": submission.upgrade_id,  # A job identifier conflicts with refusal.
             "accepted_targets": submission.accepted,  # An accepted target conflicts with refusal.
+            "response_data": submission.response_data,  # The refusal body can also name accepted targets.
         }
         if _SubmissionCertainty.is_known_refusal(
             submission.raw_status, evidence
